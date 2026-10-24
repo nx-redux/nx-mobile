@@ -56,6 +56,10 @@ val LocalNxOptionText = staticCompositionLocalOf { OptionTextSize.DEFAULT.ofList
 fun nxOptionsRowHeight(listPitch: Dp, ofListLabel: Float = OptionTextSize.DEFAULT.ofListLabel): Dp =
     listPitch * (ofListLabel / OptionTextSize.LARGE.ofListLabel)
 
+/** The list label under the screen's Appearance → Text size: the label of the scaled [NxListPitch], whatever height the rows fit. */
+@Composable
+fun nxListLabel(): TextUnit = nxListLabelSize(nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current))
+
 /** Appearance → Text size as a scale of the fixed sizes (page title, hint bar): 1 at Large, 0.75 at Small. */
 fun nxTextScale(ofListLabel: Float): Float = ofListLabel / OptionTextSize.LARGE.ofListLabel
 

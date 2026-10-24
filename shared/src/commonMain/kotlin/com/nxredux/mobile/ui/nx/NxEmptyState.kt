@@ -37,7 +37,7 @@ fun NxEmptyState(
     val font = LocalNxFont.current
     BoxWithConstraints(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         // Sized like a detail page: the headline and its secondary text, from the list label of this space.
-        val label = if (maxHeight.value.isFinite()) nxListLabelSize(maxHeight) else NxTextSizes.LABEL_FALLBACK
+        val label = nxListLabelSize()
         val body = NxTextSizes.secondary(label)
         Column(Modifier.padding(horizontal = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Image(painterResource(icon), contentDescription = null, modifier = Modifier.size(64.dp), colorFilter = ColorFilter.tint(colors.main))

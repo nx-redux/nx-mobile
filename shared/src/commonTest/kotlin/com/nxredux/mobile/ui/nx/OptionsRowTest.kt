@@ -20,7 +20,7 @@ class OptionsRowTest {
         assertEquals(32f, nxOptionsRowHeight(32.dp).value, 1e-4f)
         assertEquals(24f, nxOptionsRowHeight(32.dp, OptionTextSize.SMALL.ofListLabel).value, 1e-4f)
         // Whole rows stretch to fill the height, so Small's text is smaller, though not exactly 0.75 of Large's.
-        assertTrue(nxListLabelSize(260.dp, NxListPitch * 0.75f).value < nxListLabelSize(260.dp).value)
+        assertTrue(nxListLabelSize(NxListPitch * 0.75f).value < nxListLabelSize().value)
     }
 
     // The page title and the hint bar scale with Text size too: 1 at Large, 0.75 at Small.
@@ -49,7 +49,7 @@ class OptionsRowTest {
 
     @Test fun pillListSizesAreUnchanged() {
         assertEquals(32.5f, NxListPitch.value)
-        assertEquals(20.15f, nxListLabelSize(260.dp).value, 0.001f)
+        assertEquals(20.15f, nxListLabelSize().value, 0.001f)
         assertEquals(false, NxRow("Zelda").cycleable)
     }
 }

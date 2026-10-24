@@ -65,10 +65,9 @@ fun NxDetailListBody(
         // The details and the list capped to a share of a landscape body's width, at its start; the title keeps the width.
         val cap = if (landscape && landscapeWidth < 1f) Modifier.widthIn(max = maxWidth * landscapeWidth) else Modifier
         val inset = nxListInset()   // the list's row-label inset, so title and details line up with the labels
-        // Sized from the row labels, not the screen height, so a tall display does not blow the details up. The body's
-        // height gives the same row pitch as the list's own (both target the fixed NxListTargetPitch).
+        // Sized from the row labels, not the screen height, so a tall display does not blow the details up.
         val pitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
-        val label = nxListLabelSize(maxHeight, pitch)
+        val label = nxListLabelSize(pitch)
         // The headline and lines from the fixed pitch, not this body's: a page under the on-screen pad (a shorter body,
         // fewer and taller rows) words them at the same size as one without it.
         val detailLabel = NxTextSizes.listLabel(NxListPitch) * nxTextScale()   // Appearance → Text size

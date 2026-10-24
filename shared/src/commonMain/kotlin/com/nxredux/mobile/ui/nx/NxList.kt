@@ -86,8 +86,12 @@ fun nxRowCountFor(listHeight: Dp, pitch: Dp = NxListPitch): Int = maxOf(1, (list
  */
 fun nxListInset(): Dp = 14.dp
 
-/** The row-label size of a list [listHeight] tall: 62% of its row pitch. Tool-page details size from it too. */
-fun nxListLabelSize(listHeight: Dp, pitch: Dp = NxListPitch): TextUnit = NxTextSizes.listLabel(listHeight / nxRowCountFor(listHeight, pitch))
+/**
+ * The row-label size of a list aiming at [pitch] ([NxListPitch], or it under Appearance → Text size): 62% of that
+ * target, not of the rows the list's height fits, so the text is the same on every screen and orientation. Tool-page
+ * details size from it too.
+ */
+fun nxListLabelSize(pitch: Dp = NxListPitch): TextUnit = NxTextSizes.listLabel(pitch)
 
 /** Bold rows with the white pill, which glides between rows (NX Redux's timing); row count adapts to the list height so rows stay a sane physical size on any screen. */
 @Composable
@@ -142,7 +146,7 @@ internal fun NxList(
     var bounds by remember { mutableStateOf(Rect.Zero) }
     BoxWithConstraints(if (topCut == null) modifier else modifier.onGloballyPositioned { bounds = it.boundsInRoot() }) {
         val rowHeight = rowHeightOverride ?: (maxHeight / nxRowCountFor(maxHeight))
-        val listFont = textSizeOverride ?: (if (rowHeightOverride != null) NxTextSizes.listLabel(rowHeight) else nxListLabelSize(maxHeight))               // text scales with the row, so it stays readable, not huge, on big screens
+        val listFont = textSizeOverride ?: nxListLabel()   // a fixed size: the rows stretch to fill the height, the text does not
         val sidePad = endPadOverride ?: (maxWidth * 0.044f)
         val pillPad = pillPaddingOverride ?: nxListInset()
         val density = LocalDensity.current

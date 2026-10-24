@@ -150,7 +150,7 @@ fun NxScreenScaffold(
                 val sized = maxHeight - topGap - (band?.reserve ?: 0.dp)
                 // The first pill sits half a pill gap inside its row.
                 if (edgeFit != null && onFirstPill != null) {
-                    val pillTop = with(density) { edgeFit.gapPx.toDp().value } + nxPillGap(edgeFit.row.value, density.fontScale) / 2
+                    val pillTop = with(density) { edgeFit.gapPx.toDp().value } + nxPillGap(edgeFit.row.value, density.fontScale, bandPitch) / 2
                     val report by rememberUpdatedState(onFirstPill)
                     LaunchedEffect(pillTop) { report(pillTop) }
                 }
@@ -195,7 +195,7 @@ fun NxScreenScaffold(
                             Box(Modifier.fillMaxWidth().height(slot).then(if (fade) Modifier.nxScrollFade(listState, height = if (gutters) itemHeight / 2 else 56.dp, strong = true) else Modifier)) {
                                 if (rowKind == NxRowKind.OPTIONS) {
                                     NxOptionsList(
-                                        rows, selectedIndex, onSelect, onOpen, rowHeight = itemHeight, listText = NxTextSizes.listLabel(rowHeight),
+                                        rows, selectedIndex, onSelect, onOpen, rowHeight = itemHeight, listText = NxTextSizes.listLabel(bandPitch),
                                         modifier = Modifier.fillMaxSize(), listState = listState, onLongPress = onLongPress, scrollFade = scrollFade,
                                     )
                                 } else if (!showArt) {
@@ -257,14 +257,14 @@ internal const val NX_PILL_PAD = 0.08f
 
 /**
  * The visible gap between two consecutive pills of rows [row] dp apart at the system [fontScale]: the row less its pill,
- * which is the label's natural MiSans line ([NX_FONT_LINE] per sp of [NxTextSizes.listLabel]) plus [NX_PILL_PAD] above
- * and below. A pill sits centred in its row, half this gap above it.
+ * which is the label's natural MiSans line ([NX_FONT_LINE] per sp of the list label, [NxTextSizes.listLabel] of the
+ * list's target [pitch]) plus [NX_PILL_PAD] above and below. A pill sits centred in its row, half this gap above it.
  */
-internal fun nxPillGap(row: Float, fontScale: Float): Float =
-    row * (1f - 2 * NX_PILL_PAD) - NxTextSizes.listLabel(row.dp).value * fontScale * NX_FONT_LINE
+internal fun nxPillGap(row: Float, fontScale: Float, pitch: Dp = NxListPitch): Float =
+    row * (1f - 2 * NX_PILL_PAD) - NxTextSizes.listLabel(pitch).value * fontScale * NX_FONT_LINE
 
 /** The list top gap (dp) that puts the first pill of rows [row] dp apart one [nxPillGap] under an edge [edgeAbove] dp above the list's top. */
-internal fun nxListTopGapUnder(edgeAbove: Float, row: Float, fontScale: Float): Float = nxPillGap(row, fontScale) / 2 - edgeAbove
+internal fun nxListTopGapUnder(edgeAbove: Float, row: Float, fontScale: Float, pitch: Dp = NxListPitch): Float = nxPillGap(row, fontScale, pitch) / 2 - edgeAbove
 
 /**
  * A band list's fit under an edge ([nxListFitUnder]): its top gap in px (may be negative), row count, row height, and
@@ -305,7 +305,7 @@ internal fun nxListFitUnder(
     var fit = nxListFit(heightPx - reservePx, density, pitch)
     var slotPx = heightPx - reservePx
     repeat(2) {
-        gapPx = (nxListTopGapUnder(edgeAbove, fit.second.value, fontScale) * density).roundToInt()
+        gapPx = (nxListTopGapUnder(edgeAbove, fit.second.value, fontScale, pitch) * density).roundToInt()
         slotPx = heightPx - gapPx - reservePx
         fit = nxListFit(slotPx, density, pitch)
     }

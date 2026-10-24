@@ -34,7 +34,7 @@ fun NxLoadingOverlay(message: String = "Loading…", modifier: Modifier = Modifi
         contentAlignment = Alignment.Center,
     ) {
         // The message is a plain list row's label (~20 sp); the spinner follows it.
-        val label = nxListLabelSize(maxHeight)
+        val label = nxListLabelSize()
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator(
                 Modifier.size((label.value * 1.6f).dp), color = colors.hint, trackColor = Color.Transparent,

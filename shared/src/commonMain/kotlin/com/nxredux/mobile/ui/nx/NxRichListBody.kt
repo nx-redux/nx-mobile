@@ -43,7 +43,7 @@ fun NxRichListBody(
     val icons: (@Composable () -> Unit)? = if (touch && onHint != null) ({ NxTopIcons(hints.touchIcons(onHint)) }) else null
     BoxWithConstraints(modifier.fillMaxSize()) {
         val pitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
-        val label = nxListLabelSize(maxHeight, pitch)
+        val label = nxListLabelSize(pitch)
         val inset = nxListInset()
         Column(Modifier.fillMaxSize()) {
             // The body ends at the hint bar's top edge. Under the title row the list fades where more scrolls in (no
