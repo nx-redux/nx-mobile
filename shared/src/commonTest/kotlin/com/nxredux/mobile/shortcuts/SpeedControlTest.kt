@@ -72,13 +72,38 @@ class SpeedControlTest {
     @Test fun emptyResumesFf() {
         val c = control()
         c.tap(ShortcutAction.TOGGLE_FF)
-        c.onAction(ShortcutAction.HOLD_REWIND, true)
+        c.setToggle(rewind = true)
+        assertTrue(c.output.rewinding)
         c.onRewindEmpty()
         assertFalse(c.output.rewinding)
         assertEquals(4, c.output.ffSpeed)
-        c.onAction(ShortcutAction.HOLD_REWIND, false)
-        assertEquals(4, c.output.ffSpeed)
+    }
+
+    @Test fun heldRewindKeepsRewindingOnEmpty() {
+        val c = control()
+        c.tap(ShortcutAction.TOGGLE_FF)
         c.onAction(ShortcutAction.HOLD_REWIND, true)
+        c.onRewindEmpty()
+        assertTrue(c.output.rewinding)
+        assertEquals(0, c.output.ffSpeed)
+    }
+
+    @Test fun heldRewindReleaseAfterEmptyResumesFf() {
+        val c = control()
+        c.tap(ShortcutAction.TOGGLE_FF)
+        c.onAction(ShortcutAction.HOLD_REWIND, true)
+        c.onRewindEmpty()
+        c.onAction(ShortcutAction.HOLD_REWIND, false)
+        assertFalse(c.output.rewinding)
+        assertEquals(4, c.output.ffSpeed)
+    }
+
+    @Test fun lateEmptyWhileNotRewindingKeepsToggle() {
+        val c = control()
+        c.tap(ShortcutAction.TOGGLE_REWIND)
+        c.onAction(ShortcutAction.HOLD_FF, true)
+        c.onRewindEmpty()
+        c.onAction(ShortcutAction.HOLD_FF, false)
         assertTrue(c.output.rewinding)
     }
 

@@ -34,8 +34,6 @@ class SpeedControl {
     private var toggleRewind = false
     private var holdFf = false
     private var holdRewind = false
-    /** The buffer ran out under a held Hold Rewind; it stays spent until the button is released. */
-    private var holdRewindSpent = false
 
     var output: SpeedOutput = compute()
         private set
@@ -62,10 +60,7 @@ class SpeedControl {
                 toggleRewind = !toggleRewind
                 if (toggleRewind) toggleFf = false
             }
-            ShortcutAction.HOLD_REWIND -> if (rewindOn) {
-                holdRewind = down
-                if (!down) holdRewindSpent = false
-            } else if (!down) clearRewind()
+            ShortcutAction.HOLD_REWIND -> holdRewind = down && rewindOn
         }
         update()
         return null
@@ -79,10 +74,14 @@ class SpeedControl {
         update()
     }
 
-    /** The engine reports the buffer empty: a toggled rewind ends and a held one stops until released. */
+    /**
+     * The engine reports the buffer empty. A toggled rewind ends (resuming a toggled FF). A held one keeps rewinding:
+     * the engine alternates advance and rewind itself so the game stays near the oldest point, and a paused FF stays
+     * paused until release. Ignored when not rewinding (a Hold FF pausing a toggled rewind must not clear it).
+     */
     fun onRewindEmpty() {
+        if (!output.rewinding || holdRewind) return
         toggleRewind = false
-        if (holdRewind) holdRewindSpent = true
         update()
     }
 
@@ -90,7 +89,6 @@ class SpeedControl {
     fun releaseHolds() {
         holdFf = false
         holdRewind = false
-        holdRewindSpent = false
         update()
     }
 
@@ -108,14 +106,12 @@ class SpeedControl {
     private fun clearRewind() {
         toggleRewind = false
         holdRewind = false
-        holdRewindSpent = false
     }
 
     private fun update() { output = compute() }
 
     private fun compute(): SpeedOutput {
-        val heldRewind = holdRewind && !holdRewindSpent
-        val rewinding = !netplay && rewindOn && (heldRewind || (toggleRewind && !holdFf))
+        val rewinding = !netplay && rewindOn && (holdRewind || (toggleRewind && !holdFf))
         val ff = !netplay && !rewinding && (holdFf || toggleFf)
         return SpeedOutput(
             ffSpeed = if (ff) settings.maxFf else 0,
