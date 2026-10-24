@@ -4909,13 +4909,12 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         refreshGameInfo()   // back from a game (or another app): its time and unlocks may have moved
         homeTab.refreshStatsIfAsked()   // Home's stats too (before the menu's first show, that show computes them)
         // Back from a game resumed from the switcher: the switcher again (its game first, the latest recent), over the
-        // page it opened from. Over the main menu, after the rows rebuilt below (a swap would abandon an open under way).
-        val reopen = switcherReturn
-        switcherReturn = false
-        val s = _screen.value as? Screen.Systems ?: run { if (reopen) openSwitcher(); return }
-        if (s.menu != null) return
+        // page it opened from. Over the main menu, after the rows rebuilt below (a swap would abandon an open under way);
+        // read again there, so a Home landing meanwhile (onNewIntent may follow onStart) drops it.
+        val s = _screen.value as? Screen.Systems ?: run { reopenSwitcher(); return }
+        if (s.menu != null) { switcherReturn = false; return }
         if (!firstSetup) updaterOnMainMenu()   // back over the menu (from a game, or the install-permission screen)
-        scope.launch { rebuildMainRows(); swapMainRows(); if (reopen) openSwitcher() }   // Continue's save (its resume frame) may be new since the rows were built
+        scope.launch { rebuildMainRows(); swapMainRows(); reopenSwitcher() }   // Continue's save (its resume frame) may be new since the rows were built
         val root = home() ?: return
         if (foregroundJob?.isActive == true) return   // a quick second onStart: the first check (or its scan) covers it
         foregroundJob = scope.launch {
@@ -4928,6 +4927,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             }
             if (offlineHomeSaid == root && !deps.source.isOffline(root) && _screen.value === s) afterIndexStart(root)
         }
+    }
+
+    /** A game resumed from the switcher ended: the switcher opens again, once (a list or the main menu; elsewhere, nothing). */
+    private fun reopenSwitcher() {
+        if (!switcherReturn) return
+        switcherReturn = false
+        openSwitcher()
     }
 
     /** Re-reads the highlighted game's resume marker: a list's, Home's Continue card's, pinned or shelf game's (after returning from a game). */

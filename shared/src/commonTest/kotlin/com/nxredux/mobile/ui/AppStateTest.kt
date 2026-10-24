@@ -1652,6 +1652,20 @@ class AppStateTest {
         assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).category)
     }
 
+    // Home's intent can arrive after the menu's start: the switcher that start reopens gives way to Home.
+    @Test fun home_right_after_the_return_still_lands_on_home() = runTest {
+        val data = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))
+        val state = stateWith(data, RecordingRunner(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.load(); advanceUntilIdle()
+        state.selectTab(assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.CONSOLES })
+        state.onButton(NxButton.SELECT); advanceUntilIdle()
+        state.onButton(NxButton.A); advanceUntilIdle()
+        state.onForeground(); state.goHome(); advanceUntilIdle()
+        assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).category)
+        state.onForeground(); advanceUntilIdle()
+        assertIs<Screen.Systems>(state.screen.value)
+    }
+
     // A game started from a list (not the switcher) ends on that list.
     @Test fun a_list_launch_does_not_open_the_switcher_on_return() = runTest {
         val data = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))
