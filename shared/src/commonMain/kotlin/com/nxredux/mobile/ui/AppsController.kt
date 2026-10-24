@@ -42,7 +42,7 @@ internal interface AppsHost {
 
 /**
  * Android apps in the launcher: the apps grid (Tools -> Apps, the drawer: open an app, its menu puts it in Tools; Settings
- * -> Launcher -> Android games: which apps make the Android games console) and starting an app (an Android game, a Tools
+ * -> Library -> Android games: which apps make the Android games console) and starting an app (an Android game, a Tools
  * app row).
  */
 internal class AppsController(
@@ -107,7 +107,7 @@ internal class AppsController(
     /**
      * The grid ([gridStep], every row still): the d-pad moves by tiles, UP/DOWN wrapping in the column and LEFT/RIGHT
      * stopping at the first and last tile. The drawer: A opens the selected app, MENU its menu, B back to Tools. The
-     * games picker: A puts the app in the console or takes it out, B back to the Launcher page.
+     * games picker: A puts the app in the console or takes it out, B back to Library on its row.
      */
     fun onToolAppsButton(s: Screen.ToolApps, button: NxButton) {
         when (button) {

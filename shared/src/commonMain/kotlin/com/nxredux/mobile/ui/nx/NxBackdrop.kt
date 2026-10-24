@@ -409,6 +409,7 @@ fun NxBackdropPicture(url: String?, modifier: Modifier = Modifier) {
  * The picture behind is [NxBackdropPicture], drawn by the caller. [layoutKey]: the current Screen instance; a new key
  * snaps the row to its selection, as a new list does. [titleRoom]: a hidden page title's room at the top
  * of this box: sized without it, centred with it ([backdropRowPlace]); the caller's picture doesn't move.
+ * [centreShift]: the row moved down this far from that centre (a main menu row centred on the screen, not its body).
  */
 @Composable
 fun NxBackdrop(
@@ -419,6 +420,7 @@ fun NxBackdrop(
     modifier: Modifier = Modifier,
     layoutKey: Any? = null,
     titleRoom: Dp = 0.dp,
+    centreShift: Dp = 0.dp,
 ) {
     val colors = LocalNxColors.current
     val portrait = LocalPortrait.current
@@ -445,7 +447,7 @@ fun NxBackdrop(
         val (g, rowH, f, place) = backdropRowPlace(slot, captioned, maxHeight.value, titleRoom.value, captionH, portraitW = maxWidth.value.takeIf { portrait }, bodyW = maxWidth.value)
         val count = games?.size ?: tiles.size
         if (g.itemW <= 1f || g.itemH <= 1f || count == 0) return@BoxWithConstraints
-        val top = place.rowTop
+        val top = place.rowTop + centreShift.value
 
         val gutter = if (portrait) 16.dp else 24.dp
         val avail = maxWidth - gutter * 2

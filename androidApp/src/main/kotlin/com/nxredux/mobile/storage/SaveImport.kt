@@ -74,7 +74,7 @@ class DirImportFiles(private val root: File, private val tops: List<String> = li
 }
 
 /**
- * Settings → Emulators → Saves → Import saves into private storage ([root] = `filesDir/sd`), copy only (a source is
+ * Settings → Library → Saves → Import saves into private storage ([root] = `filesDir/sd`), copy only (a source is
  * never deleted or changed), per [ImportRules]: new files are copied in, identical ones skipped, newer ones replace the
  * private file (kept as a `.bak`, [SaveCopyRules.freeBackupName]), older ones are skipped. Each file lands through a
  * `.tmp` and gets the source's modified time (or the import's, when it has none). The copy is verified against the

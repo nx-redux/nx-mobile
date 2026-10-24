@@ -51,7 +51,6 @@ object EmulatorRows {
         val core = page.core
         if (category != null) return core.orEmpty().let { CoreOptionFilter.inCategory(it, category) }.map { EmulatorRow.Core(it, inCategory = true) }
         return buildList {
-            if (page.forGame && page.gameFileExists) add(EmulatorRow.UseEmulatorSettings)
             if (page.console.isNotEmpty()) {
                 add(EmulatorRow.Header("Console settings"))
                 page.console.forEach { add(EmulatorRow.Console(it)) }
@@ -72,6 +71,8 @@ object EmulatorRows {
             }
             if (page.console.isNotEmpty() && coreRows.isNotEmpty()) add(EmulatorRow.Gap)   // space between the two groups
             addAll(coreRows)
+            // Last, after a gap: drop this game's own settings for the emulator's.
+            if (page.forGame && page.gameFileExists) { if (isNotEmpty()) add(EmulatorRow.Gap); add(EmulatorRow.UseEmulatorSettings) }
         }
     }
 
@@ -285,10 +286,10 @@ internal class EmulatorSettingsController(
         when (button) {
             NxButton.UP -> selection.value = ListSelection(EmulatorRows.step(s.rows, selection.value.index, -1), s.rows.size)
             NxButton.DOWN -> selection.value = ListSelection(EmulatorRows.step(s.rows, selection.value.index, 1), s.rows.size)
-            NxButton.LEFT -> change(s, row, -1)
-            NxButton.RIGHT -> change(s, row, 1)
+            NxButton.LEFT -> change(s, row) { page, key -> nextValue(page, key, -1) }
+            NxButton.RIGHT -> change(s, row) { page, key -> nextValue(page, key, 1) }
             NxButton.A -> when (row) {
-                is EmulatorRow.Console, is EmulatorRow.Core -> change(s, row, 1)
+                is EmulatorRow.Console, is EmulatorRow.Core -> change(s, row) { page, key -> nextValue(page, key, 1) }
                 is EmulatorRow.Category -> {
                     val rows = EmulatorRows.build(s.page, row.key)
                     screen.value = s.copy(rows = rows, category = row.key)
@@ -304,7 +305,7 @@ internal class EmulatorSettingsController(
 
     /**
      * The selected value row's choices for a touch chooser: its title, every value it steps through (labelled as the row
-     * shows them) and the current one's place; null for any other row or a current value stepping skips (hidden).
+     * shows them) and the current one's place (-1: a value not among them, as a retired one); null for any other row.
      */
     fun choices(s: Screen.EmulatorOptions): Triple<String, List<String>, Int>? = when (val row = s.rows.getOrNull(selection.value.index)) {
         is EmulatorRow.Console -> row.row.option.let { o -> Triple(o.label, o.values.map(o::labelOf), o.values.indexOf(row.row.value)) }
@@ -313,14 +314,20 @@ internal class EmulatorSettingsController(
             Triple(CoreOptionFilter.rowLabel(o, row.inCategory), values.map { v -> CoreOptionFilter.valueLabel(o.copy(value = v)) }, values.indexOf(o.value))
         }
         else -> null
-    }?.takeIf { it.third >= 0 }
+    }
 
-    /** A touch chooser's pick [index] for the selected row ([choices]): written as stepping there would write it. */
+    /** A touch chooser's pick [index] for the selected row ([choices]): that value written, as stepping there would. */
     fun choose(index: Int) {
         val s = screen.value as? Screen.EmulatorOptions ?: return
-        val (_, values, current) = choices(s) ?: return
-        if (index !in values.indices || index == current) return
-        change(s, s.rows.getOrNull(selection.value.index), index - current)
+        val row = s.rows.getOrNull(selection.value.index)
+        val (_, labels, current) = choices(s) ?: return
+        if (index !in labels.indices || index == current) return
+        val value = when (row) {
+            is EmulatorRow.Console -> row.row.option.values[index]
+            is EmulatorRow.Core -> CoreOptionFilter.visibleValues(row.option)[index]
+            else -> return
+        }
+        change(s, row) { _, _ -> value }
     }
 
     private fun samePage(a: Screen.EmulatorOptions, b: Screen.EmulatorOptions) =
@@ -333,7 +340,7 @@ internal class EmulatorSettingsController(
      * LEFT/RIGHT (A = RIGHT) on a value row: reads both files, steps the value as that read has it, writes the one file
      * the page edits, and shows the page built from the written text. A failed read or write says so and shows the disk.
      */
-    private fun change(s: Screen.EmulatorOptions, row: EmulatorRow?, delta: Int) {
+    private fun change(s: Screen.EmulatorOptions, row: EmulatorRow?, next: (EmulatorPage, String) -> String?) {
         val key = when (row) {
             is EmulatorRow.Console -> row.row.option.key
             is EmulatorRow.Core -> row.option.key
@@ -349,7 +356,7 @@ internal class EmulatorSettingsController(
                     try {
                         val files = configs.read(tag, d.id, rom)
                         val page = build(tag, d, game, files)
-                        val value = nextValue(page, key, delta) ?: return@withContext page
+                        val value = next(page, key) ?: return@withContext page
                         if (rom == null) {
                             val text = EmulatorSettings.consoleWrite(files.first, key, value)
                             configs.writeConsole(tag, d.id, text)

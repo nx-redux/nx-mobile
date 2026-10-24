@@ -218,7 +218,7 @@ internal fun HomeScreen(
                             val m = Modifier.at(at).taps(i, menu = true); HomeLit(i, selection) { lit -> HomeToolSquare(t, lit, at.w, m) }
                         }
                         is MainRow.MoreTools -> { val m = Modifier.at(at).taps(i, menu = tabMenu); HomeLit(i, selection) { lit -> HomeMoreSquare(row.count, lit, at.w, m) } }
-                        // An inline game (the wide and large faces) is a pinned game's tile at its rect, taps and all.
+                        // An inline game (every landscape face) is a pinned game's tile at its rect, taps and all.
                         is MainRow.Pin -> topTiles.getOrNull(i)?.let { t ->
                             val m = Modifier.at(at).taps(i, menu = true)
                             HomeLit(i, selection) { lit -> HomePinTile(t, lit, { pinInfo(i) }, signedIn, portrait, m, always = true) }

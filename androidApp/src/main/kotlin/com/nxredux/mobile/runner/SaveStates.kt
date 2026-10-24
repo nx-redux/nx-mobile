@@ -12,7 +12,7 @@ import java.io.IOException
 /**
  * Per-game save-state slots in minarch's layout ([NxPaths]). The UI numbers slots 1..[SLOT_COUNT];
  * on disk they are 0-based. A slot is "occupied" when its state file exists; its timestamp is that
- * file's last-modified time. Names and encoding follow Settings -> Emulators -> Saves; loading falls back to the
+ * file's last-modified time. Names and encoding follow Settings -> Library -> Saves; loading falls back to the
  * other names (every format, both Use extracted file name settings; the next one when a file is damaged), and reads
  * take RZIP or raw states with a RetroArch RASTATE header skipped. Screenshots are PNG data under minarch's `.bmp`
  * names (nx-redux's minarch loads them with IMG_Load, which sniffs the content; BitmapFactory and Coil sniff too, so

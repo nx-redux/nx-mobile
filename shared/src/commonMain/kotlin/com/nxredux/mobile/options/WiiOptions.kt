@@ -37,6 +37,7 @@ object WiiOptions {
         SCREEN, "Wii Screen", listOf(WiiScreen.AUTO, WiiScreen.FOUR_THREE, WiiScreen.WIDE), WiiScreen.AUTO,
         "The Wii's screen shape. Auto is 4:3 when the game starts\nin portrait, 16:9 in landscape.\n" +
             "Set when the game starts: rotating keeps it until the next launch.",
+        brief = "Set at launch. Auto: 4:3 in portrait, 16:9 in landscape",
         visual = false, valueLabels = listOf("Auto", "4:3", "16:9"), atLaunch = true,
     )
 
@@ -45,17 +46,20 @@ object WiiOptions {
         POINTER_WIDTH, "Pointer Width", PERCENTS, "100",
         "How far the cursor moves sideways for a touch.\nLower it if the cursor lands further out than your finger,\n" +
             "raise it if it falls short. Applies the next time the game starts.",
+        brief = "Applies next launch",
         visual = false, valueLabels = PERCENTS.map { "$it%" }, atLaunch = true,
     )
     val pointerHeightRow = FrontendOption(
         POINTER_HEIGHT, "Pointer Height", PERCENTS, "100",
         "How far the cursor moves up and down for a touch.\nLower it if the cursor lands further out than your finger,\n" +
             "raise it if it falls short. Applies the next time the game starts.",
+        brief = "Applies next launch",
         visual = false, valueLabels = PERCENTS.map { "$it%" }, atLaunch = true,
     )
     val pointerOffsetRow = FrontendOption(
         POINTER_OFFSET, "Pointer Offset", OFFSETS, "0",
         "Moves the cursor up (+) or down (-) against your finger.\nApplies the next time the game starts.",
+        brief = "Applies next launch",
         visual = false, valueLabels = OFFSETS.map { if (it.toInt() > 0) "+$it" else it }, atLaunch = true,
     )
 

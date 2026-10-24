@@ -188,18 +188,20 @@ private fun TileContent(
                 if (outlineLit) NamedTile(tile.name, content, 17.sp, count)
                 else TileTitle(tile.name, content, 17.sp, maxLines = 3)
             } else {
+                // With a count under it, the logo and the count centre as one ([LOGO_COUNT_LIFT] up), not the logo alone.
+                val lift = if (outlineLit && count != null) LOGO_COUNT_LIFT else 0f
                 Image(
                     painterResource(res), contentDescription = tile.name,
-                    modifier = Modifier.fillMaxSize().padding(horizontal = logoInset.first.dp, vertical = logoInset.second.dp)
+                    modifier = Modifier.fillMaxSize().offset(y = (-lift).dp).padding(horizontal = logoInset.first.dp, vertical = logoInset.second.dp)
                         .graphicsLayer { alpha = if (lit) 1f else UNLIT_LOGO_ALPHA },
                     contentScale = ContentScale.Fit, colorFilter = ColorFilter.tint(content),
                 )
                 // The Grid tile's count, lit or not, 6 dp under the logo as drawn (Fit in the tile less its inset), in the
-                // logo's colour and opacity; the logo stays put.
+                // logo's colour and opacity, lifted with it.
                 if (outlineLit && count != null) {
                     val boxW = maxWidth.value - 2 * logoInset.first
                     val boxH = maxHeight.value - 2 * logoInset.second
-                    val top = underLogoTop(logoInset.second, boxH, logoDrawnHeight(boxW, boxH, logoAspect(res)), 6f)
+                    val top = underLogoTop(logoInset.second, boxH, logoDrawnHeight(boxW, boxH, logoAspect(res)), LOGO_COUNT_GAP) - lift
                     val sp = if (portrait) 12f else 13f
                     TileText(
                         gamesLabel(count), content, sp.sp, maxLines = 1, lineHeight = 16f / sp,
@@ -224,6 +226,12 @@ private fun TileContent(
         is GridTile.Game -> GameTile(tile, lit, caption, info, titleSize, titleLines, homeCaption, gameFade, subtitle, statsOnly, statsSize, captionAlways)
     }
 }
+
+/** The gap from a Grid logo's drawn bottom to its "N games" line, dp. */
+private const val LOGO_COUNT_GAP = 6f
+
+/** How far a Grid logo with its count lifts, dp: half the gap and the count's 16 dp line, so the pair centres in the tile. */
+private const val LOGO_COUNT_LIFT = (LOGO_COUNT_GAP + 16f) / 2
 
 /** A tile with no caption info (the Carousel's: its caption sits outside the tile). */
 internal val NoTileInfo: () -> List<InfoLine> = { emptyList() }

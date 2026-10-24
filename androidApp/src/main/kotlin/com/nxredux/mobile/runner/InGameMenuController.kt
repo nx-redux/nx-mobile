@@ -320,6 +320,8 @@ internal class InGameMenuController(
                             // Two panes on a wide area (the unfolded Fold, a phone in landscape), as Settings.
                             onSplit = { split -> menuModel?.split = split },
                             onParentTap = { kind, i -> if (!quitting) menuModel?.let { m -> val e = m.tapParent(kind, i); menuState.value = m.state; handle(e) } },
+                            // A row of the Options preview beside the root's Options row: the page opens on it.
+                            onPreviewTap = { i -> if (!quitting) menuModel?.let { m -> val e = m.tapPreview(i); menuState.value = m.state; handle(e) } },
                             // The game panel beside the root list (the model caches it until its inputs change).
                             panel = menuModel?.panelState(),
                             onPanelEvent = { ev -> if (!quitting) menuModel?.let { m -> val e = m.panelEvent(ev); menuState.value = m.state; handle(e) } },
@@ -328,6 +330,8 @@ internal class InGameMenuController(
                             panelBeside = menuModel?.panelBeside ?: true,
                             // In the dual-screen panel's place: opaque, as the panel it replaces.
                             opaque = dual.mainPanel.value != null,
+                            // An options row's switch, segment, picker or info icon, and the popup over it.
+                            onOption = { ev -> if (!quitting) menuModel?.let { m -> val e = m.optionEvent(ev); menuState.value = m.state; handle(e) } },
                         )
                     }
                     }
@@ -427,6 +431,9 @@ internal class InGameMenuController(
                 cheatSet = cheatSet.toggle(effect.index, effect.enabled)
                 // A toggle during load must not reach retro_cheat_reset before retro_load_game; the first-frame block re-applies the full set.
                 if (gameReady) retroView?.let(::applyCheats)
+                // The set is the one owner: the open menu's panel (a toggle from the dual-screen panel) and that panel follow it.
+                menuModel?.let { it.setCheats(cheatSet.entries, cheatsFolder, cheatSet.expected); menuState.value = it.state }
+                dual.refreshDualPanel()
             }
             is MenuEffect.ChangeDisc -> retroView?.let { view ->
                 dual.discs = dual.discs?.let { effect.index to it.second }

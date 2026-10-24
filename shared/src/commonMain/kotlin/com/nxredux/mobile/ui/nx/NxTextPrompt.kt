@@ -46,7 +46,7 @@ fun NxTextPrompt(title: String, value: String, onValueChange: (String) -> Unit, 
                 onValueChange(field.text)
             },
             singleLine = true,
-            textStyle = TextStyle(color = colors.listText, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.modalText),
+            textStyle = TextStyle(color = colors.listText, fontFamily = LocalNxFont.current, fontSize = nxModalText()),
             cursorBrush = SolidColor(colors.listText),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { onConfirm() }),

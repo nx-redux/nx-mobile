@@ -128,11 +128,12 @@ fun NxRichList(
     listState: LazyListState = rememberLazyListState(),
     onLongPress: ((Int) -> Unit)? = null,
     labelSize: TextUnit = TextUnit.Unspecified,   // the page's list label size ([nxListLabelSize] of its body); else of this list's height
+    edgeMargin: Int = 0,   // rows kept in view past the selection ([NxKeepSelectedInView]): 1 under a scroll fade
 ) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
     val tapOpens = LocalNxTapOpens.current
-    NxKeepSelectedInView(listState, selectedIndex, rows.size)
+    NxKeepSelectedInView(listState, selectedIndex, rows.size, edgeMargin)
     BoxWithConstraints(modifier) {
         val density = LocalDensity.current
         val listPitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size

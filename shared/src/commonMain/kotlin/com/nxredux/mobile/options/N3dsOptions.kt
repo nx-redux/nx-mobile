@@ -22,6 +22,7 @@ object N3dsOptions {
         NEW_CONTROLS, "New 3DS Controls", listOf(N3dsNewControls.AUTO, N3dsNewControls.ON, N3dsNewControls.OFF), N3dsNewControls.AUTO,
         "ZL, ZR and the C-stick on the on-screen pad.\nAuto shows them for games that use them\n(New 3DS and Circle Pad Pro games).\n" +
             "A controller's right stick, L2 and R2 always reach the game.",
+        brief = "On-screen ZL, ZR and C-stick",
         visual = false, valueLabels = listOf("Auto", "On", "Off"),
     )
 
@@ -66,8 +67,8 @@ object N3dsOptions {
         "Large screen: the top one big, the bottom small at its top right.\nSide by side: next to each other.\n" +
         "Single screen: the top one only.\nSELECT + Left/Right cycles it."
 
-    private fun layoutRow(key: String, label: String, info: String) = FrontendOption(
-        key, label, LAYOUT_CYCLE, "default", info, visual = true, valueLabels = LAYOUT_CYCLE.map(::layoutLabel),
+    private fun layoutRow(key: String, label: String, info: String, brief: String = "") = FrontendOption(
+        key, label, LAYOUT_CYCLE, "default", info, visual = true, valueLabels = LAYOUT_CYCLE.map(::layoutLabel), brief = brief,
     )
 
     /** Console Settings' layout rows, one per orientation as on the DS (in-game: applied live). */
@@ -76,6 +77,7 @@ object N3dsOptions {
         layoutRow(
             LAYOUT_PORTRAIT_CONTROLLER, "Layout (portrait, controller)",
             "The portrait layout while a controller that is not a clip-on\nis connected and the pad is hidden.\nSELECT + Left/Right cycles it then.",
+            brief = "Used while a controller (not a clip-on) hides the pad",
         ),
         layoutRow(LAYOUT_LANDSCAPE, "Layout (landscape)", "How the two screens share a landscape screen.\n$LAYOUT_INFO_LIST"),
     )

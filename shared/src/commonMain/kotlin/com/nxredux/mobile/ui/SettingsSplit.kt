@@ -22,11 +22,9 @@ private val SPLIT_MIN_WIDTH = 600.dp
 fun settingsSplit(window: DpSize): Boolean =
     window.width >= SPLIT_MIN_WIDTH && window.width.value >= window.height.value * SPLIT_MIN_ASPECT
 
-/** The Settings categories: the sections the Settings root lists (sub-pages open from them). Launcher only on a platform with one, Second screen only while one is connected. */
-fun settingsCategories(launcher: Boolean = false, secondScreen: Boolean = false): List<SettingsSection> =
-    SettingsSection.entries.filter {
-        it.parent == null && (it != SettingsSection.LAUNCHER || launcher) && (it != SettingsSection.SECOND_SCREEN || secondScreen)
-    }
+/** The Settings categories: the sections the Settings root lists (sub-pages open from them). Second screen only while one is connected. */
+fun settingsCategories(secondScreen: Boolean = false): List<SettingsSection> =
+    SettingsSection.entries.filter { it.parent == null && (it != SettingsSection.SECOND_SCREEN || secondScreen) }
 
 /**
  * The pane [screen] is drawn in when Settings splits: the Settings root is the left pane (focused there), a Settings
@@ -57,11 +55,11 @@ fun gameSettingsModal(screen: Screen): Boolean = screen is Screen.EmulatorOption
 fun settingsMarkShift(split: Boolean): Float =
     if (split) SETTINGS_SPLIT_LEFT + (1f - SETTINGS_SPLIT_LEFT) / 2f - 0.5f else 0f
 
-/** The category a right-pane [screen] belongs to (its top section; Emulator Settings is under Emulators, Android games under Launcher); null otherwise. */
+/** The category a right-pane [screen] belongs to (its top section; Emulator Settings is under Emulators, Android games under Library); null otherwise. */
 fun settingsCategoryOf(screen: Screen): SettingsSection? = when (screen) {
     is Screen.Settings -> generateSequence(screen.section) { it.parent }.last()
     is Screen.EmulatorList, is Screen.EmulatorConsoles, is Screen.EmulatorOptions -> SettingsSection.EMULATORS
-    is Screen.ToolApps -> if (screen.pick == AppPick.GAMES) SettingsSection.LAUNCHER else null
+    is Screen.ToolApps -> if (screen.pick == AppPick.GAMES) SettingsSection.LIBRARY else null
     else -> null
 }
 

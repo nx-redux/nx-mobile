@@ -24,7 +24,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Settings → Emulators → Saves → Export / Import on Android: the pickers come from [pickers] (MainActivity's
+ * Settings → Library → Saves → Export / Import on Android: the pickers come from [pickers] (MainActivity's
  * activity-result launchers); the work runs on one background thread (one transfer at a time) and the results come on
  * the main thread: "Working…" when the work starts, then the summary or the error.
  *

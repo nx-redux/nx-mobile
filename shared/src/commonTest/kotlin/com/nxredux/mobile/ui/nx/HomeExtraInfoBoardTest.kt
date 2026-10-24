@@ -7,8 +7,8 @@ import kotlin.test.assertTrue
 /**
  * Home with Layouts → Extra info hidden ([HomeFrame.statsHidden]). The stats strip is not drawn (the
  * board's lines 0, the top section from the 8 dp margin) and its room goes to the top section as the hidden tab row's
- * does: Continue grows, the caps rise by it so the pins start where they did, and the squares grow, a column taking one
- * more only where the room holds a whole row at the side they had with the strip shown.
+ * does: Continue grows, the caps rise by it so the pins start where they did, and the squares grow (to each face's cap),
+ * every column keeping its 5.
  */
 class HomeExtraInfoBoardTest {
     private fun near(e: Float, a: Float, what: String) = assertEquals(e, a, 0.05f, what)
@@ -27,8 +27,8 @@ class HomeExtraInfoBoardTest {
     }
 
     // The Fold cover (475 × 291, two strip lines): shown, topY 48, the top 235 (the cap), 5 squares of (235 − 24) / 5 =
-    // 42.2, Continue 443 − 42.2 − 12 = 388.8 wide; hidden, topY 8, the top 275 (the cap 235 + 40), 40 dp is no whole
-    // row (42.2 + 6), so 5 squares of (275 − 24) / 5 = 50.2, Continue 380.8 × 275. The pins start at 295 either way.
+    // 42.2, Continue 443 − 42.2 − 12 = 388.8 wide; hidden, topY 8, the top 275 (the cap 235 + 40), still 5 squares, of
+    // (275 − 24) / 5 = 50.2, Continue 380.8 × 275. The pins start at 295 either way.
     @Test fun foldCoverContinueAndSquaresGrowThePinsStay() {
         for (tools in listOf(0, 3, 5, 8, 12)) {
             val shown = homeBoard(cover, 2, tools = tools, games = 4)
@@ -51,15 +51,15 @@ class HomeExtraInfoBoardTest {
         }
     }
 
-    // The cover with the tab row hidden too (its 44 dp in the body, 6 squares a column): shown, the top 279 ((279 − 30)
-    // / 6 = 41.5); hidden, 319 (the cap 279 + 40), still no whole row (41.5 + 6 > 40): (319 − 30) / 6 = 48.17.
+    // The cover with the tab row hidden too (its 44 dp in the body, still 5 squares a column): shown, the top 279
+    // ((279 − 24) / 5 = 51); hidden, 319 (the cap 279 + 40): (319 − 24) / 5 = 59.
     @Test fun foldCoverWithTheTabRowHiddenToo() {
         val f = cover.copy(h = 335f, titleHidden = true)
         val shown = homeBoard(f, 2, tools = 3, games = 4)
         val b = homeBoard(hide(f), 2, tools = 3, games = 4)
-        near(279f, shown.topH, "shown topH"); near(41.5f, shown.square, "shown square")
-        near(8f, b.topY, "topY"); near(319f, b.topH, "topH"); near(289f / 6, b.square, "square")
-        assertEquals(6, b.slots); near(shown.tilesY, b.tilesY, "the pins start where they did")
+        near(279f, shown.topH, "shown topH"); near(51f, shown.square, "shown square")
+        near(8f, b.topY, "topY"); near(319f, b.topH, "topH"); near(59f, b.square, "square")
+        assertEquals(5, b.slots); near(shown.tilesY, b.tilesY, "the pins start where they did")
     }
 
     // A taller portrait body (the Flip's inner display) stops its top section at the cap, raised by the freed room:
@@ -73,27 +73,28 @@ class HomeExtraInfoBoardTest {
         near(shown.pinH, b.pinH, "pinH")
     }
 
-    // A short portrait body (230 tall): shown, the top 174 and squares of (174 − 24) / 5 = 30; the 40 dp hold a whole
-    // row (30 + 6), so hidden the column takes 6 of (214 − 30) / 6 = 30.67 (12 slots past 6 tools), never smaller.
-    @Test fun aShortPortraitGainsARowWhenAWholeOneFits() {
+    // A short portrait body (230 tall): shown, the top 174 and squares of (174 − 24) / 5 = 30; hidden, the column keeps
+    // its 5 and they grow: (214 − 24) / 5 = 38 (10 slots past 5 tools).
+    @Test fun aShortPortraitKeepsFiveAColumnAndGrowsThem() {
         val f = HomeFrame(475f, 230f, true)
         val shown = homeBoard(f, 2, tools = 8, games = 2)
         val b = homeBoard(hide(f), 2, tools = 8, games = 2)
         near(174f, shown.topH, "shown topH"); near(30f, shown.square, "shown square"); assertEquals(10, shown.slots)
-        near(214f, b.topH, "topH"); near(184f / 6, b.square, "square"); assertEquals(12, b.slots)
-        assertTrue(b.square >= shown.square, "a gained row never shrinks the squares")
-        assertEquals(6, homeBoard(hide(f), 2, tools = 4, games = 2).slots)
+        near(214f, b.topH, "topH"); near(38f, b.square, "square"); assertEquals(10, b.slots)
+        assertTrue(b.square >= shown.square, "the freed room only grows the squares")
+        assertEquals(5, homeBoard(hide(f), 2, tools = 4, games = 2).slots)
     }
 
-    // Landscape SPS3 (800 × 340, one strip line): the top section 20 dp taller from 8 (28 with the strip), squares
-    // (193.3 − 28) / 3 = 55.1 (48.4 with it; 20 dp is no whole row of 48.4 + 14), the pin row where it is with the strip.
+    // Landscape SPS3 (800 × 340, one strip line): the top section 20 dp taller from 8 (28 with the strip), still 5
+    // squares, of the whole body 324: (324 − 4 · 7) / 5 = 59.2 (304 and 55.2 with it), the pin row where it is with the
+    // strip (8 + 324 + 14 = 28 + 304 + 14 = 346).
     @Test fun landscapeSps3() {
         val f = HomeFrame(800f, 340f, false, 800f / 428f)
         val shown = homeBoard(f, 1, tools = 3, games = 4)
         val b = homeBoard(hide(f), 1, tools = 3, games = 4)
-        assertEquals(HomeToolMode.SPS3, b.mode); assertEquals(3, b.slots); assertEquals(0, b.stripLines)
+        assertEquals(HomeToolMode.SPS3, b.mode); assertEquals(5, b.slots); assertEquals(0, b.stripLines)
         near(28f, shown.topY, "shown topY"); near(8f, b.topY, "topY")
-        near(shown.topH + 20f, b.topH, "topH"); near(48.44f, shown.square, "shown square"); near(55.11f, b.square, "square")
+        near(shown.topH + 20f, b.topH, "topH"); near(55.2f, shown.square, "shown square"); near(59.2f, b.square, "square")
         near(shown.tilesY, b.tilesY, "tilesY"); near(shown.pinH, b.pinH, "pinH")
         assertTrue(continueOf(b).h > continueOf(shown).h, "Continue grows")
     }
@@ -108,45 +109,49 @@ class HomeExtraInfoBoardTest {
         near(shown.tilesY, b.tilesY, "tilesY")
     }
 
-    // The wide face (960 × 344, one line): the top 20 dp taller from 8, the squares at their 58 cap, 2 rows (20 dp is no
-    // row of 58 + 7); the pins where they are with the strip.
+    // The wide face (960 × 344, one line): the top (the body) 20 dp taller from 8 (308 → 328), still 5 squares a column,
+    // grown from (308 − 4 · 7) / 5 = 56 to min(58, (328 − 28) / 5 = 60) = 58; the pins where they are with the strip.
+    // 7 tools are 2 columns, so the room left of them shrinks by 2 · 2 dp, and Continue (0.6 of it) by 2.4.
     @Test fun wideFace() {
         val f = HomeFrame(960f, 344f, false, 960f / 432f)
         val shown = homeBoard(f, 1, tools = 7, games = 6)
         val b = homeBoard(hide(f), 1, tools = 7, games = 6)
-        assertEquals(HomeToolMode.WIDE, b.mode); assertEquals(6, b.slots); assertEquals(2, b.more)
-        near(8f, b.topY, "topY"); near(shown.topH + 20f, b.topH, "topH"); near(58f, b.square, "square")
-        near(shown.tilesY, b.tilesY, "tilesY"); near(continueOf(shown).w, continueOf(b).w, "continue w")
-        // With the tab row hidden too: 3 rows, 9 slots, as before; the top 20 dp taller still.
+        assertEquals(HomeToolMode.WIDE, b.mode); assertEquals(15, b.slots); assertEquals(0, b.more)
+        near(8f, b.topY, "topY"); near(shown.topH + 20f, b.topH, "topH"); near(56f, shown.square, "shown square"); near(58f, b.square, "square")
+        near(shown.tilesY, b.tilesY, "tilesY"); near(continueOf(shown).w - 0.6f * 2 * 2f, continueOf(b).w, "continue w")
+        // With the tab row hidden too: still 15 slots; the top (388 − 28 − 8 = 352) 20 dp taller still, squares at the
+        // 58 cap.
         val t = f.copy(h = 388f, titleHidden = true)
         val tb = homeBoard(hide(t), 1, tools = 7, games = 6)
-        assertEquals(9, tb.slots); near(homeBoard(t, 1, tools = 7, games = 6).topH + 20f, tb.topH, "title hidden topH")
+        assertEquals(15, tb.slots); near(homeBoard(t, 1, tools = 7, games = 6).topH + 20f, tb.topH, "title hidden topH")
+        near(58f, tb.square, "title hidden square")
     }
 
-    // A very short wide body (960 × 60, no games): shown, the top 24 and squares (24 − 7) / 2 = 8.5; the 20 dp hold a
-    // whole row (8.5 + 7), so 3 rows of (44 − 14) / 3 = 10: 9 slots.
-    @Test fun aShortWideFaceGainsARow() {
+    // A very short wide body (960 × 60, no games): shown, the top 24, too short for 5 rows and their 4 half gaps (28), so
+    // the squares floor at 0; hidden, the top 44 and still 5 rows, of (44 − 28) / 5 = 3.2: 15 slots either way.
+    @Test fun aShortWideFaceKeepsFiveAColumn() {
         val f = HomeFrame(960f, 60f, false, 960f / 148f)
         val shown = homeBoard(f, 1, tools = 7, games = 0)
         val b = homeBoard(hide(f), 1, tools = 7, games = 0)
-        assertEquals(6, shown.slots); near(8.5f, shown.square, "shown square")
-        assertEquals(9, b.slots); assertEquals(0, b.more); near(10f, b.square, "square"); near(44f, b.topH, "topH")
+        assertEquals(15, shown.slots); near(0f, shown.square, "shown square")
+        assertEquals(15, b.slots); assertEquals(0, b.more); near(3.2f, b.square, "square"); near(44f, b.topH, "topH")
     }
 
-    // The large face (933 × 616, one line): the top 274 + 20 from 8, the squares at S / 2 = 66.75 (20 dp is no row), the
-    // bands (Pinned, the shelves) where they are with the strip. With the tab row hidden too: 4 rows, the top 318 + 20.
+    // The large face (933 × 616, one line): the top 274 + 20 from 8, still 5 squares a column, of min(66.75,
+    // (294 − 4 · 7) / 5) = 53.2, the bands (Pinned, the shelves) where they are with the strip. With the tab row hidden
+    // too: the top 318 + 20, squares (338 − 28) / 5 = 62.
     @Test fun largeFace() {
         val f = HomeFrame(933f, 616f, false, 933f / 704f)
         val shelves = listOf(HomeShelf.NEW to 6, HomeShelf.NOT_STARTED to 3)
         val shown = homeBoard(f, 1, tools = 5, games = 6, shelves = shelves)
         val b = homeBoard(hide(f), 1, tools = 5, games = 6, shelves = shelves)
-        assertEquals(HomeToolMode.LARGE, b.mode); assertEquals(6, b.slots); assertEquals(0, b.stripLines)
+        assertEquals(HomeToolMode.LARGE, b.mode); assertEquals(10, b.slots); assertEquals(0, b.stripLines)
         near(274f, shown.topH, "shown topH"); near(8f, b.topY, "topY"); near(294f, b.topH, "topH"); near(294f, continueOf(b).h, "continue h")
-        near(66.75f, b.square, "square")
+        near(53.2f, b.square, "square")
         assertEquals(shown.labels, b.labels); assertEquals(shown.shelfTiles, b.shelfTiles); near(shown.tilesY, b.tilesY, "tilesY")
         val t = f.copy(h = 660f, titleHidden = true)
         val tb = homeBoard(hide(t), 1, tools = 5, games = 6, shelves = shelves)
-        assertEquals(8, tb.slots); near(338f, tb.topH, "title hidden topH")
+        assertEquals(10, tb.slots); near(338f, tb.topH, "title hidden topH"); near(62f, tb.square, "title hidden square")
     }
 
     // A face without a strip (nothing on Home: the Pick card, 0 lines) frees nothing: the board is the shown one's.
@@ -154,13 +159,5 @@ class HomeExtraInfoBoardTest {
         for (f in listOf(cover, HomeFrame(960f, 344f, false, 960f / 432f), HomeFrame(933f, 616f, false, 933f / 704f))) {
             assertEquals(homeBoard(f, 0, tools = 0, games = 0), homeBoard(hide(f), 0, tools = 0, games = 0), "$f")
         }
-    }
-
-    @Test fun rowsGainedOnlyForAWholeRow() {
-        assertEquals(0, homeStatsRows(40f, 235f, 5, 6f))          // side 42.2: a row is 48.2
-        assertEquals(1, homeStatsRows(40f, 174f, 5, 6f))          // side 30: a row is 36
-        assertEquals(0, homeStatsRows(0f, 174f, 5, 6f))
-        assertEquals(0, homeStatsRows(40f, 4f, 2, 7f))            // no shown side: no row
-        assertEquals(0, homeStatsRows(20f, 166.6f, 2, 7f, 58f))   // capped at 58: a row is 65
     }
 }

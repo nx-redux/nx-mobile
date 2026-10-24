@@ -466,7 +466,7 @@ void Environment::callback_retro_log(enum retro_log_level level, const char *fmt
             if (nx_log_enabled()) __android_log_vprint(ANDROID_LOG_DEBUG, MODULE_NAME_CORE, fmt, argptr);
             break;
 #endif
-        // 2026-10-14: below an error, only with Settings → Developer → Debug log on (CoreLog above keeps its copy).
+        // 2026-10-14: below an error, only with Settings → System → Debug log on (CoreLog above keeps its copy).
         case RETRO_LOG_INFO:
             if (nx_log_enabled()) __android_log_vprint(ANDROID_LOG_INFO, MODULE_NAME_CORE, fmt, argptr);
             break;

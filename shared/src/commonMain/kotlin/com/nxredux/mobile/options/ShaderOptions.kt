@@ -20,9 +20,7 @@ object ShaderOptions {
     const val PRESET_LABEL = "Shader"
     const val PRESET_INFO = "Shader preset to run. Screen Sharpness is used where the preset leaves the filter unspecified."
     const val PARAMS_LABEL = "Shader Parameters"
-    const val PARAMS_INFO = "Settings the active shader exposes."
     const val RESET_LABEL = "Reset Parameters"
-    const val RESET_INFO = "Restore the shader's default parameter values."
     const val NO_PARAMS = "No settings for this shader."
     const val RESET_DONE = "Parameters reset."
 

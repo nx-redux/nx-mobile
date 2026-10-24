@@ -1,5 +1,7 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.nxTextScale
+import com.nxredux.mobile.ui.nx.nxModalText
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -63,9 +65,9 @@ internal const val MODAL_ROWS = 8
 
 @Composable
 private fun ModalList(caption: String, labels: List<String>, index: Int, onButton: (NxButton) -> Unit, onSelect: (Int) -> Unit) {
-    val rowHeight = 28.dp
+    val rowHeight = 28.dp * nxTextScale()   // the rows grow with their text (Appearance → Text size)
     NxModal(caption = caption, kind = ModalKind.MENU, onButton = onButton) {
         NxList(labels.map { NxRow(it) }, index, onSelect = onSelect, onOpen = { onButton(NxButton.A) },
-            modifier = Modifier.height(rowHeight * minOf(labels.size, MODAL_ROWS)), rowHeightOverride = rowHeight, pillPaddingOverride = 12.dp, textSizeOverride = NxTextSizes.modalText)
+            modifier = Modifier.height(rowHeight * minOf(labels.size, MODAL_ROWS)), rowHeightOverride = rowHeight, pillPaddingOverride = 12.dp, textSizeOverride = nxModalText())
     }
 }

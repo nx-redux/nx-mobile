@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 /**
- * 2026-10-14: Settings → Developer → Debug log. false (the default) skips verbose, debug, info and warning logs; errors
+ * 2026-10-14: Settings → System → Debug log. false (the default) skips verbose, debug, info and warning logs; errors
  * always print. C linkage: netplay's C code (np_net.h) checks it too.
  */
 bool nx_log_enabled(void);

@@ -18,7 +18,7 @@ sealed interface ImportResult {
 typealias TransferReport = (text: String, done: Boolean) -> Unit
 
 /**
- * The platform's save Export/Import (Settings → Emulators → Saves). Each call opens what it needs (a picker) and runs in
+ * The platform's save Export/Import (Settings → Library → Saves). Each call opens what it needs (a picker) and runs in
  * the background. An export's [TransferReport] is called with the progress notice when the work starts and then once
  * more, done, with the summary or the error. An import calls `progress` when its work starts and then `done` once with
  * its [ImportResult]; a refusal (a game still alive, a sync running) is one [ImportResult.Message]. A cancelled picker

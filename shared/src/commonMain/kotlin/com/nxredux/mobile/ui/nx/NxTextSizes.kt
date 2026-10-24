@@ -81,3 +81,19 @@ object NxTextSizes {
     /** The in-game notices (toasts, the progress pill). */
     val notice: TextUnit = 15.sp
 }
+
+/**
+ * A modal's text sizes under Appearance → Text size ([nxTextScale]) and, as every list's text, Android's font size (held
+ * by [NxTheme]): [NxTextSizes.modalText] and its siblings at Large.
+ */
+@androidx.compose.runtime.Composable
+internal fun nxModalText(): TextUnit = NxTextSizes.modalText * nxTextScale()
+
+@androidx.compose.runtime.Composable
+internal fun nxModalSmall(): TextUnit = NxTextSizes.modalSmall * nxTextScale()
+
+@androidx.compose.runtime.Composable
+internal fun nxModalButton(): TextUnit = NxTextSizes.modalButton * nxTextScale()
+
+@androidx.compose.runtime.Composable
+internal fun nxDialogBody(): TextUnit = NxTextSizes.dialogBody * nxTextScale()

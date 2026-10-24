@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * A page's note in an alert box under its title, above its rows (Settings → Emulators → Saves): a "!" badge and [text]
+ * A page's note in an alert box under its title, above its rows (Settings → Library → Saves): a "!" badge and [text]
  * in the warning colour's tint, at the list's inset.
  */
 @Composable
@@ -35,6 +35,6 @@ fun NxBanner(text: String, modifier: Modifier = Modifier) {
         Box(Modifier.size(22.dp).background(colors.warning, CircleShape), contentAlignment = Alignment.Center) {
             Text("!", color = colors.background, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold, fontSize = 15.sp)
         }
-        Text(text, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.modalText)
+        Text(text, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = nxModalText())
     }
 }

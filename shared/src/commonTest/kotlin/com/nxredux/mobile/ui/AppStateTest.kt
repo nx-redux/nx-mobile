@@ -109,7 +109,11 @@ import com.nxredux.mobile.scraper.AndroidArtStore
 import com.nxredux.mobile.storage.ToolPins
 import com.nxredux.mobile.storage.UserDataStore
 import com.nxredux.mobile.ui.nx.Hint
+import com.nxredux.mobile.ui.nx.NxSettingControl
+import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.HomeFrame
+import com.nxredux.mobile.ui.nx.HomeToolMode
+import com.nxredux.mobile.ui.nx.HomeTopKind
 import com.nxredux.mobile.ui.nx.HomeShelf
 import com.nxredux.mobile.ui.nx.homeBoard
 import com.nxredux.mobile.ui.nx.homeCarouselShownRow
@@ -117,6 +121,7 @@ import com.nxredux.mobile.ui.nx.FooterMode
 import com.nxredux.mobile.ui.nx.LauncherChrome
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
+import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.nxTap
 import kotlin.jvm.JvmName
 import kotlin.test.Test
@@ -702,7 +707,7 @@ class AppStateTest {
     @Test fun adding_a_folder_from_settings_notices_its_unassigned_games() = runTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
-        state.openSettings(SettingsSection.ROM_FOLDERS)
+        state.openSettings(SettingsSection.LIBRARY)
         state.addExtra(ContentRef("sd/Loose"))
         assertEquals("2 games need a console: Library → Unassigned games.", state.notice.value)
     }
@@ -1240,18 +1245,14 @@ class AppStateTest {
         assertTrue(picker.forgotten.isEmpty())
         assertEquals(before, assertIs<Screen.Systems>(st.screen.value).systems)
         assertEquals(writes, store.writes)                                                       // the stored index is not replaced
-        assertEquals("Storage did not list a folder just now; the library is unchanged. Use Rescan library in a moment.", st.notice.value)
+        assertEquals("Storage did not list a folder just now; the library is unchanged. Use Rescan in Settings → Library in a moment.", st.notice.value)
         assertNull(st.error.value)
     }
 
-    /**
-     * The page holding [kind]'s row: ROM folders for the folder rows, Default emulators for the tags, Emulators for its
-     * two rows, else Library.
-     */
+    /** The page holding [kind]'s row: Default emulators for the tags, Emulators and Second screen for theirs, else Library. */
     private fun libraryPageOf(kind: SettingsKind): SettingsSection = when (kind) {
-        SettingsKind.HOME, SettingsKind.ADD_EXTRA, SettingsKind.EXTRA -> SettingsSection.ROM_FOLDERS
         SettingsKind.DEFAULT_TAG -> SettingsSection.DEFAULT_EMULATORS
-        SettingsKind.EMULATORS, SettingsKind.DEFAULTS, SettingsKind.SAVES -> SettingsSection.EMULATORS
+        SettingsKind.EMULATORS, SettingsKind.DEFAULTS -> SettingsSection.EMULATORS
         SettingsKind.SECOND_SCREEN_ENABLE, SettingsKind.BOTTOM_SCREEN -> SettingsSection.SECOND_SCREEN
         else -> SettingsSection.LIBRARY
     }
@@ -1264,14 +1265,15 @@ class AppStateTest {
         return row
     }
 
-    /** The Library page's game count ("3 games"), from its "<n> games · <m> consoles" line. */
+    /** The Library page's game count ("3 games"), from its first row's "<n> games · <m> consoles" label. */
     private fun gamesLine(st: AppState): String {
         val s = assertIs<Screen.Settings>(st.screen.value)
         assertEquals(SettingsSection.LIBRARY, s.section)
-        return s.details[1].substringBefore(" · ")
+        assertEquals(SettingsKind.RESCAN, s.rows[0].kind)
+        return s.rows[0].label.substringBefore(" · ")
     }
 
-    private val listingHiddenNotice = "Storage did not list a folder just now; the library is unchanged. Use Rescan library in a moment."
+    private val listingHiddenNotice = "Storage did not list a folder just now; the library is unchanged. Use Rescan in Settings → Library in a moment."
 
     @Test fun a_hidden_listing_on_rescan_from_library_returns_to_the_rescan_row() = runTest {
         val store = MemoryLibraryIndexStore()
@@ -1280,7 +1282,7 @@ class AppStateTest {
         val row = openLibraryOn(st, SettingsKind.RESCAN)
         val writes = store.writes
         source.listingFault = ListingFault.UNAVAILABLE
-        st.onButton(NxButton.A)                                                                  // Rescan library
+        st.onButton(NxButton.A)                                                                  // the counts row: rescan
         val s = assertIs<Screen.Settings>(st.screen.value)
         assertEquals(SettingsSection.LIBRARY, s.section)
         assertEquals(row, st.selection.value.index)
@@ -1318,7 +1320,7 @@ class AppStateTest {
         assertEquals(SettingsSection.LIBRARY, s.section)
         assertEquals(row, st.selection.value.index)
         assertEquals("3 games", gamesLine(st))
-        assertEquals("The home folder's storage is not available. Insert it, then use Rescan library.", st.error.value)
+        assertEquals("The home folder's storage is not available. Insert it, then use Rescan in Settings → Library.", st.error.value)
         assertEquals(ContentRef("Home"), settings.treeRef)
         assertEquals(writes, store.writes)
     }
@@ -1332,7 +1334,7 @@ class AppStateTest {
         val writes = store.writes
         source.listingFault = ListingFault.UNAVAILABLE
         st.setHomePast(ContentRef("Home"))                                                           // the same folder picked again
-        assertEquals(SettingsSection.ROM_FOLDERS, assertIs<Screen.Settings>(st.screen.value).section)
+        assertEquals(SettingsSection.LIBRARY, assertIs<Screen.Settings>(st.screen.value).section)
         assertEquals(row, st.selection.value.index)
         assertEquals(listingHiddenNotice, st.notice.value)
         assertNull(st.error.value)
@@ -1370,7 +1372,7 @@ class AppStateTest {
         assertEquals(ContentRef("Home"), settings.treeRef)
         assertIs<Screen.Systems>(st.screen.value)
         assertEquals(writes, store.writes)
-        assertEquals("Storage did not list a folder just now; the library is unchanged. Use Rescan library in a moment.", st.notice.value)
+        assertEquals("Storage did not list a folder just now; the library is unchanged. Use Rescan in Settings → Library in a moment.", st.notice.value)
         assertNull(st.error.value)
     }
 
@@ -1663,7 +1665,7 @@ class AppStateTest {
         assertEquals("Full screen", state.layoutsRows()[i].secondary)
         assertTrue(settingsNxRow(state.layoutsRows()[i]).cycleable)
         state.onButton(NxButton.RIGHT); assertEquals(com.nxredux.mobile.settings.SwitcherLayout.LIST, settings.switcherLayout)
-        state.onButton(NxButton.A); assertEquals(com.nxredux.mobile.settings.SwitcherLayout.FULL, settings.switcherLayout)
+        state.onButton(NxButton.RIGHT); assertEquals(com.nxredux.mobile.settings.SwitcherLayout.FULL, settings.switcherLayout)
         state.onButton(NxButton.LEFT); assertEquals("List", state.layoutsRows()[i].secondary)
     }
 
@@ -1922,23 +1924,21 @@ class AppStateTest {
         assertTrue(systems.systems.none { it.unassigned })                      // Unassigned lives in Settings -> Library
         state.openSettings(SettingsSection.LIBRARY)
         assertEquals(
-            listOf(SettingsKind.RESCAN, SettingsKind.FOLDERS, SettingsKind.UNASSIGNED),
-            assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind },
+            listOf(SettingsKind.RESCAN, SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.ADD_EXTRA, SettingsKind.SAVES, SettingsKind.UNASSIGNED),
+            selectableKinds(state),
         )
         state.openSettings(SettingsSection.DEFAULT_EMULATORS)
         val d = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(List(10) { SettingsKind.DEFAULT_TAG }, d.rows.map { it.kind })
         // By console name; the Sega consoles have a choice (PicoDrive or Genesis Plus GX), games or not.
-        assertEquals(listOf("gb", "gba", "nds", "segacd", "gg", "md", "sms", "sg1000", "ps", "sfc"), d.rows.map { it.consoleId })
-        assertEquals("gpSP (GBA)", d.rows[1].secondary)
+        assertEquals(listOf("gba", "segacd", "gg", "md", "sms", "sg1000", "ps", "sfc", "gb", "nds"), d.rows.map { it.consoleId })
+        assertEquals("gpSP (GBA)", d.rows[0].secondary)
         state.cycleDefaultTag("gba")
         assertEquals(mapOf("gba" to "MGBA"), settings.defaultTags)
-        assertEquals("mGBA (MGBA)", assertIs<Screen.Settings>(state.screen.value).rows[1].secondary)
-        state.openSettings(SettingsSection.ROM_FOLDERS)
-        val f = assertIs<Screen.Settings>(state.screen.value)
-        assertEquals(listOf(SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.ADD_EXTRA), f.rows.map { it.kind })
-        assertEquals("Loose", f.rows[1].label)
-        state.select(1); state.openSelected()
+        assertEquals("mGBA (MGBA)", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
+        state.openSettings(SettingsSection.LIBRARY)
+        assertEquals("ROM Folder: Loose", libraryRow(state, SettingsKind.EXTRA).label)
+        state.select(rowIndex(state, SettingsKind.EXTRA)); state.openSelected()
         assertEquals(settings.extraFolders[0], assertIs<Screen.Settings>(state.screen.value).confirmRemove)
         state.onButton(NxButton.A)
         assertEquals(emptyList<ExtraFolder>(), settings.extraFolders)
@@ -2038,7 +2038,7 @@ class AppStateTest {
         st.rescan()
         assertEquals(listOf(loose), settings.extraFolders)                                       // kept, grant not released
         assertTrue(picker.forgotten.isEmpty())
-        assertEquals("Loose is not available. Insert its storage, then use Rescan library.", st.notice.value)
+        assertEquals("Loose is not available. Insert its storage, then use Rescan in Settings → Library.", st.notice.value)
         assertEquals(1, gbaCount(st))                                                            // its games are left out
         val saved = assertNotNull(LibraryIndexCodec.decode(store.text!!))
         assertEquals(listOf(loose.id), saved.offline)
@@ -2178,7 +2178,7 @@ class AppStateTest {
         advanceTimeBy(LibraryScanner.REMOUNT_RETRY_MILLIS + 1); runCurrent()
         assertEquals(listOf(loose), settings.extraFolders)
         assertTrue(picker.forgotten.isEmpty())
-        assertEquals("Loose is not ready yet; use Rescan library in a moment.", st.notice.value)
+        assertEquals("Loose is not ready yet; use Rescan in Settings → Library in a moment.", st.notice.value)
         val saved = assertNotNull(LibraryIndexCodec.decode(store.text!!))
         assertEquals(listOf(loose.id), saved.offline)                                            // still recorded offline
         card.looseLag = 0
@@ -2230,7 +2230,7 @@ class AppStateTest {
         assertFalse(MenuCategory.COLLECTIONS in assertIs<Screen.Systems>(st.screen.value).tabs.map { it.category })
         card.homeMounted = false
         st.rescan()
-        assertEquals("The home folder's storage is not available. Insert it, then use Rescan library.", st.error.value)
+        assertEquals("The home folder's storage is not available. Insert it, then use Rescan in Settings → Library.", st.error.value)
         st.dismissError()
         st.load()                                                                                // already said: not repeated
         assertNull(st.error.value)
@@ -2288,6 +2288,12 @@ class AppStateTest {
 
     private fun libraryRow(st: AppState, kind: SettingsKind) = assertIs<Screen.Settings>(st.screen.value).rows.first { it.kind == kind }
 
+    /** The open Settings page's first [kind] row's index. */
+    private fun rowIndex(st: AppState, kind: SettingsKind) = assertIs<Screen.Settings>(st.screen.value).rows.indexOfFirst { it.kind == kind }.also { assertTrue(it >= 0, "no $kind") }
+
+    /** The open Settings page's rows the selection lands on, by kind (Library's group labels and gaps left out). */
+    private fun selectableKinds(st: AppState) = assertIs<Screen.Settings>(st.screen.value).rows.filter { it.selectable }.map { it.kind }
+
     private fun pickRow(st: AppState, label: String) {
         val s = assertIs<Screen.FilePicker>(st.screen.value)
         val at = s.rows.indexOfFirst { it.label == label }
@@ -2320,7 +2326,7 @@ class AppStateTest {
         assertEquals(true, state.menuPadShown())                           // the menu
         state.openSettingsMenu()
         assertEquals(false, state.menuPadShown())                          // Tools → Settings
-        for (section in listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.MAIN_MENU, SettingsSection.LAYOUT_HOME, SettingsSection.ABOUT)) {
+        for (section in listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.MAIN_MENU, SettingsSection.LAYOUT_HOME, SettingsSection.SYSTEM)) {
             state.openSettings(section)
             assertEquals(false, state.menuPadShown(), "$section")
         }
@@ -2356,16 +2362,16 @@ class AppStateTest {
         assertNull(settings.treeRef)
     }
 
-    @Test fun add_rom_folder_starts_beside_the_file_home_and_returns_to_rom_folders() = runTest {
+    @Test fun add_rom_folder_starts_beside_the_file_home_and_returns_to_library() = runTest {
         val settings = MemorySettings(fileHome)
         val st = state(settings, fileSource(), allFiles = FakeAllFilesAccess(isGranted = true), localFiles = localFiles())
         st.load()
-        st.openSettings(SettingsSection.ROM_FOLDERS)
+        st.openSettings(SettingsSection.LIBRARY)
         st.select(assertIs<Screen.Settings>(st.screen.value).rows.indexOfFirst { it.kind == SettingsKind.ADD_EXTRA }); st.openSelected()
         assertEquals("/storage/emulated/0", assertIs<Screen.FilePicker>(st.screen.value).dir)
         pickRow(st, "Loose"); pickRow(st, "Use this folder")
         assertEquals(FileRefs.of("/storage/emulated/0/Loose"), settings.extraFolders.single().ref)
-        assertEquals(SettingsSection.ROM_FOLDERS, assertIs<Screen.Settings>(st.screen.value).section)
+        assertEquals(SettingsSection.LIBRARY, assertIs<Screen.Settings>(st.screen.value).section)
     }
 
     @Test fun a_save_transfer_pick_comes_back_to_its_caller_and_the_screen_it_left() = runTest {
@@ -2442,7 +2448,7 @@ class AppStateTest {
         assertEquals(listOf<ContentRef?>(FileRefs.of("/storage/emulated/0/NXRedux/saves.zip")), got)
     }
 
-    private val accessOff = "All files access is off. Turn it on in Settings → All files access, or pick the home folder again."
+    private val accessOff = "All files access is off. Turn it on in Settings → Library → All files access, or pick the home folder again."
     private val tree = "content://com.android.externalstorage.documents/tree/"
     private val fileHome = FileRefs.of("/storage/emulated/0/NXRedux")
 
@@ -2534,8 +2540,8 @@ class AppStateTest {
         access.isGranted = true
         st.load()                                                                                  // back to the library with access on
         assertNull(st.error.value)
-        st.openSettings(SettingsSection.ROM_FOLDERS)
-        assertEquals("NXRedux", libraryRow(st, SettingsKind.HOME).secondary)
+        st.openSettings(SettingsSection.LIBRARY)
+        assertEquals("/storage/emulated/0/NXRedux", libraryRow(st, SettingsKind.HOME).secondary)   // its path
     }
 
     @Test fun with_access_revoked_and_no_index_the_home_pick_says_so_and_keeps_the_home() = runTest {
@@ -2559,9 +2565,12 @@ class AppStateTest {
         assertIs<Screen.Systems>(st.screen.value)
         assertEquals(listOf(loose), settings.extraFolders)
         assertTrue(picker.forgotten.isEmpty())
-        assertEquals("All files access is off. Turn it on in Settings → All files access.", st.notice.value)
-        st.openSettings(SettingsSection.ROM_FOLDERS)
+        assertNull(st.notice.value)   // no notice: Library says it
+        st.openSettings(SettingsSection.LIBRARY)
         assertEquals("All files access off", libraryRow(st, SettingsKind.EXTRA).secondary)
+        assertTrue(libraryRow(st, SettingsKind.EXTRA).warning)
+        assertEquals("Off: some ROM folders can't be read", libraryRow(st, SettingsKind.ALL_FILES).note)
+        assertTrue(libraryRow(st, SettingsKind.ALL_FILES).warning)
     }
 
     @Test fun an_offline_file_extra_with_access_granted_keeps_the_unmounted_card_wording() = runTest {
@@ -2574,7 +2583,7 @@ class AppStateTest {
         }
         val st = state(settings, cardOut, allFiles = access)
         st.load()
-        assertEquals("Loose is not available. Insert its storage, then use Rescan library.", st.notice.value)
+        assertEquals("Loose is not available. Insert its storage, then use Rescan in Settings → Library.", st.notice.value)
     }
 
     @Test fun with_access_revoked_an_empty_listing_of_the_file_home_never_clears_the_home_or_the_index() = runTest {
@@ -2732,22 +2741,21 @@ class AppStateTest {
         }
     }
 
-    @Test fun rom_folders_shows_all_files_access_next_to_the_home_where_declared() = runTest {
+    @Test fun library_shows_all_files_access_after_add_rom_folder_where_declared() = runTest {
         val access = FakeAllFilesAccess(declared = true, isGranted = false)
         val st = state(MemorySettings(ContentRef("Home")), allFiles = access)
         st.load()
-        st.openSettings(SettingsSection.ROM_FOLDERS)
-        val rows = assertIs<Screen.Settings>(st.screen.value).rows
-        assertEquals(listOf(SettingsKind.HOME, SettingsKind.ALL_FILES, SettingsKind.ADD_EXTRA), rows.map { it.kind })
-        assertEquals(SettingsRow(SettingsKind.ALL_FILES, "All files access", "Off"), rows[1])
-        st.select(1); st.openSelected()
+        st.openSettings(SettingsSection.LIBRARY)
+        assertEquals(listOf(SettingsKind.RESCAN, SettingsKind.HOME, SettingsKind.ADD_EXTRA, SettingsKind.ALL_FILES, SettingsKind.SAVES), assertIs<Screen.Settings>(st.screen.value).rows.map { it.kind })
+        assertEquals(SettingsRow(SettingsKind.ALL_FILES, "All files access", "Off"), libraryRow(st, SettingsKind.ALL_FILES))
+        st.select(rowIndex(st, SettingsKind.ALL_FILES)); st.openSelected()
         assertEquals(1, access.opened)
         access.isGranted = true
         st.onAllFilesAccessChanged()                        // the resume after Android's page
         assertEquals("On", libraryRow(st, SettingsKind.ALL_FILES).secondary)
         val plain = state(MemorySettings(ContentRef("Home")), allFiles = FakeAllFilesAccess(declared = false))
         plain.load()
-        plain.openSettings(SettingsSection.ROM_FOLDERS)
+        plain.openSettings(SettingsSection.LIBRARY)
         assertTrue(assertIs<Screen.Settings>(plain.screen.value).rows.none { it.kind == SettingsKind.ALL_FILES })
     }
 
@@ -2758,12 +2766,12 @@ class AppStateTest {
         val st = state(settings, card)
         st.load()
         st.dismissNotice()
-        st.openSettings(SettingsSection.ROM_FOLDERS)
-        assertEquals(SettingsRow(SettingsKind.EXTRA, "Loose", "Not available", extra = loose), libraryRow(st, SettingsKind.EXTRA))
+        st.openSettings(SettingsSection.LIBRARY)
+        assertEquals(SettingsRow(SettingsKind.EXTRA, "ROM Folder: Loose", "Not available", extra = loose, warning = true), libraryRow(st, SettingsKind.EXTRA))
         card.looseMounted = true
         st.load()                                                                                // Back: the card is found, rescanned in
-        st.openSettings(SettingsSection.ROM_FOLDERS)
-        assertEquals(SettingsRow(SettingsKind.EXTRA, "Loose", "ROM folder", extra = loose), libraryRow(st, SettingsKind.EXTRA))
+        st.openSettings(SettingsSection.LIBRARY)
+        assertEquals(SettingsRow(SettingsKind.EXTRA, "ROM Folder: Loose", "ROM folder", extra = loose), libraryRow(st, SettingsKind.EXTRA))
     }
 
     @Test fun library_says_an_extra_mounted_but_not_listing_yet_is_not_ready_yet() = runTest {
@@ -2777,7 +2785,7 @@ class AppStateTest {
         st.dismissNotice()
         st.onForeground()
         advanceTimeBy(LibraryScanner.REMOUNT_RETRY_MILLIS + 1); runCurrent()
-        st.openSettings(SettingsSection.ROM_FOLDERS)
+        st.openSettings(SettingsSection.LIBRARY)
         assertEquals("Not ready yet", libraryRow(st, SettingsKind.EXTRA).secondary)
     }
 
@@ -2798,7 +2806,7 @@ class AppStateTest {
         card.looseLag = 0
         val st2 = state(settings, card, store = store)
         st2.load()                                                                               // from the stored index, no scan
-        st2.openSettings(SettingsSection.ROM_FOLDERS)
+        st2.openSettings(SettingsSection.LIBRARY)
         assertEquals("Not available", libraryRow(st2, SettingsKind.EXTRA).secondary)
     }
 
@@ -2808,12 +2816,12 @@ class AppStateTest {
         val card = CardSource(source)
         val st = state(settings, card)
         st.load()
-        st.openSettings(SettingsSection.ROM_FOLDERS)
+        st.openSettings(SettingsSection.LIBRARY)
         assertEquals("ROM folder", libraryRow(st, SettingsKind.EXTRA).secondary)
         card.looseMounted = false
         openLibraryOn(st, SettingsKind.RESCAN)
-        st.onButton(NxButton.A)                                                                  // Rescan library
-        st.openSettings(SettingsSection.ROM_FOLDERS)
+        st.onButton(NxButton.A)                                                                  // the counts row: rescan
+        st.openSettings(SettingsSection.LIBRARY)
         assertEquals("Not available", libraryRow(st, SettingsKind.EXTRA).secondary)
     }
 
@@ -2824,7 +2832,7 @@ class AppStateTest {
         val st = state(settings, CardSource(source, looseMounted = false), picker)
         st.load()
         st.dismissNotice()
-        st.openSettings(SettingsSection.ROM_FOLDERS)
+        st.openSettings(SettingsSection.LIBRARY)
         st.select(assertIs<Screen.Settings>(st.screen.value).rows.indexOfFirst { it.kind == SettingsKind.EXTRA })
         st.onButton(NxButton.A)                                                                  // confirm prompt
         assertEquals(loose, assertIs<Screen.Settings>(st.screen.value).confirmRemove)
@@ -2841,13 +2849,12 @@ class AppStateTest {
         val st = state(settings, card, store = store)
         st.load()
         st.dismissError()
-        st.openSettings(SettingsSection.ROM_FOLDERS)
-        assertEquals(SettingsRow(SettingsKind.HOME, "Home folder", "Home · not available"), libraryRow(st, SettingsKind.HOME))
+        st.openSettings(SettingsSection.LIBRARY)
+        assertEquals(SettingsRow(SettingsKind.HOME, "Home folder", "Not available", warning = true), libraryRow(st, SettingsKind.HOME))
         card.homeMounted = true
-        st.onButton(NxButton.B)                                                                  // ROM folders -> Library
         st.onButton(NxButton.B)                                                                  // Back from Library: load, the probe reads it
         assertIs<Screen.SettingsMenu>(st.screen.value)
-        st.openSettings(SettingsSection.ROM_FOLDERS)
+        st.openSettings(SettingsSection.LIBRARY)
         assertEquals(SettingsRow(SettingsKind.HOME, "Home folder", "Home"), libraryRow(st, SettingsKind.HOME))
     }
 
@@ -2884,7 +2891,7 @@ class AppStateTest {
         assertEquals(before, store.text)
         assertEquals(0, store.deletes)
         assertEquals(1, gbaCount(st))
-        assertEquals("The home folder's storage is not available. Insert it, then use Rescan library.", st.error.value)
+        assertEquals("The home folder's storage is not available. Insert it, then use Rescan in Settings → Library.", st.error.value)
     }
 
     @Test fun a_first_scan_with_the_home_on_an_unmounted_card_keeps_the_home_for_the_next_start() = runTest {
@@ -2997,10 +3004,11 @@ class AppStateTest {
         state.onButton(NxButton.RIGHT)
         assertEquals(0, sub().index)                 // one column: LEFT/RIGHT do nothing
         state.onMenuLayout(2)
+        val perColumn = (sub().values.size + 1) / 2   // the columns balance ([menuColumnRows])
         state.onButton(NxButton.RIGHT)
-        assertEquals(8, sub().index)
+        assertEquals(perColumn, sub().index)
         state.onButton(NxButton.UP)
-        assertEquals(7, sub().index)                 // the right column's top: on to the left column's foot
+        assertEquals(perColumn - 1, sub().index)     // the right column's top: on to the left column's foot
         state.onButton(NxButton.DOWN); state.onButton(NxButton.LEFT)
         assertEquals(0, sub().index)
         repeat(20) { state.onButton(NxButton.DOWN) }
@@ -3252,7 +3260,7 @@ class AppStateTest {
         assertEquals(listOf("listChildren:Home", "listChildren:Home/Roms"), counting.calls.listings())   // same set of extras: no scan (probe + skeleton only)
         st.openSettings(SettingsSection.DEFAULT_EMULATORS)
         st.select(assertIs<Screen.Settings>(st.screen.value).rows.indexOfFirst { it.consoleId == "gba" })
-        st.openSelected()                                                       // GBA -> MGBA
+        st.onButton(NxButton.RIGHT)                                             // GBA -> MGBA
         counting.calls.clear()
         st.onButton(NxButton.B)
         assertTrue("listChildren:Home/Roms" in counting.calls)                  // the index no longer fits: scanned
@@ -3327,13 +3335,11 @@ class AppStateTest {
         val counting = CountingRomsSource(source)
         val st = state(settings, counting, store = store)
         st.load()
-        st.openSettings(SettingsSection.ROM_FOLDERS)
-        st.select(1); st.openSelected(); st.onButton(NxButton.A)                // remove Loose
+        st.openSettings(SettingsSection.LIBRARY)
+        st.select(rowIndex(st, SettingsKind.EXTRA)); st.openSelected(); st.onButton(NxButton.A)   // remove Loose
         assertEquals(2, store.writes)
         assertEquals(emptyList<IndexedExtra>(), assertNotNull(store.text?.let(LibraryIndexCodec::decode)).extras)
         counting.calls.clear()
-        st.onButton(NxButton.B)                                                 // ROM folders -> Library: no I/O
-        assertTrue(counting.calls.isEmpty())
         st.onButton(NxButton.B)                                                 // Library -> menu: the re-index is current, no reload
         assertEquals(emptyList<String>(), counting.calls.listings())
         assertIs<Screen.SettingsMenu>(st.screen.value)
@@ -3526,7 +3532,7 @@ class AppStateTest {
         assertEquals(emptyList(), runner.launched.single().companions)
     }
 
-    private val goneError = "Could not find Gone.gb. If it was moved or deleted, use Rescan library in Settings."
+    private val goneError = "Could not find Gone.gb. If it was moved or deleted, use Rescan in Settings → Library."
 
     @Test fun a_missing_file_shows_the_rescan_hint_and_neither_writes_recents_nor_launches() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
@@ -3581,7 +3587,7 @@ class AppStateTest {
         assertEquals(2, gba.gameCount)                                                           // extras are not probed at start
         st.openSystem(gba)
         st.play(gba.games.first { it.fileName == "Kirby.gba" })
-        assertEquals("Could not find Kirby.gba. If it was moved or deleted, use Rescan library in Settings.", st.error.value)
+        assertEquals("Could not find Kirby.gba. If it was moved or deleted, use Rescan in Settings → Library.", st.error.value)
         assertTrue(runner.launched.isEmpty())
         assertTrue(data.recents.isEmpty())
         st.dismissError()
@@ -3601,7 +3607,8 @@ class AppStateTest {
         st.openSettings(SettingsSection.LIBRARY)
         val s = assertIs<Screen.Settings>(st.screen.value)
         val row = s.rows.indexOfFirst { it.kind == SettingsKind.RESCAN }
-        assertEquals(SettingsRow(SettingsKind.RESCAN, "Rescan library"), s.rows[row])
+        assertEquals(0, row)                                           // the counts row, first
+        assertEquals(SettingsRow(SettingsKind.RESCAN, "3 games · 3 consoles"), s.rows[row])   // no scan stamped yet: no Last scan
         assertEquals("3 games", gamesLine(st))
         st.select(row)
         counting.calls.clear()
@@ -3708,7 +3715,7 @@ class AppStateTest {
         source.writeText(ContentRef("Home/Roms/Game Boy (GB)"), "Dr. Mario.gb", "")
         val writes = store.writes
         held.hold = true
-        st.onButton(NxButton.A)                                                                  // Rescan library
+        st.onButton(NxButton.A)                                                                  // the counts row: rescan
         assertIs<Screen.Settings>(st.screen.value)                                               // Settings stays underneath
         advanceTimeBy(100); assertFalse(st.loading.value)
         advanceTimeBy(100); assertTrue(st.loading.value)
@@ -3913,10 +3920,9 @@ class AppStateTest {
         val after = assertIs<Screen.Settings>(st.screen.value)
         assertNull(after.confirmRemove)
         assertTrue(after.rows.none { it.kind == SettingsKind.EXTRA })
-        assertEquals(extraRow.coerceAtMost(after.rows.size - 1), st.selection.value.index)
-        st.onButton(NxButton.B)                          // Library, on ROM folders, counted after the re-index
-        assertEquals(SettingsKind.FOLDERS, assertIs<Screen.Settings>(st.screen.value).rows[st.selection.value.index].kind)
-        assertEquals("3 games", gamesLine(st))
+        assertEquals(extraRow, st.selection.value.index)
+        assertEquals(SettingsKind.ADD_EXTRA, after.rows[st.selection.value.index].kind)   // the next row, Loose gone
+        assertEquals("3 games", gamesLine(st))           // counted after the re-index
     }
 
     private fun cheatDb(fake: FakeCheatDbPlatform, scope: CoroutineScope) = CheatDbController(fake, setOf("N64"), scope, now = { 7L })
@@ -5016,9 +5022,9 @@ class AppStateTest {
         assertEquals(listOf("Cheat Database", "Settings"), state.screen.value.toolRows().map { it.label })
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
         val menu = assertIs<Screen.SettingsMenu>(state.screen.value)
-        assertEquals(listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.DEVELOPER, SettingsSection.ABOUT), menu.sections)
-        assertEquals(listOf("Library", "Emulators", "Appearance", "Layouts", "Controls", "Developer", "About"), menu.sections.map { it.label })
-        assertEquals(ListSelection(0, 7), state.selection.value)
+        assertEquals(listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.SYSTEM), menu.sections)
+        assertEquals(listOf("Library", "Emulators", "Appearance", "Layouts", "Controls", "System"), menu.sections.map { it.label })
+        assertEquals(ListSelection(0, 6), state.selection.value)
         state.onButton(NxButton.B)
         state.screen.value.toolRows()
         assertEquals(ListSelection(1, 2), state.selection.value)       // Settings stays highlighted
@@ -5032,54 +5038,56 @@ class AppStateTest {
         state.onButton(NxButton.A)                                      // Library
         val lib = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.LIBRARY, lib.section)
-        assertEquals(listOf("Rescan library", "ROM folders"), lib.rows.take(2).map { it.label })
+        assertEquals(listOf("3 games · 3 consoles", "Home folder"), lib.rows.take(2).map { it.label })
         state.onButton(NxButton.B)
         assertIs<Screen.SettingsMenu>(state.screen.value)
         assertEquals(0, state.selection.value.index)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Emulators
         val emu = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.EMULATORS, emu.section)
-        assertEquals(listOf("Default emulators", "Settings", "Saves", "Pause when unfocused"), emu.rows.map { it.label })   // no second screen: no Second screen row
+        assertEquals(listOf("Default emulators", "Settings"), emu.rows.map { it.label })   // Saves under Library, Pause when unfocused under System
         state.onButton(NxButton.B)
-        assertEquals(ListSelection(1, 7), state.selection.value)
+        assertEquals(ListSelection(1, 6), state.selection.value)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Appearance
         assertEquals(SettingsSection.APPEARANCE, assertIs<Screen.Settings>(state.screen.value).section)
         state.onButton(NxButton.B)
-        assertEquals(ListSelection(2, 7), state.selection.value)
+        assertEquals(ListSelection(2, 6), state.selection.value)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Layouts
         assertEquals(SettingsSection.MAIN_MENU, assertIs<Screen.Settings>(state.screen.value).section)
         state.onButton(NxButton.B)
-        assertEquals(ListSelection(3, 7), state.selection.value)
+        assertEquals(ListSelection(3, 6), state.selection.value)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Controls
         assertEquals(SettingsSection.CONTROLS, assertIs<Screen.Settings>(state.screen.value).section)
         assertEquals(listOf("Pad vibration", "Game rumble", "Menu pad", "Pad layout", "Reset to defaults"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })
         state.onButton(NxButton.B)
-        assertEquals(ListSelection(4, 7), state.selection.value)
-        state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Developer
-        assertEquals(listOf("Debug log"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })
-        state.onButton(NxButton.B)
-        assertEquals(ListSelection(5, 7), state.selection.value)
-        state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // About
-        assertEquals(SettingsSection.ABOUT, assertIs<Screen.Settings>(state.screen.value).section)
+        assertEquals(ListSelection(4, 6), state.selection.value)
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // System, the last
+        val sys = assertIs<Screen.Settings>(state.screen.value)
+        assertEquals(SettingsSection.SYSTEM, sys.section)
+        assertEquals(listOf("General", "Developer", "About", "Licenses"), sys.rows.filter { it.kind == SettingsKind.SECTION }.map { it.label })   // no launcher: no Launcher group
         state.onButton(NxButton.B)
         assertIs<Screen.SettingsMenu>(state.screen.value)
-        assertEquals(ListSelection(6, 7), state.selection.value)
+        assertEquals(ListSelection(5, 6), state.selection.value)
     }
 
-    // --- Settings -> Library: the RetroAchievements-style page and its ROM folders / Default emulators sub-pages ---
+    // --- Settings -> Library: one page of Storage, ROM folders and Games groups; Default emulators under Emulators ---
 
-    @Test fun the_library_page_shows_the_home_and_counts_a_merged_console_once() = runTest {
+    @Test fun the_library_page_shows_its_counts_then_one_flat_list_counting_a_merged_console_once() = runTest {
         val st = state(MemorySettings(ContentRef("Home")), snes)
         st.load()
         st.openSettings(SettingsSection.LIBRARY)
         val s = assertIs<Screen.Settings>(st.screen.value)
-        assertEquals(listOf("Home", "7 games · 2 consoles", "1 ROM folder"), s.details)          // SFC + SUPA are one console; no clock, no Last scan
+        assertTrue(s.details.isEmpty())                                                            // the counts are the first row now
         assertEquals(
-            listOf(SettingsKind.RESCAN, SettingsKind.FOLDERS),
-            s.rows.map { it.kind },                                                                // no Unassigned or Hidden game: no rows for them
+            listOf(
+                SettingsRow(SettingsKind.RESCAN, "7 games · 2 consoles"),                           // SFC + SUPA are one console; no clock, no Last scan
+                SettingsRow(SettingsKind.HOME, "Home folder", "Home"),                              // no group labels or gaps
+                SettingsRow(SettingsKind.ADD_EXTRA, "Add ROM folder"),
+                SettingsRow(SettingsKind.SAVES, "Saves"),                                           // no Unassigned or Hidden game: no rows for them
+            ),
+            s.rows,
         )
-        assertEquals(listOf("Rescan library", "ROM folders"), s.rows.map { it.label })
-        assertTrue(s.rows.all { it.secondary == null })
+        assertEquals(0, st.selection.value.index)                                                  // on the counts row
     }
 
     @Test fun the_library_page_adds_unassigned_then_hidden_only_when_they_hold_games() = runTest {
@@ -5089,51 +5097,121 @@ class AppStateTest {
         st.openSettings(SettingsSection.LIBRARY)
         val s = assertIs<Screen.Settings>(st.screen.value)
         assertEquals(
-            listOf(
-                SettingsRow(SettingsKind.RESCAN, "Rescan library"),
-                SettingsRow(SettingsKind.FOLDERS, "ROM folders"),
-                SettingsRow(SettingsKind.UNASSIGNED, "Unassigned games", "2 games"),
-                SettingsRow(SettingsKind.HIDDEN, "Hidden games", "1 game"),
-            ),
-            s.rows,
+            listOf(SettingsKind.RESCAN, SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.ADD_EXTRA, SettingsKind.SAVES, SettingsKind.UNASSIGNED, SettingsKind.HIDDEN),
+            selectableKinds(st),
         )
-        assertEquals("2 ROM folders", s.details[2])                                              // the home and Loose
+        assertEquals(SettingsRow(SettingsKind.UNASSIGNED, "Unassigned games", "2 games"), libraryRow(st, SettingsKind.UNASSIGNED))
+        assertEquals(SettingsRow(SettingsKind.HIDDEN, "Hidden games", "1 game"), libraryRow(st, SettingsKind.HIDDEN))
+        assertEquals(SettingsRow(SettingsKind.EXTRA, "ROM Folder: Loose", "ROM folder", extra = settings.extraFolders.single()), libraryRow(st, SettingsKind.EXTRA))
+        assertEquals(rowIndex(st, SettingsKind.HOME) + 1, s.rows.indexOfFirst { it.kind == SettingsKind.EXTRA })   // right under the home, above Add ROM folder
     }
 
     @Test fun the_library_page_without_a_home_says_so() = runTest {
         val st = state(MemorySettings())
         st.openSettings(SettingsSection.LIBRARY)
-        assertEquals(listOf("No home folder", "0 games · 0 consoles", "0 ROM folders"), assertIs<Screen.Settings>(st.screen.value).details)
+        assertEquals(SettingsRow(SettingsKind.RESCAN, "0 games · 0 consoles"), assertIs<Screen.Settings>(st.screen.value).rows[0])
+        assertEquals(SettingsRow(SettingsKind.HOME, "Home folder", "No home folder"), libraryRow(st, SettingsKind.HOME))
     }
 
-    @Test fun rom_folders_opens_from_library_with_the_folder_rows_and_b_returns_to_its_row() = runTest {
+    @Test fun library_rows_show_a_file_folders_path() = runTest {
+        val settings = MemorySettings(fileHome)
+        val st = state(settings, fileSource(), allFiles = FakeAllFilesAccess(isGranted = true), localFiles = localFiles())
+        st.load()
+        st.addExtra(FileRefs.of("/storage/emulated/0/Loose"))
+        st.openSettings(SettingsSection.LIBRARY)
+        assertEquals("/storage/emulated/0/NXRedux", libraryRow(st, SettingsKind.HOME).secondary)
+        assertEquals(SettingsRow(SettingsKind.EXTRA, "ROM Folder: Loose", "/storage/emulated/0/Loose", extra = settings.extraFolders.single()), libraryRow(st, SettingsKind.EXTRA))
+        assertEquals("On", libraryRow(st, SettingsKind.ALL_FILES).secondary)
+    }
+
+    @Test fun library_up_and_down_walk_its_flat_list_and_wrap() = runTest {
+        val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
+        val st = state(MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) })
+        st.load()
+        st.openSettings(SettingsSection.LIBRARY)
+        val rows = assertIs<Screen.Settings>(st.screen.value).rows
+        assertEquals(SettingsKind.RESCAN, rows[st.selection.value.index].kind)                    // starts on the counts row
+        val seen = List(7) { st.onButton(NxButton.DOWN); rows[st.selection.value.index].kind }
+        assertEquals(listOf(SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.ADD_EXTRA, SettingsKind.SAVES, SettingsKind.UNASSIGNED, SettingsKind.RESCAN, SettingsKind.HOME), seen)   // row by row; wraps to the top
+        st.onButton(NxButton.UP); st.onButton(NxButton.UP)
+        assertEquals(SettingsKind.UNASSIGNED, rows[st.selection.value.index].kind)
+    }
+
+    @Test fun the_all_files_switch_opens_androids_page_and_follows_the_grant() = runTest {
+        val access = FakeAllFilesAccess(declared = true, isGranted = false)
+        val st = state(MemorySettings(ContentRef("Home")), allFiles = access)
+        st.load()
+        st.openSettings(SettingsSection.LIBRARY)
+        val at = rowIndex(st, SettingsKind.ALL_FILES)
+        val page = assertIs<Screen.Settings>(st.screen.value)
+        val touch = settingsTouchRow(page.rows[at], page.choices[at], page.section)
+        assertEquals(NxSettingControl.SWITCH, touch.control)
+        assertEquals(0, touch.index)                                                               // Off
+        assertEquals("", touch.info)                                                               // a line only for a warning
+        assertEquals("Lets cores and saves use your home folder's real path", touch.detail)
+        st.chooseSetting(at, 1)                                                                    // the switch flipped by a tap
+        assertEquals(1, access.opened)
+        assertEquals(at, st.selection.value.index)
+        st.onButton(NxButton.A)                                                                    // and by A
+        assertEquals(2, access.opened)
+        access.isGranted = true
+        st.onAllFilesAccessChanged()
+        val after = assertIs<Screen.Settings>(st.screen.value)
+        assertEquals(1, after.choices[at]?.index)                                                  // On
+        assertEquals(at, st.selection.value.index)
+    }
+
+    @Test fun library_touch_rows_describe_with_their_state_and_mark_a_problem() = runTest {
+        val home = settingsTouchRow(SettingsRow(SettingsKind.HOME, "Home folder", "Not available", warning = true), null, SettingsSection.LIBRARY)
+        assertEquals("Not available", home.info)
+        assertTrue(home.warning)
+        assertTrue(home.opens)
+        assertNull(home.value)
+        val hidden = settingsTouchRow(SettingsRow(SettingsKind.HIDDEN, "Hidden games", "2 games"), null, SettingsSection.LIBRARY)
+        assertEquals("2 games", hidden.info)
+        assertTrue(hidden.opens)
+        assertFalse(hidden.warning)
+        assertTrue(settingsTouchRow(SettingsRow(SettingsKind.SECTION, "Games"), null).section)
+        assertTrue(settingsTouchRow(SettingsRow(SettingsKind.GAP, ""), null).spacer)
+        assertTrue(settingsTouchPage(Screen.Settings(SettingsSection.LIBRARY, emptyList())))
+    }
+
+    @Test fun rescan_says_the_last_scan_and_the_page_gives_it_under_the_counts() = runTest {
+        val clock = 1_000_000L
+        val st = state(MemorySettings(ContentRef("Home")), now = { clock })
+        st.load()
+        st.openSettings(SettingsSection.LIBRARY)
+        val s = assertIs<Screen.Settings>(st.screen.value)
+        assertTrue(s.details.isEmpty())
+        assertEquals(SettingsRow(SettingsKind.RESCAN, "3 games · 3 consoles", "Last scan: ${formatDateTime(clock)}"), s.rows[0])   // under the counts
+    }
+
+    @Test fun b_from_hidden_games_lands_on_its_library_row() = runTest {
+        val st = state(MemorySettings(ContentRef("Home")), data = FakeUserData(hidden = listOf(mario)))
+        st.load()
+        val row = openLibraryOn(st, SettingsKind.HIDDEN)
+        st.onButton(NxButton.A)
+        assertEquals(ListSource.Hidden, assertIs<Screen.Games>(st.screen.value).source)
+        st.onButton(NxButton.B)
+        assertEquals(SettingsSection.LIBRARY, assertIs<Screen.Settings>(st.screen.value).section)
+        assertEquals(row, st.selection.value.index)
+        st.onButton(NxButton.B)
+        assertIs<Screen.SettingsMenu>(st.screen.value)
+        assertEquals(0, st.selection.value.index)                                                  // B from Library: the menu on Library
+    }
+
+    @Test fun the_remove_dialog_over_library_keeps_the_extras_row() = runTest {
         val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }
         val st = state(settings)
         st.load()
-        openLibraryOn(st, SettingsKind.FOLDERS)
+        val row = openLibraryOn(st, SettingsKind.EXTRA)
         st.onButton(NxButton.A)
-        val f = assertIs<Screen.Settings>(st.screen.value)
-        assertEquals(SettingsSection.ROM_FOLDERS, f.section)
-        assertEquals(
-            listOf(
-                SettingsRow(SettingsKind.HOME, "Home folder", "Home"),
-                SettingsRow(SettingsKind.EXTRA, "Loose", "ROM folder", extra = loose),
-                SettingsRow(SettingsKind.ADD_EXTRA, "Add ROM folder"),
-            ),
-            f.rows,
-        )
-        assertTrue(f.details.isEmpty())
-        st.onButton(NxButton.DOWN); st.onButton(NxButton.DOWN)
-        st.onButton(NxButton.B)
-        val lib = assertIs<Screen.Settings>(st.screen.value)
-        assertEquals(SettingsSection.LIBRARY, lib.section)
-        assertEquals(SettingsKind.FOLDERS, lib.rows[st.selection.value.index].kind)
-        st.onButton(NxButton.A)
-        assertEquals(2, st.selection.value.index)                                                // the sub-page's row is remembered
-        st.onButton(NxButton.B); st.onButton(NxButton.B)
-        assertIs<Screen.SettingsMenu>(st.screen.value)
-        assertEquals(0, st.selection.value.index)                                                // B from Library: the menu on Library
+        assertEquals(loose, assertIs<Screen.Settings>(st.screen.value).confirmRemove)
+        st.onButton(NxButton.B)                                                                    // keep it
+        assertNull(assertIs<Screen.Settings>(st.screen.value).confirmRemove)
+        assertEquals(row, st.selection.value.index)
+        assertEquals(listOf(loose), settings.extraFolders)
     }
 
     @Test fun default_emulators_explains_itself_and_left_right_a_cycle_the_tag() = runTest {
@@ -5145,18 +5223,13 @@ class AppStateTest {
         val d = assertIs<Screen.Settings>(st.screen.value)
         assertEquals(SettingsSection.DEFAULT_EMULATORS, d.section)
         assertEquals(
-            listOf(
-                "For every game of the console, whichever of its folders holds it. A per-game Emulator choice still wins.",
-                "The tag is where saves and settings are kept.",
-            ),
+            listOf("A game's own Emulator choice still wins. Saves and settings follow the tag."),
             d.details,
         )
-        // Consoles with games (GB, GBA, NDS) and every console with several tags, by console name; one emulator: dimmed.
+        // Consoles with several emulators first, by console name; then the single-emulator ones (Game Boy, Nintendo DS, dimmed).
         assertEquals(
             listOf(
-                SettingsRow(SettingsKind.DEFAULT_TAG, "Game Boy", "Gambatte (GB)", consoleId = "gb", enabled = false),
                 SettingsRow(SettingsKind.DEFAULT_TAG, "Game Boy Advance", "gpSP (GBA)", consoleId = "gba"),
-                SettingsRow(SettingsKind.DEFAULT_TAG, "Nintendo DS", "melonDS DS (NDS)", consoleId = "nds", enabled = false),
                 SettingsRow(SettingsKind.DEFAULT_TAG, "Sega CD", "PicoDrive (SEGACD)", consoleId = "segacd"),
                 SettingsRow(SettingsKind.DEFAULT_TAG, "Sega Game Gear", "PicoDrive (GG)", consoleId = "gg"),
                 SettingsRow(SettingsKind.DEFAULT_TAG, "Sega Genesis", "PicoDrive (MD)", consoleId = "md"),
@@ -5164,31 +5237,35 @@ class AppStateTest {
                 SettingsRow(SettingsKind.DEFAULT_TAG, "Sega SG-1000", "PicoDrive (SG1000)", consoleId = "sg1000"),
                 SettingsRow(SettingsKind.DEFAULT_TAG, "Sony PlayStation", "PCSX-ReARMed (PS)", consoleId = "ps"),
                 SettingsRow(SettingsKind.DEFAULT_TAG, "Super Nintendo ES", "Snes9x (SFC)", consoleId = "sfc"),
+                SettingsRow(SettingsKind.DEFAULT_TAG, "Game Boy", "Gambatte (GB)", consoleId = "gb", enabled = false),
+                SettingsRow(SettingsKind.DEFAULT_TAG, "Nintendo DS", "melonDS DS (NDS)", consoleId = "nds", enabled = false),
             ),
             d.rows,
         )
-        val value = { i: Int -> assertIs<Screen.Settings>(st.screen.value).rows[i].secondary }
+        val value = { id: String -> assertIs<Screen.Settings>(st.screen.value).rows.first { it.consoleId == id }.secondary }
+        val goTo = { id: String -> st.select(assertIs<Screen.Settings>(st.screen.value).rows.indexOfFirst { it.consoleId == id }) }
+        goTo("gb")
         st.onButton(NxButton.A); st.onButton(NxButton.RIGHT); st.onButton(NxButton.LEFT)   // Game Boy: one emulator, nothing moves
-        assertEquals("Gambatte (GB)", value(0))
+        assertEquals("Gambatte (GB)", value("gb"))
         assertEquals(emptyMap(), settings.defaultTags)
-        st.onButton(NxButton.DOWN)
-        st.onButton(NxButton.RIGHT); assertEquals("mGBA (MGBA)", value(1))
-        st.onButton(NxButton.LEFT); assertEquals("gpSP (GBA)", value(1))
-        st.onButton(NxButton.A); assertEquals("mGBA (MGBA)", value(1))
+        goTo("gba")
+        st.onButton(NxButton.RIGHT); assertEquals("mGBA (MGBA)", value("gba"))
+        st.onButton(NxButton.LEFT); assertEquals("gpSP (GBA)", value("gba"))
+        st.onButton(NxButton.A); st.onButton(NxButton.DOWN); st.onButton(NxButton.A); assertEquals("mGBA (MGBA)", value("gba"))   // A: the picker; DOWN, A pick the next
         assertEquals(mapOf("gba" to "MGBA"), settings.defaultTags)
-        st.onButton(NxButton.DOWN); st.onButton(NxButton.DOWN)
-        st.onButton(NxButton.RIGHT); assertEquals("Genesis Plus GX (GPGX)", value(3))   // Sega CD: its GPGX_SEGACD, shown as GPGX
+        goTo("segacd")
+        st.onButton(NxButton.RIGHT); assertEquals("Genesis Plus GX (GPGX)", value("segacd"))   // Sega CD: its GPGX_SEGACD, shown as GPGX
         assertEquals(mapOf("gba" to "MGBA", "segacd" to "GPGX_SEGACD"), settings.defaultTags)
-        st.onButton(NxButton.LEFT); assertEquals("PicoDrive (SEGACD)", value(3))
-        st.onButton(NxButton.DOWN); st.onButton(NxButton.DOWN)
-        st.onButton(NxButton.RIGHT); assertEquals("Genesis Plus GX (GPGX)", value(5))   // Genesis: PicoDrive or Genesis Plus GX
+        st.onButton(NxButton.LEFT); assertEquals("PicoDrive (SEGACD)", value("segacd"))
+        goTo("md")
+        st.onButton(NxButton.RIGHT); assertEquals("Genesis Plus GX (GPGX)", value("md"))   // Genesis: PicoDrive or Genesis Plus GX
         assertEquals("GPGX", settings.defaultTags["md"])
-        st.onButton(NxButton.LEFT); assertEquals("PicoDrive (MD)", value(5))
-        repeat(3) { st.onButton(NxButton.DOWN) }
-        st.onButton(NxButton.RIGHT); assertEquals("SwanStation (PSX)", value(8))
-        st.onButton(NxButton.LEFT); assertEquals("PCSX-ReARMed (PS)", value(8))
-        st.onButton(NxButton.DOWN)
-        st.onButton(NxButton.RIGHT); assertEquals("Supafaust (SUPA)", value(9))
+        st.onButton(NxButton.LEFT); assertEquals("PicoDrive (MD)", value("md"))
+        goTo("ps")
+        st.onButton(NxButton.RIGHT); assertEquals("SwanStation (PSX)", value("ps"))
+        st.onButton(NxButton.LEFT); assertEquals("PCSX-ReARMed (PS)", value("ps"))
+        goTo("sfc")
+        st.onButton(NxButton.RIGHT); assertEquals("Supafaust (SUPA)", value("sfc"))
     }
 
     @Test fun b_from_default_emulators_rescans_only_after_a_change_and_lands_on_its_row() = runTest {
@@ -5202,7 +5279,7 @@ class AppStateTest {
         var lib = assertIs<Screen.Settings>(st.screen.value)
         assertEquals(SettingsKind.DEFAULTS, lib.rows[st.selection.value.index].kind)
         st.onButton(NxButton.A)
-        st.onButton(NxButton.DOWN); st.onButton(NxButton.A)                                      // GBA -> MGBA (row 0 is Game Boy)
+        st.onButton(NxButton.RIGHT)                                                              // GBA (row 0) -> MGBA
         st.onButton(NxButton.B)
         assertTrue("listChildren:Home/Roms" in counting.calls)                                   // rescanned, under the overlay
         lib = assertIs<Screen.Settings>(st.screen.value)
@@ -5221,7 +5298,7 @@ class AppStateTest {
         st.onButton(NxButton.DOWN); st.onButton(NxButton.A)                                      // Emulators
         val e = assertIs<Screen.Settings>(st.screen.value)
         assertEquals(SettingsSection.EMULATORS, e.section)
-        assertEquals(listOf(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"), SettingsRow(SettingsKind.EMULATORS, "Settings"), SettingsRow(SettingsKind.SAVES, "Saves"), SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused", "On")), e.rows)
+        assertEquals(listOf(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"), SettingsRow(SettingsKind.EMULATORS, "Settings")), e.rows)   // Saves under Library, Pause when unfocused under System
         assertTrue(e.details.isEmpty())
         st.onButton(NxButton.A)                                                                  // Default emulators
         assertEquals(SettingsSection.DEFAULT_EMULATORS, assertIs<Screen.Settings>(st.screen.value).section)
@@ -5244,7 +5321,7 @@ class AppStateTest {
         st.load()
         st.openSettingsMenu(); st.onButton(NxButton.DOWN); st.onButton(NxButton.A)              // Emulators
         st.onButton(NxButton.A)                                                                  // Default emulators
-        st.onButton(NxButton.DOWN); st.onButton(NxButton.A)                                      // GBA -> MGBA (row 0 is Game Boy)
+        st.onButton(NxButton.RIGHT)                                                              // GBA (row 0) -> MGBA
         assertEquals(mapOf("gba" to "MGBA"), settings.defaultTags)
         counting.calls.clear()
         st.onButton(NxButton.B)
@@ -5308,20 +5385,20 @@ class AppStateTest {
         val first = clock
         assertEquals(first, assertNotNull(store.text?.let(LibraryIndexCodec::decode)).scannedAt)
         openLibraryOn(st, SettingsKind.RESCAN)
-        assertEquals("Last scan: ${formatDateTime(first)}", assertIs<Screen.Settings>(st.screen.value).details.last())
+        assertEquals("Last scan: ${formatDateTime(first)}", assertIs<Screen.Settings>(st.screen.value).rows[0].secondary)
         clock += 3_600_000
         source.listingFault = ListingFault.UNAVAILABLE
         st.onButton(NxButton.A)                                                                  // a failed rescan keeps the old time
-        assertEquals("Last scan: ${formatDateTime(first)}", assertIs<Screen.Settings>(st.screen.value).details.last())
+        assertEquals("Last scan: ${formatDateTime(first)}", assertIs<Screen.Settings>(st.screen.value).rows[0].secondary)
         source.listingFault = null
         st.dismissNotice()
         st.onButton(NxButton.A)                                                                  // a good one moves it
-        assertEquals("Last scan: ${formatDateTime(clock)}", assertIs<Screen.Settings>(st.screen.value).details.last())
+        assertEquals("Last scan: ${formatDateTime(clock)}", assertIs<Screen.Settings>(st.screen.value).rows[0].secondary)
         assertEquals(clock, assertNotNull(store.text?.let(LibraryIndexCodec::decode)).scannedAt)
         val restarted = state(MemorySettings(ContentRef("Home")), store = store)                 // read back from the stored index
         restarted.load()
         restarted.openSettings(SettingsSection.LIBRARY)
-        assertEquals("Last scan: ${formatDateTime(clock)}", assertIs<Screen.Settings>(restarted.screen.value).details.last())
+        assertEquals("Last scan: ${formatDateTime(clock)}", assertIs<Screen.Settings>(restarted.screen.value).rows[0].secondary)
     }
 
     @Test fun the_appearance_rows() = runTest {
@@ -5470,7 +5547,7 @@ class AppStateTest {
         assertEquals("Screenshot", state.layoutsRows()[i].secondary)
         assertEquals(listOf("Mix", "3D box art", "2D box art", "Wheel", "None", "Screenshot"), List(6) { state.onButton(NxButton.RIGHT); state.layoutsRows()[i].secondary })
         state.onButton(NxButton.LEFT); assertEquals(GameListArt.NONE, settings.gameListArt)
-        state.onButton(NxButton.A); assertEquals(GameListArt.SCREENSHOT, settings.gameListArt)
+        state.onButton(NxButton.RIGHT); assertEquals(GameListArt.SCREENSHOT, settings.gameListArt)
         assertEquals(i, state.selection.value.index)
         settings.gameListStyle = MenuStyle.BACKDROP
         state.openSettings(SettingsSection.MAIN_MENU)
@@ -5752,23 +5829,24 @@ class AppStateTest {
         assertEquals(home, state.selection.value.index)
     }
 
-    // Home reports its frame with Extra info hidden: the strip's room goes to the top section, so on a short
-    // wide body (960 × 60, the top 24 with the strip's one line) the freed 20 dp hold a whole row of squares: 9 slots,
-    // and 7 tools all show where "+2" was. The rows match the board the screen draws.
+    // Home reports its frame with Extra info hidden: the strip's room goes to the top section, which grows the squares
+    // but keeps the slots (5 a column): on the portrait type 12 tools still show 9 and "+3". The rows match the board the
+    // screen draws.
     @Test fun hidden_extra_info_gives_home_the_strips_room() = runTest {
-        val state = b2Home(games = 0, tools = 7); state.load(); advanceUntilIdle()
-        val short = HomeFrame(960f, 60f, false, 960f / 148f)
-        state.onHomeLayout(short); advanceUntilIdle()
-        assertEquals(1, state.homeView.value.lines)
-        assertTrue(state.screen.value.homeRows.any { it is MainRow.MoreTools })
-        val hidden = short.copy(statsHidden = true)
+        val state = b2Home(games = 0, tools = 12); state.load(); advanceUntilIdle()
+        state.onHomeLayout(PORT); advanceUntilIdle()
+        val lines = assertNotNull(state.homeView.value.lines)
+        assertTrue(lines > 0)
+        assertEquals(MainRow.MoreTools(3), state.screen.value.homeRows.single { it is MainRow.MoreTools })
+        val shown = homeBoard(PORT, lines, 12, 0)
+        val hidden = PORT.copy(statsHidden = true)
         state.onHomeLayout(hidden); advanceUntilIdle()
         val view = state.homeView.value
         assertEquals(hidden, view.frame)
         val b = homeBoard(view.frame!!, view.lines!!, view.tools, view.games, view.shelves)
-        assertEquals(0, b.stripLines); assertEquals(9, b.slots)
-        assertTrue(state.screen.value.homeRows.none { it is MainRow.MoreTools })
-        assertEquals(7, state.screen.value.homeRows.count { it is MainRow.PinnedTool })
+        assertEquals(0, b.stripLines); assertEquals(10, b.slots); assertTrue(b.square > shown.square)
+        assertEquals(MainRow.MoreTools(3), state.screen.value.homeRows.single { it is MainRow.MoreTools })
+        assertEquals(9, state.screen.value.homeRows.count { it is MainRow.PinnedTool })
         assertEquals(view.topCount, b.top.size)
     }
 
@@ -5801,7 +5879,7 @@ class AppStateTest {
         assertEquals(MenuStyle.GRID, MenuStyles.styleOf(settings.menuStyles, MenuCategory.CONSOLES))
         state.selectLayoutsRow(SettingsKind.MENU_STYLE, MenuCategory.TOOLS); state.onButton(NxButton.A)
         assertEquals(MenuStyle.GRID, MenuStyles.styleOf(settings.menuStyles, MenuCategory.TOOLS))
-        val games = state.selectLayoutsRow(SettingsKind.GAME_LIST_STYLE); state.onButton(NxButton.A)
+        val games = state.selectLayoutsRow(SettingsKind.GAME_LIST_STYLE); state.onButton(NxButton.RIGHT)
         assertEquals(MenuStyle.GRID, settings.gameListStyle)
         state.onButton(NxButton.LEFT)
         assertEquals(MenuStyle.LIST, settings.gameListStyle)
@@ -5929,13 +6007,13 @@ class AppStateTest {
         assertIs<Screen.GameTime>(state.screen.value)
     }
 
-    // Portrait's 5 / 10 slots show all 7 tools, so "+2" is checked on landscape's 6.
+    // Portrait's 5 / 10 slots and the wide face's 15 show all 7 tools, so "+3" is checked on a tall window's 5 (UNDER).
     @Test fun home_more_tools_and_a_tools_tab_tool_open_on_one_tap() = runTest {
         val state = b2Home(games = 6, tools = 7); state.load(); advanceUntilIdle()
-        state.onHomeLayout(LAND); advanceUntilIdle()
+        state.onHomeLayout(TALL); advanceUntilIdle()
         val more = state.screen.value.homeRows.indexOfFirst { it is MainRow.MoreTools }
         assertTrue(more > 0); state.select(0)
-        mainTap(state, more); advanceUntilIdle()                        // "+2": the Tools tab at once
+        mainTap(state, more); advanceUntilIdle()                        // "+3": the Tools tab at once
         val tools = assertIs<Screen.Systems>(state.screen.value)
         assertEquals(MenuCategory.TOOLS, tools.category)
         val settings = tools.rows.indexOfFirst { (it as? MainRow.Tool)?.row?.kind == ToolKind.SETTINGS }
@@ -6016,8 +6094,8 @@ class AppStateTest {
     @Test fun split_one_tap_on_a_category_from_a_page_opens_it() = runTest {
         val (state, _) = splitSettings()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.onButton(NxButton.RIGHT)   // Appearance's page, focused
-        nxTap(state.settingsSections().indexOf(SettingsSection.ABOUT), selected = false, opens = true, state::settingsCategoryTap, state::settingsCategoryTap)   // About on the dimmed left
-        assertEquals(SettingsSection.ABOUT, assertIs<Screen.Settings>(state.screen.value).section)
+        nxTap(state.settingsSections().indexOf(SettingsSection.SYSTEM), selected = false, opens = true, state::settingsCategoryTap, state::settingsCategoryTap)   // System on the dimmed left
+        assertEquals(SettingsSection.SYSTEM, assertIs<Screen.Settings>(state.screen.value).section)
     }
 
     @Test fun split_one_tap_on_a_preview_row_acts_on_it() = runTest {
@@ -6127,8 +6205,8 @@ class AppStateTest {
         state.addExtra(ContentRef("sd/Loose"))
         state.onSettingsSplit(true)
         state.openSettingsMenu()
-        state.openSettings(SettingsSection.ROM_FOLDERS)
-        state.select(1); state.openSelected()                           // Remove folder?
+        state.openSettings(SettingsSection.LIBRARY)
+        state.select(rowIndex(state, SettingsKind.EXTRA)); state.openSelected()   // Remove folder?
         val confirm = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(settings.extraFolders[0], confirm.confirmRemove)
         state.settingsCategoryTap(1)
@@ -6182,9 +6260,8 @@ class AppStateTest {
         val state = state(settings)
         state.load()
         state.addExtra(ContentRef("sd/Loose"))
-        state.openSettingsMenu(); state.openSettings(SettingsSection.ROM_FOLDERS)
-        state.select(1); state.openSelected(); state.onButton(NxButton.A)       // remove: re-indexed in the background
-        state.onButton(NxButton.B)                                              // Library
+        state.openSettingsMenu(); state.openSettings(SettingsSection.LIBRARY)
+        state.select(rowIndex(state, SettingsKind.EXTRA)); state.openSelected(); state.onButton(NxButton.A)   // remove: re-indexed in the background
         val log = screenLog(state)
         state.onButton(NxButton.B)
         assertIs<Screen.SettingsMenu>(state.screen.value)
@@ -6256,6 +6333,14 @@ class AppStateTest {
         assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).category)
     }
 
+    /** System's About group: the rows between its label and the gap before Licenses. */
+    private fun aboutGroup(st: AppState): List<SettingsRow> {
+        val rows = assertIs<Screen.Settings>(st.screen.value).rows
+        val from = rows.indexOfFirst { it.kind == SettingsKind.SECTION && it.label == "About" } + 1
+        val to = rows.indexOfFirst { it.kind == SettingsKind.SECTION && it.label == "Licenses" } - 1
+        return rows.subList(from, to)
+    }
+
     private val aboutInfo = AppInfo(
         "1.2.3", 7, "abc1234-dirty", "2026-09-30T23:30:00+08:00", "Android 15 (API 35)", "Samsung SM-F956B", "Qualcomm SM8650", 16,
     )
@@ -6272,7 +6357,7 @@ class AppStateTest {
         )
         state.load()
         assertEquals(0, asked)                                          // not at start: only when About shows
-        state.openSettings(SettingsSection.ABOUT)
+        state.openSettings(SettingsSection.SYSTEM)
         val released = formatInstallDate(isoEpochMillis("2026-09-30T23:30:00+08:00")!!)
         fun rows(gpuValue: String) = listOf(
             SettingsRow(SettingsKind.INFO, "NX Redux", "1.2.3 (7)"),
@@ -6283,18 +6368,19 @@ class AppStateTest {
             SettingsRow(SettingsKind.INFO, "Chip", "Qualcomm SM8650"),
             SettingsRow(SettingsKind.INFO, "GPU", gpuValue),
             SettingsRow(SettingsKind.INFO, "Page size", "16 KB"),
-            SettingsRow(SettingsKind.INFO, "Font", "MiSans by Xiaomi"),
             SettingsRow(SettingsKind.COPY_INFO, "Copy device info"),
         )
-        assertEquals(rows("…"), assertIs<Screen.Settings>(state.screen.value).rows)
+        assertEquals(rows("…"), aboutGroup(state))
         gpu.complete("Adreno (TM) 750")
         val s = assertIs<Screen.Settings>(state.screen.value)
-        assertEquals(rows("Adreno (TM) 750"), s.rows)                   // the page re-reads its rows when the GPU lands
+        assertEquals(rows("Adreno (TM) 750"), aboutGroup(state))        // the page re-reads its rows when the GPU lands
+        state.select(s.rows.indexOfFirst { it.kind == SettingsKind.INFO })
+        val on = state.screen.value
         state.onButton(NxButton.A); state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
-        assertEquals(s, state.screen.value)
+        assertEquals(on, state.screen.value)
         assertNull(state.error.value)
         assertNull(state.notice.value)
-        state.onButton(NxButton.B); state.openSettings(SettingsSection.ABOUT)
+        state.onButton(NxButton.B); state.openSettings(SettingsSection.SYSTEM)
         assertEquals(1, asked)                                          // asked once per AppState
     }
 
@@ -6307,7 +6393,7 @@ class AppStateTest {
             CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
         )
         state.load()
-        state.openSettings(SettingsSection.ABOUT)
+        state.openSettings(SettingsSection.SYSTEM)
         assertEquals("Unknown", assertIs<Screen.Settings>(state.screen.value).rows.first { it.label == "GPU" }.secondary)
     }
 
@@ -6322,10 +6408,10 @@ class AppStateTest {
             CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
         )
         state.load()
-        state.openSettings(SettingsSection.ABOUT)
+        state.openSettings(SettingsSection.SYSTEM)
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(SettingsKind.COPY_INFO, rows.last().kind)
-        state.select(rows.lastIndex)
+        assertEquals(SettingsKind.COPY_INFO, aboutGroup(state).last().kind)   // no updater: no update row
+        state.select(rows.indexOfFirst { it.kind == SettingsKind.COPY_INFO })
         state.onButton(NxButton.A)
         assertEquals(emptyList(), copied)                               // the GPU is still being asked
         gpu.complete("Mali-G715")
@@ -6352,7 +6438,7 @@ class AppStateTest {
         assertEquals(ListSelection(systems.size - 1, systems.size), state.selection.value)
         state.onButton(NxButton.R1)                                     // Tools again: still on Settings
         state.onButton(NxButton.A)
-        assertEquals(ListSelection(2, 7), state.selection.value)       // Settings menu: back on Appearance
+        assertEquals(ListSelection(2, 6), state.selection.value)       // Settings menu: back on Appearance
         state.onButton(NxButton.A)
         assertEquals(SettingsSection.APPEARANCE, assertIs<Screen.Settings>(state.screen.value).section)
         assertEquals(1, state.selection.value.index)                    // the section's row is remembered too
@@ -6361,32 +6447,31 @@ class AppStateTest {
         val src = FakeRomsSource(dirs = mapOf("Home" to emptyList(), "Home2" to emptyList()))
         val state = state(MemorySettings(ContentRef("Home")), src)
         state.load()
-        state.openSettings(SettingsSection.ROM_FOLDERS)
+        state.openSettings(SettingsSection.LIBRARY)
+        state.onButton(NxButton.DOWN)                                   // past the counts row
         state.onButton(NxButton.A)                                      // Home folder: the platform picker opens
         state.setHomePast(ContentRef("Home2"))
         val s = assertIs<Screen.Settings>(state.screen.value)
-        assertEquals(SettingsSection.ROM_FOLDERS, s.section)
-        assertEquals(SettingsRow(SettingsKind.HOME, "Home folder", "Home2"), s.rows[0])
-        assertEquals(0, state.selection.value.index)
+        assertEquals(SettingsSection.LIBRARY, s.section)
+        assertEquals(SettingsRow(SettingsKind.HOME, "Home folder", "Home2"), s.rows[1])
+        assertEquals(1, state.selection.value.index)
     }
 
     @Test fun adding_an_extra_from_library_returns_to_library_with_its_row() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings)
         state.load()
-        state.openSettings(SettingsSection.ROM_FOLDERS)
-        state.select(1); state.onButton(NxButton.A)                     // Add ROM folder
+        state.openSettings(SettingsSection.LIBRARY)
+        state.select(rowIndex(state, SettingsKind.ADD_EXTRA)); state.onButton(NxButton.A)   // Add ROM folder
         state.addExtra(ContentRef("sd/Loose"))
         val s = assertIs<Screen.Settings>(state.screen.value)
-        assertEquals(SettingsSection.ROM_FOLDERS, s.section)
-        assertEquals(SettingsRow(SettingsKind.EXTRA, "Loose", "ROM folder", extra = settings.extraFolders.single()), s.rows[1])
-        assertEquals(2, state.selection.value.index)                    // still on Add ROM folder, now below Loose
-        state.onButton(NxButton.B)
+        assertEquals(SettingsSection.LIBRARY, s.section)
+        assertEquals(SettingsRow(SettingsKind.EXTRA, "ROM Folder: Loose", "ROM folder", extra = settings.extraFolders.single()), s.rows[2])   // right under the home
+        assertEquals(3, state.selection.value.index)                    // still on Add ROM folder, now below Loose
         assertEquals("6 games", gamesLine(state))                       // counted after the rescan
-        state.openSettings(SettingsSection.ROM_FOLDERS)
-        state.addExtra(ContentRef("Home/Roms"))                         // an overlap is refused and stays on ROM folders
+        state.addExtra(ContentRef("Home/Roms"))                         // an overlap is refused and stays on Library
         assertTrue(state.error.value!!.contains("overlaps"))
-        assertEquals(SettingsSection.ROM_FOLDERS, assertIs<Screen.Settings>(state.screen.value).section)
+        assertEquals(SettingsSection.LIBRARY, assertIs<Screen.Settings>(state.screen.value).section)
     }
 
     @Test fun adding_an_extra_from_the_first_setup_offer_lands_on_systems_after_its_summary() = runTest {
@@ -8886,13 +8971,13 @@ class AppStateTest {
 
     @Test fun more_tools_opens_a_hidden_tools_tab_pushed_over_home() = runTest {
         val state = b2Home(games = 6, tools = 7, hidden = setOf(MenuCategory.TOOLS)); state.load(); advanceUntilIdle()
-        state.onHomeLayout(LAND); advanceUntilIdle()
+        state.onHomeLayout(TALL); advanceUntilIdle()                          // UNDER's 5 slots: "+3"
         assertTrue(assertIs<Screen.Systems>(state.screen.value).tabs.none { it.category == MenuCategory.TOOLS })
         val more = state.screen.value.homeRows.indexOfFirst { it is MainRow.MoreTools }
         assertTrue(more > 0)
-        state.select(more); state.onButton(NxButton.A)                        // "+2": Tools over Home
+        state.select(more); state.onButton(NxButton.A)                        // "+3": Tools over Home
         assertEquals(MenuCategory.TOOLS, state.pushedMenu().category)
-        state.onButton(NxButton.B)                                            // back on Home, on "+2"
+        state.onButton(NxButton.B)                                            // back on Home, on "+3"
         assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).also { assertFalse(it.pushed) }.category)
         assertIs<MainRow.MoreTools>(state.homeFocus())
     }
@@ -9038,7 +9123,7 @@ class AppStateTest {
         override suspend fun playedPaths(sinceMs: Long, nowMs: Long): Set<String> = paths
     }
 
-    /** Home's body frames: a 960 × 344 landscape phone (the wide face: 6 slots, 3 games a row, 1–2 inline) and a 475 × 291 portrait one (the portrait type: columns of 5 squares, 2 games a row). */
+    /** Home's body frames: a 960 × 344 landscape phone (the wide face: 15 slots, 3 games a row, 1–2 inline) and a 475 × 291 portrait one (the portrait type: columns of 5 squares, 2 games a row). */
     private val LAND = HomeFrame(960f, 344f, false, 960f / 432f)
     private val PORT = HomeFrame(475f, 291f, true)
     /** A tall window without the pad (UNDER, 5 slots); the portrait type shows 5 or 10. */
@@ -9392,9 +9477,11 @@ class AppStateTest {
         state.onButton(NxButton.LEFT)
         assertEquals(AccentPreset.PINK, settings.accent)
         assertEquals("Pink", rows()[i].secondary)
-        state.onButton(NxButton.A)
+        state.onButton(NxButton.RIGHT)
         assertEquals(AccentPreset.WHITE, settings.accent)
-        state.onButton(NxButton.A)
+        state.onButton(NxButton.A)                                         // many values: A opens the picker
+        assertEquals(AccentPreset.entries.indexOf(AccentPreset.WHITE), state.chooser.value?.current)
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
         assertEquals(AccentPreset.RED, settings.accent)
     }
 
@@ -9421,9 +9508,9 @@ class AppStateTest {
         state.onButton(NxButton.LEFT)
         assertEquals(SecondaryAccent.Preset(AccentPreset.PINK), settings.secondaryAccent)   // Auto <- Pink
         assertEquals("Pink", rows()[i].secondary)
-        state.onButton(NxButton.A)
+        state.onButton(NxButton.RIGHT)
         assertEquals(SecondaryAccent.Auto, settings.secondaryAccent)                        // Pink -> Auto
-        state.onButton(NxButton.A)
+        state.onButton(NxButton.RIGHT)
         assertEquals(SecondaryAccent.Preset(AccentPreset.WHITE), settings.secondaryAccent)
     }
 
@@ -9864,33 +9951,35 @@ class AppStateTest {
         assertEquals(ListSelection(2, 5), state.selection.value)
     }
 
-    // Settings → Developer → Debug log, Off by default; two values, so A, left and right each flip it.
+    // Settings → System → Debug log (its Developer group), Off by default; two values, so A, left and right each flip it.
     @Test fun debug_log_row_flips_on_a_left_and_right() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings)
         state.load()
-        state.openSettings(SettingsSection.DEVELOPER)
-        fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(listOf(Triple(SettingsKind.DEBUG_LOG, "Debug log", "Off")), rows().map { Triple(it.kind, it.label, it.secondary) })
+        state.openSettings(SettingsSection.SYSTEM)
+        fun row() = assertIs<Screen.Settings>(state.screen.value).rows.single { it.kind == SettingsKind.DEBUG_LOG }
+        assertEquals("Debug log" to "Off", row().label to row().secondary)
+        state.onButton(NxButton.DOWN)                 // from Pause when unfocused, past the Developer label
+        assertEquals(SettingsKind.DEBUG_LOG, assertIs<Screen.Settings>(state.screen.value).rows[state.selection.value.index].kind)
         state.onButton(NxButton.A)
         assertEquals(true, settings.debugLog)
-        assertEquals("On", rows()[0].secondary)
+        assertEquals("On", row().secondary)
         state.onButton(NxButton.RIGHT)
         assertEquals(false, settings.debugLog)
         state.onButton(NxButton.LEFT)
         assertEquals(true, settings.debugLog)
-        assertEquals("On", rows()[0].secondary)
+        assertEquals("On", row().secondary)
     }
 
-    // Settings → Emulators → Pause when unfocused, On by default; two values, so A, left and right each flip it.
+    // Settings → System → Pause when unfocused (its General group, the first row), On by default; A, left and right each flip it.
     @Test fun pause_when_unfocused_row_flips_on_a_left_and_right() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings)
         state.load()
-        state.openSettings(SettingsSection.EMULATORS)
+        state.openSettings(SettingsSection.SYSTEM)
         fun row() = assertIs<Screen.Settings>(state.screen.value).rows.single { it.kind == SettingsKind.PAUSE_UNFOCUSED }
         assertEquals("Pause when unfocused" to "On", row().label to row().secondary)
-        repeat(3) { state.onButton(NxButton.DOWN) }   // the last row
+        assertEquals(1, state.selection.value.index)  // past the General label
         state.onButton(NxButton.A)
         assertEquals(false, settings.pauseWhenUnfocused)
         assertEquals("Off", row().secondary)
@@ -9900,7 +9989,7 @@ class AppStateTest {
         assertEquals(false, settings.pauseWhenUnfocused)
     }
 
-    // Settings → Second screen: a root section between Controls and Launcher that exists only while a second screen is connected.
+    // Settings → Second screen: a root section between Controls and System that exists only while a second screen is connected.
     @Test fun the_second_screen_section_is_on_the_root_only_while_a_second_screen_is_connected() = runTest {
         val state = state(MemorySettings(ContentRef("Home")))
         state.load()
@@ -9910,12 +9999,12 @@ class AppStateTest {
         state.onSecondScreenChanged(true)                       // plugged in while the root is open
         val s = sections()
         assertEquals(SettingsSection.CONTROLS, s[s.indexOf(SettingsSection.SECOND_SCREEN) - 1])
-        assertEquals(SettingsSection.DEVELOPER, s[s.indexOf(SettingsSection.SECOND_SCREEN) + 1])   // no launcher in the test deps; Launcher follows on Android
+        assertEquals(SettingsSection.SYSTEM, s[s.indexOf(SettingsSection.SECOND_SCREEN) + 1])
         state.onSecondScreenChanged(false)
         assertTrue(SettingsSection.SECOND_SCREEN !in sections())
         state.openSettings(SettingsSection.EMULATORS)
         state.onSecondScreenChanged(true)
-        assertEquals(listOf("Default emulators", "Settings", "Saves", "Pause when unfocused"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })   // no row under Emulators any more
+        assertEquals(listOf("Default emulators", "Settings"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })   // no row under Emulators any more
     }
 
     @Test fun the_second_screen_page_has_enable_then_bottom_screen_and_b_returns_to_the_root_on_it() = runTest {
@@ -9980,7 +10069,7 @@ class AppStateTest {
         assertEquals("Auto", row().secondary)
         assertTrue(settingsNxRow(row()).cycleable)
         state.select(rows().indexOf(row()))
-        state.onButton(NxButton.A)
+        state.onButton(NxButton.RIGHT)
         assertEquals("main", settings.bottomScreen.value)
         assertEquals("Main screen", row().secondary)
         state.onButton(NxButton.RIGHT)
@@ -9992,14 +10081,14 @@ class AppStateTest {
         assertEquals("second", settings.bottomScreen.value)
     }
 
-    // Settings → Emulators → Saves, NX Redux's three save-naming settings with its labels and defaults.
+    // Settings → Library → Saves, NX Redux's three save-naming settings with its labels and defaults.
     @Test fun saves_page_cycles_the_handheld_formats() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings)
         state.load()
-        state.openSettings(SettingsSection.EMULATORS)
-        val emu = assertIs<Screen.Settings>(state.screen.value)
-        state.select(emu.rows.indexOfFirst { it.kind == SettingsKind.SAVES })
+        state.openSettings(SettingsSection.LIBRARY)
+        val lib = assertIs<Screen.Settings>(state.screen.value)
+        state.select(lib.rows.indexOfFirst { it.kind == SettingsKind.SAVES })
         state.onButton(NxButton.A)
         fun page() = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.SAVES, page().section)
@@ -10013,7 +10102,7 @@ class AppStateTest {
             ),
             page().rows.map { Triple(it.kind, it.label, it.secondary) },
         )
-        state.onButton(NxButton.A)                                    // Save format: A steps forward
+        state.onButton(NxButton.RIGHT)                                // Save format: RIGHT steps forward
         assertEquals(SaveFormat.GENERIC, settings.saveFormat)
         state.onButton(NxButton.RIGHT)                                // wraps to MinUI
         assertEquals(SaveFormat.MINUI, settings.saveFormat)
@@ -10023,9 +10112,69 @@ class AppStateTest {
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)     // Use extracted file name
         assertEquals(true, settings.useExtractedFileName)
         assertEquals("On", page().rows[2].secondary)
-        state.onButton(NxButton.B)                                    // back on the Saves row
-        assertEquals(SettingsSection.EMULATORS, page().section)
+        state.onButton(NxButton.B)                                    // back on Library's Saves row
+        assertEquals(SettingsSection.LIBRARY, page().section)
         assertEquals(SettingsKind.SAVES, page().rows[state.selection.value.index].kind)
+    }
+
+    // Library's Saves group: after ROM folders, before Games; Emulators no longer lists it; B from Saves lands on it.
+    @Test fun saves_is_a_library_row_and_b_from_it_returns_to_its_row() = runTest {
+        val st = state(MemorySettings(ContentRef("Home")), data = FakeUserData(hidden = listOf(mario)))   // a hidden game: its row follows
+        st.load()
+        st.openSettings(SettingsSection.LIBRARY)
+        val rows = assertIs<Screen.Settings>(st.screen.value).rows
+        val at = rowIndex(st, SettingsKind.SAVES)
+        assertEquals(SettingsRow(SettingsKind.SAVES, "Saves"), rows[at])
+        assertEquals(SettingsKind.ADD_EXTRA, rows[at - 1].kind)                      // after Add ROM folder (no All files access here)
+        assertTrue(rows.subList(at + 1, rows.size).all { it.kind == SettingsKind.UNASSIGNED || it.kind == SettingsKind.HIDDEN })   // then the game lists
+        assertEquals(SettingsKind.HIDDEN, rows.last().kind)
+        val touch = settingsTouchRow(rows[at], null, SettingsSection.LIBRARY)
+        assertTrue(touch.opens)
+        assertEquals("", touch.info)                                                    // compact: its text behind the info icon
+        assertEquals("Save file formats, and export or import your saves", touch.detail)
+        st.openSettings(SettingsSection.EMULATORS)
+        assertTrue(assertIs<Screen.Settings>(st.screen.value).rows.none { it.kind == SettingsKind.SAVES })
+        st.openSettings(SettingsSection.LIBRARY)
+        st.select(at); st.onButton(NxButton.A)
+        assertEquals(SettingsSection.SAVES, assertIs<Screen.Settings>(st.screen.value).section)
+        st.onButton(NxButton.B)
+        assertEquals(SettingsSection.LIBRARY, assertIs<Screen.Settings>(st.screen.value).section)
+        assertEquals(at, st.selection.value.index)
+        st.onButton(NxButton.B)
+        assertIs<Screen.SettingsMenu>(st.screen.value)
+        assertEquals(0, st.selection.value.index)                    // the menu on Library
+    }
+
+    // System's Licenses group: paragraphs the selection skips, then a row that opens the website's full list.
+    @Test fun system_ends_with_licence_paragraphs_and_a_link_row_that_opens_the_full_list() = runTest {
+        val opened = mutableListOf<String>()
+        val st = AppState(
+            AppDeps(MemorySettings(ContentRef("Home")), source, RecordingRunner(), NoopPicker(), openUrl = { opened += it }, compute = UnconfinedTestDispatcher(testScheduler)),
+            CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+        )
+        st.load()
+        st.openSettings(SettingsSection.SYSTEM)
+        val rows = assertIs<Screen.Settings>(st.screen.value).rows
+        val label = rows.indexOfFirst { it.kind == SettingsKind.SECTION && it.label == "Licenses" }
+        assertEquals(ABOUT_LICENSES.map { SettingsRow(SettingsKind.TEXT, it) }, rows.subList(label + 1, label + 1 + ABOUT_LICENSES.size))
+        assertTrue(ABOUT_LICENSES.any { "MiSans" in it })
+        assertEquals(SettingsRow(SettingsKind.LICENSES_LINK, "Full list of licenses", "https://nxredux.com/reference/licenses/"), rows.last())
+        assertTrue(rows.filter { it.kind == SettingsKind.TEXT }.none { it.selectable })
+        val paragraph = settingsTouchRow(rows[label + 1], null, SettingsSection.SYSTEM)
+        assertTrue(paragraph.paragraph)
+        val link = settingsTouchRow(rows.last(), null, SettingsSection.SYSTEM)
+        assertEquals("", link.info); assertEquals(null, link.value)                    // the URL behind the info icon
+        assertEquals("https://nxredux.com/reference/licenses/", link.detail)
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Open")), settingsHints(rows, rows.lastIndex))
+        st.select(rows.indexOfFirst { it.kind == SettingsKind.COPY_INFO })
+        st.onButton(NxButton.DOWN)                                   // past the label and the paragraphs
+        assertEquals(rows.lastIndex, st.selection.value.index)
+        st.onButton(NxButton.A)
+        assertEquals(listOf("https://nxredux.com/reference/licenses/"), opened)
+        st.openSelected()                                            // a tap opens it too
+        assertEquals(2, opened.size)
+        st.onButton(NxButton.UP)                                     // back up past the paragraphs
+        assertEquals(SettingsKind.COPY_INFO, rows[st.selection.value.index].kind)
     }
 
     private class RecordingTransfer(private val result: ImportResult = ImportResult.Done(ImportSummary(saves = 1))) : SaveTransfer {
@@ -10138,7 +10287,7 @@ class AppStateTest {
         assertEquals(before.step(1), settings.accent)
     }
 
-    @Test fun touch_a_two_value_setting_flips_and_a_controller_still_steps() = runTest {
+    @Test fun touch_a_two_value_setting_flips_and_a_controller_opens_the_picker() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings)
         state.load()
@@ -10150,7 +10299,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.APPEARANCE)
         val accent = settings.accent
         state.select(1); state.openSelected()                              // Accent, many values
-        assertNull(state.chooser.value); assertEquals(accent.step(1), settings.accent)   // a controller's A steps
+        assertEquals(true, state.chooser.value?.popup); assertEquals(accent, settings.accent)   // a controller's A opens the picker too
     }
 
     @Test fun touch_the_default_emulator_and_the_layouts_open_choosers() = runTest {
@@ -10170,6 +10319,124 @@ class AppStateTest {
             state.select(i); state.openSelected()
             assertEquals(CoreRegistry.consoles.first { it.id == rows[i].consoleId }.tags.size, state.chooser.value!!.labels.size)
         }
+    }
+
+    // Touch rows (the in-game menu's): every value row carries its values and the current one, in LEFT / RIGHT order.
+    @Test fun settings_value_rows_carry_their_choices_and_index() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings, launcher = FakeLauncher(home = true))
+        state.load()
+        fun choices(section: SettingsSection, kind: SettingsKind): SettingChoices? {
+            state.openSettings(section)
+            val s = assertIs<Screen.Settings>(state.screen.value)
+            assertEquals(s.rows.size, s.choices.size)
+            return s.choices[s.rows.indexOfFirst { it.kind == kind }]
+        }
+        assertEquals(SettingChoices(listOf("Charcoal", "Retro"), 0), choices(SettingsSection.APPEARANCE, SettingsKind.PAD_THEME))
+        assertEquals(SettingChoices(AccentPreset.entries.map { it.label }, 0), choices(SettingsSection.APPEARANCE, SettingsKind.ACCENT))
+        assertEquals(SettingChoices(listOf("Large", "Small"), 0), choices(SettingsSection.APPEARANCE, SettingsKind.TEXT_SIZE))
+        assertNull(choices(SettingsSection.APPEARANCE, SettingsKind.RESET_DEFAULTS))
+        assertEquals(SettingChoices(listOf("Off", "On"), 0), choices(SettingsSection.SAVES, SettingsKind.EXTRACTED_NAME))
+        assertEquals(SettingChoices(listOf("Off", "On"), 1), choices(SettingsSection.SYSTEM, SettingsKind.PAUSE_UNFOCUSED))
+        assertEquals(SettingChoices(listOf("Hide", "Show"), 1), choices(SettingsSection.LAYOUT_TITLE_HINTS, SettingsKind.PAGE_TITLE))
+        assertEquals(SettingChoices(listOf("List", "Grid", "Carousel", "Backdrop", "Minimal"), 0), choices(SettingsSection.LAYOUT_GAME_LISTS, SettingsKind.GAME_LIST_STYLE))
+        assertEquals(SettingChoices(listOf("Full screen", "List"), 0), choices(SettingsSection.LAYOUT_SWITCHER, SettingsKind.SWITCHER_LAYOUT))
+        assertEquals(SettingChoices(listOf("Off", "On"), 1), choices(SettingsSection.SYSTEM, SettingsKind.HOME_SCREEN))   // Android answers it
+        assertNull(choices(SettingsSection.CONTROLS, SettingsKind.PAD_LAYOUT))                                          // a page, not a value
+        // Default emulators: a console of several tags its emulators; one of a single tag none (dimmed).
+        state.openSettings(SettingsSection.DEFAULT_EMULATORS)
+        val d = assertIs<Screen.Settings>(state.screen.value)
+        assertEquals(listOf("gpSP (GBA)", "mGBA (MGBA)"), d.choices[d.rows.indexOfFirst { it.consoleId == "gba" }]?.labels)
+        assertNull(d.choices[d.rows.indexOfFirst { it.consoleId == "gb" }])
+        // Every page with a value row draws touch rows, Library and System (its About rows too); Import saves and Emulators keep theirs.
+        for (section in listOf(SettingsSection.IMPORT_SAVES, SettingsSection.EMULATORS)) assertFalse(settingsTouchPage(state.settingsPreview(section)), section.name)
+        for (section in listOf(SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.LAYOUT_HOME, SettingsSection.CONTROLS, SettingsSection.SAVES, SettingsSection.SYSTEM, SettingsSection.DEFAULT_EMULATORS, SettingsSection.PAD_LAYOUT, SettingsSection.LIBRARY))
+            assertTrue(settingsTouchPage(state.settingsPreview(section)), section.name)
+    }
+
+    // A touch pick sets the value by its index, as LEFT / RIGHT would step it there (side effects too); the row is selected.
+    @Test fun choose_setting_sets_a_value_by_index_and_selects_its_row() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val previews = mutableListOf<GameRumble>()
+        val launcher = FakeLauncher(home = false)
+        val state = state(settings, rumblePreview = { previews += it }, launcher = launcher)
+        state.load()
+        state.openSettings(SettingsSection.CONTROLS)
+        fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
+        val rumble = rows().indexOfFirst { it.kind == SettingsKind.GAME_RUMBLE }
+        state.settingEvent(NxSettingEvent.Choose(rumble, 3))
+        assertEquals(GameRumble.entries[3], settings.gameRumble)
+        assertEquals(listOf(GameRumble.entries[3]), previews)                     // the preview pulse, as a step plays
+        assertEquals(rumble, state.selection.value.index)
+        state.chooseSetting(rumble, 3)
+        assertEquals(1, previews.size)                                            // already the one: nothing
+        val pad = rows().indexOfFirst { it.kind == SettingsKind.MENU_PAD }
+        state.settingEvent(NxSettingEvent.Choose(pad, 0))                         // the switch: Off
+        assertFalse(settings.menuPad); assertEquals("Off", rows()[pad].secondary)
+        state.chooseSetting(pad, 7)                                               // out of range
+        assertFalse(settings.menuPad)
+        state.openSettings(SettingsSection.SYSTEM)
+        state.chooseSetting(assertIs<Screen.Settings>(state.screen.value).rows.indexOfFirst { it.kind == SettingsKind.HOME_SCREEN }, 1)
+        assertEquals(listOf(true), launcher.homeRequests)                         // Android is asked, as A does
+        state.openSettings(SettingsSection.DEFAULT_EMULATORS)
+        val gb = assertIs<Screen.Settings>(state.screen.value).rows.indexOfFirst { it.consoleId == "gb" }
+        state.chooseSetting(gb, 1)                                                // dimmed (one emulator): nothing
+        assertEquals(emptyMap(), settings.defaultTags)
+    }
+
+    // A picker row (many or long values) opens its picker on a tap or A; a segmented row steps on A; a switch flips.
+    @Test fun picker_rows_open_the_picker_and_others_step_or_flip() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        state.openSettings(SettingsSection.APPEARANCE)
+        state.settingEvent(NxSettingEvent.OpenPicker(1))                          // Accent
+        val picker = state.chooser.value ?: error("no picker")
+        assertTrue(picker.popup); assertEquals("Accent", picker.title); assertEquals(0, picker.current); assertEquals(0, picker.selected)
+        state.onButton(NxButton.UP)                                               // wraps to the last
+        assertEquals(AccentPreset.entries.lastIndex, state.chooser.value!!.selected)
+        state.chooseValue(4)
+        assertNull(state.chooser.value); assertEquals(AccentPreset.entries[4], settings.accent)
+        state.openSettings(SettingsSection.CONTROLS)
+        state.select(0); state.onButton(NxButton.A)                               // Pad vibration: segmented, A steps
+        assertNull(state.chooser.value); assertEquals(PadVibration.DEFAULT.step(1), settings.padVibration)
+        val pad = assertIs<Screen.Settings>(state.screen.value).rows.indexOfFirst { it.kind == SettingsKind.MENU_PAD }
+        state.select(pad); state.onButton(NxButton.A)                             // a switch flips
+        assertFalse(settings.menuPad)
+    }
+
+    // A row's full description: its info icon or X (when its line is cut off or says less) opens it; A, B or X close it.
+    @Test fun setting_info_popup_opens_on_the_icon_and_x() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        state.openSettings(SettingsSection.SYSTEM)
+        val rows = assertIs<Screen.Settings>(state.screen.value).rows
+        val pause = rows.indexOfFirst { it.kind == SettingsKind.PAUSE_UNFOCUSED }
+        state.settingEvent(NxSettingEvent.Info(pause))
+        val info = state.settingInfo.value ?: error("no info")
+        assertEquals("Pause when unfocused", info.title)
+        assertEquals(settingsInfo(rows[pause], SettingsSection.SYSTEM).detail, info.text)
+        state.onButton(NxButton.DOWN)
+        assertEquals(1, state.settingInfo.value!!.scrollSeq)
+        state.onButton(NxButton.A)
+        assertNull(state.settingInfo.value)
+        state.select(pause); state.onButton(NxButton.X)                           // a fuller text: X shows it
+        assertNotNull(state.settingInfo.value)
+        state.onButton(NxButton.X)
+        assertNull(state.settingInfo.value)
+        val copy = rows.indexOfFirst { it.kind == SettingsKind.COPY_INFO }
+        state.select(copy); state.onButton(NxButton.X)                            // a compact row: X shows its text
+        assertEquals(settingsInfo(rows[copy], SettingsSection.SYSTEM).detail, state.settingInfo.value?.text)
+        state.onButton(NxButton.X)
+        assertNull(state.settingInfo.value)
+        val version = rows.indexOfFirst { it.kind == SettingsKind.INFO }
+        state.select(version); state.onButton(NxButton.X)                         // no text at all: nothing
+        assertNull(state.settingInfo.value)
+        state.select(copy); state.onButton(NxButton.X)
+        assertTrue(state.back())                                                  // Back closes it
+        assertNull(state.settingInfo.value)
+        assertIs<Screen.Settings>(state.screen.value)
     }
 
     // Saves live only inside the app; Export and Import are on the Saves page.
@@ -10606,15 +10873,15 @@ class AppStateTest {
     // itself, without Home having to report its frame again.
     @Test fun closing_a_menu_swaps_in_the_home_rows_it_held_back() = runTest {
         val state = b2Home(games = 3, tools = 7, recent = 3); state.load(); advanceUntilIdle()   // Continue: G3; pins G1 G2
-        state.onHomeLayout(LAND); advanceUntilIdle()                     // the wide face: the 2 pins inline, the tools after them (top 9)
+        state.onHomeLayout(LAND); advanceUntilIdle()                     // the wide face: the 2 pins inline, the 7 tools after them (top 10)
         assertTrue(state.shelfRows.isNotEmpty())                         // every frame shows the shelves
-        assertEquals(9, state.homeView.value.topCount)
+        assertEquals(10, state.homeView.value.topCount)
         val rows = state.screen.value.homeRows
         state.openContextMenu(rows.indices.first { rows[it] is MainRow.Continue }); advanceUntilIdle()   // its game menu
         assertNotNull(assertIs<Screen.Systems>(state.screen.value).menu)
         state.onHomeLayout(PORT); advanceUntilIdle()                     // rebuilt behind the menu: held back
         assertEquals(rows, state.screen.value.homeRows)
-        assertEquals(9, state.homeView.value.topCount)
+        assertEquals(10, state.homeView.value.topCount)
         state.closeContextMenu(); advanceUntilIdle()
         assertEquals(8, state.homeView.value.topCount)                   // the portrait type's rows swapped in: the pins under the tools
         assertNotEquals(rows, state.screen.value.homeRows)
@@ -10915,10 +11182,12 @@ class AppStateTest {
     @Test fun every_pin_is_on_home_whatever_the_frame() = runTest {
         val state = threeGamesTwoTools(); state.load(); advanceUntilIdle()
         fun pins() = state.screen.value.homeRows.mapNotNull { (it as? MainRow.Pin)?.entry?.game?.shownName ?: (it as? MainRow.PinnedTool)?.row?.kind?.name }
-        val all = listOf("CHEAT_DB", "SETTINGS", "Tetris", "Mario", "Mario Kart DS")
-        assertEquals(all, pins())                                        // before Home reports its frame: the landscape stand-in
-        state.onHomeLayout(LAND); assertEquals(all, pins())
-        state.onHomeLayout(PORT); assertEquals(all, pins())
+        // Landscape puts the first 2 pinned games inline, before the tools; portrait keeps every game in the rows.
+        val land = listOf("Tetris", "Mario", "CHEAT_DB", "SETTINGS", "Mario Kart DS")
+        val port = listOf("CHEAT_DB", "SETTINGS", "Tetris", "Mario", "Mario Kart DS")
+        assertEquals(land, pins())                                       // before Home reports its frame: the landscape stand-in
+        state.onHomeLayout(LAND); assertEquals(land, pins())
+        state.onHomeLayout(PORT); assertEquals(port, pins())
     }
 
     // Portrait: Pick a game, Cheat DB, Settings (a column) | Tetris, Mario | Mario Kart. Pins move in rows (a shorter last
@@ -10943,21 +11212,23 @@ class AppStateTest {
         assertEquals(MenuCategory.TOOLS, assertIs<Screen.Systems>(state.screen.value).category)
     }
 
-    // A rotation keeps the focused tile and the remembered top tile by identity across a slot-count change.
-    // Portrait's columns of 5 (10 slots past 5 tools) show all 7 tools: Pick a game, the tools 1–7, G1… from
-    // 8; landscape (6 slots) Pick a game, Cheat DB … Gamma, "+2" (index 6, the block's bottom right), G1… from 7.
-    // "+2" remembered in landscape comes back in portrait as Epsilon, its last tool.
+    // A layout change keeps the focused tile and the remembered top tile by identity across a slot-count change.
+    // Portrait's columns of 5 (10 slots past 5 tools) show all 7 tools: Pick a game, the tools 1–7, G1… from 8; a tall
+    // window (UNDER, 5 slots) Pick a game, Cheat DB … Beta, "+3" (index 5, the row's right end), G1… from 6, 2 a row.
+    // "+3" remembered there comes back in portrait as Epsilon, its last tool.
     @Test fun a_rotation_keeps_the_focused_and_the_remembered_tile() = runTest {
         val state = b2Home(games = 6, tools = 7); state.load(); advanceUntilIdle()
-        state.onHomeLayout(LAND); advanceUntilIdle()
-        state.select(6); assertEquals(MainRow.MoreTools(2), state.homeFocus())
-        state.onButton(NxButton.DOWN)                                    // the pin under the block's right column: G3, index 9
-        assertEquals(b2Path(3), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path); assertEquals(9, state.selection.value.index)
+        state.onHomeLayout(TALL); advanceUntilIdle()
+        state.select(5); assertEquals(MainRow.MoreTools(3), state.homeFocus())
+        state.onButton(NxButton.DOWN)                                    // the pin under the row's right end: G2, index 7
+        assertEquals(b2Path(2), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path); assertEquals(7, state.selection.value.index)
+        state.onButton(NxButton.DOWN)                                    // the next row: G4, index 9
+        assertEquals(b2Path(4), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path); assertEquals(9, state.selection.value.index)
         state.onHomeLayout(PORT); advanceUntilIdle()
-        assertEquals(b2Path(3), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path); assertEquals(10, state.selection.value.index)
-        state.onButton(NxButton.UP)                                      // portrait's rows are 2 a row: G3's second, so G1
-        assertEquals(b2Path(1), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path); assertEquals(8, state.selection.value.index)
-        state.onButton(NxButton.UP)                                      // the top tile last on, by identity: "+2" is Epsilon now
+        assertEquals(b2Path(4), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path); assertEquals(11, state.selection.value.index)
+        state.onButton(NxButton.UP)                                      // portrait's rows are 2 a row: G4's above is G2
+        assertEquals(b2Path(2), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path); assertEquals(9, state.selection.value.index)
+        state.onButton(NxButton.UP)                                      // the top tile last on, by identity: "+3" is Epsilon now
         assertEquals("Epsilon", assertIs<MainRow.PinnedTool>(state.homeFocus()).row.label); assertEquals(7, state.selection.value.index)
     }
 
@@ -10971,21 +11242,72 @@ class AppStateTest {
 
     /**
      * Home on six GBA games: [games] of them pinned (G1 first), [tools] of Cheat Database, Settings, Alpha, Beta,
-     * Gamma, Delta, Epsilon pinned in that order, Continue on [recent] (null: Pick a game).
+     * Gamma, Delta, Epsilon pinned in that order (past 7, apps Extra 1, Extra 2… after them, so a board's slots can
+     * run out), Continue on [recent] (null: Pick a game).
      */
     private fun TestScope.b2Home(
         games: Int, tools: Int, recent: Int? = null, runner: RecordingRunner = RecordingRunner(), hidden: Set<MenuCategory> = emptySet(),
+        style: MenuStyle? = null,
     ): AppState {
-        val keys = listOf("CHEAT_DB", "SETTINGS", "APP:a/A", "APP:b/B", "APP:c/C", "APP:d/D", "APP:e/E").take(tools)
+        val apps = b2Apps + (1..(tools - 7).coerceAtLeast(0)).map { InstalledApp("x$it/X", "Extra $it") }
+        val keys = (listOf("CHEAT_DB", "SETTINGS") + apps.map { "APP:${it.id}" }).take(tools)
         val files = MemoryPrivateFiles().apply { this.files[ToolPins.FILE] = keys.joinToString("\n") }
-        val settings = MemorySettings(ContentRef("Home")).apply { toolApps = b2Apps.map { it.id }; for (c in hidden) setTabShown(c, false) }
+        val settings = MemorySettings(ContentRef("Home")).apply {
+            toolApps = apps.map { it.id }; for (c in hidden) setTabShown(c, false)
+            if (style != null) menuStyles = LIST_TABS + (MenuCategory.HOME to style)
+        }
         val data = FakeUserData(recents = listOfNotNull(recent?.let { Recent(b2Path(it)) }), pins = (1..games).map { Shortcut(b2Path(it), "G$it") })
         val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
-        return AppState(AppDeps(settings, b2Source, runner, NoopPicker(), data, launcher = FakeLauncher(b2Apps),
+        return AppState(AppDeps(settings, b2Source, runner, NoopPicker(), data, launcher = FakeLauncher(apps),
             privateFiles = files, compute = UnconfinedTestDispatcher(testScheduler)), scope)
     }
 
     private fun AppState.homeFocus(): MainRow = screen.value.homeRows[selection.value.index]
+
+    // A landscape split (SPS3, 800 × 340) puts the first 2 pinned games inline too: the rows are Pick a game, G1, G2,
+    // then the tools, then G3 a row game; they line up with the board the screen draws, and the d-pad walks them in order.
+    @Test fun sps3_puts_two_pinned_games_inline_in_the_rows_and_the_board() = runTest {
+        val state = b2Home(games = 3, tools = 2); state.load(); advanceUntilIdle()
+        val sps3 = HomeFrame(800f, 340f, false, 800f / 428f)
+        state.onHomeLayout(sps3); advanceUntilIdle()
+        val view = state.homeView.value
+        val rows = state.screen.value.homeRows
+        assertEquals(5, view.topCount)
+        assertEquals(MainRow.PickAGame, rows[0])
+        assertEquals(listOf(b2Path(1), b2Path(2)), rows.subList(1, 3).map { assertIs<MainRow.Pin>(it).entry.game.path })
+        assertTrue(rows.subList(3, 5).all { it is MainRow.PinnedTool })
+        assertEquals(b2Path(3), assertIs<MainRow.Pin>(rows[5]).entry.game.path)
+        val b = homeBoard(view.frame!!, view.lines!!, view.tools, view.games, view.shelves)
+        assertEquals(HomeToolMode.SPS3, b.mode); assertEquals(2, b.inlineGames); assertEquals(1, b.rowGames)
+        assertEquals(view.topCount, b.top.size)
+        assertEquals(listOf(HomeTopKind.CONTINUE, HomeTopKind.GAME, HomeTopKind.GAME, HomeTopKind.TOOL, HomeTopKind.TOOL), b.top.map { it.kind })
+        state.select(0)
+        state.onButton(NxButton.RIGHT); assertEquals(1, state.selection.value.index)    // Continue → G1
+        state.onButton(NxButton.DOWN); assertEquals(2, state.selection.value.index)     // G1 → G2, under it
+        state.onButton(NxButton.UP); state.onButton(NxButton.RIGHT)
+        assertEquals(3, state.selection.value.index)                                     // G1 → the top square
+        state.select(2); state.onButton(NxButton.DOWN)
+        assertEquals(b2Path(3), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path)   // G2 → the row game
+    }
+
+    // Six GBA games, none pinned or played: Not started picks 4. Grid Home shows what its board fits ([homeShelfCap]): 4
+    // in portrait (two rows of 2) and on the large face (a row of 4), 3 on the wide face (a row of 3); List and Carousel
+    // Home show 3 whatever the frame.
+    @Test fun a_shelf_shows_four_on_grid_portrait_and_three_on_list_and_carousel() = runTest {
+        val grid = b2Home(games = 0, tools = 0, style = MenuStyle.GRID); grid.load(); advanceUntilIdle()
+        for ((f, n) in listOf(PORT to 4, LAND to 3, FOLD to 4)) {
+            grid.onHomeLayout(f); advanceUntilIdle()
+            assertEquals(listOf(HomeShelf.NOT_STARTED to n), grid.homeView.value.shelves, "grid $f")
+            assertEquals(n, grid.shelfRows.size, "grid $f")
+        }
+        for (style in listOf(MenuStyle.LIST, MenuStyle.CAROUSEL)) {
+            val state = b2Home(games = 0, tools = 0, style = style); state.load(); advanceUntilIdle()
+            for (f in listOf(PORT, FOLD)) {
+                state.onHomeLayout(f); advanceUntilIdle()
+                assertEquals(3, state.shelfRows.size, "$style $f")
+            }
+        }
+    }
 
     // The wide face (the Flip): with 2 pinned games (Continue's G3 left out of 3) they sit in the top section
     // between Continue and the squares; A on one launches it as a pin, and the focus follows it onto Continue.
@@ -11024,13 +11346,13 @@ class AppStateTest {
         state.onButton(NxButton.UP); assertEquals(1, state.selection.value.index)
     }
 
-    // Landscape, 7 tools in 6 slots: Cheat Database, Settings, Alpha, Beta, Gamma, then "+2"; G1 sits inline after Pick a
-    // game, so "+2" is index 7. A on it opens the Tools tab.
+    // A tall window (UNDER), 7 tools in 5 slots: Cheat Database, Settings, Alpha, Beta, then "+3" (index 5, after Pick a
+    // game). A on it opens the Tools tab.
     @Test fun more_tools_opens_the_tools_tab() = runTest {
         val state = b2Home(games = 1, tools = 7); state.load(); advanceUntilIdle()
-        state.onHomeLayout(LAND); advanceUntilIdle()
-        assertEquals(MainRow.MoreTools(2), state.screen.value.homeRows[7])
-        state.select(7); state.onButton(NxButton.A)
+        state.onHomeLayout(TALL); advanceUntilIdle()
+        assertEquals(MainRow.MoreTools(3), state.screen.value.homeRows[5])
+        state.select(5); state.onButton(NxButton.A)
         assertEquals(MenuCategory.TOOLS, state.category())
     }
 
@@ -11048,11 +11370,11 @@ class AppStateTest {
     }
 
     // A rebuild landing while the switcher is up publishes its own view; closing the switcher restores the older Home
-    // rows, and their own view with them (frame, counts), not the newer one built meanwhile. 7 tools (landscape "+2",
-    // portrait all 7), so the rows differ.
+    // rows, and their own view with them (frame, counts), not the newer one built meanwhile. 7 tools (a tall window's
+    // "+3", portrait all 7), so the rows differ.
     @Test fun closing_the_switcher_restores_the_home_rows_own_view() = runTest {
-        val state = b2Home(games = 3, tools = 7); state.load(); advanceUntilIdle()   // landscape's rows differ from portrait's
-        state.onHomeLayout(LAND); advanceUntilIdle()
+        val state = b2Home(games = 3, tools = 7); state.load(); advanceUntilIdle()   // the tall window's rows differ from portrait's
+        state.onHomeLayout(TALL); advanceUntilIdle()
         val landRows = state.screen.value.homeRows
         val landView = state.homeView.value
         state.openSwitcher(); advanceUntilIdle()
@@ -11062,7 +11384,7 @@ class AppStateTest {
         state.onButton(NxButton.B); advanceUntilIdle()
         assertEquals(landRows, state.screen.value.homeRows)              // the snapshot the switcher opened over
         assertEquals(landView, state.homeView.value)
-        assertEquals(LAND, state.homeView.value.frame)
+        assertEquals(TALL, state.homeView.value.frame)
         state.onHomeLayout(PORT); advanceUntilIdle()                    // Home re-reports: the portrait rows swap in
         assertEquals(PORT, state.homeView.value.frame)
     }
@@ -11081,118 +11403,122 @@ class AppStateTest {
         assertIs<Screen.GameTime>(state.screen.value)
     }
 
-    // 7 tools: landscape's 5 and "+2" put G1 at index 7, portrait's two columns show all 7 (G1 at 8). The focus stays on
-    // G1 both ways, and so does the row remembered off Home.
+    // 7 tools: a tall window's 4 and "+3" put G1 at index 6, portrait's two columns show all 7 (G1 at 8). The focus stays
+    // on G1 both ways, and so does the row remembered off Home.
     @Test fun a_rotation_keeps_focus_on_the_same_game() = runTest {
         val state = b2Home(games = 3, tools = 7); state.load(); advanceUntilIdle()
         val g1 = MainRow.Pin(state.screen.value.homeRows.filterIsInstance<MainRow.Pin>().first { it.entry.game.path == b2Path(1) }.entry)
-        state.onHomeLayout(LAND); advanceUntilIdle()
-        assertEquals(7, state.screen.value.homeRows.indexOf(g1))
-        state.select(7)
+        state.onHomeLayout(TALL); advanceUntilIdle()
+        assertEquals(6, state.screen.value.homeRows.indexOf(g1))
+        state.select(6)
         state.onHomeLayout(PORT); advanceUntilIdle()
         assertEquals(8, state.screen.value.homeRows.indexOf(g1))
         assertEquals(g1, state.homeFocus())
         state.onButton(NxButton.R1)                                      // away from Home, rotated there, back
-        state.onHomeLayout(LAND); advanceUntilIdle()
+        state.onHomeLayout(TALL); advanceUntilIdle()
         state.onButton(NxButton.L1)
         assertEquals(g1, state.homeFocus())
-        assertEquals(7, state.selection.value.index)
+        assertEquals(6, state.selection.value.index)
     }
 
     // Before Home's first report the rows are built on a stand-in frame; a move made then survives the
     // rebuild on the real frame, by identity.
     @Test fun the_first_layout_keeps_a_moved_selection() = runTest {
         val state = b2Home(games = 4, tools = 0, recent = 1); state.load(); advanceUntilIdle()
-        state.onButton(NxButton.DOWN)                                    // Continue (G1) to the first row game under it
-        val moved = state.homeFocus()
-        assertEquals(b2Path(2), assertIs<MainRow.Pin>(moved).entry.game.path)
+        state.onButton(NxButton.DOWN)                                    // Continue (G1) to the first row game under it: G4
+        val moved = state.homeFocus()                                    // (G2 and G3 sit inline on the landscape stand-in)
+        assertEquals(b2Path(4), assertIs<MainRow.Pin>(moved).entry.game.path)
         state.onHomeLayout(LAND); advanceUntilIdle()
         assertEquals(moved, state.homeFocus())
         state.onHomeLayout(PORT); advanceUntilIdle()                     // the same rows on another board
         assertEquals(moved, state.homeFocus())
     }
 
-    // Landscape, 5 tools, 6 games: Pick a game 0, the 3 × 2 block 1 2 3 / 4 5, then G1 G2 G3 | G4 G5 G6.
+    // Landscape (the wide face), 6 tools, 6 games: Pick a game 0, G1 1 and G2 2 inline (stacked), the block 3 4 / 5 6 /
+    // 7 8 (2 columns of the 5-row grid), then G3 G4 G5 | G6.
     @Test fun the_d_pad_uses_the_board() = runTest {
-        val state = b2Home(games = 6, tools = 5); state.load(); advanceUntilIdle()
+        val state = b2Home(games = 6, tools = 6); state.load(); advanceUntilIdle()
         state.onHomeLayout(LAND); advanceUntilIdle()
         state.onButton(NxButton.RIGHT)
-        assertEquals(1, state.selection.value.index); assertIs<MainRow.PinnedTool>(state.homeFocus())   // the block's top left
-        state.onButton(NxButton.DOWN); assertEquals(4, state.selection.value.index)                     // the square below
-        state.onButton(NxButton.LEFT); assertEquals(0, state.selection.value.index)                     // the left column: Continue
-        state.onButton(NxButton.RIGHT); assertEquals(4, state.selection.value.index)                    // back to the square it left
-        state.onButton(NxButton.RIGHT); state.onButton(NxButton.DOWN); assertEquals(8, state.selection.value.index)   // the row's third game
-        assertEquals(b2Path(3), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path)
+        assertEquals(1, state.selection.value.index); assertEquals(b2Path(1), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path)   // G1, inline
+        state.onButton(NxButton.RIGHT)
+        assertEquals(3, state.selection.value.index); assertIs<MainRow.PinnedTool>(state.homeFocus())   // the block's top left
+        state.onButton(NxButton.DOWN); assertEquals(5, state.selection.value.index)                     // the square below
+        state.onButton(NxButton.LEFT); assertEquals(1, state.selection.value.index)                     // the left column: G1
+        state.onButton(NxButton.RIGHT); assertEquals(5, state.selection.value.index)                    // back to the square it left
+        state.onButton(NxButton.RIGHT); state.onButton(NxButton.DOWN); assertEquals(8, state.selection.value.index)   // the block's third row, right
+        state.onButton(NxButton.DOWN); assertEquals(11, state.selection.value.index)                    // the row's third game
+        assertEquals(b2Path(5), assertIs<MainRow.Pin>(state.homeFocus()).entry.game.path)
     }
 
-    // A rotation with 7 tools and 6 games: landscape (6 slots) is Pick a game, Cheat DB, Settings, Alpha, Beta, Gamma,
-    // "+2", then G1…G6; a tall window without the pad (UNDER, 5 slots) shows "+3" (portrait shows all 7). The focus on
-    // "+N" stays on "+N" (its count changes with the slots), on and off Home.
+    // A layout change with 12 tools and 6 games: portrait (10 slots) is Pick a game, 9 tools, "+3", then G1…G6; a tall
+    // window without the pad (UNDER, 5 slots) shows 4 and "+8" (the wide face shows all 12). The focus on "+N" stays on
+    // "+N" (its count changes with the slots), on and off Home.
     @Test fun a_rotation_keeps_focus_on_more() = runTest {
-        val state = b2Home(games = 6, tools = 7); state.load(); advanceUntilIdle()
-        state.onHomeLayout(LAND); advanceUntilIdle()
-        state.select(6); assertEquals(MainRow.MoreTools(2), state.homeFocus())
+        val state = b2Home(games = 6, tools = 12); state.load(); advanceUntilIdle()
+        state.onHomeLayout(PORT); advanceUntilIdle()
+        state.select(10); assertEquals(MainRow.MoreTools(3), state.homeFocus())
         state.onHomeLayout(TALL); advanceUntilIdle()
+        assertEquals(MainRow.MoreTools(8), state.homeFocus())
+        state.onHomeLayout(PORT); advanceUntilIdle()
         assertEquals(MainRow.MoreTools(3), state.homeFocus())
-        state.onHomeLayout(LAND); advanceUntilIdle()
-        assertEquals(MainRow.MoreTools(2), state.homeFocus())
         state.onButton(NxButton.R1)                                      // away from Home, rotated there, back
         state.onHomeLayout(TALL); advanceUntilIdle()
         state.onButton(NxButton.L1)
-        assertEquals(MainRow.MoreTools(3), state.homeFocus())
+        assertEquals(MainRow.MoreTools(8), state.homeFocus())
     }
 
-    // A tool the new slots hide (Delta, portrait's index 6, its columns show all 7, is behind landscape's "+2"): the focus
-    // goes to "+N"; back in portrait "+2" is Epsilon, the last tool.
+    // A tool the new slots hide (Delta, portrait's index 6, its columns show all 7, is behind a tall window's "+3"): the
+    // focus goes to "+N"; back in portrait "+3" is Epsilon, the last tool.
     @Test fun a_rotation_moves_focus_from_a_hidden_tool_to_more() = runTest {
         val state = b2Home(games = 6, tools = 7); state.load(); advanceUntilIdle()
         state.onHomeLayout(PORT); advanceUntilIdle()
         state.select(6); assertEquals("Delta", assertIs<MainRow.PinnedTool>(state.homeFocus()).row.label)
-        state.onHomeLayout(LAND); advanceUntilIdle()
-        assertEquals(MainRow.MoreTools(2), state.homeFocus())
+        state.onHomeLayout(TALL); advanceUntilIdle()
+        assertEquals(MainRow.MoreTools(3), state.homeFocus())
         state.onHomeLayout(PORT); advanceUntilIdle()
         assertEquals("Epsilon", assertIs<MainRow.PinnedTool>(state.homeFocus()).row.label)
     }
 
-    // 7 tools: landscape's "+2" (index 6); portrait shows all 7, so "+2", whose tools all fit there, becomes the last
+    // 7 tools: a tall window's "+3" (index 5); portrait shows all 7, so "+3", whose tools all fit there, becomes the last
     // tool, Epsilon (index 7).
     @Test fun more_whose_tools_all_fit_after_a_rotation_becomes_the_last_tool() = runTest {
         val state = b2Home(games = 6, tools = 7); state.load(); advanceUntilIdle()
-        state.onHomeLayout(LAND); advanceUntilIdle()
-        state.select(6); assertEquals(MainRow.MoreTools(2), state.homeFocus())
+        state.onHomeLayout(TALL); advanceUntilIdle()
+        state.select(5); assertEquals(MainRow.MoreTools(3), state.homeFocus())
         state.onHomeLayout(PORT); advanceUntilIdle()
         assertEquals("Epsilon", assertIs<MainRow.PinnedTool>(state.homeFocus()).row.label)
         assertEquals(7, state.selection.value.index)
     }
 
-    // Home reports its frame with the tab row hidden (its 44 dp in the body): the wide face takes 3 rows of squares
-    // (9 slots), so 7 tools all show and "+2" becomes the last tool. (A hidden hint bar keeps its room, so it never
-    // reaches the frame.)
-    @Test fun a_hidden_tab_row_gives_home_a_row_of_tool_slots() = runTest {
-        val state = b2Home(games = 6, tools = 7); state.load(); advanceUntilIdle()
-        state.onHomeLayout(LAND); advanceUntilIdle()
-        state.select(6); assertEquals(MainRow.MoreTools(2), state.homeFocus())
-        val hidden = LAND.copy(h = LAND.h + 44f, titleHidden = true)
+    // Home reports its frame with the tab row hidden (its 44 dp in the body): the squares grow but every column keeps its
+    // 5, so portrait's 10 slots hold, 12 tools still show 9 and "+3", and the focus stays on "+3". (A hidden hint bar
+    // keeps its room, so it never reaches the frame.)
+    @Test fun a_hidden_tab_row_keeps_homes_tool_slots() = runTest {
+        val state = b2Home(games = 6, tools = 12); state.load(); advanceUntilIdle()
+        state.onHomeLayout(PORT); advanceUntilIdle()
+        state.select(10); assertEquals(MainRow.MoreTools(3), state.homeFocus())
+        val hidden = PORT.copy(h = PORT.h + 44f, titleHidden = true)
         state.onHomeLayout(hidden); advanceUntilIdle()
         assertEquals(hidden, state.homeView.value.frame)
-        assertTrue(state.screen.value.homeRows.none { it is MainRow.MoreTools })
-        assertEquals(7, state.screen.value.homeRows.count { it is MainRow.PinnedTool })
-        assertEquals("Epsilon", assertIs<MainRow.PinnedTool>(state.homeFocus()).row.label)
+        assertEquals(MainRow.MoreTools(3), state.screen.value.homeRows.single { it is MainRow.MoreTools })
+        assertEquals(9, state.screen.value.homeRows.count { it is MainRow.PinnedTool })
+        assertEquals(MainRow.MoreTools(3), state.homeFocus())
     }
 
-    // Focus on "+2" (landscape, 7 tools, G1 inline: index 7), then a tool unpinned (on the Tools tab "+2" opened): back
-    // on Home the six tools all show and the focus is on index 7, the last square, not past the top section.
+    // Focus on "+2" (portrait, 11 tools: 9 and "+2" at index 10), then a tool unpinned (on the Tools tab "+2" opened):
+    // back on Home the ten tools all show and the focus is on index 10, the last square, not past the top section.
     @Test fun unpinning_a_tool_moves_focus_off_more() = runTest {
-        val state = b2Home(games = 1, tools = 7); state.load(); advanceUntilIdle()
-        state.onHomeLayout(LAND); advanceUntilIdle()
-        state.select(7); assertEquals(MainRow.MoreTools(2), state.homeFocus())
+        val state = b2Home(games = 1, tools = 11); state.load(); advanceUntilIdle()
+        state.onHomeLayout(PORT); advanceUntilIdle()
+        state.select(10); assertEquals(MainRow.MoreTools(2), state.homeFocus())
         state.onButton(NxButton.A)                                       // "+2": the Tools tab
         assertEquals(MenuCategory.TOOLS, state.category())
         state.select(state.screen.value.let { assertIs<Screen.Systems>(it) }.rows.indexOfFirst { it is MainRow.Tool && it.row.kind == ToolKind.SETTINGS })
         choose(state, ContextKind.UNPIN_TOOL); advanceUntilIdle()
         while (state.category() != MenuCategory.HOME) state.onButton(NxButton.L1)   // back to Home
         assertTrue(state.screen.value.homeRows.none { it is MainRow.MoreTools })
-        assertEquals(7, state.selection.value.index)
+        assertEquals(10, state.selection.value.index)
         assertIs<MainRow.PinnedTool>(state.homeFocus())
     }
 
@@ -11213,13 +11539,18 @@ class AppStateTest {
         assertEquals(before, state.strip)
     }
 
-    @Test fun launcher_section_shows_only_with_a_launcher() = runTest {
-        val none = state(MemorySettings(ContentRef("Home"))); none.load(); none.openSettingsMenu()
-        assertFalse(SettingsSection.LAUNCHER in assertIs<Screen.SettingsMenu>(none.screen.value).sections)
+    @Test fun launcher_group_and_android_games_show_only_with_a_launcher() = runTest {
+        val none = state(MemorySettings(ContentRef("Home"))); none.load()
+        none.openSettings(SettingsSection.SYSTEM)
+        assertTrue(assertIs<Screen.Settings>(none.screen.value).rows.none { it.label == "Launcher" || it.kind == SettingsKind.HOME_SCREEN })
+        none.openSettings(SettingsSection.LIBRARY)
+        assertTrue(assertIs<Screen.Settings>(none.screen.value).rows.none { it.kind == SettingsKind.ANDROID_GAMES })
         val with = state(MemorySettings(ContentRef("Home")), launcher = FakeLauncher()); with.load(); with.openSettingsMenu()
-        val sections = listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.LAUNCHER, SettingsSection.DEVELOPER, SettingsSection.ABOUT)
-        assertEquals(sections, assertIs<Screen.SettingsMenu>(with.screen.value).sections)
+        val sections = listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.SYSTEM)
+        assertEquals(sections, assertIs<Screen.SettingsMenu>(with.screen.value).sections)   // no Launcher category: its rows are on System and Library
         assertEquals(sections, with.settingsSections())   // the two-pane left pane lists the same
+        with.openSettings(SettingsSection.SYSTEM)
+        assertEquals(listOf("General", "Launcher", "Developer", "About", "Licenses"), assertIs<Screen.Settings>(with.screen.value).rows.filter { it.kind == SettingsKind.SECTION }.map { it.label })
     }
 
     @Test fun launcher_page_toggles_the_home_screen() = runTest {
@@ -11227,14 +11558,15 @@ class AppStateTest {
         val launcher = FakeLauncher()
         val state = state(settings, launcher = launcher)
         state.load()
-        state.openSettings(SettingsSection.LAUNCHER)
+        state.openSettings(SettingsSection.SYSTEM)
         val page = assertIs<Screen.Settings>(state.screen.value)
-        assertEquals(listOf("Use as home screen", "Android games"), page.rows.map { it.label })
-        assertEquals(listOf("Off", "None"), page.rows.map { it.secondary })
-        state.select(0); state.onButton(NxButton.A)
+        val at = rowIndex(state, SettingsKind.HOME_SCREEN)
+        assertEquals(SettingsRow(SettingsKind.SECTION, "Launcher"), page.rows[at - 1])         // in System's Launcher group
+        assertEquals(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", "Off"), page.rows[at])
+        state.select(at); state.onButton(NxButton.A)
         assertEquals(listOf(true), launcher.homeRequests)
         launcher.home = true; state.onLauncherChanged()                    // the role dialog came back
-        assertEquals("On", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
+        assertEquals("On", libraryRow(state, SettingsKind.HOME_SCREEN).secondary)
         state.onButton(NxButton.A)
         assertEquals(listOf(true, false), launcher.homeRequests)
     }
@@ -11242,10 +11574,10 @@ class AppStateTest {
     @Test fun a_refused_home_role_says_where_to_set_it() = runTest {
         val state = state(MemorySettings(ContentRef("Home")), launcher = FakeLauncher())
         state.load()
-        state.openSettings(SettingsSection.LAUNCHER)
+        state.openSettings(SettingsSection.SYSTEM)
         state.onHomeRoleRefused()
         assertEquals("Set NX Redux as the home app in Android settings → Default apps", state.notice.value)
-        assertEquals(SettingsSection.LAUNCHER, assertIs<Screen.Settings>(state.screen.value).section)
+        assertEquals(SettingsSection.SYSTEM, assertIs<Screen.Settings>(state.screen.value).section)
     }
 
     @Test fun go_home_lands_on_the_first_tab() = runTest {
@@ -11266,7 +11598,7 @@ class AppStateTest {
         st.load()
         st.openSettings(SettingsSection.DEFAULT_EMULATORS)
         st.onButton(NxButton.DOWN)
-        st.onButton(NxButton.A)                                                                  // GBA -> MGBA: the index no longer fits
+        st.onButton(NxButton.RIGHT)                                                              // GBA -> MGBA: the index no longer fits
         counting.calls.clear()
         st.goHome()
         assertTrue("listChildren:Home/Roms" in counting.calls)                                   // rescanned, as B would
@@ -11309,7 +11641,7 @@ class AppStateTest {
         st.load()
         openLibraryOn(st, SettingsKind.RESCAN)
         held.hold = true
-        st.onButton(NxButton.A)                                                                  // Rescan library: not cancellable
+        st.onButton(NxButton.A)                                                                  // the counts row: rescan: not cancellable
         st.goHome()
         assertIs<Screen.Settings>(st.screen.value)                                               // the scan runs on
         held.gate.complete(Unit); runCurrent()
@@ -11579,15 +11911,15 @@ class AppStateTest {
         assertEquals("None", gamesCountLabel(0)); assertEquals("1 game", gamesCountLabel(1)); assertEquals("3 games", gamesCountLabel(3))
     }
 
-    @Test fun launcher_page_lists_its_three_rows() = runTest {
+    @Test fun library_lists_android_games_right_after_saves() = runTest {
         val state = state(androidSettings("b/B"), launcher = FakeLauncher(listOf(gAlpha, gBeta, gGamma)))
         state.load()
-        state.openSettings(SettingsSection.LAUNCHER)
+        state.openSettings(SettingsSection.LIBRARY)
         testScheduler.advanceUntilIdle()
         val page = assertIs<Screen.Settings>(state.screen.value)
-        assertEquals(listOf("Use as home screen", "Android games"), page.rows.map { it.label })
-        assertEquals(listOf("Off", "1 game"), page.rows.map { it.secondary })
-        assertEquals(listOf(SettingsKind.HOME_SCREEN, SettingsKind.ANDROID_GAMES), page.rows.map { it.kind })
+        val at = rowIndex(state, SettingsKind.ANDROID_GAMES)
+        assertEquals(SettingsKind.SAVES, page.rows[at - 1].kind)                             // after Saves, before the other game lists
+        assertEquals(SettingsRow(SettingsKind.ANDROID_GAMES, "Android games", "1 game"), page.rows[at])
     }
 
     @Test fun android_games_count_waits_for_the_first_load() = runTest {
@@ -11597,18 +11929,18 @@ class AppStateTest {
         }
         val state = state(androidSettings("a/A"), launcher = launcher)
         state.load()
-        state.openSettings(SettingsSection.LAUNCHER)
-        assertEquals("…", assertIs<Screen.Settings>(state.screen.value).rows[1].secondary)
+        state.openSettings(SettingsSection.LIBRARY)
+        assertEquals("…", libraryRow(state, SettingsKind.ANDROID_GAMES).secondary)
         gate.complete(Unit); testScheduler.advanceUntilIdle()
-        assertEquals("1 game", assertIs<Screen.Settings>(state.screen.value).rows[1].secondary)
+        assertEquals("1 game", libraryRow(state, SettingsKind.ANDROID_GAMES).secondary)
     }
 
     @Test fun android_games_picker_adds_and_removes_console_apps() = runTest {
         val settings = androidSettings("b/B")
         val state = state(settings, launcher = FakeLauncher(listOf(gAlpha, gBeta, gGamma)))
         state.load()
-        state.openSettings(SettingsSection.LAUNCHER)
-        state.select(1); state.onButton(NxButton.A)
+        state.openSettings(SettingsSection.LIBRARY)
+        state.select(rowIndex(state, SettingsKind.ANDROID_GAMES)); state.onButton(NxButton.A)
         testScheduler.advanceUntilIdle()
         val picker = assertIs<Screen.ToolApps>(state.screen.value)
         assertEquals(AppPick.GAMES, picker.pick)
@@ -11626,9 +11958,9 @@ class AppStateTest {
         assertEquals(emptyList(), settings.toolApps)                      // the Tools list is untouched
         state.onButton(NxButton.B)
         val page = assertIs<Screen.Settings>(state.screen.value)
-        assertEquals(SettingsSection.LAUNCHER, page.section)
+        assertEquals(SettingsSection.LIBRARY, page.section)                // B: back on Library's Android games row
         assertEquals(SettingsKind.ANDROID_GAMES, page.rows[state.selection.value.index].kind)
-        assertEquals("2 games", page.rows[1].secondary)
+        assertEquals("2 games", libraryRow(state, SettingsKind.ANDROID_GAMES).secondary)
     }
 
     @Test fun tool_apps_picker_is_the_tools_pick() = runTest {
@@ -11771,13 +12103,13 @@ class AppStateTest {
         val state = state(settings, src = androidSource, launcher = launcher)
         state.load(); advanceUntilIdle()
         assertEquals(listOf("Alpha", "Gamma"), androidRow(state)?.games?.map { it.shownName })
-        state.openSettings(SettingsSection.LAUNCHER); advanceUntilIdle()
-        state.select(2); state.onButton(NxButton.A); advanceUntilIdle()        // the games picker: Alpha, Gamma, Beta
+        state.openSettings(SettingsSection.LIBRARY); advanceUntilIdle()
+        state.select(rowIndex(state, SettingsKind.ANDROID_GAMES)); state.onButton(NxButton.A); advanceUntilIdle()        // the games picker: Alpha, Gamma, Beta
         state.select(2); state.onButton(NxButton.A)                            // Beta added
         state.goHome()
         assertEquals(listOf("Alpha", "Beta", "Gamma"), androidRow(state)?.games?.map { it.shownName })
-        state.openSettings(SettingsSection.LAUNCHER); advanceUntilIdle()
-        state.select(2); state.onButton(NxButton.A); advanceUntilIdle()
+        state.openSettings(SettingsSection.LIBRARY); advanceUntilIdle()
+        state.select(rowIndex(state, SettingsKind.ANDROID_GAMES)); state.onButton(NxButton.A); advanceUntilIdle()
         repeat(3) { state.select(it); state.onButton(NxButton.A) }             // all three out
         assertEquals(emptyList(), settings.androidConsoleApps)
         state.goHome()
@@ -11796,8 +12128,8 @@ class AppStateTest {
         state.load(); advanceUntilIdle()
         val icons = assertNotNull(state.appIcons)
         icons.load("a/A"); icons.load("b/B")
-        state.openSettings(SettingsSection.LAUNCHER); advanceUntilIdle()
-        state.select(2); state.onButton(NxButton.A); advanceUntilIdle()
+        state.openSettings(SettingsSection.LIBRARY); advanceUntilIdle()
+        state.select(rowIndex(state, SettingsKind.ANDROID_GAMES)); state.onButton(NxButton.A); advanceUntilIdle()
         state.onButton(NxButton.B)
         icons.load("a/A"); icons.load("b/B")
         assertEquals(1, launcher.iconAsks.count { it == "a/A" })   // a console game's icon is kept
@@ -11918,15 +12250,15 @@ class AppStateTest {
     }
 
     @Test fun android_console_rows_stay_out_of_library_counts() = runTest {
-        fun TestScope.details(launcher: AppLauncher?): List<String> {
+        fun TestScope.counts(launcher: AppLauncher?): String {
             val state = state(androidSettings("a/A", "g/G"), src = androidSource, launcher = launcher)
             state.load(); testScheduler.advanceUntilIdle()
             state.openSettings(SettingsSection.LIBRARY)
-            return assertIs<Screen.Settings>(state.screen.value).details
+            return assertIs<Screen.Settings>(state.screen.value).rows[0].label
         }
-        val with = details(FakeLauncher(listOf(gAlpha, gGamma)))
-        assertEquals(details(null), with)
-        assertEquals("2 games · 2 consoles", with[1])
+        val with = counts(FakeLauncher(listOf(gAlpha, gGamma)))
+        assertEquals(counts(null), with)
+        assertEquals("2 games · 2 consoles", with)
     }
 
     // --- Android games onboarding ---
@@ -12155,8 +12487,8 @@ class AppStateTest {
         val state = pinState(settings, files, FakeLauncher(listOf(gAlpha, gBeta, gGamma)))
         state.load(); advanceUntilIdle()
         assertEquals(listOf("a/A", "b/B"), state.screen.value.homeRows.filterIsInstance<MainRow.PinnedTool>().mapNotNull { it.row.appId })
-        state.openSettings(SettingsSection.LAUNCHER)
-        state.select(1); state.onButton(NxButton.A); advanceUntilIdle()      // the games picker: Alpha, Gamma, Beta
+        state.openSettings(SettingsSection.LIBRARY)
+        state.select(rowIndex(state, SettingsKind.ANDROID_GAMES)); state.onButton(NxButton.A); advanceUntilIdle()      // the games picker: Alpha, Gamma, Beta
         state.select(0); state.onButton(NxButton.A); advanceUntilIdle()      // Alpha in
         assertEquals(listOf("g/G", "a/A"), settings.androidPins)              // appended
         assertEquals("CHEAT_DB\nAPP:b/B", files.files[ToolPins.FILE])
@@ -12165,8 +12497,8 @@ class AppStateTest {
         assertEquals(listOf("a/A"), state.screen.value.homeRows.filterIsInstance<MainRow.Pin>().map { it.entry.game.fileName })   // g/G not in the console
         assertEquals(listOf("b/B"), state.screen.value.homeRows.filterIsInstance<MainRow.PinnedTool>().mapNotNull { it.row.appId })
 
-        state.openSettings(SettingsSection.LAUNCHER)
-        state.select(2); state.onButton(NxButton.A); advanceUntilIdle()
+        state.openSettings(SettingsSection.LIBRARY)
+        state.select(rowIndex(state, SettingsKind.ANDROID_GAMES)); state.onButton(NxButton.A); advanceUntilIdle()
         state.select(0); state.onButton(NxButton.A); advanceUntilIdle()      // Alpha out: the pin stays an Android pin
         assertEquals(listOf("g/G", "a/A"), settings.androidPins)
         assertEquals("CHEAT_DB\nAPP:b/B", files.files[ToolPins.FILE])
@@ -12227,8 +12559,8 @@ class AppStateTest {
         state.onButton(NxButton.B)
         assertEquals(listOf("a/A", "b/B"), settings.toolApps)                  // kept
 
-        state.openSettings(SettingsSection.LAUNCHER)
-        state.select(1); state.onButton(NxButton.A); advanceUntilIdle()      // the games picker
+        state.openSettings(SettingsSection.LIBRARY)
+        state.select(rowIndex(state, SettingsKind.ANDROID_GAMES)); state.onButton(NxButton.A); advanceUntilIdle()      // the games picker
         state.select(0); state.onButton(NxButton.A)                           // Alpha out of the console
         assertEquals(emptyList(), settings.androidConsoleApps)
         state.goHome()

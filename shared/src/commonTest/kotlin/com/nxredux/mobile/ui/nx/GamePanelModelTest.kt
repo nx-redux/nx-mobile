@@ -2,6 +2,7 @@ package com.nxredux.mobile.ui.nx
 
 import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.achievements.RaAchievementState
+import com.nxredux.mobile.cheats.CheatEntry
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -22,6 +23,42 @@ class GamePanelModelTest {
         assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS, GamePanelTab.PLAYERS), GamePanelModel.tabs(raAvailable = true, playerSlots = 2))
         assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS), GamePanelModel.tabs(raAvailable = true, playerSlots = 1))
         assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.PLAYERS), GamePanelModel.tabs(raAvailable = false, playerSlots = 4))
+    }
+
+    @Test fun tabs_with_cheats_sit_before_players() {
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.CHEATS), GamePanelModel.tabs(raAvailable = false, playerSlots = 1, cheats = true))
+        assertEquals(
+            listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS, GamePanelTab.CHEATS, GamePanelTab.PLAYERS),
+            GamePanelModel.tabs(raAvailable = true, playerSlots = 2, cheats = true),
+        )
+        assertEquals(GamePanelTab.SHORTCUTS, GamePanelModel.resolveTab(GamePanelTab.CHEATS, GamePanelModel.tabs(raAvailable = true, playerSlots = 2)))
+    }
+
+    @Test fun cheat_rows_take_the_source_from_the_info() {
+        val rows = GamePanelModel.cheatRows(listOf(
+            CheatEntry("Infinite Lives", "01", "Infinite Lives", enabled = false),
+            CheatEntry("Max Score", "02", "(GameShark) Max Score", enabled = true),
+            CheatEntry("Speed", "03", "Built-in: Speed", enabled = false),
+        ))
+        assertEquals(listOf(CheatRow("Infinite Lives", "", false), CheatRow("Max Score", "GameShark", true), CheatRow("Speed", "Built-in", false)), rows)
+    }
+
+    @Test fun a_cheat_tap_flips_its_switch() {
+        val rows = listOf(CheatRow("A", "", false), CheatRow("B", "", true))
+        assertEquals(GamePanelEvent.SetCheat(0, on = true), GamePanelModel.cheatEvent(0, rows))
+        assertEquals(GamePanelEvent.SetCheat(1, on = false), GamePanelModel.cheatEvent(1, rows))
+        assertNull(GamePanelModel.cheatEvent(2, rows))
+    }
+
+    @Test fun no_cheats_text_says_where_to_get_them() {
+        assertEquals(
+            "No cheats for this game.\nDownload them with Tools → Cheat Database, or add a RetroArch .cht file as Cheats/PS/Crash.cht.",
+            GamePanelModel.noCheatsText("Cheats/PS", "Crash.cht"),
+        )
+        assertEquals(
+            "No cheats for this game.\nDownload them with Tools → Cheat Database, or add a RetroArch .cht file to the Cheats folder.",
+            GamePanelModel.noCheatsText("Cheats/PS", ""),
+        )
     }
 
     @Test fun resolve_tab_falls_back_when_gone() {

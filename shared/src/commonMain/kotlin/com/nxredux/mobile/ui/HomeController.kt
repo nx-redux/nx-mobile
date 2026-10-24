@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.homeShelfCap
 import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.gametime.GameTimeData
 import com.nxredux.mobile.gametime.GameTotal
@@ -152,12 +153,14 @@ internal class HomeController(
     /**
      * Home from its [inputs], its slots from the board they make on the frame ([homeBoardFor]; the
      * [com.nxredux.mobile.ui.nx.HomeToolMode.SPS3] split and the portrait type grow with the tools), with Home's shelves
-     * ([HomeHost.shelvesFor]) and the wide and large faces' inline games (the board's inlineGames).
+     * ([HomeHost.shelvesFor]) and every landscape face's inline games (the board's inlineGames).
      */
     fun homeFor(inputs: HomeInputs): Home {
         val (last, games, tools) = inputs
         val strip = homeStrip(homeStats).takeIf { last != null || games.isNotEmpty() || tools.isNotEmpty() }
-        val shelves = host.shelvesFor(inputs)
+        val picked = host.shelvesFor(inputs)
+        // List, Minimal and Carousel: up to [HOME_SHELF_LIST_MAX] a shelf; Grid: what its board shows ([homeShelfCap]).
+        val shelves = picked.map { (shelf, games) -> shelf to games.take(HOME_SHELF_LIST_MAX) }
         when (host.homeStyle()) {
             // List and Minimal: every tool is a row. Carousel: the dock's squares, "+N" for the rest.
             MenuStyle.LIST, MenuStyle.MINIMAL -> return buildHome(last, games, tools, homeStats, Int.MAX_VALUE, shelves)
@@ -170,8 +173,12 @@ internal class HomeController(
             MenuStyle.GRID -> Unit
         }
         val gamesLeft = games.count { it.game.path != last?.entry?.game?.path }
-        val b = homeBoardFor(homeLinesFor(strip), tools.size, gamesLeft, shelves = shelves.map { it.first to it.second.size })
-        return buildHome(last, games, tools, homeStats, b.slots, shelves, b.inlineGames)
+        val lines = homeLinesFor(strip)
+        // The board caps each shelf to what its face shows ([homeShelfCap]); its sizes follow the non-empty shelves in order.
+        val b = homeBoardFor(lines, tools.size, gamesLeft, shelves = picked.map { (shelf, games) -> shelf to games.size })
+        var k = 0
+        val gridShelves = picked.map { (shelf, games) -> shelf to if (games.isEmpty()) games else games.take(b.shelfSizes.getOrElse(k++) { 0 }) }
+        return buildHome(last, games, tools, homeStats, b.slots, gridShelves, b.inlineGames)
     }
 
     /** [built] is the Home tab now: its view shows once the screen shows its rows ([publishHomeView]). */

@@ -326,7 +326,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override var descriptorDefaults: Map<String, String> = emptyMap()
         private set
     override var storedValues: Map<String, String> = emptyMap()   // the config's resolved values (launch, or the last restore)
-    override var cheatsSupported = true   // false for a core that ignores cheats (the menu hides its Cheats row); set in startEmulator
+    override var cheatsSupported = true   // false for a core that ignores cheats (the panels hide their Cheats tab); set in startEmulator
         private set
     @Volatile override var gameReady = false   // set on the first rendered frame; SRAM is only valid after load
         private set
@@ -414,7 +414,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var dolphinBuiltInPath: String? = null     // named after the ROM-cache copy Dolphin loads
     override var cheatsLoad: Job? = null               // done once cheatSet holds the resolved (and saved-state-applied) set
         private set
-    override var cheatsFolder = ""                     // the folder the Cheats page names (Cheats.folder), set at start
+    override var cheatsFolder = ""                     // the folder the empty Cheats tab names (Cheats.folder), set at start
         private set
 
     // ---- netplay (Wi-Fi lockstep, see the "netplay" block) ----
@@ -930,6 +930,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             } else resolvedSet
             cheatSet = savedCheats?.let(combined::withSaved) ?: combined
             menu.menuModel?.let { it.setCheats(cheatSet.entries, cheatsFolder, cheatSet.expected); menu.menuState.value = it.state }
+            dual.refreshDualPanel()
         } }
         cheatsLoad = if (np != null) null else loadCheats()   // netplay: no cheats (a saved nx_cheats set included)
         // netplay link: the cheats come once the session has ended and the game is a local one.
@@ -1190,7 +1191,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     } + forced.filterKeys { k -> options.none { it.key == k } }.map { (k, v) -> Variable(k, v) }).toTypedArray()
                     rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
                     preferLowLatencyAudio = true
-                    // GL driver messages and a frame probe to tag NXGL, with Settings → Developer → Debug log on at
+                    // GL driver messages and a frame probe to tag NXGL, with Settings → System → Debug log on at
                     // launch.
                     glDebugOutput = NxLog.enabled
                     // Console Settings → Graphics API ([graphics]): Vulkan frames are bridged into the GLES presentation.
@@ -1994,6 +1995,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         dolphinPlayerCheats = null
         cheatSet = DolphinCheats.refresh(builtIn, player, cheatSet.enabledKeys(), dolphinSavedCheats)
         menu.menuModel?.let { it.setCheats(cheatSet.entries, cheatsFolder, cheatSet.expected); menu.menuState.value = it.state }
+        dual.refreshDualPanel()
     }
 
     /**

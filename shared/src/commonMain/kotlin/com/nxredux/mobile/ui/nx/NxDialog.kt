@@ -35,7 +35,7 @@ fun NxDialog(
         scrollSteps = scrollSteps,
         onButton = { if (it == NxButton.B) onCancel?.invoke() else onConfirm() },
     ) {
-        Text(text, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.dialogBody * nxTextScale())
+        Text(text, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = nxDialogBody())
     }
 }
 
@@ -53,7 +53,7 @@ fun NxChoiceDialog(title: String, text: String, choices: List<String>, selected:
         onButton = { if (it == NxButton.B) onCancel() else if (it == NxButton.A && selected in choices.indices) onChoose(selected) },
     ) {
         if (text.isNotBlank()) {
-            Text(text, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.dialogBody * nxTextScale())
+            Text(text, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = nxDialogBody())
             Spacer(Modifier.height(16.dp))
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -70,6 +70,6 @@ private fun NxChoiceButton(label: String, highlighted: Boolean, onClick: () -> U
     val base = Modifier.fillMaxWidth().height(48.dp).clip(shape).clickable(onClick = onClick)
     val styled = if (highlighted) base.background(colors.main, shape) else base.border(1.dp, colors.main.copy(alpha = 0.3f), shape)
     Box(styled, contentAlignment = Alignment.Center) {
-        Text(label, color = if (highlighted) colors.listTextSelected else colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = NxTextSizes.modalButton * nxTextScale(), maxLines = 1)
+        Text(label, color = if (highlighted) colors.listTextSelected else colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxModalButton(), maxLines = 1)
     }
 }

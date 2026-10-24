@@ -44,6 +44,7 @@ object PadOptions {
         PORTRAIT_PAD, "Portrait Pad", listOf(SHOWN, HIDDEN), SHOWN,
         "Hidden gives the two screens the pad's room\nin portrait, with the see-through pad over\n" +
             "the game. Long-press the corner icon in game\nto switch.",
+        brief = "Hidden: the pad goes see-through over the screens",
         visual = false, valueLabels = listOf("Shown", "Hidden"),
     )
 

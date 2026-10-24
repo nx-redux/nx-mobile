@@ -65,7 +65,7 @@ object ContextMenus {
      * Settings (a game with a core), then Emulator (multi-emulator consoles) or Console (Unassigned: no pin, no collection,
      * no Game Settings, since the game cannot launch). Recently Played: Remove only, after the lead items. A collection:
      * the console items plus Remove from Collection. A search list: a collection's items without Remove from Collection.
-     * Hidden: none (A unhides). The Android games console: Pin or Unpin only (Settings › Launcher › Android games is the
+     * Hidden: none (A unhides). The Android games console: Pin or Unpin only (Settings › Library › Android games is the
      * only way out of the console; [pinned]: in the Android pins).
      * [netplay]: the platform has Wi-Fi netplay, so Netplay follows Game Settings for a game whose tag has it.
      * [fetchArt]: the game's console is one ScreenScraper knows and the build can fetch, so Fetch art follows them

@@ -50,13 +50,14 @@ compose.resources {
 }
 
 // MiSans (© Xiaomi) is used under Xiaomi's terms (https://hyperos.mi.com/font/en/download/): software may embed it and
-// must note that it does (https://hyperos.mi.com/font/en/faq/; Settings → About), but the font files may not be
+// must note that it does (https://hyperos.mi.com/font/en/faq/; Settings → System → About and Licenses), but the font files may not be
 // distributed on their own, so the TTF is not in git.
-// fetchMiSans takes MiSansLatin-Semibold.ttf from Xiaomi's MiSans_Latin.zip (about 3.5 MB, read as a stream, never stored;
-// the full MiSans.zip is 230 MB for CJK glyphs the app doesn't bundle, other scripts use the system font) once per
-// machine, caches it in the Gradle user home, checks its SHA-256 and copies it to where Compose resources expect it
-// (gitignored). -PmisansTtf=<path> takes a local copy instead (offline builds). A new Xiaomi release fails the check:
-// review its terms, then update the hash.
+// fetchMiSans takes MiSansLatin-Semibold.ttf (every UI text) and fetchMiSansRegular MiSansLatin-Regular.ttf (the settings
+// rows' descriptions) from Xiaomi's MiSans_Latin.zip (about 3.5 MB, read as a stream, never stored; the full MiSans.zip
+// is 230 MB for CJK glyphs the app doesn't bundle, other scripts use the system font) once per machine, caches each in
+// the Gradle user home, checks its SHA-256 and copies it to where Compose resources expect it (gitignored).
+// -PmisansTtf=<path> and -PmisansRegularTtf=<path> take local copies instead (offline builds). A new Xiaomi release
+// fails the check: review its terms, then update the hashes (and the cache key in .github/workflows/release.yaml).
 abstract class FetchMiSans : DefaultTask() {
     @get:Input abstract val url: Property<String>
     @get:Input abstract val entry: Property<String>
@@ -102,7 +103,7 @@ abstract class FetchMiSans : DefaultTask() {
 
     @TaskAction fun fetch() {
         val want = sha256.get()
-        val cached = cacheDir.get().asFile.resolve("MiSansLatin-Semibold-${want.take(12)}.ttf")
+        val cached = cacheDir.get().asFile.resolve("${entry.get().substringAfterLast('/').removeSuffix(".ttf")}-${want.take(12)}.ttf")
         val source = localCopy.orNull?.asFile ?: cached.also { if (!it.isFile || sha256Of(it) != want) download(it) }
         val got = sha256Of(source)
         if (got != want) {
@@ -113,19 +114,26 @@ abstract class FetchMiSans : DefaultTask() {
     }
 }
 
-val fetchMiSans = tasks.register<FetchMiSans>("fetchMiSans") {
-    url.set("https://hyperos.mi.com/font-download/MiSans_Latin.zip")
-    entry.set("MiSans Latin/ttf/MiSansLatin-Semibold.ttf")
-    sha256.set("2080f37e783eb269129c15f7f40028943fe659c1859efc5ba5f0de4e726c0e62")
-    cacheDir.set(File(gradle.gradleUserHomeDir, "nx-mobile/misans"))
-    providers.gradleProperty("misansTtf").orNull?.let { localCopy.set(file(it)) }
-    target.set(layout.projectDirectory.file("src/commonMain/composeResources/font/misans_semibold.ttf"))
-}
+fun registerFetchMiSans(name: String, style: String, hash: String, property: String, resource: String) =
+    tasks.register<FetchMiSans>(name) {
+        url.set("https://hyperos.mi.com/font-download/MiSans_Latin.zip")
+        entry.set("MiSans Latin/ttf/MiSansLatin-$style.ttf")
+        sha256.set(hash)
+        cacheDir.set(File(gradle.gradleUserHomeDir, "nx-mobile/misans"))
+        providers.gradleProperty(property).orNull?.let { localCopy.set(file(it)) }
+        target.set(layout.projectDirectory.file("src/commonMain/composeResources/font/$resource.ttf"))
+    }
+val fetchMiSans = registerFetchMiSans(
+    "fetchMiSans", "Semibold", "2080f37e783eb269129c15f7f40028943fe659c1859efc5ba5f0de4e726c0e62", "misansTtf", "misans_semibold",
+)
+val fetchMiSansRegular = registerFetchMiSans(
+    "fetchMiSansRegular", "Regular", "d6afa946f09bf876e58ec2f784988a68647af9edb77709643f00fa25f183135b", "misansRegularTtf", "misans_regular",
+)
 // Every Compose resources task reads the font directory (value copies, accessors, preparation, the Android assets copy).
 tasks.matching {
-    it.name != fetchMiSans.name && listOf("ComposeRes", "ValueResources", "ResourceAccessors", "ResourceCollectors")
-        .any { part -> it.name.contains(part) }
-}.configureEach { dependsOn(fetchMiSans) }
+    it.name != fetchMiSans.name && it.name != fetchMiSansRegular.name &&
+        listOf("ComposeRes", "ValueResources", "ResourceAccessors", "ResourceCollectors").any { part -> it.name.contains(part) }
+}.configureEach { dependsOn(fetchMiSans, fetchMiSansRegular) }
 
 sqldelight {
     databases {

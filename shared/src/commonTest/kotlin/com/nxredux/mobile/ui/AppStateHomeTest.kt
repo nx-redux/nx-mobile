@@ -104,7 +104,6 @@ class AppStateHomeTest {
     private val media = FileRefs.of("/storage/emulated/0/Android/media/com.nxredux.mobile.dev")
     private val fileHome = FileRefs.of("/storage/emulated/0/NXRedux")
     private val mediaNote = "Saves are in Android/media/com.nxredux.mobile.dev/. Uninstalling the app removes them."
-    private val mediaNotice = "All files access is off. Using Android/media/com.nxredux.mobile.dev/ until it's back on. Saves made there stay there."
 
     /** [roots] (ref values) each holding one GB game in Roms, the folders listed recorded in [listed]. */
     private class Listing private constructor(private val src: FakeRomsSource) : RomsSource by src {
@@ -200,10 +199,11 @@ class AppStateHomeTest {
         assertEquals(mediaNote, st.settingsPreview(SettingsSection.SAVES).banner)
     }
 
-    @Test fun mediaHomeNotice() = runTest {
+    // Read from the media folder for want of All files access: no notice at each start (Library's All files row says it).
+    @Test fun mediaHomeWithoutAccessShowsNoNotice() = runTest {
         val st = state(MemorySettings(fileHome), Listing(media.value, fileHome.value), Homes(media, media))
         st.load()
-        assertEquals(mediaNotice, st.notice.value)
+        assertNull(st.notice.value)
         assertFalse(st.screen.value is Screen.PickFolder)
     }
 

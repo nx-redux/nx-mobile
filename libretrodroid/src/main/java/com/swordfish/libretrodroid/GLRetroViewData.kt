@@ -38,7 +38,7 @@ class GLRetroViewData(context: Context) {
     var skipDuplicateFrames: Boolean = false
     var enableMicrophone: Boolean = false
     var immersiveMode: ImmersiveMode? = null
-    /** With Settings → Developer → Debug log on at launch: log GL driver messages to tag NXGL (GL_KHR_debug callback, else glGetError polling). */
+    /** With Settings → System → Debug log on at launch: log GL driver messages to tag NXGL (GL_KHR_debug callback, else glGetError polling). */
     var glDebugOutput: Boolean = false
     /**
      * Offer the core Vulkan, each frame bridged into the GLES presentation through AHardwareBuffers. Ignored where the

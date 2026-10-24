@@ -150,7 +150,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         }
     }
 
-    // Settings → Emulators → Saves → Export / Import ([AndroidSaveTransfer]).
+    // Settings → Library → Saves → Export / Import ([AndroidSaveTransfer]).
     private var zipCreated: ((Uri?) -> Unit)? = null
     private val createZip = registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         zipCreated?.invoke(uri); zipCreated = null
@@ -356,6 +356,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 appInfo = AndroidDeviceInfo.appInfo(this),
                 deviceGpu = AndroidDeviceInfo::gpu,
                 copyText = { AndroidDeviceInfo.copyText(applicationContext, it) },
+                // A browser's page; none installed: nothing happens.
+                openUrl = { url -> runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } },
                 recents = processRecents(),
                 arcadeSets = { ArcadeSetsAsset.get(applicationContext) },
                 naomiSets = { NaomiSetsAsset.get(applicationContext) },

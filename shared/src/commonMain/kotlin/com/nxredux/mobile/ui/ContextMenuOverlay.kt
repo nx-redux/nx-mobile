@@ -1,5 +1,7 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.nxTextScale
+import com.nxredux.mobile.ui.nx.nxModalText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -44,23 +46,25 @@ fun ContextMenuOverlay(menu: ContextMenu, onButton: (NxButton) -> Unit, onSelect
     val sub = menu.sub
     val rows = sub?.labels?.mapIndexed { i, l -> NxRow(l, secondary = if (i == sub.current) "•" else null) } ?: menu.items.map { NxRow(it.label) }
     val selected = sub?.index ?: menu.index
-    val rowHeight = 28.dp
+    val rowHeight = 28.dp * nxTextScale()   // the rows grow with their text (Appearance → Text size)
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val columns = menuColumns(rows.size, maxWidth >= MENU_TWO_COLUMN_MIN_SCREEN)
         LaunchedEffect(columns) { onColumns(columns) }
         DisposableEffect(Unit) { onDispose { onColumns(1) } }
         NxModal(caption = sub?.title ?: menu.caption, kind = ModalKind.MENU, onButton = onButton, maxWidth = if (columns == 2) 640.dp else 420.dp) {
             if (columns == 1) {
-                NxList(rows, selected, onSelect = onSelect, onOpen = { onOpen() }, modifier = Modifier.height(rowHeight * minOf(rows.size, MODAL_ROWS)), rowHeightOverride = rowHeight, pillPaddingOverride = 12.dp, textSizeOverride = NxTextSizes.modalText)
+                NxList(rows, selected, onSelect = onSelect, onOpen = { onOpen() }, modifier = Modifier.height(rowHeight * minOf(rows.size, MODAL_ROWS)), rowHeightOverride = rowHeight, pillPaddingOverride = 12.dp, textSizeOverride = nxModalText())
             } else {
-                // Column-major: the left column takes the first MODAL_ROWS, the right the rest; only the column holding the selection lights a row.
+                // Column-major and balanced ([menuColumnRows]: the left holds the odd one); only the column holding the
+                // selection lights a row.
+                val perColumn = menuColumnRows(rows.size, columns)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MENU_COLUMN_GAP)) {
-                    rows.chunked(MODAL_ROWS).forEachIndexed { c, part ->
-                        val offset = c * MODAL_ROWS
+                    rows.chunked(perColumn).forEachIndexed { c, part ->
+                        val offset = c * perColumn
                         val local = (selected - offset).takeIf { it in part.indices } ?: -1
                         // keyed on focus: NxPillGlide would glide to/from -1 through visible rows; a fresh list puts the pill in place (none when unfocused).
                         key(local >= 0) {
-                            NxList(part, local, onSelect = { onSelect(offset + it) }, onOpen = { onOpen() }, modifier = Modifier.weight(1f).height(rowHeight * part.size), rowHeightOverride = rowHeight, pillPaddingOverride = 12.dp, textSizeOverride = NxTextSizes.modalText)
+                            NxList(part, local, onSelect = { onSelect(offset + it) }, onOpen = { onOpen() }, modifier = Modifier.weight(1f).height(rowHeight * part.size), rowHeightOverride = rowHeight, pillPaddingOverride = 12.dp, textSizeOverride = nxModalText())
                         }
                     }
                 }

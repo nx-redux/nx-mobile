@@ -203,7 +203,7 @@ interface AppSettings {
     var toolApps: List<String>
     /**
      * The Android console's members ([com.nxredux.mobile.launcher.InstalledApp.id]), in the order added: by the onboarding
-     * question or Settings → Launcher → Android games. One no longer installed is skipped but kept.
+     * question or Settings → Library → Android games. One no longer installed is skipped but kept.
      */
     var androidConsoleApps: List<String>
     /** The "Add N Android games to Consoles?" question was answered (Yes or Not now); it is never asked again. */
@@ -316,7 +316,7 @@ interface AppSettings {
         get() = true
         set(@Suppress("UNUSED_PARAMETER") value) {}
     /**
-     * Settings → Developer → Debug log (default off): off, only errors reach logcat. Defaulted so a platform or fake
+     * Settings → System → Debug log (default off): off, only errors reach logcat. Defaulted so a platform or fake
      * without it stores nothing.
      */
     var debugLog: Boolean
@@ -362,7 +362,7 @@ interface AppSettings {
     var onboardingStep: String?
         get() = null
         set(@Suppress("UNUSED_PARAMETER") value) {}
-    /** Settings → Emulators → Saves, NX Redux's three save-naming settings. Defaulted, like [debugLog]. */
+    /** Settings → Library → Saves, NX Redux's three save-naming settings. Defaulted, like [debugLog]. */
     var saveFormat: SaveFormat
         get() = SaveFormat.DEFAULT
         set(@Suppress("UNUSED_PARAMETER") value) {}

@@ -1,4 +1,4 @@
-// Host check for logflag (Settings → Developer → Debug log). From the repo root:
+// Host check for logflag (Settings → System → Debug log). From the repo root:
 //   out=$(mktemp -d)/logflag_test && clang++ -std=c++17 -Ilibretrodroid/src/main/cpp \
 //     libretrodroid/src/test/cpp/logflag_test.cpp libretrodroid/src/main/cpp/logflag.cpp -o "$out" && "$out"
 #include "logflag.h"

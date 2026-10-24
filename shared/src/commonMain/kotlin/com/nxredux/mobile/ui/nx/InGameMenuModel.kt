@@ -32,7 +32,6 @@ sealed interface PageKind {
     /** Live adjust of one visual setting (frontend or shader) over the paused frame (the menu collapses to a strip). */
     data class Adjust(val key: String) : PageKind
     data object CoreOptions : PageKind
-    data object Cheats : PageKind
     /** This game's RetroAchievements set, one Option row per achievement (no detail page: A does nothing on a row). */
     data object Achievements : PageKind
     data class Category(val key: String) : PageKind
@@ -44,20 +43,52 @@ sealed interface PageKind {
     data object Players : PageKind
 }
 
-sealed interface MenuRow {
+sealed interface MenuRow : NxDescribedRow {
     val label: String
-    val info: String
+    override val info: String
+    /** The full text the info popup shows when [info] is a short line of it, or none (a compact row); empty: [info] is all. */
+    override val detail: String get() = ""
     data class Action(override val label: String, val action: MenuAction, override val info: String = "") : MenuRow
     data class Slot(override val label: String, val action: SlotAction, override val info: String = "") : MenuRow
-    data class Submenu(override val label: String, val target: PageKind, override val info: String = "") : MenuRow
-    /** [visual]: the setting changes the picture, so A enters adjust mode instead of showing its info. */
+    data class Submenu(override val label: String, val target: PageKind, override val info: String = "", override val detail: String = "") : MenuRow
+    /**
+     * [visual]: the setting changes the picture, so A enters adjust mode. [choices]: every value's label, in cycle order
+     * (empty when not known); [index]: the current one's, -1 when it is none of them. They pick the row's control
+     * ([nxSettingControl]) and let the picker or a segment set a value ([InGameMenuModel.setChoice]).
+     */
     data class Option(
         override val label: String,
         val key: String,
         val valueLabel: String,
         override val info: String = "",
         val visual: Boolean = false,
+        val choices: List<String> = emptyList(),
+        val index: Int = -1,
+        override val detail: String = "",
     ) : MenuRow
+}
+
+/** The control of [row] ([nxSettingControl] of its choices). */
+val MenuRow.Option.control: NxSettingControl get() = nxSettingControl(choices)
+
+/** A popup over the menu's page, taking the input while it shows. */
+sealed interface MenuPopup {
+    /** Every value of option row [row] of the top page: [current] the one set (-1 none), [cursor] the d-pad's. */
+    data class Picker(val row: Int, val title: String, val choices: List<String>, val current: Int, val cursor: Int) : MenuPopup
+    /** A row's full description; [scrollSeq] / [scrollDir] as [MenuPage]'s (UP/DOWN scroll a long one). */
+    data class Info(val title: String, val text: String, val scrollSeq: Int = 0, val scrollDir: Int = 0) : MenuPopup
+}
+
+/** A touch on an options row or its popup ([InGameMenuModel.optionEvent]). */
+sealed interface OptionEvent {
+    /** Set row [row]'s value to choice [index] (a segment, the switch). */
+    data class Choose(val row: Int, val index: Int) : OptionEvent
+    data class OpenPicker(val row: Int) : OptionEvent
+    /** The row's info icon. */
+    data class Info(val row: Int) : OptionEvent
+    /** A value in the open picker. */
+    data class Pick(val index: Int) : OptionEvent
+    data object ClosePopup : OptionEvent
 }
 
 /** A player slot for the Players page ([InGameMenuModel.setPlayers]): [key] null = Empty; [connected] false = held for [name]. */
@@ -89,6 +120,8 @@ data class MenuPage(
  * [panelFocus]: where the controller is in the root's game panel, null on the menu list; [panelTab]: the panel's tab.
  * [panelVersion] counts changes to the panel's other inputs (players, second screen, achievements, header), which the
  * pages do not show, so a host publishing this state on every change still sees a new value.
+ * [preview]: the page the root's highlighted row opens, drawn dimmed on the right in place of the game panel: the Options
+ * page while the root's Options row is highlighted, else null (the model keeps it current).
  */
 data class MenuState(
     val stack: List<MenuPage>,
@@ -97,12 +130,18 @@ data class MenuState(
     val panelFocus: PanelFocus? = null,
     val panelTab: GamePanelTab = GamePanelTab.SHORTCUTS,
     val panelVersion: Int = 0,
+    val popup: MenuPopup? = null,
+    val preview: MenuPage? = null,
 ) {
     val page: MenuPage get() = stack.last()
 
-    /** The selected row is an option whose description does not fit the info area below the list: X shows it whole. */
+    /** The selected row's description is cut off on its row: X shows it whole (an options page; the root has none). */
     val selectedInfoTruncated: Boolean
-        get() = (page.rows.getOrNull(page.selected) as? MenuRow.Option)?.info?.let { it.isNotBlank() && it == truncatedInfo } == true
+        get() = page.kind != PageKind.Root && page.rows.getOrNull(page.selected)?.info?.let { it.isNotBlank() && it == truncatedInfo } == true
+
+    /** X opens the selected row's info popup: its line is cut off, or it has a fuller detail text ([hasMoreInfo]). */
+    val selectedShowsInfo: Boolean
+        get() = selectedInfoTruncated || (page.kind != PageKind.Root && page.rows.getOrNull(page.selected)?.hasMoreInfo == true)
 }
 
 /** What the host must do in response to input; the model never touches the platform or the core. */
@@ -150,10 +189,13 @@ sealed interface MenuEffect {
 /**
  * The in-game pause menu as a page stack: root (Continue/Save/Load/Options/Quit) → Options → Console Settings (→ Adjust,
  * only for a console with its own rows), Frontend (→ Adjust), Shaders (→ Shader Parameters, → Adjust), Core Options →
- * category, Cheats, and Save Changes. Slots are 0-based internally and 1-based in effects.
+ * category, and Save Changes (the cheats are the game panel's Cheats tab). Slots are 0-based internally and 1-based
+ * in effects.
  *
- * Beside the root list (but for Save / Load, which show their slot) sits the game panel ([panelState]): RIGHT enters it
- * on its tab row, L1/R1 switch its tabs, LEFT at its left edge or B comes back; a page push or pop leaves it.
+ * Beside the root list (but for Save / Load, which show their slot, and Options, which previews its page:
+ * [MenuState.preview]) sits the game panel ([panelState]): RIGHT enters it on its tab row, L1/R1 switch its tabs, LEFT at
+ * its left edge or B comes back; a page push or pop leaves it. On Options RIGHT opens the page, as A (as Save / Load's
+ * RIGHT works their card).
  *
  * The host builds a new model each time the menu opens and calls [setFrontend] and [setShaders] right away;
  * [MenuEffect.Close] does not reset the stack.
@@ -179,8 +221,29 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** The panel's shortcut grid columns as drawn (the UI reports them: 2 when narrow); UP/DOWN step a row of them. */
     var panelColumns: Int = 4
 
+    /** The Options page [optionsPreview] last built, and the inputs it was built from. */
+    private var previewPage: Pair<OptionsPreviewInputs, MenuPage>? = null
+
     var state: MenuState = MenuState(listOf(rootPage()), initialSlot.coerceIn(0, slotCount - 1))
-        private set
+        private set(value) { field = withPreview(value) }
+
+    /** [s] with its [MenuState.preview] for the root's highlighted row (the Options page beside the Options row). */
+    private fun withPreview(s: MenuState): MenuState {
+        val previews = s.stack.size == 1 && (s.page.rows.getOrNull(s.page.selected) as? MenuRow.Submenu)?.target == PageKind.Options
+        val preview = if (previews) optionsPreview() else null
+        // The same page object while its inputs hold, so the check is usually an identity one.
+        return if (preview == s.preview) s else s.copy(preview = preview)
+    }
+
+    /** What [optionsPage] reads: the Console Settings row's inputs ([consoleRows]) and the footer's [status]. */
+    private data class OptionsPreviewInputs(val tag: String, val locked: Set<String>, val second: Boolean, val status: ConfigSource)
+
+    /** [optionsPage], rebuilt only when one of its inputs has changed since the last call. */
+    private fun optionsPreview(): MenuPage {
+        val inputs = OptionsPreviewInputs(frontendTag, frontendLocked, secondConnected, status)
+        previewPage?.let { (key, page) -> if (key == inputs) return page }
+        return optionsPage().also { previewPage = inputs to it }
+    }
 
     private var options: List<CoreOption> = emptyList()
     private var locked: Set<String> = emptySet()
@@ -237,11 +300,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         state = state.copy(slotIndex = index.coerceIn(0, slotCount - 1))
     }
 
-    /** False for a core that ignores cheats: no Cheats row. */
-    var cheatsAvailable: Boolean = true
+    /** True for a core that takes cheats (the host sets it as the menu opens): the panel's Cheats tab. */
+    var cheatsAvailable: Boolean = false
+        set(value) { field = value; fixPanel() }
 
+    /** The game's cheats ([setCheats]): the panel's Cheats tab. */
     private var cheats: List<CheatEntry> = emptyList()
-    private var cheatsFolder = ""     // "Cheats/<TAG>", for the empty-page footer
+    private var cheatsFolder = ""     // "Cheats/<TAG>", for the empty tab's text
     private var cheatsExpected = ""   // the first file name looked for; blank until the host has resolved
 
     /** Null while the game is not recognised; the panel's Achievements tab shows only with a set once [achievementsAvailable]. */
@@ -266,9 +331,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var coreOptionsPending = false
 
     fun press(button: NxButton): MenuEffect? =
-        pressMenu(button).also { if (it == MenuEffect.Close) state = state.copy(panelFocus = null) }
+        pressMenu(button).also { if (it == MenuEffect.Close) state = state.copy(panelFocus = null, popup = null) }
 
     private fun pressMenu(button: NxButton): MenuEffect? {
+        state.popup?.let { return pressPopup(it, button) }
         if (state.page.kind == PageKind.Message) {
             when (button) {
                 NxButton.A, NxButton.B, NxButton.X -> { pop(); return null }
@@ -292,10 +358,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         } else if (button == NxButton.X) {
             // A button press on Quit (a pad's, the on-screen pad's) picks the quit itself: X leaves the resume point as it is.
             if (selectedAction() == MenuAction.QUIT) return MenuEffect.QuitWithoutResume
-            // X shows an option's full description when the info area cuts it off, also on visual rows where A
-            // adjusts. Achievements keep X = Mute above.
-            val row = state.page.rows.getOrNull(state.page.selected)
-            if (row is MenuRow.Option && state.selectedInfoTruncated) push(message(row.label, row.info))
+            // X shows a row's full description when its row cuts it off or says less, also on visual rows where A adjusts.
+            // Achievements keep X = Mute above.
+            if (state.selectedShowsInfo) showInfo(state.page.selected)
             return null
         }
         return when (button) {
@@ -305,7 +370,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             NxButton.RIGHT -> when {
                 // The Disc row keeps RIGHT for its value; every other row beside the panel enters it.
                 panelShown() && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Option -> { state = state.copy(panelFocus = PanelFocus.Tabs); null }
-                split && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
+                // Options moves into its preview, as A, whether or not the menu splits.
+                (split || state.preview != null) && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
                 else -> change(1)
             }
             // A on Quit saves and quits; a touch tap ([activate]) asks how to quit instead.
@@ -317,7 +383,100 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
-     * The UI laid out [info] in the info area below the list and it did ([truncated]) or did not fit. Keyed by the
+     * Input while a popup shows: the picker's UP/DOWN move (wrapping), A picks, B closes; the info's A/B/X close it and
+     * UP/DOWN scroll it. MENU closes the menu with it.
+     */
+    private fun pressPopup(popup: MenuPopup, button: NxButton): MenuEffect? {
+        if (button == NxButton.MENU) return MenuEffect.Close
+        when (popup) {
+            is MenuPopup.Picker -> when (button) {
+                NxButton.UP, NxButton.DOWN -> {
+                    val n = popup.choices.size
+                    if (n > 0) state = state.copy(popup = popup.copy(cursor = (popup.cursor + if (button == NxButton.UP) -1 else 1).mod(n)))
+                }
+                NxButton.A -> return pickChoice(popup.cursor)
+                NxButton.B -> closePopup()
+                else -> Unit
+            }
+            is MenuPopup.Info -> when (button) {
+                NxButton.A, NxButton.B, NxButton.X -> closePopup()
+                NxButton.UP, NxButton.DOWN ->
+                    state = state.copy(popup = popup.copy(scrollSeq = popup.scrollSeq + 1, scrollDir = if (button == NxButton.UP) -1 else 1))
+                else -> Unit
+            }
+        }
+        return null
+    }
+
+    /** A touch on an options row's control, its info icon, or the popup over it. */
+    fun optionEvent(event: OptionEvent): MenuEffect? = when (event) {
+        is OptionEvent.Choose -> setChoice(event.row, event.index)
+        is OptionEvent.OpenPicker -> { openPicker(event.row); null }
+        is OptionEvent.Info -> { showInfo(event.row); null }
+        is OptionEvent.Pick -> pickChoice(event.index)
+        OptionEvent.ClosePopup -> { closePopup(); null }
+    }
+
+    /** Opens the picker for option row [index] of the top page (selecting it), its current value under the cursor. */
+    fun openPicker(index: Int) {
+        val row = state.page.rows.getOrNull(index) as? MenuRow.Option ?: return
+        if (row.choices.isEmpty() || state.page.kind is PageKind.Adjust) return
+        select(index)
+        state = state.copy(popup = MenuPopup.Picker(index, row.label, row.choices, row.index, row.index.coerceAtLeast(0)))
+    }
+
+    /** Shows row [index]'s full description ([fullInfo]) in the info popup (selecting it); nothing for a row without one. */
+    fun showInfo(index: Int) {
+        val row = state.page.rows.getOrNull(index) ?: return
+        val text = row.fullInfo
+        if (text.isBlank()) return
+        select(index)
+        state = state.copy(popup = MenuPopup.Info(row.label, text))
+    }
+
+    /** The open picker's choice [index]: closes it and sets the value ([setChoice]). */
+    fun pickChoice(index: Int): MenuEffect? {
+        val picker = state.popup as? MenuPopup.Picker ?: return null
+        closePopup()
+        // The option it opened on, wherever it is now: a core options re-read can show or hide rows above it.
+        val rows = state.page.rows
+        fun same(r: MenuRow?) = r is MenuRow.Option && r.label == picker.title && r.choices == picker.choices
+        val row = picker.row.takeIf { same(rows.getOrNull(it)) } ?: rows.indexOfFirst(::same).takeIf { it >= 0 } ?: return null
+        return setChoice(row, index)
+    }
+
+    fun closePopup() {
+        if (state.popup != null) state = state.copy(popup = null)
+    }
+
+    /**
+     * Sets option row [row] of the top page to its choice [index] ([MenuRow.Option.choices]), selecting it: the effect
+     * the LEFT/RIGHT cycle would give for that value; null when it is already set or out of range.
+     */
+    fun setChoice(row: Int, index: Int): MenuEffect? {
+        val r = state.page.rows.getOrNull(row) as? MenuRow.Option ?: return null
+        if (index !in r.choices.indices || state.page.kind == PageKind.Achievements) return null
+        select(row)
+        if (index == r.index) return null
+        return when {
+            r.key.startsWith(PLAYER_KEY_PREFIX) -> {
+                val candidates = playerCandidates()
+                if (index >= candidates.size) return null
+                MenuEffect.SetPlayer(r.key.removePrefix(PLAYER_KEY_PREFIX).toInt(), candidates[index])
+            }
+            r.key == DISC_KEY -> {
+                if (index >= discCount) return null
+                discIndex = index
+                refreshRoot()
+                MenuEffect.ChangeDisc(index)
+            }
+            isSettingsPage(state.page.kind) -> settingValues(r.key)?.getOrNull(index)?.let { setFrontendValue(r.key, it) }
+            else -> options.firstOrNull { it.key == r.key }?.let { o -> CoreOptionFilter.visibleValues(o).getOrNull(index)?.let { setCoreOption(o, it) } }
+        }
+    }
+
+    /**
+     * The UI laid out the selected row's description [info] on its row and it did ([truncated]) or did not fit. Keyed by the
      * text, so a report for a row that is no longer selected never counts for the new one.
      */
     fun setInfoTruncated(info: String, truncated: Boolean) {
@@ -341,12 +500,18 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             is MenuRow.Action -> actionEffect(row.action)
             is MenuRow.Slot -> if (row.action == SlotAction.SAVE) MenuEffect.SaveSlot(state.slotIndex + 1) else MenuEffect.LoadSlot(state.slotIndex + 1)
             is MenuRow.Submenu -> openSubmenu(row.target)
-            is MenuRow.Option -> {
+            is MenuRow.Option -> when {
                 // An achievement row opens nothing (its description is on the row).
-                if (state.page.kind == PageKind.Achievements && achievementFor(row.key) != null) Unit
-                else if (row.visual) push(adjustPage(row.key))
-                else if (row.info.isNotBlank()) push(message(row.label, row.info))
-                null
+                state.page.kind == PageKind.Achievements -> null
+                // The root has no descriptions (Disc N/M): A shows it.
+                state.page.kind == PageKind.Root -> { if (row.fullInfo.isNotBlank()) push(message(row.label, row.fullInfo)); null }
+                row.visual -> { push(adjustPage(row.key)); null }
+                else -> when (row.control) {
+                    NxSettingControl.SWITCH -> setChoice(index, 1 - row.index.coerceIn(0, 1))
+                    NxSettingControl.PICKER -> { openPicker(index); null }
+                    NxSettingControl.SEGMENTED -> change(1)
+                    NxSettingControl.VALUE -> null
+                }
             }
         }
     }
@@ -376,6 +541,18 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         pop()
         select(index)
         return if (opensPage(state.page.rows[index])) activate(index) else null
+    }
+
+    /**
+     * A tap on row [index] of the root's [MenuState.preview]: its page opens, as A on the root's row, with that row
+     * highlighted. Nothing without a preview: a one-tap list ([nxTap]) may call this twice, and the second finds it open.
+     */
+    fun tapPreview(index: Int): MenuEffect? {
+        val preview = state.preview ?: return null
+        if (index !in preview.rows.indices) return null
+        val effect = activate(state.page.selected)
+        select(index)
+        return effect
     }
 
     /**
@@ -437,14 +614,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
-     * The cheats resolved for this game, the folder they were looked for in and the first file name tried (both
-     * only for the empty-page footer). Refreshes an open Cheats page, keeping its selection.
+     * The cheats resolved for this game (the host's set, a toggle from the dual-screen panel included), the folder they
+     * were looked for in and the first file name tried (both only for the empty Cheats tab's text). Refreshes the panel.
      */
     fun setCheats(entries: List<CheatEntry>, folder: String, expected: String) {
         cheats = entries
         cheatsFolder = folder
         cheatsExpected = expected
-        refreshCheatsPage()
+        fixPanel()
     }
 
     /**
@@ -537,7 +714,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun playersPage() = MenuPage(
         PageKind.Players, PLAYERS_LABEL,
         // Worded as the game panel words a slot (one wording for both).
-        playerSlots.mapIndexed { i, s -> MenuRow.Option("Player ${i + 1}", "$PLAYER_KEY_PREFIX$i", GamePanelModel.playerValue(s)) },
+        playerSlots.mapIndexed { i, s ->
+            MenuRow.Option(
+                "Player ${i + 1}", "$PLAYER_KEY_PREFIX$i", GamePanelModel.playerValue(s),
+                choices = listOf("Empty") + playerPads.map { it.name }, index = playerCandidates().indexOf(s.key),
+            )
+        },
         footer = PLAYERS_FOOTER,
     )
 
@@ -567,13 +749,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /**
      * What the root's game panel draws: the header (the achievement count from [setAchievements] while there is a set),
      * the tabs that apply, the Shortcuts (Swap disc, Second screen, the future ones), the achievements in the chosen
-     * order, the Players page's rows, and the controller's [MenuState.panelFocus].
+     * order, the cheats, the Players page's rows, and the controller's [MenuState.panelFocus].
      */
     fun panelState(): GamePanelState {
         // Asked on every recomposition of the menu: rebuilt (the achievements sorted again) only when an input changed.
         val key = listOf(
             state.panelTab, state.panelFocus, panelHeader, achievements, achievementsAvailable, achievementSummary, achievementOrder,
-            badges, playerSlots, playerPads, discCount, discIndex, secondConnected, secondOn, netplay, frontendTag,
+            badges, playerSlots, playerPads, discCount, discIndex, secondConnected, secondOn, netplay, frontendTag, cheats, cheatsAvailable,
+            cheatsFolder, cheatsExpected,
         )
         panelCache?.takeIf { it.first == key }?.let { return it.second }
         return buildPanelState().also { panelCache = key to it }
@@ -587,13 +770,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         val header = panelHeader ?: GamePanelHeader(gameTitle, null, frontendTag, 0L, null, "", null)
         return GamePanelState(
             header.copy(ra = ra), tabs, GamePanelModel.resolveTab(state.panelTab, tabs), panelShortcuts(), panelAchievements(),
-            badges, playerSlots, playerPads, focus = state.panelFocus,
+            badges, playerSlots, playerPads, panelCheats(),
+            GamePanelModel.noCheatsText(cheatsFolder, cheatsExpected), focus = state.panelFocus,
         )
     }
 
     /**
      * A tap on the panel (or A on its focused item): Swap disc and Second screen as the menu's own effects, an
-     * achievement's detail page, a player slot or pad as the Players page sets them, a tab shown.
+     * achievement's detail page, a player slot or pad as the Players page sets them, a cheat switched, a tab shown.
      */
     fun panelEvent(event: GamePanelEvent): MenuEffect? {
         // A tap moves the controller's focus (while it is in the panel) to the item tapped; A's own item is already there.
@@ -613,6 +797,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             null
         }
         is GamePanelEvent.SetPlayer -> MenuEffect.SetPlayer(event.slot, event.key)
+        is GamePanelEvent.SetCheat -> setCheat(event.index, event.on)
         GamePanelEvent.ShowGame -> null
     }
 
@@ -622,23 +807,34 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      */
     val panelBeside: Boolean get() = !netplay
 
-    /** The root's right side is the panel: the root on top with a row other than Save / Load (their slot card) highlighted. */
+    /**
+     * The root's right side is the panel: the root on top with a row other than Save / Load (their slot card) or Options
+     * (its [MenuState.preview]) highlighted.
+     */
     private fun panelShown(): Boolean =
-        panelBeside && state.stack.size == 1 && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Slot
+        panelBeside && state.stack.size == 1 && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Slot && state.preview == null
 
-    /** Achievements with a set; Players with more than one slot, never in netplay (the root had no Players row there). */
-    private fun panelTabs(): List<GamePanelTab> =
-        GamePanelModel.tabs(raAvailable = achievementsAvailable && !achievements.isNullOrEmpty(), playerSlots = if (netplay) 0 else playerSlots.size)
+    /**
+     * Achievements with a set; Cheats for a core that takes them (none for the game: the tab says how to add some); Players
+     * with more than one slot. Never Cheats or Players in netplay (the root had no Options or Players row there).
+     */
+    private fun panelTabs(): List<GamePanelTab> = GamePanelModel.tabs(
+        raAvailable = achievementsAvailable && !achievements.isNullOrEmpty(), playerSlots = if (netplay) 0 else playerSlots.size,
+        cheats = cheatsAvailable && !netplay,
+    )
 
     private fun panelShortcuts(): List<ShortcutState> = GamePanelModel.shortcuts(discCount, discIndex, secondConnected, secondOn, netplay)
 
     private fun panelAchievements(): List<RaAchievement> = achievements.orEmpty().sortedBy(achievementOrder)
+
+    private fun panelCheats(): List<CheatRow> = GamePanelModel.cheatRows(cheats)
 
     private fun panelTab(): GamePanelTab = GamePanelModel.resolveTab(state.panelTab, panelTabs())
 
     private fun panelItemCount(tab: GamePanelTab): Int = when (tab) {
         GamePanelTab.SHORTCUTS -> panelShortcuts().size
         GamePanelTab.ACHIEVEMENTS -> panelAchievements().size
+        GamePanelTab.CHEATS -> cheats.size
         GamePanelTab.PLAYERS -> playerSlots.size
     }
 
@@ -689,7 +885,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         when (tab) {
             GamePanelTab.ACHIEVEMENTS -> push(achievementsPage())
             GamePanelTab.PLAYERS -> push(playersPage())
-            GamePanelTab.SHORTCUTS -> Unit
+            GamePanelTab.SHORTCUTS, GamePanelTab.CHEATS -> Unit
         }
     }
 
@@ -701,6 +897,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             else -> null
         }?.let { s -> panelShortcuts().indexOfFirst { it.shortcut == s } }
         GamePanelTab.ACHIEVEMENTS -> null   // its rows ask for nothing
+        GamePanelTab.CHEATS -> (event as? GamePanelEvent.SetCheat)?.index
         GamePanelTab.PLAYERS -> (event as? GamePanelEvent.SetPlayer)?.slot
     }?.takeIf { it >= 0 }
 
@@ -708,6 +905,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun panelItemEvent(tab: GamePanelTab, index: Int): GamePanelEvent? = when (tab) {
         GamePanelTab.SHORTCUTS -> panelShortcuts().getOrNull(index)?.let(GamePanelModel::eventFor)
         GamePanelTab.ACHIEVEMENTS -> null
+        GamePanelTab.CHEATS -> GamePanelModel.cheatEvent(index, panelCheats())
         GamePanelTab.PLAYERS -> if (index < playerSlots.size) GamePanelModel.nextPlayer(index, playerSlots, playerPads) else null
     }
 
@@ -765,7 +963,6 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 coreOptionsPending = true
                 return MenuEffect.OpenCoreOptions
             }
-            PageKind.Cheats -> push(cheatsPage())
             PageKind.SaveChanges -> push(saveChangesPage())
             is PageKind.Category -> push(categoryPage(target.key))
             // Achievements and Players open from the game panel only ([openTabPage]).
@@ -789,18 +986,19 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         is MenuRow.Option -> when {
             row.key.startsWith(PLAYER_KEY_PREFIX) -> changePlayer(row.key.removePrefix(PLAYER_KEY_PREFIX).toInt(), delta)
             row.key == DISC_KEY -> changeDisc(delta)
-            state.page.kind == PageKind.Cheats -> toggleCheat(row.key)
             isSettingsPage(state.page.kind) -> changeFrontend(row.key, delta)
             else -> {
                 val option = options.firstOrNull { it.key == row.key }
                 val next = option?.let { CoreOptionFilter.cycle(it, delta) }
-                if (option == null || next == null) null else {
-                    updateOptions(options.map { if (it.key == option.key) it.copy(value = next) else it })
-                    MenuEffect.SetOption(option.key, next)
-                }
+                if (option == null || next == null) null else setCoreOption(option, next)
             }
         }
         else -> null
+    }
+
+    private fun setCoreOption(option: CoreOption, value: String): MenuEffect {
+        updateOptions(options.map { if (it.key == option.key) it.copy(value = value) else it })
+        return MenuEffect.SetOption(option.key, value)
     }
 
     /** Pages whose Option rows are console, frontend or shader settings (not core options). */
@@ -809,48 +1007,51 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun changeFrontend(key: String, delta: Int): MenuEffect? {
         if (ShaderOptions.isShaderKey(key)) {
-            // An unstored parameter shows its default, so it cycles from there too.
-            val current = shaders[key]
-                ?: params.firstOrNull { ShaderOptions.paramKey(it.id) == key }?.let { ShaderOptions.format2(it.default) }
-                ?: return null
-            val next = ShaderOptions.cycle(key, current, delta, presets, params)
-            if (next == null || next == current) return null
-            shaders = shaders + (key to next)
-            refreshFrontendPages()
-            return MenuEffect.SetShader(key, next)
+            val current = shaderValue(key) ?: return null
+            return ShaderOptions.cycle(key, current, delta, presets, params)?.let { setFrontendValue(key, it) }
         }
         if (key == FrontendOptions.OVERLAY && !overlayAvailable) return null
         val current = frontend[key] ?: return null
-        val next = FrontendOptions.cycle(key, current, delta, overlays)
-        if (next == null || next == current) return null
-        frontend = frontend + (key to next)
-        refreshFrontendPages()
-        return MenuEffect.SetFrontend(key, next)
+        return FrontendOptions.cycle(key, current, delta, overlays)?.let { setFrontendValue(key, it) }
     }
 
-    /** Left and Right both flip the row: a cheat has only two values. */
-    private fun toggleCheat(key: String): MenuEffect? {
-        val index = key.removePrefix(CHEAT_KEY_PREFIX).toIntOrNull() ?: return null
-        val entry = cheats.getOrNull(index) ?: return null
-        val enabled = !entry.enabled
-        cheats = cheats.mapIndexed { i, e -> if (i == index) e.copy(enabled = enabled) else e }
-        refreshCheatsPage()
-        return MenuEffect.SetCheat(index, enabled)
-    }
+    /** A shader key's value: stored, else (an unstored parameter) its default, which it cycles from too. */
+    private fun shaderValue(key: String): String? = shaders[key]
+        ?: params.firstOrNull { ShaderOptions.paramKey(it.id) == key }?.let { ShaderOptions.format2(it.default) }
 
-    private fun refreshCheatsPage() {
-        state = state.copy(stack = state.stack.map { p -> if (p.kind == PageKind.Cheats) rebuilt(p, cheatsPage()) else p })
-    }
-
-    private fun cheatsPage(): MenuPage {
-        val rows = cheats.mapIndexed { i, e ->
-            MenuRow.Option(e.desc, CHEAT_KEY_PREFIX + i, if (e.enabled) "On" else "Off", e.info, visual = false)
+    /** Sets a frontend or shader setting to [value] now; null when it already is. */
+    private fun setFrontendValue(key: String, value: String): MenuEffect? {
+        if (ShaderOptions.isShaderKey(key)) {
+            if (value == shaderValue(key)) return null
+            shaders = shaders + (key to value)
+            refreshFrontendPages()
+            return MenuEffect.SetShader(key, value)
         }
-        return MenuPage(PageKind.Cheats, CHEATS_LABEL, rows, footer = if (rows.isEmpty()) noCheatsText() else "")
+        if (value == frontend[key]) return null
+        frontend = frontend + (key to value)
+        refreshFrontendPages()
+        return MenuEffect.SetFrontend(key, value)
     }
 
-    private fun noCheatsText() =
-        if (cheatsExpected.isBlank()) NO_CHEATS else "$NO_CHEATS\nLooked for $cheatsFolder/$cheatsExpected"
+    /** The raw values a frontend or shader row offers, in [MenuRow.Option.choices]' order; null for an unknown key. */
+    private fun settingValues(key: String): List<String>? = when {
+        ShaderOptions.isShaderKey(key) -> ShaderOptions.choices(key, presets, params)
+        key == FrontendOptions.OVERLAY && !overlayAvailable -> emptyList()
+        FrontendOptions.option(key) != null -> FrontendOptions.choices(key, overlays)
+        else -> null
+    }
+
+    /** The Players page's values for a slot: Empty, then every connected pad ([GamePanelModel.cyclePlayer]'s order). */
+    private fun playerCandidates(): List<String?> = listOf<String?>(null) + playerPads.map { it.key }
+
+    /** The panel's cheat switch: cheat [index] [on] or off now (the host applies the enabled set); null when it already is. */
+    private fun setCheat(index: Int, on: Boolean): MenuEffect? {
+        val entry = cheats.getOrNull(index) ?: return null
+        if (entry.enabled == on) return null
+        cheats = cheats.mapIndexed { i, e -> if (i == index) e.copy(enabled = on) else e }
+        fixPanel()
+        return MenuEffect.SetCheat(index, on)
+    }
 
     private fun refreshAchievementsPage() {
         state = state.copy(stack = state.stack.map { p -> if (p.kind == PageKind.Achievements) rebuilt(p, achievementsPage()) else p })
@@ -943,11 +1144,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     // A push or pop leaves the panel: back on the root, the focus is on the list.
-    private fun push(page: MenuPage) { state = state.copy(stack = state.stack + page, panelFocus = null) }
-    private fun pop() { if (state.stack.size > 1) state = state.copy(stack = state.stack.dropLast(1), panelFocus = null) }
+    // A push or pop also closes a popup: it belonged to the page it was over.
+    private fun push(page: MenuPage) { state = state.copy(stack = state.stack + page, panelFocus = null, popup = null) }
+    private fun pop() { if (state.stack.size > 1) state = state.copy(stack = state.stack.dropLast(1), panelFocus = null, popup = null) }
     private fun popTo(kind: PageKind) {
         val i = state.stack.indexOfLast { it.kind == kind }
-        if (i >= 0) state = state.copy(stack = state.stack.take(i + 1), panelFocus = null)
+        if (i >= 0) state = state.copy(stack = state.stack.take(i + 1), panelFocus = null, popup = null)
     }
     private fun replaceTop(page: MenuPage) { state = state.copy(stack = state.stack.dropLast(1) + page) }
     /** [new] with [old]'s title, keeping the selected row by identity (option key / submenu target) when it survives. */
@@ -958,7 +1160,6 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         val footer = if (new.rows.isNotEmpty()) "" else when (new.kind) {
             PageKind.CoreOptions -> NO_LIVE_OPTIONS
             PageKind.ShaderParams -> ShaderOptions.NO_PARAMS
-            PageKind.Cheats -> noCheatsText()
             PageKind.Achievements -> NO_LOCKED
             else -> NO_CATEGORY_OPTIONS
         }
@@ -983,7 +1184,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         PageKind.Root, gameTitle,
         buildList {
             add(MenuRow.Action("Continue", MenuAction.CONTINUE))
-            if (discCount > 1) add(MenuRow.Option(DISC_LABEL, DISC_KEY, "${discIndex + 1}/$discCount", DISC_INFO))
+            if (discCount > 1) add(MenuRow.Option(DISC_LABEL, DISC_KEY, "${discIndex + 1}/$discCount", choices = (1..discCount).map { "Disc $it" }, index = discIndex, detail = DISC_INFO))
             add(MenuRow.Slot("Save", SlotAction.SAVE))
             add(MenuRow.Slot("Load", SlotAction.LOAD))
             add(MenuRow.Submenu("Options", PageKind.Options))
@@ -994,11 +1195,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun optionsPage() = MenuPage(
         PageKind.Options, "Options",
         buildList {
+            // Only Frontend's name needs a line; the footer's status covers Save Changes.
             if (consoleRows().isNotEmpty()) add(MenuRow.Submenu(CONSOLE_SETTINGS_LABEL, PageKind.ConsoleSettings))
-            add(MenuRow.Submenu("Frontend", PageKind.Frontend))
+            add(MenuRow.Submenu("Frontend", PageKind.Frontend, FRONTEND_INFO, FRONTEND_DETAIL))
             add(MenuRow.Submenu("Shaders", PageKind.Shaders))
             add(MenuRow.Submenu("Core Options", PageKind.CoreOptions))
-            if (cheatsAvailable) add(MenuRow.Submenu(CHEATS_LABEL, PageKind.Cheats, CHEATS_INFO))
             add(MenuRow.Submenu("Save Changes", PageKind.SaveChanges))
         },
         footer = statusText(),
@@ -1031,8 +1232,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         PageKind.Shaders, "Shaders",
         listOf(
             presetRow(),
-            MenuRow.Submenu(ShaderOptions.PARAMS_LABEL, PageKind.ShaderParams, ShaderOptions.PARAMS_INFO),
-            MenuRow.Action(ShaderOptions.RESET_LABEL, MenuAction.RESET_SHADER_PARAMS, ShaderOptions.RESET_INFO),
+            MenuRow.Submenu(ShaderOptions.PARAMS_LABEL, PageKind.ShaderParams),
+            MenuRow.Action(ShaderOptions.RESET_LABEL, MenuAction.RESET_SHADER_PARAMS),
         ),
     )
 
@@ -1041,15 +1242,20 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         return MenuPage(PageKind.ShaderParams, ShaderOptions.PARAMS_LABEL, rows, footer = if (rows.isEmpty()) ShaderOptions.NO_PARAMS else "")
     }
 
-    private fun presetRow() = MenuRow.Option(
-        ShaderOptions.PRESET_LABEL, ShaderOptions.PRESET, shaders[ShaderOptions.PRESET] ?: ShaderOptions.NONE,
-        ShaderOptions.PRESET_INFO, visual = true,
-    )
+    private fun presetRow(): MenuRow.Option {
+        val value = shaders[ShaderOptions.PRESET] ?: ShaderOptions.NONE
+        val choices = ShaderOptions.presetChoices(presets)
+        return MenuRow.Option(
+            ShaderOptions.PRESET_LABEL, ShaderOptions.PRESET, value, visual = true,
+            choices = choices, index = choices.indexOf(value), detail = ShaderOptions.PRESET_INFO,
+        )
+    }
 
-    private fun paramRow(p: ShaderParam) = MenuRow.Option(
-        p.label, ShaderOptions.paramKey(p.id), shaders[ShaderOptions.paramKey(p.id)] ?: ShaderOptions.format2(p.default),
-        p.id, visual = true,
-    )
+    private fun paramRow(p: ShaderParam): MenuRow.Option {
+        val value = shaders[ShaderOptions.paramKey(p.id)] ?: ShaderOptions.format2(p.default)
+        val choices = ShaderOptions.paramChoices(p)
+        return MenuRow.Option(p.label, ShaderOptions.paramKey(p.id), value, visual = true, choices = choices, index = choices.indexOf(value))   // compact: no line
+    }
 
     /** The one row an Adjust page shows for [key]: a frontend setting, the preset, or a parameter. */
     private fun adjustPage(key: String): MenuPage {
@@ -1064,9 +1270,15 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun frontendRow(o: FrontendOption): MenuRow.Option =
         if (o.key == FrontendOptions.OVERLAY && !overlayAvailable) {
-            MenuRow.Option(o.label, o.key, OVERLAY_UNAVAILABLE, OVERLAY_UNAVAILABLE_INFO)
+            MenuRow.Option(o.label, o.key, OVERLAY_UNAVAILABLE, OVERLAY_UNAVAILABLE_LINE, detail = OVERLAY_UNAVAILABLE_INFO)
         } else {
-            MenuRow.Option(o.label, o.key, o.labelOf(frontend[o.key] ?: o.default), o.info, visual = o.visual)
+            val value = frontend[o.key] ?: o.default
+            val values = FrontendOptions.choices(o.key, overlays)
+            // The row's brief line (none: compact); the full text in its info popup.
+            MenuRow.Option(
+                o.label, o.key, o.labelOf(value), o.brief, visual = o.visual,
+                choices = values.map(o::labelOf), index = values.indexOf(value), detail = o.info,
+            )
         }
 
     private fun saveChangesPage() = MenuPage(
@@ -1090,7 +1302,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun coreOptionsPage(): MenuPage {
         val live = CoreOptionFilter.live(options, locked)
-        val rows = CoreOptionFilter.categories(live).map { MenuRow.Submenu(it.label, PageKind.Category(it.key), it.info) } +
+        val rows = CoreOptionFilter.categories(live).map { MenuRow.Submenu(it.label, PageKind.Category(it.key), detail = it.info) } +
             CoreOptionFilter.uncategorized(live).map { optionRow(it, inCategory = false) }
         return MenuPage(PageKind.CoreOptions, "Core Options", rows)
     }
@@ -1101,8 +1313,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         return MenuPage(PageKind.Category(key), title, CoreOptionFilter.inCategory(live, key).map { optionRow(it, inCategory = true) })
     }
 
-    private fun optionRow(o: CoreOption, inCategory: Boolean) =
-        MenuRow.Option(CoreOptionFilter.rowLabel(o, inCategory), o.key, CoreOptionFilter.valueLabel(o), o.info)
+    private fun optionRow(o: CoreOption, inCategory: Boolean): MenuRow.Option {
+        val visible = CoreOptionFilter.visibleValues(o)
+        return MenuRow.Option(
+            CoreOptionFilter.rowLabel(o, inCategory), o.key, CoreOptionFilter.valueLabel(o), detail = o.info,   // the core's text: info icon only
+            choices = visible.map { v -> CoreOptionFilter.valueLabel(o.copy(value = v)) }, index = visible.indexOf(o.value),
+        )
+    }
 
     private fun message(title: String, text: String) = MenuPage(PageKind.Message, title, emptyList(), footer = text)
 
@@ -1121,15 +1338,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val PLAYER_KEY_PREFIX = "nx:player:"
         // Presses while the menu is open never claim a slot.
         const val PLAYERS_FOOTER = "Close the menu, then press a button\non a new controller to join."
-        const val CHEATS_LABEL = "Cheats"
-        const val CHEATS_INFO = "Toggle cheats for this game"
-        const val CHEAT_KEY_PREFIX = "cheat:"
-        const val NO_CHEATS = "No cheats for this game."
+        const val FRONTEND_INFO = "Scaling, overlay and on-screen extras"
+        const val FRONTEND_DETAIL = "Screen scaling, overlays and on-screen extras"
         const val ACHIEVEMENTS_LABEL = "Achievements"
         const val NO_LOCKED = "Everything unlocked."
         const val ACH_KEY_PREFIX = "ach:"
         const val OVERLAY_UNAVAILABLE = "Unavailable"
         private const val QUIT_TEXT = "Save & Quit keeps your place for next time. Quit keeps the last resume point."
+        const val OVERLAY_UNAVAILABLE_LINE = "Off while the DS screens are drawn apart"
         const val OVERLAY_UNAVAILABLE_INFO = "Overlays are off while the DS screens\nare drawn apart."
         private const val NO_LIVE_OPTIONS = "This core has no options that\ncan be changed while running."
         private const val NO_CATEGORY_OPTIONS = "This category has no options."

@@ -62,7 +62,7 @@ internal const val STAT_PENDING = "\u2026"         // a stats value not computed
 /**
  * Home from the last game ([last]), the pins in their order and the stats, for a top section of [slots] squares (the
  * board's, [com.nxredux.mobile.ui.nx.homeBoard]). Continue's own game is never a pin. The first [inline] pinned games
- * (the board's [com.nxredux.mobile.ui.nx.HomeBoard.inlineGames], on the wide and large faces) go in [Home.top] right
+ * (the board's [com.nxredux.mobile.ui.nx.HomeBoard.inlineGames], on every landscape face) go in [Home.top] right
  * after Continue, before the tools; [Home.pins] holds the rest. More tools than slots: the first slots − 1 and a
  * [MainRow.MoreTools] for the rest. [shelves] ([homeShelves]) follow the row games, a fresh install's too (a library
  * with nothing played still gets Not started).
@@ -91,13 +91,15 @@ internal fun homeView(home: Home, rows: List<MainRow>): HomeView = HomeView(
 
 internal const val HOME_NEW_DAYS = 30
 internal const val HOME_PICK_UP_DAYS = 14
-/** The most games a shelf holds, in every Home layout. */
-internal const val HOME_SHELF_MAX = 3
+/** The most games a shelf holds: Grid Home shows up to this many ([com.nxredux.mobile.ui.nx.homeShelfCap]), the other Home layouts [HOME_SHELF_LIST_MAX]. */
+internal const val HOME_SHELF_MAX = 4
 /** The most games Not started holds: as many as the others. */
-internal const val HOME_NOT_STARTED_MAX = 3
+internal const val HOME_NOT_STARTED_MAX = 4
+/** The most games a shelf shows on List, Minimal and Carousel Home. */
+internal const val HOME_SHELF_LIST_MAX = 3
 private const val SHELF_DAY_MS = 86_400_000L
 
-/** The most games [shelf] holds: Not started [HOME_NOT_STARTED_MAX], the others [HOME_SHELF_MAX] (3 each). */
+/** The most games [shelf] holds: Not started [HOME_NOT_STARTED_MAX], the others [HOME_SHELF_MAX] (4 each). */
 internal fun homeShelfMax(shelf: HomeShelf): Int = if (shelf == HomeShelf.NOT_STARTED) HOME_NOT_STARTED_MAX else HOME_SHELF_MAX
 
 /**

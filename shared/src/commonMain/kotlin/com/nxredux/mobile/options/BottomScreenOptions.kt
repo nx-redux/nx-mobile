@@ -15,6 +15,7 @@ object BottomScreenOptions {
         KEY, "Bottom screen", listOf(DEFAULT, BottomScreen.MAIN.value, BottomScreen.SECOND.value), DEFAULT,
         "Which screen is the touch screen with a second\nscreen in use: the picture goes on the other.\n" +
             "System default follows Settings → Emulators.",
+        brief = "The touch screen; the game shows on the other",
         visual = false, valueLabels = listOf("System default", "Main screen", "Second screen"),
     )
 }

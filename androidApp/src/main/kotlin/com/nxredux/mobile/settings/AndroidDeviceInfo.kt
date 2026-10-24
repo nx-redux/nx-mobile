@@ -17,7 +17,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-/** Settings -> About on Android: the fixed rows from the package, BuildConfig and [Build]; the GPU from a throwaway GL context. */
+/** Settings -> System -> About on Android: the fixed rows from the package, BuildConfig and [Build]; the GPU from a throwaway GL context. */
 object AndroidDeviceInfo {
 
     fun appInfo(context: Context): AppInfo {

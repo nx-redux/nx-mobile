@@ -75,7 +75,7 @@
             android:theme="@style/Theme.NxMobile.Starting"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboard|keyboardHidden|navigation|uiMode"
             android:windowSoftInputMode="adjustResize" />
-        <!-- Settings -> Launcher -> Use as home screen enables it (AndroidAppLauncher). -->
+        <!-- Settings -> System -> Use as home screen enables it (AndroidAppLauncher). -->
         <activity-alias
             android:name=".HomeAlias"
             android:targetActivity=".MainActivity"

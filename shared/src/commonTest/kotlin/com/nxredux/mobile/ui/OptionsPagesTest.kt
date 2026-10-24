@@ -20,7 +20,7 @@ class OptionsPagesTest {
     private val page = EmulatorPage("GBA", "gpsp", "gpSP", emptyList(), emptyList(), forGame = false, gameFileExists = false)
 
     @Test fun settingsPagesWithValuesUseTheOptionsRow() {
-        val navigation = setOf(SettingsSection.LIBRARY, SettingsSection.ROM_FOLDERS, SettingsSection.EMULATORS)
+        val navigation = setOf(SettingsSection.EMULATORS)   // Library draws touch rows (its All files switch)
         for (section in SettingsSection.entries - navigation) {
             assertEquals(NxRowKind.OPTIONS, listRowKind(Screen.Settings(section, emptyList())), section.name)
         }
@@ -57,7 +57,7 @@ class OptionsPagesTest {
 
     @Test fun settingsNavigationPagesUseTheListRows() {
         // Every row opens a page or runs an action: list rows at the list size, as the RetroAchievements page.
-        for (section in listOf(SettingsSection.LIBRARY, SettingsSection.ROM_FOLDERS, SettingsSection.EMULATORS)) {
+        for (section in listOf(SettingsSection.EMULATORS)) {
             assertEquals(NxRowKind.PILL, listRowKind(Screen.Settings(section, emptyList())), section.name)
         }
     }
@@ -105,24 +105,25 @@ class OptionsPagesTest {
         unassigned = unassigned,
     )
 
-    @Test fun defaultEmulatorsListConsolesWithGamesAndEveryMultiTagConsoleByName() {
+    @Test fun defaultEmulatorsListMultiEmulatorConsolesFirstThenTheRestEachByName() {
         val systems = listOf(folder("SMS"), folder("GG"), folder("32X"), folder("MD"), folder("PSP", games = 0), folder("", unassigned = true))
         val rows = defaultEmulatorRows(systems, mapOf("sfc" to "SUPA", "sms" to "GPGX_SMS"))
         assertEquals(
             listOf(
-                "Game Boy Advance" to "gpSP (GBA)", "Sega 32X" to "PicoDrive (32X)", "Sega CD" to "PicoDrive (SEGACD)",
+                "Game Boy Advance" to "gpSP (GBA)", "Sega CD" to "PicoDrive (SEGACD)",
                 "Sega Game Gear" to "PicoDrive (GG)", "Sega Genesis" to "PicoDrive (MD)",
                 "Sega Master System" to "Genesis Plus GX (GPGX)",   // GPGX_SMS shows as the handheld's GPGX
                 "Sega SG-1000" to "PicoDrive (SG1000)", "Sony PlayStation" to "PCSX-ReARMed (PS)", "Super Nintendo ES" to "Supafaust (SUPA)",
+                "Sega 32X" to "PicoDrive (32X)",   // single-emulator consoles follow, by name
             ),
             rows.map { it.label to it.secondary },
         )
         // A single emulator is read-only (dimmed, no arrows); a console with a choice cycles even without games.
-        assertEquals(listOf(true, false, true, true, true, true, true, true, true), rows.map { it.enabled })
+        assertEquals(listOf(true, true, true, true, true, true, true, true, false), rows.map { it.enabled })
         assertTrue(rows.all { it.kind == SettingsKind.DEFAULT_TAG })
-        assertFalse(settingsNxRow(rows[1]).cycleable)
+        assertFalse(settingsNxRow(rows[8]).cycleable)
         assertTrue(settingsNxRow(rows[0]).cycleable)
-        assertEquals(listOf("gba", "32x", "segacd", "gg", "md", "sms", "sg1000", "ps", "sfc"), rows.map { it.consoleId })
+        assertEquals(listOf("gba", "segacd", "gg", "md", "sms", "sg1000", "ps", "sfc", "32x"), rows.map { it.consoleId })
     }
 
     @Test fun defaultEmulatorsShowTheBuiltInTagForAStaleStoredOne() {

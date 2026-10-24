@@ -113,4 +113,19 @@ class NxOptionsScrollTest {
             assertTrue(g.starts[sel + 1] - to <= nxOptionsWholeBottom(g.starts, to, viewport), "row $sel drawn")
         }
     }
+
+    @Test fun keepInViewWithAMarginKeepsARowClearPastTheSelection() {
+        val g = geometry()
+        val total = g.starts.last()
+        // Row 4 (210..270) and a row's margin end at 330, the viewport's bottom: no scroll; row 5 needs one.
+        assertNull(nxOptionsKeepInView(4, 0, g.starts, g.rests, viewport, marginPx = row))
+        assertEquals(60, nxOptionsKeepInView(5, 0, g.starts, g.rests, viewport, marginPx = row))
+        // From a step (one row up or down) at every rest: the margin, clamped to the list's ends, shows.
+        for (sel in spacers.indices) if (!spacers[sel]) for (r in g.rests) {
+            val from = nxOptionsKeepInView(sel, r, g.starts, g.rests, viewport, marginPx = row) ?: r
+            assertTrue(maxOf(0, g.starts[sel] - row) >= from || g.starts[sel + 1] + row > from + viewport, "row $sel from $r: up")
+            assertTrue(minOf(total, g.starts[sel + 1] + row) <= from + viewport || g.starts[sel] - row < from, "row $sel from $r: down")
+            assertTrue(g.starts[sel] >= from && g.starts[sel + 1] <= from + viewport, "row $sel from $r: whole")
+        }
+    }
 }

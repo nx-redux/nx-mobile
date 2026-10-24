@@ -16,6 +16,11 @@ data class FrontendOption(
      * Emulator Settings, and left out of the running game's Console Settings, where a change would do nothing.
      */
     val atLaunch: Boolean = false,
+    /**
+     * The row's visible line (two lines at most), [info] the full text behind its info icon; empty: no line, the row is
+     * compact and [info] shows only from the icon.
+     */
+    val brief: String = "",
 ) {
     /** The label for [value]; the value itself when it has none (or is unknown). */
     fun labelOf(value: String): String = valueLabels.getOrNull(values.indexOf(value))?.takeIf { it.isNotEmpty() } ?: value
@@ -98,8 +103,8 @@ object FrontendOptions {
         ),
         // None for every console, whatever overlay files it has: an overlay shows only when the user picks one.
         FrontendOption(OVERLAY, "Overlay", listOf(NONE), NONE, "Choose a custom overlay png from the Overlays folder", visual = true),
-        FrontendOption(OFFSET_X, "Offset screen X", OFFSETS, "0", "Offset X pixels", visual = true),
-        FrontendOption(OFFSET_Y, "Offset screen Y", OFFSETS, "0", "Offset Y pixels", visual = true),
+        FrontendOption(OFFSET_X, "Offset screen X", OFFSETS, "0", "Moves the picture sideways, in pixels.", visual = true),
+        FrontendOption(OFFSET_Y, "Offset screen Y", OFFSETS, "0", "Moves the picture up or down, in pixels.", visual = true),
         FrontendOption(
             PAD_LANDSCAPE_OPACITY, "Pad Opacity (landscape)", PAD_OPACITIES.map { it.toString() }, PAD_OPACITY_DEFAULT.toString(),
             "How opaque the on-screen buttons are in landscape,\nwhere they sit over the game. Portrait keeps its own band.",
@@ -109,6 +114,7 @@ object FrontendOptions {
         FrontendOption(
             DEBUG_HUD, "Debug HUD", listOf("Off", "On"), "Off",
             "Show frames per second, core,\nresolution, and scaler information.",
+            brief = "FPS and core info over the game",
             visual = false,
         ),
     )

@@ -1,11 +1,18 @@
 package com.nxredux.mobile.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.Hint
+import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxDetailListBody
 import com.nxredux.mobile.ui.nx.NxDialog
@@ -13,13 +20,25 @@ import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxRowKind
 import com.nxredux.mobile.ui.nx.NxBanner
 import com.nxredux.mobile.ui.nx.NxScreenScaffold
+import com.nxredux.mobile.ui.nx.NxSettingControl
+import com.nxredux.mobile.ui.nx.NxSettingEvent
+import com.nxredux.mobile.ui.nx.NxSettingRow
+import com.nxredux.mobile.ui.nx.NxSettingsList
+import com.nxredux.mobile.ui.nx.NxSettingsPage
+import com.nxredux.mobile.ui.nx.control
+import com.nxredux.mobile.ui.nx.hasMoreInfo
+import com.nxredux.mobile.ui.nx.nxDialogBody
+import com.nxredux.mobile.ui.nx.LocalNxFontWeights
+import com.nxredux.mobile.ui.nx.nxListInset
 
 /**
  * One Settings page. Rows come from AppState; A acts on the highlighted row, B goes back to the section menu (from Library
- * the index is loaded first, and rescanned only when it no longer fits the settings) or, from a Library sub-page, to
- * Library. The detailed pages ([SettingsSection.detailed]) draw a title, their details and the rows; the rest draw
+ * the index is loaded first, and rescanned only when it no longer fits the settings) or, from a sub-page, to its
+ * section. The detailed pages ([SettingsSection.detailed]) draw a title, their details and the rows; the rest draw
  * plain rows under their name. A page of only navigation rows uses list rows, one with a value row NX Redux's options rows
- * ([listRowKind]). [titled]: the two-pane Settings' right pane (the split draws the remove dialog); [hints] (null: its
+ * ([listRowKind]). A page with a value row ([settingsTouchPage]) draws touch rows instead, as the in-game menu's options
+ * ([NxSettingsList]): [onSetting] takes their controls' and info icons' taps, [onTruncated] whether the selected row's
+ * description fits. [titled]: the two-pane Settings' right pane (the split draws the remove dialog); [hints] (null: its
  * own) the pane's.
  */
 @Composable
@@ -30,7 +49,14 @@ fun SettingsScreen(
     titled: Boolean = false,
     hints: List<Hint>? = null,
     dialog: Boolean = true,   // false: the two-pane Settings draws the remove dialog over both panes
+    onSetting: ((NxSettingEvent) -> Unit)? = null,   // null: a preview, its controls take no taps
+    onTruncated: (String, Boolean) -> Unit = { _, _ -> },
+    truncated: String? = null,   // the selected row's description the UI reported cut off ([AppState.settingInfoTruncated])
 ) {
+    if (settingsTouchPage(screen)) {
+        SettingsTouchPage(screen, selectedIndex, onSelect, onOpen, modifier, onHint, hints, dialog, onSetting, onTruncated, truncated)
+        return
+    }
     val shownHints = hints ?: settingsHints(screen.rows, selectedIndex)
     Box(modifier.fillMaxSize()) {
         val rows = remember(screen.rows) { screen.rows.map(::settingsNxRow) }   // not per d-pad move
@@ -46,7 +72,6 @@ fun SettingsScreen(
                 title = screen.section.label, details = screen.details, rows = rows, selectedIndex = selectedIndex,
                 hints = shownHints, onSelect = onSelect, onOpen = onOpen, onHint = onHint,
                 headline = screen.section != SettingsSection.DEFAULT_EMULATORS,   // its lines explain, they are not a status
-                headlineStartEllipsis = screen.section == SettingsSection.LIBRARY,   // the home's path: keep its end
                 rowKind = rowKind,
             )
         } else {
@@ -62,7 +87,107 @@ fun SettingsScreen(
     }
 }
 
-/** "Remove folder?" over a ROM folders page ([Screen.Settings.confirmRemove]): A removes, B keeps it. */
+/**
+ * A Settings value page as touch rows ([settingsTouchRow]): a Layouts group above its picture, Library under its counts
+ * and last scan, Default emulators under its lines, the others under their name (and banner). The hints follow the selected row ([settingsHints]), X Info while
+ * its description is cut off or says more.
+ */
+@Composable
+private fun SettingsTouchPage(
+    screen: Screen.Settings, selectedIndex: Int, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier,
+    onHint: ((NxButton) -> Unit)?, hints: List<Hint>?, dialog: Boolean,
+    onSetting: ((NxSettingEvent) -> Unit)?, onTruncated: (String, Boolean) -> Unit, truncated: String?,
+) {
+    val rows = remember(screen) { screen.rows.mapIndexed { i, r -> settingsTouchRow(r, screen.choices.getOrNull(i), screen.section) } }
+    val report = onTruncated
+    val selected = rows.getOrNull(selectedIndex)
+    val infoShown = selected != null && nxShowsInfo(selected, truncated)
+    val shownHints = hints ?: settingsHints(screen.rows, selectedIndex, selected, infoShown)
+    val preview = onSetting == null
+    val events = onSetting ?: {}
+    Box(modifier.fillMaxSize()) {
+        if (screen.section.layoutGroup) {
+            LayoutPreviewPage(
+                screen.section.label, emptyList(), emptyList(), screen.shot?.let(::layoutShotPicture), LAYOUT_PICTURE_AR, selectedIndex,
+                shownHints, onSelect, onOpen, onHint ?: {}, landscapeWidth = 1f, titleAction = false,
+                touchRows = { m -> NxSettingsList(rows, selectedIndex, onSelect, onOpen, events, m, report, preview) },
+            )
+        } else {
+            NxSettingsPage(
+                screen.section.label, rows, selectedIndex, shownHints, onSelect, onOpen, events,
+                onTruncated = report, onHint = onHint, preview = preview,
+                header = when {
+                    screen.banner != null -> ({ NxBanner(screen.banner) })
+                    screen.details.isNotEmpty() -> ({ SettingsDetailLines(screen.details) })
+                    else -> null
+                },
+            )
+        }
+        if (dialog && screen.confirmRemove != null) SettingsRemoveDialog(onHint)
+    }
+}
+
+/**
+ * Whether a touch row's info shows (its icon, X and the X Info hint): a fuller text is behind it, or its line is the one
+ * the UI reported cut off ([truncated], [AppState.settingInfoTruncated]).
+ */
+internal fun nxShowsInfo(row: NxSettingRow, truncated: String?): Boolean =
+    row.hasMoreInfo || (row.info.isNotBlank() && row.info == truncated)
+
+/** A touch page's lines under its title (Default emulators' caption), in the hint grey. */
+@Composable
+private fun SettingsDetailLines(lines: List<String>) {
+    Text(
+        lines.joinToString(" "), color = LocalNxColors.current.hint, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal,   // Regular, as a row's description
+        // A step under a popup's body, under Appearance → Text size as the rows.
+        fontSize = nxDialogBody() * 0.9f, lineHeight = nxDialogBody() * 0.9f * 1.35f,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = nxListInset(), vertical = 4.dp),
+    )
+}
+
+/**
+ * Whether [screen] draws as touch rows: a page with a value row ([Screen.Settings.choices]), Library and System (their
+ * groups, System's licence paragraphs) and Default emulators (a value page even when every console has one emulator).
+ * Emulators, Import saves and its results keep their rows.
+ */
+internal fun settingsTouchPage(screen: Screen.Settings): Boolean =
+    screen.choices.any { it != null } || screen.section == SettingsSection.DEFAULT_EMULATORS ||
+        screen.section == SettingsSection.LIBRARY || screen.section == SettingsSection.SYSTEM
+
+/** The Settings rows that open a page or an editor: their touch row ends in `›`. */
+private val OPENER_KINDS = setOf(
+    SettingsKind.HOME, SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVES, SettingsKind.IMPORT_SAVES,
+    SettingsKind.PAD_LAYOUT, SettingsKind.PAD_LAYOUT_SHAPE, SettingsKind.ANDROID_GAMES, SettingsKind.HIDDEN, SettingsKind.UNASSIGNED,
+    SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
+    SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER,
+)
+
+/** Rows whose secondary (a path, a state, a count, the last scan) is their description, not a value. */
+private val DESCRIBED_KINDS = setOf(SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.RESCAN, SettingsKind.UNASSIGNED, SettingsKind.HIDDEN)
+
+/**
+ * [row] as a touch row: its name, its description ([settingsInfo]; Library's [DESCRIBED_KINDS] their secondary, in the
+ * warning colour for a problem), and its [choices] (a dimmed row shows its value only); a row without values its value
+ * text, and `›` when it opens a page ([OPENER_KINDS]). A group label and a gap as the list's.
+ */
+internal fun settingsTouchRow(row: SettingsRow, choices: SettingChoices?, section: SettingsSection? = null): NxSettingRow {
+    if (row.kind == SettingsKind.SECTION) return NxSettingRow(row.label, section = true)
+    if (row.kind == SettingsKind.GAP) return NxSettingRow("", spacer = true)
+    if (row.kind == SettingsKind.TEXT) return NxSettingRow(row.label, paragraph = true)
+    val described = row.kind in DESCRIBED_KINDS
+    val text = if (described) SettingText(row.secondary.orEmpty()) else settingsInfo(row, section)
+    val values = choices?.takeIf { row.enabled }
+    return NxSettingRow(
+        row.label, info = text.line, detail = text.detail,
+        choices = values?.labels.orEmpty(), index = values?.index ?: -1,
+        value = if (values == null && !described && row.kind != SettingsKind.LICENSES_LINK) row.secondary else null,   // the link's URL: behind its info icon
+        opens = row.kind in OPENER_KINDS, enabled = row.enabled,
+        warning = row.warning,
+        button = "Rescan".takeIf { row.kind == SettingsKind.RESCAN },   // Library's counts row: the button on their right
+    )
+}
+
+/** "Remove folder?" over Library ([Screen.Settings.confirmRemove]): A removes, B keeps it. */
 @Composable
 internal fun SettingsRemoveDialog(onHint: ((NxButton) -> Unit)?) {
     NxDialog(
@@ -73,16 +198,27 @@ internal fun SettingsRemoveDialog(onHint: ((NxButton) -> Unit)?) {
 
 /**
  * The hint bar for the row at [selected]: no A on a read-only row (About's info rows, or a page of only those), "A Copy"
- * on About's Copy device info, "A Check" or "A Update" on its update row (none while busy), "A Select" elsewhere.
+ * on About's Copy device info, "A Open" on Full list of licenses, "A Check" or "A Update" on its update row (none while busy), "A Select" elsewhere.
  */
-internal fun settingsHints(rows: List<SettingsRow>, selected: Int): List<Hint> {
+internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSettingRow? = null, info: Boolean = false): List<Hint> {
     val back = Hint(NxButton.B, "Back")
     val kind = rows.getOrNull(selected)?.kind
+    val infoHint = if (info) listOf(Hint(NxButton.X, "Info")) else emptyList()
     return when {
         kind == SettingsKind.COPY_INFO -> listOf(back, Hint(NxButton.A, "Copy"))
+        kind == SettingsKind.LICENSES_LINK -> listOf(back, Hint(NxButton.A, "Open"))
         kind == SettingsKind.APP_UPDATE -> listOfNotNull(back, appUpdateHint(rows[selected].label)?.let { Hint(NxButton.A, it) })
         kind == SettingsKind.INFO || rows.all { it.kind == SettingsKind.INFO } -> listOf(back)
-        else -> listOf(back, Hint(NxButton.A, "Select"))
+        // A touch value row (the in-game menu's): LEFT / RIGHT change it, A toggles a switch or opens a picker. Use as
+        // home screen and All files access are Android's to change: A alone (it opens Android's screen).
+        touch != null && touch.choices.size >= 2 -> listOf(back) +
+            (if (kind == SettingsKind.HOME_SCREEN || kind == SettingsKind.ALL_FILES) emptyList() else listOf(Hint(NxButton.LEFT, "Change"))) + when (touch.control) {
+            NxSettingControl.SWITCH -> listOf(Hint(NxButton.A, "Toggle"))
+            NxSettingControl.PICKER -> listOf(Hint(NxButton.A, "Choose"))
+            else -> emptyList()
+        } + infoHint
+        touch != null && !touch.enabled -> listOf(back) + infoHint
+        else -> listOf(back, Hint(NxButton.A, "Select")) + infoHint
     }
 }
 

@@ -112,8 +112,8 @@ object NdsOptions {
     /** The layouts SELECT + Left/Right walks: Auto is left to the menu, so a press always lands on a layout it can show. */
     val CONCRETE_PORTRAIT: List<NdsPortraitLayout> = NdsPortraitLayout.entries - NdsPortraitLayout.AUTO
 
-    private fun <E : NdsChoice> row(key: String, label: String, all: List<E>, default: E, info: String) =
-        FrontendOption(key, label, all.map { it.value }, default.value, info, visual = true, valueLabels = all.map { it.label })
+    private fun <E : NdsChoice> row(key: String, label: String, all: List<E>, default: E, info: String, brief: String = "") =
+        FrontendOption(key, label, all.map { it.value }, default.value, info, visual = true, valueLabels = all.map { it.label }, brief = brief)
 
     val table: List<FrontendOption> = listOf(
         row(
@@ -129,6 +129,7 @@ object NdsOptions {
             LAYOUT_PORTRAIT_CONTROLLER, "Layout (portrait, controller)", NdsPortraitLayout.entries, NdsPortraitLayout.STACKED,
             "The portrait layout while a controller that is not a clip-on\n(Pocket Taco, FlipPad) is connected and the pad is hidden.\n" +
                 "SELECT + Left/Right cycles it then.\n$SPLIT_NOTE",
+            brief = "Used while a controller (not a clip-on) hides the pad",
         ),
         row(
             LAYOUT_LANDSCAPE, "Layout (landscape)", NdsLandscapeLayout.entries, NdsLandscapeLayout.STACKED,

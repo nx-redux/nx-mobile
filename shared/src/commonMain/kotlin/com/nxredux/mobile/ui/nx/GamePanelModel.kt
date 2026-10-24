@@ -1,10 +1,11 @@
 package com.nxredux.mobile.ui.nx
 
 import com.nxredux.mobile.achievements.RaAchievement
+import com.nxredux.mobile.cheats.CheatEntry
 import com.nxredux.mobile.gametime.GameTimeFormat
 
 /** The game panel's tabs, in display order; [GamePanelModel.tabs] hides the ones that don't apply. */
-enum class GamePanelTab(val label: String) { SHORTCUTS("Shortcuts"), ACHIEVEMENTS("Achievements"), PLAYERS("Players") }
+enum class GamePanelTab(val label: String) { SHORTCUTS("Shortcuts"), ACHIEVEMENTS("Achievements"), CHEATS("Cheats"), PLAYERS("Players") }
 
 /** The Shortcuts tab's one-tap actions, in display order. The last four are drawn disabled until they exist. */
 enum class Shortcut(val label: String) {
@@ -35,6 +36,12 @@ data class GamePanelHeader(
     val batteryPercent: Int?,
 )
 
+/**
+ * One Cheats tab row: the cheat's [name], the file it came from ([source]: blank with a single file) and whether it is
+ * [on] (its switch).
+ */
+data class CheatRow(val name: String, val source: String, val on: Boolean)
+
 /** Where a controller is inside the panel (single-screen in-game menu): the tab row, or the current tab's item [index]. */
 sealed interface PanelFocus {
     data object Tabs : PanelFocus
@@ -44,7 +51,8 @@ sealed interface PanelFocus {
 /**
  * What the game panel shows: the [header], the visible [tabs] and the current [tab], the Shortcuts tab's [shortcuts],
  * this game's [achievements] with the downloaded [badges] (file name → image model), and the Players tab's [players]
- * and [playerPads] (the Players page's types: the slots, and the pads a slot can be set to). [focus]: where the controller is (null: not in the panel). [showGamePill]:
+ * and [playerPads] (the Players page's types: the slots, and the pads a slot can be set to), the Cheats tab's [cheats]
+ * and what it says without any ([noCheatsText]). [focus]: where the controller is (null: not in the panel). [showGamePill]:
  * the DS/3DS panel-up Game pill (bottom-right), which sends [GamePanelEvent.ShowGame].
  */
 data class GamePanelState(
@@ -56,6 +64,8 @@ data class GamePanelState(
     val badges: Map<String, String>,
     val players: List<PlayerSlotRow>,
     val playerPads: List<PlayerPadRow>,
+    val cheats: List<CheatRow> = emptyList(),
+    val noCheatsText: String = "",
     val focus: PanelFocus? = null,
     val showGamePill: Boolean = false,
 )
@@ -69,16 +79,22 @@ sealed interface GamePanelEvent {
     data class SelectTab(val tab: GamePanelTab) : GamePanelEvent
     /** Put pad [key] in player [slot] (0-based); null empties it. */
     data class SetPlayer(val slot: Int, val key: String?) : GamePanelEvent
+    /** Turn cheat [index] (the game's cheat list) [on] or off, live. */
+    data class SetCheat(val index: Int, val on: Boolean) : GamePanelEvent
     /** The Game pill: the DS/3DS screen comes back to the second display. */
     data object ShowGame : GamePanelEvent
 }
 
 /** The panel's rules, pure so the in-game menu and both hosts share them. */
 object GamePanelModel {
-    /** Shortcuts always; Achievements only with a RetroAchievements set; Players only with more than one player slot. */
-    fun tabs(raAvailable: Boolean, playerSlots: Int): List<GamePanelTab> = buildList {
+    /**
+     * Shortcuts always; Achievements only with a RetroAchievements set; Cheats while the core takes them ([cheats], even
+     * with none for the game: the tab says how to add some); Players only with more than one player slot.
+     */
+    fun tabs(raAvailable: Boolean, playerSlots: Int, cheats: Boolean = false): List<GamePanelTab> = buildList {
         add(GamePanelTab.SHORTCUTS)
         if (raAvailable) add(GamePanelTab.ACHIEVEMENTS)
+        if (cheats) add(GamePanelTab.CHEATS)
         if (playerSlots > 1) add(GamePanelTab.PLAYERS)
     }
 
@@ -126,6 +142,31 @@ object GamePanelModel {
         s.connected -> s.name
         else -> "${s.name} (disconnected)"
     }
+
+    /**
+     * The Cheats tab's rows for the game's [entries], in their order (a row's index is the cheat's): the source is what
+     * the entry's info adds to its name, "(GameShark) Max Score" -> GameShark, "Built-in: Speed" -> Built-in.
+     */
+    fun cheatRows(entries: List<CheatEntry>): List<CheatRow> = entries.map { e ->
+        val source = if (e.info == e.desc) "" else e.info.removeSuffix(e.desc).trim().removeSuffix(":").removeSurrounding("(", ")")
+        CheatRow(e.desc, source, e.enabled)
+    }
+
+    /** A tap (or A) on cheat [index]: its switch flipped; null past the list. */
+    fun cheatEvent(index: Int, rows: List<CheatRow>): GamePanelEvent.SetCheat? =
+        rows.getOrNull(index)?.let { GamePanelEvent.SetCheat(index, on = !it.on) }
+
+    /**
+     * The Cheats tab without any: [NO_CHEATS] and how to add some, the Cheat Database tool or a RetroArch `.cht` file in
+     * the game's [folder] (`Cheats/<TAG>` in the home folder), named as the first file looked for ([expected]) once the
+     * cheats have been resolved.
+     */
+    fun noCheatsText(folder: String, expected: String): String =
+        if (expected.isBlank() || folder.isBlank()) "$NO_CHEATS\n$ADD_CHEATS a RetroArch .cht file to the Cheats folder."
+        else "$NO_CHEATS\n$ADD_CHEATS a RetroArch .cht file as $folder/$expected."
+
+    const val NO_CHEATS = "No cheats for this game."
+    private const val ADD_CHEATS = "Download them with Tools → Cheat Database, or add"
 
     /** The disc after [index] (0-based) of [count], wrapping, as each Swap disc tap steps it. */
     fun nextDisc(index: Int, count: Int): Int = if (count <= 0) 0 else (index + 1).mod(count)

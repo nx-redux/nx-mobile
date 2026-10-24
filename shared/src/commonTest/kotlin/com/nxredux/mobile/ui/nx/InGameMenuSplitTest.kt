@@ -32,16 +32,38 @@ class InGameMenuSplitTest {
         assertFalse(inGameMenuSplit(DpSize(673.dp, 841.dp)))   // the unfolded Fold in portrait
     }
 
-    @Test fun theRootSitsBesideTheGamePanelOrTheSlotCard() {
-        val m = model()
-        m.onRow("Save")
-        assertEquals(MenuPanes(m.state.stack[0], MenuPaneContent.Slots, focusLeft = true), menuPanes(m.state))
-        // Every other row shows the panel; the Options row's page preview is gone.
-        for (row in listOf("Options", "Continue", "Quit")) {
-            m.onRow(row)
-            assertEquals(MenuPanes(m.state.stack[0], MenuPaneContent.Panel, focusLeft = true), menuPanes(m.state))
+    @Test fun theRootSitsBesideTheGamePanelTheSlotCardOrTheOptionsPreview() {
+        for (split in listOf(true, false)) {
+            val m = model(split)
+            m.onRow("Save")
+            assertEquals(MenuPanes(m.state.stack[0], MenuPaneContent.Slots, focusLeft = true), menuPanes(m.state, split))
+            m.onRow("Options")
+            val preview = assertIs<MenuPaneContent.Page>(menuPanes(m.state, split)!!.right).page
+            assertEquals(m.state.preview, preview)
+            assertEquals(PageKind.Options, preview.kind)
+            assertTrue(menuPanes(m.state, split)!!.focusLeft)
+            for (row in listOf("Continue", "Quit")) {
+                m.onRow(row)
+                assertEquals(MenuPanes(m.state.stack[0], MenuPaneContent.Panel, focusLeft = true), menuPanes(m.state, split))
+            }
+            assertEquals(1, m.state.stack.size)
         }
-        assertEquals(1, m.state.stack.size)
+    }
+
+    // Portrait too: the Options page beside the dimmed root, in the root's columns; a category from it draws whole.
+    @Test fun theOptionsPageSitsBesideTheRootInBothOrientations() {
+        for (split in listOf(true, false)) {
+            val m = model(split)
+            m.onRow("Options"); m.press(NxButton.A)
+            val panes = menuPanes(m.state, split)!!
+            assertFalse(panes.focusLeft)
+            assertEquals(PageKind.Root, panes.left.kind)
+            assertEquals("Options", panes.left.rows[panes.left.selected].label)
+            assertEquals(m.state.page, assertIs<MenuPaneContent.Page>(panes.right).page)
+            m.onRow("Frontend"); m.press(NxButton.A)
+            assertEquals(PageKind.Frontend, m.state.page.kind)
+            if (split) assertEquals(PageKind.Options, menuPanes(m.state, split)!!.left.kind) else assertNull(menuPanes(m.state, split))
+        }
     }
 
     @Test fun aDeeperPageSitsBesideItsParentOnTheRowThatOpenedIt() {
@@ -69,12 +91,14 @@ class InGameMenuSplitTest {
 
     @Test fun rightOnTheRootEntersThePanelAndOpensARowThatOpensAPageDeeper() {
         val m = model()
-        m.onRow("Options")
+        m.onRow("Continue")
         assertNull(m.press(NxButton.RIGHT))
         assertEquals(PageKind.Root, m.state.page.kind)
         assertEquals(PanelFocus.Tabs, m.state.panelFocus)
         m.press(NxButton.B)
-        m.press(NxButton.A)
+        m.onRow("Options")
+        m.press(NxButton.RIGHT)
+        assertEquals(PageKind.Options, m.state.page.kind)
         m.onRow("Frontend")
         m.press(NxButton.RIGHT)
         assertEquals(PageKind.Frontend, m.state.page.kind)
@@ -88,12 +112,14 @@ class InGameMenuSplitTest {
         assertEquals(1, m.state.stack.size)
     }
 
-    @Test fun rightOnARootSubmenuEntersThePanelWhenNotSplit() {
+    // Options previews its page, not the panel: RIGHT moves into it, as A (as Save / Load's RIGHT works their card).
+    @Test fun rightOnTheOptionsRowOpensItsPageWhenNotSplit() {
         val m = model(split = false)
         m.onRow("Options")
         assertNull(m.press(NxButton.RIGHT))
-        assertEquals(PageKind.Root, m.state.page.kind)
-        assertEquals(PanelFocus.Tabs, m.state.panelFocus)
+        assertEquals(PageKind.Options, m.state.page.kind)
+        assertEquals(0, m.state.page.selected)
+        assertNull(m.state.panelFocus)
     }
 
     @Test fun rightOnASubmenuDeeperDoesNothingWhenNotSplit() {
@@ -146,7 +172,7 @@ class InGameMenuSplitTest {
 
     @Test fun root_list_narrower_in_portrait() {
         assertTrue(rootListShare(portrait = true) < rootListShare(portrait = false))
-        assertEquals(0.42f, rootListShare(portrait = false))
+        assertEquals(0.34f, rootListShare(portrait = false))
     }
 
     @Test fun root_list_top_pad_centres_first_pill_on_tab_words() {

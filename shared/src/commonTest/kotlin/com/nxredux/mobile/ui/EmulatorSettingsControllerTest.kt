@@ -31,6 +31,7 @@ import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.nxOptionsListHeight
 import com.nxredux.mobile.ui.nx.FooterMode
 import com.nxredux.mobile.ui.nx.NxButton
+import com.nxredux.mobile.ui.nx.NxSettingEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -71,7 +72,8 @@ class EmulatorSettingsControllerTest {
         assertFalse(EmulatorRow.Gap in EmulatorRows.build(page(console = emptyList()), null))   // no console rows
         assertFalse(EmulatorRow.Gap in EmulatorRows.build(page(), "video"))                     // a category: core rows only
         assertEquals(1, EmulatorRows.build(page(core = null), null).count { it == EmulatorRow.Gap })   // before the notice's header
-        assertEquals(1, EmulatorRows.build(page(forGame = true, gameFile = true), null).count { it == EmulatorRow.Gap })
+        assertEquals(2, EmulatorRows.build(page(forGame = true, gameFile = true), null).count { it == EmulatorRow.Gap })   // plus one before the last row, Use emulator settings
+        assertEquals(1, EmulatorRows.build(page(forGame = true, gameFile = false), null).count { it == EmulatorRow.Gap })
     }
 
     @Test fun up_and_down_skip_the_gap() {
@@ -95,8 +97,10 @@ class EmulatorSettingsControllerTest {
         assertEquals(20.dp * 5 + 10.dp, nxOptionsListHeight(rows, 20.dp))   // 5 rows and the gap
     }
 
-    @Test fun a_game_page_with_a_game_file_starts_with_use_emulator_settings() {
-        assertEquals(EmulatorRow.UseEmulatorSettings, EmulatorRows.build(page(forGame = true, gameFile = true), null).first())
+    @Test fun a_game_page_with_a_game_file_ends_with_use_emulator_settings() {
+        val rows = EmulatorRows.build(page(forGame = true, gameFile = true), null)
+        assertEquals(EmulatorRow.UseEmulatorSettings, rows.last())
+        assertEquals(EmulatorRow.Gap, rows[rows.size - 2])
         assertFalse(EmulatorRow.UseEmulatorSettings in EmulatorRows.build(page(forGame = true, gameFile = false), null))
     }
 
@@ -249,7 +253,7 @@ class EmulatorSettingsControllerTest {
         state.load()
         await { state.screen.value is Screen.Systems }
         state.openSettings(SettingsSection.EMULATORS)
-        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVES, SettingsKind.PAUSE_UNFOCUSED), assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind })
+        assertEquals(listOf(SettingsKind.DEFAULTS, SettingsKind.EMULATORS), assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind })   // Saves under Library, Pause when unfocused under System
         state.onButton(NxButton.B)
         state.openSettings(SettingsSection.LIBRARY)
         val kinds = assertIs<Screen.Settings>(state.screen.value).rows.map { it.kind }
@@ -272,15 +276,17 @@ class EmulatorSettingsControllerTest {
     }
 
     // Touch only, a value row of three or more opens a chooser of its values; a pick writes it as stepping would.
-    @Test fun touch_a_core_option_opens_a_chooser_and_a_pick_writes_it() = runTest {
+    // A touch row's picker lists the option's values; a pick writes it.
+    @Test fun touch_a_core_option_opens_a_picker_and_a_pick_writes_it() = runTest {
         val configs = MemoryConfigs()
         val state = TestState(configs)
         state.onFooterMode(FooterMode.BUTTONS)
         openCore(state, "gpsp")
         await { state.screen.value is Screen.EmulatorOptions }
         selectOptA(state)
-        state.openSelected()
+        state.settingEvent(NxSettingEvent.OpenPicker(state.selection.value.index))
         val chooser = state.chooser.value ?: error("no chooser")
+        assertTrue(chooser.popup)
         assertEquals("Option A", chooser.title)
         assertEquals(listOf("x", "y", "z"), chooser.labels)
         assertEquals(0, chooser.selected)
@@ -394,7 +400,7 @@ class EmulatorSettingsControllerTest {
         assertTrue("bind Up = UP" in text)
         assertTrue("opt_a = x" in text)
         assertEquals("bind Up = UP\nopt_a = z\n", configs.files["GBA-gpsp/minarch.cfg"])   // the console file is untouched
-        assertEquals(EmulatorRow.UseEmulatorSettings, options(state).rows.first())
+        assertEquals(EmulatorRow.UseEmulatorSettings, options(state).rows.last())
         assertEquals("opt_a", (selected(state) as EmulatorRow.Core).option.key)
     }
 
@@ -403,6 +409,7 @@ class EmulatorSettingsControllerTest {
         val state = TestState(configs)
         openGame(state)
         assertEquals("y", coreValue(state, "opt_a"))
+        repeat(options(state).rows.size) { if (selected(state) != EmulatorRow.UseEmulatorSettings) state.onButton(NxButton.DOWN) }
         assertEquals(EmulatorRow.UseEmulatorSettings, selected(state))
         state.onButton(NxButton.A)
         await { EmulatorRow.UseEmulatorSettings !in options(state).rows && selected(state) != EmulatorRow.UseEmulatorSettings }

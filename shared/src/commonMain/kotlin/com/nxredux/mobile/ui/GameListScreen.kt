@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.nxModalText
 import com.nxredux.mobile.ui.nx.touchOnly
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.ui.nx.touchIcons
@@ -68,6 +69,7 @@ import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxCarousel
 import com.nxredux.mobile.ui.nx.NxCarouselStack
 import com.nxredux.mobile.ui.nx.NxRow
+import com.nxredux.mobile.ui.nx.NxHintsBand
 import com.nxredux.mobile.ui.nx.NxScreenScaffold
 import com.nxredux.mobile.ui.nx.NxTapNeverOpens
 import com.nxredux.mobile.ui.nx.NxTextSizes
@@ -137,7 +139,7 @@ fun GameListScreen(
     val hints = remember(menuAvailable, openLabel, netplayHint, achievementsHint) {
         derivedStateOf(structuralEqualityPolicy()) {
             buildList {
-                add(Hint(NxButton.B, "Back"))
+                // No B Back: B still leaves, the bar keeps its room for what the game offers.
                 if (menuAvailable) add(Hint(NxButton.MENU, "Options"))
                 if (achievementsHint) add(Hint(NxButton.X, "Achievements"))   // the panel (no touch stand-in: the trophy icon is one)
                 if (netplayHint && netplay.value()) add(Hint(NxButton.Y, "Netplay"))
@@ -310,18 +312,23 @@ internal fun GameListFrame(
                             tapOpens = LocalNxTapOpens.current,   // the list's own rule (two taps, but for the preview's)
                         )
                     }
-                    // List: the info band on the hint bar, holding the scroll arrows.
+                    // List: the rows fade where more scrolls in (no band, no arrows), between a main menu List's gaps.
                     MenuStyle.LIST -> {
                         val rows = remember(dataKey) { listRows() }
                         // The selected game's info shows only in the hint bar's row (hints hidden, or touch only with no bar),
-                        // and then only that row is shaded, not the arrows' band. With the bar shown the band holds the arrows alone.
-                        val inRow = gameListInfoInBarRow(chrome.emptyBarRoom, touchOnly())
-                        GameInfoPlacement(if (inRow) info else NoGameInfo, Modifier.weight(1f), ground = if (inRow) BandGround.SHADE_WITH_INFO else BandGround.BAR, shade = !inRow) { scaffoldModifier, band ->
+                        // only that row shaded; Extra info off leaves nothing for it, so its room goes too.
+                        val barHidden = gameListInfoInBarRow(chrome.emptyBarRoom, touchOnly())
+                        val inRow = barHidden && chrome.extraInfo
+                        GameInfoPlacement(if (inRow) info else NoGameInfo, Modifier.weight(1f), ground = if (inRow) BandGround.SHADE_WITH_INFO else BandGround.BAR, shade = false) { scaffoldModifier, infoBand ->
+                            // The band's room goes to the rows; only its line in the bar's row ([NxHintsBand.barInfo]) stays.
+                            val band = NxHintsBand(reserve = 0.dp, overlap = 0.dp, barInfo = infoBand.barInfo) {}
                             CompositionLocalProvider(LocalNxListTopCut provides topCut.takeIf { iconsUp }) { NxScreenScaffold(
                                 rows = rows, selectedIndex = 0, selection = selectedIndex,   // read by the list's rows, not here
                                 hints = hints.value,
                                 onSelect = onSelect, onOpen = onOpen, modifier = scaffoldModifier, onHint = onHint, onLongPress = onLongPress,
-                                band = band, hideHints = inRow, hintShade = true, artBox = artBox,
+                                band = band, hideHints = barHidden, hintShade = true, artBox = artBox, keepBarRoom = inRow || !barHidden,
+                                // The title row counts as a tab row, the info row as a bar ([mainMenuListEdges]).
+                                scrollFade = true, rowEdges = mainMenuListEdges(chrome.listTitle, barShown = !barHidden || inRow),
                             ) }
                         }
                     }
@@ -336,7 +343,7 @@ internal fun GameListFrame(
             )
             emptyText?.let {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(it, color = LocalNxColors.current.listText, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.modalText)
+                    Text(it, color = LocalNxColors.current.listText, fontFamily = LocalNxFont.current, fontSize = nxModalText())
                 }
             }
             // Minimal's open: the selected game's band grows over the whole page, then it goes dark.

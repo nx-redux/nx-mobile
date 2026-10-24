@@ -146,7 +146,7 @@ interface DeviceSyncPlatform {
     suspend fun stopServer()
     /** The foreground service + keep-screen-on while [active]; [text] for the notification. */
     fun keepAlive(active: Boolean, text: String?)
-    /** A diagnostic line (NxLog on a device: only with Settings → Developer → Debug log on). */
+    /** A diagnostic line (NxLog on a device: only with Settings → System → Debug log on). */
     fun log(message: String) {}
 }
 

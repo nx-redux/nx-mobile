@@ -45,5 +45,6 @@ docs/
 .claude/
 CLAUDE.md
 
-# MiSans is fetched at build time (Xiaomi forbids redistributing the font files): shared/build.gradle.kts fetchMiSans
+# MiSans is fetched at build time (Xiaomi forbids redistributing the font files): shared/build.gradle.kts fetchMiSans, fetchMiSansRegular
 shared/src/commonMain/composeResources/font/misans_semibold.ttf
+shared/src/commonMain/composeResources/font/misans_regular.ttf

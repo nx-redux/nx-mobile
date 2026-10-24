@@ -89,7 +89,7 @@ fun NxModal(
             // The card scrolls and the footer stays pinned, so a landscape keyboard leaving ~125dp still shows the buttons.
             Column(Modifier.weight(1f, fill = false).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(NxModalCardColor).nxScrollFade(scroll).verticalScroll(scroll).padding(16.dp)) {
                 if (caption != null) {
-                    Text(caption, color = colors.hint, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = NxTextSizes.modalSmall * nxTextScale(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(caption, color = colors.hint, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxModalSmall(), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(8.dp))
                 }
                 content()
@@ -113,7 +113,7 @@ private fun NxModalFooter(footer: ModalFooter, onButton: (NxButton) -> Unit) {
                 Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable { onButton(hint.button) }.padding(horizontal = 4.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     NxButtonGlyph(hint.button, 16.dp)
                     Spacer(Modifier.width(6.dp))
-                    Text(hint.label, color = colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = NxTextSizes.modalSmall * nxTextScale(), maxLines = 1)
+                    Text(hint.label, color = colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxModalSmall(), maxLines = 1)
                 }
             }
         }
@@ -132,6 +132,6 @@ internal fun NxModalButton(action: FooterAction, onClick: () -> Unit) {
     val base = Modifier.height(36.dp).clip(shape).clickable(onClick = onClick)
     val styled = if (action.primary) base.background(colors.main, shape) else base.border(1.dp, colors.main.copy(alpha = 0.2f), shape)
     Box(styled.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
-        Text(action.label, color = if (action.primary) colors.listTextSelected else colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = NxTextSizes.modalButton * nxTextScale(), maxLines = 1)
+        Text(action.label, color = if (action.primary) colors.listTextSelected else colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxModalButton(), maxLines = 1)
     }
 }

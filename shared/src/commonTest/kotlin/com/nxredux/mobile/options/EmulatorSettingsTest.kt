@@ -45,6 +45,16 @@ class EmulatorSettingsTest {
         assertTrue(info(true).startsWith(VulkanFallback.NOTE))
     }
 
+    // The page keeps each row's full text (behind the info icon; the row shows [FrontendOption.brief]).
+    @Test fun console_rows_keep_the_full_text() {
+        val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
+        val rows = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, null, null, forGame = false, secondScreen = true).console.map { it.option }
+        val layout = rows.single { it.key == NdsOptions.LAYOUT_PORTRAIT }
+        assertEquals(NdsOptions.table.single { it.key == NdsOptions.LAYOUT_PORTRAIT }.info, layout.info)
+        assertTrue(layout.info.startsWith("How the two screens share a portrait screen.\nAuto: stacked"))
+        assertTrue(rows.single { it.key == BottomScreenOptions.KEY }.info.endsWith("System default follows Settings → Emulators."))
+    }
+
     @Test fun values_come_from_cfg_then_descriptor_then_table() {
         val p = EmulatorSettings.page("MD", descriptor, table, descriptor.defaultOptions, cfg("gpgx_res = 2x\n"), null, forGame = false)
         val core = p.core!!.associate { it.key to it.value }

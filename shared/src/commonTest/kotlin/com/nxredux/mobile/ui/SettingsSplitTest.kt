@@ -79,8 +79,8 @@ class SettingsSplitTest {
             assertFalse(twoPaneView(DpSize(560.dp, 360.dp), s))
         }
         assertFalse(raSplitView(DpSize(933.dp, 704.dp), Screen.RetroAchievements()))   // the page is drawn whole
-        assertFalse(raSplitView(DpSize(933.dp, 704.dp), Screen.Settings(SettingsSection.ABOUT, emptyList())))
-        assertTrue(twoPaneView(DpSize(933.dp, 704.dp), Screen.Settings(SettingsSection.ABOUT, emptyList())))
+        assertFalse(raSplitView(DpSize(933.dp, 704.dp), Screen.Settings(SettingsSection.SYSTEM, emptyList())))
+        assertTrue(twoPaneView(DpSize(933.dp, 704.dp), Screen.Settings(SettingsSection.SYSTEM, emptyList())))
         assertFalse(twoPaneView(DpSize(933.dp, 704.dp), Screen.RetroAchievements()))
         // The page's row the left pane highlights: Settings beside the settings, Achievements beside the games list.
         assertEquals(RaAction.SETTINGS, RaAction.entries[raPageRow(ra)!!])
@@ -122,10 +122,10 @@ class SettingsSplitTest {
         assertEquals(0.175f, settingsMarkShift(split = true), 1e-6f)   // 0.35 + 0.65 / 2 - 0.5 of the width
     }
 
-    @Test fun theAndroidGamesPickerIsALauncherPage() {
+    @Test fun theAndroidGamesPickerIsALibraryPage() {
         val picker = Screen.ToolApps(emptyList(), AppPick.GAMES)
         assertEquals(SettingsPane.RIGHT, settingsPane(picker))
-        assertEquals(SettingsSection.LAUNCHER, settingsCategoryOf(picker))
+        assertEquals(SettingsSection.LIBRARY, settingsCategoryOf(picker))
     }
 
     // The app drawer is a tool (Tools → Apps), never a Settings pane.
@@ -137,16 +137,15 @@ class SettingsSplitTest {
 
     @Test fun eachPageBelongsToItsTopCategory() {
         assertEquals(SettingsSection.MAIN_MENU, settingsCategoryOf(Screen.Settings(SettingsSection.MAIN_MENU, emptyList())))   // its own category
-        assertEquals(SettingsSection.LIBRARY, settingsCategoryOf(Screen.Settings(SettingsSection.ROM_FOLDERS, emptyList())))
+        assertEquals(SettingsSection.LIBRARY, settingsCategoryOf(Screen.Settings(SettingsSection.LIBRARY, emptyList())))
         assertEquals(SettingsSection.EMULATORS, settingsCategoryOf(Screen.Settings(SettingsSection.DEFAULT_EMULATORS, emptyList())))
         assertEquals(SettingsSection.EMULATORS, settingsCategoryOf(Screen.Settings(SettingsSection.EMULATORS, emptyList())))
-        assertEquals(SettingsSection.ABOUT, settingsCategoryOf(Screen.Settings(SettingsSection.ABOUT, emptyList())))
+        assertEquals(SettingsSection.SYSTEM, settingsCategoryOf(Screen.Settings(SettingsSection.SYSTEM, emptyList())))
         assertEquals(SettingsSection.EMULATORS, settingsCategoryOf(Screen.EmulatorList(emptyList())))
         assertEquals(SettingsSection.EMULATORS, settingsCategoryOf(Screen.EmulatorConsoles("gpsp", "gpSP", emptyList())))
         assertNull(settingsCategoryOf(Screen.SettingsMenu(SettingsSection.entries)))
-        assertEquals(listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.DEVELOPER, SettingsSection.ABOUT), settingsCategories())
-        assertEquals(listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.LAUNCHER, SettingsSection.DEVELOPER, SettingsSection.ABOUT), settingsCategories(launcher = true))
-        assertEquals(listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.SECOND_SCREEN, SettingsSection.LAUNCHER, SettingsSection.DEVELOPER, SettingsSection.ABOUT), settingsCategories(launcher = true, secondScreen = true))
-        assertEquals(SettingsSection.LAUNCHER, settingsCategoryOf(Screen.Settings(SettingsSection.LAUNCHER, emptyList())))
+        assertEquals(SettingsSection.LIBRARY, settingsCategoryOf(Screen.Settings(SettingsSection.SAVES, emptyList())))   // Saves under Library
+        assertEquals(listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.SYSTEM), settingsCategories())   // System last
+        assertEquals(listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.SECOND_SCREEN, SettingsSection.SYSTEM), settingsCategories(secondScreen = true))
     }
 }

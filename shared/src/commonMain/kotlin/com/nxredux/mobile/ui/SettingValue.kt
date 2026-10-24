@@ -14,7 +14,7 @@ internal class SettingValue<T>(
     val values: List<T>,
     val current: T,
     val set: (T) -> Unit,
-    /** A value's text in the touch chooser (three or more values); null: the row never opens one, a tap steps it. */
+    /** A value's text: a Settings touch row's choices, and RetroAchievements' touch chooser (three or more values); null: none. */
     val label: ((T) -> String)? = null,
     /** LEFT / RIGHT stop at the ends instead of wrapping (RetroAchievements' durations); A still wraps. */
     val clamps: Boolean = false,
@@ -29,4 +29,18 @@ internal class SettingValue<T>(
 
     /** A press on the row: [step], then [after] (the page republished, side effects in their order). */
     fun change(by: Int, wrap: Boolean = true) = after(step(by, wrap))
+
+    /** Every value's text ([label]; null when it has none), in [values]' order: a touch row's choices. */
+    val labels: List<String>? get() = label?.let(values::map)
+
+    /** [current]'s place in [values] (-1 when it is none of them). */
+    val index: Int get() = values.indexOf(current)
+
+    /** A touch pick: sets value [i] of [values], then [after]; nothing when [i] is out of range or already the one. */
+    fun changeTo(i: Int) {
+        val next = values.getOrNull(i) ?: return
+        if (i == index) return
+        set(next)
+        after(next)
+    }
 }

@@ -35,7 +35,7 @@ interface SavePuller {
  *
  * No rsync process outlives the call that started it unless it is handed back (a running daemon): a process is recorded
  * the moment it starts, before any suspension point, and every exit path that does not return it [stop]s it and its
- * forked children. [warn] is NxLog (Settings → Developer → Debug log) on a device and injectable so the JVM tests can
+ * forked children. [warn] is NxLog (Settings → System → Debug log) on a device and injectable so the JVM tests can
  * run [startDaemon].
  */
 class Rsync internal constructor(

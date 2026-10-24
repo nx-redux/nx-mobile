@@ -10,7 +10,7 @@ import com.swordfish.libretrodroid.NxLog
 import java.io.File
 
 /**
- * Applies Settings → Developer → Debug log when the process starts, whichever activity starts it (a game
+ * Applies Settings → System → Debug log when the process starts, whichever activity starts it (a game
  * launched from another launcher starts at GameActivity), moves the saves, states, settings and cheats an earlier
  * version kept in private storage into the home folder when it can do so quietly, and clears an earlier run's in-app
  * update download.

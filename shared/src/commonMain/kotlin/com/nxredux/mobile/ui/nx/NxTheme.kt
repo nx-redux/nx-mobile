@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.settings.AccentPreset
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.shared.res.Res
+import com.nxredux.mobile.shared.res.misans_regular
 import com.nxredux.mobile.shared.res.misans_semibold
 import org.jetbrains.compose.resources.Font
 
@@ -78,7 +79,19 @@ fun nxColorsFor(preset: AccentPreset, secondary: SecondaryAccent = SecondaryAcce
 object NxDefaults { val colors = NxColors() }
 
 val LocalNxColors = staticCompositionLocalOf { NxDefaults.colors }
+/**
+ * The app's font: MiSans Semibold alone, so every weight asked of it (none set, Normal, SemiBold, Bold) draws Semibold,
+ * the one look the UI is drawn in.
+ */
 val LocalNxFont = staticCompositionLocalOf<FontFamily> { FontFamily.Default }
+
+/**
+ * MiSans with both bundled weights: FontWeight.Normal draws Regular, SemiBold and Bold draw Semibold. For the text set
+ * apart from its name by a lighter weight, asked for with FontWeight.Normal: the settings rows' descriptions and
+ * paragraphs (NxSettingsRow) and the in-game menu's option descriptions (InGameMenuOptions). Not [LocalNxFont], where an
+ * unset weight is Normal: that text would all turn Regular.
+ */
+val LocalNxFontWeights = staticCompositionLocalOf<FontFamily> { FontFamily.Default }
 
 /**
  * The selection highlight's colour (a list's pill, a lit tile's fill or ring, Home's lit card): [NxColors.accent]. The
@@ -101,14 +114,17 @@ internal fun nxFontScale(system: Float): Float = system.coerceIn(NX_FONT_SCALE_M
  */
 @Composable
 fun NxTheme(colors: NxColors = NxDefaults.colors, content: @Composable () -> Unit) {
-    val misans = Font(Res.font.misans_semibold, FontWeight.SemiBold)
-    val font = remember(misans) { FontFamily(misans) }
+    val semibold = Font(Res.font.misans_semibold, FontWeight.SemiBold)
+    val regular = Font(Res.font.misans_regular, FontWeight.Normal)
+    val font = remember(semibold) { FontFamily(semibold) }
+    val weights = remember(regular, semibold) { FontFamily(regular, semibold) }
     val system = LocalDensity.current
     val held = nxFontScale(system.fontScale)
     val density = remember(system.density, held) { Density(system.density, held) }
     CompositionLocalProvider(
         LocalNxColors provides colors,
         LocalNxFont provides font,
+        LocalNxFontWeights provides weights,
         LocalDensity provides density,
         content = content,
     )

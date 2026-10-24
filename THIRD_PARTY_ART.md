@@ -49,10 +49,10 @@ Shin's (KrutzOtrem) Trimui Brick overlays, https://github.com/KrutzOtrem/Trimui-
 notes in `LICENSES/trimui-brick-overlays.txt`, shipped in the APK as `licenses/trimui-brick-overlays.txt`). Brought in
 through nx-redux, unchanged.
 
-## Font (`misans_semibold.ttf`)
+## Font (`misans_semibold.ttf`, `misans_regular.ttf`)
 
-MiSans Latin Semibold, © Beijing Xiaomi Mobile Software Co., Ltd., used under Xiaomi's MiSans terms
+MiSans Latin Semibold and Regular, © Beijing Xiaomi Mobile Software Co., Ltd., used under Xiaomi's MiSans terms
 (https://hyperos.mi.com/font/en/download/): software may embed the font and must note that it does
-(https://hyperos.mi.com/font/en/faq/; Settings → About shows "Font: MiSans by Xiaomi"); the font files may not be
-distributed on their own. So the TTF is not in this repository:
-the build fetches it from Xiaomi (`shared/build.gradle.kts`, `fetchMiSans`). Not under the project's GPL-3.0.
+(https://hyperos.mi.com/font/en/faq/; Settings → System → About shows "Font: MiSans by Xiaomi", and its Licenses group names the font); the font files may not be
+distributed on their own. So the TTFs are not in this repository:
+the build fetches them from Xiaomi (`shared/build.gradle.kts`, `fetchMiSans`, `fetchMiSansRegular`). Not under the project's GPL-3.0.

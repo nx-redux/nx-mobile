@@ -49,7 +49,7 @@ fun NxSignInPrompt(
         caption = caption, kind = ModalKind.PROMPT, confirmLabel = "Sign in",
         onButton = { if (it == NxButton.B) onCancel() else onConfirm() },
     ) {
-        Text("Username", color = colors.hint, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.modalSmall)
+        Text("Username", color = colors.hint, fontFamily = LocalNxFont.current, fontSize = nxModalSmall())
         Spacer(Modifier.height(4.dp))
         SignInField(
             username, onUsernameChange, password = false, focus = userFocus,
@@ -57,7 +57,7 @@ fun NxSignInPrompt(
             keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
         )
         Spacer(Modifier.height(12.dp))
-        Text("Password", color = colors.hint, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.modalSmall)
+        Text("Password", color = colors.hint, fontFamily = LocalNxFont.current, fontSize = nxModalSmall())
         Spacer(Modifier.height(4.dp))
         SignInField(
             password, onPasswordChange, password = true, focus = passwordFocus,
@@ -84,7 +84,7 @@ private fun SignInField(
             onValueChange(field.text)
         },
         singleLine = true,
-        textStyle = TextStyle(color = colors.listText, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.modalText),
+        textStyle = TextStyle(color = colors.listText, fontFamily = LocalNxFont.current, fontSize = nxModalText()),
         cursorBrush = SolidColor(colors.listText),
         visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = keyboardOptions,

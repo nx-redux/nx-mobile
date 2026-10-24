@@ -27,6 +27,7 @@ object GraphicsApiOptions {
         KEY, "Graphics API", listOf(AUTO, GLES, VULKAN), AUTO,
         "How the console is drawn. Auto uses OpenGL ES.\nVulkan on N64 switches to the ParaLLEl-RDP renderer\n" +
             "(more accurate, heavier). Phones without Vulkan\nstay on OpenGL ES. Takes effect the next time the game starts.",
+        brief = "Applies next launch. Auto is OpenGL ES",
         visual = false, valueLabels = listOf("Auto", "OpenGL ES", "Vulkan"), atLaunch = true,
     )
 

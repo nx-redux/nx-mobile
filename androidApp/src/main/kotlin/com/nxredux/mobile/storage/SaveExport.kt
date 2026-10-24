@@ -12,7 +12,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /**
- * Settings → Emulators → Saves → Export saves: the [SaveArchive] areas of the data root ([root], [DataRoot.of]) as
+ * Settings → Library → Saves → Export saves: the [SaveArchive] areas of the data root ([root], [DataRoot.of]) as
  * one zip, entry names from the card root and entry times from the files, so it unzips onto a handheld card as is.
  * Files are copied byte for byte. [out] is finished but left open (the caller owns the document). No logging here:
  * JVM-tested. Files whose entry names meet (`Saves/GBA/x` and a leftover `Saves/MGBA/x`, both leaving as

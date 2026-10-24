@@ -37,7 +37,7 @@ enum class StateFormat(val stored: Int, val label: String, val compressed: Boole
     }
 }
 
-/** The three handheld settings that name a game's save files (Settings → Emulators → Saves). */
+/** The three handheld settings that name a game's save files (Settings → Library → Saves). */
 data class SaveNaming(
     val saveFormat: SaveFormat = SaveFormat.DEFAULT,
     val stateFormat: StateFormat = StateFormat.DEFAULT,

@@ -126,9 +126,9 @@ public class LibretroDroid {
     public static native void setVulkanSwapchainFrames(boolean enabled);
     /** Whether this device can run the Vulkan bridge (a Vulkan 1.1 GPU with AHardwareBuffer import). Cached; any thread. */
     public static native boolean isVulkanSupported();
-    /** With Settings → Developer → Debug log on at launch: log GL driver messages (GL_KHR_debug, else glGetError) to tag NXGL. Set before create(). */
+    /** With Settings → System → Debug log on at launch: log GL driver messages (GL_KHR_debug, else glGetError) to tag NXGL. Set before create(). */
     public static native void setGlDebugOutput(boolean enabled);
-    /** Settings → Developer → Debug log: false skips the runner's and cores' logs below an error. */
+    /** Settings → System → Debug log: false skips the runner's and cores' logs below an error. */
     public static native void setLogEnabled(boolean enabled);
     /** Keep the next core's library loaded after its session (RTLD_NODELETE), so it is never reloaded elsewhere. Set before create(). */
     public static native void setKeepCoreLoaded(boolean keep);

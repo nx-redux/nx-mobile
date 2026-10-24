@@ -330,13 +330,11 @@ class StorageUpgradeTest {
         assertEquals("Saves are in your home folder.", assertIs<Screen.Settings>(r.state.screen.value).banner)
     }
 
-    @Test fun accessOffNoticeSaysInsideTheAppUntilMoved() = runTest {
+    // Access off: no notice at each start, the one-time move waiting or not (Library's All files row says it).
+    @Test fun accessOffShowsNoNoticeAtStart() = runTest {
         val r = rig(fileHome, dirs = setOf(FileRefs.path(fileHome)), platform = Platform(waiting = true))
         r.state.load()
-        assertEquals(
-            "All files access is off. Using Android/media/com.nxredux.mobile.dev/ until it's back on. Saves are still stored inside the app until your home folder is available.",
-            r.state.notice.value,
-        )
+        assertNull(r.state.notice.value)
     }
 
     @Test fun aStuckQuietMoveIsNoticed() = runTest {

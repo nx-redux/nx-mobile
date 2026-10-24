@@ -29,7 +29,7 @@ fun encodedSecret(name: String, value: String): Pair<String, String> {
     return javaBytes(enc) to javaBytes(if (plain.isEmpty()) ByteArray(0) else key)
 }
 
-// Settings -> About's Build and Released rows: the short commit ("-dirty" with uncommitted changes) and its committer
+// Settings -> System's About Build and Released rows: the short commit ("-dirty" with uncommitted changes) and its committer
 // date (ISO-8601), never the build time. providers.exec keeps the configuration cache valid; no git: "unknown" / "".
 fun git(vararg args: String): String? = runCatching {
     val run = providers.exec {

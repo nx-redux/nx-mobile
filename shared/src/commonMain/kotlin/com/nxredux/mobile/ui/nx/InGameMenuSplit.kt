@@ -19,27 +19,30 @@ sealed interface MenuPaneContent {
     data object Empty : MenuPaneContent
 }
 
-/** The two panes: [left] (a page), [right], and which one has the focus (the other is dimmed). */
+/** The two panes: [left] (a page), [right], and which one has the focus (the other is dimmed; a [MenuPaneContent.Page] on the right beside a focused left is a preview). */
 data class MenuPanes(val left: MenuPage, val right: MenuPaneContent, val focusLeft: Boolean)
 
 /**
- * The panes [state] draws as when the menu splits, or null for a page drawn whole (an Adjust strip, a Message). On the
- * root the root is focused on the left and the right is the game panel ([InGameMenuModel.panelState]), but for Save /
- * Load, which show the slot card. Deeper (a column browser, as the RetroAchievements levels) the top page is focused on
- * the right and the page under it dimmed on the left, its highlighted row the one that opened the top.
+ * The panes [state] draws as, or null for a page drawn whole (an Adjust strip, a Message). On the root the root is
+ * focused on the left and the right is the game panel ([InGameMenuModel.panelState]), but for Save / Load, which show the
+ * slot card, and Options, which previews its page ([MenuState.preview]). Deeper (a column browser, as the
+ * RetroAchievements levels) the top page is focused on the right and the page under it dimmed on the left, its
+ * highlighted row the one that opened the top. When the menu does not [split] (portrait) only the root and the Options
+ * page over it draw as two (in the root's columns); a deeper page draws whole.
  */
-fun menuPanes(state: MenuState): MenuPanes? {
+fun menuPanes(state: MenuState, split: Boolean = true): MenuPanes? {
     val top = state.page
     if (top.kind is PageKind.Adjust || top.kind == PageKind.Message) return null
     if (state.stack.size == 1) {
         val right = when (top.rows.getOrNull(top.selected)) {
             null -> MenuPaneContent.Empty
             is MenuRow.Slot -> MenuPaneContent.Slots
-            else -> MenuPaneContent.Panel
+            else -> state.preview?.let { MenuPaneContent.Page(it) } ?: MenuPaneContent.Panel
         }
         return MenuPanes(top, right, focusLeft = true)
     }
     val parent = state.stack[state.stack.size - 2]
     if (parent.kind is PageKind.Adjust || parent.kind == PageKind.Message) return null
+    if (!split && !(state.stack.size == 2 && top.kind == PageKind.Options)) return null
     return MenuPanes(parent, MenuPaneContent.Page(top), focusLeft = false)
 }

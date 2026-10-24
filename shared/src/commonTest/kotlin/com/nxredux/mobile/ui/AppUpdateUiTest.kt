@@ -42,7 +42,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** The updater in a real [AppState]: the main menu's popup, Settings → About's update row and the host's install gate. */
+/** The updater in a real [AppState]: the main menu's popup, Settings → System's About update row and the host's install gate. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppUpdateUiTest {
     private class Settings : AppSettings {
@@ -158,12 +158,15 @@ class AppUpdateUiTest {
 
     private fun TestScope.pastGuard() { advanceTimeBy(ANDROID_ASK_GUARD_MILLIS + 1); runCurrent() }
 
+    /** Settings -> System, its About group's rows (between the group's label and the gap before Licenses). */
     private fun Rig.openAbout(): List<SettingsRow> {
-        state.openSettings(SettingsSection.ABOUT)
-        return assertIs<Screen.Settings>(state.screen.value).rows
+        state.openSettings(SettingsSection.SYSTEM)
+        val rows = assertIs<Screen.Settings>(state.screen.value).rows
+        val from = rows.indexOfFirst { it.kind == SettingsKind.SECTION && it.label == "About" } + 1
+        return rows.subList(from, rows.indexOfFirst { it.kind == SettingsKind.SECTION && it.label == "Licenses" } - 1)
     }
 
-    private fun Rig.updateRow(): SettingsRow? = assertIs<Screen.Settings>(state.screen.value).rows.lastOrNull()?.takeIf { it.kind == SettingsKind.APP_UPDATE }
+    private fun Rig.updateRow(): SettingsRow? = assertIs<Screen.Settings>(state.screen.value).rows.firstOrNull { it.kind == SettingsKind.APP_UPDATE }
 
     /** A on About's update row. */
     private fun Rig.pressUpdateRow() {
@@ -267,8 +270,8 @@ class AppUpdateUiTest {
         val rows = r.openAbout()
         assertEquals(SettingsKind.APP_UPDATE, rows.last().kind)
         assertEquals("Copy device info", rows[rows.size - 2].label)
-        assertEquals(SettingsRow(SettingsKind.INFO, "Font", "MiSans by Xiaomi"), rows[rows.size - 3])
-        assertTrue(rows.dropLast(3).all { it.kind == SettingsKind.INFO })
+        assertTrue(rows.dropLast(2).all { it.kind == SettingsKind.INFO })
+        assertTrue(rows.none { it.label == "Font" })   // the font is in the Licenses text, not a row
         assertEquals("Check for updates", rows.last().label)               // Idle
         assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Check")), settingsHints(rows, rows.lastIndex))
     }

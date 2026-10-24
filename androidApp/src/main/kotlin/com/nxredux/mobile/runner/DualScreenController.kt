@@ -32,6 +32,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.R
 import com.nxredux.mobile.achievements.sortedBy
+import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.options.BottomScreenOptions
@@ -90,6 +91,10 @@ internal interface DualScreenHost : LifecycleOwner {
     val isN3ds: Boolean
     val netplayNow: NetplaySession?
     val achievements: AchievementsBridge?
+    /** The game's cheats (toggled through [handleMenuEffect]), whether the core takes any, and their folder: the Cheats tab. */
+    val cheatsSupported: Boolean
+    val cheatSet: CheatSet
+    val cheatsFolder: String
     /** The in-game menu's view while it is open (the panel on main takes its place). */
     val menuView: ComposeView?
     fun layoutTag(): String
@@ -97,7 +102,7 @@ internal interface DualScreenHost : LifecycleOwner {
     fun isLandscape(): Boolean
     fun syncN3dsCore()
     fun toast(msg: String): android.widget.Toast
-    /** The panel's Second screen and Players rows act as the in-game menu's own effects ([MenuEffect]). */
+    /** The panel's Second screen, Players and Cheats rows act as the in-game menu's own effects ([MenuEffect]). */
     fun handleMenuEffect(effect: MenuEffect)
     /** The open menu's Second screen shortcut again. */
     fun publishMenuSecondScreen()
@@ -551,14 +556,19 @@ internal class DualScreenController(
     /**
      * The dual-screen panel's state: the header ([panelHeader], with the achievement count while there is a set), the tabs
      * that apply, the Shortcuts (Swap disc for a multi-disc game outside netplay, Second screen, the future ones), this
-     * game's achievements in the menu's order, and the Players page's rows.
+     * game's achievements in the menu's order, the cheats (the host's set: one owner, as the menu's), and the Players
+     * page's rows.
      */
     private fun panelState(): GamePanelState {
         val b = achievements?.takeIf { it.available }
         val summary = b?.summary()
         val list = if (b != null && summary != null) b.list().sortedBy(appSettings.raSortOrder) else emptyList()
         val players = input.playerRows()
-        val tabs = GamePanelModel.tabs(raAvailable = list.isNotEmpty(), playerSlots = if (netplayNow != null) 0 else players?.first?.size ?: 0)
+        val tabs = GamePanelModel.tabs(
+            raAvailable = list.isNotEmpty(), playerSlots = if (netplayNow != null) 0 else players?.first?.size ?: 0,
+            cheats = owner.cheatsSupported && netplayNow == null,
+        )
+        val cheats = owner.cheatSet
         val (disc, count) = discs ?: (0 to 0)
         return GamePanelState(
             header = panelHeader().copy(ra = summary.takeIf { GamePanelTab.ACHIEVEMENTS in tabs }),
@@ -569,6 +579,8 @@ internal class DualScreenController(
             badges = b?.badges.orEmpty(),
             players = players?.first.orEmpty(),
             playerPads = players?.second.orEmpty(),
+            cheats = GamePanelModel.cheatRows(cheats.entries),
+            noCheatsText = GamePanelModel.noCheatsText(owner.cheatsFolder, cheats.expected),
             showGamePill = dualMode == DualMode.PANEL_UP,
         )
     }
@@ -579,7 +591,7 @@ internal class DualScreenController(
     }
 
     /**
-     * A touch on the dual-screen panel: Swap disc, Second screen and the Players rows as the in-game menu's own effects
+     * A touch on the dual-screen panel: Swap disc, Second screen, the Players and Cheats rows as the in-game menu's own effects
      * (the menu, if open over the game, follows), a tab, or the Game pill flipping the DS/3DS screen back. Achievement
      * rows ask for nothing.
      */
@@ -593,6 +605,7 @@ internal class DualScreenController(
             }
             is GamePanelEvent.SelectTab -> { dualPanelTab = e.tab; refreshDualPanel() }
             is GamePanelEvent.SetPlayer -> owner.handleMenuEffect(MenuEffect.SetPlayer(e.slot, e.key))
+            is GamePanelEvent.SetCheat -> owner.handleMenuEffect(MenuEffect.SetCheat(e.index, e.on))
             GamePanelEvent.ShowGame -> { panelUp = false; syncDual() }
         }
     }

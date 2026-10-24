@@ -37,6 +37,7 @@ private const val DIVIDER_ALPHA = 0.08f
 internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<ListSelection>, page: @Composable () -> Unit) {
     val categories = state.settingsSections()   // not remembered: a second screen coming or going changes it
     SplitPanes(
+        divider = false,   // the categories and the page are one surface, as the in-game menu's two panes
         left = {
             if (s is Screen.SettingsMenu) {
                 WithIndex(selection) {

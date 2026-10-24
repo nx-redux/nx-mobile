@@ -3,7 +3,7 @@ package com.nxredux.mobile.ui
 import com.nxredux.mobile.update.UpdateState
 
 /**
- * What Settings -> About shows that never changes while the app runs (the host fills it in). [commit]: the build's short
+ * What Settings -> System -> About shows that never changes while the app runs (the host fills it in). [commit]: the build's short
  * git commit, `-dirty` when its tree had uncommitted changes; [commitDate]: that commit's ISO-8601 committer date ("" when
  * unknown), the Released row; [pageSizeKb]: the memory page size, 0 when unknown. The GPU comes later ([AppDeps.deviceGpu]).
  */

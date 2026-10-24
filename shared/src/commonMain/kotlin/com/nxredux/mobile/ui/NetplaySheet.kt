@@ -1,5 +1,9 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.nxTextScale
+import com.nxredux.mobile.ui.nx.nxDialogBody
+import com.nxredux.mobile.ui.nx.nxModalSmall
+import com.nxredux.mobile.ui.nx.nxModalText
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,7 +43,7 @@ fun NetplaySheet(page: NetplayPage, onButton: (NxButton) -> Unit, onSelect: (Int
     when (page) {
         is NetplayPage.Role -> NxModal(caption = page.title, kind = ModalKind.MENU, onButton = onButton) {
             if (page.needWifi && page.connection != NetplayLink.USB) {
-                Text(NetplayText.NEED_WIFI, color = colors.listText, fontFamily = font, fontSize = NxTextSizes.dialogBody)
+                Text(NetplayText.NEED_WIFI, color = colors.listText, fontFamily = font, fontSize = nxDialogBody())
                 Spacer(Modifier.height(8.dp))
             }
             val rows = page.rows.mapIndexed { i, row ->
@@ -61,16 +65,16 @@ fun NetplaySheet(page: NetplayPage, onButton: (NxButton) -> Unit, onSelect: (Int
         }
         is NetplayPage.Hosting -> NxModal(caption = page.title, kind = ModalKind.WAIT, onButton = onButton, scrimDismisses = false) {
             // The handheld's three tiers: this device (large), the Wi-Fi or cable reminder (medium), the status (small).
-            Text(page.address, color = colors.listText, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = NxTextSizes.modalText * 1.25f,
+            Text(page.address, color = colors.listText, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = nxModalText() * 1.25f,
                 textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             Spacer(Modifier.height(12.dp))
-            Text(page.medium, color = colors.listText, fontFamily = font, fontSize = NxTextSizes.dialogBody, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(page.medium, color = colors.listText, fontFamily = font, fontSize = nxDialogBody(), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(12.dp))
-            Text(page.status, color = colors.hint, fontFamily = font, fontSize = NxTextSizes.modalSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
+            Text(page.status, color = colors.hint, fontFamily = font, fontSize = nxModalSmall(), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
         }
         is NetplayPage.Hosts -> NxModal(caption = NetplayText.SELECT_HOST, kind = ModalKind.MENU, onButton = onButton) {
             if (page.hosts.isEmpty()) {
-                Text(page.empty, color = colors.listText, fontFamily = font, fontSize = NxTextSizes.dialogBody, textAlign = TextAlign.Center,
+                Text(page.empty, color = colors.listText, fontFamily = font, fontSize = nxDialogBody(), textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
             } else {
                 SheetList(page.hosts.map { NxRow("${it.game} (${it.ip})") }, page.selected, onButton, onSelect)
@@ -82,7 +86,7 @@ fun NetplaySheet(page: NetplayPage, onButton: (NxButton) -> Unit, onSelect: (Int
         )
         // "Starting game" cannot be cancelled (the controller ignores B there): no Cancel hint.
         is NetplayPage.Progress -> NxModal(caption = page.title, kind = if (page.line == NetplayText.STARTING) ModalKind.BUSY else ModalKind.WAIT, onButton = onButton, scrimDismisses = false) {
-            Text(page.line, color = colors.listText, fontFamily = font, fontSize = NxTextSizes.dialogBody, textAlign = TextAlign.Center,
+            Text(page.line, color = colors.listText, fontFamily = font, fontSize = nxDialogBody(), textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
         }
         is NetplayPage.Error -> NxDialog(NetplayText.TITLE, page.text, onConfirm = { onButton(NxButton.A) })
@@ -94,7 +98,7 @@ fun NetplaySheet(page: NetplayPage, onButton: (NxButton) -> Unit, onSelect: (Int
 private fun SheetList(rows: List<NxRow>, selected: Int, onButton: (NxButton) -> Unit, onSelect: (Int) -> Unit) {
     NxList(
         rows, selected, onSelect = onSelect, onOpen = { i -> onSelect(i); onButton(NxButton.A) },
-        modifier = Modifier.height(SheetRowHeight * minOf(rows.size, MODAL_ROWS)),
-        rowHeightOverride = SheetRowHeight, pillPaddingOverride = 12.dp, textSizeOverride = NxTextSizes.modalText,
+        modifier = Modifier.height(SheetRowHeight * nxTextScale() * minOf(rows.size, MODAL_ROWS)),
+        rowHeightOverride = SheetRowHeight * nxTextScale(), pillPaddingOverride = 12.dp, textSizeOverride = nxModalText(),
     )
 }

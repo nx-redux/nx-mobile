@@ -198,12 +198,12 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
 
       - name: Cache MiSans
-        # shared's fetchMiSans takes the font from Xiaomi's MiSans_Latin.zip (it may not live in git) into this
-        # directory; the key is the TTF's SHA-256 pinned in shared/build.gradle.kts.
+        # shared's fetchMiSans and fetchMiSansRegular take the fonts from Xiaomi's MiSans_Latin.zip (they may not live
+        # in git) into this directory; the key is the TTFs' SHA-256s pinned in shared/build.gradle.kts (Semibold, Regular).
         uses: actions/cache@v5
         with:
           path: ~/.gradle/nx-mobile/misans
-          key: misans-2080f37e783eb269129c15f7f40028943fe659c1859efc5ba5f0de4e726c0e62
+          key: misans-2080f37e783eb269129c15f7f40028943fe659c1859efc5ba5f0de4e726c0e62-d6afa946f09bf876e58ec2f784988a68647af9edb77709643f00fa25f183135b
 
       - name: Download Cores
         uses: actions/download-artifact@v7.0.0

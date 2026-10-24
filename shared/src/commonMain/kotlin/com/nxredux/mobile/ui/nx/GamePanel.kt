@@ -57,8 +57,8 @@ import org.jetbrains.compose.resources.painterResource
 /**
  * The game panel, in the in-game menu's look: the header (art or console logo, title, play time, achievement count,
  * clock and battery), the tab words with the underline ([MenuTabRow]), then the current tab: Shortcuts as hollow pill
- * buttons in a grid (4 columns, 2 when narrow; disabled ones dimmed and inert), Achievements as badge rows, Players as
- * the Players page's rows. The controller's [GamePanelState.focus] sits on the accent pill (the tab row's capsule on
+ * buttons in a grid (4 columns, 2 when narrow; disabled ones dimmed and inert), Achievements as badge rows, Cheats as
+ * rows with a switch, Players as the Players page's rows. The controller's [GamePanelState.focus] sits on the accent pill (the tab row's capsule on
  * Tabs). The Game pill (DS/3DS panel-up) sits bottom-right. The dual-screen panel and the in-game menu share it; the
  * menu draws the header itself across its top ([GamePanelHeaderBar]) and the panel with [showHeader] off, on its own
  * surface ([opaque] off: no black box of the panel's own).
@@ -84,6 +84,7 @@ fun GamePanel(
                 when (tab) {
                     GamePanelTab.SHORTCUTS -> ShortcutsTab(state.shortcuts, focused, bottom, onEvent)
                     GamePanelTab.ACHIEVEMENTS -> AchievementsTab(state.achievements, state.badges, focused, bottom)
+                    GamePanelTab.CHEATS -> CheatsTab(state.cheats, state.noCheatsText, focused, bottom, onEvent)
                     GamePanelTab.PLAYERS -> PlayersTab(state.players, state.playerPads, focused, bottom, onEvent)
                 }
             }
@@ -132,8 +133,9 @@ fun GamePanelHeaderBar(h: GamePanelHeader) {
 private fun ShortcutsTab(shortcuts: List<ShortcutState>, focused: Int?, bottom: Dp, onEvent: (GamePanelEvent) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val columns = gamePanelColumns(maxWidth)
+        val scroll = rememberScrollState()
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            Modifier.fillMaxSize().nxScrollFade(scroll, height = 56.dp, strong = true).verticalScroll(scroll)
                 .padding(start = GP_GUTTER, end = GP_GUTTER, top = 10.dp, bottom = bottom),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -204,8 +206,10 @@ private fun DrawScope.focusRing(color: Color) {
 /** The achievements as [AchievementRow]s; they open nothing (the description is on the row). */
 @Composable
 private fun AchievementsTab(list: List<RaAchievement>, badges: Map<String, String>, focused: Int?, bottom: Dp) {
+    // The rows fade where more scrolls in (the lists' cue), the focus an item clear of the fades.
+    val state = rememberFocusedListState(focused, margin = 1)
     LazyColumn(
-        Modifier.fillMaxSize(), state = rememberFocusedListState(focused),
+        Modifier.fillMaxSize().nxScrollFade(state, height = 56.dp, strong = true), state = state,
         contentPadding = PaddingValues(start = GP_LIST_GUTTER, end = GP_LIST_GUTTER, top = 6.dp, bottom = bottom),
     ) {
         itemsIndexed(list, key = { _, a -> a.id }) { i, a ->
@@ -240,14 +244,52 @@ internal fun AchievementRow(title: String, a: RaAchievement, badge: String?, sel
 }
 
 /**
+ * The game's cheats, each with its switch ([NxSwitch]); a tap anywhere on a row flips it ([GamePanelModel.cheatEvent]),
+ * live, as A on the controller's row does. None: [empty] (how to add some), centred.
+ */
+@Composable
+private fun CheatsTab(cheats: List<CheatRow>, empty: String, focused: Int?, bottom: Dp, onEvent: (GamePanelEvent) -> Unit) {
+    val colors = LocalNxColors.current
+    if (cheats.isEmpty()) {
+        Box(Modifier.fillMaxSize().padding(start = GP_GUTTER, end = GP_GUTTER, bottom = bottom), contentAlignment = Alignment.Center) {
+            Text(empty, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = GP_SMALL_SIZE, textAlign = TextAlign.Center)
+        }
+        return
+    }
+    // Item indices are the focus indices and the cheats' own (no header item).
+    val state = rememberFocusedListState(focused, margin = 1)   // fades as the Achievements tab's
+    LazyColumn(
+        Modifier.fillMaxSize().nxScrollFade(state, height = 56.dp, strong = true), state = state,
+        contentPadding = PaddingValues(start = GP_LIST_GUTTER, end = GP_LIST_GUTTER, top = 6.dp, bottom = bottom),
+    ) {
+        itemsIndexed(cheats) { i, c ->
+            val flip = { GamePanelModel.cheatEvent(i, cheats)?.let(onEvent); Unit }
+            val selected = focused == i
+            PanelListRow(selected, Modifier.clickable(onClick = flip)) {
+                Column(Modifier.weight(1f)) {
+                    RowText(c.name, selected)
+                    // The file it came from, when several were merged (two can name a cheat alike).
+                    if (c.source.isNotEmpty()) Text(
+                        c.source, color = if (selected) colors.onAccentMuted else colors.hint, fontFamily = LocalNxFont.current, fontSize = GP_SMALL_SIZE,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                NxSwitch(c.on, onClick = flip, lit = selected)
+            }
+        }
+    }
+}
+
+/**
  * As the Players page: "Player N" with its pad; a tap steps it to the next of Empty and every connected pad
  * ([GamePanelModel.nextPlayer]): Empty benches the pad that was there, a benched pad chosen plays again.
  */
 @Composable
 private fun PlayersTab(players: List<PlayerSlotRow>, pads: List<PlayerPadRow>, focused: Int?, bottom: Dp, onEvent: (GamePanelEvent) -> Unit) {
     // Item indices are the focus indices: the slots (no header item).
+    val state = rememberFocusedListState(focused, margin = 1)   // fades as the Achievements tab's
     LazyColumn(
-        Modifier.fillMaxSize(), state = rememberFocusedListState(focused),
+        Modifier.fillMaxSize().nxScrollFade(state, height = 56.dp, strong = true), state = state,
         contentPadding = PaddingValues(start = GP_LIST_GUTTER, end = GP_LIST_GUTTER, top = 6.dp, bottom = bottom),
     ) {
         itemsIndexed(players) { i, s ->
@@ -258,23 +300,30 @@ private fun PlayersTab(players: List<PlayerSlotRow>, pads: List<PlayerPadRow>, f
 
 /**
  * A list's state that follows the controller's [focused] item (its LazyColumn index): the least scroll that shows it
- * whole, or a jump to it when it is off screen.
+ * whole, or a jump to it when it is off screen. [margin]: items kept in view past it on both sides (clamped to the
+ * list), so it never rests under a scroll fade while more is that way: the item below first, else the one above.
  */
 @Composable
-internal fun rememberFocusedListState(focused: Int?): LazyListState {
+internal fun rememberFocusedListState(focused: Int?, margin: Int = 0): LazyListState {
     val state = rememberLazyListState()
     LaunchedEffect(focused) {
         val i = focused ?: return@LaunchedEffect
         // Not laid out yet (the tab's first frame): wait for it, so the focus is measured against real rows.
         if (state.layoutInfo.visibleItemsInfo.isEmpty()) withFrameNanos { }
         val info = state.layoutInfo
-        val item = info.visibleItemsInfo.firstOrNull { it.index == i }
         val top = info.viewportStartOffset + info.beforeContentPadding
         val bottom = info.viewportEndOffset - info.afterContentPadding
+        val below = minOf(info.totalItemsCount - 1, i + margin)
+        val above = maxOf(0, i - margin)
+        val last = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+        val b = info.visibleItemsInfo.firstOrNull { it.index == below }
+        val a = info.visibleItemsInfo.firstOrNull { it.index == above }
         when {
-            item == null -> state.animateScrollToItem(i)
-            item.offset < top -> state.animateScrollBy((item.offset - top).toFloat())
-            item.offset + item.size > bottom -> state.animateScrollBy((item.offset + item.size - bottom).toFloat())
+            // Past the bottom: the item below lands on the last line.
+            b == null && below > last -> state.animateScrollToItem(below, -(bottom - top - (info.visibleItemsInfo.lastOrNull()?.size ?: 0)))
+            b != null && b.offset + b.size > bottom -> state.animateScrollBy((b.offset + b.size - bottom).toFloat())
+            a == null -> state.animateScrollToItem(above)
+            a.offset < top -> state.animateScrollBy((a.offset - top).toFloat())
         }
     }
     return state

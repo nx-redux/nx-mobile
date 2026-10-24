@@ -57,6 +57,8 @@ import com.nxredux.mobile.ui.nx.NxBackdrop
 import com.nxredux.mobile.ui.nx.NxBackdropStack
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxRow
+import com.nxredux.mobile.ui.nx.NX_HINT_BAR_ROW_HEIGHT
+import com.nxredux.mobile.ui.nx.NxHintsBand
 import com.nxredux.mobile.ui.nx.NxScreenScaffold
 import com.nxredux.mobile.ui.nx.NxTileGrid
 import com.nxredux.mobile.ui.nx.PrefetchPads
@@ -91,7 +93,8 @@ fun MainMenuScreen(
     raSignedIn: Boolean = false,          // Home: false drops achievement data from Continue and the pinned games
     controllerArt: Boolean = false,       // a List or Carousel Consoles tab: Layouts → Consoles background is Controller
     tabFocus: Boolean = false,            // the tab row has the d-pad: its tab word is lit, the whole content below dims
-    bandShade: Boolean = true,            // List: the info band's shade ([mainMenuListBand]: none on Consoles)
+    bandShade: Boolean = true,            // List: the info band's shade ([mainMenuListBand]: none on Consoles, Collections and Tools)
+    bandInfo: Boolean = true,             // List: the band shows the row's info ([mainMenuListBand]: none on Consoles, Collections and Tools)
     canSearch: Boolean = false,           // the library has games: START Search in the hints
     onTabMenu: (() -> Unit)? = null,      // a long press on the tab row or the single-tab title: the hidden-tab menu
     tabMenu: Boolean = false,             // a hidden tab can be opened from MENU: every row's hints offer Options, every Home row takes a long press
@@ -242,6 +245,9 @@ fun MainMenuScreen(
                     // composition: the row snaps instead of sliding. Vertical: the same items stood on end ([NxBackdropStack]).
                     MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
                         val tiles = remember(rows, controllerArt) { gridTiles(rows, controllerArt) }   // the controllers by Layouts → Consoles background
+                        // Centred on the screen, whatever shows: half a shown tab row up, half a shown hint bar down (a
+                        // hidden title's room is in the box already, [titleRoom]).
+                        val shift = mainMenuCarouselShift(chrome.tabRow, barShown = !chrome.emptyBarRoom && !chrome.noBar)
                         slot(keepBarRoom = false) { m ->
                             if (orientation == MenuOrientation.VERTICAL) NxBackdropStack(
                                 null, tiles, selection, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
@@ -249,6 +255,7 @@ fun MainMenuScreen(
                             ) else NxBackdrop(
                                 null, tiles, selection, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                                 captionTitle = NoCaptionTitle, captionInfo = NoCaptionInfo, modifier = m, layoutKey = layoutKey, titleRoom = titleRoom,
+                                centreShift = shift,
                             )
                         }
                     }
@@ -260,7 +267,7 @@ fun MainMenuScreen(
                             Modifier.weight(1f).zIndex(-1f), hideHints = chrome.emptyBarRoom, layoutKey = layoutKey, leaving = minimalOpening != null, onSwipeSelect = onSwipeSelect,
                         )
                     }
-                    // List: the info band on the hint bar, holding the scroll arrows.
+                    // List: the info band on the hint bar; the rows fade where more scrolls in.
                     MenuStyle.LIST -> {
                         val listRows = remember(rows, shared) {
                             rows.map { r ->
@@ -280,8 +287,11 @@ fun MainMenuScreen(
                         val portrait = LocalPortrait.current
                         val gutter = if (portrait) 16.dp else 24.dp
                         // Hints hidden: no shade where the bar was (the tabs' page has none), the info stays on the band.
-                        // [bandShade] false (Consoles) drops the band's own fill too; the arrows stay put.
-                        GameInfoPlacement(info, Modifier.weight(1f), textStart = gutter, ground = if (!chrome.emptyBarRoom) BandGround.BAR else BandGround.NONE, shade = bandShade) { scaffoldModifier, band ->
+                        // No info to show (Consoles): no band, and with hints hidden no bar room either; the rows fill the
+                        // page between set gaps ([mainMenuListEdges]) and fade where more scrolls in.
+                        val bandless = !bandInfo
+                        GameInfoPlacement(info, Modifier.weight(1f), textStart = gutter, ground = if (!chrome.emptyBarRoom) BandGround.BAR else BandGround.NONE, shade = bandShade) { scaffoldModifier, infoBand ->
+                            val band = if (bandless) NxHintsBand(reserve = 0.dp, overlap = 0.dp) {} else infoBand
                             // Its rows level with Recent and Search (tab row hidden) stop short of them.
                             CompositionLocalProvider(LocalNxListTopCut provides topCut.takeIf { topIcons.isNotEmpty() }) { NxScreenScaffold(
                                 rows = listRows,
@@ -293,7 +303,9 @@ fun MainMenuScreen(
                                 // The tab row shown: the first pill sits as far under the selected tab's underline as the
                                 // last pill sits over the band's arrows, in place of listTopGap ([mainMenuListTopEdge]).
                                 listTopEdge = mainMenuListTopEdge(chrome.tabRow),
-                                bodyAlpha = bodyAlpha, hideHints = chrome.emptyBarRoom,
+                                bodyAlpha = bodyAlpha, hideHints = chrome.emptyBarRoom, keepBarRoom = !bandless,
+                                scrollFade = true,   // the rows fade where more scrolls in, no arrows on the band
+                                rowEdges = if (bandless) mainMenuListEdges(chrome.tabRow, barShown = !chrome.emptyBarRoom && !chrome.noBar) else null,
                             ) }
                         }
                     }
@@ -315,6 +327,19 @@ fun MainMenuScreen(
         if (style == MenuStyle.MINIMAL && minimalOpening?.band == true) MinimalOpenOverlay(minimalSelected, screenBox[0])
     }
 }
+
+/**
+ * A bandless main menu List's gaps above its first row and below its last, in rows: a quarter under the tab row, half
+ * with none; a quarter over a shown hint bar, else what's left of the row the top took (the bottom fade's room).
+ */
+internal fun mainMenuListEdges(tabRow: Boolean, barShown: Boolean): Pair<Float, Float> {
+    val top = if (tabRow) 0.25f else 0.5f
+    return top to if (barShown) 0.25f else 1f - top
+}
+
+/** How far a main menu Carousel's row moves down so it centres on the screen: half a hint bar, less half a tab row. */
+internal fun mainMenuCarouselShift(tabRow: Boolean, barShown: Boolean): Dp =
+    ((if (barShown) NX_HINT_BAR_ROW_HEIGHT else 0.dp) - (if (tabRow) MENU_TAB_ROW_HEIGHT else 0.dp)) / 2
 
 /** The main menu's rows have no caption block (a console's or collection's count is drawn by the row itself). */
 private val NoCaptionTitle: () -> String? = { null }
@@ -389,14 +414,16 @@ internal fun mainMenuContentAlpha(tabFocus: Boolean): Float = if (tabFocus) TAB_
 
 /**
  * How the main menu's List band dresses a tab's selected row. [shade]: the band's fade (and, hints hidden,
- * its solid fill) under the arrows; [info]: the row's info text ("N games"). Consoles has neither, its band the arrows
- * alone on the page; every other tab (Collections, Tools) keeps both. The band's geometry is the same either way.
+ * its solid fill); [info]: the row's info text ("N games"). Consoles, Collections and Tools have neither: no band, their
+ * rows fade to set gaps ([mainMenuListEdges]); Home (and a tab-less list) keeps both.
  */
 internal data class MainMenuListBand(val shade: Boolean, val info: Boolean)
 
-/** The List band for [category]'s tab ([MainMenuListBand]): bare on Consoles, shaded with its info elsewhere. */
-internal fun mainMenuListBand(category: MenuCategory?): MainMenuListBand =
-    if (category == MenuCategory.CONSOLES) MainMenuListBand(shade = false, info = false) else MainMenuListBand(shade = true, info = true)
+/** The List band for [category]'s tab ([MainMenuListBand]): none on Consoles, Collections and Tools, shaded with its info elsewhere. */
+internal fun mainMenuListBand(category: MenuCategory?): MainMenuListBand = when (category) {
+    MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS -> MainMenuListBand(shade = false, info = false)
+    MenuCategory.HOME, null -> MainMenuListBand(shade = true, info = true)
+}
 
 /** The content's alpha while the tab row has the d-pad. */
 internal const val TAB_FOCUS_CONTENT_ALPHA = 0.4f

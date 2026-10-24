@@ -6,6 +6,7 @@ import com.nxredux.mobile.library.path
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.HomeShelf
+import com.nxredux.mobile.ui.nx.homeShelfCap
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -43,7 +44,7 @@ class HomeShelvesTest {
         val lib = (1..200).map { g("G$it") }
         val one = names(homeShelves(lib, emptyMap(), emptySet(), emptySet(), now, 100), HomeShelf.NOT_STARTED)
         assertEquals(one, names(homeShelves(lib.reversed(), emptyMap(), emptySet(), emptySet(), now + 1000, 100), HomeShelf.NOT_STARTED))
-        assertEquals(3, one.size)
+        assertEquals(4, one.size)
         assertTrue(one != names(homeShelves(lib, emptyMap(), emptySet(), emptySet(), now, 101), HomeShelf.NOT_STARTED))
     }
     @Test fun pinnedAndContinueNeverOnAShelf() {
@@ -56,20 +57,29 @@ class HomeShelvesTest {
         val s = homeShelves(listOf(a), emptyMap(), emptySet(), emptySet(), now, 100)
         assertEquals(listOf(HomeShelf.NEW), s.map { it.first })
     }
-    // Every shelf holds at most 3, in every Home layout.
-    @Test fun atMostThreeAShelf() {
+    // The data picks at most 4 a shelf; each Home layout then shows what it fits (Grid [homeShelfCap], the others 3).
+    @Test fun atMostFourAShelf() {
         val lib = (1..10).map { g("N$it", now - it * day) }
-        assertEquals(3, names(homeShelves(lib, emptyMap(), emptySet(), emptySet(), now, 100), HomeShelf.NEW).size)
+        assertEquals(4, names(homeShelves(lib, emptyMap(), emptySet(), emptySet(), now, 100), HomeShelf.NEW).size)
         val old = (1..10).map { g("P$it") }
         val info = old.associate { it.game.path to played(now - 20 * day, 1_000) }
-        assertEquals(3, names(homeShelves(old, info, emptySet(), emptySet(), now, 100), HomeShelf.PICK_UP).size)
+        assertEquals(4, names(homeShelves(old, info, emptySet(), emptySet(), now, 100), HomeShelf.PICK_UP).size)
     }
-    // 10 new games never played: New takes 3, Not started 3 of the other 7.
-    @Test fun everyShelfHoldsThree() {
+    // 10 new games never played: New takes 4, Not started 4 of the 16 left.
+    @Test fun everyShelfHoldsFour() {
         val lib = (1..10).map { g("N$it", now - it * day) } + (1..10).map { g("U$it") }
         val s = homeShelves(lib, emptyMap(), emptySet(), emptySet(), now, 100)
-        assertEquals(3, names(s, HomeShelf.NEW).size); assertEquals(3, names(s, HomeShelf.NOT_STARTED).size)
-        assertEquals(3, homeShelfMax(HomeShelf.NOT_STARTED)); assertEquals(3, homeShelfMax(HomeShelf.NEW)); assertEquals(3, homeShelfMax(HomeShelf.PICK_UP))
+        assertEquals(4, names(s, HomeShelf.NEW).size); assertEquals(4, names(s, HomeShelf.NOT_STARTED).size)
+        assertEquals(4, homeShelfMax(HomeShelf.NOT_STARTED)); assertEquals(4, homeShelfMax(HomeShelf.NEW)); assertEquals(4, homeShelfMax(HomeShelf.PICK_UP))
+    }
+    // Grid Home's shelves: 4 in portrait (two rows of 2) and on a row of 4 or more (the large face), else 3 (a landscape
+    // row of 3). List, Minimal and Carousel show 3.
+    @Test fun gridShelfCapFollowsTheBoardsRow() {
+        assertEquals(4, homeShelfCap(portrait = true, perRow = 2))
+        assertEquals(3, homeShelfCap(portrait = false, perRow = 3))
+        assertEquals(3, homeShelfCap(portrait = false, perRow = 2))
+        assertEquals(4, homeShelfCap(portrait = false, perRow = 4))
+        assertEquals(3, HOME_SHELF_LIST_MAX)
     }
     @Test fun unassignedAndAndroidAreLeftOut() {
         val un = SystemFolder("Unassigned", "", null, emptyList(), null, null, "", true)

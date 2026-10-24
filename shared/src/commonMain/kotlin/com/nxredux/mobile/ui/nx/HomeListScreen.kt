@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
+import com.nxredux.mobile.ui.mainMenuListEdges
 import androidx.compose.foundation.gestures.detectTapGestures
 import kotlin.math.max
 import androidx.compose.runtime.setValue
@@ -54,9 +55,9 @@ private val NoInfo: () -> List<InfoLine> = { emptyList() }
  * Home in the List style (Layouts → Home layout: List), as the handheld's List Home: the stats strip ([HomeStripLines]
  * at the List gutter, while Home stats shows it, its text centred between the tab underline and the first row's pill,
  * [homeListStripInkTop]) over a main menu List of Home's [rows] ([homeListRows]). With the tab row hidden the strip
- * moves into a header in its place ([homeStatsHeader]). The band under the list holds the scroll arrows alone,
- * unshaded; the selected game's [info] shows only in the hint bar's row, with Button hints hidden or touch only
- * ([gameListInfoInBarRow]). App draws the selected game's picture behind ([com.nxredux.mobile.ui.menuBackground]). A
+ * moves into a header in its place ([homeStatsHeader]). The rows fade where more scrolls in and run down to the hint
+ * bar's row (no band under them); the selected game's [info] shows only in that row, with Button hints hidden or touch
+ * only ([gameListInfoInBarRow]). App draws the selected game's picture behind ([com.nxredux.mobile.ui.menuBackground]). A
  * fresh install's only row, Pick a game, is its card filling the body instead.
  * Navigation lives in AppState: this only draws [selection], and taps go to [onSelect] / [onOpen] as a main menu List's
  * do. A long press on any row calls [onLongPress], on the Pick a game card only when [tabMenu] (a hidden tab to offer
@@ -102,14 +103,18 @@ internal fun HomeListScreen(
                 return@Column
             }
             val listRows = remember(rows) { homeListRows(rows) }
-            // The band holds the arrows alone, never shaded. The selected game's info shows only in the bar's row, shaded
-            // under it (as a List game list's, [BandGround.SHADE_WITH_INFO]; Extra info off leaves it empty): with the
+            // No band: the rows fade where more scrolls in, down to the bar. The selected game's info shows only in the bar's row, shaded
+            // under it (as a List game list's, [BandGround.SHADE_WITH_INFO]): with the
             // hints hidden, or touch only, where the row is kept for it ([gameListInfoInBarRow]).
-            val inRow = gameListInfoInBarRow(chrome.emptyBarRoom, touchOnly())
+            // Extra info off leaves nothing for that row, so its room goes too.
+            val barHidden = gameListInfoInBarRow(chrome.emptyBarRoom, touchOnly())
+            val inRow = barHidden && chrome.extraInfo
             GameInfoPlacement(
                 if (inRow) info else NoInfo, Modifier.weight(1f), textStart = gutter,
                 ground = if (inRow) BandGround.SHADE_WITH_INFO else BandGround.BAR, shade = false,
-            ) { scaffoldModifier, band ->
+            ) { scaffoldModifier, infoBand ->
+                // The band's room goes to the rows; only its line in the bar's row ([NxHintsBand.barInfo]) stays.
+                val band = NxHintsBand(reserve = 0.dp, overlap = 0.dp, barInfo = infoBand.barInfo) {}
                 NxScreenScaffold(
                     rows = listRows,
                     selectedIndex = 0, selection = selection, showArt = false,   // App draws the game's picture behind; the rows read the selection
@@ -124,7 +129,10 @@ internal fun HomeListScreen(
                         else if (header != null) 0.dp
                         else mainMenuListTopEdge(chrome.tabRow),
                     listTopGap = if (portrait) 10.dp else 12.dp,
-                    bodyAlpha = bodyAlpha, hideHints = inRow, hintShade = inRow,
+                    bodyAlpha = bodyAlpha, hideHints = barHidden, hintShade = inRow, keepBarRoom = inRow || !barHidden,
+                    // The main menu Lists' row height and bottom gap (their edges here; the info row counts as a bar), so
+                    // Home's text and its gap over the bottom match theirs.
+                    scrollFade = true, rowsLike = mainMenuListEdges(chrome.tabRow, barShown = !barHidden || inRow),
                     onFirstPill = if (pageStrip != null) { y -> firstPill = y } else null,
                 )
             }

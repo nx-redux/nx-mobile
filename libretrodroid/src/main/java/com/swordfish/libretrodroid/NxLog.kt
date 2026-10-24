@@ -3,7 +3,7 @@ package com.swordfish.libretrodroid
 import android.util.Log
 
 /**
- * The app's and the runner's logger, gated by Settings → Developer → Debug log. Off (the default) skips verbose,
+ * The app's and the runner's logger, gated by Settings → System → Debug log. Off (the default) skips verbose,
  * debug, info and warning lines; errors always print. Setting [enabled] also sets the native flag, so the
  * runner's LOGx macros and the cores' log callback follow it in the same process.
  */

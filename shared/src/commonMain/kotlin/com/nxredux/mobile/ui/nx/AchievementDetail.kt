@@ -76,7 +76,9 @@ fun AchievementDetail(a: RaAchievement, badgePath: String?, muted: Boolean, modi
             a.type?.let { DetailLine("[${it.label}]", colors.hint, body, align = align) }
             if (muted) DetailLine("Muted", colors.hint, body, align = align)
         }
-        Box(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = padV), contentAlignment = Alignment.Center) {
+        val scroll = rememberScrollState()
+        // A long description fades where more scrolls in (the lists' cue).
+        Box(Modifier.fillMaxWidth().nxScrollFade(scroll, height = 56.dp, strong = true).verticalScroll(scroll).padding(horizontal = 28.dp, vertical = padV), contentAlignment = Alignment.Center) {
             Layout(
                 content = {
                     NxBadge(badgePath, AchievementBadgeMax, corner = 12.dp)

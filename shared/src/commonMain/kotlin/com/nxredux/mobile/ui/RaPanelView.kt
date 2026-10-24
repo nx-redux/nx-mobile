@@ -1,5 +1,9 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.nxModalButton
+import com.nxredux.mobile.ui.nx.nxModalSmall
+import com.nxredux.mobile.ui.nx.nxScrollFade
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -106,7 +110,7 @@ private fun ColumnScope.RaPanelBody(p: RaPanel, onRow: (Int) -> Unit, onButton: 
             append(p.title)
             p.progress?.let { withStyle(SpanStyle(color = colors.hint)) { append("\u00A0(" + it.replace(' ', '\u00A0') + ")") } }   // unbroken, kept with the last word
         }
-        Text(heading, Modifier.weight(1f), color = colors.listText, fontFamily = font, fontSize = NxTextSizes.modalButton * scale, fontWeight = FontWeight.SemiBold)
+        Text(heading, Modifier.weight(1f), color = colors.listText, fontFamily = font, fontSize = nxModalButton(), fontWeight = FontWeight.SemiBold)
     }
     Spacer(Modifier.height(4.dp))
     // The same room under the list as above the header.
@@ -133,7 +137,12 @@ private fun ColumnScope.RaPanelBody(p: RaPanel, onRow: (Int) -> Unit, onButton: 
                         val rows = remember(c.achievements, c.badges) {
                             c.achievements.map { r -> raAchievementRow(r, c.badges) }
                         }
-                        NxRichList(rows, p.row, onSelect = onRow, onOpen = onRow, modifier = Modifier.fillMaxSize().padding(start = 8.dp), labelSize = label)
+                        // The rows fade where more scrolls in (the lists' cue), the selection a row clear of the fades.
+                        val listState = rememberLazyListState()
+                        NxRichList(
+                            rows, p.row, onSelect = onRow, onOpen = onRow, listState = listState, labelSize = label, edgeMargin = 1,
+                            modifier = Modifier.fillMaxSize().nxScrollFade(listState, height = 56.dp, strong = true).padding(start = 8.dp),
+                        )
                     }
                 }
             }
@@ -146,11 +155,11 @@ private fun PanelMessage(text: String, action: String? = null, onAction: () -> U
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
     Column(Modifier.padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text, color = colors.hint, fontFamily = font, fontSize = NxTextSizes.modalSmall * nxTextScale(), textAlign = TextAlign.Center)
+        Text(text, color = colors.hint, fontFamily = font, fontSize = nxModalSmall(), textAlign = TextAlign.Center)
         if (action != null) {
             Spacer(Modifier.height(14.dp))
             Text(
-                action, color = colors.onAccent, fontFamily = font, fontSize = NxTextSizes.modalSmall * nxTextScale(), fontWeight = FontWeight.SemiBold,
+                action, color = colors.onAccent, fontFamily = font, fontSize = nxModalSmall(), fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.background(colors.accent, RoundedCornerShape(50)).pointerInput(Unit) { detectTapGestures { onAction() } }
                     .padding(horizontal = 16.dp, vertical = 7.dp),
             )
