@@ -676,10 +676,10 @@ internal fun verticalAlignmentLabel(a: VerticalListAlignment): String = when (a)
 
 /** [enabled] false: dimmed and A does nothing (a default emulator of a one-tag console). [category]: a MENU_STYLE row's tab. */
 /**
- * A touch value dropdown ([AppState.chooser]): a value row's [title], every value's [labels], the [selected] one.
- * [popup]: a Settings touch row's picker (the in-game menu's look), its d-pad cursor [selected] and the value set [current].
+ * A touch value row's picker ([AppState.chooser], the in-game menu's look): the row's [title], every value's [labels],
+ * the d-pad cursor [selected] and the value set [current] (-1: none).
  */
-data class ValueChooser(val title: String, val labels: List<String>, val selected: Int, val current: Int = -1, val popup: Boolean = false)
+data class ValueChooser(val title: String, val labels: List<String>, val selected: Int, val current: Int = -1)
 
 /** Use as home screen's values: it is not a [SettingValue] (Android answers it). */
 private val ON_OFF = listOf("Off", "On")
@@ -3428,9 +3428,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** Tools -> Settings: the section menu, on the section last opened. */
     private val _chooser = MutableStateFlow<ValueChooser?>(null)
     /**
-     * Touch only, a value row of three or more values opens this as a dropdown at the row's value instead of stepping
-     * ([com.nxredux.mobile.ui.nx.NxValueDropdown]): every value, the current one highlighted; a pick applies it
-     * ([chooseValue]), B or a tap outside closes it ([closeChooser]).
+     * A value row's picker ([com.nxredux.mobile.ui.nx.NxSettingPicker]): every value, the current one marked; a pick
+     * applies it ([chooseValue]), B or a tap outside closes it ([closeChooser]).
      */
     val chooser: StateFlow<ValueChooser?> = _chooser.asStateFlow()
     private var chooserApply: ((Int) -> Unit)? = null
@@ -3454,9 +3453,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
     }
 
-    /** A value row's picker ([ValueChooser.popup]) titled [title]: [labels], [current] under the cursor (-1: none); [apply] takes a pick. */
+    /** A value row's picker ([ValueChooser]) titled [title]: [labels], [current] under the cursor (-1: none); [apply] takes a pick. */
     private fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit) {
-        _chooser.value = ValueChooser(title, labels, current.coerceAtLeast(0), current = current, popup = true)
+        _chooser.value = ValueChooser(title, labels, current.coerceAtLeast(0), current = current)
         chooserApply = apply
     }
 
@@ -3519,12 +3518,12 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     /**
-     * The selected Emulator Settings value row's picker ([ValueChooser.popup]); a pick writes it
+     * The selected Emulator Settings value row's picker ([ValueChooser]); a pick writes it
      * ([EmulatorSettingsController.choose]). False when it has none. A current value not among the choices marks none.
      */
     private fun openEmulatorPicker(s: Screen.EmulatorOptions): Boolean {
         val (title, labels, current) = emulatorSettings.choices(s)?.takeIf { it.second.size >= 2 } ?: return false
-        _chooser.value = ValueChooser(title, labels, current.coerceAtLeast(0), current = current, popup = true)
+        _chooser.value = ValueChooser(title, labels, current.coerceAtLeast(0), current = current)
         chooserApply = { emulatorSettings.choose(it) }
         return true
     }
@@ -3542,13 +3541,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
     }
 
-    /** Settings row [row]'s picker ([ValueChooser.popup]): every value, the current one under the cursor; a pick sets it ([chooseSetting]). */
+    /** Settings row [row]'s picker ([ValueChooser]): every value, the current one under the cursor; a pick sets it ([chooseSetting]). */
     fun openSettingPicker(row: Int) {
         val s = _screen.value as? Screen.Settings ?: return
         if (s.rows.getOrNull(row)?.enabled != true) return
         val c = s.choices.getOrNull(row)?.takeIf { it.labels.size >= 2 } ?: return
         select(row)
-        _chooser.value = ValueChooser(s.rows[row].label, c.labels, c.index.coerceAtLeast(0), current = c.index, popup = true)
+        _chooser.value = ValueChooser(s.rows[row].label, c.labels, c.index.coerceAtLeast(0), current = c.index)
         val label = s.rows[row].label
         // By its label: a refresh while the picker is open can move the rows (a dependent row shown or hidden).
         chooserApply = { i ->

@@ -7151,7 +7151,7 @@ class AppStateTest {
         // A on a picker row opens its picker; a pick sets it.
         state.openSelected()
         val picker = assertNotNull(state.chooser.value)
-        assertEquals(listOf("Off", "1 s", "2 s", "3 s", "4 s", "5 s"), picker.labels); assertTrue(picker.popup); assertEquals(0, picker.current)
+        assertEquals(listOf("Off", "1 s", "2 s", "3 s", "4 s", "5 s"), picker.labels); assertEquals(0, picker.current)
         state.chooseValue(5)
         assertEquals(5, state.settings.raProgressSeconds); assertEquals("5 s", state.raSettings().rows[8].secondary)
         // A touch on a switch sets it, selecting its row.
@@ -10328,7 +10328,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.APPEARANCE)
         val accent = settings.accent
         state.select(1); state.openSelected()                              // Accent, many values
-        assertEquals(true, state.chooser.value?.popup); assertEquals(accent, settings.accent)   // a controller's A opens the picker too
+        assertNotNull(state.chooser.value); assertEquals(accent, settings.accent)   // a controller's A opens the picker too
     }
 
     @Test fun touch_the_default_emulator_and_the_layouts_open_choosers() = runTest {
@@ -10421,7 +10421,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.APPEARANCE)
         state.settingEvent(NxSettingEvent.OpenPicker(1))                          // Accent
         val picker = state.chooser.value ?: error("no picker")
-        assertTrue(picker.popup); assertEquals("Accent", picker.title); assertEquals(0, picker.current); assertEquals(0, picker.selected)
+        assertEquals("Accent", picker.title); assertEquals(0, picker.current); assertEquals(0, picker.selected)
         state.onButton(NxButton.UP)                                               // wraps to the last
         assertEquals(AccentPreset.entries.lastIndex, state.chooser.value!!.selected)
         state.chooseValue(4)
