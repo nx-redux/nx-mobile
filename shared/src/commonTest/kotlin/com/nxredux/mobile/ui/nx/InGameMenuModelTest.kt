@@ -2188,6 +2188,15 @@ class InGameMenuModelTest {
         assertEquals("None (default)", m.row("Toggle FF").valueLabel)
     }
 
+    @Test fun startRefusedWithMenuToo() {
+        val m = shortcuts()
+        m.selectRow("Toggle FF"); m.press(NxButton.A)
+        assertNull(m.captureKey(KeyCodes.BUTTON_MODE, down = true))
+        assertNull(m.captureKey(KeyCodes.BUTTON_START, down = true))
+        assertEquals(ShortcutOverrides.NONE, m.shortcutOverrides)
+        assertTrue("SELECT and START stay the game's" in m.state.page.footer)
+    }
+
     @Test fun blockedRowUnavailable() {
         val m = shortcuts(base = ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to r2), emptyMap()), tag = "NDS")
         val row = m.row("Toggle FF")

@@ -129,7 +129,7 @@ object Shortcuts {
         val blocked = LinkedHashMap<ShortcutAction, ClaimedInput>()
         for (a in ShortcutAction.entries) {
             val b = merged[a] ?: continue
-            if (!allowed(a)) continue
+            if (!allowed(a) || b.keyCode in ShortcutBinding.GAME_KEYS) continue
             val hit = claimed.firstOrNull { it.binding == b }
             if (hit != null) blocked[a] = hit else bindings[a] = b
         }

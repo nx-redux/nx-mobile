@@ -25,9 +25,21 @@ class ShortcutsTest {
     // being one ("109+96") reads as absent, so the action inherits.
     @Test fun decodeOnlyTakesMenuAsModifier() {
         assertNull(ShortcutBinding.decode("109+96"))
+        // SELECT and START are never a shortcut's key: a stored one reads as absent.
+        assertNull(ShortcutBinding.decode("110+108"))
+        assertNull(ShortcutBinding.decode("110+109"))
+        assertNull(ShortcutBinding.decode("108"))
+        assertNull(ShortcutBinding.decode("109"))
         assertEquals(ShortcutBinding(KeyCodes.BUTTON_MODE, 96), ShortcutBinding.decode("110+96"))
         assertNull(ShortcutBinding.decode("103+96"))
         assertNull(ShortcutBinding.decode("0+96"))
+    }
+
+    @Test fun aSelectOrStartBindingNeverTakesEffect() {
+        val start = ShortcutBinding(null, KeyCodes.BUTTON_START)
+        val menuSelect = ShortcutBinding(KeyCodes.BUTTON_MODE, KeyCodes.BUTTON_SELECT)
+        val e = eff(ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to start, ShortcutAction.RESET to menuSelect), emptyMap()))
+        assertTrue(e.bindings.isEmpty())
     }
 
     @Test fun overrideInherits() {

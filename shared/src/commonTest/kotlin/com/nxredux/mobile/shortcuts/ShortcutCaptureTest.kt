@@ -29,14 +29,13 @@ class ShortcutCaptureTest {
         assertEquals(CaptureResult.Bound(ShortcutBinding(menu, r1)), c.onKey(r1, true))
     }
 
-    // SELECT is no modifier: pressed, it is that key alone, which the SELECT+START menu chord keeps (bound alone it would
-    // never reach the chord); START alone likewise.
+    // SELECT and START stay the game's (pause, the SELECT+START menu chord): never a shortcut's key, alone or with MENU.
     @Test fun selectOrStartAloneIsRefused() {
         val c = started()
-        assertEquals(CaptureResult.Refused(ShortcutBinding(null, select), "SELECT+START opens the menu"), c.onKey(select, true))
+        assertEquals(CaptureResult.Refused(ShortcutBinding(null, select), "SELECT and START stay the game's"), c.onKey(select, true))
         assertFalse(c.active)
         assertEquals(
-            CaptureResult.Refused(ShortcutBinding(null, KeyCodes.BUTTON_START), "SELECT+START opens the menu"),
+            CaptureResult.Refused(ShortcutBinding(null, KeyCodes.BUTTON_START), "SELECT and START stay the game's"),
             started().onKey(KeyCodes.BUTTON_START, true),
         )
     }
@@ -49,11 +48,16 @@ class ShortcutCaptureTest {
         assertEquals(CaptureResult.Bound(ShortcutBinding(null, r1)), c.onKey(r1, true))   // released: the next key is single
     }
 
-    // L23: MENU+SELECT is the handheld's reserved pair.
-    @Test fun menuSelectIsRefused() {
+    @Test fun menuSelectOrMenuStartIsRefused() {
         val c = started()
         c.onKey(menu, true)
-        assertEquals(CaptureResult.Refused(ShortcutBinding(menu, select), "MENU+SELECT is reserved"), c.onKey(select, true))
+        assertEquals(CaptureResult.Refused(ShortcutBinding(menu, select), "SELECT and START stay the game's"), c.onKey(select, true))
+        val d = started()
+        d.onKey(menu, true)
+        assertEquals(
+            CaptureResult.Refused(ShortcutBinding(menu, KeyCodes.BUTTON_START), "SELECT and START stay the game's"),
+            d.onKey(KeyCodes.BUTTON_START, true),
+        )
     }
 
     @Test fun bAndBackCancel() {

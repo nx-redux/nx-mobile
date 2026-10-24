@@ -203,8 +203,8 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.SHORTCUT_BIND -> SettingText(
         row.note.orEmpty(),
         "Press A, then the button to use. For a combo, hold MENU and press another button. B cancels, X sets it back " +
-            "to None. A button another action had moves to this one. MENU alone and SELECT+START open the menu, so " +
-            "MENU, SELECT and START can't be bound alone.",
+            "to None. A button another action had moves to this one. MENU alone and SELECT+START open the menu, and " +
+            "SELECT and START stay the game's, so MENU alone, SELECT and START can't be bound.",
     )
     SettingsKind.SHORTCUT_TOUCH -> quiet(
         "What this on-screen touch button does; None hides it",

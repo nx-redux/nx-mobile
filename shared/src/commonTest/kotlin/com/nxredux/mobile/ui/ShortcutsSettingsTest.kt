@@ -169,14 +169,19 @@ class ShortcutsSettingsTest {
         assertFalse(s.captureKey(KeyCodes.BUTTON_MODE, true))   // released: the next MENU is the menu's again
     }
 
-    @Test fun selectStartRefused() = runTest {
+    @Test fun selectAndStartRefused() = runTest {
         val s = state()
         s.openShortcuts()
         s.bind(ShortcutAction.TOGGLE_FF)
-        s.captureKey(KeyCodes.BUTTON_SELECT, true); s.captureKey(KeyCodes.BUTTON_START, true)
+        s.captureKey(KeyCodes.BUTTON_SELECT, true)
         assertNull(s.capturingShortcut.value)
         assertEquals("None", s.row("Toggle FF").secondary)
-        assertEquals("SELECT+START opens the menu", s.notice.value)
+        assertEquals("SELECT and START stay the game's", s.notice.value)
+        s.captureKey(KeyCodes.BUTTON_SELECT, false)
+        s.bind(ShortcutAction.TOGGLE_FF)
+        s.captureKey(KeyCodes.BUTTON_MODE, true); s.captureKey(KeyCodes.BUTTON_START, true)
+        assertEquals("None", s.row("Toggle FF").secondary)
+        assertEquals("SELECT and START stay the game's", s.notice.value)
     }
 
     @Test fun duplicateMoves() = runTest {

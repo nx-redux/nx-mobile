@@ -17,14 +17,12 @@ object ConsoleHotkeys {
     private fun chord(code: Int, note: String) = ClaimedInput(ShortcutBinding(KeyCodes.BUTTON_SELECT, code), note)
 
     /**
-     * Every console: MENU alone opens the in-game menu, SELECT + START is its chord. SELECT or START bound alone would
-     * be swallowed before the chord sees it (START first, then SELECT, too), so both stay the console's.
+     * Every console: MENU alone opens the in-game menu, SELECT + START is its chord. SELECT and START themselves are never
+     * bindable at all ([ShortcutBinding.GAME_KEYS]).
      */
     val always: List<ClaimedInput> = listOf(
         single(KeyCodes.BUTTON_MODE, "MENU opens the menu"),
         chord(KeyCodes.BUTTON_START, "SELECT+START opens the menu"),
-        single(KeyCodes.BUTTON_SELECT, "SELECT+START opens the menu"),
-        single(KeyCodes.BUTTON_START, "SELECT+START opens the menu"),
     )
 
     private val nds = listOf(
