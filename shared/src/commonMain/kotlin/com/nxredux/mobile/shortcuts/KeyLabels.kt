@@ -1,6 +1,6 @@
 package com.nxredux.mobile.shortcuts
 
-/** Button names for a binding: `MENU+R1`, `SELECT+X`, `Button 1`, `Key 312` for a code nothing names. */
+/** Button names for a binding: `MENU+R1`, `SELECT+R1` (a built-in chord), `Button 1`, `Key 312` for a code nothing names. */
 object KeyLabels {
     fun label(b: ShortcutBinding): String {
         val key = name(b.keyCode)

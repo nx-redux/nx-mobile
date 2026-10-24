@@ -264,10 +264,11 @@ class ShortcutsSettingsTest {
     }
 
     @Test fun storedBindingsShow() = runTest {
-        val settings = Settings().apply { shortcuts = "hold_rewind=109+99;touch_1=reset" }
+        val settings = Settings().apply { shortcuts = "hold_rewind=110+99;toggle_ff=109+99;touch_1=reset" }
         val s = state(settings)
         s.openShortcuts()
-        assertEquals("SELECT+X", s.row("Hold Rewind").secondary)
+        assertEquals("MENU+X", s.row("Hold Rewind").secondary)
+        assertEquals("None", s.row("Toggle FF").secondary)   // a SELECT combo from before MENU became the only modifier
         assertEquals("Reset Game", s.row("Touch button 1").secondary)
     }
 
@@ -278,7 +279,7 @@ class ShortcutsSettingsTest {
         assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Bind"), Hint(NxButton.X, "Clear")), settingsHints(s.page().rows, i))
         s.bind(ShortcutAction.TOGGLE_FF)
         assertEquals(listOf(Hint(NxButton.B, "Cancel")), settingsHints(s.page().rows, i))
-        assertEquals("Hold MENU or SELECT for a combo", settingsInfo(s.row("Toggle FF")).line)
+        assertEquals("Hold MENU for a combo", settingsInfo(s.row("Toggle FF")).line)
     }
 
     // Touch only: A still starts a capture (a controller may be plugged in next), and the row says what it waits for.

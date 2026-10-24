@@ -21,9 +21,10 @@ class ShortcutsTest {
         assertNull(ShortcutBinding.decode("1+2+3"))
     }
 
-    // Only MENU and SELECT are modifiers: a stored "103+96" (R1 held + A) is garbage, not a combo nothing can press.
-    @Test fun decodeOnlyTakesMenuOrSelectAsModifier() {
-        assertEquals(ShortcutBinding(KeyCodes.BUTTON_SELECT, 96), ShortcutBinding.decode("109+96"))
+    // Only MENU is a modifier: a stored "103+96" (R1 held + A) is garbage, and a SELECT combo from before SELECT stopped
+    // being one ("109+96") reads as absent, so the action inherits.
+    @Test fun decodeOnlyTakesMenuAsModifier() {
+        assertNull(ShortcutBinding.decode("109+96"))
         assertEquals(ShortcutBinding(KeyCodes.BUTTON_MODE, 96), ShortcutBinding.decode("110+96"))
         assertNull(ShortcutBinding.decode("103+96"))
         assertNull(ShortcutBinding.decode("0+96"))

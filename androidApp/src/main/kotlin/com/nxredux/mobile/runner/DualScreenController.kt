@@ -340,7 +340,7 @@ internal class DualScreenController(
     /**
      * Which display is the picture screen for [display]: the game's window as landscape (it is locked so while dual)
      * against the display's real size as it is turned now, unless a bottom screen is chosen (the console's Bottom screen,
-     * else Settings → Emulators'). [geometry]: the view's game geometry (null before the view).
+     * else Settings → Second screen's). [geometry]: the view's game geometry (null before the view).
      */
     private fun pictureOnNow(display: Display, geometry: FloatArray?): PictureOn {
         val root = findViewById<View>(R.id.root)

@@ -22,7 +22,7 @@ enum class PictureOn { MAIN, SECOND }
 
 /**
  * Which display is the bottom (touch) screen: [AUTO] goes by shape ([DualScreen.pictureOn]); [MAIN] or [SECOND] is the
- * user's choice (Settings → Emulators → Bottom screen, or the console's override), the picture going on the other.
+ * user's choice (Settings → Second screen → Bottom screen, or the console's override), the picture going on the other.
  */
 enum class BottomScreen(
     /** As stored: the system setting's pref and the console override ([com.nxredux.mobile.options.BottomScreenOptions]). */

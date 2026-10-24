@@ -2014,7 +2014,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             "Which is the bottom screen?",
             listOf(
                 "Tap the button on the bottom screen. It becomes the touch screen, and games show their picture on the other.",
-                "Change it later in Settings → Emulation, or for one console in its settings.",
+                "Change it later in Settings → Second screen, or for one console in its settings.",
             ),
             listOf(NxRow("This is the bottom screen"), NxRow("Skip")),
         )
@@ -3914,7 +3914,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private fun shortcutRows(): List<SettingsRow> {
         val set = shortcutSet()
         val waiting = _capturingShortcut.value
-        val note = if (controllerConnected) "Hold MENU or SELECT for a combo" else "Connect a controller to bind"
+        val note = if (controllerConnected) "Hold MENU for a combo" else "Connect a controller to bind"
         return ShortcutAction.entries.map { a ->
             if (a == waiting) SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, SHORTCUT_PROMPT, note = note, shortcut = a)
             else SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, set.bindings[a]?.let(KeyLabels::label) ?: "None", shortcut = a)

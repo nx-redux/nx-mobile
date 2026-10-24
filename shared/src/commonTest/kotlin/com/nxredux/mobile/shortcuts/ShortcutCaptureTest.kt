@@ -23,13 +23,22 @@ class ShortcutCaptureTest {
         assertEquals(CaptureResult.Bound(ShortcutBinding(null, KeyCodes.BUTTON_1 + 2)), started().onKey(KeyCodes.BUTTON_1 + 2, true))
     }
 
-    @Test fun menuOrSelectHeldMakesACombo() {
+    @Test fun menuHeldMakesACombo() {
         val c = started()
         assertNull(c.onKey(menu, true))
         assertEquals(CaptureResult.Bound(ShortcutBinding(menu, r1)), c.onKey(r1, true))
-        val d = started()
-        assertNull(d.onKey(select, true))
-        assertEquals(CaptureResult.Bound(ShortcutBinding(select, KeyCodes.BUTTON_X)), d.onKey(KeyCodes.BUTTON_X, true))
+    }
+
+    // SELECT is no modifier: pressed, it is that key alone, which the SELECT+START menu chord keeps (bound alone it would
+    // never reach the chord); START alone likewise.
+    @Test fun selectOrStartAloneIsRefused() {
+        val c = started()
+        assertEquals(CaptureResult.Refused(ShortcutBinding(null, select), "SELECT+START opens the menu"), c.onKey(select, true))
+        assertFalse(c.active)
+        assertEquals(
+            CaptureResult.Refused(ShortcutBinding(null, KeyCodes.BUTTON_START), "SELECT+START opens the menu"),
+            started().onKey(KeyCodes.BUTTON_START, true),
+        )
     }
 
     // L23: MENU alone opens the in-game menu, so pressing and releasing it binds nothing and keeps waiting.
@@ -40,21 +49,11 @@ class ShortcutCaptureTest {
         assertEquals(CaptureResult.Bound(ShortcutBinding(null, r1)), c.onKey(r1, true))   // released: the next key is single
     }
 
-    @Test fun selectStartIsRefused() {
-        val c = started()
-        c.onKey(select, true)
-        assertEquals(CaptureResult.Refused(ShortcutBinding(select, KeyCodes.BUTTON_START), "SELECT+START opens the menu"), c.onKey(KeyCodes.BUTTON_START, true))
-        assertFalse(c.active)
-    }
-
-    // L23: MENU+SELECT is the handheld's reserved pair; either order is refused.
-    @Test fun bothModifiersAreRefused() {
+    // L23: MENU+SELECT is the handheld's reserved pair.
+    @Test fun menuSelectIsRefused() {
         val c = started()
         c.onKey(menu, true)
         assertEquals(CaptureResult.Refused(ShortcutBinding(menu, select), "MENU+SELECT is reserved"), c.onKey(select, true))
-        val d = started()
-        d.onKey(select, true)
-        assertEquals(CaptureResult.Refused(ShortcutBinding(select, menu), "MENU+SELECT is reserved"), d.onKey(menu, true))
     }
 
     @Test fun bAndBackCancel() {

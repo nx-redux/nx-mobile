@@ -1597,7 +1597,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         private const val NONE_LABEL = "None"
         private const val UNAVAILABLE = "Unavailable"
         /** The waiting bind row's line: B cancels (the hint says so). */
-        private const val CAPTURE_LINE = "Hold MENU or SELECT for a combo"
+        private const val CAPTURE_LINE = "Hold MENU for a combo"
         const val DISC_KEY = "nx:disc"
         const val DISC_LABEL = "Disc"
         const val DISC_INFO = "Left and right change the disc in the drive,\nas opening the lid and swapping it would."

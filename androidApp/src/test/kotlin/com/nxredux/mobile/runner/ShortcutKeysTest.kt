@@ -17,9 +17,12 @@ class ShortcutKeysTest {
     private val select = KeyCodes.BUTTON_SELECT
     private val menu = KeyCodes.BUTTON_MODE
 
+    private var clock = 0L
+
     private fun keys(vararg bound: Pair<ShortcutAction, ShortcutBinding>, tag: String = "GBA") = ShortcutKeys(
         Shortcuts.effective(ShortcutSet(bound.toMap(), emptyMap()), ShortcutOverrides.NONE, ConsoleHotkeys.claimed(tag), canRewind = true),
         ConsoleHotkeys.claimed(tag),
+        now = { clock },
     )
 
     @Test fun singleKeyFires() {
@@ -29,26 +32,35 @@ class ShortcutKeysTest {
     }
 
     @Test fun comboFires() {
-        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(select, r1))
-        assertEquals(KeyVerdict.Pass, k.onDown(109))
+        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(menu, r1))
+        assertEquals(KeyVerdict.Swallow, k.onDown(menu))
         assertEquals(KeyVerdict.Fire(ShortcutAction.TOGGLE_FF, true), k.onDown(103))
         // The modifier let go first: the trigger's release is still the shortcut's (L22), never the game's.
-        assertEquals(KeyVerdict.Pass, k.onUp(109))
+        assertEquals(KeyVerdict.Swallow, k.onUp(menu))
         assertEquals(KeyVerdict.Fire(ShortcutAction.TOGGLE_FF, false), k.onUp(103))
     }
 
     @Test fun comboKeyAlonePasses() {
-        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(select, r1))
+        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(menu, r1))
         assertEquals(KeyVerdict.Pass, k.onDown(r1))
         assertEquals(KeyVerdict.Pass, k.onUp(r1))
     }
 
     @Test fun comboWinsOverSingleOnTheSameKey() {
-        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(null, r1), ShortcutAction.RESET to ShortcutBinding(select, r1))
+        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(null, r1), ShortcutAction.RESET to ShortcutBinding(menu, r1))
         assertEquals(KeyVerdict.Fire(ShortcutAction.TOGGLE_FF, true), k.onDown(r1))
         assertEquals(KeyVerdict.Fire(ShortcutAction.TOGGLE_FF, false), k.onUp(r1))
-        k.onDown(select)
+        k.onDown(menu)
         assertEquals(KeyVerdict.Fire(ShortcutAction.RESET, true), k.onDown(r1))
+    }
+
+    // MENU is the only combo modifier: a SELECT combo (one built in code; a stored one decodes to nothing) never fires,
+    // SELECT and the key both reach the game.
+    @Test fun aSelectComboNeverFires() {
+        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(select, r1))
+        assertEquals(KeyVerdict.Pass, k.onDown(select))
+        assertEquals(KeyVerdict.Pass, k.onDown(r1))
+        assertEquals(KeyVerdict.Pass, k.onUp(r1))
     }
 
     @Test fun repeatOfAFiredKeyIsSwallowed() {
@@ -58,9 +70,9 @@ class ShortcutKeysTest {
     }
 
     @Test fun repeatOfAKeyHeldBeforeTheModifierStaysTheGames() {
-        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(select, r1))
+        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(menu, r1))
         assertEquals(KeyVerdict.Pass, k.onDown(r1))
-        k.onDown(select)
+        k.onDown(menu)
         assertEquals(KeyVerdict.Pass, k.onDown(r1, repeat = true))
     }
 
@@ -75,13 +87,24 @@ class ShortcutKeysTest {
 
     @Test fun menuTapOpensMenu() {
         val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(menu, r1))
+        clock = 1_000
         assertEquals(KeyVerdict.Swallow, k.onDown(menu))
         assertEquals(KeyVerdict.Swallow, k.onDown(menu, repeat = true))
+        clock = 1_399
         assertEquals(KeyVerdict.OpenMenu, k.onUp(menu))
     }
 
+    // A held MENU (no combo pressed) is not a tap: it opens nothing.
+    @Test fun aHeldMenuOpensNoMenu() {
+        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(menu, r1))
+        clock = 1_000
+        k.onDown(menu)
+        clock = 1_500
+        assertEquals(KeyVerdict.Swallow, k.onUp(menu))
+    }
+
     @Test fun noMenuComboKeepsMenu() {
-        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(select, r1))
+        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(null, r1))
         assertFalse(k.holdsMenu)
         assertEquals(KeyVerdict.Pass, k.onDown(menu))
     }
@@ -93,11 +116,11 @@ class ShortcutKeysTest {
     }
 
     @Test fun releaseAllForgetsHeldKeys() {
-        val k = keys(ShortcutAction.HOLD_FF to ShortcutBinding(select, r1), ShortcutAction.RESET to ShortcutBinding(menu, KeyCodes.BUTTON_A))
-        k.onDown(select); k.onDown(r1); k.onDown(menu)
+        val k = keys(ShortcutAction.HOLD_FF to ShortcutBinding(menu, r1))
+        k.onDown(menu); k.onDown(r1)
         k.releaseAll()   // the menu took the buttons: their releases go to it
         assertEquals(KeyVerdict.Pass, k.onUp(r1))
-        assertEquals(KeyVerdict.Pass, k.onDown(r1))   // SELECT no longer held
+        assertEquals(KeyVerdict.Pass, k.onDown(r1))   // MENU no longer held
         assertEquals(KeyVerdict.Swallow, k.onUp(menu))   // a MENU release with no press seen opens nothing
     }
 

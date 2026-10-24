@@ -319,7 +319,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         get() = menuOpenState.value
         set(value) { menuOpenState.value = value }
     /**
-     * Settings → Emulators → Pause when unfocused: another app took the top focus while this window stays visible (split
+     * Settings → System → Pause when unfocused: another app took the top focus while this window stays visible (split
      * screen, a freeform window, an app on another display), so the game holds, as under the menu, until it is back.
      */
     private var focusPaused = false
@@ -2728,7 +2728,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         shortcutOverrides = overrides
         val effective = Shortcuts.effective(shortcutBase, overrides, shortcutClaimed, canRewind)
         effectiveShortcuts = effective
-        shortcutKeys = ShortcutKeys(effective, shortcutClaimed)
+        shortcutKeys = ShortcutKeys(effective, shortcutClaimed, SystemClock::uptimeMillis)
         refreshTouchShortcuts()
     }
 

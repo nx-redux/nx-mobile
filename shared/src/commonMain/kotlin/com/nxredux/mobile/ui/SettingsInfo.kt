@@ -202,9 +202,9 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     // While it waits for a press, its line says how to bind (or that a controller is needed).
     SettingsKind.SHORTCUT_BIND -> SettingText(
         row.note.orEmpty(),
-        "Press A, then the button to use. For a combo, hold MENU or SELECT and press another button. B cancels, X sets " +
-            "it back to None. A button another action had moves to this one. MENU alone and SELECT+START open the menu, " +
-            "so they can't be bound.",
+        "Press A, then the button to use. For a combo, hold MENU and press another button. B cancels, X sets it back " +
+            "to None. A button another action had moves to this one. MENU alone and SELECT+START open the menu, so " +
+            "MENU, SELECT and START can't be bound alone.",
     )
     SettingsKind.SHORTCUT_TOUCH -> quiet(
         "What this on-screen touch button does; None hides it",

@@ -13,6 +13,8 @@ class ConsoleHotkeysTest {
         for (tag in listOf("GBA", "NDS", "3DS", "WII", "")) {
             val c = ConsoleHotkeys.claimed(tag).map { it.binding }
             assertTrue(single(KeyCodes.BUTTON_MODE) in c && chord(KeyCodes.BUTTON_START) in c, tag)
+            // Either half of the chord bound alone would take it from the chord.
+            assertTrue(single(KeyCodes.BUTTON_SELECT) in c && single(KeyCodes.BUTTON_START) in c, tag)
         }
         assertEquals(ConsoleHotkeys.always, ConsoleHotkeys.claimed("GBA"))
     }
