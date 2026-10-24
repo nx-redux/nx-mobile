@@ -461,13 +461,14 @@ azahar_NINJA = $(SDK)/cmake/3.30.3/bin/ninja
 azahar_PLATFORM = android-21
 azahar_FLAGS = -DENABLE_LIBRETRO=ON -DENABLE_VULKAN=ON -DENABLE_OPENGL=ON -DENABLE_TESTS=OFF -DANDROID_STL=c++_static
 
-# Dolphin (Wii, GameCube): libretro/dolphin at the 2026-10-11 head. CMake like azahar, needing >= 3.25 (3.30.3 below). The
+# Dolphin (Wii, GameCube): libretro/dolphin at the 2026-10-23 head (its d3ca3028 fixed a GPU-loop stop the CPU thread sent
+# before retro_run entered RunGpuLoop: lost, it hung retro_run with the CPU paused, a Wii game frozen ~10 s in). CMake like azahar, needing >= 3.25 (3.30.3 below). The
 # libretro target is Source/Core/DolphinLibretro's SHARED dolphin_libretro, suffix "_android.so", built in the build root.
 # Flags follow upstream's Android CI (.gitlab-ci.yml .core-defs: -DLIBRETRO=ON -DENABLE_LTO=ON, API 24). The core asks
 # GET_PREFERRED_HW_RENDER: the runner answers GLES3, or Vulkan when Console Settings → Graphics API picks it. 34 submodules, recursive (template default). Licences
 # are REUSE-style under LICENSES/. patches/dolphin.patch: SET_SYSTEM_AV_INFO on every refresh-rate change (the runner
 # paces by it; Dolphin's boot-time 119.88 Hz was never taken back), a Synchronize GPU Thread option (unsynced dual core
-# desynced NSMB Wii's FIFO), shared GL contexts through the runner's private call (nxsharedgl.h), and a failed load
+# desynced NSMB Wii's FIFO), shared GL contexts through the runner's private call (nxsharedgl.h; upstream's own EGL ones after it), and a failed load
 # when no hardware context was granted, sensors re-asked when a port's device is resent (live motion toggle), with the
 # IMU unbound on the stick-tilt path, a null-source guard in the emulated Wiimote's HID output (states restored with
 # more remotes linked than connected), raw-disc reader exports for RetroAchievements hashing (NxDisc.cpp;
@@ -477,7 +478,7 @@ azahar_FLAGS = -DENABLE_LIBRETRO=ON -DENABLE_VULKAN=ON -DENABLE_OPENGL=ON -DENAB
 # libiconv/libcharset (LGPL-2.1+) vendor no licence text; libusb's COPYING is the same FSF LGPL-2.1 text, from the pinned
 # checkout. KissFFT's BSD notice lives only in its source header, so notices/dolphin-kissfft.txt carries it.
 dolphin_REPO = https://github.com/libretro/dolphin
-dolphin_HASH = 7a2d51d5fa3f72e9b03fed30449ac45b6d6ac8e2
+dolphin_HASH = 3aac3f052f733f8df2f1616843a4d2e14002ed11
 dolphin_LICENSE = COPYING LICENSES/GPL-2.0-or-later.txt LICENSES/MIT.txt LICENSES/BSD-3-Clause.txt LICENSES/CC0-1.0.txt Data/Sys/GC/font-licenses.txt \
   Externals/FatFs/LICENSE.txt Externals/LZO/COPYING Externals/SFML/SFML/license.md Externals/bzip2/bzip2/LICENSE \
   Externals/cpp-optparse/cpp-optparse/LICENSE Externals/curl/curl/COPYING Externals/ed25519/license.txt \

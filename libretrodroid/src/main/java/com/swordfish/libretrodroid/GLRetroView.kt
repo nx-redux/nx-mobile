@@ -22,6 +22,7 @@ import android.content.Context
 import android.graphics.PointF
 import android.graphics.RectF
 import android.opengl.GLSurfaceView
+import android.os.SystemClock
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -202,6 +203,17 @@ class GLRetroView(
     // Mirrors the GLThread's lifetime: GLSurfaceView exits it on detach and recreates it on re-attach.
     @Volatile
     private var emulationThreadGone = false
+
+    // nx-mobile: uptimeMillis when the GL thread entered the running step, 0 outside one. A core hung inside its frame
+    // never leaves it (and keeps the core's lock): see [stepStalledMillis].
+    @Volatile
+    private var stepStartedAt = 0L
+
+    /** nx-mobile: how long the GL thread has been inside the current step; 0 when it is not in one. Any thread. */
+    fun stepStalledMillis(): Long {
+        val t = stepStartedAt
+        return if (t == 0L) 0L else SystemClock.uptimeMillis() - t
+    }
 
     // Emitted with tryEmit from the GL thread every frame: no coroutine per frame, and a slow collector drops the oldest
     // FrameRendered instead of piling up suspended emitters. Replays the last event to a new collector, as before.
@@ -670,7 +682,8 @@ class GLRetroView(
     inner class Renderer : GLSurfaceView.Renderer {
         override fun onDrawFrame(gl: GL10) = catchExceptions {
             if (isEmulationReady) {
-                LibretroDroid.step(this@GLRetroView)
+                stepStartedAt = SystemClock.uptimeMillis()
+                try { LibretroDroid.step(this@GLRetroView) } finally { stepStartedAt = 0L }
                 retroGLEventsSubject.tryEmit(GLRetroEvents.FrameRendered)
                 if (LibretroDroid.takeShutdownRequest()) shutdownRequests.tryEmit(Unit)
                 if (LibretroDroid.takeGameGeometryChanged()) gameGeometryChanges.tryEmit(Unit)

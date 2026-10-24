@@ -61,7 +61,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | gearcoleco | drhelius/Gearcoleco | ed5095b3ce158ff0cf82395a61c2476505634894 | ndk-build (`platforms/libretro`; 0.7 MB stripped) | 0:10 |
 | fbneo | libretro/FBNeo | 6a5cc250c2db8d874a06ee86e302a2a78918b4c1 | ndk-build (`src/burner/libretro`, + `system/fbneo/`; 63.2 MB stripped) | 0:28 |
 | flycast (DC) | flyinghead/flycast | 5aa091fde632fb332c8d8c34e280d62dc951954c (v2.7) | cmake (dynarec, GLES3, patched; 6 submodules; 23.1 MB stripped) | 1:15 |
-| dolphin | libretro/dolphin | 7a2d51d5fa3f72e9b03fed30449ac45b6d6ac8e2 | cmake 3.30.3 (LTO, GLES, patched; 34 submodules; + system/dolphin-emu/Sys 14 MB; ~15 MB stripped) | 4:09 |
+| dolphin | libretro/dolphin | 3aac3f052f733f8df2f1616843a4d2e14002ed11 | cmake 3.30.3 (LTO, GLES, patched; 34 submodules; + system/dolphin-emu/Sys 14 MB; ~15 MB stripped) | 4:09 |
 
 melondsds (melonDS DS) replaced libretro/melonDS on 2026-09-27. Its eleven CMake FetchContent dependencies are pinned
 by full SHA in `MELONDSDS_DEPS` and cloned into `src/melondsds-deps/<name>-src` before configure, which runs with

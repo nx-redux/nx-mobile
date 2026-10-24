@@ -193,6 +193,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private val autoWriter = Executors.newSingleThreadExecutor { Thread(it, "nx-auto-state") }
         /** How long the Wii's HOME holds the core's Home (R3): a few frames, as a tap. */
         private const val WII_HOME_PRESS_MS = 150L
+        /** [onCoreHung]: between the hung game's finish and the process kill. */
+        private const val HUNG_FINISH_GRACE_MS = 500L
 
         /** Blocks until every queued Home write has finished. Call off the main thread before touching slot 9. */
         private fun awaitAutoWrites() { runCatching { autoWriter.submit {}.get() } }
@@ -257,6 +259,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var wiiMotionOn = false
     /** The phone's accelerometer and gyroscope, created for a Wii game only. */
     private var motionSensors: MotionSensors? = null
+    /** Ends the game if its core hangs inside a frame ([onCoreHung]); from the view's creation to the end of onDestroy. */
+    private var coreWatchdog: CoreWatchdog? = null
     /** The display rotation the motion level was last captured in: a change mid-game recentres ([onConfigurationChanged]). */
     private var lastRotation = -1
     /**
@@ -824,6 +828,24 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         sessionClaim?.let { sessions.release(it.token) }
         sessionClaim = null
         if (usingData) { usingData = false; DataRoot.useEnd(this) }   // after the core's last write (destroyed above)
+        coreWatchdog?.stop()   // last: a hung core also hangs the native destroy above, which it must still catch
+        coreWatchdog = null
+    }
+
+    /**
+     * The core has been stuck in one frame past [CoreWatchdog.LIMIT_MILLIS]; on the watchdog's thread, since the main
+     * thread may be blocked on the core's lock. Nothing in this process can stop the core or take that lock, so the game
+     * goes with the process: finished first (a binder call, whatever the main thread is doing) so Android does not
+     * recreate it, then the process ends; the menu restarts and tells the user ([CoreHangNotice]). The battery save was
+     * written when the menu last opened and with the last auto state; play time keeps its last minute ([startGameTimeTicker]).
+     */
+    private fun onCoreHung(stalledMillis: Long) {
+        val title = intent.getStringExtra(EXTRA_TITLE) ?: "The game"
+        NxLog.e("GameActivity", "the core has been stuck in one frame for ${stalledMillis / 1000} s: closing $title")
+        runCatching { CoreHangNotice.record(applicationContext, title) }
+        runCatching { finish() }.onFailure { NxLog.w("GameActivity", "could not finish the hung game", it) }
+        SystemClock.sleep(HUNG_FINISH_GRACE_MS)   // the finish reaches the system before the process goes
+        android.os.Process.killProcess(android.os.Process.myPid())
     }
 
     /** A foreground kill (crash, OOM) closes the session at the last touch: keep it at most a minute old while started. */
@@ -1256,6 +1278,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (isN3ds) offerN3dsMotion()
         val view = GLRetroView(this, data)
         retroView = view
+        // Not in netplay: a link cable's step may wait out the peer's hold (sio_lockstep: up to 30 s), and the session
+        // has its own timeouts.
+        coreWatchdog = CoreWatchdog({ if (netplay == null) view.stepStalledMillis() else 0L }, onHung = ::onCoreHung)
+            .also { it.start() }
         if (focusPaused) { view.frameSpeed = 0; view.audioEnabled = false }   // focus went to another app while loading
         // Collected before the view is added (its ON_CREATE) and long before the first frame: the runner reports a
         // change only, from an unbuffered flow, so a missed event would leave the motor wrong until the next one.
