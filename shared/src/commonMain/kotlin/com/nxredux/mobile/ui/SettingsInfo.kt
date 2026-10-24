@@ -25,9 +25,9 @@ private fun resetText(section: SettingsSection?): SettingText = when (section) {
  * line names that page's settings). Empty for a row that needs none (About's, a console's default emulator).
  */
 internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): SettingText = when (row.kind) {
-    // Emulators.
+    // Emulation.
     SettingsKind.DEFAULTS -> SettingText("The emulator each console's games run on")
-    SettingsKind.EMULATORS -> SettingText("Each emulator's options for a whole console")
+    SettingsKind.EMULATORS -> SettingText("Each console's settings and emulator options; a game can override them")
     SettingsKind.PAUSE_UNFOCUSED -> quiet(
         "Pause a game while another app takes over the screen",
         "Pauses a game when another app takes over while the game is still on screen: in split screen, in a desktop " +

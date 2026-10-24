@@ -51,7 +51,7 @@ class OptionsPagesTest {
     }
 
     @Test fun emulatorListTitleDropsEmulatorInTheSplit() {
-        assertEquals("Settings", emulatorListTitle(split = true))   // the left pane already shows Emulators
+        assertEquals("Default settings", emulatorListTitle(split = true))   // the left pane already shows Emulation
         assertEquals("Emulator Settings", emulatorListTitle(split = false))
     }
 

@@ -457,7 +457,7 @@ enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EM
  * Appearance, as NX Redux's main page category.
  */
 enum class SettingsSection(val label: String, val parent: SettingsSection? = null, val opener: SettingsKind? = null) {
-    LIBRARY("Library"), EMULATORS("Emulators"), APPEARANCE("Appearance"), MAIN_MENU("Layouts"), CONTROLS("Controls"),
+    LIBRARY("Library"), EMULATORS("Emulation"), APPEARANCE("Appearance"), MAIN_MENU("Layouts"), CONTROLS("Controls"),
     // Only while a second screen is connected: Enable and Bottom screen.
     SECOND_SCREEN("Second screen"),
     // General, Launcher (with a launcher), Developer and About groups on one page; the last category.
@@ -1969,7 +1969,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             "Which is the bottom screen?",
             listOf(
                 "Tap the button on the bottom screen. It becomes the touch screen, and games show their picture on the other.",
-                "Change it later in Settings → Emulators, or for one console in its settings.",
+                "Change it later in Settings → Emulation, or for one console in its settings.",
             ),
             listOf(NxRow("This is the bottom screen"), NxRow("Skip")),
         )
@@ -3813,7 +3813,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         SettingsSection.LIBRARY -> libraryRows()
         SettingsSection.EMULATORS -> listOf(
             SettingsRow(SettingsKind.DEFAULTS, "Default emulators"),
-            SettingsRow(SettingsKind.EMULATORS, "Settings"),
+            SettingsRow(SettingsKind.EMULATORS, "Default settings"),
         )
         SettingsSection.SECOND_SCREEN -> listOf(
             SettingsRow(SettingsKind.SECOND_SCREEN_ENABLE, "Enable", if (deps.settings.secondScreen) "On" else "Off"),

@@ -18,8 +18,8 @@ import com.nxredux.mobile.ui.nx.control
 private val LIST_HINTS = listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Select"))
 
 /**
- * Settings -> Emulators -> Settings: one row per core, its tags as the secondary text. [split]: the two-pane Settings'
- * right pane, titled "Settings" (the left pane already shows Emulators); a single page keeps "Emulator Settings".
+ * Settings -> Emulation -> Default settings: one row per core, its tags as the secondary text. [split]: the two-pane Settings'
+ * right pane, titled "Default settings" (the left pane already shows Emulation); a single page keeps "Emulator Settings".
  */
 @Composable
 fun EmulatorListScreen(
@@ -37,8 +37,8 @@ fun EmulatorListScreen(
 /** A core row's tags as the handheld names them, each once ("GPGX" for Genesis Plus GX on every Sega console). */
 internal fun emulatorListTags(row: EmulatorListRow): String = row.tags.map(CoreRegistry::handheldTag).distinct().joinToString(" · ")
 
-/** The core list's title: "Settings" in the two-pane right pane (under Emulators on the left), else "Emulator Settings". */
-internal fun emulatorListTitle(split: Boolean): String = if (split) "Settings" else "Emulator Settings"
+/** The core list's title: "Default settings" in the two-pane right pane (under Emulation on the left), else "Emulator Settings". */
+internal fun emulatorListTitle(split: Boolean): String = if (split) "Default settings" else "Emulator Settings"
 
 /** The console picker of a core serving several tags. */
 @Composable
