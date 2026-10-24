@@ -671,9 +671,13 @@ internal class GameInputRouter(private val host: GameInputHost) {
         }
     }
 
-    /** The shortcut keys' releases will not come here: nothing held, and a Hold FF / Hold Rewind ends (a toggled one stays on). */
+    /**
+     * The shortcut keys' releases will not come here: nothing held, a bound L2/R2 is the game's again ([TriggerAxes.untakeAll]),
+     * and a Hold FF / Hold Rewind ends (a toggled one stays on).
+     */
     private fun releaseShortcuts() {
         host.shortcutKeys?.releaseAll()
+        inputs[0].triggers.untakeAll()   // a bound L2/R2's pull ends with it: its analog must not stay at rest
         host.releaseShortcutHolds()
     }
 

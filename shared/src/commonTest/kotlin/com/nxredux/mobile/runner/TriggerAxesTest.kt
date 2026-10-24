@@ -85,4 +85,13 @@ class TriggerAxesTest {
         t.releaseAll()
         assertEquals(0f to 1f, t.analog(0f, 1f))
     }
+
+    @Test fun untake_all_ends_every_take_but_keeps_what_is_held() {
+        val t = TriggerAxes()
+        assertEquals(listOf(NxButton.L2 to true), t.onAxes(1f, 0f))
+        t.take(NxButton.R2)
+        t.untakeAll()   // the shortcut's key-up never came (the app went to the background)
+        assertEquals(1f to 1f, t.analog(1f, 1f))
+        assertEquals(emptyList(), t.onAxes(1f, 0f))   // L2 stays pressed: untakeAll releases nothing
+    }
 }

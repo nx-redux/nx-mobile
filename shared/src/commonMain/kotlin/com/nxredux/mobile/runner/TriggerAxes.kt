@@ -54,6 +54,9 @@ class TriggerAxes(private val press: Float = 0.5f, private val release: Float = 
     /** The shortcut's key let go: the trigger is the game's again. */
     fun untake(button: NxButton) { taken -= button }
 
+    /** The shortcuts' releases will not come (backgrounded, the pad gone): every trigger is the game's again. */
+    fun untakeAll() = taken.clear()
+
     /** Analog triggers (Dreamcast, GameCube): the values the core gets for this read, a [take]n trigger at rest. */
     fun analog(left: Float, right: Float): Pair<Float, Float> {
         lastLeft = left
