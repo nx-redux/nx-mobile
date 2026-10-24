@@ -44,6 +44,14 @@ import com.nxredux.mobile.ui.nx.symmetricCutoutInset
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.round
+import com.nxredux.mobile.ui.nx.NxSpeedIndicator
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
@@ -302,7 +310,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     // ---- in-game pause menu ----
-    override var menuOpen = false
+    private val menuOpenState = mutableStateOf(false)   // read by the notifications overlay (hides the speed indicator)
+    override var menuOpen: Boolean
+        get() = menuOpenState.value
+        set(value) { menuOpenState.value = value }
     /**
      * Settings → Emulators → Pause when unfocused: another app took the top focus while this window stays visible (split
      * screen, a freeform window, an app on another display), so the game holds, as under the menu, until it is back.
@@ -2596,9 +2607,25 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                         symmetricCutoutInset(cutout.getLeft(density, dir).toFloat(), cutout.getRight(density, dir).toFloat()).toDp().value
                     }
                     // This view's own size: in landscape the root's, which the clusters (MATCH_PARENT tall) fit their unit to.
-                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                    var origin by remember { mutableStateOf(IntOffset.Zero) }   // this view's top-left in the window
+                    BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow().round() }) {
                         val maxW = nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset).dp
                         NxNotifications(toasts, pill, safeSides = sides, placement = placement, topCentreMaxWidth = maxW)
+                        // Top-right of the picture (not the screen: the landscape pad's shoulders hold the screen's corners),
+                        // kept inside the cutout; not under the menu.
+                        val kind = speed.indicator.value
+                        val pic = renderer.pictureBox.value
+                        if (kind != null && pic != null && !menuOpenState.value) {
+                            val margin = with(density) { 8.dp.roundToPx() }
+                            val cutRight = cutout.getRight(density, dir)
+                            val cutTop = cutout.getTop(density)
+                            val right = minOf(pic.right - origin.x, constraints.maxWidth - cutRight) - margin
+                            val top = maxOf(pic.top - origin.y, cutTop) + margin
+                            NxSpeedIndicator(kind, Modifier.layout { m, c ->
+                                val p = m.measure(c)
+                                layout(0, 0) { p.place(right - p.width, top) }
+                            })
+                        }
                     }
                 }
             }

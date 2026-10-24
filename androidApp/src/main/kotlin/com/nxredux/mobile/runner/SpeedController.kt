@@ -4,6 +4,7 @@ import com.nxredux.mobile.options.SpeedSettings
 import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.shortcuts.SpeedControl
 import com.nxredux.mobile.shortcuts.SpeedEffect
+import com.nxredux.mobile.shortcuts.SpeedIndicator
 import com.nxredux.mobile.shortcuts.SpeedOutput
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.RewindStatus
@@ -40,6 +41,9 @@ internal class SpeedController(
     private var tick: Job? = null
 
     val output: SpeedOutput get() = control.output
+
+    /** The on-screen mark to draw now (fast forward, rewind, or none): snapshot state the notifications overlay reads. */
+    val indicator = androidx.compose.runtime.mutableStateOf<SpeedIndicator?>(null)
 
     /** The console's (or game's) speed rows, applied live; [canRewind] is the core's. */
     fun configure(s: SpeedSettings, canRewind: Boolean) {
@@ -85,6 +89,7 @@ internal class SpeedController(
 
     /** Puts the current output on the view (again): after [configure], an action, a new view, a state read or write. */
     fun apply() {
+        indicator.value = control.output.indicator
         tiles().takeIf { it != lastTiles }?.let { lastTiles = it; onTiles() }
         val v = view() ?: return
         val o = control.output

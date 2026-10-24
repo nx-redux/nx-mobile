@@ -139,6 +139,11 @@ internal class FrontendRenderer(
     // The preset last asked for; differs from loadedPreset exactly while its load is in flight.
     private var requestedPreset: String? = null
     private var lastViewport: RectF? = null
+    /**
+     * Where the picture sits, in window pixels (the whole game area while the DS screens are split): the speed indicator
+     * goes at its top-right corner. Snapshot state, read in the notifications overlay's composition.
+     */
+    val pictureBox = androidx.compose.runtime.mutableStateOf<android.graphics.Rect?>(null)
     private var hudJob: Job? = null
 
     /** The overlay file names offered for this console (the Overlay setting's list). */
@@ -308,6 +313,7 @@ internal class FrontendRenderer(
         val h = game.height.toFloat()
         if (w <= 0f || h <= 0f) return
         val g = geometry ?: view.getGameGeometry()
+        val origin = IntArray(2).also { game.getLocationInWindow(it) }
         val nds = ndsLayout(w, h, g) ?: n3dsSplitLayout(w, h)
         // An area too small for one DS screen pixel (NdsLayout returns no regions) is only ever a transient mid-resize
         // size. Keep whatever is drawn now rather than letting an empty list flip a split game to the whole 256x384
@@ -328,6 +334,7 @@ internal class FrontendRenderer(
                 view.viewport = whole
             }
             view.screenOffset = PointF(0f, 0f)
+            pictureBox.value = android.graphics.Rect(origin[0], origin[1], origin[0] + w.roundToInt(), origin[1] + h.roundToInt())
             view.screenRegions = nds.map { it.toScreenRegion(w, h) }
             return
         }
@@ -336,6 +343,10 @@ internal class FrontendRenderer(
         val layout = frontendLayout(w, h, g[0].toInt(), g[1].toInt(), g[2], s.scaling, s.offsetX, s.offsetY, overlayFile?.aspect)
         val box = layout.box
         val viewport = RectF(box.x / w, box.y / h, (box.x + box.width) / w, (box.y + box.height) / h)
+        pictureBox.value = android.graphics.Rect(
+            origin[0] + box.x.roundToInt(), origin[1] + box.y.roundToInt(),
+            origin[0] + (box.x + box.width).roundToInt(), origin[1] + (box.y + box.height).roundToInt(),
+        )
         if (viewport != lastViewport) {
             lastViewport = viewport
             view.viewport = viewport
