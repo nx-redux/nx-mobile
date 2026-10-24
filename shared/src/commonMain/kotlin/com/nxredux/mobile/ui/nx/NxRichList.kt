@@ -146,7 +146,7 @@ fun NxRichList(
         // only the row is taller, for the thumbnail. Each line's box is [NxTextSizes.line] of
         // its size with the glyphs centred in it, and the two boxes are centred in the row, so the text sits midway with
         // even room above and below. A short slot can round the rows down, so the title is capped where both boxes still fit.
-        val label = NxTextSizes.secondary(if (labelSize != TextUnit.Unspecified) labelSize else nxListLabelSize(maxHeight, listPitch))
+        val label = NxTextSizes.secondary(if (labelSize != TextUnit.Unspecified) labelSize else nxListLabelSize(listPitch))
         val cap = with(density) { (rowHeight / NxTextSizes.RICH_BLOCK_OF_TITLE).toSp() }
         val titleSize = if (label.value > cap.value) cap else label
         val subtitleSize = NxTextSizes.secondary(titleSize)

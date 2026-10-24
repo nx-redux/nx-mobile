@@ -15,7 +15,7 @@ class ListSizingTest {
     }
 
     @Test fun plainLabelIsSixtyTwoPercentOfTheRow() {
-        assertEquals(20.15f, nxListLabelSize(260.dp).value, 0.001f)
+        assertEquals(20.15f, nxListLabelSize().value, 0.001f)
     }
 
     @Test fun richRowsTakeTheNearestCountOfOneAndAHalfPitches() {

@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.MENU_TAB_ROW_HEIGHT
 import com.nxredux.mobile.ui.nx.menuTabUnderlineBottom
 import com.nxredux.mobile.ui.nx.NxHintInkTop
@@ -43,8 +44,9 @@ class MainMenuListTopEdgeTest {
     }
 
     @Test fun thePillGapMatchesTheFold() {
-        // Measured on the Fold's cover screen at font scale 0.9: 89 px rows, 79 px pills, so 10 px (3.8 dp) apart.
-        assertTrue(abs(nxPillGap(89 / density, 0.9f) * density - 10f) <= 1.5f)
+        // Measured on the Fold's cover screen at font scale 0.9: 89 px rows, 79 px pills, so 10 px (3.8 dp) apart, when
+        // the label was the row's own (now it is the target pitch's, so that row's pitch is passed as the target).
+        assertTrue(abs(nxPillGap(89 / density, 0.9f, (89 / density).dp) * density - 10f) <= 1.5f)
     }
 
     /** The visible gaps (px) a fit gives: underline to the first pill's top, the last pill's bottom to the arrows' ink. */

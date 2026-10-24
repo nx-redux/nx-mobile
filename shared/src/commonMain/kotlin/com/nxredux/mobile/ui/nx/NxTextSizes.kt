@@ -8,8 +8,9 @@ import androidx.compose.ui.unit.sp
  * The one set of text sizes outside the main menu's own layouts (Home, Grid, Carousel, Backdrop, the pad). Each role's
  * factor is defined here once; pages ask for a role, never multiply a size themselves.
  *
- * Most roles are a share of the **list label** ([listLabel]: 62% of the row pitch, so it follows the screen's row count
- * ): the headline above it, the secondary text one [STEP] below it, a caption two steps below. The page
+ * Most roles are a share of the **list label** ([listLabel]: 62% of the target row pitch, [NxListPitch] under
+ * Appearance → Text size, never of the rows a list's height fits, so it is the same in either orientation): the
+ * headline above it, the secondary text one [STEP] below it, a caption two steps below. The page
  * title, the hint bar, the pad's labels and the in-game notices are fixed; the modal and in-game
  * message texts are fixed. No page text is a share of the screen height.
  */
@@ -33,9 +34,9 @@ object NxTextSizes {
     /** A badge glyph's text as a share of its disc. */
     const val BADGE_OF_DISC = 0.62f
 
-    // --- The list label and its shares (all follow the list's row pitch) ---
+    // --- The list label and its shares (all follow the target row pitch) ---
 
-    /** The list label of rows [pitch] apart. */
+    /** The list label of rows aiming at [pitch] apart. */
     fun listLabel(pitch: Dp): TextUnit = (pitch.value * LABEL_OF_PITCH).sp
     /** One step smaller than [size] ([STEP]); of the list label, the secondary text. */
     fun secondary(size: TextUnit): TextUnit = size * STEP
@@ -44,9 +45,6 @@ object NxTextSizes {
     /** The line height (box) for text of [size]. */
     fun line(size: TextUnit): TextUnit = size * LINE
     fun headline(label: TextUnit): TextUnit = label * HEADLINE
-
-    /** The list label where the space's height is unbounded (a scrolling parent). */
-    val LABEL_FALLBACK: TextUnit = 16.sp
 
     // --- Fixed: not the screen ---
 

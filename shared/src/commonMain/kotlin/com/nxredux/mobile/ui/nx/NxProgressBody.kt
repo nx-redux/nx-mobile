@@ -27,7 +27,7 @@ fun NxProgressBody(title: String, line: String, fraction: Float?, hints: List<Hi
     val font = LocalNxFont.current
     BoxWithConstraints(modifier.fillMaxSize()) {
         val inset = nxListInset()   // the list's row-label inset, as on NxDetailListBody
-        val label = nxListLabelSize(maxHeight)   // sizes follow the list row labels, as on NxDetailListBody
+        val label = nxListLabelSize()   // sizes follow the list row labels, as on NxDetailListBody
         val status = NxTextSizes.secondary(label)
         Column(Modifier.fillMaxSize()) {
             NxPageTitle(title, bottom = 8.dp)
