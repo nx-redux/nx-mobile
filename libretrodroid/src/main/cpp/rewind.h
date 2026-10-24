@@ -37,15 +37,16 @@ namespace libretrodroid {
  * nx-mobile 2026-10-24: rewind, ported from the handheld's ma_rewind.c. The GL thread serializes the core into a free
  * capture-pool slot after retro_run; one worker thread XORs it against the previous stored state, LZ4-compresses it
  * and writes it to the ring, in capture order. Every 60th entry is a keyframe (the whole state), so the ring can drop
- * its oldest entries without losing the chain.
+ * its oldest entries without losing the chain; a keyframe also carries its delta to the state before it, so stepping
+ * back always undoes one delta against the reference and never decodes forward from an older keyframe.
  * - Only the worker writes, FIFO: a capture that finds no free slot within 2 ms is skipped, never written from the GL
  *   thread, and the delta reference moves only after a stored write — a newer state committed ahead of an older one, or
  *   a reference moved past a failed write, breaks every later delta (the handheld's d10c2509).
  * - clear() bumps a generation before draining the queue, so captures still queued are dropped, not stored into the
  *   cleared ring. The worker sleeps on a condition variable; nothing spins.
  * - stepBack pops the newest entry and restores the one before it, which becomes the new delta reference: playing on
- *   after a rewind continues the chain from there (NextUI #577). A state the core refuses is dropped from the newest end,
- *   so the next step goes past it instead of retrying it forever (633c3937).
+ *   after a rewind continues the chain from there (NextUI #577). A state the core refuses is dropped from the newest end
+ *   (SKIPPED) and the next step restores the one before it, instead of retrying it forever (633c3937).
  * - configure rebuilds only when an effective value changed: the handheld reallocated many MB per config key (1ccc1030).
  * Not thread-safe across callers: LibretroDroid makes every call under its core lock (step(), reset, state load, disc
  * swap), so a clear() never runs beside a capture. The worker is internal.
@@ -57,7 +58,8 @@ public:
 
     enum class Step {
         REWOUND, // the core now holds an earlier state
-        EMPTY,   // nothing older to go back to (or the step failed): the core is unchanged
+        EMPTY,   // nothing older to go back to: the core is unchanged
+        SKIPPED, // the core refused the state, now dropped; the core is unchanged and the next step goes on from there
         OFF,     // rewind is off
     };
 
@@ -101,13 +103,17 @@ private:
     void workerLoop();
     // ringLock held. Encodes src (a delta unless a keyframe is due) and stores it.
     void storeLocked(const uint8_t* src);
-    // ringLock held. Compresses src or its delta into scratch; returns the length, 0 on failure.
-    size_t compressLocked(const uint8_t* src, bool keyframe);
-    // ringLock held. Decompresses entry k into out; false when it isn't a whole state.
-    bool decompressLocked(int k, std::vector<uint8_t>& out);
-    // ringLock held. Decodes the state of entry k into stateDec, from the keyframe at or before it.
-    bool decodeForwardLocked(int k);
+    // ringLock held. LZ4 of one state-sized buffer into out; 0 on failure.
+    size_t lz4Locked(const uint8_t* in, uint8_t* out, size_t room);
+    // ringLock held. Encodes src into scratch: a delta against the reference, or a keyframe (with that delta when
+    // withDelta). Returns the length, 0 on failure.
+    size_t encodeLocked(const uint8_t* src, bool keyframe, bool withDelta);
+    // ringLock held. Given the state of entry k, writes the state before it into out; false if it can't.
+    bool decodePreviousLocked(int k, const uint8_t* state, uint8_t* out);
     void recountSinceKeyframeLocked();
+    void dropHistoryLocked();
+    // ringLock held. After the core refused the reference: drops its entry, the one before becoming due.
+    Step dropRefusedLocked();
     void releaseSlot(int slot);
 
     const size_t wantBytes;
@@ -130,6 +136,7 @@ private:
     std::vector<uint8_t> reference;   // the state the ring's newest entry decodes to: the next delta's base
     bool hasReference = false;
     int sinceKeyframe = 0;            // entries since the newest keyframe, that one included
+    bool restorePending = false;      // the reference is not restored yet (a refused state before it was dropped)
     std::vector<uint8_t> deltaEnc;
     std::vector<uint8_t> scratch;     // compressed output
     std::vector<uint8_t> stateDec;

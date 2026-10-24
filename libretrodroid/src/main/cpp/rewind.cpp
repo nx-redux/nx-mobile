@@ -44,6 +44,8 @@ constexpr int POOL_LARGE = 4;
 // The handheld's default: a little faster than LZ4's 1, for a slightly bigger entry.
 constexpr int LZ4_ACCELERATION = 2;
 constexpr auto SLOT_WAIT = std::chrono::milliseconds(2);
+// A keyframe entry starts with the length of its compressed state (native order: the ring never leaves the process).
+constexpr size_t KEYFRAME_HEADER = sizeof(uint32_t);
 
 void xorInto(uint8_t* out, const uint8_t* a, const uint8_t* b, size_t len) {
     for (size_t i = 0; i < len; i++) out[i] = a[i] ^ b[i];
@@ -79,7 +81,9 @@ void Rewind::build(size_t size) {
         ring = std::make_unique<RewindRing>(capacity, entries);
         reference.assign(size, 0);
         deltaEnc.assign(size, 0);
-        scratch.assign(static_cast<size_t>(LZ4_compressBound(static_cast<int>(size))), 0);
+        // A keyframe entry: header, the whole state and its delta, each compressed.
+        const size_t bound = static_cast<size_t>(LZ4_compressBound(static_cast<int>(size)));
+        scratch.assign(KEYFRAME_HEADER + 2 * bound, 0);
         stateDec.assign(size, 0);
         deltaDec.assign(size, 0);
         pool.resize(poolSize);
@@ -94,6 +98,7 @@ void Rewind::build(size_t size) {
     queue.clear();
     hasReference = false;
     sinceKeyframe = 0;
+    restorePending = false;
     tick = 0;
     stateSize = size;
     captureInterval = size <= MB ? 1 : (size <= 8 * MB ? 2 : 4);
@@ -126,6 +131,7 @@ void Rewind::teardown() {
     freeSlots.clear();
     queue.clear();
     hasReference = false;
+    restorePending = false;
     stateSize = 0;
 }
 
@@ -192,30 +198,41 @@ void Rewind::workerLoop() {
     }
 }
 
-size_t Rewind::compressLocked(const uint8_t* src, bool keyframe) {
-    const uint8_t* in = src;
-    if (!keyframe) {
-        // Consecutive states differ in few bytes: the XOR is mostly zeros, which LZ4 packs small and fast.
-        xorInto(deltaEnc.data(), src, reference.data(), stateSize);
-        in = deltaEnc.data();
-    }
-    int len = LZ4_compress_fast(reinterpret_cast<const char*>(in), reinterpret_cast<char*>(scratch.data()),
-                                static_cast<int>(stateSize), static_cast<int>(scratch.size()), LZ4_ACCELERATION);
+size_t Rewind::lz4Locked(const uint8_t* in, uint8_t* out, size_t room) {
+    int len = LZ4_compress_fast(reinterpret_cast<const char*>(in), reinterpret_cast<char*>(out),
+                                static_cast<int>(stateSize), static_cast<int>(room), LZ4_ACCELERATION);
     return len > 0 ? static_cast<size_t>(len) : 0;
+}
+
+size_t Rewind::encodeLocked(const uint8_t* src, bool keyframe, bool withDelta) {
+    size_t at = 0;
+    if (keyframe) {
+        const size_t key = lz4Locked(src, scratch.data() + KEYFRAME_HEADER, scratch.size() - KEYFRAME_HEADER);
+        if (key == 0) return 0;
+        const uint32_t keyLen = static_cast<uint32_t>(key);
+        std::memcpy(scratch.data(), &keyLen, KEYFRAME_HEADER);
+        at = KEYFRAME_HEADER + key;
+        if (!withDelta) return at;
+    }
+    // Consecutive states differ in few bytes: the XOR is mostly zeros, which LZ4 packs small and fast.
+    xorInto(deltaEnc.data(), src, reference.data(), stateSize);
+    const size_t delta = lz4Locked(deltaEnc.data(), scratch.data() + at, scratch.size() - at);
+    return delta > 0 ? at + delta : 0;
 }
 
 void Rewind::storeLocked(const uint8_t* src) {
     bool keyframe = !hasReference || sinceKeyframe >= KEYFRAME_EVERY;
-    size_t len = compressLocked(src, keyframe);
+    size_t len = encodeLocked(src, keyframe, hasReference);
     if (len == 0) {
         LOGE("Rewind: compression failed");
         return;
     }
     RewindRing::Write result = ring->write(scratch.data(), len, keyframe);
     if (result == RewindRing::Write::NEED_KEYFRAME) {
-        // The trim took the delta's keyframe with it and left the ring empty: this entry starts a new chain.
+        // The trim took the delta's keyframe with it and left the ring empty: this entry starts a new chain, with
+        // nothing before it to carry a delta to.
         keyframe = true;
-        len = compressLocked(src, true);
+        len = encodeLocked(src, true, false);
         if (len == 0) {
             LOGE("Rewind: compression failed");
             return;
@@ -228,6 +245,8 @@ void Rewind::storeLocked(const uint8_t* src) {
             std::memcpy(reference.data(), src, stateSize);
             hasReference = true;
             sinceKeyframe = keyframe ? 1 : sinceKeyframe + 1;
+            // The game moved on from a reference a refused restore had left unrestored.
+            restorePending = false;
             break;
         case RewindRing::Write::TOO_BIG:
             LOGW("Rewind: a %zu-byte entry does not fit in the buffer", len);
@@ -235,28 +254,29 @@ void Rewind::storeLocked(const uint8_t* src) {
         case RewindRing::Write::NO_ROOM:
         case RewindRing::Write::NEED_KEYFRAME:
             LOGE("Rewind: the ring could not store an entry; history dropped");
-            ring->clear();
-            hasReference = false;
+            dropHistoryLocked();
             break;
     }
 }
 
-bool Rewind::decompressLocked(int k, std::vector<uint8_t>& out) {
+bool Rewind::decodePreviousLocked(int k, const uint8_t* state, uint8_t* out) {
     RewindRing::Entry e = ring->at(k);
-    int got = LZ4_decompress_safe(reinterpret_cast<const char*>(e.data), reinterpret_cast<char*>(out.data()),
-                                  static_cast<int>(e.len), static_cast<int>(stateSize));
-    return got == static_cast<int>(stateSize);
-}
-
-bool Rewind::decodeForwardLocked(int k) {
-    int key = k;
-    while (key > 0 && !ring->at(key).keyframe) key--;
-    // The ring keeps a keyframe at its oldest end; anything else is a broken chain.
-    if (!ring->at(key).keyframe || !decompressLocked(key, stateDec)) return false;
-    for (int i = key + 1; i <= k; i++) {
-        if (!decompressLocked(i, deltaDec)) return false;
-        xorInto(stateDec.data(), stateDec.data(), deltaDec.data(), stateSize);
+    const uint8_t* delta = e.data;
+    size_t len = e.len;
+    if (e.keyframe) {
+        // A keyframe carries its delta after the whole state; a chain's first keyframe has none.
+        uint32_t keyLen = 0;
+        if (e.len < KEYFRAME_HEADER) return false;
+        std::memcpy(&keyLen, e.data, KEYFRAME_HEADER);
+        const size_t off = KEYFRAME_HEADER + keyLen;
+        if (off >= e.len) return false;
+        delta = e.data + off;
+        len = e.len - off;
     }
+    int got = LZ4_decompress_safe(reinterpret_cast<const char*>(delta), reinterpret_cast<char*>(deltaDec.data()),
+                                  static_cast<int>(len), static_cast<int>(stateSize));
+    if (got != static_cast<int>(stateSize)) return false;
+    xorInto(out, deltaDec.data(), state, stateSize);
     return true;
 }
 
@@ -269,29 +289,53 @@ void Rewind::recountSinceKeyframeLocked() {
     }
 }
 
+void Rewind::dropHistoryLocked() {
+    ring->clear();
+    hasReference = false;
+    sinceKeyframe = 0;
+    restorePending = false;
+}
+
+Rewind::Step Rewind::dropRefusedLocked() {
+    // The reference (the newest entry's state) was refused: drop that entry for good, the one before it becoming the
+    // reference, restored by the next step. A bad state is passed once, never retried — also not after a capture
+    // appended the current game behind it.
+    const int n = static_cast<int>(ring->count());
+    if (n >= 2 && decodePreviousLocked(n - 1, reference.data(), stateDec.data())) {
+        ring->popNewest();
+        reference.swap(stateDec);
+        recountSinceKeyframeLocked();
+        restorePending = true;
+    } else {
+        dropHistoryLocked();   // the oldest was refused: nothing older to go to
+    }
+    return Step::SKIPPED;
+}
+
 Rewind::Step Rewind::stepBack(const UnserializeFn& unserialize) {
     if (!isEnabled) return Step::OFF;
     // Every capture so far is in the ring before it is read.
     waitIdle();
 
     std::lock_guard<std::mutex> lock(ringLock);
+    if (restorePending) {
+        restorePending = false;
+        if (!unserialize(reference.data(), stateSize)) {
+            LOGW("Rewind: the core refused a rewound state");
+            return dropRefusedLocked();
+        }
+        return Step::REWOUND;
+    }
+
     const int n = static_cast<int>(ring->count());
     // The newest entry is (about) where the game is now: there must be one before it.
     if (n < 2 || !hasReference) return Step::EMPTY;
 
-    // The state before the newest: undo the newest delta against the reference, or, when the newest is a keyframe
-    // (whose bytes say nothing about the state before it), decode forward from the keyframe before that.
-    bool decoded;
-    if (!ring->at(n - 1).keyframe) {
-        decoded = decompressLocked(n - 1, deltaDec);
-        if (decoded) xorInto(stateDec.data(), deltaDec.data(), reference.data(), stateSize);
-    } else {
-        decoded = decodeForwardLocked(n - 2);
-    }
-    if (!decoded) {
+    // The state before the newest: the newest's delta undone against the reference. A keyframe carries one too, so a
+    // step never decodes forward from an older keyframe (up to 59 deltas, a stall on big states).
+    if (!decodePreviousLocked(n - 1, reference.data(), stateDec.data())) {
         LOGE("Rewind: an entry did not decompress; history dropped");
-        ring->clear();
-        hasReference = false;
+        dropHistoryLocked();
         return Step::EMPTY;
     }
 
@@ -301,9 +345,8 @@ Rewind::Step Rewind::stepBack(const UnserializeFn& unserialize) {
     recountSinceKeyframeLocked();
 
     if (!unserialize(reference.data(), stateSize)) {
-        // Its entry stays the newest, so the next step goes past it: a bad state is skipped, not retried forever.
         LOGW("Rewind: the core refused a rewound state");
-        return Step::EMPTY;
+        return dropRefusedLocked();
     }
     return Step::REWOUND;
 }
@@ -314,9 +357,7 @@ void Rewind::clear() {
     generation.fetch_add(1);
     waitIdle();
     std::lock_guard<std::mutex> lock(ringLock);
-    ring->clear();
-    hasReference = false;
-    sinceKeyframe = 0;
+    dropHistoryLocked();
     tick = 0;
 }
 

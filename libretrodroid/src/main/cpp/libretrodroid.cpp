@@ -444,6 +444,7 @@ void LibretroDroid::create(
     rewindState = REWIND_STATUS_OFF;
     appliedRewinding = false;
     appliedRewindMuted = false;
+    rewindEmptyLatched = false;
     rewindDropAudio = false;
     // scaleMode, screenOffset and viewportRect are not reset here: setters may arrive (on the GL thread) before
     // create(), and GLRetroView re-applies its own values right after create().
@@ -603,6 +604,8 @@ void LibretroDroid::releaseCore() {
     rewindSize = 0;
     rewindGivenUp = false;
     rewindProbeWait = 0;
+    rewindRefusals = 0;
+    rewindBuilt = false;
     // The patches and the RAM they point into belong to that core.
     memoryCheats.clear();
     memoryCheatList.clear();
@@ -694,6 +697,7 @@ void LibretroDroid::step() {
     applyRewindConfig();
     const bool rewindHeld = !np && !lk && rewindingWanted.load() && rewind.enabled();
     const bool rewinding = rewindHeld && speed > 0;
+    if (!rewindHeld) rewindEmptyLatched = false;
     applyRewinding(rewinding);
     applyFastForward((np || lk || rewindHeld) ? 0 : fastForwardSpeed.load(), fastForwardAudible.load());
     // Paused during FF (speed 0) takes the normal paused path below; FF picks up again on resume, its clock resynced.
@@ -849,11 +853,18 @@ void LibretroDroid::setRewindAudio(bool audible) {
 void LibretroDroid::applyRewindConfig() {
     if (!rewindWanted.load() || core == nullptr || !gameLoaded) {
         rewind.configure(false, rewindSize);   // a no-op once off
+        rewindBuilt = false;
         return;
     }
     if (rewind.enabled() || rewindGivenUp) return;
-    // Built only once the core can serialize: booting cores (mupen64plus, pcsx) report 0 or refuse for a while, and a
-    // refused capture turns rewind off. Asked again every REWIND_PROBE_STEPS steps, not every frame.
+    if (rewindBuilt) {
+        // Built, then a capture was refused (Rewind turned itself off): counted like a refused probe.
+        rewindBuilt = false;
+        noteRewindRefusal();
+        return;
+    }
+    // Built only once the core can serialize: booting cores (mupen64plus, pcsx) report 0 or refuse for a while.
+    // Asked again every REWIND_PROBE_STEPS steps, not every frame, and less often after each refusal.
     if (rewindProbeWait > 0) {
         rewindProbeWait--;
         return;
@@ -867,8 +878,35 @@ void LibretroDroid::applyRewindConfig() {
         rewindGivenUp = true;
         return;
     }
+    // One serialize before building: a core that reports a size but refuses would otherwise build and free the whole
+    // buffer (tens of MB, a thread) on every ask, a hitch on this thread each time.
+    try {
+        std::vector<uint8_t> probe(size);
+        if (!core->retro_serialize(probe.data(), size)) {
+            noteRewindRefusal();
+            return;
+        }
+    } catch (const std::bad_alloc&) {
+        LOGW("Rewind: no memory for a %zu-byte state; rewind off for this game", size);
+        rewindGivenUp = true;
+        return;
+    }
     rewindSize = size;
     rewind.configure(true, size);
+    rewindBuilt = rewind.enabled();
+    // No room in RAM (or none for the buffers): asking again would only retry the same budget.
+    if (!rewindBuilt) rewindGivenUp = true;
+}
+
+void LibretroDroid::noteRewindRefusal() {
+    rewindRefusals++;
+    if (rewindRefusals >= REWIND_MAX_REFUSALS) {
+        LOGW("Rewind: the core refused to serialize %u times; rewind off for this game", rewindRefusals);
+        rewindGivenUp = true;
+        return;
+    }
+    // 2, 4, 8 ... up to 32 probe intervals: a core still booting is soon caught, one that never serializes costs little.
+    rewindProbeWait = REWIND_PROBE_STEPS << std::min(rewindRefusals, 5u);
 }
 
 void LibretroDroid::applyRewinding(bool rewinding) {
@@ -891,14 +929,19 @@ unsigned LibretroDroid::stepRewinding(float frameSeconds) {
     const unsigned interval = static_cast<unsigned>(std::max(rewind.interval(), 1));
     if (rewindTick++ % interval != 0) return 0;
 
+    // EMPTY stays latched until the rewind ends: a held rewind on an empty buffer alternates EMPTY and REWOUND steps,
+    // and the app (polling) must not miss it.
     switch (rewind.stepBack(rewindUnserialize)) {
         case Rewind::Step::REWOUND:
-            rewindState = REWIND_STATUS_REWINDING;
+        case Rewind::Step::SKIPPED:
+            rewindState = rewindEmptyLatched ? REWIND_STATUS_EMPTY : REWIND_STATUS_REWINDING;
             // A restored state draws nothing until the core runs: one frame shows it. Not captured, or the next step
-            // would land on it again.
+            // would land on it again (after SKIPPED, on the refused state's successor: still not captured, so the
+            // next step restores the state before the refused one).
             runFrame(false, false, frameSeconds);
             return 1;
         case Rewind::Step::EMPTY:
+            rewindEmptyLatched = true;
             rewindState = REWIND_STATUS_EMPTY;
             // Nothing older: play this frame (captured, as in play) so a held rewind never freezes the game; the next
             // step goes back to it, alternating. A toggled rewind reads EMPTY and the app turns it off.

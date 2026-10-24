@@ -202,6 +202,62 @@ int main() {
         CHECK(core.state() == 1, "failedUnserializeDropsNewest: the oldest is still there");
     }
     {
+        // A state the core always refuses, under step()'s handling: EMPTY plays and captures a frame, SKIPPED and
+        // REWOUND don't. The refused state is passed once and the steps carry on to the oldest.
+        Rewind r(WANT);
+        FakeCore core;
+        r.configure(true, STATE);
+        play(r, core, 1, 20);
+        int refusals = 0;
+        std::vector<int> seen;
+        auto refuse15 = [&core, &refusals](const uint8_t* in, size_t len) {
+            if (in[0] == 15) {
+                refusals++;
+                return false;
+            }
+            std::memcpy(core.mem.data(), in, len);
+            return true;
+        };
+        bool skipped = false;
+        for (int i = 0; i < 40; i++) {
+            Rewind::Step s = r.stepBack(refuse15);
+            if (s == Rewind::Step::REWOUND) seen.push_back(core.state());
+            if (s == Rewind::Step::SKIPPED) skipped = true;
+            if (s == Rewind::Step::EMPTY) {
+                r.capture(core.serialize());
+                r.waitIdle();
+            }
+        }
+        std::vector<int> expect;
+        for (int n = 19; n >= 1; n--)
+            if (n != 15) expect.push_back(n);
+        seen.resize(std::min(seen.size(), expect.size()));
+        CHECK(skipped && refusals == 1 && seen == expect, "refusedState: passed once, every older state still reached");
+    }
+    {
+        // The oldest refused: the history ends there and a held rewind (EMPTY → capture) never tries it again.
+        Rewind r(WANT);
+        FakeCore core;
+        r.configure(true, STATE);
+        play(r, core, 1, 5);
+        int refusals = 0;
+        auto refuse1 = [&core, &refusals](const uint8_t* in, size_t len) {
+            if (in[0] == 1) {
+                refusals++;
+                return false;
+            }
+            std::memcpy(core.mem.data(), in, len);
+            return true;
+        };
+        for (int i = 0; i < 20; i++) {
+            if (r.stepBack(refuse1) == Rewind::Step::EMPTY) {
+                r.capture(core.serialize());
+                r.waitIdle();
+            }
+        }
+        CHECK(refusals == 1 && core.state() == 2, "refusedOldest: tried once, the game stays at the oldest it could restore");
+    }
+    {
         Rewind r(WANT);
         r.configure(true, STATE);
         int builds = r.builds();

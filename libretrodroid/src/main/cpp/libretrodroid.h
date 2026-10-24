@@ -248,6 +248,8 @@ private:
     void applyFastForward(unsigned maxSpeed, bool audible);
     // GL thread, in step(): builds or frees the rewind buffers for what setRewindEnabled asked.
     void applyRewindConfig();
+    // GL thread: a refused serialize (probe or capture): backs off, or gives up after REWIND_MAX_REFUSALS.
+    void noteRewindRefusal();
     // GL thread, in step(): tells audio when rewinding starts or stops muting.
     void applyRewinding(bool rewinding);
     // GL thread, in step(): one frame while rewinding (a step back, or a cadence frame); returns the frames it ran.
@@ -360,6 +362,12 @@ private:
     // Steps until retro_serialize_size is asked again while rewind can't build (booting cores report 0 or refuse).
     unsigned rewindProbeWait = 0;
     static constexpr unsigned REWIND_PROBE_STEPS = 60;
+    unsigned rewindRefusals = 0;
+    static constexpr unsigned REWIND_MAX_REFUSALS = 8;
+    // Rewind was built for this game and still is, as far as the last applyRewindConfig saw.
+    bool rewindBuilt = false;
+    // Set by an EMPTY step, cleared when the rewind ends: rewindStatus keeps reporting EMPTY meanwhile.
+    bool rewindEmptyLatched = false;
     bool appliedRewinding = false;
     bool appliedRewindMuted = false;
     unsigned rewindTick = 0;
