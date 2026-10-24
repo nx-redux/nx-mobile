@@ -18,7 +18,7 @@ class TouchShortcutTest {
 
     @Test fun labels() {
         assertEquals(
-            listOf("FF", "Hold FF", "Rewind", "Hold Rewind", "Reset"),
+            listOf("FF", "Hold FF", "RW", "Hold RW", "Reset"),
             listOf(ShortcutAction.TOGGLE_FF, ShortcutAction.HOLD_FF, ShortcutAction.TOGGLE_REWIND, ShortcutAction.HOLD_REWIND, ShortcutAction.RESET)
                 .map(::touchShortcutLabel),
         )

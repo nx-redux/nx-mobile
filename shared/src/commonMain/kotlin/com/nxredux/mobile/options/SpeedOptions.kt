@@ -3,7 +3,7 @@ package com.nxredux.mobile.options
 /**
  * Console Settings → fast forward and rewind, for every console: the top fast-forward speed, whether the sound plays
  * while fast-forwarding, and rewind (off by default; it costs battery) with its sound. Frontend `nx_` keys, saved like
- * the other console rows and applied live. Rewind rows are left out for cores that cannot rewind ([REWIND_KEYS]).
+ * the other console rows and applied live. Compact rows: no description line, the text sits behind the info icon. Rewind rows are left out for cores that cannot rewind ([REWIND_KEYS]).
  */
 object SpeedOptions {
     const val MAX_FF = "nx_max_ff_speed"
@@ -20,7 +20,6 @@ object SpeedOptions {
         FrontendOption(
             MAX_FF, "Max FF Speed", speeds, "4",
             "How fast fast forward can run. It never goes\nfaster than this, whatever the shortcut asks for.",
-            brief = "Fast forward never runs faster than this",
             visual = false, valueLabels = speeds.map { "${it}x" },
         ),
         FrontendOption(
@@ -31,7 +30,6 @@ object SpeedOptions {
         FrontendOption(
             REWIND, "Rewind", listOf("Off", "On"), "Off",
             "Keeps the last moments of play so you can go\nback with the Rewind shortcut. Uses battery.",
-            brief = "Keeps the last moments so you can go back (uses battery)",
             visual = false,
         ),
         FrontendOption(

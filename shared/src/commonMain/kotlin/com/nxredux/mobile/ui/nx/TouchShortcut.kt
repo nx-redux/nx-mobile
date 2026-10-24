@@ -13,8 +13,8 @@ data class TouchShortcut(val action: ShortcutAction, val on: Boolean)
 fun touchShortcutLabel(a: ShortcutAction): String = when (a) {
     ShortcutAction.TOGGLE_FF -> "FF"
     ShortcutAction.HOLD_FF -> "Hold FF"
-    ShortcutAction.TOGGLE_REWIND -> "Rewind"
-    ShortcutAction.HOLD_REWIND -> "Hold Rewind"
+    ShortcutAction.TOGGLE_REWIND -> "RW"
+    ShortcutAction.HOLD_REWIND -> "Hold RW"
     ShortcutAction.RESET -> "Reset"
 }
 

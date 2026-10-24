@@ -1317,7 +1317,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             // Only Frontend's name needs a line; the footer's status covers Save Changes.
             if (consoleRows().isNotEmpty()) add(MenuRow.Submenu(CONSOLE_SETTINGS_LABEL, PageKind.ConsoleSettings))
             add(MenuRow.Submenu(SHORTCUTS_LABEL, PageKind.Shortcuts))
-            add(MenuRow.Submenu("Frontend", PageKind.Frontend, FRONTEND_INFO, FRONTEND_DETAIL))
+            add(MenuRow.Submenu("Frontend", PageKind.Frontend, detail = FRONTEND_DETAIL))   // compact: its text behind the info icon
             add(MenuRow.Submenu("Shaders", PageKind.Shaders))
             add(MenuRow.Submenu("Core Options", PageKind.CoreOptions))
             add(MenuRow.Submenu("Save Changes", PageKind.SaveChanges))
@@ -1350,11 +1350,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun shadersPage() = MenuPage(
         PageKind.Shaders, "Shaders",
-        listOf(
-            presetRow(),
-            MenuRow.Submenu(ShaderOptions.PARAMS_LABEL, PageKind.ShaderParams),
-            MenuRow.Action(ShaderOptions.RESET_LABEL, MenuAction.RESET_SHADER_PARAMS),
-        ),
+        buildList {
+            add(presetRow())
+            // Parameters belong to a shader: with the preset None there is nothing to tune or reset.
+            if ((shaders[ShaderOptions.PRESET] ?: ShaderOptions.NONE) != ShaderOptions.NONE) {
+                add(MenuRow.Submenu(ShaderOptions.PARAMS_LABEL, PageKind.ShaderParams))
+                add(MenuRow.Action(ShaderOptions.RESET_LABEL, MenuAction.RESET_SHADER_PARAMS))
+            }
+        },
     )
 
     private fun shaderParamsPage(): MenuPage {
@@ -1602,7 +1605,6 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val PLAYER_KEY_PREFIX = "nx:player:"
         // Presses while the menu is open never claim a slot.
         const val PLAYERS_FOOTER = "Close the menu, then press a button\non a new controller to join."
-        const val FRONTEND_INFO = "Scaling, overlay and on-screen extras"
         const val FRONTEND_DETAIL = "Screen scaling, overlays and on-screen extras"
         const val ACHIEVEMENTS_LABEL = "Achievements"
         const val NO_LOCKED = "Everything unlocked."

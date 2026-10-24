@@ -20,4 +20,9 @@ class SpeedOptionsTest {
     @Test fun noRewindCoreForcesOff() {
         assertEquals(false, SpeedSettings.parse(mapOf(SpeedOptions.REWIND to "On"), false).rewind)
     }
+
+    @Test fun rowsAreCompactWithTheirTextBehindInfo() {
+        for (o in SpeedOptions.table) assertEquals("", o.brief, o.label)
+        for (o in SpeedOptions.table) kotlin.test.assertTrue(o.info.isNotBlank(), o.label)
+    }
 }

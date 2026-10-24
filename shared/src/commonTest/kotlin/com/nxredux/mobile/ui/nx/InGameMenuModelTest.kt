@@ -530,6 +530,28 @@ class InGameMenuModelTest {
         assertEquals(MenuAction.RESET_SHADER_PARAMS, (rows[2] as MenuRow.Action).action)
     }
 
+    @Test fun shader_parameters_and_reset_only_show_with_a_preset() {
+        val none = shadersModel(values = mapOf("nx_shader" to "None"))
+        assertEquals(listOf("Shader"), none.state.page.rows.map { it.label })
+        val absent = shadersModel(values = emptyMap())
+        assertEquals(listOf("Shader"), absent.state.page.rows.map { it.label })
+        // Choosing a preset rebuilds the page with all three, the selection still on the Shader row.
+        none.setShaders(mapOf("nx_shader" to "crt/crt-pi.glslp"), presets, listOf(scan, mask))
+        assertEquals(listOf("Shader", "Shader Parameters", "Reset Parameters"), none.state.page.rows.map { it.label })
+        assertEquals(0, none.state.page.selected)
+        none.press(NxButton.DOWN)
+        none.setShaders(mapOf("nx_shader" to "None"), presets, listOf(scan, mask))   // back to None: the selection stays valid
+        assertEquals(listOf("Shader"), none.state.page.rows.map { it.label })
+        assertEquals(0, none.state.page.selected)
+    }
+
+    @Test fun frontend_row_on_the_options_page_is_compact_with_its_text_behind_info() {
+        val m = plain(InGameMenuModel("Game", 9))
+        m.press(NxButton.DOWN); m.press(NxButton.DOWN); m.press(NxButton.DOWN); m.press(NxButton.A)
+        val row = m.state.page.rows.first { it.label == "Frontend" }
+        assertEquals("", row.info); assertEquals(InGameMenuModel.FRONTEND_DETAIL, row.detail); assertTrue(row.hasMoreInfo)
+    }
+
     @Test fun left_right_on_the_shader_row_emit_set_shader() {
         val m = shadersModel(values = mapOf("nx_shader" to "None"))
         assertEquals(MenuEffect.SetShader("nx_shader", "crt/crt-pi.glslp"), m.press(NxButton.RIGHT))
@@ -557,7 +579,7 @@ class InGameMenuModelTest {
     }
 
     @Test fun params_page_without_params_shows_the_message() {
-        val m = shadersModel(values = mapOf("nx_shader" to "None"), params = emptyList())
+        val m = shadersModel(params = emptyList())
         m.press(NxButton.DOWN); m.press(NxButton.A)
         assertEquals(PageKind.ShaderParams, m.state.page.kind)
         assertEquals(0, m.state.page.rows.size)

@@ -810,7 +810,7 @@ private fun SwapButton(tools: PadTools, height: Dp, width: Dp) =
 @Composable
 private fun ShortcutButton(slot: TouchSlot, shortcut: TouchShortcut?, onShortcut: (TouchSlot, Boolean) -> Unit, height: Dp, width: Dp) {
     val label = shortcut?.let { touchShortcutLabel(it.action) } ?: touchSlotPlaceholder(slot)
-    // "Hold Rewind" is long for a pill: it shrinks to fit, as a long label on a pad button does.
+    // "Hold RW" is long for a pill: it shrinks to fit, as a long label on a pad button does.
     val measurer = rememberTextMeasurer()
     val style = LocalTextStyle.current.merge(TextStyle(fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = NxTextSizes.padLabel.pinned()))
     val textWidth = remember(label, style, measurer) { measurer.measure(label, style, maxLines = 1, softWrap = false).size.width.toFloat() }
