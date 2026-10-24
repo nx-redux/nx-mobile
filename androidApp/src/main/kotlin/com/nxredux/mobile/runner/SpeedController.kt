@@ -64,8 +64,14 @@ internal class SpeedController(
      */
     fun tiles(): Pair<Boolean, Boolean?> {
         val o = control.output
-        return (o.ffSpeed > 0) to o.rewinding.takeIf { canRewind && settings.rewind && !netplay }
+        return (o.ffSpeed > 0) to o.rewinding.takeIf { rewindShown }
     }
+
+    /** Rewind is offered now: the core can, the console's Rewind row is on, and no session plays. */
+    val rewindShown: Boolean get() = canRewind && settings.rewind && !netplay
+
+    /** A netplay or GBA link session plays ([setSession]): every shortcut does nothing. */
+    val inSession: Boolean get() = netplay
 
     /** Focus or the menu took the buttons: holds end, toggles stay (Review Focus 5). */
     fun releaseHolds() { control.releaseHolds(); apply() }

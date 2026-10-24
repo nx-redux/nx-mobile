@@ -63,9 +63,10 @@ private val HandleHit = 28.dp   // a touch this near the handle resizes rather t
 
 /**
  * Controls → Pad layout's editor for [shape]: a grey block for the game and the real pad ([profile]'s buttons) at
- * [state]'s layout. A tap selects a group, a drag moves it (clamped, snapping home), its corner handle
- * resizes it and the toolbar resets it; overlapping groups are outlined red. The pad's own buttons do not press here:
- * the edit layer takes every touch. [onClose] leaves without saving (after "Discard changes?" when something changed).
+ * [state]'s layout, both touch shortcut pieces drawn as labelled stand-ins (in game each shows only once it has an
+ * action). A tap selects a group, a drag moves it (clamped, snapping home), its corner handle resizes it and the toolbar
+ * resets it; overlapping groups are outlined red. The pad's own buttons do not press here: the edit layer takes every
+ * touch. [onClose] leaves without saving (after "Discard changes?" when something changed).
  */
 @Composable
 fun PadLayoutEditor(shape: PadShape, profile: PadProfile, title: String, state: PadEditorState, onSave: (PadLayout) -> Unit, onClose: () -> Unit) {
@@ -81,14 +82,14 @@ fun PadLayoutEditor(shape: PadShape, profile: PadProfile, title: String, state: 
             PadShape.PORTRAIT -> Column(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxWidth().aspectRatio(4f / 3f).background(GameBlock))
                 Box(Modifier.fillMaxWidth().weight(1f)) {
-                    VirtualPad(noPad, Modifier.fillMaxSize(), profile = profile, onCStick = cStick, layout = state.layout, onGroupBounds = state)
+                    VirtualPad(noPad, Modifier.fillMaxSize(), profile = profile, onCStick = cStick, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true)
                 }
             }
             PadShape.OVERLAY -> Box(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxHeight().aspectRatio(4f / 3f).align(Alignment.Center).background(GameBlock))
                 Row(Modifier.fillMaxSize()) {
-                    VirtualPadLeft(noPad, { _, _ -> }, Modifier.weight(1f).fillMaxHeight(), profile = profile, overGame = true, layout = state.layout, onGroupBounds = state)
-                    VirtualPadRight(noPad, Modifier.weight(1f).fillMaxHeight(), profile = profile, overGame = true, onCStick = cStick, layout = state.layout, onGroupBounds = state)
+                    VirtualPadLeft(noPad, { _, _ -> }, Modifier.weight(1f).fillMaxHeight(), profile = profile, overGame = true, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true)
+                    VirtualPadRight(noPad, Modifier.weight(1f).fillMaxHeight(), profile = profile, overGame = true, onCStick = cStick, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true)
                 }
             }
         }

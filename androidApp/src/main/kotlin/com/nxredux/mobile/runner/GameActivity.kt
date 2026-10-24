@@ -101,11 +101,15 @@ import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.GameRumble
 import com.nxredux.mobile.shortcuts.ClaimedInput
 import com.nxredux.mobile.shortcuts.ConsoleHotkeys
+import com.nxredux.mobile.shortcuts.EffectiveShortcuts
 import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.shortcuts.ShortcutOverrides
 import com.nxredux.mobile.shortcuts.ShortcutSet
 import com.nxredux.mobile.shortcuts.Shortcuts
 import com.nxredux.mobile.shortcuts.SpeedEffect
+import com.nxredux.mobile.shortcuts.TouchSlot
+import com.nxredux.mobile.ui.nx.TouchShortcut
+import com.nxredux.mobile.ui.nx.visibleTouchShortcuts
 import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.storage.NdsResumeCleanup
 import com.nxredux.mobile.storage.NdsDsvSave
@@ -397,8 +401,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     private val speed by lazy {
         // The panels' Fast forward / Rewind tiles follow whatever changed them (a shortcut, a tile, the buffer running out).
-        SpeedController(lifecycleScope, onTiles = { dual.refreshDualPanel(); menu.menuModel?.let(menu::publishSpeed) }) { retroView }
+        // So do the touch shortcut buttons' toggled look and their Rewind rows.
+        SpeedController(lifecycleScope, onTiles = { dual.refreshDualPanel(); menu.menuModel?.let(menu::publishSpeed); refreshTouchShortcuts() }) { retroView }
     }
+    // What [applyShortcuts] last built: the touch buttons' actions ([refreshTouchShortcuts]).
+    private var effectiveShortcuts: EffectiveShortcuts? = null
+    /** The touch shortcut buttons the pads draw: snapshot state, read in the pads' composition. */
+    private val touchShortcuts = mutableStateOf<Map<TouchSlot, TouchShortcut>>(emptyMap())
+    // Each touch button's action while its press lasts: the release ends what the press started, even if the slot's
+    // action changed meanwhile.
+    private val touchHeld = HashMap<TouchSlot, ShortcutAction>()
     /** Controls → Shortcuts with this console's and game's `nx_bind_*` over it, read at launch; null before. */
     override var shortcutKeys: ShortcutKeys? = null
         private set
@@ -994,6 +1006,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         shortcutClaimed = ConsoleHotkeys.claimed(tag)
         applyShortcuts(Shortcuts.fromConfig(resolved.values))
         speed.setSession(netplay = np != null)
+        refreshTouchShortcuts()
         val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id) else null
         renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
         renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(privateRoot) }
@@ -2426,6 +2439,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (netplayLocal) return
         netplayLocal = true
         speed.setSession(netplay = false)   // the shortcuts work again
+        refreshTouchShortcuts()
         saveStates = SaveStates(dataRoot, paths).also { ss ->
             // Read now, as openMenu does for a menu opened before the first read: an open menu shows this slot.
             lastSlotCache = ss.lastSlot()
@@ -2627,13 +2641,41 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun releaseShortcutHolds() = speed.releaseHolds()
 
+    override val padShortcuts: Map<TouchSlot, TouchShortcut> get() = touchShortcuts.value
+
+    /**
+     * A touch shortcut button goes through [onShortcut] as a bound button does: hold while down, toggle on the press.
+     * Not while the in-game menu is open (the portrait band stays up and drives it): the menu took the shortcuts.
+     */
+    override fun onPadShortcut(slot: TouchSlot, down: Boolean) {
+        if (down) {
+            if (menuOpen) return
+            val action = touchShortcuts.value[slot]?.action ?: return
+            touchHeld[slot] = action
+            onShortcut(action, true)
+        } else {
+            touchHeld.remove(slot)?.let { onShortcut(it, false) }
+        }
+    }
+
+    /**
+     * The touch buttons to draw now: after the shortcuts are built ([applyShortcuts]), a session starts or ends, and the
+     * speed's tiles change (a toggle's look, the Rewind row).
+     */
+    private fun refreshTouchShortcuts() {
+        touchShortcuts.value = visibleTouchShortcuts(effectiveShortcuts, speed.output, speed.inSession, rewind = speed.rewindShown)
+    }
+
     /**
      * This console's or game's shortcut [overrides] now (launch, the in-game Shortcuts page, Restore defaults): the keys
      * are built again. Only while no shortcut key is held: the menu that changes them released them all as it opened.
      */
     override fun applyShortcuts(overrides: ShortcutOverrides) {
         shortcutOverrides = overrides
-        shortcutKeys = ShortcutKeys(Shortcuts.effective(shortcutBase, overrides, shortcutClaimed, canRewind))
+        val effective = Shortcuts.effective(shortcutBase, overrides, shortcutClaimed, canRewind)
+        effectiveShortcuts = effective
+        shortcutKeys = ShortcutKeys(effective)
+        refreshTouchShortcuts()
     }
 
     override fun publishShortcuts(model: InGameMenuModel) = model.setShortcuts(shortcutBase, shortcutOverrides, shortcutClaimed, canRewind)

@@ -118,11 +118,13 @@ class PadEditorState(initial: PadLayout) : PadGroupBoundsListener {
 
 /**
  * The pads' groups topmost first, as they draw: the C-stick over the clusters, the clusters over the shoulders, the
- * shoulders over the system rows (portrait: the top row over MENU's, which sits under everything with the NX mark).
+ * shoulders over the system rows (portrait: the top row over MENU's, which sits under everything with the NX mark, the
+ * touch shortcuts beside it).
  * Overlay halves keep their groups apart, and the same order holds within each.
  */
 private val HitOrder = listOf(
     PadGroup.C_STICK, PadGroup.FACE, PadGroup.DPAD, PadGroup.R_SHOULDERS, PadGroup.SYSTEM_RIGHT, PadGroup.L_SHOULDERS, PadGroup.SYSTEM_LEFT,
+    PadGroup.SHORTCUT_1, PadGroup.SHORTCUT_2,
 )
 
 /**

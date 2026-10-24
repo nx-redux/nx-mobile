@@ -70,6 +70,7 @@ import androidx.compose.ui.zIndex
 import com.nxredux.mobile.settings.PadGroup
 import com.nxredux.mobile.settings.PadLayout
 import com.nxredux.mobile.settings.PadTheme
+import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.pad_ps_circle
 import com.nxredux.mobile.shared.res.pad_ps_cross
@@ -737,9 +738,10 @@ data class PadTools(val stylusOn: Boolean, val onStylus: () -> Unit, val onSwap:
 
 /**
  * A pill button styled like a pad button, with its own press feedback (the [PadTools] pills, the d-pad / stick toggle,
- * MOTION): [label] on the pill face, pressed in while [latched], drawn at [alpha] when given; [onDown] / [onUp] around a
- * press, [onTap] after a tap, [onLongPress] after a long press (a pill without one never waits for it). The tap handler
- * outlives a composition: it calls the latest callbacks (a hoisted choice changes them).
+ * MOTION, the touch shortcuts): [label] on the pill face at [labelScale] of the pad's label size, pressed in while
+ * [latched], drawn at [alpha] when given; [onDown] / [onUp] around a press, [onTap] after a tap, [onLongPress] after a
+ * long press (a pill without one never waits for it). The tap handler outlives a composition: it calls the latest
+ * callbacks (a hoisted choice changes them).
  */
 @Composable
 private fun ToolButton(
@@ -752,6 +754,7 @@ private fun ToolButton(
     onLongPress: (() -> Unit)? = null,
     onDown: () -> Unit = {},
     onUp: () -> Unit = {},
+    labelScale: Float = 1f,
 ) {
     val haptic = rememberPadHaptic()
     val latestTap by rememberUpdatedState(onTap)
@@ -785,7 +788,7 @@ private fun ToolButton(
             color = LocalPadColors.current.label,
             fontFamily = LocalNxFont.current,
             fontWeight = FontWeight.SemiBold,
-            fontSize = NxTextSizes.padLabel.pinned(),
+            fontSize = NxTextSizes.padLabel.pinned() * labelScale,
         )
     }
 }
@@ -797,6 +800,45 @@ private fun StylusButton(tools: PadTools, height: Dp, width: Dp) =
 @Composable
 private fun SwapButton(tools: PadTools, height: Dp, width: Dp) =
     ToolButton("SWAP", height, width, onDown = { tools.onSwap(true) }, onUp = { tools.onSwap(false) })
+
+/**
+ * A touch shortcut button: [shortcut]'s label on a MENU-sized pill, pressed in while its toggle is on. Every action gets
+ * its press and its release ([onShortcut] true, then false, also when the finger slides off or the button leaves the
+ * pad): a hold runs while the finger stays, a toggle flips (and Reset asks) on the press. A null [shortcut] is the Pad
+ * layout editor's labelled stand-in for [slot] (the editor takes its touches).
+ */
+@Composable
+private fun ShortcutButton(slot: TouchSlot, shortcut: TouchShortcut?, onShortcut: (TouchSlot, Boolean) -> Unit, height: Dp, width: Dp) {
+    val label = shortcut?.let { touchShortcutLabel(it.action) } ?: touchSlotPlaceholder(slot)
+    // "Hold Rewind" is long for a pill: it shrinks to fit, as a long label on a pad button does.
+    val measurer = rememberTextMeasurer()
+    val style = LocalTextStyle.current.merge(TextStyle(fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = NxTextSizes.padLabel.pinned()))
+    val textWidth = remember(label, style, measurer) { measurer.measure(label, style, maxLines = 1, softWrap = false).size.width.toFloat() }
+    val scale = with(LocalDensity.current) { pillLabelScale(textWidth, width.toPx(), height.toPx()) }
+    ToolButton(
+        label, height, width, latched = shortcut?.on == true, labelScale = scale,
+        onDown = { onShortcut(slot, true) }, onUp = { onShortcut(slot, false) },
+    )
+}
+
+/**
+ * [slot]'s touch shortcut as its own Pad layout piece ([TouchSlot.padGroup]): drawn while [shortcuts] gives it an action,
+ * or always as a stand-in when [placeholders] (the editor). Nothing at all otherwise, so the stock pad looks as before.
+ */
+@Composable
+private fun ShortcutPiece(
+    slot: TouchSlot,
+    shortcuts: Map<TouchSlot, TouchShortcut>,
+    placeholders: Boolean,
+    onShortcut: (TouchSlot, Boolean) -> Unit,
+    height: Dp,
+    width: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val shortcut = shortcuts[slot]
+    if ((shortcut == null && !placeholders) || width <= 0.dp) return
+    PadGroupBox(slot.padGroup, modifier) { ShortcutButton(slot, shortcut, onShortcut, height, width) }
+}
 
 /**
  * The d-pad / stick choice per game for the process's life. A host that rebuilds the pad per layout (rotate, fold: a
@@ -843,7 +885,9 @@ private fun rememberStickChoice(useJoystick: Boolean?, onUseJoystickChange: (Boo
 /**
  * The portrait pad. [useJoystick] / [onUseJoystickChange] hoist the d-pad / stick choice to the host (see
  * [PadStickModes]); left null, the pad keeps it itself. [latched] are shoulders drawn pressed without a finger on them
- * (the GameCube's soft-pressed L / R).
+ * (the GameCube's soft-pressed L / R). [shortcuts] are the touch shortcut buttons to draw ([visibleTouchShortcuts]), either
+ * side of MENU's row, each pressed and released through [onShortcut]; [shortcutPlaceholders] draws both as stand-ins
+ * (the Pad layout editor).
  */
 @Composable
 fun VirtualPad(
@@ -860,6 +904,9 @@ fun VirtualPad(
     layout: PadLayout = PadLayout.EMPTY,
     onGroupBounds: PadGroupBoundsListener? = null,
     tools: PadTools? = null,
+    shortcuts: Map<TouchSlot, TouchShortcut> = emptyMap(),
+    onShortcut: (TouchSlot, Boolean) -> Unit = { _, _ -> },
+    shortcutPlaceholders: Boolean = false,
 ) {
     // Track which buttons this pad currently holds so we can release them if the pad
     // leaves composition mid-hold. A duplicate Up (also emitted by the gesture's finally
@@ -932,7 +979,12 @@ fun VirtualPad(
                     NxEmblem(Modifier.size(width = unit * 1.15f, height = unit * 1.1f))
                     Spacer(Modifier.height(unit * 0.3f))
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                // The touch shortcuts either side of MENU's row: the equal weights keep the row centred with or without them.
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                        val w = portraitShortcutWidth(sysW.value, maxWidth.value, PORTRAIT_SHORTCUT_GAP).dp
+                        ShortcutPiece(TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, w, Modifier.padding(end = PORTRAIT_SHORTCUT_GAP.dp))
+                    }
                     PadGroupBox(PadGroup.SYSTEM_LEFT) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (tools != null) {
@@ -952,6 +1004,10 @@ fun VirtualPad(
                             }
                         }
                     }
+                    BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                        val w = portraitShortcutWidth(sysW.value, maxWidth.value, PORTRAIT_SHORTCUT_GAP).dp
+                        ShortcutPiece(TouchSlot.TWO, shortcuts, shortcutPlaceholders, onShortcut, sysH, w, Modifier.padding(start = PORTRAIT_SHORTCUT_GAP.dp))
+                    }
                 }
             }
         }
@@ -970,6 +1026,9 @@ fun VirtualPad(
         }   // ProvidePadArrange
     }
 }
+
+/** The gap between a portrait touch shortcut and MENU's row, dp: the row's own pill gap. */
+private const val PORTRAIT_SHORTCUT_GAP = 12f
 
 private const val MID_SCALE = 1.25f       // target growth of the portrait pad's middle row
 private const val MID_MIN_GAP = 0.5f      // units kept between the d-pad and the face diamond
@@ -1333,7 +1392,8 @@ private fun SystemRow(
 /**
  * Left cluster (landscape): [clusterRows] of MENU/toggle, shoulders L1/L2 and the d-pad/analog-stick, pushed to the
  * bottom-left so the d-pad sits low for the left thumb. Transparent. [overGame] (the clusters drawn over the game)
- * moves the MENU/toggle row to the top of the box.
+ * moves the MENU/toggle row to the top of the box. Touch shortcut 1 ([shortcuts], [onShortcut], [shortcutPlaceholders]
+ * as on [VirtualPad]) sits beside the shoulders, toward the screen's middle.
  */
 @Composable
 fun VirtualPadLeft(
@@ -1349,6 +1409,9 @@ fun VirtualPadLeft(
     layout: PadLayout = PadLayout.EMPTY,
     onGroupBounds: PadGroupBoundsListener? = null,
     tools: PadTools? = null,
+    shortcuts: Map<TouchSlot, TouchShortcut> = emptyMap(),
+    onShortcut: (TouchSlot, Boolean) -> Unit = { _, _ -> },
+    shortcutPlaceholders: Boolean = false,
 ) {
     val emit = rememberEmit(onEvent)
     val stick = rememberStickChoice(useJoystick, onUseJoystickChange)
@@ -1383,10 +1446,15 @@ fun VirtualPadLeft(
                                 }
                             }
                         }
-                        PadRow.SHOULDERS -> PadGroupBox(PadGroup.L_SHOULDERS, Modifier.padding(start = nudge)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                ShoulderButtons(padShoulders(PadSide.LEFT, profile), profile, bumper, trigger, emit, latched)
+                        // Touch shortcut 1 beside the shoulders, toward the middle: the row is the shoulders' height already, so
+                        // nothing else moves, and it stays clear of MENU's row above and the d-pad below.
+                        PadRow.SHOULDERS -> Row(verticalAlignment = Alignment.CenterVertically) {
+                            PadGroupBox(PadGroup.L_SHOULDERS, Modifier.padding(start = nudge)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    ShoulderButtons(padShoulders(PadSide.LEFT, profile), profile, bumper, trigger, emit, latched)
+                                }
                             }
+                            ShortcutPiece(TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW, Modifier.padding(start = gap))
                         }
                         PadRow.CLUSTER -> PadGroupBox(PadGroup.DPAD, Modifier.padding(start = nudge)) {
                             if (stick.useJoystick) NeuJoystick(unit, emit, analog = true, onStick = onStick)
@@ -1404,7 +1472,8 @@ fun VirtualPadLeft(
 /**
  * Right cluster (landscape): [clusterRows] of SELECT/START, shoulders R1/R2 and the X/Y/B/A diamond, pushed to the
  * bottom-right so the face buttons sit low and toward the edge for the right thumb. Transparent. [overGame] moves
- * SELECT/START to the top of the box.
+ * SELECT/START to the top of the box. Touch shortcut 2 ([shortcuts], [onShortcut], [shortcutPlaceholders] as on
+ * [VirtualPad]) sits beside the shoulders, toward the screen's middle.
  */
 @Composable
 fun VirtualPadRight(
@@ -1417,6 +1486,9 @@ fun VirtualPadRight(
     layout: PadLayout = PadLayout.EMPTY,
     onGroupBounds: PadGroupBoundsListener? = null,
     tools: PadTools? = null,
+    shortcuts: Map<TouchSlot, TouchShortcut> = emptyMap(),
+    onShortcut: (TouchSlot, Boolean) -> Unit = { _, _ -> },
+    shortcutPlaceholders: Boolean = false,
 ) {
     val emit = rememberEmit(onEvent)
     // Always Charcoal: the clusters sit translucent over the game, whatever the portrait Pad theme.
@@ -1450,13 +1522,18 @@ fun VirtualPadRight(
                         }
                         // With the C-stick the face cluster is taller, which would lift the shoulders above the left cluster's:
                         // drawn lower by the difference, level with L / ZL (right of the stick, above X).
-                        PadRow.SHOULDERS -> PadGroupBox(
-                            PadGroup.R_SHOULDERS,
-                            Modifier.padding(end = nudge)
-                                .offset(y = if (profile.cStick && onCStick != null) unit * C_STICK_SHOULDER_DROP else 0.dp),
-                        ) {
-                            Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                                ShoulderButtons(padShoulders(PadSide.RIGHT, profile), profile, bumper, trigger, emit, latched)
+                        // Touch shortcut 2 beside them, toward the middle, as on the left; it does not drop with them, so it
+                        // stays above the C-stick's well.
+                        PadRow.SHOULDERS -> Row(verticalAlignment = Alignment.CenterVertically) {
+                            ShortcutPiece(TouchSlot.TWO, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW, Modifier.padding(end = gap))
+                            PadGroupBox(
+                                PadGroup.R_SHOULDERS,
+                                Modifier.padding(end = nudge)
+                                    .offset(y = if (profile.cStick && onCStick != null) unit * C_STICK_SHOULDER_DROP else 0.dp),
+                            ) {
+                                Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                                    ShoulderButtons(padShoulders(PadSide.RIGHT, profile), profile, bumper, trigger, emit, latched)
+                                }
                             }
                         }
                         PadRow.CLUSTER -> PadGroupBox(PadGroup.FACE, Modifier.padding(end = nudge)) {

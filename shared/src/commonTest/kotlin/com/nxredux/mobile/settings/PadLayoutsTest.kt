@@ -170,4 +170,13 @@ class PadLayoutsTest {
         assertEquals(PadLayout.EMPTY, PadLayouts.startingLayout(all, "gba", PORTRAIT))
         assertNull(PadLayouts.afterSave(all, "gba", PORTRAIT, PadLayout.EMPTY, dirty = false))
     }
+    @Test fun pad_group_names_stay_stable_and_the_shortcut_pieces_read() {
+        // Layouts store groups by name: the shortcut pieces are appended, so a stored line naming an old group still reads.
+        assertEquals(listOf("DPAD", "FACE", "L_SHOULDERS", "R_SHOULDERS", "SYSTEM_LEFT", "SYSTEM_RIGHT", "C_STICK"), PadGroup.entries.take(7).map { it.name })
+        val all = PadLayouts.decode("gba\tPORTRAIT\tDPAD\t1\t0\t1\ngba\tOVERLAY\tSHORTCUT_1\t0\t-1\t1.2\ngba\tOVERLAY\tSHORTCUT_2\t1\t0\t1")
+        assertEquals(GroupTweak(dx = 1f), PadLayouts.own(all, "gba", PORTRAIT)?.tweaks?.get(PadGroup.DPAD))
+        assertEquals(GroupTweak(dy = -1f, scale = 1.2f), PadLayouts.own(all, "gba", OVERLAY)?.tweaks?.get(PadGroup.SHORTCUT_1))
+        assertEquals(GroupTweak(dx = 1f), PadLayouts.own(all, "gba", OVERLAY)?.tweaks?.get(PadGroup.SHORTCUT_2))
+        assertEquals(all, PadLayouts.decode(PadLayouts.encode(all)))
+    }
 }
