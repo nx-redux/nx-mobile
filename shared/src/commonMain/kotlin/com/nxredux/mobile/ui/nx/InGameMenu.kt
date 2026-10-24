@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.ui.SETTINGS_SPLIT_LEFT
+import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 import com.nxredux.mobile.ui.SplitPanes
 import com.nxredux.mobile.ui.UNFOCUSED_ALPHA
 
@@ -131,7 +132,7 @@ fun InGameMenu(
         val split = inGameMenuSplit(window)
         // After every composition, so the model's input agrees with the panes drawn from the first frame.
         SideEffect { onSplit(split) }
-        // A dialog page (Quit's) draws over the page under it, which takes no input meanwhile (the scrim covers it).
+        // A dialog page (Quit's, Reset's) draws over the page under it, which takes no input meanwhile (the scrim covers it).
         val (under, dialog) = menuDialog(state)
         if (under.page.kind is PageKind.Adjust) {
             // Over the dual-screen panel (opaque) the picture is on the other display: the header over the strip instead.
@@ -144,7 +145,8 @@ fun InGameMenu(
             InGameMenuContent(under, slots, rowHeight, onSelect, onActivate, onDismiss, onChange, onPress, detail, onInfoTruncated, splitUi, panelUi, panelBeside, opaque, onOption)
         }
         if (dialog != null) {
-            // Only a tap opens it (a pad's A / X quit on the row itself), so no key hints.
+            // No key hints: Quit's opens on a tap only (a pad's A / X quit on the row itself); Reset's, from a binding too,
+            // reads as any choice dialog (UP/DOWN, A, B cancels).
             NxChoiceDialog(dialog.title, dialog.footer, dialog.rows.map { it.label }, dialog.selected, onChoose = onActivate, onCancel = onDismiss)
         }
         // An options row's picker or full description, over everything (the hint bar too).
@@ -155,9 +157,9 @@ fun InGameMenu(
 /** [under]: the menu drawn as pages; [dialog]: the top page when it draws as a dialog over them ([NxChoiceDialog]). */
 internal data class MenuDialog(val under: MenuState, val dialog: MenuPage?)
 
-/** Whether [state]'s top page is a dialog (Quit Game): then the pages under it draw, the dialog over them. */
+/** Whether [state]'s top page is a dialog (Quit Game, Reset game?): then the pages under it draw, the dialog over them. */
 internal fun menuDialog(state: MenuState): MenuDialog =
-    if (state.page.kind == PageKind.QuitGame && state.stack.size > 1) {
+    if ((state.page.kind == PageKind.QuitGame || state.page.kind == PageKind.ResetGame) && state.stack.size > 1) {
         MenuDialog(state.copy(stack = state.stack.dropLast(1)), state.page)
     } else {
         MenuDialog(state, null)
@@ -727,6 +729,7 @@ private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, pan
     page.kind == PageKind.Root && row is MenuRow.Slot ->
         listOf(Hint(NxButton.LEFT, "Slot"), Hint(NxButton.A, row.label), Hint(NxButton.B, "Resume"))
     // The root has no info area (Disc N/M): A opens the info there.
+    page.kind == PageKind.Shortcuts && row is MenuRow.Option -> shortcutHints(row)
     page.kind == PageKind.Root && row is MenuRow.Option -> buildList {
         add(Hint(NxButton.LEFT, "Change"))
         if (row.fullInfo.isNotBlank()) add(Hint(NxButton.A, "Info"))
@@ -751,6 +754,18 @@ private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, pan
         if (infoTruncated) add(Hint(NxButton.X, "Info"))
         add(Hint(NxButton.B, "Back"))
     }
+}
+
+/**
+ * An Options → Shortcuts row: waiting for a press, only B Cancel (every other key is the press); a bind row's A Bind, a
+ * touch button's Change and Choose; then X None (here) and Y Default (back to Controls → Shortcuts).
+ */
+private fun shortcutHints(row: MenuRow.Option): List<Hint> = buildList {
+    if (row.valueLabel == SHORTCUT_PROMPT) { add(Hint(NxButton.B, "Cancel")); return@buildList }
+    if (row.choices.isEmpty()) add(Hint(NxButton.A, "Bind")) else { add(Hint(NxButton.LEFT, "Change")); add(Hint(NxButton.A, "Choose")) }
+    add(Hint(NxButton.X, "None"))
+    add(Hint(NxButton.Y, "Default"))
+    add(Hint(NxButton.B, "Back"))
 }
 
 /**

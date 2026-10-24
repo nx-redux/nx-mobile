@@ -44,6 +44,14 @@ import com.nxredux.mobile.ui.nx.symmetricCutoutInset
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.round
+import com.nxredux.mobile.ui.nx.NxSpeedIndicator
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
@@ -94,9 +102,22 @@ import com.nxredux.mobile.options.OverlayResolver
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.ScreenScaling
 import com.nxredux.mobile.options.ShaderOptions
+import com.nxredux.mobile.options.SpeedOptions
+import com.nxredux.mobile.options.SpeedSettings
 import com.nxredux.mobile.options.VulkanFallback
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.GameRumble
+import com.nxredux.mobile.shortcuts.ClaimedInput
+import com.nxredux.mobile.shortcuts.ConsoleHotkeys
+import com.nxredux.mobile.shortcuts.EffectiveShortcuts
+import com.nxredux.mobile.shortcuts.ShortcutAction
+import com.nxredux.mobile.shortcuts.ShortcutOverrides
+import com.nxredux.mobile.shortcuts.ShortcutSet
+import com.nxredux.mobile.shortcuts.Shortcuts
+import com.nxredux.mobile.shortcuts.SpeedEffect
+import com.nxredux.mobile.shortcuts.TouchSlot
+import com.nxredux.mobile.ui.nx.TouchShortcut
+import com.nxredux.mobile.ui.nx.visibleTouchShortcuts
 import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.storage.NdsResumeCleanup
 import com.nxredux.mobile.storage.NdsDsvSave
@@ -293,9 +314,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     // ---- in-game pause menu ----
-    override var menuOpen = false
+    private val menuOpenState = mutableStateOf(false)   // read by the notifications overlay (hides the speed indicator)
+    override var menuOpen: Boolean
+        get() = menuOpenState.value
+        set(value) { menuOpenState.value = value }
     /**
-     * Settings → Emulators → Pause when unfocused: another app took the top focus while this window stays visible (split
+     * Settings → System → Pause when unfocused: another app took the top focus while this window stays visible (split
      * screen, a freeform window, an app on another display), so the game holds, as under the menu, until it is back.
      */
     private var focusPaused = false
@@ -382,6 +406,35 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** Players this game's core gives ([CoreRegistry.playersFor]); 1 until launch. */
     private var playerCount = 1
     override var frontendValues: Map<String, String> = FrontendOptions.defaults()   // every frontend key, as in effect now
+        private set
+    /** The core can rewind ([com.nxredux.mobile.runner.CoreDescriptor.rewind]); false until the launch resolves the core. */
+    private var canRewind = false
+    /**
+     * Fast forward and rewind on the view; the shortcuts drive it ([onShortcut]), the speed rows configure it ([applyFrontend]).
+     * Off for a netplay session ([SpeedController.setSession]): a link session's end turns it back on ([playLocally]), a
+     * lockstep session's does not, so a game played on alone after lockstep keeps it off, as it keeps save states off.
+     */
+    private val speed by lazy {
+        // The panels' Fast forward / Rewind tiles follow whatever changed them (a shortcut, a tile, the buffer running out).
+        // So do the touch shortcut buttons' toggled look and their Rewind rows.
+        SpeedController(lifecycleScope, lifecycle, onTiles = { dual.refreshDualPanel(); menu.menuModel?.let(menu::publishSpeed); refreshTouchShortcuts() }) { retroView }
+    }
+    // What [applyShortcuts] last built: the touch buttons' actions ([refreshTouchShortcuts]).
+    private var effectiveShortcuts: EffectiveShortcuts? = null
+    /** The touch shortcut buttons the pads draw: snapshot state, read in the pads' composition. */
+    private val touchShortcuts = mutableStateOf<Map<TouchSlot, TouchShortcut>>(emptyMap())
+    // Each touch button's action while its press lasts: the release ends what the press started, even if the slot's
+    // action changed meanwhile.
+    private val touchHeld = HashMap<TouchSlot, ShortcutAction>()
+    /** Controls → Shortcuts with this console's and game's `nx_bind_*` over it, read at launch; null before. */
+    override var shortcutKeys: ShortcutKeys? = null
+        private set
+    // What [shortcutKeys] is built from ([applyShortcuts]): Controls → Shortcuts and the console's hotkeys, read at launch
+    // (neither can change while the game runs), and this console's or game's overrides, which the in-game Shortcuts page
+    // edits live and Save Changes writes.
+    private var shortcutBase = ShortcutSet.EMPTY
+    private var shortcutClaimed: List<ClaimedInput> = ConsoleHotkeys.always
+    override var shortcutOverrides: ShortcutOverrides = ShortcutOverrides.NONE
         private set
     // Settings → Controls → Game rumble, read once per game: each port's rumble on its own pad; port 0 falls back to the phone.
     private val gameRumble by lazy { AndroidAppSettings(this).gameRumble }
@@ -778,7 +831,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // crashes on a thread without the context. The file writes go to [autoWriter] to keep them off the
         // main thread; they are atomic renames, so a reader sees the previous state or the new one.
         val t0 = SystemClock.elapsedRealtime()
-        val bytes = runCatching { view.serializeState() }
+        val bytes = speed.aroundStateNow { runCatching { view.serializeState() } }
             .onFailure { NxLog.e("GameActivity", "auto-resume state on stop failed", it) }.getOrNull()
         val serializeMs = SystemClock.elapsedRealtime() - t0
         if (bytes == null || bytes.isEmpty()) return
@@ -977,6 +1030,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // netplay: both devices run the console's default Sega pad (Auto), whatever this device's console or game setting;
         // the core then gets the handheld pak's pad for this tag and core (NetplayPads).
         if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to SegaPadType.AUTO)
+        // Shortcuts: the base with this console's and game's overrides, less what a built-in hotkey owns. netplay: they
+        // stay bound but do nothing, as fast forward, rewind and reset would desync the players. A link session's end
+        // turns them back on ([playLocally]); a lockstep session's does not: the game played on alone after it keeps them
+        // off, as it has no save states.
+        canRewind = descriptor?.rewind == true
+        shortcutBase = Shortcuts.decodeBase(AndroidAppSettings(this).shortcuts)
+        shortcutClaimed = ConsoleHotkeys.claimed(tag)
+        applyShortcuts(Shortcuts.fromConfig(resolved.values))
+        speed.setSession(netplay = np != null)
+        refreshTouchShortcuts()
         val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id) else null
         renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
         renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(privateRoot) }
@@ -1278,6 +1341,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (isN3ds) offerN3dsMotion()
         val view = GLRetroView(this, data)
         retroView = view
+        speed.apply()   // a speed set before the view existed (the launch's rows reach it again in applyFrontend)
         // Not in netplay: a link cable's step may wait out the peer's hold (sio_lockstep: up to 30 s), and the session
         // has its own timeouts.
         coreWatchdog = CoreWatchdog({ if (netplay == null) view.stepStalledMillis() else 0L }, onHung = ::onCoreHung)
@@ -1471,7 +1535,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             val ss = saveStates ?: return
             ok = withContext(Dispatchers.IO) {
                 awaitAutoWrites()   // a Home write of this game may still be landing
-                runCatching { ss.readSlotState(slot)?.let { view.unserializeState(it) } ?: false }.getOrDefault(false)
+                runCatching { ss.readSlotState(slot)?.let { speed.aroundState { view.unserializeState(it) } } ?: false }.getOrDefault(false)
             }
             if (!ok) toast("Resume failed")
         } finally {
@@ -1693,6 +1757,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Portrait Pad changed (the menu, the corner icon, or the launch's values after onCreate's layout). Posted: the
         // icon's own view is still dispatching its long press.
         if (padLayout.portraitPadHidden() != padLayout.layoutPadHidden) findViewById<FrameLayout>(R.id.root).post { padLayout.applyLayout(resources.configuration.orientation) }
+        speed.configure(SpeedSettings.parse(values, canRewind), canRewind)   // applied once the view exists, and on every row change
         val s = FrontendSettings.parse(values)
         padLayout.padLandscapeAlpha.value = s.padLandscapeAlpha
         val view = retroView ?: return
@@ -1891,7 +1956,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         captureThumbnail { bmp ->
             lifecycleScope.launch(Dispatchers.IO) {
                 runCatching {
-                    val bytes = view.serializeState()
+                    val bytes = speed.aroundState { view.serializeState() }
                     check(bytes.isNotEmpty()) { "core returned no state" }
                     // On [autoWriter], so it lands in order with an on-stop write of the same files.
                     autoWriter.submit {
@@ -1917,13 +1982,17 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (isWii && padProfile().motionButton && motionSensors?.hasSensors == true) PadMotion(wiiMotionOn, ::toggleWiiMotion, ::recenterWiiMotion) else null
 
     /**
-     * The keys the menu leaves out: the .cfg's locks, Motion Controls on a Wii game without both sensors, and both Wii
-     * rows for a GameCube disc under the WII tag.
+     * The keys the menu leaves out: the .cfg's locks, Motion Controls on a Wii game without both sensors, both Wii rows
+     * for a GameCube disc under the WII tag, and the Rewind rows unless the core can rewind ([canRewind]: an unknown core
+     * can't, as the shortcuts have it).
      */
-    override fun menuLocked(): Set<String> = when {
-        wiiGameCube -> lockedOptions + WiiOptions.table.map { it.key }
-        isWii && motionSensors?.hasSensors != true -> lockedOptions + WiiOptions.MOTION
-        else -> lockedOptions
+    override fun menuLocked(): Set<String> {
+        val noRewind = if (!canRewind) SpeedOptions.REWIND_KEYS else emptySet()
+        return noRewind + when {
+            wiiGameCube -> lockedOptions + WiiOptions.table.map { it.key }
+            isWii && motionSensors?.hasSensors != true -> lockedOptions + WiiOptions.MOTION
+            else -> lockedOptions
+        }
     }
 
     /** The open menu's Wii rows: Motion Controls, once the sensors are known. */
@@ -2080,13 +2149,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 // true = written, null = skipped (the core can't save states), false = failed.
                 val ok: Boolean? = withContext(Dispatchers.IO) {
                     // Both reads of the core before any wait; null = the core was already destroyed (nothing to write).
-                    val bytes = withLiveCore {
-                        // On the GL thread (a core may draw inside it: Azahar), waited for under the lock: the GL
-                        // thread never takes coreLock, so the destroy observer just waits for it.
-                        val state = runCatching { view.serializeState() }
-                            .onFailure { NxLog.e("GameActivity", "auto-resume state failed", it) }
-                        writeBatterySave(notify = true)   // local: always completes, before the native destroy
-                        state
+                    val bytes = speed.aroundState {
+                        withLiveCore {
+                            // On the GL thread (a core may draw inside it: Azahar), waited for under the lock: the GL
+                            // thread never takes coreLock, so the destroy observer just waits for it.
+                            val state = runCatching { view.serializeState() }
+                                .onFailure { NxLog.e("GameActivity", "auto-resume state failed", it) }
+                            writeBatterySave(notify = true)   // local: always completes, before the native destroy
+                            state
+                        }
                     }
                     val ok = when {
                         bytes == null || bytes.isFailure -> false
@@ -2178,7 +2249,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             trackSlotJob(lifecycleScope.launch(Dispatchers.IO) {
                 val ok = runCatching {
                     // Empty = the core refused (or is gone): keep the slot's old state and report the failure.
-                    val bytes = view.serializeState()
+                    val bytes = speed.aroundState { view.serializeState() }
                     check(bytes.isNotEmpty()) { "core returned no state" }
                     ss.writeState(slot, bytes)
                     if (bmp != null) ss.writeThumb(slot, bmp)
@@ -2200,7 +2271,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             val read = runCatching { ss.readState(slot) }
                 .onFailure { NxLog.e("GameActivity", "could not read slot $slot", it) }
             if (read.getOrNull() == null && read.isSuccess) return@launch   // empty slot: ignore (the menu stays open)
-            val ok = read.getOrNull()?.let { bytes -> runCatching { view.unserializeState(bytes) }.getOrDefault(false) } ?: false
+            val ok = read.getOrNull()?.let { bytes -> runCatching { speed.aroundState { view.unserializeState(bytes) } }.getOrDefault(false) } ?: false
             if (ok) runCatching { saveStates?.rememberSlot(slot) }
                 .onFailure { NxLog.e("GameActivity", "could not record last slot", it) }
             // The loaded state's rumble may stay latched unreported: start from still rather than re-apply the old one.
@@ -2405,6 +2476,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun playLocally() {
         if (netplayLocal) return
         netplayLocal = true
+        speed.setSession(netplay = false)   // the shortcuts work again
+        refreshTouchShortcuts()
         saveStates = SaveStates(dataRoot, paths).also { ss ->
             // Read now, as openMenu does for a menu opened before the first read: an open menu shows this slot.
             lastSlotCache = ss.lastSlot()
@@ -2561,9 +2634,25 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                         symmetricCutoutInset(cutout.getLeft(density, dir).toFloat(), cutout.getRight(density, dir).toFloat()).toDp().value
                     }
                     // This view's own size: in landscape the root's, which the clusters (MATCH_PARENT tall) fit their unit to.
-                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                    var origin by remember { mutableStateOf(IntOffset.Zero) }   // this view's top-left in the window
+                    BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow().round() }) {
                         val maxW = nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset).dp
                         NxNotifications(toasts, pill, safeSides = sides, placement = placement, topCentreMaxWidth = maxW)
+                        // Top-right of the picture (not the screen: the landscape pad's shoulders hold the screen's corners),
+                        // kept inside the cutout; not under the menu.
+                        val kind = speed.indicator.value
+                        val pic = renderer.pictureBox.value
+                        if (kind != null && pic != null && !menuOpenState.value) {
+                            val margin = with(density) { 8.dp.roundToPx() }
+                            val cutRight = cutout.getRight(density, dir)
+                            val cutTop = cutout.getTop(density)
+                            val right = minOf(pic.right - origin.x, constraints.maxWidth - cutRight) - margin
+                            val top = maxOf(pic.top - origin.y, cutTop) + margin
+                            NxSpeedIndicator(kind, Modifier.layout { m, c ->
+                                val p = m.measure(c)
+                                layout(0, 0) { p.place(right - p.width, top) }
+                            })
+                        }
                     }
                 }
             }
@@ -2599,6 +2688,83 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun menuLayoutParams(orientation: Int, overPanel: Boolean): FrameLayout.LayoutParams = menu.menuLayoutParams(orientation, overPanel)
     override fun toggleMenu() = menu.toggleMenu()
     override fun backPressed() = menu.backPressed()
+
+    override fun onShortcut(action: ShortcutAction, down: Boolean) {
+        if (speed.onAction(action, down) == SpeedEffect.AskReset) askReset()
+    }
+
+    override fun releaseShortcutHolds() = speed.releaseHolds()
+
+    override val padShortcuts: Map<TouchSlot, TouchShortcut> get() = touchShortcuts.value
+
+    /**
+     * A touch shortcut button goes through [onShortcut] as a bound button does: hold while down, toggle on the press.
+     * Not while the in-game menu is open (the portrait band stays up and drives it): the menu took the shortcuts.
+     */
+    override fun onPadShortcut(slot: TouchSlot, down: Boolean) {
+        if (down) {
+            if (menuOpen) return
+            val action = touchShortcuts.value[slot]?.action ?: return
+            touchHeld[slot] = action
+            onShortcut(action, true)
+        } else {
+            touchHeld.remove(slot)?.let { onShortcut(it, false) }
+        }
+    }
+
+    /**
+     * The touch buttons to draw now: after the shortcuts are built ([applyShortcuts]), a session starts or ends, and the
+     * speed's tiles change (a toggle's look, the Rewind row).
+     */
+    private fun refreshTouchShortcuts() {
+        touchShortcuts.value = visibleTouchShortcuts(effectiveShortcuts, speed.output, speed.inSession, rewind = speed.rewindShown)
+    }
+
+    /**
+     * This console's or game's shortcut [overrides] now (launch, the in-game Shortcuts page, Restore defaults): the keys
+     * are built again. Only while no shortcut key is held: the menu that changes them released them all as it opened.
+     */
+    override fun applyShortcuts(overrides: ShortcutOverrides) {
+        shortcutOverrides = overrides
+        val effective = Shortcuts.effective(shortcutBase, overrides, shortcutClaimed, canRewind)
+        effectiveShortcuts = effective
+        shortcutKeys = ShortcutKeys(effective, shortcutClaimed, SystemClock::uptimeMillis)
+        refreshTouchShortcuts()
+    }
+
+    override fun publishShortcuts(model: InGameMenuModel) = model.setShortcuts(shortcutBase, shortcutOverrides, shortcutClaimed, canRewind)
+
+    override fun menuCaptureKey(keyCode: Int, down: Boolean, repeat: Boolean): Boolean = menu.captureKey(keyCode, down, repeat)
+
+    override fun speedTiles(): Pair<Boolean, Boolean?> = speed.tiles()
+
+    override fun setSpeedToggle(ff: Boolean?, rewind: Boolean?) = speed.setToggle(ff, rewind)
+
+    /**
+     * A Reset shortcut or the dual-screen panel's Reset tile: reset always asks first, so the in-game menu opens on its
+     * Reset dialog; a menu opened for it closes again on Cancel. Never before the game is ready (nothing to reset yet),
+     * in netplay or a link session (the model refuses too).
+     */
+    override fun askReset() {
+        if (quitting || !gameReady || netplayNow != null) return
+        val opened = !menuOpen
+        if (opened) toggleMenu()
+        withMenu { it.openResetDialog(closesOnCancel = opened) }
+    }
+
+    /**
+     * The Reset dialog's Reset: retro_reset on the emulation thread (the engine clears the rewind buffer and the frame
+     * timer with it, L18/L19), waited for off main as a disc change is. A toggled rewind would only run back to the reset
+     * point: it ends first; a toggled FF stays.
+     */
+    override fun resetGame() {
+        if (quitting || !gameReady || netplayNow != null) return
+        val view = retroView ?: return
+        speed.setToggle(rewind = false)
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { view.reset() }.onFailure { NxLog.w("GameActivity", "reset failed", it) }
+        }
+    }
 
     /**
      * netplay: DISCONNECT and shut the engine down (off main), then quit; saveStates is null: no auto state. A link

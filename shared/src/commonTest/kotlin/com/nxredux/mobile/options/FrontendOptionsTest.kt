@@ -13,8 +13,9 @@ class FrontendOptionsTest {
                 FrontendOptions.SCALING to "Aspect", FrontendOptions.SHARPNESS to "NEAREST", FrontendOptions.OVERLAY to "None",
                 FrontendOptions.OFFSET_X to "0", FrontendOptions.OFFSET_Y to "0", FrontendOptions.PAD_LANDSCAPE_OPACITY to "40",
                 FrontendOptions.DEBUG_HUD to "Off", BottomScreenOptions.KEY to "default", PadOptions.LAYOUT to "auto",
+                SpeedOptions.MAX_FF to "4", SpeedOptions.FF_AUDIO to "Off", SpeedOptions.REWIND to "Off", SpeedOptions.REWIND_AUDIO to "Off",
             ),
-            FrontendOptions.defaults("GBA"),   // GBA: Bottom screen and Controller Layout only (as every console)
+            FrontendOptions.defaults("GBA"),   // GBA: Bottom screen, Controller Layout and the speed rows (as every console)
         )
     }
 
@@ -174,6 +175,27 @@ class FrontendOptionsTest {
         assertEquals(mapOf("nx_overlay" to "Aspect.png", "nx_scale_filter" to "NEAREST", "core_x" to "1"), migrated)
         assertEquals("nx_screen_effect", FrontendOptions.migrateKey("minarch_screen_effect"))
         assertEquals("gambatte_x", FrontendOptions.migrateKey("gambatte_x"))
+    }
+
+    @Test fun handheld_speed_and_rewind_keys_never_reach_the_speed_rows() {
+        val handheld = mapOf(
+            "minarch_max_ff_speed" to "8", "minarch__ff_audio" to "On", "minarch_ff_audio" to "On",
+            "minarch_rewind" to "On", "minarch_rewind_enable" to "1", "minarch_rewind_audio" to "On", "minarch_rewind_buffer_mb" to "64",
+        )
+        assertEquals(emptyMap(), FrontendOptions.migrateKeys(handheld))
+        handheld.keys.forEach { k ->
+            assertEquals(k, FrontendOptions.migrateKey(k))
+            assertEquals(true, FrontendOptions.droppedOnSave(k), k)
+        }
+    }
+
+    @Test fun a_locked_handheld_line_locks_no_speed_row() {
+        val cfg = CoreConfig.parse("-minarch_max_ff_speed = 8\n-minarch_rewind = On\n-minarch__ff_audio = On\n")
+        val r = CoreConfig.resolve(SpeedOptions.table.associate { it.key to it.default }, cfg, null)
+        assertEquals("4", r.values[SpeedOptions.MAX_FF])
+        assertEquals("Off", r.values[SpeedOptions.REWIND])
+        assertEquals("Off", r.values[SpeedOptions.FF_AUDIO])
+        assertEquals(emptySet(), r.locked.intersect(SpeedOptions.table.map { it.key }.toSet()))
     }
 
     @Test fun core_values_drop_both_prefixes() {

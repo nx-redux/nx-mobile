@@ -51,4 +51,47 @@ class TriggerAxesTest {
         t.releaseAll()
         assertEquals(l2Down, t.onAxes(1f, 0f))
     }
+
+    @Test fun a_trigger_taken_by_a_shortcut_ignores_its_axis_for_that_pull() {
+        val t = TriggerAxes()
+        assertFalse(t.take(NxButton.R2))                   // the key came first: nothing was pressed
+        assertEquals(emptyList(), t.onAxes(0f, 1f))       // the same pull's axis presses nothing
+        t.untake(NxButton.R2)
+        assertEquals(emptyList(), t.onAxes(0f, 0f))
+        assertEquals(listOf(NxButton.L2 to true), t.onAxes(1f, 0f))   // the other trigger still goes by its axis
+    }
+
+    @Test fun a_take_after_the_axis_pressed_asks_for_the_release() {
+        val t = TriggerAxes()
+        assertEquals(listOf(NxButton.R2 to true), t.onAxes(0f, 1f))
+        assertTrue(t.take(NxButton.R2))                    // the host sends the core R2 up
+        assertEquals(emptyList(), t.onAxes(0f, 0f))       // no second release
+        assertEquals(emptyList(), t.onAxes(0f, 1f))
+    }
+
+    @Test fun a_taken_analog_trigger_reads_at_rest_until_its_key_lets_go() {
+        val t = TriggerAxes()
+        assertEquals(0.4f to 0.8f, t.analog(0.4f, 0.8f))
+        t.take(NxButton.R2)
+        assertEquals(0.4f to 0f, t.analogNow())            // sent at once: the core lets go of R2
+        assertEquals(0.5f to 0f, t.analog(0.5f, 1f))
+        t.untake(NxButton.R2)
+        assertEquals(0.5f to 1f, t.analog(0.5f, 1f))
+    }
+
+    @Test fun release_all_ends_a_take() {
+        val t = TriggerAxes()
+        t.take(NxButton.R2)
+        t.releaseAll()
+        assertEquals(0f to 1f, t.analog(0f, 1f))
+    }
+
+    @Test fun untake_all_ends_every_take_but_keeps_what_is_held() {
+        val t = TriggerAxes()
+        assertEquals(listOf(NxButton.L2 to true), t.onAxes(1f, 0f))
+        t.take(NxButton.R2)
+        t.untakeAll()   // the shortcut's key-up never came (the app went to the background)
+        assertEquals(1f to 1f, t.analog(1f, 1f))
+        assertEquals(emptyList(), t.onAxes(1f, 0f))   // L2 stays pressed: untakeAll releases nothing
+    }
 }

@@ -12,12 +12,12 @@ object ConsoleSettings {
         N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRows + N3dsOptions.newControlsRow
         WiiOptions.appliesTo(tag) -> WiiOptions.table
         else -> emptyList()
-    } + graphicsRows(tag) + BottomScreenOptions.row + PadOptions.tableFor(tag)
+    } + graphicsRows(tag) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table
 
     private fun graphicsRows(tag: String): List<FrontendOption> =
         if (GraphicsApiOptions.appliesTo(tag)) listOf(GraphicsApiOptions.row) else emptyList()
 
     /** Every console's rows (keys are unique across them). */
     val all: List<FrontendOption> =
-        NdsOptions.table + N3dsOptions.layoutRows + N3dsOptions.newControlsRow + WiiOptions.table + GraphicsApiOptions.row + BottomScreenOptions.row + PadOptions.all
+        NdsOptions.table + N3dsOptions.layoutRows + N3dsOptions.newControlsRow + WiiOptions.table + GraphicsApiOptions.row + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table
 }

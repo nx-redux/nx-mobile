@@ -52,7 +52,7 @@ class EmulatorSettingsTest {
         val layout = rows.single { it.key == NdsOptions.LAYOUT_PORTRAIT }
         assertEquals(NdsOptions.table.single { it.key == NdsOptions.LAYOUT_PORTRAIT }.info, layout.info)
         assertTrue(layout.info.startsWith("How the two screens share a portrait screen.\nAuto: stacked"))
-        assertTrue(rows.single { it.key == BottomScreenOptions.KEY }.info.endsWith("System default follows Settings → Emulators."))
+        assertTrue(rows.single { it.key == BottomScreenOptions.KEY }.info.endsWith("System default follows Settings → Second screen."))
     }
 
     @Test fun values_come_from_cfg_then_descriptor_then_table() {
@@ -81,7 +81,7 @@ class EmulatorSettingsTest {
 
     @Test fun console_rows_follow_the_tag_and_read_the_cfg() {
         val p = EmulatorSettings.page("MD", descriptor, table, descriptor.defaultOptions, cfg("nx_sega_pad_type = 6\n"), null, forGame = false)
-        assertEquals(listOf(BottomScreenOptions.KEY, PadOptions.SEGA_PAD, PadOptions.LAYOUT), p.console.map { it.option.key })
+        assertEquals(listOf(BottomScreenOptions.KEY, PadOptions.SEGA_PAD, PadOptions.LAYOUT) + SpeedOptions.table.map { it.key }, p.console.map { it.option.key })
         assertEquals("6", p.console[1].value); assertEquals(PadOptions.AUTO, p.console[2].value)
     }
 
@@ -95,7 +95,7 @@ class EmulatorSettingsTest {
 
     @Test fun no_table_gives_null_core_and_keeps_console_rows() {
         val p = EmulatorSettings.page("MD", descriptor, null, descriptor.defaultOptions, null, null, forGame = false)
-        assertNull(p.core); assertEquals(3, p.console.size)
+        assertNull(p.core); assertEquals(3 + SpeedOptions.table.size, p.console.size)
     }
 
     @Test fun offline_hidden_options_never_reach_the_page() {
@@ -175,7 +175,7 @@ class EmulatorSettingsTest {
 
     @Test fun a_console_row_locked_in_the_cfg_is_hidden() {
         val p = EmulatorSettings.page("MD", descriptor, table, descriptor.defaultOptions, cfg("-${PadOptions.LAYOUT} = xbox\n"), null, forGame = false)
-        assertEquals(listOf(BottomScreenOptions.KEY, PadOptions.SEGA_PAD), p.console.map { it.option.key })
+        assertEquals(listOf(BottomScreenOptions.KEY, PadOptions.SEGA_PAD) + SpeedOptions.table.map { it.key }, p.console.map { it.option.key })
     }
 
     @Test fun a_legacy_minarch_key_is_renamed_in_place_on_a_one_key_write() {
@@ -220,5 +220,14 @@ class EmulatorSettingsTest {
         val console = cfg("mupen64plus-rdp-plugin = angrylion\nmupen64plus-rsp-plugin = cxd4\n")
         val r = CoreConfig.resolve(mupen.defaultOptions, console, null, forced = mupen.lockedOptions, hidden = mupen.hiddenValues)
         assertEquals("gliden64", r.values["mupen64plus-rdp-plugin"]); assertEquals("hle", r.values["mupen64plus-rsp-plugin"])
+    }
+
+    @Test fun defaultSettingsHidesRewindRowsWithoutRewind() {
+        val gba = com.nxredux.mobile.runner.CoreRegistry.forTag("GBA")!!
+        fun keys(d: CoreDescriptor) = EmulatorSettings.page("GBA", d, null, d.defaultOptions, null, null, forGame = false).console.map { it.option.key }
+        val off = keys(gba.copy(rewind = false))
+        assertTrue(SpeedOptions.MAX_FF in off && SpeedOptions.FF_AUDIO in off)
+        assertTrue(SpeedOptions.REWIND !in off && SpeedOptions.REWIND_AUDIO !in off)
+        assertTrue(keys(gba.copy(rewind = true)).containsAll(listOf(SpeedOptions.MAX_FF, SpeedOptions.FF_AUDIO, SpeedOptions.REWIND, SpeedOptions.REWIND_AUDIO)))
     }
 }

@@ -162,6 +162,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     val menuPortraitLayout = remember(padLayouts, padScreen) { PadLayouts.resolve(padLayouts, null, PadSlot(PadShape.PORTRAIT, padScreen)) }
     val look = rememberMenuLook(state, screen)   // the accents and the launcher chrome's settings, likewise
     val controllerConnected = rememberControllerConnected()   // once, above the shell: survives rotation and pad/no-pad flips
+    LaunchedEffect(controllerConnected) { state.onControllerConnected(controllerConnected) }   // a Shortcuts bind row's line
     val touchscreen = rememberHasTouchscreen()   // for a game list's Recent, Search and Layout icons
     // Bars and cutout only, never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
     Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))) {

@@ -133,20 +133,32 @@ object FrontendOptions {
 
     fun isLegacyKey(key: String): Boolean = key.startsWith(LEGACY_PREFIX)
 
-    /** `minarch_<x>` → `nx_<x>`; any other key unchanged. */
-    fun migrateKey(key: String): String = if (isLegacyKey(key)) PREFIX + key.removePrefix(LEGACY_PREFIX) else key
+    /**
+     * The handheld's own fast-forward and rewind keys (`minarch_max_ff_speed`, `minarch__ff_audio`, `minarch_rewind_*`):
+     * never migrated, so a copied handheld cfg neither sets nor locks a [SpeedOptions] row (its rewind is on by choice
+     * there, and its buffers are not ours). Read as nothing and dropped on a full save.
+     */
+    fun isHandheldOnlyKey(key: String): Boolean {
+        if (!isLegacyKey(key)) return false
+        val name = key.removePrefix(LEGACY_PREFIX)
+        return name == "max_ff_speed" || name.trimStart('_') == "ff_audio" || name == "rewind" || name.startsWith("rewind_")
+    }
+
+    /** `minarch_<x>` → `nx_<x>` ([isHandheldOnlyKey] ones excepted); any other key unchanged. */
+    fun migrateKey(key: String): String =
+        if (isLegacyKey(key) && !isHandheldOnlyKey(key)) PREFIX + key.removePrefix(LEGACY_PREFIX) else key
 
     /**
      * Whether a full config save drops a line with [key]: a key moved to the shader rows ([ShaderOptions.MIGRATED_KEYS]),
-     * read once and migrated, so the save has already carried its value.
+     * read once and migrated, so the save has already carried its value, or a handheld-only key ([isHandheldOnlyKey]).
      */
-    fun droppedOnSave(key: String): Boolean = key in ShaderOptions.MIGRATED_KEYS
+    fun droppedOnSave(key: String): Boolean = key in ShaderOptions.MIGRATED_KEYS || isHandheldOnlyKey(key)
 
-    /** [values] with legacy keys renamed; an existing `nx_` value wins over its legacy twin. */
+    /** [values] with legacy keys renamed, handheld-only ones left out; an existing `nx_` value wins over its legacy twin. */
     fun migrateKeys(values: Map<String, String>): Map<String, String> {
         val out = LinkedHashMap<String, String>()
         values.forEach { (k, v) -> if (!isLegacyKey(k)) out[k] = v }
-        values.forEach { (k, v) -> if (isLegacyKey(k)) out.putIfAbsent(migrateKey(k), v) }
+        values.forEach { (k, v) -> if (isLegacyKey(k) && !isHandheldOnlyKey(k)) out.putIfAbsent(migrateKey(k), v) }
         return out
     }
 

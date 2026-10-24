@@ -15,6 +15,7 @@ private fun resetText(section: SettingsSection?): SettingText = when (section) {
     SettingsSection.APPEARANCE -> SettingText("Resets every setting on this page", "Put Pad theme, Accent, Secondary accent and Text size back")
     SettingsSection.MAIN_MENU -> SettingText("Resets every setting on this page", "Put every Layouts group and Extra info back to their defaults")
     SettingsSection.CONTROLS -> SettingText("Resets this page, pad layouts included", "Put vibration, Menu pad and every pad layout back to defaults")
+    SettingsSection.SHORTCUTS -> SettingText("Sets every shortcut to None", "Unbind every action and take both touch buttons off the pad")
     else -> SettingText("Put this page back to its defaults")
 }
 
@@ -25,9 +26,9 @@ private fun resetText(section: SettingsSection?): SettingText = when (section) {
  * line names that page's settings). Empty for a row that needs none (About's, a console's default emulator).
  */
 internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): SettingText = when (row.kind) {
-    // Emulators.
+    // Emulation.
     SettingsKind.DEFAULTS -> SettingText("The emulator each console's games run on")
-    SettingsKind.EMULATORS -> SettingText("Each emulator's options for a whole console")
+    SettingsKind.EMULATORS -> SettingText("Each console's settings and emulator options; a game can override them")
     SettingsKind.PAUSE_UNFOCUSED -> quiet(
         "Pause a game while another app takes over the screen",
         "Pauses a game when another app takes over while the game is still on screen: in split screen, in a desktop " +
@@ -193,6 +194,23 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
         if (row.padShape == PadShape.OVERLAY) "Edit the button clusters over a landscape game" else "Edit the pad below the screen in portrait",
     )
     SettingsKind.PAD_LAYOUT_RESET -> SettingText("Resets its layouts on this screen", "Put the chosen console's layouts on this screen back")
+    SettingsKind.SHORTCUTS -> quiet(
+        "Controller buttons and touch buttons for fast forward, rewind and reset",
+        "Bind a controller button or combo to fast forward, rewind or reset, and give the on-screen pad up to two touch " +
+            "buttons. Every console and game uses these unless its in-game Shortcuts page overrides them.",
+    )
+    // While it waits for a press, its line says how to bind (or that a controller is needed).
+    SettingsKind.SHORTCUT_BIND -> SettingText(
+        row.note.orEmpty(),
+        "Press A, then the button to use. For a combo, hold MENU and press another button. B cancels, X sets it back " +
+            "to None. A button another action had moves to this one. MENU alone and SELECT+START open the menu, and " +
+            "SELECT and START stay the game's, so MENU alone, SELECT and START can't be bound.",
+    )
+    SettingsKind.SHORTCUT_TOUCH -> quiet(
+        "What this on-screen touch button does; None hides it",
+        "The action of a touch button on the on-screen pad. None, the default, leaves it off the pad. Hold actions work " +
+            "while your finger stays on it, toggles flip on each tap. Move it in Pad layout.",
+    )
     // System's Launcher and Developer groups.
     SettingsKind.HOME_SCREEN -> quiet(
         "Make the app your Android home screen",

@@ -26,6 +26,8 @@ import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_TITLE
 import com.nxredux.mobile.settings.AndroidAppSettings
+import com.nxredux.mobile.shortcuts.ShortcutOverrides
+import com.nxredux.mobile.shortcuts.Shortcuts
 import com.nxredux.mobile.ui.nx.GamePanelEvent
 import com.nxredux.mobile.ui.nx.HintGlyphs
 import com.nxredux.mobile.ui.nx.InGameMenu
@@ -119,6 +121,18 @@ internal interface InGameMenuHost : LifecycleOwner {
     /** The menu closed: the game plays on (unless the focus pause holds it, or a failed netplay start). */
     fun resumeAfterMenu()
     fun toast(msg: String): android.widget.Toast
+    /** This console's or game's shortcut overrides in effect (the Shortcuts page's live edits included): what Save Changes writes. */
+    val shortcutOverrides: ShortcutOverrides
+    /** The overrides changed (the Shortcuts page, Restore defaults): the bound keys follow now. */
+    fun applyShortcuts(overrides: ShortcutOverrides)
+    /** The Shortcuts page's inputs: Controls → Shortcuts, [shortcutOverrides], the console's hotkeys, whether the core rewinds. */
+    fun publishShortcuts(model: InGameMenuModel)
+    /** The panel's Fast forward / Rewind tiles: running now, and rewinding (null: no Rewind tile) ([SpeedController.tiles]). */
+    fun speedTiles(): Pair<Boolean, Boolean?>
+    /** A Fast forward / Rewind tile's toggles ([SpeedController.setToggle]). */
+    fun setSpeedToggle(ff: Boolean?, rewind: Boolean?)
+    /** The Reset dialog's Reset: the game restarts ([GLRetroView.reset]); a toggled rewind ends, a toggled FF stays. */
+    fun resetGame()
 }
 
 /**
@@ -214,6 +228,13 @@ internal class InGameMenuController(
         menuState.value = model.state
     }
 
+    /** The panel's Fast forward and Rewind tiles show the live state (a shortcut's toggle, the buffer running out). */
+    fun publishSpeed(model: InGameMenuModel) {
+        val (ff, rewind) = host.speedTiles()
+        model.setSpeedTiles(ff, rewind)
+        menuState.value = model.state
+    }
+
     /** Back (the key's press, the gesture): the open in-game menu reads it as B, else it opens. */
     fun backPressed() { if (menuOpen) onMenuPress(NxButton.B) else toggleMenu() }
 
@@ -264,8 +285,10 @@ internal class InGameMenuController(
         model.setFrontend(frontendValues, renderer.overlayNames(), menuLocked(), gameTag, overlayAvailable = !renderer.ndsSplit)
         model.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams)
         model.setCheats(cheatSet.entries, cheatsFolder, cheatSet.expected)
+        host.publishShortcuts(model)
         publishPlayers(model)
         publishSecondScreen(model)
+        publishSpeed(model)
         applyAchievements(model)
         model.setPanelHeader(dual.panelHeader())
         // Over the dual-screen panel: the menu's panel opens on the tab it showed (a tab change has no effect to handle).
@@ -379,6 +402,21 @@ internal class InGameMenuController(
         host.resumeAfterMenu()   // the game plays on, unless another app has the focus (focusResume then)
     }
 
+    /**
+     * A raw key while the menu is open: the Shortcuts page's press to bind takes it ([InGameMenuModel.takesKey]) before
+     * the menu's routing, as MainActivity's Controls → Shortcuts does; a repeat it takes is dropped. True when taken.
+     */
+    fun captureKey(keyCode: Int, down: Boolean, repeat: Boolean): Boolean {
+        if (quitting) return false
+        val model = menuModel ?: return false
+        if (!model.takesKey(keyCode, down)) return false
+        if (repeat) return true
+        val effect = model.captureKey(keyCode, down)
+        menuState.value = model.state
+        handle(effect)
+        return true
+    }
+
     /** Menu navigation from the InputRouter (hardware/on-screen). */
     fun onMenuPress(button: NxButton) {
         if (quitting) return   // frozen until finish()
@@ -451,6 +489,10 @@ internal class InGameMenuController(
             MenuEffect.SaveForConsole -> saveOptions(game = false)
             MenuEffect.SaveForGame -> saveOptions(game = true)
             MenuEffect.RestoreDefaults -> restoreOptions()
+            is MenuEffect.ShortcutsChanged -> host.applyShortcuts(effect.overrides)
+            // A tile: the game runs with it on, so the menu closes (spec).
+            is MenuEffect.SetSpeed -> { host.setSpeedToggle(effect.ff, effect.rewind); closeMenu() }
+            MenuEffect.ResetGame -> { host.resetGame(); closeMenu() }
             is MenuEffect.SetPlayer -> input.slots?.let { s ->
                 val benchedBefore = s.outOfPlay
                 s.assign(effect.slot, effect.key?.let(::DeviceKey)).forEach { port ->
@@ -506,12 +548,17 @@ internal class InGameMenuController(
                 // meanwhile has already applied its value, so this write keeps it instead of bringing back the old one.
                 val written = configWrites.withLock {
                     // A key Graphics API forced for this launch keeps its stored value: the running one is the session's only.
+                    // Shortcuts: only the rows overridden here (spec: overrides inherit), never a full snapshot of what
+                    // fires, so a later Controls → Shortcuts change still reaches the others; a row given back to the
+                    // default loses its line ([Shortcuts.droppedOnSave]).
+                    val overrides = host.shortcutOverrides
                     val values = CoreConfig.valuesToSave(all.map { it.key to it.value }, storedValues, graphicsForcedOptions + dualForcedOptions()) + frontendValues.toList() +
-                        ShaderOptions.activeParamEntries(renderer.shaderValues, renderer.shaderParams) +
+                        ShaderOptions.activeParamEntries(renderer.shaderValues, renderer.shaderParams) + Shortcuts.toConfig(overrides) +
                         if (game) listOf(FrontendOptions.CHEATS to CheatSet.encode(cheatSet.enabledKeys())) else emptyList()
+                    val drop = Shortcuts.droppedOnSave(overrides)
                     withContext(Dispatchers.IO) {
                         runCatching {
-                            if (game) store.saveGame(values) else store.saveConsole(values).also { store.deleteGame() }
+                            if (game) store.saveGame(values, drop) else store.saveConsole(values, drop).also { store.deleteGame() }
                         }.onFailure { NxLog.w("GameActivity", "saving options failed", it) }.getOrNull()
                     }
                 }
@@ -532,10 +579,11 @@ internal class InGameMenuController(
     /** Deletes the config file in use and falls back one layer (game → console → defaults), applied live. */
     private fun restoreOptions() {
         val store = configStore
-        // The menu has already popped to Options; say so rather than silently doing nothing.
-        if (store == null || retroView == null) { toast("Could not save options"); return }
+        // The menu has already popped to Options; say so rather than silently doing nothing. Nothing restored: the
+        // model's dropped shortcut overrides come back ([publishShortcuts]).
+        if (store == null || retroView == null) { toast("Could not save options"); menuModel?.let(::republishShortcuts); return }
         withCoreOptions { all ->
-            if (all == null) { toast("Could not save options"); return@withCoreOptions }
+            if (all == null) { toast("Could not save options"); menuModel?.let(::republishShortcuts); return@withCoreOptions }
             lifecycleScope.launch {
                 val next = configWrites.withLock {   // after any hotkey save in flight, not interleaved with it
                     withContext(Dispatchers.IO) {
@@ -569,8 +617,10 @@ internal class InGameMenuController(
                     input.n3dsCoreValues(mapOf(N3dsOptions.DEADZONE to (next.values[N3dsOptions.DEADZONE] ?: "")))
                     applyFrontend(FrontendOptions.fromConfig(next.values, gameTag))
                     renderer.applyShader(ShaderOptions.fromConfig(next.values))
+                    host.applyShortcuts(Shortcuts.fromConfig(next.values))   // the layer fallen back to's, none for defaults
                 }
                 val model = menuModel ?: return@launch
+                host.publishShortcuts(model)   // the model dropped its overrides; a failed restore puts the ones in effect back
                 if (next != null) {
                     model.setFrontend(frontendValues, renderer.overlayNames(), menuLocked(), gameTag, overlayAvailable = !renderer.ndsSplit)
                     model.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams)
@@ -580,6 +630,11 @@ internal class InGameMenuController(
                 menuState.value = model.state
             }
         }
+    }
+
+    private fun republishShortcuts(model: InGameMenuModel) {
+        host.publishShortcuts(model)
+        menuState.value = model.state
     }
 
     /** The Players page's data in the open menu. */

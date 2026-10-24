@@ -33,7 +33,7 @@ object EmulatorSettings {
             frontendDefaults + tableDefaults + defaults, console, if (forGame) game else null,
             forced = descriptor.lockedOptions, hidden = descriptor.hiddenValues,
         )
-        val consoleRows = ConsoleSettings.tableFor(tag).filter { it.key !in resolved.locked && (secondScreen || it.key != BottomScreenOptions.KEY) }
+        val consoleRows = ConsoleSettings.tableFor(tag).filter { it.key !in resolved.locked && (descriptor.rewind || it.key !in SpeedOptions.REWIND_KEYS) && (secondScreen || it.key != BottomScreenOptions.KEY) }
             .map { ConsoleRow(VulkanFallback.noted(it, vulkanFailed), resolved.values[it.key] ?: it.default) }
         val core = table?.let { t ->
             val withValues = t.options.filter { it.key !in descriptor.offlineHiddenOptions && !FrontendOptions.isFrontendKey(it.key) }.map { o ->

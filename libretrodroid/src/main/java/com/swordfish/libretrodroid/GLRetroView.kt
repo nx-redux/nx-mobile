@@ -63,6 +63,59 @@ class GLRetroView(
         LibretroDroid.setFrameSpeed(value)
     }
 
+    /**
+     * Fast forward: 0 off, else the speed cap (2 = up to 2x the content's frame rate). Kept apart from [frameSpeed],
+     * which pauses (0) and resumes (1) without touching it. Ignored in netplay and GBA link sessions. Main thread;
+     * applied on the GL thread, and re-applied after create().
+     */
+    var fastForward: Int by Delegates.observable(0) { _, old, value ->
+        if (old != value) pushFastForward()
+    }
+
+    /** Whether fast forward plays the game's audio (sped up) or mutes it. Main thread, like [fastForward]. */
+    var fastForwardAudio: Boolean by Delegates.observable(false) { _, old, value ->
+        if (old != value) pushFastForward()
+    }
+
+    private fun pushFastForward() {
+        val speed = fastForward
+        val audible = fastForwardAudio
+        queueEvent { LibretroDroid.setFastForward(speed, audible) }
+    }
+
+    /**
+     * Rewind snapshots: on, the game is snapshotted every frame (or every 2nd/4th for big states) once the core can
+     * serialize; off frees the buffer. Ignored in netplay and GBA link sessions. Main thread; applied on the GL thread
+     * and re-applied after create(), like [fastForward].
+     */
+    var rewindEnabled: Boolean by Delegates.observable(false) { _, old, value ->
+        if (old != value) pushRewind()
+    }
+
+    /** Steps back through the snapshots instead of playing (wins over [fastForward]). Watch [rewindStatus] for EMPTY. */
+    var rewinding: Boolean by Delegates.observable(false) { _, old, value ->
+        if (old != value) pushRewind()
+    }
+
+    /** Whether rewound frames play their audio. */
+    var rewindAudio: Boolean by Delegates.observable(false) { _, old, value ->
+        if (old != value) pushRewind()
+    }
+
+    private fun pushRewind() {
+        val enabled = rewindEnabled
+        val active = rewinding
+        val audible = rewindAudio
+        queueEvent {
+            LibretroDroid.setRewindAudio(audible)
+            LibretroDroid.setRewindEnabled(enabled)
+            LibretroDroid.setRewinding(active)
+        }
+    }
+
+    /** What rewind did on the last frame. Any thread. */
+    fun rewindStatus(): RewindStatus = RewindStatus.fromNative(LibretroDroid.rewindStatus())
+
     /** Applied on the emulation thread (the renderer reads it there); takes effect on the next drawn frame. */
     var shader: ShaderConfig by Delegates.observable(data.shader) { _, _, value ->
         val shader = buildShader(value)
@@ -271,6 +324,8 @@ class GLRetroView(
         val alignment = data.viewportAlignment.value
         queueEvent { LibretroDroid.setViewportAlignment(alignment) }
         reapplyDisplaySettings()
+        pushFastForward()
+        pushRewind()
     }
 
     /**
@@ -517,6 +572,7 @@ class GLRetroView(
     fun serializeRTC(useEmulationThread: Boolean = true): ByteArray =
         runOnEmulationThread(useEmulationThread) { LibretroDroid.serializeRTC() }
 
+    /** Restarts the game (retro_reset), dropping the rewind history. On the GL thread between steps, never mid-frame. */
     fun reset(useEmulationThread: Boolean = true) = runOnEmulationThread(useEmulationThread) {
         LibretroDroid.reset()
     }

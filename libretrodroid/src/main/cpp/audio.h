@@ -68,7 +68,19 @@ public:
 
 public:
     void write(const int16_t *data, size_t frames);
+    // The pause (0) / run (1) speed. UI thread.
     void setPlaybackSpeed(const double newPlaybackSpeed);
+    // nx-mobile 2026-10-24: audible FF's playback speed (the game's achieved speed), 0 when not in audible FF. Separate
+    // from setPlaybackSpeed, which another thread writes: the callback combines them with a pause (0) winning, so an FF
+    // update landing just after a pause can't play the FIFO's tail at FF pitch in the menu. GL thread.
+    void setFastForwardSpeed(double speed);
+    // nx-mobile 2026-10-24: fast forward. Muted, the realtime callback plays silence with the rate controller held, as
+    // at speed 0, and drops what the FIFO still held; audible, the caller sets the FF speed. Whenever the output was
+    // muted and is not anymore (FF ended, or muted FF turned audible) it stays silent until the FIFO is refilled
+    // (crackles otherwise). GL thread, like setRewind.
+    void setFastForward(bool active, bool audible);
+    // nx-mobile 2026-10-24: rewind without its audio mutes the output like muted FF, refilled the same way after.
+    void setRewind(bool active, bool audible);
 
 private:
     static int32_t roundToEven(int32_t x);
@@ -112,6 +124,19 @@ private:
     double errorIntegral = 0.0;
 
     std::atomic<double> playbackSpeed { 1.0 };
+    std::atomic<double> fastForwardSpeed { 0.0 };
+
+    // Fast forward (setFastForward): written by the GL thread, read by the audio callback.
+    // Rewind likewise (setRewind). outputMuted is either one muting.
+    std::atomic<bool> fastForwardActive { false };
+    bool fastForwardMutes = false;   // GL thread
+    bool rewindMutes = false;        // GL thread
+    std::atomic<bool> outputMuted { false };
+    std::atomic<bool> refillPending { false };
+    // GL thread: applies fastForwardMutes / rewindMutes, starting a refill when the output unmutes.
+    void updateMute(bool fastForwardEnded);
+    // Output resumes after FF once the FIFO is this full, near the PI controller's half-full target.
+    static constexpr double REFILL_FRACTION = 0.4;
 
     std::unique_ptr<AudioLatencySettings> audioLatencySettings;
 };

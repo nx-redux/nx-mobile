@@ -88,6 +88,13 @@ add_library(libretrodroid SHARED
         sharedcontexts.cpp
         pointerstate.h
         pointerstate.cpp
+        rewindring.h
+        rewindring.cpp
+        rewindbudget.h
+        rewindbudget.cpp
+        rewindprobe.h
+        rewind.h
+        rewind.cpp
         sensorstate.h
         sensorstate.cpp
         languagemap.h
@@ -115,6 +122,8 @@ add_library(libretrodroid SHARED
         resamplers/sincresampler.cpp
         fpssync.h
         fpssync.cpp
+        fastforward.h
+        fastforward.cpp
         environment.h
         environment.cpp
         corelog.h
@@ -180,6 +189,7 @@ add_library(libretrodroid SHARED
         netplay/linkjni.cpp
         ${RCHEEVOS_SOURCES}
         ${LIBRETRO_COMMON}
+        lz4/lz4.c
 )
 
 # Support 16k pages for Android 15

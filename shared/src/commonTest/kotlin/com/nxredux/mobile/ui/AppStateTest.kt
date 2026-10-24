@@ -5099,7 +5099,7 @@ class AppStateTest {
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
         val menu = assertIs<Screen.SettingsMenu>(state.screen.value)
         assertEquals(listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS, SettingsSection.SYSTEM), menu.sections)
-        assertEquals(listOf("Library", "Emulators", "Appearance", "Layouts", "Controls", "System"), menu.sections.map { it.label })
+        assertEquals(listOf("Library", "Emulation", "Appearance", "Layouts", "Controls", "System"), menu.sections.map { it.label })
         assertEquals(ListSelection(0, 6), state.selection.value)
         state.onButton(NxButton.B)
         state.screen.value.toolRows()
@@ -5121,7 +5121,7 @@ class AppStateTest {
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Emulators
         val emu = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.EMULATORS, emu.section)
-        assertEquals(listOf("Default emulators", "Settings"), emu.rows.map { it.label })   // Saves under Library, Pause when unfocused under System
+        assertEquals(listOf("Default emulators", "Default settings"), emu.rows.map { it.label })   // Saves under Library, Pause when unfocused under System
         state.onButton(NxButton.B)
         assertEquals(ListSelection(1, 6), state.selection.value)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Appearance
@@ -5134,7 +5134,7 @@ class AppStateTest {
         assertEquals(ListSelection(3, 6), state.selection.value)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Controls
         assertEquals(SettingsSection.CONTROLS, assertIs<Screen.Settings>(state.screen.value).section)
-        assertEquals(listOf("Pad vibration", "Game rumble", "Menu pad", "Pad layout", "Reset to defaults"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })
+        assertEquals(listOf("Pad vibration", "Game rumble", "Menu pad", "Pad layout", "Shortcuts", "Reset to defaults"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })
         state.onButton(NxButton.B)
         assertEquals(ListSelection(4, 6), state.selection.value)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // System, the last
@@ -5374,7 +5374,7 @@ class AppStateTest {
         st.onButton(NxButton.DOWN); st.onButton(NxButton.A)                                      // Emulators
         val e = assertIs<Screen.Settings>(st.screen.value)
         assertEquals(SettingsSection.EMULATORS, e.section)
-        assertEquals(listOf(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"), SettingsRow(SettingsKind.EMULATORS, "Settings")), e.rows)   // Saves under Library, Pause when unfocused under System
+        assertEquals(listOf(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"), SettingsRow(SettingsKind.EMULATORS, "Default settings")), e.rows)   // Saves under Library, Pause when unfocused under System
         assertTrue(e.details.isEmpty())
         st.onButton(NxButton.A)                                                                  // Default emulators
         assertEquals(SettingsSection.DEFAULT_EMULATORS, assertIs<Screen.Settings>(st.screen.value).section)
@@ -9840,6 +9840,7 @@ class AppStateTest {
                 SettingsRow(SettingsKind.GAME_RUMBLE, "Game rumble", "Medium"),
                 SettingsRow(SettingsKind.MENU_PAD, "Menu pad", "On"),
                 SettingsRow(SettingsKind.PAD_LAYOUT, "Pad layout", "Default"),
+                SettingsRow(SettingsKind.SHORTCUTS, "Shortcuts"),
                 SettingsRow(SettingsKind.RESET_DEFAULTS, "Reset to defaults"),
             ),
             assertIs<Screen.Settings>(state.screen.value).rows,
@@ -10007,7 +10008,7 @@ class AppStateTest {
         state.load()
         state.openSettings(SettingsSection.CONTROLS)
         assertEquals("Custom", assertIs<Screen.Settings>(state.screen.value).rows[3].secondary)
-        state.select(4)
+        state.select(5)
         state.onButton(NxButton.A)
         assertEquals(emptyMap(), settings.padLayouts)
         assertEquals(emptyMap(), state.padLayouts.value)
@@ -10025,7 +10026,7 @@ class AppStateTest {
         state.onButton(NxButton.RIGHT)
         assertEquals(GameRumble.STRONG, settings.gameRumble)
         assertEquals("Strong", rows()[1].secondary)
-        assertEquals(ListSelection(1, 5), state.selection.value)
+        assertEquals(ListSelection(1, 6), state.selection.value)
         state.onButton(NxButton.A)                                   // wraps
         assertEquals(GameRumble.OFF, settings.gameRumble)
         assertEquals("Off", rows()[1].secondary)
@@ -10054,7 +10055,7 @@ class AppStateTest {
         assertEquals(true, settings.menuPad)
         state.onButton(NxButton.LEFT)
         assertEquals(false, settings.menuPad)
-        assertEquals(ListSelection(2, 5), state.selection.value)
+        assertEquals(ListSelection(2, 6), state.selection.value)
     }
 
     // Settings → System → Debug log (its Developer group), Off by default; two values, so A, left and right each flip it.
@@ -10110,7 +10111,7 @@ class AppStateTest {
         assertTrue(SettingsSection.SECOND_SCREEN !in sections())
         state.openSettings(SettingsSection.EMULATORS)
         state.onSecondScreenChanged(true)
-        assertEquals(listOf("Default emulators", "Settings"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })   // no row under Emulators any more
+        assertEquals(listOf("Default emulators", "Default settings"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })   // no row under Emulators any more
     }
 
     @Test fun the_second_screen_page_has_enable_then_bottom_screen_and_b_returns_to_the_root_on_it() = runTest {
@@ -10768,7 +10769,7 @@ class AppStateTest {
         state.onButton(NxButton.RIGHT)
         assertEquals(PadVibration.MEDIUM, settings.padVibration)
         assertEquals("Medium", rows()[0].secondary)
-        assertEquals(ListSelection(0, 5), state.selection.value)
+        assertEquals(ListSelection(0, 6), state.selection.value)
         state.onButton(NxButton.A)
         assertEquals(PadVibration.STRONG, settings.padVibration)
         assertEquals("Strong", rows()[0].secondary)
@@ -10785,7 +10786,7 @@ class AppStateTest {
         val state = state(settings, rumblePreview = { previews += it })
         state.load()
         state.openSettings(SettingsSection.CONTROLS)
-        state.select(4); state.onButton(NxButton.A)
+        state.select(5); state.onButton(NxButton.A)
         assertEquals(PadVibration.LIGHT, settings.padVibration)
         assertEquals(GameRumble.MEDIUM, settings.gameRumble)
         assertEquals(true, settings.menuPad)
@@ -10793,7 +10794,7 @@ class AppStateTest {
         assertEquals(PadTheme.RETRO, settings.padTheme)              // Appearance's stays
         assertEquals(ConsoleArt.NONE, settings.consoleArt)             // Layouts' stays
         assertEquals(SettingsSection.CONTROLS, assertIs<Screen.Settings>(state.screen.value).section)
-        assertEquals(ListSelection(4, 5), state.selection.value)
+        assertEquals(ListSelection(5, 6), state.selection.value)
     }
 
     @Test fun appearance_and_layouts_resets_leave_pad_vibration() = runTest {

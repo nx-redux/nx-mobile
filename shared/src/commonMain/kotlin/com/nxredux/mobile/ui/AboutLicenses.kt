@@ -13,7 +13,7 @@ internal val ABOUT_LICENSES: List<String> = listOf(
         "melonDS DS, Azahar, Dolphin, flycast, PPSSPP, SwanStation and FBNeo. Each core keeps its own licence, most of " +
         "them the GPL; FBNeo's does not allow commercial use.",
     "The game runner is a fork of LibretroDroid (GPL-3.0) with oboe (Apache 2.0), rcheevos for RetroAchievements " +
-        "(MIT), libretro-common (MIT), libchdr (BSD-3-Clause) with miniz (MIT), zstd (BSD-3-Clause) and the LZMA SDK " +
+        "(MIT), libretro-common (MIT), libchdr (BSD-3-Clause) with miniz (MIT), zstd (BSD-3-Clause), LZ4 (BSD-2-Clause) and the LZMA SDK " +
         "(public domain). Device Sync and netplay copy saves with rsync (GPL-3.0-or-later).",
     "Kotlin, Compose Multiplatform, kotlinx and AndroidX libraries are under the Apache License 2.0.",
 )

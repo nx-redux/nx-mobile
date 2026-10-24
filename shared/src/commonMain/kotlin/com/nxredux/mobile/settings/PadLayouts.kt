@@ -3,9 +3,11 @@ package com.nxredux.mobile.settings
 /**
  * Controls → Pad layout. The on-screen pad's button groups: each moves and resizes as one (the d-pad and
  * the stick share [DPAD]'s spot). [C_STICK] is the New 3DS C-stick of the portrait pad; in the landscape clusters it is
- * part of [FACE]. [SYSTEM_LEFT] is MENU and the d-pad / stick toggle, [SYSTEM_RIGHT] SELECT and START.
+ * part of [FACE]. [SYSTEM_LEFT] is MENU and the d-pad / stick toggle, [SYSTEM_RIGHT] SELECT and START. [SHORTCUT_1] /
+ * [SHORTCUT_2] are the touch shortcut buttons, drawn in game only while their slot has an action (the editor always shows
+ * them). Layouts store groups by name: new groups go at the end, so a stored line stays valid.
  */
-enum class PadGroup { DPAD, FACE, L_SHOULDERS, R_SHOULDERS, SYSTEM_LEFT, SYSTEM_RIGHT, C_STICK }
+enum class PadGroup { DPAD, FACE, L_SHOULDERS, R_SHOULDERS, SYSTEM_LEFT, SYSTEM_RIGHT, C_STICK, SHORTCUT_1, SHORTCUT_2 }
 
 /**
  * The pad's two editable arrangements: the portrait band ([PORTRAIT], also flex mode's band and the main menu's pad)

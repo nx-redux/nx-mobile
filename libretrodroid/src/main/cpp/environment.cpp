@@ -85,6 +85,11 @@ void Environment::deinitialize() {
     gameGeometryAspectRatio = -1.0f;
     timingUpdated.store(false);
     timingFps.store(0.0);
+    fastForwarding.store(false);
+    {
+        std::lock_guard<std::mutex> lock(fastForwardingOverrideMutex);
+        fastForwardingOverride.reset();
+    }
 
     rumbleStates.fill(libretrodroid::RumbleState {});
 
@@ -507,6 +512,13 @@ bool Environment::handle_callback_set_rumble_state(unsigned port, enum retro_rum
     return true;
 }
 
+bool Environment::getFastForwardingOverride(struct retro_fastforwarding_override &out) {
+    std::lock_guard<std::mutex> lock(fastForwardingOverrideMutex);
+    if (!fastForwardingOverride) return false;
+    out = *fastForwardingOverride;
+    return true;
+}
+
 bool Environment::callback_environment(unsigned cmd, void *data) {
     return Environment::getInstance().handle_callback_environment(cmd, data);
 }
@@ -737,6 +749,19 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
         case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
             LOGD("Called RETRO_ENVIRONMENT_SET_CONTROLLER_INFO");
             return environment_handle_set_controller_info(static_cast<const struct retro_controller_info*>(data));
+
+        case RETRO_ENVIRONMENT_GET_FASTFORWARDING:
+            if (data == nullptr) return false;
+            *((bool*) data) = fastForwarding.load();
+            return true;
+
+        case RETRO_ENVIRONMENT_SET_FASTFORWARDING_OVERRIDE: {
+            // NULL asks whether the override is supported.
+            if (data == nullptr) return true;
+            std::lock_guard<std::mutex> lock(fastForwardingOverrideMutex);
+            fastForwardingOverride = *static_cast<const struct retro_fastforwarding_override*>(data);
+            return true;
+        }
 
         case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
             LOGD("Called RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE");
