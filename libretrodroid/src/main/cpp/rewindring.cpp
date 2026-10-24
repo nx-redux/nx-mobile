@@ -77,7 +77,7 @@ RewindRing::Write RewindRing::write(const uint8_t* data, size_t len, bool keyfra
     if (count_ == 0) {
         head_ = tail_ = 0;
         writeOffset = 0;
-        if (!keyframe) return Write::NO_ROOM;
+        if (!keyframe) return Write::NEED_KEYFRAME;
     }
 
     std::memcpy(buffer_.data() + writeOffset, data, len);
@@ -92,6 +92,11 @@ RewindRing::Write RewindRing::write(const uint8_t* data, size_t len, bool keyfra
     slotHead_ = (slotHead_ + 1) % static_cast<int>(slots_.size());
     count_++;
     return Write::STORED;
+}
+
+RewindRing::Entry RewindRing::at(int k) const {
+    const Slot& s = slots_[(slotTail_ + k) % slots_.size()];
+    return Entry{buffer_.data() + s.offset, s.size, s.keyframe};
 }
 
 RewindRing::Entry RewindRing::newest() const {

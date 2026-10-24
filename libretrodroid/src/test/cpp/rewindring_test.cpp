@@ -2,8 +2,7 @@
 //   out=$(mktemp -d)/rewindring_test && clang++ -std=c++17 -fsanitize=address,undefined \
 //     -Ilibretrodroid/src/main/cpp libretrodroid/src/test/cpp/rewindring_test.cpp \
 //     libretrodroid/src/main/cpp/rewindring.cpp -o "$out" && "$out"
-// Ported from the handheld's tests/test_rewind_ring.c. The ring has no public view of its slots, so a test reads it
-// by popping a copy, newest first.
+// Ported from the handheld's tests/test_rewind_ring.c. Entries are read through at().
 #include "rewindring.h"
 
 #include <cstdio>
@@ -35,17 +34,15 @@ struct Seen {
     bool keyframe;
 };
 
-// The live entries from the oldest, read by popping a copy
+// The live entries from the oldest
 static std::vector<Seen> contents(const RewindRing& r) {
-    RewindRing copy = r;
     std::vector<Seen> out;
-    while (!copy.empty()) {
-        RewindRing::Entry e = copy.newest();
+    for (int k = 0; k < (int)r.count(); k++) {
+        RewindRing::Entry e = r.at(k);
         int tag = e.data[0];
         for (size_t i = 1; i < e.len; i++)
             if (e.data[i] != e.data[0]) tag = -1;
-        out.insert(out.begin(), Seen{tag, e.len, e.keyframe});
-        copy.popNewest();
+        out.push_back(Seen{tag, e.len, e.keyframe});
     }
     return out;
 }
@@ -174,7 +171,7 @@ int main() {
             bool keyframe = r.empty() || (i % 9 == 0);
             size_t len = 1 + (seed >> 8) % 60;
             RewindRing::Write w = put(r, len, (uint8_t)(1 + i % 250), keyframe);
-            if (w == RewindRing::Write::NO_ROOM) {
+            if (w == RewindRing::Write::NEED_KEYFRAME) {
                 // only a delta that lost its keyframe is refused, and it leaves the ring empty
                 if (keyframe || !r.empty()) ok = false;
                 keyframe = true;
@@ -189,7 +186,7 @@ int main() {
         CHECK(ok, "5,000 mixed writes: the oldest stored entry is always a keyframe");
         CHECK(sawDelta, "the chain test did hold deltas");
         RewindRing e(100, 4);
-        CHECK(put(e, 10, 1, false) == RewindRing::Write::NO_ROOM && e.empty(), "a delta into an empty ring is refused");
+        CHECK(put(e, 10, 1, false) == RewindRing::Write::NEED_KEYFRAME && e.empty(), "a delta into an empty ring is refused");
     }
 
     printf(fails ? "\n%d FAILURE(S)\n" : "\nALL PASS\n", fails);

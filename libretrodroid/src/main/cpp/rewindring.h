@@ -35,7 +35,8 @@ public:
     enum class Write {
         STORED,
         TOO_BIG, // the entry is not smaller than the whole buffer
-        NO_ROOM, // could not make room (a logic error), or a delta had no keyframe left under it: the ring is empty
+        NO_ROOM, // could not make room (a logic error)
+        NEED_KEYFRAME, // a delta had no keyframe left under it; the ring is now empty, so write a keyframe
     };
 
     struct Entry {
@@ -45,6 +46,9 @@ public:
     };
 
     RewindRing(size_t capacity, int entryCapacity);
+    // The buffer can be hundreds of MB: never copied by accident.
+    RewindRing(const RewindRing&) = delete;
+    RewindRing& operator=(const RewindRing&) = delete;
 
     /** Stores an entry, dropping the oldest entries it would overlap or that leave too little room. */
     Write write(const uint8_t* data, size_t len, bool keyframe);
@@ -54,6 +58,9 @@ public:
 
     /** The newest entry; the ring must not be empty. */
     Entry newest() const;
+
+    /** The k-th entry counting from the oldest (0 = oldest, count() - 1 = newest); k must be in range. */
+    Entry at(int k) const;
 
     /** Pops the newest entry and reclaims its bytes, so rewind-then-play cycles don't shrink the usable history. */
     void popNewest();
