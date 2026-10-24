@@ -572,13 +572,29 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private fun routeTriggerAxes(event: MotionEvent, port: Int = 0) {
         val l = maxOf(event.getAxisValue(MotionEvent.AXIS_LTRIGGER), event.getAxisValue(MotionEvent.AXIS_BRAKE))
         val r = maxOf(event.getAxisValue(MotionEvent.AXIS_RTRIGGER), event.getAxisValue(MotionEvent.AXIS_GAS))
-        for ((button, down) in inputs[port].triggers.onAxes(l, r)) {
-            when {
-                isNds -> routeNds(button, down)
-                isN3ds -> if (routeN3ds(button, down)) sendTriggerKey(button, down)
-                else -> sendTriggerKey(button, down, port)
-            }
+        for ((button, down) in inputs[port].triggers.onAxes(l, r)) sendAxisTrigger(button, down, port)
+    }
+
+    /** An axis trigger's press or release: to the DS hotkeys, the 3DS hotkeys (ZL/ZR, always forwarded) or the core. */
+    private fun sendAxisTrigger(button: NxButton, down: Boolean, port: Int) {
+        when {
+            isNds -> routeNds(button, down)
+            isN3ds -> if (routeN3ds(button, down)) sendTriggerKey(button, down)
+            else -> sendTriggerKey(button, down, port)
         }
+    }
+
+    /**
+     * A shortcut fired ([down]) or ended on [keyCode]: an L2/R2 pull that is the shortcut's keeps its axis out of the core
+     * too ([TriggerAxes.take]), as a pad may send both. One its axis pressed first is let go; an analog one reads at rest.
+     */
+    private fun takeTrigger(keyCode: Int, port: Int, down: Boolean) {
+        val button = PadKeymap.buttonFor(keyCode)?.takeIf { it == NxButton.L2 || it == NxButton.R2 } ?: return
+        val t = inputs[port].triggers
+        if (!down) { t.untake(button); return }
+        val pressed = t.take(button)
+        if (isDc || gcPad) retroView?.let { v -> t.analogNow().let { (l, r) -> v.sendTriggers(port, l, r) } }
+        else if (pressed) sendAxisTrigger(button, false, port)
     }
 
     /**
@@ -620,6 +636,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         }
         n3dsTickJob?.cancel()
         n3dsTickJob = null
+        releaseShortcuts()   // backgrounded: a Hold FF / Hold Rewind never hears its release
     }
 
     /** Release any held game inputs so nothing sticks in the core while the menu is up. */
@@ -643,8 +660,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         ndsHatX = 0
         ndsHatY = 0
         syncPen()
-        host.shortcutKeys?.releaseAll()   // their releases go to the menu now
-        host.releaseShortcutHolds()       // a Hold FF / Hold Rewind ends with its button; a toggled one stays on
+        releaseShortcuts()   // their releases go to the menu now
         if (isN3ds) {
             n3dsHotkeys.releaseAll()   // sends up what it held in the core (L3, R3, a tapping SELECT); a held-back SELECT is dropped
             n3dsHatX = 0
@@ -655,9 +671,16 @@ internal class GameInputRouter(private val host: GameInputHost) {
         }
     }
 
+    /** The shortcut keys' releases will not come here: nothing held, and a Hold FF / Hold Rewind ends (a toggled one stays on). */
+    private fun releaseShortcuts() {
+        host.shortcutKeys?.releaseAll()
+        host.releaseShortcutHolds()
+    }
+
     /** Lets go of everything [port] held in the core: its keys, directions, sticks and DC or GameCube analog triggers. */
     fun releasePort(port: Int) {
         inputs[port].reset()
+        if (port == 0) releaseShortcuts()   // P1's pad went: a SELECT or Hold FF held on it must not stay held
         val view = retroView ?: return
         RELEASED_BUTTONS.forEach { b -> PadKeymap.keyCodeFor(b)?.let { view.sendKeyEvent(KeyEvent.ACTION_UP, it, port) } }
         RELEASED_THUMB_KEYS.forEach { view.sendKeyEvent(KeyEvent.ACTION_UP, it, port) }
@@ -786,7 +809,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
             if (isDc || gcPad) {   // GameCube triggers too: Dolphin reads them as analog buttons
                 val l = maxOf(event.getAxisValue(MotionEvent.AXIS_LTRIGGER), event.getAxisValue(MotionEvent.AXIS_BRAKE))
                 val r = maxOf(event.getAxisValue(MotionEvent.AXIS_RTRIGGER), event.getAxisValue(MotionEvent.AXIS_GAS))
-                view.sendTriggers(port, l, r)
+                inp.triggers.analog(l, r).let { (al, ar) -> view.sendTriggers(port, al, ar) }   // a shortcut's pull reads at rest
             } else {
                 routeTriggerAxes(event, port)   // a digital L2/R2 from a pad that reports its triggers only as axes
             }
@@ -881,12 +904,12 @@ internal class GameInputRouter(private val host: GameInputHost) {
         return im.inputDeviceIds.toList().mapNotNull(im::getInputDevice).filter(::isPad).distinctBy { it.descriptor }
     }
 
-    /** Acts on [ShortcutKeys]' [verdict]; true when the key is taken (it goes no further). */
-    private fun shortcut(verdict: KeyVerdict): Boolean = when (verdict) {
+    /** Acts on [ShortcutKeys]' [verdict] for [keyCode] on [port]; true when the key is taken (it goes no further). */
+    private fun shortcut(verdict: KeyVerdict, keyCode: Int = 0, port: Int = 0): Boolean = when (verdict) {
         KeyVerdict.Pass -> false
         KeyVerdict.Swallow -> true
         KeyVerdict.OpenMenu -> { toggleMenu(); true }
-        is KeyVerdict.Fire -> { host.onShortcut(verdict.action, verdict.down); true }
+        is KeyVerdict.Fire -> { takeTrigger(keyCode, port, verdict.down); host.onShortcut(verdict.action, verdict.down); true }
     }
 
     fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -920,7 +943,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         if (button != null && inputs.menuChord(port, button, down = true) && first) { toggleMenu(); return true }
         // Shortcuts, P1's (port 0's) only, as the menu chord: after the built-in hotkeys above, which they can't bind
         // ([com.nxredux.mobile.shortcuts.EffectiveShortcuts.blocked]), before the DS / 3DS routing and the core.
-        if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onDown(keyCode, repeat = !first))) return true }
+        if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onDown(keyCode, repeat = !first), keyCode, port)) return true }
         // The hotkeys and stylus see the console button the key is (its printed letter on DS/3DS), as the core will.
         if (isNds) PadKeymap.buttonFor(positionOf(event, keyCode))?.let { b ->
             if (b == NxButton.L2 || b == NxButton.R2) { if (first && routeTriggerKey(b, down = true)) routeNds(b, down = true); return true }
@@ -951,7 +974,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         if (WiiShortcuts.isRecenter(isWii, keyCode) || WiiShortcuts.isHome(isWii, keyCode)) return true
         if (keyCode == KeyEvent.KEYCODE_BUTTON_THUMBL && onN3dsSwapPressed(down = false)) return true
         PadKeymap.buttonFor(keyCode)?.let { inputs.menuChord(port, it, down = false) }
-        if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onUp(keyCode))) return true }
+        if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onUp(keyCode), keyCode, port)) return true }
         if (isNds) PadKeymap.buttonFor(positionOf(event, keyCode))?.let { b ->   // as on the down
             if (b == NxButton.L2 || b == NxButton.R2) { if (routeTriggerKey(b, down = false)) routeNds(b, down = false); return true }
             if (!routeNds(b, down = false)) return true

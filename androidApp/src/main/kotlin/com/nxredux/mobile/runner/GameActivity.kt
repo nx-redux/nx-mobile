@@ -387,7 +387,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private set
     /** The core can rewind ([com.nxredux.mobile.runner.CoreDescriptor.rewind]); false until the launch resolves the core. */
     private var canRewind = false
-    /** Fast forward and rewind on the view; the shortcuts drive it ([onShortcut]), the speed rows configure it ([applyFrontend]). */
+    /**
+     * Fast forward and rewind on the view; the shortcuts drive it ([onShortcut]), the speed rows configure it ([applyFrontend]).
+     * Off for a netplay session ([SpeedController.setSession]): a link session's end turns it back on ([playLocally]), a
+     * lockstep session's does not, so a game played on alone after lockstep keeps it off, as it keeps save states off.
+     */
     private val speed by lazy { SpeedController(lifecycleScope) { retroView } }
     /** Controls → Shortcuts with this console's and game's `nx_bind_*` over it, read at launch; null before. */
     override var shortcutKeys: ShortcutKeys? = null
@@ -969,7 +973,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // the core then gets the handheld pak's pad for this tag and core (NetplayPads).
         if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to SegaPadType.AUTO)
         // Shortcuts: the base with this console's and game's overrides, less what a built-in hotkey owns. netplay: they
-        // stay bound but do nothing, as fast forward, rewind and reset would desync the players ([playLocally] ends that).
+        // stay bound but do nothing, as fast forward, rewind and reset would desync the players. A link session's end
+        // turns them back on ([playLocally]); a lockstep session's does not: the game played on alone after it keeps them
+        // off, as it has no save states.
         canRewind = descriptor?.rewind == true
         shortcutKeys = ShortcutKeys(Shortcuts.effective(
             Shortcuts.decodeBase(AndroidAppSettings(this).shortcuts), Shortcuts.fromConfig(resolved.values),
