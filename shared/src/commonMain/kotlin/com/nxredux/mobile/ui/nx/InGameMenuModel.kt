@@ -29,7 +29,7 @@ import com.nxredux.mobile.shortcuts.Shortcuts
 import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 
-enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS }
+enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, CANCEL }
 enum class SlotAction { SAVE, LOAD }
 
 sealed interface PageKind {
@@ -54,6 +54,8 @@ sealed interface PageKind {
     data object SaveChanges : PageKind
     /** Quit's choice: Save & Quit (the resume point) or Quit (the last resume point stays), drawn as a dialog ([menuDialog]). */
     data object QuitGame : PageKind
+    /** Reset's confirm (reset always asks first): Reset or Cancel, drawn as a dialog over the root ([menuDialog]). */
+    data object ResetGame : PageKind
     data object Message : PageKind
     /** Which pad is which player (multiplayer cores only). */
     data object Players : PageKind
@@ -205,6 +207,13 @@ sealed interface MenuEffect {
      * only by Save Changes, which writes the overridden rows alone (spec: overrides inherit).
      */
     data class ShortcutsChanged(val overrides: ShortcutOverrides) : MenuEffect
+    /**
+     * The panel's Fast forward or Rewind tile: set the toggles ([ff], [rewind]; null leaves one alone), then close the
+     * menu so the game runs with it on (spec). Turning one on turns the other off, as a Toggle binding does.
+     */
+    data class SetSpeed(val ff: Boolean?, val rewind: Boolean?) : MenuEffect
+    /** The Reset dialog's Reset: restart the game, then close the menu. */
+    data object ResetGame : MenuEffect
 }
 
 /**
@@ -233,6 +242,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** From [setSecondScreen]; the panel shows the Second screen shortcut only while a second display is [secondConnected]. */
     private var secondConnected = false
     private var secondOn = true
+    /** From [setSpeedTiles]: the panel's Fast forward and Rewind tiles' live state; [speedRewind] null: no Rewind tile. */
+    private var speedFf = false
+    private var speedRewind: Boolean? = null
     /** From [setPlayers]; the panel shows its Players tab when there is more than one slot. */
     private var playerSlots: List<PlayerSlotRow> = emptyList()
     private var playerPads: List<PlayerPadRow> = emptyList()
@@ -740,6 +752,26 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         refreshFrontendPages()
     }
 
+    /**
+     * Fast forward runs now ([ff]) and rewinding does ([rewind]; null where this game can't rewind: the core or its Rewind
+     * row): the panel's tiles show it, so a toggle a binding left on (or one removed live) can be turned off here.
+     */
+    fun setSpeedTiles(ff: Boolean, rewind: Boolean?) {
+        speedFf = ff
+        speedRewind = rewind
+        fixPanel()
+    }
+
+    /**
+     * A Reset binding: the menu (just opened on its root) shows the Reset dialog, as the panel's Reset tile does. Nothing
+     * in netplay (reset would desync the players) or while the dialog is already up.
+     */
+    fun openResetDialog() {
+        if (netplay || state.page.kind == PageKind.ResetGame) return
+        popTo(PageKind.Root)
+        push(resetPage())
+    }
+
     /** Open Options pages built again (Console Settings offered or not), keeping the selected row and the status footer. */
     private fun rebuildOptions() {
         state = state.copy(stack = state.stack.map { p ->
@@ -802,14 +834,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /**
      * What the root's game panel draws: the header (the achievement count from [setAchievements] while there is a set),
-     * the tabs that apply, the Shortcuts (Swap disc, Second screen, the future ones), the achievements in the chosen
+     * the tabs that apply, the Shortcuts (Swap disc, Second screen, Fast forward, Rewind, Reset), the achievements in the chosen
      * order, the cheats, the Players page's rows, and the controller's [MenuState.panelFocus].
      */
     fun panelState(): GamePanelState {
         // Asked on every recomposition of the menu: rebuilt (the achievements sorted again) only when an input changed.
         val key = listOf(
             state.panelTab, state.panelFocus, panelHeader, achievements, achievementsAvailable, achievementSummary, achievementOrder,
-            badges, playerSlots, playerPads, discCount, discIndex, secondConnected, secondOn, netplay, frontendTag, cheats, cheatsAvailable,
+            badges, playerSlots, playerPads, discCount, discIndex, secondConnected, secondOn, speedFf, speedRewind, netplay, frontendTag, cheats, cheatsAvailable,
             cheatsFolder, cheatsExpected,
         )
         panelCache?.takeIf { it.first == key }?.let { return it.second }
@@ -831,7 +863,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /**
      * A tap on the panel (or A on its focused item): Swap disc and Second screen as the menu's own effects, an
-     * achievement's detail page, a player slot or pad as the Players page sets them, a cheat switched, a tab shown.
+     * achievement's detail page, a player slot or pad as the Players page sets them, a cheat switched, a tab shown, a
+     * Fast forward / Rewind toggle ([MenuEffect.SetSpeed]: the host closes the menu), or the Reset dialog pushed.
      */
     fun panelEvent(event: GamePanelEvent): MenuEffect? {
         // A tap moves the controller's focus (while it is in the panel) to the item tapped; A's own item is already there.
@@ -853,6 +886,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         is GamePanelEvent.SetPlayer -> MenuEffect.SetPlayer(event.slot, event.key)
         is GamePanelEvent.SetCheat -> setCheat(event.index, event.on)
         GamePanelEvent.ShowGame -> null
+        // The tiles are hidden in netplay; a stale tap there does nothing.
+        is GamePanelEvent.SetFastForward -> if (netplay) null else GamePanelModel.speedEffect(event)
+        is GamePanelEvent.SetRewind -> if (netplay || speedRewind == null) null else GamePanelModel.speedEffect(event)
+        GamePanelEvent.Reset -> { if (!netplay) push(resetPage()); null }
     }
 
     /**
@@ -877,7 +914,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         cheats = cheatsAvailable && !netplay,
     )
 
-    private fun panelShortcuts(): List<ShortcutState> = GamePanelModel.shortcuts(discCount, discIndex, secondConnected, secondOn, netplay)
+    private fun panelShortcuts(): List<ShortcutState> =
+        GamePanelModel.shortcuts(discCount, discIndex, secondConnected, secondOn, netplay, speedFf, speedRewind)
 
     private fun panelAchievements(): List<RaAchievement> = achievements.orEmpty().sortedBy(achievementOrder)
 
@@ -948,6 +986,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         GamePanelTab.SHORTCUTS -> when (event) {
             GamePanelEvent.SwapDisc -> Shortcut.SWAP_DISC
             is GamePanelEvent.SetSecondScreen -> Shortcut.SECOND_SCREEN
+            is GamePanelEvent.SetFastForward -> Shortcut.FAST_FORWARD
+            is GamePanelEvent.SetRewind -> Shortcut.REWIND
+            GamePanelEvent.Reset -> Shortcut.RESET
             else -> null
         }?.let { s -> panelShortcuts().indexOfFirst { it.shortcut == s } }
         GamePanelTab.ACHIEVEMENTS -> null   // its rows ask for nothing
@@ -992,6 +1033,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         MenuAction.QUIT -> { push(quitPage()); null }
         MenuAction.SAVE_AND_QUIT -> MenuEffect.Quit
         MenuAction.QUIT_ONLY -> MenuEffect.QuitWithoutResume
+        MenuAction.RESET -> { popTo(PageKind.Root); MenuEffect.ResetGame }
+        MenuAction.CANCEL -> { popTo(PageKind.Root); null }
         MenuAction.LEAVE_NETPLAY -> MenuEffect.LeaveNetplay
         MenuAction.SAVE_FOR_CONSOLE -> { popTo(PageKind.Options); MenuEffect.SaveForConsole }
         MenuAction.SAVE_FOR_GAME -> { popTo(PageKind.Options); MenuEffect.SaveForGame }
@@ -1023,7 +1066,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             is PageKind.Category -> push(categoryPage(target.key))
             // Achievements and Players open from the game panel only ([openTabPage]).
             PageKind.Achievements, PageKind.Players, is PageKind.Adjust, PageKind.Root, PageKind.Message,
-            PageKind.QuitGame -> Unit
+            PageKind.QuitGame, PageKind.ResetGame -> Unit
         }
         return null
     }
@@ -1491,6 +1534,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         footer = QUIT_TEXT,
     )
 
+    private fun resetPage() = MenuPage(
+        PageKind.ResetGame, "Reset game?",
+        listOf(MenuRow.Action("Reset", MenuAction.RESET), MenuRow.Action("Cancel", MenuAction.CANCEL)),
+        footer = RESET_TEXT,
+    )
+
     private fun coreOptionsPage(): MenuPage {
         val live = CoreOptionFilter.live(options, locked)
         val rows = CoreOptionFilter.categories(live).map { MenuRow.Submenu(it.label, PageKind.Category(it.key), detail = it.info) } +
@@ -1545,6 +1594,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val NO_LOCKED = "Everything unlocked."
         const val ACH_KEY_PREFIX = "ach:"
         const val OVERLAY_UNAVAILABLE = "Unavailable"
+        private const val RESET_TEXT = "Progress since your last save will be lost."
         private const val QUIT_TEXT = "Save & Quit keeps your place for next time. Quit keeps the last resume point."
         const val OVERLAY_UNAVAILABLE_LINE = "Off while the DS screens are drawn apart"
         const val OVERLAY_UNAVAILABLE_INFO = "Overlays are off while the DS screens\nare drawn apart."

@@ -132,7 +132,7 @@ fun InGameMenu(
         val split = inGameMenuSplit(window)
         // After every composition, so the model's input agrees with the panes drawn from the first frame.
         SideEffect { onSplit(split) }
-        // A dialog page (Quit's) draws over the page under it, which takes no input meanwhile (the scrim covers it).
+        // A dialog page (Quit's, Reset's) draws over the page under it, which takes no input meanwhile (the scrim covers it).
         val (under, dialog) = menuDialog(state)
         if (under.page.kind is PageKind.Adjust) {
             // Over the dual-screen panel (opaque) the picture is on the other display: the header over the strip instead.
@@ -145,7 +145,8 @@ fun InGameMenu(
             InGameMenuContent(under, slots, rowHeight, onSelect, onActivate, onDismiss, onChange, onPress, detail, onInfoTruncated, splitUi, panelUi, panelBeside, opaque, onOption)
         }
         if (dialog != null) {
-            // Only a tap opens it (a pad's A / X quit on the row itself), so no key hints.
+            // No key hints: Quit's opens on a tap only (a pad's A / X quit on the row itself); Reset's, from a binding too,
+            // reads as any choice dialog (UP/DOWN, A, B cancels).
             NxChoiceDialog(dialog.title, dialog.footer, dialog.rows.map { it.label }, dialog.selected, onChoose = onActivate, onCancel = onDismiss)
         }
         // An options row's picker or full description, over everything (the hint bar too).
@@ -156,9 +157,9 @@ fun InGameMenu(
 /** [under]: the menu drawn as pages; [dialog]: the top page when it draws as a dialog over them ([NxChoiceDialog]). */
 internal data class MenuDialog(val under: MenuState, val dialog: MenuPage?)
 
-/** Whether [state]'s top page is a dialog (Quit Game): then the pages under it draw, the dialog over them. */
+/** Whether [state]'s top page is a dialog (Quit Game, Reset game?): then the pages under it draw, the dialog over them. */
 internal fun menuDialog(state: MenuState): MenuDialog =
-    if (state.page.kind == PageKind.QuitGame && state.stack.size > 1) {
+    if ((state.page.kind == PageKind.QuitGame || state.page.kind == PageKind.ResetGame) && state.stack.size > 1) {
         MenuDialog(state.copy(stack = state.stack.dropLast(1)), state.page)
     } else {
         MenuDialog(state, null)

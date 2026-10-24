@@ -127,6 +127,12 @@ internal interface InGameMenuHost : LifecycleOwner {
     fun applyShortcuts(overrides: ShortcutOverrides)
     /** The Shortcuts page's inputs: Controls → Shortcuts, [shortcutOverrides], the console's hotkeys, whether the core rewinds. */
     fun publishShortcuts(model: InGameMenuModel)
+    /** The panel's Fast forward / Rewind tiles: running now, and rewinding (null: no Rewind tile) ([SpeedController.tiles]). */
+    fun speedTiles(): Pair<Boolean, Boolean?>
+    /** A Fast forward / Rewind tile's toggles ([SpeedController.setToggle]). */
+    fun setSpeedToggle(ff: Boolean?, rewind: Boolean?)
+    /** The Reset dialog's Reset: the game restarts ([GLRetroView.reset]); a toggled rewind ends, a toggled FF stays. */
+    fun resetGame()
 }
 
 /**
@@ -222,6 +228,13 @@ internal class InGameMenuController(
         menuState.value = model.state
     }
 
+    /** The panel's Fast forward and Rewind tiles show the live state (a shortcut's toggle, the buffer running out). */
+    fun publishSpeed(model: InGameMenuModel) {
+        val (ff, rewind) = host.speedTiles()
+        model.setSpeedTiles(ff, rewind)
+        menuState.value = model.state
+    }
+
     /** Back (the key's press, the gesture): the open in-game menu reads it as B, else it opens. */
     fun backPressed() { if (menuOpen) onMenuPress(NxButton.B) else toggleMenu() }
 
@@ -275,6 +288,7 @@ internal class InGameMenuController(
         host.publishShortcuts(model)
         publishPlayers(model)
         publishSecondScreen(model)
+        publishSpeed(model)
         applyAchievements(model)
         model.setPanelHeader(dual.panelHeader())
         // Over the dual-screen panel: the menu's panel opens on the tab it showed (a tab change has no effect to handle).
@@ -476,6 +490,9 @@ internal class InGameMenuController(
             MenuEffect.SaveForGame -> saveOptions(game = true)
             MenuEffect.RestoreDefaults -> restoreOptions()
             is MenuEffect.ShortcutsChanged -> host.applyShortcuts(effect.overrides)
+            // A tile: the game runs with it on, so the menu closes (spec).
+            is MenuEffect.SetSpeed -> { host.setSpeedToggle(effect.ff, effect.rewind); closeMenu() }
+            MenuEffect.ResetGame -> { host.resetGame(); closeMenu() }
             is MenuEffect.SetPlayer -> input.slots?.let { s ->
                 val benchedBefore = s.outOfPlay
                 s.assign(effect.slot, effect.key?.let(::DeviceKey)).forEach { port ->

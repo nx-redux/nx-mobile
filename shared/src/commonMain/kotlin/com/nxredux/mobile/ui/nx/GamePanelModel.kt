@@ -7,15 +7,15 @@ import com.nxredux.mobile.gametime.GameTimeFormat
 /** The game panel's tabs, in display order; [GamePanelModel.tabs] hides the ones that don't apply. */
 enum class GamePanelTab(val label: String) { SHORTCUTS("Shortcuts"), ACHIEVEMENTS("Achievements"), CHEATS("Cheats"), PLAYERS("Players") }
 
-/** The Shortcuts tab's one-tap actions, in display order. The last four are drawn disabled until they exist. */
+/** The Shortcuts tab's one-tap actions, in display order. No Screenshot: the spec dropped it everywhere. */
 enum class Shortcut(val label: String) {
-    SWAP_DISC("Swap disc"), SECOND_SCREEN("Second screen"), FAST_FORWARD("Fast forward"), REWIND("Rewind"),
-    SCREENSHOT("Screenshot"), RESET("Reset"),
+    SWAP_DISC("Swap disc"), SECOND_SCREEN("Second screen"), FAST_FORWARD("Fast forward"), REWIND("Rewind"), RESET("Reset"),
 }
 
 /**
  * One shortcut button: [enabled] false is drawn dimmed and does nothing; [value] is the display text under the label
- * ("2/3" for discs); [on] makes it a toggle (the second screen's setting; null for the action shortcuts), drawn as a
+ * ("2/3" for discs); [on] makes it a toggle (the second screen's setting, fast forward, rewind; null for the action
+ * shortcuts), drawn as a
  * quick-settings tile: filled while on, outlined while off, with no On/Off words.
  */
 data class ShortcutState(val shortcut: Shortcut, val label: String, val enabled: Boolean, val value: String? = null, val on: Boolean? = null)
@@ -83,6 +83,12 @@ sealed interface GamePanelEvent {
     data class SetCheat(val index: Int, val on: Boolean) : GamePanelEvent
     /** The Game pill: the DS/3DS screen comes back to the second display. */
     data object ShowGame : GamePanelEvent
+    /** The toggled fast forward to [on] (the tile shows the live state, so this turns off a toggle a binding left on). */
+    data class SetFastForward(val on: Boolean) : GamePanelEvent
+    /** The toggled rewind to [on]. */
+    data class SetRewind(val on: Boolean) : GamePanelEvent
+    /** Reset: always asks first (the in-game menu's Reset dialog). */
+    data object Reset : GamePanelEvent
 }
 
 /** The panel's rules, pure so the in-game menu and both hosts share them. */
@@ -107,19 +113,38 @@ object GamePanelModel {
 
     /**
      * The Shortcuts tab: Swap disc for a multi-disc game outside netplay (disc swaps aren't synced), Second screen while
-     * one is connected, then Fast forward, Rewind, Screenshot and Reset, disabled until they exist. [discIndex] is 0-based.
+     * one is connected, then Fast forward ([ff]: running now), Rewind ([rewind]: rewinding now; null where the game
+     * can't rewind, the core or its Rewind row off: hidden, never greyed) and Reset. Netplay and link sessions hide all
+     * three, since they would desync the players. [discIndex] is 0-based.
      */
-    fun shortcuts(discCount: Int, discIndex: Int, secondConnected: Boolean, secondOn: Boolean, netplay: Boolean): List<ShortcutState> = buildList {
+    fun shortcuts(
+        discCount: Int, discIndex: Int, secondConnected: Boolean, secondOn: Boolean, netplay: Boolean, ff: Boolean, rewind: Boolean?,
+    ): List<ShortcutState> = buildList {
         if (discCount > 1 && !netplay) add(ShortcutState(Shortcut.SWAP_DISC, Shortcut.SWAP_DISC.label, true, "${discIndex + 1}/$discCount"))
         if (secondConnected) add(ShortcutState(Shortcut.SECOND_SCREEN, Shortcut.SECOND_SCREEN.label, true, on = secondOn))
-        for (s in FUTURE) add(ShortcutState(s, s.label, enabled = false))
+        if (netplay) return@buildList
+        add(ShortcutState(Shortcut.FAST_FORWARD, Shortcut.FAST_FORWARD.label, true, on = ff))
+        if (rewind != null) add(ShortcutState(Shortcut.REWIND, Shortcut.REWIND.label, true, on = rewind))
+        add(ShortcutState(Shortcut.RESET, Shortcut.RESET.label, true))
     }
 
-    /** What activating [s] asks for: nothing while disabled; Swap disc, or the second screen flipped. */
+    /** What activating [s] asks for: nothing while disabled; Swap disc, a toggle flipped (from its live [ShortcutState.on]), or Reset. */
     fun eventFor(s: ShortcutState): GamePanelEvent? = if (!s.enabled) null else when (s.shortcut) {
         Shortcut.SWAP_DISC -> GamePanelEvent.SwapDisc
         Shortcut.SECOND_SCREEN -> s.on?.let { GamePanelEvent.SetSecondScreen(on = !it) }
-        Shortcut.FAST_FORWARD, Shortcut.REWIND, Shortcut.SCREENSHOT, Shortcut.RESET -> null
+        Shortcut.FAST_FORWARD -> s.on?.let { GamePanelEvent.SetFastForward(on = !it) }
+        Shortcut.REWIND -> s.on?.let { GamePanelEvent.SetRewind(on = !it) }
+        Shortcut.RESET -> GamePanelEvent.Reset
+    }
+
+    /**
+     * What a Fast forward or Rewind tile asks of the toggles (null for any other event): the one tapped to its new state,
+     * and turning one on turns the other off (last toggle wins, as the Toggle bindings). Both panels share it.
+     */
+    fun speedEffect(event: GamePanelEvent): MenuEffect.SetSpeed? = when (event) {
+        is GamePanelEvent.SetFastForward -> MenuEffect.SetSpeed(ff = event.on, rewind = if (event.on) false else null)
+        is GamePanelEvent.SetRewind -> MenuEffect.SetSpeed(ff = if (event.on) false else null, rewind = event.on)
+        else -> null
     }
 
     /**
@@ -179,6 +204,4 @@ object GamePanelModel {
 
     /** The header's play line: "Total 4h 12m". */
     fun timeLine(h: GamePanelHeader): String = "Total ${GameTimeFormat.duration(h.totalMs)}"
-
-    private val FUTURE = listOf(Shortcut.FAST_FORWARD, Shortcut.REWIND, Shortcut.SCREENSHOT, Shortcut.RESET)
 }

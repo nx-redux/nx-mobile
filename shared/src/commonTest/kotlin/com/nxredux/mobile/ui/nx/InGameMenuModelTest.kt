@@ -832,24 +832,88 @@ class InGameMenuModelTest {
     @Test fun the_shortcut_grid_moves_by_its_columns() {
         val m = model()
         m.setDiscs(current = 0, count = 2)
-        m.setSecondScreen(connected = true, on = true)       // 6 shortcuts
+        m.setSecondScreen(connected = true, on = true)
+        m.setSpeedTiles(ff = false, rewind = false)          // 5 shortcuts
         m.panelColumns = 2
         m.press(NxButton.RIGHT); m.press(NxButton.DOWN)      // Item 0
         m.press(NxButton.DOWN); assertEquals(PanelFocus.Item(2), m.state.panelFocus)
         m.press(NxButton.RIGHT); assertEquals(PanelFocus.Item(3), m.state.panelFocus)
         m.press(NxButton.RIGHT); assertEquals(PanelFocus.Item(3), m.state.panelFocus)   // the row's right end
-        m.press(NxButton.DOWN); m.press(NxButton.DOWN); assertEquals(PanelFocus.Item(5), m.state.panelFocus)
-        m.press(NxButton.UP); assertEquals(PanelFocus.Item(3), m.state.panelFocus)
+        m.press(NxButton.DOWN); assertEquals(PanelFocus.Item(4), m.state.panelFocus)    // the short last row's last pill
+        m.press(NxButton.DOWN); assertEquals(PanelFocus.Item(4), m.state.panelFocus)
+        m.press(NxButton.UP); assertEquals(PanelFocus.Item(2), m.state.panelFocus)
         m.press(NxButton.UP); m.press(NxButton.UP); assertEquals(PanelFocus.Tabs, m.state.panelFocus)
     }
 
-    @Test fun disabled_shortcut_a_does_nothing() {
-        val m = model()                                      // no discs, no second screen: the four future shortcuts
-        assertTrue(m.panelState().shortcuts.none { it.enabled })
+    @Test fun ffTileToggles() {
+        val m = model()                                      // no discs, no second screen: Fast forward, Rewind, Reset
+        m.setSpeedTiles(ff = false, rewind = false)
+        assertEquals(listOf(Shortcut.FAST_FORWARD, Shortcut.REWIND, Shortcut.RESET), m.panelState().shortcuts.map { it.shortcut })
         m.press(NxButton.RIGHT); m.press(NxButton.DOWN)
-        val before = m.state
-        assertNull(m.press(NxButton.A))
-        assertEquals(before, m.state)
+        // FF on: rewind's toggle goes off (last toggle wins); the host closes the menu and the game runs fast.
+        assertEquals(MenuEffect.SetSpeed(ff = true, rewind = false), m.press(NxButton.A))
+        m.setSpeedTiles(ff = true, rewind = false)
+        assertEquals(true, m.panelState().shortcuts[0].on)
+        assertEquals(MenuEffect.SetSpeed(ff = false, rewind = null), m.panelEvent(GamePanelEvent.SetFastForward(on = false)))
+        assertEquals(MenuEffect.SetSpeed(ff = false, rewind = true), m.panelEvent(GamePanelEvent.SetRewind(on = true)))
+        assertEquals(MenuEffect.SetSpeed(ff = null, rewind = false), m.panelEvent(GamePanelEvent.SetRewind(on = false)))
+    }
+
+    @Test fun rewindHiddenWithoutRewind() {
+        val m = model()
+        m.setSpeedTiles(ff = false, rewind = null)
+        assertEquals(listOf(Shortcut.FAST_FORWARD, Shortcut.RESET), m.panelState().shortcuts.map { it.shortcut })
+        assertNull(m.panelEvent(GamePanelEvent.SetRewind(on = true)))   // no tile, no rewind
+    }
+
+    @Test fun resetTileOpensDialog() {
+        val m = model()
+        m.setSpeedTiles(ff = false, rewind = false)
+        assertNull(m.panelEvent(GamePanelEvent.Reset))
+        assertEquals(PageKind.ResetGame, m.state.page.kind)
+        assertEquals("Reset game?", m.state.page.title)
+        assertEquals("Progress since your last save will be lost.", m.state.page.footer)
+        assertEquals(listOf("Reset", "Cancel"), m.state.page.rows.map { it.label })
+        assertEquals(PageKind.ResetGame, menuDialog(m.state).dialog?.kind)   // drawn as a dialog over the root
+        assertEquals(PageKind.Root, menuDialog(m.state).under.page.kind)
+        // Cancel: back on the root, nothing done.
+        assertNull(m.activate(1))
+        assertEquals(PageKind.Root, m.state.page.kind)
+        assertEquals(1, m.state.stack.size)
+        // Reset resets (the host closes the menu).
+        m.panelEvent(GamePanelEvent.Reset)
+        assertEquals(MenuEffect.ResetGame, m.activate(0))
+        // B on the dialog is Cancel too.
+        m.panelEvent(GamePanelEvent.Reset)
+        assertNull(m.press(NxButton.B))
+        assertEquals(PageKind.Root, m.state.page.kind)
+    }
+
+    @Test fun openResetDialog_opens_the_confirm_on_the_root() {
+        val m = model()
+        m.openResetDialog()
+        assertEquals(PageKind.ResetGame, m.state.page.kind)
+        assertEquals(2, m.state.stack.size)
+        m.openResetDialog()                                  // a second Reset press: still one dialog
+        assertEquals(2, m.state.stack.size)
+        m.press(NxButton.DOWN)
+        assertNull(m.press(NxButton.A))                      // Cancel by pad
+        assertEquals(PageKind.Root, m.state.page.kind)
+        m.openResetDialog()
+        assertEquals(MenuEffect.ResetGame, m.press(NxButton.A))
+    }
+
+    @Test fun netplay_has_no_reset_or_speed() {
+        val m = model()
+        m.netplay = true; m.refresh()
+        m.setSpeedTiles(ff = false, rewind = false)
+        assertTrue(m.panelState().shortcuts.none { it.shortcut in listOf(Shortcut.FAST_FORWARD, Shortcut.REWIND, Shortcut.RESET) })
+        m.openResetDialog()
+        assertEquals(PageKind.Root, m.state.page.kind)
+        assertNull(m.panelEvent(GamePanelEvent.Reset))
+        assertEquals(PageKind.Root, m.state.page.kind)
+        assertNull(m.panelEvent(GamePanelEvent.SetFastForward(on = true)))
+        assertNull(m.panelEvent(GamePanelEvent.SetRewind(on = true)))
     }
 
     @Test fun swap_disc_and_second_screen_shortcuts_reuse_the_menu_effects() {
@@ -897,12 +961,13 @@ class InGameMenuModelTest {
 
     @Test fun a_lost_second_screen_clamps_the_panel_focus() {
         val m = model()
-        m.setSecondScreen(connected = true, on = true)       // Second screen + 4 future = 5
+        m.setSecondScreen(connected = true, on = true)
+        m.setSpeedTiles(ff = false, rewind = false)          // Second screen, Fast forward, Rewind, Reset
         m.press(NxButton.RIGHT); m.press(NxButton.DOWN)
-        repeat(3) { m.press(NxButton.RIGHT) }; m.press(NxButton.DOWN)
-        assertEquals(PanelFocus.Item(4), m.state.panelFocus)
-        m.setSecondScreen(connected = false, on = true)
+        repeat(3) { m.press(NxButton.RIGHT) }
         assertEquals(PanelFocus.Item(3), m.state.panelFocus)
+        m.setSecondScreen(connected = false, on = true)
+        assertEquals(PanelFocus.Item(2), m.state.panelFocus)
     }
 
     @Test fun achievement_a_in_the_panel_does_nothing() {
@@ -946,7 +1011,7 @@ class InGameMenuModelTest {
         m.setAchievementsAvailable(false)                    // signed out mid-menu
         assertEquals(GamePanelTab.SHORTCUTS, m.state.panelTab)
         assertEquals(GamePanelTab.SHORTCUTS, m.panelState().tab)
-        assertEquals(PanelFocus.Item(0), m.state.panelFocus) // in range of the four shortcuts
+        assertEquals(PanelFocus.Item(0), m.state.panelFocus) // in range of the shortcuts
         assertTrue(0 < m.panelState().shortcuts.size)
     }
 

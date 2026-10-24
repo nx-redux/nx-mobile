@@ -108,6 +108,10 @@ internal interface DualScreenHost : LifecycleOwner {
     fun publishMenuSecondScreen()
     /** Runs [block] on the open in-game menu, if any, and redraws it. */
     fun withMenu(block: (InGameMenuModel) -> Unit)
+    /** The Fast forward / Rewind tiles' live state ([SpeedController.tiles]); null rewind: no Rewind tile. */
+    fun speedTiles(): Pair<Boolean, Boolean?>
+    /** The Reset tile: reset always asks first, so the in-game menu opens on its Reset dialog. */
+    fun askReset()
 }
 
 /**
@@ -555,7 +559,7 @@ internal class DualScreenController(
 
     /**
      * The dual-screen panel's state: the header ([panelHeader], with the achievement count while there is a set), the tabs
-     * that apply, the Shortcuts (Swap disc for a multi-disc game outside netplay, Second screen, the future ones), this
+     * that apply, the Shortcuts (Swap disc for a multi-disc game outside netplay, Second screen, Fast forward, Rewind and Reset outside netplay), this
      * game's achievements in the menu's order, the cheats (the host's set: one owner, as the menu's), and the Players
      * page's rows.
      */
@@ -570,11 +574,12 @@ internal class DualScreenController(
         )
         val cheats = owner.cheatSet
         val (disc, count) = discs ?: (0 to 0)
+        val (ff, rewind) = owner.speedTiles()
         return GamePanelState(
             header = panelHeader().copy(ra = summary.takeIf { GamePanelTab.ACHIEVEMENTS in tabs }),
             tabs = tabs,
             tab = GamePanelModel.resolveTab(dualPanelTab, tabs),
-            shortcuts = GamePanelModel.shortcuts(count, disc, secondScreens.current.value != null, appSettings.secondScreen, netplayNow != null),
+            shortcuts = GamePanelModel.shortcuts(count, disc, secondScreens.current.value != null, appSettings.secondScreen, netplayNow != null, ff, rewind),
             achievements = list,
             badges = b?.badges.orEmpty(),
             players = players?.first.orEmpty(),
@@ -592,8 +597,8 @@ internal class DualScreenController(
 
     /**
      * A touch on the dual-screen panel: Swap disc, Second screen, the Players and Cheats rows as the in-game menu's own effects
-     * (the menu, if open over the game, follows), a tab, or the Game pill flipping the DS/3DS screen back. Achievement
-     * rows ask for nothing.
+     * (the menu, if open over the game, follows), a tab, the Game pill flipping the DS/3DS screen back, a Fast forward /
+     * Rewind toggle, or Reset (the in-game menu's dialog). Achievement rows ask for nothing.
      */
     private fun onGamePanelEvent(e: GamePanelEvent) {
         if (quitting) return
@@ -607,6 +612,13 @@ internal class DualScreenController(
             is GamePanelEvent.SetPlayer -> owner.handleMenuEffect(MenuEffect.SetPlayer(e.slot, e.key))
             is GamePanelEvent.SetCheat -> owner.handleMenuEffect(MenuEffect.SetCheat(e.index, e.on))
             GamePanelEvent.ShowGame -> { panelUp = false; syncDual() }
+            // Hidden in netplay; a stale tap there does nothing. The tiles follow through the speed's onTiles.
+            is GamePanelEvent.SetFastForward, is GamePanelEvent.SetRewind -> GamePanelModel.speedEffect(e)?.takeIf { netplayNow == null }?.let {
+                owner.handleMenuEffect(it)
+                // The game runs with it on: a panel flipped up over the DS/3DS screen gives the screen back.
+                if (panelUp) { panelUp = false; syncDual() }
+            }
+            GamePanelEvent.Reset -> if (netplayNow == null) owner.askReset()
         }
     }
 

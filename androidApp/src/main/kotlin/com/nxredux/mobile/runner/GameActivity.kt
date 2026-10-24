@@ -395,7 +395,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * Off for a netplay session ([SpeedController.setSession]): a link session's end turns it back on ([playLocally]), a
      * lockstep session's does not, so a game played on alone after lockstep keeps it off, as it keeps save states off.
      */
-    private val speed by lazy { SpeedController(lifecycleScope) { retroView } }
+    private val speed by lazy {
+        // The panels' Fast forward / Rewind tiles follow whatever changed them (a shortcut, a tile, the buffer running out).
+        SpeedController(lifecycleScope, onTiles = { dual.refreshDualPanel(); menu.menuModel?.let(menu::publishSpeed) }) { retroView }
+    }
     /** Controls → Shortcuts with this console's and game's `nx_bind_*` over it, read at launch; null before. */
     override var shortcutKeys: ShortcutKeys? = null
         private set
@@ -2637,8 +2640,33 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun menuCaptureKey(keyCode: Int, down: Boolean, repeat: Boolean): Boolean = menu.captureKey(keyCode, down, repeat)
 
-    /** A Reset shortcut: reset always asks first, so it opens the in-game menu, where the confirm is. */
-    private fun askReset() { if (!menuOpen) toggleMenu() }
+    override fun speedTiles(): Pair<Boolean, Boolean?> = speed.tiles()
+
+    override fun setSpeedToggle(ff: Boolean?, rewind: Boolean?) = speed.setToggle(ff, rewind)
+
+    /**
+     * A Reset shortcut or the dual-screen panel's Reset tile: reset always asks first, so the in-game menu opens on its
+     * Reset dialog. Never in netplay or a link session (the model refuses too).
+     */
+    override fun askReset() {
+        if (quitting || netplayNow != null) return
+        if (!menuOpen) toggleMenu()
+        withMenu { it.openResetDialog() }
+    }
+
+    /**
+     * The Reset dialog's Reset: retro_reset on the emulation thread (the engine clears the rewind buffer and the frame
+     * timer with it, L18/L19), waited for off main as a disc change is. A toggled rewind would only run back to the reset
+     * point: it ends first; a toggled FF stays.
+     */
+    override fun resetGame() {
+        if (quitting || !gameReady || netplayNow != null) return
+        val view = retroView ?: return
+        speed.setToggle(rewind = false)
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { view.reset() }.onFailure { NxLog.w("GameActivity", "reset failed", it) }
+        }
+    }
 
     /**
      * netplay: DISCONNECT and shut the engine down (off main), then quit; saveStates is null: no auto state. A link
