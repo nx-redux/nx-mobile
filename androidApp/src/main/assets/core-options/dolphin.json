@@ -373,7 +373,7 @@
       "Sync - Per Frame using target refresh rate",
       "Async - driven by callbacks using refresh rate and audio buffer status"
      ],
-     "default": "0"
+     "default": "1"
     }
    ]
   },
@@ -1099,6 +1099,23 @@
       ""
      ],
      "default": "disabled"
+    },
+    {
+     "key": "dolphin_vr_mode",
+     "label": "Graphics > Settings > VR Mode",
+     "labelCategorized": "VR Mode",
+     "info": "'Stereoscopic' shows the game on a virtual screen in 3D. 'Immersive' also turns the game camera with your head. Expect odd things in immersive mode. Requires a frontend with VR support.",
+     "values": [
+      "disabled",
+      "stereo",
+      "immersive"
+     ],
+     "labels": [
+      "",
+      "Stereoscopic",
+      "Immersive (Free Look)"
+     ],
+     "default": "disabled"
     }
    ]
   },
@@ -1559,6 +1576,43 @@
    "label": "Wiimote IR / Gyro / Swing",
    "info": "Configure Wiimote infrared pointer, gyro and swing settings.",
    "items": [
+    {
+     "key": "dolphin_wiimote_default_device",
+     "label": "WiiMote > Device",
+     "labelCategorized": "Device",
+     "info": "Device to use on every Wii port, in place of the one set for that port. Real WiiMote plays with Wiimotes connected to this device, for example through a DolphinBar, and scans for them continuously.",
+     "values": [
+      "frontend",
+      "upright",
+      "sideways",
+      "nunchuk",
+      "classic",
+      "classic_pro",
+      "motionplus",
+      "motionplus_sideways",
+      "motionplus_nunchuk",
+      "motionplus_classic",
+      "motionplus_classic_pro",
+      "real",
+      "gamecube"
+     ],
+     "labels": [
+      "Set per port",
+      "WiiMote (upright)",
+      "WiiMote (sideways)",
+      "WiiMote + Nunchuk",
+      "WiiMote + Classic Controller",
+      "WiiMote + Classic Controller Pro",
+      "WiiMote + MotionPlus",
+      "WiiMote + MotionPlus (sideways)",
+      "WiiMote + MotionPlus + Nunchuk",
+      "WiiMote + MotionPlus + Classic Controller",
+      "WiiMote + MotionPlus + Classic Controller Pro",
+      "Real WiiMote",
+      "GameCube Controller"
+     ],
+     "default": "frontend"
+    },
     {
      "key": "dolphin_hotkey_sideways_toggle",
      "label": "WiiMote Sideways > Toggle Button",
@@ -2626,6 +2680,21 @@
       ""
      ],
      "default": "enabled"
+    },
+    {
+     "key": "dolphin_log_popups_enabled",
+     "label": "Interface > Logging > Popups",
+     "labelCategorized": "Popup Logging",
+     "info": "Enable Popup log messages.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
     }
    ]
   },
@@ -3227,6 +3296,6 @@
    ]
   }
  ],
- "soSha256": "4fb4f1bb45addd048b87267b87b47c8230308939c785b6ed59147512205a1085",
- "probedAt": "2026-10-13"
+ "soSha256": "d118774ef1d040e3fdb055bac111f56357f761f3ba368b0ad024ce0b9965115b",
+ "probedAt": "2026-10-25"
 }
