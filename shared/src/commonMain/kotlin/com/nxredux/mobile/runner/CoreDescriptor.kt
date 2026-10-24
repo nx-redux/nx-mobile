@@ -87,6 +87,11 @@ data class CoreDescriptor(
     /** How the core switches API under Console Settings → Graphics API; null = no Vulkan path, the console has no row. */
     val vulkan: VulkanSwitch? = null,
     /**
+     * Whether the core can rewind (libretro docs feature table, checked 2026-10-24). False for azahar, flycast, ppsspp and
+     * prboom, which don't support it, and Dolphin, whose states are too large to snapshot every frame on a phone.
+     */
+    val rewind: Boolean = true,
+    /**
      * The emulator's name as the UI shows it (the core's retro_get_system_info library_name: "Genesis Plus GX", "gpSP").
      * One source for Emulator Settings and Default emulators; the id when unset.
      */

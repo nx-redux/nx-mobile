@@ -65,6 +65,7 @@ object CoreRegistry {
         restartOnlyOptions = RestartOnlyOptions.ppsspp,
         // PPSSPP writes SAVEDATA/ under the save dir.
         name = "PPSSPP",
+        rewind = false,
     )
     private val gambatte = CoreDescriptor("gambatte", "libgambatte_libretro_android.so", setOf("gb", "gbc", "dmg"), name = "Gambatte")
     private val mgba = CoreDescriptor(
@@ -205,6 +206,7 @@ object CoreRegistry {
         biosFiles = listOf("prboom.wad"),   // required, bundled as an asset
         // prboom saves under <saves>/<stem>/.
         name = "PrBoom",
+        rewind = false,
     )
     // The Sega consoles' default emulator, as on the Brick (MD, SMS, GG, SG1000, SEGACD and 32X paks). 68k is listed by
     // its valid_extensions (sc, sgd and pco too, which no console here owns).
@@ -296,6 +298,7 @@ object CoreRegistry {
         savesNamedAfterContent = true,   // the VMU is <content>.A1.bin: a zipped disc unpacks as <archive stem>.<ext>
         players = 4,
         name = "Flycast",
+        rewind = false,
     )
 
     // Nintendo 3DS on Azahar (azahar-emu/azahar 2126.1.2, src/citra_libretro, patched; cores/Makefile), GLES or Vulkan
@@ -334,6 +337,7 @@ object CoreRegistry {
         vulkan = VulkanSwitch(gles = mapOf("citra_graphics_api" to "OpenGL"), vulkan = mapOf("citra_graphics_api" to "Vulkan")),
         cheats = false,   // retro_cheat_set is empty
         name = "Azahar",
+        rewind = false,
     )
 
     // Wii and GameCube on Dolphin (libretro/dolphin 7a2d51d5, patched; cores/Makefile), GLES or Vulkan (Graphics API). It
@@ -385,6 +389,7 @@ object CoreRegistry {
         players = 4,
         cheats = true,   // Dolphin's built-in codes plus the player's own .cht (DolphinCheats)
         name = "Dolphin",
+        rewind = false,   // dolphinGc copies it
     )
     private val dolphinGc = dolphinWii.copy(
         defaultOptions = dolphinOptions,
