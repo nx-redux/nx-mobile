@@ -2,7 +2,7 @@ package com.nxredux.mobile.shortcuts
 
 /**
  * Android key codes the shortcuts need, as plain ints because `shared` is platform-free. They mirror
- * `android.view.KeyEvent.KEYCODE_*`; androidApp has a test pinning them to the real constants.
+ * `android.view.KeyEvent.KEYCODE_*`; androidApp's `KeyCodesTest` pins them to the real constants.
  */
 object KeyCodes {
     /** A controller's or the system's Back: press-to-bind cancels on it, as on B. */

@@ -13,6 +13,7 @@ import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsScreen
+import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.ui.nx.AxisDirections
 import com.nxredux.mobile.ui.nx.DpadHat
 import com.nxredux.mobile.ui.nx.InputRouter
@@ -59,9 +60,15 @@ internal interface GameInputHost : LifecycleOwner {
     val ndsRegions: List<NdsRegion>
     val secondNdsRegions: List<NdsRegion>
     val presentation: SecondScreenPresentation?
+    /** The game's controller shortcuts (fast forward, rewind, reset); null before the launch has read them. */
+    val shortcutKeys: ShortcutKeys?
     fun padProfile(): PadProfile
     fun publishNotifications()
     fun toggleMenu()
+    /** A bound shortcut's press or release ([ShortcutKeys]). */
+    fun onShortcut(action: ShortcutAction, down: Boolean)
+    /** The buttons were taken (the menu, the focus): held shortcuts end, toggled ones stay ([SpeedController.releaseHolds]). */
+    fun releaseShortcutHolds()
     fun backPressed()
     fun pressWiiHome()
     fun recenterWiiMotion()
@@ -636,6 +643,8 @@ internal class GameInputRouter(private val host: GameInputHost) {
         ndsHatX = 0
         ndsHatY = 0
         syncPen()
+        host.shortcutKeys?.releaseAll()   // their releases go to the menu now
+        host.releaseShortcutHolds()       // a Hold FF / Hold Rewind ends with its button; a toggled one stays on
         if (isN3ds) {
             n3dsHotkeys.releaseAll()   // sends up what it held in the core (L3, R3, a tapping SELECT); a held-back SELECT is dropped
             n3dsHatX = 0
@@ -872,6 +881,14 @@ internal class GameInputRouter(private val host: GameInputHost) {
         return im.inputDeviceIds.toList().mapNotNull(im::getInputDevice).filter(::isPad).distinctBy { it.descriptor }
     }
 
+    /** Acts on [ShortcutKeys]' [verdict]; true when the key is taken (it goes no further). */
+    private fun shortcut(verdict: KeyVerdict): Boolean = when (verdict) {
+        KeyVerdict.Pass -> false
+        KeyVerdict.Swallow -> true
+        KeyVerdict.OpenMenu -> { toggleMenu(); true }
+        is KeyVerdict.Fire -> { host.onShortcut(verdict.action, verdict.down); true }
+    }
+
     fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (isVolumeKey(keyCode)) return host.superKeyDown(keyCode, event)
         // The rumble follows the pad in use, on its own port (a one-player core: port 0); a pad with no slot yet claims below.
@@ -884,8 +901,13 @@ internal class GameInputRouter(private val host: GameInputHost) {
         if (keyCode == KeyEvent.KEYCODE_BACK) { if (event.repeatCount == 0) backPressed(); return true }
         val first = event.repeatCount == 0
         val button = PadKeymap.buttonFor(keyCode)
-        // Any pad can pause, before the slot lookup: also one with no slot (table full) or benched. It claims nothing.
-        if (button == NxButton.MENU) { if (first) toggleMenu(); return true }
+        // Any pad can pause, before the slot lookup: also one with no slot (table full) or benched. It claims nothing. With a
+        // MENU combo bound, MENU is a modifier first: the menu opens on its release if no combo fired ([ShortcutKeys]).
+        if (button == NxButton.MENU) {
+            val keys = host.shortcutKeys
+            if (keys?.holdsMenu == true) keys.onDown(keyCode, repeat = !first) else if (first) toggleMenu()
+            return true
+        }
         val port = portFor(event.device, claim = true) ?: return true   // no slot: dropped
         // Wii: the left-stick click recentres the phone's motion, the right-stick click is HOME ([pressWiiHome]); neither
         // reaches the core as itself.
@@ -896,6 +918,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
         noteRumbleDevice(event.device, port)
         // SELECT + START opens the menu: P1's (port 0's) only. Held state follows every down, repeats too.
         if (button != null && inputs.menuChord(port, button, down = true) && first) { toggleMenu(); return true }
+        // Shortcuts, P1's (port 0's) only, as the menu chord: after the built-in hotkeys above, which they can't bind
+        // ([com.nxredux.mobile.shortcuts.EffectiveShortcuts.blocked]), before the DS / 3DS routing and the core.
+        if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onDown(keyCode, repeat = !first))) return true }
         // The hotkeys and stylus see the console button the key is (its printed letter on DS/3DS), as the core will.
         if (isNds) PadKeymap.buttonFor(positionOf(event, keyCode))?.let { b ->
             if (b == NxButton.L2 || b == NxButton.R2) { if (first && routeTriggerKey(b, down = true)) routeNds(b, down = true); return true }
@@ -920,10 +945,13 @@ internal class GameInputRouter(private val host: GameInputHost) {
             return true
         }
         if (keyCode == KeyEvent.KEYCODE_BACK) return true
+        // A held-back MENU (a MENU combo is bound): its release opens the menu if no combo fired, from any pad as its press.
+        if (PadKeymap.buttonFor(keyCode) == NxButton.MENU) host.shortcutKeys?.takeIf { it.holdsMenu }?.let { shortcut(it.onUp(keyCode)); return true }
         val port = portFor(event.device, claim = false) ?: return true
         if (WiiShortcuts.isRecenter(isWii, keyCode) || WiiShortcuts.isHome(isWii, keyCode)) return true
         if (keyCode == KeyEvent.KEYCODE_BUTTON_THUMBL && onN3dsSwapPressed(down = false)) return true
         PadKeymap.buttonFor(keyCode)?.let { inputs.menuChord(port, it, down = false) }
+        if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onUp(keyCode))) return true }
         if (isNds) PadKeymap.buttonFor(positionOf(event, keyCode))?.let { b ->   // as on the down
             if (b == NxButton.L2 || b == NxButton.R2) { if (routeTriggerKey(b, down = false)) routeNds(b, down = false); return true }
             if (!routeNds(b, down = false)) return true
