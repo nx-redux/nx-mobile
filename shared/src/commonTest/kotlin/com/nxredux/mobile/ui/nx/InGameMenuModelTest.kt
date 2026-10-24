@@ -890,17 +890,42 @@ class InGameMenuModelTest {
     }
 
     @Test fun openResetDialog_opens_the_confirm_on_the_root() {
+        // A Reset binding: the menu opened for the dialog, so Cancel and B resume the game.
         val m = model()
-        m.openResetDialog()
+        m.openResetDialog(closesOnCancel = true)
         assertEquals(PageKind.ResetGame, m.state.page.kind)
         assertEquals(2, m.state.stack.size)
-        m.openResetDialog()                                  // a second Reset press: still one dialog
+        m.openResetDialog(closesOnCancel = true)             // a second Reset press: still one dialog
         assertEquals(2, m.state.stack.size)
         m.press(NxButton.DOWN)
-        assertNull(m.press(NxButton.A))                      // Cancel by pad
-        assertEquals(PageKind.Root, m.state.page.kind)
-        m.openResetDialog()
-        assertEquals(MenuEffect.ResetGame, m.press(NxButton.A))
+        assertEquals(MenuEffect.Close, m.press(NxButton.A))  // Cancel by pad
+        val b = model()
+        b.openResetDialog(closesOnCancel = true)
+        assertEquals(MenuEffect.Close, b.press(NxButton.B))
+        val t = model()
+        t.openResetDialog(closesOnCancel = true)
+        assertEquals(MenuEffect.Close, t.activate(1))        // Cancel by tap
+        val r = model()
+        r.openResetDialog(closesOnCancel = true)
+        assertEquals(MenuEffect.ResetGame, r.press(NxButton.A))
+    }
+
+    @Test fun the_reset_tile_dialog_cancels_back_to_the_root() {
+        val m = model()
+        m.openResetDialog(closesOnCancel = true)
+        assertEquals(MenuEffect.Close, m.press(NxButton.B))
+        // The menu's own tile (the binding's flag does not carry over): Cancel and B come back to the root.
+        val t = model()
+        t.panelEvent(GamePanelEvent.Reset)
+        assertNull(t.press(NxButton.B))
+        assertEquals(PageKind.Root, t.state.page.kind)
+        t.panelEvent(GamePanelEvent.Reset)
+        assertNull(t.activate(1))
+        assertEquals(PageKind.Root, t.state.page.kind)
+        // Opened from the menu already up (no flag): back to the root too.
+        t.openResetDialog()
+        assertNull(t.press(NxButton.B))
+        assertEquals(PageKind.Root, t.state.page.kind)
     }
 
     @Test fun netplay_has_no_reset_or_speed() {

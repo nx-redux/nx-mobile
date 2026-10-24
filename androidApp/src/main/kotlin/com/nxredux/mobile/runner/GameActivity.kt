@@ -2646,12 +2646,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /**
      * A Reset shortcut or the dual-screen panel's Reset tile: reset always asks first, so the in-game menu opens on its
-     * Reset dialog. Never in netplay or a link session (the model refuses too).
+     * Reset dialog; a menu opened for it closes again on Cancel. Never before the game is ready (nothing to reset yet),
+     * in netplay or a link session (the model refuses too).
      */
     override fun askReset() {
-        if (quitting || netplayNow != null) return
-        if (!menuOpen) toggleMenu()
-        withMenu { it.openResetDialog() }
+        if (quitting || !gameReady || netplayNow != null) return
+        val opened = !menuOpen
+        if (opened) toggleMenu()
+        withMenu { it.openResetDialog(closesOnCancel = opened) }
     }
 
     /**

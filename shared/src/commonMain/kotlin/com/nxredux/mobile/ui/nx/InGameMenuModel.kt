@@ -245,6 +245,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** From [setSpeedTiles]: the panel's Fast forward and Rewind tiles' live state; [speedRewind] null: no Rewind tile. */
     private var speedFf = false
     private var speedRewind: Boolean? = null
+    /** The Reset dialog up was opened with the menu for it ([openResetDialog]): Cancel and B resume the game. */
+    private var resetClosesOnCancel = false
     /** From [setPlayers]; the panel shows its Players tab when there is more than one slot. */
     private var playerSlots: List<PlayerSlotRow> = emptyList()
     private var playerPads: List<PlayerPadRow> = emptyList()
@@ -763,13 +765,24 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
-     * A Reset binding: the menu (just opened on its root) shows the Reset dialog, as the panel's Reset tile does. Nothing
-     * in netplay (reset would desync the players) or while the dialog is already up.
+     * A Reset binding or the second-screen panel's Reset tile: the menu shows the Reset dialog, as its own panel's Reset
+     * tile does. [closesOnCancel]: the menu opened for it, so Cancel and B close the menu and the game plays on (the
+     * player never asked for the menu); otherwise they come back to the root. Nothing in netplay (reset would desync the
+     * players) or while the dialog is already up.
      */
-    fun openResetDialog() {
+    fun openResetDialog(closesOnCancel: Boolean = false) {
         if (netplay || state.page.kind == PageKind.ResetGame) return
         popTo(PageKind.Root)
         push(resetPage())
+        resetClosesOnCancel = closesOnCancel
+    }
+
+    /** Leaving the Reset dialog without a reset: the menu closes if it opened for the dialog, else back to the root. */
+    private fun cancelReset(): MenuEffect? {
+        val close = resetClosesOnCancel
+        resetClosesOnCancel = false
+        popTo(PageKind.Root)
+        return if (close) MenuEffect.Close else null
     }
 
     /** Open Options pages built again (Console Settings offered or not), keeping the selected row and the status footer. */
@@ -889,7 +902,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         // The tiles are hidden in netplay; a stale tap there does nothing.
         is GamePanelEvent.SetFastForward -> if (netplay) null else GamePanelModel.speedEffect(event)
         is GamePanelEvent.SetRewind -> if (netplay || speedRewind == null) null else GamePanelModel.speedEffect(event)
-        GamePanelEvent.Reset -> { if (!netplay) push(resetPage()); null }
+        GamePanelEvent.Reset -> { if (!netplay) { push(resetPage()); resetClosesOnCancel = false }; null }
     }
 
     /**
@@ -1033,8 +1046,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         MenuAction.QUIT -> { push(quitPage()); null }
         MenuAction.SAVE_AND_QUIT -> MenuEffect.Quit
         MenuAction.QUIT_ONLY -> MenuEffect.QuitWithoutResume
-        MenuAction.RESET -> { popTo(PageKind.Root); MenuEffect.ResetGame }
-        MenuAction.CANCEL -> { popTo(PageKind.Root); null }
+        MenuAction.RESET -> { resetClosesOnCancel = false; popTo(PageKind.Root); MenuEffect.ResetGame }
+        MenuAction.CANCEL -> cancelReset()
         MenuAction.LEAVE_NETPLAY -> MenuEffect.LeaveNetplay
         MenuAction.SAVE_FOR_CONSOLE -> { popTo(PageKind.Options); MenuEffect.SaveForConsole }
         MenuAction.SAVE_FOR_GAME -> { popTo(PageKind.Options); MenuEffect.SaveForGame }
@@ -1073,6 +1086,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun back(): MenuEffect? {
         if (state.stack.size == 1) return MenuEffect.Close
+        if (state.page.kind == PageKind.ResetGame) return cancelReset()
         pop()
         return null
     }
