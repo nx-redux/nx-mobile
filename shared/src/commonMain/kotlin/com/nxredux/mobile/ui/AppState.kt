@@ -148,7 +148,6 @@ import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.fullInfo
-import com.nxredux.mobile.ui.nx.hasMoreInfo
 import com.nxredux.mobile.ui.nx.launcherChromeFor
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.gridAtTop
@@ -3567,12 +3566,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** A Settings row's full description over the page (its info icon, or X); A, B, X or a tap close it, UP / DOWN scroll it. */
     val settingInfo: StateFlow<SettingInfoPopup?> = _settingInfo.asStateFlow()
 
-    /** The selected Settings row's description the UI reported cut off on its row (keyed by its text). */
-    private var settingInfoTruncated: String? = null
+    private val _settingInfoTruncated = MutableStateFlow<String?>(null)
+    /** The selected Settings row's description the UI reported cut off on its row (keyed by its text): X and its hint read it. */
+    val settingInfoTruncated: StateFlow<String?> = _settingInfoTruncated.asStateFlow()
 
     /** The UI laid out the selected row's description [info] and it did ([truncated]) or did not fit. */
     fun onSettingInfoTruncated(info: String, truncated: Boolean) {
-        settingInfoTruncated = if (truncated) info else settingInfoTruncated.takeIf { it != info }
+        _settingInfoTruncated.value = if (truncated) info else _settingInfoTruncated.value.takeIf { it != info }
     }
 
     /** Row [row]'s touch row as the page draws it ([settingsTouchRow], [emulatorTouchRow]); null off those pages. */
@@ -3585,7 +3585,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** Whether X opens the selected Settings row's info: its line is cut off on the row, or a fuller text is behind it. */
     private fun selectedSettingShowsInfo(): Boolean {
         val r = settingTouchRow(_selection.value.index) ?: return false
-        return r.hasMoreInfo || (r.info.isNotBlank() && r.info == settingInfoTruncated)
+        return nxShowsInfo(r, _settingInfoTruncated.value)
     }
 
     /** Shows Settings row [row]'s full description ([fullInfo]), selecting it; nothing for a row without one. */

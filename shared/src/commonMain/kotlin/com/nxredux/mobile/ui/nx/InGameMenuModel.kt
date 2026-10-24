@@ -43,18 +43,18 @@ sealed interface PageKind {
     data object Players : PageKind
 }
 
-sealed interface MenuRow {
+sealed interface MenuRow : NxDescribedRow {
     val label: String
-    val info: String
+    override val info: String
     /** The full text the info popup shows when [info] is a short line of it, or none (a compact row); empty: [info] is all. */
-    val detail: String get() = ""
+    override val detail: String get() = ""
     data class Action(override val label: String, val action: MenuAction, override val info: String = "") : MenuRow
     data class Slot(override val label: String, val action: SlotAction, override val info: String = "") : MenuRow
     data class Submenu(override val label: String, val target: PageKind, override val info: String = "", override val detail: String = "") : MenuRow
     /**
      * [visual]: the setting changes the picture, so A enters adjust mode. [choices]: every value's label, in cycle order
      * (empty when not known); [index]: the current one's, -1 when it is none of them. They pick the row's control
-     * ([optionControlKind]) and let the picker or a segment set a value ([InGameMenuModel.setChoice]).
+     * ([nxSettingControl]) and let the picker or a segment set a value ([InGameMenuModel.setChoice]).
      */
     data class Option(
         override val label: String,
@@ -68,56 +68,8 @@ sealed interface MenuRow {
     ) : MenuRow
 }
 
-/** The text a row's info popup shows: its [MenuRow.detail] when that says more than its line, else its info. */
-val MenuRow.fullInfo: String get() = detail.takeIf { it.length > info.length } ?: info
-
-/** The row's info popup says more than its row: a detail text longer than its line (the info icon shows, X opens it). */
-val MenuRow.hasMoreInfo: Boolean get() = detail.isNotBlank() && detail.length > info.length
-
-/** How an options row shows and sets its value ([optionControlKind]). */
-enum class OptionControl {
-    /** Two values that read as on/off: a switch. */
-    SWITCH,
-    /** Two to four short values: a segmented button. */
-    SEGMENTED,
-    /** More or longer values: "Value ›", a tap opens the picker. */
-    PICKER,
-    /** No list (or a single value): the value only; LEFT/RIGHT still step it. */
-    VALUE,
-}
-
-/** On/off word pairs a switch stands for (lower case, the "on" word first). */
-private val SWITCH_PAIRS = listOf("on" to "off", "show" to "hide", "enabled" to "disabled", "true" to "false", "yes" to "no")
-
-/** A segmented button's most values, the longest label it takes and its labels' total length. */
-private const val SEGMENT_MAX = 4
-private const val SEGMENT_LABEL_MAX = 10
-private const val SEGMENT_TOTAL_MAX = 24
-
-/** The index of [choices]' "on" value when they are an on/off pair ([SWITCH_PAIRS]), else -1. */
-fun switchOnIndex(choices: List<String>): Int {
-    if (choices.size != 2) return -1
-    val (a, b) = choices.map { it.trim().lowercase() }
-    return SWITCH_PAIRS.firstNotNullOfOrNull { (on, off) ->
-        when {
-            a == on && b == off -> 0
-            a == off && b == on -> 1
-            else -> null
-        }
-    } ?: -1
-}
-
-/** The control for an option with [choices]: a switch, a segmented button, a picker, or the value alone. */
-fun optionControlKind(choices: List<String>): OptionControl = when {
-    choices.size < 2 -> OptionControl.VALUE
-    switchOnIndex(choices) >= 0 -> OptionControl.SWITCH
-    choices.size <= SEGMENT_MAX && choices.all { it.length <= SEGMENT_LABEL_MAX } && choices.sumOf { it.length } <= SEGMENT_TOTAL_MAX ->
-        OptionControl.SEGMENTED
-    else -> OptionControl.PICKER
-}
-
-/** The control of [row] ([optionControlKind] of its choices). */
-val MenuRow.Option.control: OptionControl get() = optionControlKind(choices)
+/** The control of [row] ([nxSettingControl] of its choices). */
+val MenuRow.Option.control: NxSettingControl get() = nxSettingControl(choices)
 
 /** A popup over the menu's page, taking the input while it shows. */
 sealed interface MenuPopup {
@@ -269,14 +221,28 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** The panel's shortcut grid columns as drawn (the UI reports them: 2 when narrow); UP/DOWN step a row of them. */
     var panelColumns: Int = 4
 
+    /** The Options page [optionsPreview] last built, and the inputs it was built from. */
+    private var previewPage: Pair<OptionsPreviewInputs, MenuPage>? = null
+
     var state: MenuState = MenuState(listOf(rootPage()), initialSlot.coerceIn(0, slotCount - 1))
         private set(value) { field = withPreview(value) }
 
     /** [s] with its [MenuState.preview] for the root's highlighted row (the Options page beside the Options row). */
     private fun withPreview(s: MenuState): MenuState {
         val previews = s.stack.size == 1 && (s.page.rows.getOrNull(s.page.selected) as? MenuRow.Submenu)?.target == PageKind.Options
-        val preview = if (previews) optionsPage() else null
+        val preview = if (previews) optionsPreview() else null
+        // The same page object while its inputs hold, so the check is usually an identity one.
         return if (preview == s.preview) s else s.copy(preview = preview)
+    }
+
+    /** What [optionsPage] reads: the Console Settings row's inputs ([consoleRows]) and the footer's [status]. */
+    private data class OptionsPreviewInputs(val tag: String, val locked: Set<String>, val second: Boolean, val status: ConfigSource)
+
+    /** [optionsPage], rebuilt only when one of its inputs has changed since the last call. */
+    private fun optionsPreview(): MenuPage {
+        val inputs = OptionsPreviewInputs(frontendTag, frontendLocked, secondConnected, status)
+        previewPage?.let { (key, page) -> if (key == inputs) return page }
+        return optionsPage().also { previewPage = inputs to it }
     }
 
     private var options: List<CoreOption> = emptyList()
@@ -541,10 +507,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 state.page.kind == PageKind.Root -> { if (row.fullInfo.isNotBlank()) push(message(row.label, row.fullInfo)); null }
                 row.visual -> { push(adjustPage(row.key)); null }
                 else -> when (row.control) {
-                    OptionControl.SWITCH -> setChoice(index, 1 - row.index.coerceIn(0, 1))
-                    OptionControl.PICKER -> { openPicker(index); null }
-                    OptionControl.SEGMENTED -> change(1)
-                    OptionControl.VALUE -> null
+                    NxSettingControl.SWITCH -> setChoice(index, 1 - row.index.coerceIn(0, 1))
+                    NxSettingControl.PICKER -> { openPicker(index); null }
+                    NxSettingControl.SEGMENTED -> change(1)
+                    NxSettingControl.VALUE -> null
                 }
             }
         }

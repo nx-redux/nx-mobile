@@ -762,8 +762,8 @@ private fun optionHints(row: MenuRow.Option, infoTruncated: Boolean): List<Hint>
     add(Hint(NxButton.LEFT, "Change"))
     when {
         row.visual -> add(Hint(NxButton.A, "Adjust"))
-        row.control == OptionControl.SWITCH -> add(Hint(NxButton.A, "Toggle"))
-        row.control == OptionControl.PICKER -> add(Hint(NxButton.A, "Choose"))
+        row.control == NxSettingControl.SWITCH -> add(Hint(NxButton.A, "Toggle"))
+        row.control == NxSettingControl.PICKER -> add(Hint(NxButton.A, "Choose"))
     }
     if (infoTruncated && row.fullInfo.isNotBlank()) add(Hint(NxButton.X, "Info"))
     add(Hint(NxButton.B, "Back"))

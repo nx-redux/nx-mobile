@@ -1,10 +1,7 @@
 package com.nxredux.mobile.ui
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.options.CoreOptionFilter
 import com.nxredux.mobile.runner.CoreRegistry
@@ -17,7 +14,6 @@ import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.NxSettingsPage
 import com.nxredux.mobile.ui.nx.control
-import com.nxredux.mobile.ui.nx.hasMoreInfo
 
 private val LIST_HINTS = listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Select"))
 
@@ -66,9 +62,9 @@ fun EmulatorOptionsScreen(
     screen: Screen.EmulatorOptions, selectedIndex: Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier = Modifier, onHint: ((NxButton) -> Unit)? = null,
     onSetting: (NxSettingEvent) -> Unit = {}, onTruncated: (String, Boolean) -> Unit = { _, _ -> },
+    truncated: String? = null,   // the selected row's description the UI reported cut off ([AppState.settingInfoTruncated])
 ) {
     val rows = remember(screen.rows) { screen.rows.map(::emulatorTouchRow) }   // not per d-pad move
-    var truncated by remember { mutableStateOf<String?>(null) }   // the selected row's description, when it is cut off
     NxSettingsPage(
         emulatorOptionsTitle(screen), rows, selectedIndex,
         hints = emulatorOptionsHints(screen.rows.getOrNull(selectedIndex), rows.getOrNull(selectedIndex), truncated),
@@ -76,7 +72,7 @@ fun EmulatorOptionsScreen(
         onOpen = { i -> if (screen.rows.getOrNull(i)?.selectable == true) onOpen(i) },
         onEvent = { e -> if (screen.rows.getOrNull(e.row)?.selectable == true) onSetting(e) },
         modifier = modifier, onHint = onHint,
-        onTruncated = { info, t -> truncated = if (t) info else truncated.takeIf { it != info }; onTruncated(info, t) },
+        onTruncated = onTruncated,
     )
 }
 
@@ -140,7 +136,7 @@ internal fun emulatorOptionsTitle(s: Screen.EmulatorOptions): String {
  * picker (none on a segmented row, where A steps); X Info while its description is cut off ([truncated]) or says more.
  */
 internal fun emulatorOptionsHints(row: EmulatorRow?, touch: NxSettingRow? = null, truncated: String? = null): List<Hint> {
-    val info = touch != null && (touch.hasMoreInfo || (touch.info.isNotBlank() && touch.info == truncated))
+    val info = touch != null && nxShowsInfo(touch, truncated)
     val x = if (info) listOf(Hint(NxButton.X, "Info")) else emptyList()
     return when (row) {
         is EmulatorRow.Console, is EmulatorRow.Core -> listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.B, "Back")) + when (touch?.control) {

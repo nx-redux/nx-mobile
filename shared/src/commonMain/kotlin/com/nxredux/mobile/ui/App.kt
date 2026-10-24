@@ -575,13 +575,14 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
 /** A Settings screen drawn as one page (or as the two-pane Settings' focused right pane, [titled]: the split draws its dialog). */
 @Composable
 private fun SettingsPage(state: AppState, s: Screen, selection: State<ListSelection>, titled: Boolean) {
+    val settingTruncated by state.settingInfoTruncated.collectAsState()   // the selected row's cut-off line: its X Info hint
     when (s) {
         is Screen.Settings -> WithIndex(selection) {
-            SettingsScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, titled = titled, dialog = !titled, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated)
+            SettingsScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, titled = titled, dialog = !titled, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = settingTruncated)
         }
         is Screen.EmulatorList -> WithIndex(selection) { EmulatorListScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, split = titled) }
         is Screen.EmulatorConsoles -> WithIndex(selection) { EmulatorConsolesScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton) }
-        is Screen.EmulatorOptions -> WithIndex(selection) { EmulatorOptionsScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated) }
+        is Screen.EmulatorOptions -> WithIndex(selection) { EmulatorOptionsScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = settingTruncated) }
         is Screen.SettingsMenu -> WithIndex(selection) { SettingsMenuScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton) }
         is Screen.ToolApps -> {
             // Only the picker showing reports its columns (one sliding out never overwrites the count).

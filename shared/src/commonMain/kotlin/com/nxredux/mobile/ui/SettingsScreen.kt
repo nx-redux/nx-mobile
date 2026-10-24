@@ -7,16 +7,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.LocalNxColors
-import com.nxredux.mobile.ui.nx.LocalNxFont
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxDetailListBody
 import com.nxredux.mobile.ui.nx.NxDialog
@@ -29,9 +25,10 @@ import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.NxSettingsList
 import com.nxredux.mobile.ui.nx.NxSettingsPage
-import com.nxredux.mobile.ui.nx.NxTextSizes
 import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.hasMoreInfo
+import com.nxredux.mobile.ui.nx.nxDialogBody
+import com.nxredux.mobile.ui.nx.LocalNxFontWeights
 import com.nxredux.mobile.ui.nx.nxListInset
 
 /**
@@ -54,9 +51,10 @@ fun SettingsScreen(
     dialog: Boolean = true,   // false: the two-pane Settings draws the remove dialog over both panes
     onSetting: ((NxSettingEvent) -> Unit)? = null,   // null: a preview, its controls take no taps
     onTruncated: (String, Boolean) -> Unit = { _, _ -> },
+    truncated: String? = null,   // the selected row's description the UI reported cut off ([AppState.settingInfoTruncated])
 ) {
     if (settingsTouchPage(screen)) {
-        SettingsTouchPage(screen, selectedIndex, onSelect, onOpen, modifier, onHint, hints, dialog, onSetting, onTruncated)
+        SettingsTouchPage(screen, selectedIndex, onSelect, onOpen, modifier, onHint, hints, dialog, onSetting, onTruncated, truncated)
         return
     }
     val shownHints = hints ?: settingsHints(screen.rows, selectedIndex)
@@ -98,13 +96,12 @@ fun SettingsScreen(
 private fun SettingsTouchPage(
     screen: Screen.Settings, selectedIndex: Int, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier,
     onHint: ((NxButton) -> Unit)?, hints: List<Hint>?, dialog: Boolean,
-    onSetting: ((NxSettingEvent) -> Unit)?, onTruncated: (String, Boolean) -> Unit,
+    onSetting: ((NxSettingEvent) -> Unit)?, onTruncated: (String, Boolean) -> Unit, truncated: String?,
 ) {
     val rows = remember(screen) { screen.rows.mapIndexed { i, r -> settingsTouchRow(r, screen.choices.getOrNull(i), screen.section) } }
-    var truncated by remember { mutableStateOf<String?>(null) }   // the selected row's description, when it is cut off
-    val report: (String, Boolean) -> Unit = { info, t -> truncated = if (t) info else truncated.takeIf { it != info }; onTruncated(info, t) }
+    val report = onTruncated
     val selected = rows.getOrNull(selectedIndex)
-    val infoShown = selected != null && (selected.hasMoreInfo || (selected.info.isNotBlank() && selected.info == truncated))
+    val infoShown = selected != null && nxShowsInfo(selected, truncated)
     val shownHints = hints ?: settingsHints(screen.rows, selectedIndex, selected, infoShown)
     val preview = onSetting == null
     val events = onSetting ?: {}
@@ -130,12 +127,20 @@ private fun SettingsTouchPage(
     }
 }
 
+/**
+ * Whether a touch row's info shows (its icon, X and the X Info hint): a fuller text is behind it, or its line is the one
+ * the UI reported cut off ([truncated], [AppState.settingInfoTruncated]).
+ */
+internal fun nxShowsInfo(row: NxSettingRow, truncated: String?): Boolean =
+    row.hasMoreInfo || (row.info.isNotBlank() && row.info == truncated)
+
 /** A touch page's lines under its title (Default emulators' caption), in the hint grey. */
 @Composable
 private fun SettingsDetailLines(lines: List<String>) {
     Text(
-        lines.joinToString(" "), color = LocalNxColors.current.hint, fontFamily = LocalNxFont.current,
-        fontSize = NxTextSizes.menuInfoPortrait, lineHeight = NxTextSizes.menuInfoLinePortrait,
+        lines.joinToString(" "), color = LocalNxColors.current.hint, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal,   // Regular, as a row's description
+        // A step under a popup's body, under Appearance → Text size as the rows.
+        fontSize = nxDialogBody() * 0.9f, lineHeight = nxDialogBody() * 0.9f * 1.35f,
         modifier = Modifier.fillMaxWidth().padding(horizontal = nxListInset(), vertical = 4.dp),
     )
 }

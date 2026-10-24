@@ -174,10 +174,10 @@ internal class HomeController(
         }
         val gamesLeft = games.count { it.game.path != last?.entry?.game?.path }
         val lines = homeLinesFor(strip)
-        // The board's row width sets each shelf's count; it does not depend on the shelves.
-        val cap = homeShelfCap(homeFrameNow().portrait, homeBoardFor(lines, tools.size, gamesLeft).perRow)
-        val gridShelves = picked.map { (shelf, games) -> shelf to games.take(cap) }
-        val b = homeBoardFor(lines, tools.size, gamesLeft, shelves = gridShelves.map { it.first to it.second.size })
+        // The board caps each shelf to what its face shows ([homeShelfCap]); its sizes follow the non-empty shelves in order.
+        val b = homeBoardFor(lines, tools.size, gamesLeft, shelves = picked.map { (shelf, games) -> shelf to games.size })
+        var k = 0
+        val gridShelves = picked.map { (shelf, games) -> shelf to if (games.isEmpty()) games else games.take(b.shelfSizes.getOrElse(k++) { 0 }) }
         return buildHome(last, games, tools, homeStats, b.slots, gridShelves, b.inlineGames)
     }
 

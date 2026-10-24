@@ -191,7 +191,7 @@ class InGameMenuModelTest {
     @Test fun a_on_a_segmented_option_steps_it_and_shows_no_page() {
         val m = model().openCoreOptions()
         m.press(NxButton.A)                                  // Video
-        assertEquals(OptionControl.SEGMENTED, m.optionRow(0).control)   // A / B
+        assertEquals(NxSettingControl.SEGMENTED, m.optionRow(0).control)   // A / B
         assertEquals(MenuEffect.SetOption("pal", "b"), m.press(NxButton.A))
         assertEquals(PageKind.Category("video"), m.state.page.kind)
         assertNull(m.state.popup)
@@ -202,7 +202,7 @@ class InGameMenuModelTest {
         val m = model()
         m.select(3); m.activate(3); m.activate(2)
         m.showCoreOptions(listOf(CoreOption("k", "v", label = "Raw", info = "Raw value.")), emptySet())
-        assertEquals(OptionControl.VALUE, m.optionRow(0).control)
+        assertEquals(NxSettingControl.VALUE, m.optionRow(0).control)
         assertNull(m.press(NxButton.A))
         assertEquals(PageKind.CoreOptions, m.state.page.kind)
         assertNull(m.state.popup)                            // no details page either: X shows a cut-off text
@@ -415,7 +415,7 @@ class InGameMenuModelTest {
     @Test fun a_on_debug_hud_flips_its_switch() {
         val m = model().openFrontend()
         m.select(6)
-        assertEquals(OptionControl.SWITCH, m.optionRow(6).control)
+        assertEquals(NxSettingControl.SWITCH, m.optionRow(6).control)
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "On"), m.press(NxButton.A))
         assertEquals(PageKind.Frontend, m.state.page.kind)
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "Off"), m.press(NxButton.A))
@@ -1749,26 +1749,26 @@ class InGameMenuModelTest {
     private fun InGameMenuModel.rowIndex(label: String) = state.page.rows.indexOfFirst { it.label == label }.also { assertTrue(it >= 0, label) }
 
     @Test fun option_control_kind_follows_the_values() {
-        assertEquals(OptionControl.VALUE, optionControlKind(emptyList()))
-        assertEquals(OptionControl.VALUE, optionControlKind(listOf("None")))
+        assertEquals(NxSettingControl.VALUE, nxSettingControl(emptyList()))
+        assertEquals(NxSettingControl.VALUE, nxSettingControl(listOf("None")))
         for (pair in listOf(listOf("Off", "On"), listOf("enabled", "disabled"), listOf("True", "False"), listOf("no", "yes"))) {
-            assertEquals(OptionControl.SWITCH, optionControlKind(pair), pair.toString())
+            assertEquals(NxSettingControl.SWITCH, nxSettingControl(pair), pair.toString())
         }
-        assertEquals(1, switchOnIndex(listOf("Off", "On")))
-        assertEquals(0, switchOnIndex(listOf("enabled", "disabled")))
-        assertEquals(-1, switchOnIndex(listOf("On", "Auto")))
-        assertEquals(-1, switchOnIndex(listOf("Off", "On", "Auto")))
+        assertEquals(1, nxSwitchOnIndex(listOf("Off", "On")))
+        assertEquals(0, nxSwitchOnIndex(listOf("enabled", "disabled")))
+        assertEquals(-1, nxSwitchOnIndex(listOf("On", "Auto")))
+        assertEquals(-1, nxSwitchOnIndex(listOf("Off", "On", "Auto")))
         // Two to four short values: segments (two that are not on/off too).
-        assertEquals(OptionControl.SEGMENTED, optionControlKind(listOf("On", "Auto")))
-        assertEquals(OptionControl.SEGMENTED, optionControlKind(listOf("NEAREST", "LINEAR")))
-        assertEquals(OptionControl.SEGMENTED, optionControlKind(listOf("Native", "Aspect", "Fullscreen")))
-        assertEquals(OptionControl.SEGMENTED, optionControlKind(listOf("100%", "60%", "40%", "25%")))
-        assertEquals(OptionControl.SEGMENTED, optionControlKind(listOf("Auto", "OpenGL ES", "Vulkan")))
+        assertEquals(NxSettingControl.SEGMENTED, nxSettingControl(listOf("On", "Auto")))
+        assertEquals(NxSettingControl.SEGMENTED, nxSettingControl(listOf("NEAREST", "LINEAR")))
+        assertEquals(NxSettingControl.SEGMENTED, nxSettingControl(listOf("Native", "Aspect", "Fullscreen")))
+        assertEquals(NxSettingControl.SEGMENTED, nxSettingControl(listOf("100%", "60%", "40%", "25%")))
+        assertEquals(NxSettingControl.SEGMENTED, nxSettingControl(listOf("Auto", "OpenGL ES", "Vulkan")))
         // More values, a long one, or too long together: the picker.
-        assertEquals(OptionControl.PICKER, optionControlKind(listOf("1", "2", "3", "4", "5")))
-        assertEquals(OptionControl.PICKER, optionControlKind(listOf("Auto", "Sideways Wiimote")))
-        assertEquals(OptionControl.PICKER, optionControlKind(listOf("Top screen", "Bottom screen")))
-        assertEquals(OptionControl.PICKER, optionControlKind(listOf("Abcdefghij", "Abcdefghij", "Abcde")))
+        assertEquals(NxSettingControl.PICKER, nxSettingControl(listOf("1", "2", "3", "4", "5")))
+        assertEquals(NxSettingControl.PICKER, nxSettingControl(listOf("Auto", "Sideways Wiimote")))
+        assertEquals(NxSettingControl.PICKER, nxSettingControl(listOf("Top screen", "Bottom screen")))
+        assertEquals(NxSettingControl.PICKER, nxSettingControl(listOf("Abcdefghij", "Abcdefghij", "Abcde")))
     }
 
     @Test fun frontend_rows_carry_their_value_labels_and_index() {
@@ -1783,7 +1783,7 @@ class InGameMenuModelTest {
         assertEquals(listOf("100%", "60%", "40%", "25%"), opacity.choices)
         assertEquals(2, opacity.index)
         assertEquals(129, m.optionRow(m.rowIndex("Offset screen X")).choices.size)
-        assertEquals(OptionControl.PICKER, m.optionRow(m.rowIndex("Offset screen X")).control)
+        assertEquals(NxSettingControl.PICKER, m.optionRow(m.rowIndex("Offset screen X")).control)
     }
 
     @Test fun core_option_rows_offer_their_visible_values() {
@@ -1851,7 +1851,7 @@ class InGameMenuModelTest {
         val m = model().openConsoleSettings()
         val layout = m.rowIndex("Controller Layout")
         m.select(layout)
-        assertEquals(OptionControl.PICKER, m.optionRow(layout).control)
+        assertEquals(NxSettingControl.PICKER, m.optionRow(layout).control)
         assertNull(m.press(NxButton.A))
         val labels = PadOptions.layoutRow.valueLabels
         assertEquals(MenuPopup.Picker(layout, "Controller Layout", labels, 0, 0), m.state.popup)
