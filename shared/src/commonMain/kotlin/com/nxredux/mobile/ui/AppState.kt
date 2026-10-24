@@ -436,6 +436,9 @@ sealed interface Screen {
         val editingKey: Boolean = false, val draftKey: String = "", val keyFor: ArtKeyFor = ArtKeyFor.SGDB,
         val confirmLogout: Boolean = false,
     ) : Screen {
+        /** A prompt or dialog is open over the rows: it takes every input. */
+        val dialogOpen: Boolean get() = signingIn || editingKey || confirmLogout
+
         /** The typed password and key never reach a log or an assertion message. */
         override fun toString(): String =
             "ArtworkSettings(rows=$rows, signingIn=$signingIn, draftUser=$draftUser, draftPassword=***, editingKey=$editingKey, draftKey=***, keyFor=$keyFor, confirmLogout=$confirmLogout)"
@@ -1102,9 +1105,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             override fun refreshResume() = this@AppState.refreshResume()
             override fun refreshGameInfo() = this@AppState.refreshGameInfo()
             override fun raSignedIn(): Boolean = this@AppState.raSignedIn()
-            override val touchMode: Boolean get() = this@AppState.touchMode
-            override fun <T> openValueChooser(title: String, v: SettingValue<T>, again: () -> SettingValue<*>?): Boolean =
-                this@AppState.openValueChooser(title, v, again)
+            override fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit) =
+                this@AppState.openPicker(title, labels, current, apply)
         },
     )
     /** The achievements panel over a game list; null while closed. */
@@ -3432,17 +3434,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      */
     val chooser: StateFlow<ValueChooser?> = _chooser.asStateFlow()
     private var chooserApply: ((Int) -> Unit)? = null
-    /** Touch only ([FooterMode.BUTTONS]: no controller, no pad, as App reports it in [onFooterMode]). */
-    private val touchMode: Boolean get() = footerMode == FooterMode.BUTTONS
-
-    /** Opens the chooser over [labels] on [current] when there are three or more; [apply] takes the picked index. True when it opened. */
-    private fun openChooser(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit): Boolean {
-        if (labels.size < 3) return false
-        _chooser.value = ValueChooser(title, labels, current.coerceIn(0, labels.lastIndex))
-        chooserApply = apply
-        return true
-    }
-
     /** The chooser's value [index] picked: it closes, then the value applies (unchanged when it was already the one). */
     fun chooseValue(index: Int) {
         val c = _chooser.value ?: return
@@ -3463,15 +3454,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
     }
 
-    /**
-     * [v]'s values as a chooser titled [title], on the current one. A pick steps the setting there from its value then,
-     * [again] reading it afresh, through [SettingValue.change] (so every side effect follows, even when it is unchanged).
-     * False when [v] has no chooser labels or fewer than three values.
-     */
-    private fun <T> openValueChooser(title: String, v: SettingValue<T>, again: () -> SettingValue<*>?): Boolean {
-        val label = v.label ?: return false
-        val now = v.values.indexOf(v.current)
-        return openChooser(title, v.values.map(label), now) { i -> again()?.change(i - now) }
+    /** A value row's picker ([ValueChooser.popup]) titled [title]: [labels], [current] under the cursor (-1: none); [apply] takes a pick. */
+    private fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit) {
+        _chooser.value = ValueChooser(title, labels, current.coerceAtLeast(0), current = current, popup = true)
+        chooserApply = apply
     }
 
     /**
@@ -3480,6 +3466,15 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      */
     fun settingEvent(event: NxSettingEvent) {
         (_screen.value as? Screen.EmulatorOptions)?.let { emulatorSettingEvent(it, event); return }
+        // RetroAchievements' and Artwork's settings: their controllers set values; the info popup is this page's.
+        (_screen.value as? Screen.RaSettings)?.let {
+            if (event is NxSettingEvent.Info) { if (!it.signingIn && it.confirm == null) showSettingInfo(event.row) } else ra.onRaSettingEvent(it, event)
+            return
+        }
+        (_screen.value as? Screen.ArtworkSettings)?.let {
+            if (event is NxSettingEvent.Info) { if (!it.dialogOpen) showSettingInfo(event.row) } else artworkScreens?.onSettingEvent(it, event)
+            return
+        }
         when (event) {
             is NxSettingEvent.Choose -> chooseSetting(event.row, event.index)
             is NxSettingEvent.OpenPicker -> openSettingPicker(event.row)
@@ -3579,6 +3574,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private fun settingTouchRow(row: Int): NxSettingRow? = when (val s = _screen.value) {
         is Screen.Settings -> s.rows.getOrNull(row)?.let { settingsTouchRow(it, s.choices.getOrNull(row), s.section) }
         is Screen.EmulatorOptions -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::emulatorTouchRow)
+        is Screen.RaSettings -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::raSettingsTouchRow)
+        is Screen.ArtworkSettings -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::artworkSettingTouchRow)
         else -> null
     }
 
@@ -3729,14 +3726,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     /** One selectable row up ([delta] -1) or down from [sel] on [rows], wrapping past group labels and gaps. */
-    private fun settingsStep(rows: List<SettingsRow>, sel: ListSelection, delta: Int): ListSelection {
-        var next = sel
-        repeat(rows.size) {
-            next = if (delta < 0) next.up() else next.down()
-            if (rows.getOrNull(next.index)?.selectable != false) return next
-        }
-        return sel
-    }
+    private fun settingsStep(rows: List<SettingsRow>, sel: ListSelection, delta: Int): ListSelection =
+        sel.step(delta) { rows.getOrNull(it)?.selectable != false }
 
     private val _padLayouts = MutableStateFlow(deps.settings.padLayouts)
     /** The stored pad layouts, republished on every change (the main menu's pads follow Shared). */
@@ -5987,6 +5978,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         (_screen.value as? Screen.EmulatorOptions)?.let { if (onEmulatorTouchButton(it, button)) return }
         if (emulatorSettings.onButton(_screen.value, button)) return
         if (gameTimeScreen?.onButton(_screen.value, button) == true) return   // B without a modal falls through to back()
+        (_screen.value as? Screen.ArtworkSettings)?.takeIf { button == NxButton.X && !it.dialogOpen }?.let {   // X: the selected row's info
+            if (selectedSettingShowsInfo()) showSettingInfo(_selection.value.index); return
+        }
         if (artworkScreens?.onButton(_screen.value, button) == true) return
         (_screen.value as? Screen.Switcher)?.let { onSwitcherButton(it, button, repeat); return }
         // The summary: LEFT and RIGHT flip the Move row as A does.
@@ -6000,7 +5994,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         if (_screen.value == Screen.DeviceSync) { onDeviceSyncButton(button); return }   // every button is the controller's
         (_screen.value as? Screen.RetroAchievements)?.let { ra.onRaButton(it, button); return }   // same: UP/DOWN use the action-row count
         (_screen.value as? Screen.RaDownload)?.let { ra.onRaDownloadButton(it, button); return }
-        (_screen.value as? Screen.RaSettings)?.let { ra.onRaSettingsButton(it, button); return }   // LEFT/RIGHT change values; dialogs take the buttons
+        (_screen.value as? Screen.RaSettings)?.let {   // LEFT/RIGHT change values; dialogs take the buttons; X the selected row's info
+            if (button == NxButton.X && !it.signingIn && it.confirm == null) { if (selectedSettingShowsInfo()) showSettingInfo(_selection.value.index); return }
+            ra.onRaSettingsButton(it, button); return
+        }
         _screen.value.takeIf { it is Screen.RaGames || it is Screen.RaGame || it is Screen.RaAchievement }?.let { ra.onRaBrowserButton(it, button); return }
         dropHiddenTabFocus()   // a tab row hidden while it had the d-pad (a setting or footer change it missed) gives it back
         if (_tabFocus.value && onTabRowButton(button, repeat)) return

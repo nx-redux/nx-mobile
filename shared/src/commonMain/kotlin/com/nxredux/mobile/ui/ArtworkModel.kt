@@ -24,16 +24,21 @@ data class ArtworkConsole(val name: String, val tags: Set<String>, val missing: 
 /** Whose API key the Settings key prompt edits. */
 enum class ArtKeyFor(val label: String) { SGDB("SteamGridDB"), TGDB("TheGamesDB") }
 
-/** Artwork → Settings' rows: Replace existing art, the optional art (2D box, wheel, mix), the art sources' accounts, Reset artwork. */
+/**
+ * Artwork → Settings' rows: Replace existing art, the optional art (2D box, wheel, mix), the art sources' accounts, Reset
+ * artwork; [SECTION] a group's label and [GAP] the space before one, never selected.
+ */
 enum class ArtworkSettingKind {
-    REPLACE, BOX2D, WHEEL, MIX, SS_LOGIN, SS_LOGOUT, SGDB_KEY, SGDB_REMOVE, TGDB_KEY, TGDB_REMOVE, TGDB_LEFT, RESET;
+    SECTION, GAP, REPLACE, BOX2D, WHEEL, MIX, SS_LOGIN, SS_LOGOUT, SGDB_KEY, SGDB_REMOVE, TGDB_KEY, TGDB_REMOVE, TGDB_LEFT, RESET;
 
     /** The On/Off rows that step on A / LEFT / RIGHT (when enabled). */
     val toggle: Boolean get() = this == REPLACE || this == BOX2D || this == WHEEL || this == MIX
 }
 
 /** [enabled] false: dimmed and A / LEFT / RIGHT do nothing. */
-data class ArtworkSettingRow(val kind: ArtworkSettingKind, val label: String, val secondary: String? = null, val enabled: Boolean = true)
+data class ArtworkSettingRow(val kind: ArtworkSettingKind, val label: String, val secondary: String? = null, val enabled: Boolean = true) {
+    val selectable: Boolean get() = kind != ArtworkSettingKind.SECTION && kind != ArtworkSettingKind.GAP
+}
 
 /** What Reset artwork deletes: every logged file ([tags] null) or a console's. */
 data class ResetScope(val label: String, val tags: Set<String>?)

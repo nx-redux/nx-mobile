@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -50,7 +52,15 @@ internal fun RaLevelPage(state: AppState, s: Screen, selection: State<ListSelect
         is Screen.RaGames -> WithIndex(selection) { RaGamesScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, split = split) }
         is Screen.RaGame -> c?.let { WithIndex(selection) { RaGameScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton, split = split) } } ?: Box(Modifier.fillMaxSize())
         is Screen.RaAchievement -> c?.let { RaAchievementScreen(s, c, onHint = state::onButton, split = split) } ?: Box(Modifier.fillMaxSize())
-        is Screen.RaSettings -> WithIndex(selection) { RaSettingsScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton, split = split) }
+        is Screen.RaSettings -> {
+            val truncated by state.settingInfoTruncated.collectAsState()   // the selected row's cut-off line: its X Info hint
+            WithIndex(selection) {
+                RaSettingsScreen(
+                    s, state, it, state::select, { state.openSelected() }, onHint = state::onButton, split = split,
+                    onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = truncated,
+                )
+            }
+        }
         else -> Unit
     }
 }
