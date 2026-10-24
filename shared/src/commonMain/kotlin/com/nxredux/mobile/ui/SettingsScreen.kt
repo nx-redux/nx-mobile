@@ -223,13 +223,14 @@ internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSett
 }
 
 /**
- * How a list page draws its rows: the "Label: Value" pages (the Settings pages with a value row, the RetroAchievements
- * settings, an emulator's options, the Artwork settings and account) use NX Redux's options row; navigation pages (the
- * Settings pages of only page and action rows, [SettingsSection.navigation]), category lists, pickers and game lists keep the pill.
+ * How a list page draws its rows: the "Label: Value" pages (the Settings pages with a value row, an emulator's options)
+ * use NX Redux's options row; navigation pages (the Settings pages of only page and action rows,
+ * [SettingsSection.navigation]), category lists, pickers and game lists keep the pill. The RetroAchievements and Artwork
+ * settings draw touch rows ([raSettingsTouchRow], [artworkSettingTouchRow]).
  */
 internal fun listRowKind(screen: Screen): NxRowKind = when (screen) {
     is Screen.Settings -> if (screen.section.navigation) NxRowKind.PILL else NxRowKind.OPTIONS
-    is Screen.RaSettings, is Screen.EmulatorOptions, is Screen.ArtworkSettings -> NxRowKind.OPTIONS
+    is Screen.EmulatorOptions -> NxRowKind.OPTIONS
     else -> NxRowKind.PILL
 }
 

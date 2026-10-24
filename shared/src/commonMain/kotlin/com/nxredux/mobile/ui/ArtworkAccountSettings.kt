@@ -7,6 +7,7 @@ import com.nxredux.mobile.scraper.SignInResult
 import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
+import com.nxredux.mobile.ui.nx.NxSettingEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,17 +49,23 @@ internal class ArtworkAccountSettings(
     private val signedIn: Boolean get() = settings.ssUsername.isNotEmpty() && settings.ssPassword != null
 
     /**
-     * Replace existing art and the optional art (2D box art, Wheel, Generate mix; only when fetching is available; the
-     * Wheel shows On and is locked while Generate mix needs it, as NX Redux's "Needed by Generate mix"), then
-     * ScreenScraper's login / logout row (only in a build with its credentials), the SteamGridDB key rows, TheGamesDB's
-     * key rows and its read-only allowance for the key in use (only once the user's key is set), and Reset artwork last.
+     * In groups: Art to fetch (Replace existing art and the optional art: 2D box art, Wheel, Generate mix; only when
+     * fetching is available; the Wheel shows On and is locked while Generate mix needs it, as NX Redux's "Needed by
+     * Generate mix"), then Accounts (ScreenScraper's login / logout row, only in a build with its credentials; the
+     * SteamGridDB key rows; TheGamesDB's key rows and its read-only allowance for the key in use, only once the user's key
+     * is set), and Reset artwork last, after a gap.
      */
     private fun settingRows(): List<ArtworkSettingRow> = buildList {
         if (controller.available) {
+            add(ArtworkSettingRow(ArtworkSettingKind.SECTION, "Art to fetch"))
             add(ArtworkSettingRow(ArtworkSettingKind.REPLACE, "Replace existing art", onOff(settings.artReplaceExisting)))
             add(ArtworkSettingRow(ArtworkSettingKind.BOX2D, "2D box art", onOff(settings.artBox2d)))
             add(ArtworkSettingRow(ArtworkSettingKind.WHEEL, "Wheel", onOff(settings.artWheel || settings.artMix), enabled = !settings.artMix))
             add(ArtworkSettingRow(ArtworkSettingKind.MIX, "Generate mix", onOff(settings.artMix)))
+        }
+        if (controller.ssAvailable || controller.sgdbAvailable || controller.tgdbSupported) {
+            if (isNotEmpty()) add(ArtworkSettingRow(ArtworkSettingKind.GAP, ""))
+            add(ArtworkSettingRow(ArtworkSettingKind.SECTION, "Accounts"))
         }
         // ScreenScraper is one row: login, or once signed in logout with today's requests (the name and password not shown).
         if (controller.ssAvailable) {
@@ -84,7 +91,8 @@ internal class ArtworkAccountSettings(
             val left = controller.state.value.tgdbLeft
             add(ArtworkSettingRow(ArtworkSettingKind.TGDB_LEFT, "TheGamesDB", left?.let { "${groupThousands(it)} left this month" } ?: "—"))
         }
-        add(ArtworkSettingRow(ArtworkSettingKind.RESET, "Reset artwork…"))
+        if (isNotEmpty()) add(ArtworkSettingRow(ArtworkSettingKind.GAP, ""))
+        add(ArtworkSettingRow(ArtworkSettingKind.RESET, "Reset artwork"))
     }
 
     /** The Settings page as it would open now (no modal), for the left pane beside Reset ([ArtworkScreenController.parentOf]). */
@@ -94,6 +102,7 @@ internal class ArtworkAccountSettings(
         val rows = settingRows()
         screen.value = Screen.ArtworkSettings(rows)
         selection.value = ListSelection(on?.let { k -> rows.indexOfFirst { it.kind == k } }?.coerceAtLeast(0) ?: 0, rows.size)
+            .landOn { rows[it].selectable }
         // The quota and allowance rows follow through [refreshSettings]; a failed read keeps "—".
         if (controller.ssAvailable && signedIn) scope.launch { quietly { controller.refreshQuota() } }
         if (controller.tgdbAvailable) scope.launch { quietly { controller.tgdbAllowance() } }
@@ -124,18 +133,20 @@ internal class ArtworkAccountSettings(
     /**
      * Where the highlight goes when the rows change, so a second A never lands on another action: the same row kind
      * when it is still there; ScreenScraper's login for its logout (and back); otherwise the nearest row above it that
-     * stays (a key's Remove row or TheGamesDB's allowance: that source's key row), or the first.
+     * stays (a key's Remove row or TheGamesDB's allowance: that source's key row), or the first. Never a group label or gap.
      */
     private fun keepRow(before: List<ArtworkSettingRow>, index: Int, rows: List<ArtworkSettingRow>): Int {
-        fun at(kind: ArtworkSettingKind) = rows.indexOfFirst { it.kind == kind }.takeIf { it >= 0 }
-        val kind = before.getOrNull(index)?.kind ?: return index.coerceIn(0, (rows.size - 1).coerceAtLeast(0))
+        fun at(kind: ArtworkSettingKind) = rows.indexOfFirst { it.kind == kind && it.selectable }.takeIf { it >= 0 }
+        val first = rows.indexOfFirst { it.selectable }.coerceAtLeast(0)
+        val kind = before.getOrNull(index)?.takeIf { it.selectable }?.kind
+            ?: return ListSelection(index, rows.size).clampedTo(rows.size).landOn { rows[it].selectable }.index
         at(kind)?.let { return it }
         when (kind) {
             ArtworkSettingKind.SS_LOGOUT -> at(ArtworkSettingKind.SS_LOGIN)
             ArtworkSettingKind.SS_LOGIN -> at(ArtworkSettingKind.SS_LOGOUT)
             else -> null
         }?.let { return it }
-        return (index - 1 downTo 0).firstNotNullOfOrNull { i -> at(before[i].kind) } ?: 0
+        return (index - 1 downTo 0).firstNotNullOfOrNull { i -> before[i].takeIf { it.selectable }?.let { at(it.kind) } } ?: first
     }
 
     fun draftUser(text: String) {
@@ -233,8 +244,7 @@ internal class ArtworkAccountSettings(
         }
         val row = s.rows.getOrNull(selection.value.index)
         when (button) {
-            NxButton.UP -> selection.value = selection.value.up()
-            NxButton.DOWN -> selection.value = selection.value.down()
+            NxButton.UP, NxButton.DOWN -> selection.value = selection.value.step(if (button == NxButton.UP) -1 else 1) { s.rows.getOrNull(it)?.selectable == true }
             NxButton.LEFT, NxButton.RIGHT -> if (row?.enabled == true && row.kind.toggle) toggle(row.kind)
             NxButton.A -> if (row?.enabled == true) when (row.kind) {
                 ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX -> toggle(row.kind)
@@ -248,11 +258,23 @@ internal class ArtworkAccountSettings(
                     controller.clearTgdbKey(); refreshSettings(); host.showNotice("TheGamesDB key removed"); refreshAllowance()
                 }
                 ArtworkSettingKind.RESET -> openReset()
-                ArtworkSettingKind.TGDB_LEFT -> Unit
+                ArtworkSettingKind.TGDB_LEFT, ArtworkSettingKind.SECTION, ArtworkSettingKind.GAP -> Unit
             }
             NxButton.B -> showPage(ArtworkAction.SETTINGS)
             else -> Unit
         }
+    }
+
+    /**
+     * A touch on a Settings row's switch ([com.nxredux.mobile.ui.nx.NxSettingsList]), selecting it: an On/Off row set to
+     * choice [NxSettingEvent.Choose.index] (Off, On), flipped only when that is not its value already. Nothing under an
+     * open prompt or dialog; the info icon is [AppState]'s.
+     */
+    fun onSettingEvent(s: Screen.ArtworkSettings, event: NxSettingEvent) {
+        if (s.dialogOpen || event !is NxSettingEvent.Choose) return
+        val row = s.rows.getOrNull(event.row)?.takeIf { it.selectable && it.enabled } ?: return
+        selection.value = selection.value.copy(index = event.row)
+        if (row.kind.toggle && (event.index == 1) != (row.secondary == "On")) toggle(row.kind)
     }
 
     private fun onOff(on: Boolean) = if (on) "On" else "Off"

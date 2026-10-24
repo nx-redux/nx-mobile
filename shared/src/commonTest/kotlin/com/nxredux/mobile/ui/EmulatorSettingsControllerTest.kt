@@ -286,7 +286,6 @@ class EmulatorSettingsControllerTest {
         selectOptA(state)
         state.settingEvent(NxSettingEvent.OpenPicker(state.selection.value.index))
         val chooser = state.chooser.value ?: error("no chooser")
-        assertTrue(chooser.popup)
         assertEquals("Option A", chooser.title)
         assertEquals(listOf("x", "y", "z"), chooser.labels)
         assertEquals(0, chooser.selected)

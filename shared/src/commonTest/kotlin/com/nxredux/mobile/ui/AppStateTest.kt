@@ -122,6 +122,7 @@ import com.nxredux.mobile.ui.nx.LauncherChrome
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxSettingEvent
+import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.nxTap
 import kotlin.jvm.JvmName
 import kotlin.test.Test
@@ -7126,17 +7127,36 @@ class AppStateTest {
         state.settings.raToken = "tok"; state.settings.raUsername = "me"
         openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
         val s = assertIs<Screen.RaSettings>(state.screen.value)
-        assertEquals(listOf("Sign out", "Status", "Enable achievements", "Download all game data", "Show notifications", "Notification duration", "Progress duration", "Achievement sort order", "Reset account data", "Erase all achievement data", "Reset settings to defaults"), s.rows.map { it.label })
+        assertEquals(
+            listOf(
+                "Account", "Sign out", "Enable achievements", "Download all game data", "",
+                "Notifications", "Show notifications", "Notification duration", "Progress duration", "",
+                "Achievements", "Achievement sort order", "",
+                "Reset", "Reset account data", "Erase all achievement data", "Reset settings to defaults",
+            ),
+            s.rows.map { it.label },
+        )
         assertEquals("Signed in as me", s.rows[1].secondary); assertEquals("Off", s.rows[2].secondary); assertTrue(s.rows[2].enabled); assertTrue(s.rows[3].enabled)
-        assertEquals("3 s", s.rows[5].secondary); assertEquals("1 s", s.rows[6].secondary); assertEquals("Unlocked first", s.rows[7].secondary)
-        assertEquals(1, state.selection.value.index)   // opens on Status, not Sign out
-        state.onButton(NxButton.DOWN); state.openSelected()   // Enable → On
+        assertEquals("3 s", s.rows[7].secondary); assertEquals("1 s", s.rows[8].secondary); assertEquals("Unlocked first", s.rows[11].secondary)
+        assertEquals(SettingChoices(listOf("Off", "On"), 0), s.rows[2].choices)
+        assertEquals(2, state.selection.value.index)   // opens on Enable, not Sign out
+        state.openSelected()   // Enable → On: A flips the switch
         assertEquals("On", state.raSettings().rows[2].secondary); assertTrue(state.settings.raEnabled)
-        assertEquals(listOf(Hint(NxButton.A, "Select"), Hint(NxButton.B, "Back")), raSettingsHints(state.raSettings().rows[2]))
-        repeat(4) { state.onButton(NxButton.DOWN) }; state.onButton(NxButton.RIGHT)   // Progress duration 1 → 2
-        assertEquals("2 s", state.raSettings().rows[6].secondary)
+        val enable = raSettingsTouchRow(state.raSettings().rows[2])
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Toggle")), raSettingsHints(state.raSettings().rows[2], enable))
+        repeat(4) { state.onButton(NxButton.DOWN) }; state.onButton(NxButton.RIGHT)   // past the gap and label: Progress duration 1 → 2
+        assertEquals("2 s", state.raSettings().rows[8].secondary)
         repeat(2) { state.onButton(NxButton.LEFT) }   // → Off
-        assertEquals("Off", state.raSettings().rows[6].secondary); assertEquals(0, state.settings.raProgressSeconds)
+        assertEquals("Off", state.raSettings().rows[8].secondary); assertEquals(0, state.settings.raProgressSeconds)
+        // A on a picker row opens its picker; a pick sets it.
+        state.openSelected()
+        val picker = assertNotNull(state.chooser.value)
+        assertEquals(listOf("Off", "1 s", "2 s", "3 s", "4 s", "5 s"), picker.labels); assertEquals(0, picker.current)
+        state.chooseValue(5)
+        assertEquals(5, state.settings.raProgressSeconds); assertEquals("5 s", state.raSettings().rows[8].secondary)
+        // A touch on a switch sets it, selecting its row.
+        state.settingEvent(NxSettingEvent.Choose(6, 0))
+        assertFalse(state.settings.raShowNotifications); assertEquals(6, state.selection.value.index)
     }
     @Test fun signed_out_the_enable_and_download_rows_are_disabled() = runTest {
         val (state, store) = stateWithAchievements()
@@ -7144,10 +7164,13 @@ class AppStateTest {
         state.settings.raEnabled = true   // a stale flag from before a sign-out still reads Off
         openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
         val s = state.raSettings()
-        assertEquals(listOf("Sign in", "Status", "Enable achievements", "Download all game data"), s.rows.take(4).map { it.label })
+        assertEquals(listOf("Account", "Sign in", "Enable achievements", "Download all game data"), s.rows.take(4).map { it.label })
+        assertEquals("Not signed in", s.rows[1].secondary)
         assertEquals("Off", s.rows[2].secondary); assertFalse(s.rows[2].enabled); assertFalse(s.rows[3].enabled); assertEquals("1 games cached", s.rows[3].secondary)
         assertTrue(s.rows.drop(4).all { it.enabled })
-        repeat(2) { state.onButton(NxButton.DOWN) }; state.openSelected()   // Enable: nothing
+        assertEquals(NxSettingRow("Enable achievements", info = "Needs a sign-in", detail = "Track achievements in games. Needs a sign-in.", value = "Off", enabled = false), raSettingsTouchRow(s.rows[2]))
+        state.onButton(NxButton.DOWN); state.openSelected()   // Enable: nothing
+        state.settingEvent(NxSettingEvent.Choose(2, 1)); assertEquals(s.rows, state.raSettings().rows)   // nor a touch
         assertEquals(s.rows, state.raSettings().rows); assertTrue(state.settings.raEnabled)
         assertEquals(listOf(Hint(NxButton.B, "Back")), raSettingsHints(s.rows[2]))
         state.onButton(NxButton.DOWN); state.openSelected()   // Download all: nothing, the page stays
@@ -7155,6 +7178,8 @@ class AppStateTest {
         assertEquals(listOf(Hint(NxButton.B, "Back")), raSettingsHints(s.rows[3]))
     }
     private fun AppState.raSettings(): Screen.RaSettings = assertIs<Screen.RaSettings>(screen.value)
+    /** Selects the RetroAchievements settings row of [kind]. */
+    private fun AppState.raOn(kind: RaSettingKind) = select(raSettings().rows.indexOfFirst { it.kind == kind })
     @Test fun sign_in_opens_one_modal_and_signs_in_with_both_entries() = runTest {
         val (state, http) = stateWithAchievementsHttp()
         http.on("login2", body = """{"Success":true,"User":"Me","Token":"tok"}""")
@@ -7168,7 +7193,7 @@ class AppStateTest {
         assertEquals(listOf("r=login2&u=me&p=secret"), http.posts)
         val s = state.raSettings()
         assertFalse(s.signingIn); assertEquals("", s.draftUser); assertEquals("", s.draftPassword)
-        assertEquals(RaSettingKind.SIGN_OUT, s.rows[0].kind); assertEquals("Sign out", s.rows[0].label); assertEquals("Signed in as Me", s.rows[1].secondary)
+        assertEquals(RaSettingKind.SIGN_OUT, s.rows[1].kind); assertEquals("Sign out", s.rows[1].label); assertEquals("Signed in as Me", s.rows[1].secondary)
         assertEquals("tok", state.settings.raToken)
     }
     @Test fun sign_in_cannot_reopen_or_resubmit_while_a_login_runs() = runTest {
@@ -7178,7 +7203,7 @@ class AppStateTest {
         openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
         state.onButton(NxButton.A)   // open
         state.raDraftUser("me"); state.raDraftPassword("secret"); state.onButton(NxButton.A)   // login starts and waits
-        assertFalse(state.raSettings().signingIn); assertEquals("Sign in", state.raSettings().rows[0].label)
+        assertFalse(state.raSettings().signingIn); assertEquals("Sign in", state.raSettings().rows[1].label)
         state.onButton(NxButton.A)   // the row again: busy, no modal
         assertEquals("Busy, try again", state.error.value); assertFalse(state.raSettings().signingIn)
         state.onButton(NxButton.A); state.onButton(NxButton.A)   // dismiss, then try once more
@@ -7187,7 +7212,7 @@ class AppStateTest {
         gate.complete(Unit)
         assertEquals(1, http.posts.count { it.startsWith("r=login2") })
         val s = state.raSettings()
-        assertFalse(s.signingIn); assertEquals("", s.draftUser); assertEquals("", s.draftPassword); assertEquals("Sign out", s.rows[0].label)
+        assertFalse(s.signingIn); assertEquals("", s.draftUser); assertEquals("", s.draftPassword); assertEquals("Sign out", s.rows[1].label)
     }
     @Test fun a_modal_open_when_a_sign_in_lands_closes() = runTest {
         val (state, _) = stateWithAchievements()
@@ -7197,7 +7222,7 @@ class AppStateTest {
         assertTrue(state.raSettings().signingIn)
         state.settings.raToken = "tok"; state.achievements!!.refresh()   // a sign-in finished while the modal was up
         val s = state.raSettings()
-        assertFalse(s.signingIn); assertEquals("", s.draftUser); assertEquals("", s.draftPassword); assertEquals("Sign out", s.rows[0].label)
+        assertFalse(s.signingIn); assertEquals("", s.draftUser); assertEquals("", s.draftPassword); assertEquals("Sign out", s.rows[1].label)
     }
     @Test fun a_failed_server_login_shows_the_error_and_keeps_sign_in() = runTest {
         val (state, http) = stateWithAchievementsHttp()
@@ -7207,7 +7232,7 @@ class AppStateTest {
         state.raDraftUser("me"); state.raDraftPassword("wrong"); state.onButton(NxButton.A)
         val s = state.raSettings()
         assertFalse(s.signingIn); assertEquals("", s.draftUser); assertEquals("", s.draftPassword)
-        assertEquals(RaSettingKind.SIGN_IN, s.rows[0].kind); assertNull(state.settings.raToken)
+        assertEquals(RaSettingKind.SIGN_IN, s.rows[1].kind); assertNull(state.settings.raToken)
         assertTrue(s.rows[1].secondary!!.contains("Invalid"), s.rows[1].secondary)
     }
     @Test fun sign_in_seeds_the_saved_username_and_an_empty_password() = runTest {
@@ -7260,13 +7285,13 @@ class AppStateTest {
         state.settings.raToken = "tok"; state.settings.raUsername = "me"
         store.put(RaPaths.login(), "{}"); store.put(RaPaths.JOURNAL, "x\n")
         openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
-        assertEquals("Sign out", state.raSettings().rows[0].label)
+        assertEquals("Sign out", state.raSettings().rows[1].label)
         state.onButton(NxButton.UP); state.openSelected()   // Sign out: asks first
         assertEquals(RaConfirm.SIGN_OUT, state.raSettings().confirm); assertEquals("tok", state.settings.raToken)
         state.onButton(NxButton.A)
         assertNull(state.raSettings().confirm)
         assertNull(state.settings.raToken); assertFalse(state.settings.raEnabled); assertNull(store.text(RaPaths.login())); assertEquals("x\n", store.text(RaPaths.JOURNAL))
-        assertEquals(RaSettingKind.SIGN_IN, state.raSettings().rows[0].kind); assertEquals("Signed out", state.notice.value)
+        assertEquals(RaSettingKind.SIGN_IN, state.raSettings().rows[1].kind); assertEquals("Signed out", state.notice.value)
     }
     @Test fun sign_out_asks_first_and_b_keeps_the_account() = runTest {
         val (state, store) = stateWithAchievements()
@@ -7277,21 +7302,21 @@ class AppStateTest {
         assertEquals(RaConfirm.SIGN_OUT, state.raSettings().confirm)
         assertEquals("tok", state.settings.raToken); assertTrue(state.settings.raEnabled); assertEquals("{}", store.text(RaPaths.login()))
         state.onButton(NxButton.DOWN)   // the dialog takes the buttons
-        assertEquals(0, state.selection.value.index); assertEquals(RaConfirm.SIGN_OUT, state.raSettings().confirm)
+        assertEquals(RaSettingKind.SIGN_OUT, state.raSettings().rows[state.selection.value.index].kind); assertEquals(RaConfirm.SIGN_OUT, state.raSettings().confirm)
         state.onButton(NxButton.B)
-        assertNull(state.raSettings().confirm); assertEquals("tok", state.settings.raToken); assertEquals("Sign out", state.raSettings().rows[0].label)
+        assertNull(state.raSettings().confirm); assertEquals("tok", state.settings.raToken); assertEquals("Sign out", state.raSettings().rows[1].label)
     }
     @Test fun ra_settings_never_opens_on_sign_out() = runTest {
         val (state, _) = stateWithAchievements()
         state.settings.raToken = "tok"
         openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
-        assertEquals(RaSettingKind.STATUS, state.raSettings().rows[state.selection.value.index].kind)
+        assertEquals(RaSettingKind.ENABLED, state.raSettings().rows[state.selection.value.index].kind)   // the row under Sign out
         state.onButton(NxButton.UP); assertTrue(state.back())   // left with Sign out highlighted
         state.openSelected()
-        assertEquals(RaSettingKind.STATUS, state.raSettings().rows[state.selection.value.index].kind)
-        state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); assertTrue(state.back())   // another row is remembered
+        assertEquals(RaSettingKind.ENABLED, state.raSettings().rows[state.selection.value.index].kind)
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); assertTrue(state.back())   // past the gap and group label; remembered
         state.openSelected()
-        assertEquals(RaSettingKind.DOWNLOAD_ALL, state.raSettings().rows[state.selection.value.index].kind)
+        assertEquals(RaSettingKind.NOTIFICATIONS, state.raSettings().rows[state.selection.value.index].kind)
     }
     @Test fun signed_out_ra_settings_opens_on_sign_in() = runTest {
         val (state, _) = stateWithAchievements()
@@ -7304,7 +7329,7 @@ class AppStateTest {
         http.responders["login2"] = { gate.await(); com.nxredux.mobile.achievements.RaResponse(200, """{"Success":true,"User":"Me","Token":"tok"}""") }
         openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
         state.onButton(NxButton.A); state.raDraftUser("me"); state.raDraftPassword("secret"); state.onButton(NxButton.A)   // login waits
-        repeat(8) { state.onButton(NxButton.DOWN) }; state.openSelected()   // Reset account data
+        state.raOn(RaSettingKind.RESET_ACCOUNT); state.openSelected()
         assertEquals(RaConfirm.RESET_ACCOUNT, state.raSettings().confirm)
         state.onButton(NxButton.A)
         assertEquals("Busy, try again", state.error.value); assertNull(state.raSettings().confirm)
@@ -7316,7 +7341,7 @@ class AppStateTest {
         val (state, _) = stateWithAchievements()
         state.settings.raToken = "tok"
         openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
-        repeat(7) { state.onButton(NxButton.DOWN) }; state.openSelected()
+        state.raOn(RaSettingKind.RESET_ACCOUNT); state.openSelected()
         assertEquals(RaConfirm.RESET_ACCOUNT, (state.screen.value as Screen.RaSettings).confirm)
         state.onButton(NxButton.B); assertNull((state.screen.value as Screen.RaSettings).confirm)
         state.openSelected(); state.onButton(NxButton.A)
@@ -7326,11 +7351,11 @@ class AppStateTest {
     @Test fun the_on_off_rows_toggle_on_left_and_right() = runTest {
         val (state, _) = stateWithAchievements()
         openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
-        state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN)   // Enable achievements: dimmed while signed out
+        state.onButton(NxButton.DOWN)   // Enable achievements: dimmed while signed out
         state.onButton(NxButton.RIGHT); assertEquals(false, state.settings.raEnabled)
-        state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN)   // Show notifications, On
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN)   // past the gap and group label: Show notifications, On
         state.onButton(NxButton.LEFT); assertEquals(false, state.settings.raShowNotifications)
-        assertEquals("Off", (state.screen.value as Screen.RaSettings).rows[4].secondary)
+        assertEquals("Off", (state.screen.value as Screen.RaSettings).rows[6].secondary)
         state.settings.raToken = "tok"
         state.onButton(NxButton.RIGHT); assertEquals(true, state.settings.raShowNotifications)   // the refresh sees the sign-in
         state.onButton(NxButton.UP); state.onButton(NxButton.UP)
@@ -7351,17 +7376,21 @@ class AppStateTest {
         tap(0); assertIs<Screen.RetroAchievements>(state.screen.value)                           // only from a level beside the page
     }
 
-    @Test fun a_on_the_duration_rows_steps_forward_and_wraps() = runTest {
+    @Test fun the_duration_rows_step_to_their_ends_and_a_opens_their_picker() = runTest {
         val (state, _) = stateWithAchievements()
         openRa(state); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.openSelected()
-        repeat(5) { state.onButton(NxButton.DOWN) }                  // Notification duration, 3 s
-        state.openSelected(); assertEquals("4 s", (state.screen.value as Screen.RaSettings).rows[5].secondary)
-        state.onButton(NxButton.RIGHT); assertEquals("5 s", (state.screen.value as Screen.RaSettings).rows[5].secondary)
-        state.onButton(NxButton.A); assertEquals("1 s", (state.screen.value as Screen.RaSettings).rows[5].secondary)
-        state.onButton(NxButton.DOWN); repeat(4) { state.onButton(NxButton.RIGHT) }   // Progress duration 1 → 5
-        assertEquals("5 s", (state.screen.value as Screen.RaSettings).rows[6].secondary)
-        state.openSelected(); assertEquals("Off", (state.screen.value as Screen.RaSettings).rows[6].secondary); assertEquals(0, state.settings.raProgressSeconds)
-        assertEquals(listOf(Hint(NxButton.A, "Change"), Hint(NxButton.B, "Back")), raSettingsHints((state.screen.value as Screen.RaSettings).rows[6]))
+        state.raOn(RaSettingKind.NOTIFICATION_SECONDS)                                   // 3 s
+        repeat(3) { state.onButton(NxButton.RIGHT) }; assertEquals("5 s", state.raSettings().rows[7].secondary)   // stops at 5
+        state.onButton(NxButton.A)   // a picker row: A opens the picker, not a step
+        assertEquals("5 s", state.raSettings().rows[7].secondary)
+        assertEquals(4, assertNotNull(state.chooser.value).current)
+        state.chooseValue(0); assertEquals("1 s", state.raSettings().rows[7].secondary); assertNull(state.chooser.value)
+        state.onButton(NxButton.DOWN); repeat(5) { state.onButton(NxButton.RIGHT) }   // Progress duration 1 → 5, then stays
+        assertEquals("5 s", state.raSettings().rows[8].secondary)
+        state.onButton(NxButton.A); state.onButton(NxButton.B)   // the picker, closed: nothing changes
+        assertEquals(5, state.settings.raProgressSeconds)
+        val row = state.raSettings().rows[8]
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Choose")), raSettingsHints(row, raSettingsTouchRow(row)))
     }
 
     private val tetris = "/Roms/Game Boy (GB)/Tetris.gb"
@@ -10299,7 +10328,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.APPEARANCE)
         val accent = settings.accent
         state.select(1); state.openSelected()                              // Accent, many values
-        assertEquals(true, state.chooser.value?.popup); assertEquals(accent, settings.accent)   // a controller's A opens the picker too
+        assertNotNull(state.chooser.value); assertEquals(accent, settings.accent)   // a controller's A opens the picker too
     }
 
     @Test fun touch_the_default_emulator_and_the_layouts_open_choosers() = runTest {
@@ -10392,7 +10421,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.APPEARANCE)
         state.settingEvent(NxSettingEvent.OpenPicker(1))                          // Accent
         val picker = state.chooser.value ?: error("no picker")
-        assertTrue(picker.popup); assertEquals("Accent", picker.title); assertEquals(0, picker.current); assertEquals(0, picker.selected)
+        assertEquals("Accent", picker.title); assertEquals(0, picker.current); assertEquals(0, picker.selected)
         state.onButton(NxButton.UP)                                               // wraps to the last
         assertEquals(AccentPreset.entries.lastIndex, state.chooser.value!!.selected)
         state.chooseValue(4)

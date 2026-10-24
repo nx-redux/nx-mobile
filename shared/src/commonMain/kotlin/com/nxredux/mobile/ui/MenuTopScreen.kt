@@ -38,7 +38,6 @@ import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.LocalWindowSize
 import com.nxredux.mobile.ui.nx.NxScreenBackground
 import com.nxredux.mobile.ui.nx.NxTheme
-import com.nxredux.mobile.ui.nx.NxValueAnchor
 import com.nxredux.mobile.ui.nx.footerModeFor
 import com.nxredux.mobile.ui.nx.rememberControllerConnected
 import com.nxredux.mobile.ui.nx.rememberHasTouchscreen
@@ -69,8 +68,7 @@ fun MenuTopScreen(state: AppState) {
     val controllerConnected = rememberControllerConnected()
     val touchscreen = rememberHasTouchscreen()
     NxTheme(colors = look.colors) {
-        val valueAnchor = remember { NxValueAnchor() }
-        MenuLocals(state, look, footerModeFor(controllerConnected, padVisible = false), touchscreen, valueAnchor) {
+        MenuLocals(state, look, footerModeFor(controllerConnected, padVisible = false), touchscreen) {
             BoxWithConstraints(
                 Modifier.fillMaxSize().background(LocalNxColors.current.background)
                     .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)).clipToBounds(),
@@ -92,7 +90,7 @@ fun MenuTopScreen(state: AppState) {
                             val loadingMessage by state.loadingMessage.collectAsState()
                             PageContent(state, screen, selection, resumeInfo, gameInfo, live, onTop = true)
                             if (loading) NxLoadingOverlay(loadingMessage)
-                            PageOverlays(state, chooser, error, notice, valueAnchor)
+                            PageOverlays(state, chooser, error, notice)
                         }
                         TopContent.GameList -> (screen as? Screen.Games)?.let { s ->
                             val live = remember { mutableStateOf(true) }

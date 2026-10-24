@@ -6,7 +6,7 @@ import com.nxredux.mobile.settings.stepFrom
  * One value row's setting as it is now, bound to that row (a tab's, a console's, a hint's): [values] in the order
  * LEFT / RIGHT step through them, the [current] one, how to [set] another, and what the page does [after] a change
  * (republish, plus any side effect: Home rebuilt, the tab row's focus dropped, a rumble preview). Settings' rows
- * ([AppState]'s `settingValue`) and RetroAchievements' build one per press, so LEFT / RIGHT, A and the touch chooser
+ * ([AppState]'s `settingValue`) and RetroAchievements' build one per press, so LEFT / RIGHT, A and the touch controls
  * are one generic path each; onboarding's value rows [step] the same settings without [after] (they republish their
  * own page). A two-value row (an On / Off, Show / Hide or two-choice row) steps by flipping.
  */
@@ -14,7 +14,7 @@ internal class SettingValue<T>(
     val values: List<T>,
     val current: T,
     val set: (T) -> Unit,
-    /** A value's text: a Settings touch row's choices, and RetroAchievements' touch chooser (three or more values); null: none. */
+    /** A value's text: a Settings or RetroAchievements touch row's choices; null: none. */
     val label: ((T) -> String)? = null,
     /** LEFT / RIGHT stop at the ends instead of wrapping (RetroAchievements' durations); A still wraps. */
     val clamps: Boolean = false,

@@ -100,9 +100,6 @@ import com.nxredux.mobile.ui.nx.NxDefaults
 import com.nxredux.mobile.ui.nx.NxBackdropPicture
 import com.nxredux.mobile.ui.nx.backdropPictureTarget
 import com.nxredux.mobile.ui.nx.LocalNxOptionText
-import com.nxredux.mobile.ui.nx.LocalNxValueAnchor
-import com.nxredux.mobile.ui.nx.NxValueAnchor
-import com.nxredux.mobile.ui.nx.NxValueDropdown
 import com.nxredux.mobile.ui.nx.NxSettingInfoPopup
 import com.nxredux.mobile.ui.nx.NxSettingPicker
 import com.nxredux.mobile.ui.nx.NxDialog
@@ -191,8 +188,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                     val portrait = LocalPortrait.current
                     val separate = rememberSeparateController()
                     LaunchedEffect(portrait, separate) { state.onPadContext(portrait, separate) }
-                    val valueAnchor = remember { NxValueAnchor() }   // where a touch value dropdown opens
-                    MenuLocals(state, look, footer, touchscreen, valueAnchor) {
+                    MenuLocals(state, look, footer, touchscreen) {
                         Box(m) {
                             // A tool on the top screen ([MenuTopScreen]): this one keeps the menu, still.
                             val toolAbove = DualMenu.bottom(screen, dualMenu, toolOnTop) == BottomContent.Menu
@@ -243,7 +239,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                                 NxDialog("Update available", updateText(r), onConfirm = { state.answerUpdate(true) }, confirmLabel = "Update",
                                     onCancel = { state.answerUpdate(false) }, cancelLabel = "Not now", scrimDismisses = false, scrollSteps = state.updateScroll)
                             }
-                            PageOverlays(state, chooser, error, notice, valueAnchor)
+                            PageOverlays(state, chooser, error, notice)
                         }
                     }
                 }
@@ -279,14 +275,14 @@ internal fun rememberMenuLook(state: AppState, screen: Screen): MenuLook {
 /**
  * The CompositionLocals every launcher screen reads, for the main window's [App] and the second display's
  * [MenuTopScreen] alike: the [footer] mode, the launcher chrome ([launcherChromeFor] from [look] and [footer]), the
- * [touchscreen], the app icons, the touch value dropdown's [valueAnchor] and the option text size.
+ * [touchscreen], the app icons and the option text size.
  */
 @Composable
-internal fun MenuLocals(state: AppState, look: MenuLook, footer: FooterMode, touchscreen: Boolean, valueAnchor: NxValueAnchor, content: @Composable () -> Unit) {
+internal fun MenuLocals(state: AppState, look: MenuLook, footer: FooterMode, touchscreen: Boolean, content: @Composable () -> Unit) {
     val chrome = launcherChromeFor(look.pageTitle, look.buttonHints, footer, look.extraInfo, look.recentHint, look.searchHint, look.netplayHint, look.homeStats)
     CompositionLocalProvider(
         LocalFooterMode provides footer, LocalLauncherChrome provides chrome, LocalHasTouchscreen provides touchscreen,
-        LocalAppIcons provides state.appIcons, LocalNxValueAnchor provides valueAnchor, LocalNxOptionText provides look.optionText,
+        LocalAppIcons provides state.appIcons, LocalNxOptionText provides look.optionText,
         content = content,
     )
 }
@@ -349,16 +345,13 @@ private fun pageTransition(motion: NavMotion): ContentTransform {
 private fun updateText(r: AppRelease): String = "NX Redux ${r.version}" + if (r.notes.isNotBlank()) "\n\n${r.notes}" else ""
 
 /**
- * The touch value chooser, About's update confirm, the Problem dialog and the notice, over the focused page (a tool's on
+ * A value row's picker, About's update confirm, the Problem dialog and the notice, over the focused page (a tool's on
  * the top screen: [MenuTopScreen]).
  */
 @Composable
-internal fun BoxScope.PageOverlays(state: AppState, chooser: ValueChooser?, error: String?, notice: String?, valueAnchor: NxValueAnchor) {
-    chooser?.let { c ->
-        // A Settings touch row's picker (the in-game menu's), else the dropdown at the row's value.
-        if (c.popup) NxSettingPicker(c.title, c.labels, c.current, c.selected, onPick = state::chooseValue, onDismiss = state::closeChooser)
-        else NxValueDropdown(c.labels, c.selected, valueAnchor.bounds, onPick = state::chooseValue, onDismiss = state::closeChooser)
-    }
+internal fun BoxScope.PageOverlays(state: AppState, chooser: ValueChooser?, error: String?, notice: String?) {
+    // A touch value row's picker (the in-game menu's).
+    chooser?.let { c -> NxSettingPicker(c.title, c.labels, c.current, c.selected, onPick = state::chooseValue, onDismiss = state::closeChooser) }
     val settingInfo by state.settingInfo.collectAsState()   // a Settings row's full description
     settingInfo?.let { p -> NxSettingInfoPopup(p.title, p.text, p.scrollSeq, p.scrollDir, onClose = state::closeSettingInfo) }
     // About's Update to: here, so it shows on whichever screen Settings is on (the top one in dual screen).

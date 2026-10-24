@@ -25,10 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.settings.OptionTextSize
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.positionOnScreen
-import androidx.compose.ui.unit.toSize
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
@@ -159,11 +155,8 @@ fun NxOptionsRow(
                 )
             }
             if (value != null) {
-                val anchor = LocalNxValueAnchor.current
                 Box(
                     Modifier.fillMaxHeight().let { m -> if (selected && onValueClick != null) m.clickable(onClick = onValueClick) else m }
-                        // The selected row's value: where a touch value dropdown opens ([NxValueDropdown]).
-                        .let { m -> if (selected && anchor != null) m.onGloballyPositioned { anchor.bounds = Rect(it.positionOnScreen(), it.size.toSize()) } else m }
                         .padding(horizontal = innerPad),
                     contentAlignment = Alignment.CenterEnd,
                 ) {

@@ -10,6 +10,7 @@ import com.nxredux.mobile.scraper.ScrapeState
 import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
+import com.nxredux.mobile.ui.nx.NxSettingEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -334,7 +335,7 @@ internal class ArtworkScreenController(
 
     /** A dialog or prompt open on an Artwork page: it takes every input, the left pane's taps included. */
     private fun dialogOpen(s: Screen): Boolean = when (s) {
-        is Screen.ArtworkSettings -> s.signingIn || s.editingKey || s.confirmLogout
+        is Screen.ArtworkSettings -> s.dialogOpen
         is Screen.ArtworkReset -> s.confirm != null
         is Screen.ArtworkProgress -> s.confirmCancel
         else -> false
@@ -354,6 +355,9 @@ internal class ArtworkScreenController(
         }
         return true
     }
+
+    /** A touch on an Artwork Settings row's control ([ArtworkAccountSettings.onSettingEvent]). */
+    fun onSettingEvent(s: Screen.ArtworkSettings, event: NxSettingEvent) = more.onSettingEvent(s, event)
 
     // --- The game context menu's Fetch art ---
 

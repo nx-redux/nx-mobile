@@ -35,6 +35,8 @@ import com.nxredux.mobile.storage.PrivateFiles
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.HintTouch
 import com.nxredux.mobile.ui.nx.NxButton
+import com.nxredux.mobile.ui.nx.NxSettingEvent
+import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.nxTap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -453,11 +455,11 @@ class ArtworkScreensTest {
         r.state.openArtwork()
         r.state.pick(ArtworkAction.SETTINGS)
         val account = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.SGDB_KEY, ArtworkSettingKind.RESET), account.rows.map { it.kind })
-        assertEquals("Not set", account.rows[5].secondary)
+        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.SGDB_KEY, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
+        assertEquals("Not set", account.rows[8].secondary)
 
         r.http.on("search/autocomplete/tetris", HttpResult(401, null))
-        r.state.select(5); r.state.onButton(NxButton.A)
+        r.state.select(8); r.state.onButton(NxButton.A)
         assertTrue(assertIs<Screen.ArtworkSettings>(r.state.screen.value).editingKey)
         assertTrue(r.state.textEntryOpen)
         r.state.artworkDraftKey("WRONGKEY")
@@ -485,7 +487,7 @@ class ArtworkScreensTest {
         r.state.select(saved.rows.indexOfFirst { it.kind == ArtworkSettingKind.SGDB_REMOVE }); r.state.onButton(NxButton.A)
         assertNull(r.settings.sgdbApiKey)
         assertTrue("SteamGridDB key removed" in r.notices)
-        assertEquals(ArtworkSettingKind.SGDB_KEY, assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.dropLast(1).last().kind)
+        assertEquals(ArtworkSettingKind.SGDB_KEY, assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.dropLast(2).last().kind)   // above the gap and Reset artwork
         // B closes the prompt without a check.
         r.state.onButton(NxButton.A); r.state.artworkDraftKey("X"); r.state.onButton(NxButton.B)
         assertFalse(assertIs<Screen.ArtworkSettings>(r.state.screen.value).editingKey)
@@ -497,11 +499,11 @@ class ArtworkScreensTest {
         r.state.openArtwork()
         r.state.pick(ArtworkAction.SETTINGS)
         val account = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.TGDB_KEY, ArtworkSettingKind.RESET), account.rows.map { it.kind })
-        assertEquals("TheGamesDB API key" to "Not set", account.rows[5].label to account.rows[5].secondary)
+        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.TGDB_KEY, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
+        assertEquals("TheGamesDB API key" to "Not set", account.rows[8].label to account.rows[8].secondary)
 
         r.http.on("API/Limit?apikey=WRONGKEY", HttpResult(200, """{"remaining_monthly_allowance":0,"allowance_refresh_timer":0}""".encodeToByteArray()))
-        r.state.select(5); r.state.onButton(NxButton.A)
+        r.state.select(8); r.state.onButton(NxButton.A)
         val prompt = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
         assertTrue(prompt.editingKey && prompt.keyFor == ArtKeyFor.TGDB)
         r.state.artworkDraftKey("WRONGKEY")
@@ -529,7 +531,7 @@ class ArtworkScreensTest {
         assertNull(r.settings.tgdbApiKey)
         assertTrue("TheGamesDB key removed" in r.notices)
         val removed = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        assertEquals(ArtworkSettingKind.TGDB_KEY, removed.rows.dropLast(1).last().kind)   // before Reset: no allowance row without a key
+        assertEquals(ArtworkSettingKind.TGDB_KEY, removed.rows.dropLast(2).last().kind)   // above the gap and Reset: no allowance row without a key
         r.state.onButton(NxButton.B)
     }
 
@@ -556,10 +558,10 @@ class ArtworkScreensTest {
         r.state.openArtwork()
         r.state.pick(ArtworkAction.SETTINGS)
         val account = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.RESET), account.rows.map { it.kind })
+        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
 
         r.http.on("ssuserInfos", Scrape.json("""{"response":{}}"""))   // an answer without a user: a bad login
-        r.state.select(4); r.state.onButton(NxButton.A)   // ScreenScraper login, under Replace existing art and the optional art
+        r.state.select(7); r.state.onButton(NxButton.A)   // ScreenScraper login, under Replace existing art and the optional art
         assertTrue(r.state.textEntryOpen)
         r.state.artworkDraftUser("me"); r.state.artworkDraftPassword("secret")
         assertFalse("secret" in r.state.screen.value.toString())
@@ -592,8 +594,8 @@ class ArtworkScreensTest {
         r.state.onButton(NxButton.A)   // Logout asks first
         assertTrue(assertIs<Screen.ArtworkSettings>(r.state.screen.value).confirmLogout)
         r.state.onButton(NxButton.A)   // yes: the row turns back into login, the highlight stays on it
-        assertEquals(ArtworkSettingKind.SS_LOGIN, assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows[4].kind)
-        assertEquals(4, r.state.selection.value.index)
+        assertEquals(ArtworkSettingKind.SS_LOGIN, assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows[7].kind)
+        assertEquals(7, r.state.selection.value.index)
         assertEquals("", r.settings.ssUsername)
 
     }
@@ -630,10 +632,14 @@ class ArtworkScreensTest {
         r.state.openArtwork()
         r.state.pick(ArtworkAction.SETTINGS)
         fun rows() = assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows
-        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.RESET), rows().map { it.kind })
-        assertEquals("Off", rows()[0].secondary)
+        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.RESET), rows().filter { it.selectable }.map { it.kind })
+        assertEquals(ArtworkSettingKind.REPLACE, rows()[r.state.selection.value.index].kind)   // opens past the group label
+        assertEquals("Off", rows()[1].secondary)
         r.state.onButton(NxButton.A)
-        assertTrue(r.settings.artReplaceExisting); assertEquals("On", rows()[0].secondary)
+        assertTrue(r.settings.artReplaceExisting); assertEquals("On", rows()[1].secondary)
+        r.state.settingEvent(NxSettingEvent.Choose(1, 0)); assertFalse(r.settings.artReplaceExisting)   // the switch's tap
+        r.state.settingEvent(NxSettingEvent.Choose(1, 0)); assertFalse(r.settings.artReplaceExisting)   // already Off: stays
+        r.state.onButton(NxButton.A)
         r.state.onButton(NxButton.B)
         assertEquals("Fetch all art", assertIs<Screen.Artwork>(r.state.screen.value).rows.first { it.action == ArtworkAction.FETCH_MISSING }.label)
     }
@@ -646,7 +652,7 @@ class ArtworkScreensTest {
         fun rows() = assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows
         fun row(k: ArtworkSettingKind) = rows().first { it.kind == k }
         fun on(k: ArtworkSettingKind) { r.state.select(rows().indexOfFirst { it.kind == k }) }
-        assertEquals(listOf("Replace existing art", "2D box art", "Wheel", "Generate mix"), rows().take(4).map { it.label })
+        assertEquals(listOf("Art to fetch", "Replace existing art", "2D box art", "Wheel", "Generate mix"), rows().take(5).map { it.label })
         assertEquals(listOf("Off", "Off", "Off"), listOf(ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX).map { row(it).secondary })
         on(ArtworkSettingKind.BOX2D); r.state.onButton(NxButton.RIGHT)
         assertTrue(r.settings.artBox2d); assertEquals("On", row(ArtworkSettingKind.BOX2D).secondary)
@@ -658,8 +664,8 @@ class ArtworkScreensTest {
         assertTrue(r.settings.artMix)
         // The mix needs the wheel: it reads On, dimmed, and does not step (NX Redux: "Needed by Generate mix").
         assertEquals(ArtworkSettingRow(ArtworkSettingKind.WHEEL, "Wheel", "On", enabled = false), row(ArtworkSettingKind.WHEEL))
-        assertFalse(artworkSettingNxRow(row(ArtworkSettingKind.WHEEL)).cycleable)
-        assertTrue(artworkSettingNxRow(row(ArtworkSettingKind.MIX)).cycleable)
+        assertEquals(NxSettingRow("Wheel", info = "Needed by Generate mix", detail = "Also fetch the game's logo. Locked On while Generate mix is on.", value = "On", enabled = false), artworkSettingTouchRow(row(ArtworkSettingKind.WHEEL)))
+        assertEquals(listOf("Off", "On"), artworkSettingTouchRow(row(ArtworkSettingKind.MIX)).choices)
         on(ArtworkSettingKind.WHEEL); r.state.onButton(NxButton.A); r.state.onButton(NxButton.RIGHT)
         assertFalse(r.settings.artWheel)
         // With Generate mix on, a game has art only with its mix: Zelda (a box and a background, no mix) is missing again.
@@ -682,7 +688,7 @@ class ArtworkScreensTest {
         r.http.on("https://m/", Scrape.OK_PNG)
         r.state.openArtwork()
         r.state.pick(ArtworkAction.SETTINGS)
-        r.state.pickRow("Reset artwork…", assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.label })
+        r.state.pickRow("Reset artwork", assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.label })
         r.state.onButton(NxButton.A); r.state.onButton(NxButton.A)   // All, then Delete
         advanceUntilIdle()
         assertEquals(ARTWORK_STORAGE_ERROR, r.state.error.value)
@@ -713,7 +719,7 @@ class ArtworkScreensTest {
         assertEquals("4 games · 2 with art · 2 missing", assertIs<Screen.Artwork>(r.state.screen.value).details[0])
 
         r.state.pick(ArtworkAction.SETTINGS)
-        r.state.pickRow("Reset artwork…", assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.label })
+        r.state.pickRow("Reset artwork", assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.label })
         val reset = assertIs<Screen.ArtworkReset>(r.state.screen.value)
         assertEquals(listOf("All", "Game Boy", "Game Boy Advance", "Sega Genesis"), reset.scopes.map { it.label })
         r.state.pickRow("All", reset.scopes.map { it.label })
@@ -741,7 +747,7 @@ class ArtworkScreensTest {
         // The page beside Settings is the page as it stands (its counts and rows), not a stale copy.
         assertEquals(assertIs<Screen.Artwork>(assertNotNull(r.state.artworkParent(r.state.screen.value)).screen).details[0], "4 games · 1 with art · 3 missing")
         val rows = assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows
-        r.state.pickRow("Reset artwork…", rows.map { it.label })
+        r.state.pickRow("Reset artwork", rows.map { it.label })
         val beside = assertNotNull(r.state.artworkParent(assertIs<Screen.ArtworkReset>(r.state.screen.value)))
         assertEquals(rows, assertIs<Screen.ArtworkSettings>(beside.screen).rows)        // Settings beside Reset, Reset lit
         assertEquals(ArtworkSettingKind.RESET, rows[beside.row].kind)
@@ -776,14 +782,14 @@ class ArtworkScreensTest {
         r.state.onButton(NxButton.B)                                                      // B from there: the page, on Settings
         assertEquals(ArtworkAction.SETTINGS, assertIs<Screen.Artwork>(r.state.screen.value).rows[r.state.selection.value.index].action)
         r.state.pick(ArtworkAction.SETTINGS)
-        r.state.pickRow("Reset artwork…", assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.label })
+        r.state.pickRow("Reset artwork", assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.label })
         // Settings' Replace existing art beside Reset: Settings again on that row, acted on as A there would.
         tapSettings(ArtworkSettingKind.REPLACE)
         val settings = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
         assertTrue(r.settings.artReplaceExisting)
         assertEquals(ArtworkSettingKind.REPLACE, settings.rows[r.state.selection.value.index].kind)
         // An open dialog on the right takes the taps: the left pane does nothing under it.
-        r.state.pickRow("Reset artwork…", settings.rows.map { it.label })
+        r.state.pickRow("Reset artwork", settings.rows.map { it.label })
         r.state.onButton(NxButton.A)
         assertNotNull(assertIs<Screen.ArtworkReset>(r.state.screen.value).confirm)
         tapSettings(ArtworkSettingKind.REPLACE)
@@ -887,7 +893,7 @@ class ArtworkScreensTest {
         r.state.openArtwork()
         assertEquals("5 games · 2 with art · 3 missing", assertIs<Screen.Artwork>(r.state.screen.value).details[0])
         r.state.pick(ArtworkAction.SETTINGS)
-        r.state.pickRow("Reset artwork…", assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.label })
+        r.state.pickRow("Reset artwork", assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.label })
         // Reset lists Android like a ROM console, where Fetch lists it; resetting it deletes its stored screenshots.
         val scopes = assertIs<Screen.ArtworkReset>(r.state.screen.value).scopes
         assertEquals(listOf("All", "Android", "Game Boy", "Game Boy Advance", "Sega Genesis"), scopes.map { it.label })
@@ -916,7 +922,7 @@ class ArtworkScreensTest {
         r.state.onButton(NxButton.B)
 
         r.state.pick(ArtworkAction.SETTINGS)
-        r.state.pickRow("Reset artwork…", assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.label })
+        r.state.pickRow("Reset artwork", assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.label })
         r.state.pickRow("All", assertIs<Screen.ArtworkReset>(r.state.screen.value).scopes.map { it.label })
         r.state.onButton(NxButton.A)
         advanceUntilIdle()
@@ -932,7 +938,7 @@ class ArtworkScreensTest {
         assertEquals(listOf("Game Boy", "Game Boy Advance", "Sega Genesis"), assertIs<Screen.ArtworkConsoles>(r.state.screen.value).rows.map { it.name })
         r.state.onButton(NxButton.B)
         r.state.pick(ArtworkAction.SETTINGS)
-        r.state.pickRow("Reset artwork…", assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.label })
+        r.state.pickRow("Reset artwork", assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.label })
         assertEquals(listOf("All", "Game Boy", "Game Boy Advance", "Sega Genesis"), assertIs<Screen.ArtworkReset>(r.state.screen.value).scopes.map { it.label })
     }
 
