@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.ui.SETTINGS_SPLIT_LEFT
+import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 import com.nxredux.mobile.ui.SplitPanes
 import com.nxredux.mobile.ui.UNFOCUSED_ALPHA
 
@@ -727,6 +728,7 @@ private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, pan
     page.kind == PageKind.Root && row is MenuRow.Slot ->
         listOf(Hint(NxButton.LEFT, "Slot"), Hint(NxButton.A, row.label), Hint(NxButton.B, "Resume"))
     // The root has no info area (Disc N/M): A opens the info there.
+    page.kind == PageKind.Shortcuts && row is MenuRow.Option -> shortcutHints(row)
     page.kind == PageKind.Root && row is MenuRow.Option -> buildList {
         add(Hint(NxButton.LEFT, "Change"))
         if (row.fullInfo.isNotBlank()) add(Hint(NxButton.A, "Info"))
@@ -751,6 +753,18 @@ private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, pan
         if (infoTruncated) add(Hint(NxButton.X, "Info"))
         add(Hint(NxButton.B, "Back"))
     }
+}
+
+/**
+ * An Options → Shortcuts row: waiting for a press, only B Cancel (every other key is the press); a bind row's A Bind, a
+ * touch button's Change and Choose; then X None (here) and Y Default (back to Controls → Shortcuts).
+ */
+private fun shortcutHints(row: MenuRow.Option): List<Hint> = buildList {
+    if (row.valueLabel == SHORTCUT_PROMPT) { add(Hint(NxButton.B, "Cancel")); return@buildList }
+    if (row.choices.isEmpty()) add(Hint(NxButton.A, "Bind")) else { add(Hint(NxButton.LEFT, "Change")); add(Hint(NxButton.A, "Choose")) }
+    add(Hint(NxButton.X, "None"))
+    add(Hint(NxButton.Y, "Default"))
+    add(Hint(NxButton.B, "Back"))
 }
 
 /**

@@ -17,6 +17,17 @@ import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.settings.stepFrom
 import com.nxredux.mobile.shaders.ShaderParam
+import com.nxredux.mobile.shortcuts.CaptureResult
+import com.nxredux.mobile.shortcuts.ClaimedInput
+import com.nxredux.mobile.shortcuts.ConsoleHotkeys
+import com.nxredux.mobile.shortcuts.KeyLabels
+import com.nxredux.mobile.shortcuts.ShortcutAction
+import com.nxredux.mobile.shortcuts.ShortcutCapture
+import com.nxredux.mobile.shortcuts.ShortcutOverrides
+import com.nxredux.mobile.shortcuts.ShortcutSet
+import com.nxredux.mobile.shortcuts.Shortcuts
+import com.nxredux.mobile.shortcuts.TouchSlot
+import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 
 enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS }
 enum class SlotAction { SAVE, LOAD }
@@ -27,6 +38,11 @@ sealed interface PageKind {
     data object Frontend : PageKind
     /** App-owned rows of this console ([ConsoleSettings]); edited like Frontend rows. */
     data object ConsoleSettings : PageKind
+    /**
+     * This console's or game's shortcut overrides over Controls → Shortcuts ([InGameMenuModel.setShortcuts]): A binds by
+     * press, X sets None here, Y goes back to the default; saved with Save Changes like the other rows.
+     */
+    data object Shortcuts : PageKind
     data object Shaders : PageKind
     data object ShaderParams : PageKind
     /** Live adjust of one visual setting (frontend or shader) over the paused frame (the menu collapses to a strip). */
@@ -184,6 +200,11 @@ sealed interface MenuEffect {
     data object SaveForConsole : MenuEffect
     data object SaveForGame : MenuEffect
     data object RestoreDefaults : MenuEffect
+    /**
+     * The in-game Shortcuts page changed this console's or game's [overrides]: the host's bindings follow now; persisted
+     * only by Save Changes, which writes the overridden rows alone (spec: overrides inherit).
+     */
+    data class ShortcutsChanged(val overrides: ShortcutOverrides) : MenuEffect
 }
 
 /**
@@ -254,6 +275,21 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var frontendLocked: Set<String> = emptySet()
     private var frontendTag = ""                 // the console's tag: selects the Console Settings rows
     private var overlayAvailable = true          // false while the DS screens are split (the overlay is off)
+
+    // Options → Shortcuts ([setShortcuts]): Controls → Shortcuts, this console's or game's overrides over it, the
+    // console's hotkeys (they win: a row on one is Unavailable, press to bind refuses one), whether the core rewinds.
+    private var shortcutBase = ShortcutSet.EMPTY
+    /** This console's or game's overrides as edited on the Shortcuts page (absent: inherits Controls → Shortcuts). */
+    var shortcutOverrides: ShortcutOverrides = ShortcutOverrides.NONE
+        private set
+    private var shortcutClaimed: List<ClaimedInput> = ConsoleHotkeys.always
+    private var shortcutRewind = false
+    /** Press to bind on the Shortcuts page; the host hands it raw key codes ([takesKey], [captureKey]). */
+    private var capture = ShortcutCapture(shortcutClaimed)
+    private var capturing: ShortcutAction? = null
+
+    /** A Shortcuts row waits for a press: the host gives raw keys to [captureKey] first ([takesKey]). */
+    val capturingShortcut: Boolean get() = capturing != null
 
     private var shaders: Map<String, String> = ShaderOptions.fromConfig(emptyMap())
     private var presets: List<String> = emptyList()
@@ -347,6 +383,16 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             }
         }
         if (state.page.kind is PageKind.Adjust) return pressAdjust(button)
+        if (state.page.kind == PageKind.Shortcuts) {
+            // Waiting for a press, the controller's keys are the capture's ([captureKey]); a touch B cancels, nothing
+            // else (MENU included, L23) does anything.
+            if (capturing != null) { if (button == NxButton.B) cancelCapture(); return null }
+            when (button) {
+                NxButton.X -> return clearShortcut(state.page.selected)
+                NxButton.Y -> return defaultShortcut(state.page.selected)
+                else -> Unit
+            }
+        }
         if (state.panelFocus != null) return pressPanel(button)
         if ((button == NxButton.L1 || button == NxButton.R1) && panelShown()) { stepTab(if (button == NxButton.L1) -1 else 1); return null }
         if (state.page.kind == PageKind.Achievements) {
@@ -470,6 +516,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 refreshRoot()
                 MenuEffect.ChangeDisc(index)
             }
+            state.page.kind == PageKind.Shortcuts -> touchSlot(r.key)?.let { slot ->
+                touchChoices().let { if (index < it.size) setTouchOverride(slot, it[index]) else null }
+            }
             isSettingsPage(state.page.kind) -> settingValues(r.key)?.getOrNull(index)?.let { setFrontendValue(r.key, it) }
             else -> options.firstOrNull { it.key == r.key }?.let { o -> CoreOptionFilter.visibleValues(o).getOrNull(index)?.let { setCoreOption(o, it) } }
         }
@@ -487,6 +536,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** Highlights row [index] of the top page; on the root the focus comes back from the panel to the list. */
     fun select(index: Int) {
         if (index in state.page.rows.indices) {
+            if (capturing != null && index != state.page.selected) cancelCapture()   // another row: the wait ends
             replaceTop(state.page.copy(selected = index))
             state = state.copy(panelFocus = null)
         }
@@ -494,6 +544,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     fun activate(index: Int): MenuEffect? {
         if (state.page.kind is PageKind.Adjust) return null
+        // A tap while a Shortcuts row waits ends the wait, as B (a touch-only player can't press one).
+        if (capturing != null) { cancelCapture(); return null }
         val row = state.page.rows.getOrNull(index) ?: return null
         select(index)
         return when (row) {
@@ -503,6 +555,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             is MenuRow.Option -> when {
                 // An achievement row opens nothing (its description is on the row).
                 state.page.kind == PageKind.Achievements -> null
+                // A bind row waits for a press ([captureKey]).
+                state.page.kind == PageKind.Shortcuts && row.choices.isEmpty() -> { bindAction(row.key)?.let(::startCapture); null }
                 // The root has no descriptions (Disc N/M): A shows it.
                 state.page.kind == PageKind.Root -> { if (row.fullInfo.isNotBlank()) push(message(row.label, row.fullInfo)); null }
                 row.visual -> { push(adjustPage(row.key)); null }
@@ -941,7 +995,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         MenuAction.LEAVE_NETPLAY -> MenuEffect.LeaveNetplay
         MenuAction.SAVE_FOR_CONSOLE -> { popTo(PageKind.Options); MenuEffect.SaveForConsole }
         MenuAction.SAVE_FOR_GAME -> { popTo(PageKind.Options); MenuEffect.SaveForGame }
-        MenuAction.RESTORE_DEFAULTS -> { popTo(PageKind.Options); MenuEffect.RestoreDefaults }
+        // The overrides go with the file (spec: Restore defaults drops them); the host sets the restored layer's after.
+        MenuAction.RESTORE_DEFAULTS -> { popTo(PageKind.Options); shortcutOverrides = ShortcutOverrides.NONE; MenuEffect.RestoreDefaults }
         MenuAction.RESET_SHADER_PARAMS -> {
             val entries = ShaderOptions.resetEntries(params)
             shaders = shaders + entries
@@ -955,6 +1010,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         when (target) {
             PageKind.Options -> push(optionsPage())
             PageKind.ConsoleSettings -> push(consoleSettingsPage())
+            PageKind.Shortcuts -> push(shortcutsPage())
             PageKind.Frontend -> push(frontendPage())
             PageKind.Shaders -> push(shadersPage())
             PageKind.ShaderParams -> push(shaderParamsPage())
@@ -986,6 +1042,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         is MenuRow.Option -> when {
             row.key.startsWith(PLAYER_KEY_PREFIX) -> changePlayer(row.key.removePrefix(PLAYER_KEY_PREFIX).toInt(), delta)
             row.key == DISC_KEY -> changeDisc(delta)
+            state.page.kind == PageKind.Shortcuts -> touchSlot(row.key)?.let { slot ->
+                val choices = touchChoices()
+                setTouchOverride(slot, choices[(row.index.coerceAtLeast(0) + delta).mod(choices.size)])
+            }
             isSettingsPage(state.page.kind) -> changeFrontend(row.key, delta)
             else -> {
                 val option = options.firstOrNull { it.key == row.key }
@@ -1145,9 +1205,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     // A push or pop leaves the panel: back on the root, the focus is on the list.
     // A push or pop also closes a popup: it belonged to the page it was over.
-    private fun push(page: MenuPage) { state = state.copy(stack = state.stack + page, panelFocus = null, popup = null) }
-    private fun pop() { if (state.stack.size > 1) state = state.copy(stack = state.stack.dropLast(1), panelFocus = null, popup = null) }
+    // A push or pop also ends a Shortcuts wait: its row is no longer on top.
+    private fun push(page: MenuPage) { endWait(); state = state.copy(stack = state.stack + page, panelFocus = null, popup = null) }
+    private fun pop() { endWait(); if (state.stack.size > 1) state = state.copy(stack = state.stack.dropLast(1), panelFocus = null, popup = null) }
     private fun popTo(kind: PageKind) {
+        endWait()
         val i = state.stack.indexOfLast { it.kind == kind }
         if (i >= 0) state = state.copy(stack = state.stack.take(i + 1), panelFocus = null, popup = null)
     }
@@ -1197,6 +1259,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         buildList {
             // Only Frontend's name needs a line; the footer's status covers Save Changes.
             if (consoleRows().isNotEmpty()) add(MenuRow.Submenu(CONSOLE_SETTINGS_LABEL, PageKind.ConsoleSettings))
+            add(MenuRow.Submenu(SHORTCUTS_LABEL, PageKind.Shortcuts))
             add(MenuRow.Submenu("Frontend", PageKind.Frontend, FRONTEND_INFO, FRONTEND_DETAIL))
             add(MenuRow.Submenu("Shaders", PageKind.Shaders))
             add(MenuRow.Submenu("Core Options", PageKind.CoreOptions))
@@ -1281,6 +1344,134 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             )
         }
 
+    // ------------------------------------------------------------------ Options → Shortcuts
+
+    /**
+     * Controls → Shortcuts ([base]), this console's or game's [overrides] over it (the resolved config's `nx_bind_*`, or
+     * what this page set since launch), the console's hotkeys ([claimed]: [ConsoleHotkeys.claimed]) and whether the core
+     * can rewind (no rewind rows without). Refreshes an open Shortcuts page.
+     */
+    fun setShortcuts(base: ShortcutSet, overrides: ShortcutOverrides, claimed: List<ClaimedInput>, canRewind: Boolean) {
+        shortcutBase = base
+        shortcutOverrides = overrides
+        shortcutRewind = canRewind
+        // A new capture only for new hotkeys: the old one's held keys must keep their releases swallowed.
+        if (claimed != shortcutClaimed) { shortcutClaimed = claimed; capture.cancel(); capture = ShortcutCapture(claimed); capturing = null }
+        refreshShortcutsPage()
+    }
+
+    /**
+     * Whether the host should give this raw key's press ([down]) or release to [captureKey] instead of the menu: every
+     * key while a row waits, and the release of one pressed since ([ShortcutCapture.takes]), so MENU's release after
+     * MENU+R1 or B's after a cancel never reach the menu. A key repeat it takes the host drops.
+     */
+    fun takesKey(keyCode: Int, down: Boolean): Boolean = capture.takes(keyCode, down)
+
+    /**
+     * A raw key the host gave press to bind ([takesKey]): [MenuEffect.ShortcutsChanged] when it bound the waiting row. A
+     * button or combo the console's hotkeys use (or the SELECT+START menu chord) is refused, saying which hotkey has it
+     * (spec: built-in hotkeys win); B or Back alone cancels.
+     */
+    fun captureKey(keyCode: Int, down: Boolean): MenuEffect? {
+        val result = capture.onKey(keyCode, down) ?: return null
+        val action = capturing ?: return null
+        capturing = null
+        return when (result) {
+            is CaptureResult.Bound -> setBindOverride(shortcutOverrides.withBinding(action, result.binding))
+            is CaptureResult.Refused -> { refreshShortcutsPage(); push(message(action.label, result.reason)); null }
+            CaptureResult.Cancelled -> { refreshShortcutsPage(); null }
+        }
+    }
+
+    private fun startCapture(action: ShortcutAction) {
+        capture.start()
+        capturing = action
+        refreshShortcutsPage()
+    }
+
+    private fun cancelCapture() {
+        endWait()
+        refreshShortcutsPage()
+    }
+
+    /** Ends a wait without a binding; the keys already down keep their releases swallowed ([takesKey]). */
+    private fun endWait() {
+        if (capturing == null) return
+        capture.cancel()
+        capturing = null
+    }
+
+    /** X: row [index]'s action or touch button set to None here. */
+    private fun clearShortcut(index: Int): MenuEffect? {
+        val key = (state.page.rows.getOrNull(index) as? MenuRow.Option)?.key ?: return null
+        bindAction(key)?.let { a ->
+            if (a in shortcutOverrides.bindings && shortcutOverrides.bindings[a] == null) return null
+            return setBindOverride(shortcutOverrides.withBinding(a, null))
+        }
+        return touchSlot(key)?.let { setTouchOverride(it, null) }
+    }
+
+    /** Y: row [index] follows Controls → Shortcuts again (its override dropped); null when it already does. */
+    private fun defaultShortcut(index: Int): MenuEffect? {
+        val key = (state.page.rows.getOrNull(index) as? MenuRow.Option)?.key ?: return null
+        val next = bindAction(key)?.takeIf { it in shortcutOverrides.bindings }?.let(shortcutOverrides::inheriting)
+            ?: touchSlot(key)?.takeIf { it in shortcutOverrides.touch }?.let(shortcutOverrides::inheriting)
+            ?: return null
+        return setBindOverride(next)
+    }
+
+    private fun setTouchOverride(slot: TouchSlot, action: ShortcutAction?): MenuEffect? {
+        if (slot in shortcutOverrides.touch && shortcutOverrides.touch[slot] == action) return null
+        return setBindOverride(shortcutOverrides.withTouch(slot, action))
+    }
+
+    private fun setBindOverride(next: ShortcutOverrides): MenuEffect {
+        shortcutOverrides = next
+        refreshShortcutsPage()
+        return MenuEffect.ShortcutsChanged(next)
+    }
+
+    private fun bindAction(key: String): ShortcutAction? =
+        if (key.startsWith(BIND_KEY_PREFIX)) ShortcutAction.fromKey(key.removePrefix(BIND_KEY_PREFIX)) else null
+
+    private fun touchSlot(key: String): TouchSlot? =
+        if (key.startsWith(TOUCH_KEY_PREFIX)) TouchSlot.entries.firstOrNull { it.key == key.removePrefix(TOUCH_KEY_PREFIX) } else null
+
+    /** What a touch button can do here: None, then every action the core has (no rewind ones without rewind). */
+    private fun touchChoices(): List<ShortcutAction?> = listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { shortcutRewind || !it.rewind }
+
+    private fun refreshShortcutsPage() {
+        state = state.copy(stack = state.stack.map { p -> if (p.kind == PageKind.Shortcuts) rebuilt(p, shortcutsPage()).copy(footer = SHORTCUTS_FOOTER) else p })
+    }
+
+    /**
+     * One row per action (no rewind rows without rewind), then the two touch buttons: each shows what fires here, marked
+     * "(default)" while it inherits Controls → Shortcuts; an action on a button the console's hotkeys use shows
+     * Unavailable with the hotkey as its line (spec: built-in hotkeys win). The row waiting for a press says so.
+     */
+    private fun shortcutsPage(): MenuPage {
+        val effective = Shortcuts.effective(shortcutBase, shortcutOverrides, shortcutClaimed, shortcutRewind)
+        fun shown(value: String, inherited: Boolean) = if (inherited) "$value$DEFAULT_SUFFIX" else value
+        val binds = ShortcutAction.entries.filter { shortcutRewind || !it.rewind }.map { a ->
+            val key = BIND_KEY_PREFIX + a.key
+            val blocked = effective.blocked[a]
+            when {
+                a == capturing -> MenuRow.Option(a.label, key, SHORTCUT_PROMPT, CAPTURE_LINE)
+                blocked != null -> MenuRow.Option(a.label, key, UNAVAILABLE, blocked.note)
+                else -> MenuRow.Option(a.label, key, shown(effective.bindings[a]?.let(KeyLabels::label) ?: NONE_LABEL, a !in shortcutOverrides.bindings))
+            }
+        }
+        val choices = touchChoices()
+        val touch = TouchSlot.entries.mapIndexed { i, t ->
+            val action = effective.touch[t]
+            MenuRow.Option(
+                "Touch button ${i + 1}", TOUCH_KEY_PREFIX + t.key, shown(action?.label ?: NONE_LABEL, t !in shortcutOverrides.touch),
+                choices = choices.map { it?.label ?: NONE_LABEL }, index = choices.indexOf(action),
+            )
+        }
+        return MenuPage(PageKind.Shortcuts, SHORTCUTS_LABEL, binds + touch, footer = SHORTCUTS_FOOTER)
+    }
+
     private fun saveChangesPage() = MenuPage(
         PageKind.SaveChanges, "Save Changes",
         listOf(
@@ -1331,6 +1522,16 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     companion object {
         const val CONSOLE_SETTINGS_LABEL = "Console Settings"
+        const val SHORTCUTS_LABEL = "Shortcuts"
+        const val SHORTCUTS_FOOTER = "Changes here apply to this console or game. Save them with Save Changes."
+        const val BIND_KEY_PREFIX = "nx:bind:"
+        const val TOUCH_KEY_PREFIX = "nx:touch:"
+        /** A Shortcuts row inheriting Controls → Shortcuts. */
+        private const val DEFAULT_SUFFIX = " (default)"
+        private const val NONE_LABEL = "None"
+        private const val UNAVAILABLE = "Unavailable"
+        /** The waiting bind row's line: B cancels (the hint says so). */
+        private const val CAPTURE_LINE = "Hold MENU or SELECT for a combo"
         const val DISC_KEY = "nx:disc"
         const val DISC_LABEL = "Disc"
         const val DISC_INFO = "Left and right change the disc in the drive,\nas opening the lid and swapping it would."

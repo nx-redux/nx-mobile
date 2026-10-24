@@ -12,10 +12,10 @@ class CoreConfigStore(private val console: File, private val game: File) {
     /** (console, game); null when a file doesn't exist or can't be read. */
     fun read(): Pair<ConfigFile?, ConfigFile?> = readFile(console) to readFile(game)
 
-    /** Writes the console file; returns what was written. */
-    fun saveConsole(values: List<Pair<String, String>>): ConfigFile = write(console, values)
-    /** Writes the game file; returns what was written. */
-    fun saveGame(values: List<Pair<String, String>>): ConfigFile = write(game, values)
+    /** Writes the console file, also removing the lines whose key [drop] names; returns what was written. */
+    fun saveConsole(values: List<Pair<String, String>>, drop: (String) -> Boolean = { false }): ConfigFile = write(console, values, drop)
+    /** Writes the game file, also removing the lines whose key [drop] names; returns what was written. */
+    fun saveGame(values: List<Pair<String, String>>, drop: (String) -> Boolean = { false }): ConfigFile = write(game, values, drop)
     /** Sets one key in the game file ([CoreConfig.withKey]: a new game file starts as the console file); returns what was written. */
     fun saveGameKey(key: String, value: String): ConfigFile {
         val text = CoreConfig.withKey(readFileStrict(console), readFileStrict(game), key, value)
@@ -37,8 +37,8 @@ class CoreConfigStore(private val console: File, private val game: File) {
     fun deleteGame() = delete(game)
     fun deleteConsole() = delete(console)
 
-    private fun write(file: File, values: List<Pair<String, String>>): ConfigFile {
-        val text = CoreConfig.render(readFileStrict(file), values, FrontendOptions::migrateKey, drop = FrontendOptions::droppedOnSave)
+    private fun write(file: File, values: List<Pair<String, String>>, drop: (String) -> Boolean): ConfigFile {
+        val text = CoreConfig.render(readFileStrict(file), values, FrontendOptions::migrateKey, drop = { FrontendOptions.droppedOnSave(it) || drop(it) })
         file.writeAtomically(text.encodeToByteArray())
         return CoreConfig.parse(text)
     }

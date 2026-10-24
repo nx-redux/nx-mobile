@@ -33,6 +33,27 @@ data class ShortcutOverrides(
     val bindings: Map<ShortcutAction, ShortcutBinding?> = emptyMap(),
     val touch: Map<TouchSlot, ShortcutAction?> = emptyMap(),
 ) {
+    /**
+     * [action] overridden to [binding] (null: None here). Another action overridden onto [binding] gives it up to None
+     * (one button, one action, as [ShortcutSet.withBinding]); a base action on it is dropped by [Shortcuts.effective].
+     */
+    fun withBinding(action: ShortcutAction, binding: ShortcutBinding?): ShortcutOverrides {
+        val kept = bindings.mapValues { (a, b) -> if (a != action && binding != null && b == binding) null else b } + (action to binding)
+        return copy(bindings = ShortcutAction.entries.filter { it in kept }.associateWith { kept[it] })
+    }
+
+    /** [action] inherits the base again. */
+    fun inheriting(action: ShortcutAction): ShortcutOverrides = copy(bindings = bindings - action)
+
+    /** Touch button [slot] overridden to [action] (null: none here), in [TouchSlot] order. */
+    fun withTouch(slot: TouchSlot, action: ShortcutAction?): ShortcutOverrides {
+        val kept = touch + (slot to action)
+        return copy(touch = TouchSlot.entries.filter { it in kept }.associateWith { kept[it] })
+    }
+
+    /** Touch button [slot] inherits the base again. */
+    fun inheriting(slot: TouchSlot): ShortcutOverrides = copy(touch = touch - slot)
+
     companion object {
         val NONE = ShortcutOverrides()
     }
@@ -70,6 +91,15 @@ object Shortcuts {
     fun toConfig(o: ShortcutOverrides): List<Pair<String, String>> =
         ShortcutAction.entries.filter { it in o.bindings }.map { keyFor(it) to (o.bindings[it]?.encode() ?: NONE) } +
             TouchSlot.entries.filter { it in o.touch }.map { keyFor(it) to (o.touch[it]?.key ?: NONE) }
+
+    /**
+     * For a config save writing [o] ([toConfig]): drops every `nx_bind_*` line it doesn't write, since the cfg render keeps
+     * any line it isn't given, and a dropped override must inherit again rather than stay in the file.
+     */
+    fun droppedOnSave(o: ShortcutOverrides): (String) -> Boolean {
+        val written = toConfig(o).map { it.first }.toSet()
+        return { key -> key.startsWith(PREFIX) && key !in written }
+    }
 
     /**
      * The bindings that fire. Overrides replace base rows, and an override that takes a button drops any base action on

@@ -69,6 +69,11 @@ internal interface GameInputHost : LifecycleOwner {
     fun onShortcut(action: ShortcutAction, down: Boolean)
     /** The buttons were taken (the menu, the focus): held shortcuts end, toggled ones stay ([SpeedController.releaseHolds]). */
     fun releaseShortcutHolds()
+    /**
+     * A raw key while the in-game menu is open: true when its Shortcuts page's press to bind took it ([InGameMenuModel.takesKey]),
+     * so the menu never sees it (MENU, B, Back included).
+     */
+    fun menuCaptureKey(keyCode: Int, down: Boolean, repeat: Boolean): Boolean
     fun backPressed()
     fun pressWiiHome()
     fun recenterWiiMotion()
@@ -921,6 +926,8 @@ internal class GameInputRouter(private val host: GameInputHost) {
         // The rumble follows the pad in use, on its own port (a one-player core: port 0); a pad with no slot yet claims below.
         portFor(event.device, claim = false)?.let { noteRumbleDevice(event.device, it) }
         if (menuOpen) {
+            // Press to bind first, on the raw code (as [ShortcutKeys] matches it in game), Back too: it cancels.
+            if (host.menuCaptureKey(keyCode, down = true, repeat = event.repeatCount > 0)) return true
             if (keyCode == KeyEvent.KEYCODE_BACK) { if (event.repeatCount == 0) backPressed(); return true }
             if (event.repeatCount == 0) PadKeymap.buttonFor(printedKey(event, keyCode))?.let { menuRouter.onEvent(PadEvent.Down(it)) }
             return true
@@ -968,6 +975,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
     fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         if (isVolumeKey(keyCode)) return host.superKeyUp(keyCode, event)
         if (menuOpen) {
+            if (host.menuCaptureKey(keyCode, down = false, repeat = false)) return true
             PadKeymap.buttonFor(printedKey(event, keyCode))?.let { menuRouter.onEvent(PadEvent.Up(it)) }
             return true
         }

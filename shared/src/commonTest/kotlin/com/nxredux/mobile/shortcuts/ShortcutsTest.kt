@@ -1,5 +1,6 @@
 package com.nxredux.mobile.shortcuts
 
+import com.nxredux.mobile.options.CoreConfig
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -121,5 +122,13 @@ class ShortcutsTest {
         val s = ShortcutSet.EMPTY.withTouch(TouchSlot.TWO, ShortcutAction.RESET).withTouch(TouchSlot.ONE, ShortcutAction.HOLD_FF)
         assertEquals(listOf(TouchSlot.ONE, TouchSlot.TWO), s.touch.keys.toList())
         assertEquals(mapOf(TouchSlot.TWO to ShortcutAction.RESET), s.withTouch(TouchSlot.ONE, null).touch)
+    }
+
+    @Test fun aSaveDropsTheBindLinesNoLongerOverridden() {
+        val existing = CoreConfig.parse("nx_bind_toggle_ff = 103\nnx_bind_hold_ff = none\nnx_bind_touch_1 = reset\nfoo = 1\n")
+        val o = ShortcutOverrides(mapOf(ShortcutAction.HOLD_FF to ShortcutBinding(null, 102)))
+        val text = CoreConfig.render(existing, Shortcuts.toConfig(o), drop = Shortcuts.droppedOnSave(o))
+        assertEquals("nx_bind_hold_ff = 102\nfoo = 1\n", text)
+        assertEquals("foo = 1\n", CoreConfig.render(existing, emptyList(), drop = Shortcuts.droppedOnSave(ShortcutOverrides.NONE)))
     }
 }

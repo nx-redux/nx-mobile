@@ -13,6 +13,13 @@ import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.SpeedOptions
 import com.nxredux.mobile.options.NdsOptions
+import com.nxredux.mobile.shortcuts.ConsoleHotkeys
+import com.nxredux.mobile.shortcuts.KeyCodes
+import com.nxredux.mobile.shortcuts.ShortcutAction
+import com.nxredux.mobile.shortcuts.ShortcutBinding
+import com.nxredux.mobile.shortcuts.ShortcutOverrides
+import com.nxredux.mobile.shortcuts.ShortcutSet
+import com.nxredux.mobile.shortcuts.TouchSlot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -40,7 +47,7 @@ class InGameMenuModelTest {
     private fun InGameMenuModel.openCoreOptions(): InGameMenuModel {
         press(NxButton.DOWN); press(NxButton.DOWN); press(NxButton.DOWN)   // Options
         press(NxButton.A)                                                  // -> Options page
-        press(NxButton.DOWN); press(NxButton.DOWN)                         // Core Options
+        press(NxButton.DOWN); press(NxButton.DOWN); press(NxButton.DOWN)   // Core Options
         assertEquals(MenuEffect.OpenCoreOptions, press(NxButton.A))        // Core Options (host loads)
         showCoreOptions(listOf(palette, speed, hidden), locked = emptySet())
         return this
@@ -157,7 +164,7 @@ class InGameMenuModelTest {
         m.select(3)
         assertNull(m.activate(3))
         assertEquals(PageKind.Options, m.state.page.kind)
-        assertEquals(listOf("Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Shortcuts", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
         assertEquals("Using defaults.", m.state.page.footer)
         m.setStatus(ConfigSource.GAME)
         assertEquals("Using game config.", m.state.page.footer)
@@ -201,7 +208,7 @@ class InGameMenuModelTest {
 
     @Test fun a_on_option_without_choices_does_nothing() {
         val m = model()
-        m.select(3); m.activate(3); m.activate(2)
+        m.select(3); m.activate(3); m.activate(3)
         m.showCoreOptions(listOf(CoreOption("k", "v", label = "Raw", info = "Raw value.")), emptySet())
         assertEquals(NxSettingControl.VALUE, m.optionRow(0).control)
         assertNull(m.press(NxButton.A))
@@ -211,7 +218,7 @@ class InGameMenuModelTest {
 
     @Test fun left_right_on_option_without_choices_does_nothing() {
         val m = model()
-        m.select(3); m.activate(3); m.activate(2)
+        m.select(3); m.activate(3); m.activate(3)
         m.showCoreOptions(listOf(CoreOption("k", "v", label = "Raw")), emptySet())
         assertNull(m.press(NxButton.RIGHT))
         assertEquals("v", (m.state.page.rows.single() as MenuRow.Option).valueLabel)
@@ -219,7 +226,7 @@ class InGameMenuModelTest {
 
     @Test fun no_live_options_shows_the_empty_message() {
         val m = model()
-        m.select(3); m.activate(3); m.activate(2)
+        m.select(3); m.activate(3); m.activate(3)
         m.showCoreOptions(listOf(hidden), emptySet())
         assertEquals(PageKind.Message, m.state.page.kind)
         assertEquals("This core has no options that\ncan be changed while running.", m.state.page.footer)
@@ -242,9 +249,9 @@ class InGameMenuModelTest {
         assertEquals(listOf("Save for console", "Save for game", "Restore defaults"), m.state.page.rows.map { it.label })
         assertEquals(MenuEffect.SaveForConsole, m.press(NxButton.A))
         assertEquals(PageKind.Options, m.state.page.kind)
-        m.activate(3)                                        // Save Changes (index 3, the last)
+        m.activate(4)                                        // Save Changes (index 4, the last)
         m.select(1); assertEquals(MenuEffect.SaveForGame, m.activate(1))
-        m.activate(3); m.select(2)
+        m.activate(4); m.select(2)
         assertIs<MenuEffect.RestoreDefaults>(m.activate(2))
         m.showMessage("Save Changes", "Restored defaults.")
         assertEquals(PageKind.Message, m.state.page.kind)
@@ -257,12 +264,12 @@ class InGameMenuModelTest {
         m.select(3)
         assertNull(m.activate(3))                            // -> Options page
         assertEquals(PageKind.Options, m.state.page.kind)
-        assertEquals(listOf("Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Shortcuts", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
         assertTrue(GamePanelTab.CHEATS in m.panelState().tabs)
     }
 
     private fun InGameMenuModel.toCoreOptionsRow(): InGameMenuModel {
-        select(3); activate(3); select(2)                    // Options page, Core Options selected
+        select(3); activate(3); select(3)                    // Options page, Core Options selected
         return this
     }
 
@@ -501,7 +508,7 @@ class InGameMenuModelTest {
         m.setShaders(values, presets, params)
         m.press(NxButton.DOWN); m.press(NxButton.DOWN); m.press(NxButton.DOWN)   // Options
         m.press(NxButton.A)
-        m.press(NxButton.DOWN)   // Shaders
+        m.press(NxButton.DOWN); m.press(NxButton.DOWN)   // Shaders
         m.press(NxButton.A)
         return m
     }
@@ -509,7 +516,7 @@ class InGameMenuModelTest {
     @Test fun options_page_lists_frontend_shaders_core_options_save_changes() {
         val m = plain(InGameMenuModel("Game", 9))
         m.press(NxButton.DOWN); m.press(NxButton.DOWN); m.press(NxButton.DOWN); m.press(NxButton.A)
-        assertEquals(listOf("Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Shortcuts", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
     }
 
     @Test fun shaders_page_rows_and_values() {
@@ -1072,7 +1079,7 @@ class InGameMenuModelTest {
         val m = model()
         m.setAchievements(listOf(ach(1, RaAchievementState.UNLOCKED), ach(2, RaAchievementState.LOCKED)), 1 to 2, RaSortOrder.DEFAULT, emptySet(), BADGES)
         m.press(NxButton.DOWN); m.press(NxButton.DOWN); m.press(NxButton.DOWN); m.press(NxButton.A)   // Options
-        assertEquals(listOf("Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Shortcuts", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
     }
 
     @Test fun the_achievements_tab_shows_with_a_set_and_the_header_counts_it() {
@@ -1137,7 +1144,7 @@ class InGameMenuModelTest {
         m.setFrontend(FrontendOptions.defaults("NDS"), emptyList(), emptySet(), "NDS", overlayAvailable = false)
         m.select(3); m.activate(3)                           // Root → Options
         assertEquals(
-            listOf("Console Settings", "Frontend", "Shaders", "Core Options", "Save Changes"),
+            listOf("Console Settings", "Shortcuts", "Frontend", "Shaders", "Core Options", "Save Changes"),
             m.state.page.rows.map { it.label },
         )
         assertEquals(MenuRow.Submenu(InGameMenuModel.CONSOLE_SETTINGS_LABEL, PageKind.ConsoleSettings), m.state.page.rows.first())
@@ -1148,7 +1155,7 @@ class InGameMenuModelTest {
         val m = model()
         m.setFrontend(FrontendOptions.defaults(tag), emptyList(), emptySet(), tag)
         m.select(3); m.activate(3)
-        assertEquals(listOf("Console Settings", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Console Settings", "Shortcuts", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
         assertNull(m.activate(0))
         return m.state.page.rows.map { it.label }
     }
@@ -1187,9 +1194,9 @@ class InGameMenuModelTest {
         val m = model()   // plainLocked: the plain console's rows locked
         m.setSecondScreen(connected = true, on = true)
         m.select(3); m.activate(3)                                         // Options (no Second screen row on the root)
-        assertEquals(listOf("Console Settings", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Console Settings", "Shortcuts", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
         m.setSecondScreen(connected = false, on = true)
-        assertEquals(listOf("Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Shortcuts", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
     }
 
     // A new lock set while Options is open (Save Changes → Restore defaults, the Wii's sensors once known) brings the
@@ -1197,13 +1204,13 @@ class InGameMenuModelTest {
     @Test fun a_new_lock_set_rebuilds_the_open_options_page() {
         val m = model()   // plainLocked: the plain console's rows locked
         m.select(3); m.activate(3)                                         // Options
-        assertEquals(listOf("Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Shortcuts", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
         val footer = m.state.page.footer
         m.setFrontend(FrontendOptions.defaults(plainTag), emptyList(), emptySet(), plainTag)
-        assertEquals(listOf("Console Settings", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Console Settings", "Shortcuts", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
         assertEquals(footer, m.state.page.footer)
         m.setFrontend(FrontendOptions.defaults(plainTag), emptyList(), plainLocked, plainTag)
-        assertEquals(listOf("Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Shortcuts", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
         assertEquals(footer, m.state.page.footer)
     }
 
@@ -1215,13 +1222,13 @@ class InGameMenuModelTest {
         assertEquals(listOf("Bottom screen"), m.state.page.rows.map { it.label })
         m.setSecondScreen(connected = false, on = true)
         assertEquals(PageKind.Options, m.state.page.kind)                  // back to Options, never an empty page
-        assertEquals(listOf("Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Shortcuts", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
     }
 
     @Test fun console_settings_is_not_offered_when_every_row_is_locked() {
         val m = model()   // plainLocked: the plain console's rows locked
         m.select(3); m.activate(3)
-        assertEquals(listOf("Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Shortcuts", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
     }
 
     @Test fun console_settings_lists_the_ds_rows_and_edits_them_like_frontend_rows() {
@@ -1311,7 +1318,7 @@ class InGameMenuModelTest {
     /** Core Options with two plain options, their core text behind the info icon only. */
     private fun twoCoreOptions(): InGameMenuModel {
         val m = model()
-        m.select(3); m.activate(3); m.activate(2)
+        m.select(3); m.activate(3); m.activate(3)
         m.showCoreOptions(
             listOf(
                 CoreOption("a", "1", label = "Alpha", info = "Alpha text.", values = listOf("1", "2")),
@@ -1789,7 +1796,7 @@ class InGameMenuModelTest {
 
     @Test fun core_option_rows_offer_their_visible_values() {
         val m = model()
-        m.select(3); m.activate(3); m.activate(2)
+        m.select(3); m.activate(3); m.activate(3)
         val hiddenValue = CoreOption("q", "hi", label = "Quality", values = listOf("lo", "hi", "max"), valueLabels = listOf("Low", "High", "Max"), hiddenValues = setOf("hi"))
         m.showCoreOptions(listOf(speed, hiddenValue), emptySet())
         assertEquals(listOf("1x", "2x"), m.optionRow(0).choices)
@@ -1965,4 +1972,172 @@ class InGameMenuModelTest {
         assertEquals("Colors.", core.optionRow(0).detail)
     }
 
+    // ------------------------------------------------------------------ Options → Shortcuts
+
+    private val r1 = ShortcutBinding(null, KeyCodes.BUTTON_R1)
+    private val r2 = ShortcutBinding(null, KeyCodes.BUTTON_R2)
+    private val menuR1 = ShortcutBinding(KeyCodes.BUTTON_MODE, KeyCodes.BUTTON_R1)
+
+    /** The Options → Shortcuts page over [base] and [overrides], for [tag] (its hotkeys claimed). */
+    private fun shortcuts(
+        base: ShortcutSet = ShortcutSet.EMPTY,
+        overrides: ShortcutOverrides = ShortcutOverrides.NONE,
+        tag: String = plainTag,
+        canRewind: Boolean = true,
+    ): InGameMenuModel {
+        val m = model()
+        m.setShortcuts(base, overrides, ConsoleHotkeys.claimed(tag), canRewind)
+        m.select(3); m.activate(3)                                         // Options
+        assertNull(m.activate(m.state.page.rows.indexOfFirst { it.label == "Shortcuts" }))
+        assertEquals(PageKind.Shortcuts, m.state.page.kind)
+        return m
+    }
+
+    private fun InGameMenuModel.row(label: String): MenuRow.Option = state.page.rows.first { it.label == label } as MenuRow.Option
+    private fun InGameMenuModel.selectRow(label: String) = select(state.page.rows.indexOfFirst { it.label == label })
+
+    @Test fun optionsOrder() {
+        val m = model()
+        m.setFrontend(FrontendOptions.defaults("GBA"), emptyList(), emptySet(), "GBA")
+        m.select(3); m.activate(3)
+        assertEquals(listOf("Console Settings", "Shortcuts", "Frontend", "Shaders", "Core Options", "Save Changes"), m.state.page.rows.map { it.label })
+    }
+
+    @Test fun inheritedShowsDefault() {
+        val m = shortcuts(base = ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to r1), emptyMap()))
+        assertEquals("R1 (default)", m.row("Toggle FF").valueLabel)
+        assertEquals("None (default)", m.row("Hold FF").valueLabel)
+        assertEquals("None (default)", m.row("Touch button 1").valueLabel)
+        assertEquals("Changes here apply to this console or game. Save them with Save Changes.", m.state.page.footer)
+    }
+
+    @Test fun overrideShowsValue() {
+        val m = shortcuts(
+            base = ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to r1), emptyMap()),
+            overrides = ShortcutOverrides(mapOf(ShortcutAction.TOGGLE_FF to menuR1, ShortcutAction.HOLD_FF to null), mapOf(TouchSlot.ONE to ShortcutAction.RESET)),
+        )
+        assertEquals("MENU+R1", m.row("Toggle FF").valueLabel)
+        assertEquals("None", m.row("Hold FF").valueLabel)
+        assertEquals("Reset Game", m.row("Touch button 1").valueLabel)
+    }
+
+    @Test fun captureSetsOverride() {
+        val m = shortcuts()
+        m.selectRow("Toggle FF")
+        assertNull(m.press(NxButton.A))
+        assertTrue(m.capturingShortcut)
+        assertEquals("Press a button…", m.row("Toggle FF").valueLabel)
+        assertTrue(m.takesKey(KeyCodes.BUTTON_R1, down = true))
+        val expected = ShortcutOverrides(mapOf(ShortcutAction.TOGGLE_FF to r1))
+        assertEquals(MenuEffect.ShortcutsChanged(expected), m.captureKey(KeyCodes.BUTTON_R1, down = true))
+        assertFalse(m.capturingShortcut)
+        assertEquals(expected, m.shortcutOverrides)
+        assertEquals("R1", m.row("Toggle FF").valueLabel)
+        // Its release is the capture's too, never the menu's.
+        assertTrue(m.takesKey(KeyCodes.BUTTON_R1, down = false))
+        assertNull(m.captureKey(KeyCodes.BUTTON_R1, down = false))
+        assertFalse(m.takesKey(KeyCodes.BUTTON_R1, down = false))
+    }
+
+    @Test fun captureMovesADuplicateAndCancels() {
+        val m = shortcuts(overrides = ShortcutOverrides(mapOf(ShortcutAction.HOLD_FF to r1)))
+        m.selectRow("Toggle FF"); m.press(NxButton.A)
+        assertEquals(
+            MenuEffect.ShortcutsChanged(ShortcutOverrides(mapOf(ShortcutAction.HOLD_FF to null, ShortcutAction.TOGGLE_FF to r1))),
+            m.captureKey(KeyCodes.BUTTON_R1, down = true),
+        )
+        assertEquals("None", m.row("Hold FF").valueLabel)
+        m.selectRow("Reset Game"); m.press(NxButton.A)
+        assertNull(m.captureKey(KeyCodes.BUTTON_B, down = true))           // B cancels
+        assertFalse(m.capturingShortcut)
+        assertEquals("None (default)", m.row("Reset Game").valueLabel)
+    }
+
+    @Test fun menuWhileCapturingNeitherClosesNorBinds() {
+        val m = shortcuts()
+        m.selectRow("Toggle FF"); m.press(NxButton.A)
+        assertNull(m.captureKey(KeyCodes.BUTTON_MODE, down = true))
+        assertNull(m.captureKey(KeyCodes.BUTTON_MODE, down = false))       // MENU alone binds nothing
+        assertTrue(m.capturingShortcut)
+        assertNull(m.press(NxButton.MENU))                                 // a touch MENU neither
+        assertEquals(PageKind.Shortcuts, m.state.page.kind)
+        assertNull(m.press(NxButton.B))                                    // a touch B cancels
+        assertFalse(m.capturingShortcut)
+    }
+
+    @Test fun claimedRefused() {
+        val m = shortcuts(tag = "NDS")
+        m.selectRow("Toggle FF"); m.press(NxButton.A)
+        assertNull(m.captureKey(KeyCodes.BUTTON_R2, down = true))
+        assertEquals(ShortcutOverrides.NONE, m.shortcutOverrides)
+        assertEquals(PageKind.Message, m.state.page.kind)
+        assertTrue("R2 swaps the DS screens" in m.state.page.footer)
+        m.press(NxButton.A)
+        assertEquals("None (default)", m.row("Toggle FF").valueLabel)
+    }
+
+    @Test fun blockedRowUnavailable() {
+        val m = shortcuts(base = ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to r2), emptyMap()), tag = "NDS")
+        val row = m.row("Toggle FF")
+        assertEquals("Unavailable", row.valueLabel)
+        assertEquals("R2 swaps the DS screens", row.info)
+    }
+
+    @Test fun xClearsToNoneHere() {
+        val m = shortcuts(base = ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to r1), emptyMap()))
+        m.selectRow("Toggle FF")
+        assertEquals(MenuEffect.ShortcutsChanged(ShortcutOverrides(mapOf(ShortcutAction.TOGGLE_FF to null))), m.press(NxButton.X))
+        assertEquals("None", m.row("Toggle FF").valueLabel)
+    }
+
+    @Test fun useDefaultDropsOverride() {
+        val m = shortcuts(
+            base = ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to r1), emptyMap()),
+            overrides = ShortcutOverrides(mapOf(ShortcutAction.TOGGLE_FF to menuR1)),
+        )
+        m.selectRow("Toggle FF")
+        assertEquals(MenuEffect.ShortcutsChanged(ShortcutOverrides.NONE), m.press(NxButton.Y))
+        assertEquals("R1 (default)", m.row("Toggle FF").valueLabel)
+        assertNull(m.press(NxButton.Y))                                    // already inherited
+    }
+
+    @Test fun touchRowsCycleAndUseDefault() {
+        val m = shortcuts(canRewind = false)
+        m.selectRow("Touch button 1")
+        assertEquals(listOf("None", "Toggle FF", "Hold FF", "Reset Game"), m.row("Touch button 1").choices)
+        assertEquals(MenuEffect.ShortcutsChanged(ShortcutOverrides(touch = mapOf(TouchSlot.ONE to ShortcutAction.TOGGLE_FF))), m.press(NxButton.RIGHT))
+        assertEquals("Toggle FF", m.row("Touch button 1").valueLabel)
+        assertEquals(MenuEffect.ShortcutsChanged(ShortcutOverrides.NONE), m.press(NxButton.Y))
+        assertEquals("None (default)", m.row("Touch button 1").valueLabel)
+    }
+
+    @Test fun noRewindRowsWithoutRewind() {
+        assertEquals(
+            listOf("Toggle FF", "Hold FF", "Reset Game", "Touch button 1", "Touch button 2"),
+            shortcuts(canRewind = false).state.page.rows.map { it.label },
+        )
+        assertEquals(
+            listOf("Toggle FF", "Hold FF", "Toggle Rewind", "Hold Rewind", "Reset Game", "Touch button 1", "Touch button 2"),
+            shortcuts(canRewind = true).state.page.rows.map { it.label },
+        )
+    }
+
+    @Test fun restoreDefaultsClears() {
+        val m = model()
+        m.setShortcuts(ShortcutSet.EMPTY, ShortcutOverrides(mapOf(ShortcutAction.TOGGLE_FF to r1)), ConsoleHotkeys.claimed(plainTag), true)
+        m.select(3); m.activate(3)
+        m.activate(m.state.page.rows.indexOfFirst { it.label == "Save Changes" })
+        assertEquals(MenuEffect.RestoreDefaults, m.activate(m.state.page.rows.indexOfFirst { it.label == "Restore defaults" }))
+        assertEquals(ShortcutOverrides.NONE, m.shortcutOverrides)
+    }
+
+    @Test fun shortcutsHints() {
+        val m = shortcuts()
+        m.selectRow("Toggle FF")
+        val bind = listOf(Hint(NxButton.A, "Bind"), Hint(NxButton.X, "None"), Hint(NxButton.Y, "Default"), Hint(NxButton.B, "Back"))
+        assertEquals(bind, hintsFor(m.state.page, m.row("Toggle FF")))
+        m.press(NxButton.A)
+        assertEquals(listOf(Hint(NxButton.B, "Cancel")), hintsFor(m.state.page, m.row("Toggle FF")))
+        assertEquals(Hint(NxButton.LEFT, "Change"), hintsFor(m.state.page, m.row("Touch button 1")).first())
+    }
 }

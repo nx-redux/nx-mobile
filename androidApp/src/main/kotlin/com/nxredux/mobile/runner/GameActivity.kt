@@ -99,8 +99,11 @@ import com.nxredux.mobile.options.SpeedSettings
 import com.nxredux.mobile.options.VulkanFallback
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.GameRumble
+import com.nxredux.mobile.shortcuts.ClaimedInput
 import com.nxredux.mobile.shortcuts.ConsoleHotkeys
 import com.nxredux.mobile.shortcuts.ShortcutAction
+import com.nxredux.mobile.shortcuts.ShortcutOverrides
+import com.nxredux.mobile.shortcuts.ShortcutSet
 import com.nxredux.mobile.shortcuts.Shortcuts
 import com.nxredux.mobile.shortcuts.SpeedEffect
 import com.nxredux.mobile.storage.GamePath
@@ -395,6 +398,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val speed by lazy { SpeedController(lifecycleScope) { retroView } }
     /** Controls → Shortcuts with this console's and game's `nx_bind_*` over it, read at launch; null before. */
     override var shortcutKeys: ShortcutKeys? = null
+        private set
+    // What [shortcutKeys] is built from ([applyShortcuts]): Controls → Shortcuts and the console's hotkeys, read at launch
+    // (neither can change while the game runs), and this console's or game's overrides, which the in-game Shortcuts page
+    // edits live and Save Changes writes.
+    private var shortcutBase = ShortcutSet.EMPTY
+    private var shortcutClaimed: List<ClaimedInput> = ConsoleHotkeys.always
+    override var shortcutOverrides: ShortcutOverrides = ShortcutOverrides.NONE
         private set
     // Settings → Controls → Game rumble, read once per game: each port's rumble on its own pad; port 0 falls back to the phone.
     private val gameRumble by lazy { AndroidAppSettings(this).gameRumble }
@@ -977,10 +987,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // turns them back on ([playLocally]); a lockstep session's does not: the game played on alone after it keeps them
         // off, as it has no save states.
         canRewind = descriptor?.rewind == true
-        shortcutKeys = ShortcutKeys(Shortcuts.effective(
-            Shortcuts.decodeBase(AndroidAppSettings(this).shortcuts), Shortcuts.fromConfig(resolved.values),
-            ConsoleHotkeys.claimed(tag), canRewind,
-        ))
+        shortcutBase = Shortcuts.decodeBase(AndroidAppSettings(this).shortcuts)
+        shortcutClaimed = ConsoleHotkeys.claimed(tag)
+        applyShortcuts(Shortcuts.fromConfig(resolved.values))
         speed.setSession(netplay = np != null)
         val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id) else null
         renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
@@ -2614,6 +2623,19 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     override fun releaseShortcutHolds() = speed.releaseHolds()
+
+    /**
+     * This console's or game's shortcut [overrides] now (launch, the in-game Shortcuts page, Restore defaults): the keys
+     * are built again. Only while no shortcut key is held: the menu that changes them released them all as it opened.
+     */
+    override fun applyShortcuts(overrides: ShortcutOverrides) {
+        shortcutOverrides = overrides
+        shortcutKeys = ShortcutKeys(Shortcuts.effective(shortcutBase, overrides, shortcutClaimed, canRewind))
+    }
+
+    override fun publishShortcuts(model: InGameMenuModel) = model.setShortcuts(shortcutBase, shortcutOverrides, shortcutClaimed, canRewind)
+
+    override fun menuCaptureKey(keyCode: Int, down: Boolean, repeat: Boolean): Boolean = menu.captureKey(keyCode, down, repeat)
 
     /** A Reset shortcut: reset always asks first, so it opens the in-game menu, where the confirm is. */
     private fun askReset() { if (!menuOpen) toggleMenu() }
