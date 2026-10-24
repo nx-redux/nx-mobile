@@ -855,12 +855,14 @@ void LibretroDroid::applyRewindConfig() {
     if (!rewindWanted.load() || core == nullptr || !gameLoaded) {
         rewind.configure(false, rewindSize);   // a no-op once off
         rewindBuilt = false;
+        rewindPlayed = 0;   // the probe counts only frames played while probing
         return;
     }
-    if (rewind.enabled() || rewindGivenUp) return;
+    if (rewind.enabled() || rewindGivenUp) { rewindPlayed = 0; return; }
     if (rewindBuilt) {
         // Built, then a capture was refused (Rewind turned itself off): counted like a refused probe.
         rewindBuilt = false;
+        rewindPlayed = 0;
         noteRewindRefusal();
         return;
     }

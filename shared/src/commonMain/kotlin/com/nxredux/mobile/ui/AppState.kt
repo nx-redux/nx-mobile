@@ -408,7 +408,7 @@ sealed interface Screen {
         override fun toString(): String =
             "RaSettings(rows=$rows, signingIn=$signingIn, confirm=$confirm, draftUser=$draftUser, draftPassword=***)"
     }
-    /** Settings -> Emulators -> Emulator Settings: one row per core with games. */
+    /** Settings -> Emulation -> Default settings: one row per core with games. */
     data class EmulatorList(val rows: List<EmulatorListRow>) : Screen
     /** The console picker of a core serving several tags with games. */
     data class EmulatorConsoles(val coreId: String, val emulator: String, val tags: List<String>) : Screen
@@ -714,7 +714,7 @@ data class SettingsRow(val kind: SettingsKind, val label: String, val secondary:
 val SettingsRow.selectable: Boolean get() = kind != SettingsKind.SECTION && kind != SettingsKind.GAP && kind != SettingsKind.TEXT
 
 /**
- * Settings -> Emulators -> Default emulators: every console with several tags (cycled, so one can be set before it has
+ * Settings -> Emulation -> Default emulators: every console with several tags (cycled, so one can be set before it has
  * games) and every other console [systems] hold games for (Unassigned left out), as a dimmed read-only row. The value
  * names the emulator behind the tag, "mGBA (MGBA)", so two tags on one core would still differ by tag. A stored pick
  * that is not one of the console's tags is ignored. Sorted by console name.
@@ -5576,7 +5576,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** A tap on row [index] of the dimmed Game Tracker list beside a game's sessions: that game's sessions open in their place. */
     fun gameTimeParentTap(index: Int) { gameTimeScreen?.parentTap(index) }
 
-    // --- Emulator Settings (Settings -> Emulators) and Game Settings ---
+    // --- Emulator Settings (Settings -> Emulation -> Default settings) and Game Settings ---
 
     internal val emulatorSettings = EmulatorSettingsController(
         scope, _screen, _selection, _error, deps.coreOptions, deps.emulatorConfigs, deps.coreDefaults,

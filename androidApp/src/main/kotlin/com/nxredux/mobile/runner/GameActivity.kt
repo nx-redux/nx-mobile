@@ -1982,11 +1982,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (isWii && padProfile().motionButton && motionSensors?.hasSensors == true) PadMotion(wiiMotionOn, ::toggleWiiMotion, ::recenterWiiMotion) else null
 
     /**
-     * The keys the menu leaves out: the .cfg's locks, Motion Controls on a Wii game without both sensors, and both Wii
-     * rows for a GameCube disc under the WII tag.
+     * The keys the menu leaves out: the .cfg's locks, Motion Controls on a Wii game without both sensors, both Wii rows
+     * for a GameCube disc under the WII tag, and the Rewind rows unless the core can rewind ([canRewind]: an unknown core
+     * can't, as the shortcuts have it).
      */
     override fun menuLocked(): Set<String> {
-        val noRewind = if (CoreRegistry.forId(gameCoreId)?.rewind == false) SpeedOptions.REWIND_KEYS else emptySet()
+        val noRewind = if (!canRewind) SpeedOptions.REWIND_KEYS else emptySet()
         return noRewind + when {
             wiiGameCube -> lockedOptions + WiiOptions.table.map { it.key }
             isWii && motionSensors?.hasSensors != true -> lockedOptions + WiiOptions.MOTION
@@ -2727,7 +2728,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         shortcutOverrides = overrides
         val effective = Shortcuts.effective(shortcutBase, overrides, shortcutClaimed, canRewind)
         effectiveShortcuts = effective
-        shortcutKeys = ShortcutKeys(effective)
+        shortcutKeys = ShortcutKeys(effective, shortcutClaimed)
         refreshTouchShortcuts()
     }
 

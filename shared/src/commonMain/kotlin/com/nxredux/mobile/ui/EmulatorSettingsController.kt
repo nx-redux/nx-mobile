@@ -106,7 +106,7 @@ object EmulatorRows {
 
 /** What [EmulatorSettingsController] needs from [AppState] beyond the flows it is handed. */
 internal interface EmulatorSettingsHost {
-    /** Settings -> Emulators, on the Emulator Settings row. */
+    /** Settings -> Emulation, on the Default settings row. */
     fun showEmulatorsSettings()
 
     /** Back to the game list Game Settings was opened from ([screen] as it was), then rebuilt from its source on the same game. */
@@ -114,9 +114,9 @@ internal interface EmulatorSettingsHost {
 }
 
 /**
- * Emulator Settings (Settings -> Emulators): the core list, the console picker, and the per-tag page; Game Settings: the
- * same page for one game. Every read and write goes through [configs], off the main thread, one at a time; each change
- * reads both files fresh, writes, and shows the page built from what it wrote.
+ * Emulator Settings (Settings -> Emulation -> Default settings): the core list, the console picker, and the per-tag
+ * page; Game Settings: the same page for one game. Every read and write goes through [configs], off the main thread, one
+ * at a time; each change reads both files fresh, writes, and shows the page built from what it wrote.
  */
 internal class EmulatorSettingsController(
     private val scope: CoroutineScope,
@@ -153,7 +153,7 @@ internal class EmulatorSettingsController(
         }
     }
 
-    /** Settings -> Emulators -> Emulator Settings. */
+    /** Settings -> Emulation -> Default settings. */
     fun openList(systems: List<SystemFolder>) {
         val from = screen.value
         scope.launch {

@@ -65,7 +65,7 @@ class OptionsPagesTest {
         assertEquals("MD · GG", emulatorListTags(EmulatorListRow("picodrive", "PicoDrive", listOf("MD", "GG"))))
     }
 
-    @Test fun emulatorListTitleDropsEmulatorInTheSplit() {
+    @Test fun emulatorListTitleIsDefaultSettingsInTheSplitAndEmulatorSettingsAlone() {
         assertEquals("Default settings", emulatorListTitle(split = true))   // the left pane already shows Emulation
         assertEquals("Emulator Settings", emulatorListTitle(split = false))
     }

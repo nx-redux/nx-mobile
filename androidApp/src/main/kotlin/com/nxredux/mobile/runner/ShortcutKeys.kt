@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.shortcuts.ClaimedInput
 import com.nxredux.mobile.shortcuts.EffectiveShortcuts
 import com.nxredux.mobile.shortcuts.KeyCodes
 import com.nxredux.mobile.shortcuts.ShortcutAction
@@ -19,9 +20,14 @@ sealed interface KeyVerdict {
  * first (L22: MENU+Y must not also zoom the N64 camera). A combo's modifier itself passes: SELECT still reaches the game
  * and MENU still opens the menu, except that with a MENU combo bound ([holdsMenu]) MENU waits for its release and opens
  * the menu only if no combo fired while it was held. Built-in hotkeys never match: [EffectiveShortcuts.bindings] leaves
- * them out ([EffectiveShortcuts.blocked]). A fired key's repeats are swallowed, never fired again.
+ * them out ([EffectiveShortcuts.blocked]), and a key bound alone stays the console's while its built-in chord's modifier
+ * is held ([claimed]: SELECT+R1 still swaps the 3DS screens with R1 bound alone). A fired key's repeats are swallowed,
+ * never fired again.
  */
-class ShortcutKeys(private val effective: EffectiveShortcuts) {
+class ShortcutKeys(private val effective: EffectiveShortcuts, claimed: List<ClaimedInput>) {
+    /** The built-in chords (`ConsoleHotkeys.claimed`), which a key bound alone must not take from the console. */
+    private val chords: Set<ShortcutBinding> = claimed.mapNotNullTo(HashSet()) { c -> c.binding.takeIf { it.modifier != null } }
+
     /** A MENU combo is bound: MENU is held back until its release ([KeyVerdict.OpenMenu]). */
     val holdsMenu: Boolean = effective.bindings.values.any { it.modifier == KeyCodes.BUTTON_MODE }
 
@@ -42,6 +48,7 @@ class ShortcutKeys(private val effective: EffectiveShortcuts) {
         // A combo with its modifier held wins over the same key bound alone.
         val hit = effective.bindings.entries.firstOrNull { (_, b) -> b.keyCode == keyCode && b.modifier?.let(::modifierHeld) == true }
             ?: effective.bindings.entries.firstOrNull { (_, b) -> b.keyCode == keyCode && b.modifier == null }
+                ?.takeUnless { chords.any { c -> c.keyCode == keyCode && c.modifier?.let(::modifierHeld) == true } }
             ?: return KeyVerdict.Pass
         fired[keyCode] = hit.key
         if (hit.value.modifier == KeyCodes.BUTTON_MODE) menuComboFired = true

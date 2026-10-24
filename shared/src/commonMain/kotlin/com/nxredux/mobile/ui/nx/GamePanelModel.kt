@@ -15,8 +15,7 @@ enum class Shortcut(val label: String) {
 /**
  * One shortcut button: [enabled] false is drawn dimmed and does nothing; [value] is the display text under the label
  * ("2/3" for discs); [on] makes it a toggle (the second screen's setting, fast forward, rewind; null for the action
- * shortcuts), drawn as a
- * quick-settings tile: filled while on, outlined while off, with no On/Off words.
+ * shortcuts), drawn as a quick-settings tile: filled while on, outlined while off, with no On/Off words.
  */
 data class ShortcutState(val shortcut: Shortcut, val label: String, val enabled: Boolean, val value: String? = null, val on: Boolean? = null)
 

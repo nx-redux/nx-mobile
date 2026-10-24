@@ -145,7 +145,10 @@ public class LibretroDroid {
     public static native void setRewinding(boolean rewinding);
     /** Whether rewound frames play their audio. */
     public static native void setRewindAudio(boolean audible);
-    /** 0 off or unavailable, 1 ready, 2 rewinding, 3 rewinding with nothing older left. Any thread. */
+    /**
+     * 0 off or no buffer yet, 1 ready, 2 rewinding, 3 rewinding with nothing older left, 4 unavailable (given up on for
+     * this game); RewindStatus reads it. Any thread.
+     */
     public static native int rewindStatus();
     public static native void setShaderConfig(GLRetroShader shader);
     public static native void setViewport(float x, float y, float width, float height);

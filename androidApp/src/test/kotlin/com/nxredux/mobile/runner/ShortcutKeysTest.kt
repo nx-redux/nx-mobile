@@ -19,6 +19,7 @@ class ShortcutKeysTest {
 
     private fun keys(vararg bound: Pair<ShortcutAction, ShortcutBinding>, tag: String = "GBA") = ShortcutKeys(
         Shortcuts.effective(ShortcutSet(bound.toMap(), emptyMap()), ShortcutOverrides.NONE, ConsoleHotkeys.claimed(tag), canRewind = true),
+        ConsoleHotkeys.claimed(tag),
     )
 
     @Test fun singleKeyFires() {
@@ -98,5 +99,29 @@ class ShortcutKeysTest {
         assertEquals(KeyVerdict.Pass, k.onUp(r1))
         assertEquals(KeyVerdict.Pass, k.onDown(r1))   // SELECT no longer held
         assertEquals(KeyVerdict.Swallow, k.onUp(menu))   // a MENU release with no press seen opens nothing
+    }
+
+    @Test fun builtInChordBeatsAKeyBoundAlone3ds() {
+        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(null, r1), tag = "3DS")
+        assertEquals(KeyVerdict.Pass, k.onDown(select))
+        // SELECT+R1 swaps the 3DS screens: R1 is the console's while SELECT is held, its release too.
+        assertEquals(KeyVerdict.Pass, k.onDown(r1))
+        assertEquals(KeyVerdict.Pass, k.onUp(r1))
+        k.onUp(select)
+        assertEquals(KeyVerdict.Fire(ShortcutAction.TOGGLE_FF, true), k.onDown(r1))
+    }
+
+    @Test fun builtInChordBeatsADirectionBoundAloneDs() {
+        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(null, KeyCodes.DPAD_UP), tag = "NDS")
+        k.onDown(select)
+        assertEquals(KeyVerdict.Pass, k.onDown(KeyCodes.DPAD_UP))
+        assertEquals(KeyVerdict.Pass, k.onUp(KeyCodes.DPAD_UP))
+    }
+
+    @Test fun noChordClaimedKeepsTheKeyBoundAlone() {
+        val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(null, r1), tag = "GB")
+        k.onDown(select)
+        assertEquals(KeyVerdict.Fire(ShortcutAction.TOGGLE_FF, true), k.onDown(r1))
+        assertEquals(KeyVerdict.Fire(ShortcutAction.TOGGLE_FF, false), k.onUp(r1))
     }
 }

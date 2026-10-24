@@ -331,12 +331,15 @@ interface AppSettings {
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
-    /** Settings → Emulators → Second screen (default on): a built-in or wired second screen shows part of the frame. Defaulted, like [debugLog]. */
+    /**
+     * Settings → Second screen → Enable (default on): a built-in or wired second screen shows part of the frame.
+     * Defaulted, like [debugLog].
+     */
     var secondScreen: Boolean
         get() = true
         set(@Suppress("UNUSED_PARAMETER") value) {}
     /**
-     * Settings → Emulators → Bottom screen (default Auto): which display is the touch screen; a console's own choice wins.
+     * Settings → Second screen → Bottom screen (default Auto): which display is the touch screen; a console's own choice wins.
      * Defaulted, like [debugLog].
      */
     var bottomScreen: BottomScreen
@@ -344,7 +347,7 @@ interface AppSettings {
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
     /**
-     * Settings → Emulators → Pause when unfocused (default on): a game whose window loses the focus to another app (split
+     * Settings → System → Pause when unfocused (default on): a game whose window loses the focus to another app (split
      * screen, a freeform window, an app on another display) pauses until it is focused again. Defaulted, like [debugLog].
      */
     var pauseWhenUnfocused: Boolean

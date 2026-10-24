@@ -1052,9 +1052,10 @@ internal const val PORTRAIT_TOP_GAP = 8f
 internal enum class PortraitTopPill { STYLUS, SELECT, HOME, START, MOTION, SWAP }
 
 /**
- * The portrait top row's pills, left to right: SELECT (unless [profile] hides it), the Wii's HOME and, right after it, MOTION ([motion], where [profile] has one), START; around them the
- * pills that would otherwise share MENU's row, so the touch shortcuts always sit right beside MENU and the toggle there:
- * the DS / 3DS STYLUS first and SWAP last ([tools]). The Wii's row so reads − HOME MOTION +.
+ * The portrait top row's pills, left to right: SELECT (unless [profile] hides it), the Wii's HOME and, right after it,
+ * MOTION ([motion], where [profile] has one), START; around them the pills that would otherwise share MENU's row, so the
+ * touch shortcuts always sit right beside MENU and the toggle there: the DS / 3DS STYLUS first and SWAP last ([tools]).
+ * The Wii's row so reads − HOME MOTION +.
  */
 internal fun portraitTopPills(profile: PadProfile, tools: Boolean, motion: Boolean): List<PortraitTopPill> = listOfNotNull(
     PortraitTopPill.STYLUS.takeIf { tools },
