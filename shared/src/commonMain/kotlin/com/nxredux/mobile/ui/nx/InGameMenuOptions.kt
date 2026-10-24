@@ -121,7 +121,8 @@ internal fun OptionsBody(
             // The rows' own heights (a segmented row is taller), the list no taller than the room.
             // In each row's own rounded px, as the list lays them out (a Dp sum can fall a px short and leave a fade).
             val total = with(LocalDensity.current) { page.rows.sumOf { sizes.heightOf(it).roundToPx() }.toDp() }
-            NxKeepSelectedInView(listState, page.selected, count, margin = 1)
+            // Rows differ in height (a bare row, segments under the text): kept clear of the fade in px.
+            NxKeepSelectedInView(listState, page.selected, count, edge = with(LocalDensity.current) { (sizes.row / 2).roundToPx() })
             LazyColumn(
                 Modifier.fillMaxWidth().height(minOf(total, maxHeight)).nxScrollFade(listState, height = sizes.row / 2, strong = true),
                 state = listState, flingBehavior = rememberNxRowSnapFling(listState),

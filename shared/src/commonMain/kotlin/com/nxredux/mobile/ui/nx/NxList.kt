@@ -344,6 +344,22 @@ internal fun nxKeepInViewMargin(
     return if (up is NxKeepInView.By && up.px < 0 || up is NxKeepInView.ToItem) up else NxKeepInView.None
 }
 
+/**
+ * [nxKeepInViewScroll] keeping [edge] px clear past row [selected] on both sides (its rows can differ in height, so a
+ * row margin can't promise that): it never rests under a scroll fade [edge] tall. The list clamps a scroll past its
+ * ends, where no fade shows. [edge] shrinks to what the viewport has room for around the row.
+ */
+internal fun nxKeepInViewEdge(
+    selected: Int, itemOffset: Int?, itemSize: Int, edge: Int, viewportStart: Int, viewportEnd: Int, lastVisible: Int,
+): NxKeepInView {
+    val e = minOf(edge, (viewportEnd - viewportStart - itemSize) / 2).coerceAtLeast(0)
+    if (itemOffset != null) return nxKeepInViewScroll(
+        selected, itemOffset - e, itemSize + 2 * e, viewportStart, viewportEnd, lastVisible, itemSize + 2 * e,
+    )
+    return if (selected > lastVisible) NxKeepInView.ToItem(selected, -(viewportEnd - viewportStart - itemSize - e))
+    else NxKeepInView.ToItem(selected, -e)
+}
+
 /** [NxKeepSelectedInView] reading [selectedIndex] in its own scope (only this recomposes on a selection step). */
 @Composable
 internal fun NxKeepSelectedInView(state: LazyListState, selectedIndex: () -> Int, count: Int, margin: Int = 0) =
@@ -354,19 +370,23 @@ internal fun NxKeepSelectedInView(state: LazyListState, selectedIndex: () -> Int
  * (landing it on the last line when moving down past the visible rows). Shared by [NxList] and [NxRichList]. It waits
  * for the list's first layout of its [count] rows (before that the layout info is empty and the row would land on the
  * top line); the first placement is instant, later moves animate. [margin]: rows kept in view past it on both sides
- * ([nxKeepInViewMargin]; none while the list shows under three rows).
+ * ([nxKeepInViewMargin]; none while the list shows under three rows). [edge]: instead, px kept clear past it on both
+ * sides ([nxKeepInViewEdge]), for rows of differing heights under a fade that tall.
  */
 @Composable
-internal fun NxKeepSelectedInView(state: LazyListState, selectedIndex: Int, count: Int, margin: Int = 0) {
+internal fun NxKeepSelectedInView(state: LazyListState, selectedIndex: Int, count: Int, margin: Int = 0, edge: Int = 0) {
     val placed = remember(state) { BooleanArray(1) }   // a plain flag: whether the first placement has happened
-    LaunchedEffect(selectedIndex, count) {
+    LaunchedEffect(selectedIndex, count, edge) {
         if (count == 0 || selectedIndex < 0) return@LaunchedEffect   // nothing highlighted (an unfocused pane)
         val layoutInfo = snapshotFlow { state.layoutInfo }
             .first { it.totalItemsCount == count && it.viewportEndOffset > it.viewportStartOffset && it.visibleItemsInfo.isNotEmpty() }
         val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == selectedIndex }
         val rowPx = layoutInfo.visibleItemsInfo.maxOf { it.size }   // a row, not an options gap
         val shown = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset) / maxOf(1, rowPx)
-        val scroll = if (margin > 0 && shown >= 3) nxKeepInViewMargin(
+        val scroll = if (edge > 0) nxKeepInViewEdge(
+            selectedIndex, item?.offset, item?.size ?: rowPx, edge,
+            layoutInfo.viewportStartOffset, layoutInfo.viewportEndOffset, layoutInfo.visibleItemsInfo.last().index,
+        ) else if (margin > 0 && shown >= 3) nxKeepInViewMargin(
             selectedIndex, margin, count,
             offsetOf = { r -> layoutInfo.visibleItemsInfo.firstOrNull { it.index == r }?.offset },
             itemSize = rowPx, viewportStart = layoutInfo.viewportStartOffset, viewportEnd = layoutInfo.viewportEndOffset,

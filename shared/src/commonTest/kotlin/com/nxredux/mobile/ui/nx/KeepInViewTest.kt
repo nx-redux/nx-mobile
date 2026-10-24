@@ -52,4 +52,28 @@ class KeepInViewTest {
         assertEquals(NxKeepInView.ToItem(16, -180), margin(15))           // below: its margin row on the last line
         assertEquals(NxKeepInView.ToItem(1, 0), margin(2, top = 280))     // above: its margin row on the top line
     }
+
+    // A 200 px viewport kept 15 px clear at both edges ([nxKeepInViewEdge]), for a row [size] tall at [offset].
+    private fun edge(selected: Int, offset: Int?, size: Int = 20, lastVisible: Int = 9) =
+        nxKeepInViewEdge(selected, offset, size, edge = 15, viewportStart = 0, viewportEnd = 200, lastVisible = lastVisible)
+
+    @Test fun aRowClearOfTheEdgesDoesNotScroll() {
+        assertEquals(NxKeepInView.None, edge(3, offset = 15))
+        assertEquals(NxKeepInView.None, edge(8, offset = 165))
+    }
+
+    @Test fun aRowUnderAFadeScrollsClearOfIt() {
+        assertEquals(NxKeepInView.By(10), edge(8, offset = 175))            // its bottom at 195: 10 px into the 15 px fade
+        assertEquals(NxKeepInView.By(25), edge(8, offset = 160, size = 50)) // a taller row, the same way
+        assertEquals(NxKeepInView.By(-7), edge(1, offset = 8))              // under the top fade
+    }
+
+    @Test fun anOffScreenRowLandsClearOfTheEdge() {
+        assertEquals(NxKeepInView.ToItem(15, -165), edge(15, offset = null))
+        assertEquals(NxKeepInView.ToItem(2, -15), edge(2, offset = null, lastVisible = 14))
+    }
+
+    @Test fun theEdgeShrinksToTheRoomAroundTheRow() {
+        assertEquals(NxKeepInView.By(20), edge(1, offset = 30, size = 180))  // 10 px each side: its bottom at 210 → 190
+    }
 }

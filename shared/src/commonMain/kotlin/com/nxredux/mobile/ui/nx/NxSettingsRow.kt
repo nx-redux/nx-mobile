@@ -235,7 +235,8 @@ fun NxSettingsList(
         // leave the list scrollable by that px and its bottom fade showing over the last row.
         val density = LocalDensity.current
         val total = if (rows.any { it.paragraph }) maxHeight else with(density) { rows.sumOf { sizes.heightOf(it).roundToPx() }.toDp() }
-        NxKeepSelectedInView(listState, selectedIndex, rows.size, margin = 1)
+        // Rows differ in height (a bare row, a group label, segments under the text): kept clear of the fade in px.
+        NxKeepSelectedInView(listState, selectedIndex, rows.size, edge = with(density) { (sizes.row / 2).roundToPx() })
         LazyColumn(
             Modifier.fillMaxWidth().height(minOf(total, maxHeight)).nxScrollFade(listState, height = sizes.row / 2, strong = true),
             state = listState, flingBehavior = rememberNxRowSnapFling(listState),
