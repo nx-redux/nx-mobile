@@ -29,6 +29,7 @@ sealed interface SpeedEffect {
 class SpeedControl {
     private var settings = SpeedSettings()
     private var canRewind = false
+    private var engineCant = false   // the engine gave up on rewind for this game ([onRewindUnavailable])
     private var netplay = false
     private var toggleFf = false
     private var toggleRewind = false
@@ -38,7 +39,8 @@ class SpeedControl {
     var output: SpeedOutput = compute()
         private set
 
-    private val rewindOn get() = canRewind && settings.rewind
+    /** Rewind is offered: the core can, the Rewind row is on, and the engine hasn't given up on this game. */
+    val rewindOn get() = canRewind && settings.rewind && !engineCant
 
     fun configure(s: SpeedSettings, canRewind: Boolean) {
         settings = s
@@ -82,6 +84,26 @@ class SpeedControl {
     fun onRewindEmpty() {
         if (!output.rewinding || holdRewind) return
         toggleRewind = false
+        update()
+    }
+
+    /**
+     * The engine stepped back with no buffer built yet (still probing the core): the press did nothing, so the rewind
+     * ends, held or toggled, and a toggled FF it paused plays on. Rewind stays offered. Ignored when not rewinding.
+     */
+    fun onRewindOff() {
+        if (!output.rewinding) return
+        clearRewind()
+        update()
+    }
+
+    /**
+     * The engine gave up on rewind for this game (no states, a state size that changes, refused serializes, no RAM):
+     * rewind ends and stays off for the session, whatever [configure] says later.
+     */
+    fun onRewindUnavailable() {
+        engineCant = true
+        clearRewind()
         update()
     }
 

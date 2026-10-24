@@ -182,6 +182,7 @@ public:
     static constexpr int REWIND_STATUS_READY = 1;
     static constexpr int REWIND_STATUS_REWINDING = 2;
     static constexpr int REWIND_STATUS_EMPTY = 3;      // rewinding with nothing older left
+    static constexpr int REWIND_STATUS_UNAVAILABLE = 4;   // wanted, but given up for this game (rewindGivenUp): no buffer will come
 
     // RetroAchievements: taken under the core lock so they never race the run loop's onFrame().
     void achievementsEnable(bool enabled);
@@ -251,6 +252,8 @@ private:
     // GL thread: a refused serialize (probe or capture): backs off, or gives up after REWIND_MAX_REFUSALS.
     void noteRewindRefusal();
     // GL thread, in step(): tells audio when rewinding starts or stops muting.
+    // GL thread: the status when no buffer is built: UNAVAILABLE once given up on while wanted, else OFF.
+    int offStatus() const;
     void applyRewinding(bool rewinding);
     // GL thread, in step(): one frame while rewinding (a step back, or a cadence frame); returns the frames it ran.
     unsigned stepRewinding(float frameSeconds);

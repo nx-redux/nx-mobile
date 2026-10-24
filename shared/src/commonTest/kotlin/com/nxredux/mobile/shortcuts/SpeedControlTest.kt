@@ -185,4 +185,37 @@ class SpeedControlTest {
         c.configure(SpeedSettings(rewind = false), true)
         assertFalse(c.output.rewinding)
     }
+
+    @Test fun engineWithNoBufferEndsARewindEvenAHeldOne() {
+        val c = control()
+        c.tap(ShortcutAction.TOGGLE_FF)
+        c.onAction(ShortcutAction.HOLD_REWIND, true)
+        assertTrue(c.output.rewinding)
+        c.onRewindOff()   // the engine stepped back with nothing built: the press did nothing
+        assertFalse(c.output.rewinding)
+        assertEquals(4, c.output.ffSpeed)   // the toggled FF the hold paused plays on
+        assertTrue(c.rewindOn)   // still offered: the buffer may yet be built
+        c.onAction(ShortcutAction.HOLD_REWIND, false)
+        assertFalse(c.output.rewinding)
+    }
+
+    @Test fun rewindOffWhenNotRewindingChangesNothing() {
+        val c = control()
+        c.tap(ShortcutAction.TOGGLE_FF)
+        c.onRewindOff()
+        assertEquals(4, c.output.ffSpeed)
+    }
+
+    @Test fun engineGivingUpHidesRewindForTheSession() {
+        val c = control()
+        c.tap(ShortcutAction.TOGGLE_REWIND)
+        c.onRewindUnavailable()
+        assertFalse(c.output.rewinding)
+        assertNull(c.output.indicator)
+        assertFalse(c.rewindOn)
+        c.configure(SpeedSettings(rewind = true), canRewind = true)   // a speed row changed: still unavailable
+        assertFalse(c.rewindOn)
+        c.tap(ShortcutAction.TOGGLE_REWIND)
+        assertFalse(c.output.rewinding)
+    }
 }

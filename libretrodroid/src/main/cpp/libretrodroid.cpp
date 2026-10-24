@@ -734,7 +734,7 @@ void LibretroDroid::step() {
             runFrame(np, lk, frameSeconds);
             if (!np && !lk) rewind.capture(rewindSerialize);
         }
-        if (speed > 0) rewindState = (!np && !lk && rewind.enabled()) ? REWIND_STATUS_READY : REWIND_STATUS_OFF;
+        if (speed > 0) rewindState = (np || lk) ? REWIND_STATUS_OFF : rewind.enabled() ? REWIND_STATUS_READY : offStatus();
     }
     auto& achievements = Achievements::getInstance();
     if (speed == 0 && achievements.isEnabled()) achievements.onFrame(true);   // menu open: keep the session alive
@@ -871,7 +871,12 @@ void LibretroDroid::applyRewindConfig() {
     }
     rewindProbeWait = REWIND_PROBE_STEPS;
     const size_t size = core->retro_serialize_size();
-    if (size == 0) return;
+    if (size == 0) {
+        // A booting core reports 0 for a while (mupen64plus); one that always does (melonDS DS in DSi mode) has no
+        // states at all: counted like a refusal, so it is given up on (and the app hides Rewind) after the same backoff.
+        noteRewindRefusal();
+        return;
+    }
     if (rewindSize != 0 && size != rewindSize) {
         // Its last capture was refused because the state grew (or shrank): rebuilding per change would churn many MB.
         LOGW("Rewind: the state size changed from %zu to %zu bytes; rewind off for this game", rewindSize, size);
@@ -901,12 +906,16 @@ void LibretroDroid::applyRewindConfig() {
 void LibretroDroid::noteRewindRefusal() {
     rewindRefusals++;
     if (rewindRefusals >= REWIND_MAX_REFUSALS) {
-        LOGW("Rewind: the core refused to serialize %u times; rewind off for this game", rewindRefusals);
+        LOGW("Rewind: the core refused to serialize (or had no state) %u times; rewind off for this game", rewindRefusals);
         rewindGivenUp = true;
         return;
     }
     // 2, 4, 8 ... up to 32 probe intervals: a core still booting is soon caught, one that never serializes costs little.
     rewindProbeWait = REWIND_PROBE_STEPS << std::min(rewindRefusals, 5u);
+}
+
+int LibretroDroid::offStatus() const {
+    return rewindWanted.load() && rewindGivenUp ? REWIND_STATUS_UNAVAILABLE : REWIND_STATUS_OFF;
 }
 
 void LibretroDroid::applyRewinding(bool rewinding) {
@@ -952,7 +961,7 @@ unsigned LibretroDroid::stepRewinding(float frameSeconds) {
         case Rewind::Step::OFF:
             break;
     }
-    rewindState = REWIND_STATUS_OFF;
+    rewindState = offStatus();
     runFrame(false, false, frameSeconds);
     return 1;
 }

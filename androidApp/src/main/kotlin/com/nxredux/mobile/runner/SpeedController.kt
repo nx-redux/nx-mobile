@@ -21,8 +21,12 @@ import kotlinx.coroutines.withContext
  * The game's fast forward and rewind: owns the [SpeedControl] the shortcuts drive and puts its [SpeedOutput] on the view
  * ([GLRetroView.fastForward], [GLRetroView.rewinding] and their audio; [GLRetroView.rewindEnabled] from the console's
  * Rewind row). Pause is the view's frameSpeed, which this never touches, so a toggled FF is still on when the menu
- * closes (L6). While rewinding, a 100 ms tick reads [GLRetroView.rewindStatus]: EMPTY (latched by the engine until
- * rewinding goes off) ends a toggled rewind ([SpeedControl.onRewindEmpty], L16). Around a save state's write or read
+ * closes (L6). While rewind is offered, a 100 ms tick reads [GLRetroView.rewindStatus]. Rewinding, EMPTY (latched by the
+ * engine until rewinding goes off) ends a toggled rewind ([SpeedControl.onRewindEmpty], L16), and OFF (no buffer built yet)
+ * ends the rewind, as the press did nothing ([SpeedControl.onRewindOff]). UNAVAILABLE at any time (the engine gave up on
+ * this game: melonDS DS in DSi mode, a state size that changes, refused serializes) hides rewind for the session
+ * ([SpeedControl.onRewindUnavailable]): the tiles and touch buttons follow through [onTiles]. OFF alone is never read
+ * as unavailable: it is also the status before the first capture. Around a save state's write or read
  * ([aroundState]) FF and rewind are forced off, then put back (L6). [onTiles] runs when the game panel's tiles
  * ([tiles]) change, whatever changed them (a shortcut, the panel, the buffer running out, a speed row, a session).
  * Main thread, but for [aroundState].
@@ -33,8 +37,6 @@ internal class SpeedController(
     private val view: () -> GLRetroView?,
 ) {
     private val control = SpeedControl()
-    private var settings = SpeedSettings()
-    private var canRewind = false
     private var netplay = false
     private var lastTiles: Pair<Boolean, Boolean?>? = null
     private var stateDepth = 0   // save-state reads/writes in flight ([aroundState]); nested ones count
@@ -47,8 +49,6 @@ internal class SpeedController(
 
     /** The console's (or game's) speed rows, applied live; [canRewind] is the core's. */
     fun configure(s: SpeedSettings, canRewind: Boolean) {
-        settings = s
-        this.canRewind = canRewind
         control.configure(s, canRewind)
         apply()
     }
@@ -71,8 +71,8 @@ internal class SpeedController(
         return (o.ffSpeed > 0) to o.rewinding.takeIf { rewindShown }
     }
 
-    /** Rewind is offered now: the core can, the console's Rewind row is on, and no session plays. */
-    val rewindShown: Boolean get() = canRewind && settings.rewind && !netplay
+    /** Rewind is offered now: the core can, the console's Rewind row is on, the engine hasn't given up, no session plays. */
+    val rewindShown: Boolean get() = control.rewindOn && !netplay
 
     /** A netplay or GBA link session plays ([setSession]): every shortcut does nothing. */
     val inSession: Boolean get() = netplay
@@ -97,9 +97,9 @@ internal class SpeedController(
         v.fastForwardAudio = o.ffAudio
         v.fastForward = if (inState) 0 else o.ffSpeed
         v.rewindAudio = o.rewindAudio
-        v.rewindEnabled = settings.rewind && !netplay
+        v.rewindEnabled = rewindShown
         v.rewinding = !inState && o.rewinding
-        syncTick(!inState && o.rewinding)
+        syncTick(!inState && rewindShown)
     }
 
     /**
@@ -132,10 +132,14 @@ internal class SpeedController(
         tick = scope.launch {
             while (isActive) {
                 delay(REWIND_TICK_MS)
-                if (view()?.rewindStatus() == RewindStatus.EMPTY && control.output.rewinding) {
-                    control.onRewindEmpty()
-                    apply()   // a toggled rewind ended: rewinding off stops this tick
+                val rewinding = control.output.rewinding
+                when (view()?.rewindStatus()) {
+                    RewindStatus.UNAVAILABLE -> control.onRewindUnavailable()   // rewind hidden: this tick stops
+                    RewindStatus.EMPTY -> if (rewinding) control.onRewindEmpty() else continue
+                    RewindStatus.OFF -> if (rewinding) control.onRewindOff() else continue
+                    else -> continue
                 }
+                apply()
             }
         }
     }
