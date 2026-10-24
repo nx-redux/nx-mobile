@@ -11,7 +11,7 @@ the Kotlin `GLRetroView` API are his work; nx-mobile builds on top of them.
 The fork started at upstream commit `8835c30` (after release `0.14.0`) and does not track upstream after that. It
 now lives only in this repository. Upstream copyright headers are kept unchanged in the source. Like LibretroDroid, it is licensed under the GPL-3.0.
 
-Third-party code, as git submodules under `src/main/cpp/`: [Oboe](https://github.com/google/oboe) (Apache-2.0),
+Third-party code under `src/main/cpp/` (git submodules, plus [LZ4](https://github.com/lz4/lz4) v1.10.0 (BSD-2-Clause) vendored unmodified in `lz4/`): [Oboe](https://github.com/google/oboe) (Apache-2.0),
 [libretro-common](https://github.com/libretro/libretro-common) (MIT), [rcheevos](https://github.com/RetroAchievements/rcheevos)
 (MIT), [libchdr](https://github.com/rtissera/libchdr) (BSD-3-Clause).
 
