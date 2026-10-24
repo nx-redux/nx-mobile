@@ -35,7 +35,7 @@ object CheatResolver {
             val loaded = CheatMatch.variants(name, files).mapNotNull { other ->
                 if (other == name) name to cheats else load(other, read, onSkipped)?.let { other to it }
             }
-            return CheatSet(merge(loaded), expected)
+            return CheatSet(merge(withTitled(loaded, romFileName, files, read, onSkipped)), expected)
         }
         if (serial != null) {
             val tag = "[$serial]"
@@ -50,7 +50,7 @@ object CheatResolver {
             val selected = CheatMatch.select(name, romFileName, files)
             if (selected.isEmpty()) continue
             val loaded = selected.mapNotNull { file -> load(file, read, onSkipped)?.let { file to it } }
-            return CheatSet(merge(loaded), expected)
+            return CheatSet(merge(withTitled(loaded, romFileName, files, read, onSkipped, name)), expected)
         }
         // No stem is exact (`Pokemon - Yellow.gbc` against `Pokemon - Yellow Version - … (USA, Europe).cht`): the first
         // file, in name order, that starts with the game's name and loads.
@@ -62,12 +62,37 @@ object CheatResolver {
         return CheatSet(emptyList(), expected)
     }
 
-    /** The files' cheats in order; with more than one file, each cheat's info is prefixed `(<source>) ` when its file has one. */
+    /**
+     * [loaded] with the files under a ` _ ` title of the game for the same ROM ([CheatMatch.titledFiles]) that share a code
+     * with it: the same codes mean the same ROM (`Sonic 3D Blast _ Sonic 3D Flickies' Island` holds the USA Action
+     * Replay file's codes); a multi-game cart's or another game's don't. Files without a source tag come first.
+     */
+    private fun withTitled(
+        loaded: List<Pair<String, List<Cheat>>>, romFileName: String, files: List<String>, read: (String) -> String?,
+        onSkipped: (String, String) -> Unit, display: String = CheatMatch.displayName(romFileName),
+    ): List<Pair<String, List<Cheat>>> {
+        val codes = loaded.flatMap { (_, cheats) -> cheats.map { it.code } }.filter { it.isNotBlank() }.toSet()
+        if (codes.isEmpty()) return loaded
+        val titled = CheatMatch.titledFiles(display, romFileName, loaded.map { it.first }, files)
+            .mapNotNull { file -> load(file, read, onSkipped)?.let { file to it } }
+            .filter { (_, cheats) -> cheats.any { it.code in codes } }
+        if (titled.isEmpty()) return loaded
+        val (plain, sourced) = (loaded + titled).partition { (name, _) -> CheatMatch.sourceLabel(name).isEmpty() }
+        return plain + sourced
+    }
+
+    /**
+     * The files' cheats in order; with more than one file, each cheat's info is prefixed `(<source>) ` when its file has one.
+     * A code an earlier file already gave is dropped (merged files repeat each other's codes).
+     */
     fun merge(loaded: List<Pair<String, List<Cheat>>>): List<CheatEntry> {
         val multi = loaded.size > 1
+        val seen = HashSet<String>()
         return loaded.flatMap { (name, cheats) ->
             val source = CheatMatch.sourceLabel(name)
-            cheats.map { c ->
+            val kept = cheats.filter { c -> c.code.isBlank() || c.code !in seen }
+            cheats.mapTo(seen) { it.code }
+            kept.map { c ->
                 val info = if (multi && source.isNotEmpty()) "($source) ${c.desc}" else c.desc
                 CheatEntry(c.desc, c.code, info, c.enabled, c.mem)
             }
