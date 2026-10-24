@@ -1603,6 +1603,81 @@ class AppStateTest {
         assertEquals("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds", data.recents.first().path)
     }
 
+    // A game resumed from the switcher ends back on the switcher (the menu comes to the front again), its game first
+    // as the latest recent; the page under it is the one the switcher opened over.
+    @Test fun quitting_a_game_resumed_from_the_switcher_returns_to_the_switcher() = runTest {
+        val data = FakeUserData(
+            recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb"), Recent("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds")),
+            resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9), ("NDS" to "Mario Kart DS.nds") to ResumeInfo(2)),
+        )
+        val state = stateWith(data, RecordingRunner(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.load(); advanceUntilIdle()
+        state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "GB" })
+        val list = assertIs<Screen.Games>(state.screen.value)
+        state.onButton(NxButton.SELECT); advanceUntilIdle()
+        state.onButton(NxButton.RIGHT)
+        state.onButton(NxButton.A); advanceUntilIdle()
+        assertIs<Screen.Games>(state.screen.value)                       // closed while the game runs
+        state.onForeground(); advanceUntilIdle()                         // the game quit: the menu is back
+        val sw = assertIs<Screen.Switcher>(state.screen.value)
+        assertEquals("Mario Kart DS.nds", sw.entries[sw.index].game.fileName)
+        state.onButton(NxButton.B); advanceUntilIdle()
+        assertEquals(list.source, assertIs<Screen.Games>(state.screen.value).source)
+        state.onForeground(); advanceUntilIdle()                         // only once
+        assertIs<Screen.Games>(state.screen.value)
+    }
+
+    // Over the main menu too: the switcher comes back over the tab it opened from.
+    @Test fun the_switcher_comes_back_over_the_main_menu() = runTest {
+        val data = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))
+        val state = stateWith(data, RecordingRunner(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.load(); advanceUntilIdle()
+        state.selectTab(assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.CONSOLES })
+        state.onButton(NxButton.SELECT); advanceUntilIdle()
+        state.onButton(NxButton.A); advanceUntilIdle()
+        state.onForeground(); advanceUntilIdle()
+        assertIs<Screen.Switcher>(state.screen.value)
+        state.onButton(NxButton.B); advanceUntilIdle()
+        assertEquals(MenuCategory.CONSOLES, assertIs<Screen.Systems>(state.screen.value).category)
+    }
+
+    // Home while the resumed game runs (launcher mode) lands on Home, and the switcher does not come back later.
+    @Test fun home_during_a_switcher_game_drops_the_return() = runTest {
+        val data = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))
+        val state = stateWith(data, RecordingRunner(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.load(); advanceUntilIdle()
+        state.selectTab(assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.CONSOLES })
+        state.onButton(NxButton.SELECT); advanceUntilIdle()
+        state.onButton(NxButton.A); advanceUntilIdle()
+        state.goHome(); state.onForeground(); advanceUntilIdle()
+        assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).category)
+    }
+
+    // Home's intent can arrive after the menu's start: the switcher that start reopens gives way to Home.
+    @Test fun home_right_after_the_return_still_lands_on_home() = runTest {
+        val data = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))
+        val state = stateWith(data, RecordingRunner(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.load(); advanceUntilIdle()
+        state.selectTab(assertIs<Screen.Systems>(state.screen.value).tabs.indexOfFirst { it.category == MenuCategory.CONSOLES })
+        state.onButton(NxButton.SELECT); advanceUntilIdle()
+        state.onButton(NxButton.A); advanceUntilIdle()
+        state.onForeground(); state.goHome(); advanceUntilIdle()
+        assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).category)
+        state.onForeground(); advanceUntilIdle()
+        assertIs<Screen.Systems>(state.screen.value)
+    }
+
+    // A game started from a list (not the switcher) ends on that list.
+    @Test fun a_list_launch_does_not_open_the_switcher_on_return() = runTest {
+        val data = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))
+        val state = stateWith(data, RecordingRunner(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.load(); advanceUntilIdle()
+        state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "GB" })
+        state.onButton(NxButton.A); advanceUntilIdle()
+        state.onForeground(); advanceUntilIdle()
+        assertIs<Screen.Games>(state.screen.value)
+    }
+
     @Test fun the_switcher_list_moves_on_up_and_down_wrapping_a_fresh_press_and_ignores_left_and_right() = runTest {
         val settings = MemorySettings(ContentRef("Home")).apply { switcherLayout = com.nxredux.mobile.settings.SwitcherLayout.LIST }
         val runner = RecordingRunner()
@@ -8925,6 +9000,8 @@ class AppStateTest {
         val state = switcherOverPushedConsoles(runner, gone = false)
         assertEquals(1, runner.launched.size)
         state.onForeground(); advanceUntilIdle()
+        assertIs<Screen.Switcher>(state.screen.value)   // back from the game: the switcher, over the tab underneath
+        state.onButton(NxButton.B); advanceUntilIdle()
         val s = assertIs<Screen.Systems>(state.screen.value)
         assertFalse(s.pushed)
         assertEquals(MenuCategory.HOME, s.category)

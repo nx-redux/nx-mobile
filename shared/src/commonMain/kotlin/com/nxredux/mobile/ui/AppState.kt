@@ -1121,6 +1121,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private var beforeSwitcher: Pair<Screen, ListSelection>? = null
     private var switcherJob: Job? = null   // switcher entries loading
     private var switcherRemoval: Job? = null   // the switcher's last Y Remove write (chained after the one before)
+    private var switcherReturn = false   // a game resumed from the switcher is running: the menu's next foreground reopens it
     private var resumeJob: Job? = null     // highlighted game's resume-marker read
     private var launchJob: Job? = null     // pre-launch checks + runner launch in flight
     private var hideJob: Job? = null       // A-in-the-hidden-list unhide in flight
@@ -4748,7 +4749,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         launch(entry, resumeSlot = null, coreOverride = core, netplay = session)
     }
 
-    private fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null) {
+    private fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null, fromSwitcher: Boolean = false) {
         val listed = entry.system
         val game = entry.game
         // After a game the menu is its own tab again (the pushed one is not restored): dropped only for a launch that
@@ -4820,6 +4821,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             // a save that just arrived.
             SaveTransferRules.launchRefusal(deps.saveTransfer?.importing == true, deps.deviceSync?.running == true)?.let { showNotice(it); return@launch }
             dropPushedTab()
+            switcherReturn = fromSwitcher   // set only once the runner is called: a refused launch never gets here
             deps.runner.launch(GameSession(sys.tag, game.shownName, core, game.ref, game.folder, game.fileName, resumeSlot, all, systemSets = systemSets, gamePath = game.path,
                 artPath = panelArt(game.boxartRef?.value, game.box2dRef?.value, game.gridRef?.value, game.screenshotRef?.value), netplay = netplay)) {
                 recorder.record(recent)
@@ -4896,10 +4898,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         refreshInstalled()    // apps may have been installed or removed meanwhile
         refreshGameInfo()   // back from a game (or another app): its time and unlocks may have moved
         homeTab.refreshStatsIfAsked()   // Home's stats too (before the menu's first show, that show computes them)
-        val s = _screen.value as? Screen.Systems ?: return
-        if (s.menu != null) return
+        // Back from a game resumed from the switcher: the switcher again (its game first, the latest recent), over the
+        // page it opened from. Over the main menu, after the rows rebuilt below (a swap would abandon an open under way);
+        // read again there, so a Home landing meanwhile (onNewIntent may follow onStart) drops it.
+        val s = _screen.value as? Screen.Systems ?: run { reopenSwitcher(); return }
+        if (s.menu != null) { switcherReturn = false; return }
         if (!firstSetup) updaterOnMainMenu()   // back over the menu (from a game, or the install-permission screen)
-        scope.launch { rebuildMainRows(); swapMainRows() }   // Continue's save (its resume frame) may be new since the rows were built
+        scope.launch { rebuildMainRows(); swapMainRows(); reopenSwitcher() }   // Continue's save (its resume frame) may be new since the rows were built
         val root = home() ?: return
         if (foregroundJob?.isActive == true) return   // a quick second onStart: the first check (or its scan) covers it
         foregroundJob = scope.launch {
@@ -4912,6 +4917,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             }
             if (offlineHomeSaid == root && !deps.source.isOffline(root) && _screen.value === s) afterIndexStart(root)
         }
+    }
+
+    /** A game resumed from the switcher ended: the switcher opens again, once (a list or the main menu; elsewhere, nothing). */
+    private fun reopenSwitcher() {
+        if (!switcherReturn) return
+        switcherReturn = false
+        openSwitcher()
     }
 
     /** Re-reads the highlighted game's resume marker: a list's, Home's Continue card's, pinned or shelf game's (after returning from a game). */
@@ -4973,6 +4985,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         loader.cancel()
         if (loader.active) return   // a non-cancellable load (the library rescan) runs on and lands by itself
         val first = menuTabs.firstOrNull()?.category ?: return
+        switcherReturn = false   // Home over a game resumed from the switcher: Home, not the switcher, when it ends
         val s = _screen.value
         if (s is Screen.Switcher) closeSwitcher()
         pushedTab = null   // Home lands on the menu's own first tab (shown just below: the screen follows)
@@ -5219,7 +5232,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             NxButton.RIGHT -> if (!s.list) _screen.value = s.copy(index = at.down(wrap = false).index)
             NxButton.A -> s.entries.getOrNull(s.index)?.let { e ->
                 closeSwitcher()
-                launch(Listed(e.system, e.game), e.resume.slot)
+                launch(Listed(e.system, e.game), e.resume.slot, fromSwitcher = true)
             }
             NxButton.Y -> if (s.entries.getOrNull(s.index) != null) _screen.value = s.copy(confirmRemove = true)
             NxButton.B, NxButton.SELECT -> closeSwitcher()
