@@ -88,8 +88,8 @@ fun GameListLayoutMenu(current: Int, highlighted: Int, onPick: (Int) -> Unit, on
                         Modifier.background(if (lit) colors.accent else Color.Transparent, RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(layout.label, color = ink, fontFamily = font, fontSize = nxModalButton() * k, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                        if (i == current) Text("  ✓", color = ink, fontFamily = font, fontSize = nxModalButton() * k, fontWeight = FontWeight.SemiBold)
+                        Text(layout.label, color = ink, fontFamily = font, fontSize = nxModalButton(), fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        if (i == current) Text("  ✓", color = ink, fontFamily = font, fontSize = nxModalButton(), fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

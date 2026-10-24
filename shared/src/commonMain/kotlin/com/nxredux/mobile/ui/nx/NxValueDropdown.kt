@@ -95,7 +95,7 @@ fun NxValueDropdown(labels: List<String>, selected: Int, anchor: Rect?, onPick: 
                         ) {
                             Text(
                                 label, color = if (lit) colors.listTextSelected else colors.listText, fontFamily = LocalNxFont.current,
-                                fontWeight = FontWeight.SemiBold, fontSize = nxModalText() * k, maxLines = 1,
+                                fontWeight = FontWeight.SemiBold, fontSize = nxModalText(), maxLines = 1,
                             )
                         }
                     }

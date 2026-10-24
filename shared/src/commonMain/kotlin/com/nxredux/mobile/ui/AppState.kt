@@ -447,7 +447,7 @@ sealed interface Screen {
 
 enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, MENU_PAD, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, APP_UPDATE,
     LAYOUT_HOME, LAYOUT_CONSOLES, LAYOUT_COLLECTIONS, LAYOUT_TOOLS, LAYOUT_GAME_LISTS, LAYOUT_TITLE_HINTS, LAYOUT_SWITCHER, TEXT_SIZE,
-    // A group's label and the space before it (Library's Storage, ROM folders, Games): never selected.
+    // A group's label and the space before it (System's General, Launcher, Developer, About, Licenses): never selected.
     SECTION, GAP,
     // System's Licenses group: a paragraph (never selected) and the row that opens the website's full list.
     TEXT, LICENSES_LINK }
@@ -551,8 +551,6 @@ private const val HOME_OFFLINE = "The home folder's storage is not available."
 
 /** A file home read without All files access (revoked): the home, its index and its extras are kept. */
 private const val ACCESS_OFF = FileRefs.ACCESS_OFF_MESSAGE
-
-/** The notice for a file ROM folder (an extra) read while All files access is off. */
 
 /** A scan or the start probe met a listing the provider would not give ([ListingUnavailable]): the index is kept. */
 private const val LISTING_HIDDEN = "Storage did not list a folder just now; the library is unchanged. Use Rescan in Settings → Library in a moment."
@@ -3528,11 +3526,11 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /**
      * The selected Emulator Settings value row's picker ([ValueChooser.popup]); a pick writes it
-     * ([EmulatorSettingsController.choose]). False when it has none (a current value stepping skips).
+     * ([EmulatorSettingsController.choose]). False when it has none. A current value not among the choices marks none.
      */
     private fun openEmulatorPicker(s: Screen.EmulatorOptions): Boolean {
         val (title, labels, current) = emulatorSettings.choices(s)?.takeIf { it.second.size >= 2 } ?: return false
-        _chooser.value = ValueChooser(title, labels, current, current = current, popup = true)
+        _chooser.value = ValueChooser(title, labels, current.coerceAtLeast(0), current = current, popup = true)
         chooserApply = { emulatorSettings.choose(it) }
         return true
     }
@@ -3557,7 +3555,12 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val c = s.choices.getOrNull(row)?.takeIf { it.labels.size >= 2 } ?: return
         select(row)
         _chooser.value = ValueChooser(s.rows[row].label, c.labels, c.index.coerceAtLeast(0), current = c.index, popup = true)
-        chooserApply = { i -> chooseSetting(row, i) }
+        val label = s.rows[row].label
+        // By its label: a refresh while the picker is open can move the rows (a dependent row shown or hidden).
+        chooserApply = { i ->
+            ((_screen.value as? Screen.Settings)?.rows?.let { rows -> row.takeIf { rows.getOrNull(it)?.label == label } ?: rows.indexOfFirst { it.label == label } })
+                ?.takeIf { it >= 0 }?.let { chooseSetting(it, i) }
+        }
     }
 
     private val _settingInfo = MutableStateFlow<SettingInfoPopup?>(null)
@@ -3925,10 +3928,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
 
     /**
-     * The Library page in three groups. Storage: the home (its path; "Not available" while recorded offline,
-     * [offlineHomeSaid]) and, where the permission is declared (a sideloaded Android 11+ build), All files access as a
-     * switch opening Android's page. ROM folders: each extra (its path, or its state while the in-memory index lists it
-     * offline) and Add ROM folder. Games: Unassigned and Hidden while they hold a game. From memory
+     * The Library page, one list with no groups: the counts with Rescan, the home (its path; "Not available" while recorded
+     * offline, [offlineHomeSaid]), each extra ROM folder (its path, or its state while the in-memory index lists it
+     * offline) and Add ROM folder, All files access where the permission is declared (a sideloaded Android 11+ build) as a
+     * switch opening Android's page, Saves, Android games, and Unassigned and Hidden while they hold a game. From memory
      * only, no SAF call. Extras reflect the last scan: one whose card was pulled since reads as fine until a rescan. "Not
      * ready yet" (mounted but not listing, as the scan's notice says) only comes from a scan in this AppState
      * ([lateMountHere]); a lateMount read from the stored index is from an earlier run, so it reads "Not available".
@@ -4419,7 +4422,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             return
         }
         when (button) {
-            // Past Library's group labels and gaps.
+            // Past System's group labels and gaps.
             NxButton.UP, NxButton.DOWN -> _selection.value = if (s is Screen.Settings) settingsStep(s.rows, _selection.value, if (button == NxButton.UP) -1 else 1)
                 else if (button == NxButton.UP) _selection.value.up() else _selection.value.down()
             NxButton.A -> openSelected()

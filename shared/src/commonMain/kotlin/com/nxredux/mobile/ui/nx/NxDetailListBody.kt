@@ -75,13 +75,11 @@ fun NxDetailListBody(
         val headlineSize = NxTextSizes.headline(detailLabel)
         val dimSize = NxTextSizes.secondary(detailLabel)
         // Rows at the body's pitch, not one fitted to what the details leave, so one detail line more or less never
-        // changes the pitch or text size. Only whole rows show; the rest scroll, with the up and down arrows side by side
-        // in one strip under the rows, at the labels' inset (as the main menu draws them). With details the list starts a
-        // fixed gap under them; without, it is centred in the space. A list that fits whole needs no arrows, so it keeps
-        // the strip's room for rows; an options list that fits is only as tall as its rows.
+        // changes the pitch or text size. Only whole rows show; the rest scroll, fading at the edge more is that way
+        // ([nxScrollFade]). With details the list starts a fixed gap under them; without, it is centred in the space. An
+        // options list that fits is only as tall as its rows.
         val listPitch = bodyHeight / nxRowCountFor(bodyHeight, pitch)
         val rowHeight = listPitch   // options rows are list rows (Text size already in the pitch)
-        val arrowWidth = NxScrollArrowWidth
         // An options page with no details lays out its title as the titled lists do ([NxTitledBody]), its rows at the top under it.
         val balanced = rowKind == NxRowKind.OPTIONS && details.isEmpty()
         // Options rows, and any page's rows under details, sit at the top of the list area.
@@ -112,12 +110,11 @@ fun NxDetailListBody(
             val tailHeight = with(LocalDensity.current) { nxRowsSlotPx(listPitch.roundToPx(), tail.size).toDp() }
             val tailGap = if (tail.isNotEmpty()) listPitch * NX_OPTIONS_GAP else 0.dp
             val listHeight = maxHeight - headHeight - headGap - tailHeight - tailGap
-            // Under details a list that fits still keeps a fixed gap from the last detail line (a scrolling one has its up strip).
+            // Under details the list keeps a fixed gap from the last detail line.
             val gap = if (underDetails && !split) NxDetailListGap else 0.dp
             val scrolls = if (rowKind == NxRowKind.OPTIONS) nxOptionsListHeight(options, rowHeight).value > (listHeight - gap).value + slack   // its gaps are half rows
                 else rest.size > nxWholeRows(listHeight - gap, rowHeight, pxSlack = slack)
-            val strip = when { !scrolls -> 0.dp; rowKind == NxRowKind.OPTIONS -> NxOptionsArrowStrip; else -> NxDetailArrowStrip }
-            val whole = nxWholeRows(listHeight - gap - strip, rowHeight, pxSlack = slack)
+            val whole = nxWholeRows(listHeight - gap, rowHeight, pxSlack = slack)
             // The rows' slot in whole px, the rows' own rounded px, so it rests on whole rows ([nxRowsSlotPx]); an
             // options list that fits takes only its own height.
             val rowsSlot = with(LocalDensity.current) { nxRowsSlotPx(rowHeight.roundToPx(), whole).toDp() }
@@ -136,21 +133,14 @@ fun NxDetailListBody(
                 if (rowKind == NxRowKind.OPTIONS) {
                     NxOptionsList(
                         options, selectedIndex.takeIf { it < options.size } ?: -1, onSelect, onOpen, rowHeight = rowHeight, listText = label,
-                        modifier = Modifier.fillMaxWidth().height(optionsHeight), listState = listState,
+                        modifier = Modifier.fillMaxWidth().height(optionsHeight), listState = listState, scrollFade = true,
                     )
                 } else {
                     NxList(
-                        rest, if (listSelected < 0) -1 else listSelected - pinned, { onSelect(it + pinned) }, { onOpen(it + pinned) }, Modifier.fillMaxWidth().height(rowsSlot),
-                        listState = listState, rowHeightOverride = rowHeight, textSizeOverride = rowText?.invoke(label) ?: label,
+                        rest, if (listSelected < 0) -1 else listSelected - pinned, { onSelect(it + pinned) }, { onOpen(it + pinned) },
+                        Modifier.fillMaxWidth().height(rowsSlot).nxScrollFade(listState, height = rowHeight / 2, strong = true),
+                        listState = listState, rowHeightOverride = rowHeight, textSizeOverride = rowText?.invoke(label) ?: label, edgeMargin = 1,
                     )
-                }
-                // Up and down side by side under the rows, at the labels' inset, whichever applies (the main menu's pair).
-                if (scrolls) Row(
-                    Modifier.fillMaxWidth().height(strip).padding(start = inset),
-                    horizontalArrangement = Arrangement.spacedBy(1.dp), verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (listState.canScrollBackward) NxScrollArrow(up = true, width = arrowWidth)
-                    if (listState.canScrollForward) NxScrollArrow(up = false, width = arrowWidth)
                 }
                 if (tail.isNotEmpty()) {
                     // The pill enters the action rows from above as the options' selection leaves them (and back).
@@ -278,10 +268,7 @@ internal fun startEllipsized(text: String, fits: (String) -> Boolean): String {
     return "…"
 }
 
-/** The detail pages' arrow strips, one above and one below the rows: the arrow (a quarter of its width high) with air round it. */
-private val NxDetailArrowStrip = 16.dp
-
-/** A detail page's gap between its last detail line and a list that fits (no arrow strip). */
+/** A detail page's gap between its last detail line and its list. */
 private val NxDetailListGap = 8.dp
 
 /** The room under a page's touch buttons, before its list. */

@@ -149,4 +149,14 @@ class SettingsTouchRowsTest {
         v.changeTo(5); assertEquals("c", value)            // out of range: nothing
         assertEquals(null, SettingValue(listOf(1, 2), 1, {}, after = {}).labels)
     }
+
+    @Test fun androidsOwnSwitchesHaveNoLeftChangeHint() {
+        val touch = NxSettingRow("Use as home screen", choices = listOf("Off", "On"), index = 0)
+        val back = Hint(NxButton.B, "Back")
+        val toggle = Hint(NxButton.A, "Toggle")
+        for (kind in listOf(SettingsKind.HOME_SCREEN, SettingsKind.ALL_FILES))
+            assertEquals(listOf(back, toggle), settingsHints(listOf(SettingsRow(kind, touch.label)), 0, touch), "$kind")
+        val pause = SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused")
+        assertEquals(listOf(back, Hint(NxButton.LEFT, "Change"), toggle), settingsHints(listOf(pause), 0, touch.copy(label = pause.label)))
+    }
 }

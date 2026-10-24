@@ -258,7 +258,7 @@ internal fun LayoutPreviewPage(
         if (touchRows != null) touchRows(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = rowsMax))
         else NxOptionsList(
             values, selected.takeIf { it < values.size } ?: -1, onSelect, onRow, rowHeight = optionPitch, listText = NxTextSizes.listLabel(optionPitch),
-            modifier = Modifier.fillMaxWidth().weight(1f, fill = false).height(nxOptionsFitHeight(values, optionPitch)),
+            modifier = Modifier.fillMaxWidth().weight(1f, fill = false).height(nxOptionsFitHeight(values, optionPitch)), scrollFade = true,
         )
     } }
     // Too little room left (a short page of many rows): no picture rather than a thumbnail.

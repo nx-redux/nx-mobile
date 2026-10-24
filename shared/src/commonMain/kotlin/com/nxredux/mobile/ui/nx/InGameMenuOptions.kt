@@ -354,7 +354,7 @@ private fun OptionPicker(picker: MenuPopup.Picker, onOption: (OptionEvent) -> Un
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(NxModalCardColor).padding(vertical = 12.dp)) {
                 Text(
                     picker.title, color = colors.hint, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold,
-                    fontSize = nxModalSmall() * k, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    fontSize = nxModalSmall(), maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
                 )
                 LazyColumn(

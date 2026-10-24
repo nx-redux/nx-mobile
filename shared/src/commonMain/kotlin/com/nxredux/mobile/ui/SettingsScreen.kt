@@ -204,8 +204,10 @@ internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSett
         kind == SettingsKind.LICENSES_LINK -> listOf(back, Hint(NxButton.A, "Open"))
         kind == SettingsKind.APP_UPDATE -> listOfNotNull(back, appUpdateHint(rows[selected].label)?.let { Hint(NxButton.A, it) })
         kind == SettingsKind.INFO || rows.all { it.kind == SettingsKind.INFO } -> listOf(back)
-        // A touch value row (the in-game menu's): LEFT / RIGHT change it, A toggles a switch or opens a picker.
-        touch != null && touch.choices.size >= 2 -> listOf(back, Hint(NxButton.LEFT, "Change")) + when (touch.control) {
+        // A touch value row (the in-game menu's): LEFT / RIGHT change it, A toggles a switch or opens a picker. Use as
+        // home screen and All files access are Android's to change: A alone (it opens Android's screen).
+        touch != null && touch.choices.size >= 2 -> listOf(back) +
+            (if (kind == SettingsKind.HOME_SCREEN || kind == SettingsKind.ALL_FILES) emptyList() else listOf(Hint(NxButton.LEFT, "Change"))) + when (touch.control) {
             NxSettingControl.SWITCH -> listOf(Hint(NxButton.A, "Toggle"))
             NxSettingControl.PICKER -> listOf(Hint(NxButton.A, "Choose"))
             else -> emptyList()

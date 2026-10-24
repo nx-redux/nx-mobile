@@ -66,14 +66,14 @@ class NxHintsBand(
  * [labelStart]: where the row labels start, in place of [nxListInset]. The list moves right by the difference and the
  * labels still end where they did.
  * [rowKind] [NxRowKind.OPTIONS]: [NxOptionsList] rows (a list row's pitch) in place of the pill list, art unused, always
- * at the top. On a titled page a list that fits takes only its rows' height; one that scrolls gets [NxOptionsArrowStrip]s.
+ * at the top. On a titled page a list that fits takes only its rows' height.
  * [grid]: a body in place of the list (Grid, Carousel and Backdrop pages, the tool apps grid), running down to the hint
  * bar; [rows], [title] and [band] are unused.
  * [bodyAlpha]: the body's alpha, read at draw time so it animates with no recomposition (the main menu's dim while its
  * tab row has focus). The list and band are separate layers so the band's reach into the hint bar is not clipped; the
  * hint bar keeps full alpha.
- * [scrollFade]: the rows fade at the edge they scroll on ([nxScrollFade]) in place of the scroll arrows; the band and
- * the rows keep the arrows' room, so nothing moves.
+ * [scrollFade]: the rows fade at the edge they scroll on ([nxScrollFade]) in place of the scroll arrows (false only
+ * draws the arrows); a band keeps the arrows' room, so nothing moves, a titled page gives it to the rows.
  * [rowEdges]: with a band, gaps above the first row and below the last, in rows (top to bottom); the whole rows that fit
  * the rest stretch to fill it exactly ([listTopGap] and [listTopEdge] unused).
  * [rowsLike]: under a [listTopEdge], the row height a [rowEdges] list with these edges would have here, so the rows
@@ -103,7 +103,7 @@ fun NxScreenScaffold(
     onFirstPill: ((Float) -> Unit)? = null,   // under a listTopEdge: the first pill's top, dp from the list's top (List Home centres its strip by it)
     keepBarRoom: Boolean = true,   // false: hidden hints leave no room either, the body runs to the bottom (a main menu Carousel, centred in what shows)
     header: (@Composable () -> Unit)? = null,   // under the title, above the rows (a page's banner); the rows fit what it leaves
-    scrollFade: Boolean = false,
+    scrollFade: Boolean = true,
     rowEdges: Pair<Float, Float>? = null,
     rowsLike: Pair<Float, Float>? = null,
 ) {
@@ -177,11 +177,11 @@ fun NxScreenScaffold(
                         val options = rowKind == NxRowKind.OPTIONS && title != null
                         val itemHeight = rowHeight   // options rows are list rows (Text size already in the pitch)
                         val slack = 2f / LocalDensity.current.density
-                        // A titled options list that fits needs no arrows and takes its own height. One that scrolls has an
-                        // [NxOptionsArrowStrip] in place of the half-row gutter.
+                        // A titled options list that fits takes its own height. One that scrolls has an [NxOptionsArrowStrip]
+                        // in place of the half-row gutter when it draws arrows (no [scrollFade]).
                         val optionsHeight = if (options) nxOptionsFitHeight(rows, itemHeight) else 0.dp
                         val fits = options && optionsHeight.value <= maxHeight.value + slack
-                        val strip = when { !gutters || fits -> 0.dp; options -> NxOptionsArrowStrip; else -> gutter }
+                        val strip = when { !gutters || fits || scrollFade -> 0.dp; options -> NxOptionsArrowStrip; else -> gutter }
                         // An options gap takes half a row of the slot: the whole rows fit in the rest.
                         val gap = if (rowKind == NxRowKind.OPTIONS && !fits && rows.any { it.spacer }) itemHeight * NX_OPTIONS_GAP else 0.dp
                         val whole = nxWholeRows(maxHeight - strip - gap, itemHeight, pxSlack = slack)
@@ -190,11 +190,13 @@ fun NxScreenScaffold(
                         val listWidth = maxWidth
                         val listShift = Modifier.padding(start = labelStart?.let { maxOf(0.dp, it - nxListInset()) } ?: 0.dp)
                         Column(Modifier.fillMaxWidth()) {
-                            Box(Modifier.fillMaxWidth().height(slot).then(if (scrollFade) Modifier.nxScrollFade(listState, height = 56.dp, strong = true) else Modifier)) {
+                            // An options list fades itself (its rows rest whole); a titled page's fade is half a row, the main menu's taller.
+                            val fade = scrollFade && rowKind != NxRowKind.OPTIONS
+                            Box(Modifier.fillMaxWidth().height(slot).then(if (fade) Modifier.nxScrollFade(listState, height = if (gutters) itemHeight / 2 else 56.dp, strong = true) else Modifier)) {
                                 if (rowKind == NxRowKind.OPTIONS) {
                                     NxOptionsList(
                                         rows, selectedIndex, onSelect, onOpen, rowHeight = itemHeight, listText = NxTextSizes.listLabel(rowHeight),
-                                        modifier = Modifier.fillMaxSize(), listState = listState, onLongPress = onLongPress,
+                                        modifier = Modifier.fillMaxSize(), listState = listState, onLongPress = onLongPress, scrollFade = scrollFade,
                                     )
                                 } else if (!showArt) {
                                     NxList(rows, listSelection, onSelect, onOpen, Modifier.fillMaxSize().then(listShift), listState = listState, rowHeightOverride = rowHeight, onLongPress = onLongPress, edgeMargin = if (scrollFade) 1 else 0)

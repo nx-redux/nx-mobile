@@ -86,12 +86,13 @@ private const val WHOLE_SLACK_PX = 2
 
 /**
  * The rest to scroll to so row [selected] shows whole (null: it already does): up to its top when above the viewport,
- * else down to the first rest that brings its bottom in.
+ * else down to the first rest that brings its bottom in. [marginPx]: room kept past the row on both sides (clamped to
+ * the list's ends), so it never rests under a scroll fade while more is that way.
  */
-internal fun nxOptionsKeepInView(selected: Int, current: Int, starts: IntArray, rests: IntArray, viewportPx: Int): Int? {
+internal fun nxOptionsKeepInView(selected: Int, current: Int, starts: IntArray, rests: IntArray, viewportPx: Int, marginPx: Int = 0): Int? {
     if (selected !in 0 until starts.size - 1) return null
-    val top = starts[selected]
-    val bottom = starts[selected + 1]
+    val top = maxOf(0, starts[selected] - marginPx)
+    val bottom = minOf(starts.last(), starts[selected + 1] + marginPx)
     return when {
         top < current -> rests.lastOrNull { it <= top } ?: 0
         bottom > current + viewportPx -> rests.firstOrNull { it + viewportPx >= bottom } ?: rests.last()
@@ -158,15 +159,15 @@ internal fun Modifier.nxOptionsWholeRows(state: LazyListState, geometry: NxOptio
  * d-pad move never leaves the list on a cut row. The first placement is instant, later moves animate.
  */
 @Composable
-internal fun NxOptionsKeepSelectedInView(state: LazyListState, selectedIndex: Int, geometry: NxOptionsGeometry) {
+internal fun NxOptionsKeepSelectedInView(state: LazyListState, selectedIndex: Int, geometry: NxOptionsGeometry, marginPx: Int = 0) {
     val placed = remember(state) { BooleanArray(1) }
     val count = geometry.starts.size - 1
-    LaunchedEffect(selectedIndex, geometry) {
+    LaunchedEffect(selectedIndex, geometry, marginPx) {
         if (count == 0 || selectedIndex < 0) return@LaunchedEffect
         snapshotFlow { state.layoutInfo }
             .first { it.totalItemsCount == count && it.viewportEndOffset > it.viewportStartOffset && it.visibleItemsInfo.isNotEmpty() }
         val current = geometry.offset(state) ?: return@LaunchedEffect
-        val target = nxOptionsKeepInView(selectedIndex, current, geometry.starts, geometry.rests, geometry.viewportPx)
+        val target = nxOptionsKeepInView(selectedIndex, current, geometry.starts, geometry.rests, geometry.viewportPx, marginPx)
         val animate = placed[0]
         placed[0] = true
         if (target == null) return@LaunchedEffect

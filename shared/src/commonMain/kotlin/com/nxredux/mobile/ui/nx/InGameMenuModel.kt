@@ -87,7 +87,7 @@ enum class OptionControl {
 }
 
 /** On/off word pairs a switch stands for (lower case, the "on" word first). */
-private val SWITCH_PAIRS = listOf("on" to "off", "enabled" to "disabled", "true" to "false", "yes" to "no")
+private val SWITCH_PAIRS = listOf("on" to "off", "show" to "hide", "enabled" to "disabled", "true" to "false", "yes" to "no")
 
 /** A segmented button's most values, the longest label it takes and its labels' total length. */
 private const val SEGMENT_MAX = 4
@@ -472,7 +472,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     fun pickChoice(index: Int): MenuEffect? {
         val picker = state.popup as? MenuPopup.Picker ?: return null
         closePopup()
-        return setChoice(picker.row, index)
+        // The option it opened on, wherever it is now: a core options re-read can show or hide rows above it.
+        val rows = state.page.rows
+        fun same(r: MenuRow?) = r is MenuRow.Option && r.label == picker.title && r.choices == picker.choices
+        val row = picker.row.takeIf { same(rows.getOrNull(it)) } ?: rows.indexOfFirst(::same).takeIf { it >= 0 } ?: return null
+        return setChoice(row, index)
     }
 
     fun closePopup() {
