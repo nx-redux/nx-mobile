@@ -195,4 +195,58 @@ class CheatMatchTest {
         val files = listOf("Patapon 2 [US] [HB4B12D3BC].cht", "Patapon 2 [US] [UCUS-98732].cht", "Patapon 2 [EU] [UCES-01177].cht")
         assertEquals(listOf(files[1]), CheatMatch.select("Patapon 2", "Patapon 2 (USA) (En,Fr,Es).iso", files))
     }
+
+    // The Mega Drive set as it ships: the ROM is region-less, its files are a sourced USA file, a source-only pack and the
+    // plain file under a longer title ("A _ B": the database's alternate titles, or its "&").
+    private val sonic3d = listOf(
+        "Sonic 3D Blast (USA) (Action Replay).cht", "Sonic 3d Blast (Rumbles).cht",
+        "Sonic 3D Blast _ Sonic 3D Flickies' Island (USA, Europe, Korea).cht",
+    )
+
+    @Test fun a_source_only_pack_loses_to_a_file_for_the_roms_region() {
+        val ar = listOf("Sonic 3D Blast (USA) (Action Replay).cht")
+        assertEquals(ar, CheatMatch.select("Sonic 3D Blast", "Sonic 3D Blast.md", sonic3d))
+        assertEquals(ar, CheatMatch.select("Sonic 3D Blast", "Sonic 3D Blast (USA).md", sonic3d))
+        // Another region's file doesn't take its place: a region-less ROM keeps the pack over a Japanese file.
+        val jp = listOf("Chuck Rock II (Japan) (Action Replay).cht", "Chuck Rock Ii (Rumbles).cht")
+        assertEquals(listOf("Chuck Rock Ii (Rumbles).cht"), CheatMatch.select("Chuck Rock II", "Chuck Rock II.md", jp))
+        assertEquals(listOf(jp[0]), CheatMatch.select("Chuck Rock II", "Chuck Rock II (Japan).md", jp))
+    }
+
+    @Test fun an_alternate_title_after_an_underscore_matches_when_no_stem_does() {
+        val files = listOf("Sonic 3D Blast _ Sonic 3D Flickies' Island (USA, Europe, Korea).cht")
+        assertEquals(files, CheatMatch.select("Sonic 3D Blast", "Sonic 3D Blast.md", files))
+        assertEquals(files, CheatMatch.select("Sonic 3D Flickies' Island", "Sonic 3D Flickies' Island (Europe).md", files))
+        assertEquals(emptyList(), CheatMatch.select("Sonic 3D", "Sonic 3D.md", files))
+        // An exact stem wins: "_" is also the database's "&" (Asterix & Obelix is another game).
+        val asterix = listOf("Asterix _ Obelix (Europe).cht", "Asterix (Europe).cht")
+        assertEquals(listOf("Asterix (Europe).cht"), CheatMatch.select("Asterix", "Asterix (Europe).sfc", asterix))
+    }
+
+    @Test fun files_for_the_same_regional_rom_merge_with_the_winning_group() {
+        val files = listOf("Game (USA).cht", "Game (USA) (Beta).cht", "Game (USA, Europe) (Action Replay).cht", "Game (Japan).cht")
+        // The USA ROM is the one the (USA, Europe) file covers; a beta is another ROM and never merges by region.
+        assertEquals(listOf("Game (USA).cht", "Game (USA, Europe) (Action Replay).cht"), CheatMatch.select("Game", "Game (USA).md", files))
+        // A European ROM shares the (USA, Europe) file's ROM, not the USA one.
+        val eu = listOf("Game (Europe).cht", "Game (USA).cht", "Game (USA, Europe) (Action Replay).cht")
+        assertEquals(listOf("Game (Europe).cht", "Game (USA, Europe) (Action Replay).cht"), CheatMatch.select("Game", "Game (Europe).md", eu))
+    }
+
+    @Test fun contra_hard_corps_keeps_its_region_group() {
+        val files = listOf("Contra - Hard Corps (Rumbles).cht", "Contra - Hard Corps (USA, Korea) (Action Replay).cht", "Contra - Hard Corps (USA, Korea).cht")
+        val usa = listOf("Contra - Hard Corps (USA, Korea).cht", "Contra - Hard Corps (USA, Korea) (Action Replay).cht")
+        assertEquals(usa, CheatMatch.select("Contra - Hard Corps", "Contra - Hard Corps.md", files))
+        assertEquals(usa, CheatMatch.select("Contra - Hard Corps", "Contra - Hard Corps (USA, Korea).md", files))
+    }
+
+    @Test fun variants_bring_in_the_same_regional_roms_files() {
+        val files = listOf("Game (USA).cht", "Game (USA, Europe) (Action Replay).cht", "Game (Japan).cht", "Game (USA) (Beta).cht", "Game (Rumbles).cht")
+        assertEquals(listOf("Game (USA).cht", "Game (USA, Europe) (Action Replay).cht"), CheatMatch.variants("Game (USA).cht", files))
+        assertEquals(listOf("Game (Japan).cht"), CheatMatch.variants("Game (Japan).cht", files))
+    }
+
+    @Test fun a_titled_file_competes_when_the_exact_name_has_only_a_pack() {
+        val files = listOf("Mercs (Rumbles).cht", "Senjou no Ookami II _ Mercs (World).cht")
+        assertEquals(listOf("Senjou no Ookami II _ Mercs (World).cht"), CheatMatch.select("Mercs", "Mercs.md", files))
+    }
 }

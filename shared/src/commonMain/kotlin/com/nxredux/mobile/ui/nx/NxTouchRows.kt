@@ -125,7 +125,7 @@ private val TOUCH_ROW_AIR = 12.dp
 /** The touch rows' sizes for list rows [itemHeight] high and [rowWidth] wide, the description [descOfLabel] of the name. */
 @Composable
 internal fun nxTouchRowSizes(itemHeight: Dp, rowWidth: Dp, descOfLabel: Float): NxTouchRowSizes {
-    val listText = NxTextSizes.listLabel(itemHeight)
+    val listText = nxListLabel()
     val label = nxOptionsLabelSize(listText)
     val desc = label * descOfLabel
     val descLine = desc * 1.25f

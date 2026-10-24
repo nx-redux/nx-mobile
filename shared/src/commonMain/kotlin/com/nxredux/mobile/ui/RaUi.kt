@@ -15,6 +15,9 @@ import com.nxredux.mobile.ui.nx.HintTouch
 import com.nxredux.mobile.ui.nx.GamePanelModel
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxRichRow
+import com.nxredux.mobile.ui.nx.NxSettingControl
+import com.nxredux.mobile.ui.nx.NxSettingRow
+import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.NxTone
 
 /**
@@ -30,20 +33,42 @@ enum class RaConfirm(val title: String, val text: String, val confirmLabel: Stri
     ERASE_ALL("Erase all achievement data?", "Deletes every cached game and unsynced unlock, and signs out. Badges and fingerprints in your ROM folders stay.", "Erase"),
 }
 
-/** The RetroAchievements settings page's row kinds. */
+/** The RetroAchievements settings page's row kinds; [SECTION] a group's label and [GAP] the space before one, never selected. */
 enum class RaSettingKind {
-    ENABLED, SIGN_IN, SIGN_OUT, STATUS, DOWNLOAD_ALL, NOTIFICATIONS, NOTIFICATION_SECONDS, PROGRESS_SECONDS,
+    SECTION, GAP, ENABLED, SIGN_IN, SIGN_OUT, DOWNLOAD_ALL, NOTIFICATIONS, NOTIFICATION_SECONDS, PROGRESS_SECONDS,
     SORT_ORDER, RESET_ACCOUNT, ERASE_ALL, RESET_SETTINGS,
 }
 
-/** [enabled] = false: drawn greyed and A does nothing (the account rows that need a sign-in). */
-data class RaSettingsRow(val kind: RaSettingKind, val label: String, val secondary: String? = null, val enabled: Boolean = true)
+/**
+ * [enabled] = false: drawn greyed and A does nothing (the account rows that need a sign-in). [secondary]: a value row's
+ * value, Sign in / Sign out's status and Download all's cached count; [choices]: a value row's values, its touch control
+ * ([raSettingsTouchRow]); [warning]: the status is a problem (the last error).
+ */
+data class RaSettingsRow(
+    val kind: RaSettingKind, val label: String, val secondary: String? = null, val enabled: Boolean = true,
+    val choices: SettingChoices? = null, val warning: Boolean = false,
+) {
+    val selectable: Boolean get() = kind != RaSettingKind.SECTION && kind != RaSettingKind.GAP
+}
 
-/** The settings page's hints for the highlighted row: A steps a value row forward (LEFT/RIGHT also work); the status row and a disabled row only read. */
-fun raSettingsHints(row: RaSettingsRow?): List<Hint> = if (row?.enabled == false) listOf(Hint(NxButton.B, "Back")) else when (row?.kind) {
-    RaSettingKind.NOTIFICATION_SECONDS, RaSettingKind.PROGRESS_SECONDS, RaSettingKind.SORT_ORDER -> listOf(Hint(NxButton.A, "Change"), Hint(NxButton.B, "Back"))
-    RaSettingKind.STATUS -> listOf(Hint(NxButton.B, "Back"))
-    else -> listOf(Hint(NxButton.A, "Select"), Hint(NxButton.B, "Back"))
+/**
+ * The settings page's hints for the highlighted row, as Settings' ([settingsHints]): a value row LEFT Change, with A
+ * Toggle on a switch or Choose on a picker (none on segments, where A steps); an action A Select; a dimmed row Back
+ * only. X Info while its description is cut off or says more ([info]).
+ */
+fun raSettingsHints(row: RaSettingsRow?, touch: NxSettingRow? = null, info: Boolean = false): List<Hint> {
+    val back = Hint(NxButton.B, "Back")
+    val x = if (info) listOf(Hint(NxButton.X, "Info")) else emptyList()
+    return when {
+        row == null || !row.selectable -> listOf(back)
+        !row.enabled -> listOf(back) + x
+        touch != null && touch.choices.size >= 2 -> listOf(back, Hint(NxButton.LEFT, "Change")) + when (touch.control) {
+            NxSettingControl.SWITCH -> listOf(Hint(NxButton.A, "Toggle"))
+            NxSettingControl.PICKER -> listOf(Hint(NxButton.A, "Choose"))
+            else -> emptyList()
+        } + x
+        else -> listOf(back, Hint(NxButton.A, "Select")) + x
+    }
 }
 
 fun raRows(state: RaState, download: RaDownload? = null): List<RaAction> =

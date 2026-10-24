@@ -116,7 +116,7 @@ private fun ColumnScope.RaPanelBody(p: RaPanel, onRow: (Int) -> Unit, onButton: 
     // The same room under the list as above the header.
     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(bottom = PANEL_EDGE), contentAlignment = Alignment.Center) {
         // A step under the list a page this tall would show ([NxTextSizes.secondary] of its label size).
-        val label = NxTextSizes.secondary(nxListLabelSize(maxHeight)) * nxTextScale()   // Appearance → Text size
+        val label = NxTextSizes.secondary(nxListLabelSize()) * nxTextScale()   // Appearance → Text size
         when (val c = p.content) {
             RaPanelContent.Loading -> PanelMessage("Loading…")
             RaPanelContent.SignedOut -> PanelMessage("Sign in to RetroAchievements to see this game's achievements.", action = "Sign in") { onButton(NxButton.A) }

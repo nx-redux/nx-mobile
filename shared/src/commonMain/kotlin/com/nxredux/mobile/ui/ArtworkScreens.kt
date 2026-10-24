@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -16,6 +17,11 @@ import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxDetailListBody
 import com.nxredux.mobile.ui.nx.NxDialog
 import com.nxredux.mobile.ui.nx.NxRow
+import com.nxredux.mobile.ui.nx.NxSettingControl
+import com.nxredux.mobile.ui.nx.NxSettingEvent
+import com.nxredux.mobile.ui.nx.NxSettingRow
+import com.nxredux.mobile.ui.nx.NxSettingsPage
+import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.NxSignInPrompt
 import com.nxredux.mobile.ui.nx.NxTextPrompt
 
@@ -31,20 +37,26 @@ fun ArtworkScreen(
     screen: Screen, state: AppState, selectedIndex: Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onHint: (NxButton) -> Unit, modifier: Modifier = Modifier,
 ) {
+    val truncated by state.settingInfoTruncated.collectAsState()   // Settings' selected row's cut-off line: its X Info hint
     Box(modifier.fillMaxSize()) {
-        ArtworkPageBody(screen, selectedIndex, onSelect, onOpen, onHint)
+        ArtworkPageBody(
+            screen, selectedIndex, onSelect, onOpen, onHint,
+            onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = truncated,
+        )
         ArtworkDialogs(screen, state, onHint)
     }
 }
 
 /**
  * An Artwork page without its dialogs. [split]: a pane of the column browser ([ArtworkSplitScreen]), titled without
- * the tool's name; [focused] = false: its dimmed left pane, with no hints.
+ * the tool's name; [focused] = false: its dimmed left pane, with no hints (Settings' controls take no taps there).
+ * [onSetting], [onTruncated] and [truncated]: Settings' touch rows, as Settings' pages ([SettingsScreen]).
  */
 @Composable
 internal fun ArtworkPageBody(
     screen: Screen, selectedIndex: Int, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onHint: (NxButton) -> Unit,
     modifier: Modifier = Modifier, split: Boolean = false, focused: Boolean = true,
+    onSetting: (NxSettingEvent) -> Unit = {}, onTruncated: (String, Boolean) -> Unit = { _, _ -> }, truncated: String? = null,
 ) {
     fun hints(h: List<Hint>) = if (focused) h else emptyList()
     when (screen) {
@@ -59,12 +71,16 @@ internal fun ArtworkPageBody(
             onSelect = onSelect, onOpen = onOpen, modifier = modifier, onHint = onHint, rowsAtTop = true,
         )
         is Screen.ArtworkProgress -> ArtworkProgressBody(screen, selectedIndex, onSelect, onOpen, onHint, modifier, split)
-        is Screen.ArtworkSettings -> NxDetailListBody(
-            title = toolPageTitle(screen, split).orEmpty(), details = emptyList(),
-            rows = screen.rows.map(::artworkSettingNxRow),
-            selectedIndex = selectedIndex, hints = hints(selectBack), onSelect = onSelect, onOpen = onOpen, modifier = modifier,
-            onHint = onHint, rowKind = listRowKind(screen),
-        )
+        is Screen.ArtworkSettings -> {
+            val rows = remember(screen.rows) { screen.rows.map(::artworkSettingTouchRow) }   // not per d-pad move
+            val touch = rows.getOrNull(selectedIndex)
+            NxSettingsPage(
+                toolPageTitle(screen, split), rows, selectedIndex,
+                hints = hints(artworkSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated))),
+                onSelect = onSelect, onOpen = onOpen, onEvent = onSetting, modifier = modifier,
+                onTruncated = onTruncated, onHint = onHint, preview = !focused,
+            )
+        }
         is Screen.ArtworkReset -> NxDetailListBody(
             title = toolPageTitle(screen, split).orEmpty(), details = listOf("Deletes only art this app fetched. Art you added yourself is kept."),
             rows = screen.scopes.map { NxRow(it.label) }, selectedIndex = selectedIndex, headline = false,
@@ -138,7 +154,15 @@ internal fun ArtworkSplitScreen(state: AppState, s: Screen, selection: State<Lis
                 )
             }
         },
-        right = { WithIndex(selection) { ArtworkPageBody(s, it, state::select, { state.openSelected() }, state::onButton, split = true) } },
+        right = {
+            val truncated by state.settingInfoTruncated.collectAsState()
+            WithIndex(selection) {
+                ArtworkPageBody(
+                    s, it, state::select, { state.openSelected() }, state::onButton, split = true,
+                    onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = truncated,
+                )
+            }
+        },
         over = { ArtworkDialogs(s, state, state::onButton) },
     )
 }
@@ -159,15 +183,89 @@ private fun ArtworkProgressBody(
     )
 }
 
+/** Rows whose secondary (today's requests, the allowance left) is their description, not a value. */
+private val ART_DESCRIBED_KINDS = setOf(ArtworkSettingKind.SS_LOGOUT, ArtworkSettingKind.TGDB_LEFT)
+
 /**
- * A Settings row as an options row: the On/Off rows (Replace existing art, 2D box art, Wheel, Generate mix) step on
- * LEFT/RIGHT, so they show `< value >` (not a locked one); the account rows' values open the sign-in or key prompt or only
- * read, so no arrows.
+ * A Settings row as a touch row, as Settings' ([settingsTouchRow]): the On/Off rows (Replace existing art, 2D box art,
+ * Wheel, Generate mix) a switch (a locked Wheel its value only); ScreenScraper's logout and TheGamesDB's allowance their
+ * count as the line; the key rows their Set / Not set; Reset artwork `›`. A group label and a gap as the list's.
  */
-internal fun artworkSettingNxRow(row: ArtworkSettingRow): NxRow = NxRow(
-    row.label, enabled = row.enabled, secondary = row.secondary,
-    cycleable = row.enabled && row.kind.toggle,
-)
+internal fun artworkSettingTouchRow(row: ArtworkSettingRow): NxSettingRow {
+    if (row.kind == ArtworkSettingKind.SECTION) return NxSettingRow(row.label, section = true)
+    if (row.kind == ArtworkSettingKind.GAP) return NxSettingRow("", spacer = true)
+    val text = artworkSettingInfo(row)
+    val switch = row.kind.toggle && row.enabled
+    return NxSettingRow(
+        row.label, info = text.line, detail = text.detail,
+        choices = if (switch) ART_ON_OFF else emptyList(), index = if (switch) (if (row.secondary == "On") 1 else 0) else -1,
+        value = if (!switch && row.kind !in ART_DESCRIBED_KINDS) row.secondary else null,
+        opens = row.kind == ArtworkSettingKind.RESET, enabled = row.enabled,
+    )
+}
+
+private val ART_ON_OFF = listOf("Off", "On")
+
+/** A compact row: no line, [text] (or a fuller [detail]) behind the info icon only. */
+private fun quiet(text: String, detail: String = "") = SettingText("", detail.ifEmpty { text })
+
+/**
+ * [row]'s description, from the user guide's Artwork page: a line for a status (today's requests, the allowance left)
+ * or a locked row's reason, the fuller text behind the info icon; the rest compact ([quiet]).
+ */
+internal fun artworkSettingInfo(row: ArtworkSettingRow): SettingText = when (row.kind) {
+    ArtworkSettingKind.REPLACE -> quiet(
+        "Fetch art again for games that already have it",
+        "Fetch art again for games that already have it. Fetch missing art then reads Fetch all art.",
+    )
+    ArtworkSettingKind.BOX2D -> quiet("Also fetch the flat 2D cover, beside the 3D box")
+    ArtworkSettingKind.WHEEL ->
+        if (row.enabled) quiet("Also fetch the game's logo")
+        else SettingText("Needed by Generate mix", "Also fetch the game's logo. Locked On while Generate mix is on.")
+    ArtworkSettingKind.MIX -> quiet("Make the handheld's mix picture on the phone", "Make the handheld's mix picture on the phone. It needs the Wheel, so Wheel stays On.")
+    ArtworkSettingKind.SS_LOGIN -> quiet(
+        "Log in for your own daily allowance",
+        "ScreenScraper works without an account, on a shared allowance. A free ScreenScraper account gives you your own " +
+            "daily allowance, which goes much further. Login is dimmed while art is downloading.",
+    )
+    ArtworkSettingKind.SS_LOGOUT -> SettingText(
+        row.secondary.orEmpty(),
+        "Your requests used today. Logout asks first: fetches then use the anonymous allowance again. Logout is dimmed " +
+            "while art is downloading.",
+    )
+    ArtworkSettingKind.SGDB_KEY -> quiet(
+        "Only used with your own free key",
+        "SteamGridDB is only used with your own free key from steamgriddb.com. A key is checked before it is saved: if " +
+            "SteamGridDB turns it down, it is not saved.",
+    )
+    ArtworkSettingKind.TGDB_KEY -> quiet(
+        "Only used with your own free key",
+        "TheGamesDB is only used with your own free key from thegamesdb.net. A key is checked before it is saved: if " +
+            "TheGamesDB turns it down, it is not saved.",
+    )
+    ArtworkSettingKind.TGDB_LEFT -> SettingText(row.secondary.orEmpty(), "The requests your TheGamesDB key has left this month.")
+    ArtworkSettingKind.RESET -> quiet(
+        "Delete art the app fetched",
+        "Delete art the app fetched, for every console or one. Art you added yourself is kept.",
+    )
+    ArtworkSettingKind.SGDB_REMOVE, ArtworkSettingKind.TGDB_REMOVE, ArtworkSettingKind.SECTION, ArtworkSettingKind.GAP -> SettingText("")
+}
+
+/**
+ * Artwork Settings' hints for the highlighted row, as Settings' ([settingsHints]): an On/Off row LEFT Change and A
+ * Toggle; TheGamesDB's allowance and a dimmed row Back only; the rest A Select. X Info while its description is cut off
+ * or says more ([info]).
+ */
+internal fun artworkSettingsHints(row: ArtworkSettingRow?, touch: NxSettingRow?, info: Boolean): List<Hint> {
+    val back = Hint(NxButton.B, "Back")
+    val x = if (info) listOf(Hint(NxButton.X, "Info")) else emptyList()
+    return when {
+        row == null || !row.selectable -> listOf(back)
+        !row.enabled || row.kind == ArtworkSettingKind.TGDB_LEFT -> listOf(back) + x
+        touch?.control == NxSettingControl.SWITCH -> listOf(back, Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Toggle")) + x
+        else -> listOf(back, Hint(NxButton.A, "Select")) + x
+    }
+}
 
 /**
  * The fetch progress page's hints: Y Pause / Resume and X Cancel while it runs, A Done once it has ended (it clears the

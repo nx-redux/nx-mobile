@@ -172,4 +172,35 @@ class CheatResolverTest {
         assertEquals(listOf("Health"), set.entries.map { it.info })   // one file loaded: no prefix
         assertTrue("Alleyway (World).cht" in skipped)
     }
+
+    private val md = setOf("md", "gen", "bin", "zip")
+
+    @Test fun a_titled_file_with_the_same_codes_merges_first_and_repeats_drop() {
+        // The Mega Drive set: the USA Action Replay file's codes are inside the (USA, Europe, Korea) file under its longer title.
+        val disk = mapOf(
+            "Sonic 3D Blast (USA) (Action Replay).cht" to cht("Infinite Rings" to "FFE001:0099", "Infinite Lives" to "FFE002:0005"),
+            "Sonic 3d Blast (Rumbles).cht" to cht("Rumble ring pickup/loss" to "R1"),
+            "Sonic 3D Blast _ Sonic 3D Flickies' Island (USA, Europe, Korea).cht" to
+                cht("Invincibility" to "FFE003:0001", "Infinite Rings" to "FFE001:0099", "Skip Levels" to "FFE004:0001"),
+        )
+        val set = CheatResolver.resolve(disk.keys.toList(), "Sonic 3D Blast.md", "Sonic 3D Blast", md, read = { disk[it] })
+        assertEquals(listOf("Invincibility", "Infinite Rings", "Skip Levels", "Infinite Lives"), set.entries.map { it.desc })
+        assertEquals("(Action Replay) Infinite Lives", set.entries.last().info)
+    }
+
+    @Test fun a_titled_file_with_other_codes_stays_out() {
+        // "_" is also a multi-game cart's or an "&": Asterix & Obelix is another game, with its own codes.
+        val disk = mapOf(
+            "Asterix (Europe) (Action Replay).cht" to cht("Lives" to "7E0001:09"),
+            "Asterix _ Obelix (Europe) (Action Replay).cht" to cht("Energy" to "7E0F00:63"),
+        )
+        val set = CheatResolver.resolve(disk.keys.toList(), "Asterix (Europe).sfc", "Asterix", setOf("sfc", "smc"), read = { disk[it] })
+        assertEquals(listOf("Lives"), set.entries.map { it.desc })
+    }
+
+    @Test fun a_files_own_repeated_code_stays() {
+        val disk = mapOf("Game (USA).cht" to cht("Lives" to "01", "Lives again" to "01"))
+        val set = CheatResolver.resolve(disk.keys.toList(), "Game (USA).gb", "Game", gb, read = { disk[it] })
+        assertEquals(listOf("Lives", "Lives again"), set.entries.map { it.desc })
+    }
 }

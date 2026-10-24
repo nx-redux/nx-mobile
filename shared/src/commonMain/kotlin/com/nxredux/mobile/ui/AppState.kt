@@ -444,6 +444,9 @@ sealed interface Screen {
         val editingKey: Boolean = false, val draftKey: String = "", val keyFor: ArtKeyFor = ArtKeyFor.SGDB,
         val confirmLogout: Boolean = false,
     ) : Screen {
+        /** A prompt or dialog is open over the rows: it takes every input. */
+        val dialogOpen: Boolean get() = signingIn || editingKey || confirmLogout
+
         /** The typed password and key never reach a log or an assertion message. */
         override fun toString(): String =
             "ArtworkSettings(rows=$rows, signingIn=$signingIn, draftUser=$draftUser, draftPassword=***, editingKey=$editingKey, draftKey=***, keyFor=$keyFor, confirmLogout=$confirmLogout)"
@@ -687,10 +690,10 @@ internal fun verticalAlignmentLabel(a: VerticalListAlignment): String = when (a)
 
 /** [enabled] false: dimmed and A does nothing (a default emulator of a one-tag console). [category]: a MENU_STYLE row's tab. */
 /**
- * A touch value dropdown ([AppState.chooser]): a value row's [title], every value's [labels], the [selected] one.
- * [popup]: a Settings touch row's picker (the in-game menu's look), its d-pad cursor [selected] and the value set [current].
+ * A touch value row's picker ([AppState.chooser], the in-game menu's look): the row's [title], every value's [labels],
+ * the d-pad cursor [selected] and the value set [current] (-1: none).
  */
-data class ValueChooser(val title: String, val labels: List<String>, val selected: Int, val current: Int = -1, val popup: Boolean = false)
+data class ValueChooser(val title: String, val labels: List<String>, val selected: Int, val current: Int = -1)
 
 /** Use as home screen's values: it is not a [SettingValue] (Android answers it). */
 private val ON_OFF = listOf("Off", "On")
@@ -1143,9 +1146,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             override fun refreshResume() = this@AppState.refreshResume()
             override fun refreshGameInfo() = this@AppState.refreshGameInfo()
             override fun raSignedIn(): Boolean = this@AppState.raSignedIn()
-            override val touchMode: Boolean get() = this@AppState.touchMode
-            override fun <T> openValueChooser(title: String, v: SettingValue<T>, again: () -> SettingValue<*>?): Boolean =
-                this@AppState.openValueChooser(title, v, again)
+            override fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit) =
+                this@AppState.openPicker(title, labels, current, apply)
         },
     )
     /** The achievements panel over a game list; null while closed. */
@@ -1160,6 +1162,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private var beforeSwitcher: Pair<Screen, ListSelection>? = null
     private var switcherJob: Job? = null   // switcher entries loading
     private var switcherRemoval: Job? = null   // the switcher's last Y Remove write (chained after the one before)
+    private var switcherReturn = false   // a game resumed from the switcher is running: the menu's next foreground reopens it
     private var resumeJob: Job? = null     // highlighted game's resume-marker read
     private var launchJob: Job? = null     // pre-launch checks + runner launch in flight
     private var hideJob: Job? = null       // A-in-the-hidden-list unhide in flight
@@ -3468,23 +3471,11 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** Tools -> Settings: the section menu, on the section last opened. */
     private val _chooser = MutableStateFlow<ValueChooser?>(null)
     /**
-     * Touch only, a value row of three or more values opens this as a dropdown at the row's value instead of stepping
-     * ([com.nxredux.mobile.ui.nx.NxValueDropdown]): every value, the current one highlighted; a pick applies it
-     * ([chooseValue]), B or a tap outside closes it ([closeChooser]).
+     * A value row's picker ([com.nxredux.mobile.ui.nx.NxSettingPicker]): every value, the current one marked; a pick
+     * applies it ([chooseValue]), B or a tap outside closes it ([closeChooser]).
      */
     val chooser: StateFlow<ValueChooser?> = _chooser.asStateFlow()
     private var chooserApply: ((Int) -> Unit)? = null
-    /** Touch only ([FooterMode.BUTTONS]: no controller, no pad, as App reports it in [onFooterMode]). */
-    private val touchMode: Boolean get() = footerMode == FooterMode.BUTTONS
-
-    /** Opens the chooser over [labels] on [current] when there are three or more; [apply] takes the picked index. True when it opened. */
-    private fun openChooser(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit): Boolean {
-        if (labels.size < 3) return false
-        _chooser.value = ValueChooser(title, labels, current.coerceIn(0, labels.lastIndex))
-        chooserApply = apply
-        return true
-    }
-
     /** The chooser's value [index] picked: it closes, then the value applies (unchanged when it was already the one). */
     fun chooseValue(index: Int) {
         val c = _chooser.value ?: return
@@ -3505,15 +3496,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
     }
 
-    /**
-     * [v]'s values as a chooser titled [title], on the current one. A pick steps the setting there from its value then,
-     * [again] reading it afresh, through [SettingValue.change] (so every side effect follows, even when it is unchanged).
-     * False when [v] has no chooser labels or fewer than three values.
-     */
-    private fun <T> openValueChooser(title: String, v: SettingValue<T>, again: () -> SettingValue<*>?): Boolean {
-        val label = v.label ?: return false
-        val now = v.values.indexOf(v.current)
-        return openChooser(title, v.values.map(label), now) { i -> again()?.change(i - now) }
+    /** A value row's picker ([ValueChooser]) titled [title]: [labels], [current] under the cursor (-1: none); [apply] takes a pick. */
+    private fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit) {
+        _chooser.value = ValueChooser(title, labels, current.coerceAtLeast(0), current = current)
+        chooserApply = apply
     }
 
     /**
@@ -3522,6 +3508,15 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      */
     fun settingEvent(event: NxSettingEvent) {
         (_screen.value as? Screen.EmulatorOptions)?.let { emulatorSettingEvent(it, event); return }
+        // RetroAchievements' and Artwork's settings: their controllers set values; the info popup is this page's.
+        (_screen.value as? Screen.RaSettings)?.let {
+            if (event is NxSettingEvent.Info) { if (!it.signingIn && it.confirm == null) showSettingInfo(event.row) } else ra.onRaSettingEvent(it, event)
+            return
+        }
+        (_screen.value as? Screen.ArtworkSettings)?.let {
+            if (event is NxSettingEvent.Info) { if (!it.dialogOpen) showSettingInfo(event.row) } else artworkScreens?.onSettingEvent(it, event)
+            return
+        }
         when (event) {
             is NxSettingEvent.Choose -> chooseSetting(event.row, event.index)
             is NxSettingEvent.OpenPicker -> openSettingPicker(event.row)
@@ -3566,12 +3561,12 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     /**
-     * The selected Emulator Settings value row's picker ([ValueChooser.popup]); a pick writes it
+     * The selected Emulator Settings value row's picker ([ValueChooser]); a pick writes it
      * ([EmulatorSettingsController.choose]). False when it has none. A current value not among the choices marks none.
      */
     private fun openEmulatorPicker(s: Screen.EmulatorOptions): Boolean {
         val (title, labels, current) = emulatorSettings.choices(s)?.takeIf { it.second.size >= 2 } ?: return false
-        _chooser.value = ValueChooser(title, labels, current.coerceAtLeast(0), current = current, popup = true)
+        _chooser.value = ValueChooser(title, labels, current.coerceAtLeast(0), current = current)
         chooserApply = { emulatorSettings.choose(it) }
         return true
     }
@@ -3589,13 +3584,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
     }
 
-    /** Settings row [row]'s picker ([ValueChooser.popup]): every value, the current one under the cursor; a pick sets it ([chooseSetting]). */
+    /** Settings row [row]'s picker ([ValueChooser]): every value, the current one under the cursor; a pick sets it ([chooseSetting]). */
     fun openSettingPicker(row: Int) {
         val s = _screen.value as? Screen.Settings ?: return
         if (s.rows.getOrNull(row)?.enabled != true) return
         val c = s.choices.getOrNull(row)?.takeIf { it.labels.size >= 2 } ?: return
         select(row)
-        _chooser.value = ValueChooser(s.rows[row].label, c.labels, c.index.coerceAtLeast(0), current = c.index, popup = true)
+        _chooser.value = ValueChooser(s.rows[row].label, c.labels, c.index.coerceAtLeast(0), current = c.index)
         val label = s.rows[row].label
         // By its label: a refresh while the picker is open can move the rows (a dependent row shown or hidden).
         chooserApply = { i ->
@@ -3621,6 +3616,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private fun settingTouchRow(row: Int): NxSettingRow? = when (val s = _screen.value) {
         is Screen.Settings -> s.rows.getOrNull(row)?.let { settingsTouchRow(it, s.choices.getOrNull(row), s.section) }
         is Screen.EmulatorOptions -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::emulatorTouchRow)
+        is Screen.RaSettings -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::raSettingsTouchRow)
+        is Screen.ArtworkSettings -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::artworkSettingTouchRow)
         else -> null
     }
 
@@ -3771,14 +3768,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     /** One selectable row up ([delta] -1) or down from [sel] on [rows], wrapping past group labels and gaps. */
-    private fun settingsStep(rows: List<SettingsRow>, sel: ListSelection, delta: Int): ListSelection {
-        var next = sel
-        repeat(rows.size) {
-            next = if (delta < 0) next.up() else next.down()
-            if (rows.getOrNull(next.index)?.selectable != false) return next
-        }
-        return sel
-    }
+    private fun settingsStep(rows: List<SettingsRow>, sel: ListSelection, delta: Int): ListSelection =
+        sel.step(delta) { rows.getOrNull(it)?.selectable != false }
 
     private val _padLayouts = MutableStateFlow(deps.settings.padLayouts)
     /** The stored pad layouts, republished on every change (the main menu's pads follow Shared). */
@@ -4893,7 +4884,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         launch(entry, resumeSlot = null, coreOverride = core, netplay = session)
     }
 
-    private fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null) {
+    private fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null, fromSwitcher: Boolean = false) {
         val listed = entry.system
         val game = entry.game
         // After a game the menu is its own tab again (the pushed one is not restored): dropped only for a launch that
@@ -4965,6 +4956,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             // a save that just arrived.
             SaveTransferRules.launchRefusal(deps.saveTransfer?.importing == true, deps.deviceSync?.running == true)?.let { showNotice(it); return@launch }
             dropPushedTab()
+            switcherReturn = fromSwitcher   // set only once the runner is called: a refused launch never gets here
             deps.runner.launch(GameSession(sys.tag, game.shownName, core, game.ref, game.folder, game.fileName, resumeSlot, all, systemSets = systemSets, gamePath = game.path,
                 artPath = panelArt(game.boxartRef?.value, game.box2dRef?.value, game.gridRef?.value, game.screenshotRef?.value), netplay = netplay)) {
                 recorder.record(recent)
@@ -5041,10 +5033,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         refreshInstalled()    // apps may have been installed or removed meanwhile
         refreshGameInfo()   // back from a game (or another app): its time and unlocks may have moved
         homeTab.refreshStatsIfAsked()   // Home's stats too (before the menu's first show, that show computes them)
-        val s = _screen.value as? Screen.Systems ?: return
-        if (s.menu != null) return
+        // Back from a game resumed from the switcher: the switcher again (its game first, the latest recent), over the
+        // page it opened from. Over the main menu, after the rows rebuilt below (a swap would abandon an open under way);
+        // read again there, so a Home landing meanwhile (onNewIntent may follow onStart) drops it.
+        val s = _screen.value as? Screen.Systems ?: run { reopenSwitcher(); return }
+        if (s.menu != null) { switcherReturn = false; return }
         if (!firstSetup) updaterOnMainMenu()   // back over the menu (from a game, or the install-permission screen)
-        scope.launch { rebuildMainRows(); swapMainRows() }   // Continue's save (its resume frame) may be new since the rows were built
+        scope.launch { rebuildMainRows(); swapMainRows(); reopenSwitcher() }   // Continue's save (its resume frame) may be new since the rows were built
         val root = home() ?: return
         if (foregroundJob?.isActive == true) return   // a quick second onStart: the first check (or its scan) covers it
         foregroundJob = scope.launch {
@@ -5057,6 +5052,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             }
             if (offlineHomeSaid == root && !deps.source.isOffline(root) && _screen.value === s) afterIndexStart(root)
         }
+    }
+
+    /** A game resumed from the switcher ended: the switcher opens again, once (a list or the main menu; elsewhere, nothing). */
+    private fun reopenSwitcher() {
+        if (!switcherReturn) return
+        switcherReturn = false
+        openSwitcher()
     }
 
     /** Re-reads the highlighted game's resume marker: a list's, Home's Continue card's, pinned or shelf game's (after returning from a game). */
@@ -5118,6 +5120,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         loader.cancel()
         if (loader.active) return   // a non-cancellable load (the library rescan) runs on and lands by itself
         val first = menuTabs.firstOrNull()?.category ?: return
+        switcherReturn = false   // Home over a game resumed from the switcher: Home, not the switcher, when it ends
         val s = _screen.value
         if (s is Screen.Switcher) closeSwitcher()
         pushedTab = null   // Home lands on the menu's own first tab (shown just below: the screen follows)
@@ -5364,7 +5367,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             NxButton.RIGHT -> if (!s.list) _screen.value = s.copy(index = at.down(wrap = false).index)
             NxButton.A -> s.entries.getOrNull(s.index)?.let { e ->
                 closeSwitcher()
-                launch(Listed(e.system, e.game), e.resume.slot)
+                launch(Listed(e.system, e.game), e.resume.slot, fromSwitcher = true)
             }
             NxButton.Y -> if (s.entries.getOrNull(s.index) != null) _screen.value = s.copy(confirmRemove = true)
             NxButton.B, NxButton.SELECT -> closeSwitcher()
@@ -6128,6 +6131,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         (_screen.value as? Screen.EmulatorOptions)?.let { if (onEmulatorTouchButton(it, button)) return }
         if (emulatorSettings.onButton(_screen.value, button)) return
         if (gameTimeScreen?.onButton(_screen.value, button) == true) return   // B without a modal falls through to back()
+        (_screen.value as? Screen.ArtworkSettings)?.takeIf { button == NxButton.X && !it.dialogOpen }?.let {   // X: the selected row's info
+            if (selectedSettingShowsInfo()) showSettingInfo(_selection.value.index); return
+        }
         if (artworkScreens?.onButton(_screen.value, button) == true) return
         (_screen.value as? Screen.Switcher)?.let { onSwitcherButton(it, button, repeat); return }
         // The summary: LEFT and RIGHT flip the Move row as A does.
@@ -6141,7 +6147,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         if (_screen.value == Screen.DeviceSync) { onDeviceSyncButton(button); return }   // every button is the controller's
         (_screen.value as? Screen.RetroAchievements)?.let { ra.onRaButton(it, button); return }   // same: UP/DOWN use the action-row count
         (_screen.value as? Screen.RaDownload)?.let { ra.onRaDownloadButton(it, button); return }
-        (_screen.value as? Screen.RaSettings)?.let { ra.onRaSettingsButton(it, button); return }   // LEFT/RIGHT change values; dialogs take the buttons
+        (_screen.value as? Screen.RaSettings)?.let {   // LEFT/RIGHT change values; dialogs take the buttons; X the selected row's info
+            if (button == NxButton.X && !it.signingIn && it.confirm == null) { if (selectedSettingShowsInfo()) showSettingInfo(_selection.value.index); return }
+            ra.onRaSettingsButton(it, button); return
+        }
         _screen.value.takeIf { it is Screen.RaGames || it is Screen.RaGame || it is Screen.RaAchievement }?.let { ra.onRaBrowserButton(it, button); return }
         dropHiddenTabFocus()   // a tab row hidden while it had the d-pad (a setting or footer change it missed) gives it back
         if (_tabFocus.value && onTabRowButton(button, repeat)) return

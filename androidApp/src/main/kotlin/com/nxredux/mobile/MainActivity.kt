@@ -52,6 +52,7 @@ import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.usb.UsbCables
 import com.nxredux.mobile.padlayout.PadLayoutActivity
 import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
+import com.nxredux.mobile.runner.CoreHangNotice
 import com.nxredux.mobile.runner.AndroidUserDataStore
 import com.nxredux.mobile.runner.ArcadeSetsAsset
 import com.nxredux.mobile.runner.Archives
@@ -390,6 +391,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
             ),
             scope,
         )
+        // A game whose core hung was closed with the process; this is the menu that process restarted.
+        CoreHangNotice.take(this)?.let(state::showError)
         // Settings shows the dual-screen rows only with a second screen. Only while started: stop() clears `current`, which is not a removal.
         scope.launch {
             secondScreens.current.collect {

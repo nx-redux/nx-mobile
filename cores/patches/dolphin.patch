@@ -308,10 +308,10 @@ index 3031f14..5585683 100644
  
  void VolumeVerifier::CheckVolumeSize()
 diff --git a/Source/Core/DolphinLibretro/Boot.cpp b/Source/Core/DolphinLibretro/Boot.cpp
-index 14ee1c5..becb11d 100644
+index 3a3b873..767411e 100644
 --- a/Source/Core/DolphinLibretro/Boot.cpp
 +++ b/Source/Core/DolphinLibretro/Boot.cpp
-@@ -366,6 +366,10 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -370,6 +370,10 @@ bool retro_load_game(const struct retro_game_info* game)
    Config::SetBase(Config::MAIN_CPU_THREAD,
      Libretro::GetOption<bool>(core::MAIN_CPU_THREAD, /*def=*/true));
  
@@ -322,7 +322,7 @@ index 14ee1c5..becb11d 100644
    Config::SetBase(Config::MAIN_LOAD_GAME_INTO_MEMORY,
      Libretro::GetOption<bool>(core::MAIN_LOAD_GAME_INTO_MEMORY, /*def=*/false));
  
-@@ -675,6 +679,14 @@ bool retro_load_game(const struct retro_game_info* game)
+@@ -683,6 +687,14 @@ bool retro_load_game(const struct retro_game_info* game)
    Libretro::FrameTiming::Init();
    Libretro::Audio::Init();
    Libretro::Video::Init();
@@ -338,7 +338,7 @@ index 14ee1c5..becb11d 100644
    VideoBackendBase::PopulateBackendInfo(wsi);
    NOTICE_LOG_FMT(VIDEO, "Using GFX backend: {}", Config::Get(Config::MAIN_GFX_BACKEND));
 diff --git a/Source/Core/DolphinLibretro/CMakeLists.txt b/Source/Core/DolphinLibretro/CMakeLists.txt
-index 50497a7..b6678f1 100644
+index 2023b8b..a64e183 100644
 --- a/Source/Core/DolphinLibretro/CMakeLists.txt
 +++ b/Source/Core/DolphinLibretro/CMakeLists.txt
 @@ -6,6 +6,7 @@ add_library(dolphin_libretro SHARED
@@ -347,10 +347,10 @@ index 50497a7..b6678f1 100644
    Main.cpp
 +  NxDisc.cpp
    Video.cpp
+   VR.cpp
  )
- 
 diff --git a/Source/Core/DolphinLibretro/Common/Options.cpp b/Source/Core/DolphinLibretro/Common/Options.cpp
-index 3dacade..04c8604 100644
+index e54214d..86046c6 100644
 --- a/Source/Core/DolphinLibretro/Common/Options.cpp
 +++ b/Source/Core/DolphinLibretro/Common/Options.cpp
 @@ -175,6 +175,20 @@ static struct retro_core_option_v2_definition option_defs[] = {
@@ -384,7 +384,7 @@ index 3dacade..04c8604 100644
    },
    {
      Libretro::Options::gfx_settings::WAIT_FOR_SHADERS,
-@@ -1149,7 +1164,8 @@ static struct retro_core_option_v2_definition option_defs[] = {
+@@ -1164,7 +1179,8 @@ static struct retro_core_option_v2_definition option_defs[] = {
        { "6", "Area Sampling" },
        { nullptr, nullptr }
      },
@@ -395,7 +395,7 @@ index 3dacade..04c8604 100644
    {
      Libretro::Options::gfx_enhancements::FORCE_TRUE_COLOR,
 diff --git a/Source/Core/DolphinLibretro/Common/Options.h b/Source/Core/DolphinLibretro/Common/Options.h
-index 57fe3b1..15a0ff1 100644
+index 1ec94d6..8793e14 100644
 --- a/Source/Core/DolphinLibretro/Common/Options.h
 +++ b/Source/Core/DolphinLibretro/Common/Options.h
 @@ -164,6 +164,7 @@ namespace core {
@@ -407,10 +407,10 @@ index 57fe3b1..15a0ff1 100644
    constexpr const char MAIN_PRECISION_FRAME_TIMING[] = "dolphin_precision_frame_timing";
    constexpr const char FASTMEM[] = "dolphin_fastmem";
 diff --git a/Source/Core/DolphinLibretro/Input.cpp b/Source/Core/DolphinLibretro/Input.cpp
-index fe5f3b4..2ab99c6 100644
+index 24d7950..127af2b 100644
 --- a/Source/Core/DolphinLibretro/Input.cpp
 +++ b/Source/Core/DolphinLibretro/Input.cpp
-@@ -110,6 +110,7 @@ static unsigned input_types[8];
+@@ -115,6 +115,7 @@ static unsigned frontend_types[8];
  static bool g_init_wiimotes = false;
  static bool s_sensor_init_pending = false;
  static bool sensor_enabled[NUM_CONTROLLERS_FOR_SENSORS][SENSOR_COUNT] = {};
@@ -418,15 +418,15 @@ index fe5f3b4..2ab99c6 100644
  static int port_max;
  double g_accel_pos[NUM_CONTROLLERS_FOR_SENSORS][3] = {}; // x, y, z
  double g_accel_neg[NUM_CONTROLLERS_FOR_SENSORS][3] = {}; // x, y, z
-@@ -672,6 +673,7 @@ void InitSensors()
-           auto sensor = std::make_shared<SensorDevice>(i);
-           sensor->RegisterAll();
-           g_controller_interface.AddDevice(sensor);
-+          s_sensor_registered[i] = true;
-         }
- 
-         INFO_LOG_FMT(BOOT, "Sensor interface: Port: {} ACCELEROMETER: {} GYROSCOPE: {}", i,
-@@ -683,6 +685,24 @@ void InitSensors()
+@@ -695,6 +696,7 @@ void InitSensors()
+         auto sensor = std::make_shared<SensorDevice>(i);
+         sensor->RegisterAll();
+         g_controller_interface.AddDevice(sensor);
++        s_sensor_registered[i] = true;
+       }
+     }
+   }
+@@ -702,6 +704,24 @@ void InitSensors()
    ResetControllers(WiimoteUpdateFlags{});
  }
  
@@ -451,7 +451,7 @@ index fe5f3b4..2ab99c6 100644
  void Shutdown()
  {
    if (g_init_wiimotes)
-@@ -1461,6 +1481,9 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
+@@ -1551,6 +1571,9 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
      return;
    }
  
@@ -461,7 +461,7 @@ index fe5f3b4..2ab99c6 100644
    bool altGCPorts = Libretro::Options::GetCached<bool>(Libretro::Options::sysconf::ALT_GC_PORTS_ON_WII);
    if (!altGCPorts) // Disconnect GC controller to avoid conflict with Wii device
    {
-@@ -1696,6 +1719,12 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
+@@ -1786,6 +1809,12 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
              wmAccel->SetControlExpression(5, "`" + devSensor + ":AccelY+`");  // Backward
            }
          }
@@ -474,7 +474,7 @@ index fe5f3b4..2ab99c6 100644
  
          // A sibling, not a child: nested, gyro-without-accelerometer bound neither.
          if (Libretro::Input::sensor_enabled[port][SENSOR_GYRO])
-@@ -1716,9 +1745,25 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
+@@ -1806,9 +1835,25 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
              wmGyro->SetControlExpression(5, "`" + devSensor + ":GyroZ-`");  // Yaw Right
            }
          }
@@ -501,7 +501,7 @@ index fe5f3b4..2ab99c6 100644
          wmTilt->SetControlExpression(1, "`" + devAnalog + ":Y0+`");  // Backward
          wmTilt->SetControlExpression(2, "`" + devAnalog + ":X0-`");  // Left
 diff --git a/Source/Core/DolphinLibretro/Main.cpp b/Source/Core/DolphinLibretro/Main.cpp
-index 09cbb16..be785c8 100644
+index ad03bb0..901c870 100644
 --- a/Source/Core/DolphinLibretro/Main.cpp
 +++ b/Source/Core/DolphinLibretro/Main.cpp
 @@ -1,4 +1,5 @@
@@ -510,7 +510,7 @@ index 09cbb16..be785c8 100644
  #include <cstdint>
  #include <libretro.h>
  #include <string>
-@@ -381,8 +382,9 @@ void retro_run(void)
+@@ -399,8 +400,9 @@ void retro_run(void)
        Libretro::s_refresh_rate_settled && ((old_rate > 55.0) != (new_rate > 55.0));
      Libretro::s_refresh_rate_settled = true;
  
@@ -522,7 +522,7 @@ index 09cbb16..be785c8 100644
      Libretro::environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &info);
    }
  
-@@ -628,9 +630,17 @@ void* retro_get_memory_data(unsigned id)
+@@ -652,9 +654,17 @@ void* retro_get_memory_data(unsigned id)
    return NULL;
  }
  
@@ -541,7 +541,7 @@ index 09cbb16..be785c8 100644
    bool found = false;
  
    // Match Action Replay codes
-@@ -656,7 +666,7 @@ static void enable_cheat_by_code(bool enabled, const char* code)
+@@ -680,7 +690,7 @@ static void enable_cheat_by_code(bool enabled, const char* code)
    }
  
    // Match Gecko codes only if not already matched
@@ -550,7 +550,7 @@ index 09cbb16..be785c8 100644
    {
      for (auto& c : Libretro::g_gecko_codes)
      {
-@@ -670,6 +680,8 @@ static void enable_cheat_by_code(bool enabled, const char* code)
+@@ -694,6 +704,8 @@ static void enable_cheat_by_code(bool enabled, const char* code)
  
          serialized += line.original_line;
        }
@@ -559,7 +559,7 @@ index 09cbb16..be785c8 100644
  
        if (serialized == incoming)
        {
-@@ -679,6 +691,66 @@ static void enable_cheat_by_code(bool enabled, const char* code)
+@@ -703,6 +715,66 @@ static void enable_cheat_by_code(bool enabled, const char* code)
        }
      }
    }
@@ -626,7 +626,7 @@ index 09cbb16..be785c8 100644
  }
  
  // reset cheats to off
-@@ -717,8 +789,12 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
+@@ -741,8 +813,12 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
    const std::string& game_id = SConfig::GetInstance().GetGameID();
    const u16 game_revision = SConfig::GetInstance().GetRevision();
  
@@ -705,12 +705,12 @@ index 0000000..5a810c5
 +  delete static_cast<DiscIO::BlobReader*>(h);
 +}
 diff --git a/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.cpp b/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.cpp
-index 1a42fb7..29319f9 100644
+index a3f108e..20e82d1 100644
 --- a/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.cpp
 +++ b/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.cpp
-@@ -7,6 +7,11 @@
- #include "DolphinLibretro/VideoContexts/ContextStatus.h"
- #include "DolphinLibretro/Video.h"
+@@ -304,6 +304,11 @@ std::unique_ptr<GLContext> CreateSharedGLX(GLContext::Mode mode)
+ #endif  // HAVE_X11
+ }  // namespace
  
 +namespace Libretro
 +{
@@ -720,13 +720,12 @@ index 1a42fb7..29319f9 100644
  GLContextLR::GLContextLR()
  {
  }
-@@ -58,3 +63,46 @@ void GLContextLR::Shutdown()
- {
-   m_initialized = false;
+@@ -351,9 +356,54 @@ void GLContextLR::Swap()
+         m_backbuffer_width, m_backbuffer_height, 0);
  }
-+
-+// nx-mobile 2026-10-13: the async shader compiler's worker contexts. libretro has no shared-context call; the nx-mobile
-+// runner offers one (NX_ENVIRONMENT_GET_SHARED_GL). Any other frontend: null, and Dolphin compiles on the GPU thread.
+ 
++// nx-mobile 2026-10-13: the async shader compiler's worker contexts from the nx-mobile runner's private call
++// (NX_ENVIRONMENT_GET_SHARED_GL), tried before upstream's own EGL/GLX contexts (any other frontend gets those).
 +namespace
 +{
 +class GLContextLRShared final : public GLContext
@@ -754,9 +753,8 @@ index 1a42fb7..29319f9 100644
 +  nx_shared_gl_interface m_gl;
 +  void* m_handle;
 +};
-+}  // namespace
 +
-+std::unique_ptr<GLContext> GLContextLR::CreateSharedContext()
++std::unique_ptr<GLContext> CreateSharedNx(GLContext::Mode mode)
 +{
 +  nx_shared_gl_interface gl{};
 +  if (!Libretro::environ_cb(NX_ENVIRONMENT_GET_SHARED_GL, &gl) ||
@@ -765,10 +763,20 @@ index 1a42fb7..29319f9 100644
 +  void* handle = gl.create();
 +  if (!handle)
 +    return nullptr;
-+  return std::make_unique<GLContextLRShared>(gl, handle, m_opengl_mode);
++  return std::make_unique<GLContextLRShared>(gl, handle, mode);
 +}
++}  // namespace
++
+ std::unique_ptr<GLContext> GLContextLR::CreateSharedContext()
+ {
+   // Must be called on the thread the frontend's context is current on.
++  if (auto context = CreateSharedNx(m_opengl_mode))
++    return context;
+ #if defined(HAVE_EGL)
+   if (auto context = CreateSharedEGL(m_opengl_mode))
+     return context;
 diff --git a/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.h b/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.h
-index 84238cb..da560b4 100644
+index 1bf7a79..155ed3c 100644
 --- a/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.h
 +++ b/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.h
 @@ -1,7 +1,9 @@
@@ -781,14 +789,6 @@ index 84238cb..da560b4 100644
  
  /* retroGL interface*/
  class GLContextLR : public GLContext
-@@ -15,6 +17,7 @@ public:
-   void* GetFuncAddress(const std::string& name) override;
-   bool Initialize(const WindowSystemInfo& wsi, bool stereo, bool core) override;
-   bool IsInitialized() const { return m_initialized; }
-+  std::unique_ptr<GLContext> CreateSharedContext() override;
-   void Shutdown();
- 
- private:
 diff --git a/Source/Core/DolphinLibretro/VideoContexts/nxsharedgl.h b/Source/Core/DolphinLibretro/VideoContexts/nxsharedgl.h
 new file mode 100644
 index 0000000..0a71c03
@@ -822,10 +822,10 @@ index c24bb62..c33c66d 100644
  
  std::string GameFile::GetNetPlayName(const Core::TitleDatabase& title_database) const
 diff --git a/Source/Core/VideoCommon/VertexManagerBase.cpp b/Source/Core/VideoCommon/VertexManagerBase.cpp
-index 2bc6d58..02ecc54 100644
+index 2d5e28b..2025727 100644
 --- a/Source/Core/VideoCommon/VertexManagerBase.cpp
 +++ b/Source/Core/VideoCommon/VertexManagerBase.cpp
-@@ -953,7 +953,9 @@ void VertexManagerBase::OnDraw()
+@@ -969,7 +969,9 @@ void VertexManagerBase::OnDraw()
  
    // Check if this draw is scheduled to kick a command buffer.
    // The draw counters will always be sorted so a binary search is possible here.

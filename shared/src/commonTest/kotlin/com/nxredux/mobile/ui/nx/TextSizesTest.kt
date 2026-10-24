@@ -12,7 +12,14 @@ class TextSizesTest {
     @Test fun listLabelIsSixtyTwoPercentOfThePitch() {
         assertEquals(16.12f, NxTextSizes.listLabel(26.dp).value, 1e-4f)
         assertEquals(20.15f, NxTextSizes.listLabel(32.5.dp).value, 1e-4f)
-        assertEquals(NxTextSizes.listLabel(32.5.dp).value, nxListLabelSize(260.dp).value)
+        assertEquals(NxTextSizes.listLabel(32.5.dp).value, nxListLabelSize().value)
+    }
+
+    // A list's rows stretch to fill its height; its label stays the target pitch's, so a pill grows with the row, not the text.
+    @Test fun aStretchedRowKeepsTheTargetPitchsLabel() {
+        val label = NxTextSizes.listLabel(NxListPitch).value
+        assertEquals(45f * (1f - 2 * NX_PILL_PAD) - label * NX_FONT_LINE, nxPillGap(45f, 1f), 1e-4f)
+        assertEquals(60f * (1f - 2 * NX_PILL_PAD) - label * NX_FONT_LINE, nxPillGap(60f, 1f), 1e-4f)
     }
 
     @Test fun headlineSecondaryAndCaptionStepFromTheLabel() {
@@ -44,7 +51,6 @@ class TextSizesTest {
         assertEquals(15f, NxTextSizes.dialogBody.value)
         assertEquals(16f, NxTextSizes.menuMessage.value)
         assertEquals(13f, NxTextSizes.menuInfo.value)
-        assertEquals(16f, NxTextSizes.LABEL_FALLBACK.value)
     }
 
     // The system font size is followed between 0.85 and 1.3, held there past either end (Android goes to 2.0).

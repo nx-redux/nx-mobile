@@ -57,7 +57,7 @@ fun AchievementDetail(a: RaAchievement, badgePath: String?, muted: Boolean, modi
     BoxWithConstraints(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         val bounded = maxHeight.value.isFinite()
         // Appearance → Text size, times [textShare] (the achievements panel's narrower box reads a step smaller).
-        val label = (if (bounded) nxListLabelSize(maxHeight) else NxTextSizes.LABEL_FALLBACK) * (nxTextScale() * textShare)
+        val label = nxListLabelSize() * (nxTextScale() * textShare)
         val name = NxTextSizes.headline(label)
         val body = NxTextSizes.secondary(label)
         val padV = 8.dp

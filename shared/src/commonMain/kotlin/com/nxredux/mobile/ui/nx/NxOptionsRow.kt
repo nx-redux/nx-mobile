@@ -25,10 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.settings.OptionTextSize
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.positionOnScreen
-import androidx.compose.ui.unit.toSize
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
@@ -59,6 +55,10 @@ val LocalNxOptionText = staticCompositionLocalOf { OptionTextSize.DEFAULT.ofList
  */
 fun nxOptionsRowHeight(listPitch: Dp, ofListLabel: Float = OptionTextSize.DEFAULT.ofListLabel): Dp =
     listPitch * (ofListLabel / OptionTextSize.LARGE.ofListLabel)
+
+/** The list label under the screen's Appearance → Text size: the label of the scaled [NxListPitch], whatever height the rows fit. */
+@Composable
+fun nxListLabel(): TextUnit = nxListLabelSize(nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current))
 
 /** Appearance → Text size as a scale of the fixed sizes (page title, hint bar): 1 at Large, 0.75 at Small. */
 fun nxTextScale(ofListLabel: Float): Float = ofListLabel / OptionTextSize.LARGE.ofListLabel
@@ -159,11 +159,8 @@ fun NxOptionsRow(
                 )
             }
             if (value != null) {
-                val anchor = LocalNxValueAnchor.current
                 Box(
                     Modifier.fillMaxHeight().let { m -> if (selected && onValueClick != null) m.clickable(onClick = onValueClick) else m }
-                        // The selected row's value: where a touch value dropdown opens ([NxValueDropdown]).
-                        .let { m -> if (selected && anchor != null) m.onGloballyPositioned { anchor.bounds = Rect(it.positionOnScreen(), it.size.toSize()) } else m }
                         .padding(horizontal = innerPad),
                     contentAlignment = Alignment.CenterEnd,
                 ) {

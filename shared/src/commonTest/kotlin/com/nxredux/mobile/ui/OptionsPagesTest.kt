@@ -8,8 +8,13 @@ import com.nxredux.mobile.options.EmulatorPage
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.ui.nx.Hint
+import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxRowKind
+import com.nxredux.mobile.ui.nx.NxSettingControl
+import com.nxredux.mobile.ui.nx.control
+import com.nxredux.mobile.ui.nx.hasMoreInfo
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -24,17 +29,27 @@ class OptionsPagesTest {
         for (section in SettingsSection.entries - navigation) {
             assertEquals(NxRowKind.OPTIONS, listRowKind(Screen.Settings(section, emptyList())), section.name)
         }
-        assertEquals(NxRowKind.OPTIONS, listRowKind(Screen.RaSettings(emptyList())))
         assertEquals(NxRowKind.OPTIONS, listRowKind(Screen.EmulatorOptions(page, emptyList())))
-        assertEquals(NxRowKind.OPTIONS, listRowKind(Screen.ArtworkSettings(emptyList())))
     }
 
-    @Test fun artworkValueRowsCycle() {
-        assertEquals(NxRow("Replace existing art", secondary = "Off", cycleable = true), artworkSettingNxRow(ArtworkSettingRow(ArtworkSettingKind.REPLACE, "Replace existing art", "Off")))
-        assertFalse(artworkSettingNxRow(ArtworkSettingRow(ArtworkSettingKind.REPLACE, "Replace existing art", "Off", enabled = false)).cycleable)
-        assertEquals(NxRow("Reset artwork…"), artworkSettingNxRow(ArtworkSettingRow(ArtworkSettingKind.RESET, "Reset artwork…")))
-        // The account's rows open the sign-in or read only: no arrows.
-        assertEquals(NxRow("ScreenScraper logout", secondary = "5 / 100 today"), artworkSettingNxRow(ArtworkSettingRow(ArtworkSettingKind.SS_LOGOUT, "ScreenScraper logout", "5 / 100 today")))
+    @Test fun artworkSettingsDrawTouchRows() {
+        // The On/Off rows are switches; a dimmed one its value only.
+        val replace = artworkSettingTouchRow(ArtworkSettingRow(ArtworkSettingKind.REPLACE, "Replace existing art", "Off"))
+        assertEquals(listOf("Off", "On"), replace.choices); assertEquals(0, replace.index); assertEquals(NxSettingControl.SWITCH, replace.control)
+        assertEquals("", replace.info); assertTrue(replace.hasMoreInfo)   // compact: its text behind the info icon
+        val dimmed = artworkSettingTouchRow(ArtworkSettingRow(ArtworkSettingKind.REPLACE, "Replace existing art", "Off", enabled = false))
+        assertTrue(dimmed.choices.isEmpty()); assertEquals("Off", dimmed.value)
+        assertTrue(artworkSettingTouchRow(ArtworkSettingRow(ArtworkSettingKind.RESET, "Reset artwork")).opens)
+        // Today's requests and the allowance are the rows' status line, not a value; the key rows show Set / Not set.
+        val logout = artworkSettingTouchRow(ArtworkSettingRow(ArtworkSettingKind.SS_LOGOUT, "ScreenScraper logout", "5 / 100 today"))
+        assertEquals("5 / 100 today", logout.info); assertEquals(null, logout.value)
+        assertEquals("Set", artworkSettingTouchRow(ArtworkSettingRow(ArtworkSettingKind.SGDB_KEY, "SteamGridDB API key", "Set")).value)
+        assertTrue(artworkSettingTouchRow(ArtworkSettingRow(ArtworkSettingKind.SECTION, "Accounts")).section)
+        // Hints: a switch Toggle, the allowance Back only, the rest Select; X Info when asked.
+        val back = Hint(NxButton.B, "Back")
+        assertEquals(listOf(back, Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Toggle"), Hint(NxButton.X, "Info")), artworkSettingsHints(ArtworkSettingRow(ArtworkSettingKind.REPLACE, "Replace existing art", "Off"), replace, info = true))
+        assertEquals(listOf(back), artworkSettingsHints(ArtworkSettingRow(ArtworkSettingKind.TGDB_LEFT, "TheGamesDB", "9 left this month"), null, info = false))
+        assertEquals(listOf(back, Hint(NxButton.A, "Select")), artworkSettingsHints(ArtworkSettingRow(ArtworkSettingKind.SS_LOGIN, "ScreenScraper login"), null, info = false))
     }
 
     @Test fun categoryAndGameListsKeepThePill() {
@@ -80,14 +95,22 @@ class OptionsPagesTest {
         assertEquals(NxRow("Game Boy", enabled = false, secondary = "GB"), settingsNxRow(SettingsRow(SettingsKind.DEFAULT_TAG, "Game Boy", "GB", enabled = false)))
     }
 
-    @Test fun raSettingsArrowsOnTheSteppedRows() {
-        assertTrue(raSettingsNxRow(RaSettingsRow(RaSettingKind.NOTIFICATION_SECONDS, "Notification duration", "3 s")).cycleable)
-        assertTrue(raSettingsNxRow(RaSettingsRow(RaSettingKind.PROGRESS_SECONDS, "Progress duration", "Off")).cycleable)
-        assertTrue(raSettingsNxRow(RaSettingsRow(RaSettingKind.SORT_ORDER, "Achievement sort order", "Type")).cycleable)
-        assertEquals(NxRow("Show notifications", secondary = "On", cycleable = true), raSettingsNxRow(RaSettingsRow(RaSettingKind.NOTIFICATIONS, "Show notifications", "On")))
-        assertTrue(raSettingsNxRow(RaSettingsRow(RaSettingKind.ENABLED, "Enable achievements", "On")).cycleable)
-        assertFalse(raSettingsNxRow(RaSettingsRow(RaSettingKind.ENABLED, "Enable achievements", "Off", enabled = false)).cycleable)
-        assertEquals(NxRow("Status", enabled = false, secondary = "x"), raSettingsNxRow(RaSettingsRow(RaSettingKind.STATUS, "Status", "x", enabled = false)))
+    @Test fun raSettingsDrawTouchRows() {
+        val seconds = SettingChoices((1..5).map { "$it s" }, 2)
+        val duration = raSettingsTouchRow(RaSettingsRow(RaSettingKind.NOTIFICATION_SECONDS, "Notification duration", "3 s", choices = seconds))
+        assertEquals(NxSettingControl.PICKER, duration.control); assertEquals(2, duration.index); assertEquals(null, duration.value)
+        val show = raSettingsTouchRow(RaSettingsRow(RaSettingKind.NOTIFICATIONS, "Show notifications", "On", choices = SettingChoices(listOf("Off", "On"), 1)))
+        assertEquals(NxSettingControl.SWITCH, show.control)
+        // The status is Sign in's line (an error in the warning colour), not a value.
+        val signIn = raSettingsTouchRow(RaSettingsRow(RaSettingKind.SIGN_IN, "Sign in", "Network error", warning = true))
+        assertEquals("Network error", signIn.info); assertTrue(signIn.warning); assertEquals(null, signIn.value)
+        assertTrue(raSettingsTouchRow(RaSettingsRow(RaSettingKind.SECTION, "Account")).section)
+        assertTrue(raSettingsTouchRow(RaSettingsRow(RaSettingKind.GAP, "")).spacer)
+        // Hints: a picker Choose, an action Select, a group label Back only; X Info when asked.
+        val back = Hint(NxButton.B, "Back")
+        assertEquals(listOf(back, Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Choose")), raSettingsHints(RaSettingsRow(RaSettingKind.NOTIFICATION_SECONDS, "Notification duration", "3 s", choices = seconds), duration))
+        assertEquals(listOf(back, Hint(NxButton.A, "Select"), Hint(NxButton.X, "Info")), raSettingsHints(RaSettingsRow(RaSettingKind.RESET_ACCOUNT, "Reset account data"), null, info = true))
+        assertEquals(listOf(back), raSettingsHints(RaSettingsRow(RaSettingKind.SECTION, "Account")))
     }
 
     @Test fun emulatorValueRowsCycle() {

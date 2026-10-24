@@ -206,8 +206,8 @@ private fun InGameMenuContent(
     val page = state.page
     // Without the panel beside the root (netplay) the header stays; the root's right side is left empty.
     val beside = panel?.takeIf { panelBeside }
-    // The save-slot card's text: the list label size at the menu's row height.
-    val slotTextSize = NxTextSizes.listLabel(rowHeight) * nxTextScale()   // Appearance → Text size
+    // The save-slot card's text: the list label size.
+    val slotTextSize = nxListLabel()   // Appearance → Text size
     val selectedRow = page.rows.getOrNull(page.selected)
     Column(
         Modifier
@@ -613,7 +613,7 @@ private fun AdjustContent(
     val row = page.rows.firstOrNull() as? MenuRow.Option ?: return
     val selection = nxOptionsSelection(LocalNxColors.current)
     val font = LocalNxFont.current
-    val fontSize = NxTextSizes.listLabel(rowHeight)
+    val fontSize = nxListLabel()
     val valueSize = NxTextSizes.secondary(fontSize)
     val pillHeight = rowHeight * 0.84f
     val dismiss by rememberUpdatedState(onDismiss)

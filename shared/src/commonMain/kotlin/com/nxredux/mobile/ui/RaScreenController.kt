@@ -13,6 +13,9 @@ import com.nxredux.mobile.library.path
 import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
+import com.nxredux.mobile.ui.nx.NxSettingControl
+import com.nxredux.mobile.ui.nx.NxSettingEvent
+import com.nxredux.mobile.ui.nx.control
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -36,10 +39,8 @@ internal interface RaScreenHost {
     fun refreshGameInfo()
     /** Signed in to RetroAchievements: a token and a user name. */
     fun raSignedIn(): Boolean
-    /** The footer is touch only: a value row of three or more picks from a chooser. */
-    val touchMode: Boolean
-    /** The touch chooser for [v] titled [title]; [again] reads the row's value again after a pick. False when none opened. */
-    fun <T> openValueChooser(title: String, v: SettingValue<T>, again: () -> SettingValue<*>?): Boolean
+    /** A value row's picker popup titled [title]: [labels], [current] under the cursor; [apply] takes the picked index. */
+    fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit)
 }
 
 /**
@@ -286,20 +287,36 @@ internal class RaScreenController(
     private val RA_BUSY = "Busy, try again"
     private val RA_READ_FAILED = "Couldn't read achievements"
 
-    /** The settings page's rows, from the settings and the controller's last status. */
+    /**
+     * The settings page's rows, from the settings and the controller's last status, in groups: Account (Sign in or Sign
+     * out with the status under it, Enable achievements, Download all game data), Notifications, Achievements (the sort
+     * order) and Reset. Each value row carries its values ([raSettingValue]).
+     */
     private fun raSettingsRows(): List<RaSettingsRow> {
         val st = (achievements?.state?.value as? RaState.Idle)?.status
         val s = settings
         val signedIn = s.raToken != null   // enabling achievements and downloading game data need an account
+        fun value(kind: RaSettingKind, label: String, text: String, enabled: Boolean = true) = RaSettingsRow(
+            kind, label, text, enabled = enabled,
+            choices = raSettingValue(kind)?.let { v -> v.labels?.let { SettingChoices(it, v.index) } },
+        )
+        val status = st?.lastError ?: if (signedIn) "Signed in as ${s.raUsername}" else "Not signed in"
         return listOf(
-            if (signedIn) RaSettingsRow(RaSettingKind.SIGN_OUT, "Sign out") else RaSettingsRow(RaSettingKind.SIGN_IN, "Sign in"),
-            RaSettingsRow(RaSettingKind.STATUS, "Status", st?.lastError ?: if (signedIn) "Signed in as ${s.raUsername}" else "Not signed in"),
-            RaSettingsRow(RaSettingKind.ENABLED, "Enable achievements", if (signedIn && s.raEnabled) "On" else "Off", enabled = signedIn),
+            RaSettingsRow(RaSettingKind.SECTION, "Account"),
+            if (signedIn) RaSettingsRow(RaSettingKind.SIGN_OUT, "Sign out", status, warning = st?.lastError != null)
+            else RaSettingsRow(RaSettingKind.SIGN_IN, "Sign in", status, warning = st?.lastError != null),
+            value(RaSettingKind.ENABLED, "Enable achievements", if (signedIn && s.raEnabled) "On" else "Off", enabled = signedIn),
             RaSettingsRow(RaSettingKind.DOWNLOAD_ALL, "Download all game data", st?.let { "${it.cachedGames} games cached" }, enabled = signedIn),
-            RaSettingsRow(RaSettingKind.NOTIFICATIONS, "Show notifications", if (s.raShowNotifications) "On" else "Off"),
-            RaSettingsRow(RaSettingKind.NOTIFICATION_SECONDS, "Notification duration", "${s.raNotificationSeconds} s"),
-            RaSettingsRow(RaSettingKind.PROGRESS_SECONDS, "Progress duration", if (s.raProgressSeconds == 0) "Off" else "${s.raProgressSeconds} s"),
-            RaSettingsRow(RaSettingKind.SORT_ORDER, "Achievement sort order", s.raSortOrder.label),
+            RaSettingsRow(RaSettingKind.GAP, ""),
+            RaSettingsRow(RaSettingKind.SECTION, "Notifications"),
+            value(RaSettingKind.NOTIFICATIONS, "Show notifications", if (s.raShowNotifications) "On" else "Off"),
+            value(RaSettingKind.NOTIFICATION_SECONDS, "Notification duration", "${s.raNotificationSeconds} s"),
+            value(RaSettingKind.PROGRESS_SECONDS, "Progress duration", if (s.raProgressSeconds == 0) "Off" else "${s.raProgressSeconds} s"),
+            RaSettingsRow(RaSettingKind.GAP, ""),
+            RaSettingsRow(RaSettingKind.SECTION, "Achievements"),
+            value(RaSettingKind.SORT_ORDER, "Achievement sort order", s.raSortOrder.label),
+            RaSettingsRow(RaSettingKind.GAP, ""),
+            RaSettingsRow(RaSettingKind.SECTION, "Reset"),
             RaSettingsRow(RaSettingKind.RESET_ACCOUNT, "Reset account data"),
             RaSettingsRow(RaSettingKind.ERASE_ALL, "Erase all achievement data"),
             RaSettingsRow(RaSettingKind.RESET_SETTINGS, "Reset settings to defaults"),
@@ -313,25 +330,29 @@ internal class RaScreenController(
      */
     private fun raSettingValue(kind: RaSettingKind?): SettingValue<*>? {
         val s = settings
-        fun <T> cycle(values: List<T>, current: T, label: ((T) -> String)? = null, clamps: Boolean = false, set: (T) -> Unit) =
+        fun <T> cycle(values: List<T>, current: T, label: (T) -> String, clamps: Boolean = false, set: (T) -> Unit) =
             SettingValue(values, current, set, label, clamps) { refreshRaSettings() }
+        val onOff = { on: Boolean -> if (on) "On" else "Off" }
         return when (kind) {
             RaSettingKind.NOTIFICATION_SECONDS -> cycle((1..5).toList(), s.raNotificationSeconds, { "$it s" }, clamps = true) { s.raNotificationSeconds = it }
             RaSettingKind.PROGRESS_SECONDS -> cycle((0..5).toList(), s.raProgressSeconds, { if (it == 0) "Off" else "$it s" }, clamps = true) { s.raProgressSeconds = it }
             RaSettingKind.SORT_ORDER -> cycle(RaSortOrder.entries, s.raSortOrder, { it.label }) { s.raSortOrder = it }
-            RaSettingKind.ENABLED -> cycle(listOf(false, true), s.raEnabled) { s.raEnabled = it }
-            RaSettingKind.NOTIFICATIONS -> cycle(listOf(false, true), s.raShowNotifications) { s.raShowNotifications = it }
+            RaSettingKind.ENABLED -> cycle(listOf(false, true), s.raEnabled, onOff) { s.raEnabled = it }
+            RaSettingKind.NOTIFICATIONS -> cycle(listOf(false, true), s.raShowNotifications, onOff) { s.raShowNotifications = it }
             else -> null
         }
     }
 
-    /** Opens on the remembered row, but never on Sign out: the page lands on Status instead, so a stray A reads only. */
+    /**
+     * Opens on the remembered row, but never on Sign out (nor a group label): the page lands on the row under it
+     * instead, so a stray A never signs out.
+     */
     private fun openRaSettings() {
         val rows = raSettingsRows()
         screen.value = Screen.RaSettings(rows)
-        val sel = raSettingsSelection.clampedTo(rows.size)
+        val sel = raSettingsSelection.clampedTo(rows.size).landOn { rows[it].selectable }
         selection.value = if (rows.getOrNull(sel.index)?.kind != RaSettingKind.SIGN_OUT) sel
-            else sel.copy(index = rows.indexOfFirst { it.kind == RaSettingKind.STATUS })
+            else sel.copy(index = sel.index + 1).clampedTo(rows.size).landOn { rows[it].selectable }
     }
 
     /** Re-renders the rows, keeping an open sign-in modal or confirm. */
@@ -455,19 +476,18 @@ internal class RaScreenController(
         }
         val row = s.rows.getOrNull(selection.value.index)
         when (button) {
-            NxButton.UP -> selection.value = selection.value.up()
-            NxButton.DOWN -> selection.value = selection.value.down()
+            NxButton.UP, NxButton.DOWN -> selection.value = selection.value.step(if (button == NxButton.UP) -1 else 1) { s.rows.getOrNull(it)?.selectable == true }
             // The value rows step either way (NX Redux ITEM_CYCLE): the durations stop at their ends, the sort order and the
             // On/Off rows wrap. Enable needs an account, as on A.
             NxButton.LEFT, NxButton.RIGHT -> if (row?.enabled != false) raSettingValue(row?.kind)?.let { v ->
                 v.change(if (button == NxButton.RIGHT) 1 else -1, wrap = !v.clamps)
             }
             NxButton.A -> if (row?.enabled == false) Unit else when (row?.kind) {
-                // A (and a row tap) steps a value row forward with wrap-around, so touch alone reaches every value.
-                // Touch only, a row of three or more values picks from a chooser instead.
+                // A value row as on Settings: a picker row (many or long values) opens its picker, the others step
+                // forward with wrap-around.
                 RaSettingKind.ENABLED, RaSettingKind.NOTIFICATIONS, RaSettingKind.NOTIFICATION_SECONDS, RaSettingKind.PROGRESS_SECONDS,
                 RaSettingKind.SORT_ORDER -> raSettingValue(row?.kind)?.let { v ->
-                    if (!(host.touchMode && host.openValueChooser(row?.label.orEmpty(), v) { raSettingValue(row?.kind) })) v.change(1)
+                    if (row != null && raSettingsTouchRow(row).control == NxSettingControl.PICKER) openRaPicker(row) else v.change(1)
                 }
                 RaSettingKind.SIGN_IN ->
                     if (c.busy) error.value = RA_BUSY   // a sign-in (or other job) is still running
@@ -488,10 +508,35 @@ internal class RaScreenController(
                     settings.raNotificationSeconds = 3; settings.raProgressSeconds = 1; settings.raSortOrder = RaSortOrder.DEFAULT
                     refreshRaSettings()
                 }
-                RaSettingKind.STATUS, null -> Unit
+                RaSettingKind.SECTION, RaSettingKind.GAP, null -> Unit
             }
             NxButton.B -> leaveRaSettings()
             else -> Unit
+        }
+    }
+
+    /**
+     * A touch on a settings row's control ([com.nxredux.mobile.ui.nx.NxSettingsList]), selecting it: a segment or the
+     * switch sets that value ([SettingValue.changeTo]), a picker row opens its picker. Nothing on a dimmed row or under
+     * an open sign-in or confirm. The info icon is [AppState]'s ([AppState.showSettingInfo]).
+     */
+    fun onRaSettingEvent(s: Screen.RaSettings, event: NxSettingEvent) {
+        if (s.signingIn || s.confirm != null) return
+        val i = event.row
+        val row = s.rows.getOrNull(i)?.takeIf { it.selectable && it.enabled } ?: return
+        selection.value = selection.value.copy(index = i)
+        when (event) {
+            is NxSettingEvent.Choose -> raSettingValue(row.kind)?.changeTo(event.index)
+            is NxSettingEvent.OpenPicker -> openRaPicker(row)
+            is NxSettingEvent.Info -> Unit
+        }
+    }
+
+    /** [row]'s picker: every value, the current one under the cursor; a pick sets it, the row found again by its kind. */
+    private fun openRaPicker(row: RaSettingsRow) {
+        val c = row.choices?.takeIf { it.labels.size >= 2 } ?: return
+        host.openPicker(row.label, c.labels, c.index) { picked ->
+            if (screen.value is Screen.RaSettings) raSettingValue(row.kind)?.changeTo(picked)
         }
     }
 

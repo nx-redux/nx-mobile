@@ -340,7 +340,7 @@ object CoreRegistry {
         rewind = false,
     )
 
-    // Wii and GameCube on Dolphin (libretro/dolphin 7a2d51d5, patched; cores/Makefile), GLES or Vulkan (Graphics API). It
+    // Wii and GameCube on Dolphin (libretro/dolphin 3aac3f05, patched; cores/Makefile), GLES or Vulkan (Graphics API). It
     // opens the game by path (need_fullpath) through the runner's VFS (its Libretro::VFile): /rom/<name>, read from the SAF
     // descriptor in place, not a multi-GB copy into the cache. Its user dir is <save dir>/User/, so each console has its
     // own (Saves/WII/User, Saves/GC/User) and one's NAND (User/Wii) and memory cards (User/GC) are not seen by the other; a
@@ -349,7 +349,9 @@ object CoreRegistry {
     // airship); async with skip-rendering (shaders compile in the background on the runner's shared contexts and an effect
     // whose shader is not ready is skipped for a moment, not drawn with GPU-heavy ubershaders, which made SMG2 lag on the
     // Fold); on-screen messages off. The orientation hotkeys are off because the app sets the controller type itself
-    // (nx_wii_controller). Four players: every port gets the game's device. Port 0 must be set or the Wiimote mapping is
+    // (nx_wii_controller); for the same reason Wiimote Device stays "Set per port" (it would override every port's). Audio is pushed per frame (mode 0):
+    // the runner has no audio or frame-time callback for the other modes. No VR mode (no VR frontend), no popups (RetroArch
+    // notifications). Four players: every port gets the game's device. Port 0 must be set or the Wiimote mapping is
     // half built: the sideways Wiimote for Wii, the GameCube pad for GameCube; GameActivity overrides the Wii ports from
     // the resolved controller.
     private val dolphinOptions = mapOf(
@@ -361,6 +363,10 @@ object CoreRegistry {
         "dolphin_hotkey_sideways_toggle" to "Disabled",
         "dolphin_hotkey_upright_toggle" to "Disabled",
         "dolphin_cheats_enabled" to "enabled",   // when off, retro_cheat_set ignores every code
+        "dolphin_call_back_audio_method" to "0",
+        "dolphin_vr_mode" to "disabled",
+        "dolphin_wiimote_default_device" to "frontend",
+        "dolphin_log_popups_enabled" to "disabled",
     )
     private val dolphinLocked = setOf(
         "dolphin_renderer", "dolphin_osd_enabled", "dolphin_debug_mode_enabled", "dolphin_bluetooth_passthrough",
@@ -369,6 +375,7 @@ object CoreRegistry {
         "dolphin_log_memmap_enabled", "dolphin_log_dspinterface_enabled", "dolphin_log_dsphle_enabled",
         "dolphin_log_dsplle_enabled", "dolphin_log_dsp_mail_enabled",
         "dolphin_hotkey_sideways_toggle", "dolphin_hotkey_upright_toggle", "dolphin_cheats_enabled",
+        "dolphin_vr_mode", "dolphin_wiimote_default_device", "dolphin_log_popups_enabled",
         // Console Settings → Wii Screen sets these at launch (WiiScreen): the shape, and the pointer geometry for it.
         "dolphin_widescreen", "dolphin_ir_yaw", "dolphin_ir_pitch", "dolphin_ir_offset",
     )
