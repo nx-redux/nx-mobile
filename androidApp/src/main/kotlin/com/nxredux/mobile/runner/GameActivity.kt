@@ -413,7 +413,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val speed by lazy {
         // The panels' Fast forward / Rewind tiles follow whatever changed them (a shortcut, a tile, the buffer running out).
         // So do the touch shortcut buttons' toggled look and their Rewind rows.
-        SpeedController(lifecycleScope, onTiles = { dual.refreshDualPanel(); menu.menuModel?.let(menu::publishSpeed); refreshTouchShortcuts() }) { retroView }
+        SpeedController(lifecycleScope, lifecycle, onTiles = { dual.refreshDualPanel(); menu.menuModel?.let(menu::publishSpeed); refreshTouchShortcuts() }) { retroView }
     }
     // What [applyShortcuts] last built: the touch buttons' actions ([refreshTouchShortcuts]).
     private var effectiveShortcuts: EffectiveShortcuts? = null

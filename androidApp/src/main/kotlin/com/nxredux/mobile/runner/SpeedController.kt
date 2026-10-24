@@ -8,6 +8,8 @@ import com.nxredux.mobile.shortcuts.SpeedIndicator
 import com.nxredux.mobile.shortcuts.SpeedOutput
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.RewindStatus
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,6 +35,8 @@ import kotlinx.coroutines.withContext
  */
 internal class SpeedController(
     private val scope: CoroutineScope,
+    /** The tick runs only while this is RESUMED: no wake-ups in the background. */
+    private val lifecycle: Lifecycle,
     private val onTiles: () -> Unit = {},
     private val view: () -> GLRetroView?,
 ) {
@@ -130,16 +134,18 @@ internal class SpeedController(
         if (!on) { tick?.cancel(); tick = null; return }
         if (tick?.isActive == true) return
         tick = scope.launch {
-            while (isActive) {
-                delay(REWIND_TICK_MS)
-                val rewinding = control.output.rewinding
-                when (view()?.rewindStatus()) {
-                    RewindStatus.UNAVAILABLE -> control.onRewindUnavailable()   // rewind hidden: this tick stops
-                    RewindStatus.EMPTY -> if (rewinding) control.onRewindEmpty() else continue
-                    RewindStatus.OFF -> if (rewinding) control.onRewindOff() else continue
-                    else -> continue
+            lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {   // backgrounded: no wake-ups; back in front, it resumes
+                while (isActive) {
+                    delay(REWIND_TICK_MS)
+                    val rewinding = control.output.rewinding
+                    when (view()?.rewindStatus()) {
+                        RewindStatus.UNAVAILABLE -> control.onRewindUnavailable()   // rewind hidden: this tick stops
+                        RewindStatus.EMPTY -> if (rewinding) control.onRewindEmpty() else continue
+                        RewindStatus.OFF -> if (rewinding) control.onRewindOff() else continue
+                        else -> continue
+                    }
+                    apply()
                 }
-                apply()
             }
         }
     }

@@ -603,8 +603,8 @@ void LibretroDroid::releaseCore() {
     rewind.configure(false, 0);
     rewindSize = 0;
     rewindGivenUp = false;
-    rewindProbeWait = 0;
-    rewindRefusals = 0;
+    rewindProbe.reset();
+    rewindPlayed = 0;
     rewindBuilt = false;
     // The patches and the RAM they point into belong to that core.
     memoryCheats.clear();
@@ -734,6 +734,7 @@ void LibretroDroid::step() {
             runFrame(np, lk, frameSeconds);
             if (!np && !lk) rewind.capture(rewindSerialize);
         }
+        rewindPlayed += runs;   // the probe's clock (RewindProbe): a paused step plays none
         if (speed > 0) rewindState = (np || lk) ? REWIND_STATUS_OFF : rewind.enabled() ? REWIND_STATUS_READY : offStatus();
     }
     auto& achievements = Achievements::getInstance();
@@ -864,19 +865,20 @@ void LibretroDroid::applyRewindConfig() {
         return;
     }
     // Built only once the core can serialize: booting cores (mupen64plus, pcsx) report 0 or refuse for a while.
-    // Asked again every REWIND_PROBE_STEPS steps, not every frame, and less often after each refusal.
-    if (rewindProbeWait > 0) {
-        rewindProbeWait--;
-        return;
-    }
-    rewindProbeWait = REWIND_PROBE_STEPS;
+    // Asked again every RewindProbe::INTERVAL played frames, not every frame, and less often after each refusal.
+    if (!rewindProbe.advance(std::exchange(rewindPlayed, 0u))) return;
     const size_t size = core->retro_serialize_size();
     if (size == 0) {
-        // A booting core reports 0 for a while (mupen64plus); one that always does (melonDS DS in DSi mode) has no
-        // states at all: counted like a refusal, so it is given up on (and the app hides Rewind) after the same backoff.
-        noteRewindRefusal();
+        // One that stays at 0 has no states at all (melonDS DS in DSi mode): given up on, and the app hides Rewind.
+        const double fps = fpsSync ? fpsSync->getContentRefreshRate() : 60.0;
+        const auto limit = static_cast<unsigned>(REWIND_ZERO_SECONDS * std::max(fps, 1.0));
+        if (rewindProbe.sizeZero(limit)) {
+            LOGW("Rewind: no state after %u s of play; rewind off for this game", REWIND_ZERO_SECONDS);
+            rewindGivenUp = true;
+        }
         return;
     }
+    rewindProbe.sizeKnown();
     if (rewindSize != 0 && size != rewindSize) {
         // Its last capture was refused because the state grew (or shrank): rebuilding per change would churn many MB.
         LOGW("Rewind: the state size changed from %zu to %zu bytes; rewind off for this game", rewindSize, size);
@@ -904,14 +906,11 @@ void LibretroDroid::applyRewindConfig() {
 }
 
 void LibretroDroid::noteRewindRefusal() {
-    rewindRefusals++;
-    if (rewindRefusals >= REWIND_MAX_REFUSALS) {
-        LOGW("Rewind: the core refused to serialize (or had no state) %u times; rewind off for this game", rewindRefusals);
-        rewindGivenUp = true;
-        return;
-    }
     // 2, 4, 8 ... up to 32 probe intervals: a core still booting is soon caught, one that never serializes costs little.
-    rewindProbeWait = REWIND_PROBE_STEPS << std::min(rewindRefusals, 5u);
+    if (rewindProbe.refused()) {
+        LOGW("Rewind: the core refused to serialize %u times; rewind off for this game", rewindProbe.refusalCount());
+        rewindGivenUp = true;
+    }
 }
 
 int LibretroDroid::offStatus() const {

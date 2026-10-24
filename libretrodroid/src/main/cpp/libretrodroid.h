@@ -40,6 +40,7 @@
 #include "fpssync.h"
 #include "fastforward.h"
 #include "rewind.h"
+#include "rewindprobe.h"
 #include "input.h"
 #include "rumble.h"
 #include "shadermanager.h"
@@ -178,7 +179,7 @@ public:
     void setRewindAudio(bool audible);
     // REWIND_STATUS_*: what step() last did; a toggled rewind that reads EMPTY turns itself off. Any thread.
     int rewindStatus() const { return rewindState.load(); }
-    static constexpr int REWIND_STATUS_OFF = 0;        // off, or this core/game can't rewind
+    static constexpr int REWIND_STATUS_OFF = 0;        // off, or no buffer built yet (the core can't serialize yet)
     static constexpr int REWIND_STATUS_READY = 1;
     static constexpr int REWIND_STATUS_REWINDING = 2;
     static constexpr int REWIND_STATUS_EMPTY = 3;      // rewinding with nothing older left
@@ -249,12 +250,12 @@ private:
     void applyFastForward(unsigned maxSpeed, bool audible);
     // GL thread, in step(): builds or frees the rewind buffers for what setRewindEnabled asked.
     void applyRewindConfig();
-    // GL thread: a refused serialize (probe or capture): backs off, or gives up after REWIND_MAX_REFUSALS.
+    // GL thread: a refused serialize (probe or capture): backs off, or gives up after RewindProbe::MAX_REFUSALS.
     void noteRewindRefusal();
     // GL thread, in step(): tells audio when rewinding starts or stops muting.
+    void applyRewinding(bool rewinding);
     // GL thread: the status when no buffer is built: UNAVAILABLE once given up on while wanted, else OFF.
     int offStatus() const;
-    void applyRewinding(bool rewinding);
     // GL thread, in step(): one frame while rewinding (a step back, or a cadence frame); returns the frames it ran.
     unsigned stepRewinding(float frameSeconds);
     // GL thread: retro_run with the per-frame work around it (pointers, RAM cheats, achievements).
@@ -362,11 +363,12 @@ private:
     // The state size rewind was built for; a core whose size changes mid-game can't rewind this session.
     size_t rewindSize = 0;
     bool rewindGivenUp = false;
-    // Steps until retro_serialize_size is asked again while rewind can't build (booting cores report 0 or refuse).
-    unsigned rewindProbeWait = 0;
-    static constexpr unsigned REWIND_PROBE_STEPS = 60;
-    unsigned rewindRefusals = 0;
-    static constexpr unsigned REWIND_MAX_REFUSALS = 8;
+    // When to ask again while rewind can't build (booting cores report 0 or refuse), and when to give up.
+    RewindProbe rewindProbe;
+    // Frames played since applyRewindConfig last ran: the probe counts played frames, not steps (a pause plays none).
+    unsigned rewindPlayed = 0;
+    // A state size of 0 for this long of play is a core with no states (melonDS DS in DSi mode).
+    static constexpr unsigned REWIND_ZERO_SECONDS = 15;
     // Rewind was built for this game and still is, as far as the last applyRewindConfig saw.
     bool rewindBuilt = false;
     // Set by an EMPTY step, cleared when the rewind ends: rewindStatus keeps reporting EMPTY meanwhile.

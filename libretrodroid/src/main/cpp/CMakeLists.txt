@@ -92,6 +92,7 @@ add_library(libretrodroid SHARED
         rewindring.cpp
         rewindbudget.h
         rewindbudget.cpp
+        rewindprobe.h
         rewind.h
         rewind.cpp
         sensorstate.h
