@@ -308,6 +308,14 @@ interface AppSettings {
         get() = emptyMap()
         set(@Suppress("UNUSED_PARAMETER") value) {}
     /**
+     * Controls → Shortcuts: the base bindings and touch buttons every console and game inherits, as
+     * [com.nxredux.mobile.shortcuts.Shortcuts.encodeBase] writes them. Empty: nothing bound. Defaulted so a platform or
+     * fake without it stores nothing.
+     */
+    var shortcuts: String
+        get() = ""
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /**
      * Settings → Controls → Menu pad (default on): off, portrait's main menu drops its bottom on-screen pad and the screen
      * runs to the bottom (the menu is touch-driven). Games keep their own pad. Defaulted so a platform or fake without it
      * stores nothing.

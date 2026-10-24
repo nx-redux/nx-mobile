@@ -5,6 +5,8 @@ package com.nxredux.mobile.shortcuts
  * `android.view.KeyEvent.KEYCODE_*`; androidApp has a test pinning them to the real constants.
  */
 object KeyCodes {
+    /** A controller's or the system's Back: press-to-bind cancels on it, as on B. */
+    const val BACK = 4
     const val DPAD_UP = 19
     const val DPAD_DOWN = 20
     const val DPAD_LEFT = 21

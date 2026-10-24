@@ -1,6 +1,14 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.sync.SyncLink
+import com.nxredux.mobile.shortcuts.CaptureResult
+import com.nxredux.mobile.shortcuts.KeyLabels
+import com.nxredux.mobile.shortcuts.ShortcutAction
+import com.nxredux.mobile.shortcuts.ShortcutBinding
+import com.nxredux.mobile.shortcuts.ShortcutCapture
+import com.nxredux.mobile.shortcuts.ShortcutSet
+import com.nxredux.mobile.shortcuts.Shortcuts
+import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.update.AppRelease
 import com.nxredux.mobile.update.UpdateController
 import com.nxredux.mobile.update.UpdateState
@@ -445,6 +453,8 @@ sealed interface Screen {
 }
 
 enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, MENU_PAD, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, APP_UPDATE,
+    // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
+    SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     LAYOUT_HOME, LAYOUT_CONSOLES, LAYOUT_COLLECTIONS, LAYOUT_TOOLS, LAYOUT_GAME_LISTS, LAYOUT_TITLE_HINTS, LAYOUT_SWITCHER, TEXT_SIZE,
     // A group's label and the space before it (System's General, Launcher, Developer, About, Licenses): never selected.
     SECTION, GAP,
@@ -464,6 +474,7 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
     SYSTEM("System"),
     DEFAULT_EMULATORS("Default emulators", EMULATORS, SettingsKind.DEFAULTS),
     PAD_LAYOUT("Pad layout", CONTROLS, SettingsKind.PAD_LAYOUT), SAVES("Saves", LIBRARY, SettingsKind.SAVES),
+    SHORTCUTS("Shortcuts", CONTROLS, SettingsKind.SHORTCUTS),
     IMPORT_SAVES("Import saves", SAVES, SettingsKind.IMPORT_SAVES),
     // An import's results; Done and B go back to Saves ([AppState.leaveSubPage]), past Import saves.
     IMPORT_RESULT("Import results", IMPORT_SAVES),
@@ -508,6 +519,9 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
 
 /** The last row of Appearance, Layouts and Controls (NX Redux's label; its description has no place on a Settings page here). */
 internal const val RESET_DEFAULTS_LABEL = "Reset to defaults"
+
+/** A Shortcuts bind row's value while it waits for a press. */
+internal const val SHORTCUT_PROMPT = "Press a button…"
 
 /** How long a notice stays before it clears itself. */
 private const val NOTICE_MILLIS = 3_000L
@@ -687,8 +701,11 @@ data class SettingChoices(val labels: List<String>, val index: Int)
 /** A Settings row's full description over the page ([AppState.settingInfo]); [scrollSeq] / [scrollDir] count UP/DOWN steps. */
 data class SettingInfoPopup(val title: String, val text: String, val scrollSeq: Int = 0, val scrollDir: Int = 0)
 
-/** [warning]: its secondary is a problem (a folder not available), drawn in the warning colour. */
-data class SettingsRow(val kind: SettingsKind, val label: String, val secondary: String? = null, val extra: ExtraFolder? = null, val consoleId: String? = null, val enabled: Boolean = true, val category: MenuCategory? = null, val shelf: HomeShelf? = null, val hint: NxButton? = null, val padShape: PadShape? = null, val warning: Boolean = false, val note: String? = null)
+/**
+ * [warning]: its secondary is a problem (a folder not available), drawn in the warning colour. [shortcut] / [touchSlot]:
+ * the action or touch button of a Shortcuts row; [note] on a bind row: it is waiting for a press, and what to do.
+ */
+data class SettingsRow(val kind: SettingsKind, val label: String, val secondary: String? = null, val extra: ExtraFolder? = null, val consoleId: String? = null, val enabled: Boolean = true, val category: MenuCategory? = null, val shelf: HomeShelf? = null, val hint: NxButton? = null, val padShape: PadShape? = null, val warning: Boolean = false, val note: String? = null, val shortcut: ShortcutAction? = null, val touchSlot: TouchSlot? = null)
 
 /** A row the selection lands on: not a group label, the space before one, or a paragraph. */
 val SettingsRow.selectable: Boolean get() = kind != SettingsKind.SECTION && kind != SettingsKind.GAP && kind != SettingsKind.TEXT
@@ -1379,6 +1396,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /** The app left the foreground: art results still waiting are written now, not left to a debounce a kill would lose. */
     fun onBackground() {
+        if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) { closeShortcuts(); refreshSettings() }
         scope.launch { flushArt() }
     }
 
@@ -3621,6 +3639,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     fun openSettings(section: SettingsSection) {
+        if (section != SettingsSection.SHORTCUTS && (_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) closeShortcuts()
         when (_screen.value) {
             is Screen.Systems -> rememberMenuSelection()
             is Screen.SettingsMenu -> settingsMenuSelection = _selection.value
@@ -3809,6 +3828,103 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         showSettingsOn(SettingsSection.PAD_LAYOUT, SettingsKind.PAD_LAYOUT_RESET)
     }
 
+    /** Controls -> Shortcuts as edited since it opened; null: closed (or untouched), [AppSettings.shortcuts] is all there is. */
+    private var shortcutDraft: ShortcutSet? = null
+
+    private fun shortcutSet(): ShortcutSet = shortcutDraft ?: Shortcuts.decodeBase(deps.settings.shortcuts)
+
+    /** Press to bind's raw keys ([captureKey]); Controls -> Shortcuts' bind rows start it. */
+    private val capture = ShortcutCapture()
+
+    private val _capturingShortcut = MutableStateFlow<ShortcutAction?>(null)
+    /** The action a Shortcuts bind row is waiting on a press for; while set the platform hands raw keys to [captureKey] first. */
+    val capturingShortcut: StateFlow<ShortcutAction?> = _capturingShortcut.asStateFlow()
+
+    private var controllerConnected = true
+
+    /** The UI reports whether a controller is connected: a bind row waiting for a press says what it needs. */
+    fun onControllerConnected(connected: Boolean) {
+        if (controllerConnected == connected) return
+        controllerConnected = connected
+        if (_capturingShortcut.value != null) refreshSettings()
+    }
+
+    /**
+     * A raw key from the platform, before it maps to an [NxButton]: true when press to bind took it, so the platform
+     * drops it. Waiting, every key is the capture's (MENU opens nothing, L23); after it ends, the keys still held stay
+     * its until released ([ShortcutCapture.takes]). Auto-repeats are the platform's to drop.
+     */
+    fun captureKey(keyCode: Int, down: Boolean): Boolean {
+        if (!capture.takes(keyCode)) return false
+        val result = capture.onKey(keyCode, down) ?: return true
+        val action = _capturingShortcut.value
+        _capturingShortcut.value = null
+        if (action != null) when (result) {
+            is CaptureResult.Bound -> setShortcut(action, result.binding)
+            is CaptureResult.Refused -> { refreshShortcuts(); showNotice(result.reason) }
+            CaptureResult.Cancelled -> refreshShortcuts()
+        }
+        return true
+    }
+
+    private fun startCapture(action: ShortcutAction) {
+        capture.start()
+        _capturingShortcut.value = action
+        refreshShortcuts()
+    }
+
+    /** Ends a capture without a binding (B on the pad or a touch hint, Back, the page left). */
+    private fun cancelCapture() {
+        if (_capturingShortcut.value == null) return
+        capture.cancel()
+        _capturingShortcut.value = null
+        refreshShortcuts()
+    }
+
+    /** [action] on [binding] (null: None); an action that had it already gives it up (one button, one action). */
+    private fun setShortcut(action: ShortcutAction, binding: ShortcutBinding?) {
+        val set = shortcutSet()
+        val bindings = set.bindings.filter { (a, b) -> a != action && b != binding }.toMutableMap()
+        if (binding != null) bindings[action] = binding
+        shortcutDraft = set.copy(bindings = ShortcutAction.entries.filter { it in bindings }.associateWith { bindings.getValue(it) })
+        refreshShortcuts()
+    }
+
+    private fun setTouch(slot: TouchSlot, action: ShortcutAction?) {
+        val set = shortcutSet()
+        val touch = set.touch.toMutableMap().apply { if (action == null) remove(slot) else put(slot, action) }
+        shortcutDraft = set.copy(touch = TouchSlot.entries.filter { it in touch }.associateWith { touch.getValue(it) })
+    }
+
+    private fun refreshShortcuts() { if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) refreshSettings() }
+
+    /**
+     * The Shortcuts page closes (B, another page, the app backgrounded): a capture ends, and the draft is written once
+     * (L25: not per change).
+     */
+    private fun closeShortcuts() {
+        capture.cancel()
+        _capturingShortcut.value = null
+        shortcutDraft?.let { deps.settings.shortcuts = Shortcuts.encodeBase(it) }
+        shortcutDraft = null
+    }
+
+    /**
+     * Controls -> Shortcuts: one press-to-bind row per action (its button or combo, None unbound; the one waiting shows
+     * [SHORTCUT_PROMPT] and, as its line, how to bind), the two touch buttons' actions, then Clear all.
+     */
+    private fun shortcutRows(): List<SettingsRow> {
+        val set = shortcutSet()
+        val waiting = _capturingShortcut.value
+        val note = if (controllerConnected) "Hold MENU or SELECT for a combo" else "Connect a controller to bind"
+        return ShortcutAction.entries.map { a ->
+            if (a == waiting) SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, SHORTCUT_PROMPT, note = note, shortcut = a)
+            else SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, set.bindings[a]?.let(KeyLabels::label) ?: "None", shortcut = a)
+        } + TouchSlot.entries.mapIndexed { i, t ->
+            SettingsRow(SettingsKind.SHORTCUT_TOUCH, "Touch button ${i + 1}", set.touch[t]?.label ?: "None", touchSlot = t)
+        } + SettingsRow(SettingsKind.RESET_DEFAULTS, "Clear all")
+    }
+
     private fun settingsRows(section: SettingsSection): List<SettingsRow> = when (section) {
         SettingsSection.LIBRARY -> libraryRows()
         SettingsSection.EMULATORS -> listOf(
@@ -3839,6 +3955,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }.orEmpty() + SettingsRow(SettingsKind.IMPORT_DONE, "Done")
         SettingsSection.DEFAULT_EMULATORS -> defaultEmulatorRows()
         SettingsSection.PAD_LAYOUT -> padLayoutRows()
+        SettingsSection.SHORTCUTS -> shortcutRows()
         SettingsSection.APPEARANCE -> listOf(
             SettingsRow(SettingsKind.PAD_THEME, "Pad theme", padThemeLabel(deps.settings.padTheme)),
             SettingsRow(SettingsKind.ACCENT, "Accent", deps.settings.accent.label),
@@ -3861,6 +3978,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             SettingsRow(SettingsKind.MENU_PAD, "Menu pad", if (deps.settings.menuPad) "On" else "Off"),
             // The pad's arrangement, its own page (Pad layout).
             SettingsRow(SettingsKind.PAD_LAYOUT, "Pad layout", if (PadLayouts.isCustom(deps.settings.padLayouts)) "Custom" else "Default"),
+            // Fast forward, rewind and reset buttons, its own page (Shortcuts).
+            SettingsRow(SettingsKind.SHORTCUTS, "Shortcuts"),
             SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
         )
         SettingsSection.SYSTEM -> systemRows()
@@ -4070,6 +4189,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             SettingsKind.PAD_VIBRATION -> cycle(PadVibration.entries, s.padVibration, { it.label }) { s.padVibration = it }
             SettingsKind.GAME_RUMBLE -> cycle(GameRumble.entries, s.gameRumble, { it.label }, after = { refreshSettings(); deps.rumblePreview(it) }) { s.gameRumble = it }
             SettingsKind.MENU_PAD -> flip(s.menuPad) { s.menuPad = it }
+            // A touch button: None, then every action.
+            SettingsKind.SHORTCUT_TOUCH -> row.touchSlot?.let { slot ->
+                cycle(listOf<ShortcutAction?>(null) + ShortcutAction.entries, shortcutSet().touch[slot], { it?.label ?: "None" }) { setTouch(slot, it) }
+            }
             SettingsKind.PAD_LAYOUT_CONSOLE -> {   // Shared, then the library's consoles; a gone console reads as Shared
                 val keys = listOf(PadLayouts.SHARED_KEY) + padLayoutConsoles().map { it.id }
                 cycle(keys, padLayoutConsole.takeIf { it in keys } ?: keys.first(), ::padLayoutConsoleName) { padLayoutConsole = it }
@@ -4159,7 +4282,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      */
     private fun resetToDefaults(section: SettingsSection) {
         val s = deps.settings
-        if (section == SettingsSection.APPEARANCE) {
+        if (section == SettingsSection.SHORTCUTS) {
+            shortcutDraft = ShortcutSet.EMPTY   // Clear all: written with the rest when the page closes
+        } else if (section == SettingsSection.APPEARANCE) {
             s.padTheme = PadTheme.DEFAULT
             s.accent = AccentPreset.DEFAULT
             s.secondaryAccent = SecondaryAccent.DEFAULT
@@ -4372,6 +4497,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * goes back to Saves on its Import saves row.
      */
     private fun leaveSubPage(section: SettingsSection) {
+        if (section == SettingsSection.SHORTCUTS) closeShortcuts()
         if (section == SettingsSection.IMPORT_RESULT) return showSettingsOn(SettingsSection.SAVES, SettingsKind.IMPORT_SAVES)   // past Import saves
         val parent = section.parent ?: return
         val opener = section.opener ?: return
@@ -4427,7 +4553,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 else if (button == NxButton.UP) _selection.value.up() else _selection.value.down()
             NxButton.A -> openSelected()
             NxButton.B -> back()
-            NxButton.X -> if (s is Screen.Settings && selectedSettingShowsInfo()) showSettingInfo(_selection.value.index)
+            NxButton.X -> (s as? Screen.Settings)?.rows?.getOrNull(_selection.value.index)?.let { row ->
+                if (row.kind == SettingsKind.SHORTCUT_BIND) row.shortcut?.let { setShortcut(it, null) }   // back to None
+                else if (selectedSettingShowsInfo()) showSettingInfo(_selection.value.index)
+            }
             // NX Redux ITEM_CYCLE: every value row steps on LEFT/RIGHT too (A steps forward). A default emulator steps
             // through its console's tags.
             NxButton.LEFT, NxButton.RIGHT -> if (s is Screen.SettingsMenu) {
@@ -5329,6 +5458,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     fun select(index: Int) {
         if (minimalPending) return   // a Minimal open's band is growing: the selection stays on the row opening
         _tabFocus.value = false   // a touch on the content takes the focus there
+        if (index != _selection.value.index) cancelCapture()   // a tap on another Shortcuts row ends a wait for a press
         _selection.value = _selection.value.copy(index = index).clampedTo(_selection.value.count)
         (_screen.value as? Screen.Systems)?.takeIf { it.category == MenuCategory.HOME }?.let { homeTab.noteHomeFocus(_selection.value.index, it.rows) }
         refreshResume()
@@ -5381,6 +5511,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                     SettingsKind.PAD_LAYOUT -> { sectionSelections[s.section] = _selection.value; padLayoutConsole = PadLayouts.SHARED_KEY; openSettings(SettingsSection.PAD_LAYOUT) }
                     SettingsKind.PAD_LAYOUT_SHAPE -> row.padShape?.let { openPadEditor(it) }
                     SettingsKind.PAD_LAYOUT_RESET -> resetPadLayoutConsole()
+                    SettingsKind.SHORTCUTS -> { sectionSelections[s.section] = _selection.value; openSettings(SettingsSection.SHORTCUTS) }
+                    // Without a controller too: one plugged in next answers it (the row says to connect one).
+                    SettingsKind.SHORTCUT_BIND -> row.shortcut?.let(::startCapture)
                     SettingsKind.HIDDEN -> openList(ListSource.Hidden)
                     SettingsKind.UNASSIGNED -> unassignedSystem()?.let { sectionSelections[s.section] = _selection.value; openSystem(it) }
                     SettingsKind.EMULATORS -> { sectionSelections[s.section] = _selection.value; emulatorSettings.openList(systemsCache) }
@@ -5935,6 +6068,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         _minimalOpening.value?.let { minimalJob?.cancel(); _minimalOpening.value = null }   // opened: the next press clears its band
         _chooser.value?.let { onChooserButton(it, button); return }   // a touch chooser takes the pad while open
         _settingInfo.value?.let { onSettingInfoButton(it, button); return }   // a Settings row's info popup too
+        // Press to bind waits on the controller's raw keys ([captureKey]): a touch hint's or the on-screen pad's B cancels, the rest wait.
+        if (_capturingShortcut.value != null) { if (button == NxButton.B) cancelCapture(); return }
         if (_error.value != null) { if (button == NxButton.A || button == NxButton.B) dismissError(); return }
         if (_androidGamesAsk.value != null) {   // the Android games question: A Yes, B Not now
             if (button == NxButton.A) answerAndroidGames(true) else if (button == NxButton.B) answerAndroidGames(false)
@@ -6068,6 +6203,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     fun back(): Boolean {
         if (_chooser.value != null) { closeChooser(); return true }   // a touch chooser: Back closes it
         if (_settingInfo.value != null) { closeSettingInfo(); return true }   // and a Settings row's info popup
+        if (_capturingShortcut.value != null) { cancelCapture(); return true }   // press to bind: Back cancels it, the page stays
         if (_androidGamesAsk.value != null) { answerAndroidGames(false); return true }   // the dialog's B: Not now
         if (_updateConfirm.value != null) { answerUpdateConfirm(false); return true }   // About's confirm: Cancel
         if (updatePopupShows()) { answerUpdate(false); return true }   // the update dialog's B: Not now

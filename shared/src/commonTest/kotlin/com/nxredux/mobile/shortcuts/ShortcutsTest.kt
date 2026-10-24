@@ -20,6 +20,14 @@ class ShortcutsTest {
         assertNull(ShortcutBinding.decode("1+2+3"))
     }
 
+    // Only MENU and SELECT are modifiers: a stored "103+96" (R1 held + A) is garbage, not a combo nothing can press.
+    @Test fun decodeOnlyTakesMenuOrSelectAsModifier() {
+        assertEquals(ShortcutBinding(KeyCodes.BUTTON_SELECT, 96), ShortcutBinding.decode("109+96"))
+        assertEquals(ShortcutBinding(KeyCodes.BUTTON_MODE, 96), ShortcutBinding.decode("110+96"))
+        assertNull(ShortcutBinding.decode("103+96"))
+        assertNull(ShortcutBinding.decode("0+96"))
+    }
+
     @Test fun overrideInherits() {
         val e = eff(ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to r1), emptyMap()), ShortcutOverrides(mapOf(ShortcutAction.HOLD_FF to l1)))
         assertEquals(mapOf(ShortcutAction.TOGGLE_FF to r1, ShortcutAction.HOLD_FF to l1), e.bindings)

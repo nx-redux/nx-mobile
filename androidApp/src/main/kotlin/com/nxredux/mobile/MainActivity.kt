@@ -744,9 +744,11 @@ class MainActivity : ComponentActivity(), FolderPicker {
     /**
      * Mapped pad keys reach the router before the view hierarchy: Compose's focus navigation would otherwise take a
      * keyboard-source DPAD (a BT keyboard, a pad in keyboard mode) and move its own focus instead of the NX selection.
-     * While a text field is up the hierarchy sees them first, so LEFT/RIGHT move its cursor.
+     * While a text field is up the hierarchy sees them first, so LEFT/RIGHT move its cursor. Press to bind
+     * ([captureKey]) sees every key before either.
      */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (::state.isInitialized && captureKey(event)) return true
         if (::state.isInitialized && !state.textEntryOpen && keyToButton(event.keyCode) != null) {
             when (event.action) {
                 KeyEvent.ACTION_DOWN -> { onUserInteraction(); return onKeyDown(event.keyCode, event) }
@@ -754,6 +756,23 @@ class MainActivity : ComponentActivity(), FolderPicker {
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    /**
+     * Controls -> Shortcuts' press to bind: the raw key code goes to [AppState.captureKey] before [keyToButton], so a
+     * code no NxButton names (an extra paddle's BUTTON_1..16) binds, and MENU opens nothing while it waits (L23). An
+     * auto-repeat is dropped while it waits: the A held from starting it must not bind itself.
+     */
+    private fun captureKey(event: KeyEvent): Boolean {
+        val down = when (event.action) {
+            KeyEvent.ACTION_DOWN -> true
+            KeyEvent.ACTION_UP -> false
+            else -> return false
+        }
+        if (down && event.repeatCount > 0) return state.capturingShortcut.value != null
+        if (!state.captureKey(event.keyCode, down)) return false
+        onUserInteraction()
+        return true
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
