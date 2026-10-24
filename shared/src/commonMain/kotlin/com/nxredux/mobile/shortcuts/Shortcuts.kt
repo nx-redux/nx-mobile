@@ -1,0 +1,110 @@
+package com.nxredux.mobile.shortcuts
+
+/** The bindings of one level (base, console or game): action -> button, touch slot -> action. */
+data class ShortcutSet(
+    val bindings: Map<ShortcutAction, ShortcutBinding>,
+    val touch: Map<TouchSlot, ShortcutAction>,
+) {
+    companion object {
+        val EMPTY = ShortcutSet(emptyMap(), emptyMap())
+    }
+}
+
+/**
+ * What a console or game changes over the base: a present key overrides (a null value is "None here"), an absent key
+ * inherits the base, so a later change to Controls -> Shortcuts still reaches every row not touched there.
+ */
+data class ShortcutOverrides(
+    val bindings: Map<ShortcutAction, ShortcutBinding?> = emptyMap(),
+    val touch: Map<TouchSlot, ShortcutAction?> = emptyMap(),
+) {
+    companion object {
+        val NONE = ShortcutOverrides()
+    }
+}
+
+/** What fires in game. [blocked]: bound actions a console hotkey disables, with the hotkey that wins. */
+data class EffectiveShortcuts(
+    val bindings: Map<ShortcutAction, ShortcutBinding>,
+    val touch: Map<TouchSlot, ShortcutAction>,
+    val blocked: Map<ShortcutAction, ClaimedInput>,
+)
+
+object Shortcuts {
+    const val PREFIX = "nx_bind_"
+    private const val NONE = "none"
+
+    fun keyFor(a: ShortcutAction): String = PREFIX + a.key
+    fun keyFor(t: TouchSlot): String = PREFIX + t.key
+
+    /** Reads the `nx_bind_*` entries of a cfg; blank or garbage values are as absent. */
+    fun fromConfig(values: Map<String, String>): ShortcutOverrides {
+        val bindings = LinkedHashMap<ShortcutAction, ShortcutBinding?>()
+        for (a in ShortcutAction.entries) {
+            val v = values[keyFor(a)]?.trim() ?: continue
+            if (v == NONE) bindings[a] = null else ShortcutBinding.decode(v)?.let { bindings[a] = it }
+        }
+        val touch = LinkedHashMap<TouchSlot, ShortcutAction?>()
+        for (t in TouchSlot.entries) {
+            val v = values[keyFor(t)]?.trim() ?: continue
+            if (v == NONE) touch[t] = null else ShortcutAction.fromKey(v)?.let { touch[t] = it }
+        }
+        return ShortcutOverrides(bindings, touch)
+    }
+
+    fun toConfig(o: ShortcutOverrides): List<Pair<String, String>> =
+        ShortcutAction.entries.filter { it in o.bindings }.map { keyFor(it) to (o.bindings[it]?.encode() ?: NONE) } +
+            TouchSlot.entries.filter { it in o.touch }.map { keyFor(it) to (o.touch[it]?.key ?: NONE) }
+
+    /**
+     * The bindings that fire. Overrides replace base rows, and an override that takes a button drops any base action on
+     * it (L24: one button, one action). Rewind actions go without [canRewind]. A binding a console hotkey claims moves to
+     * [EffectiveShortcuts.blocked]: built-in hotkeys win.
+     */
+    fun effective(
+        base: ShortcutSet,
+        overrides: ShortcutOverrides,
+        claimed: List<ClaimedInput>,
+        canRewind: Boolean,
+    ): EffectiveShortcuts {
+        val merged = LinkedHashMap(base.bindings)
+        for ((action, binding) in overrides.bindings) {
+            if (binding == null) {
+                merged.remove(action)
+            } else {
+                merged.keys.filter { it !in overrides.bindings && merged[it] == binding }.forEach { merged.remove(it) }
+                merged[action] = binding
+            }
+        }
+        val touch = LinkedHashMap(base.touch)
+        for ((slot, action) in overrides.touch) if (action == null) touch.remove(slot) else touch[slot] = action
+
+        val allowed = { a: ShortcutAction -> canRewind || !a.rewind }
+        val bindings = LinkedHashMap<ShortcutAction, ShortcutBinding>()
+        val blocked = LinkedHashMap<ShortcutAction, ClaimedInput>()
+        for (a in ShortcutAction.entries) {
+            val b = merged[a] ?: continue
+            if (!allowed(a)) continue
+            val hit = claimed.firstOrNull { it.binding == b }
+            if (hit != null) blocked[a] = hit else bindings[a] = b
+        }
+        return EffectiveShortcuts(bindings, touch.filterValues(allowed), blocked)
+    }
+
+    /** One line for a cfg or pref: `toggle_ff=110+103;touch_1=reset`. */
+    fun encodeBase(s: ShortcutSet): String =
+        (ShortcutAction.entries.filter { it in s.bindings }.map { "${it.key}=${s.bindings.getValue(it).encode()}" } +
+            TouchSlot.entries.filter { it in s.touch }.map { "${it.key}=${s.touch.getValue(it).key}" }).joinToString(";")
+
+    fun decodeBase(s: String): ShortcutSet {
+        val bindings = LinkedHashMap<ShortcutAction, ShortcutBinding>()
+        val touch = LinkedHashMap<TouchSlot, ShortcutAction>()
+        for (part in s.split(';')) {
+            val k = part.substringBefore('=', "").trim()
+            val v = part.substringAfter('=', "").trim()
+            ShortcutAction.fromKey(k)?.let { a -> ShortcutBinding.decode(v)?.let { bindings[a] = it } }
+            TouchSlot.entries.firstOrNull { it.key == k }?.let { t -> ShortcutAction.fromKey(v)?.let { touch[t] = it } }
+        }
+        return ShortcutSet(bindings, touch)
+    }
+}
