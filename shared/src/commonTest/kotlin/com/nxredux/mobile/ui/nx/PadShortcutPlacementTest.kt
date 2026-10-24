@@ -27,8 +27,13 @@ class PadShortcutPlacementTest {
         assertEquals(dsRow, portraitTopPills(nds, tools = true, motion = false))
         assertEquals(dsRow, portraitTopPills(PadProfile.N3DS_NEW, tools = true, motion = false))
         assertEquals(
-            listOf(PortraitTopPill.SELECT, PortraitTopPill.HOME, PortraitTopPill.START, PortraitTopPill.MOTION),
+            listOf(PortraitTopPill.SELECT, PortraitTopPill.HOME, PortraitTopPill.MOTION, PortraitTopPill.START),
             portraitTopPills(wiiSideways, tools = false, motion = true),
+        )
+        // The Nunchuk Wii has the same - HOME MOTION + order.
+        assertEquals(
+            listOf(PortraitTopPill.SELECT, PortraitTopPill.HOME, PortraitTopPill.MOTION, PortraitTopPill.START),
+            portraitTopPills(wiiNunchuk, tools = false, motion = true),
         )
         // The Classic Controller has no MOTION; without a host's motion there is none either.
         assertEquals(listOf(PortraitTopPill.SELECT, PortraitTopPill.HOME, PortraitTopPill.START), portraitTopPills(wiiClassic, tools = false, motion = true))
