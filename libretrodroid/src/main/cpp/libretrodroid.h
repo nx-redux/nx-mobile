@@ -39,6 +39,7 @@
 #include "renderers/renderer.h"
 #include "fpssync.h"
 #include "fastforward.h"
+#include "rewind.h"
 #include "input.h"
 #include "rumble.h"
 #include "shadermanager.h"
@@ -168,6 +169,20 @@ public:
     // netplay or a GBA link session. Any thread; step() picks it up.
     void setFastForward(unsigned maxSpeed, bool audible);
 
+    // nx-mobile 2026-10-24: rewind. Enabled, step() snapshots the game after each frame (once the core can serialize);
+    // rewinding, it steps back through those snapshots instead of playing, one per capture interval, and wins over
+    // fast forward. Rewind audio off mutes the rewound frames. Never in netplay or a GBA link session. Any thread;
+    // step() picks them up.
+    void setRewindEnabled(bool enabled);
+    void setRewinding(bool rewinding);
+    void setRewindAudio(bool audible);
+    // REWIND_STATUS_*: what step() last did; a toggled rewind that reads EMPTY turns itself off. Any thread.
+    int rewindStatus() const { return rewindState.load(); }
+    static constexpr int REWIND_STATUS_OFF = 0;        // off, or this core/game can't rewind
+    static constexpr int REWIND_STATUS_READY = 1;
+    static constexpr int REWIND_STATUS_REWINDING = 2;
+    static constexpr int REWIND_STATUS_EMPTY = 3;      // rewinding with nothing older left
+
     // RetroAchievements: taken under the core lock so they never race the run loop's onFrame().
     void achievementsEnable(bool enabled);
     void achievementsLogin(const std::string& user, const std::string& token);
@@ -227,8 +242,18 @@ public:
 
 private:
     void updateAudioSampleRateMultiplier();
+    // GL thread: the audible-FF playback speed. Kept apart from frameSpeed's (UI thread) so a pause always wins.
+    void updateFastForwardAudioSpeed();
     // GL thread, in step(): starts/stops the pacer and tells audio and the core (GET_FASTFORWARDING) on a change.
     void applyFastForward(unsigned maxSpeed, bool audible);
+    // GL thread, in step(): builds or frees the rewind buffers for what setRewindEnabled asked.
+    void applyRewindConfig();
+    // GL thread, in step(): tells audio when rewinding starts or stops muting.
+    void applyRewinding(bool rewinding);
+    // GL thread, in step(): one frame while rewinding (a step back, or a cadence frame); returns the frames it ran.
+    unsigned stepRewinding(float frameSeconds);
+    // GL thread: retro_run with the per-frame work around it (pointers, RAM cheats, achievements).
+    void runFrame(bool np, bool lk, float frameSeconds);
     float findDefaultAspectRatio(const retro_system_av_info &system_av_info);
     void afterGameLoad();
     void releaseCore();
@@ -244,7 +269,8 @@ protected:
     static void callback_retro_set_input_poll();
 
 private:
-    unsigned int frameSpeed = 1;
+    // UI thread (setFrameSpeed) and GL thread (step) both read it.
+    std::atomic<unsigned> frameSpeed { 1 };
     bool audioEnabled = true;
     bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
@@ -315,6 +341,30 @@ private:
     std::atomic<bool> fastForwardDropAudio { false };
     // Audio playback speed while audible FF runs (the game's achieved speed); 0 otherwise.
     std::atomic<double> fastForwardPlaybackSpeed { 0.0 };
+
+    // Rewind as asked (any thread) and as run by step() (GL thread, core lock held).
+    std::atomic<bool> rewindWanted { false };
+    std::atomic<bool> rewindingWanted { false };
+    std::atomic<bool> rewindAudible { false };
+    std::atomic<int> rewindState { REWIND_STATUS_OFF };
+    Rewind rewind;
+    Rewind::SerializeFn rewindSerialize = [this](uint8_t* data, size_t size) {
+        return core->retro_serialize(data, size);
+    };
+    Rewind::UnserializeFn rewindUnserialize = [this](const uint8_t* data, size_t size) {
+        return core->retro_unserialize(data, size);
+    };
+    // The state size rewind was built for; a core whose size changes mid-game can't rewind this session.
+    size_t rewindSize = 0;
+    bool rewindGivenUp = false;
+    // Steps until retro_serialize_size is asked again while rewind can't build (booting cores report 0 or refuse).
+    unsigned rewindProbeWait = 0;
+    static constexpr unsigned REWIND_PROBE_STEPS = 60;
+    bool appliedRewinding = false;
+    bool appliedRewindMuted = false;
+    unsigned rewindTick = 0;
+    // Read by the audio callback, like fastForwardDropAudio.
+    std::atomic<bool> rewindDropAudio { false };
     std::unique_ptr<Input> input;
     std::array<bool, 4> stickyPointers {};   // survive an input reset (pause/resume), see currentInput()
     std::unique_ptr<Rumble> rumble;

@@ -1087,6 +1087,37 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFastFor
     LibretroDroid::getInstance().setFastForward(maxSpeed > 0 ? (unsigned) maxSpeed : 0u, audible);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setRewindEnabled(
+    JNIEnv* env,
+    jclass obj,
+    jboolean enabled
+) {
+    LibretroDroid::getInstance().setRewindEnabled(enabled);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setRewinding(
+    JNIEnv* env,
+    jclass obj,
+    jboolean rewinding
+) {
+    LibretroDroid::getInstance().setRewinding(rewinding);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setRewindAudio(
+    JNIEnv* env,
+    jclass obj,
+    jboolean audible
+) {
+    LibretroDroid::getInstance().setRewindAudio(audible);
+}
+
+JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_rewindStatus(
+    JNIEnv* env,
+    jclass obj
+) {
+    return LibretroDroid::getInstance().rewindStatus();
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderConfig(
     JNIEnv* env,
     jclass obj,

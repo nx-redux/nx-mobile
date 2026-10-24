@@ -94,10 +94,15 @@ int16_t LibretroDroid::callback_set_input_state(
 
 void LibretroDroid::updateAudioSampleRateMultiplier() {
     if (audio) {
-        // Audible FF plays at the game's achieved speed; a pause (0) still wins.
-        double fastForward = fastForwardPlaybackSpeed.load();
-        audio->setPlaybackSpeed(frameSpeed > 0 && fastForward > 0.0 ? fastForward : frameSpeed);
+        audio->setPlaybackSpeed(frameSpeed.load());
+        audio->setFastForwardSpeed(fastForwardPlaybackSpeed.load());
     }
+}
+
+void LibretroDroid::updateFastForwardAudioSpeed() {
+    // Audible FF plays at the game's achieved speed. Audio combines it with the pause speed, so a pause (0) set on the UI
+    // thread mid-step still wins: the GL thread never writes the pause speed.
+    if (audio) audio->setFastForwardSpeed(fastForwardPlaybackSpeed.load());
 }
 
 // TODO... Do we really need this?
@@ -124,6 +129,9 @@ int LibretroDroid::currentDisk() {
 }
 
 void LibretroDroid::changeDisk(unsigned int index) {
+    // The rewind history is cleared with the swap; the lock keeps that off a running step's capture.
+    std::lock_guard<std::mutex> lock(coreLock);
+
     if (Environment::getInstance().getRetroDiskControlCallback() == nullptr) {
         LOGE("Cannot swap disk. This platform does not support it.");
         return;
@@ -138,6 +146,8 @@ void LibretroDroid::changeDisk(unsigned int index) {
         Environment::getInstance().getRetroDiskControlCallback()->set_eject_state(true);
         Environment::getInstance().getRetroDiskControlCallback()->set_image_index((unsigned) index);
         Environment::getInstance().getRetroDiskControlCallback()->set_eject_state(false);
+        // Rewinding past the swap would restore states that expect the other disc.
+        rewind.clear();
     }
 }
 
@@ -175,7 +185,10 @@ bool LibretroDroid::unserializeState(int8_t *data, size_t size) {
     if (core == nullptr) return false;
     // A core may run emulation (and GL) inside it (Azahar drains its async work with RunLoop): the paused view's context.
     TeardownContext context;
-    return core->retro_unserialize(data, size);
+    if (!core->retro_unserialize(data, size)) return false;
+    // The history led to the state just replaced: rewinding must not step back into it.
+    rewind.clear();
+    return true;
 }
 
 jboolean LibretroDroid::unserializeMemory(unsigned id, int8_t* data, size_t size) {
@@ -424,6 +437,14 @@ void LibretroDroid::create(
     appliedFastForwardAudible = false;
     fastForwardDropAudio = false;
     fastForwardPlaybackSpeed = 0.0;
+    // Rewind likewise: off until GLRetroView re-applies it.
+    rewindWanted = false;
+    rewindingWanted = false;
+    rewindAudible = false;
+    rewindState = REWIND_STATUS_OFF;
+    appliedRewinding = false;
+    appliedRewindMuted = false;
+    rewindDropAudio = false;
     // scaleMode, screenOffset and viewportRect are not reset here: setters may arrive (on the GL thread) before
     // create(), and GLRetroView re-applies its own values right after create().
     geometryWidth = 0.0F;
@@ -577,6 +598,11 @@ void LibretroDroid::releaseCore() {
     core = nullptr;
     coreInitialized = false;
     gameLoaded = false;
+    // Its rewind history and buffers too (the worker joined, the memory freed).
+    rewind.configure(false, 0);
+    rewindSize = 0;
+    rewindGivenUp = false;
+    rewindProbeWait = 0;
     // The patches and the RAM they point into belong to that core.
     memoryCheats.clear();
     memoryCheatList.clear();
@@ -662,8 +688,14 @@ void LibretroDroid::step() {
     const bool np = !lk && netplay::active();        // nx-mobile netplay: one lockstep frame per step
     if (np || lk) speed = 1;
 
-    // Fast forward never runs in netplay or a link session: the peers would desync.
-    applyFastForward((np || lk) ? 0 : fastForwardSpeed.load(), fastForwardAudible.load());
+    // Neither rewind nor fast forward runs in netplay or a link session: the peers would desync. Rewinding wins over
+    // FF, which stops (its clock resynced) and picks up again when the rewind ends. Paused while rewinding (speed 0)
+    // takes the paused path below.
+    applyRewindConfig();
+    const bool rewindHeld = !np && !lk && rewindingWanted.load() && rewind.enabled();
+    const bool rewinding = rewindHeld && speed > 0;
+    applyRewinding(rewinding);
+    applyFastForward((np || lk || rewindHeld) ? 0 : fastForwardSpeed.load(), fastForwardAudible.load());
     // Paused during FF (speed 0) takes the normal paused path below; FF picks up again on resume, its clock resynced.
     const bool fastForward = fastForwardPacer.active() && speed > 0;
 
@@ -671,8 +703,9 @@ void LibretroDroid::step() {
     if (fpsSync && !fastForward) {
         unsigned requestedFrames = fpsSync->advanceFrames();
 
-        // If the application runs too slow it's better to just skip those frames.
-        frames = (np || lk) ? 1 : std::min(requestedFrames, 2u);
+        // If the application runs too slow it's better to just skip those frames. A rewind never catches up: one
+        // step back per frame at most.
+        frames = (np || lk || rewinding) ? 1 : std::min(requestedFrames, 2u);
     }
     if (np && !netplay::preFrame(*core, *currentInput())) speed = 0;   // waiting: redraw the last frame
     if (lk && !gbalink::preFrame()) speed = 0;                         // a pause: redraw the last frame
@@ -681,24 +714,25 @@ void LibretroDroid::step() {
     const float frameSeconds = fpsSync ? 1.0f / static_cast<float>(fpsSync->getContentRefreshRate()) : 1.0f / 60.0f;
     // FF runs the frames its pacer has due, never fpsSync's catch-up × a speed: that let the speed follow the display.
     unsigned runs = frames * speed;
-    if (fastForward) {
-        runs = fastForwardPacer.framesFor(std::chrono::steady_clock::now());
-        if (appliedFastForwardAudible) {
-            // The core's audio comes at the speed it actually ran; vsync mode had stretched the rate to the screen.
-            const double stretch = fpsSync ? fpsSync->getTimeStretchFactor() : 1.0;
-            fastForwardPlaybackSpeed = fastForwardPacer.effectiveSpeed() / stretch;
-            updateAudioSampleRateMultiplier();
+    if (rewinding) {
+        runs = stepRewinding(frameSeconds);
+    } else {
+        if (fastForward) {
+            runs = fastForwardPacer.framesFor(std::chrono::steady_clock::now());
+            if (appliedFastForwardAudible) {
+                // The core's audio comes at the speed it actually ran; vsync mode had stretched the rate to the screen.
+                const double stretch = fpsSync ? fpsSync->getTimeStretchFactor() : 1.0;
+                fastForwardPlaybackSpeed = fastForwardPacer.effectiveSpeed() / stretch;
+                updateFastForwardAudioSpeed();
+            }
         }
+        for (size_t i = 0; i < runs; i++) {
+            runFrame(np, lk, frameSeconds);
+            if (!np && !lk) rewind.capture(rewindSerialize);
+        }
+        if (speed > 0) rewindState = (!np && !lk && rewind.enabled()) ? REWIND_STATUS_READY : REWIND_STATUS_OFF;
     }
     auto& achievements = Achievements::getInstance();
-    for (size_t i = 0; i < runs; i++) {
-        currentInput()->advancePointers(frameSeconds);
-        if (!np && !lk && !memoryCheats.empty()) applyMemoryCheats();   // never in netplay or link: the peer's RAM would differ
-        core->retro_run();
-        gldebug::pollErrors();
-        rethrowVideoCallbackError();
-        if (achievements.isEnabled()) achievements.onFrame(false);
-    }
     if (speed == 0 && achievements.isEnabled()) achievements.onFrame(true);   // menu open: keep the session alive
     if (np && speed) netplay::postFrame();
 
@@ -787,7 +821,97 @@ bool LibretroDroid::isRumbleEnabled() const {
 
 void LibretroDroid::setFrameSpeed(unsigned int speed) {
     frameSpeed = speed;
-    updateAudioSampleRateMultiplier();
+    if (audio) audio->setPlaybackSpeed(speed);
+}
+
+void LibretroDroid::runFrame(bool np, bool lk, float frameSeconds) {
+    currentInput()->advancePointers(frameSeconds);
+    if (!np && !lk && !memoryCheats.empty()) applyMemoryCheats();   // never in netplay or link: the peer's RAM would differ
+    core->retro_run();
+    gldebug::pollErrors();
+    rethrowVideoCallbackError();
+    auto& achievements = Achievements::getInstance();
+    if (achievements.isEnabled()) achievements.onFrame(false);
+}
+
+void LibretroDroid::setRewindEnabled(bool enabled) {
+    rewindWanted = enabled;
+}
+
+void LibretroDroid::setRewinding(bool rewinding) {
+    rewindingWanted = rewinding;
+}
+
+void LibretroDroid::setRewindAudio(bool audible) {
+    rewindAudible = audible;
+}
+
+void LibretroDroid::applyRewindConfig() {
+    if (!rewindWanted.load() || core == nullptr || !gameLoaded) {
+        rewind.configure(false, rewindSize);   // a no-op once off
+        return;
+    }
+    if (rewind.enabled() || rewindGivenUp) return;
+    // Built only once the core can serialize: booting cores (mupen64plus, pcsx) report 0 or refuse for a while, and a
+    // refused capture turns rewind off. Asked again every REWIND_PROBE_STEPS steps, not every frame.
+    if (rewindProbeWait > 0) {
+        rewindProbeWait--;
+        return;
+    }
+    rewindProbeWait = REWIND_PROBE_STEPS;
+    const size_t size = core->retro_serialize_size();
+    if (size == 0) return;
+    if (rewindSize != 0 && size != rewindSize) {
+        // Its last capture was refused because the state grew (or shrank): rebuilding per change would churn many MB.
+        LOGW("Rewind: the state size changed from %zu to %zu bytes; rewind off for this game", rewindSize, size);
+        rewindGivenUp = true;
+        return;
+    }
+    rewindSize = size;
+    rewind.configure(true, size);
+}
+
+void LibretroDroid::applyRewinding(bool rewinding) {
+    if (rewinding != appliedRewinding) {
+        appliedRewinding = rewinding;
+        rewindTick = 0;   // the first frame of a rewind steps back at once
+    }
+    const bool muted = rewinding && !rewindAudible.load();
+    if (muted != appliedRewindMuted) {
+        appliedRewindMuted = muted;
+        rewindDropAudio = muted;
+        if (audio) audio->setRewind(rewinding, !muted);
+    }
+}
+
+unsigned LibretroDroid::stepRewinding(float frameSeconds) {
+    // One snapshot per capture interval, as recorded: never faster than the game ran. In between, the last frame is
+    // redrawn. The core isn't polled for input here, but our input state comes from key events queued between steps,
+    // so a shortcut's release is seen whether or not the core runs.
+    const unsigned interval = static_cast<unsigned>(std::max(rewind.interval(), 1));
+    if (rewindTick++ % interval != 0) return 0;
+
+    switch (rewind.stepBack(rewindUnserialize)) {
+        case Rewind::Step::REWOUND:
+            rewindState = REWIND_STATUS_REWINDING;
+            // A restored state draws nothing until the core runs: one frame shows it. Not captured, or the next step
+            // would land on it again.
+            runFrame(false, false, frameSeconds);
+            return 1;
+        case Rewind::Step::EMPTY:
+            rewindState = REWIND_STATUS_EMPTY;
+            // Nothing older: play this frame (captured, as in play) so a held rewind never freezes the game; the next
+            // step goes back to it, alternating. A toggled rewind reads EMPTY and the app turns it off.
+            runFrame(false, false, frameSeconds);
+            rewind.capture(rewindSerialize);
+            rewindTick = 0;
+            return 1;
+        case Rewind::Step::OFF:
+            break;
+    }
+    rewindState = REWIND_STATUS_OFF;
+    runFrame(false, false, frameSeconds);
+    return 1;
 }
 
 void LibretroDroid::setFastForward(unsigned maxSpeed, bool audible) {
@@ -814,7 +938,7 @@ void LibretroDroid::applyFastForward(unsigned maxSpeed, bool audible) {
     fastForwardPlaybackSpeed = on && audible ? fastForwardPacer.effectiveSpeed() : 0.0;
     Environment::getInstance().setFastForwarding(on);
     if (audio) audio->setFastForward(on, audible);
-    updateAudioSampleRateMultiplier();
+    updateFastForwardAudioSpeed();
 }
 
 void LibretroDroid::setAudioEnabled(bool enabled) {
@@ -913,7 +1037,7 @@ size_t LibretroDroid::handleAudioCallback(const int16_t *data, size_t frames) {
     gldebug::onAudio(data, frames);
     // Muted FF drops the samples but still reports them consumed: mupen64plus spins on a short count. The FIFO write
     // never blocks either; what doesn't fit (audible FF outrunning playback) is dropped.
-    if (audio && audioEnabled && !fastForwardDropAudio.load()) {
+    if (audio && audioEnabled && !fastForwardDropAudio.load() && !rewindDropAudio.load()) {
         audio->write(data, frames);
     }
     return frames;
@@ -939,7 +1063,11 @@ uintptr_t LibretroDroid::handleGetCurrentFrameBuffer() {
 void LibretroDroid::reset() {
     std::lock_guard<std::mutex> lock(coreLock);
 
-    if (core) core->retro_reset();
+    if (core == nullptr) return;
+    core->retro_reset();
+    // A bare retro_reset left the old game's snapshots to rewind into, and fpsSync's clock counting from before.
+    rewind.clear();
+    if (fpsSync) fpsSync->reset();
 }
 
 std::pair<int8_t*, size_t> LibretroDroid::serializeState() {

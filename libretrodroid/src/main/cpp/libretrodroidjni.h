@@ -53,6 +53,10 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setKeepCor
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFrameSpeed(JNIEnv* env, jclass obj, jint speed);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setAudioEnabled(JNIEnv* env, jclass obj, jboolean enabled);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFastForward(JNIEnv* env, jclass obj, jint maxSpeed, jboolean audible);
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setRewindEnabled(JNIEnv* env, jclass obj, jboolean enabled);
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setRewinding(JNIEnv* env, jclass obj, jboolean rewinding);
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setRewindAudio(JNIEnv* env, jclass obj, jboolean audible);
+JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_rewindStatus(JNIEnv* env, jclass obj);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderChain(JNIEnv* env, jclass obj, jobjectArray sources, jintArray filterLinear, jintArray wrap, jintArray scaleTypeX, jintArray scaleTypeY, jfloatArray scaleX, jfloatArray scaleY, jintArray frameCountMod, jobjectArray alias, jobjectArray lutIds, jintArray lutWidth, jintArray lutHeight, jobjectArray lutRgba, jbooleanArray lutLinear, jintArray lutWrap, jobjectArray paramIds, jfloatArray paramValues);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_clearShaderChain(JNIEnv* env, jclass obj);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderParameter(JNIEnv* env, jclass obj, jstring id, jfloat value);

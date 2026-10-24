@@ -142,20 +142,44 @@ void Audio::setPlaybackSpeed(const double newPlaybackSpeed) {
     playbackSpeed.store(newPlaybackSpeed);
 }
 
+void Audio::setFastForwardSpeed(double speed) {
+    fastForwardSpeed.store(speed);
+}
+
 void Audio::setFastForward(bool active, bool audible) {
     bool wasActive = fastForwardActive.exchange(active);
-    fastForwardMuted.store(active && !audible);
-    if (wasActive && !active) refillPending.store(true);
-    if (active) refillPending.store(false);
+    fastForwardMutes = active && !audible;
+    updateMute(wasActive && !active);
+}
+
+void Audio::setRewind(bool active, bool audible) {
+    rewindMutes = active && !audible;
+    updateMute(false);
+}
+
+void Audio::updateMute(bool fastForwardEnded) {
+    const bool muted = fastForwardMutes || rewindMutes;
+    const bool wasMuted = outputMuted.exchange(muted);
+    // Unmuting restarts on an empty FIFO, as does the end of audible FF (it drained at FF speed): refill first. Not only
+    // when FF ends — muted FF turned audible with FF still on needs it as much.
+    if (fastForwardEnded || (wasMuted && !muted)) {
+        refillPending.store(true);
+    } else if (muted || fastForwardActive.load()) {
+        // Muted, or FF starting: nothing to wait for (FF fills the FIFO faster than it plays).
+        refillPending.store(false);
+    }
 }
 
 oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void *audioData, int32_t numFrames) {
     auto outputArray = reinterpret_cast<int16_t *>(audioData);
+    // A pause (0) wins over audible FF's speed, whichever thread wrote last.
     double speed = playbackSpeed.load();
-    const bool muted = fastForwardMuted.load();
+    const double fastForward = fastForwardSpeed.load();
+    if (speed > 0.0 && fastForward > 0.0) speed = fastForward;
+    const bool muted = outputMuted.load();
 
-    // Muted fast forward: what the FIFO still holds is from before FF; dropped here (the reader's side) so it isn't
-    // played when FF ends. The core's samples are dropped before they reach the FIFO.
+    // Muted fast forward (or rewind): what the FIFO still holds is from before; dropped here (the reader's side) so it
+    // isn't played when it ends. The core's samples are dropped before they reach the FIFO.
     if (muted) fifoBuffer->setReadCounter(fifoBuffer->getWriteCounter());
 
     // After FF: silent until the FIFO is refilled, so playback doesn't restart on an empty buffer and crackle.

@@ -139,6 +139,14 @@ public class LibretroDroid {
      * setFrameSpeed's pause, so a pause and resume keep it; never applied in netplay or a GBA link session.
      */
     public static native void setFastForward(int maxSpeed, boolean audible);
+    /** Rewind snapshots (once the core can serialize); off frees them. Never in netplay or a GBA link session. */
+    public static native void setRewindEnabled(boolean enabled);
+    /** Steps back through the snapshots instead of playing; wins over fast forward. */
+    public static native void setRewinding(boolean rewinding);
+    /** Whether rewound frames play their audio. */
+    public static native void setRewindAudio(boolean audible);
+    /** 0 off or unavailable, 1 ready, 2 rewinding, 3 rewinding with nothing older left. Any thread. */
+    public static native int rewindStatus();
     public static native void setShaderConfig(GLRetroShader shader);
     public static native void setViewport(float x, float y, float width, float height);
     public static native void setViewportAlignment(int viewportAlignment);
