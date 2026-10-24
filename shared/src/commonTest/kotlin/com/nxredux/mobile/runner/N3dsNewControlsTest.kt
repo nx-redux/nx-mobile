@@ -4,6 +4,7 @@ import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.ConsoleSettings
 import com.nxredux.mobile.options.GraphicsApiOptions
 import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.SpeedOptions
 import com.nxredux.mobile.options.PadOptions
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -63,7 +64,7 @@ class N3dsNewControlsTest {
     }
 
     @Test fun the_3ds_console_settings_offer_the_row_before_the_layout_row() {
-        assertEquals(N3dsOptions.layoutRows + listOf(N3dsOptions.newControlsRow, GraphicsApiOptions.row, BottomScreenOptions.row, PadOptions.portraitPadRow, PadOptions.layoutRow), ConsoleSettings.tableFor("3DS"))
+        assertEquals(N3dsOptions.layoutRows + listOf(N3dsOptions.newControlsRow, GraphicsApiOptions.row, BottomScreenOptions.row, PadOptions.portraitPadRow, PadOptions.layoutRow) + SpeedOptions.table, ConsoleSettings.tableFor("3DS"))
         val row = N3dsOptions.newControlsRow
         assertEquals(N3dsOptions.NEW_CONTROLS, row.key)
         assertEquals("New 3DS Controls", row.label)

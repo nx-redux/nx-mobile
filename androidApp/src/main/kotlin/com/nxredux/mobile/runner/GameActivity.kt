@@ -94,6 +94,7 @@ import com.nxredux.mobile.options.OverlayResolver
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.ScreenScaling
 import com.nxredux.mobile.options.ShaderOptions
+import com.nxredux.mobile.options.SpeedOptions
 import com.nxredux.mobile.options.VulkanFallback
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.GameRumble
@@ -1894,10 +1895,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * The keys the menu leaves out: the .cfg's locks, Motion Controls on a Wii game without both sensors, and both Wii
      * rows for a GameCube disc under the WII tag.
      */
-    override fun menuLocked(): Set<String> = when {
-        wiiGameCube -> lockedOptions + WiiOptions.table.map { it.key }
-        isWii && motionSensors?.hasSensors != true -> lockedOptions + WiiOptions.MOTION
-        else -> lockedOptions
+    override fun menuLocked(): Set<String> {
+        val noRewind = if (CoreRegistry.forId(gameCoreId)?.rewind == false) SpeedOptions.REWIND_KEYS else emptySet()
+        return noRewind + when {
+            wiiGameCube -> lockedOptions + WiiOptions.table.map { it.key }
+            isWii && motionSensors?.hasSensors != true -> lockedOptions + WiiOptions.MOTION
+            else -> lockedOptions
+        }
     }
 
     /** The open menu's Wii rows: Motion Controls, once the sensors are known. */

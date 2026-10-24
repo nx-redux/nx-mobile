@@ -8,9 +8,9 @@ import kotlin.test.assertTrue
 
 class GraphicsApiOptionsTest {
     @Test fun wii_and_gamecube_offer_the_graphics_api_row() {
-        assertEquals(WiiOptions.table + GraphicsApiOptions.row, ConsoleSettings.tableFor("WII").filter { it !in PadOptions.all && it != BottomScreenOptions.row })
+        assertEquals(WiiOptions.table + GraphicsApiOptions.row, ConsoleSettings.tableFor("WII").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in SpeedOptions.table })
         assertTrue(WiiOptions.screenRow in WiiOptions.table)
-        assertEquals(listOf(GraphicsApiOptions.row), ConsoleSettings.tableFor(" gc ").filter { it !in PadOptions.all && it != BottomScreenOptions.row })
+        assertEquals(listOf(GraphicsApiOptions.row), ConsoleSettings.tableFor(" gc ").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in SpeedOptions.table })
         assertEquals(listOf("Auto", "OpenGL ES", "Vulkan"), GraphicsApiOptions.row.values.map(GraphicsApiOptions.row::labelOf))
         assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.row.default)
     }
@@ -19,7 +19,7 @@ class GraphicsApiOptionsTest {
         listOf("WII", "GC", "PSP", "PSX", "N64", "DC", "3DS").forEach { assertTrue(GraphicsApiOptions.appliesTo(it), it) }
         listOf("PS", "GBA", "NDS", "SNES", "").forEach { assertFalse(GraphicsApiOptions.appliesTo(it), it) }
         assertTrue(ConsoleSettings.tableFor("PSX").any { it.key == GraphicsApiOptions.KEY })
-        assertEquals(N3dsOptions.layoutRows + listOf(N3dsOptions.newControlsRow, GraphicsApiOptions.row), ConsoleSettings.tableFor("3DS").filter { it !in PadOptions.all && it != BottomScreenOptions.row })
+        assertEquals(N3dsOptions.layoutRows + listOf(N3dsOptions.newControlsRow, GraphicsApiOptions.row), ConsoleSettings.tableFor("3DS").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in SpeedOptions.table })
         assertTrue(ConsoleSettings.tableFor("PS").none { it.key == GraphicsApiOptions.KEY })
     }
 
