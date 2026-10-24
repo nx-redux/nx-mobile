@@ -69,7 +69,7 @@ class ShortcutCaptureTest {
         val c = started()
         c.cancel()
         assertFalse(c.active)
-        assertFalse(c.takes(r1))
+        assertFalse(c.takes(r1, true))
     }
 
     // The keys still down when it ends are swallowed until released: MENU's release after MENU+R1 must not open anything.
@@ -77,18 +77,26 @@ class ShortcutCaptureTest {
         val c = started()
         c.onKey(menu, true); c.onKey(r1, true)
         assertFalse(c.active)
-        assertTrue(c.takes(menu)); assertNull(c.onKey(menu, false))
-        assertTrue(c.takes(r1)); assertNull(c.onKey(r1, false))
-        assertFalse(c.takes(menu))
+        assertTrue(c.takes(menu, false)); assertNull(c.onKey(menu, false))
+        assertTrue(c.takes(r1, true)); assertNull(c.onKey(r1, false))
+        assertFalse(c.takes(menu, false))
     }
 
     @Test fun theVolumeAndHomeKeysPassThrough() {
         val c = started()
-        assertFalse(c.takes(24)); assertFalse(c.takes(25)); assertFalse(c.takes(3))
-        assertTrue(c.takes(r1))
+        assertFalse(c.takes(24, true)); assertFalse(c.takes(25, true)); assertFalse(c.takes(3, true))
+        assertTrue(c.takes(r1, true))
+    }
+
+    // A key held from before the capture started (DOWN scrolling the list, then A): its release is the menu's, or the
+    // menu's held-direction repeat would never stop.
+    @Test fun aReleaseOfAKeyHeldFromBeforeStartPassesThrough() {
+        val c = started()
+        assertFalse(c.takes(KeyCodes.DPAD_DOWN, false))
+        assertTrue(c.takes(KeyCodes.DPAD_DOWN, true))
     }
 
     @Test fun idleTakesNothing() {
-        assertFalse(ShortcutCapture().takes(r1))
+        assertFalse(ShortcutCapture().takes(r1, true))
     }
 }

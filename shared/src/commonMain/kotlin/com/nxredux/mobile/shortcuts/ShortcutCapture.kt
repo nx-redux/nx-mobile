@@ -29,8 +29,12 @@ class ShortcutCapture(private val reserved: List<ClaimedInput> = ConsoleHotkeys.
 
     fun cancel() { active = false; modifier = null }
 
-    /** Whether [onKey] should see [keyCode]: while waiting, or while it is still held from a capture; never a system key. */
-    fun takes(keyCode: Int): Boolean = keyCode !in SYSTEM && (active || keyCode in held)
+    /**
+     * Whether [onKey] should see this press ([down]) or release of [keyCode]: a press while waiting, a release of a key
+     * that went down since [start]; never a system key. A key held from before [start] keeps its release (a held
+     * direction's repeat must hear it stop).
+     */
+    fun takes(keyCode: Int, down: Boolean): Boolean = keyCode !in SYSTEM && (keyCode in held || (down && active))
 
     /** A key went down or up; the result when that press ended the capture, else null (still waiting, or a swallowed key). */
     fun onKey(keyCode: Int, down: Boolean): CaptureResult? {

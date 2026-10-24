@@ -299,6 +299,24 @@ class ShortcutsSettingsTest {
         assertEquals("None", s.row("Toggle FF").secondary)
     }
 
+    // Home (the launcher's Home press) leaves the page however it is reached: the wait ends, the draft is written, and
+    // the controller's keys reach the menu again.
+    @Test fun homeDuringACaptureEndsItAndSaves() = runTest {
+        val settings = Settings()
+        val s = state(settings)
+        s.openShortcuts()
+        s.bind(ShortcutAction.TOGGLE_FF); s.press(KeyCodes.BUTTON_R1)
+        s.bind(ShortcutAction.HOLD_FF)
+        s.goHome()
+        assertIs<Screen.Systems>(s.screen.value)
+        assertNull(s.capturingShortcut.value)
+        assertEquals(mapOf(ShortcutAction.TOGGLE_FF to ShortcutBinding(null, KeyCodes.BUTTON_R1)), Shortcuts.decodeBase(settings.shortcuts).bindings)
+        assertFalse(s.captureKey(KeyCodes.BUTTON_MODE, true))
+        val tab = assertIs<Screen.Systems>(s.screen.value).tab
+        s.onButton(NxButton.R1)                                 // the menu takes the pad again: R1 switches tabs
+        assertTrue(assertIs<Screen.Systems>(s.screen.value).tab != tab)
+    }
+
     @Test fun leavingThePageEndsACapture() = runTest {
         val s = state()
         s.openShortcuts()

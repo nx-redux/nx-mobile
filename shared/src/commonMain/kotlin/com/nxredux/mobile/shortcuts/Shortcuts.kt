@@ -5,6 +5,21 @@ data class ShortcutSet(
     val bindings: Map<ShortcutAction, ShortcutBinding>,
     val touch: Map<TouchSlot, ShortcutAction>,
 ) {
+    /**
+     * [action] on [binding] (null: None). An action that had [binding] gives it up (one button, one action, as
+     * [Shortcuts.effective] treats an override); the map stays in [ShortcutAction] order, as [Shortcuts.encodeBase] writes it.
+     */
+    fun withBinding(action: ShortcutAction, binding: ShortcutBinding?): ShortcutSet {
+        val kept = bindings.filter { (a, b) -> a != action && b != binding } + listOfNotNull(binding?.let { action to it })
+        return copy(bindings = ShortcutAction.entries.filter { it in kept }.associateWith { kept.getValue(it) })
+    }
+
+    /** Touch button [slot] on [action] (null: none, off the pad), in [TouchSlot] order. Two slots may share an action. */
+    fun withTouch(slot: TouchSlot, action: ShortcutAction?): ShortcutSet {
+        val kept = touch.filterKeys { it != slot } + listOfNotNull(action?.let { slot to it })
+        return copy(touch = TouchSlot.entries.filter { it in kept }.associateWith { kept.getValue(it) })
+    }
+
     companion object {
         val EMPTY = ShortcutSet(emptyMap(), emptyMap())
     }

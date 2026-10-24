@@ -106,4 +106,20 @@ class ShortcutsTest {
         assertEquals("Up", KeyLabels.label(ShortcutBinding(null, 19)))
         assertEquals("Key 312", KeyLabels.label(ShortcutBinding(null, 312)))
     }
+
+    // One button, one action: a binding another action had moves, and the map stays in action order.
+    @Test fun withBindingMovesADuplicateAndKeepsOrder() {
+        val s = ShortcutSet(mapOf(ShortcutAction.RESET to r1), emptyMap())
+            .withBinding(ShortcutAction.TOGGLE_FF, l1)
+            .withBinding(ShortcutAction.HOLD_FF, r1)
+        assertEquals(mapOf(ShortcutAction.TOGGLE_FF to l1, ShortcutAction.HOLD_FF to r1), s.bindings)
+        assertEquals(listOf(ShortcutAction.TOGGLE_FF, ShortcutAction.HOLD_FF), s.bindings.keys.toList())
+        assertEquals(mapOf(ShortcutAction.HOLD_FF to r1), s.withBinding(ShortcutAction.TOGGLE_FF, null).bindings)
+    }
+
+    @Test fun withTouchSetsAndClearsInSlotOrder() {
+        val s = ShortcutSet.EMPTY.withTouch(TouchSlot.TWO, ShortcutAction.RESET).withTouch(TouchSlot.ONE, ShortcutAction.HOLD_FF)
+        assertEquals(listOf(TouchSlot.ONE, TouchSlot.TWO), s.touch.keys.toList())
+        assertEquals(mapOf(TouchSlot.TWO to ShortcutAction.RESET), s.withTouch(TouchSlot.ONE, null).touch)
+    }
 }

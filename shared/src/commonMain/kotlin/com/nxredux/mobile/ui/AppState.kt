@@ -743,10 +743,34 @@ enum class NavMotion {
 /** The last animated page change: [seq] moves only on one, so any other screen change (a refresh, Settings) is instant. */
 data class NavStep(val seq: Int = 0, val motion: NavMotion = NavMotion.NONE)
 
+/** [flow] whose every `value` write is reported to [onSet] after it lands ([AppState]'s screen: leaving the Shortcuts page). */
+private class WatchedStateFlow<T>(private val flow: MutableStateFlow<T>, private val onSet: (T) -> Unit) : MutableStateFlow<T> by flow {
+    override var value: T
+        get() = flow.value
+        set(v) { flow.value = v; onSet(v) }
+}
+
 class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private val sidecars = Sidecars(deps.source, deps.sidecarStore) { home() }
     private val scanner = LibraryScanner(deps.source, sidecars, deps.arcadeSets, deps.naomiSets, compute = deps.compute, chdSectors = deps.chdSectors)
-    private val _screen = MutableStateFlow<Screen>(Screen.Loading)
+    /** Controls -> Shortcuts as edited since it opened; null: closed (or untouched), [AppSettings.shortcuts] is all there is. */
+    private var shortcutDraft: ShortcutSet? = null
+
+    /** Press to bind's raw keys ([captureKey]); Controls -> Shortcuts' bind rows start it. */
+    private val capture = ShortcutCapture()
+
+    private val _capturingShortcut = MutableStateFlow<ShortcutAction?>(null)
+    /** The action a Shortcuts bind row is waiting on a press for; while set the platform hands raw keys to [captureKey] first. */
+    val capturingShortcut: StateFlow<ShortcutAction?> = _capturingShortcut.asStateFlow()
+
+    /**
+     * Every screen write, here or in a controller sharing it: one that leaves the Shortcuts page, by B, another page,
+     * Home or anything else, closes it ([closeShortcuts]), so no way out keeps a wait swallowing the menu's keys or
+     * drops the draft. Declared after the Shortcuts state it reads.
+     */
+    private val _screen: MutableStateFlow<Screen> = WatchedStateFlow(MutableStateFlow(Screen.Loading)) { s ->
+        if ((s as? Screen.Settings)?.section != SettingsSection.SHORTCUTS && (shortcutDraft != null || _capturingShortcut.value != null)) closeShortcuts()
+    }
     val screen: StateFlow<Screen> = _screen.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
@@ -3639,7 +3663,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     fun openSettings(section: SettingsSection) {
-        if (section != SettingsSection.SHORTCUTS && (_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) closeShortcuts()
         when (_screen.value) {
             is Screen.Systems -> rememberMenuSelection()
             is Screen.SettingsMenu -> settingsMenuSelection = _selection.value
@@ -3828,17 +3851,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         showSettingsOn(SettingsSection.PAD_LAYOUT, SettingsKind.PAD_LAYOUT_RESET)
     }
 
-    /** Controls -> Shortcuts as edited since it opened; null: closed (or untouched), [AppSettings.shortcuts] is all there is. */
-    private var shortcutDraft: ShortcutSet? = null
-
     private fun shortcutSet(): ShortcutSet = shortcutDraft ?: Shortcuts.decodeBase(deps.settings.shortcuts)
-
-    /** Press to bind's raw keys ([captureKey]); Controls -> Shortcuts' bind rows start it. */
-    private val capture = ShortcutCapture()
-
-    private val _capturingShortcut = MutableStateFlow<ShortcutAction?>(null)
-    /** The action a Shortcuts bind row is waiting on a press for; while set the platform hands raw keys to [captureKey] first. */
-    val capturingShortcut: StateFlow<ShortcutAction?> = _capturingShortcut.asStateFlow()
 
     private var controllerConnected = true
 
@@ -3855,7 +3868,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * its until released ([ShortcutCapture.takes]). Auto-repeats are the platform's to drop.
      */
     fun captureKey(keyCode: Int, down: Boolean): Boolean {
-        if (!capture.takes(keyCode)) return false
+        if (capture.active && (_screen.value as? Screen.Settings)?.section != SettingsSection.SHORTCUTS) closeShortcuts()   // a stale wait: never the menu's keys
+        if (!capture.takes(keyCode, down)) return false
         val result = capture.onKey(keyCode, down) ?: return true
         val action = _capturingShortcut.value
         _capturingShortcut.value = null
@@ -3881,26 +3895,19 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         refreshShortcuts()
     }
 
-    /** [action] on [binding] (null: None); an action that had it already gives it up (one button, one action). */
+    /** [action] on [binding] (null: None; [ShortcutSet.withBinding]). */
     private fun setShortcut(action: ShortcutAction, binding: ShortcutBinding?) {
-        val set = shortcutSet()
-        val bindings = set.bindings.filter { (a, b) -> a != action && b != binding }.toMutableMap()
-        if (binding != null) bindings[action] = binding
-        shortcutDraft = set.copy(bindings = ShortcutAction.entries.filter { it in bindings }.associateWith { bindings.getValue(it) })
+        shortcutDraft = shortcutSet().withBinding(action, binding)
         refreshShortcuts()
     }
 
-    private fun setTouch(slot: TouchSlot, action: ShortcutAction?) {
-        val set = shortcutSet()
-        val touch = set.touch.toMutableMap().apply { if (action == null) remove(slot) else put(slot, action) }
-        shortcutDraft = set.copy(touch = TouchSlot.entries.filter { it in touch }.associateWith { touch.getValue(it) })
-    }
+    private fun setTouch(slot: TouchSlot, action: ShortcutAction?) { shortcutDraft = shortcutSet().withTouch(slot, action) }
 
     private fun refreshShortcuts() { if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) refreshSettings() }
 
     /**
-     * The Shortcuts page closes (B, another page, the app backgrounded): a capture ends, and the draft is written once
-     * (L25: not per change).
+     * The Shortcuts page closes (any screen but it, [_screen]; the app backgrounded): a capture ends, and the draft is
+     * written once (L25: not per change).
      */
     private fun closeShortcuts() {
         capture.cancel()
@@ -4497,7 +4504,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * goes back to Saves on its Import saves row.
      */
     private fun leaveSubPage(section: SettingsSection) {
-        if (section == SettingsSection.SHORTCUTS) closeShortcuts()
         if (section == SettingsSection.IMPORT_RESULT) return showSettingsOn(SettingsSection.SAVES, SettingsKind.IMPORT_SAVES)   // past Import saves
         val parent = section.parent ?: return
         val opener = section.opener ?: return
