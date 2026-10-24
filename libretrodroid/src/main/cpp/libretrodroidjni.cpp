@@ -1078,6 +1078,15 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setAudioEn
     LibretroDroid::getInstance().setAudioEnabled(enabled);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFastForward(
+    JNIEnv* env,
+    jclass obj,
+    jint maxSpeed,
+    jboolean audible
+) {
+    LibretroDroid::getInstance().setFastForward(maxSpeed > 0 ? (unsigned) maxSpeed : 0u, audible);
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderConfig(
     JNIEnv* env,
     jclass obj,

@@ -134,6 +134,11 @@ public class LibretroDroid {
     public static native void setKeepCoreLoaded(boolean keep);
     public static native void setFrameSpeed(int speed);
     public static native void setAudioEnabled(boolean enabled);
+    /**
+     * Fast forward up to maxSpeed times the content's frame rate (0 = off), its audio played or muted. Separate from
+     * setFrameSpeed's pause, so a pause and resume keep it; never applied in netplay or a GBA link session.
+     */
+    public static native void setFastForward(int maxSpeed, boolean audible);
     public static native void setShaderConfig(GLRetroShader shader);
     public static native void setViewport(float x, float y, float width, float height);
     public static native void setViewportAlignment(int viewportAlignment);

@@ -142,13 +142,36 @@ void Audio::setPlaybackSpeed(const double newPlaybackSpeed) {
     playbackSpeed.store(newPlaybackSpeed);
 }
 
+void Audio::setFastForward(bool active, bool audible) {
+    bool wasActive = fastForwardActive.exchange(active);
+    fastForwardMuted.store(active && !audible);
+    if (wasActive && !active) refillPending.store(true);
+    if (active) refillPending.store(false);
+}
+
 oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void *audioData, int32_t numFrames) {
     auto outputArray = reinterpret_cast<int16_t *>(audioData);
     double speed = playbackSpeed.load();
+    const bool muted = fastForwardMuted.load();
 
-    // Speed 0 (menu open): the core produces nothing. Play silence and hold the rate controller, which would
-    // otherwise wind up against the empty FIFO and skew the rate once the game resumes.
-    if (speed <= 0.0) {
+    // Muted fast forward: what the FIFO still holds is from before FF; dropped here (the reader's side) so it isn't
+    // played when FF ends. The core's samples are dropped before they reach the FIFO.
+    if (muted) fifoBuffer->setReadCounter(fifoBuffer->getWriteCounter());
+
+    // After FF: silent until the FIFO is refilled, so playback doesn't restart on an empty buffer and crackle.
+    bool refilling = false;
+    if (!muted && refillPending.load()) {
+        double capacity = fifoBuffer->getBufferCapacityInFrames();
+        if (fifoBuffer->getFullFramesAvailable() >= capacity * REFILL_FRACTION) {
+            refillPending.store(false);
+        } else {
+            refilling = true;
+        }
+    }
+
+    // Speed 0 (menu open) and muted FF: the FIFO gets nothing. Play silence and hold the rate controller, which would
+    // otherwise wind up against the empty FIFO and skew the rate once the game resumes. Refilling after FF likewise.
+    if (speed <= 0.0 || muted || refilling) {
         std::fill_n(outputArray, numFrames * 2, (int16_t) 0);
         framesToSubmit = 0.0;
         tuneLatency();

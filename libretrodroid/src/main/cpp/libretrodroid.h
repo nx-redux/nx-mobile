@@ -38,6 +38,7 @@
 #include "video.h"
 #include "renderers/renderer.h"
 #include "fpssync.h"
+#include "fastforward.h"
 #include "input.h"
 #include "rumble.h"
 #include "shadermanager.h"
@@ -162,6 +163,11 @@ public:
 
     void setFrameSpeed(unsigned int speed);
 
+    // nx-mobile 2026-10-24: fast forward up to maxSpeed × the content's rate (0 = off), with or without its audio.
+    // Separate from frameSpeed, which stays pause (0) / run (1): a pause and resume never drop FF. Not applied in
+    // netplay or a GBA link session. Any thread; step() picks it up.
+    void setFastForward(unsigned maxSpeed, bool audible);
+
     // RetroAchievements: taken under the core lock so they never race the run loop's onFrame().
     void achievementsEnable(bool enabled);
     void achievementsLogin(const std::string& user, const std::string& token);
@@ -221,6 +227,8 @@ public:
 
 private:
     void updateAudioSampleRateMultiplier();
+    // GL thread, in step(): starts/stops the pacer and tells audio and the core (GET_FASTFORWARDING) on a change.
+    void applyFastForward(unsigned maxSpeed, bool audible);
     float findDefaultAspectRatio(const retro_system_av_info &system_av_info);
     void afterGameLoad();
     void releaseCore();
@@ -296,6 +304,17 @@ private:
     std::unique_ptr<Audio> audio;
     std::unique_ptr<Video> video;
     std::unique_ptr<FPSSync> fpsSync;
+
+    // Fast forward as asked (setFastForward, any thread) and as applied by step() (GL thread).
+    std::atomic<unsigned> fastForwardSpeed { 0 };
+    std::atomic<bool> fastForwardAudible { false };
+    FastForwardPacer fastForwardPacer;
+    unsigned appliedFastForwardSpeed = 0;
+    bool appliedFastForwardAudible = false;
+    // Read by the audio callback, which threaded cores call off the GL thread: drop the samples (muted FF).
+    std::atomic<bool> fastForwardDropAudio { false };
+    // Audio playback speed while audible FF runs (the game's achieved speed); 0 otherwise.
+    std::atomic<double> fastForwardPlaybackSpeed { 0.0 };
     std::unique_ptr<Input> input;
     std::array<bool, 4> stickyPointers {};   // survive an input reset (pause/resume), see currentInput()
     std::unique_ptr<Rumble> rumble;

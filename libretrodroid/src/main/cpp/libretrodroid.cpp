@@ -94,7 +94,9 @@ int16_t LibretroDroid::callback_set_input_state(
 
 void LibretroDroid::updateAudioSampleRateMultiplier() {
     if (audio) {
-        audio->setPlaybackSpeed(frameSpeed);
+        // Audible FF plays at the game's achieved speed; a pause (0) still wins.
+        double fastForward = fastForwardPlaybackSpeed.load();
+        audio->setPlaybackSpeed(frameSpeed > 0 && fastForward > 0.0 ? fastForward : frameSpeed);
     }
 }
 
@@ -414,6 +416,14 @@ void LibretroDroid::create(
     this->immersiveModeConfig = immersiveModeConfig.value_or(ImmersiveMode::Config{});
     audioEnabled = true;
     frameSpeed = 1;
+    // A new view starts without FF; GLRetroView re-applies its own value right after create().
+    fastForwardSpeed = 0;
+    fastForwardAudible = false;
+    fastForwardPacer.stop();
+    appliedFastForwardSpeed = 0;
+    appliedFastForwardAudible = false;
+    fastForwardDropAudio = false;
+    fastForwardPlaybackSpeed = 0.0;
     // scaleMode, screenOffset and viewportRect are not reset here: setters may arrive (on the GL thread) before
     // create(), and GLRetroView re-applies its own values right after create().
     geometryWidth = 0.0F;
@@ -652,8 +662,13 @@ void LibretroDroid::step() {
     const bool np = !lk && netplay::active();        // nx-mobile netplay: one lockstep frame per step
     if (np || lk) speed = 1;
 
+    // Fast forward never runs in netplay or a link session: the peers would desync.
+    applyFastForward((np || lk) ? 0 : fastForwardSpeed.load(), fastForwardAudible.load());
+    // Paused during FF (speed 0) takes the normal paused path below; FF picks up again on resume, its clock resynced.
+    const bool fastForward = fastForwardPacer.active() && speed > 0;
+
     unsigned frames = 1;
-    if (fpsSync) {
+    if (fpsSync && !fastForward) {
         unsigned requestedFrames = fpsSync->advanceFrames();
 
         // If the application runs too slow it's better to just skip those frames.
@@ -664,8 +679,19 @@ void LibretroDroid::step() {
 
     // A stick-driven pointer moves once per emulated frame, so its speed is per second of game time.
     const float frameSeconds = fpsSync ? 1.0f / static_cast<float>(fpsSync->getContentRefreshRate()) : 1.0f / 60.0f;
+    // FF runs the frames its pacer has due, never fpsSync's catch-up × a speed: that let the speed follow the display.
+    unsigned runs = frames * speed;
+    if (fastForward) {
+        runs = fastForwardPacer.framesFor(std::chrono::steady_clock::now());
+        if (appliedFastForwardAudible) {
+            // The core's audio comes at the speed it actually ran; vsync mode had stretched the rate to the screen.
+            const double stretch = fpsSync ? fpsSync->getTimeStretchFactor() : 1.0;
+            fastForwardPlaybackSpeed = fastForwardPacer.effectiveSpeed() / stretch;
+            updateAudioSampleRateMultiplier();
+        }
+    }
     auto& achievements = Achievements::getInstance();
-    for (size_t i = 0; i < frames * speed; i++) {
+    for (size_t i = 0; i < runs; i++) {
         currentInput()->advancePointers(frameSeconds);
         if (!np && !lk && !memoryCheats.empty()) applyMemoryCheats();   // never in netplay or link: the peer's RAM would differ
         core->retro_run();
@@ -677,9 +703,10 @@ void LibretroDroid::step() {
     if (np && speed) netplay::postFrame();
 
     if (video) {
-        if (speed == 0) {
-            // Paused: the core doesn't run, so redraw its last frame with the current shader and layout.
-            // GL cores otherwise draw only inside their video callback, leaving the paused picture stale.
+        if (runs == 0) {
+            // Paused, or an FF step with no frame due: the core doesn't run, so redraw its last frame with the current
+            // shader and layout. GL cores otherwise draw only inside their video callback, leaving the picture stale.
+            // An FF step that ran frames shows its last one like any step.
             video->renderPausedFrame();
         } else if (!video->rendersInVideoCallback()) {
             video->renderFrame();
@@ -688,7 +715,10 @@ void LibretroDroid::step() {
 
     // The frame sleep runs without the core lock, so achievements and the off-thread save calls aren't held up by it.
     lock.unlock();
-    if (fpsSync) {
+    if (fastForward) {
+        auto ahead = fastForwardPacer.sleepFor(std::chrono::steady_clock::now());
+        if (ahead > Duration::zero()) std::this_thread::sleep_for(ahead);
+    } else if (fpsSync) {
         fpsSync->wait();
     }
     lock.lock();
@@ -701,6 +731,9 @@ void LibretroDroid::step() {
         if (std::abs(fps - fpsSync->getContentRefreshRate()) > 0.01) {
             LOGI("Core changed its frame rate from %f to %f", fpsSync->getContentRefreshRate(), fps);
             fpsSync = std::make_unique<FPSSync>(fps, screenRefreshRate);
+            if (fastForwardPacer.active()) {
+                fastForwardPacer.start(fps, appliedFastForwardSpeed, std::chrono::steady_clock::now());
+            }
         }
     }
 
@@ -754,6 +787,33 @@ bool LibretroDroid::isRumbleEnabled() const {
 
 void LibretroDroid::setFrameSpeed(unsigned int speed) {
     frameSpeed = speed;
+    updateAudioSampleRateMultiplier();
+}
+
+void LibretroDroid::setFastForward(unsigned maxSpeed, bool audible) {
+    fastForwardSpeed = maxSpeed;
+    fastForwardAudible = audible;
+}
+
+void LibretroDroid::applyFastForward(unsigned maxSpeed, bool audible) {
+    if (maxSpeed == appliedFastForwardSpeed && audible == appliedFastForwardAudible) return;
+
+    const bool on = maxSpeed > 0;
+    if (on && maxSpeed != appliedFastForwardSpeed) {
+        const double fps = fpsSync ? fpsSync->getContentRefreshRate() : 60.0;
+        fastForwardPacer.start(fps, maxSpeed, std::chrono::steady_clock::now());
+    } else if (!on && fastForwardPacer.active()) {
+        fastForwardPacer.stop();
+        // fpsSync's clock stood still through FF: restart it, or the first normal step sleeps off the gap.
+        if (fpsSync) fpsSync->reset();
+    }
+    appliedFastForwardSpeed = maxSpeed;
+    appliedFastForwardAudible = audible;
+
+    fastForwardDropAudio = on && !audible;
+    fastForwardPlaybackSpeed = on && audible ? fastForwardPacer.effectiveSpeed() : 0.0;
+    Environment::getInstance().setFastForwarding(on);
+    if (audio) audio->setFastForward(on, audible);
     updateAudioSampleRateMultiplier();
 }
 
@@ -851,7 +911,9 @@ void LibretroDroid::rethrowVideoCallbackError() {
 
 size_t LibretroDroid::handleAudioCallback(const int16_t *data, size_t frames) {
     gldebug::onAudio(data, frames);
-    if (audio && audioEnabled) {
+    // Muted FF drops the samples but still reports them consumed: mupen64plus spins on a short count. The FIFO write
+    // never blocks either; what doesn't fit (audible FF outrunning playback) is dropped.
+    if (audio && audioEnabled && !fastForwardDropAudio.load()) {
         audio->write(data, frames);
     }
     return frames;

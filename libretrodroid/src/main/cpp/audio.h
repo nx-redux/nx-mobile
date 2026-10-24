@@ -69,6 +69,10 @@ public:
 public:
     void write(const int16_t *data, size_t frames);
     void setPlaybackSpeed(const double newPlaybackSpeed);
+    // nx-mobile 2026-10-24: fast forward. Muted, the realtime callback plays silence with the rate controller held, as
+    // at speed 0, and drops what the FIFO still held; audible, the caller sets the playback speed to the game's. When
+    // FF ends the output stays silent until the FIFO is refilled (crackles otherwise). Any thread.
+    void setFastForward(bool active, bool audible);
 
 private:
     static int32_t roundToEven(int32_t x);
@@ -112,6 +116,13 @@ private:
     double errorIntegral = 0.0;
 
     std::atomic<double> playbackSpeed { 1.0 };
+
+    // Fast forward (setFastForward): written by the GL thread, read by the audio callback.
+    std::atomic<bool> fastForwardActive { false };
+    std::atomic<bool> fastForwardMuted { false };
+    std::atomic<bool> refillPending { false };
+    // Output resumes after FF once the FIFO is this full, near the PI controller's half-full target.
+    static constexpr double REFILL_FRACTION = 0.4;
 
     std::unique_ptr<AudioLatencySettings> audioLatencySettings;
 };

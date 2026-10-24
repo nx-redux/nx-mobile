@@ -115,6 +115,8 @@ add_library(libretrodroid SHARED
         resamplers/sincresampler.cpp
         fpssync.h
         fpssync.cpp
+        fastforward.h
+        fastforward.cpp
         environment.h
         environment.cpp
         corelog.h
