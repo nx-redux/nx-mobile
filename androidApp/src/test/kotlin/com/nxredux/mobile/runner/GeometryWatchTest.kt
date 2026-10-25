@@ -73,4 +73,20 @@ class GeometryWatchTest {
         base[0] = 999f
         assertEquals(GeometryWatch.Tick.WAITING, w.tick(old))
     }
+
+    @Test fun noWatchWithoutARealGeometry() {
+        val w = GeometryWatch()
+        assertFalse(w.start(floatArrayOf(0f, 0f, 0f, 0f)))   // the core has not loaded: its first geometry is not a change
+        assertFalse(w.active)
+        assertEquals(GeometryWatch.Tick.IDLE, w.tick(new))
+        assertTrue(w.start(old))
+    }
+
+    @Test fun laysOutOncePerDistinctGeometry() {
+        val w = GeometryWatch()
+        assertTrue(w.shouldLayOut(new))
+        assertFalse(w.shouldLayOut(new.copyOf()))   // the second path seeing the same change
+        assertTrue(w.shouldLayOut(old))
+        assertTrue(w.shouldLayOut(new))
+    }
 }

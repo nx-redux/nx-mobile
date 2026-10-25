@@ -24,11 +24,28 @@ internal class GeometryWatch(private val defaultFrames: Int = 90) {
     /** The geometry the watch compares against: the frame before the switch; null when none is under way. */
     val before: FloatArray? get() = baseline
 
-    /** Begins watching from [baseline], the geometry before the switch, for up to [frames] frames. */
-    fun start(baseline: FloatArray, frames: Int = defaultFrames) {
+    private var laidOut: FloatArray? = null
+
+    /**
+     * Begins watching from [baseline], the geometry before the switch, for up to [frames] frames. Returns false and
+     * watches nothing while the core has no geometry yet (zeros before it loads): its first real one is not a change.
+     */
+    fun start(baseline: FloatArray, frames: Int = defaultFrames): Boolean {
+        if (baseline.size < 2 || baseline[0] <= 0f || baseline[1] <= 0f) return false
         this.baseline = baseline.copyOf()
         maxFrames = frames
         framesWaited = 0
+        return true
+    }
+
+    /**
+     * Whether to lay out from [g]: false when the last layout from the core already used an equal geometry (the watch and
+     * the view's flow can both see one change); otherwise remembers it.
+     */
+    fun shouldLayOut(g: FloatArray): Boolean {
+        if (laidOut?.contentEquals(g) == true) return false
+        laidOut = g.copyOf()
+        return true
     }
 
     /** One frame with [current]: the first change from the baseline ends the watch; so does reaching [maxFrames]. */

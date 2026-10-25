@@ -91,6 +91,8 @@ internal interface FrontendHost : LifecycleOwner {
     fun publishMenuShaders()
     fun publishMenuFrontend()
     fun toast(msg: String): android.widget.Toast
+    /** The core's geometry changed to [g]: a dual mode checks which display the picture belongs on. */
+    fun recheckPictureOn(g: FloatArray)
 }
 
 /**
@@ -323,7 +325,7 @@ internal class FrontendRenderer(
                 GeometryWatch.Tick.WAITING -> Choreographer.getInstance().postFrameCallback(this)
                 GeometryWatch.Tick.CHANGED -> {
                     NxLog.i(TAG_LOG, "3DS frame: new geometry after ${geometryWatch.framesWaited} frames, ${old.fmt()} -> ${g.fmt()}; laying out again")
-                    relayoutFrontend(g)
+                    layOutFromCore(g)
                 }
                 GeometryWatch.Tick.GAVE_UP -> NxLog.i(TAG_LOG, "3DS frame: no new geometry in ${geometryWatch.framesWaited} frames (${g.fmt()})")
                 GeometryWatch.Tick.IDLE -> {}
@@ -342,7 +344,7 @@ internal class FrontendRenderer(
     fun watchGeometry(frames: Int = 90) {
         val view = retroView ?: return
         val before = view.getGameGeometry()
-        geometryWatch.start(before, frames)
+        if (!geometryWatch.start(before, frames)) return   // the core has no geometry yet (still launching)
         NxLog.i(TAG_LOG, "3DS layout switched: watching the frame size for up to $frames frames from ${before.fmt()}")
         Choreographer.getInstance().removeFrameCallback(geometryFrame)
         Choreographer.getInstance().postFrameCallback(geometryFrame)
@@ -358,6 +360,13 @@ internal class FrontendRenderer(
     fun onCoreGeometry(g: FloatArray) {
         val before = geometryWatch.before
         if (geometryWatch.seen(g)) NxLog.i(TAG_LOG, "3DS frame: new geometry from the core after ${geometryWatch.framesWaited} frames, ${before.fmt()} -> ${g.fmt()}; laying out again")
+        layOutFromCore(g)
+    }
+
+    /** The one way a changed core geometry is laid out (the watch's and the flow's), once per distinct geometry. */
+    private fun layOutFromCore(g: FloatArray) {
+        if (!geometryWatch.shouldLayOut(g)) return
+        host.recheckPictureOn(g)
         relayoutFrontend(g)
     }
 
