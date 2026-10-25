@@ -5038,12 +5038,11 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         refreshInstalled()    // apps may have been installed or removed meanwhile
         refreshGameInfo()   // back from a game (or another app): its time and unlocks may have moved
         homeTab.refreshStatsIfAsked()   // Home's stats too (before the menu's first show, that show computes them)
-        // Back from a game resumed from the switcher: the switcher again (its game first, the latest recent), over the
-        // page it opened from. Over the main menu, after the rows rebuilt below (a swap would abandon an open under way);
-        // read again there, so a Home landing meanwhile (onNewIntent may follow onStart) drops it.
+        // Back from a game opened from the switcher, which stayed up under it: its cards read again in place, no slide, and
+        // Home's rows rebuilt behind it. A switcher game whose switcher went meanwhile (a Home landing) reopens it once
+        // ([reopenSwitcher]): over the main menu after the rows rebuilt below (a swap would abandon an open under way).
         // Back on a list or a page: Home's rows are rebuilt all the same (the page stays as it is; [swapMainRows] only acts
         // on the menu), so B to the menu shows Continue's new resume frame, not the one read when the game launched.
-        // Back from a game opened from the switcher, which stayed up under it: its cards read again in place, no slide.
         if (switcherBack) { switcherReturn = false; switcherRowsRebuilt = true; scope.launch { rebuildMainRows() }; refreshSwitcher(); return }
         val s = _screen.value as? Screen.Systems ?: run { scope.launch { rebuildMainRows(); swapMainRows() }; reopenSwitcher(); return }
         if (s.menu != null) { switcherReturn = false; return }
@@ -5974,7 +5973,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * LEFT / RIGHT on a game list whose d-pad runs up and down (List, Minimal, a vertical Carousel or Backdrop): a page of
      * [pageRows] up or down, held at the ends, a held key's repeat paging on (NX Redux's game lists).
      */
-    private fun pageMove(s: Screen.Games, button: NxButton) {
+    private fun pageMove(button: NxButton) {
         val sel = _selection.value
         val next = ListJumps.page(sel.count, pageRows, sel.index, if (button == NxButton.RIGHT) 1 else -1)
         if (next != sel.index) { _selection.value = sel.copy(index = next); refreshResume() }
@@ -6081,7 +6080,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             NxButton.LEFT, NxButton.RIGHT -> {
                 when (s) {
                     is Screen.Systems -> if (!repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)
-                    is Screen.Games -> pageMove(s, button)   // a game list's stack pages, as its List
+                    is Screen.Games -> pageMove(button)   // a game list's stack pages, as its List
                     else -> Unit
                 }
                 return true
@@ -6249,8 +6248,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             NxButton.DOWN -> if (!rowMove(button, repeat) && !gridMove(button)) { _selection.value = _selection.value.down(wrap = !repeat || !launcherList()); refreshResume() }
             // The main menu: LEFT / RIGHT are L1 / R1 (a Grid or row switches only past its ends), on a fresh press only: a held
             // key's repeats never switch tabs. A List or Minimal game list pages ([pageMove]).
-            NxButton.LEFT, NxButton.RIGHT -> if (!rowMove(button, repeat) && !gridMove(button, repeat)) when (val s = _screen.value) {
-                is Screen.Games -> pageMove(s, button)   // a List or Minimal game list pages
+            NxButton.LEFT, NxButton.RIGHT -> if (!rowMove(button, repeat) && !gridMove(button, repeat)) when (_screen.value) {
+                is Screen.Games -> pageMove(button)   // a List or Minimal game list pages
                 is Screen.Systems -> if (!repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)
                 else -> Unit
             }
