@@ -1528,8 +1528,8 @@ internal fun portraitOverlayUnits(midScale: Float): Float =
  * show / hide chevron is the host's, at the row's right end. [unit] and the middle row's scale (from [bandWidthUnits] x
  * [bandHeightUnits], the band this replaces) match the band's buttons on this screen; the height is
  * [portraitOverlayUnits] units plus the padding. No background, and only the buttons take touches: the gaps pass to
- * the game. The rows have a fixed height, so there is no room for the New 3DS C-stick; [onCStick] is accepted for the
- * host's symmetry with the band and the cluster draws without it.
+ * the game. No C-stick in the hidden-band overlay: the rows have a fixed height, so the New 3DS cluster draws without
+ * one. [analog] is the joystick's mode, as on the portrait band.
  */
 @Composable
 fun PortraitOverlayPad(
@@ -1537,11 +1537,11 @@ fun PortraitOverlayPad(
     onStick: (Float, Float) -> Unit,
     unit: Dp,
     modifier: Modifier = Modifier,
+    analog: Boolean = false,
     profile: PadProfile = PadProfile.STANDARD,
     useJoystick: Boolean? = null,
     onUseJoystickChange: (Boolean) -> Unit = {},
     latched: Set<NxButton> = emptySet(),
-    onCStick: ((Float, Float) -> Unit)? = null,
     shortcuts: Map<TouchSlot, TouchShortcut> = emptyMap(),
     onShortcut: (TouchSlot, Boolean) -> Unit = { _, _ -> },
     bandWidthUnits: Float = 9f,
@@ -1574,8 +1574,8 @@ fun PortraitOverlayPad(
             Row(sides.height(unit * 3f * mid), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 val stickMid = unit * mid
                 val faceMid = unit * faceScale
-                if (stick.useJoystick) NeuJoystick(stickMid, emit, analog = true, onStick = onStick) else NeuDpad(stickMid, emit)
-                FaceClusterBox(profile, faceMid, (faceMid.value * 0.46f).sp, emit, onCStick = onCStick)
+                if (stick.useJoystick) NeuJoystick(stickMid, emit, analog = analog, onStick = onStick) else NeuDpad(stickMid, emit)
+                FaceClusterBox(profile, faceMid, (faceMid.value * 0.46f).sp, emit)
             }
             Spacer(Modifier.height(gap))
             Row(Modifier.padding(start = nudge).height(sysH), verticalAlignment = Alignment.CenterVertically) {

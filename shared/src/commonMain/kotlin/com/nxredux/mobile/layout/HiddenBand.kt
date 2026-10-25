@@ -18,7 +18,7 @@ fun hideOffered(scale: ConsoleScale, frame: CoreFrame?): Boolean {
 
 /**
  * Height in pixels of the pad overlay drawn over the game when the band is hidden: the portrait pad column's
- * fixed 2.42 units plus three times the middle row's scale ([midRowScale] for a band [bandWidthUnits] x
+ * fixed 2.42 units (equal to `portraitOverlayUnits` in ui/nx/VirtualPad.kt, pinned by PortraitOverlayTest) plus three times the middle row's scale ([midRowScale] for a band [bandWidthUnits] x
  * [bandHeightUnits]), times [bandUnitPx], plus the cluster padding top and bottom.
  */
 fun overlayHeightPx(bandUnitPx: Float, bandWidthUnits: Float, bandHeightUnits: Float, density: Float): Float =
