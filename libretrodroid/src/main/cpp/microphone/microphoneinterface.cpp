@@ -16,10 +16,32 @@
  */
 
 #include "microphoneinterface.h"
+
+#include <mutex>
+#include <unordered_set>
+
 #include "../log.h"
 #include "microphone.h"
 
 namespace libretrodroid {
+
+namespace {
+// The source and the open mics, so setSource reaches each one. Taken before a mic's own lock, never after.
+std::mutex registryLock;
+MicSource currentSource = MicSource::SILENCE;
+std::unordered_set<Microphone*> openMicrophones;
+}
+
+void MicrophoneInterface::setSource(int source) {
+    MicSource micSource = MicSource::SILENCE;
+    if (source == (int) MicSource::LIVE || source == (int) MicSource::NOISE) micSource = (MicSource) source;
+
+    std::lock_guard<std::mutex> r(registryLock);
+    if (micSource == currentSource) return;
+    LOGI("Microphone source set to %d", source);
+    currentSource = micSource;
+    for (Microphone* microphone : openMicrophones) microphone->setSource(micSource);
+}
 
 retro_microphone_interface* MicrophoneInterface::getInterface() {
     LOGI("Fetching microphone interface");
@@ -38,12 +60,12 @@ retro_microphone_interface* MicrophoneInterface::getInterface() {
 }
 
 retro_microphone_t* MicrophoneInterface::libretroOpenMicrophone(const retro_microphone_params_t* params) {
+    // Never fails: no stream opens until the core starts the mic with the source live, and a phone mic that can't
+    // open falls back to noise, so the core always has a mic to read.
     auto* result = new Microphone(params != nullptr ? (int) params->rate : 44100);
-    if (!result->open()) {
-        // libretro: open_mic returns NULL when the microphone can't be opened.
-        delete result;
-        return nullptr;
-    }
+    std::lock_guard<std::mutex> r(registryLock);
+    result->setSource(currentSource);
+    openMicrophones.insert(result);
     LOGI("Opened microphone");
     return reinterpret_cast<retro_microphone_t*>(result);
 }
@@ -52,7 +74,10 @@ void MicrophoneInterface::libretroCloseMicrophone(retro_microphone_t* opaqueMicr
     if (opaqueMicrophone == nullptr) return;
     LOGI("Closed microphone");
     auto microphone = reinterpret_cast<Microphone*>(opaqueMicrophone);
-    microphone->close();
+    {
+        std::lock_guard<std::mutex> r(registryLock);
+        openMicrophones.erase(microphone);
+    }
     delete microphone;
 }
 

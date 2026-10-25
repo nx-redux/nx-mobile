@@ -84,6 +84,19 @@ class GLRetroView(
     }
 
     /**
+     * What the core's mic hears: 0 silence, 1 the phone mic (noise if it can't open), 2 noise. Main thread; pushed
+     * straight to native, not queued on the GL thread, so turning live off closes the mic while paused too. Re-applied
+     * after create().
+     */
+    var microphoneSource: Int by Delegates.observable(0) { _, old, value ->
+        if (old != value) pushMicrophoneSource()
+    }
+
+    private fun pushMicrophoneSource() {
+        LibretroDroid.setMicrophoneSource(microphoneSource)
+    }
+
+    /**
      * Rewind snapshots: on, the game is snapshotted every frame (or every 2nd/4th for big states) once the core can
      * serialize; off frees the buffer. Ignored in netplay and GBA link sessions. Main thread; applied on the GL thread
      * and re-applied after create(), like [fastForward].
@@ -326,6 +339,7 @@ class GLRetroView(
         reapplyDisplaySettings()
         pushFastForward()
         pushRewind()
+        pushMicrophoneSource()
     }
 
     /**

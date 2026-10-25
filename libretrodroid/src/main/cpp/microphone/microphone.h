@@ -22,16 +22,18 @@
 #include <mutex>
 
 #include "libretro.h"
+#include "micfeed.h"
 #include "oboe/AudioStreamCallback.h"
 #include "oboe/FifoBuffer.h"
 
 namespace libretrodroid {
 
+// One core mic. Always answers read() from its MicFeed; the phone mic is open only while the feed wants it live.
 class Microphone: public oboe::AudioStreamCallback {
 public:
     explicit Microphone(int sampleRate);
     // Closes a stream still open: its callback points at this object.
-    ~Microphone() override { close(); }
+    ~Microphone() override;
     Microphone(const Microphone& other) = delete;
     Microphone& operator=(const Microphone& other) = delete;
 
@@ -41,21 +43,29 @@ public:
         int32_t numFrames
     ) override;
 
-    bool open();
-    bool close();
+    // Any thread: leaving LIVE closes the stream before returning.
+    void setSource(MicSource source);
+    // Always fills numSamples: live samples padded with zeros, else silence or noise. Opens the stream when wanted.
     int read(int16_t* samples, int numSamples);
 
+    // The core's set_mic_state: stopping closes the stream at once.
     void setRunning(bool shouldRun);
     bool isRunning() const;
 
     int sampleRate() const;
 
 private:
-    bool mIsRunning = false;
+    // Both with streamLock held.
+    bool openStream();
+    void closeStream();
+
     int mSampleRate = 44100;
+    // FIFO only: the Oboe callback takes it, so never stop or close a stream while holding it.
     std::mutex lock;
     std::unique_ptr<oboe::FifoBuffer> fifoBuffer = nullptr;
-    // Opened, started and closed on the core's thread (the libretro mic calls); never touched by the callback.
+    // Guards feed and inputStream: the core thread reads and opens, the app's thread (setSource) can close.
+    mutable std::mutex streamLock;
+    MicFeed feed;
     std::shared_ptr<oboe::AudioStream> inputStream;
 };
 
