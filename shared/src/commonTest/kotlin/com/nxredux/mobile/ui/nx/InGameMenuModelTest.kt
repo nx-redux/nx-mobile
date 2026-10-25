@@ -1389,6 +1389,27 @@ class InGameMenuModelTest {
         assertTrue("Side by side" in phone.optionRow(2).choices)
     }
 
+    // The layout row's Adjust strip (A on a visual row) shows the same screen's values and default as the row.
+    @Test fun console_settings_adjust_strip_follows_the_window_screen() {
+        val m = model().apply { screen = ScreenClass.NEAR_SQUARE_TABLET }.openConsoleSettings()
+        m.select(2)
+        assertNull(m.press(NxButton.A))
+        assertEquals(PageKind.Adjust(NdsOptions.LAYOUT_LANDSCAPE), m.state.page.kind)
+        val strip = m.state.page.rows.single() as MenuRow.Option
+        assertEquals("Large screen", strip.valueLabel)
+        assertFalse("Side by side" in strip.choices)
+        assertEquals(0, strip.index)
+        assertEquals(MenuEffect.SetFrontend(NdsOptions.LAYOUT_LANDSCAPE, "stacked"), m.press(NxButton.RIGHT))
+        val next = m.state.page.rows.single() as MenuRow.Option
+        assertEquals("Stacked", next.valueLabel)
+        assertEquals(1, next.index)
+        m.press(NxButton.LEFT)                                             // back to Large screen
+        assertEquals(MenuEffect.SetFrontend(NdsOptions.LAYOUT_LANDSCAPE, "pip"), m.press(NxButton.LEFT))   // wraps past no Side by side
+        val last = m.state.page.rows.single() as MenuRow.Option
+        assertEquals("Picture in picture", last.valueLabel)
+        assertEquals(last.choices.lastIndex, last.index)
+    }
+
     @Test fun a_locked_console_row_is_hidden() {
         val m = model().openConsoleSettings(locked = setOf(NdsOptions.BIG_SCREEN))
         assertTrue(m.state.page.rows.none { it.label == "Big Screen" })

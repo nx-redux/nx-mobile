@@ -1398,7 +1398,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             key == ShaderOptions.PRESET -> presetRow()
             ShaderOptions.paramId(key) != null ->
                 paramRow(checkNotNull(params.firstOrNull { ShaderOptions.paramKey(it.id) == key }) { "not an active parameter: $key" })
-            else -> frontendRow(checkNotNull(FrontendOptions.option(key)) { "not a frontend key: $key" })
+            else -> frontendRow(checkNotNull(optionFor(key)) { "not a frontend key: $key" })
         }
         return MenuPage(PageKind.Adjust(key), row.label, listOf(row))
     }

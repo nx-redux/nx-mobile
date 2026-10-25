@@ -334,10 +334,8 @@ internal class FrontendRenderer(
         val frame = coreFrame(g)   // null before the first frame (0x0)
         frame?.let(padLayout::onFrame)
         val room = padLayout.padRoom()
-        val pad = padLayout.landscapePad()
-        // Before the first frame: the clusters take their unit and rows now (still hidden), so they are measured by then.
-        if (frame == null && pad != null) padLayout.placeClusters(null, pad)
-        val shape = pad?.shape ?: activity.windowShape()
+        val shape = activity.windowShape()   // one window reading for this layout
+        val pad = padLayout.landscapePad(shape)
         val screen = shape.screenClass
         val overlayH = padLayout.hiddenOverlayHeightPx()
         val setAside = pad?.let { setAsidePx(screen, it.reach, controller = false) } ?: 0f
@@ -347,8 +345,12 @@ internal class FrontendRenderer(
         // size. Keep whatever is drawn now rather than letting an empty list flip a split game to the whole 256x384
         // frame (and the overlay back on) for that moment; the next size change lays it out again.
         if (nds != null && nds.isEmpty()) return
-        // Before its first frame a DS game's frame size is unknown (0x0): it stays split as it started, overlay off.
-        if (nds == null && ndsSplit && !gameReady) return
+        // Before its first frame a DS game's frame size is unknown (0x0): it stays split as it started, overlay off. The
+        // clusters still take their unit and rows (hidden), so they are measured by the first frame.
+        if (nds == null && ndsSplit && !gameReady) {
+            pad?.let { padLayout.placeClusters(null, it) }
+            return
+        }
         ndsRegions = nds ?: emptyList()
         val secondDs = secondDsRegions(g)
         secondNdsRegions = secondDs.takeIf { isNds }.orEmpty()

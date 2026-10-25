@@ -36,9 +36,11 @@ internal data class WindowShape(
 }
 
 /**
- * This activity's [WindowShape]: `currentWindowMetrics` on Android 11+ (known from the first layout, insets included);
- * below that the display's real size and the decor view's cutout (Android 9+; none before), which a split-screen
- * window does not follow.
+ * This activity's [WindowShape]: `currentWindowMetrics` on Android 11+ (known from onCreate, insets included). Below
+ * that the display's real size (not the window's, so a split-screen window does not follow) and the decor view's cutout
+ * (Android 9+; none before), which is only known once the window is attached and its insets dispatched: a read before
+ * then (onCreate) sees cutoutTop = 0. The game lays its pad out again when the insets arrive
+ * ([PadLayoutController.applyGameTopMargin]).
  */
 internal fun Activity.windowShape(): WindowShape {
     val dm = resources.displayMetrics

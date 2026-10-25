@@ -1,6 +1,7 @@
 package com.nxredux.mobile.runner
 
 import android.content.res.Configuration
+import android.os.Build
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.InputDevice
@@ -220,6 +221,10 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     /** The portrait band hidden: its see-through overlay across the bottom, and that overlay's height, px. */
     private var overlayView: ComposeView? = null
     private var overlayHeight = 0
+    /** The portrait band's hide / show corner icon, while it is drawn ([syncPortraitToggle]). */
+    private var toggleView: ComposeView? = null
+    /** Shows the pads that waited for the picture once [reveal]'s timeout has passed; one pending at a time. */
+    private val revealTimeout = Runnable { updatePadVisibility() }
     /** The portrait band is shown in the current layout. */
     private var bandShown = false
     /** The clusters' drawn buttons ([MeasuredButtons]); each layout's own listeners ([clusterGeneration]) report here. */
@@ -263,6 +268,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         layoutPadHidden = portraitPadHidden()
         clusterViews = null
         overlayView = null
+        toggleView = null
         overlayHeight = 0
         bandShown = false
         shoulderReachPx.value = null
@@ -306,12 +312,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 // A controller hides it, as in landscape.
                 addHiddenBandOverlay(root)
             }
-            if (hideOfferedNow() && PadBandRule.keepPadBand(portrait = true, names)) {
-                val hidden = layoutPadHidden
-                val toggle = composePad { PortraitPadToggle(hidden, if (hidden) padLandscapeAlpha.value else 1f, ::togglePortraitPad) }
-                addPad(root, toggle, FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END))
-            }
+            syncPortraitToggle(root, names, portrait = true)
         } else {
             // Landscape: full-screen game. Show the transparent corner clusters only when no controller
             // is attached; a connected controller hides them for an unobstructed screen.
@@ -319,10 +320,11 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
             if (names.isEmpty()) addBesideClusters(root)
         }
+        root.removeCallbacks(revealTimeout)
         if (clusterViews != null || overlayView != null) {
             // Hidden until the renderer places the picture; the timeout shows them for a game that never draws.
             reveal.onLayoutStart(SystemClock.uptimeMillis())
-            root.postDelayed({ updatePadVisibility() }, reveal.timeoutMs)
+            root.postDelayed(revealTimeout, reveal.timeoutMs)
         }
         game.requestLayout()
         updatePadVisibility()
@@ -331,6 +333,28 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         notificationsView?.layoutParams = menuLayoutParams(orientation)
         // The DS layouts follow the new area (gameContainer's size listener does too, once it is laid out).
         game.post { relayoutFrontend() }
+    }
+
+    /**
+     * [portrait]: the band's corner icon drawn where hiding is offered ([hideOfferedNow]) and the band rule keeps a pad
+     * ([names]), else taken away; nothing else is rebuilt, so a game's first frame can add it without a new layout.
+     */
+    private fun syncPortraitToggle(root: FrameLayout, names: List<String>, portrait: Boolean) {
+        val wanted = portrait && tabletop(names) == null &&
+            hideOfferedNow() && PadBandRule.keepPadBand(portrait = true, names)
+        val shown = toggleView
+        if (wanted == (shown != null)) return
+        if (shown != null) {
+            root.removeView(shown)
+            padViews -= shown
+            toggleView = null
+            return
+        }
+        val hidden = layoutPadHidden
+        val toggle = composePad { PortraitPadToggle(hidden, if (hidden) padLandscapeAlpha.value else 1f, ::togglePortraitPad) }
+        addPad(root, toggle, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END))
+        toggleView = toggle
     }
 
     /**
@@ -383,12 +407,11 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     }
 
     /**
-     * The landscape clusters' unit and reach now ([landscapeUnitPx], [reach] with the measured buttons once both halves
-     * have reported, else the estimate); null when no clusters are beside the picture.
+     * The landscape clusters' unit and reach now in the window [shape] ([landscapeUnitPx], [reach] with the measured
+     * buttons once both halves have reported, else the estimate); null when no clusters are beside the picture.
      */
-    fun landscapePad(): LandscapePad? {
+    fun landscapePad(shape: WindowShape = activity.windowShape()): LandscapePad? {
         if (clusterViews == null) return null
-        val shape = activity.windowShape()
         val secondRow = besideSecondRow(padTools(), host.padShortcuts, placeholders = false)
         val unit = landscapeUnitPx(
             shape.screenClass, shape.heightPx.toFloat(), minOf(shape.widthPx, shape.heightPx).toFloat(), shape.ydpi, shape.density, secondRow,
@@ -493,12 +516,21 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 
     /**
      * The running game's [next] frame (each layout with a known geometry): when it changes whether hiding the band is
-     * offered (a picture taller than wide), the screen is laid out again for the corner icon and the band.
+     * offered (a picture taller than wide) in portrait, the corner icon follows, and the band too when it is set hidden.
      */
     fun onFrame(next: CoreFrame) {
         val before = hideOfferedNow()
         frame = next
-        if (hideOfferedNow() != before) findViewById<FrameLayout>(R.id.root).post { applyLayout(resources.configuration.orientation) }
+        // Landscape builds nothing from it; portrait rebuilds only when the band / overlay choice flips, else just the icon.
+        if (hideOfferedNow() == before || isLandscape(resources.configuration.orientation)) return
+        val root = findViewById<FrameLayout>(R.id.root)
+        root.post {
+            if (portraitPadHidden() != layoutPadHidden) applyLayout(resources.configuration.orientation)
+            else {
+                syncPortraitToggle(root, layoutControllerNames(), portrait = !isLandscape(resources.configuration.orientation))
+                updatePadVisibility()
+            }
+        }
     }
 
     /** Hiding the portrait band is offered for this game ([hideOffered]: DS / 3DS, or a picture taller than wide). */
@@ -605,7 +637,10 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 
     /** Portrait keeps the game below a top camera cutout; landscape leaves the (centred) picture full-screen. */
     fun applyGameTopMargin(orientation: Int) {
-        if (tabletop() != null) {   // the tabletop game area starts at the cutout too: lay it out again whole
+        // The tabletop game area starts at the cutout too; below Android 11 the portrait band's height read the cutout
+        // ([windowShape]) before it was known: lay it out again whole.
+        val bandFromInsets = Build.VERSION.SDK_INT < 30 && orientation == Configuration.ORIENTATION_PORTRAIT
+        if (tabletop() != null || bandFromInsets) {
             applyLayout(orientation)
             return
         }
