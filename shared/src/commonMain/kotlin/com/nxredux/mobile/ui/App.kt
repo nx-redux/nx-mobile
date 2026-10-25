@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui
 
 import coil3.ImageLoader
+import coil3.PlatformContext
 import coil3.compose.AsyncImagePainter
 import coil3.compose.setSingletonImageLoaderFactory
 import com.nxredux.mobile.update.AppRelease
@@ -127,12 +128,18 @@ import com.nxredux.mobile.shared.res.background
 import org.jetbrains.compose.resources.painterResource
 import kotlinx.coroutines.delay
 
+/**
+ * The image loader every picture uses, the game screen's too: the generated abstract art's fetcher ([abstractArtFetcher])
+ * and key, and local files (ROM art, save-state screenshots) read by path: its mapper runs before Coil's String mapper,
+ * which would parse '#' and '?'.
+ */
+internal fun nxImageLoader(context: PlatformContext): ImageLoader =
+    ImageLoader.Builder(context).components { fileRefMapper()?.let { add(it) }; add(abstractArtFetcher()); abstractArtKeyer()?.let { add(it) } }.build()
+
 /** Root composable. The host creates AppState once (so a folder pick can reach setHome/addExtra) and passes it in. */
 @Composable
 fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
-    // The image loader every picture uses, with the generated abstract art's fetcher ([abstractArtFetcher]) and key, and
-    // local ROM art as files: its mapper runs before Coil's String mapper, which would parse '#' and '?'.
-    setSingletonImageLoaderFactory { context -> ImageLoader.Builder(context).components { fileRefMapper()?.let { add(it) }; add(abstractArtFetcher()); abstractArtKeyer()?.let { add(it) } }.build() }
+    setSingletonImageLoaderFactory(::nxImageLoader)   // a no-op when the platform installed it first (Android: at process start)
     val screen by state.screen.collectAsState()
     val error by state.error.collectAsState()
     val androidGamesAsk by state.androidGamesAsk.collectAsState()

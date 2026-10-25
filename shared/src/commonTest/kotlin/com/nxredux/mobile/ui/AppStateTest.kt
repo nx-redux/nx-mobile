@@ -8822,6 +8822,48 @@ class AppStateTest {
         assertTrue(Hint(NxButton.A, "Play") in mainMenuHints(state.screen.value.homeRows[0], state.resumeInfo.value.canResume))
     }
 
+    @Test fun back_from_a_game_over_its_list_rebuilds_continue_for_the_menu_after_it() = runTest {
+        val runner = RecordingRunner()
+        val resumable = HashMap<Pair<String, String>, ResumeInfo>()
+        val data = FakeUserData(recents = listOf(Recent(mk)), resumable = resumable)
+        val state = state(MemorySettings(ContentRef("Home")), data = data, runner = runner)
+        state.load(); advanceUntilIdle()
+        state.openConsole("GB"); advanceUntilIdle()
+        state.onButton(NxButton.A); advanceUntilIdle()                   // Tetris, from its list: no save yet
+        data.recents = listOf(Recent(tetris), Recent(mk))
+        resumable[("GB" to "Tetris.gb")] = ResumeInfo(9, "file:///Tetris.gb.9.bmp?v=2")   // Save & Quit wrote its screenshot
+        state.onForeground(); advanceUntilIdle()                         // back from the game, on the list
+        assertIs<Screen.Games>(state.screen.value)                       // the list is left as it was
+        state.back(); advanceUntilIdle()                                 // B: the main menu
+        state.selectTab(0); advanceUntilIdle()                           // Home
+        val cont = assertIs<MainRow.Continue>(state.screen.value.homeRows[0])
+        assertEquals("Tetris.gb", cont.entry.game.fileName)
+        assertEquals("file:///Tetris.gb.9.bmp?v=2", cont.resume.previewPath)   // its new resume frame, not the art
+    }
+
+    @Test fun back_from_a_game_resumed_from_the_switcher_shows_its_new_resume_frame_there_and_on_home() = runTest {
+        for (fromList in listOf(false, true)) {
+            val runner = RecordingRunner()
+            val resumable = HashMap(mapOf(("GB" to "Tetris.gb") to ResumeInfo(9, "file:///Tetris.gb.9.bmp?v=1")))
+            val data = FakeUserData(recents = listOf(Recent(tetris)), resumable = resumable)
+            val state = state(MemorySettings(ContentRef("Home")), data = data, runner = runner)
+            state.load(); advanceUntilIdle()
+            if (fromList) { state.openConsole("NDS"); advanceUntilIdle() }   // the switcher over a game list
+            state.onButton(NxButton.SELECT); advanceUntilIdle()
+            state.onButton(NxButton.A); advanceUntilIdle()               // resumes Tetris
+            assertEquals(9, runner.launched.single().resumeSlot)
+            resumable[("GB" to "Tetris.gb")] = ResumeInfo(9, "file:///Tetris.gb.9.bmp?v=2")   // a newer resume point
+            state.onForeground(); advanceUntilIdle()                     // back from the game: the switcher again
+            val sw = assertIs<Screen.Switcher>(state.screen.value)
+            assertEquals("file:///Tetris.gb.9.bmp?v=2", sw.entries.single().resume.previewPath, "fromList=$fromList")
+            state.onButton(NxButton.B); advanceUntilIdle()               // closed: what it opened over
+            if (fromList) { assertIs<Screen.Games>(state.screen.value); state.back(); advanceUntilIdle() }
+            state.selectTab(0); advanceUntilIdle()                       // Home
+            val cont = assertIs<MainRow.Continue>(state.screen.value.homeRows[0])
+            assertEquals("file:///Tetris.gb.9.bmp?v=2", cont.resume.previewPath, "fromList=$fromList")
+        }
+    }
+
     @Test fun a_tab_that_vanishes_lands_the_fallback_on_its_own_row() = runTest {
         val src = sourceWithCollections()
         val state = state(MemorySettings(ContentRef("Home")), src = src, data = FakeUserData(recents = listOf(Recent(tetris)), pins = listOf(Shortcut(mario, "Mario"))))

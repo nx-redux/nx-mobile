@@ -14,9 +14,6 @@ object FileRefs {
     /** The prefix of a file ref's value. */
     const val SCHEME = "file://"
 
-    /** Where ROM folders live: art under it is read by path ([artPath]); app-private `file://` refs are not. */
-    private const val SHARED_STORAGE = "/storage/"
-
     /** True for a folder or file ref read by path. App-private art `file://` models are art, not folder refs: they are never passed here. */
     fun isFile(ref: ContentRef): Boolean = ref.value.startsWith(SCHEME)
 
@@ -45,8 +42,17 @@ object FileRefs {
     fun isPlainName(name: String): Boolean = name.isNotEmpty() && '/' !in name && name != "." && name != ".."
 
     /**
-     * The path Coil should read for an image model that is a file ref on shared storage (a ROM folder's `.media`), or null
-     * for any other model: an app-private `file://...?v=` ref keeps Coil's own handling, whose query is its cache key.
+     * An image model for the file at [path] that changes when the file does: the raw file ref with `?v=<[modified]>`, so
+     * a rewritten file (a save state's screenshot) is a new model and loads again. [artPath] drops the version.
      */
-    fun artPath(model: String): String? = model.takeIf { it.startsWith(SCHEME + SHARED_STORAGE) }?.removePrefix(SCHEME)
+    fun versioned(path: String, modified: Long): String = "$SCHEME$path?v=$modified"
+
+    /**
+     * The path Coil should read for an image model that is a file ref (a ROM folder's `.media`, a save state's
+     * screenshot, app-private art), without a trailing `?v=<digits>` ([versioned]); null for any other model. Coil's own
+     * `file://` handling would parse the raw path as a URI and lose a name's tail at '#' or '?'.
+     */
+    fun artPath(model: String): String? = model.takeIf { it.startsWith(SCHEME) }?.removePrefix(SCHEME)?.replace(VERSION, "")
+
+    private val VERSION = Regex("\\?v=\\d+$")
 }

@@ -10,7 +10,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.hardware.input.InputManager
 import android.media.AudioManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -126,6 +125,7 @@ import com.nxredux.mobile.storage.AndroidLibraryIndexStore
 import com.nxredux.mobile.storage.AndroidRefs
 import com.nxredux.mobile.storage.AndroidRomsSources
 import com.nxredux.mobile.storage.DataRoot
+import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.AndroidHomeLocator
 import com.nxredux.mobile.test.NxTestResults
 import com.nxredux.mobile.tools.CheatsRoot
@@ -2207,10 +2207,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** The slot strip for [ss]: file listings and thumbnail bounds. Blocking I/O. */
     private fun readSlots(ss: SaveStates): List<SlotUi> = ss.slots().map { slotUi(it, "Slot ${it.index}") }
 
-    /** One slot as the strip shows it; the thumbnail's URI carries its mtime, so a new save reloads it. Blocking I/O. */
+    /** One slot as the strip shows it; the thumbnail's ref carries its mtime, so a new save reloads it. Blocking I/O. */
     private fun slotUi(s: SaveStates.Slot, label: String): SlotUi {
         val sub = if (s.occupied) formatSlotTime(s.timestampMillis) else "empty"
-        val thumb = s.thumb?.let { Uri.fromFile(it).buildUpon().fragment(it.lastModified().toString()).build().toString() }
+        val thumb = s.thumb?.let { FileRefs.versioned(it.absolutePath, it.lastModified()) }
         return SlotUi(
             label = label,
             subtitle = sub,

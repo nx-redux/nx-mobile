@@ -5036,7 +5036,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         // Back from a game resumed from the switcher: the switcher again (its game first, the latest recent), over the
         // page it opened from. Over the main menu, after the rows rebuilt below (a swap would abandon an open under way);
         // read again there, so a Home landing meanwhile (onNewIntent may follow onStart) drops it.
-        val s = _screen.value as? Screen.Systems ?: run { reopenSwitcher(); return }
+        // Back on a list or a page: Home's rows are rebuilt all the same (the page stays as it is; [swapMainRows] only acts
+        // on the menu), so B to the menu shows Continue's new resume frame, not the one read when the game launched.
+        val s = _screen.value as? Screen.Systems ?: run { scope.launch { rebuildMainRows(); swapMainRows() }; reopenSwitcher(); return }
         if (s.menu != null) { switcherReturn = false; return }
         if (!firstSetup) updaterOnMainMenu()   // back over the menu (from a game, or the install-permission screen)
         scope.launch { rebuildMainRows(); swapMainRows(); reopenSwitcher() }   // Continue's save (its resume frame) may be new since the rows were built
