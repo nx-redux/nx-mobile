@@ -148,13 +148,14 @@ object NdsLayout {
         val m = maxOf(half, minOf(k - 1, floor((space.height - SCREEN_HEIGHT * k) / SCREEN_HEIGHT + EPSILON).toInt()))
         val bigH = SCREEN_HEIGHT * k
         var touchH = SCREEN_HEIGHT * m
-        if (!landscape && m < 2) touchH = minOf(space.height - bigH, 2f * SCREEN_HEIGHT, bigH, space.width / ASPECT)
-        val touchW = if (touchH == SCREEN_HEIGHT * m) SCREEN_WIDTH * m else touchH * ASPECT
+        val filled = !landscape && m < 2
+        if (filled) touchH = minOf(space.height - bigH, 2f * SCREEN_HEIGHT, bigH, space.width / ASPECT)
+        val touchW = if (filled) touchH * ASPECT else SCREEN_WIDTH * m
         val top = centred(space, SCREEN_WIDTH * k, bigH + touchH)
         val other = big.other
         val bigRect = PxRect(top.x, top.y, SCREEN_WIDTH * k, bigH)
         val otherRect = PxRect(space.x + wholePx((space.width - touchW) / 2f), top.y + bigH, touchW, touchH)
-        return listOf(full(big, bigRect), NdsRegion(other, src(other), otherRect, shaded = m == k, touch = false))
+        return listOf(full(big, bigRect), NdsRegion(other, src(other), otherRect, shaded = touchH == bigH, touch = false))
     }
 
     /** Both screens at one whole scale, [first] over the other, centred. */

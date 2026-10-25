@@ -240,6 +240,7 @@ class NdsLayoutTest {
                 val r = layout(w, h, choice, landscape, screen, s)
                 val what = "$w x $h landscape=$landscape $screen $choice $s"
                 val space = PxRect(0f, 0f, w, h)
+                if (w >= 512f && h >= 384f) assertTrue(r.isNotEmpty(), what)   // every layout fits at 1x here
                 for (reg in r) {
                     assertInside(reg.dst, space, what)
                     near(4f / 3f, reg.dst.width / reg.dst.height, "$what aspect")

@@ -43,6 +43,13 @@ class DualScreenTest {
         val r = DualScreen.ndsPanelUp(1920f, 1080f, NdsSettings(landscape = NdsLayoutChoice.PIP))
         assertEquals(2, r.size); assertEquals(listOf(false, true), r.map { it.touch })
     }
+    @Test fun nds_panel_up_keeps_its_own_fractional_fit() {
+        val r = DualScreen.ndsPanelUp(2400f, 1080f, NdsSettings())
+        assertEquals(PxRect(0f, 90f, 1200f, 900f), r[0].dst)
+        assertEquals(PxRect(1200f, 90f, 1200f, 900f), r[1].dst)
+        assertEquals(listOf(NdsScreen.TOP, NdsScreen.BOTTOM), r.map { it.screen })
+        assertEquals(listOf(NdsScreen.BOTTOM, NdsScreen.TOP), DualScreen.ndsPanelUp(2400f, 1080f, NdsSettings(big = NdsScreen.BOTTOM)).map { it.screen })
+    }
     @Test fun n3ds_split_rects() {
         assertEquals(FrameRect(0.1f, 0.5f, 0.9f, 1f), DualScreen.n3dsScreen(1240f, 1080f, NdsScreen.TOP.other).single().src)
         assertEquals(1800f / 1080f, DualScreen.n3dsScreen(1920f, 1080f, NdsScreen.TOP).single().dst.let { it.width / it.height }, 0.01f)

@@ -1,8 +1,6 @@
 package com.nxredux.mobile.runner
 
-import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.N3dsOptions
-import com.nxredux.mobile.options.NdsLayoutChoice
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.PxRect
@@ -108,12 +106,20 @@ object DualScreen {
     fun ndsScreen(areaW: Float, areaH: Float, which: NdsScreen): List<NdsRegion> = single(areaW, areaH, which, NdsLayout.src(which), DS_ASPECT)
 
     /**
-     * Both DS screens side by side on the main display (the panel is on the second one); touch on the bottom screen.
-     * Side by side is forced; the screen class only matters for Single screen, so a regular phone it is.
+     * Both DS screens side by side on the main display (the panel is on the second one), edge to edge, fitted to the area
+     * (whole pixels, not whole-number scales) and centred; touch on the bottom screen. Dual screen keeps its own layout,
+     * whatever the layout settings say; [settings] only picks which screen is first.
      */
-    fun ndsPanelUp(areaW: Float, areaH: Float, settings: NdsSettings): List<NdsRegion> = NdsLayout.regions(
-        PxRect(0f, 0f, areaW, areaH), NdsLayoutChoice.SIDE_BY_SIDE, landscape = true, ScreenClass.REGULAR_PHONE, settings, insetMarginPx = 0f,
-    )
+    fun ndsPanelUp(areaW: Float, areaH: Float, settings: NdsSettings): List<NdsRegion> {
+        if (areaW <= 0f || areaH <= 0f) return emptyList()
+        val size = NdsLayout.ScreenSize(min(areaW / 2f, areaH * DS_ASPECT), DS_ASPECT)
+        if (size.width <= 0f || size.height <= 0f) return emptyList()
+        val x = NdsLayout.wholePx((areaW - 2f * size.width) / 2f)
+        val y = NdsLayout.wholePx((areaH - size.height) / 2f)
+        return listOf(settings.big, settings.big.other).mapIndexed { i, screen ->
+            NdsRegion(screen, NdsLayout.src(screen), PxRect(x + i * size.width, y, size.width, size.height), shaded = true, touch = screen == NdsScreen.BOTTOM)
+        }
+    }
 
     /** [screen]'s rectangle in the 3DS frame in the split layout. */
     private fun n3dsSrc(screen: NdsScreen): FrameRect = if (screen == NdsScreen.TOP) N3DS_TOP_SRC else N3DS_BOTTOM_SRC
