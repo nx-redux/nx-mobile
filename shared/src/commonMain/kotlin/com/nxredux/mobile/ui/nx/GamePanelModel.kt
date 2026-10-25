@@ -9,7 +9,7 @@ enum class GamePanelTab(val label: String) { SHORTCUTS("Shortcuts"), ACHIEVEMENT
 
 /** The Shortcuts tab's one-tap actions, in display order. No Screenshot: the spec dropped it everywhere. */
 enum class Shortcut(val label: String) {
-    SWAP_DISC("Swap disc"), SECOND_SCREEN("Second screen"), FAST_FORWARD("Fast forward"), REWIND("Rewind"), RESET("Reset"),
+    SWAP_DISC("Swap disc"), SECOND_SCREEN("Second screen"), FAST_FORWARD("Fast forward"), REWIND("Rewind"), MIC("Mic"), RESET("Reset"),
 }
 
 /**
@@ -86,6 +86,8 @@ sealed interface GamePanelEvent {
     data class SetFastForward(val on: Boolean) : GamePanelEvent
     /** The toggled rewind to [on]. */
     data class SetRewind(val on: Boolean) : GamePanelEvent
+    /** The session's mic toggled to [on] (the tile shows the live state). */
+    data class SetMic(val on: Boolean) : GamePanelEvent
     /** Reset: always asks first (the in-game menu's Reset dialog). */
     data object Reset : GamePanelEvent
 }
@@ -113,17 +115,18 @@ object GamePanelModel {
     /**
      * The Shortcuts tab: Swap disc for a multi-disc game outside netplay (disc swaps aren't synced), Second screen while
      * one is connected, then Fast forward ([ff]: running now), Rewind ([rewind]: rewinding now; null where the game
-     * can't rewind, the core or its Rewind row off: hidden, never greyed) and Reset. Netplay and link sessions hide all
+     * can't rewind, the core or its Rewind row off: hidden, never greyed), Mic ([mic]: on now; null off DS/3DS: hidden) and Reset. Netplay and link sessions hide all
      * three, since they would desync the players. [discIndex] is 0-based.
      */
     fun shortcuts(
-        discCount: Int, discIndex: Int, secondConnected: Boolean, secondOn: Boolean, netplay: Boolean, ff: Boolean, rewind: Boolean?,
+        discCount: Int, discIndex: Int, secondConnected: Boolean, secondOn: Boolean, netplay: Boolean, ff: Boolean, rewind: Boolean?, mic: Boolean? = null,
     ): List<ShortcutState> = buildList {
         if (discCount > 1 && !netplay) add(ShortcutState(Shortcut.SWAP_DISC, Shortcut.SWAP_DISC.label, true, "${discIndex + 1}/$discCount"))
         if (secondConnected) add(ShortcutState(Shortcut.SECOND_SCREEN, Shortcut.SECOND_SCREEN.label, true, on = secondOn))
         if (netplay) return@buildList
         add(ShortcutState(Shortcut.FAST_FORWARD, Shortcut.FAST_FORWARD.label, true, on = ff))
         if (rewind != null) add(ShortcutState(Shortcut.REWIND, Shortcut.REWIND.label, true, on = rewind))
+        if (mic != null) add(ShortcutState(Shortcut.MIC, Shortcut.MIC.label, true, on = mic))
         add(ShortcutState(Shortcut.RESET, Shortcut.RESET.label, true))
     }
 
@@ -133,6 +136,7 @@ object GamePanelModel {
         Shortcut.SECOND_SCREEN -> s.on?.let { GamePanelEvent.SetSecondScreen(on = !it) }
         Shortcut.FAST_FORWARD -> s.on?.let { GamePanelEvent.SetFastForward(on = !it) }
         Shortcut.REWIND -> s.on?.let { GamePanelEvent.SetRewind(on = !it) }
+        Shortcut.MIC -> s.on?.let { GamePanelEvent.SetMic(on = !it) }
         Shortcut.RESET -> GamePanelEvent.Reset
     }
 

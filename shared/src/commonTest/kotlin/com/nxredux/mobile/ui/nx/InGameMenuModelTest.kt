@@ -881,6 +881,14 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.SetSpeed(ff = null, rewind = false), m.panelEvent(GamePanelEvent.SetRewind(on = false)))
     }
 
+    @Test fun micTileEffect() {
+        val m = model()
+        m.setMicTile(false)
+        assertEquals(MenuEffect.SetMic(true), m.panelEvent(GamePanelEvent.SetMic(on = true)))
+        m.setMicTile(null)
+        assertNull(m.panelEvent(GamePanelEvent.SetMic(on = true)))
+    }
+
     @Test fun rewindHiddenWithoutRewind() {
         val m = model()
         m.setSpeedTiles(ff = false, rewind = null)

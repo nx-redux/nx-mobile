@@ -110,6 +110,8 @@ internal interface DualScreenHost : LifecycleOwner {
     fun withMenu(block: (InGameMenuModel) -> Unit)
     /** The Fast forward / Rewind tiles' live state ([SpeedController.tiles]); null rewind: no Rewind tile. */
     fun speedTiles(): Pair<Boolean, Boolean?>
+    /** The Mic tile's state: null where this isn't a mic console or a session is on. */
+    fun micTile(): Boolean?
     /** The Reset tile: reset always asks first, so the in-game menu opens on its Reset dialog. */
     fun askReset()
 }
@@ -579,7 +581,7 @@ internal class DualScreenController(
             header = panelHeader().copy(ra = summary.takeIf { GamePanelTab.ACHIEVEMENTS in tabs }),
             tabs = tabs,
             tab = GamePanelModel.resolveTab(dualPanelTab, tabs),
-            shortcuts = GamePanelModel.shortcuts(count, disc, secondScreens.current.value != null, appSettings.secondScreen, netplayNow != null, ff, rewind),
+            shortcuts = GamePanelModel.shortcuts(count, disc, secondScreens.current.value != null, appSettings.secondScreen, netplayNow != null, ff, rewind, owner.micTile()),
             achievements = list,
             badges = b?.badges.orEmpty(),
             players = players?.first.orEmpty(),
@@ -616,6 +618,11 @@ internal class DualScreenController(
             is GamePanelEvent.SetFastForward, is GamePanelEvent.SetRewind -> GamePanelModel.speedEffect(e)?.takeIf { netplayNow == null }?.let {
                 owner.handleMenuEffect(it)
                 // The game runs with it on: a panel flipped up over the DS/3DS screen gives the screen back.
+                if (panelUp) { panelUp = false; syncDual() }
+            }
+            is GamePanelEvent.SetMic -> if (netplayNow == null && owner.micTile() != null) {
+                owner.handleMenuEffect(MenuEffect.SetMic(e.on))
+                // The game hears it now: a panel flipped up over the DS/3DS screen gives the screen back, as for FF.
                 if (panelUp) { panelUp = false; syncDual() }
             }
             GamePanelEvent.Reset -> if (netplayNow == null) owner.askReset()

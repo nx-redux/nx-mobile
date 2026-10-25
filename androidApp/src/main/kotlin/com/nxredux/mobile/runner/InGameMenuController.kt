@@ -131,6 +131,10 @@ internal interface InGameMenuHost : LifecycleOwner {
     fun speedTiles(): Pair<Boolean, Boolean?>
     /** A Fast forward / Rewind tile's toggles ([SpeedController.setToggle]). */
     fun setSpeedToggle(ff: Boolean?, rewind: Boolean?)
+    /** The panel's Mic tile: null where this isn't a mic console or a session is on, else the session's mic on/off. */
+    fun micTile(): Boolean?
+    /** The Mic tile's toggle: the session's mic to [on]. */
+    fun setMic(on: Boolean)
     /** The Reset dialog's Reset: the game restarts ([GLRetroView.reset]); a toggled rewind ends, a toggled FF stays. */
     fun resetGame()
 }
@@ -232,6 +236,7 @@ internal class InGameMenuController(
     fun publishSpeed(model: InGameMenuModel) {
         val (ff, rewind) = host.speedTiles()
         model.setSpeedTiles(ff, rewind)
+        model.setMicTile(host.micTile())
         menuState.value = model.state
     }
 
@@ -492,6 +497,7 @@ internal class InGameMenuController(
             is MenuEffect.ShortcutsChanged -> host.applyShortcuts(effect.overrides)
             // A tile: the game runs with it on, so the menu closes (spec).
             is MenuEffect.SetSpeed -> { host.setSpeedToggle(effect.ff, effect.rewind); closeMenu() }
+            is MenuEffect.SetMic -> { host.setMic(effect.on); closeMenu() }
             MenuEffect.ResetGame -> { host.resetGame(); closeMenu() }
             is MenuEffect.SetPlayer -> input.slots?.let { s ->
                 val benchedBefore = s.outOfPlay

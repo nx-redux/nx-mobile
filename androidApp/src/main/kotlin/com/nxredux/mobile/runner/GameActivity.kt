@@ -2739,6 +2739,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun speedTiles(): Pair<Boolean, Boolean?> = speed.tiles()
 
     override fun setSpeedToggle(ff: Boolean?, rewind: Boolean?) = speed.setToggle(ff, rewind)
+    override fun micTile(): Boolean? = null
+    override fun setMic(on: Boolean) {}
 
     /**
      * A Reset shortcut or the dual-screen panel's Reset tile: reset always asks first, so the in-game menu opens on its

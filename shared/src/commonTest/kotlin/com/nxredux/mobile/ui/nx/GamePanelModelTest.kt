@@ -13,8 +13,8 @@ class GamePanelModelTest {
 
     private fun shortcuts(
         discCount: Int = 1, discIndex: Int = 0, connected: Boolean = false, on: Boolean = true, netplay: Boolean = false,
-        ff: Boolean = false, rewind: Boolean? = false,
-    ) = GamePanelModel.shortcuts(discCount, discIndex, connected, on, netplay, ff, rewind)
+        ff: Boolean = false, rewind: Boolean? = false, mic: Boolean? = null,
+    ) = GamePanelModel.shortcuts(discCount, discIndex, connected, on, netplay, ff, rewind, mic)
 
     @Test fun tabs_shortcuts_only() {
         assertEquals(listOf(GamePanelTab.SHORTCUTS), GamePanelModel.tabs(raAvailable = false, playerSlots = 1))
@@ -102,8 +102,8 @@ class GamePanelModelTest {
             assertTrue(tiles.all { it.enabled })
             assertEquals(listOf(false, false, null), tiles.map { it.on })   // FF and Rewind toggles; Reset an action
         }
-        // Display order: Swap disc, Second screen, then Fast forward, Rewind and Reset.
-        assertEquals(Shortcut.entries.toList(), shortcuts(discCount = 2, connected = true).map { it.shortcut })
+        // Display order: Swap disc, Second screen, then Fast forward, Rewind, Mic and Reset.
+        assertEquals(Shortcut.entries.toList(), shortcuts(discCount = 2, connected = true, mic = false).map { it.shortcut })
         // The live state fills the toggle.
         assertEquals(true, shortcuts(ff = true).single { it.shortcut == Shortcut.FAST_FORWARD }.on)
         assertEquals(true, shortcuts(rewind = true).single { it.shortcut == Shortcut.REWIND }.on)
@@ -117,6 +117,22 @@ class GamePanelModelTest {
         val list = shortcuts(rewind = null)
         assertTrue(list.none { it.shortcut == Shortcut.REWIND })
         assertEquals(listOf(Shortcut.FAST_FORWARD, Shortcut.RESET), list.map { it.shortcut })
+    }
+
+    @Test fun micTileOrder() {
+        val list = shortcuts(mic = false)
+        assertEquals(listOf("Fast forward", "Rewind", "Mic", "Reset"), list.takeLast(4).map { it.label })
+        assertEquals(false, list.single { it.shortcut == Shortcut.MIC }.on)
+    }
+
+    @Test fun micTileHidden() {
+        assertTrue(shortcuts(mic = null).none { it.shortcut == Shortcut.MIC })
+        assertTrue(shortcuts(netplay = true, mic = true).none { it.shortcut == Shortcut.MIC })
+    }
+
+    @Test fun micTileFlips() {
+        assertEquals(GamePanelEvent.SetMic(on = false), GamePanelModel.eventFor(shortcuts(mic = true).single { it.shortcut == Shortcut.MIC }))
+        assertEquals(GamePanelEvent.SetMic(on = true), GamePanelModel.eventFor(shortcuts(mic = false).single { it.shortcut == Shortcut.MIC }))
     }
 
     @Test fun netplayHidesAll() {
