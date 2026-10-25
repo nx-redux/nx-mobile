@@ -866,6 +866,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     override fun onDestroy() {
+        renderer.cancelGeometryWatch()
         rumbles.forEach { it.release() }
         motionSensors?.stop()
         if (isWii) LibretroDroid.setSensorEnabled(0, false)   // a next Wii game sets its own on its first frame
@@ -1463,7 +1464,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 view.getGameGeometryChanges().collect {
                     val g = view.getGameGeometry()
                     if (dual.dualMode != DualMode.OFF) dual.recheckPictureOn(g)
-                    renderer.relayoutFrontend(g)
+                    renderer.onCoreGeometry(g)
                 }
             }
             renderer.relayoutFrontend()   // the core's geometry (a DS game's 256x384) is only known now
@@ -1772,15 +1773,24 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun syncN3dsCore() {
         if (!isN3ds) return
         val screen = screenClass()
-        applyOptions(listOf(
+        val options = listOf(
             Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen)),
             // Large screen halves the touch screen, Stacked keeps both alike: a layout change updates it too.
             Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen)),
             // Under the main display's panel the pad is hidden, so it covers nothing on the picture screen.
             Variable(N3dsOptions.TOUCH_MAIN_ONLY, DualScreen.n3dsTouchMainOnly(dual.dualMode, padLayout.overlayPadShown.value && !dual.mainPanelShown())),
             Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(input.n3dsHotkeys.stylus)),
-        ).withN3dsSplit(DualScreen.n3dsCoreOptions(dual.dualMode)))
+        ).withN3dsSplit(DualScreen.n3dsCoreOptions(dual.dualMode))
+        // Azahar reports the new frame size some frames after its layout changes (a hotkey or menu cycle, a rotation, a
+        // second screen's split or its restore): lay out again when it arrives, if the view's geometry flow has not.
+        val layout = options.first { it.key == N3dsOptions.LAYOUT }.value
+        if (lastN3dsLayout != null && layout != lastN3dsLayout) renderer.watchGeometry()
+        lastN3dsLayout = layout
+        applyOptions(options)
     }
+
+    /** The core layout last sent for the 3DS ([syncN3dsCore]); null before the first. */
+    private var lastN3dsLayout: String? = null
 
     /** These options with a second-screen [split]'s fixed ones in place of the same keys; unchanged without one. */
     private fun List<Variable>.withN3dsSplit(split: Map<String, String>?): List<Variable> =

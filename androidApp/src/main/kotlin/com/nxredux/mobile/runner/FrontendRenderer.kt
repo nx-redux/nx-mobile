@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.PointF
 import android.graphics.RectF
 import android.os.SystemClock
+import android.view.Choreographer
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
@@ -309,6 +310,55 @@ internal class FrontendRenderer(
         iv.visibility = View.GONE
         findViewById<FrameLayout>(R.id.gameContainer).addView(iv, FrameLayout.LayoutParams(0, 0, Gravity.TOP or Gravity.START))
         overlayView = iv
+    }
+
+    private val geometryWatch = GeometryWatch()
+    private val geometryFrame = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            val view = retroView
+            if (view == null || !view.isAttachedToWindow || activity.isDestroyed) { geometryWatch.cancel(); return }
+            val old = geometryWatch.before
+            val g = view.getGameGeometry()
+            when (geometryWatch.tick(g)) {
+                GeometryWatch.Tick.WAITING -> Choreographer.getInstance().postFrameCallback(this)
+                GeometryWatch.Tick.CHANGED -> {
+                    NxLog.i(TAG_LOG, "3DS frame: new geometry after ${geometryWatch.framesWaited} frames, ${old.fmt()} -> ${g.fmt()}; laying out again")
+                    relayoutFrontend(g)
+                }
+                GeometryWatch.Tick.GAVE_UP -> NxLog.i(TAG_LOG, "3DS frame: no new geometry in ${geometryWatch.framesWaited} frames (${g.fmt()})")
+                GeometryWatch.Tick.IDLE -> {}
+            }
+        }
+    }
+
+    private fun FloatArray?.fmt() = this?.joinToString(prefix = "[", postfix = "]") { "%.2f".format(it) } ?: "none"
+
+    /**
+     * After a 3DS layout switch: reads the core's geometry each frame (Choreographer) for up to [frames] frames and lays
+     * out again the first time it differs from the one before the switch; Azahar reports the new frame size late. A
+     * safety net behind the view's geometry flow ([onCoreGeometry] ends the watch when that already caught the change), so
+     * one change lays out once. A newer switch restarts it; [cancelGeometryWatch] ends it.
+     */
+    fun watchGeometry(frames: Int = 90) {
+        val view = retroView ?: return
+        val before = view.getGameGeometry()
+        geometryWatch.start(before, frames)
+        NxLog.i(TAG_LOG, "3DS layout switched: watching the frame size for up to $frames frames from ${before.fmt()}")
+        Choreographer.getInstance().removeFrameCallback(geometryFrame)
+        Choreographer.getInstance().postFrameCallback(geometryFrame)
+    }
+
+    /** Ends a [watchGeometry] under way (the game is closing). */
+    fun cancelGeometryWatch() {
+        geometryWatch.cancel()
+        Choreographer.getInstance().removeFrameCallback(geometryFrame)
+    }
+
+    /** The view's geometry flow fired with [g]: lays out from it, and a [watchGeometry] waiting for this change is done. */
+    fun onCoreGeometry(g: FloatArray) {
+        val before = geometryWatch.before
+        if (geometryWatch.seen(g)) NxLog.i(TAG_LOG, "3DS frame: new geometry from the core after ${geometryWatch.framesWaited} frames, ${before.fmt()} -> ${g.fmt()}; laying out again")
+        relayoutFrontend(g)
     }
 
     /**
