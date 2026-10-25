@@ -528,12 +528,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         // Cross-fade in from the menu instead of the default slide-from-right: the bottom pad is
         // identical and in the same position in both screens, so a fade keeps it visually steady while
-        // only the top (game) area changes. (Back to the menu cross-fades too.) Only while the game shares
-        // the menu's task (launcher mode off); in launcher mode it has its own task and the system task animation runs,
-        // as Android ignores these overrides for a task change (LibretroRunner's gameLaunchFlags).
+        // only the top (game) area changes. Back to the menu is a cut, no animation (see [finish]): the page it returns
+        // to (the switcher, a list, Home) is already there. Only while the game shares the menu's task (launcher mode
+        // off); in launcher mode it has its own task and the system task animation runs, as Android ignores these
+        // overrides for a task change (LibretroRunner's gameLaunchFlags).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, android.R.anim.fade_in, android.R.anim.fade_out)
-            overrideActivityTransition(Activity.OVERRIDE_TRANSITION_CLOSE, android.R.anim.fade_in, android.R.anim.fade_out)
+            overrideActivityTransition(Activity.OVERRIDE_TRANSITION_CLOSE, 0, 0)
         }
         // The game's own Recents entry (launcher mode) carries its title; sharing the menu's task, the entry stays the app's.
         if (isTaskRoot) {
@@ -853,6 +854,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         homeThumb?.let { queueHomeThumb(it) }
         homeThumb = null
+    }
+
+    /** Back to the menu with no animation: below Android 14 (no close override set in onCreate) the default one is skipped here. */
+    override fun finish() {
+        super.finish()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) @Suppress("DEPRECATION") overridePendingTransition(0, 0)
     }
 
     override fun onDestroy() {

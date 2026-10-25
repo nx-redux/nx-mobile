@@ -1601,8 +1601,8 @@ class AppStateTest {
         assertEquals("Mario Kart DS.nds", runner.launched.single().fileName)
         val nav = state.nav.value
         assertIs<Screen.Switcher>(state.screen.value)         // up while the game opens over it
-        state.onBackground()                                  // the game covers the menu: the switcher closes unseen
-        assertIs<Screen.Systems>(state.screen.value)
+        state.onBackground()
+        assertIs<Screen.Switcher>(state.screen.value)         // and through the game
         assertEquals(nav, state.nav.value)                    // no slide
         assertEquals("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds", data.recents.first().path)
     }
@@ -1621,10 +1621,11 @@ class AppStateTest {
         state.onButton(NxButton.SELECT); advanceUntilIdle()
         state.onButton(NxButton.RIGHT)
         state.onButton(NxButton.A); advanceUntilIdle()
-        assertIs<Screen.Switcher>(state.screen.value)                    // up while the game opens over it
+        val nav = state.nav.value
         state.onBackground()
-        assertIs<Screen.Games>(state.screen.value)                       // closed while the game runs
+        assertIs<Screen.Switcher>(state.screen.value)                    // up under the game the whole time
         state.onForeground(); advanceUntilIdle()                         // the game quit: the menu is back
+        assertEquals(nav, state.nav.value)                               // the switcher was there already: no slide
         val sw = assertIs<Screen.Switcher>(state.screen.value)
         assertEquals("Mario Kart DS.nds", sw.entries[sw.index].game.fileName)
         state.onButton(NxButton.B); advanceUntilIdle()
@@ -7890,7 +7891,8 @@ class AppStateTest {
         state.load()
         state.onButton(NxButton.SELECT); state.onButton(NxButton.A)
         assertEquals(9, runner.launched.single().resumeSlot)
-        state.onBackground()                                             // the game covers the menu
+        state.onBackground(); state.onForeground(); advanceUntilIdle()   // the game ends: the switcher, still up
+        state.onButton(NxButton.B); advanceUntilIdle()
         assertEquals(tetris, assertIs<MainRow.Continue>(state.screen.value.homeRows[0]).entry.game.path)
     }
 

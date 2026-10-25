@@ -1422,13 +1422,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         afterIndexChange(shown, IndexRefresh(rows = true, openList = true, ui = true))
     }
 
-    /**
-     * The app left the foreground: art results still waiting are written now, not left to a debounce a kill would lose; a
-     * switcher left up under a game closes ([closeSwitcherUnseen]).
-     */
+    /** The app left the foreground: art results still waiting are written now, not left to a debounce a kill would lose. */
     fun onBackground() {
         if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) { closeShortcuts(); refreshSettings() }
-        closeSwitcherUnseen()   // a game opened from the switcher covers the menu now
         scope.launch { flushArt() }
     }
 
@@ -5034,7 +5030,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * rebuild uses app-private reads only (recents, pins, resume markers, tool pins, the in-memory index), never the tree.
      */
     fun onForeground() {
-        closeSwitcherUnseen()   // the menu never went to the background under the game: the page under the switcher first
+        val switcherBack = switcherUnderGame && _screen.value is Screen.Switcher
+        switcherUnderGame = false
         checkArt(reuse = true)   // art deleted or added while away (only changed art folders are listed)
         if (!minimalPending) _minimalOpening.value?.let { minimalJob?.cancel(); _minimalOpening.value = null }   // back from a game a Minimal band opened
         onLauncherChanged()   // back from Android's home settings or the role dialog: System re-reads its state
@@ -5046,6 +5043,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         // read again there, so a Home landing meanwhile (onNewIntent may follow onStart) drops it.
         // Back on a list or a page: Home's rows are rebuilt all the same (the page stays as it is; [swapMainRows] only acts
         // on the menu), so B to the menu shows Continue's new resume frame, not the one read when the game launched.
+        // Back from a game opened from the switcher, which stayed up under it: its cards read again in place, no slide.
+        if (switcherBack) { switcherReturn = false; switcherRowsRebuilt = true; scope.launch { rebuildMainRows() }; refreshSwitcher(); return }
         val s = _screen.value as? Screen.Systems ?: run { scope.launch { rebuildMainRows(); swapMainRows() }; reopenSwitcher(); return }
         if (s.menu != null) { switcherReturn = false; return }
         if (!firstSetup) updaterOnMainMenu()   // back over the menu (from a game, or the install-permission screen)
@@ -5344,13 +5343,15 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }.distinctBy { it.game.path }   // a hidden copy's line and its home game's are one game
 
     /**
-     * A game was opened from the switcher, which stayed up under it: closed with no slide when the menu goes to the
-     * background ([onBackground]), or back from the game when it never did (the menu on a second display).
+     * A game was opened from the switcher, which stays up under it the whole game: the game opens over it and Save & Quit
+     * cuts back to it, with no slide either way ([refreshSwitcher] on the way back).
      */
     private var switcherUnderGame = false
+    /** Home's rows were rebuilt after a game the switcher stayed up over: its close swaps them in ([closeSwitcher]). */
+    private var switcherRowsRebuilt = false
 
     /**
-     * A from the switcher: the game opens over the switcher ([switcherUnderGame]). A launch that never reaches the runner
+     * A from the switcher: the game opens over the switcher, which stays ([switcherUnderGame]). A launch that never reaches the runner
      * (the game gone, a transfer running: [launch]'s refusals) closes it as before, so B and the error land on its page.
      */
     private fun launchFromSwitcher(entry: Listed, resumeSlot: Int?) {
@@ -5362,11 +5363,19 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
     }
 
-    /** The switcher left up under a game ([switcherUnderGame]) goes, with no slide: the page it opened over shows again. */
-    private fun closeSwitcherUnseen() {
-        if (!switcherUnderGame) return
-        switcherUnderGame = false
-        if (_screen.value is Screen.Switcher) closeSwitcher(slide = false)
+    /**
+     * The switcher back on screen after its game: its cards read again (the game just played first, the latest recent),
+     * in place; none left resumable, it closes.
+     */
+    private fun refreshSwitcher() {
+        val here = _screen.value as? Screen.Switcher ?: return
+        switcherJob?.cancel()
+        switcherJob = scope.launch {
+            val entries = switcherEntries()
+            if (_screen.value !== here) return@launch   // the user moved on meanwhile
+            if (entries.isEmpty()) closeSwitcher(slide = false)
+            else _screen.value = here.copy(entries = entries, index = 0, confirmRemove = false)
+        }
     }
 
     /** Back to the page the switcher opened over; [slide]: the switcher's slide down (none: an instant swap). */
@@ -5379,6 +5388,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         _screen.value = screen
         homeTab.publishHomeView()   // the restored Home rows' own view, not one built while the switcher was up
         _selection.value = selection
+        // After a game the switcher stayed up over, the tabs were rebuilt (Continue's new resume frame): those, not the
+        // snapshot. Otherwise the snapshot stays, with its own Home view ([publishHomeView] above).
+        if (switcherRowsRebuilt) { switcherRowsRebuilt = false; swapMainRows() }
         refreshResume()
         // A Y Remove changed recent.txt: once written, rebuild the tabs, so Home's Continue moves past the game (the
         // snapshot above still shows it); the highlight stays on its row where that row is still there.
@@ -5404,8 +5416,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             NxButton.DOWN -> if (s.list) _screen.value = s.copy(index = at.down(wrap = !repeat).index)
             NxButton.LEFT -> if (!s.list) _screen.value = s.copy(index = at.up(wrap = false).index)
             NxButton.RIGHT -> if (!s.list) _screen.value = s.copy(index = at.down(wrap = false).index)
-            // The switcher stays up while the game opens over it (no slide back to the menu first): it closes, unseen,
-            // once the menu has gone to the background ([closeSwitcherUnseen]).
+            // The switcher stays up while the game opens over it (no slide back to the menu first) and through the game.
             NxButton.A -> s.entries.getOrNull(s.index)?.let { e -> launchFromSwitcher(Listed(e.system, e.game), e.resume.slot) }
             NxButton.Y -> if (s.entries.getOrNull(s.index) != null) _screen.value = s.copy(confirmRemove = true)
             NxButton.B, NxButton.SELECT -> closeSwitcher()
