@@ -1422,9 +1422,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         afterIndexChange(shown, IndexRefresh(rows = true, openList = true, ui = true))
     }
 
-    /** The app left the foreground: art results still waiting are written now, not left to a debounce a kill would lose. */
+    /**
+     * The app left the foreground: art results still waiting are written now, not left to a debounce a kill would lose; a
+     * switcher left up under a game closes ([closeSwitcherUnseen]).
+     */
     fun onBackground() {
         if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) { closeShortcuts(); refreshSettings() }
+        closeSwitcherUnseen()   // a game opened from the switcher covers the menu now
         scope.launch { flushArt() }
     }
 
@@ -4885,15 +4889,16 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         launch(entry, resumeSlot = null, coreOverride = core, netplay = session)
     }
 
-    private fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null, fromSwitcher: Boolean = false) {
+    /** Starts [entry] (see the steps inside); the start's job, or null when none began (an app, no core, one in flight). */
+    private fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null, fromSwitcher: Boolean = false): Job? {
         val listed = entry.system
         val game = entry.game
         // After a game the menu is its own tab again (the pushed one is not restored): dropped only for a launch that
         // happens (an app's start, or the runner's call), so a coreless, in-flight, vanished or unreadable game leaves the
         // push for B to return to.
-        if (listed.android) { dropPushedTab(); androidApps.launchApp(entry); return }
-        if (coreOverride == null && listed.core == null) return
-        if (launchJob?.isActive == true) return   // a launch is already in flight
+        if (listed.android) { dropPushedTab(); androidApps.launchApp(entry); return null }
+        if (coreOverride == null && listed.core == null) return null
+        if (launchJob?.isActive == true) return null   // a launch is already in flight
         switcherJob?.cancel()   // a switcher still loading must not open over the launched game
         val job = scope.launch {
             val gone = "Could not find ${game.fileName}. If it was moved or deleted, use Rescan in Settings → Library."
@@ -4965,6 +4970,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
         launchJob = job
         job.invokeOnCompletion { if (launchJob === job) launchJob = null }
+        return job
     }
 
     /**
@@ -5028,6 +5034,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * rebuild uses app-private reads only (recents, pins, resume markers, tool pins, the in-memory index), never the tree.
      */
     fun onForeground() {
+        closeSwitcherUnseen()   // the menu never went to the background under the game: the page under the switcher first
         checkArt(reuse = true)   // art deleted or added while away (only changed art folders are listed)
         if (!minimalPending) _minimalOpening.value?.let { minimalJob?.cancel(); _minimalOpening.value = null }   // back from a game a Minimal band opened
         onLauncherChanged()   // back from Android's home settings or the role dialog: System re-reads its state
@@ -5087,6 +5094,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     fun openSwitcher() {
+        switcherUnderGame = false   // a refused launch's flag never closes a switcher opened since
         val here = _screen.value
         if (here !is Screen.Systems && here !is Screen.Games) return
         _tabFocus.value = false   // the menu under it comes back on its content
@@ -5335,11 +5343,39 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             if (info.canResume) SwitcherEntry(e.system, e.game, info) else null
         }.distinctBy { it.game.path }   // a hidden copy's line and its home game's are one game
 
-    private fun closeSwitcher() {
+    /**
+     * A game was opened from the switcher, which stayed up under it: closed with no slide when the menu goes to the
+     * background ([onBackground]), or back from the game when it never did (the menu on a second display).
+     */
+    private var switcherUnderGame = false
+
+    /**
+     * A from the switcher: the game opens over the switcher ([switcherUnderGame]). A launch that never reaches the runner
+     * (the game gone, a transfer running: [launch]'s refusals) closes it as before, so B and the error land on its page.
+     */
+    private fun launchFromSwitcher(entry: Listed, resumeSlot: Int?) {
+        switcherUnderGame = true
+        val job = launch(entry, resumeSlot, fromSwitcher = true) ?: run { closeSwitcher(); return }
+        scope.launch {
+            job.join()
+            if (switcherUnderGame && !switcherReturn) closeSwitcher()   // refused: [switcherReturn] is set only at the runner's call
+        }
+    }
+
+    /** The switcher left up under a game ([switcherUnderGame]) goes, with no slide: the page it opened over shows again. */
+    private fun closeSwitcherUnseen() {
+        if (!switcherUnderGame) return
+        switcherUnderGame = false
+        if (_screen.value is Screen.Switcher) closeSwitcher(slide = false)
+    }
+
+    /** Back to the page the switcher opened over; [slide]: the switcher's slide down (none: an instant swap). */
+    private fun closeSwitcher(slide: Boolean = true) {
         val (screen, selection) = beforeSwitcher
             ?: menuScreen().let { m -> m to (m.category?.let(tabSelections::get) ?: ListSelection(0, 0)).clampedTo(m.rows.size) }
         beforeSwitcher = null
-        navStep(NavMotion.SWITCHER_CLOSE)
+        switcherUnderGame = false
+        if (slide) navStep(NavMotion.SWITCHER_CLOSE)
         _screen.value = screen
         homeTab.publishHomeView()   // the restored Home rows' own view, not one built while the switcher was up
         _selection.value = selection
@@ -5368,10 +5404,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             NxButton.DOWN -> if (s.list) _screen.value = s.copy(index = at.down(wrap = !repeat).index)
             NxButton.LEFT -> if (!s.list) _screen.value = s.copy(index = at.up(wrap = false).index)
             NxButton.RIGHT -> if (!s.list) _screen.value = s.copy(index = at.down(wrap = false).index)
-            NxButton.A -> s.entries.getOrNull(s.index)?.let { e ->
-                closeSwitcher()
-                launch(Listed(e.system, e.game), e.resume.slot, fromSwitcher = true)
-            }
+            // The switcher stays up while the game opens over it (no slide back to the menu first): it closes, unseen,
+            // once the menu has gone to the background ([closeSwitcherUnseen]).
+            NxButton.A -> s.entries.getOrNull(s.index)?.let { e -> launchFromSwitcher(Listed(e.system, e.game), e.resume.slot) }
             NxButton.Y -> if (s.entries.getOrNull(s.index) != null) _screen.value = s.copy(confirmRemove = true)
             NxButton.B, NxButton.SELECT -> closeSwitcher()
             else -> Unit

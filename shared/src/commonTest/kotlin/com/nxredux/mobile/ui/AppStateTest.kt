@@ -1599,7 +1599,11 @@ class AppStateTest {
         state.onButton(NxButton.A)
         assertEquals(2, runner.launched.single().resumeSlot)
         assertEquals("Mario Kart DS.nds", runner.launched.single().fileName)
-        assertIs<Screen.Systems>(state.screen.value)          // switcher closes on launch
+        val nav = state.nav.value
+        assertIs<Screen.Switcher>(state.screen.value)         // up while the game opens over it
+        state.onBackground()                                  // the game covers the menu: the switcher closes unseen
+        assertIs<Screen.Systems>(state.screen.value)
+        assertEquals(nav, state.nav.value)                    // no slide
         assertEquals("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds", data.recents.first().path)
     }
 
@@ -1617,6 +1621,8 @@ class AppStateTest {
         state.onButton(NxButton.SELECT); advanceUntilIdle()
         state.onButton(NxButton.RIGHT)
         state.onButton(NxButton.A); advanceUntilIdle()
+        assertIs<Screen.Switcher>(state.screen.value)                    // up while the game opens over it
+        state.onBackground()
         assertIs<Screen.Games>(state.screen.value)                       // closed while the game runs
         state.onForeground(); advanceUntilIdle()                         // the game quit: the menu is back
         val sw = assertIs<Screen.Switcher>(state.screen.value)
@@ -1625,6 +1631,26 @@ class AppStateTest {
         assertEquals(list.source, assertIs<Screen.Games>(state.screen.value).source)
         state.onForeground(); advanceUntilIdle()                         // only once
         assertIs<Screen.Games>(state.screen.value)
+    }
+
+    // The menu never went to the background under the game (it is on a second display): the switcher left up closes
+    // when the game ends, then comes back as after any switcher game, over the page it opened from.
+    @Test fun a_switcher_left_up_under_a_game_on_another_display_comes_back_over_its_page() = runTest {
+        val data = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))
+        val runner = RecordingRunner()
+        val state = stateWith(data, runner, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.load(); advanceUntilIdle()
+        state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "GB" })
+        val list = assertIs<Screen.Games>(state.screen.value)
+        state.onButton(NxButton.SELECT); advanceUntilIdle()
+        state.onButton(NxButton.A); advanceUntilIdle()
+        assertEquals(1, runner.launched.size)
+        assertIs<Screen.Switcher>(state.screen.value)                    // still up: no onBackground came
+        state.onForeground(); advanceUntilIdle()                         // the game ended
+        assertIs<Screen.Switcher>(state.screen.value)                    // the switcher again, read afresh
+        state.onButton(NxButton.B); advanceUntilIdle()
+        assertEquals(list.source, assertIs<Screen.Games>(state.screen.value).source)
+        state.onBackground(); assertIs<Screen.Games>(state.screen.value)   // nothing left to close
     }
 
     // Over the main menu too: the switcher comes back over the tab it opened from.
@@ -7864,6 +7890,7 @@ class AppStateTest {
         state.load()
         state.onButton(NxButton.SELECT); state.onButton(NxButton.A)
         assertEquals(9, runner.launched.single().resumeSlot)
+        state.onBackground()                                             // the game covers the menu
         assertEquals(tetris, assertIs<MainRow.Continue>(state.screen.value.homeRows[0]).entry.game.path)
     }
 
