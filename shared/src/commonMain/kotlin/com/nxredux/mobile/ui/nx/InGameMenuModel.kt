@@ -1128,7 +1128,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             return ShaderOptions.cycle(key, current, delta, presets, params)?.let { setFrontendValue(key, it) }
         }
         if (key == FrontendOptions.OVERLAY && !overlayAvailable) return null
-        val current = frontend[key] ?: return null
+        // An unset DS layout row (no stored value) cycles from its shown default, like frontendRow shows it.
+        val current = frontend[key] ?: FrontendOptions.option(key)?.default ?: return null
         return FrontendOptions.cycle(key, current, delta, overlays)?.let { setFrontendValue(key, it) }
     }
 

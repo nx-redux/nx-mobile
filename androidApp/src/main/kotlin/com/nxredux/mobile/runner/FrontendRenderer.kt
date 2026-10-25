@@ -385,6 +385,7 @@ internal class FrontendRenderer(
             // The same condition applyLayout shows the landscape pad clusters on (no controller).
             padOverGame = landscape && padLayout.layoutControllerNames().isEmpty(),
             portraitPadOver = padLayout.portraitClusterTop != null,   // portrait with the band hidden: the clusters over the game
+            screen = resources.screenClass(),
         )
     }
 

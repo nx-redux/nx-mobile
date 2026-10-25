@@ -1,7 +1,7 @@
 package com.nxredux.mobile.runner
 
-import com.nxredux.mobile.options.NdsLandscapeLayout
-import com.nxredux.mobile.options.NdsPortraitLayout
+import com.nxredux.mobile.layout.ScreenClass
+import com.nxredux.mobile.options.NdsLayoutChoice
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.PipCorner
@@ -56,7 +56,7 @@ object NdsLayout {
     /**
      * The regions for an [areaWidth] x [areaHeight] game area, in draw order; empty for an area too small for a screen pixel.
      * Portrait uses [NdsSettings.controller] in [controllerMode] (a non-clip-on controller dropped the pad band), else
-     * [NdsSettings.portrait], with Auto resolved for this area: a new area size (rotation, a fold, the band dropping) decides again.
+     * [NdsSettings.portrait]; a layout not picked yet is [screen]'s default ([NdsSettings.layoutShown]).
      * Only the bottom screen takes touches: as the main screen ([NdsSettings.big]: the big one, or the first in stacked
      * and side by side) always, as the other one only while no pad clusters are drawn over the game: [padOverGame] in
      * landscape (no controller), [portraitPadOver] in portrait (the band hidden). R2 swaps it into the main spot.
@@ -70,21 +70,16 @@ object NdsLayout {
         controllerMode: Boolean = false,
         padOverGame: Boolean = false,
         portraitPadOver: Boolean = false,
+        screen: ScreenClass = ScreenClass.REGULAR_PHONE,
     ): List<NdsRegion> {
         if (areaWidth <= 0f || areaHeight <= 0f) return emptyList()
-        val regions = if (landscape) when (settings.landscape) {
-            NdsLandscapeLayout.SIDE_BY_SIDE -> sideBySide(areaWidth, areaHeight, settings.big)
-            NdsLandscapeLayout.SINGLE -> listOf(full(settings.big, centreFit(areaWidth, areaHeight)))
-            NdsLandscapeLayout.PIP -> pip(centreFit(areaWidth, areaHeight), settings, marginPx)
-            NdsLandscapeLayout.LARGE -> large(areaWidth, areaHeight, settings, beside = true)
-            NdsLandscapeLayout.STACKED -> stackedLargeFirst(areaWidth, areaHeight, settings.big)
-        } else when (settings.portraitLayout(controllerMode, areaWidth, areaHeight)) {
-            NdsPortraitLayout.PIP -> pip(topFit(areaWidth, areaHeight), settings, marginPx)
-            NdsPortraitLayout.STACKED -> stacked(areaWidth, areaHeight, settings.big)
-            NdsPortraitLayout.SINGLE -> listOf(full(settings.big, topFit(areaWidth, areaHeight)))
-            NdsPortraitLayout.LARGE -> large(areaWidth, areaHeight, settings, beside = false)
-            NdsPortraitLayout.SIDE_BY_SIDE -> sideBySide(areaWidth, areaHeight, settings.big)
-            NdsPortraitLayout.AUTO -> error("AUTO is resolved before layout")
+        val regions = when (settings.layoutShown(landscape, controllerMode, screen)) {
+            NdsLayoutChoice.SIDE_BY_SIDE -> sideBySide(areaWidth, areaHeight, settings.big)
+            NdsLayoutChoice.SINGLE -> listOf(full(settings.big, if (landscape) centreFit(areaWidth, areaHeight) else topFit(areaWidth, areaHeight)))
+            NdsLayoutChoice.PIP -> pip(if (landscape) centreFit(areaWidth, areaHeight) else topFit(areaWidth, areaHeight), settings, marginPx)
+            NdsLayoutChoice.LARGE -> large(areaWidth, areaHeight, settings, beside = landscape)
+            NdsLayoutChoice.STACKED ->
+                if (landscape) stackedLargeFirst(areaWidth, areaHeight, settings.big) else stacked(areaWidth, areaHeight, settings.big)
         }
         val laid = if (regions.any { !it.inset && (it.dst.width <= 0f || it.dst.height <= 0f) }) emptyList() else regions
         val padOver = if (landscape) padOverGame else portraitPadOver

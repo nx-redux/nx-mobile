@@ -355,10 +355,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
         when (action) {
             NdsAction.SwapScreens -> setNdsKey(NdsOptions.swapBigScreen(frontendValues))
             is NdsAction.CycleLayout -> {
-                // From the layout showing: Auto resolves for the game area as ndsLayout lays it out.
-                val game = host.gameContainer
+                // From the layout showing on this screen (an unset row steps from its default).
                 setNdsKey(NdsOptions.cycleLayout(
-                    frontendValues, landscape, ndsControllerMode(), action.delta, game.width.toFloat(), game.height.toFloat(),
+                    frontendValues, landscape, ndsControllerMode(), action.delta, host.gameContainer.resources.screenClass(),
                 ))
             }
             is NdsAction.CycleCorner -> NdsOptions.cycleCorner(frontendValues, action.delta).let { (key, value) ->

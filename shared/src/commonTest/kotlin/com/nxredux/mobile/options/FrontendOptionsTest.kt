@@ -218,7 +218,8 @@ class FrontendOptionsTest {
     @Test fun the_frontend_page_has_no_ds_rows_but_the_helpers_still_cover_them() {
         assertTrue(FrontendOptions.table.none { it.key.startsWith("nx_nds_") })
         val d = FrontendOptions.defaults("NDS")
-        assertEquals("auto", d[NdsOptions.LAYOUT_PORTRAIT])
+        assertNull(d[NdsOptions.LAYOUT_PORTRAIT])   // no stored default: the screen decides
+        assertNull(FrontendOptions.fromConfig(emptyMap(), "NDS")[NdsOptions.LAYOUT_PORTRAIT])
         val v = FrontendOptions.fromConfig(mapOf(NdsOptions.BIG_SCREEN to "bottom"), "NDS")
         assertEquals("bottom", v[NdsOptions.BIG_SCREEN])
         assertEquals("Big Screen", FrontendOptions.option(NdsOptions.BIG_SCREEN)?.label)

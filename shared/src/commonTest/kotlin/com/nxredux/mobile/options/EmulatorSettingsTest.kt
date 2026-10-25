@@ -51,7 +51,7 @@ class EmulatorSettingsTest {
         val rows = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, null, null, forGame = false, secondScreen = true).console.map { it.option }
         val layout = rows.single { it.key == NdsOptions.LAYOUT_PORTRAIT }
         assertEquals(NdsOptions.table.single { it.key == NdsOptions.LAYOUT_PORTRAIT }.info, layout.info)
-        assertTrue(layout.info.startsWith("How the two screens share a portrait screen.\nAuto: stacked"))
+        assertTrue(layout.info.startsWith("How the two screens share a portrait screen.\nLarge screen:"))
         assertTrue(rows.single { it.key == BottomScreenOptions.KEY }.info.endsWith("System default follows Settings → Second screen."))
     }
 

@@ -127,8 +127,12 @@ object FrontendOptions {
     /** Every frontend setting for [tag]: its console's rows, then [table]. Defaults, config reads and saves use this. */
     fun allFor(tag: String): List<FrontendOption> = ConsoleSettings.tableFor(tag) + table
 
-    /** Every frontend key for [tag] with its default (the Overlay default is None, whatever files the console has). */
-    fun defaults(tag: String = ""): Map<String, String> = allFor(tag).associate { it.key to it.default }
+    /**
+     * Every frontend key for [tag] with its default (the Overlay default is None, whatever files the console has), except
+     * the DS layout rows ([NdsOptions.NO_PICK_KEYS]): they have no stored default, the screen decides.
+     */
+    fun defaults(tag: String = ""): Map<String, String> =
+        allFor(tag).filter { it.key !in NdsOptions.NO_PICK_KEYS }.associate { it.key to it.default }
 
     /** A frontend setting by key, the console rows included (keys are unique). */
     fun option(key: String): FrontendOption? = table.firstOrNull { it.key == key } ?: ConsoleSettings.all.firstOrNull { it.key == key }
@@ -189,10 +193,16 @@ object FrontendOptions {
     /** Every frontend key for [tag] with its value from [values] (kept raw), else its default. */
     fun fromConfig(values: Map<String, String>, tag: String = ""): Map<String, String> {
         val defaults = defaults(tag)
-        return allFor(tag).associate { option ->
-            val value = if (option.key == SCALING) migrateKey(values, SCALING, SCALING_V1, "Aspect") else values[option.key]
-            option.key to (value ?: defaults.getValue(option.key))
-        }
+        return allFor(tag).mapNotNull { option ->
+            val key = option.key
+            val old = NdsOptions.OLD_LAYOUT_KEYS[key]
+            val value = when {
+                key == SCALING -> migrateKey(values, SCALING, SCALING_V1, "Aspect")
+                old != null -> migrateKey(values, key, old.first, old.second)   // null = no pick: left out
+                else -> values[key]
+            }
+            (value ?: defaults[key])?.let { key to it }
+        }.toMap()
     }
 
     /** [values] without any frontend key: what the core receives as variables. */

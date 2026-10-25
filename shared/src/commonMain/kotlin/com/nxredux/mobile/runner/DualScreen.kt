@@ -1,7 +1,7 @@
 package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.options.N3dsOptions
-import com.nxredux.mobile.options.NdsLandscapeLayout
+import com.nxredux.mobile.options.NdsLayoutChoice
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.PxRect
@@ -106,9 +106,12 @@ object DualScreen {
      */
     fun ndsScreen(areaW: Float, areaH: Float, which: NdsScreen): List<NdsRegion> = single(areaW, areaH, which, NdsLayout.src(which), DS_ASPECT)
 
-    /** Both DS screens side by side on the main display (the panel is on the second one); touch on the bottom screen. */
+    /**
+     * Both DS screens side by side on the main display (the panel is on the second one); touch on the bottom screen.
+     * Side by side is forced, so the screen class stays the default one that keeps it.
+     */
     fun ndsPanelUp(areaW: Float, areaH: Float, settings: NdsSettings): List<NdsRegion> = NdsLayout.regions(
-        areaW, areaH, landscape = true, settings.copy(landscape = NdsLandscapeLayout.SIDE_BY_SIDE), marginPx = 0f,
+        areaW, areaH, landscape = true, settings.copy(landscape = NdsLayoutChoice.SIDE_BY_SIDE), marginPx = 0f,
     )
 
     /** [screen]'s rectangle in the 3DS frame in the split layout. */

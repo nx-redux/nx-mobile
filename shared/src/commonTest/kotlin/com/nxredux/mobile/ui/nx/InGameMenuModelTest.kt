@@ -1354,10 +1354,10 @@ class InGameMenuModelTest {
             ),
             m.state.page.rows.map { it.label },
         )
-        assertEquals("Auto", m.optionRow(0).valueLabel)                   // the portrait layout's default
-        assertEquals(MenuEffect.SetFrontend(NdsOptions.LAYOUT_PORTRAIT, "pip"), m.press(NxButton.RIGHT))
-        assertEquals("Picture in picture", m.optionRow(0).valueLabel)
-        assertEquals("Stacked", m.optionRow(1).valueLabel)                 // the controller layout's default
+        assertEquals("Large screen", m.optionRow(0).valueLabel)           // the portrait layout's default
+        assertEquals(MenuEffect.SetFrontend(NdsOptions.LAYOUT_PORTRAIT, "stacked"), m.press(NxButton.RIGHT))
+        assertEquals("Stacked", m.optionRow(0).valueLabel)
+        assertEquals("Large screen", m.optionRow(1).valueLabel)            // the controller layout's default
         m.select(3)                                                        // Big Screen
         assertEquals(MenuEffect.SetFrontend(NdsOptions.BIG_SCREEN, "bottom"), m.press(NxButton.RIGHT))
         assertNull(m.press(NxButton.A))                                    // a visual row: adjust mode
@@ -2063,7 +2063,7 @@ class InGameMenuModelTest {
             assertTrue(o.info.isNotBlank() && o.info != o.brief, o.label)   // the full text kept for the info icon
         }
         // The full texts stay behind the info icon.
-        assertTrue("Auto: stacked when both screens fit the width, else picture in picture." in FrontendOptions.option(NdsOptions.LAYOUT_PORTRAIT)!!.info)
+        assertTrue("Large screen: one big, the other small above or below it." in FrontendOptions.option(NdsOptions.LAYOUT_PORTRAIT)!!.info)
         // In game: the short line on the row, the full text in its popup (the info icon / X without a truncation report).
         val m = model().openFrontend()
         val hud = m.rowIndex("Debug HUD")
