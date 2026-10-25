@@ -1550,12 +1550,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
-    /** The resume is done (or failed): the cover goes once two frames of the game are up, so its own frame replaces it. */
+    /**
+     * The resume is done (or failed): the cover fades once [ResumeCover.SETTLE_FRAMES] of the game's frames are drawn,
+     * so its own frame is on screen under it (the surface shows a drawn frame a frame or two later).
+     */
     private fun dropResumeCover(view: GLRetroView) {
         val cover = resumeCover ?: return
         lifecycleScope.launch {
-            view.getGLRetroEvents().filter { it is GLRetroView.GLRetroEvents.FrameRendered }.take(2).collect {}
-            cover.remove()
+            view.getGLRetroEvents().filter { it is GLRetroView.GLRetroEvents.FrameRendered }.take(ResumeCover.SETTLE_FRAMES).collect {}
+            cover.fadeOut()
             if (resumeCover === cover) resumeCover = null
         }
     }

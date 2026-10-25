@@ -43,8 +43,19 @@ internal class ResumeCover(context: Context, private val container: FrameLayout)
         place()
     }
 
+    /**
+     * Fades the cover out over [FADE_MS], then [remove]s it: the game's frame under it is the same picture, so the fade
+     * is unseen, and it hides a frame the game's surface may still be late with (a dark frame or the screen behind, on
+     * the Fold).
+     */
+    fun fadeOut() {
+        if (bitmap == null) return
+        image.animate().alpha(0f).setDuration(FADE_MS).withEndAction { remove() }.start()
+    }
+
     /** Takes the cover away (the resumed frame is up, or the resume failed); safe to call twice. */
     fun remove() {
+        image.animate().cancel()
         container.removeOnLayoutChangeListener(follow)
         game?.removeOnLayoutChangeListener(follow)
         container.removeView(image)
@@ -68,6 +79,10 @@ internal class ResumeCover(context: Context, private val container: FrameLayout)
     }
 
     companion object {
+        /** How many of the game's frames after the resume land before the cover fades: its surface shows them a frame or two late. */
+        const val SETTLE_FRAMES = 6
+        private const val FADE_MS = 150L
+
         /** How far a screenshot's aspect may be from the view's and still be this view's frame (rounding when scaled down). */
         private const val ASPECT_SLACK = 0.02f
 
