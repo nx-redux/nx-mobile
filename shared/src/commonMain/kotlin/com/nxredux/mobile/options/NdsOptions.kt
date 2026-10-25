@@ -89,8 +89,7 @@ data class NdsSettings(
 
         /** A layout row's pick: its current key, else the old key's value unless that was the old default (no pick). */
         private fun layoutPick(values: Map<String, String>, key: String): NdsLayoutChoice? {
-            val (oldKey, oldDefault) = NdsOptions.OLD_LAYOUT_KEYS.getValue(key)
-            return pick(FrontendOptions.migrateKey(values, key, oldKey, oldDefault), NdsLayoutChoice.entries)
+            return pick(NdsOptions.layoutValue(values, key), NdsLayoutChoice.entries)
         }
 
         private fun <E : NdsChoice> pick(value: String?, all: List<E>): E? = all.firstOrNull { it.value == value }
@@ -119,6 +118,15 @@ object NdsOptions {
         LAYOUT_PORTRAIT_CONTROLLER to ("nx_nds_layout_portrait_controller" to "stacked"),
         LAYOUT_LANDSCAPE to ("nx_nds_layout_landscape" to "stacked"),
     )
+
+    /**
+     * The stored value of layout row [key] in [values]: its own, else the old key's unless that was the old default; null
+     * (no pick) when neither is set or the value is not a layout (a migrated old "auto").
+     */
+    fun layoutValue(values: Map<String, String>, key: String): String? {
+        val (oldKey, oldDefault) = OLD_LAYOUT_KEYS.getValue(key)
+        return FrontendOptions.migrateKey(values, key, oldKey, oldDefault)?.takeIf { v -> NdsLayoutChoice.entries.any { it.value == v } }
+    }
 
     /** The keys that can be absent ("no pick"): left out of [FrontendOptions.defaults] and of a config read when unset. */
     val NO_PICK_KEYS: Set<String> = OLD_LAYOUT_KEYS.keys

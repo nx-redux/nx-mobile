@@ -198,7 +198,7 @@ object FrontendOptions {
             val old = NdsOptions.OLD_LAYOUT_KEYS[key]
             val value = when {
                 key == SCALING -> migrateKey(values, SCALING, SCALING_V1, "Aspect")
-                old != null -> migrateKey(values, key, old.first, old.second)   // null = no pick: left out
+                old != null -> NdsOptions.layoutValue(values, key)   // null = no pick: left out
                 else -> values[key]
             }
             (value ?: defaults[key])?.let { key to it }

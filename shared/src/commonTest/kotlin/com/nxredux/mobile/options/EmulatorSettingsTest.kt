@@ -85,6 +85,17 @@ class EmulatorSettingsTest {
         assertEquals("6", p.console[1].value); assertEquals(PadOptions.AUTO, p.console[2].value)
     }
 
+    @Test fun ds_layout_rows_read_the_old_keys_like_the_game_does() {
+        val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
+        fun value(cfgText: String, key: String) = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, cfg(cfgText), null, forGame = false)
+            .console.single { it.option.key == key }.value
+        assertEquals("pip", value("nx_nds_layout_landscape = pip\n", NdsOptions.LAYOUT_LANDSCAPE))
+        assertEquals("single", value("nx_nds_layout_portrait_v2 = single\n", NdsOptions.LAYOUT_PORTRAIT))
+        // An untouched old default, or an old "auto", is no pick: the row default.
+        assertEquals(NdsOptions.table.single { it.key == NdsOptions.LAYOUT_LANDSCAPE }.default, value("nx_nds_layout_landscape = stacked\n", NdsOptions.LAYOUT_LANDSCAPE))
+        assertEquals(NdsOptions.table.single { it.key == NdsOptions.LAYOUT_PORTRAIT_CONTROLLER }.default, value("nx_nds_layout_portrait_controller = auto\n", NdsOptions.LAYOUT_PORTRAIT_CONTROLLER))
+    }
+
     @Test fun game_page_reads_the_game_file_instead_of_the_console_file() {
         val p = EmulatorSettings.page("MD", descriptor, table, descriptor.defaultOptions,
             cfg("gpgx_res = 2x\n"), cfg("gpgx_region = ntsc-u\n"), forGame = true)

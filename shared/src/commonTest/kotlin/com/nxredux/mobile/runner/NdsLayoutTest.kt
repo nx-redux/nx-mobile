@@ -316,6 +316,9 @@ class NdsLayoutTest {
 
     @Test fun landscape_side_by_side_is_the_regular_phone_default() {
         assertNull(NdsSettings().landscape)
-        assertEquals(2, NdsLayout.regions(2520f, 1080f, true, NdsSettings(), margin).size)
+        assertEquals(
+            NdsLayout.regions(2520f, 1080f, true, NdsSettings(landscape = NdsLayoutChoice.SIDE_BY_SIDE), margin),
+            NdsLayout.regions(2520f, 1080f, true, NdsSettings(), margin),
+        )
     }
 }

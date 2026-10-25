@@ -153,6 +153,14 @@ class NdsOptionsTest {
         assertEquals("medium", read[PIP_SIZE])
     }
 
+    @Test fun a_migrated_old_auto_is_no_pick_in_a_config_read() {
+        // The old controller default was stacked, so an old "auto" there is kept by migrateKey: it must still read as no pick.
+        val read = FrontendOptions.fromConfig(mapOf("nx_nds_layout_portrait_controller" to "auto"), "NDS")
+        assertFalse(LAYOUT_PORTRAIT_CONTROLLER in read)
+        assertNull(NdsOptions.layoutValue(mapOf("nx_nds_layout_portrait_controller" to "auto"), LAYOUT_PORTRAIT_CONTROLLER))
+        assertEquals("pip", NdsOptions.layoutValue(mapOf("nx_nds_layout_portrait_controller" to "pip"), LAYOUT_PORTRAIT_CONTROLLER))
+    }
+
     @Test fun layout_cycle_steps_from_the_default_when_unset() {
         assertEquals(LAYOUT_PORTRAIT to "stacked", cycle(emptyMap(), phone))                     // large -> stacked
         assertEquals(LAYOUT_PORTRAIT to "side-by-side", cycle(emptyMap(), phone, delta = -1))    // large wraps back
