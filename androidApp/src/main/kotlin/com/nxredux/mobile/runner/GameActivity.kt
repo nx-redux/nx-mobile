@@ -1805,7 +1805,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val view = retroView ?: return
         view.scaleMode = when (s.scaling) {
             ScreenScaling.NATIVE -> ScaleMode.INTEGER
-            ScreenScaling.ASPECT -> ScaleMode.FIT
+            // AUTO follows ASPECT until the side-column placement is wired.
+            ScreenScaling.AUTO, ScreenScaling.ASPECT -> ScaleMode.FIT
             ScreenScaling.FULLSCREEN -> ScaleMode.STRETCH
         }
         val shader = renderer.shaderFor(s)
