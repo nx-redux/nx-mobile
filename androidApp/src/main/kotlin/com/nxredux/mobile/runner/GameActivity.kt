@@ -75,6 +75,7 @@ import com.nxredux.mobile.gametime.GameTimeRecorder
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.NaomiSets
+import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.netplay.NetplayLinkKind
@@ -149,6 +150,7 @@ import com.nxredux.mobile.ui.nx.NxProgressPill
 import com.nxredux.mobile.ui.nx.NxToast
 import com.nxredux.mobile.ui.nx.nxNotificationPlacement
 import com.nxredux.mobile.ui.nx.nxTopCentreMaxWidth
+import com.nxredux.mobile.ui.nx.topCentreMaxWidth
 import com.nxredux.mobile.ui.nx.map
 import com.nxredux.mobile.ui.nx.SlotUi
 import com.nxredux.mobile.ui.nx.PadMotion
@@ -660,6 +662,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (!menuOpen && !focusPaused) netplayGame?.resume()   // netplay: input flows again; with the menu open it stays paused until Continue
         syncMotionSensors(foreground = true)
         dual.syncDual()   // Settings → Second screen may have changed meanwhile
+        padLayout.onResume()   // Controls → Pad layout may have changed meanwhile
     }
 
     /** API 29+: multi-resume keeps this activity resumed while another app has the focus; only the top one is told. */
@@ -1063,11 +1066,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             .map { (k, v) -> Variable(k, v) } +
             // 3DS Large screen: the touch screen at half size (onConfigurationChanged follows a rotation).
             if (N3dsOptions.appliesTo(tag)) listOf(
-                Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), resources.screenClass())),
+                Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass())),
                 Variable(N3dsOptions.TOUCH_MAIN_ONLY, DualScreen.n3dsTouchMainOnly(launchDual, padLayout.overlayPadShown.value)),
                 Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(false)),   // stylus mode is off at launch
                 // The locked core layout ([N3dsOptions.LAYOUT]) from the row in use; the descriptor's default is replaced.
-                Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), resources.screenClass())),
+                Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass())),
             ).withN3dsSplit(n3dsSplit) else emptyList()
         // netplay link: gambatte gets its link options; a GBA link engine starts now, before the core loads, so
         // a joiner learns the host's gpsp_serial from its READY and runs with it (the handheld reloads instead).
@@ -1451,16 +1454,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }
             dual.pushSecondSurface()   // a presentation shown before the view ran
             if (dual.panelShown()) dual.refreshDiscs()   // a panel up before the game ran asked too early
-            // A core may change its geometry later (SET_GEOMETRY), as Azahar does a frame or so after the dual modes switch
-            // its layout: both displays are laid out again from the new size and aspect, or the second one keeps fitting
-            // the new frame at the old aspect. A core turning its picture (a WonderSwan game held upright) moves the
-            // picture screen too. Collected before the first layout below, so no change falls between the two.
+            // A core may change its geometry later (SET_GEOMETRY), as Azahar does a frame or so after a layout switch: the
+            // picture and the pad are laid out again from the new size and aspect (both displays in a dual mode, or the
+            // second one keeps fitting the new frame at the old aspect). A core turning its picture (a WonderSwan game
+            // held upright) moves the picture screen too. Collected before the first layout below, so no change falls
+            // between the two.
             lifecycleScope.launch {
                 view.getGameGeometryChanges().collect {
-                    // Single display: nothing to do (turning dual on lays out from the geometry then).
-                    if (dual.dualMode == DualMode.OFF) return@collect
                     val g = view.getGameGeometry()
-                    dual.recheckPictureOn(g)
+                    if (dual.dualMode != DualMode.OFF) dual.recheckPictureOn(g)
                     renderer.relayoutFrontend(g)
                 }
             }
@@ -1739,7 +1741,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Split keeps its own fixed proportion.
         if (isN3ds && DualScreen.n3dsCoreOptions(dual.dualMode) == null) {
             val landscape = isLandscape(newConfig.orientation)
-            val screen = resources.screenClass()
+            val screen = screenClass()
             applyOptions(listOf(
                 Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, landscape, renderer.ndsControllerMode(), screen)),
             ))
@@ -1769,7 +1771,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     override fun syncN3dsCore() {
         if (!isN3ds) return
-        val screen = resources.screenClass()
+        val screen = screenClass()
         applyOptions(listOf(
             Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen)),
             // Large screen halves the touch screen, Stacked keeps both alike: a layout change updates it too.
@@ -1812,7 +1814,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val view = retroView ?: return
         view.scaleMode = when (s.scaling) {
             ScreenScaling.NATIVE -> ScaleMode.INTEGER
-            // AUTO follows ASPECT until the side-column placement is wired.
+            // Auto: the viewport is the picture (or its overlay box) as the renderer placed it; the game fits it.
             ScreenScaling.AUTO, ScreenScaling.ASPECT -> ScaleMode.FIT
             ScreenScaling.FULLSCREEN -> ScaleMode.STRETCH
         }
@@ -2686,7 +2688,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     // This view's own size: in landscape the root's, which the clusters (MATCH_PARENT tall) fit their unit to.
                     var origin by remember { mutableStateOf(IntOffset.Zero) }   // this view's top-left in the window
                     BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow().round() }) {
-                        val maxW = nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset).dp
+                        // Beside the picture the top corners hold only the shoulders (the system rows sit lower): clear those.
+                        val shoulders = padLayout.shoulderReachPx.value?.let { with(density) { it.toDp().value } }
+                        val maxW = (if (shoulders != null) topCentreMaxWidth(maxWidth.value, shoulders) else nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset)).dp
                         NxNotifications(toasts, pill, safeSides = sides, placement = placement, topCentreMaxWidth = maxW)
                         // Top-right of the picture (not the screen: the landscape pad's shoulders hold the screen's corners),
                         // kept inside the cutout; not under the menu.
@@ -2720,6 +2724,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override val activity: ComponentActivity get() = this
     override fun ndsControllerMode(): Boolean = renderer.ndsControllerMode()
+    override fun screenClass(): ScreenClass = windowShape().screenClass
 
     // The second display's state, owned by [dual]: read by the input, layout and picture code.
     override val presentation: SecondScreenPresentation? get() = dual.presentation
@@ -2771,7 +2776,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * speed's tiles change (a toggle's look, the Rewind row).
      */
     private fun refreshTouchShortcuts() {
+        val before = touchShortcuts.value.keys
         touchShortcuts.value = visibleTouchShortcuts(effectiveShortcuts, speed.output, speed.inSession, rewind = speed.rewindShown)
+        // A button coming or going changes the landscape pad's second row, so its height and reach: lay out again.
+        if (touchShortcuts.value.keys != before) findViewById<View?>(R.id.root)?.post { renderer.relayoutFrontend() }
     }
 
     /**

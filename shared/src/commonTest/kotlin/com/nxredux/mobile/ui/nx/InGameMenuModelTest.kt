@@ -4,6 +4,7 @@ import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.achievements.RaAchievementState
 import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.cheats.CheatEntry
+import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.ConsoleSettings
@@ -1370,6 +1371,22 @@ class InGameMenuModelTest {
         assertEquals(PageKind.ConsoleSettings, m.state.page.kind)
         assertEquals(4, m.state.page.selected)                             // the owner followed the strip
         assertEquals("Top screen", m.optionRow(3).valueLabel)              // refreshed from the edit
+    }
+
+    // The window's screen shapes the DS layout rows: a Fold-shaped screen's landscape row has no Side by side and starts
+    // at Large screen; a regular phone's starts at Side by side.
+    @Test fun console_settings_follow_the_window_screen() {
+        val fold = model().apply { screen = ScreenClass.NEAR_SQUARE_TABLET }.openConsoleSettings()
+        val landscape = fold.optionRow(2)
+        assertEquals("Layout (landscape)", landscape.label)
+        assertEquals("Large screen", landscape.valueLabel)
+        assertFalse("Side by side" in landscape.choices)
+        fold.select(2)
+        fold.press(NxButton.LEFT)                                          // Large screen back to the last one offered
+        assertEquals("Picture in picture", fold.optionRow(2).valueLabel)
+        val phone = model().apply { screen = ScreenClass.REGULAR_PHONE }.openConsoleSettings()
+        assertEquals("Side by side", phone.optionRow(2).valueLabel)
+        assertTrue("Side by side" in phone.optionRow(2).choices)
     }
 
     @Test fun a_locked_console_row_is_hidden() {

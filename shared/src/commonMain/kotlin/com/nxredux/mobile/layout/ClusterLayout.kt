@@ -44,7 +44,6 @@ data class Reach(val edgePx: Float, val buttonsPx: Float) {
  * cutout wider than the margin moves both halves. Buttons = [measuredButtonsPx] (the user's tweaked group bounds)
  * when known, else the estimate max(2 x 1.4 unit + 12 dp, faceUnits x unit).
  */
-@Suppress("UNUSED_PARAMETER")
 fun reach(
     unitPx: Float,
     density: Float,
@@ -52,7 +51,6 @@ fun reach(
     cutoutRight: Float,
     measuredButtonsPx: Float?,
     faceUnits: Float,
-    toolRow: Boolean,
 ): Reach {
     val margin = LayoutConstants.CLUSTER_PADDING_DP * density + LayoutConstants.EDGE_NUDGE_UNITS * unitPx
     val extra = max(0f, max(cutoutLeft, cutoutRight) - margin)

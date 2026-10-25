@@ -1098,7 +1098,7 @@ private const val MID_MIN_GAP = 0.5f      // units kept between the d-pad and th
 private const val MID_MIN_SLACK = 0.4f    // units of vertical space kept free in the column
 
 /** The face cluster's width in face-button units: 3 for the X/Y/B/A diamond, else its cluster's WIDTH. */
-internal fun faceWidthUnits(profile: PadProfile): Float = when (profile.cluster) {
+fun faceWidthUnits(profile: PadProfile): Float = when (profile.cluster) {
     FaceCluster.DIAMOND -> 3f
     FaceCluster.N64 -> N64Cluster.WIDTH
     FaceCluster.SEGA -> SegaCluster.WIDTH
@@ -1467,6 +1467,14 @@ internal fun clusterRows(overGame: Boolean, besidePicture: Boolean = false): Lis
  */
 internal fun padSecondRow(tools: PadTools?, shortcuts: Map<TouchSlot, TouchShortcut>, placeholders: Boolean): Boolean =
     tools != null || shortcuts.isNotEmpty() || placeholders
+
+/**
+ * The `secondRow` both halves of a pad beside the picture take: either half's [padSecondRow], the left with STYLUS and
+ * touch shortcut 1, the right with SWAP and touch shortcut 2, so a row on one side keeps the other's rows level.
+ */
+fun besideSecondRow(tools: PadTools?, shortcuts: Map<TouchSlot, TouchShortcut>, placeholders: Boolean): Boolean =
+    padSecondRow(tools, shortcuts.filterKeys { it == TouchSlot.ONE }, placeholders) ||
+        padSecondRow(tools, shortcuts.filterKeys { it == TouchSlot.TWO }, placeholders)
 
 /**
  * The row of [rows] ([clusterRows]) whose spacer above takes the free height: over the game ([overGame])

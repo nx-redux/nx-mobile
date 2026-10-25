@@ -1,5 +1,6 @@
 package com.nxredux.mobile.options
 
+import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.PadFaceLayout
 import com.nxredux.mobile.runner.PadMap
 import com.nxredux.mobile.runner.SegaPadType
@@ -7,7 +8,7 @@ import com.nxredux.mobile.runner.SegaPadType
 /**
  * Console Settings rows about the controller: Controller Layout for every console (the letters printed on the pad;
  * buttons work as printed, [com.nxredux.mobile.runner.PhysicalKeys]), Controller Type for the Sega pad tags, and
- * Portrait Pad for the two-screen consoles.
+ * Portrait Pad for the two-screen consoles and arcade.
  * Frontend `nx_` keys, per game with a console default. The layout row is read on every key, so a change applies when
  * the menu closes; the type is sent to the running core at once (GameActivity.applySegaPad).
  */
@@ -48,8 +49,24 @@ object PadOptions {
         visual = false, valueLabels = listOf("Shown", "Hidden"),
     )
 
-    /** The consoles with two screens, which offer [portraitPadRow]. */
-    fun hasPortraitPadRow(tag: String): Boolean = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
+    /**
+     * Arcade: the same setting, for the boards whose picture is taller than wide (the game offers the corner icon only
+     * for those); a wide game keeps its band whatever this says.
+     */
+    val portraitPadTallRow = portraitPadRow.copy(
+        info = "Hidden gives a game taller than wide (a vertical\narcade board) the pad's room in portrait, with\n" +
+            "the see-through pad over the game. Wide games\nkeep the pad. Long-press the corner icon in\ngame to switch.",
+        brief = "Hidden: tall games get the pad's room",
+    )
+
+    /** The consoles with two screens. */
+    private fun twoScreens(tag: String): Boolean = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
+
+    /** Arcade, whose vertical boards are taller than wide. */
+    private fun tallGames(tag: String): Boolean = CoreRegistry.consoleOf(tag)?.id == "fbn"
+
+    /** The consoles that offer Portrait Pad: the two-screen ones ([portraitPadRow]) and arcade ([portraitPadTallRow]). */
+    fun hasPortraitPadRow(tag: String): Boolean = twoScreens(tag) || tallGames(tag)
 
     /** The portrait band is hidden: [values] say so and [tag] offers the row. */
     fun portraitPadHidden(tag: String, values: Map<String, String>): Boolean =
@@ -57,7 +74,7 @@ object PadOptions {
 
     fun tableFor(tag: String): List<FrontendOption> =
         (if (PadMap.isSegaPadTag(tag)) listOf(segaPadRow) else emptyList()) +
-            (if (hasPortraitPadRow(tag)) listOf(portraitPadRow) else emptyList()) +
+            (if (twoScreens(tag)) listOf(portraitPadRow) else if (tallGames(tag)) listOf(portraitPadTallRow) else emptyList()) +
             listOf(layoutRow)
 
     val all: List<FrontendOption> = listOf(segaPadRow, portraitPadRow, layoutRow)

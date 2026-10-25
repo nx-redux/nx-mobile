@@ -85,6 +85,20 @@ class EmulatorSettingsTest {
         assertEquals("6", p.console[1].value); assertEquals(PadOptions.AUTO, p.console[2].value)
     }
 
+    // The menu window's screen shapes the DS and 3DS layout rows, as in the game.
+    @Test fun layout_rows_follow_the_screen() {
+        val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
+        fun landscape(screen: com.nxredux.mobile.layout.ScreenClass?) = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, null, null, forGame = false, screen = screen)
+            .console.single { it.option.key == NdsOptions.LAYOUT_LANDSCAPE }
+        val fold = landscape(com.nxredux.mobile.layout.ScreenClass.STUBBY_PHONE)
+        assertEquals(NdsLayoutChoice.LARGE.value, fold.value)
+        assertTrue(NdsLayoutChoice.SIDE_BY_SIDE.value !in fold.option.values)
+        assertEquals(NdsLayoutChoice.SIDE_BY_SIDE.value, landscape(com.nxredux.mobile.layout.ScreenClass.REGULAR_PHONE).value)
+        val n3ds = com.nxredux.mobile.runner.CoreRegistry.forTag("3DS")!!
+        val tablet = EmulatorSettings.page("3DS", n3ds, null, n3ds.defaultOptions, null, null, forGame = false, screen = com.nxredux.mobile.layout.ScreenClass.WIDE_TABLET)
+        assertEquals("large", tablet.console.single { it.option.key == N3dsOptions.LAYOUT_LANDSCAPE }.value)
+    }
+
     @Test fun ds_layout_rows_read_the_old_keys_like_the_game_does() {
         val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
         fun value(cfgText: String, key: String) = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, cfg(cfgText), null, forGame = false)

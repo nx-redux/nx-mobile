@@ -38,15 +38,15 @@ class ClusterLayoutTest {
         assertEquals(0f, setAsidePx(ScreenClass.WIDE_TABLET, reach, controller = true), 0.01f)
 
     @Test fun cutout_beyond_margin_moves_both_halves() {
-        val r = reach(182f, 2.625f, 136f, 0f, null, 0f, toolRow = false)
+        val r = reach(182f, 2.625f, 136f, 0f, null, 0f)
         assertEquals(42f + 36.4f + 57.6f, r.edgePx, 0.1f)
         assertEquals(136f, r.edgePx, 0.1f)
     }
 
     @Test fun reach_counts_tweaked_group_bounds() {
-        val r = reach(182f, 2.625f, 0f, 0f, 900f, 0f, toolRow = false)
+        val r = reach(182f, 2.625f, 0f, 0f, 900f, 0f)
         assertEquals(900f, r.buttonsPx, 0.01f)
-        assertEquals(2f * 1.4f * 182f + 12f * 2.625f, reach(182f, 2.625f, 0f, 0f, null, 0f, false).buttonsPx, 0.01f)
+        assertEquals(2f * 1.4f * 182f + 12f * 2.625f, reach(182f, 2.625f, 0f, 0f, null, 0f).buttonsPx, 0.01f)
     }
 
     @Test fun clear_when_both_columns_hold_the_reach() {

@@ -17,6 +17,16 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.R
+import com.nxredux.mobile.layout.CoreFrame
+import com.nxredux.mobile.layout.PadRoom
+import com.nxredux.mobile.layout.ScreenClass
+import com.nxredux.mobile.layout.consoleScale
+import com.nxredux.mobile.layout.overlayClear
+import com.nxredux.mobile.layout.picture
+import com.nxredux.mobile.layout.pictureSpace
+import com.nxredux.mobile.layout.placedFor
+import com.nxredux.mobile.layout.setAsidePx
+import com.nxredux.mobile.options.BRICK_HEIGHT
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsSettings
@@ -24,6 +34,7 @@ import com.nxredux.mobile.options.OverlayFile
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.options.OverlayResolver
 import com.nxredux.mobile.options.OverlaySets
+import com.nxredux.mobile.options.ScreenScaling
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.frontendLayout
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_TAG
@@ -48,7 +59,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.ByteBuffer
+import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * What [FrontendRenderer] needs from [GameActivity]: the activity for its views, the game's identity, view and settings,
@@ -145,6 +158,8 @@ internal class FrontendRenderer(
      * goes at its top-right corner. Snapshot state, read in the notifications overlay's composition.
      */
     val pictureBox = androidx.compose.runtime.mutableStateOf<android.graphics.Rect?>(null)
+    /** The single picture as last laid out (game-area px, offsets included); null while the DS screens are split. */
+    private var shownPicture: PxRect? = null
     private var hudJob: Job? = null
 
     /** The overlay file names offered for this console (the Overlay setting's list). */
@@ -297,17 +312,18 @@ internal class FrontendRenderer(
     }
 
     /**
-     * Lays the picture out in the game area. DS games (a plain 256x384 frame) get their screens as regions of the view
-     * ([NdsLayout]), with the viewport the whole area and no offsets or overlay: the fork ignores the screen offset and
-     * the scaling mode for regions, so the Screen Offset and Scaling settings have no effect while the screens are split.
-     * Other games: the overlay box (or the whole area) becomes the GL viewport and the overlay view's bounds; the offsets
-     * (scaled to the box) go to the view. No-op until laid out. [geometry]: the view's, when the caller has just read it.
+     * Lays the picture out in the game area and the pad around it. The space the pad leaves ([PadRoom]: the set-aside
+     * width each side of landscape clusters, the area above the portrait band, the hidden band's space, else the whole
+     * area) holds the picture: under Screen Scaling Auto at its console's scale ([picture]); Native, Aspect and Fullscreen
+     * size it in the whole area as before. DS games (a plain 256x384 frame) get their screens as regions of the view
+     * ([NdsLayout], in that same space), with the viewport the whole area and no offsets or overlay: the fork ignores the
+     * screen offset and the scaling mode for regions. Other games: the picture (or its overlay box) becomes the GL
+     * viewport and the overlay view's bounds; the offsets (scaled to the box) go to the view and move the picture after
+     * its placement. The pad is then fitted to the final picture ([PadLayoutController.placeClusters]). No-op until laid
+     * out. [geometry]: the view's, when the caller has just read it.
      */
     fun relayoutFrontend(geometry: FloatArray? = null) {
         val view = retroView ?: return
-        // Portrait with the band hidden: no touch reaches the game under the clusters (the 3DS core takes the touches whole;
-        // the DS screen under them is also off in its regions). The game area starts at the cutout.
-        view.touchCutoffY = padLayout.portraitClusterTop?.let { (it - padLayout.cutoutTop).toFloat() } ?: Float.POSITIVE_INFINITY
         if (!view.isAttachedToWindow) return   // the GL thread is gone once detached
         val game = findViewById<FrameLayout>(R.id.gameContainer)
         val w = game.width.toFloat()
@@ -315,7 +331,18 @@ internal class FrontendRenderer(
         if (w <= 0f || h <= 0f) return
         val g = geometry ?: view.getGameGeometry()
         val origin = IntArray(2).also { game.getLocationInWindow(it) }
-        val nds = ndsLayout(w, h, g) ?: n3dsSplitLayout(w, h)
+        val frame = coreFrame(g)   // null before the first frame (0x0)
+        frame?.let(padLayout::onFrame)
+        val room = padLayout.padRoom()
+        val pad = padLayout.landscapePad()
+        // Before the first frame: the clusters take their unit and rows now (still hidden), so they are measured by then.
+        if (frame == null && pad != null) padLayout.placeClusters(null, pad)
+        val shape = pad?.shape ?: activity.windowShape()
+        val screen = shape.screenClass
+        val overlayH = padLayout.hiddenOverlayHeightPx()
+        val setAside = pad?.let { setAsidePx(screen, it.reach, controller = false) } ?: 0f
+        val space = pictureSpace(room, w, h, setAside, overlayH)
+        val nds = ndsLayout(w, h, g, space, room, overlayH, screen) ?: n3dsSplitLayout(w, h)
         // An area too small for one DS screen pixel (NdsLayout returns no regions) is only ever a transient mid-resize
         // size. Keep whatever is drawn now rather than letting an empty list flip a split game to the whole 256x384
         // frame (and the overlay back on) for that moment; the next size change lays it out again.
@@ -335,37 +362,106 @@ internal class FrontendRenderer(
                 view.viewport = whole
             }
             view.screenOffset = PointF(0f, 0f)
-            pictureBox.value = android.graphics.Rect(origin[0], origin[1], origin[0] + w.roundToInt(), origin[1] + h.roundToInt())
+            val shown = nds.shownRect()
+            pictureBox.value = windowRect(origin, shown)
+            shownPicture = null
             view.screenRegions = nds.map { it.toScreenRegion(w, h) }
+            fitPad(room, pad, shown, frameKnown = true, h, overlayH)
+            val scales = nds.joinToString(" + ") { "${it.screen.value}${if (it.inset) " inset" else ""} %.2fx".format(java.util.Locale.US, it.dst.height / 192f) }
+            logLayout(w, h, shape, room, pad, setAside, space, shown, "ds $scales")
             return
         }
         if (view.screenRegions.isNotEmpty()) view.screenRegions = emptyList()
         val s = FrontendSettings.parse(frontendValues)
-        val layout = frontendLayout(w, h, g[0].toInt(), g[1].toInt(), g[2], s.scaling, s.offsetX, s.offsetY, overlayFile?.aspect)
-        val box = layout.box
+        val overlayAspect = overlayFile?.aspect
+        val box: PxRect
+        val shown: PxRect
+        val offset: PointF
+        if (s.scaling == ScreenScaling.AUTO && frame != null) {
+            val placed = placedFor(room, picture(space, frame, consoleScale(gameTag), s.scaling, PxRect(0f, 0f, w, h), overlayAspect), h, overlayH)
+            // The offsets as Native / Aspect / Fullscreen scale them: to the overlay's box, else the game area.
+            val unit = (if (overlayAspect != null && overlayAspect > 0f) placed.height else h) / BRICK_HEIGHT
+            box = placed
+            offset = PointF(s.offsetX * unit, s.offsetY * unit)
+            shown = placed.copy(x = placed.x + offset.x, y = placed.y + offset.y)
+        } else {
+            // The overrides, as before; Auto too before the first frame, which has nothing to place yet.
+            val layout = frontendLayout(w, h, g[0].toInt(), g[1].toInt(), g[2], s.scaling, s.offsetX, s.offsetY, overlayAspect)
+            box = layout.box
+            offset = PointF(layout.offsetX, layout.offsetY)
+            shown = layout.content
+        }
         val viewport = RectF(box.x / w, box.y / h, (box.x + box.width) / w, (box.y + box.height) / h)
-        pictureBox.value = android.graphics.Rect(
-            origin[0] + box.x.roundToInt(), origin[1] + box.y.roundToInt(),
-            origin[0] + (box.x + box.width).roundToInt(), origin[1] + (box.y + box.height).roundToInt(),
-        )
+        pictureBox.value = windowRect(origin, if (s.scaling == ScreenScaling.AUTO) shown else box)
+        shownPicture = shown
         if (viewport != lastViewport) {
             lastViewport = viewport
             view.viewport = viewport
         }
-        view.screenOffset = PointF(layout.offsetX, layout.offsetY)
+        view.screenOffset = offset
         overlayView?.layoutParams = FrameLayout.LayoutParams(box.width.roundToInt(), box.height.roundToInt()).apply {
             gravity = Gravity.TOP or Gravity.START
             leftMargin = box.x.roundToInt()
             topMargin = box.y.roundToInt()
         }
+        fitPad(room, pad, shown, frameKnown = frame != null, h, overlayH)
+        val scale = frame?.let { shown.height / (if (it.rotated) it.width else it.height) }
+        logLayout(w, h, shape, room, pad, setAside, space, shown, "${s.scaling} frame=${frame?.let { "${it.width.roundToInt()}x${it.height.roundToInt()}" }} scale=${scale?.let { "%.2f".format(java.util.Locale.US, it) }}")
     }
 
     /**
-     * The DS screen regions for a [w] x [h] game area, or null: not NDS, or the frame is not the plain DS stack (256x384,
-     * or 256N x 384N from the GL renderer).
+     * The pad fitted to the final [picture] (game-area px; the area is the window in landscape, where the clusters are):
+     * the clusters beside it, or the hidden band's overlay solid when the picture stops above it. A [frameKnown] picture
+     * lets the pads that waited for it show.
+     */
+    private fun fitPad(room: PadRoom, pad: LandscapePad?, picture: PxRect, frameKnown: Boolean, areaH: Float, overlayH: Float) {
+        when (room) {
+            PadRoom.BESIDE -> pad?.let { padLayout.placeClusters(picture.takeIf { frameKnown }, it) }
+            PadRoom.HIDDEN_BAND -> padLayout.overlayClear.value = frameKnown && overlayClear(picture.y + picture.height, areaH, overlayH)
+            PadRoom.BAND, PadRoom.NONE -> Unit
+        }
+        if (frameKnown) padLayout.onPictureKnown()
+    }
+
+    /** The core's frame from [g] (the view's geometry), or null before it is known (0x0 until the first frame). */
+    private fun coreFrame(g: FloatArray): CoreFrame? =
+        if (g[0] > 0f && g[1] > 0f) CoreFrame(g[0], g[1], g[2], rotated = abs(sin(g[3])) > 0.5f) else null
+
+    private fun windowRect(origin: IntArray, r: PxRect) = android.graphics.Rect(
+        origin[0] + r.x.roundToInt(), origin[1] + r.y.roundToInt(),
+        origin[0] + (r.x + r.width).roundToInt(), origin[1] + (r.y + r.height).roundToInt(),
+    )
+
+    /** The DS screens' bounds as one picture: the screens other than a picture-in-picture inset. */
+    private fun List<NdsRegion>.shownRect(): PxRect = filterNot { it.inset }.ifEmpty { this }.map { it.dst }.reduce(::union)
+
+    private fun union(a: PxRect, b: PxRect): PxRect {
+        val left = minOf(a.x, b.x)
+        val top = minOf(a.y, b.y)
+        return PxRect(left, top, maxOf(a.x + a.width, b.x + b.width) - left, maxOf(a.y + a.height, b.y + b.height) - top)
+    }
+
+    /** The relayout's inputs and outcome, once per change, for the Debug log (the device checks read the spec's tables from it). */
+    private var lastLayoutLog: String? = null
+
+    private fun logLayout(w: Float, h: Float, shape: WindowShape, room: PadRoom, pad: LandscapePad?, setAside: Float, space: PxRect, picture: PxRect, what: String) {
+        val reach = pad?.let { "reach=${it.reach.edgePx.roundToInt()}+${it.reach.buttonsPx.roundToInt()}${if (it.measured) " measured" else " estimated"} unit=${"%.1f".format(java.util.Locale.US, it.unitPx)}" } ?: "no clusters"
+        val line = "relayout: window=${shape.widthPx}x${shape.heightPx} ${shape.screenClass} area=${w.roundToInt()}x${h.roundToInt()} room=$room $reach setAside=${setAside.roundToInt()} " +
+            "space=${space.short()} picture=${picture.short()} $what"
+        if (line == lastLayoutLog) return
+        lastLayoutLog = line
+        NxLog.i(TAG_LOG, line)
+    }
+
+    private fun PxRect.short() = "${x.roundToInt()},${y.roundToInt()} ${width.roundToInt()}x${height.roundToInt()}"
+
+    /**
+     * The DS screen regions for a [w] x [h] game area in [space] (the pad's room, [room]; with the band hidden placed by
+     * the quarter-pad rule against an overlay [overlayH] tall), or null: not NDS, or the frame is not the plain DS stack
+     * (256x384, or 256N x 384N from the GL renderer). The dual-screen modes keep their own layouts.
      * Empty when the area is too small for a screen pixel (the caller keeps the current layout then).
      */
-    private fun ndsLayout(w: Float, h: Float, g: FloatArray): List<NdsRegion>? {
+    private fun ndsLayout(w: Float, h: Float, g: FloatArray, space: PxRect, room: PadRoom, overlayH: Float, screen: ScreenClass): List<NdsRegion>? {
         if (!NdsOptions.appliesTo(gameTag)) return null
         val frameW = g[0].roundToInt()
         val frameH = g[1].roundToInt()
@@ -380,12 +476,16 @@ internal class FrontendRenderer(
         if (dualMode == DualMode.SPLIT) return DualScreen.ndsScreen(w, h, DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn))
         if (dualMode == DualMode.PANEL_UP) return DualScreen.ndsPanelUp(w, h, NdsSettings.parse(frontendValues))
         val landscape = isLandscape()
-        val screen = resources.screenClass()
         val settings = NdsSettings.parse(frontendValues)
-        return NdsLayout.regions(
-            PxRect(0f, 0f, w, h), settings.layoutShown(landscape, ndsControllerMode(), screen), landscape, screen, settings,
+        val regions = NdsLayout.regions(
+            space, settings.layoutShown(landscape, ndsControllerMode(), screen), landscape, screen, settings,
             NDS_INSET_MARGIN_DP * resources.displayMetrics.density,
         )
+        if (room != PadRoom.HIDDEN_BAND || regions.isEmpty()) return regions
+        // The band hidden: the screens as one picture, at the top when they reach into the overlay, else centred above it.
+        val shown = regions.shownRect()
+        val dy = (placedFor(room, shown, h, overlayH).y - shown.y).roundToInt().toFloat()
+        return regions.map { it.copy(dst = it.dst.copy(y = it.dst.y + dy)) }
     }
 
     /**
@@ -465,8 +565,9 @@ internal class FrontendRenderer(
         val shown = if (ndsRegions.isNotEmpty()) {
             ndsRegions.sortedBy { it.inset }.joinToString(" + ") { "${it.screen.value} ${it.dst.width.roundToInt()}x${it.dst.height.roundToInt()}" }
         } else {
-            val s = FrontendSettings.parse(frontendValues)
-            val out = frontendLayout(game.width.toFloat(), game.height.toFloat(), coreW, coreH, g[2], s.scaling, s.offsetX, s.offsetY, overlayFile?.aspect).content
+            val out = shownPicture ?: FrontendSettings.parse(frontendValues).let { s ->
+                frontendLayout(game.width.toFloat(), game.height.toFloat(), coreW, coreH, g[2], s.scaling, s.offsetX, s.offsetY, overlayFile?.aspect).content
+            }
             "${out.width.roundToInt()}x${out.height.roundToInt()}"
         }
         val rate = if (fps == null) "paused" else String.format(java.util.Locale.US, "%.1f fps", fps)

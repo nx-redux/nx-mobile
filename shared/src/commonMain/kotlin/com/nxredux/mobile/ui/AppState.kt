@@ -244,6 +244,8 @@ class AppDeps(
     val rumblePreview: (GameRumble) -> Unit = {},
     /** Wi-Fi netplay's platform side (sockets, discovery, save staging); null: no netplay (tests, other platforms). */
     val netplay: com.nxredux.mobile.netplay.NetplayPlatform? = null,
+    /** The menu window's screen class now (Emulator Settings' DS and 3DS layout rows); null: unknown. */
+    val screenClass: () -> com.nxredux.mobile.layout.ScreenClass? = { null },
     /** Opens the pad layout editor (Android: its own activity); it saves to the settings and ends with [AppState.onPadLayoutEdited]. Null: no editor. */
     val padEditor: ((PadEditRequest) -> Unit)? = null,
     /** Settings → Library → Saves: Export and Import (null: rows do nothing). */
@@ -5643,6 +5645,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         work = deps.compute,
         vulkanFailed = { it in deps.settings.vulkanFailedCores },
         secondScreen = { secondConnected },
+        screenClass = deps.screenClass,
     )
 
     // --- Tools -> Artwork: AppState hosts the controller (index writes stay here); the pages live in ArtworkScreenController ---
