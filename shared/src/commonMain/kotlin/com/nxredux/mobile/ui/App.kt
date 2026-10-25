@@ -537,6 +537,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val orientation = state.orientationOf(s)
     // A Grid reports its columns only while its page is the one showing (a page sliding out never overwrites the count).
     val onGridLayout: (Int, Int) -> Unit = remember(s) { { columns, rows -> if (state.screen.value === s) state.onGridLayout(columns, rows) } }
+    val onPageRows: (Int) -> Unit = remember(s) { { rows -> if (state.screen.value === s) state.onPageRows(rows) } }   // likewise LEFT / RIGHT's page
     val index = { selection.value.index }
     val minimalOpening = state.minimalOpening.collectAsState()   // a Minimal page's row being opened (its page draws the band)
     val raPanel by state.raPanel.collectAsState()   // the achievements panel over the list
@@ -553,7 +554,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
         showTag = s.source == ListSource.Hidden || s.source is ListSource.Search,   // a search mixes consoles
         emptyText = if (s.source is ListSource.Search || s.source is ListSource.Filtered) "No results" else null,
         info = { gameInfoFor(gameInfo, now, current()?.game, full = true) },   // Grid shows none (its tiles have tileInfo)
-        style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, tileInfo = remember(s.entries, gameInfo, now) { entryTileInfo(s.entries, gameInfo, now) }, layoutKey = s.source,
+        style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = remember(s.entries, gameInfo, now) { entryTileInfo(s.entries, gameInfo, now) }, layoutKey = s.source,
         artBox = state.settings.gameListArt.boxed,
         backdropArt = state.settings.backdropArt,
         onSearch = state::openListSearch.takeIf { s.source.searchable },

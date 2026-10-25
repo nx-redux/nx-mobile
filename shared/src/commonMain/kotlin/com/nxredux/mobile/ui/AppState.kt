@@ -814,6 +814,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private val tabSelections = HashMap<MenuCategory, ListSelection>()   // each tab's row, remembered across visits
     private var gridColumns = 0   // the Grid body's column count for the screen showing now; 0 until it lays out
     private var gridRows = 2      // and its row count: 2 on phones, 3–4 on a tablet-class window
+    private var pageRows = 0      // a game list's rows (or stack items) on one screen ([onPageRows]); 0 until it lays out: a page is one row
     private var installedCache: List<InstalledApp>? = null   // the last [AppLauncher.installedApps]; null until the first load
     private var installedJob: Job? = null
     /**
@@ -5918,6 +5919,33 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         gridColumns = columns.coerceAtLeast(0); gridRows = rows.coerceAtLeast(1)
     }
 
+    /** A game list's List, Minimal or vertical stack reports the items one screen shows: LEFT / RIGHT page by them ([pageMove]). */
+    fun onPageRows(rows: Int) {
+        pageRows = rows.coerceAtLeast(0)
+    }
+
+    /**
+     * LEFT / RIGHT on a game list whose d-pad runs up and down (List, Minimal, a vertical Carousel or Backdrop): a page of
+     * [pageRows] up or down, held at the ends, a held key's repeat paging on (NX Redux's game lists).
+     */
+    private fun pageMove(s: Screen.Games, button: NxButton) {
+        val sel = _selection.value
+        val next = ListJumps.page(sel.count, pageRows, sel.index, if (button == NxButton.RIGHT) 1 else -1)
+        if (next != sel.index) { _selection.value = sel.copy(index = next); refreshResume() }
+    }
+
+    /**
+     * L1 / R1 on a game list, every layout: the previous / next letter's first game ([ListJumps.letter]), a held key's
+     * repeat jumping on. Only a console's list is in name order: Recently Played, a collection, Hidden and a search's
+     * results are not, so there they do nothing.
+     */
+    private fun letterJump(s: Screen.Games, button: NxButton) {
+        if (s.source !is ListSource.Console) return
+        val sel = _selection.value
+        val next = ListJumps.letter(s.entries.map { it.shown }, sel.index, if (button == NxButton.R1) 1 else -1)
+        if (next != sel.index) { _selection.value = sel.copy(index = next); refreshResume() }
+    }
+
     /** Home's layout (Layouts → Home): Grid (the dashboard), List or Carousel. */
     internal fun homeStyle(): MenuStyle = MenuStyles.styleOf(deps.settings.menuStyles, MenuCategory.HOME)
 
@@ -5999,12 +6027,19 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /**
      * The d-pad on a Vertical Carousel stack (main menu tab or game list) or a game list's Backdrop stack ([stackStep]):
      * UP / DOWN step one item; past an end a fresh press wraps (UP on the first to the last, DOWN on the last to the
-     * first), a held key's [repeat] stops there, as the List. UP reaches the tab row only from an empty main menu stack. LEFT / RIGHT have no move of their own: on the main menu
-     * a fresh press switches tab (never a key [repeat]); a game list ignores them. False for any other button.
+     * first), a held key's [repeat] stops there, as the List. UP reaches the tab row only from an empty main menu stack. LEFT / RIGHT: on the main menu
+     * a fresh press switches tab (never a key [repeat]); a game list pages ([pageMove]). False for any other button.
      */
     private fun stackMove(s: Screen, button: NxButton, repeat: Boolean): Boolean {
         when (button) {
-            NxButton.LEFT, NxButton.RIGHT -> { if (s is Screen.Systems && !repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1); return true }
+            NxButton.LEFT, NxButton.RIGHT -> {
+                when (s) {
+                    is Screen.Systems -> if (!repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)
+                    is Screen.Games -> pageMove(s, button)   // a game list's stack pages, as its List
+                    else -> Unit
+                }
+                return true
+            }
             NxButton.UP, NxButton.DOWN -> {
                 val sel = _selection.value
                 val next = stackStep(sel.index, sel.count, button, fresh = !repeat)   // only an empty stack's UP is null: the tab row
@@ -6167,8 +6202,12 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             }
             NxButton.DOWN -> if (!rowMove(button, repeat) && !gridMove(button)) { _selection.value = _selection.value.down(wrap = !repeat || !launcherList()); refreshResume() }
             // The main menu: LEFT / RIGHT are L1 / R1 (a Grid or row switches only past its ends), on a fresh press only: a held
-            // key's repeats never switch tabs. A List game list ignores them.
-            NxButton.LEFT, NxButton.RIGHT -> if (!rowMove(button, repeat) && !gridMove(button, repeat) && !repeat && _screen.value is Screen.Systems) switchTab(if (button == NxButton.RIGHT) 1 else -1)
+            // key's repeats never switch tabs. A List or Minimal game list pages ([pageMove]).
+            NxButton.LEFT, NxButton.RIGHT -> if (!rowMove(button, repeat) && !gridMove(button, repeat)) when (val s = _screen.value) {
+                is Screen.Games -> pageMove(s, button)   // a List or Minimal game list pages
+                is Screen.Systems -> if (!repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)
+                else -> Unit
+            }
             NxButton.A -> openSelected()
             NxButton.B -> back()
             NxButton.Y -> when (val s = _screen.value) {
@@ -6180,8 +6219,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             NxButton.START -> if (_screen.value is Screen.Games) openListSearch() else openSearch()   // a game list searches its own games
             NxButton.X -> if (_screen.value is Screen.Games && !_dualMenu.value) ra.openRaPanel()   // the highlighted game's achievements (the second display's list has its own details)
             NxButton.MENU -> openContextMenu()
-            NxButton.L1 -> switchTab(-1)
-            NxButton.R1 -> switchTab(1)
+            NxButton.L1, NxButton.R1 -> when (val s = _screen.value) {
+                is Screen.Games -> letterJump(s, button)
+                else -> switchTab(if (button == NxButton.R1) 1 else -1)
+            }
             else -> Unit
         }
     }

@@ -78,6 +78,7 @@ class NxHintsBand(
  * the rest stretch to fill it exactly ([listTopGap] and [listTopEdge] unused).
  * [rowsLike]: under a [listTopEdge], the row height a [rowEdges] list with these edges would have here, so the rows
  * match those lists', and its bottom gap; the top gap takes what is left ([nxListFitUnder]'s rowPx, bottomRows).
+ * [onPageRows]: told the whole rows the list shows, again when that changes (a game list pages LEFT / RIGHT by them).
  * [hideHints]: no hint bar is drawn but its room is kept, so nothing moves. [hintShade] keeps the bar's
  * [NX_HINT_BAR_ALPHA] shade there (with [NxHintsBand.barInfo] drawn on it).
  */
@@ -106,6 +107,7 @@ fun NxScreenScaffold(
     scrollFade: Boolean = true,
     rowEdges: Pair<Float, Float>? = null,
     rowsLike: Pair<Float, Float>? = null,
+    onPageRows: ((Int) -> Unit)? = null,   // the whole rows the list shows (a game list's LEFT / RIGHT page)
 ) {
     val listSelection = selection ?: { selectedIndex }
     val dim = if (bodyAlpha == null) Modifier else Modifier.graphicsLayer { alpha = bodyAlpha() }
@@ -185,6 +187,10 @@ fun NxScreenScaffold(
                         // An options gap takes half a row of the slot: the whole rows fit in the rest.
                         val gap = if (rowKind == NxRowKind.OPTIONS && !fits && rows.any { it.spacer }) itemHeight * NX_OPTIONS_GAP else 0.dp
                         val whole = nxWholeRows(maxHeight - strip - gap, itemHeight, pxSlack = slack)
+                if (onPageRows != null) {
+                    val report by rememberUpdatedState(onPageRows)
+                    LaunchedEffect(whole) { report(whole) }
+                }
                         // In the rows' own rounded px, so the list rests on whole rows ([nxRowsSlotPx]).
                         val slot = if (fits) optionsHeight else with(density) { nxRowsSlotPx(itemHeight.roundToPx(), whole, gap.roundToPx()).toDp() }
                         val listWidth = maxWidth

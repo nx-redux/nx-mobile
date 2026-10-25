@@ -8864,6 +8864,79 @@ class AppStateTest {
         }
     }
 
+    /** A Game Boy list of eight games over four letter groups: # (0), A (1-2), B (3), C (4-5), Z (6-7). */
+    private val lettersSource = FakeRomsSource(
+        dirs = mapOf(
+            "Home" to listOf("Roms"),
+            "Home/Roms" to listOf("Game Boy (GB)"),
+            "Home/Roms/Game Boy (GB)" to listOf("1942.gb", "Alleyway.gb", "Asteroids.gb", "Battletoads.gb", "Castlevania.gb", "Contra.gb", "Zelda.gb", "Zoids.gb"),
+        ),
+    )
+
+    private fun TestScope.lettersList(style: MenuStyle, orientation: MenuOrientation = MenuStyles.DEFAULT_ORIENTATION): AppState {
+        val settings = MemorySettings(ContentRef("Home")).apply { gameListStyle = style; gameListOrientation = orientation }
+        val state = state(settings, src = lettersSource)
+        state.load()
+        state.openConsole("GB")
+        assertEquals(listOf("1942", "Alleyway", "Asteroids", "Battletoads", "Castlevania", "Contra", "Zelda", "Zoids"),
+            assertIs<Screen.Games>(state.screen.value).entries.map { it.shown })
+        return state
+    }
+
+    @Test fun l1_and_r1_jump_by_letter_in_a_console_list_in_every_layout() = runTest {
+        for (style in MenuStyle.entries) for (orientation in MenuOrientation.entries) {
+            val state = lettersList(style, orientation)
+            val at = { state.selection.value.index }
+            state.onButton(NxButton.R1); assertEquals(1, at(), "$style $orientation")       // # -> A
+            state.onButton(NxButton.R1); assertEquals(3, at())                                // A -> B
+            state.onButton(NxButton.R1, repeat = true); assertEquals(4, at())                 // held: on to C
+            state.onButton(NxButton.DOWN)                                                     // Contra, inside C
+            state.onButton(NxButton.L1); assertEquals(3, at())                                // the previous group: B
+            state.select(7); state.onButton(NxButton.R1); assertEquals(7, at())               // the last group: stays
+            assertIs<Screen.Games>(state.screen.value)                                        // no tab switched
+        }
+    }
+
+    @Test fun recently_played_is_not_in_name_order_so_l1_and_r1_do_nothing() = runTest {
+        val data = FakeUserData(recents = listOf(Recent(tetris), Recent(mk), Recent(mario)))
+        val state = state(MemorySettings(ContentRef("Home")), data = data)
+        state.load(); advanceUntilIdle()
+        state.openList(ListSource.Recent); advanceUntilIdle()
+        assertEquals(listOf("Tetris", "Mario Kart DS", "Mario"), assertIs<Screen.Games>(state.screen.value).entries.map { it.shown })
+        state.onButton(NxButton.R1); assertEquals(0, state.selection.value.index)
+        state.select(2); state.onButton(NxButton.L1); assertEquals(2, state.selection.value.index)
+        assertIs<Screen.Games>(state.screen.value)
+    }
+
+    @Test fun left_and_right_page_by_the_rows_shown_in_list_minimal_and_the_vertical_stacks() = runTest {
+        val layouts = listOf(
+            MenuStyle.LIST to MenuStyles.DEFAULT_ORIENTATION, MenuStyle.MINIMAL to MenuStyles.DEFAULT_ORIENTATION,
+            MenuStyle.CAROUSEL to MenuOrientation.VERTICAL, MenuStyle.BACKDROP to MenuOrientation.VERTICAL,
+        )
+        for ((style, orientation) in layouts) {
+            val state = lettersList(style, orientation)
+            val at = { state.selection.value.index }
+            state.onPageRows(3)                                                               // the layout shows three rows
+            state.onButton(NxButton.RIGHT); assertEquals(3, at(), "$style $orientation")
+            state.onButton(NxButton.RIGHT, repeat = true); assertEquals(6, at())              // held: another page
+            state.onButton(NxButton.RIGHT); assertEquals(7, at())                             // stops on the last
+            state.onButton(NxButton.LEFT); assertEquals(4, at())
+            state.onButton(NxButton.LEFT); state.onButton(NxButton.LEFT); assertEquals(0, at())   // stops on the first
+            assertIs<Screen.Games>(state.screen.value)
+        }
+    }
+
+    @Test fun left_and_right_still_step_one_tile_in_a_grid_and_a_horizontal_row() = runTest {
+        for (style in listOf(MenuStyle.CAROUSEL, MenuStyle.BACKDROP)) {
+            val state = lettersList(style, MenuOrientation.HORIZONTAL)
+            state.onPageRows(3)
+            state.onButton(NxButton.RIGHT); assertEquals(1, state.selection.value.index, "$style")
+        }
+        val grid = lettersList(MenuStyle.GRID)
+        grid.onGridLayout(4, 2); grid.onPageRows(3)
+        grid.onButton(NxButton.RIGHT); assertEquals(1, grid.selection.value.index)
+    }
+
     @Test fun a_tab_that_vanishes_lands_the_fallback_on_its_own_row() = runTest {
         val src = sourceWithCollections()
         val state = state(MemorySettings(ContentRef("Home")), src = src, data = FakeUserData(recents = listOf(Recent(tetris)), pins = listOf(Shortcut(mario, "Mario"))))

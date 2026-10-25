@@ -117,6 +117,7 @@ fun GameListScreen(
     orientation: MenuOrientation = MenuOrientation.HORIZONTAL,   // the game list orientation (Carousel / Backdrop: Vertical is the stack)
     alignment: VerticalListAlignment = VerticalListAlignment.LEFT,   // Vertical: the stack's side (Layouts → Vertical alignment)
     onGridLayout: (Int, Int) -> Unit = { _, _ -> },   // a Grid reports its column and row counts
+    onPageRows: ((Int) -> Unit)? = null,   // a List, Minimal or vertical stack reports the items one screen shows (LEFT / RIGHT page)
     tileInfo: (Int) -> List<InfoLine> = { emptyList() },   // Grid: a game's count-only info, in its tile (read lazily per tile)
     layoutKey: Any? = null,               // the list laid out (its source): a Grid re-reports its columns, a Carousel / Backdrop row snaps, for each
     artBox: Boolean = false,   // Layouts → List art is a boxed picture: the names stop short of it
@@ -159,7 +160,7 @@ fun GameListScreen(
             minimalRows = { entries.map { NxRow(it.shown) } },
             captionTitle = { entries.getOrNull(index.value())?.shown },
             onSelect = onSelect, onOpen = onOpen, modifier = modifier, onHint = onHint, onLongPress = onLongPress,
-            info = info, onGridLayout = onGridLayout, tileInfo = tileInfo, layoutKey = layoutKey,
+            info = info, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = tileInfo, layoutKey = layoutKey,
             emptyText = emptyText.takeIf { entries.isEmpty() }, artBox = artBox,
             onSearch = onSearch, onLayout = onLayout, layoutOpen = layoutOpen,
             onAchievements = onAchievements, achievementsOpen = achievementsOpen, minimalOpening = minimalOpening,
@@ -191,6 +192,7 @@ internal fun GameListFrame(
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier = Modifier,
     onHint: ((NxButton) -> Unit)? = null, onLongPress: ((Int) -> Unit)? = null,
     info: () -> List<InfoLine> = { emptyList() }, onGridLayout: (Int, Int) -> Unit = { _, _ -> },
+    onPageRows: ((Int) -> Unit)? = null,
     tileInfo: (Int) -> List<InfoLine> = { emptyList() }, layoutKey: Any? = null,
     orientation: MenuOrientation = MenuOrientation.HORIZONTAL,
     alignment: VerticalListAlignment = VerticalListAlignment.LEFT,
@@ -281,7 +283,7 @@ internal fun GameListFrame(
                             if (orientation == MenuOrientation.VERTICAL) NxCarouselStack(
                                 tiles, selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                                 captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, alignment = alignment,
-                                titleRoom = titleRoom,
+                                titleRoom = titleRoom, onPageRows = onPageRows,
                             ) else NxCarousel(
                                 tiles, selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                                 captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, titleRoom = titleRoom,
@@ -296,7 +298,7 @@ internal fun GameListFrame(
                             if (orientation == MenuOrientation.VERTICAL) NxBackdropStack(
                                 games, emptyList(), selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                                 captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, alignment = alignment,
-                                titleRoom = titleRoom,
+                                titleRoom = titleRoom, onPageRows = onPageRows,
                             ) else NxBackdrop(
                                 games, emptyList(), selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                                 captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, titleRoom = titleRoom,
@@ -310,6 +312,7 @@ internal fun GameListFrame(
                             names, selectedIndex, hints.value, onSelect, onOpen, onLongPress, onHint, { 1f }, minimalSelected,
                             Modifier.weight(1f).zIndex(-1f), hideHints = chrome.emptyBarRoom, layoutKey = layoutKey, leaving = minimalOpening != null,
                             tapOpens = LocalNxTapOpens.current,   // the list's own rule (two taps, but for the preview's)
+                            onPageRows = onPageRows,
                         )
                     }
                     // List: the rows fade where more scrolls in (no band, no arrows), between a main menu List's gaps.
@@ -329,6 +332,7 @@ internal fun GameListFrame(
                                 band = band, hideHints = barHidden, hintShade = true, artBox = artBox, keepBarRoom = inRow || !barHidden,
                                 // The title row counts as a tab row, the info row as a bar ([mainMenuListEdges]).
                                 scrollFade = true, rowEdges = mainMenuListEdges(chrome.listTitle, barShown = !barHidden || inRow),
+                                onPageRows = onPageRows,
                             ) }
                         }
                     }

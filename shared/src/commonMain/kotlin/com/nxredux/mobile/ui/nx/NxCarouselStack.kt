@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +37,7 @@ fun NxCarouselStack(
     layoutKey: Any? = null,
     alignment: VerticalListAlignment = VerticalListAlignment.LEFT,
     titleRoom: Dp = 0.dp,
+    onPageRows: ((Int) -> Unit)? = null,   // the items one screen shows (a game list's LEFT / RIGHT page)
 ) {
     val colors = LocalNxColors.current
     val portrait = LocalPortrait.current
@@ -48,6 +52,11 @@ fun NxCarouselStack(
         val g = carouselStackGeometry(bodyW, titleRoomSizingBody(bodyH, titleRoom.value), screenW, screenH, portrait, gutter = if (portrait) 16f else 24f, alignment = alignment)
             .centredIn(bodyH)
         if (g.slotW <= 1f || g.slotH <= 1f) return@BoxWithConstraints
+        if (onPageRows != null) {
+            val shown = stackPageItems(RowStyle.CAROUSEL, g, bodyH)
+            val report by rememberUpdatedState(onPageRows)
+            LaunchedEffect(shown) { report(shown) }
+        }
         val itemRow = g.asItemRow()
         val logoInset = remember(itemRow) { rowLogoInset(itemRow) }
         val toolSize = carouselToolSize(itemRow)

@@ -412,4 +412,17 @@ class StackLayoutTest {
             }
         }
     }
+
+    // LEFT / RIGHT page a game list's stack by the items it shows: the selection and its neighbours whose centre is in the body.
+    @Test fun a_stacks_page_is_the_items_shown_in_its_body() {
+        for (bodyH in listOf(344f, 616f, 900f)) for (style in listOf(RowStyle.CAROUSEL, RowStyle.BACKDROP)) {
+            val g = carouselStackGeometry(960f, bodyH, 960f, bodyH + 88f, false, 24f).centredIn(bodyH)
+            val n = stackPageItems(style, g, bodyH)
+            assertTrue(n in 1..7, "$style $bodyH: $n")
+            val inside = (-3..3).count { d -> (g.centreY + stackItem(style, d.toFloat(), g).dx) in 0f..bodyH }
+            assertEquals(inside, n, "$style $bodyH")
+        }
+        val tall = carouselStackGeometry(960f, 900f, 960f, 988f, false, 24f).centredIn(900f)
+        assertTrue(stackPageItems(RowStyle.CAROUSEL, tall, 900f) >= stackPageItems(RowStyle.CAROUSEL, tall, 300f))
+    }
 }
