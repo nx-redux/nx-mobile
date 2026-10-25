@@ -17,6 +17,7 @@
 
 #include "microphone.h"
 #include "oboe/AudioStream.h"
+#include "oboe/Utilities.h"
 #include "../log.h"
 #include "libretro.h"
 
@@ -30,6 +31,12 @@ oboe::DataCallbackResult Microphone::onAudioReady(
     std::lock_guard<std::mutex> l(lock);
     fifoBuffer->write(audioData, numFrames);
     return oboe::DataCallbackResult::Continue;
+}
+
+void Microphone::onErrorAfterClose(oboe::AudioStream* audioStream, oboe::Result error) {
+    // Only a flag: streamLock may be held by a read, and this is the last thing Oboe does with us for that stream.
+    LOGE("Microphone stream lost: %s", oboe::convertToText(error));
+    lostStream.store(audioStream);
 }
 
 Microphone::Microphone(int sampleRate):
@@ -52,6 +59,7 @@ bool Microphone::openStream() {
     builder.setChannelCount(oboe::ChannelCount::Mono);
     builder.setFormat(oboe::AudioFormat::I16);
     builder.setCallback(this);
+    lostStream.store(nullptr);
 
     // Not under the lock: the stream's callback takes it, and starting or closing waits on the callback thread.
     std::shared_ptr<oboe::AudioStream> stream;
@@ -109,6 +117,11 @@ bool Microphone::isRunning() const {
 
 int Microphone::read(int16_t* samples, int numSamples) {
     std::lock_guard<std::mutex> s(streamLock);
+    if (inputStream && lostStream.load() == inputStream.get()) {
+        // Oboe already closed it: drop it without stop/close, and play noise for the rest of this live period.
+        inputStream = nullptr;
+        feed.onLiveFailed();
+    }
     // Opened here, on the core's thread, as libretro mics always were; a failure falls back to noise.
     if (feed.wantsLive() && !inputStream && !openStream()) feed.onLiveFailed();
 

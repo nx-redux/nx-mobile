@@ -18,6 +18,7 @@
 #ifndef LIBRETRODROID_MICROPHONE_H
 #define LIBRETRODROID_MICROPHONE_H
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 
@@ -42,6 +43,8 @@ public:
         void *audioData,
         int32_t numFrames
     ) override;
+    // Oboe's error thread, once it has closed a disconnected stream (rerouted input, another app took the mic).
+    void onErrorAfterClose(oboe::AudioStream* audioStream, oboe::Result error) override;
 
     // Any thread: leaving LIVE closes the stream before returning.
     void setSource(MicSource source);
@@ -67,6 +70,8 @@ private:
     mutable std::mutex streamLock;
     MicFeed feed;
     std::shared_ptr<oboe::AudioStream> inputStream;
+    // The stream Oboe closed after an error; compared, never dereferenced. read() drops it and falls back to noise.
+    std::atomic<oboe::AudioStream*> lostStream { nullptr };
 };
 
 }

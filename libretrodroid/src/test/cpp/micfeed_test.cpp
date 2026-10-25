@@ -72,6 +72,27 @@ static void liveFailureFallsBackToNoise() {
     check(feed.wantsLive(), "liveFailure: a source change clears it");
 }
 
+static void liveLostMidPeriodIsNoise() {
+    // What Microphone::read does when Oboe closes a live stream after an error: noise, never silence.
+    int stops = 0;
+    MicFeed feed([&stops] { stops++; });
+    feed.setSource(MicSource::LIVE);
+    feed.setCoreRunning(true);
+    check(feed.wantsLive() && feed.effective() == MicSource::LIVE, "liveLost: live before the loss");
+    feed.onLiveFailed();
+    check(!feed.wantsLive(), "liveLost: no reopen after the loss");
+    check(feed.effective() == MicSource::NOISE, "liveLost: noise after the loss");
+    std::vector<int16_t> out(4096);
+    feed.fillSynthetic(out.data(), (int) out.size());
+    double sum = 0;
+    for (int16_t s : out) sum += (double) s * s;
+    check(std::sqrt(sum / out.size()) > 3000, "liveLost: the fallback is loud, not silent");
+    feed.setCoreRunning(false);
+    feed.setCoreRunning(true);
+    check(feed.effective() == MicSource::NOISE, "liveLost: a core mic restart keeps the noise");
+    check(stops == 0, "liveLost: nothing left to close once lost");
+}
+
 static void leavingLiveClosesWithoutRead() {
     int stops = 0;
     MicFeed feed([&stops] { stops++; });
@@ -96,6 +117,7 @@ int main() {
     noiseIsLoud();
     wantsLiveNeedsRunning();
     liveFailureFallsBackToNoise();
+    liveLostMidPeriodIsNoise();
     leavingLiveClosesWithoutRead();
     if (failures == 0) std::printf("micfeed_test: all checks passed\n");
     return failures == 0 ? 0 : 1;

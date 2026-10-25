@@ -54,8 +54,6 @@ public:
     void fillSynthetic(int16_t* out, int n);
 
 private:
-    bool liveWanted() const { return mSource == MicSource::LIVE && mCoreRunning; }
-
     std::function<void()> onStopLive;
     MicSource mSource = MicSource::SILENCE;
     bool mCoreRunning = false;

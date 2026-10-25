@@ -20,17 +20,17 @@ namespace libretrodroid {
 
 void MicFeed::setSource(MicSource source) {
     if (source == mSource) return;
-    bool wasLive = liveWanted();
+    bool wasLive = wantsLive();
     mSource = source;
     liveFailed = false;
-    if (wasLive && !liveWanted() && onStopLive) onStopLive();
+    if (wasLive && !wantsLive() && onStopLive) onStopLive();
 }
 
 void MicFeed::setCoreRunning(bool running) {
     if (running == mCoreRunning) return;
-    bool wasLive = liveWanted();
+    bool wasLive = wantsLive();
     mCoreRunning = running;
-    if (wasLive && !liveWanted() && onStopLive) onStopLive();
+    if (wasLive && !wantsLive() && onStopLive) onStopLive();
 }
 
 MicSource MicFeed::effective() const {
