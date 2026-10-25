@@ -52,6 +52,7 @@ import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.usb.UsbCables
 import com.nxredux.mobile.padlayout.PadLayoutActivity
 import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
+import com.nxredux.mobile.runner.AndroidMicAccess
 import com.nxredux.mobile.runner.CoreHangNotice
 import com.nxredux.mobile.runner.AndroidUserDataStore
 import com.nxredux.mobile.runner.ArcadeSetsAsset
@@ -289,6 +290,12 @@ class MainActivity : ComponentActivity(), FolderPicker {
         ) runCatching { askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
     }
 
+    /** Settings → Library → Microphone access: Android's prompt; the row follows on resume (and now). */
+    private val askMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        if (::state.isInitialized) state.onAllFilesAccessChanged()
+    }
+    private val micAccess = AndroidMicAccess(this) { runCatching { askMic.launch(android.Manifest.permission.RECORD_AUDIO) } }
+
     /** Setup's Permissions page: the notification permission on Android 13+, asked through [askNotifications]. */
     private val notificationAccess: NotificationAccess? = if (android.os.Build.VERSION.SDK_INT < 33) null else object : NotificationAccess {
         override fun granted() = checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
@@ -383,6 +390,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 chdSectors = LibchdrSectors(contentResolver),
                 allFilesAccess = allFiles,
                 notificationAccess = notificationAccess,
+                micAccess = micAccess,
                 localFiles = AndroidLocalFiles(AndroidLocalFiles.deviceVolumes(applicationContext)),
                 archiveHead = { ref, name, exts, max -> withContext(Dispatchers.IO) { Archives.head(applicationContext, ref, name, exts, max) } },
                 builtInSecondScreen = { secondScreens.builtInNow() != null },

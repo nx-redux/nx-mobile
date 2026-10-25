@@ -215,7 +215,7 @@ internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSett
         // A touch value row (the in-game menu's): LEFT / RIGHT change it, A toggles a switch or opens a picker. Use as
         // home screen and All files access are Android's to change: A alone (it opens Android's screen).
         touch != null && touch.choices.size >= 2 -> listOf(back) +
-            (if (kind == SettingsKind.HOME_SCREEN || kind == SettingsKind.ALL_FILES) emptyList() else listOf(Hint(NxButton.LEFT, "Change"))) + when (touch.control) {
+            (if (kind == SettingsKind.HOME_SCREEN || kind == SettingsKind.ALL_FILES || kind == SettingsKind.MIC_ACCESS) emptyList() else listOf(Hint(NxButton.LEFT, "Change"))) + when (touch.control) {
             NxSettingControl.SWITCH -> listOf(Hint(NxButton.A, "Toggle"))
             NxSettingControl.PICKER -> listOf(Hint(NxButton.A, "Choose"))
             else -> emptyList()

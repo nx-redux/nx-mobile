@@ -65,6 +65,10 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var androidGamesAsked: Boolean
         get() = prefs.getBoolean(KEY_ANDROID_GAMES_ASKED, false)
         set(value) = prefs.edit { putBoolean(KEY_ANDROID_GAMES_ASKED, value) }
+    override var micAsked: Boolean
+        get() = prefs.getBoolean(KEY_MIC_ASKED, false)
+        set(value) = prefs.edit { putBoolean(KEY_MIC_ASKED, value) }
+
     override var allFilesAsked: Boolean
         get() = prefs.getBoolean(KEY_ALL_FILES_ASKED, false)
         set(value) = prefs.edit { putBoolean(KEY_ALL_FILES_ASKED, value) }
@@ -299,6 +303,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_ANDROID_CONSOLE_APPS = "android_console_apps"
         private const val KEY_ANDROID_GAMES_ASKED = "android_games_asked"
         private const val KEY_ALL_FILES_ASKED = "all_files_asked"
+        private const val KEY_MIC_ASKED = "mic_asked"
         private const val KEY_ONBOARDING_DONE = "onboarding_done"
         private const val KEY_ONBOARDING_STEP = "onboarding_step"
         private const val KEY_ANDROID_PINS = "android_pins"

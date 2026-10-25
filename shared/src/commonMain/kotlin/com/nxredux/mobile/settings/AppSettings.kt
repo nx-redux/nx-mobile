@@ -355,6 +355,14 @@ interface AppSettings {
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
     /**
+     * The in-game Mic toggle has asked for the microphone permission once (never again from the toggle); Settings →
+     * Library → Microphone access does not touch it. Defaulted, like [debugLog].
+     */
+    var micAsked: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /**
      * First setup's All files access step was answered (Allow or Skip); it is never shown again. Defaulted, like
      * [debugLog].
      */
