@@ -4,6 +4,7 @@ import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.compose.AsyncImagePainter
 import coil3.compose.setSingletonImageLoaderFactory
+import coil3.request.addLastModifiedToFileCacheKey
 import com.nxredux.mobile.update.AppRelease
 import com.nxredux.mobile.ui.nx.LocalMinimalPage
 import com.nxredux.mobile.ui.nx.MinimalMorph
@@ -131,10 +132,13 @@ import kotlinx.coroutines.delay
 /**
  * The image loader every picture uses, the game screen's too: the generated abstract art's fetcher ([abstractArtFetcher])
  * and key, and local files (ROM art, save-state screenshots) read by path: its mapper runs before Coil's String mapper,
- * which would parse '#' and '?'.
+ * which would parse '#' and '?'. A file's cache key holds its modified time (Coil 3's default leaves it out): the mapper
+ * drops a ref's `?v=` version, so a screenshot rewritten under the same name would otherwise show from the memory cache.
  */
 internal fun nxImageLoader(context: PlatformContext): ImageLoader =
-    ImageLoader.Builder(context).components { fileRefMapper()?.let { add(it) }; add(abstractArtFetcher()); abstractArtKeyer()?.let { add(it) } }.build()
+    ImageLoader.Builder(context).components { fileRefMapper()?.let { add(it) }; add(abstractArtFetcher()); abstractArtKeyer()?.let { add(it) } }
+        .addLastModifiedToFileCacheKey(true)
+        .build()
 
 /** Root composable. The host creates AppState once (so a folder pick can reach setHome/addExtra) and passes it in. */
 @Composable
