@@ -63,6 +63,7 @@ class SpeedControl {
                 if (toggleRewind) toggleFf = false
             }
             ShortcutAction.HOLD_REWIND -> holdRewind = down && rewindOn
+            ShortcutAction.TOGGLE_MIC -> return null   // the host handles it before this
         }
         update()
         return null

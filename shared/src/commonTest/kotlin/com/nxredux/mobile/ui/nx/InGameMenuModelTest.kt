@@ -2096,9 +2096,10 @@ class InGameMenuModelTest {
         overrides: ShortcutOverrides = ShortcutOverrides.NONE,
         tag: String = plainTag,
         canRewind: Boolean = true,
+        canMic: Boolean = false,
     ): InGameMenuModel {
         val m = model()
-        m.setShortcuts(base, overrides, ConsoleHotkeys.claimed(tag), canRewind)
+        m.setShortcuts(base, overrides, ConsoleHotkeys.claimed(tag), canRewind, canMic)
         m.select(3); m.activate(3)                                         // Options
         assertNull(m.activate(m.state.page.rows.indexOfFirst { it.label == "Shortcuts" }))
         assertEquals(PageKind.Shortcuts, m.state.page.kind)
@@ -2241,6 +2242,13 @@ class InGameMenuModelTest {
             listOf("Toggle FF", "Hold FF", "Toggle Rewind", "Hold Rewind", "Reset Game", "Touch button 1", "Touch button 2"),
             shortcuts(canRewind = true).state.page.rows.map { it.label },
         )
+    }
+
+    @Test fun micRowOnlyOnMicConsoles() {
+        assertTrue("Toggle mic" in shortcuts(canMic = true).state.page.rows.map { it.label })
+        assertFalse("Toggle mic" in shortcuts(canMic = false).state.page.rows.map { it.label })
+        val m = shortcuts(canMic = true)
+        assertFalse("Toggle mic" in m.row("Touch button 1").choices)
     }
 
     @Test fun restoreDefaultsClears() {

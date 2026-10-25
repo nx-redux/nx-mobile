@@ -524,6 +524,7 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
 internal const val RESET_DEFAULTS_LABEL = "Reset to defaults"
 
 /** A Shortcuts bind row's value while it waits for a press. */
+internal const val MIC_ROW_NOTE = "DS / 3DS only"
 internal const val SHORTCUT_PROMPT = "Press a button…"
 
 /** How long a notice stays before it clears itself. */
@@ -3917,7 +3918,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val note = if (controllerConnected) "Hold MENU for a combo" else "Connect a controller to bind"
         return ShortcutAction.entries.map { a ->
             if (a == waiting) SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, SHORTCUT_PROMPT, note = note, shortcut = a)
-            else SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, set.bindings[a]?.let(KeyLabels::label) ?: "None", shortcut = a)
+            else SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, set.bindings[a]?.let(KeyLabels::label) ?: "None", note = if (a.mic) MIC_ROW_NOTE else null, shortcut = a)
         } + TouchSlot.entries.mapIndexed { i, t ->
             SettingsRow(SettingsKind.SHORTCUT_TOUCH, "Touch button ${i + 1}", set.touch[t]?.label ?: "None", touchSlot = t)
         } + SettingsRow(SettingsKind.RESET_DEFAULTS, "Clear all")
@@ -4189,7 +4190,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             SettingsKind.MENU_PAD -> flip(s.menuPad) { s.menuPad = it }
             // A touch button: None, then every action.
             SettingsKind.SHORTCUT_TOUCH -> row.touchSlot?.let { slot ->
-                cycle(listOf<ShortcutAction?>(null) + ShortcutAction.entries, shortcutSet().touch[slot], { it?.label ?: "None" }) { setTouch(slot, it) }
+                cycle(listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { it.touch }, shortcutSet().touch[slot], { it?.label ?: "None" }) { setTouch(slot, it) }
             }
             SettingsKind.PAD_LAYOUT_CONSOLE -> {   // Shared, then the library's consoles; a gone console reads as Shared
                 val keys = listOf(PadLayouts.SHARED_KEY) + padLayoutConsoles().map { it.id }

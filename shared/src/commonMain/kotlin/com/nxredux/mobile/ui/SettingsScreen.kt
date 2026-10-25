@@ -210,7 +210,7 @@ internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSett
         kind == SettingsKind.APP_UPDATE -> listOfNotNull(back, appUpdateHint(rows[selected].label)?.let { Hint(NxButton.A, it) })
         kind == SettingsKind.INFO || rows.all { it.kind == SettingsKind.INFO } -> listOf(back)
         // Press to bind: B cancels a wait ([SettingsRow.note] set), else A binds and X clears.
-        kind == SettingsKind.SHORTCUT_BIND -> if (rows[selected].note != null) listOf(Hint(NxButton.B, "Cancel"))
+        kind == SettingsKind.SHORTCUT_BIND -> if (rows[selected].note.let { it != null && it != MIC_ROW_NOTE }) listOf(Hint(NxButton.B, "Cancel"))
             else listOf(back, Hint(NxButton.A, "Bind"), Hint(NxButton.X, "Clear"))
         // A touch value row (the in-game menu's): LEFT / RIGHT change it, A toggles a switch or opens a picker. Use as
         // home screen and All files access are Android's to change: A alone (it opens Android's screen).

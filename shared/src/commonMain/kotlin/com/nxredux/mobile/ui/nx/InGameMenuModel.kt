@@ -298,6 +298,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         private set
     private var shortcutClaimed: List<ClaimedInput> = ConsoleHotkeys.always
     private var shortcutRewind = false
+    private var shortcutMic = false
     /** Press to bind on the Shortcuts page; the host hands it raw key codes ([takesKey], [captureKey]). */
     private var capture = ShortcutCapture(shortcutClaimed)
     private var capturing: ShortcutAction? = null
@@ -1411,10 +1412,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * what this page set since launch), the console's hotkeys ([claimed]: [ConsoleHotkeys.claimed]) and whether the core
      * can rewind (no rewind rows without). Refreshes an open Shortcuts page.
      */
-    fun setShortcuts(base: ShortcutSet, overrides: ShortcutOverrides, claimed: List<ClaimedInput>, canRewind: Boolean) {
+    fun setShortcuts(base: ShortcutSet, overrides: ShortcutOverrides, claimed: List<ClaimedInput>, canRewind: Boolean, canMic: Boolean = false) {
         shortcutBase = base
         shortcutOverrides = overrides
         shortcutRewind = canRewind
+        shortcutMic = canMic
         // A new capture only for new hotkeys: the old one's held keys must keep their releases swallowed.
         if (claimed != shortcutClaimed) { shortcutClaimed = claimed; capture.cancel(); capture = ShortcutCapture(claimed); capturing = null }
         refreshShortcutsPage()
@@ -1498,7 +1500,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         if (key.startsWith(TOUCH_KEY_PREFIX)) TouchSlot.entries.firstOrNull { it.key == key.removePrefix(TOUCH_KEY_PREFIX) } else null
 
     /** What a touch button can do here: None, then every action the core has (no rewind ones without rewind). */
-    private fun touchChoices(): List<ShortcutAction?> = listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { shortcutRewind || !it.rewind }
+    private fun touchChoices(): List<ShortcutAction?> = listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { it.touch && (shortcutRewind || !it.rewind) }
 
     private fun refreshShortcutsPage() {
         state = state.copy(stack = state.stack.map { p -> if (p.kind == PageKind.Shortcuts) rebuilt(p, shortcutsPage()).copy(footer = SHORTCUTS_FOOTER) else p })
@@ -1510,9 +1512,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * Unavailable with the hotkey as its line (spec: built-in hotkeys win). The row waiting for a press says so.
      */
     private fun shortcutsPage(): MenuPage {
-        val effective = Shortcuts.effective(shortcutBase, shortcutOverrides, shortcutClaimed, shortcutRewind)
+        val effective = Shortcuts.effective(shortcutBase, shortcutOverrides, shortcutClaimed, shortcutRewind, shortcutMic)
         fun shown(value: String, inherited: Boolean) = if (inherited) "$value$DEFAULT_SUFFIX" else value
-        val binds = ShortcutAction.entries.filter { shortcutRewind || !it.rewind }.map { a ->
+        val binds = ShortcutAction.entries.filter { (shortcutRewind || !it.rewind) && (shortcutMic || !it.mic) }.map { a ->
             val key = BIND_KEY_PREFIX + a.key
             val blocked = effective.blocked[a]
             when {

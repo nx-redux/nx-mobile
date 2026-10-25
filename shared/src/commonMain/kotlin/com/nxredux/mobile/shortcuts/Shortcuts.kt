@@ -103,7 +103,7 @@ object Shortcuts {
 
     /**
      * The bindings that fire. Overrides replace base rows, and an override that takes a button drops any base action on
-     * it (L24: one button, one action). Rewind actions go without [canRewind]. A binding a console hotkey claims moves to
+     * it (L24: one button, one action). Rewind actions go without [canRewind], mic ones without [canMic]. A binding a console hotkey claims moves to
      * [EffectiveShortcuts.blocked]: built-in hotkeys win.
      */
     fun effective(
@@ -111,6 +111,7 @@ object Shortcuts {
         overrides: ShortcutOverrides,
         claimed: List<ClaimedInput>,
         canRewind: Boolean,
+        canMic: Boolean = false,
     ): EffectiveShortcuts {
         val merged = LinkedHashMap(base.bindings)
         for ((action, binding) in overrides.bindings) {
@@ -124,7 +125,7 @@ object Shortcuts {
         val touch = LinkedHashMap(base.touch)
         for ((slot, action) in overrides.touch) if (action == null) touch.remove(slot) else touch[slot] = action
 
-        val allowed = { a: ShortcutAction -> canRewind || !a.rewind }
+        val allowed = { a: ShortcutAction -> (canRewind || !a.rewind) && (canMic || !a.mic) }
         val bindings = LinkedHashMap<ShortcutAction, ShortcutBinding>()
         val blocked = LinkedHashMap<ShortcutAction, ClaimedInput>()
         for (a in ShortcutAction.entries) {
