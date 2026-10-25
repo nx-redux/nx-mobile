@@ -30,20 +30,20 @@ data class NdsRegion(
 
 /**
  * Where the two DS screens go. melonDS DS draws them stacked in one 256x384 frame (256N x 384N with the GL renderer);
- * each screen is 4:3.
- * Portrait: picture in picture (big screen fitted, top-aligned and centred; the other screen as an inset in a corner of
- * it), stacked (both at one scale, centred) or single (the big screen, top-aligned). Landscape: side by side, edge to
- * edge, centred; single (the big screen centred on both axes, leaving the side margins to the pad clusters); or picture
- * in picture (that centred big screen with the portrait inset rules). Touch only on a full-size bottom screen. Shaded
- * regions always share one size, in whole pixels at whole-pixel positions ([ScreenSize], once per layout), so the one
- * preset chain that draws them never resizes its framebuffers between them. Screen offsets don't apply here (the fork
- * ignores them for regions).
+ * each screen is 4:3 (256x192 at scale 1).
+ * Every layout uses whole-number scales of the 256x192 screen, with the pair centred in the space it is given (the
+ * game area after the pad set-aside in landscape, or above the band in portrait): Large screen (the top screen big, the
+ * touch screen centred below it), Stacked, Single screen, Picture in picture (the big screen with the other one as an
+ * inset in a corner) and Side by side. Shaded regions always share one size, in whole pixels at whole-pixel positions,
+ * so the one preset chain that draws them never resizes its framebuffers between them; a screen of another size is
+ * drawn unshaded. Screen offsets don't apply here (the fork ignores them for regions).
  */
 object NdsLayout {
     const val FRAME_WIDTH = 256
     private const val SCREEN_WIDTH = 256f
     private const val SCREEN_HEIGHT = 192f
     private const val ASPECT = 4f / 3f
+    private const val EPSILON = 0.001f
 
     val TOP_SRC = FrameRect(0f, 0f, 1f, 0.5f)
     val BOTTOM_SRC = FrameRect(0f, 0.5f, 1f, 1f)
@@ -54,36 +54,28 @@ object NdsLayout {
     fun isDsFrame(width: Int, height: Int): Boolean = width > 0 && width % FRAME_WIDTH == 0 && height * 2 == width * 3
 
     /**
-     * The regions for an [areaWidth] x [areaHeight] game area, in draw order; empty for an area too small for a screen pixel.
-     * Portrait uses [NdsSettings.controller] in [controllerMode] (a non-clip-on controller dropped the pad band), else
-     * [NdsSettings.portrait]; a layout not picked yet is [screen]'s default ([NdsSettings.layoutShown]).
-     * Only the bottom screen takes touches: as the main screen ([NdsSettings.big]: the big one, or the first in stacked
-     * and side by side) always, as the other one only while no pad clusters are drawn over the game: [padOverGame] in
-     * landscape (no controller), [portraitPadOver] in portrait (the band hidden). R2 swaps it into the main spot.
+     * The regions of [layout] in [space] (game-area pixels), in draw order; empty when not even one screen at scale 1 fits.
+     * [screen] only matters for Single screen and Picture in picture, which take one step less than the most that fits on
+     * a tablet in landscape. The bottom screen takes touches, except as a picture-in-picture inset. R2 swaps which
+     * screen is the main one ([NdsSettings.big]).
      */
     fun regions(
-        areaWidth: Float,
-        areaHeight: Float,
+        space: PxRect,
+        layout: NdsLayoutChoice,
         landscape: Boolean,
+        screen: ScreenClass,
         settings: NdsSettings,
-        marginPx: Float,
-        controllerMode: Boolean = false,
-        padOverGame: Boolean = false,
-        portraitPadOver: Boolean = false,
-        screen: ScreenClass = ScreenClass.REGULAR_PHONE,
+        insetMarginPx: Float,
     ): List<NdsRegion> {
-        if (areaWidth <= 0f || areaHeight <= 0f) return emptyList()
-        val regions = when (settings.layoutShown(landscape, controllerMode, screen)) {
-            NdsLayoutChoice.SIDE_BY_SIDE -> sideBySide(areaWidth, areaHeight, settings.big)
-            NdsLayoutChoice.SINGLE -> listOf(full(settings.big, if (landscape) centreFit(areaWidth, areaHeight) else topFit(areaWidth, areaHeight)))
-            NdsLayoutChoice.PIP -> pip(if (landscape) centreFit(areaWidth, areaHeight) else topFit(areaWidth, areaHeight), settings, marginPx)
-            NdsLayoutChoice.LARGE -> large(areaWidth, areaHeight, settings, beside = landscape)
-            NdsLayoutChoice.STACKED ->
-                if (landscape) stackedLargeFirst(areaWidth, areaHeight, settings.big) else stacked(areaWidth, areaHeight, settings.big)
+        if (space.width <= 0f || space.height <= 0f) return emptyList()
+        val regions = when (layout) {
+            NdsLayoutChoice.LARGE -> large(space, landscape, settings.big)
+            NdsLayoutChoice.STACKED -> stacked(space, settings.big)
+            NdsLayoutChoice.SIDE_BY_SIDE -> sideBySide(space, settings.big)
+            NdsLayoutChoice.SINGLE -> single(space, landscape, screen)?.let { listOf(full(settings.big, it)) }.orEmpty()
+            NdsLayoutChoice.PIP -> single(space, landscape, screen)?.let { pip(it, settings, insetMarginPx) }.orEmpty()
         }
-        val laid = if (regions.any { !it.inset && (it.dst.width <= 0f || it.dst.height <= 0f) }) emptyList() else regions
-        val padOver = if (landscape) padOverGame else portraitPadOver
-        return laid.map { it.copy(touch = it.screen == NdsScreen.BOTTOM && (it.screen == settings.big || !padOver)) }
+        return regions.map { it.copy(touch = it.screen == NdsScreen.BOTTOM && !it.inset) }
     }
 
     /** The centre of DS pixel ([dsX], [dsY]) of [region]'s screen, in game-area pixels. */
@@ -107,16 +99,20 @@ object NdsLayout {
     private fun full(screen: NdsScreen, dst: PxRect) =
         NdsRegion(screen, src(screen), dst, shaded = true, touch = screen == NdsScreen.BOTTOM)
 
-    /** One screen fitted 4:3, centred horizontally, top-aligned. */
-    private fun topFit(w: Float, h: Float): PxRect {
-        val size = ScreenSize(min(w, h * ASPECT))
-        return PxRect(wholePx((w - size.width) / 2f), 0f, size.width, size.height)
-    }
+    /** The largest whole scale that fits [space] with [cols] x [rows] screens of 256x192 each; 0 when not even 1x does. */
+    private fun fitScale(space: PxRect, cols: Int, rows: Int): Int =
+        floor(min(space.width / (SCREEN_WIDTH * cols), space.height / (SCREEN_HEIGHT * rows)) + EPSILON).toInt().coerceAtLeast(0)
 
-    /** One screen fitted 4:3, centred on both axes. */
-    private fun centreFit(w: Float, h: Float): PxRect {
-        val size = ScreenSize(min(w, h * ASPECT))
-        return PxRect(wholePx((w - size.width) / 2f), wholePx((h - size.height) / 2f), size.width, size.height)
+    /** A [w] x [h] block centred in [space] at whole-pixel positions. */
+    private fun centred(space: PxRect, w: Float, h: Float) =
+        PxRect(space.x + wholePx((space.width - w) / 2f), space.y + wholePx((space.height - h) / 2f), w, h)
+
+    /** One screen at the largest whole scale in [space], centred; one step less on a tablet in landscape (at least 1x). */
+    private fun single(space: PxRect, landscape: Boolean, screen: ScreenClass): PxRect? {
+        val most = fitScale(space, 1, 1)
+        if (most < 1) return null
+        val k = if (landscape && screen.isTablet) maxOf(1, most - 1) else most
+        return centred(space, SCREEN_WIDTH * k, SCREEN_HEIGHT * k)
     }
 
     /** The big screen at [big] and the other as an inset in its corner; the inset's width is a fraction of the big screen's. */
@@ -137,72 +133,47 @@ object NdsLayout {
     }
 
     /**
-     * Large screen: the big screen and the other one small next to it, apart. Like an inset the small one is drawn
-     * unshaded (shaded regions share one size).
-     * The small one is [NdsSettings.size] of the big one's width, at [NdsSettings.corner]: [beside] the big screen on
-     * that side and level with its top or bottom edge (landscape, the pair centred), or above or below it at that side
-     * (portrait, the pair top-aligned like the other portrait layouts).
+     * Large screen: the [big] screen at the largest scale k that leaves the other screen half of it (rounded down, at least
+     * 1x) in the height, and the other one centred below it, fixed (the inset corner and size don't apply). The other
+     * screen takes the largest whole scale the leftover height holds, up to one step under the big one (but never less
+     * than that half). In portrait, where that leaves it under 2x, it fills the leftover height up to 2x at any scale (the
+     * band never shrinks for it). Only the big screen is shaded unless both end up the same size; the other is drawn
+     * unshaded like an inset (shaded regions share one size).
      */
-    private fun large(w: Float, h: Float, s: NdsSettings, beside: Boolean): List<NdsRegion> {
-        val f = s.size.fraction
-        val left = s.corner == PipCorner.TOP_LEFT || s.corner == PipCorner.BOTTOM_LEFT
-        val top = s.corner == PipCorner.TOP_LEFT || s.corner == PipCorner.TOP_RIGHT
-        val bigSize = ScreenSize(if (beside) min(w / (1f + f), h * ASPECT) else min(w, h / (1f + f) * ASPECT))
-        val small = ScreenSize(bigSize.width * f)
-        val bw = bigSize.width
-        val bh = bigSize.height
-        val big: PxRect
-        val inset: PxRect
-        if (beside) {
-            val x = wholePx((w - bw - small.width) / 2f)
-            val y = wholePx((h - bh) / 2f)
-            val bigX = if (left) x + small.width else x
-            big = PxRect(bigX, y, bw, bh)
-            inset = PxRect(if (left) x else x + bw, if (top) y else y + bh - small.height, small.width, small.height)
-        } else {
-            val x = wholePx((w - bw) / 2f)
-            big = PxRect(x, if (top) small.height else 0f, bw, bh)
-            inset = PxRect(if (left) x else x + bw - small.width, if (top) 0f else bh, small.width, small.height)
-        }
-        if (inset.width <= 0f || inset.height <= 0f) return listOf(full(s.big, big))
-        val other = s.big.other
-        return listOf(full(s.big, big), NdsRegion(other, src(other), inset, shaded = false, touch = false))
+    private fun large(space: PxRect, landscape: Boolean, big: NdsScreen): List<NdsRegion> {
+        val k = (1..fitScale(space, 1, 1)).lastOrNull { k ->
+            SCREEN_HEIGHT * (k + maxOf(1, k / 2)) <= space.height + EPSILON && SCREEN_WIDTH * k <= space.width + EPSILON
+        } ?: return emptyList()
+        val half = maxOf(1, k / 2)
+        val m = maxOf(half, minOf(k - 1, floor((space.height - SCREEN_HEIGHT * k) / SCREEN_HEIGHT + EPSILON).toInt()))
+        val bigH = SCREEN_HEIGHT * k
+        var touchH = SCREEN_HEIGHT * m
+        if (!landscape && m < 2) touchH = minOf(space.height - bigH, 2f * SCREEN_HEIGHT, bigH, space.width / ASPECT)
+        val touchW = if (touchH == SCREEN_HEIGHT * m) SCREEN_WIDTH * m else touchH * ASPECT
+        val top = centred(space, SCREEN_WIDTH * k, bigH + touchH)
+        val other = big.other
+        val bigRect = PxRect(top.x, top.y, SCREEN_WIDTH * k, bigH)
+        val otherRect = PxRect(space.x + wholePx((space.width - touchW) / 2f), top.y + bigH, touchW, touchH)
+        return listOf(full(big, bigRect), NdsRegion(other, src(other), otherRect, shaded = m == k, touch = false))
     }
 
-    /**
-     * Landscape stacked: the [first] screen over the other at a third of its size (three quarters of the height and a
-     * quarter), both centred; the second is drawn unshaded like an inset (shaded regions share one size).
-     */
-    private fun stackedLargeFirst(w: Float, h: Float, first: NdsScreen): List<NdsRegion> {
-        val big = ScreenSize(min(w, h * 0.75f * ASPECT))
-        // Unshaded, so exact thirds rather than whole pixels: the 4:3 shape holds even on a tiny screen.
-        val smallW = big.width / 3f
-        val smallH = big.height / 3f
-        val y = wholePx((h - big.height - smallH) / 2f)
-        val second = first.other
-        return listOf(
-            full(first, PxRect(wholePx((w - big.width) / 2f), y, big.width, big.height)),
-            NdsRegion(second, src(second), PxRect((w - smallW) / 2f, y + big.height, smallW, smallH), shaded = false, touch = false),
-        )
+    /** Both screens at one whole scale, [first] over the other, centred. */
+    private fun stacked(space: PxRect, first: NdsScreen): List<NdsRegion> {
+        val k = fitScale(space, 1, 2)
+        if (k < 1) return emptyList()
+        val w = SCREEN_WIDTH * k
+        val h = SCREEN_HEIGHT * k
+        val at = centred(space, w, 2f * h)
+        return listOf(full(first, PxRect(at.x, at.y, w, h)), full(first.other, PxRect(at.x, at.y + h, w, h)))
     }
 
-    private fun stacked(w: Float, h: Float, first: NdsScreen): List<NdsRegion> {
-        val size = ScreenSize(min(w, h * ASPECT / 2f))
-        val x = wholePx((w - size.width) / 2f)
-        val y = wholePx((h - 2f * size.height) / 2f)
-        return listOf(
-            full(first, PxRect(x, y, size.width, size.height)),
-            full(first.other, PxRect(x, y + size.height, size.width, size.height)),
-        )
-    }
-
-    private fun sideBySide(w: Float, h: Float, left: NdsScreen): List<NdsRegion> {
-        val size = ScreenSize(min(w / 2f, h * ASPECT))
-        val x = wholePx((w - 2f * size.width) / 2f)
-        val y = wholePx((h - size.height) / 2f)
-        return listOf(
-            full(left, PxRect(x, y, size.width, size.height)),
-            full(left.other, PxRect(x + size.width, y, size.width, size.height)),
-        )
+    /** Both screens at one whole scale, [left] first, edge to edge, centred. */
+    private fun sideBySide(space: PxRect, left: NdsScreen): List<NdsRegion> {
+        val k = fitScale(space, 2, 1)
+        if (k < 1) return emptyList()
+        val w = SCREEN_WIDTH * k
+        val h = SCREEN_HEIGHT * k
+        val at = centred(space, 2f * w, h)
+        return listOf(full(left, PxRect(at.x, at.y, w, h)), full(left.other, PxRect(at.x + w, at.y, w, h)))
     }
 }

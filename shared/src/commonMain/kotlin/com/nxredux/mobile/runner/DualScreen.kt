@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsLayoutChoice
 import com.nxredux.mobile.options.NdsScreen
@@ -108,10 +109,10 @@ object DualScreen {
 
     /**
      * Both DS screens side by side on the main display (the panel is on the second one); touch on the bottom screen.
-     * Side by side is forced, so the screen class stays the default one that keeps it.
+     * Side by side is forced; the screen class only matters for Single screen, so a regular phone it is.
      */
     fun ndsPanelUp(areaW: Float, areaH: Float, settings: NdsSettings): List<NdsRegion> = NdsLayout.regions(
-        areaW, areaH, landscape = true, settings.copy(landscape = NdsLayoutChoice.SIDE_BY_SIDE), marginPx = 0f,
+        PxRect(0f, 0f, areaW, areaH), NdsLayoutChoice.SIDE_BY_SIDE, landscape = true, ScreenClass.REGULAR_PHONE, settings, insetMarginPx = 0f,
     )
 
     /** [screen]'s rectangle in the 3DS frame in the split layout. */

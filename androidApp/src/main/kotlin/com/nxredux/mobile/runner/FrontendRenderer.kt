@@ -21,6 +21,7 @@ import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.OverlayFile
+import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.options.OverlayResolver
 import com.nxredux.mobile.options.OverlaySets
 import com.nxredux.mobile.options.ShaderOptions
@@ -379,13 +380,11 @@ internal class FrontendRenderer(
         if (dualMode == DualMode.SPLIT) return DualScreen.ndsScreen(w, h, DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn))
         if (dualMode == DualMode.PANEL_UP) return DualScreen.ndsPanelUp(w, h, NdsSettings.parse(frontendValues))
         val landscape = isLandscape()
+        val screen = resources.screenClass()
+        val settings = NdsSettings.parse(frontendValues)
         return NdsLayout.regions(
-            w, h, landscape, NdsSettings.parse(frontendValues), NDS_INSET_MARGIN_DP * resources.displayMetrics.density,
-            controllerMode = ndsControllerMode(),
-            // The same condition applyLayout shows the landscape pad clusters on (no controller).
-            padOverGame = landscape && padLayout.layoutControllerNames().isEmpty(),
-            portraitPadOver = padLayout.portraitClusterTop != null,   // portrait with the band hidden: the clusters over the game
-            screen = resources.screenClass(),
+            PxRect(0f, 0f, w, h), settings.layoutShown(landscape, ndsControllerMode(), screen), landscape, screen, settings,
+            NDS_INSET_MARGIN_DP * resources.displayMetrics.density,
         )
     }
 
