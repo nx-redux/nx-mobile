@@ -814,6 +814,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private val tabSelections = HashMap<MenuCategory, ListSelection>()   // each tab's row, remembered across visits
     private var gridColumns = 0   // the Grid body's column count for the screen showing now; 0 until it lays out
     private var gridRows = 2      // and its row count: 2 on phones, 3–4 on a tablet-class window
+    private var pageRows = 0      // a game list's rows (or stack items) on one screen ([onPageRows]); 0 until it lays out: a page is one row
     private var installedCache: List<InstalledApp>? = null   // the last [AppLauncher.installedApps]; null until the first load
     private var installedJob: Job? = null
     /**
@@ -4187,9 +4188,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             SettingsKind.PAD_VIBRATION -> cycle(PadVibration.entries, s.padVibration, { it.label }) { s.padVibration = it }
             SettingsKind.GAME_RUMBLE -> cycle(GameRumble.entries, s.gameRumble, { it.label }, after = { refreshSettings(); deps.rumblePreview(it) }) { s.gameRumble = it }
             SettingsKind.MENU_PAD -> flip(s.menuPad) { s.menuPad = it }
-            // A touch button: None, then every action.
+            // A touch button: None, then every action a touch button can do ([ShortcutAction.touch]).
             SettingsKind.SHORTCUT_TOUCH -> row.touchSlot?.let { slot ->
-                cycle(listOf<ShortcutAction?>(null) + ShortcutAction.entries, shortcutSet().touch[slot], { it?.label ?: "None" }) { setTouch(slot, it) }
+                cycle(listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { it.touch }, shortcutSet().touch[slot], { it?.label ?: "None" }) { setTouch(slot, it) }
             }
             SettingsKind.PAD_LAYOUT_CONSOLE -> {   // Shared, then the library's consoles; a gone console reads as Shared
                 val keys = listOf(PadLayouts.SHARED_KEY) + padLayoutConsoles().map { it.id }
@@ -4884,15 +4885,16 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         launch(entry, resumeSlot = null, coreOverride = core, netplay = session)
     }
 
-    private fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null, fromSwitcher: Boolean = false) {
+    /** Starts [entry] (see the steps inside); the start's job, or null when none began (an app, no core, one in flight). */
+    private fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null, fromSwitcher: Boolean = false): Job? {
         val listed = entry.system
         val game = entry.game
         // After a game the menu is its own tab again (the pushed one is not restored): dropped only for a launch that
         // happens (an app's start, or the runner's call), so a coreless, in-flight, vanished or unreadable game leaves the
         // push for B to return to.
-        if (listed.android) { dropPushedTab(); androidApps.launchApp(entry); return }
-        if (coreOverride == null && listed.core == null) return
-        if (launchJob?.isActive == true) return   // a launch is already in flight
+        if (listed.android) { dropPushedTab(); androidApps.launchApp(entry); return null }
+        if (coreOverride == null && listed.core == null) return null
+        if (launchJob?.isActive == true) return null   // a launch is already in flight
         switcherJob?.cancel()   // a switcher still loading must not open over the launched game
         val job = scope.launch {
             val gone = "Could not find ${game.fileName}. If it was moved or deleted, use Rescan in Settings → Library."
@@ -4964,6 +4966,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
         launchJob = job
         job.invokeOnCompletion { if (launchJob === job) launchJob = null }
+        return job
     }
 
     /**
@@ -5027,16 +5030,21 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * rebuild uses app-private reads only (recents, pins, resume markers, tool pins, the in-memory index), never the tree.
      */
     fun onForeground() {
+        val switcherBack = switcherUnderGame && _screen.value is Screen.Switcher
+        switcherUnderGame = false
         checkArt(reuse = true)   // art deleted or added while away (only changed art folders are listed)
         if (!minimalPending) _minimalOpening.value?.let { minimalJob?.cancel(); _minimalOpening.value = null }   // back from a game a Minimal band opened
         onLauncherChanged()   // back from Android's home settings or the role dialog: System re-reads its state
         refreshInstalled()    // apps may have been installed or removed meanwhile
         refreshGameInfo()   // back from a game (or another app): its time and unlocks may have moved
         homeTab.refreshStatsIfAsked()   // Home's stats too (before the menu's first show, that show computes them)
-        // Back from a game resumed from the switcher: the switcher again (its game first, the latest recent), over the
-        // page it opened from. Over the main menu, after the rows rebuilt below (a swap would abandon an open under way);
-        // read again there, so a Home landing meanwhile (onNewIntent may follow onStart) drops it.
-        val s = _screen.value as? Screen.Systems ?: run { reopenSwitcher(); return }
+        // Back from a game opened from the switcher, which stayed up under it: its cards read again in place, no slide, and
+        // Home's rows rebuilt behind it. A switcher game whose switcher went meanwhile (a Home landing) reopens it once
+        // ([reopenSwitcher]): over the main menu after the rows rebuilt below (a swap would abandon an open under way).
+        // Back on a list or a page: Home's rows are rebuilt all the same (the page stays as it is; [swapMainRows] only acts
+        // on the menu), so B to the menu shows Continue's new resume frame, not the one read when the game launched.
+        if (switcherBack) { switcherReturn = false; switcherRowsRebuilt = true; scope.launch { rebuildMainRows() }; refreshSwitcher(); return }
+        val s = _screen.value as? Screen.Systems ?: run { scope.launch { rebuildMainRows(); swapMainRows() }; reopenSwitcher(); return }
         if (s.menu != null) { switcherReturn = false; return }
         if (!firstSetup) updaterOnMainMenu()   // back over the menu (from a game, or the install-permission screen)
         scope.launch { rebuildMainRows(); swapMainRows(); reopenSwitcher() }   // Continue's save (its resume frame) may be new since the rows were built
@@ -5084,6 +5092,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     fun openSwitcher() {
+        switcherUnderGame = false   // a refused launch's flag never closes a switcher opened since
         val here = _screen.value
         if (here !is Screen.Systems && here !is Screen.Games) return
         _tabFocus.value = false   // the menu under it comes back on its content
@@ -5332,14 +5341,55 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             if (info.canResume) SwitcherEntry(e.system, e.game, info) else null
         }.distinctBy { it.game.path }   // a hidden copy's line and its home game's are one game
 
-    private fun closeSwitcher() {
+    /**
+     * A game was opened from the switcher, which stays up under it the whole game: the game opens over it and Save & Quit
+     * cuts back to it, with no slide either way ([refreshSwitcher] on the way back).
+     */
+    private var switcherUnderGame = false
+    /** Home's rows were rebuilt after a game the switcher stayed up over: its close swaps them in ([closeSwitcher]). */
+    private var switcherRowsRebuilt = false
+
+    /**
+     * A from the switcher: the game opens over the switcher, which stays ([switcherUnderGame]). A launch that never reaches the runner
+     * (the game gone, a transfer running: [launch]'s refusals) closes it as before, so B and the error land on its page.
+     */
+    private fun launchFromSwitcher(entry: Listed, resumeSlot: Int?) {
+        switcherUnderGame = true
+        val job = launch(entry, resumeSlot, fromSwitcher = true) ?: run { closeSwitcher(); return }
+        scope.launch {
+            job.join()
+            if (switcherUnderGame && !switcherReturn) closeSwitcher()   // refused: [switcherReturn] is set only at the runner's call
+        }
+    }
+
+    /**
+     * The switcher back on screen after its game: its cards read again (the game just played first, the latest recent),
+     * in place; none left resumable, it closes.
+     */
+    private fun refreshSwitcher() {
+        val here = _screen.value as? Screen.Switcher ?: return
+        switcherJob?.cancel()
+        switcherJob = scope.launch {
+            val entries = switcherEntries()
+            if (_screen.value !== here) return@launch   // the user moved on meanwhile
+            if (entries.isEmpty()) closeSwitcher(slide = false)
+            else _screen.value = here.copy(entries = entries, index = 0, confirmRemove = false)
+        }
+    }
+
+    /** Back to the page the switcher opened over; [slide]: the switcher's slide down (none: an instant swap). */
+    private fun closeSwitcher(slide: Boolean = true) {
         val (screen, selection) = beforeSwitcher
             ?: menuScreen().let { m -> m to (m.category?.let(tabSelections::get) ?: ListSelection(0, 0)).clampedTo(m.rows.size) }
         beforeSwitcher = null
-        navStep(NavMotion.SWITCHER_CLOSE)
+        switcherUnderGame = false
+        if (slide) navStep(NavMotion.SWITCHER_CLOSE)
         _screen.value = screen
         homeTab.publishHomeView()   // the restored Home rows' own view, not one built while the switcher was up
         _selection.value = selection
+        // After a game the switcher stayed up over, the tabs were rebuilt (Continue's new resume frame): those, not the
+        // snapshot. Otherwise the snapshot stays, with its own Home view ([publishHomeView] above).
+        if (switcherRowsRebuilt) { switcherRowsRebuilt = false; swapMainRows() }
         refreshResume()
         // A Y Remove changed recent.txt: once written, rebuild the tabs, so Home's Continue moves past the game (the
         // snapshot above still shows it); the highlight stays on its row where that row is still there.
@@ -5365,10 +5415,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             NxButton.DOWN -> if (s.list) _screen.value = s.copy(index = at.down(wrap = !repeat).index)
             NxButton.LEFT -> if (!s.list) _screen.value = s.copy(index = at.up(wrap = false).index)
             NxButton.RIGHT -> if (!s.list) _screen.value = s.copy(index = at.down(wrap = false).index)
-            NxButton.A -> s.entries.getOrNull(s.index)?.let { e ->
-                closeSwitcher()
-                launch(Listed(e.system, e.game), e.resume.slot, fromSwitcher = true)
-            }
+            // The switcher stays up while the game opens over it (no slide back to the menu first) and through the game.
+            NxButton.A -> s.entries.getOrNull(s.index)?.let { e -> launchFromSwitcher(Listed(e.system, e.game), e.resume.slot) }
             NxButton.Y -> if (s.entries.getOrNull(s.index) != null) _screen.value = s.copy(confirmRemove = true)
             NxButton.B, NxButton.SELECT -> closeSwitcher()
             else -> Unit
@@ -5916,6 +5964,33 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         gridColumns = columns.coerceAtLeast(0); gridRows = rows.coerceAtLeast(1)
     }
 
+    /** A game list's List, Minimal or vertical stack reports the items one screen shows: LEFT / RIGHT page by them ([pageMove]). */
+    fun onPageRows(rows: Int) {
+        pageRows = rows.coerceAtLeast(0)
+    }
+
+    /**
+     * LEFT / RIGHT on a game list whose d-pad runs up and down (List, Minimal, a vertical Carousel or Backdrop): a page of
+     * [pageRows] up or down, held at the ends, a held key's repeat paging on (NX Redux's game lists).
+     */
+    private fun pageMove(button: NxButton) {
+        val sel = _selection.value
+        val next = ListJumps.page(sel.count, pageRows, sel.index, if (button == NxButton.RIGHT) 1 else -1)
+        if (next != sel.index) { _selection.value = sel.copy(index = next); refreshResume() }
+    }
+
+    /**
+     * L1 / R1 on a game list, every layout: the previous / next letter's first game ([ListJumps.letter]), a held key's
+     * repeat jumping on. Only a console's list is in name order: Recently Played, a collection, Hidden and a search's
+     * results are not, so there they do nothing.
+     */
+    private fun letterJump(s: Screen.Games, button: NxButton) {
+        if (s.source !is ListSource.Console) return
+        val sel = _selection.value
+        val next = ListJumps.letter(s.entries.map { it.shown }, sel.index, if (button == NxButton.R1) 1 else -1)
+        if (next != sel.index) { _selection.value = sel.copy(index = next); refreshResume() }
+    }
+
     /** Home's layout (Layouts → Home): Grid (the dashboard), List or Carousel. */
     internal fun homeStyle(): MenuStyle = MenuStyles.styleOf(deps.settings.menuStyles, MenuCategory.HOME)
 
@@ -5997,12 +6072,19 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /**
      * The d-pad on a Vertical Carousel stack (main menu tab or game list) or a game list's Backdrop stack ([stackStep]):
      * UP / DOWN step one item; past an end a fresh press wraps (UP on the first to the last, DOWN on the last to the
-     * first), a held key's [repeat] stops there, as the List. UP reaches the tab row only from an empty main menu stack. LEFT / RIGHT have no move of their own: on the main menu
-     * a fresh press switches tab (never a key [repeat]); a game list ignores them. False for any other button.
+     * first), a held key's [repeat] stops there, as the List. UP reaches the tab row only from an empty main menu stack. LEFT / RIGHT: on the main menu
+     * a fresh press switches tab (never a key [repeat]); a game list pages ([pageMove]). False for any other button.
      */
     private fun stackMove(s: Screen, button: NxButton, repeat: Boolean): Boolean {
         when (button) {
-            NxButton.LEFT, NxButton.RIGHT -> { if (s is Screen.Systems && !repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1); return true }
+            NxButton.LEFT, NxButton.RIGHT -> {
+                when (s) {
+                    is Screen.Systems -> if (!repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)
+                    is Screen.Games -> pageMove(button)   // a game list's stack pages, as its List
+                    else -> Unit
+                }
+                return true
+            }
             NxButton.UP, NxButton.DOWN -> {
                 val sel = _selection.value
                 val next = stackStep(sel.index, sel.count, button, fresh = !repeat)   // only an empty stack's UP is null: the tab row
@@ -6165,8 +6247,12 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             }
             NxButton.DOWN -> if (!rowMove(button, repeat) && !gridMove(button)) { _selection.value = _selection.value.down(wrap = !repeat || !launcherList()); refreshResume() }
             // The main menu: LEFT / RIGHT are L1 / R1 (a Grid or row switches only past its ends), on a fresh press only: a held
-            // key's repeats never switch tabs. A List game list ignores them.
-            NxButton.LEFT, NxButton.RIGHT -> if (!rowMove(button, repeat) && !gridMove(button, repeat) && !repeat && _screen.value is Screen.Systems) switchTab(if (button == NxButton.RIGHT) 1 else -1)
+            // key's repeats never switch tabs. A List or Minimal game list pages ([pageMove]).
+            NxButton.LEFT, NxButton.RIGHT -> if (!rowMove(button, repeat) && !gridMove(button, repeat)) when (_screen.value) {
+                is Screen.Games -> pageMove(button)   // a List or Minimal game list pages
+                is Screen.Systems -> if (!repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)
+                else -> Unit
+            }
             NxButton.A -> openSelected()
             NxButton.B -> back()
             NxButton.Y -> when (val s = _screen.value) {
@@ -6178,8 +6264,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             NxButton.START -> if (_screen.value is Screen.Games) openListSearch() else openSearch()   // a game list searches its own games
             NxButton.X -> if (_screen.value is Screen.Games && !_dualMenu.value) ra.openRaPanel()   // the highlighted game's achievements (the second display's list has its own details)
             NxButton.MENU -> openContextMenu()
-            NxButton.L1 -> switchTab(-1)
-            NxButton.R1 -> switchTab(1)
+            NxButton.L1, NxButton.R1 -> when (val s = _screen.value) {
+                is Screen.Games -> letterJump(s, button)
+                else -> switchTab(if (button == NxButton.R1) 1 else -1)
+            }
             else -> Unit
         }
     }

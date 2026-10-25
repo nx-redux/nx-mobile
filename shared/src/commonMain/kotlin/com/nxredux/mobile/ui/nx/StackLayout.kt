@@ -87,6 +87,13 @@ internal fun stackItem(style: RowStyle, distance: Float, g: StackGeometry): RowI
     return if (distance > 0f && extra != 0f) r.copy(dx = r.dx + extra * min(1f, distance)) else r
 }
 
+/**
+ * The items a game list's stack shows on one screen, its page for LEFT / RIGHT: the selection and the neighbours within
+ * the three steps [stackItem] draws whose centre lies in the body ([bodyH] tall, [g] centred in it).
+ */
+internal fun stackPageItems(style: RowStyle, g: StackGeometry, bodyH: Float): Int =
+    (-3..3).count { d -> (g.centreY + stackItem(style, d.toFloat(), g).dx) in 0f..bodyH }
+
 /** A console's count: 8 dp under its logo, in the item (so scaled with it). */
 internal const val COUNT_UNDER_LOGO = 8f
 /** The count's line at full size, dp: 14 sp, about 18 (a full-size cap of 26 less the 8 above it). */

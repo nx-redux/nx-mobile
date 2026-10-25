@@ -1,8 +1,10 @@
 package com.nxredux.mobile.ui
 
 import coil3.ImageLoader
+import coil3.PlatformContext
 import coil3.compose.AsyncImagePainter
 import coil3.compose.setSingletonImageLoaderFactory
+import coil3.request.addLastModifiedToFileCacheKey
 import com.nxredux.mobile.update.AppRelease
 import com.nxredux.mobile.ui.nx.LocalMinimalPage
 import com.nxredux.mobile.ui.nx.MinimalMorph
@@ -127,12 +129,21 @@ import com.nxredux.mobile.shared.res.background
 import org.jetbrains.compose.resources.painterResource
 import kotlinx.coroutines.delay
 
+/**
+ * The image loader every picture uses, the game screen's too: the generated abstract art's fetcher ([abstractArtFetcher])
+ * and key, and local files (ROM art, save-state screenshots) read by path: its mapper runs before Coil's String mapper,
+ * which would parse '#' and '?'. A file's cache key holds its modified time (Coil 3's default leaves it out): the mapper
+ * drops a ref's `?v=` version, so a screenshot rewritten under the same name would otherwise show from the memory cache.
+ */
+internal fun nxImageLoader(context: PlatformContext): ImageLoader =
+    ImageLoader.Builder(context).components { fileRefMapper()?.let { add(it) }; add(abstractArtFetcher()); abstractArtKeyer()?.let { add(it) } }
+        .addLastModifiedToFileCacheKey(true)
+        .build()
+
 /** Root composable. The host creates AppState once (so a folder pick can reach setHome/addExtra) and passes it in. */
 @Composable
 fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
-    // The image loader every picture uses, with the generated abstract art's fetcher ([abstractArtFetcher]) and key, and
-    // local ROM art as files: its mapper runs before Coil's String mapper, which would parse '#' and '?'.
-    setSingletonImageLoaderFactory { context -> ImageLoader.Builder(context).components { fileRefMapper()?.let { add(it) }; add(abstractArtFetcher()); abstractArtKeyer()?.let { add(it) } }.build() }
+    setSingletonImageLoaderFactory(::nxImageLoader)   // a no-op when the platform installed it first (Android: at process start)
     val screen by state.screen.collectAsState()
     val error by state.error.collectAsState()
     val androidGamesAsk by state.androidGamesAsk.collectAsState()
@@ -530,6 +541,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val orientation = state.orientationOf(s)
     // A Grid reports its columns only while its page is the one showing (a page sliding out never overwrites the count).
     val onGridLayout: (Int, Int) -> Unit = remember(s) { { columns, rows -> if (state.screen.value === s) state.onGridLayout(columns, rows) } }
+    val onPageRows: (Int) -> Unit = remember(s) { { rows -> if (state.screen.value === s) state.onPageRows(rows) } }   // likewise LEFT / RIGHT's page
     val index = { selection.value.index }
     val minimalOpening = state.minimalOpening.collectAsState()   // a Minimal page's row being opened (its page draws the band)
     val raPanel by state.raPanel.collectAsState()   // the achievements panel over the list
@@ -546,7 +558,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
         showTag = s.source == ListSource.Hidden || s.source is ListSource.Search,   // a search mixes consoles
         emptyText = if (s.source is ListSource.Search || s.source is ListSource.Filtered) "No results" else null,
         info = { gameInfoFor(gameInfo, now, current()?.game, full = true) },   // Grid shows none (its tiles have tileInfo)
-        style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, tileInfo = remember(s.entries, gameInfo, now) { entryTileInfo(s.entries, gameInfo, now) }, layoutKey = s.source,
+        style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = remember(s.entries, gameInfo, now) { entryTileInfo(s.entries, gameInfo, now) }, layoutKey = s.source,
         artBox = state.settings.gameListArt.boxed,
         backdropArt = state.settings.backdropArt,
         onSearch = state::openListSearch.takeIf { s.source.searchable },

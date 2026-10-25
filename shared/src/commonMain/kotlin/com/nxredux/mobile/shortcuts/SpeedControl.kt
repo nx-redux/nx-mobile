@@ -18,6 +18,9 @@ data class SpeedOutput(
 sealed interface SpeedEffect {
     /** Reset always asks first; the host opens the confirm. */
     data object AskReset : SpeedEffect
+
+    /** Save & Quit, as the in-game menu's: the host writes the resume point and leaves. */
+    data object SaveAndQuit : SpeedEffect
 }
 
 /**
@@ -53,6 +56,7 @@ class SpeedControl {
         if (netplay) return null
         when (a) {
             ShortcutAction.RESET -> return if (down) SpeedEffect.AskReset else null
+            ShortcutAction.SAVE_AND_QUIT -> return if (down) SpeedEffect.SaveAndQuit else null
             ShortcutAction.TOGGLE_FF -> if (down) {
                 toggleFf = !toggleFf
                 if (toggleFf) toggleRewind = false

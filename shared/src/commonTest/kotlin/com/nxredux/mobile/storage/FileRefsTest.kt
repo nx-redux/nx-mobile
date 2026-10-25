@@ -34,15 +34,33 @@ class FileRefsTest {
         for (ok in listOf("a b", ".media", "x..y", "Pokémon #1?")) assertTrue(FileRefs.isPlainName(ok), ok)
     }
 
-    @Test fun art_on_shared_storage_maps_to_its_path_and_other_models_do_not() {
+    @Test fun a_file_ref_maps_to_its_path_and_other_models_do_not() {
         assertEquals(
             "/storage/emulated/0/Roms/GB/.media/boxart/Pokémon #1?.png",
             FileRefs.artPath("file:///storage/emulated/0/Roms/GB/.media/boxart/Pokémon #1?.png"),
         )
-        // App-private versioned refs (AndroidArtFiles) keep Coil's own file:// handling: the ?v= query is their cache key.
-        assertNull(FileRefs.artPath("file:///data/user/0/com.nxredux.mobile/files/android-art/com.a.png?v=1000"))
+        // App-private versioned refs (AndroidArtFiles) too, without their version.
+        assertEquals(
+            "/data/user/0/com.nxredux.mobile/files/android-art/com.a.png",
+            FileRefs.artPath("file:///data/user/0/com.nxredux.mobile/files/android-art/com.a.png?v=1000"),
+        )
         assertNull(FileRefs.artPath("content://com.android.externalstorage.documents/tree/primary%3AX/document/primary%3AX%2Fa.png"))
         assertNull(FileRefs.artPath("nx-abstract://seed/1"))
+    }
+
+    @Test fun a_versioned_ref_keeps_the_raw_path_and_drops_only_its_version() {
+        // A save-state screenshot in the home folder: spaces, '#', '%' and '?' stay as they are (never percent-encoded).
+        for (path in listOf(
+            "/storage/emulated/0/NX/.userdata/shared/.minui/GBA/Fire Emblem (USA).gba.9.bmp",
+            "/storage/emulated/0/NX/.userdata/shared/.minui/GB/Pokémon #1? 100%.gb.0.bmp",
+            "/data/user/0/com.nxredux.mobile/files/sd/.userdata/shared/.minui/GB/Tetris.zip.9.bmp",
+        )) {
+            val ref = FileRefs.versioned(path, 1792909319990L)
+            assertEquals("file://$path?v=1792909319990", ref)
+            assertEquals(path, FileRefs.artPath(ref))
+        }
+        // Only a trailing ?v=<digits> is a version: anything else is part of the name.
+        assertEquals("/storage/emulated/0/a?v=x.png", FileRefs.artPath("file:///storage/emulated/0/a?v=x.png"))
     }
 
     @Test fun access_is_off_only_for_a_file_home_without_the_grant() {

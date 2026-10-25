@@ -44,7 +44,6 @@ import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_ART_PATH
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_GAME_PATH
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_TITLE
 import com.nxredux.mobile.settings.AndroidAppSettings
-import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.ui.nx.GamePanel
 import com.nxredux.mobile.ui.nx.GamePanelEvent
 import com.nxredux.mobile.ui.nx.GamePanelHeader
@@ -693,8 +692,8 @@ internal class DualScreenController(
      */
     fun panelHeader(): GamePanelHeader {
         val now = System.currentTimeMillis()
-        // A shared-storage ref as its plain path: the game screen's image loader may not have the app's ref mapper.
-        val art = intent.getStringExtra(EXTRA_ART_PATH)?.let { FileRefs.artPath(it) ?: it }
+        // A file ref as it is: the process's image loader ([com.nxredux.mobile.ui.NxImages]) reads it by path.
+        val art = intent.getStringExtra(EXTRA_ART_PATH)
         val minute = now / 60_000L
         if (minute != panelClockMinute) {
             panelClockMinute = minute

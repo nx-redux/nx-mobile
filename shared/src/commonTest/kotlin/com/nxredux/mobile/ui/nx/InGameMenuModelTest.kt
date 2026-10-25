@@ -2234,11 +2234,11 @@ class InGameMenuModelTest {
 
     @Test fun noRewindRowsWithoutRewind() {
         assertEquals(
-            listOf("Toggle FF", "Hold FF", "Reset Game", "Touch button 1", "Touch button 2"),
+            listOf("Toggle FF", "Hold FF", "Reset Game", "Save & Quit", "Touch button 1", "Touch button 2"),
             shortcuts(canRewind = false).state.page.rows.map { it.label },
         )
         assertEquals(
-            listOf("Toggle FF", "Hold FF", "Toggle Rewind", "Hold Rewind", "Reset Game", "Touch button 1", "Touch button 2"),
+            listOf("Toggle FF", "Hold FF", "Toggle Rewind", "Hold Rewind", "Reset Game", "Save & Quit", "Touch button 1", "Touch button 2"),
             shortcuts(canRewind = true).state.page.rows.map { it.label },
         )
     }

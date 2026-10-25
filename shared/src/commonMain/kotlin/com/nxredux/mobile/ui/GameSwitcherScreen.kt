@@ -124,12 +124,16 @@ private fun GameSwitcherListScreen(
         val picture = pictures.getOrNull(failed)
         // The resume frame is a copy of the whole game view: trimmed of its letterbox first ([homeCoverTrim]), as Continue's.
         val context = LocalPlatformContext.current
-        val request = remember(picture, context) {
-            if (picture != null && picture == entry?.resume?.previewPath) ImageRequest.Builder(context).data(picture).transformations(homeCoverTrim()).build() else null
-        }
+        val preview = entry?.resume?.previewPath
         if (picture == null) NxScreenBackground(url = null, fallback = Res.drawable.background, fade = false, modifier = Modifier.fillMaxSize(), centred = true)
-        else key(picture) {
-            NxScreenBackground(url = picture, fallback = null, fade = true, modifier = Modifier.fillMaxSize(), request = request, onFailed = { failed++ })
+        else KeepUntilLoaded(picture) { shown, done ->
+            val request = remember(shown, context) {
+                if (shown == preview) ImageRequest.Builder(context).data(shown).transformations(homeCoverTrim()).build() else null
+            }
+            NxScreenBackground(
+                url = shown, fallback = null, fade = true, modifier = Modifier.fillMaxSize(), request = request,
+                onFailed = { done(); if (shown == picture) failed++ }, onLoaded = done,
+            )
         }
         // A row launches its game: tap to highlight, tap again to resume, as a game list's.
         CompositionLocalProvider(LocalNxTapOpens provides NxTapNeverOpens) {
@@ -141,6 +145,22 @@ private fun GameSwitcherListScreen(
             )
         }
         if (screen.confirmRemove && entry != null) RemoveDialog(entry, onButton)
+    }
+}
+
+/**
+ * [content] for [model], with the picture last drawn kept under it until [model] has loaded (or failed): back from a
+ * game the switcher's resume frame is read again under a new version (the same scene), and a game's picture after
+ * another's, with no blank frame between. [content] gets the model to draw and the callback for its load's end.
+ */
+@Composable
+private fun KeepUntilLoaded(model: String, content: @Composable (shown: String, done: () -> Unit) -> Unit) {
+    var drawn by remember { mutableStateOf(model) }
+    Box(Modifier.fillMaxSize()) {
+        // One keyed loop: the picture drawn keeps its own composition (and its loaded image) as it moves under the new one.
+        for (m in if (drawn != model) listOf(drawn, model) else listOf(model)) key(m) {
+            content(m) { if (m == model) drawn = model }
+        }
     }
 }
 
@@ -187,7 +207,12 @@ private fun GameSwitcherFullScreen(screen: Screen.Switcher, onButton: (NxButton)
             var failed by remember(entry) { mutableStateOf(emptySet<String>()) }
             val box = boxShown(entry.game.boxartRef?.value, entry.game.box2dRef?.value, entry.game.gridRef?.value, failed)
             when {
-                preview != null -> AsyncImage(model = preview, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                preview != null -> KeepUntilLoaded(preview) { shown, done ->
+                    AsyncImage(
+                        model = shown, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
+                        onState = { if (it is AsyncImagePainter.State.Success || it is AsyncImagePainter.State.Error) done() },
+                    )
+                }
                 box is BoxShown.Art3d -> AsyncImage(
                     model = box.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
                     onState = { if (it is AsyncImagePainter.State.Error) failed = failed + box.url },

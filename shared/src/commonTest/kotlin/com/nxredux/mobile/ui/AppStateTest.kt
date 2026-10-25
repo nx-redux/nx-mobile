@@ -1599,7 +1599,11 @@ class AppStateTest {
         state.onButton(NxButton.A)
         assertEquals(2, runner.launched.single().resumeSlot)
         assertEquals("Mario Kart DS.nds", runner.launched.single().fileName)
-        assertIs<Screen.Systems>(state.screen.value)          // switcher closes on launch
+        val nav = state.nav.value
+        assertIs<Screen.Switcher>(state.screen.value)         // up while the game opens over it
+        state.onBackground()
+        assertIs<Screen.Switcher>(state.screen.value)         // and through the game
+        assertEquals(nav, state.nav.value)                    // no slide
         assertEquals("/Roms/Nintendo DS (NDS)/Mario Kart DS.nds", data.recents.first().path)
     }
 
@@ -1617,14 +1621,37 @@ class AppStateTest {
         state.onButton(NxButton.SELECT); advanceUntilIdle()
         state.onButton(NxButton.RIGHT)
         state.onButton(NxButton.A); advanceUntilIdle()
-        assertIs<Screen.Games>(state.screen.value)                       // closed while the game runs
+        val nav = state.nav.value
+        state.onBackground()
+        assertIs<Screen.Switcher>(state.screen.value)                    // up under the game the whole time
         state.onForeground(); advanceUntilIdle()                         // the game quit: the menu is back
+        assertEquals(nav, state.nav.value)                               // the switcher was there already: no slide
         val sw = assertIs<Screen.Switcher>(state.screen.value)
         assertEquals("Mario Kart DS.nds", sw.entries[sw.index].game.fileName)
         state.onButton(NxButton.B); advanceUntilIdle()
         assertEquals(list.source, assertIs<Screen.Games>(state.screen.value).source)
         state.onForeground(); advanceUntilIdle()                         // only once
         assertIs<Screen.Games>(state.screen.value)
+    }
+
+    // The menu never went to the background under the game (it is on a second display): the switcher left up closes
+    // when the game ends, then comes back as after any switcher game, over the page it opened from.
+    @Test fun a_switcher_left_up_under_a_game_on_another_display_comes_back_over_its_page() = runTest {
+        val data = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))
+        val runner = RecordingRunner()
+        val state = stateWith(data, runner, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.load(); advanceUntilIdle()
+        state.openSystem(assertIs<Screen.Systems>(state.screen.value).systems.first { it.tag == "GB" })
+        val list = assertIs<Screen.Games>(state.screen.value)
+        state.onButton(NxButton.SELECT); advanceUntilIdle()
+        state.onButton(NxButton.A); advanceUntilIdle()
+        assertEquals(1, runner.launched.size)
+        assertIs<Screen.Switcher>(state.screen.value)                    // still up: no onBackground came
+        state.onForeground(); advanceUntilIdle()                         // the game ended
+        assertIs<Screen.Switcher>(state.screen.value)                    // the switcher again, read afresh
+        state.onButton(NxButton.B); advanceUntilIdle()
+        assertEquals(list.source, assertIs<Screen.Games>(state.screen.value).source)
+        state.onBackground(); assertIs<Screen.Games>(state.screen.value)   // nothing left to close
     }
 
     // Over the main menu too: the switcher comes back over the tab it opened from.
@@ -7864,6 +7891,8 @@ class AppStateTest {
         state.load()
         state.onButton(NxButton.SELECT); state.onButton(NxButton.A)
         assertEquals(9, runner.launched.single().resumeSlot)
+        state.onBackground(); state.onForeground(); advanceUntilIdle()   // the game ends: the switcher, still up
+        state.onButton(NxButton.B); advanceUntilIdle()
         assertEquals(tetris, assertIs<MainRow.Continue>(state.screen.value.homeRows[0]).entry.game.path)
     }
 
@@ -8820,6 +8849,121 @@ class AppStateTest {
         assertEquals("Mario Kart DS.nds", assertIs<MainRow.Continue>(state.screen.value.homeRows[0]).entry.game.fileName)
         assertFalse(state.resumeInfo.value.canResume)                    // no save: A Play
         assertTrue(Hint(NxButton.A, "Play") in mainMenuHints(state.screen.value.homeRows[0], state.resumeInfo.value.canResume))
+    }
+
+    @Test fun back_from_a_game_over_its_list_rebuilds_continue_for_the_menu_after_it() = runTest {
+        val runner = RecordingRunner()
+        val resumable = HashMap<Pair<String, String>, ResumeInfo>()
+        val data = FakeUserData(recents = listOf(Recent(mk)), resumable = resumable)
+        val state = state(MemorySettings(ContentRef("Home")), data = data, runner = runner)
+        state.load(); advanceUntilIdle()
+        state.openConsole("GB"); advanceUntilIdle()
+        state.onButton(NxButton.A); advanceUntilIdle()                   // Tetris, from its list: no save yet
+        data.recents = listOf(Recent(tetris), Recent(mk))
+        resumable[("GB" to "Tetris.gb")] = ResumeInfo(9, "file:///Tetris.gb.9.bmp?v=2")   // Save & Quit wrote its screenshot
+        state.onForeground(); advanceUntilIdle()                         // back from the game, on the list
+        assertIs<Screen.Games>(state.screen.value)                       // the list is left as it was
+        state.back(); advanceUntilIdle()                                 // B: the main menu
+        state.selectTab(0); advanceUntilIdle()                           // Home
+        val cont = assertIs<MainRow.Continue>(state.screen.value.homeRows[0])
+        assertEquals("Tetris.gb", cont.entry.game.fileName)
+        assertEquals("file:///Tetris.gb.9.bmp?v=2", cont.resume.previewPath)   // its new resume frame, not the art
+    }
+
+    @Test fun back_from_a_game_resumed_from_the_switcher_shows_its_new_resume_frame_there_and_on_home() = runTest {
+        for (fromList in listOf(false, true)) {
+            val runner = RecordingRunner()
+            val resumable = HashMap(mapOf(("GB" to "Tetris.gb") to ResumeInfo(9, "file:///Tetris.gb.9.bmp?v=1")))
+            val data = FakeUserData(recents = listOf(Recent(tetris)), resumable = resumable)
+            val state = state(MemorySettings(ContentRef("Home")), data = data, runner = runner)
+            state.load(); advanceUntilIdle()
+            if (fromList) { state.openConsole("NDS"); advanceUntilIdle() }   // the switcher over a game list
+            state.onButton(NxButton.SELECT); advanceUntilIdle()
+            state.onButton(NxButton.A); advanceUntilIdle()               // resumes Tetris
+            assertEquals(9, runner.launched.single().resumeSlot)
+            resumable[("GB" to "Tetris.gb")] = ResumeInfo(9, "file:///Tetris.gb.9.bmp?v=2")   // a newer resume point
+            state.onForeground(); advanceUntilIdle()                     // back from the game: the switcher again
+            val sw = assertIs<Screen.Switcher>(state.screen.value)
+            assertEquals("file:///Tetris.gb.9.bmp?v=2", sw.entries.single().resume.previewPath, "fromList=$fromList")
+            state.onButton(NxButton.B); advanceUntilIdle()               // closed: what it opened over
+            if (fromList) { assertIs<Screen.Games>(state.screen.value); state.back(); advanceUntilIdle() }
+            state.selectTab(0); advanceUntilIdle()                       // Home
+            val cont = assertIs<MainRow.Continue>(state.screen.value.homeRows[0])
+            assertEquals("file:///Tetris.gb.9.bmp?v=2", cont.resume.previewPath, "fromList=$fromList")
+        }
+    }
+
+    /** A Game Boy list of eight games over four letter groups: # (0), A (1-2), B (3), C (4-5), Z (6-7). */
+    private val lettersSource = FakeRomsSource(
+        dirs = mapOf(
+            "Home" to listOf("Roms"),
+            "Home/Roms" to listOf("Game Boy (GB)"),
+            "Home/Roms/Game Boy (GB)" to listOf("1942.gb", "Alleyway.gb", "Asteroids.gb", "Battletoads.gb", "Castlevania.gb", "Contra.gb", "Zelda.gb", "Zoids.gb"),
+        ),
+    )
+
+    private fun TestScope.lettersList(style: MenuStyle, orientation: MenuOrientation = MenuStyles.DEFAULT_ORIENTATION): AppState {
+        val settings = MemorySettings(ContentRef("Home")).apply { gameListStyle = style; gameListOrientation = orientation }
+        val state = state(settings, src = lettersSource)
+        state.load()
+        state.openConsole("GB")
+        assertEquals(listOf("1942", "Alleyway", "Asteroids", "Battletoads", "Castlevania", "Contra", "Zelda", "Zoids"),
+            assertIs<Screen.Games>(state.screen.value).entries.map { it.shown })
+        return state
+    }
+
+    @Test fun l1_and_r1_jump_by_letter_in_a_console_list_in_every_layout() = runTest {
+        for (style in MenuStyle.entries) for (orientation in MenuOrientation.entries) {
+            val state = lettersList(style, orientation)
+            val at = { state.selection.value.index }
+            state.onButton(NxButton.R1); assertEquals(1, at(), "$style $orientation")       // # -> A
+            state.onButton(NxButton.R1); assertEquals(3, at())                                // A -> B
+            state.onButton(NxButton.R1, repeat = true); assertEquals(4, at())                 // held: on to C
+            state.onButton(NxButton.DOWN)                                                     // Contra, inside C
+            state.onButton(NxButton.L1); assertEquals(3, at())                                // the previous group: B
+            state.select(7); state.onButton(NxButton.R1); assertEquals(7, at())               // the last group: stays
+            assertIs<Screen.Games>(state.screen.value)                                        // no tab switched
+        }
+    }
+
+    @Test fun recently_played_is_not_in_name_order_so_l1_and_r1_do_nothing() = runTest {
+        val data = FakeUserData(recents = listOf(Recent(tetris), Recent(mk), Recent(mario)))
+        val state = state(MemorySettings(ContentRef("Home")), data = data)
+        state.load(); advanceUntilIdle()
+        state.openList(ListSource.Recent); advanceUntilIdle()
+        assertEquals(listOf("Tetris", "Mario Kart DS", "Mario"), assertIs<Screen.Games>(state.screen.value).entries.map { it.shown })
+        state.onButton(NxButton.R1); assertEquals(0, state.selection.value.index)
+        state.select(2); state.onButton(NxButton.L1); assertEquals(2, state.selection.value.index)
+        assertIs<Screen.Games>(state.screen.value)
+    }
+
+    @Test fun left_and_right_page_by_the_rows_shown_in_list_minimal_and_the_vertical_stacks() = runTest {
+        val layouts = listOf(
+            MenuStyle.LIST to MenuStyles.DEFAULT_ORIENTATION, MenuStyle.MINIMAL to MenuStyles.DEFAULT_ORIENTATION,
+            MenuStyle.CAROUSEL to MenuOrientation.VERTICAL, MenuStyle.BACKDROP to MenuOrientation.VERTICAL,
+        )
+        for ((style, orientation) in layouts) {
+            val state = lettersList(style, orientation)
+            val at = { state.selection.value.index }
+            state.onPageRows(3)                                                               // the layout shows three rows
+            state.onButton(NxButton.RIGHT); assertEquals(3, at(), "$style $orientation")
+            state.onButton(NxButton.RIGHT, repeat = true); assertEquals(6, at())              // held: another page
+            state.onButton(NxButton.RIGHT); assertEquals(7, at())                             // stops on the last
+            state.onButton(NxButton.LEFT); assertEquals(4, at())
+            state.onButton(NxButton.LEFT); state.onButton(NxButton.LEFT); assertEquals(0, at())   // stops on the first
+            assertIs<Screen.Games>(state.screen.value)
+        }
+    }
+
+    @Test fun left_and_right_still_step_one_tile_in_a_grid_and_a_horizontal_row() = runTest {
+        for (style in listOf(MenuStyle.CAROUSEL, MenuStyle.BACKDROP)) {
+            val state = lettersList(style, MenuOrientation.HORIZONTAL)
+            state.onPageRows(3)
+            state.onButton(NxButton.RIGHT); assertEquals(1, state.selection.value.index, "$style")
+        }
+        val grid = lettersList(MenuStyle.GRID)
+        grid.onGridLayout(4, 2); grid.onPageRows(3)
+        grid.onButton(NxButton.RIGHT); assertEquals(1, grid.selection.value.index)
     }
 
     @Test fun a_tab_that_vanishes_lands_the_fallback_on_its_own_row() = runTest {

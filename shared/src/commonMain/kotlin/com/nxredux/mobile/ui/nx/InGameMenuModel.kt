@@ -1497,8 +1497,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun touchSlot(key: String): TouchSlot? =
         if (key.startsWith(TOUCH_KEY_PREFIX)) TouchSlot.entries.firstOrNull { it.key == key.removePrefix(TOUCH_KEY_PREFIX) } else null
 
-    /** What a touch button can do here: None, then every action the core has (no rewind ones without rewind). */
-    private fun touchChoices(): List<ShortcutAction?> = listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { shortcutRewind || !it.rewind }
+    /** What a touch button can do here: None, then every action the core has (no rewind ones without rewind) a touch button can do. */
+    private fun touchChoices(): List<ShortcutAction?> = listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { (shortcutRewind || !it.rewind) && it.touch }
 
     private fun refreshShortcutsPage() {
         state = state.copy(stack = state.stack.map { p -> if (p.kind == PageKind.Shortcuts) rebuilt(p, shortcutsPage()).copy(footer = SHORTCUTS_FOOTER) else p })

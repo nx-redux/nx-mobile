@@ -10,7 +10,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.hardware.input.InputManager
 import android.media.AudioManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -126,6 +125,7 @@ import com.nxredux.mobile.storage.AndroidLibraryIndexStore
 import com.nxredux.mobile.storage.AndroidRefs
 import com.nxredux.mobile.storage.AndroidRomsSources
 import com.nxredux.mobile.storage.DataRoot
+import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.AndroidHomeLocator
 import com.nxredux.mobile.test.NxTestResults
 import com.nxredux.mobile.tools.CheatsRoot
@@ -373,6 +373,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     // is the fresh boot, so it must not overwrite the resume point.
     @Volatile override var resumePending = false
         private set
+    private var resumeCover: ResumeCover? = null   // the resume's screenshot over the game until its frame shows (main thread only)
     private var autoWrittenOnStop = false   // onStop serialized an auto state (its write is queued) since the last onStart
     // Home screenshot for the switcher (main thread only): onPause starts a PixelCopy; its bitmap is written as
     // the slot-9 thumb once onStop has queued the auto state. [homeThumbGen] drops callbacks from an older pause.
@@ -527,12 +528,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         // Cross-fade in from the menu instead of the default slide-from-right: the bottom pad is
         // identical and in the same position in both screens, so a fade keeps it visually steady while
-        // only the top (game) area changes. (Back to the menu cross-fades too.) Only while the game shares
-        // the menu's task (launcher mode off); in launcher mode it has its own task and the system task animation runs,
-        // as Android ignores these overrides for a task change (LibretroRunner's gameLaunchFlags).
+        // only the top (game) area changes. Back to the menu is a cut, no animation (see [finish]): the page it returns
+        // to (the switcher, a list, Home) is already there. Only while the game shares the menu's task (launcher mode
+        // off); in launcher mode it has its own task and the system task animation runs, as Android ignores these
+        // overrides for a task change (LibretroRunner's gameLaunchFlags).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, android.R.anim.fade_in, android.R.anim.fade_out)
-            overrideActivityTransition(Activity.OVERRIDE_TRANSITION_CLOSE, android.R.anim.fade_in, android.R.anim.fade_out)
+            overrideActivityTransition(Activity.OVERRIDE_TRANSITION_CLOSE, 0, 0)
         }
         // The game's own Recents entry (launcher mode) carries its title; sharing the menu's task, the entry stays the app's.
         if (isTaskRoot) {
@@ -854,6 +856,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         homeThumb = null
     }
 
+    /** Back to the menu with no animation: below Android 14 (no close override set in onCreate) the default one is skipped here. */
+    override fun finish() {
+        super.finish()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) @Suppress("DEPRECATION") overridePendingTransition(0, 0)
+    }
+
     override fun onDestroy() {
         rumbles.forEach { it.release() }
         motionSensors?.stop()
@@ -949,6 +957,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // for the unpack (after the inner-file check below), since Use extracted file name names them after the
         // archive's inner file; the config and marker names never depend on the settings.
         paths = NxPaths(tag, coreId, romFileName, AndroidAppSettings(this).saveNaming)
+        showResumeCover()   // the screenshot's name depends on the tag and ROM name only: up long before the core loads
         val home = AndroidHomeLocator(this).current()   // a SAF tree or a file ref (the media home without access): BiosImport picks the tree
         // netplay: a session on a copy never touches the real saves: its session folder is its own.
         val sessionDir = if (np?.onCopy == true) NetplaySessionDir.dir(filesDir) else null
@@ -1368,6 +1377,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         val game = findViewById<FrameLayout>(R.id.gameContainer)
         game.addView(view)
+        resumeCover?.follow(view)
         lifecycle.addObserver(view)
         // Added after the view: LifecycleRegistry sends ON_DESTROY newest-first, so this runs before the view's
         // LibretroDroid.destroy(). It waits for a quit's serialize in flight (one call, milliseconds) and stops the next.
@@ -1488,6 +1498,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }
             val slot = resumeSlot
             if (slot != null) resumeFrom(view, slot) else resumePending = false
+            dropResumeCover(view)
             // Cheats sit on top of the resumed state, as minarch applies them after load.
             cheatsLoad?.join()
             refreshDolphinCheats()
@@ -1525,6 +1536,37 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (dropped) {
             resumeSlot = null
             resumePending = false
+        }
+    }
+
+    /**
+     * The resume slot's screenshot over the game container from as soon as its name is known, while the core loads and
+     * boots, until the resumed state's frame ([dropResumeCover]), as minarch shows it from its window's first moment.
+     * Decoded off the main thread; nothing when the slot has none, or the resume already landed.
+     */
+    private fun showResumeCover() {
+        val slot = resumeSlot?.takeIf { resumePending && it != 8 } ?: return   // slot 8 has no screenshot in minarch's scheme
+        val file = File(dataRoot, paths.thumb(slot))
+        lifecycleScope.launch {
+            val bmp = withContext(Dispatchers.IO) { ResumeCover.decode(file) } ?: return@launch
+            if (!resumePending || isFinishing) return@launch
+            resumeCover = ResumeCover(this@GameActivity, findViewById(R.id.gameContainer)).also { cover ->
+                cover.show(bmp)
+                retroView?.let(cover::follow)   // the game view came first
+            }
+        }
+    }
+
+    /**
+     * The resume is done (or failed): the cover fades once [ResumeCover.SETTLE_FRAMES] of the game's frames are drawn,
+     * so its own frame is on screen under it (the surface shows a drawn frame a frame or two later).
+     */
+    private fun dropResumeCover(view: GLRetroView) {
+        val cover = resumeCover ?: return
+        lifecycleScope.launch {
+            view.getGLRetroEvents().filter { it is GLRetroView.GLRetroEvents.FrameRendered }.take(ResumeCover.SETTLE_FRAMES).collect {}
+            cover.fadeOut()
+            if (resumeCover === cover) resumeCover = null
         }
     }
 
@@ -2207,10 +2249,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** The slot strip for [ss]: file listings and thumbnail bounds. Blocking I/O. */
     private fun readSlots(ss: SaveStates): List<SlotUi> = ss.slots().map { slotUi(it, "Slot ${it.index}") }
 
-    /** One slot as the strip shows it; the thumbnail's URI carries its mtime, so a new save reloads it. Blocking I/O. */
+    /** One slot as the strip shows it; the thumbnail's ref carries its mtime, so a new save reloads it. Blocking I/O. */
     private fun slotUi(s: SaveStates.Slot, label: String): SlotUi {
         val sub = if (s.occupied) formatSlotTime(s.timestampMillis) else "empty"
-        val thumb = s.thumb?.let { Uri.fromFile(it).buildUpon().fragment(it.lastModified().toString()).build().toString() }
+        val thumb = s.thumb?.let { FileRefs.versioned(it.absolutePath, it.lastModified()) }
         return SlotUi(
             label = label,
             subtitle = sub,
@@ -2690,7 +2732,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun backPressed() = menu.backPressed()
 
     override fun onShortcut(action: ShortcutAction, down: Boolean) {
-        if (speed.onAction(action, down) == SpeedEffect.AskReset) askReset()
+        when (speed.onAction(action, down)) {
+            SpeedEffect.AskReset -> askReset()
+            SpeedEffect.SaveAndQuit -> quitWithAutoState(chosen = true, autoState = true)   // the menu's Save & Quit
+            null -> Unit
+        }
     }
 
     override fun releaseShortcutHolds() = speed.releaseHolds()
