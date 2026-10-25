@@ -122,7 +122,8 @@ class AppUpdateUiTest {
         override fun busyReason(): String? = busy
         override fun canInstall() = true
         override fun askInstallPermission() {}
-        override fun install(file: UpdateFile, clear: () -> Boolean, onResult: (UpdateInstallResult) -> Unit) {}
+        var installs = 0
+        override fun install(file: UpdateFile, clear: () -> Boolean, onResult: (UpdateInstallResult) -> Unit) { installs++ }
         override fun resumeInstall() = true
         override fun keepAlive(active: Boolean, text: String?) {}
         override fun showWaiting(reason: String?) {}
@@ -317,6 +318,19 @@ class AppUpdateUiTest {
         r.pressUpdateRow()                                                  // Waiting: nothing
         assertEquals(1, p.downloads)
         assertIs<UpdateState.Waiting>(r.updater.state.value)
+    }
+
+    @Test fun a_on_ready_to_install_installs_from_about() = runTest {
+        val p = FakePlatform()
+        val r = rig(p, load = false)
+        r.openAbout()
+        r.pressUpdateRow()                                                  // check
+        r.pressUpdateRow(); pastGuard(); r.state.onButton(NxButton.A)     // Update to 0.4.0, confirmed: held off the menu
+        assertEquals("Ready to install", r.updateRow()?.label)
+        assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Install")), settingsHints(assertIs<Screen.Settings>(r.state.screen.value).rows, r.state.selection.value.index))
+        r.pressUpdateRow()
+        assertEquals("Installing…", r.updateRow()?.label)
+        assertEquals(1, p.installs)
     }
 
     @Test fun a_on_a_failed_download_downloads_again() = runTest {

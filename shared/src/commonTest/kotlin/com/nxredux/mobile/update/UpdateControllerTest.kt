@@ -235,6 +235,40 @@ class UpdateControllerTest {
         assertTrue(fake.installs.isEmpty())
     }
 
+    @Test fun install_now_on_ready_to_install_installs_off_the_main_menu() = runTest {
+        val fake = FakeUpdatePlatform()
+        val c = downloaded(fake) { "" }
+        assertEquals("Ready to install", assertIs<UpdateState.Waiting>(c.state.value).reason)
+        c.installNow()
+        assertEquals(UpdateState.Installing(RELEASE), c.state.value)
+        assertEquals(listOf("/cache/update.apk"), fake.installs)
+        assertTrue(fake.installClear!!())   // still off the main menu when the confirm screen is due
+        fake.busy = "Close your game to install"
+        assertEquals(false, fake.installClear!!())
+    }
+
+    @Test fun install_now_keeps_a_real_reason_or_a_hidden_apps_wait() = runTest {
+        val fake = FakeUpdatePlatform().apply { busy = "Waiting for artwork to finish" }
+        val c = downloaded(fake) { "" }
+        c.installNow()
+        assertEquals("Waiting for artwork to finish", assertIs<UpdateState.Waiting>(c.state.value).reason)
+        fake.busy = "Ready to install"   // the platform's: the app is hidden
+        advanceTimeBy(2_001L)
+        c.installNow()
+        assertIs<UpdateState.Waiting>(c.state.value)
+        assertTrue(fake.installs.isEmpty())
+    }
+
+    @Test fun install_now_lasts_only_for_that_install() = runTest {
+        val fake = FakeUpdatePlatform()
+        val c = downloaded(fake) { "" }
+        c.installNow()
+        fake.installResult!!(UpdateInstallResult.CANCELLED)
+        c.update()
+        assertEquals("Ready to install", assertIs<UpdateState.Waiting>(c.state.value).reason)
+        assertEquals(1, fake.installs.size)
+    }
+
     @Test fun no_install_permission_asks_before_downloading_then_downloads_when_granted() = runTest {
         val fake = FakeUpdatePlatform().apply { installAllowed = false }
         val c = downloaded(fake)
