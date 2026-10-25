@@ -373,6 +373,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     // is the fresh boot, so it must not overwrite the resume point.
     @Volatile override var resumePending = false
         private set
+    private var resumeCover: ResumeCover? = null   // the resume's screenshot over the game until its frame shows (main thread only)
     private var autoWrittenOnStop = false   // onStop serialized an auto state (its write is queued) since the last onStart
     // Home screenshot for the switcher (main thread only): onPause starts a PixelCopy; its bitmap is written as
     // the slot-9 thumb once onStop has queued the auto state. [homeThumbGen] drops callbacks from an older pause.
@@ -949,6 +950,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // for the unpack (after the inner-file check below), since Use extracted file name names them after the
         // archive's inner file; the config and marker names never depend on the settings.
         paths = NxPaths(tag, coreId, romFileName, AndroidAppSettings(this).saveNaming)
+        showResumeCover()   // the screenshot's name depends on the tag and ROM name only: up long before the core loads
         val home = AndroidHomeLocator(this).current()   // a SAF tree or a file ref (the media home without access): BiosImport picks the tree
         // netplay: a session on a copy never touches the real saves: its session folder is its own.
         val sessionDir = if (np?.onCopy == true) NetplaySessionDir.dir(filesDir) else null
@@ -1368,6 +1370,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         val game = findViewById<FrameLayout>(R.id.gameContainer)
         game.addView(view)
+        resumeCover?.follow(view)
         lifecycle.addObserver(view)
         // Added after the view: LifecycleRegistry sends ON_DESTROY newest-first, so this runs before the view's
         // LibretroDroid.destroy(). It waits for a quit's serialize in flight (one call, milliseconds) and stops the next.
@@ -1488,6 +1491,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }
             val slot = resumeSlot
             if (slot != null) resumeFrom(view, slot) else resumePending = false
+            dropResumeCover(view)
             // Cheats sit on top of the resumed state, as minarch applies them after load.
             cheatsLoad?.join()
             refreshDolphinCheats()
@@ -1525,6 +1529,34 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (dropped) {
             resumeSlot = null
             resumePending = false
+        }
+    }
+
+    /**
+     * The resume slot's screenshot over the game container from as soon as its name is known, while the core loads and
+     * boots, until the resumed state's frame ([dropResumeCover]), as minarch shows it from its window's first moment.
+     * Decoded off the main thread; nothing when the slot has none, or the resume already landed.
+     */
+    private fun showResumeCover() {
+        val slot = resumeSlot?.takeIf { resumePending && it != 8 } ?: return   // slot 8 has no screenshot in minarch's scheme
+        val file = File(dataRoot, paths.thumb(slot))
+        lifecycleScope.launch {
+            val bmp = withContext(Dispatchers.IO) { ResumeCover.decode(file) } ?: return@launch
+            if (!resumePending || isFinishing) return@launch
+            resumeCover = ResumeCover(this@GameActivity, findViewById(R.id.gameContainer)).also { cover ->
+                cover.show(bmp)
+                retroView?.let(cover::follow)   // the game view came first
+            }
+        }
+    }
+
+    /** The resume is done (or failed): the cover goes once two frames of the game are up, so its own frame replaces it. */
+    private fun dropResumeCover(view: GLRetroView) {
+        val cover = resumeCover ?: return
+        lifecycleScope.launch {
+            view.getGLRetroEvents().filter { it is GLRetroView.GLRetroEvents.FrameRendered }.take(2).collect {}
+            cover.remove()
+            if (resumeCover === cover) resumeCover = null
         }
     }
 
