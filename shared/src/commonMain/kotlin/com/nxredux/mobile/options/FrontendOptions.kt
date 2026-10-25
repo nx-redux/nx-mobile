@@ -129,10 +129,17 @@ object FrontendOptions {
 
     /**
      * Every frontend key for [tag] with its default (the Overlay default is None, whatever files the console has), except
-     * the DS layout rows ([NdsOptions.NO_PICK_KEYS]): they have no stored default, the screen decides.
+     * the DS and 3DS layout rows ([NO_PICK_KEYS]): they have no stored default, the screen decides.
      */
     fun defaults(tag: String = ""): Map<String, String> =
-        allFor(tag).filter { it.key !in NdsOptions.NO_PICK_KEYS }.associate { it.key to it.default }
+        allFor(tag).filter { it.key !in NO_PICK_KEYS }.associate { it.key to it.default }
+
+    /** The DS and 3DS layout keys, which can be absent ("no pick"). */
+    val NO_PICK_KEYS: Set<String> = NdsOptions.NO_PICK_KEYS + N3dsOptions.NO_PICK_KEYS
+
+    /** The stored value of a [NO_PICK_KEYS] layout row [key] in [values] (old keys migrated); null: no pick. */
+    fun layoutValue(values: Map<String, String>, key: String): String? =
+        if (key in NdsOptions.NO_PICK_KEYS) NdsOptions.layoutValue(values, key) else N3dsOptions.layoutValue(values, key)
 
     /** A frontend setting by key, the console rows included (keys are unique). */
     fun option(key: String): FrontendOption? = table.firstOrNull { it.key == key } ?: ConsoleSettings.all.firstOrNull { it.key == key }
@@ -195,10 +202,9 @@ object FrontendOptions {
         val defaults = defaults(tag)
         return allFor(tag).mapNotNull { option ->
             val key = option.key
-            val old = NdsOptions.OLD_LAYOUT_KEYS[key]
             val value = when {
                 key == SCALING -> migrateKey(values, SCALING, SCALING_V1, "Aspect")
-                old != null -> NdsOptions.layoutValue(values, key)   // null = no pick: left out
+                key in NO_PICK_KEYS -> layoutValue(values, key)   // null = no pick: left out
                 else -> values[key]
             }
             (value ?: defaults[key])?.let { key to it }

@@ -209,7 +209,7 @@ internal class DualScreenController(
         val view = retroView ?: return
         if (netplayNow != null) return
         val stored = storedValues
-        val proportion = N3dsOptions.stackedSmallProportion(isLandscape())
+        val proportion = N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), resources.screenClass())
         view.queueEvent {
             val vars = DualScreen.n3dsSwapRestore(n3dsSwapBeforeSplit, stored).map { (k, v) -> Variable(k, v) } +
                 Variable(N3dsOptions.STACKED_SMALL_PROPORTION, proportion)

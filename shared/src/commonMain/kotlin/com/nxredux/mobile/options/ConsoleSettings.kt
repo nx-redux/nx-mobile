@@ -9,10 +9,10 @@ import com.nxredux.mobile.layout.ScreenClass
  * controller rows ([PadOptions]) and Bottom screen ([BottomScreenOptions]) are shared.
  */
 object ConsoleSettings {
-    /** [tag]'s rows; [screen] (null: unknown) shapes the DS layout rows ([NdsOptions.tableFor]). */
+    /** [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows. */
     fun tableFor(tag: String, screen: ScreenClass? = null): List<FrontendOption> = when {
         NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen)
-        N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRows + N3dsOptions.newControlsRow
+        N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.newControlsRow
         WiiOptions.appliesTo(tag) -> WiiOptions.table
         else -> emptyList()
     } + graphicsRows(tag) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table

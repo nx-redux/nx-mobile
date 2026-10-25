@@ -503,7 +503,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         when (action) {
             is N3dsAction.CycleLayout -> {
                 // The row in use (orientation, controller), as the DS's; applyFrontend sets the core's layout from it.
-                val (key, value) = N3dsOptions.cycleLayout(frontendValues, isLandscape(), ndsControllerMode(), action.delta)
+                val (key, value) = N3dsOptions.cycleLayout(frontendValues, isLandscape(), ndsControllerMode(), action.delta, host.gameContainer.resources.screenClass())
                 if (key in lockedOptions) return
                 applyFrontend(frontendValues + (key to value))   // Azahar re-lays its screens out on its next frame
                 showNdsLabel(N3dsOptions.layoutLabel(value))

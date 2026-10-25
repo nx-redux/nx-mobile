@@ -36,8 +36,8 @@ object EmulatorSettings {
         val consoleRows = ConsoleSettings.tableFor(tag).filter { it.key !in resolved.locked && (descriptor.rewind || it.key !in SpeedOptions.REWIND_KEYS) && (secondScreen || it.key != BottomScreenOptions.KEY) }
             .map { ConsoleRow(
                 VulkanFallback.noted(it, vulkanFailed),
-                // The DS layout rows read their old keys too, as the game does (no pick: the row default).
-                (if (it.key in NdsOptions.NO_PICK_KEYS) NdsOptions.layoutValue(resolved.values, it.key) else resolved.values[it.key]) ?: it.default,
+                // The DS and 3DS layout rows read their old keys too, as the game does (no pick: the row default).
+                (if (it.key in FrontendOptions.NO_PICK_KEYS) FrontendOptions.layoutValue(resolved.values, it.key) else resolved.values[it.key]) ?: it.default,
             ) }
         val core = table?.let { t ->
             val withValues = t.options.filter { it.key !in descriptor.offlineHiddenOptions && !FrontendOptions.isFrontendKey(it.key) }.map { o ->
