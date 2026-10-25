@@ -4188,9 +4188,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             SettingsKind.PAD_VIBRATION -> cycle(PadVibration.entries, s.padVibration, { it.label }) { s.padVibration = it }
             SettingsKind.GAME_RUMBLE -> cycle(GameRumble.entries, s.gameRumble, { it.label }, after = { refreshSettings(); deps.rumblePreview(it) }) { s.gameRumble = it }
             SettingsKind.MENU_PAD -> flip(s.menuPad) { s.menuPad = it }
-            // A touch button: None, then every action.
+            // A touch button: None, then every action a touch button can do ([ShortcutAction.touch]).
             SettingsKind.SHORTCUT_TOUCH -> row.touchSlot?.let { slot ->
-                cycle(listOf<ShortcutAction?>(null) + ShortcutAction.entries, shortcutSet().touch[slot], { it?.label ?: "None" }) { setTouch(slot, it) }
+                cycle(listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { it.touch }, shortcutSet().touch[slot], { it?.label ?: "None" }) { setTouch(slot, it) }
             }
             SettingsKind.PAD_LAYOUT_CONSOLE -> {   // Shared, then the library's consoles; a gone console reads as Shared
                 val keys = listOf(PadLayouts.SHARED_KEY) + padLayoutConsoles().map { it.id }

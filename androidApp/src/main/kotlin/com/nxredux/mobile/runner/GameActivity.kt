@@ -2732,7 +2732,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun backPressed() = menu.backPressed()
 
     override fun onShortcut(action: ShortcutAction, down: Boolean) {
-        if (speed.onAction(action, down) == SpeedEffect.AskReset) askReset()
+        when (speed.onAction(action, down)) {
+            SpeedEffect.AskReset -> askReset()
+            SpeedEffect.SaveAndQuit -> quitWithAutoState(chosen = true, autoState = true)   // the menu's Save & Quit
+            null -> Unit
+        }
     }
 
     override fun releaseShortcutHolds() = speed.releaseHolds()

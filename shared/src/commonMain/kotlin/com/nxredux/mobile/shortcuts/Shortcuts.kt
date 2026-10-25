@@ -133,7 +133,7 @@ object Shortcuts {
             val hit = claimed.firstOrNull { it.binding == b }
             if (hit != null) blocked[a] = hit else bindings[a] = b
         }
-        return EffectiveShortcuts(bindings, touch.filterValues(allowed), blocked)
+        return EffectiveShortcuts(bindings, touch.filterValues { allowed(it) && it.touch }, blocked)
     }
 
     /** One line for a cfg or pref: `toggle_ff=110+103;touch_1=reset`. */

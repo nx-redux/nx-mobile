@@ -21,6 +21,15 @@ class SpeedControlTest {
         assertEquals(0, c.output.ffSpeed)
     }
 
+    // Save & Quit asks the host to quit as the menu's Save & Quit does, on the press; the release and the speed do nothing.
+    @Test fun saveAndQuitIsTheHostsOnThePress() {
+        val c = control()
+        val before = c.output
+        assertEquals(SpeedEffect.SaveAndQuit, c.onAction(ShortcutAction.SAVE_AND_QUIT, true))
+        assertNull(c.onAction(ShortcutAction.SAVE_AND_QUIT, false))
+        assertEquals(before, c.output)
+    }
+
     @Test fun holdFf() {
         val c = control()
         c.onAction(ShortcutAction.HOLD_FF, true)

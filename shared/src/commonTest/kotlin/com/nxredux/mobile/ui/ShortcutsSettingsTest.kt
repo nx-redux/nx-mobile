@@ -239,7 +239,9 @@ class ShortcutsSettingsTest {
         assertEquals("Hold FF", s.row("Touch button 1").secondary)
         s.onButton(NxButton.LEFT); s.onButton(NxButton.LEFT)
         assertEquals("None", s.row("Touch button 1").secondary)
-        assertEquals(listOf("None") + ShortcutAction.entries.map { it.label }, s.page().choices[s.selection.value.index]?.labels)
+        // Every action a touch button can do: Save & Quit is a controller's only.
+        assertEquals(listOf("None") + ShortcutAction.entries.filter { it.touch }.map { it.label }, s.page().choices[s.selection.value.index]?.labels)
+        assertFalse("Save & Quit" in s.page().choices[s.selection.value.index]!!.labels)
     }
 
     @Test fun clearAllEmptiesThePage() = runTest {
