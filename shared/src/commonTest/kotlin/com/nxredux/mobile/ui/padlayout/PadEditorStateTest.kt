@@ -130,4 +130,11 @@ class PadEditorStateTest {
         s.endResize()
         assertEquals(before, s.rectOf(PadGroup.DPAD))
     }
+
+    @Test fun a_group_reported_empty_leaves_the_editor() {
+        val s = state()
+        s.onGroup(PadGroup.DPAD, Rect.Zero, pad, 50f, Rect.Zero)                  // the group left composition
+        assertNull(s.groupAt(Offset(150f, 800f)))
+        assertEquals(setOf(PadGroup.FACE), s.groups)
+    }
 }
