@@ -34,6 +34,9 @@ class CoreRegistryNdsTest {
                 "melonds_touch_mode" to "touch", "melonds_number_of_screen_layouts" to "1",
                 "melonds_screen_layout1" to "top-bottom", "melonds_screen_gap" to "0", "melonds_show_cursor" to "disabled",
                 "melonds_opengl_resolution" to "2",
+                "melonds_mic_input" to "microphone",
+                "melonds_mic_input_active" to "always",
+                "melonds_show_mic_state" to "disabled",
             ),
             nds.defaultOptions,
         )
