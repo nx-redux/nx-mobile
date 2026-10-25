@@ -34,8 +34,9 @@ class PadEditorState(initial: PadLayout) : PadGroupBoundsListener {
     /** The groups this pad has (those that reported). */
     val groups: Set<PadGroup> get() = geoms.keys
 
-    override fun onGroup(group: PadGroup, defaultInRoot: Rect, padInRoot: Rect, unitPx: Float) {
-        geoms[group] = Geom(defaultInRoot, padInRoot, unitPx)
+    override fun onGroup(group: PadGroup, defaultInRoot: Rect, padInRoot: Rect, unitPx: Float, placedInRoot: Rect) {
+        if (defaultInRoot.isEmpty) geoms.remove(group)   // the group left the pad
+        else geoms[group] = Geom(defaultInRoot, padInRoot, unitPx)
     }
 
     private fun tweak(group: PadGroup) = layout.tweaks[group] ?: GroupTweak()

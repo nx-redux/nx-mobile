@@ -33,6 +33,14 @@ class PadSystemRowTest {
         assertNull(flexSpacerRow(under, overGame = false))
     }
 
+    // Beside the picture the pad has its own column: shoulders, d-pad / face cluster, then the system row, with or without overGame.
+    @Test fun besidePictureRowsOrder() {
+        val expected = listOf(PadRow.SHOULDERS, PadRow.CLUSTER, PadRow.SYSTEM)
+        assertEquals(expected, clusterRows(overGame = false, besidePicture = true))
+        assertEquals(expected, clusterRows(overGame = true, besidePicture = true))
+        assertNull(flexSpacerRow(clusterRows(overGame = true, besidePicture = true), overGame = false))
+    }
+
     // The stretching spacer follows the system row, wherever it is in the list (not a fixed index).
     @Test fun theStretchingSpacerFollowsTheSystemRow() {
         assertEquals(2, flexSpacerRow(listOf(PadRow.SHOULDERS, PadRow.SYSTEM, PadRow.CLUSTER), overGame = true))

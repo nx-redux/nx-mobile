@@ -14,8 +14,8 @@ import kotlin.test.assertTrue
 class PadEditorStateTest {
     private val pad = Rect(0f, 600f, 1000f, 1000f)          // the band, root px
     private fun state(initial: PadLayout = PadLayout.EMPTY) = PadEditorState(initial).apply {
-        onGroup(PadGroup.DPAD, Rect(100f, 750f, 250f, 900f), pad, 50f)
-        onGroup(PadGroup.FACE, Rect(750f, 750f, 900f, 900f), pad, 50f)
+        onGroup(PadGroup.DPAD, Rect(100f, 750f, 250f, 900f), pad, 50f, Rect(100f, 750f, 250f, 900f))
+        onGroup(PadGroup.FACE, Rect(750f, 750f, 900f, 900f), pad, 50f, Rect(750f, 750f, 900f, 900f))
     }
 
     @Test fun a_tap_on_a_group_selects_it_and_empty_space_clears() {
@@ -39,7 +39,7 @@ class PadEditorStateTest {
     }
 
     @Test fun a_drag_before_the_pad_has_a_unit_is_ignored() {
-        val s = PadEditorState(PadLayout.EMPTY).apply { onGroup(PadGroup.DPAD, Rect(100f, 750f, 250f, 900f), pad, 0f) }
+        val s = PadEditorState(PadLayout.EMPTY).apply { onGroup(PadGroup.DPAD, Rect(100f, 750f, 250f, 900f), pad, 0f, Rect(100f, 750f, 250f, 900f)) }
         s.dragBy(PadGroup.DPAD, Offset(100f, 0f))
         assertEquals(PadLayout.EMPTY, s.layout)
     }
@@ -95,9 +95,9 @@ class PadEditorStateTest {
 
     @Test fun untweaked_groups_that_overlap_by_default_are_not_flagged() {
         val s = PadEditorState(PadLayout.EMPTY).apply {
-            onGroup(PadGroup.DPAD, Rect(100f, 750f, 250f, 900f), pad, 50f)
-            onGroup(PadGroup.FACE, Rect(750f, 750f, 900f, 900f), pad, 50f)
-            onGroup(PadGroup.C_STICK, Rect(700f, 700f, 800f, 800f), pad, 50f)   // covers FACE's corner, as today's pad does
+            onGroup(PadGroup.DPAD, Rect(100f, 750f, 250f, 900f), pad, 50f, Rect(100f, 750f, 250f, 900f))
+            onGroup(PadGroup.FACE, Rect(750f, 750f, 900f, 900f), pad, 50f, Rect(750f, 750f, 900f, 900f))
+            onGroup(PadGroup.C_STICK, Rect(700f, 700f, 800f, 800f), pad, 50f, Rect(700f, 700f, 800f, 800f))   // covers FACE's corner, as today's pad does
         }
         assertEquals(emptySet(), s.overlapping())
         s.dragBy(PadGroup.DPAD, Offset(600f, 0f))                 // DPAD now sits on FACE and the C-stick
@@ -112,8 +112,8 @@ class PadEditorStateTest {
 
     @Test fun where_groups_overlap_the_one_drawn_on_top_is_picked() {
         val s = state()
-        s.onGroup(PadGroup.SYSTEM_LEFT, Rect(100f, 750f, 250f, 900f), pad, 50f)   // MENU's row moved over the d-pad
-        s.onGroup(PadGroup.L_SHOULDERS, Rect(700f, 700f, 950f, 950f), pad, 50f)   // shoulders under the face buttons
+        s.onGroup(PadGroup.SYSTEM_LEFT, Rect(100f, 750f, 250f, 900f), pad, 50f, Rect(100f, 750f, 250f, 900f))   // MENU's row moved over the d-pad
+        s.onGroup(PadGroup.L_SHOULDERS, Rect(700f, 700f, 950f, 950f), pad, 50f, Rect(700f, 700f, 950f, 950f))   // shoulders under the face buttons
         assertEquals(PadGroup.DPAD, s.groupAt(Offset(150f, 800f)))
         assertEquals(PadGroup.FACE, s.groupAt(Offset(800f, 800f)))
         assertEquals(PadGroup.L_SHOULDERS, s.groupAt(Offset(720f, 720f)))
