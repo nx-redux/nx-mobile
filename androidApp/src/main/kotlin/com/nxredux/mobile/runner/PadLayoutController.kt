@@ -58,6 +58,7 @@ import com.nxredux.mobile.ui.nx.CLUSTER_MAX_WIDTH_SHARE
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.PAD_PORTRAIT_CM
+import com.nxredux.mobile.ui.nx.PadMic
 import com.nxredux.mobile.ui.nx.PadMotion
 import com.nxredux.mobile.ui.nx.PadStickModes
 import com.nxredux.mobile.ui.nx.PadThemeProvider
@@ -92,6 +93,8 @@ internal interface PadLayoutHost {
     fun layoutTag(): String
     fun padProfile(): com.nxredux.mobile.ui.nx.PadProfile
     fun padMotion(): PadMotion?
+    /** The DS / 3DS pad's fixed mic button ([PadMic]): null where the pad has none. */
+    fun padMic(): PadMic?
     /** The touch shortcut buttons to draw now ([com.nxredux.mobile.ui.nx.visibleTouchShortcuts]); snapshot state, so the pads follow a change. */
     val padShortcuts: Map<TouchSlot, TouchShortcut>
     /** A touch shortcut button's press ([down]) or release. */
@@ -133,6 +136,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private fun layoutTag() = host.layoutTag()
     private fun padProfile() = host.padProfile()
     private fun padMotion() = host.padMotion()
+    private fun padMic() = host.padMic()
     private fun isLandscape(orientation: Int) = host.isLandscape(orientation)
     private fun syncN3dsCore() = host.syncN3dsCore()
     private fun mainPanelShown() = host.mainPanelShown()
@@ -238,7 +242,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             ).apply { bottomMargin = bandPx; topMargin = cutoutTop }
             if (bandPx > 0) {
                 val bandLayout = padLayout(PadShape.PORTRAIT)
-                val pad = composePad { PadThemeProvider(padTheme) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = bandLayout, tools = padTools(), shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut) } }
+                val pad = composePad { PadThemeProvider(padTheme) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = bandLayout, tools = padTools(), shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic()) } }
                 addPad(root, pad, FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT, bandPx, Gravity.BOTTOM))
             } else if (layoutPadHidden && names.isEmpty()) {
@@ -285,7 +289,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val left = composePad {
             VirtualPadLeft(input::onPad, input::onStick, Modifier.fillMaxSize().clearOfCutoutBothSides(WindowInsetsSides.Start).alpha(padLandscapeAlpha.value), profile = padProfile(),
                 useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, overGame = true, motion = padMotion(), latched = input.gcLatched.value, layout = overlayLayout, tools = padTools(),
-                shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut)
+                shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic())
         }
         val right = composePad {
             VirtualPadRight(input::onPad, Modifier.fillMaxSize().clearOfCutoutBothSides(WindowInsetsSides.End).alpha(padLandscapeAlpha.value), profile = padProfile(), overGame = true, onCStick = padCStick(), latched = input.gcLatched.value, layout = overlayLayout, tools = padTools(),
@@ -325,7 +329,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         when (tt.pad) {
             TabletopPad.PORTRAIT -> {
                 val portraitLayout = padLayout(PadShape.PORTRAIT)
-                val pad = composePad { PadThemeProvider(padTheme) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = portraitLayout, shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut) } }
+                val pad = composePad { PadThemeProvider(padTheme) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = portraitLayout, shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic()) } }
                 addPad(root, pad, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, padH, Gravity.BOTTOM))
             }
             TabletopPad.CLUSTERS -> {
@@ -333,7 +337,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 val left = composePad {
                     VirtualPadLeft(input::onPad, input::onStick, Modifier.fillMaxSize().clearOfCutout(WindowInsetsSides.Start), profile = padProfile(),
                         useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, motion = padMotion(), latched = input.gcLatched.value,
-                        shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut)
+                        shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic())
                 }
                 val right = composePad {
                     VirtualPadRight(input::onPad, Modifier.fillMaxSize().clearOfCutout(WindowInsetsSides.End), profile = padProfile(), onCStick = padCStick(), latched = input.gcLatched.value,

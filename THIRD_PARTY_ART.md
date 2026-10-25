@@ -27,6 +27,10 @@ Google's Material Icons "search", "history", "delete", "filter_list", "create_ne
 "grid_view", under the Apache License 2.0 (https://github.com/google/material-design-icons). Paths unchanged, filled white (grid_view drawn
 at 80% scale).
 
+## Pad mic button (`pad_mic.xml`)
+
+Google's Material Icons "mic", under the Apache License 2.0 (https://github.com/google/material-design-icons). Path unchanged, filled white.
+
 ## Controller art (`menu_pad_*.webp`)
 
 Console controllers and handhelds drawn in the main menu's Consoles tab, from ScreenScraper (https://www.screenscraper.fr),

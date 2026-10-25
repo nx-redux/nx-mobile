@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.settings.PadGroup
 import com.nxredux.mobile.settings.PadLayout
 import com.nxredux.mobile.settings.PadShape
@@ -50,6 +51,7 @@ import com.nxredux.mobile.ui.nx.ModalKind
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxModal
 import com.nxredux.mobile.ui.nx.PadEvent
+import com.nxredux.mobile.ui.nx.PadMic
 import com.nxredux.mobile.ui.nx.PadProfile
 import com.nxredux.mobile.ui.nx.VirtualPad
 import com.nxredux.mobile.ui.nx.VirtualPadLeft
@@ -66,12 +68,14 @@ private val HandleHit = 28.dp   // a touch this near the handle resizes rather t
  * [state]'s layout, both touch shortcut pieces drawn as labelled stand-ins (in game each shows only once it has an
  * action). A tap selects a group, a drag moves it (clamped, snapping home), its corner handle resizes it and the toolbar
  * resets it; overlapping groups are outlined red. The pad's own buttons do not press here: the edit layer takes every
- * touch. [onClose] leaves without saving (after "Discard changes?" when something changed).
+ * touch. [onClose] leaves without saving (after "Discard changes?" when something changed). [showMic] draws the DS / 3DS
+ * fixed mic button ([padLayoutShowsMic]), so the player sees its spot; it is no group, so it is never selected.
  */
 @Composable
-fun PadLayoutEditor(shape: PadShape, profile: PadProfile, title: String, state: PadEditorState, onSave: (PadLayout) -> Unit, onClose: () -> Unit) {
+fun PadLayoutEditor(shape: PadShape, profile: PadProfile, title: String, state: PadEditorState, onSave: (PadLayout) -> Unit, onClose: () -> Unit, showMic: Boolean = false) {
     val colors = LocalNxColors.current
     val noPad: (PadEvent) -> Unit = {}
+    val mic = if (showMic) PadMic(on = false, onTap = {}) else null
     val cStick: ((Float, Float) -> Unit)? = if (profile.cStick) { _, _ -> } else null
     var origin by remember { mutableStateOf(Offset.Zero) }   // the edit layer's root offset (0 in a full-screen host)
     var downAt by remember { mutableStateOf(Offset.Zero) }   // the current touch's first point, edit layer px
@@ -82,13 +86,13 @@ fun PadLayoutEditor(shape: PadShape, profile: PadProfile, title: String, state: 
             PadShape.PORTRAIT -> Column(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxWidth().aspectRatio(4f / 3f).background(GameBlock))
                 Box(Modifier.fillMaxWidth().weight(1f)) {
-                    VirtualPad(noPad, Modifier.fillMaxSize(), profile = profile, onCStick = cStick, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true)
+                    VirtualPad(noPad, Modifier.fillMaxSize(), profile = profile, onCStick = cStick, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true, mic = mic)
                 }
             }
             PadShape.OVERLAY -> Box(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxHeight().aspectRatio(4f / 3f).align(Alignment.Center).background(GameBlock))
                 Row(Modifier.fillMaxSize()) {
-                    VirtualPadLeft(noPad, { _, _ -> }, Modifier.weight(1f).fillMaxHeight(), profile = profile, overGame = true, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true)
+                    VirtualPadLeft(noPad, { _, _ -> }, Modifier.weight(1f).fillMaxHeight(), profile = profile, overGame = true, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true, mic = mic)
                     VirtualPadRight(noPad, Modifier.weight(1f).fillMaxHeight(), profile = profile, overGame = true, onCStick = cStick, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true)
                 }
             }
@@ -230,3 +234,9 @@ private fun ToolbarButton(label: String, enabled: Boolean = true, primary: Boole
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) { Text(label, color = fg, fontFamily = LocalNxFont.current, fontSize = 13.sp) }
 }
+
+/**
+ * Whether the editor for the console of [tag] shows the fixed mic button: a console whose core hears the mic (DS and
+ * DSi, 3DS: [com.nxredux.mobile.runner.CoreDescriptor.microphone]), and Shared ([tag] empty), which they inherit.
+ */
+fun padLayoutShowsMic(tag: String): Boolean = tag.isBlank() || CoreRegistry.forTag(tag)?.microphone == true

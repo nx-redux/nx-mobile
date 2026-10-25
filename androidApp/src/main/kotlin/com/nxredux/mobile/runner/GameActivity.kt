@@ -151,6 +151,7 @@ import com.nxredux.mobile.ui.nx.nxNotificationPlacement
 import com.nxredux.mobile.ui.nx.nxTopCentreMaxWidth
 import com.nxredux.mobile.ui.nx.map
 import com.nxredux.mobile.ui.nx.SlotUi
+import com.nxredux.mobile.ui.nx.PadMic
 import com.nxredux.mobile.ui.nx.PadMotion
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -1980,6 +1981,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** The pad's motion button ([PadMotion]): Wiimote types on a phone with both sensors; none without them. */
     override fun padMotion(): PadMotion? =
         if (isWii && padProfile().motionButton && motionSensors?.hasSensors == true) PadMotion(wiiMotionOn, ::toggleWiiMotion, ::recenterWiiMotion) else null
+
+    /** The pad's fixed mic button ([PadMic]): not drawn yet; the session's Mic toggle drives it once wired. */
+    override fun padMic(): PadMic? = null
 
     /**
      * The keys the menu leaves out: the .cfg's locks, Motion Controls on a Wii game without both sensors, both Wii rows

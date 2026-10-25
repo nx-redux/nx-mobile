@@ -72,6 +72,7 @@ import com.nxredux.mobile.settings.PadLayout
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.shared.res.Res
+import com.nxredux.mobile.shared.res.pad_mic
 import com.nxredux.mobile.shared.res.pad_ps_circle
 import com.nxredux.mobile.shared.res.pad_ps_cross
 import com.nxredux.mobile.shared.res.pad_ps_square
@@ -730,6 +731,64 @@ private fun MotionButton(motion: PadMotion, height: Dp, width: Dp) =
     ToolButton("MOTION", height, width, alpha = if (motion.on) 1f else 0.45f, onTap = motion.onTap, onLongPress = motion.onLongPress)
 
 /**
+ * The DS / 3DS pad's mic button: [on] says whether the game hears the phone's mic (the session's Mic toggle), a tap
+ * flips it ([onTap]). Not a [PadGroup]: fixed at the pad's bottom left whatever the Pad layout, drawn above every group
+ * and taking a touch on one it overlaps.
+ */
+data class PadMic(val on: Boolean, val onTap: () -> Unit)
+
+/** The mic button's diameter on a pad whose unit is [unit] dp. */
+internal fun micButtonSize(unit: Float): Float = unit * 0.9f
+
+/** The mic button's inset from the pad's bottom (and, on the portrait pad, its left) edge, dp. */
+internal fun micButtonInset(unit: Float): Float = unit * 0.15f
+
+/**
+ * The mic button's inset from a landscape cluster's left edge ([VirtualPadLeft]), dp: past the d-pad / stick (3 units)
+ * and MENU + toggle (two pills and their gap, the bottom row off the game), both from the cluster's [nudge], so it sits
+ * in the bottom corner beside them, toward the screen's middle. Over the game that still ends inside the 4.5-unit cluster.
+ */
+internal fun clusterMicStart(unit: Float, nudge: Float): Float =
+    nudge + maxOf(3f * unit, 2f * SYSTEM_PILL_W_UNITS * unit + SYSTEM_PILL_GAP) + micButtonInset(unit)
+
+/**
+ * [mic]'s round button in its pad's root box, [start] dp from the left and [micButtonInset] up from the bottom: the pad's
+ * pill face with the mic symbol, dimmed while off (as MOTION), pressed in while on. A tap toggles; there is no hold.
+ */
+@Composable
+private fun BoxScope.MicButton(mic: PadMic, unit: Dp, start: Dp) {
+    val haptic = rememberPadHaptic()
+    val latestTap by rememberUpdatedState(mic.onTap)
+    var pressed by remember { mutableStateOf(false) }
+    val size = micButtonSize(unit.value).dp
+    NeuSurface(
+        shape = CircleShape,
+        face = LocalPadColors.current.pill,
+        pressed = pressed || mic.on,
+        modifier = Modifier.align(Alignment.BottomStart).zIndex(1f)
+            .padding(start = start, bottom = micButtonInset(unit.value).dp)
+            .size(size)
+            .then(if (mic.on) Modifier else Modifier.alpha(0.45f))
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        pressed = true
+                        haptic()
+                        try { tryAwaitRelease() } finally { pressed = false }
+                    },
+                    onTap = { latestTap() },
+                )
+            },
+    ) {
+        Image(
+            painterResource(Res.drawable.pad_mic), contentDescription = "Mic",
+            modifier = Modifier.size(size * 0.5f),
+            colorFilter = ColorFilter.tint(LocalPadColors.current.label),
+        )
+    }
+}
+
+/**
  * The 3DS pad's own STYLUS and SWAP pills, the on-screen forms of its SELECT + L1 / SELECT + R1 chords: [stylusOn] says
  * whether stylus mode is on (the pill stays pressed in), a STYLUS tap flips it ([onStylus]), and SWAP holds the core's
  * swap-screens key while pressed ([onSwap] down, then up), so it works in Azahar's toggle and hold swap modes alike.
@@ -889,7 +948,7 @@ private fun rememberStickChoice(useJoystick: Boolean?, onUseJoystickChange: (Boo
  * (the GameCube's soft-pressed L / R). [tools] (DS / 3DS STYLUS and SWAP) and [motion] (the Wii's MOTION) join SELECT /
  * START in the top row ([portraitTopPills]). [shortcuts] are the touch shortcut buttons to draw ([visibleTouchShortcuts]),
  * either side of MENU and the toggle, each pressed and released through [onShortcut]; [shortcutPlaceholders] draws both
- * as stand-ins (the Pad layout editor).
+ * as stand-ins (the Pad layout editor). [mic] (DS / 3DS) is the fixed mic button at the bottom left ([MicButton]).
  */
 @Composable
 fun VirtualPad(
@@ -909,6 +968,7 @@ fun VirtualPad(
     shortcuts: Map<TouchSlot, TouchShortcut> = emptyMap(),
     onShortcut: (TouchSlot, Boolean) -> Unit = { _, _ -> },
     shortcutPlaceholders: Boolean = false,
+    mic: PadMic? = null,
 ) {
     // Track which buttons this pad currently holds so we can release them if the pad
     // leaves composition mid-hold. A duplicate Up (also emitted by the gesture's finally
@@ -1033,6 +1093,9 @@ fun VirtualPad(
                 }
             }
         }
+        // The mic button in the bottom-left corner, under the d-pad's row (which ends at least 1.92 units up: over MENU's
+        // row and the NX mark's room, or the dropped clusters' padding) and left of a touch shortcut 1.
+        mic?.let { MicButton(it, unit, micButtonInset(unit.value).dp) }
         }   // Box (arrange root)
         }   // ProvidePadArrange
     }
@@ -1473,7 +1536,7 @@ private fun SystemRow(
  * bottom-left so the d-pad sits low for the left thumb. Transparent. [overGame] (the clusters drawn over the game)
  * moves the MENU/toggle row to the top of the box. Touch shortcut 1 ([shortcuts], [onShortcut], [shortcutPlaceholders]
  * as on [VirtualPad]) sits under the toggle over the game ([overlayShortcutPlace]), else beside the shoulders, toward
- * the screen's middle.
+ * the screen's middle. [mic] (DS / 3DS) is the fixed mic button in the bottom corner right of the d-pad ([clusterMicStart]).
  */
 @Composable
 fun VirtualPadLeft(
@@ -1492,6 +1555,7 @@ fun VirtualPadLeft(
     shortcuts: Map<TouchSlot, TouchShortcut> = emptyMap(),
     onShortcut: (TouchSlot, Boolean) -> Unit = { _, _ -> },
     shortcutPlaceholders: Boolean = false,
+    mic: PadMic? = null,
 ) {
     val emit = rememberEmit(onEvent)
     val stick = rememberStickChoice(useJoystick, onUseJoystickChange)
@@ -1549,6 +1613,7 @@ fun VirtualPadLeft(
                     }
                 }
             }
+            mic?.let { MicButton(it, unit, clusterMicStart(unit.value, nudge.value).dp) }
             }
             }
         }

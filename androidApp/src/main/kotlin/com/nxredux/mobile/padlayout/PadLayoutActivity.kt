@@ -24,6 +24,7 @@ import com.nxredux.mobile.ui.nx.PadProfile
 import com.nxredux.mobile.ui.nx.nxColorsFor
 import com.nxredux.mobile.ui.padlayout.PadEditorState
 import com.nxredux.mobile.ui.padlayout.PadLayoutEditor
+import com.nxredux.mobile.ui.padlayout.padLayoutShowsMic
 
 /**
  * Controls → Pad layout's editor, its own activity so it can hold the shape's orientation (the menu
@@ -65,6 +66,7 @@ class PadLayoutActivity : ComponentActivity() {
                         finish()
                     },
                     onClose = ::finish,
+                    showMic = padLayoutShowsMic(tag),
                 )
             }
         }
