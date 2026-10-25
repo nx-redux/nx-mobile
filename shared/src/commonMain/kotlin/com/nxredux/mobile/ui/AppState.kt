@@ -6537,12 +6537,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         else -> null
     }
 
-    /** A on About's update row: Check for updates (also after a failed check), Update to after one found a release; nothing while busy. */
+    /** A on About's update row: Check for updates (also after a failed check), Update to after one found a release, Ready to install installs; nothing while busy. */
     private fun appUpdateRowA(u: UpdateController) {
         when (val s = u.state.value) {
             UpdateState.Idle, is UpdateState.UpToDate -> u.checkNow()
             is UpdateState.Failed -> if (s.release == null) u.checkNow() else confirmUpdate(s.release)
             is UpdateState.Available -> confirmUpdate(s.release)
+            is UpdateState.Waiting -> u.installNow()
             else -> Unit
         }
     }
