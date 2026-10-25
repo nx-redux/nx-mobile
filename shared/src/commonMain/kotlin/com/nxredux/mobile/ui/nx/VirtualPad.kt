@@ -1099,9 +1099,9 @@ internal fun faceHeightUnits(profile: PadProfile): Float = when (profile.cluster
  * The portrait pad's d-pad / stick scale for a pad [widthUnits] x [heightUnits] button units, the same on every
  * console: [MID_SCALE], or less so the row (0.55-unit side padding each side, the 3-unit d-pad / stick, the 3-unit
  * face diamond, [MID_MIN_GAP] between) fits the width and the column (3.12 fixed units + the 3-unit row, scaled,
- * + [MID_MIN_SLACK]) fits the height. Never below 1.
+ * + [MID_MIN_SLACK]) fits the height. Never below 1. The layout model (hidden-band overlay height) uses it too.
  */
-internal fun midRowScale(widthUnits: Float, heightUnits: Float): Float =
+fun midRowScale(widthUnits: Float, heightUnits: Float): Float =
     minOf(MID_SCALE, (widthUnits - 1.1f - MID_MIN_GAP) / 6f, (heightUnits - 3.12f - MID_MIN_SLACK) / 3f).coerceAtLeast(1f)
 
 /**
