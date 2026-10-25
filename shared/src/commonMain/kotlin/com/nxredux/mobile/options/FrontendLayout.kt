@@ -48,7 +48,8 @@ fun frontendLayout(
     val picture = when (scaling) {
         ScreenScaling.FULLSCREEN -> box
         ScreenScaling.NATIVE -> integer(box, coreWidth, coreHeight) ?: fit(box, aspect)
-        ScreenScaling.ASPECT -> fit(box, aspect)
+        // AUTO follows ASPECT until the side-column placement lands.
+        ScreenScaling.AUTO, ScreenScaling.ASPECT -> fit(box, aspect)
     }
     return FrontendLayout(box, picture.copy(x = picture.x + dx, y = picture.y + dy), dx, dy)
 }

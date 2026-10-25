@@ -358,15 +358,15 @@ class InGameMenuModelTest {
             listOf("Screen Scaling", "Screen Sharpness", "Overlay", "Offset screen X", "Offset screen Y", "Pad Opacity (landscape)", "Debug HUD"),
             m.state.page.rows.map { it.label },
         )
-        assertEquals(listOf("Aspect", "NEAREST", "None", "0", "0", "40%", "Off"), m.state.page.rows.map { (it as MenuRow.Option).valueLabel })
+        assertEquals(listOf("Auto", "NEAREST", "None", "0", "0", "40%", "Off"), m.state.page.rows.map { (it as MenuRow.Option).valueLabel })
         assertEquals(listOf(true, true, true, true, true, false, false), m.state.page.rows.map { (it as MenuRow.Option).visual })
     }
 
     @Test fun left_right_on_the_list_emit_set_frontend() {
         val m = model().openFrontend()
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Fullscreen"), m.press(NxButton.RIGHT))
-        assertEquals("Fullscreen", m.optionRow(0).valueLabel)
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Aspect"), m.press(NxButton.LEFT))
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.press(NxButton.RIGHT))
+        assertEquals("Native", m.optionRow(0).valueLabel)
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Auto"), m.press(NxButton.LEFT))
         m.select(5)
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.PAD_LANDSCAPE_OPACITY, "25"), m.press(NxButton.RIGHT))
         assertEquals("25%", m.optionRow(5).valueLabel)
@@ -375,11 +375,11 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "On"), m.press(NxButton.RIGHT))
     }
 
-    @Test fun frontend_page_shows_none_and_aspect_by_default_whatever_the_files() {
+    @Test fun frontend_page_shows_none_and_auto_by_default_whatever_the_files() {
         val m = model().openFrontend(values = emptyMap(), overlays = listOf("Aspect - LCD Grid.png", "Aspect.png"))
         assertEquals("None", m.optionRow(2).valueLabel)
         assertEquals("NEAREST", m.optionRow(1).valueLabel)
-        assertEquals("Aspect", m.optionRow(0).valueLabel)
+        assertEquals("Auto", m.optionRow(0).valueLabel)
         m.setFrontend(mapOf(FrontendOptions.OVERLAY to "Aspect - LCD Grid.png"), listOf("Aspect - LCD Grid.png"), emptySet())
         assertEquals("Aspect - LCD Grid.png", m.optionRow(2).valueLabel)   // a stored pick still shows
     }
@@ -476,7 +476,7 @@ class InGameMenuModelTest {
     @Test fun stored_raw_value_shows_raw_and_right_goes_to_first() {
         val m = model().openFrontend(values = FrontendOptions.defaults() + (FrontendOptions.SCALING to "Cropped"))
         assertEquals("Cropped", m.optionRow(0).valueLabel)
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.press(NxButton.RIGHT))
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Auto"), m.press(NxButton.RIGHT))
     }
 
     @Test fun locked_frontend_keys_are_hidden_and_skipped_in_adjust() {
@@ -1894,8 +1894,9 @@ class InGameMenuModelTest {
     @Test fun frontend_rows_carry_their_value_labels_and_index() {
         val m = model().openFrontend()
         val scaling = m.optionRow(m.rowIndex("Screen Scaling"))
-        assertEquals(listOf("Native", "Aspect", "Fullscreen"), scaling.choices)
-        assertEquals(1, scaling.index)
+        assertEquals(listOf("Auto", "Native", "Aspect", "Fullscreen"), scaling.choices)
+        assertEquals(0, scaling.index)
+        assertEquals(NxSettingControl.PICKER, scaling.control)   // four values total 26 characters: past the segmented limit
         val overlay = m.optionRow(m.rowIndex("Overlay"))
         assertEquals(listOf("None", "Aspect.png", "Native.png"), overlay.choices)
         assertEquals(0, overlay.index)
@@ -1959,12 +1960,12 @@ class InGameMenuModelTest {
         val m = model().openFrontend()
         val scaling = m.rowIndex("Screen Scaling")
         m.select(scaling + 1)
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Fullscreen"), m.setChoice(scaling, 2))
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Fullscreen"), m.setChoice(scaling, 3))
         assertEquals(scaling, m.state.page.selected)
         assertEquals("Fullscreen", m.optionRow(scaling).valueLabel)
-        assertNull(m.setChoice(scaling, 2))                  // already that value
+        assertNull(m.setChoice(scaling, 3))                  // already that value
         assertNull(m.setChoice(scaling, -1))
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.press(NxButton.RIGHT))   // the cycle still works
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Auto"), m.press(NxButton.RIGHT))   // the cycle still works
     }
 
     @Test fun a_opens_the_picker_and_the_dpad_drives_it() {
@@ -2002,7 +2003,7 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.OVERLAY, "Native.png"), m.optionEvent(OptionEvent.Pick(2)))
         assertNull(m.state.popup)
         assertNull(m.optionEvent(OptionEvent.Pick(1)))      // no picker open
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.optionEvent(OptionEvent.Choose(m.rowIndex("Screen Scaling"), 0)))
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.optionEvent(OptionEvent.Choose(m.rowIndex("Screen Scaling"), 1)))
         val hud = m.rowIndex("Debug HUD")
         m.optionEvent(OptionEvent.Info(hud))
         assertEquals(MenuPopup.Info("Debug HUD", FrontendOptions.option(FrontendOptions.DEBUG_HUD)!!.info), m.state.popup)

@@ -82,19 +82,19 @@ class CoreConfigTest {
     }
 
     @Test fun save_keeps_unused_nx_keys() {
-        val existing = CoreConfig.parse("nx_cpu_speed = Powersave\nnx_screen_scaling = Aspect\n")
+        val existing = CoreConfig.parse("nx_cpu_speed = Powersave\nnx_screen_scaling_v2 = Aspect\n")
         val text = CoreConfig.render(existing, listOf(FrontendOptions.SCALING to "Native"))
-        assertEquals("nx_cpu_speed = Powersave\nnx_screen_scaling = Native\n", text)
+        assertEquals("nx_cpu_speed = Powersave\nnx_screen_scaling_v2 = Native\n", text)
     }
 
     @Test fun frontend_keys_fall_back_one_layer_like_core_options() {
-        val console = CoreConfig.parse("nx_screen_scaling = Fullscreen\n")
-        val game = CoreConfig.parse("nx_screen_scaling = Native\n")
+        val console = CoreConfig.parse("nx_screen_scaling_v2 = Fullscreen\n")
+        val game = CoreConfig.parse("nx_screen_scaling_v2 = Native\n")
         fun scaling(c: ConfigFile?, g: ConfigFile?) =
             FrontendOptions.fromConfig(CoreConfig.resolve(emptyMap(), c, g).values)[FrontendOptions.SCALING]
         assertEquals("Native", scaling(console, game))
         assertEquals("Fullscreen", scaling(console, null))   // game file restored away
-        assertEquals("Aspect", scaling(null, null))          // console file restored away too
+        assertEquals("Auto", scaling(null, null))          // console file restored away too
     }
 
     @Test fun locked_frontend_key_is_reported_locked() {

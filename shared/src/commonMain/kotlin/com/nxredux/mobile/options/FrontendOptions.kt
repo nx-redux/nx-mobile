@@ -26,11 +26,12 @@ data class FrontendOption(
     fun labelOf(value: String): String = valueLabels.getOrNull(values.indexOf(value))?.takeIf { it.isNotEmpty() } ?: value
 }
 
-enum class ScreenScaling { NATIVE, ASPECT, FULLSCREEN }
+/** How the game picture fills its box; [AUTO] lets the layout choose per screen and console. */
+enum class ScreenScaling { AUTO, NATIVE, ASPECT, FULLSCREEN }
 
 /** Frontend values parsed for use; anything unknown falls back to the default (sharpness NEAREST, overlay None). */
 data class FrontendSettings(
-    val scaling: ScreenScaling = ScreenScaling.ASPECT,
+    val scaling: ScreenScaling = ScreenScaling.AUTO,
     val linear: Boolean = false,
     /** Overlay file name, null for None. */
     val overlay: String? = null,
@@ -44,12 +45,13 @@ data class FrontendSettings(
     val padLandscapeAlpha: Float get() = padLandscapeOpacity / 100f
 
     companion object {
-        /** A missing key takes its default, as in [FrontendOptions.fromConfig]: Aspect scaling, overlay None. */
+        /** A missing key takes its default, as in [FrontendOptions.fromConfig]: Auto scaling, overlay None. */
         fun parse(values: Map<String, String>): FrontendSettings = FrontendSettings(
-            scaling = when (values[FrontendOptions.SCALING]) {
+            scaling = when (FrontendOptions.migrateKey(values, FrontendOptions.SCALING, FrontendOptions.SCALING_V1, "Aspect")) {
                 "Native" -> ScreenScaling.NATIVE
+                "Aspect" -> ScreenScaling.ASPECT
                 "Fullscreen" -> ScreenScaling.FULLSCREEN
-                else -> ScreenScaling.ASPECT
+                else -> ScreenScaling.AUTO
             },
             linear = values[FrontendOptions.SHARPNESS] == "LINEAR",
             overlay = values[FrontendOptions.OVERLAY]?.takeIf { it.isNotEmpty() && it != FrontendOptions.NONE },
@@ -66,7 +68,10 @@ data class FrontendSettings(
 
 /** The frontend options that make sense on a phone (values and texts follow minarch `ma_config.c`; keys are ours). */
 object FrontendOptions {
-    const val SCALING = "nx_screen_scaling"
+    /** Screen Scaling, with Auto added: a new key so an untouched old Aspect reads as Auto ([migrateKey]). */
+    const val SCALING = "nx_screen_scaling_v2"
+    /** Screen Scaling before Auto: read when [SCALING] is absent, never written. */
+    const val SCALING_V1 = "nx_screen_scaling"
     const val SHARPNESS = "nx_scale_filter"
     /** Not a row: read once by [ShaderOptions] to migrate Line/Grid to a preset. */
     const val EFFECT = "nx_screen_effect"
@@ -91,8 +96,8 @@ object FrontendOptions {
 
     val table: List<FrontendOption> = listOf(
         FrontendOption(
-            SCALING, "Screen Scaling", listOf("Native", "Aspect", "Fullscreen"), "Aspect",
-            "Native uses integer scaling.\nAspect uses core reported aspect ratio.\nFullscreen has non-square pixels.",
+            SCALING, "Screen Scaling", listOf("Auto", "Native", "Aspect", "Fullscreen"), "Auto",
+            "Auto picks the best fit for the screen and console.\nNative uses integer scaling.\nAspect uses core reported aspect ratio.\nFullscreen has non-square pixels.",
             visual = true,
         ),
         FrontendOption(
@@ -149,6 +154,13 @@ object FrontendOptions {
         if (isLegacyKey(key) && !isHandheldOnlyKey(key)) PREFIX + key.removePrefix(LEGACY_PREFIX) else key
 
     /**
+     * [newKey]'s value from [values], else [oldKey]'s unless it equals [oldDefault] (an untouched old default should
+     * follow the new default), else null.
+     */
+    fun migrateKey(values: Map<String, String>, newKey: String, oldKey: String, oldDefault: String): String? =
+        values[newKey] ?: values[oldKey]?.takeIf { it != oldDefault }
+
+    /**
      * Whether a full config save drops a line with [key]: a key moved to the shader rows ([ShaderOptions.MIGRATED_KEYS]),
      * read once and migrated, so the save has already carried its value, or a handheld-only key ([isHandheldOnlyKey]).
      */
@@ -177,7 +189,10 @@ object FrontendOptions {
     /** Every frontend key for [tag] with its value from [values] (kept raw), else its default. */
     fun fromConfig(values: Map<String, String>, tag: String = ""): Map<String, String> {
         val defaults = defaults(tag)
-        return allFor(tag).associate { it.key to (values[it.key] ?: defaults.getValue(it.key)) }
+        return allFor(tag).associate { option ->
+            val value = if (option.key == SCALING) migrateKey(values, SCALING, SCALING_V1, "Aspect") else values[option.key]
+            option.key to (value ?: defaults.getValue(option.key))
+        }
     }
 
     /** [values] without any frontend key: what the core receives as variables. */

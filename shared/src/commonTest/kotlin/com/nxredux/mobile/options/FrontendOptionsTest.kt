@@ -10,7 +10,7 @@ class FrontendOptionsTest {
     @Test fun defaults_match_minarch() {
         assertEquals(
             mapOf(
-                FrontendOptions.SCALING to "Aspect", FrontendOptions.SHARPNESS to "NEAREST", FrontendOptions.OVERLAY to "None",
+                FrontendOptions.SCALING to "Auto", FrontendOptions.SHARPNESS to "NEAREST", FrontendOptions.OVERLAY to "None",
                 FrontendOptions.OFFSET_X to "0", FrontendOptions.OFFSET_Y to "0", FrontendOptions.PAD_LANDSCAPE_OPACITY to "40",
                 FrontendOptions.DEBUG_HUD to "Off", BottomScreenOptions.KEY to "default", PadOptions.LAYOUT to "auto",
                 SpeedOptions.MAX_FF to "4", SpeedOptions.FF_AUDIO to "Off", SpeedOptions.REWIND to "Off", SpeedOptions.REWIND_AUDIO to "Off",
@@ -41,18 +41,18 @@ class FrontendOptionsTest {
         assertNull(FrontendSettings.parse(mapOf(FrontendOptions.OVERLAY to "None")).overlay)
     }
 
-    @Test fun scaling_defaults_to_aspect_for_every_console() {
+    @Test fun scaling_defaults_to_auto_for_every_console() {
         for (tag in CoreRegistry.tags) {
-            assertEquals("Aspect", FrontendOptions.defaults(tag)[FrontendOptions.SCALING], tag)
-            assertEquals("Aspect", FrontendOptions.fromConfig(emptyMap(), tag)[FrontendOptions.SCALING], tag)
+            assertEquals("Auto", FrontendOptions.defaults(tag)[FrontendOptions.SCALING], tag)
+            assertEquals("Auto", FrontendOptions.fromConfig(emptyMap(), tag)[FrontendOptions.SCALING], tag)
             // Whatever overlay is picked, the scaling default does not follow it.
-            assertEquals("Aspect", FrontendOptions.fromConfig(mapOf(FrontendOptions.OVERLAY to "Native.png"), tag)[FrontendOptions.SCALING], tag)
+            assertEquals("Auto", FrontendOptions.fromConfig(mapOf(FrontendOptions.OVERLAY to "Native.png"), tag)[FrontendOptions.SCALING], tag)
         }
-        assertEquals(ScreenScaling.ASPECT, FrontendSettings.parse(emptyMap()).scaling)
+        assertEquals(ScreenScaling.AUTO, FrontendSettings.parse(emptyMap()).scaling)
     }
 
     @Test fun a_stored_scaling_still_applies() {
-        for (v in listOf("Native", "Fullscreen")) {
+        for (v in listOf("Auto", "Native", "Aspect", "Fullscreen")) {
             assertEquals(v, FrontendOptions.fromConfig(mapOf(FrontendOptions.SCALING to v), "GBA")[FrontendOptions.SCALING])
         }
         assertEquals(ScreenScaling.NATIVE, FrontendSettings.parse(mapOf(FrontendOptions.SCALING to "Native")).scaling)
@@ -65,7 +65,7 @@ class FrontendOptionsTest {
             FrontendOptions.table.map { it.label },
         )
         assertEquals(listOf(true, true, true, true, true, false, false), FrontendOptions.table.map { it.visual })
-        assertEquals(listOf("nx_screen_scaling", "nx_scale_filter", "nx_overlay",
+        assertEquals(listOf("nx_screen_scaling_v2", "nx_scale_filter", "nx_overlay",
             "nx_screen_offsetx", "nx_screen_offsety", "nx_pad_landscape_opacity", "nx_debug_hud"), FrontendOptions.table.map { it.key })
     }
 
@@ -77,13 +77,13 @@ class FrontendOptionsTest {
     }
 
     @Test fun cycle_wraps_both_ways() {
-        assertEquals("Native", FrontendOptions.cycle(FrontendOptions.SCALING, "Fullscreen", 1, emptyList()))
-        assertEquals("Fullscreen", FrontendOptions.cycle(FrontendOptions.SCALING, "Native", -1, emptyList()))
+        assertEquals("Auto", FrontendOptions.cycle(FrontendOptions.SCALING, "Fullscreen", 1, emptyList()))
+        assertEquals("Fullscreen", FrontendOptions.cycle(FrontendOptions.SCALING, "Auto", -1, emptyList()))
         assertEquals("-64", FrontendOptions.cycle(FrontendOptions.OFFSET_Y, "64", 1, emptyList()))
     }
 
     @Test fun cycle_from_a_raw_value_goes_to_first_or_last() {
-        assertEquals("Native", FrontendOptions.cycle(FrontendOptions.SCALING, "Cropped", 1, emptyList()))
+        assertEquals("Auto", FrontendOptions.cycle(FrontendOptions.SCALING, "Cropped", 1, emptyList()))
         assertEquals("Fullscreen", FrontendOptions.cycle(FrontendOptions.SCALING, "Aspect Screen", -1, emptyList()))
     }
 
@@ -152,7 +152,8 @@ class FrontendOptionsTest {
     }
 
     @Test fun keys_use_the_nx_prefix() {
-        assertEquals("nx_screen_scaling", FrontendOptions.SCALING)
+        assertEquals("nx_screen_scaling_v2", FrontendOptions.SCALING)
+        assertEquals("nx_screen_scaling", FrontendOptions.SCALING_V1)
         assertEquals("nx_scale_filter", FrontendOptions.SHARPNESS)
         assertEquals("nx_overlay", FrontendOptions.OVERLAY)
         assertEquals("nx_screen_offsetx", FrontendOptions.OFFSET_X)
@@ -223,5 +224,34 @@ class FrontendOptionsTest {
         assertEquals("Big Screen", FrontendOptions.option(NdsOptions.BIG_SCREEN)?.label)
         assertTrue(NdsOptions.BIG_SCREEN !in FrontendOptions.coreValues(v))
         assertTrue(FrontendOptions.defaults("GBA").keys.none { it.startsWith("nx_nds_") })
+    }
+
+    @Test fun untouched_old_aspect_reads_as_auto() {
+        val old = mapOf(FrontendOptions.SCALING_V1 to "Aspect")
+        assertEquals(ScreenScaling.AUTO, FrontendSettings.parse(old).scaling)
+        assertEquals("Auto", FrontendOptions.fromConfig(old)[FrontendOptions.SCALING])
+    }
+
+    @Test fun old_native_is_kept() {
+        val old = mapOf(FrontendOptions.SCALING_V1 to "Native")
+        assertEquals(ScreenScaling.NATIVE, FrontendSettings.parse(old).scaling)
+        assertEquals("Native", FrontendOptions.fromConfig(old)[FrontendOptions.SCALING])
+    }
+
+    @Test fun new_key_wins() {
+        val both = mapOf(FrontendOptions.SCALING_V1 to "Native", FrontendOptions.SCALING to "Aspect")
+        assertEquals(ScreenScaling.ASPECT, FrontendSettings.parse(both).scaling)
+        assertEquals("Aspect", FrontendOptions.fromConfig(both)[FrontendOptions.SCALING])
+    }
+
+    @Test fun missing_reads_auto() {
+        assertEquals(ScreenScaling.AUTO, FrontendSettings.parse(emptyMap()).scaling)
+        assertEquals("Auto", FrontendOptions.fromConfig(emptyMap())[FrontendOptions.SCALING])
+    }
+
+    @Test fun row_default_is_auto() {
+        val row = FrontendOptions.option(FrontendOptions.SCALING)!!
+        assertEquals("Auto", row.default)
+        assertEquals(listOf("Auto", "Native", "Aspect", "Fullscreen"), row.values)
     }
 }
