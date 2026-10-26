@@ -12,6 +12,9 @@ private const val STUBBY_SHORT_SIDE_UNITS = 9f
 private const val BOX_MIN_WIDTH_UNITS = 4.5f
 private const val BUTTON_GROUP_UNITS = 1.4f
 private const val BUTTON_GAP_DP = 12f
+private const val DPAD_UNITS = 3f
+private const val MIC_INSET_UNITS = 0.15f
+private const val MIC_SIZE_UNITS = 0.9f
 
 /**
  * Pixels in one landscape layout unit. With mid = windowH / 2 and pad = 16 dp:
@@ -43,7 +46,8 @@ data class Reach(val edgePx: Float, val buttonsPx: Float) {
  * Edge = pad + 0.2 unit + extra, where extra = max(0, max(cutoutLeft, cutoutRight) - pad - 0.2 unit), so a camera
  * cutout wider than the margin moves both halves. Buttons = [measuredButtonsPx] (the user's tweaked group bounds)
  * when known, else the estimate max(systemPills x 1.4 unit + (systemPills - 1) x 12 dp, faceUnits x unit), where
- * [systemPills] is the pill count of the widest system row drawn (3 for the Wii's SELECT HOME START).
+ * [systemPills] is the pill count of the widest system row drawn (3 for the Wii's SELECT HOME START). A DS / 3DS pad
+ * ([mic]) reaches at least past its mic button ([micReachPx]), which is no group and so never measured.
  */
 fun reach(
     unitPx: Float,
@@ -53,11 +57,20 @@ fun reach(
     measuredButtonsPx: Float?,
     faceUnits: Float,
     systemPills: Int,
+    mic: Boolean = false,
 ): Reach {
     val margin = LayoutConstants.CLUSTER_PADDING_DP * density + LayoutConstants.EDGE_NUDGE_UNITS * unitPx
     val extra = max(0f, max(cutoutLeft, cutoutRight) - margin)
-    return Reach(margin + extra, measuredButtonsPx ?: max(systemRowPx(systemPills, unitPx, density), faceUnits * unitPx))
+    val buttons = measuredButtonsPx ?: max(systemRowPx(systemPills, unitPx, density), faceUnits * unitPx)
+    return Reach(margin + extra, if (mic) max(buttons, micReachPx(unitPx, density)) else buttons)
 }
+
+/**
+ * How far the left half's mic button reaches in past the edge nudge, px: past the d-pad (3 units) or MENU + the toggle
+ * (two 1.4-unit pills 12 dp apart), then its 0.15-unit inset and 0.9-unit size (VirtualPadLeft's `clusterMicStart`).
+ */
+fun micReachPx(unitPx: Float, density: Float): Float =
+    max(DPAD_UNITS * unitPx, systemRowPx(2, unitPx, density)) + (MIC_INSET_UNITS + MIC_SIZE_UNITS) * unitPx
 
 /** A system row of [pills] 1.4-unit pills, 12 dp apart, px. */
 private fun systemRowPx(pills: Int, unitPx: Float, density: Float): Float =
@@ -135,9 +148,10 @@ fun besideMeasures(
     measuredButtonsPx: Float?,
     faceUnits: Float,
     systemPills: Int,
+    mic: Boolean = false,
 ): BesideMeasures {
     val unit = landscapeUnitPx(screen, windowH, min(windowW, windowH), ydpi, density, secondRow)
-    return BesideMeasures(unit, reach(unit, density, cutoutLeft, cutoutRight, measuredButtonsPx, faceUnits, systemPills))
+    return BesideMeasures(unit, reach(unit, density, cutoutLeft, cutoutRight, measuredButtonsPx, faceUnits, systemPills, mic))
 }
 
 /**
@@ -172,8 +186,9 @@ fun besidePreview(
     faceUnits: Float,
     systemPills: Int,
     tag: String = "",
+    mic: Boolean = false,
 ): BesidePreview {
-    val m = besideMeasures(screen, windowW, windowH, ydpi, density, cutoutLeft, cutoutRight, secondRow, null, faceUnits, systemPills)
+    val m = besideMeasures(screen, windowW, windowH, ydpi, density, cutoutLeft, cutoutRight, secondRow, null, faceUnits, systemPills, mic)
     val space = pictureSpace(PadRoom.BESIDE, windowW, windowH, setAsidePx(screen, m.reach), 0f)
     val picture = previewPicture(tag, space, screen)
     val placement = besidePlacement(PxRect(0f, 0f, windowW, windowH), picture, m.unitPx, m.reach, density, secondRow)

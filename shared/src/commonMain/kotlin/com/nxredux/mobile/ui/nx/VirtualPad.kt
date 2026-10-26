@@ -860,8 +860,9 @@ fun portraitMicEdge(unit: Float, hiddenBand: Boolean): Float =
 
 /**
  * The mic button's inset from a landscape cluster's left edge ([VirtualPadLeft]), dp: past the d-pad / stick (3 units)
- * and MENU + toggle (two pills and their gap, the bottom row off the game), both from the cluster's [nudge], so it sits
- * in the bottom corner beside them, toward the screen's middle. Over the game that still ends inside the 4.5-unit cluster.
+ * and MENU + toggle (two pills and their gap), both from the cluster's [nudge], so it sits in the bottom corner beside
+ * them, toward the screen's middle. The halves' reach counts it ([com.nxredux.mobile.layout.micReachPx]), so the
+ * picture, or the half-folded touch screen, keeps clear of it.
  */
 internal fun clusterMicStart(unit: Float, nudge: Float): Float =
     nudge + maxOf(3f * unit, 2f * SYSTEM_PILL_W_UNITS * unit + SYSTEM_PILL_GAP) + micButtonInset(unit)

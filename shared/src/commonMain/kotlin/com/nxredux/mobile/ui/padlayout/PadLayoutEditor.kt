@@ -138,7 +138,7 @@ fun PadLayoutEditor(
                 val preview = besidePreview(
                     window?.screen ?: screenClass(w.roundToInt(), h.roundToInt(), (min(w, h) / d).toInt()), w, h, ydpi, d,
                     window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, faceWidthUnits(profile), systemRowPills(profile, motion = motion != null),
-                    tag = consoleTag,
+                    tag = consoleTag, mic = mic != null,
                 )
                 gameArea = preview.picture
                 Box(Modifier.placedPx(gameArea).background(GameBlock))
@@ -151,7 +151,7 @@ fun PadLayoutEditor(
                 val preview = halfFoldedPreview(
                     w, h, window?.screen ?: screenClass(w.roundToInt(), h.roundToInt(), (min(w, h) / d).toInt()), window?.cutoutTop ?: 0f,
                     ydpi, d, window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, faceWidthUnits(profile),
-                    systemRowPills(profile, motion = motion != null), kind,
+                    systemRowPills(profile, motion = motion != null), kind, mic = mic != null,
                 )
                 gameArea = preview?.placement?.top ?: PxRect(0f, 0f, w, h / 2f)
                 if (preview != null) {

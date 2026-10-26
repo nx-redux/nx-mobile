@@ -1,5 +1,7 @@
 package com.nxredux.mobile.ui.nx
 
+import com.nxredux.mobile.layout.micReachPx
+import com.nxredux.mobile.layout.reach
 import com.nxredux.mobile.ui.padlayout.padLayoutShowsMic
 import kotlin.math.abs
 import kotlin.test.Test
@@ -24,13 +26,16 @@ class PadMicTest {
         near(clusterMicStart(100f, 20f), 20f + 300f + 15f)
     }
 
-    @Test fun overTheGameItFitsInsideTheCluster() {
-        // The over-the-game nudge (0.2 units) on a height-bound phone and on the width-bound Flip cover: the button
-        // ends inside the cluster's 4.5 units.
-        for (unit in listOf(54.7f, 45.6f)) {
-            val end = clusterMicStart(unit, unit * 0.2f) + micButtonSize(unit)
-            assertTrue(end <= 4.5f * unit, "unit $unit: ends at $end, past ${4.5f * unit}")
+    @Test fun theHalvesReachCountsIt() {
+        // Beside the picture and half-folded (the 0.2-unit nudge): the reach the picture keeps clear of ends where the
+        // button does, at a phone's, a tablet's and the half-folded unit, at density 1 (dp = px).
+        for (unit in listOf(36f, 54.7f, 49.3f)) {
+            near(micReachPx(unit, 1f), clusterMicStart(unit, unit * 0.2f) + micButtonSize(unit) - unit * 0.2f)
+            val r = reach(unit, 1f, 0f, 0f, measuredButtonsPx = 2.8f * unit + 12f, faceUnits = 3f, systemPills = 2, mic = true)
+            assertTrue(r.buttonsPx >= micReachPx(unit, 1f), "unit $unit: buttons ${r.buttonsPx}")
         }
+        // Without a mic the measured buttons stand.
+        assertEquals(112f, reach(40f, 1f, 0f, 0f, measuredButtonsPx = 112f, faceUnits = 3f, systemPills = 2).buttonsPx)
     }
 
     @Test fun portraitCentreIsTheBandCornerOrTheOverlayRow() {
