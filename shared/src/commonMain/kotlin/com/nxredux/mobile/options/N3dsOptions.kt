@@ -37,7 +37,7 @@ object N3dsOptions {
     const val STACKED_SMALL_PROPORTION = "citra_stacked_small_proportion"
 
     /**
-     * While the on-screen buttons are over the game, a finger touches the bottom screen only when it is the main one
+     * While the on-screen buttons cover part of the picture, a finger touches the bottom screen only when it is the main one
      * (swapped); the stylus cursor still touches anywhere (nx-mobile's core patch; not declared, never shown or saved).
      */
     const val TOUCH_MAIN_ONLY = "citra_touch_main_only"

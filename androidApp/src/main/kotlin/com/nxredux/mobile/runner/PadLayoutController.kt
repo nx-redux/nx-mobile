@@ -260,6 +260,17 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private val clusterSecondRow = mutableStateOf(false)
     /** The hidden band's overlay misses the picture: drawn solid ([overlayClear]). */
     val overlayClear = mutableStateOf(false)
+
+    /** The pad covers part of the picture now ([DualScreen.padCoversPicture]): the 3DS then limits touch to its main screen. */
+    val padCoversPicture: Boolean
+        get() = DualScreen.padCoversPicture(overlayPadShown.value, clustersClear.value, overlayClear.value)
+
+    /** Sets [overlayClear]; a change re-sends the 3DS core's touch rule. */
+    fun setOverlayClear(clear: Boolean) {
+        if (overlayClear.value == clear) return
+        overlayClear.value = clear
+        syncN3dsCore()
+    }
     /**
      * How far the clusters' shoulders reach in from each screen edge while they sit beside the picture, px; null
      * otherwise. The top-centre notifications keep clear of this ([com.nxredux.mobile.ui.nx.topCentreMaxWidth]).
@@ -289,6 +300,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         padViews.clear()
         input.dpadHat.clear()
         overlayPadShown.value = false   // set again below where the landscape clusters are added
+        clustersClear.value = false
+        overlayClear.value = false
         layoutPadHidden = portraitPadHidden()
         clusterViews = null
         tabletopDsViews = null
@@ -563,7 +576,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val window = PxRect(0f, 0f, (root.width.takeIf { it > 0 } ?: pad.shape.widthPx).toFloat(), (root.height.takeIf { it > 0 } ?: pad.shape.heightPx).toFloat())
         // Unknown picture: as if it took the middle half, so the unit and rows are already right when it shows.
         val p = besidePlacement(window, picture, pad.unitPx, pad.reach, pad.shape.density, pad.secondRow)
-        clustersClear.value = picture != null && p.clear
+        val clear = picture != null && p.clear
+        val changed = clustersClear.value != clear
+        clustersClear.value = clear
         clusterInsetPx.value = p.extraInsetPx
         clusterUnitPx.value = pad.unitPx
         clusterSecondRow.value = pad.secondRow
@@ -573,6 +588,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val top = p.topMarginPx.roundToInt()
         setBox(left, Gravity.START or Gravity.TOP, w, h, top)
         setBox(right, Gravity.END or Gravity.TOP, w, h, top)
+        if (changed) syncN3dsCore()   // clear of the picture, the 3DS takes touch on both screens
     }
 
     /**
