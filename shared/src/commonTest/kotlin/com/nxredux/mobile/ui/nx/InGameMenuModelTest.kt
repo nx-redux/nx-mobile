@@ -1467,6 +1467,36 @@ class InGameMenuModelTest {
         assertTrue("Scale" in m.state.page.rows.map { it.label })
     }
 
+    private fun InGameMenuModel.row3d(label: String) = state.page.rows.filterIsInstance<MenuRow.Option>().single { it.label == label }
+
+    @Test fun modeRowShowsTheValueInUse() {
+        val m = model().openConsoleSettings()
+        m.setNds3d(6, false)
+        assertEquals("Auto · 6x now", m.row3d("3D Resolution").valueLabel)
+        m.setFrontend(FrontendOptions.defaults("NDS") + (NdsOptions.MODE_3D to "quality"), emptyList(), emptySet(), "NDS")
+        assertEquals("Quality · 6x now", m.row3d("3D Resolution").valueLabel)
+        m.setFrontend(FrontendOptions.defaults("NDS") + (NdsOptions.MODE_3D to "performance"), emptyList(), emptySet(), "NDS")
+        assertEquals("Performance", m.row3d("3D Resolution").valueLabel)
+        m.setFrontend(FrontendOptions.defaults("NDS"), emptyList(), emptySet(), "NDS")
+        m.setNds3d(null, false)
+        assertEquals("Auto", m.row3d("3D Resolution").valueLabel)
+    }
+
+    @Test fun softwareModeDisablesTheRows() {
+        val m = model().openConsoleSettings()
+        m.setNds3d(1, true)
+        for (label in listOf("3D Resolution", "Max Scale")) {
+            val row = m.row3d(label)
+            assertTrue(row.choices.isEmpty())
+            assertEquals(NdsOptions.SOFTWARE_NOTE, row.info)
+        }
+        m.select(m.state.page.rows.indexOfFirst { it.label == "3D Resolution" })
+        assertNull(m.press(NxButton.RIGHT))
+        m.setNds3d(4, false)
+        assertTrue(m.row3d("3D Resolution").choices.isNotEmpty())
+        assertTrue(m.row3d("Max Scale").choices.isNotEmpty())
+    }
+
     @Test fun anUnstoredMaxScaleAboveTheDisplayShowsTheLast() {
         val m = model().apply { displayMax3d = 3 }.openConsoleSettings()
         val row = m.state.page.rows.filterIsInstance<MenuRow.Option>().single { it.label == "Max Scale" }

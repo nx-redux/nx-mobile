@@ -110,6 +110,15 @@ class EmulatorSettingsTest {
         assertTrue("Scale" in perf && "Max Scale" !in perf)
     }
 
+    @Test fun softwareRenderModeDisablesOffline() {
+        val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
+        fun notes(text: String?) = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, text?.let(::cfg), null, forGame = false, displayMax = 5)
+            .console.filter { it.option.key in setOf(NdsOptions.MODE_3D, NdsOptions.MAX_SCALE_3D) }.map { it.disabledNote }
+        assertEquals(listOf(NdsOptions.SOFTWARE_NOTE, NdsOptions.SOFTWARE_NOTE), notes("melonds_render_mode = software\n"))
+        assertEquals(listOf(null, null), notes("melonds_render_mode = opengl\n"))
+        assertEquals(listOf(null, null), notes(null))
+    }
+
     @Test fun storedValueOutsideTheListStillShows() {
         val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
         val row = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, cfg("nx_nds_3d_max_scale = 7\n"), null, forGame = false, displayMax = 3)

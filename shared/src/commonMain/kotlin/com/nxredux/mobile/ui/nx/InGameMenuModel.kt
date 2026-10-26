@@ -15,8 +15,10 @@ import com.nxredux.mobile.options.CoreOption
 import com.nxredux.mobile.options.CoreOptionFilter
 import com.nxredux.mobile.options.FrontendOption
 import com.nxredux.mobile.options.FrontendOptions
+import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.shownFor
+import com.nxredux.mobile.runner.Nds3dMode
 import com.nxredux.mobile.settings.stepFrom
 import com.nxredux.mobile.shaders.ShaderParam
 import com.nxredux.mobile.shortcuts.CaptureResult
@@ -307,6 +309,22 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** The biggest DS 3D scale this display reaches (null: unknown): the 3D Resolution rows offer scales up to it. Set before the menu's pages are built. */
     var displayMax3d: Int? = null
+
+    private var nds3dNow: Int? = null            // the DS 3D scale in use (null: unknown / not DS)
+    private var nds3dSoftware = false            // the core renders in software: the 3D Resolution rows take no effect
+
+    /**
+     * The DS 3D scale in use ([now], null: unknown) and whether the core renders in [software] (the 3D Resolution rows are
+     * then static, with a note). Refreshes open Console Settings/Frontend/Adjust pages.
+     */
+    fun setNds3d(now: Int?, software: Boolean) {
+        if (now == nds3dNow && software == nds3dSoftware) return
+        nds3dNow = now
+        nds3dSoftware = software
+        refreshFrontendPages()
+    }
+
+    private fun softwareLocked(key: String) = nds3dSoftware && key in NdsOptions.RESOLUTION_KEYS
 
     // Options → Shortcuts ([setShortcuts]): Controls → Shortcuts, this console's or game's overrides over it, the
     // console's hotkeys (they win: a row on one is Unavailable, press to bind refuses one), whether the core rewinds.
@@ -1157,6 +1175,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             return ShaderOptions.cycle(key, current, delta, presets, params)?.let { setFrontendValue(key, it) }
         }
         if (key == FrontendOptions.OVERLAY && !overlayAvailable) return null
+        if (softwareLocked(key)) return null
         // An unset DS layout row (no stored value) cycles from its shown default, like frontendRow shows it.
         val option = optionFor(key)
         val current = ConsoleSettings.fitted(option ?: return null, frontend[key] ?: option.default).second
@@ -1429,12 +1448,17 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun frontendRow(o: FrontendOption): MenuRow.Option =
         if (o.key == FrontendOptions.OVERLAY && !overlayAvailable) {
             MenuRow.Option(o.label, o.key, OVERLAY_UNAVAILABLE, OVERLAY_UNAVAILABLE_LINE, detail = OVERLAY_UNAVAILABLE_INFO)
+        } else if (softwareLocked(o.key)) {
+            val value = ConsoleSettings.fitted(o, frontend[o.key] ?: o.default).second
+            MenuRow.Option(o.label, o.key, o.labelOf(value), NdsOptions.SOFTWARE_NOTE)
         } else {
             val value = ConsoleSettings.fitted(o, frontend[o.key] ?: o.default).second
             val values = if (o.key == FrontendOptions.OVERLAY) FrontendOptions.choices(o.key, overlays) else o.values
             // The row's brief line (none: compact); the full text in its info popup.
+            val now = nds3dNow
+            val shown = if (o.key == NdsOptions.MODE_3D && now != null && value != Nds3dMode.PERFORMANCE.value) "${o.labelOf(value)} · ${now}x now" else o.labelOf(value)
             MenuRow.Option(
-                o.label, o.key, o.labelOf(value), o.brief, visual = o.visual,
+                o.label, o.key, shown, o.brief, visual = o.visual,
                 choices = values.map(o::labelOf), index = values.indexOf(value), detail = o.info,
             )
         }

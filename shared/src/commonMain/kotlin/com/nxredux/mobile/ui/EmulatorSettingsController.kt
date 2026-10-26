@@ -311,7 +311,7 @@ internal class EmulatorSettingsController(
      * shows them) and the current one's place (-1: a value not among them, as a retired one); null for any other row.
      */
     fun choices(s: Screen.EmulatorOptions): Triple<String, List<String>, Int>? = when (val row = s.rows.getOrNull(selection.value.index)) {
-        is EmulatorRow.Console -> row.row.option.let { o -> Triple(o.label, o.values.map(o::labelOf), o.values.indexOf(row.row.value)) }
+        is EmulatorRow.Console -> if (row.row.disabledNote != null) null else row.row.option.let { o -> Triple(o.label, o.values.map(o::labelOf), o.values.indexOf(row.row.value)) }
         is EmulatorRow.Core -> row.option.let { o ->
             val values = CoreOptionFilter.visibleValues(o)
             Triple(CoreOptionFilter.rowLabel(o, row.inCategory), values.map { v -> CoreOptionFilter.valueLabel(o.copy(value = v)) }, values.indexOf(o.value))
@@ -345,7 +345,7 @@ internal class EmulatorSettingsController(
      */
     private fun change(s: Screen.EmulatorOptions, row: EmulatorRow?, next: (EmulatorPage, String) -> String?) {
         val key = when (row) {
-            is EmulatorRow.Console -> row.row.option.key
+            is EmulatorRow.Console -> if (row.row.disabledNote != null) return else row.row.option.key
             is EmulatorRow.Core -> row.option.key
             else -> return
         }

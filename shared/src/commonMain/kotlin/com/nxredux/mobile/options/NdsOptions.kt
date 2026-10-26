@@ -118,6 +118,9 @@ object NdsOptions {
     const val MAX_SCALE_3D = "nx_nds_3d_max_scale"
     const val SCALE_3D = "nx_nds_3d_scale"
 
+    /** The note on the 3D Resolution rows while the core renders in software (they take no effect there). */
+    const val SOFTWARE_NOTE = "Needs Render Mode → OpenGL"
+
     /** Each layout key to its previous key and that key's old default. */
     val OLD_LAYOUT_KEYS: Map<String, Pair<String, String>> = mapOf(
         LAYOUT_PORTRAIT to ("nx_nds_layout_portrait_v2" to "auto"),
