@@ -15,6 +15,7 @@ import com.nxredux.mobile.settings.FolderPicker
 import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
+import com.nxredux.mobile.settings.PadButtons
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.NxButton
@@ -52,6 +53,7 @@ class AppUpdateUiTest {
         override var extraFolders: List<ExtraFolder> = emptyList()
         override var defaultTags: Map<String, String> = emptyMap()
         override var padTheme = PadTheme.DEFAULT
+        override var padButtons: PadButtons = PadButtons.DEFAULT
         override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap()
         override var gameListStyle: MenuStyle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_GAME_LIST_STYLE
         override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap()

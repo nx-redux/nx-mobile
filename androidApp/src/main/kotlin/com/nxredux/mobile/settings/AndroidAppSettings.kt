@@ -34,6 +34,10 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = prefs.getString(KEY_PAD_THEME, null)?.let { runCatching { PadTheme.valueOf(it) }.getOrNull() } ?: PadTheme.DEFAULT
         set(value) = prefs.edit { putString(KEY_PAD_THEME, value.name) }
 
+    override var padButtons: PadButtons
+        get() = PadButtons.fromStored(prefs.getString(KEY_PAD_BUTTONS, null))
+        set(value) = prefs.edit { putString(KEY_PAD_BUTTONS, value.name) }
+
     override var menuStyles: Map<MenuCategory, MenuStyle>
         get() = MenuStyles.decode(prefs.getString(KEY_MENU_STYLES, null))
         set(value) = prefs.edit { putString(KEY_MENU_STYLES, MenuStyles.encode(value)) }
@@ -291,6 +295,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_EXTRAS = "extra_folders"
         private const val KEY_DEFAULT_TAGS = "default_tags"
         private const val KEY_PAD_THEME = "pad_theme"
+        private const val KEY_PAD_BUTTONS = "pad_buttons"
         private const val KEY_MENU_STYLES = "menu_styles"
         private const val KEY_GAME_LIST_STYLE = "game_list_style"
         private const val KEY_MENU_ORIENTATIONS = "menu_orientations"

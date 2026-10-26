@@ -12,7 +12,7 @@ private fun quiet(text: String, detail: String = "") = SettingText("", detail.if
 
 /** Reset to defaults' line on each page that has one, and the fuller text behind its info icon. */
 private fun resetText(section: SettingsSection?): SettingText = when (section) {
-    SettingsSection.APPEARANCE -> SettingText("Resets every setting on this page", "Put Pad theme, Accent, Secondary accent and Text size back")
+    SettingsSection.APPEARANCE -> SettingText("Resets every setting on this page", "Put Pad theme, Pad buttons, Accent, Secondary accent and Text size back")
     SettingsSection.MAIN_MENU -> SettingText("Resets every setting on this page", "Put every Layouts group and Extra info back to their defaults")
     SettingsSection.CONTROLS -> SettingText("Resets this page, pad layouts included", "Put vibration, Menu pad and every pad layout back to defaults")
     SettingsSection.SHORTCUTS -> SettingText("Sets every shortcut to None", "Unbind every action and take both touch buttons off the pad")
@@ -72,7 +72,13 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.PAD_THEME -> quiet(
         "Colours of the on-screen pad in portrait",
         "The colours of the on-screen pad in portrait, in the menus and in games. Charcoal is the dark pad; Retro has a " +
-            "light grey body with magenta face buttons. The landscape button clusters always stay Charcoal.",
+            "light grey body with magenta face buttons; Black has a pure black body, its buttons set by Pad buttons. The " +
+            "landscape button clusters always stay Charcoal.",
+    )
+    SettingsKind.PAD_BUTTONS -> quiet(
+        "How the Black pad's buttons look",
+        "How the buttons look on the Black pad theme. Grey keeps Charcoal's grey buttons on the black body; Outline " +
+            "draws each button as a thin outline with its label, lit faintly while you hold it.",
     )
     SettingsKind.ACCENT -> quiet(
         "The selection colour: the selected row, tile or card",

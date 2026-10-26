@@ -241,7 +241,7 @@ internal fun listRowKind(screen: Screen): NxRowKind = when (screen) {
 internal fun settingsNxRow(row: SettingsRow): NxRow = NxRow(
     row.label, enabled = row.enabled, secondary = row.secondary,
     cycleable = row.enabled && when (row.kind) {
-        SettingsKind.PAD_THEME,
+        SettingsKind.PAD_THEME, SettingsKind.PAD_BUTTONS,
         SettingsKind.DEFAULT_TAG, SettingsKind.MENU_STYLE, SettingsKind.GAME_LIST_STYLE,
         SettingsKind.MENU_ORIENTATION, SettingsKind.GAME_LIST_ORIENTATION, SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT,
         SettingsKind.CONTROLLER_ART, SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HINT_SHOWN, SettingsKind.LIST_ART, SettingsKind.BACKDROP_ART, SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS, SettingsKind.EXTRA_INFO, SettingsKind.HOME_STATS, SettingsKind.LAYOUT_OPTIONS, SettingsKind.ACHIEVEMENTS_PANEL, SettingsKind.SWITCHER_LAYOUT, SettingsKind.PAD_VIBRATION, SettingsKind.GAME_RUMBLE, SettingsKind.MENU_PAD, SettingsKind.PAD_LAYOUT_CONSOLE, SettingsKind.SHORTCUT_TOUCH, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.DEBUG_LOG, SettingsKind.SECOND_SCREEN_ENABLE, SettingsKind.BOTTOM_SCREEN, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME -> true
