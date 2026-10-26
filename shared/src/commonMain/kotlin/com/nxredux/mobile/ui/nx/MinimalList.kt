@@ -76,6 +76,7 @@ import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 /*
@@ -231,8 +232,9 @@ private fun minimalNameStyle(): TextStyle {
 
 /**
  * A page body in the Minimal layout: [names] ([NxRow.label], and an [NxRow.tag] on Home's rows; nothing else shows) over
- * the whole box, the hint bar at the bottom ([NxScreenScaffold]). The selection sits one row under the body's top, [top]
- * down the box (Home's strip room), the names running on above and below it. A drag moves the names with the finger and,
+ * the whole box, the hint bar at the bottom ([NxScreenScaffold]). The selection sits a third of the way down the box, at
+ * least one row under the body's top ([top] down the box: Home's strip room), the names running on above and below it
+ * ([minimalAnchor]). A drag moves the names with the finger and,
  * released, they settle on the name the throw lands on, selected ([axisSwipe]). A tap selects, a tap on the selected name
  * opens it (every name, so the open band starts at the selection's place; [tapOpens] may open on one tap), a long press calls [onLongPress]. The d-pad
  * lives in AppState (UP / DOWN wrap on a fresh press, as a List). [overlay] draws over the names (Home's strip). Draw it
@@ -244,7 +246,7 @@ private fun minimalNameStyle(): TextStyle {
 internal fun MinimalScreen(
     names: List<NxRow>, selection: () -> Int, hints: List<Hint>,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, onHint: ((NxButton) -> Unit)?,
-    bodyAlpha: () -> Float, selected: MinimalSelected, modifier: Modifier = Modifier, top: Float = 0f, hideHints: Boolean = false,
+    selected: MinimalSelected, modifier: Modifier = Modifier, top: Float = 0f, hideHints: Boolean = false,
     layoutKey: Any? = null, leaving: Boolean = false, tapOpens: (Int) -> Boolean = NxTapNeverOpens,
     onSwipeSelect: ((Int) -> Unit)? = null,   // a swipe's release: moves the highlight only (default: onSelect)
     onPageRows: ((Int) -> Unit)? = null,   // the names one screen shows under the selection (a game list's LEFT / RIGHT page)
@@ -279,7 +281,7 @@ internal fun MinimalScreen(
     Box(modifier.fillMaxSize().onGloballyPositioned { box[0] = it; boxH = it.size.height.toFloat() }) {
         area?.let { a ->
             CompositionLocalProvider(LocalNxTapOpens provides tapOpens) {
-                MinimalNames(names, a, boxH, selection, onSelect, onOpen, onLongPress, selected, gutter, bodyAlpha, layoutKey, motion, page, onSwipeSelect, onPageRows)
+                MinimalNames(names, a, boxH, selection, onSelect, onOpen, onLongPress, selected, gutter, layoutKey, motion, page, onSwipeSelect, onPageRows)
             }
         }
         // B from a Minimal list: its title flies down into the selected row.
@@ -291,7 +293,7 @@ internal fun MinimalScreen(
             if (top > 0f) Spacer(Modifier.height(top.dp))
             NxScreenScaffold(
                 rows = emptyList(), selectedIndex = 0, hints = hints, onSelect = onSelect, onOpen = onOpen,
-                modifier = Modifier.weight(1f), onHint = onHint, bodyAlpha = bodyAlpha, hideHints = hideHints,
+                modifier = Modifier.weight(1f), onHint = onHint, hideHints = hideHints,
                 grid = { m ->
                     Box(m.fillMaxSize().onGloballyPositioned { c -> box[0]?.takeIf { it.isAttached }?.let { b -> area = b.localBoundingBoxOf(c, clipBounds = false) } })
                 },
@@ -369,10 +371,17 @@ private class MinimalTexts(
  * box's edges unclipped. The position eases to the selection (a far jump snaps: [MINIMAL_SNAP_STEPS]) and follows a
  * finger's drag. Only the names in view are composed ([minimalWindow]), keyed by recycled slots ([ItemSlots]).
  */
+/**
+ * Where a Minimal page's selected name's top sits, px down its box ([boxH] tall): a third of the way down, so the list
+ * starts in the upper third rather than right under Home's strip or the title; never higher than one row ([pitchPx])
+ * under the body's top [bodyTop].
+ */
+internal fun minimalAnchor(bodyTop: Float, pitchPx: Float, boxH: Float): Float = max(bodyTop + pitchPx, boxH / 3f)
+
 @Composable
 private fun MinimalNames(
     names: List<NxRow>, area: Rect, boxH: Float, selection: () -> Int, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit,
-    onLongPress: ((Int) -> Unit)?, selected: MinimalSelected, gutter: Dp, bodyAlpha: () -> Float, layoutKey: Any?,
+    onLongPress: ((Int) -> Unit)?, selected: MinimalSelected, gutter: Dp, layoutKey: Any?,
     motion: MinimalMotion, page: MinimalPage?, onSwipeSelect: ((Int) -> Unit)?, onPageRows: ((Int) -> Unit)?,
 ) {
     val count = names.size
@@ -383,8 +392,9 @@ private fun MinimalNames(
     val size = MINIMAL_NAME_DP * nxTextScale()
     val pitch = size + 2f
     val pitchPx = with(density) { pitch.dp.toPx() }
-    // The selection one row under the body's top: a row of the name above shows, the rest run on behind the strip or title, faded further there.
-    val anchorPx = area.top + pitchPx
+    // The selection a third of the way down the box, the names above it running on up behind the strip or title, faded
+    // further there; never higher than one row under the body's top (a short landscape box under a tall strip).
+    val anchorPx = minimalAnchor(area.top, pitchPx, boxH)
     // A page: the one-line names from the selection down to the body's bottom.
     if (onPageRows != null) {
         val rows = ((area.bottom - anchorPx) / pitchPx).toInt().coerceAtLeast(1)
@@ -451,7 +461,7 @@ private fun MinimalNames(
     val first = remember { window.first }   // the top name as the page came in: the names rise in from it down
     val risePx = with(density) { MINIMAL_RISE_DP.dp.toPx() }
     Box(
-        Modifier.fillMaxSize().graphicsLayer { alpha = bodyAlpha() }
+        Modifier.fillMaxSize()
             .axisSwipe(
                 vertical = true, key = pos, value = pos, live = dragPos, perDp = -1f / pitch,
                 lo = 0f, hi = (count - 1).toFloat(), give = .5f, ms = MINIMAL_MOVE_MS,
