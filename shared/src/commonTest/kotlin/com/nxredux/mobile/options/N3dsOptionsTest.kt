@@ -121,6 +121,13 @@ class N3dsOptionsTest {
         assertEquals(N3dsOptions.LAYOUT_PORTRAIT_CONTROLLER to "single_screen", N3dsOptions.cycleLayout(values, false, true, 1, phone))
     }
 
+    @Test fun layoutRowsAreNotVisual() {
+        // Azahar composes the 3DS layout itself, so the paused frame never shows a change: no Adjust strip.
+        assertTrue(N3dsOptions.layoutRowsFor(null).all { it.visual == false })
+        // The DS layout rows are drawn by the app, so their strip works.
+        assertTrue(NdsOptions.layoutRows(null).all { it.visual })
+    }
+
     @Test fun deadzone_reads_the_core_percentage() {
         assertEquals(0.15f, N3dsOptions.deadzone(null))
         assertEquals(0.15f, N3dsOptions.deadzone("x"))

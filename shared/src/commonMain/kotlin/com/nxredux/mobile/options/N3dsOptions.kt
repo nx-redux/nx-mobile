@@ -107,8 +107,9 @@ object N3dsOptions {
         "Stacked: one above the other, the same size.\nSingle screen: the top one only.\n" +
         "Side by side: next to each other.\nSELECT + Left/Right cycles it."
 
+    /** Not visual: Azahar composes the 3DS layout, so the paused frame never shows a change; it shows on Continue. */
     private fun layoutRow(key: String, label: String, default: String, info: String, fold: String, brief: String = "") = FrontendOption(
-        key, label, LAYOUT_CYCLE, default, info + fold, visual = true, valueLabels = LAYOUT_CYCLE.map(::layoutLabel), brief = brief,
+        key, label, LAYOUT_CYCLE, default, info + fold, visual = false, valueLabels = LAYOUT_CYCLE.map(::layoutLabel), brief = brief,
     )
 
     /**

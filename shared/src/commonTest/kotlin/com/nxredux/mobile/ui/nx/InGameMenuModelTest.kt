@@ -1522,14 +1522,21 @@ class InGameMenuModelTest {
         assertTrue("3D Resolution" in labels())
     }
 
-    @Test fun n3dsAdjustStripOnTheLandscapeRowClosesInPortrait() {
-        val m = model()
+    // The 3DS layout rows are not visual (Azahar draws the layout, so the paused frame can't show it): A does not open a strip,
+    // and LEFT/RIGHT changes the row in place.
+    @Test fun n3dsLayoutRowChangesInPlaceWithoutAnAdjustStrip() {
+        val m = model().apply { screen = ScreenClass.NEAR_SQUARE_TABLET }
         m.ndsView = NdsView(landscape = true, controllerMode = false)
         m.open3dsConsoleSettings()
         m.select(m.state.page.rows.indexOfFirst { it.label == "Layout (landscape)" })
-        m.press(NxButton.A)
-        assertTrue(m.state.page.kind is PageKind.Adjust)
-        m.ndsView = NdsView(landscape = false, controllerMode = false)
+        assertFalse(m.optionRow(m.state.page.rows.indexOfFirst { it.label == "Layout (landscape)" }).visual)
+        assertNull(m.press(NxButton.A))                                    // a value picker, as a non-visual row's A
+        assertTrue(m.state.popup is MenuPopup.Picker)
+        assertEquals(PageKind.ConsoleSettings, m.state.page.kind)          // no Adjust page
+        m.press(NxButton.B)
+        assertNull(m.state.popup)
+        assertEquals(MenuEffect.SetFrontend(N3dsOptions.LAYOUT_LANDSCAPE, "stacked"), m.press(NxButton.RIGHT))
+        assertEquals(MenuEffect.SetFrontend(N3dsOptions.LAYOUT_LANDSCAPE, "large"), m.press(NxButton.LEFT))
         assertEquals(PageKind.ConsoleSettings, m.state.page.kind)
     }
 
