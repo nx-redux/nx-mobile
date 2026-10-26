@@ -88,13 +88,13 @@ data class PadEditorWindow(val screen: ScreenClass, val ydpi: Float, val cutoutT
  * resets it; overlapping groups are outlined red. The pad's own buttons do not press here: the edit layer takes every
  * touch. [onClose] leaves without saving (after "Discard changes?" when something changed).
  * Both shapes are laid out as the game lays them out on this [window] (null: from the editor's size alone): portrait's
- * band at the game's height under its game area ([portraitSplit]); landscape's halves beside a typical picture
- * ([besidePreview]), with STYLUS / SWAP when the console has them ([tools]).
+ * band at the game's height under its game area ([portraitSplit]); landscape's halves beside the picture of [consoleTag]'s
+ * console ([besidePreview]; a typical one for the Shared layout), with STYLUS / SWAP when the console has them ([tools]).
  */
 @Composable
 fun PadLayoutEditor(
     shape: PadShape, profile: PadProfile, title: String, state: PadEditorState, onSave: (PadLayout) -> Unit, onClose: () -> Unit,
-    window: PadEditorWindow? = null, tools: Boolean = false,
+    window: PadEditorWindow? = null, tools: Boolean = false, consoleTag: String = "",
 ) {
     val colors = LocalNxColors.current
     val noPad: (PadEvent) -> Unit = {}
@@ -110,7 +110,7 @@ fun PadLayoutEditor(
         val h = constraints.maxHeight.toFloat()
         val d = LocalDensity.current.density
         val ydpi = window?.ydpi ?: 0f   // outside 40..1200: the density's dpi, as the game falls back
-        // The game area the toolbar sits in: portrait's above the band, landscape's typical picture.
+        // The game area the toolbar sits in: portrait's above the band, landscape's console picture.
         val gameArea: PxRect
         when (shape) {
             PadShape.PORTRAIT -> {
@@ -127,6 +127,7 @@ fun PadLayoutEditor(
                 val preview = besidePreview(
                     window?.screen ?: screenClass(w.roundToInt(), h.roundToInt(), (min(w, h) / d).toInt()), w, h, ydpi, d,
                     window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, faceWidthUnits(profile), systemRowPills(profile, motion = motion != null),
+                    tag = consoleTag,
                 )
                 gameArea = preview.picture
                 Box(Modifier.placedPx(gameArea).background(GameBlock))

@@ -90,6 +90,7 @@ class PadLayoutActivity : ComponentActivity() {
                     onClose = ::finish,
                     window = editorWindow,
                     tools = tools,
+                    consoleTag = tag,
                 )
             }
         }

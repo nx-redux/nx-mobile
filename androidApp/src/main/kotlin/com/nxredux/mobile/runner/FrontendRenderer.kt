@@ -495,15 +495,6 @@ internal class FrontendRenderer(
         origin[0] + (r.x + r.width).roundToInt(), origin[1] + (r.y + r.height).roundToInt(),
     )
 
-    /** The DS screens' bounds as one picture: the screens other than a picture-in-picture inset. */
-    private fun List<NdsRegion>.shownRect(): PxRect = filterNot { it.inset }.ifEmpty { this }.map { it.dst }.reduce(::union)
-
-    private fun union(a: PxRect, b: PxRect): PxRect {
-        val left = minOf(a.x, b.x)
-        val top = minOf(a.y, b.y)
-        return PxRect(left, top, maxOf(a.x + a.width, b.x + b.width) - left, maxOf(a.y + a.height, b.y + b.height) - top)
-    }
-
     /** The relayout's inputs and outcome, once per change, for the Debug log (the device checks read the spec's tables from it). */
     private var lastLayoutLog: String? = null
 

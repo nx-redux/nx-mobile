@@ -28,6 +28,13 @@ data class NdsRegion(
     val alpha: Float = 1f,
 )
 
+/** The DS screens' bounds as one picture: the screens other than a picture-in-picture inset. Not empty. */
+fun List<NdsRegion>.shownRect(): PxRect = filterNot { it.inset }.ifEmpty { this }.map { it.dst }.reduce { a, b ->
+    val left = minOf(a.x, b.x)
+    val top = minOf(a.y, b.y)
+    PxRect(left, top, maxOf(a.x + a.width, b.x + b.width) - left, maxOf(a.y + a.height, b.y + b.height) - top)
+}
+
 /**
  * Where the two DS screens go. melonDS DS draws them stacked in one 256x384 frame (256N x 384N with the GL renderer);
  * each screen is 4:3 (256x192 at scale 1).
