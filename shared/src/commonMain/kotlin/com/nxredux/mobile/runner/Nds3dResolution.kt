@@ -10,6 +10,7 @@ import com.nxredux.mobile.options.offers
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** How the DS 3D Resolution is picked: [AUTO] follows the shown size up to the Max Scale, the others ignore the layout's cap. */
 enum class Nds3dMode(val value: String, val label: String) {
@@ -134,6 +135,26 @@ object N3ds3dResolution {
 
     /** Azahar's 1x frame (width, height) for each layout the app offers: Stacked, Large screen, Single screen, Side by side. */
     private val FRAMES_1X = listOf(400f to 480f, 400f to 360f, 400f to 240f, 720f to 240f)
+
+    /**
+     * Every 1x frame Azahar reports for the layouts the app uses (our patched ComputeLayoutGeometry): Stacked (400 x 480
+     * either way round), Large screen (400 x 360; 320 x 360 with the bottom screen prominent), Single screen (400 x 240 top,
+     * 320 x 240 bottom), Side by side (720 x 240 either way round). No two reach the same size at factors 1 to 10.
+     */
+    internal val FRAME_SHAPES_1X = listOf(400 to 480, 400 to 360, 320 to 360, 400 to 240, 320 to 240, 720 to 240)
+
+    /**
+     * The factor a [frameW] x [frameH] frame was rendered at: the whole f (1 to 10) for which it is f times one of
+     * [FRAME_SHAPES_1X]; null for any other frame (none yet, or a layout this does not know).
+     */
+    fun frameFactor(frameW: Float, frameH: Float): Int? {
+        val w = frameW.roundToInt()
+        val h = frameH.roundToInt()
+        if (w <= 0 || h <= 0) return null
+        return FRAME_SHAPES_1X.firstNotNullOfOrNull { (bw, bh) ->
+            (w / bw).takeIf { f -> f in 1..Res3dConsole.N3DS.coreMax && w == bw * f && h == bh * f }
+        }
+    }
 
     /**
      * The scale a picture [pictureWidth] px wide shows at when it is part of a frame [frameWidth] px wide rendered at

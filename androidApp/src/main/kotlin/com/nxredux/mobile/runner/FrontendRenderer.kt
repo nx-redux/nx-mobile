@@ -166,7 +166,7 @@ internal class FrontendRenderer(
     private var nds3dArea: Nds3dArea? = null                // the game area the DS 3D scale was last reported for
     private var nds3dMaxFor: Triple<Float, Float, ScreenClass>? = null   // the area [nds3dMainMax] was worked out for
     private var nds3dMainMax = 1                            // the console's displayMax of that area
-    private var n3dsFactor = N3dsFrameFactor(Res3dConsole.N3DS.defaultCap)   // the factor the 3DS frame shown was rendered at
+    private var n3dsFactor = Res3dConsole.N3DS.defaultCap   // the factor the last 3DS frame read was rendered at (N3ds3dResolution.frameFactor)
 
     // ---- shader presets ----
     var shaderValues: Map<String, String> = ShaderOptions.fromConfig(emptyMap())   // nx_shader + stored nx_shader_param_*
@@ -353,6 +353,8 @@ internal class FrontendRenderer(
                     val paused = host.corePaused()
                     NxLog.i(TAG_LOG, "3DS frame: no new geometry in ${geometryWatch.framesWaited} frames (${g.fmt()})${if (paused && geometryHold.held) ", core paused: picture held until it runs" else ""}")
                     if (geometryHold.onGaveUp(paused)) showHeldPicture()
+                    // The 3D scale held for the layout's frame ([reportN3ds3d]) is read from the frame there is.
+                    if (watchIsLayoutSwitch) relayoutFrontend(g)
                 }
                 GeometryWatch.Tick.IDLE -> {}
             }
@@ -371,10 +373,11 @@ internal class FrontendRenderer(
      * that gives up while the core is paused keeps it held until the core runs ([onCoreResumed]) or its geometry arrives
      * ([GeometryHold]). False: nothing is watched (no view, or the core has no geometry yet).
      */
-    fun watchGeometry(frames: Int = 90, holdPicture: Boolean = false, why: String = "3DS layout switched"): Boolean {
+    fun watchGeometry(frames: Int = 90, holdPicture: Boolean = false, why: String = "3DS layout switched", layoutSwitch: Boolean = true): Boolean {
         val view = retroView ?: return false
         val before = view.getGameGeometry()
         if (!geometryWatch.start(before, frames)) return false   // the core has no geometry yet (still launching)
+        watchIsLayoutSwitch = layoutSwitch
         if (holdPicture) {
             geometryHold.start()
             view.pictureHeld = true
@@ -407,6 +410,9 @@ internal class FrontendRenderer(
         // A hold that outlasted its watch (paused) ends with the geometry it waited for, whichever path brings it.
         if (seen || geometryHold.awaitsRun) endGeometryHold()
     }
+
+    /** The [watchGeometry] under way waits for a layout switch's frame (not a 3D resolution's): the 3DS 3D scale is held meanwhile. */
+    private var watchIsLayoutSwitch = false
 
     /** A [watchGeometry] holds the picture until its new frame size is laid out ([endGeometryHold]). */
     private val geometryHold = GeometryHold()
@@ -567,13 +573,18 @@ internal class FrontendRenderer(
 
     /**
      * The 3DS 3D scale's inputs to the host, as [reportNds3d]: flat, the [flat] picture's scale at the factor the frame
-     * on screen was rendered at ([N3dsFrameFactor]); half-folded or split ([flat] null), the screens' regions
-     * ([N3ds3dResolution.regionScale]). A second display drawing 3DS screens ([secondDs]) or the whole frame counts as
-     * for the DS. Nothing before the first frame (the launch's value stands). [g]: the game geometry laid out.
+     * was rendered at, read from its size ([N3ds3dResolution.frameFactor]; an unknown frame keeps the last one read);
+     * half-folded or split ([flat] null), the screens' regions ([N3ds3dResolution.regionScale]). A second display drawing
+     * 3DS screens ([secondDs]) or the whole frame counts as for the DS. Nothing before the first frame (the launch's value
+     * stands), nor while a layout switch's frame is awaited ([watchGeometry]): the old layout's frame laid out in the new
+     * space would start a send for a scale never shown; the new frame (or the watch giving up) reports. [g]: the game
+     * geometry laid out.
      */
     private fun reportN3ds3d(w: Float, h: Float, screen: ScreenClass, halfFolded: Boolean, g: FloatArray, flat: PxRect?, secondDs: List<NdsRegion>?) {
         if (g[0] <= 0f || g[1] <= 0f) return
-        val factor = n3dsFactor.of(g[0], g[1])
+        if (geometryWatch.active && watchIsLayoutSwitch) return
+        N3ds3dResolution.frameFactor(g[0], g[1])?.let { n3dsFactor = it }
+        val factor = n3dsFactor
         val main = if (flat != null) N3ds3dResolution.currentScale(flat.width, g[0], factor) else N3ds3dResolution.regionScale(ndsRegions)
         val second = secondDs?.let(N3ds3dResolution::regionScale)
             ?: host.secondWholeFrame(g)?.let { N3ds3dResolution.currentScale(it.width, g[0], factor) }
@@ -598,19 +609,17 @@ internal class FrontendRenderer(
         host.onNds3dLayout(current, maxOf(nds3dMainMax, second), sizeChange)
     }
 
-    /** The 3DS game launched with internal resolution [factor]: its first frames carry it. */
+    /** The 3DS game launched with internal resolution [factor]: what a frame of a size no layout explains is taken to carry. */
     fun startN3dsFactor(factor: Int) {
-        n3dsFactor = N3dsFrameFactor(factor)
+        n3dsFactor = factor
     }
 
     /**
-     * [factor] went to Azahar: its frame carries it once the frame size changes ([N3dsFrameFactor]); the frame size is
-     * watched for that change ([watchGeometry]), as after a layout switch, so the new frame is laid out and measured.
+     * [factor] went to Azahar, whose frame size follows a frame or more later: watched for ([watchGeometry]) so the new
+     * frame is laid out and measured. A layout switch's watch under way is left as it is (it ends on the next change too).
      */
     fun onN3dsFactorSent(factor: Int) {
-        val g = retroView?.getGameGeometry() ?: return
-        n3dsFactor.sent(factor, g[0], g[1])
-        watchGeometry(why = "3DS 3D resolution ${factor}x sent")
+        if (!geometryWatch.active) watchGeometry(why = "3DS 3D resolution ${factor}x sent", layoutSwitch = false)
     }
 
     /**

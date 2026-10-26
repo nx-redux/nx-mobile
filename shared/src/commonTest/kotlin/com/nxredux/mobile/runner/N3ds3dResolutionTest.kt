@@ -68,4 +68,28 @@ class N3ds3dResolutionTest {
         assertNull(N3ds3dResolution.displayMaxOf(0 to 2400, ScreenClass.REGULAR_PHONE))
         assertEquals(4, N3ds3dResolution.displayMaxOf(1080 to 2400, ScreenClass.REGULAR_PHONE))
     }
+
+    @Test
+    fun frameFactorReadsTheFrame() {
+        assertEquals(3, N3ds3dResolution.frameFactor(1200f, 1440f))   // Stacked
+        assertEquals(2, N3ds3dResolution.frameFactor(800f, 720f))     // Large screen
+        assertEquals(4, N3ds3dResolution.frameFactor(1280f, 1440f))   // Large screen, bottom screen prominent
+        assertEquals(5, N3ds3dResolution.frameFactor(2000f, 1200f))   // Single screen
+        assertEquals(6, N3ds3dResolution.frameFactor(1920f, 1440f))   // Single screen, the bottom one
+        assertEquals(10, N3ds3dResolution.frameFactor(7200f, 2400f))  // Side by side
+        assertEquals(1, N3ds3dResolution.frameFactor(400f, 480f))
+    }
+
+    @Test
+    fun frameFactorNullForAnUnknownFrame() {
+        assertNull(N3ds3dResolution.frameFactor(0f, 0f))
+        assertNull(N3ds3dResolution.frameFactor(1000f, 700f))
+        assertNull(N3ds3dResolution.frameFactor(4400f, 5280f))   // Stacked at 11x: past the core's range
+    }
+
+    @Test
+    fun noTwoFrameShapesShareASize() {
+        val sizes = N3ds3dResolution.FRAME_SHAPES_1X.flatMap { (w, h) -> (1..10).map { f -> (w * f to h * f) } }
+        assertEquals(sizes.size, sizes.toSet().size)
+    }
 }
