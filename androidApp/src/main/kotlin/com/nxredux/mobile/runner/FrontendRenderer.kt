@@ -559,7 +559,7 @@ internal class FrontendRenderer(
             nds3dMainMax = Nds3dResolution.displayMax(w, h, screen)
         }
         val second = Nds3dResolution.currentScale(secondNdsRegions) ?: 1
-        val area = Nds3dArea(w, h, isLandscape(), halfFolded, dualMode)
+        val area = Nds3dArea(w, h, screen, retroView?.display?.displayId, isLandscape(), halfFolded, dualMode)
         val sizeChange = area.isSizeChangeFrom(nds3dArea)
         nds3dArea = area
         host.onNds3dLayout(Nds3dResolution.currentScale(ndsRegions + secondNdsRegions), maxOf(nds3dMainMax, second), sizeChange)

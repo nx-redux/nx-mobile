@@ -128,6 +128,14 @@ class EmulatorSettingsTest {
         assertEquals("7x", row.option.labelOf("7"))
     }
 
+    @Test fun anUnknownStoredModeShowsAsAutoWithNoExtraChoice() {
+        val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
+        val row = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, cfg("nx_nds_3d_resolution = bogus\n"), null, forGame = false, displayMax = 3)
+            .console.single { it.option.key == NdsOptions.MODE_3D }
+        assertEquals("auto", row.value)
+        assertEquals(NdsOptions.table.single { it.key == NdsOptions.MODE_3D }.values, row.option.values)
+    }
+
     @Test fun anUnstoredDefaultAboveTheListIsNotOffered() {
         val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
         val row = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, null, null, forGame = false, displayMax = 3)

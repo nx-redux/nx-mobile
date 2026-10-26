@@ -7,8 +7,7 @@ object CoreRegistry {
     // melonDS DS (JesseTG/melonds-ds v1.3.1). The core draws the plain top-over-bottom 256x384 stack and takes the
     // touchscreen as a pointer; the frontend lays the two screens out (NdsLayout), so those options are locked. Keys and
     // values: src/libretro/config/constants.hpp and config/definitions/screen.hpp at the pin. BIOS and firmware are
-    // optional (built-in free ones); Bios/NDS/ is copied into the system dir when present.
-    // the renderer's default comes from the device's GLES version at load (NdsRenderer). The mic options are locked too: the
+    // optional (built-in free ones); Bios/NDS/ is copied into the system dir when present. The renderer's default comes from the device's GLES version at load (NdsRenderer). The mic options are locked too: the
     // app's Mic toggle drives the frontend feed, so the core always reads the microphone interface, always active, no overlay.
     // One plain top-bottom frame: the app sets the internal resolution from the on-screen size (at launch from the
     // window's size, then from each layout; the 4x default is never run).

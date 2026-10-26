@@ -87,10 +87,19 @@ object Nds3dResolution {
 }
 
 /**
- * The game area a DS layout was made for: its size, which way up, half-folded or flat, and the Dual screen mode. A new
+ * The game area a DS layout was made for: its size, which screen (class and display id: unfolding or another DeX display is not a resize), which way up,
+ * half-folded or flat, and the Dual screen mode. A new
  * value from a change in size alone (a DeX window dragged) waits to settle ([Nds3dSender]); any other change goes at once.
  */
-data class Nds3dArea(val width: Float, val height: Float, val landscape: Boolean, val halfFolded: Boolean, val dual: DualMode) {
+data class Nds3dArea(
+    val width: Float,
+    val height: Float,
+    val screen: ScreenClass,
+    val displayId: Int?,
+    val landscape: Boolean,
+    val halfFolded: Boolean,
+    val dual: DualMode,
+) {
     /** Only the size changed since [prev] (null: this is the first layout, which is never one). */
     fun isSizeChangeFrom(prev: Nds3dArea?): Boolean =
         prev != null && (width != prev.width || height != prev.height) && copy(width = prev.width, height = prev.height) == prev

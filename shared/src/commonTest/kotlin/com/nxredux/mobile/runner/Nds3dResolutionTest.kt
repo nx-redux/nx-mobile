@@ -145,12 +145,14 @@ class Nds3dResolutionTest {
 
     @Test
     fun onlyAResizeInPlaceIsASizeChange() {
-        val a = Nds3dArea(1080f, 2000f, landscape = false, halfFolded = false, dual = DualMode.OFF)
+        val a = Nds3dArea(1080f, 2000f, ScreenClass.REGULAR_PHONE, 0, landscape = false, halfFolded = false, dual = DualMode.OFF)
         assertFalse(a.isSizeChangeFrom(null))                                  // the first layout
         assertFalse(a.isSizeChangeFrom(a))                                     // nothing changed (the hotkey, SWAP)
         assertTrue(a.copy(width = 900f).isSizeChangeFrom(a))                   // a DeX window dragged
-        assertFalse(Nds3dArea(2000f, 1080f, true, false, DualMode.OFF).isSizeChangeFrom(a))   // a rotation
+        assertFalse(Nds3dArea(2000f, 1080f, ScreenClass.REGULAR_PHONE, 0, true, false, DualMode.OFF).isSizeChangeFrom(a))   // a rotation
         assertFalse(a.copy(height = 1000f, halfFolded = true).isSizeChangeFrom(a))            // half-folding
+        assertFalse(a.copy(width = 1812f, screen = ScreenClass.NEAR_SQUARE_TABLET).isSizeChangeFrom(a))   // unfolding
+        assertFalse(a.copy(width = 900f, displayId = 2).isSizeChangeFrom(a))                  // another display
         assertFalse(a.copy(width = 900f, dual = DualMode.SPLIT).isSizeChangeFrom(a))          // Dual screen on
     }
 }
