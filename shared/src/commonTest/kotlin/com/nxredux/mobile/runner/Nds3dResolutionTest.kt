@@ -179,4 +179,20 @@ class Nds3dResolutionTest {
         assertNull(Res3dConsole.forTag("GBA"))
         assertEquals(setOf("nx_3ds_3d_resolution", "nx_3ds_3d_max_scale", "nx_3ds_3d_scale"), Res3dConsole.N3DS.keys)
     }
+
+    @Test
+    fun consolesKnowTheirCore() {
+        assertEquals("melondsds", Res3dConsole.DS.coreId)
+        assertEquals("azahar", Res3dConsole.N3DS.coreId)
+    }
+
+    @Test
+    fun displayMaxOfUsesTheConsolesMaths() {
+        val fold = 1848 to 2448
+        val screen = ScreenClass.NEAR_SQUARE_TABLET
+        assertEquals(Nds3dResolution.displayMaxOf(fold, screen), Res3dConsole.DS.displayMaxOf(fold, screen))
+        assertEquals(6, Res3dConsole.N3DS.displayMaxOf(fold, screen))
+        assertNull(Res3dConsole.N3DS.displayMaxOf(null, screen))
+        assertNull(Res3dConsole.DS.displayMaxOf(fold, null))
+    }
 }

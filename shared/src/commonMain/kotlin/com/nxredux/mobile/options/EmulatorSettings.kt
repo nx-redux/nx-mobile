@@ -24,7 +24,7 @@ object EmulatorSettings {
      * descriptor's [CoreDescriptor.offlineHiddenOptions] and table keys in the frontend namespace never appear; console
      * rows locked in the cfg are hidden, as on the in-game Console Settings page. [secondScreen] false (none connected) hides Bottom screen, its value kept. [vulkanFailed]: Vulkan failed for the
      * core on this phone ([VulkanFallback]), noted on the Graphics API row. [screen]: the window's [ScreenClass] (null:
-     * unknown), which shapes the DS and 3DS layout rows ([ConsoleSettings.tableFor]). [displayMax]: the biggest DS 3D scale the display reaches (null:
+     * unknown), which shapes the DS and 3DS layout rows ([ConsoleSettings.tableFor]). [displayMax]: the biggest DS or 3DS 3D scale the display reaches (null:
      * unknown), which shapes the 3D Resolution scales.
      */
     fun page(

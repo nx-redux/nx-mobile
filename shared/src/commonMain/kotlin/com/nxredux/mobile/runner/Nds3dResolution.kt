@@ -22,10 +22,11 @@ enum class Nds3dMode(val value: String, val label: String) {
 }
 
 /**
- * The consoles with a 3D Resolution: the core's option and range, the cap an unset game starts with, and the three rows
- * ([modeKey], [maxScaleKey], [scaleKey]) the player's pick is stored under.
+ * The consoles with a 3D Resolution: the core the app sets it on ([coreId]), the core's option and range, the cap an unset
+ * game starts with, and the three rows ([modeKey], [maxScaleKey], [scaleKey]) the player's pick is stored under.
  */
 enum class Res3dConsole(
+    val coreId: String,
     val coreKey: String,
     val coreMax: Int,
     val defaultCap: Int,
@@ -33,11 +34,17 @@ enum class Res3dConsole(
     val maxScaleKey: String,
     val scaleKey: String,
 ) {
-    DS("melonds_opengl_resolution", 8, 4, NdsOptions.MODE_3D, NdsOptions.MAX_SCALE_3D, NdsOptions.SCALE_3D),
-    N3DS("citra_resolution_factor", 10, 3, "nx_3ds_3d_resolution", "nx_3ds_3d_max_scale", "nx_3ds_3d_scale");
+    DS(NdsRenderer.CORE_ID_MELONDSDS, "melonds_opengl_resolution", 8, 4, NdsOptions.MODE_3D, NdsOptions.MAX_SCALE_3D, NdsOptions.SCALE_3D),
+    N3DS("azahar", "citra_resolution_factor", 10, 3, "nx_3ds_3d_resolution", "nx_3ds_3d_max_scale", "nx_3ds_3d_scale");
 
     /** The three stored rows. */
     val keys: Set<String> get() = setOf(modeKey, maxScaleKey, scaleKey)
+
+    /** This console's display maximum ([Nds3dResolution.displayMaxOf], [N3ds3dResolution.displayMaxOf]) for a [window] (px, width to height) of class [screen]. */
+    fun displayMaxOf(window: Pair<Int, Int>?, screen: ScreenClass?): Int? = when (this) {
+        DS -> Nds3dResolution.displayMaxOf(window, screen)
+        N3DS -> N3ds3dResolution.displayMaxOf(window, screen)
+    }
 
     companion object {
         /** The console for a system [tag]; null when it has no 3D Resolution. */
