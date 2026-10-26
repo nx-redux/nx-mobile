@@ -13,8 +13,9 @@ import androidx.compose.ui.unit.LayoutDirection
 
 @Composable
 actual fun restingSystemBars(): WindowInsets {
-    val view = LocalView.current
     val live = WindowInsets.systemBars
+    if (!LocalRestingBars.current) return live
+    val view = LocalView.current
     return remember(view, live) { RestingSystemBars(view, live) }
 }
 
@@ -29,14 +30,14 @@ private class RestingSystemBars(private val view: View, private val live: Window
         if (Build.VERSION.SDK_INT >= 30) view.rootWindowInsets?.getInsets(android.view.WindowInsets.Type.systemBars()) else null
 
     override fun getLeft(density: Density, layoutDirection: LayoutDirection) =
-        restingInset(live.getLeft(density, layoutDirection), resting()?.left)
+        restingInset(live.getLeft(density, layoutDirection), resting()?.left, enabled = true)
 
-    override fun getTop(density: Density) = restingInset(live.getTop(density), resting()?.top)
+    override fun getTop(density: Density) = restingInset(live.getTop(density), resting()?.top, enabled = true)
 
     override fun getRight(density: Density, layoutDirection: LayoutDirection) =
-        restingInset(live.getRight(density, layoutDirection), resting()?.right)
+        restingInset(live.getRight(density, layoutDirection), resting()?.right, enabled = true)
 
-    override fun getBottom(density: Density) = restingInset(live.getBottom(density), resting()?.bottom)
+    override fun getBottom(density: Density) = restingInset(live.getBottom(density), resting()?.bottom, enabled = true)
 
     override fun equals(other: Any?) = other is RestingSystemBars && other.view === view && other.live == live
     override fun hashCode() = 31 * System.identityHashCode(view) + live.hashCode()

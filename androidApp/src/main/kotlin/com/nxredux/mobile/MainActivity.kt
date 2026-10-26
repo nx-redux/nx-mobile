@@ -41,6 +41,7 @@ import com.nxredux.mobile.ui.HOME_NOT_WRITABLE
 import com.nxredux.mobile.runner.PostureTracker
 import com.nxredux.mobile.runner.screenClass
 import com.nxredux.mobile.ui.nx.LocalPosture
+import com.nxredux.mobile.ui.nx.LocalRestingBars
 import com.nxredux.mobile.achievements.AchievementsService
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.gametime.LazyGameTimeData
@@ -432,7 +433,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
             val padScreen = PadScreen.of(LocalConfiguration.current.smallestScreenWidthDp.toFloat())
             LaunchedEffect(padScreen) { state.onPadScreen(padScreen) }
             // One App at a time: with the menu on the second display ([syncMenuScreen]) this window has the top screen.
-            CompositionLocalProvider(LocalPosture provides posture.value) { if (menuOnSecond.value) MenuTopScreen(state) else App(state, ::pad) }
+            // This window's root gets the insets unconsumed: the pages may pad for the bars at rest ([LocalRestingBars]).
+            CompositionLocalProvider(LocalPosture provides posture.value, LocalRestingBars provides true) { if (menuOnSecond.value) MenuTopScreen(state) else App(state, ::pad) }
         }
         collectPosture()
         // Dual mode: apps open on the top screen; one there takes our window on that display down until it leaves.
