@@ -245,4 +245,10 @@ class NdsOptionsTest {
         assertTrue(NdsOptions.appliesTo("NDS"))
         assertFalse(NdsOptions.appliesTo("MGBA"))
     }
+
+    @Test fun layout_rows_say_the_fold_sets_the_layout_half_folded() {
+        for (screen in listOf(null, ScreenClass.NEAR_SQUARE_TABLET)) {
+            assertTrue(NdsOptions.layoutRows(screen).all { NdsOptions.FOLD_NOTE in it.info })
+        }
+    }
 }

@@ -127,4 +127,8 @@ class N3dsOptionsTest {
         assertEquals(0.35f, N3dsOptions.deadzone("35"))
         assertEquals(0f, N3dsOptions.deadzone("0"))
     }
+
+    @Test fun layout_rows_say_the_fold_sets_the_layout_half_folded() {
+        assertTrue(N3dsOptions.layoutRowsFor(ScreenClass.NEAR_SQUARE_TABLET).all { NdsOptions.FOLD_NOTE in it.info })
+    }
 }

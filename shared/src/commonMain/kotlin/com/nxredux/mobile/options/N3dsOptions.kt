@@ -103,7 +103,7 @@ object N3dsOptions {
         "Side by side: next to each other.\nSELECT + Left/Right cycles it."
 
     private fun layoutRow(key: String, label: String, default: String, info: String, brief: String = "") = FrontendOption(
-        key, label, LAYOUT_CYCLE, default, info, visual = true, valueLabels = LAYOUT_CYCLE.map(::layoutLabel), brief = brief,
+        key, label, LAYOUT_CYCLE, default, "$info\n${NdsOptions.FOLD_NOTE}", visual = true, valueLabels = LAYOUT_CYCLE.map(::layoutLabel), brief = brief,
     )
 
     /**

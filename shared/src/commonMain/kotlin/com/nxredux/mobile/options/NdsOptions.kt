@@ -133,6 +133,9 @@ object NdsOptions {
 
     private const val SPLIT_NOTE = "Screen Scaling and the screen offsets do not apply to the DS screens."
 
+    /** The DS / 3DS layout rows' note: half-folded, the fold places the screens and SELECT + Left/Right does nothing. */
+    const val FOLD_NOTE = "This is the layout when not half-folded:\nhalf-folded, the fold sets it."
+
     fun appliesTo(tag: String): Boolean = tag.trim().uppercase() == "NDS"
 
     private fun <E : NdsChoice> row(key: String, label: String, all: List<E>, default: E, info: String, brief: String = "") =
@@ -154,12 +157,12 @@ object NdsOptions {
                     "Stacked: one above the other.\nSingle screen: the big one only.\n" +
                     "Picture in picture: one big, the other small in a corner.\n" +
                     "Side by side: half the width each.\nSELECT + Left/Right cycles it, or Layout (portrait, controller)\n" +
-                    "while a controller hides the pad.\n$SPLIT_NOTE",
+                    "while a controller hides the pad.\n$SPLIT_NOTE\n$FOLD_NOTE",
             ),
             row(
                 LAYOUT_PORTRAIT_CONTROLLER, "Layout (portrait, controller)", NdsLayoutChoice.entries, portraitDefault,
                 "The portrait layout while a controller that is not a clip-on\n(Pocket Taco, FlipPad) is connected and the pad is hidden.\n" +
-                    "SELECT + Left/Right cycles it then.\n$SPLIT_NOTE",
+                    "SELECT + Left/Right cycles it then.\n$SPLIT_NOTE\n$FOLD_NOTE",
                 brief = "Used while a controller (not a clip-on) hides the pad",
             ),
             row(
@@ -168,7 +171,7 @@ object NdsOptions {
                     "Stacked: one above the other, the first three times the size.\nSingle screen: the big one, centred.\n" +
                     "Picture in picture: the big one centred, the other small in a corner.\n" +
                     (if (NdsLayoutChoice.SIDE_BY_SIDE in landscapeAll) "Side by side: half the width each.\n" else "") +
-                    "SELECT + Left/Right cycles it.\n$SPLIT_NOTE",
+                    "SELECT + Left/Right cycles it.\n$SPLIT_NOTE\n$FOLD_NOTE",
             ),
         )
     }
