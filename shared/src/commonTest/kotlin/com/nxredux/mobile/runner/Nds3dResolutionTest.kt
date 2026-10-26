@@ -155,4 +155,28 @@ class Nds3dResolutionTest {
         assertFalse(a.copy(width = 900f, displayId = 2).isSizeChangeFrom(a))                  // another display
         assertFalse(a.copy(width = 900f, dual = DualMode.SPLIT).isSizeChangeFrom(a))          // Dual screen on
     }
+
+    @Test
+    fun threeDsUsesItsOwnCoreRangeAndCeiling() {
+        assertEquals(9, Nds3dResolution.value(Nds3dMode.QUALITY, 3, 2, 9, 9, Res3dConsole.N3DS))
+        assertEquals(3, Nds3dResolution.value(Nds3dMode.AUTO, 3, 2, 6, 6, Res3dConsole.N3DS))
+        assertEquals(3, Nds3dResolution.performanceCeiling(6, Res3dConsole.N3DS))
+        assertEquals(10, Nds3dResolution.performanceCeiling(20, Res3dConsole.N3DS))
+        assertEquals(8, Nds3dResolution.value(Nds3dMode.QUALITY, 4, 2, 9, 9))
+    }
+
+    @Test
+    fun valueForReadsTheConsolesKeys() {
+        val values = mapOf("nx_3ds_3d_resolution" to "performance", "nx_3ds_3d_scale" to "3", NdsOptions.MODE_3D to "quality")
+        assertEquals(3, Nds3dResolution.valueFor(values, 4, 8, Res3dConsole.N3DS))
+        assertEquals(4, Nds3dResolution.valueFor(values, 4, 8))
+    }
+
+    @Test
+    fun forTagMapsConsoles() {
+        assertEquals(Res3dConsole.N3DS, Res3dConsole.forTag("3DS"))
+        assertEquals(Res3dConsole.DS, Res3dConsole.forTag("NDS"))
+        assertNull(Res3dConsole.forTag("GBA"))
+        assertEquals(setOf("nx_3ds_3d_resolution", "nx_3ds_3d_max_scale", "nx_3ds_3d_scale"), Res3dConsole.N3DS.keys)
+    }
 }

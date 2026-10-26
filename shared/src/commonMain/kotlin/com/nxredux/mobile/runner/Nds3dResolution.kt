@@ -3,10 +3,12 @@ package com.nxredux.mobile.runner
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.NdsLayoutChoice
 import com.nxredux.mobile.options.NdsOptions
+import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.options.offers
 import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.min
 
 /** How the DS 3D Resolution is picked: [AUTO] follows the shown size up to the Max Scale, the others ignore the layout's cap. */
@@ -16,6 +18,34 @@ enum class Nds3dMode(val value: String, val label: String) {
     companion object {
         /** The mode stored as [v]; unknown or missing reads as [AUTO]. */
         fun parse(v: String?): Nds3dMode = entries.firstOrNull { it.value == v } ?: AUTO
+    }
+}
+
+/**
+ * The consoles with a 3D Resolution: the core's option and range, the cap an unset game starts with, and the three rows
+ * ([modeKey], [maxScaleKey], [scaleKey]) the player's pick is stored under.
+ */
+enum class Res3dConsole(
+    val coreKey: String,
+    val coreMax: Int,
+    val defaultCap: Int,
+    val modeKey: String,
+    val maxScaleKey: String,
+    val scaleKey: String,
+) {
+    DS("melonds_opengl_resolution", 8, 4, NdsOptions.MODE_3D, NdsOptions.MAX_SCALE_3D, NdsOptions.SCALE_3D),
+    N3DS("citra_resolution_factor", 10, 3, "nx_3ds_3d_resolution", "nx_3ds_3d_max_scale", "nx_3ds_3d_scale");
+
+    /** The three stored rows. */
+    val keys: Set<String> get() = setOf(modeKey, maxScaleKey, scaleKey)
+
+    companion object {
+        /** The console for a system [tag]; null when it has no 3D Resolution. */
+        fun forTag(tag: String): Res3dConsole? = when (tag) {
+            "NDS" -> DS
+            "3DS" -> N3DS
+            else -> null
+        }
     }
 }
 
@@ -58,32 +88,73 @@ object Nds3dResolution {
     }
 
     /** Performance never goes above half the [displayMax], rounded up. */
-    fun performanceCeiling(displayMax: Int): Int = ceil(displayMax / 2.0).toInt().coerceIn(1, CORE_MAX)
+    fun performanceCeiling(displayMax: Int, console: Res3dConsole = Res3dConsole.DS): Int =
+        ceil(displayMax / 2.0).toInt().coerceIn(1, console.coreMax)
 
     /**
      * The scale to send for [mode]: [current] is the shown scale (null: no screens placed yet, so [displayMax] stands in),
      * [maxScale] the Auto cap and [scale] the Performance pick.
      */
-    fun value(mode: Nds3dMode, maxScale: Int, scale: Int, current: Int?, displayMax: Int): Int {
+    fun value(
+        mode: Nds3dMode, maxScale: Int, scale: Int, current: Int?, displayMax: Int, console: Res3dConsole = Res3dConsole.DS,
+    ): Int {
         val v = when (mode) {
             Nds3dMode.AUTO -> minOf(current ?: displayMax, maxScale, displayMax)
             Nds3dMode.QUALITY -> min(current ?: displayMax, displayMax)
-            Nds3dMode.PERFORMANCE -> min(scale, performanceCeiling(displayMax))
+            Nds3dMode.PERFORMANCE -> min(scale, performanceCeiling(displayMax, console))
         }
-        return v.coerceIn(1, CORE_MAX)
+        return v.coerceIn(1, console.coreMax)
     }
 
     /**
-     * [value] from the stored 3D Resolution rows in [values] ([NdsOptions.MODE_3D], [NdsOptions.MAX_SCALE_3D],
-     * [NdsOptions.SCALE_3D]); a row unset or unreadable takes its row default.
+     * [value] from [console]'s stored 3D Resolution rows in [values] (its mode, max scale and scale keys); a row unset or
+     * unreadable takes its row default.
      */
-    fun valueFor(values: Map<String, String>, current: Int?, displayMax: Int): Int = value(
-        mode = Nds3dMode.parse(values[NdsOptions.MODE_3D]),
-        maxScale = values[NdsOptions.MAX_SCALE_3D]?.toIntOrNull() ?: DEFAULT_CAP,
-        scale = values[NdsOptions.SCALE_3D]?.toIntOrNull() ?: DEFAULT_PERFORMANCE_SCALE,
+    fun valueFor(values: Map<String, String>, current: Int?, displayMax: Int, console: Res3dConsole = Res3dConsole.DS): Int = value(
+        mode = Nds3dMode.parse(values[console.modeKey]),
+        maxScale = values[console.maxScaleKey]?.toIntOrNull() ?: console.defaultCap,
+        scale = values[console.scaleKey]?.toIntOrNull() ?: DEFAULT_PERFORMANCE_SCALE,
         current = current,
         displayMax = displayMax,
+        console = console,
     )
+}
+
+/** The 3DS (Azahar) 3D Resolution maths: the core draws both screens at a factor of their native size, so scales come from frame widths. */
+object N3ds3dResolution {
+    private const val TOP_WIDTH = 400f
+    private const val BOTTOM_WIDTH = 320f
+
+    /** Azahar's 1x frame (width, height) for each layout the app offers: Stacked, Large screen, Single screen, Side by side. */
+    private val FRAMES_1X = listOf(400f to 480f, 400f to 360f, 400f to 240f, 720f to 240f)
+
+    /**
+     * The scale a picture [pictureWidth] px wide shows at when it is part of a frame [frameWidth] px wide rendered at
+     * [factor] (at least 1): the frame's own factor, so a different frame of the same screen reads the same.
+     */
+    fun currentScale(pictureWidth: Float, frameWidth: Float, factor: Int): Int =
+        floor(pictureWidth * factor / frameWidth).toInt().coerceAtLeast(1)
+
+    /** The scale of the biggest non-inset screen in [regions] (width over its native 400 top / 320 bottom); null when there is none. */
+    fun regionScale(regions: List<NdsRegion>): Int? = regions.filterNot { it.inset }.maxOfOrNull {
+        floor(it.dst.width / (if (it.screen == NdsScreen.TOP) TOP_WIDTH else BOTTOM_WIDTH)).toInt().coerceAtLeast(1)
+    }
+
+    /** The biggest scale any offered layout's 1x frame reaches in a [windowW] x [windowH] px window, either way up (at least 1). */
+    @Suppress("UNUSED_PARAMETER")
+    fun displayMax(windowW: Float, windowH: Float, screen: ScreenClass): Int {
+        var best = 1
+        for ((w, h) in listOf(windowW to windowH, windowH to windowW)) {
+            for ((fw, fh) in FRAMES_1X) best = maxOf(best, floor(min(w / fw, h / fh)).toInt())
+        }
+        return best
+    }
+
+    /** [displayMax] for a [window] of that px size (width to height) and class; null when either is unknown or the window is empty. */
+    fun displayMaxOf(window: Pair<Int, Int>?, screen: ScreenClass?): Int? {
+        if (window == null || screen == null || window.first <= 0 || window.second <= 0) return null
+        return displayMax(window.first.toFloat(), window.second.toFloat(), screen)
+    }
 }
 
 /**
