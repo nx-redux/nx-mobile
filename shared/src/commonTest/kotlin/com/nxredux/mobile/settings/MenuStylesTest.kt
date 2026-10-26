@@ -15,7 +15,7 @@ class MenuStylesTest {
     @Test fun aStoredStyleATabDoesNotOfferReadsAsNoneStored() {
         // Backdrop is a game-list style: a tab line naming it is dropped, so the tab takes its default.
         assertEquals(mapOf(MenuCategory.TOOLS to MenuStyle.LIST), MenuStyles.decode("HOME=BACKDROP\nTOOLS=LIST"))
-        assertEquals(MenuStyle.GRID, MenuStyles.styleOf(MenuStyles.decode("HOME=BACKDROP"), MenuCategory.HOME))
+        assertEquals(MenuStyle.MINIMAL, MenuStyles.styleOf(MenuStyles.decode("HOME=BACKDROP"), MenuCategory.HOME))
     }
 
     @Test fun mainMenuStylesCycleListGridCarouselMinimal() {
@@ -95,8 +95,8 @@ class MenuStylesTest {
         assertEquals(MenuOrientation.HORIZONTAL, MenuStyles.flip(MenuOrientation.VERTICAL))
     }
 
-    @Test fun home_defaults_to_grid_and_cycles_list_grid_carousel_minimal() {
-        assertEquals(MenuStyle.GRID, MenuStyles.styleOf(emptyMap(), MenuCategory.HOME))
+    @Test fun home_defaults_to_minimal_and_cycles_list_grid_carousel_minimal() {
+        assertEquals(MenuStyle.MINIMAL, MenuStyles.styleOf(emptyMap(), MenuCategory.HOME))
         assertEquals(MenuStyle.CAROUSEL, MenuStyles.cycleMainMenu(MenuStyle.GRID, 1))
         assertEquals(MenuStyle.LIST, MenuStyles.cycleMainMenu(MenuStyle.GRID, -1))
         assertEquals(MenuStyle.MINIMAL, MenuStyles.cycleMainMenu(MenuStyle.CAROUSEL, 1))

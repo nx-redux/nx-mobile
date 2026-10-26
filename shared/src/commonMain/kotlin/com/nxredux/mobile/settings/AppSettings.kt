@@ -205,7 +205,7 @@ interface AppSettings {
     var padButtons: PadButtons
     /**
      * Each main menu tab's style (List, Grid or Carousel), Home's too (Layouts → Home layout); a category missing from
-     * the map is its default ([MenuStyles.defaultStyleOf]: Grid for Home and Tools, Minimal for Collections, Carousel for Consoles) and a stored
+     * the map is its default ([MenuStyles.defaultStyleOf]: Grid for Tools, Minimal for Home and Collections, Carousel for Consoles) and a stored
      * Backdrop reads as Carousel ([MenuStyles.styleOf]).
      */
     var menuStyles: Map<MenuCategory, MenuStyle>
