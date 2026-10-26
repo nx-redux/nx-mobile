@@ -23,4 +23,10 @@ object NdsRenderer {
 
     /** OpenGL was asked for but the core's frames are software ones: melonDS DS fell back (it can't start its GL renderer). */
     fun showFallbackNotice(renderMode: String?, hardwareRendered: Boolean): Boolean = renderMode == OPENGL && !hardwareRendered
+
+    /**
+     * The running game draws in software: it started in a mode other than OpenGL, or OpenGL [fellBack] ([showFallbackNotice]).
+     * A Render Mode changed since applies at the next launch, so it does not count.
+     */
+    fun rendersSoftware(renderMode: String?, fellBack: Boolean): Boolean = renderMode != OPENGL || fellBack
 }

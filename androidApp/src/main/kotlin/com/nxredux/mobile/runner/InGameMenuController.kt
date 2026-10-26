@@ -138,6 +138,10 @@ internal interface InGameMenuHost : LifecycleOwner {
     fun setMic(on: Boolean)
     /** The Reset dialog's Reset: the game restarts ([GLRetroView.reset]); a toggled rewind ends, a toggled FF stays. */
     fun resetGame()
+    /** The biggest DS 3D scale the displays in use reach (null: unknown, not a DS game): the 3D Resolution rows' scales. */
+    val nds3dDisplayMax: Int?
+    /** The DS 3D Resolution rows' live state ([InGameMenuModel.setNds3d]): the scale in use, software rendering. */
+    fun publishNds3d(model: InGameMenuModel)
 }
 
 /**
@@ -258,6 +262,7 @@ internal class InGameMenuController(
         ).also {
             it.setStatus(configSource); it.cheatsAvailable = cheatsSupported
             it.screen = activity.screenClass()   // the DS / 3DS layout rows: this window's values and defaults
+            it.displayMax3d = host.nds3dDisplayMax   // the DS 3D Resolution rows' scales
             // netplay: the root is "Leave netplay?" only; Continue / Quit once the session has ended. An ended link
             // session's game is a local one ([netplayNow] null): the normal root.
             if (netplayNow != null) {
@@ -290,6 +295,7 @@ internal class InGameMenuController(
         }
         // Unconditional: the menu can open while the game is still loading, and must still show the loaded config.
         model.setFrontend(frontendValues, renderer.overlayNames(), menuLocked(), gameTag, overlayAvailable = !renderer.ndsSplit)
+        host.publishNds3d(model)
         model.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams)
         model.setCheats(cheatSet.entries, cheatsFolder, cheatSet.expected)
         host.publishShortcuts(model)

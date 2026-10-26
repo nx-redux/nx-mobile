@@ -39,7 +39,7 @@ import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.ui.FilePickMode
 import com.nxredux.mobile.ui.HOME_NOT_WRITABLE
 import com.nxredux.mobile.runner.PostureTracker
-import com.nxredux.mobile.runner.screenClass
+import com.nxredux.mobile.runner.windowShape
 import com.nxredux.mobile.ui.nx.LocalPosture
 import com.nxredux.mobile.ui.nx.LocalRestingBars
 import com.nxredux.mobile.achievements.AchievementsService
@@ -238,6 +238,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
      * every configuration change), since the pages are built off it.
      */
     @Volatile private var windowScreenClass: ScreenClass? = null
+    /** This window's size in px (width to height), for Emulator Settings' DS 3D scales: read with [windowScreenClass]. */
+    @Volatile private var windowPx: Pair<Int, Int>? = null
     /** Between onResume and onPause: [reclaimKeyFocus] must not pull the task forward from behind another window. */
     private var resumed = false
     private var inFront = false
@@ -333,7 +335,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         asHome = intent.hasCategory(Intent.CATEGORY_HOME)
         launcher = AndroidAppLauncher(this) { requestHomeRole.launch(it) }
         if (handOverToHome()) return   // nothing built: onStart/onStop never run for an activity finished in onCreate
-        windowScreenClass = screenClass()
+        readWindow()
         if (asHome) closeOtherInstances()
         thread(name = "nx-temp-sweep") {
             NxStorage.sweepTemps(this)
@@ -394,6 +396,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 },
                 padEditor = { request -> padLayoutEditor.launch(PadLayoutActivity.intent(this, request)) },
                 screenClass = { windowScreenClass },
+                windowPx = { windowPx },
                 saveTransfer = saveTransfer,
                 deviceSync = DeviceSyncs.get(this),
                 updater = AppUpdates.get(this),
@@ -637,10 +640,17 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (hasFocus) TopScreenHost.recheck(this)
     }
 
+    /** [windowScreenClass] and [windowPx] from one window reading. */
+    private fun readWindow() {
+        val shape = windowShape()
+        windowScreenClass = shape.screenClass
+        windowPx = shape.widthPx to shape.heightPx
+    }
+
     /** The window's own size changed (a Fold folded or unfolded): the menu may belong on the other screen now. */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        windowScreenClass = screenClass()
+        readWindow()
         syncMenuScreen()
     }
 

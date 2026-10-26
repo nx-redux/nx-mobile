@@ -2,12 +2,15 @@ package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.NdsLayoutChoice
+import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.PxRect
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class Nds3dResolutionTest {
     private fun region(width: Float, inset: Boolean = false) = NdsRegion(
@@ -101,5 +104,53 @@ class Nds3dResolutionTest {
         assertEquals(6, s.tick(401))
         assertNull(s.tick(500))
         assertEquals(3, s.offer(3, false, 600))
+    }
+
+    @Test
+    fun aSettlingValueIsPendingUntilSentOrOvertaken() {
+        val s = Nds3dSender()
+        assertFalse(s.pending)
+        s.offer(5, true, 0)
+        assertTrue(s.pending)
+        s.tick(400)
+        assertFalse(s.pending)
+        s.offer(6, true, 500)
+        s.offer(7, false, 510)   // a rotation meanwhile goes at once and drops the held size
+        assertFalse(s.pending)
+    }
+
+    @Test
+    fun valueForReadsTheStoredRows() {
+        val auto = mapOf(NdsOptions.MODE_3D to "auto", NdsOptions.MAX_SCALE_3D to "3")
+        assertEquals(3, Nds3dResolution.valueFor(auto, current = 6, displayMax = 7))
+        val perf = mapOf(NdsOptions.MODE_3D to "performance", NdsOptions.SCALE_3D to "1")
+        assertEquals(1, Nds3dResolution.valueFor(perf, current = 6, displayMax = 7))
+        assertEquals(6, Nds3dResolution.valueFor(mapOf(NdsOptions.MODE_3D to "quality"), current = 6, displayMax = 7))
+    }
+
+    @Test
+    fun valueForUnsetRowsUsesTheRowDefaults() {
+        assertEquals(Nds3dResolution.DEFAULT_CAP, Nds3dResolution.valueFor(emptyMap(), current = 6, displayMax = 7))
+        assertEquals(2, Nds3dResolution.valueFor(mapOf(NdsOptions.MODE_3D to "performance"), current = 6, displayMax = 7))
+        assertEquals(Nds3dResolution.DEFAULT_CAP, Nds3dResolution.valueFor(mapOf(NdsOptions.MAX_SCALE_3D to "junk"), current = 6, displayMax = 7))
+    }
+
+    @Test
+    fun displayMaxOfAWindowNeedsItsSizeAndClass() {
+        assertEquals(5, Nds3dResolution.displayMaxOf(1080 to 2400, ScreenClass.REGULAR_PHONE))
+        assertNull(Nds3dResolution.displayMaxOf(null, ScreenClass.REGULAR_PHONE))
+        assertNull(Nds3dResolution.displayMaxOf(1080 to 2400, null))
+        assertNull(Nds3dResolution.displayMaxOf(0 to 2400, ScreenClass.REGULAR_PHONE))
+    }
+
+    @Test
+    fun onlyAResizeInPlaceIsASizeChange() {
+        val a = Nds3dArea(1080f, 2000f, landscape = false, halfFolded = false, dual = DualMode.OFF)
+        assertFalse(a.isSizeChangeFrom(null))                                  // the first layout
+        assertFalse(a.isSizeChangeFrom(a))                                     // nothing changed (the hotkey, SWAP)
+        assertTrue(a.copy(width = 900f).isSizeChangeFrom(a))                   // a DeX window dragged
+        assertFalse(Nds3dArea(2000f, 1080f, true, false, DualMode.OFF).isSizeChangeFrom(a))   // a rotation
+        assertFalse(a.copy(height = 1000f, halfFolded = true).isSizeChangeFrom(a))            // half-folding
+        assertFalse(a.copy(width = 900f, dual = DualMode.SPLIT).isSizeChangeFrom(a))          // Dual screen on
     }
 }

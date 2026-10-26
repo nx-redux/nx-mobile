@@ -12,6 +12,7 @@ import com.nxredux.mobile.options.EmulatorPage
 import com.nxredux.mobile.options.EmulatorSettings
 import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.runner.Nds3dResolution
 import com.nxredux.mobile.storage.EmulatorConfigStore
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
@@ -137,6 +138,8 @@ internal class EmulatorSettingsController(
     private val secondScreen: () -> Boolean = { true },
     /** The current window's screen class (null: unknown): the DS and 3DS layout rows follow it. */
     private val screenClass: () -> ScreenClass? = { null },
+    /** The current window's size in px, width to height (null: unknown): the DS 3D Resolution scales go up to what it reaches. */
+    private val windowPx: () -> Pair<Int, Int>? = { null },
 ) {
     private val lock = Mutex()
     private var listRows: List<EmulatorListRow> = emptyList()
@@ -257,8 +260,13 @@ internal class EmulatorSettingsController(
 
     private fun defaults(d: CoreDescriptor) = coreDefaults(d.id) + d.defaultOptions
 
-    private fun build(tag: String, d: CoreDescriptor, game: Listed?, files: Pair<ConfigFile?, ConfigFile?>): EmulatorPage =
-        EmulatorSettings.page(tag, d, coreOptions.table(d.id), defaults(d), files.first, files.second, forGame = game != null, vulkanFailed = vulkanFailed(d.id), secondScreen = secondScreen(), screen = screenClass())
+    private fun build(tag: String, d: CoreDescriptor, game: Listed?, files: Pair<ConfigFile?, ConfigFile?>): EmulatorPage {
+        val screen = screenClass()
+        return EmulatorSettings.page(
+            tag, d, coreOptions.table(d.id), defaults(d), files.first, files.second, forGame = game != null, vulkanFailed = vulkanFailed(d.id),
+            secondScreen = secondScreen(), screen = screen, displayMax = Nds3dResolution.displayMaxOf(windowPx(), screen),
+        )
+    }
 
     private suspend fun readPage(tag: String, d: CoreDescriptor, game: Listed?): EmulatorPage =
         build(tag, d, game, configs.read(tag, d.id, game?.game?.fileName))

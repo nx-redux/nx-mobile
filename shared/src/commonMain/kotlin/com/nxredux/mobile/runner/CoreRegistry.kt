@@ -10,7 +10,8 @@ object CoreRegistry {
     // optional (built-in free ones); Bios/NDS/ is copied into the system dir when present.
     // the renderer's default comes from the device's GLES version at load (NdsRenderer). The mic options are locked too: the
     // app's Mic toggle drives the frontend feed, so the core always reads the microphone interface, always active, no overlay.
-    // One plain top-bottom frame: the app sets the internal resolution from the on-screen size (4x until the first layout).
+    // One plain top-bottom frame: the app sets the internal resolution from the on-screen size (at launch from the
+    // window's size, then from each layout; the 4x default is never run).
     // The screen options that frame never reads are locked at the core's own defaults, so a cfg cannot bring them back.
     private val melondsds = CoreDescriptor(
         "melondsds", "libmelondsds_libretro_android.so", setOf("nds", "ids", "dsi"),

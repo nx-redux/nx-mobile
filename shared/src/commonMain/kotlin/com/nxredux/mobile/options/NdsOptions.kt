@@ -229,7 +229,7 @@ object NdsOptions {
                 visual = true, valueLabels = maxScales.map { "${it}x" }, shownWhen = MODE_3D to setOf(Nds3dMode.AUTO.value),
             ),
             FrontendOption(
-                SCALE_3D, "Scale", perfScales, "2",
+                SCALE_3D, "Scale", perfScales, Nds3dResolution.DEFAULT_PERFORMANCE_SCALE.toString(),
                 "The fixed resolution Performance draws 3D at, as a multiple of the DS screen.",
                 visual = true, valueLabels = perfScales.map { "${it}x" }, shownWhen = MODE_3D to setOf(Nds3dMode.PERFORMANCE.value),
             ),
