@@ -1,7 +1,10 @@
 package com.nxredux.mobile.runner
 
+import android.view.KeyEvent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -49,6 +52,30 @@ class LaunchNameHoldTest {
         assertEquals(LaunchTimeline_HOLD_MS, holdRemainingMs(shownAt = 1_000L, now = 1_000L))
         assertEquals(150L, holdRemainingMs(shownAt = 1_000L, now = 1_000L + LaunchTimeline_HOLD_MS - 150L))
         assertEquals(0L, holdRemainingMs(shownAt = 1_000L, now = 5_000L))   // the core took longer: fade at once
+    }
+
+    @Test fun the_hold_swallows_the_players_keys_but_volume() {
+        listOf(KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_BUTTON_SELECT,
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_LEFT).forEach { assertTrue("$it", holdSwallows(it, 0L)) }
+        assertTrue(holdSwallows(KeyEvent.KEYCODE_BUTTON_A, 60_000L))   // a hung core: only Back gets out
+        listOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE)
+            .forEach { assertFalse("$it", holdSwallows(it, 0L)) }
+    }
+
+    @Test fun back_gets_out_only_after_the_give_up() {
+        val giveUp = com.nxredux.mobile.ui.nx.LaunchTimeline.GIVE_UP_MS
+        assertTrue(holdSwallows(KeyEvent.KEYCODE_BACK, 0L))
+        assertTrue(holdSwallows(KeyEvent.KEYCODE_BACK, giveUp - 1))
+        assertFalse(holdSwallows(KeyEvent.KEYCODE_BACK, giveUp))
+    }
+
+    @Test fun the_name_fades_ease_in_over_its_wall_clock_time() {
+        val fade = com.nxredux.mobile.ui.nx.LaunchTimeline.NAME_FADE_MS
+        assertEquals(1f, nameFadeAlpha(0L), 0f)
+        assertEquals(0.75f, nameFadeAlpha(fade / 2), 0.001f)   // ease-in: slow first
+        assertEquals(0f, nameFadeAlpha(fade), 0f)
+        assertEquals(0f, nameFadeAlpha(fade * 3), 0f)
+        assertEquals(1f, nameFadeAlpha(-5L), 0f)
     }
 
     private companion object {

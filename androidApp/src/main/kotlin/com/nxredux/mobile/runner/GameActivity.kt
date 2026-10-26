@@ -383,6 +383,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     // The launch sequence's name (a Minimal launch; null: none, the screen opens as before) and its hold over the window.
     private val launchName by lazy { launchNameFrom(intent.extras) }
     private var nameHold: LaunchNameHold? = null   // main thread only; null once it has gone
+    private val heldDowns = HashSet<Int>()   // key codes whose press the hold swallowed: their release is swallowed too
     private var autoWrittenOnStop = false   // onStop serialized an auto state (its write is queued) since the last onStart
     // Home screenshot for the switcher (main thread only): onPause starts a PixelCopy; its bitmap is written as
     // the slot-9 thumb once onStop has queued the auto state. [homeThumbGen] drops callbacks from an older pause.
@@ -613,7 +614,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // onKeyDown): what the key's press did there, the in-game menu toggles (B inside it). Before 16 the gesture and
         // the key both arrive as KEYCODE_BACK, which onKeyDown consumes, so this never runs twice for one Back.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() = backPressed()
+            override fun handleOnBackPressed() { if (!holdKeepsBack()) backPressed() }
         })
         // netplay: a session launches cold: no saved or requested resume slot.
         val launchSession = netplaySessionFrom(
@@ -3124,6 +3125,46 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
     override val gameContainer: FrameLayout get() = findViewById(R.id.gameContainer)
+
+    /**
+     * While the launch name's hold is up keys wait for the game ([holdSwallows]): a swallowed press's repeats and release
+     * are swallowed too, even after the hold went; a release whose press went through goes through.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        when (event.action) {
+            KeyEvent.ACTION_UP -> if (heldDowns.remove(code)) return true
+            KeyEvent.ACTION_DOWN -> {
+                if (code in heldDowns) return true
+                if (nameHold != null) {
+                    if (holdSwallows(code, heldForMs())) { heldDowns += code; return true }
+                    if (code == KeyEvent.KEYCODE_BACK) dropHoldForBack()
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    /** How long the launch name's hold has been up; 0 without one. */
+    private fun heldForMs(): Long = nameHold?.let { SystemClock.uptimeMillis() - it.shownAt } ?: 0L
+
+    /** The back callback's Back (Android 16+): kept by the hold before its give-up; past it the hold goes and Back acts. */
+    private fun holdKeepsBack(): Boolean {
+        if (nameHold == null) return false
+        if (holdSwallows(KeyEvent.KEYCODE_BACK, heldForMs())) return true
+        dropHoldForBack()
+        return false
+    }
+
+    /** Back past the give-up on a core that never drew: the hold goes at once so the in-game menu Back opens is seen. */
+    private fun dropHoldForBack() {
+        nameHold?.remove()
+        nameHold = null
+    }
+
+    /** Sticks wait for the game while the launch name's hold is up. */
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
+        nameHold != null || super.dispatchGenericMotionEvent(event)
 
     override fun onGenericMotionEvent(event: MotionEvent?): Boolean = input.onGenericMotionEvent(event)
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean = input.onKeyDown(keyCode, event)

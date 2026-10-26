@@ -1,6 +1,5 @@
 package com.nxredux.mobile.runner
 
-import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
@@ -9,19 +8,20 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.AccelerateInterpolator
 import com.nxredux.mobile.ui.nx.LaunchTimeline
 
 /**
  * The launch sequence's hold on the game screen: black, with the launched name drawn on the pixels the menu last drew it
- * on (its [LaunchName], in screen px; the view's own screen position is taken off), until the core's first frame and
- * at least [LaunchTimeline.HOLD_MS] after it was first shown ([shownAt], kept across a GLES relaunch). [release] fades
- * the name out over [LaunchTimeline.NAME_FADE_MS] on the black, then the view goes and the game cuts in (spec steps 4-6).
- * Over everything in the window, the resume cover included: the player never sees its screenshot before the name goes.
- * Touches stop here while it is up. Main thread only.
+ * on (its [LaunchName], in window px, as the menu captured it; the view's own place in the window is taken off), until
+ * the core's first frame and at least [LaunchTimeline.HOLD_MS] after it was first shown ([shownAt], kept across a GLES
+ * relaunch). [release] fades the name out over [LaunchTimeline.NAME_FADE_MS] (ease-in, wall-clock: the system's animator
+ * scale doesn't touch it) on the black, then the view goes and the game cuts in (spec steps 4-6). Over everything in the
+ * window, the resume cover included: the player never sees its screenshot before the name goes. Touches stop here while
+ * it is up; the activity holds keys back ([holdSwallows]). Main thread only.
  */
 @SuppressLint("ViewConstructor")
 internal class LaunchNameHold(
@@ -35,10 +35,21 @@ internal class LaunchNameHold(
         if (name.textSizePx > 0f) letterSpacing = name.letterSpacingPx / name.textSizePx
         color = name.argb
     }
-    private val screen = IntArray(2)
+    private val inWindow = IntArray(2)
     private var nameAlpha = 1f
-    private var fade: ValueAnimator? = null
-    private val startFade = Runnable { fadeOut() }
+    private var fadeStart = -1L   // uptime the name's fade began; -1: not fading
+    private val startFade = Runnable { fadeStart = SystemClock.uptimeMillis(); postOnAnimation(fadeStep) }
+    private val fadeStep = object : Runnable {
+        override fun run() {
+            if (fadeStart < 0L) return
+            nameAlpha = nameFadeAlpha(SystemClock.uptimeMillis() - fadeStart)
+            invalidate()
+            if (nameAlpha > 0f) { postOnAnimation(this); return }
+            val done = onGone
+            remove()
+            done?.invoke()
+        }
+    }
     private var onGone: (() -> Unit)? = null
     private var released = false
 
@@ -63,34 +74,18 @@ internal class LaunchNameHold(
         released = true
         onGone = null
         removeCallbacks(startFade)
-        fade?.cancel()
+        removeCallbacks(fadeStep)
+        fadeStart = -1L
         (parent as? ViewGroup)?.removeView(this)
-    }
-
-    private fun fadeOut() {
-        fade = ValueAnimator.ofFloat(1f, 0f).apply {
-            duration = LaunchTimeline.NAME_FADE_MS
-            interpolator = AccelerateInterpolator()
-            addUpdateListener { nameAlpha = it.animatedValue as Float; invalidate() }
-            addListener(object : android.animation.AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: android.animation.Animator) {
-                    if (fade !== animation) return
-                    val done = onGone
-                    remove()
-                    done?.invoke()
-                }
-            })
-            start()
-        }
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (nameAlpha <= 0f) return
         paint.alpha = (Color.alpha(name.argb) * nameAlpha).toInt()
-        getLocationOnScreen(screen)
+        getLocationInWindow(inWindow)
         for (line in name.lines) {
-            val (x, y) = clampLine(line.xPx - screen[0], line.baselinePx - screen[1], width, height, name.textSizePx)
+            val (x, y) = clampLine(line.xPx - inWindow[0], line.baselinePx - inWindow[1], width, height, name.textSizePx)
             canvas.drawText(line.text, x, y, paint)
         }
     }
@@ -100,6 +95,7 @@ internal class LaunchNameHold(
 
     override fun onDetachedFromWindow() {
         removeCallbacks(startFade)
+        removeCallbacks(fadeStep)
         super.onDetachedFromWindow()
     }
 
@@ -115,6 +111,23 @@ internal class LaunchNameHold(
             runCatching { Typeface.createFromAsset(context.assets, FONT_DIR + if (bold) "misans_semibold.ttf" else "misans_regular.ttf") }
                 .getOrDefault(if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT)
     }
+}
+
+/** The name's alpha [elapsedMs] into its fade: 1 → 0 over [LaunchTimeline.NAME_FADE_MS], ease-in (t²). */
+internal fun nameFadeAlpha(elapsedMs: Long): Float {
+    val t = (elapsedMs.toFloat() / LaunchTimeline.NAME_FADE_MS).coerceIn(0f, 1f)
+    return 1f - t * t
+}
+
+/**
+ * While the launch name's hold is up the player's input waits for the game (the spec: ignored from A until the emulator
+ * has the screen): every key is swallowed but the volume keys, and Back too until the hold has been up
+ * [LaunchTimeline.GIVE_UP_MS] ([heldForMs]), so a core that never draws can still be left, as the menu gives up.
+ */
+internal fun holdSwallows(keyCode: Int, heldForMs: Long): Boolean = when (keyCode) {
+    KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> false
+    KeyEvent.KEYCODE_BACK -> heldForMs < LaunchTimeline.GIVE_UP_MS
+    else -> true
 }
 
 /** How long a hold shown at [shownAt] still has to stay before its name may fade ([LaunchTimeline.HOLD_MS] minimum); 0: now. */
