@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.layout.SubcomposeLayout
+import com.nxredux.mobile.ui.LocalSettingsBlock
 
 /**
  * A tool page in the nx-redux shape: grey title, a details block (headline + dim lines), the rows, the hint bar.
@@ -55,6 +56,19 @@ fun NxDetailListBody(
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
     val listState = rememberLazyListState()
+    // The Settings rows block ([LocalSettingsBlock]): the title its first line, the details under it in the hint grey,
+    // the rows from the bottom (the landscape split, pinned, action and title rows are a whole page's).
+    LocalSettingsBlock.current?.let { block ->
+        val header: (@Composable () -> Unit)? = if (details.isEmpty()) null else ({
+            val size = NxTextSizes.secondary(NxTextSizes.listLabel(NxListPitch) * nxTextScale())
+            Text(
+                details.joinToString("\n"), color = colors.hint, fontFamily = font, fontSize = size, lineHeight = size * 1.35f,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = nxListInset()).padding(bottom = 6.dp),
+            )
+        })
+        NxRowsBlockPage(block, title, rows, { selectedIndex }, hints, onSelect, onOpen, modifier, onHint, rowKind = rowKind, header = header, listState = listState)
+        return
+    }
     // Touch only: the hints' icon stand-ins ([HintTouch.Icon]) sit at the title's right.
     val touch = touchOnly()
     val icons: (@Composable () -> Unit)? = if (touch && onHint != null) ({ NxTopIcons(hints.touchIcons(onHint)) }) else null

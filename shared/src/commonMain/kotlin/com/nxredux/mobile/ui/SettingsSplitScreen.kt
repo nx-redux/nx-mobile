@@ -2,6 +2,10 @@ package com.nxredux.mobile.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,64 +17,77 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxHintBarKeepHeight
 import com.nxredux.mobile.ui.nx.NxButton
+import com.nxredux.mobile.ui.nx.NxHintBar
 
 /** An unfocused pane's opacity. */
 internal const val UNFOCUSED_ALPHA = 0.6f
 
 /**
- * The two-pane Settings on a wide landscape window ([settingsSplit]): the categories on the left, the category's page
- * on the right, a faint divider between. The focus follows the screen ([settingsPane]): on the Settings root the left
- * pane is focused and the right previews the highlighted category (no highlight, dimmed; a tap opens it on that row);
- * on a page the right pane is [page] exactly as the single page draws it, and the left pane shows the categories dimmed
- * on the page's own (a tap there focuses it, [AppState.settingsCategoryTap]). Only the focused pane shows hints (both
- * bars keep their height, so the panes' rows stay level). The Remove folder dialog is drawn here, over both panes.
+ * The wide Settings ([settingsSplit]): one stage, nothing above but the small mark (the background's). The section block
+ * ([SettingsMenuScreen]) rests bottom-left; the page is the rows block ([LocalSettingsBlock]) at the bottom right, its
+ * left edge at [SETTINGS_ROWS_LEFT] of the width, on the same baseline. On the Settings root the sections have the
+ * focus and the rows preview the highlighted section (no selection, a tap opens it on that row,
+ * [AppState.settingsPreviewTap]); on a page the rows have it and the current section drops to the main ink (a tap on a
+ * section, [AppState.settingsCategoryTap]). A page that is not a rows block ([settingsBlockPage]: a Layouts group with
+ * its picture, the Android games picker) draws whole from the old pane's edge. Only the page shows hints; both sides keep
+ * the bar's height, so the blocks share the baseline. The Remove folder dialog is drawn here, over the whole stage.
  */
 @Composable
 internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<ListSelection>, page: @Composable () -> Unit) {
     val categories = state.settingsSections()   // not remembered: a second screen coming or going changes it
-    SplitPanes(
-        divider = false,   // the categories and the page are one surface, as the in-game menu's two panes
-        left = {
-            if (s is Screen.SettingsMenu) {
-                WithIndex(selection) {
-                    SettingsMenuScreen(s, it, state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) })
+    val blockPage = settingsBlockPage(s)
+    Box(Modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalNxHintBarKeepHeight provides true) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val left = maxWidth * settingsStageLeft(blockPage)
+                Column(Modifier.width(left).fillMaxHeight()) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        if (s is Screen.SettingsMenu) {
+                            WithIndex(selection) {
+                                SettingsMenuScreen(s, it, state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) })
+                            }
+                        } else {
+                            val current = categories.indexOf(settingsCategoryOf(s)).coerceAtLeast(0)
+                            // The page has the focus: the current section drops to the main ink.
+                            SettingsMenuScreen(
+                                Screen.SettingsMenu(categories), current,
+                                onTap = state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) }, rowsFocused = true,
+                            )
+                        }
+                    }
+                    NxHintBar(emptyList())   // no hints here; with a pad it keeps the page bar's room, so the baselines meet
                 }
-            } else {
-                val current = categories.indexOf(settingsCategoryOf(s)).coerceAtLeast(0)
-                // The page has the focus: the current section drops to the main ink (no dimming of the block).
-                SettingsMenuScreen(
-                    Screen.SettingsMenu(categories), current,
-                    onTap = state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) }, rowsFocused = true,
-                )
-            }
-        },
-        right = {
-            if (s is Screen.SettingsMenu) {
-                WithIndex(selection) { i ->
-                    s.sections.getOrNull(i)?.let { section ->
-                        val gpu by state.gpu.collectAsState()   // About's GPU row lands after its query
-                        val update by state.updateLabel.collectAsState()   // and its update row follows the updater
-                        val preview = remember(s, section, gpu, update) { state.settingsPreview(section) }
-                        SettingsScreen(
-                            preview, -1,
-                            onSelect = state::settingsPreviewTap, onOpen = state::settingsPreviewTap,
-                            modifier = Modifier.alpha(UNFOCUSED_ALPHA), titled = true, hints = emptyList(),   // role: an unfocused pane, dimmed
-                        )
+                Box(Modifier.padding(start = left).fillMaxSize()) {
+                    CompositionLocalProvider(LocalSettingsBlock provides SettingsBlockMode(crumb = null).takeIf { blockPage }) {
+                        if (s is Screen.SettingsMenu) {
+                            WithIndex(selection) { i ->
+                                s.sections.getOrNull(i)?.let { section ->
+                                    val gpu by state.gpu.collectAsState()   // About's GPU row lands after its query
+                                    val update by state.updateLabel.collectAsState()   // and its update row follows the updater
+                                    val preview = remember(s, section, gpu, update) { state.settingsPreview(section) }
+                                    // No selection, undimmed: the current section is the one accent word.
+                                    SettingsScreen(
+                                        preview, -1,
+                                        onSelect = state::settingsPreviewTap, onOpen = state::settingsPreviewTap,
+                                        titled = true, hints = emptyList(),
+                                    )
+                                }
+                            }
+                        } else {
+                            page()
+                        }
                     }
                 }
-            } else {
-                page()
             }
-        },
-        // Over both panes, so its scrim takes every tap until it is answered.
-        over = { if ((s as? Screen.Settings)?.confirmRemove != null) SettingsRemoveDialog(state::onButton) },
-    )
+        }
+        // Over the whole stage, so its scrim takes every tap until it is answered.
+        if ((s as? Screen.Settings)?.confirmRemove != null) SettingsRemoveDialog(state::onButton)
+    }
 }
 
 /**

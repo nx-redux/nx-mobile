@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
+import com.nxredux.mobile.ui.settingsRowsFade
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -225,7 +226,7 @@ fun NxOptionsList(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().nxOptionsWholeRows(listState, geometry)
-                .then(if (scrollFade) Modifier.nxScrollFade(listState, height = rowDp / 2, strong = true) else Modifier),
+                .then(if (scrollFade) Modifier.nxScrollFade(listState, height = settingsRowsFade(rowDp / 2), strong = true) else Modifier),
             contentPadding = PaddingValues(bottom = with(density) { geometry.endPadPx.toDp() }),
             flingBehavior = rememberNxOptionsSnapFling(listState, geometry),
         ) {

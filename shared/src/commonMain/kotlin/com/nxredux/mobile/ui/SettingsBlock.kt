@@ -12,14 +12,20 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -33,6 +39,7 @@ import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxFont
 import com.nxredux.mobile.ui.nx.LocalWindowSize
 import com.nxredux.mobile.ui.nx.NxTextSizes
+import com.nxredux.mobile.ui.nx.nxListInset
 import com.nxredux.mobile.ui.nx.nxTextScale
 import com.nxredux.mobile.ui.nx.pinned
 import org.jetbrains.compose.resources.painterResource
@@ -152,3 +159,70 @@ internal fun SettingsBackground() {
         SettingsMark(Modifier.align(Alignment.TopEnd).padding(top = SETTINGS_MARK_TOP, end = settingsGutter(settingsSizeClass())))
     }
 }
+
+/**
+ * A page drawn as the Settings rows block ([SettingsRowsBlock]) rather than as a whole page: its title the block's first
+ * line, its rows anchored to the bottom. [crumb]: the words before the title ("Settings" on a phone held upright, as
+ * "Settings / Layouts"); null on a wide window, where the section block beside it already says Settings.
+ */
+data class SettingsBlockMode(val crumb: String?)
+
+/** Set while a Settings page is drawn as the rows block ([SettingsBlockMode]); null everywhere else (a page draws whole). */
+val LocalSettingsBlock = compositionLocalOf<SettingsBlockMode?> { null }
+
+/** The rows block's fade at an edge it scrolls past. */
+val SETTINGS_ROWS_FADE = 24.dp
+
+/** The least room the rows block leaves above it when it fills the height (it then scrolls). */
+val SETTINGS_ROWS_TOP = 24.dp
+
+/**
+ * Whether [screen] draws as the rows block on the wide Settings stage: the root (its preview), every Settings page and
+ * sub-page, and Emulation's Default settings pages. A Layouts group keeps its page with the picture, and the Android
+ * games picker its grid, beside the section block as before.
+ */
+fun settingsBlockPage(screen: Screen): Boolean = when (screen) {
+    is Screen.SettingsMenu, is Screen.EmulatorList, is Screen.EmulatorConsoles -> true
+    is Screen.Settings -> !screen.section.layoutGroup
+    is Screen.EmulatorOptions -> !gameSettingsModal(screen)
+    else -> false
+}
+
+/** Where the right-hand page starts on the wide stage, as a share of the width: the rows block's 44%, or a whole page's pane. */
+fun settingsStageLeft(blockPage: Boolean): Float = if (blockPage) SETTINGS_ROWS_LEFT else SETTINGS_SPLIT_LEFT
+
+/**
+ * The rows block: anchored to the bottom of what it is given, [SETTINGS_BLOCK_BOTTOM] up and the gutter in from the
+ * right, so it sits on the section block's baseline. Its first line is [title] in hint at 13 sp (after [mode]'s crumb in
+ * inkDim), level with the row labels and 6 dp above the first row; then [header] (a banner, a page's lines), then
+ * [rows], which take what is left and scroll there (each list fades its own edges, [SETTINGS_ROWS_FADE]). No pane
+ * header, nothing at the top.
+ */
+@Composable
+fun SettingsRowsBlock(
+    mode: SettingsBlockMode, title: String?, modifier: Modifier = Modifier,
+    header: (@Composable () -> Unit)? = null, rows: @Composable () -> Unit,
+) {
+    val colors = LocalNxColors.current
+    val scale = nxTextScale()
+    Column(
+        modifier.fillMaxSize().padding(top = SETTINGS_ROWS_TOP, end = settingsGutter(settingsSizeClass()), bottom = SETTINGS_BLOCK_BOTTOM),
+        verticalArrangement = Arrangement.Bottom,
+    ) {
+        val line = buildAnnotatedString {
+            mode.crumb?.let { withStyle(SpanStyle(color = colors.inkDim)) { append("$it / ") } }
+            append(title.orEmpty())
+        }
+        if (line.isNotEmpty()) Text(
+            line, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.menuInfo.pinned() * scale,
+            maxLines = 1, softWrap = false,
+            modifier = Modifier.fillMaxWidth().padding(start = nxListInset(), end = nxListInset(), bottom = SETTINGS_LABEL_GAP),
+        )
+        header?.invoke()
+        Box(Modifier.fillMaxWidth().weight(1f, fill = false)) { rows() }
+    }
+}
+
+/** A list's edge fade: [SETTINGS_ROWS_FADE] in the rows block, else the list's own [default]. */
+@Composable
+fun settingsRowsFade(default: Dp): Dp = if (LocalSettingsBlock.current != null) SETTINGS_ROWS_FADE else default

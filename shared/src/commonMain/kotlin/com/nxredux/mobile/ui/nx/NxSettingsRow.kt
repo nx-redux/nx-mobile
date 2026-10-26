@@ -26,6 +26,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.nxredux.mobile.ui.LocalSettingsBlock
+import com.nxredux.mobile.ui.SettingsRowsBlock
+import com.nxredux.mobile.ui.settingsRowsFade
 
 /*
  * The app's touch settings rows (Settings' value pages, Emulator Settings, Game Settings), drawn as the in-game menu's
@@ -102,6 +105,16 @@ fun NxSettingsPage(
     header: (@Composable () -> Unit)? = null,
     preview: Boolean = false,
 ) {
+    // The Settings rows block ([LocalSettingsBlock]): the title its first line, the rows from the bottom.
+    LocalSettingsBlock.current?.let { block ->
+        Column(modifier.fillMaxSize()) {
+            SettingsRowsBlock(block, title, Modifier.weight(1f), header) {
+                NxSettingsList(rows, selectedIndex, onSelect, onOpen, onEvent, Modifier, onTruncated, preview)
+            }
+            NxHintBar(hints, onHint = onHint)
+        }
+        return
+    }
     Column(modifier.fillMaxSize()) {
         NxTitledBody(title, Modifier.weight(1f).fillMaxWidth()) {
             Column(Modifier.fillMaxSize()) {
@@ -138,9 +151,10 @@ fun NxSettingsList(
         val density = LocalDensity.current
         val total = if (rows.any { it.paragraph }) maxHeight else with(density) { rows.sumOf { sizes.heightOf(it).roundToPx() }.toDp() }
         // Rows differ in height (a bare row, a group label, segments under the text): kept clear of the fade in px.
-        NxKeepSelectedInView(listState, selectedIndex, rows.size, edge = with(density) { (sizes.row / 2).roundToPx() })
+        val fade = settingsRowsFade(sizes.row / 2)   // the Settings rows block's 24 dp
+        NxKeepSelectedInView(listState, selectedIndex, rows.size, edge = with(density) { fade.roundToPx() })
         LazyColumn(
-            Modifier.fillMaxWidth().height(minOf(total, maxHeight)).nxScrollFade(listState, height = sizes.row / 2, strong = true),
+            Modifier.fillMaxWidth().height(minOf(total, maxHeight)).nxScrollFade(listState, height = fade, strong = true),
             state = listState, flingBehavior = rememberNxRowSnapFling(listState),
         ) {
             itemsIndexed(rows) { i, row ->

@@ -33,6 +33,10 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.nxredux.mobile.ui.LocalSettingsBlock
+import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE
+import com.nxredux.mobile.ui.SettingsBlockMode
+import com.nxredux.mobile.ui.SettingsRowsBlock
 import com.nxredux.mobile.ui.listArtLabelEnd
 import kotlin.math.roundToInt
 
@@ -106,6 +110,12 @@ fun NxScreenScaffold(
 ) {
     val listSelection = selection ?: { selectedIndex }
     val listState = rememberLazyListState()
+    // The Settings rows block ([LocalSettingsBlock]): a titled list page's rows from the bottom, under its title line.
+    val block = LocalSettingsBlock.current
+    if (block != null && grid == null && band == null) {
+        NxRowsBlockPage(block, title, rows, listSelection, hints, onSelect, onOpen, modifier, onHint, onLongPress, rowKind, header, listState)
+        return
+    }
     // Every list's pitch under Appearance → Text size: the list's at Large, in proportion at Small (the text follows the row).
     val bandPitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)
     // Up and down side by side, 1 dp apart, whichever applies, packed (a lone arrow leaves no gap): the pair a band draws.
@@ -378,5 +388,42 @@ internal fun NxTitledBody(title: String?, modifier: Modifier = Modifier, titleSu
             head.place(0, 0)
             body.place(0, head.height + maxOf(0, -shift))
         }
+    }
+}
+
+/**
+ * A list page as the Settings rows block ([SettingsRowsBlock]): [title] its first line, [header] under it, the rows at
+ * the list pitch (Appearance → Text size) taking only their own height, from the bottom; past the room they scroll under
+ * a [SETTINGS_ROWS_FADE] fade, the selection kept clear of it. Pill rows keep the pill, options rows NX Redux's options
+ * row; the hint bar below, as the page's.
+ */
+@Composable
+internal fun NxRowsBlockPage(
+    block: SettingsBlockMode, title: String?, rows: List<NxRow>, selection: () -> Int, hints: List<Hint>,
+    onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier = Modifier, onHint: ((NxButton) -> Unit)? = null,
+    onLongPress: ((Int) -> Unit)? = null, rowKind: NxRowKind = NxRowKind.PILL, header: (@Composable () -> Unit)? = null,
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+) {
+    val pitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)
+    val density = LocalDensity.current
+    Column(modifier.fillMaxSize()) {
+        SettingsRowsBlock(block, title, Modifier.weight(1f), header) {
+            if (rowKind == NxRowKind.OPTIONS) {
+                NxOptionsList(
+                    rows, selection(), onSelect, onOpen, rowHeight = pitch, listText = NxTextSizes.listLabel(pitch),
+                    modifier = Modifier.fillMaxWidth().height(nxOptionsFitHeight(rows, pitch)), listState = listState,
+                    onLongPress = onLongPress, scrollFade = true,
+                )
+            } else {
+                // Its own rows' height in their rounded px; a taller list is held to the room and scrolls.
+                val height = with(density) { (pitch.roundToPx() * rows.size).toDp() }
+                NxList(
+                    rows, selection, onSelect, onOpen,
+                    Modifier.fillMaxWidth().height(height).nxScrollFade(listState, height = SETTINGS_ROWS_FADE, strong = true),
+                    listState = listState, rowHeightOverride = pitch, onLongPress = onLongPress, edgeMargin = 1,
+                )
+            }
+        }
+        NxHintBar(hints, onHint = onHint)
     }
 }
