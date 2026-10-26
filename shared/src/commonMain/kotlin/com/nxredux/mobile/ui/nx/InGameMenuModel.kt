@@ -28,6 +28,7 @@ import com.nxredux.mobile.shortcuts.ShortcutOverrides
 import com.nxredux.mobile.shortcuts.ShortcutSet
 import com.nxredux.mobile.shortcuts.Shortcuts
 import com.nxredux.mobile.shortcuts.TouchSlot
+import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 
 enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, CANCEL }
@@ -126,6 +127,8 @@ data class MenuPage(
     val rows: List<MenuRow>,
     val selected: Int = 0,
     val footer: String = "",
+    /** Plain text an options page shows above its rows (Shortcuts with no controller); not a row, never selected. */
+    val intro: String = "",
     /**
      * Message pages only: UP/DOWN ask the UI to scroll the text one step. [scrollSeq] counts the requests (the UI
      * scrolls once per new value), [scrollDir] is the latest one's direction (-1 up, +1 down).
@@ -305,6 +308,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         private set
     private var shortcutClaimed: List<ClaimedInput> = ConsoleHotkeys.always
     private var shortcutRewind = false
+    /** A controller is connected ([setControllerConnected]): without one the page has no bind rows (the on-screen pad binds nothing). */
+    private var controllerConnected = true
     /** Press to bind on the Shortcuts page; the host hands it raw key codes ([takesKey], [captureKey]). */
     private var capture = ShortcutCapture(shortcutClaimed)
     private var capturing: ShortcutAction? = null
@@ -1432,6 +1437,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         refreshShortcutsPage()
     }
 
+    /** Whether a controller is [connected]; one going away ends a wait. Refreshes an open Shortcuts page. */
+    fun setControllerConnected(connected: Boolean) {
+        if (connected == controllerConnected) return
+        controllerConnected = connected
+        if (!connected) endWait()
+        refreshShortcutsPage()
+    }
+
     /**
      * Whether the host should give this raw key's press ([down]) or release to [captureKey] instead of the menu: every
      * key while a row waits, and the release of one pressed since ([ShortcutCapture.takes]), so MENU's release after
@@ -1519,12 +1532,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /**
      * One row per action (no rewind rows without rewind), then the two touch buttons: each shows what fires here, marked
      * "(default)" while it inherits Controls → Shortcuts; an action on a button the console's hotkeys use shows
-     * Unavailable with the hotkey as its line (spec: built-in hotkeys win). The row waiting for a press says so.
+     * Unavailable with the hotkey as its line (spec: built-in hotkeys win). The row waiting for a press says so. With no
+     * controller the bind rows give way to [SHORTCUTS_NO_CONTROLLER] as the page's intro; their overrides stay.
      */
     private fun shortcutsPage(): MenuPage {
         val effective = Shortcuts.effective(shortcutBase, shortcutOverrides, shortcutClaimed, shortcutRewind)
         fun shown(value: String, inherited: Boolean) = if (inherited) "$value$DEFAULT_SUFFIX" else value
-        val binds = ShortcutAction.entries.filter { shortcutRewind || !it.rewind }.map { a ->
+        val binds = if (!controllerConnected) emptyList()
+        else ShortcutAction.entries.filter { shortcutRewind || !it.rewind }.map { a ->
             val key = BIND_KEY_PREFIX + a.key
             val blocked = effective.blocked[a]
             when {
@@ -1541,7 +1556,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 choices = choices.map { it?.label ?: NONE_LABEL }, index = choices.indexOf(action),
             )
         }
-        return MenuPage(PageKind.Shortcuts, SHORTCUTS_LABEL, binds + touch, footer = SHORTCUTS_FOOTER)
+        return MenuPage(PageKind.Shortcuts, SHORTCUTS_LABEL, binds + touch, footer = SHORTCUTS_FOOTER, intro = if (controllerConnected) "" else SHORTCUTS_NO_CONTROLLER)
     }
 
     private fun saveChangesPage() = MenuPage(

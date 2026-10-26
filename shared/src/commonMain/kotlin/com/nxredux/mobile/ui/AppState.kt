@@ -530,6 +530,9 @@ internal const val RESET_DEFAULTS_LABEL = "Reset to defaults"
 /** A Shortcuts bind row's value while it waits for a press. */
 internal const val SHORTCUT_PROMPT = "Press a button…"
 
+/** Both Shortcuts pages' line in place of the bind rows while no controller is connected (the on-screen pad binds nothing). */
+internal const val SHORTCUTS_NO_CONTROLLER = "Connect a controller to bind buttons. On the on-screen pad, use Touch button 1 and 2 instead."
+
 /** How long a notice stays before it clears itself. */
 private const val NOTICE_MILLIS = 3_000L
 
@@ -3855,11 +3858,15 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     private var controllerConnected = true
 
-    /** The UI reports whether a controller is connected: a bind row waiting for a press says what it needs. */
+    /**
+     * The UI reports whether a controller is connected: the Shortcuts page shows its bind rows only with one (the
+     * on-screen pad binds nothing), so a wait ends when it goes.
+     */
     fun onControllerConnected(connected: Boolean) {
         if (controllerConnected == connected) return
         controllerConnected = connected
-        if (_capturingShortcut.value != null) refreshSettings()
+        if (!connected && _capturingShortcut.value != null) { capture.cancel(); _capturingShortcut.value = null }
+        refreshShortcuts()
     }
 
     /**
@@ -3918,16 +3925,18 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /**
      * Controls -> Shortcuts: one press-to-bind row per action (its button or combo, None unbound; the one waiting shows
-     * [SHORTCUT_PROMPT] and, as its line, how to bind), the two touch buttons' actions, then Clear all.
+     * [SHORTCUT_PROMPT] and, as its line, how to bind), the two touch buttons' actions, then Clear all. With no
+     * controller the bind rows give way to [SHORTCUTS_NO_CONTROLLER]; their bindings stay.
      */
     private fun shortcutRows(): List<SettingsRow> {
         val set = shortcutSet()
         val waiting = _capturingShortcut.value
-        val note = if (controllerConnected) "Hold MENU for a combo" else "Connect a controller to bind"
-        return ShortcutAction.entries.map { a ->
-            if (a == waiting) SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, SHORTCUT_PROMPT, note = note, shortcut = a)
+        val binds = if (!controllerConnected) listOf(SettingsRow(SettingsKind.TEXT, SHORTCUTS_NO_CONTROLLER))
+        else ShortcutAction.entries.map { a ->
+            if (a == waiting) SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, SHORTCUT_PROMPT, note = "Hold MENU for a combo", shortcut = a)
             else SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, set.bindings[a]?.let(KeyLabels::label) ?: "None", shortcut = a)
-        } + TouchSlot.entries.mapIndexed { i, t ->
+        }
+        return binds + TouchSlot.entries.mapIndexed { i, t ->
             SettingsRow(SettingsKind.SHORTCUT_TOUCH, "Touch button ${i + 1}", set.touch[t]?.label ?: "None", touchSlot = t)
         } + SettingsRow(SettingsKind.RESET_DEFAULTS, "Clear all")
     }

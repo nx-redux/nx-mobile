@@ -209,7 +209,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
         "Bind a controller button or combo to fast forward, rewind or reset, and give the on-screen pad up to two touch " +
             "buttons. Every console and game uses these unless its in-game Shortcuts page overrides them.",
     )
-    // While it waits for a press, its line says how to bind (or that a controller is needed).
+    // While it waits for a press, its line says how to bind.
     SettingsKind.SHORTCUT_BIND -> SettingText(
         row.note.orEmpty(),
         "Press A, then the button to use. For a combo, hold MENU and press another button. B cancels, X sets it back " +

@@ -5,6 +5,7 @@ import android.view.Gravity
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -287,6 +288,7 @@ internal class InGameMenuController(
         model.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams)
         model.setCheats(cheatSet.entries, cheatsFolder, cheatSet.expected)
         host.publishShortcuts(model)
+        model.setControllerConnected(padLayout.controllerConnected.value)
         publishPlayers(model)
         publishSecondScreen(model)
         publishSpeed(model)
@@ -315,6 +317,8 @@ internal class InGameMenuController(
                     // No controller: hints show the on-screen pad's own labels (Sega C, PS ○); one attached: the A/B art.
                     // Keyed on the profile's revision: a live Controller Type change redraws them with the menu open.
                     val connected = padLayout.controllerConnected.value
+                    // Shortcuts' bind rows come and go with a controller (the on-screen pad binds nothing).
+                    LaunchedEffect(connected) { menuModel?.let { it.setControllerConnected(connected); menuState.value = it.state } }
                     val hintGlyphs = remember(connected, padProfileRevision.value) {
                         if (connected) HintGlyphs.STANDARD else HintGlyphs.forPad(padProfile())
                     }
