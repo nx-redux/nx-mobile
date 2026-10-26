@@ -16,6 +16,7 @@ import com.nxredux.mobile.options.CoreOptionFilter
 import com.nxredux.mobile.options.FrontendOption
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.ShaderOptions
+import com.nxredux.mobile.options.shownFor
 import com.nxredux.mobile.settings.stepFrom
 import com.nxredux.mobile.shaders.ShaderParam
 import com.nxredux.mobile.shortcuts.CaptureResult
@@ -303,6 +304,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * defaults ([ConsoleSettings.tableFor]). Set before the menu's pages are built.
      */
     var screen: ScreenClass? = null
+
+    /** The biggest DS 3D scale this display reaches (null: unknown): the 3D Resolution rows offer scales up to it. Set before the menu's pages are built. */
+    var displayMax3d: Int? = null
 
     // Options → Shortcuts ([setShortcuts]): Controls → Shortcuts, this console's or game's overrides over it, the
     // console's hotkeys (they win: a row on one is Unavailable, press to bind refuses one), whether the core rewinds.
@@ -1369,9 +1373,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * Game Settings / Emulator Settings) left out, and Bottom screen while no second display is [secondConnected]; none
      * left = the page is not offered.
      */
-    private fun consoleRows() = ConsoleSettings.tableFor(frontendTag, screen).filter {
+    private fun consoleRows() = ConsoleSettings.tableFor(frontendTag, screen, displayMax3d).filter {
         it.key !in frontendLocked && !it.atLaunch && (secondConnected || it.key != BottomScreenOptions.KEY)
-    }
+    }.shownFor(frontend).map { ConsoleSettings.keeping(it, frontend[it.key] ?: it.default) }
 
     private fun frontendPage() = MenuPage(
         PageKind.Frontend, "Frontend",

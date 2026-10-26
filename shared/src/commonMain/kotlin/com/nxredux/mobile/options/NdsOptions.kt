@@ -2,6 +2,8 @@ package com.nxredux.mobile.options
 
 import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.layout.ScreenClass
+import com.nxredux.mobile.runner.Nds3dMode
+import com.nxredux.mobile.runner.Nds3dResolution
 import com.nxredux.mobile.settings.stepFrom
 
 /** A DS setting's stored [value] and what the menu and hotkey labels show. */
@@ -112,6 +114,9 @@ object NdsOptions {
     const val PIP_SIZE = "nx_nds_pip_size"
     const val PIP_OPACITY = "nx_nds_pip_opacity"
     const val CORE_RESOLUTION = "melonds_opengl_resolution"
+    const val MODE_3D = "nx_nds_3d_resolution"
+    const val MAX_SCALE_3D = "nx_nds_3d_max_scale"
+    const val SCALE_3D = "nx_nds_3d_scale"
 
     /** Each layout key to its previous key and that key's old default. */
     val OLD_LAYOUT_KEYS: Map<String, Pair<String, String>> = mapOf(
@@ -200,9 +205,43 @@ object NdsOptions {
         ),
     )
 
-    /** The page's rows for [screen] (null: unknown). */
-    fun tableFor(screen: ScreenClass?, canHalfFold: Boolean = DeviceTraits.canHalfFold): List<FrontendOption> =
-        layoutRows(screen, canHalfFold) + otherRows
+    private fun scales(max: Int): List<String> = (1..max.coerceIn(1, Nds3dResolution.CORE_MAX)).map { it.toString() }
+
+    /**
+     * The 3D Resolution row and its two sub-rows: Max Scale (Auto) and Scale (Performance). [displayMax] is the biggest scale
+     * the display reaches ([Nds3dResolution.displayMax]); null (unknown) offers every scale the core has.
+     */
+    fun resolutionRows(displayMax: Int?): List<FrontendOption> {
+        val maxScales = scales(displayMax ?: Nds3dResolution.CORE_MAX)
+        val perfScales = scales(displayMax?.let(Nds3dResolution::performanceCeiling) ?: Nds3dResolution.CORE_MAX)
+        return listOf(
+            FrontendOption(
+                MODE_3D, "3D Resolution", Nds3dMode.entries.map { it.value }, Nds3dMode.AUTO.value,
+                "How sharply 3D models are drawn. 2D art, text and the screen's size don't change.",
+                visual = true, valueLabels = Nds3dMode.entries.map { it.label },
+            ),
+            FrontendOption(
+                MAX_SCALE_3D, "Max Scale", maxScales, Nds3dResolution.DEFAULT_CAP.toString(),
+                "The most Auto draws 3D at, as a multiple of the DS screen.",
+                visual = true, valueLabels = maxScales.map { "${it}x" }, shownWhen = MODE_3D to setOf(Nds3dMode.AUTO.value),
+            ),
+            FrontendOption(
+                SCALE_3D, "Scale", perfScales, "2",
+                "The fixed resolution Performance draws 3D at, as a multiple of the DS screen.",
+                visual = true, valueLabels = perfScales.map { "${it}x" }, shownWhen = MODE_3D to setOf(Nds3dMode.PERFORMANCE.value),
+            ),
+        )
+    }
+
+    /** The keys of [resolutionRows]. */
+    val RESOLUTION_KEYS: Set<String> = setOf(MODE_3D, MAX_SCALE_3D, SCALE_3D)
+
+    /**
+     * The page's rows for [screen] (null: unknown): the layout rows, the 3D Resolution rows for a display that reaches
+     * [displayMax] (null: unknown), then the rest.
+     */
+    fun tableFor(screen: ScreenClass?, canHalfFold: Boolean = DeviceTraits.canHalfFold, displayMax: Int? = null): List<FrontendOption> =
+        layoutRows(screen, canHalfFold) + resolutionRows(displayMax) + otherRows
 
     /**
      * Every row with every layout value ([tableFor] an unknown screen). Built when read, so the info text follows

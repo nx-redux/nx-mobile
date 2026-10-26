@@ -9,13 +9,23 @@ import com.nxredux.mobile.layout.ScreenClass
  * controller rows ([PadOptions]) and Bottom screen ([BottomScreenOptions]) are shared.
  */
 object ConsoleSettings {
-    /** [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows. */
-    fun tableFor(tag: String, screen: ScreenClass? = null): List<FrontendOption> = when {
-        NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen)
+    /**
+     * [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows, [displayMax] (null: unknown) the DS 3D
+     * Resolution scales.
+     */
+    fun tableFor(tag: String, screen: ScreenClass? = null, displayMax: Int? = null): List<FrontendOption> = when {
+        NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen, displayMax = displayMax)
         N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.newControlsRow
         WiiOptions.appliesTo(tag) -> WiiOptions.table
         else -> emptyList()
     } + graphicsRows(tag) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table
+
+    /**
+     * This row with [value] among its choices: a stored scale the display no longer reaches (a smaller window, another
+     * phone) still shows and cycles. Only the 3D Resolution scales; any other row is returned as it is.
+     */
+    fun keeping(option: FrontendOption, value: String): FrontendOption =
+        if (option.key in NdsOptions.RESOLUTION_KEYS && value !in option.values) option.copy(values = option.values + value) else option
 
     private fun graphicsRows(tag: String): List<FrontendOption> =
         if (GraphicsApiOptions.appliesTo(tag)) listOf(GraphicsApiOptions.row) else emptyList()

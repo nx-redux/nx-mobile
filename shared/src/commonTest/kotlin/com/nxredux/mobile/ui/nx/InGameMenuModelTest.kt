@@ -1356,10 +1356,10 @@ class InGameMenuModelTest {
     @Test fun console_settings_lists_the_ds_rows_and_edits_them_like_frontend_rows() {
         val m = model().openConsoleSettings()
         assertEquals("Console Settings", m.state.page.title)
-        assertEquals(ConsoleSettings.tableFor("NDS").filter { it != BottomScreenOptions.row }.map { it.label }, m.state.page.rows.map { it.label })
+        assertEquals(ConsoleSettings.tableFor("NDS").filter { it != BottomScreenOptions.row && it.key != NdsOptions.SCALE_3D }.map { it.label }, m.state.page.rows.map { it.label })
         assertEquals(
             listOf(
-                "Layout (portrait)", "Layout (portrait, controller)", "Layout (landscape)", "Big Screen", "Inset Corner", "Inset Size",
+                "Layout (portrait)", "Layout (portrait, controller)", "Layout (landscape)", "3D Resolution", "Max Scale", "Big Screen", "Inset Corner", "Inset Size",
                 "Inset Opacity", "Portrait Pad", "Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio",
             ),
             m.state.page.rows.map { it.label },
@@ -1368,7 +1368,7 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.SetFrontend(NdsOptions.LAYOUT_PORTRAIT, "stacked"), m.press(NxButton.RIGHT))
         assertEquals("Stacked", m.optionRow(0).valueLabel)
         assertEquals("Large screen", m.optionRow(1).valueLabel)            // the controller layout's default
-        m.select(3)                                                        // Big Screen
+        m.select(5)                                                        // Big Screen
         assertEquals(MenuEffect.SetFrontend(NdsOptions.BIG_SCREEN, "bottom"), m.press(NxButton.RIGHT))
         assertNull(m.press(NxButton.A))                                    // a visual row: adjust mode
         assertEquals(PageKind.Adjust(NdsOptions.BIG_SCREEN), m.state.page.kind)
@@ -1378,8 +1378,8 @@ class InGameMenuModelTest {
         assertEquals(PageKind.Adjust(NdsOptions.PIP_CORNER), m.state.page.kind)
         m.press(NxButton.B)
         assertEquals(PageKind.ConsoleSettings, m.state.page.kind)
-        assertEquals(4, m.state.page.selected)                             // the owner followed the strip
-        assertEquals("Top screen", m.optionRow(3).valueLabel)              // refreshed from the edit
+        assertEquals(6, m.state.page.selected)                             // the owner followed the strip
+        assertEquals("Top screen", m.optionRow(5).valueLabel)              // refreshed from the edit
     }
 
     // The window's screen shapes the DS layout rows: a Fold-shaped screen's landscape row has no Side by side and starts
@@ -1422,7 +1422,7 @@ class InGameMenuModelTest {
     @Test fun a_locked_console_row_is_hidden() {
         val m = model().openConsoleSettings(locked = setOf(NdsOptions.BIG_SCREEN))
         assertTrue(m.state.page.rows.none { it.label == "Big Screen" })
-        assertEquals(12, m.state.page.rows.size)
+        assertEquals(14, m.state.page.rows.size)
     }
 
     @Test fun other_consoles_keep_the_plain_frontend_page() {
@@ -1453,6 +1453,18 @@ class InGameMenuModelTest {
         m.press(NxButton.A)
         m.press(NxButton.DOWN)
         assertEquals(PageKind.Adjust(FrontendOptions.OFFSET_X), m.state.page.kind)
+    }
+
+    @Test fun ndsResolutionRowsFollowTheMode() {
+        val m = model().openConsoleSettings()
+        assertTrue("Max Scale" in m.state.page.rows.map { it.label })
+        assertTrue("Scale" !in m.state.page.rows.map { it.label })
+        m.select(m.state.page.rows.indexOfFirst { it.label == "3D Resolution" })
+        assertEquals(MenuEffect.SetFrontend(NdsOptions.MODE_3D, "quality"), m.press(NxButton.RIGHT))
+        assertTrue(m.state.page.rows.none { it.label.endsWith("Scale") && it.label != "Big Screen" })
+        assertEquals(MenuEffect.SetFrontend(NdsOptions.MODE_3D, "performance"), m.press(NxButton.RIGHT))
+        assertTrue("Max Scale" !in m.state.page.rows.map { it.label })
+        assertTrue("Scale" in m.state.page.rows.map { it.label })
     }
 
     @Test fun x_shows_the_full_text_of_a_compact_visual_row() {
