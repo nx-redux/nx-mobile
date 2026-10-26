@@ -37,6 +37,7 @@ import com.nxredux.mobile.ui.LocalSettingsBlock
 import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE
 import com.nxredux.mobile.ui.SettingsBlockMode
 import com.nxredux.mobile.ui.SettingsRowsBlock
+import com.nxredux.mobile.ui.SettingsWordList
 import com.nxredux.mobile.ui.listArtLabelEnd
 import kotlin.math.roundToInt
 
@@ -402,7 +403,6 @@ internal fun NxRowsBlockPage(
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
 ) {
     val pitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)
-    val density = LocalDensity.current
     Column(modifier.fillMaxSize()) {
         SettingsRowsBlock(block, title, Modifier.weight(1f), header) {
             if (rowKind == NxRowKind.OPTIONS) {
@@ -412,13 +412,8 @@ internal fun NxRowsBlockPage(
                     onLongPress = onLongPress, scrollFade = true,
                 )
             } else {
-                // Its own rows' height in their rounded px; a taller list is held to the room and scrolls.
-                val height = with(density) { (pitch.roundToPx() * rows.size).toDp() }
-                NxList(
-                    rows, selection, onSelect, onOpen,
-                    Modifier.fillMaxWidth().height(height).nxScrollFade(listState, height = SETTINGS_ROWS_FADE, strong = true),
-                    listState = listState, rowHeightOverride = pitch, onLongPress = onLongPress, edgeMargin = 1,
-                )
+                // The section block's words, no pill: its own height, held to the room (the list then scrolls).
+                SettingsWordList(rows, selection, onSelect, onOpen, Modifier.fillMaxWidth(), listState)
             }
         }
         NxHintBar(hints, onHint = onHint)

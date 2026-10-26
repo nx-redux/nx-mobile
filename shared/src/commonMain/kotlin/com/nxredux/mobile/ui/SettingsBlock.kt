@@ -12,6 +12,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.draw.alpha
+import com.nxredux.mobile.ui.nx.LocalNxTapOpens
+import com.nxredux.mobile.ui.nx.NX_DISABLED_ALPHA
+import com.nxredux.mobile.ui.nx.NxKeepSelectedInView
+import com.nxredux.mobile.ui.nx.NxRow
+import com.nxredux.mobile.ui.nx.nxScrollFade
+import com.nxredux.mobile.ui.nx.nxTap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
@@ -334,3 +344,41 @@ fun SettingsRowsBlock(
 /** A list's edge fade: [SETTINGS_ROWS_FADE] in the rows block, else the list's own [default]. */
 @Composable
 fun settingsRowsFade(default: Dp): Dp = if (LocalSettingsBlock.current != null) SETTINGS_ROWS_FADE else default
+
+
+/**
+ * A pill-list page's rows in the Settings rows block, drawn as the section block's words ([settingsWordStyle]): one per
+ * pitch, the [selection] row in the accent and the rest inkDim, no pill. A tap selects, a tap on the selected row opens
+ * ([nxTap]); the selection is kept in view and the edges fade like the other rows.
+ */
+@Composable
+internal fun SettingsWordList(
+    rows: List<NxRow>, selection: () -> Int, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit,
+    modifier: Modifier = Modifier, listState: LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
+) {
+    val colors = LocalNxColors.current
+    val style = settingsWordStyle()
+    val tapOpens = LocalNxTapOpens.current
+    NxKeepSelectedInView(listState, selection, rows.size, 1)
+    LazyColumn(
+        modifier.nxScrollFade(listState, height = SETTINGS_ROWS_FADE, strong = true),
+        state = listState,
+    ) {
+        itemsIndexed(rows) { i, row ->
+            val selected = i == selection()
+            val text = buildAnnotatedString {
+                append(row.label)
+                row.secondary?.let {
+                    append("  ")
+                    withStyle(SpanStyle(color = colors.hint, fontSize = NxTextSizes.secondary(style.fontSize))) { append(it) }
+                }
+            }
+            Text(
+                text, color = if (selected) colors.accent else colors.inkDim, style = style, maxLines = 1, softWrap = false,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth().padding(start = nxListInset()).alpha(if (row.enabled) 1f else NX_DISABLED_ALPHA)   // role: a disabled row
+                    .clickable(remember { MutableInteractionSource() }, indication = null) { nxTap(i, selected, tapOpens(i), onSelect, onOpen) },
+            )
+        }
+    }
+}
