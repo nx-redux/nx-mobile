@@ -32,15 +32,6 @@ class MainMenuHintsTest {
         assertEquals(listOf(recent, Hint(NxButton.MENU, "Options"), Hint(NxButton.A, "Play")), mainMenuHints(MainRow.Pin(Listed(md, game)), canResume = false))
     }
 
-    @Test fun theFocusedTabRowShowsRecentAndOpenOnly() {
-        val tabRow = listOf(recent, Hint(NxButton.A, "Open"))
-        assertEquals(tabRow, mainMenuHints(MainRow.Pin(Listed(md, game)), canResume = true, tabFocus = true))   // Home: no Resume, no Options
-        assertEquals(tabRow, mainMenuHints(MainRow.Continue(Listed(md, game), ResumeInfo.NONE), tabFocus = true))
-        assertEquals(tabRow, mainMenuHints(MainRow.System(md), tabFocus = true))
-        assertEquals(tabRow, mainMenuHints(MainRow.Tool(ToolRow(ToolKind.SETTINGS, "Settings", null)), tabFocus = true))
-        assertEquals(tabRow, mainMenuHints(null, tabFocus = true))   // an empty tab
-    }
-
     @Test fun aGameRowWithNetplayOffersY() {
         val options = Hint(NxButton.MENU, "Options")
         val netplay = Hint(NxButton.Y, "Netplay")
@@ -48,7 +39,6 @@ class MainMenuHintsTest {
         assertEquals(listOf(recent, options, netplay, Hint(NxButton.A, "Play")), mainMenuHints(pin, canNetplay = true))
         assertEquals(listOf(recent, options, netplay, Hint(NxButton.A, "Resume")),
             mainMenuHints(MainRow.Continue(Listed(md, game), ResumeInfo.NONE), canResume = true, canNetplay = true))
-        assertEquals(listOf(recent, Hint(NxButton.A, "Open")), mainMenuHints(pin, tabFocus = true, canNetplay = true))   // the tab row: no Y
         assertEquals(listOf(recent, Hint(NxButton.A, "Open")), mainMenuHints(MainRow.System(md), canNetplay = true))   // not a game
     }
 
@@ -56,7 +46,6 @@ class MainMenuHintsTest {
         val search = Hint(NxButton.START, "Search")
         val pin = MainRow.Pin(Listed(md, game))
         assertEquals(listOf(recent, search, Hint(NxButton.MENU, "Options"), Hint(NxButton.A, "Play")), mainMenuHints(pin, canSearch = true))
-        assertEquals(listOf(recent, search, Hint(NxButton.A, "Open")), mainMenuHints(pin, tabFocus = true, canSearch = true))   // START works from the tab row too
         assertEquals(listOf(recent, Hint(NxButton.MENU, "Options"), Hint(NxButton.A, "Play")), mainMenuHints(pin))   // no START without games
     }
 
@@ -75,7 +64,6 @@ class MainMenuHintsTest {
 
     @Test fun aCollectionRowOffersItsRenameAndDeleteMenu() {
         assertEquals(listOf(recent, Hint(NxButton.MENU, "Options"), Hint(NxButton.A, "Open")), mainMenuHints(MainRow.Collection("Co-op", 3)))
-        assertEquals(listOf(recent, Hint(NxButton.A, "Open")), mainMenuHints(MainRow.Collection("Co-op"), tabFocus = true))   // the tab row: no Options
     }
 
     @Test fun everyOtherRowOpens() {

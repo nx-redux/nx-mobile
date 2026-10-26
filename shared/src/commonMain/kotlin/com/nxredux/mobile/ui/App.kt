@@ -432,7 +432,6 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
         val homeRowLast = state.homeCarouselRowLast.collectAsState()   // Carousel Home's row item last on (AppState's d-pad memory)
         val index = { selection.value.index }
         val gridPresses = state.gridPresses.collectAsState()   // read only inside the Grid, so a press recomposes only it
-        val tabFocus = state.tabFocus.collectAsState()   // the main menu's tab row has the d-pad
         val minimalOpening = state.minimalOpening.collectAsState()   // a Minimal page's row being opened (its page draws the band)
         // Full-height background behind everything (list, scroll arrows, hint bar).
         PageBackground(state, s, style, selection, live)
@@ -471,8 +470,6 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     raSignedIn = state.settings.raToken != null,
                     controllerArt = state.settings.consoleArt == ConsoleArt.CONTROLLER,
                     minimalOpening = minimalOpening.value?.takeIf { s.category != null && it.page == s.category },
-                    // The page sliding out shows none; nor does a hidden tab row (AppState gives the d-pad back to the content).
-                    tabFocus = tabFocus.value && s.menu == null && s.search == null && state.screen.value === s && LocalLauncherChrome.current.tabRow,
                     bandShade = listBand.shade, bandInfo = listBand.info,
                     canSearch = state.canSearch,
                     // Per page (s, not the screen now: a sliding-out page keeps its own): the screen carries its hidden tabs

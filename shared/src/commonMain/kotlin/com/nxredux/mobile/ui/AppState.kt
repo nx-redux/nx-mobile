@@ -162,9 +162,7 @@ import com.nxredux.mobile.ui.nx.fullInfo
 import com.nxredux.mobile.ui.nx.launcherChromeFor
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.gridAtTop
-import com.nxredux.mobile.ui.nx.gridBottom
 import com.nxredux.mobile.ui.nx.gridStep
-import com.nxredux.mobile.ui.nx.homeBottom
 import com.nxredux.mobile.ui.nx.homeClamp
 import com.nxredux.mobile.ui.nx.rowStep
 import com.nxredux.mobile.ui.nx.stackStep
@@ -905,7 +903,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             override fun shelvesFor(inputs: HomeInputs): List<Pair<HomeShelf, List<Listed>>> = this@AppState.shelvesFor(inputs)
             override fun rebuildHomeTab() = this@AppState.rebuildHomeTab()
             override fun refreshResume() = this@AppState.refreshResume()
-            override fun toTabRow(repeat: Boolean) = this@AppState.toTabRow(repeat)
             override fun switchTab(step: Int) = this@AppState.switchTab(step)
         },
     )
@@ -1100,17 +1097,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         if (opens) openSelected()
     }
 
-    private val _tabFocus = MutableStateFlow(false)
-    /**
-     * The main menu's tab row has the d-pad (UP from the top of a Grid, a horizontal row or Home, or on an empty tab; a
-     * List or a stack wraps instead): LEFT / RIGHT switch tabs there, DOWN,
-     * A and B go back to the content's [selection] (kept as it was), UP to the content's bottom ([toContentBottom]). Its
-     * own flag, not part of [Screen.Systems]: the menu is rebuilt in place often ([swapMainRows]) and keeps it; leaving
-     * the menu, a touch on its content, the switcher and Home clear it, and so does the row being hidden
-     * ([dropHiddenTabFocus]): never true while it is.
-     */
-    val tabFocus: StateFlow<Boolean> = _tabFocus.asStateFlow()
-
     private val _minimalOpening = MutableStateFlow<MinimalOpening?>(null)
     /**
      * A Minimal page's row being opened, while its band grows over the screen and a moment after ([openMinimal]); null
@@ -1126,12 +1112,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /**
      * The UI reports the footer mode ([footerModeFor]: a controller or the portrait pad, else touch only), which decides
-     * whether Layouts → Page title's Hide is in effect ([launcherChromeFor]). A change that hides the tab row (a
-     * controller connected, a rotation to the pad) takes the d-pad back from it.
+     * whether Layouts → Page title's Hide is in effect ([launcherChromeFor]).
      */
     fun onFooterMode(mode: FooterMode) {
         footerMode = mode
-        dropHiddenTabFocus()
     }
 
     /** The launcher screens' chrome in effect: the settings under [footerMode], the rule App draws by. */
@@ -1139,9 +1123,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         deps.settings.let { s ->
             launcherChromeFor(s.menuPageTitle, s.menuButtonHints, footerMode, s.menuExtraInfo, s.showRecentHint, s.showSearchHint, s.showNetplayHint, homeStats = s.menuHomeStats)
         }
-
-    /** The tab row is hidden (Layouts → Page title, in effect): it never holds the d-pad, so the content takes it back. */
-    private fun dropHiddenTabFocus() { if (!launcherChrome().tabRow) _tabFocus.value = false }
 
     private val _nav = MutableStateFlow(NavStep())
     val nav: StateFlow<NavStep> = _nav.asStateFlow()
@@ -1708,7 +1689,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val s = _screen.value as? Screen.Systems ?: return
         if (s.pushed || s.menu != null || s.search != null) return
         if (menuTabs.any { it.category == category } || allMenuTabs.none { it.category == category }) return
-        _tabFocus.value = false
         rememberMenuSelection()
         pushedTab = category
         tabSelections.remove(category)
@@ -1763,8 +1743,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         // Another tab (or the menu from another screen): its grid reports its own columns on its first layout. The same
         // tab rebuilt in place keeps them, as its grid stays laid out.
         if (prev !is Screen.Systems || prev.category != screen.category) gridColumns = 0
-        if (prev !is Screen.Systems) _tabFocus.value = false   // back from another screen: on the content
-        if (screen.tabs.size < 2 || screen.pushed) _tabFocus.value = false   // no tab row to hold the d-pad (one tab: the title)
         _screen.value = screen
         homeTab.publishHomeView()   // the Home rows on screen may be the ones last built now
         if (!screen.pushed) screen.category?.let { menuCategory = it }
@@ -4212,8 +4190,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                     }
                 }
             }
-            // Hidden, the tab row gives up the d-pad ([dropHiddenTabFocus]).
-            SettingsKind.PAGE_TITLE -> flip(s.menuPageTitle, show = true, after = { dropHiddenTabFocus(); refreshSettings() }) { s.menuPageTitle = it }
+            SettingsKind.PAGE_TITLE -> flip(s.menuPageTitle, show = true, after = { refreshSettings() }) { s.menuPageTitle = it }
             SettingsKind.BUTTON_HINTS -> flip(s.menuButtonHints, show = true) { s.menuButtonHints = it }
             SettingsKind.EXTRA_INFO -> flip(s.menuExtraInfo, show = true) { s.menuExtraInfo = it }
             SettingsKind.HOME_STATS -> flip(s.menuHomeStats, show = true) { s.menuHomeStats = it }   // Home's board follows through its frame
@@ -4342,9 +4319,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             s.gameListLayoutOptions = true
             s.gameListAchievementsPanel = true
             s.switcherLayout = SwitcherLayout.DEFAULT
-            // As the single rows do: Home's rows follow its style and shelves; a hidden tab row gives up the d-pad.
+            // As the single rows do: Home's rows follow its style and shelves.
             rebuildHomeTab()
-            dropHiddenTabFocus()
         } else if (section == SettingsSection.CONTROLS) {
             s.padVibration = PadVibration.DEFAULT
             s.gameRumble = GameRumble.DEFAULT
@@ -4728,7 +4704,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     fun openSearch() {
         val s = _screen.value as? Screen.Systems ?: return
         if (s.menu != null || s.search != null || !canSearch) return
-        _tabFocus.value = false
         _screen.value = s.copy(search = lastSearch)
     }
 
@@ -5131,7 +5106,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         switcherUnderGame = false   // a refused launch's flag never closes a switcher opened since
         val here = _screen.value
         if (here !is Screen.Systems && here !is Screen.Games) return
-        _tabFocus.value = false   // the menu under it comes back on its content
         if (switcherJob?.isActive == true) return   // already loading
         val sel = _selection.value
         switcherJob = scope.launch {
@@ -5157,7 +5131,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * stale library ([libraryStale], which also covers Default emulators' changed default) before landing.
      */
     fun goHome() {
-        _tabFocus.value = false   // Home lands on its content (a stale-library reload too)
         // Onboarding (and its embedded Device Sync) stays put, as first setup does.
         if (_screen.value is Screen.Onboarding || (_screen.value == Screen.DeviceSync && onboardingSync)) return
         when (_screen.value) { Screen.Loading, is Screen.PermissionsStep, Screen.PickFolder, Screen.AddFirstExtra, is Screen.AndroidGamesStep, is Screen.FilePicker, is Screen.StorageUpgrade -> return; else -> Unit }
@@ -5550,7 +5523,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     fun select(index: Int) {
         if (minimalPending) return   // a Minimal open's band is growing: the selection stays on the row opening
-        _tabFocus.value = false   // a touch on the content takes the focus there
         if (index != _selection.value.index) cancelCapture()   // a tap on another Shortcuts row ends a wait for a press
         _selection.value = _selection.value.copy(index = index).clampedTo(_selection.value.count)
         (_screen.value as? Screen.Systems)?.takeIf { it.category == MenuCategory.HOME }?.let { homeTab.noteHomeFocus(_selection.value.index, it.rows) }
@@ -5560,7 +5532,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     fun openSelected() {
         if (loader.active) return   // a screen is loading: only B (cancel) acts
         if (minimalPending) return   // a Minimal open's band is growing: a tap waits too
-        _tabFocus.value = false   // a tap on the highlighted item (A on the tab row never gets here: it returns to the content)
         when (val s = _screen.value) {
             is Screen.Onboarding -> onboardingRow(_selection.value.index)
             is Screen.Systems -> if (styleOf(s) == MenuStyle.MINIMAL) openMinimal(s) else openMainRow(s, _selection.value.index)
@@ -5902,10 +5873,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     /** MENU or a long press on row [index] (null = the highlighted row): a game list's menu, or a pinned or recent main-menu row's. */
-    fun openContextMenu(index: Int? = null) { _tabFocus.value = false; contextMenus.openContextMenu(index) }
+    fun openContextMenu(index: Int? = null) { contextMenus.openContextMenu(index) }
 
-    /** A long press on the tab row or the single-tab title: the hidden-tab menu (the tab row's focus ends only if it opens). */
-    fun openTabMenu() { if (contextMenus.openTabMenu()) _tabFocus.value = false }
+    /** A long press on the tab row or the single-tab title: the hidden-tab menu. */
+    fun openTabMenu() { contextMenus.openTabMenu() }
 
     fun closeContextMenu() = contextMenus.closeContextMenu()
 
@@ -6061,8 +6032,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /**
      * The d-pad on a laid-out Grid (main menu tab or game list) steps by tiles. Past the first / last tile the main menu
      * switches tab (a fresh press only, never a key [repeat]: a held key stops at the edge); a game list stops. On the main
-     * menu UP from the top row reaches the tab row ([gridAtTop], [toTabRow]) instead of wrapping; with the tab row hidden
-     * it stays. False when the screen is not a laid-out Grid (the caller does the List step).
+     * menu UP from the top row ([gridAtTop]) stays instead of wrapping. False when the screen is not a laid-out Grid (the caller does the List step).
      */
     private fun gridMove(button: NxButton, repeat: Boolean = false): Boolean {
         if (gridColumns <= 0 || currentStyle() != MenuStyle.GRID) return false
@@ -6070,7 +6040,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         if (s !is Screen.Systems && s !is Screen.Games) return false
         val sel = _selection.value
         _gridPresses.value += 1
-        if (s is Screen.Systems && button == NxButton.UP && gridAtTop(sel.index, sel.count, gridColumns, gridRows)) { toTabRow(repeat); return true }
+        if (s is Screen.Systems && button == NxButton.UP && gridAtTop(sel.index, sel.count, gridColumns, gridRows)) return true
         val next = gridStep(sel.index, sel.count, gridColumns, button, gridRows)
         if (next == null) {
             // A pushed tab has no tab to switch to: its Grid wraps LEFT / RIGHT at its ends instead (a fresh press only).
@@ -6098,7 +6068,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val s = _screen.value
         if (s !is Screen.Systems && s !is Screen.Games) return false
         if (orientationOf(s) == MenuOrientation.VERTICAL) return stackMove(s, button, repeat)
-        if (s is Screen.Systems && button == NxButton.UP) { toTabRow(repeat); return true }   // a row is all top row
         if (button == NxButton.UP || button == NxButton.DOWN) return true
         val sel = _selection.value
         val next = rowStep(sel.index, sel.count, button)
@@ -6126,8 +6095,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             }
             NxButton.UP, NxButton.DOWN -> {
                 val sel = _selection.value
-                val next = stackStep(sel.index, sel.count, button, fresh = !repeat)   // only an empty stack's UP is null: the tab row
-                if (next == null) { if (s is Screen.Systems) toTabRow(repeat); return true }
+                val next = stackStep(sel.index, sel.count, button, fresh = !repeat)   // only an empty stack's UP is null: it stays
+                if (next == null) return true
                 if (next != sel.index) {
                     _selection.value = sel.copy(index = next)
                     refreshResume()
@@ -6136,60 +6105,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             }
             else -> return false
         }
-    }
-
-    /**
-     * UP from the top of a main menu tab's content: the tab row takes the d-pad, on a fresh press only (a held UP stops at
-     * the top). Hidden (Layouts → Page title, in effect: [launcherChrome]) it never does: the press stays put.
-     */
-    private fun toTabRow(repeat: Boolean) {
-        val tabs = (_screen.value as? Screen.Systems)?.tabs?.size ?: 0
-        if (!repeat && launcherChrome().tabRow && tabs > 1) _tabFocus.value = true
-    }
-
-    /**
-     * A button while the main menu's tab row has the d-pad ([tabFocus]). LEFT / RIGHT switch tabs (a fresh press only, as
-     * [switchTab] past a content edge), L1 / R1 too; DOWN, A and B return to the content where it was; UP lands on its
-     * bottom ([toContentBottom], a fresh press only); SELECT opens the switcher as from the content; START the search prompt
-     * ([openSearch], dropping the flag); MENU, X, Y and the rest do nothing. False (the flag dropped) when the main menu is
-     * not showing with no menu open.
-     */
-    private fun onTabRowButton(button: NxButton, repeat: Boolean): Boolean {
-        val s = _screen.value as? Screen.Systems
-        if (s == null || s.menu != null) { _tabFocus.value = false; return false }
-        when (button) {
-            NxButton.LEFT, NxButton.RIGHT -> if (!repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)
-            NxButton.L1 -> switchTab(-1)
-            NxButton.R1 -> switchTab(1)
-            NxButton.DOWN, NxButton.A, NxButton.B -> _tabFocus.value = false
-            NxButton.UP -> if (!repeat) { _tabFocus.value = false; toContentBottom(s) }
-            NxButton.SELECT -> openSwitcher()
-            NxButton.START -> openSearch()
-            else -> Unit
-        }
-        return true
-    }
-
-    /**
-     * UP on the tab row: the focus wraps to the bottom of [s]'s content. Home: its bottom-most item ([homeBottom]); a laid-out
-     * Grid: the bottom row in the same column, else the last tile ([gridBottom]); a Carousel row is one row:
-     * the item it was on, but a Vertical one (a stack) its last item, as a List; a List: the last row.
-     */
-    private fun toContentBottom(s: Screen.Systems) {
-        val sel = _selection.value
-        if (sel.count <= 0) return
-        val at = when {
-            s.category == MenuCategory.HOME -> homeTab.bottom(sel, s.rows)
-            else -> when (currentStyle()) {
-                MenuStyle.GRID -> if (gridColumns > 0) { _gridPresses.value += 1; gridBottom(sel.index, sel.count, gridColumns, gridRows) } else sel.count - 1
-                MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> if (currentOrientation() == MenuOrientation.VERTICAL) sel.count - 1 else sel.index
-                MenuStyle.LIST, MenuStyle.MINIMAL -> sel.count - 1
-            }
-        }.coerceIn(0, sel.count - 1)
-        if (at == sel.index) return
-        _selection.value = sel.copy(index = at)
-        if (s.category == MenuCategory.HOME) homeTab.noteHomeFocus(at, s.rows)
-        refreshResume()
     }
 
     /** A pad press. [repeat]: an auto-repeat of a held direction (the router's), not a fresh press; taps are fresh. */
@@ -6273,16 +6188,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             ra.onRaSettingsButton(it, button); return
         }
         _screen.value.takeIf { it is Screen.RaGames || it is Screen.RaGame || it is Screen.RaAchievement }?.let { ra.onRaBrowserButton(it, button); return }
-        dropHiddenTabFocus()   // a tab row hidden while it had the d-pad (a setting or footer change it missed) gives it back
-        if (_tabFocus.value && onTabRowButton(button, repeat)) return
         if (button.isDirection && homeTab.homeMove(button, repeat)) return   // Home first: its own two-dimensional moves
         when (button) {
-            // A List: UP on the first row wraps to the last, DOWN on the last to the first, on the main menu too (only an
-            // empty tab's UP reaches the tab row). On the launcher's lists (the main menu's and the game lists) a held
+            // A List: UP on the first row wraps to the last, DOWN on the last to the first, on the main menu too (an
+            // empty tab's UP does nothing). On the launcher's lists (the main menu's and the game lists) a held
             // key's repeat stops at the end instead of wrapping.
             NxButton.UP -> if (!rowMove(button, repeat) && !gridMove(button, repeat)) {
-                if (_screen.value is Screen.Systems && _selection.value.count == 0) toTabRow(repeat)
-                else { _selection.value = _selection.value.up(wrap = !repeat || !launcherList()); refreshResume() }
+                if (_screen.value !is Screen.Systems || _selection.value.count > 0) { _selection.value = _selection.value.up(wrap = !repeat || !launcherList()); refreshResume() }
             }
             NxButton.DOWN -> if (!rowMove(button, repeat) && !gridMove(button)) { _selection.value = _selection.value.down(wrap = !repeat || !launcherList()); refreshResume() }
             // The main menu: LEFT / RIGHT are L1 / R1 (a Grid or row switches only past its ends), on a fresh press only: a held
@@ -6367,7 +6279,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             }
             is Screen.Systems -> if (s.search != null) { _screen.value = s.copy(search = null); true }
                 else if (s.menu != null) { if (!s.menu.busy) closeContextMenu(); true }
-                else if (_tabFocus.value) { _tabFocus.value = false; true }   // the tab row: back to the content, as B
                 else if (s.pushed) { popHiddenTab(); true }
                 else false
             is Screen.Settings -> {

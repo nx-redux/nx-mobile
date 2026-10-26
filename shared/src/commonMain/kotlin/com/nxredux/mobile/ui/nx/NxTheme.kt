@@ -94,8 +94,7 @@ val LocalNxFont = staticCompositionLocalOf<FontFamily> { FontFamily.Default }
 val LocalNxFontWeights = staticCompositionLocalOf<FontFamily> { FontFamily.Default }
 
 /**
- * The selection highlight's colour (a list's pill, a lit tile's fill or ring, Home's lit card): [NxColors.accent]. The
- * main menu's tab focus dims the whole content as one layer instead ([com.nxredux.mobile.ui.mainMenuContentAlpha]).
+ * The selection highlight's colour (a list's pill, a lit tile's fill or ring, Home's lit card): [NxColors.accent].
  */
 @Composable
 fun nxHighlight(): Color = LocalNxColors.current.accent

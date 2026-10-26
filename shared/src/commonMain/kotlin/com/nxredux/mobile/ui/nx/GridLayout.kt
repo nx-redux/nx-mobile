@@ -154,24 +154,13 @@ internal fun gridStep(index: Int, count: Int, columns: Int, button: NxButton, ro
     }
 }
 
-/** Whether [index] is on the grid's top row (still: the first row; sliding: its column's top): UP there reaches the main menu's tab row. */
+/** Whether [index] is on the grid's top row (still: the first row; sliding: its column's top): UP there stays on the main menu. */
 internal fun gridAtTop(index: Int, count: Int, columns: Int, rows: Int = 2): Boolean {
     if (count <= 0 || columns <= 0) return true
     val r = rows.coerceAtLeast(1)
     return when (gridModeFor(count, columns, r)) {
         GridMode.STILL -> index < columns
         GridMode.SLIDING -> index % r == 0
-    }
-}
-
-/** The grid's bottom row under [index]'s column (UP on the main menu's tab row lands there), else the last item. */
-internal fun gridBottom(index: Int, count: Int, columns: Int, rows: Int = 2): Int {
-    if (count <= 0 || columns <= 0) return index
-    val last = count - 1
-    val r = rows.coerceAtLeast(1)
-    return when (gridModeFor(count, columns, r)) {
-        GridMode.STILL -> min((last / columns) * columns + index % columns, last)
-        GridMode.SLIDING -> min(index - index % r + r - 1, last)
     }
 }
 

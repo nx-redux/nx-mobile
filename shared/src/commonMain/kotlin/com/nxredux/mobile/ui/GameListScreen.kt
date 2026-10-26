@@ -309,7 +309,7 @@ internal fun GameListFrame(
                     MenuStyle.MINIMAL -> {
                         val names = remember(dataKey) { minimalRows() }
                         MinimalScreen(
-                            names, selectedIndex, hints.value, onSelect, onOpen, onLongPress, onHint, { 1f }, minimalSelected,
+                            names, selectedIndex, hints.value, onSelect, onOpen, onLongPress, onHint, minimalSelected,
                             Modifier.weight(1f).zIndex(-1f), hideHints = chrome.emptyBarRoom, layoutKey = layoutKey, leaving = minimalOpening != null,
                             tapOpens = LocalNxTapOpens.current,   // the list's own rule (two taps, but for the preview's)
                             onPageRows = onPageRows,

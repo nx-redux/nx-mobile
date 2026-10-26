@@ -153,21 +153,12 @@ class GridLayoutTest {
 
     // The main menu's tab row: UP from the top row reaches it; UP on it lands on the bottom row.
     // Still 0 1 2 / 3 4 (columns 3); sliding with 2 rows: columns (0 1) (2 3) (4).
-    @Test fun gridTopRowIsTheTabRowEdge() {
+    @Test fun gridTopRowIsTheFirstRowElseTheColumnsTop() {
         assertTrue(gridAtTop(0, 5, 3)); assertTrue(gridAtTop(2, 5, 3))
         assertFalse(gridAtTop(3, 5, 3)); assertFalse(gridAtTop(4, 5, 3))
         assertTrue(gridAtTop(2, 5, 1)); assertFalse(gridAtTop(3, 5, 1))      // sliding: the column's top
         assertTrue(gridAtTop(4, 5, 1))
         assertTrue(gridAtTop(0, 0, 3))                                         // empty: the top
-    }
-
-    @Test fun gridBottomKeepsTheColumnElseTheLastItem() {
-        assertEquals(3, gridBottom(0, 5, 3)); assertEquals(4, gridBottom(1, 5, 3))
-        assertEquals(4, gridBottom(2, 5, 3))                                   // column 2 is empty below: the last item
-        assertEquals(2, gridBottom(2, 3, 3))                                   // one row: the same tile
-        assertEquals(3, gridBottom(2, 5, 1)); assertEquals(4, gridBottom(4, 5, 1))   // sliding: the column's bottom
-        assertEquals(2, gridBottom(0, 4, 1, rows = 3))                         // 3 rows: (0 1 2) (3)
-        assertEquals(0, gridBottom(0, 0, 3))
     }
 
     // The logo as drawn (Fit in its box): its own aspect (height over width) capped at the box; no logo, half the box.

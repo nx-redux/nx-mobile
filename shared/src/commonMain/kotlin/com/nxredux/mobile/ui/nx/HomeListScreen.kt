@@ -18,7 +18,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -61,13 +60,13 @@ private val NoInfo: () -> List<InfoLine> = { emptyList() }
  * fresh install's only row, Pick a game, is its card filling the body instead.
  * Navigation lives in AppState: this only draws [selection], and taps go to [onSelect] / [onOpen] as a main menu List's
  * do. A long press on any row calls [onLongPress], on the Pick a game card only when [tabMenu] (a hidden tab to offer
- * from MENU). [bodyAlpha]: the tab focus dim of everything but the hint bar.
+ * from MENU).
  */
 @Composable
 internal fun HomeListScreen(
     rows: List<MainRow>, selection: () -> Int, strip: HomeStrip?, info: () -> List<InfoLine>, hints: List<Hint>,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, onHint: ((NxButton) -> Unit)?,
-    bodyAlpha: () -> Float, modifier: Modifier = Modifier, tabMenu: Boolean = false,
+    modifier: Modifier = Modifier, tabMenu: Boolean = false,
 ) {
     val chrome = LocalLauncherChrome.current
     val portrait = LocalPortrait.current
@@ -97,7 +96,7 @@ internal fun HomeListScreen(
                 // Nothing played yet: the Pick a game card fills the body (the selection is always on it).
                 NxScreenScaffold(
                     rows = emptyList(), selectedIndex = 0, hints = hints, onSelect = onSelect, onOpen = onOpen,
-                    modifier = Modifier.weight(1f), onHint = onHint, bodyAlpha = bodyAlpha, hideHints = chrome.emptyBarRoom || chrome.noBar,
+                    modifier = Modifier.weight(1f), onHint = onHint, hideHints = chrome.emptyBarRoom || chrome.noBar,
                     grid = { m -> HomePickCard(selection, onSelect, onOpen, onLongPress?.takeIf { tabMenu }, portrait, m.padding(horizontal = gutter, vertical = 12.dp).fillMaxSize()) },
                 )
                 return@Column
@@ -129,7 +128,7 @@ internal fun HomeListScreen(
                         else if (header != null) 0.dp
                         else mainMenuListTopEdge(chrome.tabRow),
                     listTopGap = if (portrait) 10.dp else 12.dp,
-                    bodyAlpha = bodyAlpha, hideHints = barHidden, hintShade = inRow, keepBarRoom = inRow || !barHidden,
+                    hideHints = barHidden, hintShade = inRow, keepBarRoom = inRow || !barHidden,
                     // The main menu Lists' row height and bottom gap (their edges here; the info row counts as a bar), so
                     // Home's text and its gap over the bottom match theirs.
                     scrollFade = true, rowsLike = mainMenuListEdges(chrome.tabRow, barShown = !barHidden || inRow),
@@ -138,22 +137,22 @@ internal fun HomeListScreen(
             }
         }
         val inkTop = if (pageStrip != null) homeListStripInkTop(above, inkH, firstPill) else 0f
-        HomeStripOverlay(shownStrip, pageStrip, header, stripLines, inkTop, capTop, frame, gutter, bodyAlpha)
+        HomeStripOverlay(shownStrip, pageStrip, header, stripLines, inkTop, capTop, frame, gutter)
     }
 }
 
 /**
- * List and Minimal Home's strip over their body (faded with [bodyAlpha]), at the [gutter]: [pageStrip] in the page under
+ * List and Minimal Home's strip over their body, at the [gutter]: [pageStrip] in the page under
  * the tab row, its text's top at [inkTop] ([capTop] under its lines' top), or [strip] in the stats [header] (the tab row
  * hidden), short of the Recent and Search icons MainMenuScreen draws at its right.
  */
 @Composable
 internal fun HomeStripOverlay(
     strip: HomeStrip?, pageStrip: HomeStrip?, header: HomeStatsHeader?, stripLines: Int, inkTop: Float, capTop: Float,
-    frame: HomeFrame, gutter: Dp, bodyAlpha: () -> Float,
+    frame: HomeFrame, gutter: Dp,
 ) {
     if (pageStrip != null) {
-        BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = bodyAlpha() }) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
             HomeStripLines(
                 pageStrip, stripLines, gutter.value, inkTop - capTop,
                 width = maxWidth.value - 2 * gutter.value, lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
@@ -161,7 +160,7 @@ internal fun HomeStripOverlay(
         }
     }
     if (header != null && strip != null) {
-        BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = bodyAlpha() }) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
             HomeStripLines(
                 strip, header.lines, gutter.value, header.stripTop,
                 width = maxWidth.value - 2 * gutter.value - HOME_HEADER_ICONS_ROOM, lh = homeStripLineH(frame), pitch = homeStripPitch(frame),

@@ -42,7 +42,7 @@ class StackLayoutTest {
         assertEquals(0, stackStep(0, 1, NxButton.UP, fresh = true)); assertEquals(0, stackStep(0, 1, NxButton.DOWN, fresh = true))
         assertEquals(1, stackStep(1, 3, NxButton.LEFT, fresh = true)); assertEquals(1, stackStep(1, 3, NxButton.RIGHT, fresh = true))
         assertEquals(0, stackStep(0, 0, NxButton.DOWN, fresh = true))
-        assertNull(stackStep(0, 0, NxButton.UP, fresh = true))   // an empty stack is all top: UP is the tab row, DOWN does nothing
+        assertNull(stackStep(0, 0, NxButton.UP, fresh = true))   // an empty stack is all top: UP finds nothing (the press stays)
     }
 
     @Test fun mainMenuSlots() {

@@ -28,7 +28,7 @@ internal fun homeMinimalRows(rows: List<MainRow>): List<NxRow> = rows.flatMap { 
 internal fun HomeMinimalScreen(
     rows: List<MainRow>, selection: () -> Int, strip: HomeStrip?, hints: List<Hint>,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, onHint: ((NxButton) -> Unit)?,
-    bodyAlpha: () -> Float, selected: MinimalSelected, modifier: Modifier = Modifier, leaving: Boolean = false,
+    selected: MinimalSelected, modifier: Modifier = Modifier, leaving: Boolean = false,
 ) {
     val chrome = LocalLauncherChrome.current
     val portrait = LocalPortrait.current
@@ -48,9 +48,9 @@ internal fun HomeMinimalScreen(
         else -> 0f
     }
     MinimalScreen(
-        names, selection, hints, onSelect, onOpen, onLongPress, onHint, bodyAlpha, selected, modifier, top = top,
+        names, selection, hints, onSelect, onOpen, onLongPress, onHint, selected, modifier, top = top,
         hideHints = chrome.emptyBarRoom, leaving = leaving,
     ) {
-        HomeStripOverlay(shownStrip, pageStrip, header, stripLines, inkTop, capTop, frame, gutter, bodyAlpha)
+        HomeStripOverlay(shownStrip, pageStrip, header, stripLines, inkTop, capTop, frame, gutter)
     }
 }

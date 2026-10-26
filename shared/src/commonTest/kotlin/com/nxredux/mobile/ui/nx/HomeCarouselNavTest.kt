@@ -10,11 +10,11 @@ class HomeCarouselNavTest {
         assertEquals(HomeCarouselMove.SwitchTab(-1), homeCarouselStep(0, 3, 5, NxButton.LEFT, 0, null))
         assertEquals(HomeCarouselMove.SwitchTab(1), homeCarouselStep(2, 3, 5, NxButton.RIGHT, 2, null))
     }
-    @Test fun down_goes_to_the_dock_square_last_used_up_returns_to_the_row() {
+    @Test fun down_goes_to_the_dock_square_last_used_up_returns_to_the_row_and_stays_there() {
         assertEquals(HomeCarouselMove.To(3), homeCarouselStep(1, 3, 5, NxButton.DOWN, 1, null))
         assertEquals(HomeCarouselMove.To(4), homeCarouselStep(1, 3, 5, NxButton.DOWN, 1, 4))
         assertEquals(HomeCarouselMove.To(1), homeCarouselStep(4, 3, 5, NxButton.UP, 1, 4))
-        assertEquals(HomeCarouselMove.TabRow, homeCarouselStep(1, 3, 5, NxButton.UP, 1, null))
+        assertEquals(HomeCarouselMove.Stay, homeCarouselStep(1, 3, 5, NxButton.UP, 1, null))   // UP from the row stays
     }
     @Test fun dock_left_right_step_and_switch_tab_past_the_ends() {
         assertEquals(HomeCarouselMove.SwitchTab(-1), homeCarouselStep(3, 3, 5, NxButton.LEFT, 0, 3))
@@ -26,10 +26,5 @@ class HomeCarouselNavTest {
     @Test fun stale_memory_is_clamped() {
         assertEquals(HomeCarouselMove.To(4), homeCarouselStep(0, 3, 5, NxButton.DOWN, 0, 9))
         assertEquals(HomeCarouselMove.To(2), homeCarouselStep(3, 3, 5, NxButton.UP, 7, 3))
-    }
-    @Test fun bottom_is_the_dock_when_it_has_tools_else_the_row() {
-        assertEquals(3, homeCarouselBottom(1, 3, 5, 1, null))
-        assertEquals(4, homeCarouselBottom(1, 3, 5, 1, 4))
-        assertEquals(1, homeCarouselBottom(1, 3, 3, 1, null))
     }
 }

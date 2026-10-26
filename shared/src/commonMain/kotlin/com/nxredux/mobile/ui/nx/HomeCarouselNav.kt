@@ -3,7 +3,6 @@ package com.nxredux.mobile.ui.nx
 /** What a d-pad press does on the Carousel Home ([homeCarouselStep]). */
 sealed interface HomeCarouselMove {
     data class To(val index: Int) : HomeCarouselMove
-    data object TabRow : HomeCarouselMove
     data class SwitchTab(val step: Int) : HomeCarouselMove
     data object Stay : HomeCarouselMove
 }
@@ -12,7 +11,7 @@ sealed interface HomeCarouselMove {
  * The Carousel Home's d-pad (NX Redux home_carousel_layout.c): rows 0 until [rowCount] are the carousel, the rest up to
  * [total] the tool dock. LEFT / RIGHT step along the row or the dock, no wrap; past either end, switch tab. DOWN from
  * the row: the dock square last used ([dockLast]), else its first; nothing without a dock. UP from the dock: the row's
- * item last used ([rowLast]); UP from the row: the tab row. Stale memory is clamped.
+ * item last used ([rowLast]); UP from the row stays. Stale memory is clamped.
  */
 internal fun homeCarouselStep(index: Int, rowCount: Int, total: Int, button: NxButton, rowLast: Int, dockLast: Int?): HomeCarouselMove {
     val inDock = index >= rowCount
@@ -23,12 +22,8 @@ internal fun homeCarouselStep(index: Int, rowCount: Int, total: Int, button: NxB
         NxButton.RIGHT -> if (index < hi) HomeCarouselMove.To(index + 1) else HomeCarouselMove.SwitchTab(1)
         NxButton.DOWN -> if (inDock || total <= rowCount) HomeCarouselMove.Stay
             else HomeCarouselMove.To((dockLast ?: rowCount).coerceIn(rowCount, total - 1))
-        NxButton.UP -> if (inDock) HomeCarouselMove.To(rowLast.coerceIn(0, rowCount - 1)) else HomeCarouselMove.TabRow
+        NxButton.UP -> if (inDock) HomeCarouselMove.To(rowLast.coerceIn(0, rowCount - 1)) else HomeCarouselMove.Stay
         else -> HomeCarouselMove.Stay
     }
 }
 
-/** Where UP on the tab row lands on the Carousel Home: the dock (its square last used) when it has tools, else the row's item. */
-internal fun homeCarouselBottom(index: Int, rowCount: Int, total: Int, rowLast: Int, dockLast: Int?): Int =
-    if (total > rowCount) (dockLast ?: rowCount).coerceIn(rowCount, total - 1)
-    else (if (index < rowCount) index else rowLast).coerceIn(0, rowCount - 1)

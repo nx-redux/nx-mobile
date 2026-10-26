@@ -1410,7 +1410,7 @@ class AppStateTest {
         assertTrue(systems.systems.all { it.core != null })   // Commodore 64 (no core) is not shown
     }
 
-    @Test fun buttons_move_the_selection_through_the_tab_row_to_the_bottom_and_a_opens_b_goes_back() = runTest {
+    @Test fun buttons_move_the_selection_wrapping_to_the_bottom_and_a_opens_b_goes_back() = runTest {
         val runner = RecordingRunner()
         val state = AppState(AppDeps(MemorySettings(ContentRef("Home")), source, runner, NoopPicker(), compute = UnconfinedTestDispatcher(testScheduler)), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
         state.load()
@@ -1418,8 +1418,7 @@ class AppStateTest {
         val systems = assertIs<Screen.Systems>(state.screen.value).systems
         val nds = systems.indexOfFirst { it.tag == "NDS" }
         assertEquals(0, state.selection.value.index)
-        state.onButton(NxButton.UP)                         // wraps to the last row (the last console; Tools is a tab), never the tab row
-        assertFalse(state.tabFocus.value)
+        state.onButton(NxButton.UP)                         // wraps to the last row (the last console; Tools is a tab)
         assertEquals(systems.size - 1, state.selection.value.index)
         repeat(systems.size - 1 - nds) { state.onButton(NxButton.UP) }   // up to Nintendo DS
         assertEquals(nds, state.selection.value.index)
@@ -4102,7 +4101,6 @@ class AppStateTest {
         assertEquals(0, state.selection.value.index)               // held: stops on the first
         state.onButton(NxButton.UP)
         assertEquals(rows.size - 1, state.selection.value.index)   // fresh: the first to the last
-        assertFalse(state.tabFocus.value)
         state.onButton(NxButton.UP)
         assertEquals(rows.size - 2, state.selection.value.index)
     }
@@ -4355,10 +4353,8 @@ class AppStateTest {
         assertEquals(1, state.selection.value.index)
         state.onButton(NxButton.UP)                          // row 1 -> row 0
         assertEquals(0, state.selection.value.index)
-        state.onButton(NxButton.UP)                          // the top row: the tab row
-        assertTrue(state.tabFocus.value)
-        state.onButton(NxButton.UP)                          // wraps to the bottom row
-        assertEquals(2, state.selection.value.index)
+        state.onButton(NxButton.UP)                          // the top row: stays, no wrap
+        assertEquals(0, state.selection.value.index)
     }
 
     // The tall portrait's two columns of three rows: 3 consoles fit, so the grid is still, row by row.
@@ -4374,8 +4370,8 @@ class AppStateTest {
         }
         state.onButton(NxButton.RIGHT)
         assertEquals(1, state.selection.value.index)
-        state.onButton(NxButton.UP)                          // the top row: the tab row
-        assertTrue(state.tabFocus.value)
+        state.onButton(NxButton.UP)                          // the top row: stays
+        assertEquals(1, state.selection.value.index)
     }
 
     @Test fun every_grid_dpad_press_counts_even_one_that_moves_nothing() = runTest {
@@ -4447,7 +4443,7 @@ class AppStateTest {
         state.onConsoles()
         state.onButton(NxButton.RIGHT)                       // List: RIGHT is the next tab
         assertEquals(MenuCategory.TOOLS, assertIs<Screen.Systems>(state.screen.value).category)
-        state.onButton(NxButton.UP)                          // the bottom of Tools (not through the tab row)
+        state.onButton(NxButton.UP)                          // wraps to the bottom of Tools
         assertEquals(state.selection.value.count - 1, state.selection.value.index)
         state.onButton(NxButton.LEFT)                        // back to Consoles, its remembered row
         assertEquals(MenuCategory.CONSOLES, assertIs<Screen.Systems>(state.screen.value).category)
@@ -4466,23 +4462,22 @@ class AppStateTest {
         assertEquals(minOf(1, state.selection.value.count - 1), state.selection.value.index)
     }
 
-    @Test fun home_up_from_the_top_reaches_the_tab_row_not_the_bottom() = runTest {
+    @Test fun home_up_from_the_top_stays_not_the_bottom() = runTest {
         val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
         state.onGridLayout(3)                                // ignored: Home is no Grid
         state.onButton(NxButton.UP)
         assertEquals(0, state.selection.value.index)
-        assertTrue(state.tabFocus.value)
     }
 
     private fun AppState.category() = assertIs<Screen.Systems>(screen.value).category
 
-    @Test fun carousel_home_held_keys_never_switch_tabs_or_reach_the_tab_row() = runTest {
+    @Test fun carousel_home_held_keys_never_switch_tabs_and_up_from_the_row_stays() = runTest {
         val state = homeFixture(MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + (MenuCategory.HOME to MenuStyle.CAROUSEL) })
         state.onButton(NxButton.LEFT, repeat = true); assertEquals(MenuCategory.HOME, state.category())
-        state.onButton(NxButton.UP, repeat = true); assertFalse(state.tabFocus.value)
-        state.onButton(NxButton.UP); assertTrue(state.tabFocus.value)
-        state.onButton(NxButton.UP)                                      // tab row UP: the dock (it has tools)
-        assertIs<MainRow.PinnedTool>(assertIs<Screen.Systems>(state.screen.value).rows[state.selection.value.index])
+        val at = state.selection.value.index
+        state.onButton(NxButton.UP, repeat = true); assertEquals(at, state.selection.value.index)
+        state.onButton(NxButton.UP); assertEquals(at, state.selection.value.index)   // a fresh press too
+        assertEquals(MenuCategory.HOME, state.category())
     }
 
     @Test fun carousel_home_down_reaches_the_dock_and_a_on_more_opens_tools() = runTest {
@@ -4511,10 +4506,10 @@ class AppStateTest {
         }
     }
 
-    @Test fun list_home_up_wraps_and_never_reaches_the_tab_row() = runTest {
+    @Test fun list_home_up_wraps_to_the_bottom() = runTest {
         val state = homeFixture(MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + (MenuCategory.HOME to MenuStyle.LIST) })
         state.onButton(NxButton.UP)
-        assertEquals(state.selection.value.count - 1, state.selection.value.index); assertFalse(state.tabFocus.value)
+        assertEquals(state.selection.value.count - 1, state.selection.value.index)
         state.onButton(NxButton.RIGHT); assertEquals(MenuCategory.CONSOLES, state.category())
     }
 
@@ -4616,9 +4611,9 @@ class AppStateTest {
         state.onConsoles()
         val last = state.selection.value.count - 1
         state.onButton(NxButton.UP, repeat = true)                       // held at the first: stays
-        assertEquals(0, state.selection.value.index); assertFalse(state.tabFocus.value)
-        state.onButton(NxButton.UP)                                      // a fresh press: the last row, never the tab row
-        assertEquals(last, state.selection.value.index); assertFalse(state.tabFocus.value)
+        assertEquals(0, state.selection.value.index)
+        state.onButton(NxButton.UP)                                      // a fresh press: the last row
+        assertEquals(last, state.selection.value.index)
         state.onButton(NxButton.DOWN, repeat = true)                     // held at the last: stays
         assertEquals(last, state.selection.value.index)
         state.onButton(NxButton.DOWN)                                    // a fresh press: the first
@@ -4648,7 +4643,7 @@ class AppStateTest {
         val menu = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings = settings)
         menu.onConsoles()
         menu.onButton(NxButton.UP, repeat = true); assertEquals(0, menu.selection.value.index)
-        menu.onButton(NxButton.UP); assertEquals(2, menu.selection.value.index); assertFalse(menu.tabFocus.value)
+        menu.onButton(NxButton.UP); assertEquals(2, menu.selection.value.index)
         menu.onButton(NxButton.DOWN, repeat = true); assertEquals(2, menu.selection.value.index)
         menu.onButton(NxButton.DOWN); assertEquals(0, menu.selection.value.index)
 
@@ -4664,7 +4659,7 @@ class AppStateTest {
         }
     }
 
-    @Test fun page_title_hidden_up_never_focuses_the_tab_row_and_l1_r1_and_edges_still_switch_tabs() = runTest {
+    @Test fun page_title_hidden_up_stays_and_l1_r1_and_edges_still_switch_tabs() = runTest {
         val settings = MemorySettings(ContentRef("Home")).apply {
             menuPageTitle = false
             menuStyles = LIST_TABS + mapOf(MenuCategory.CONSOLES to MenuStyle.GRID, MenuCategory.TOOLS to MenuStyle.CAROUSEL)
@@ -4673,16 +4668,17 @@ class AppStateTest {
         state.onConsoles()
         state.onGridLayout(2)                                            // 0 1 / 2
         state.onButton(NxButton.RIGHT); state.onButton(NxButton.UP)      // the Grid's top row: stays
-        assertFalse(state.tabFocus.value); assertEquals(1, state.selection.value.index)
+        assertEquals(1, state.selection.value.index)
         state.onButton(NxButton.R1)                                      // Tools: a Carousel row
         assertEquals(MenuCategory.TOOLS, state.category())
-        state.onButton(NxButton.UP); assertFalse(state.tabFocus.value)
+        val at = state.selection.value.index
+        state.onButton(NxButton.UP); assertEquals(at, state.selection.value.index)
         state.onButton(NxButton.L1); assertEquals(MenuCategory.CONSOLES, state.category())
         state.onGridLayout(2)                                            // the Grid reports again
         state.onButton(NxButton.LEFT); state.onButton(NxButton.LEFT)     // past the Grid's start: the tab before
         assertEquals(MenuCategory.HOME, state.category())
         state.select(0); state.onButton(NxButton.UP)                     // Home's top: stays
-        assertFalse(state.tabFocus.value)
+        assertEquals(0, state.selection.value.index); assertEquals(MenuCategory.HOME, state.category())
     }
 
     @Test fun page_title_hidden_on_touch_only_landscape_keeps_the_tab_row() = runTest {
@@ -4693,136 +4689,20 @@ class AppStateTest {
         state.onFooterMode(FooterMode.BUTTONS)                           // no controller, no pad: the tab row stays
         assertEquals(LauncherChrome(tabRow = true, listTitle = false, buttonHints = true, topIcons = true, noBar = true, netplayHint = false), state.launcherChrome())
         state.onConsoles()
-        state.onButton(NxButton.UP)
-        assertTrue(state.tabFocus.value)
-        state.onFooterMode(FooterMode.HINTS)                             // a controller connects: the row hides, the content takes the d-pad
-        assertFalse(state.tabFocus.value)
+        state.onButton(NxButton.UP); assertEquals(0, state.selection.value.index)   // a row's UP: stays
+        state.onFooterMode(FooterMode.HINTS)                             // a controller connects: the row hides
         assertEquals(LauncherChrome(tabRow = false, listTitle = false, buttonHints = true), state.launcherChrome())
-        state.onButton(NxButton.UP); assertFalse(state.tabFocus.value)
+        state.onButton(NxButton.UP); assertEquals(0, state.selection.value.index)
     }
 
-    @Test fun hiding_the_page_title_while_the_tab_row_has_the_d_pad_gives_it_back() = runTest {
+    @Test fun l1_r1_switch_tabs_from_the_content() = runTest {
         val settings = MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + mapOf(MenuCategory.CONSOLES to MenuStyle.CAROUSEL) }
         val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings = settings)
         state.onConsoles()
-        state.onButton(NxButton.UP)
-        assertTrue(state.tabFocus.value)
-        settings.menuPageTitle = false                                   // changed behind the menu's back
-        state.onButton(NxButton.RIGHT)                                   // the content's RIGHT, not the tab row's
-        assertFalse(state.tabFocus.value)
-        assertEquals(MenuCategory.CONSOLES, state.category()); assertEquals(1, state.selection.value.index)
-    }
-
-    /** The main menu on Consoles as a horizontal Carousel, whose UP reaches the tab row from any item (a List's wraps). */
-    private fun TestScope.carouselConsoles(): AppState {
-        val settings = MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + mapOf(MenuCategory.CONSOLES to MenuStyle.CAROUSEL) }
-        return stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings = settings).also { it.onConsoles() }
-    }
-
-    // The main menu's tab row (UP from a horizontal row, a Grid's top row or Home's top; a List or a stack
-    // wraps instead): LEFT/RIGHT switch tabs and keep it, DOWN, A and B return to the content where it was, UP wraps to
-    // the content's bottom.
-    @Test fun row_up_focuses_the_tab_row_and_left_right_switch_tabs_there() = runTest {
-        val state = carouselConsoles()
-        state.onButton(NxButton.RIGHT)
-        assertFalse(state.tabFocus.value)
-        state.onButton(NxButton.UP)                          // the tab row
-        assertTrue(state.tabFocus.value)
-        assertEquals(1, state.selection.value.index)
-        state.onButton(NxButton.RIGHT)                       // the next tab, the tab row kept
-        assertEquals(MenuCategory.TOOLS, state.category()); assertTrue(state.tabFocus.value)
-        state.onButton(NxButton.RIGHT, repeat = true)        // a held key never switches
-        assertEquals(MenuCategory.TOOLS, state.category())
-        state.onButton(NxButton.LEFT)
-        assertEquals(MenuCategory.CONSOLES, state.category()); assertTrue(state.tabFocus.value)
-        state.onButton(NxButton.DOWN)                        // back to the content, on its item
-        assertFalse(state.tabFocus.value)
-        assertEquals(1, state.selection.value.index)
-        assertEquals(MenuCategory.CONSOLES, state.category())
-    }
-
-    @Test fun a_and_b_on_the_tab_row_return_to_the_remembered_item_without_opening_or_leaving() = runTest {
-        val state = carouselConsoles()
-        state.onButton(NxButton.UP); state.onButton(NxButton.A)
-        assertFalse(state.tabFocus.value)
-        assertEquals(MenuCategory.CONSOLES, state.category())   // A opened nothing
-        state.onButton(NxButton.UP); state.onButton(NxButton.B)
-        assertFalse(state.tabFocus.value)
-        assertEquals(MenuCategory.CONSOLES, state.category())
-        state.onButton(NxButton.UP)
-        assertTrue(state.back())                             // the system back, as B: to the content, not out of the app
-        assertFalse(state.tabFocus.value)
-        assertFalse(state.back())                            // on the content: the main menu does not handle it
-        state.onButton(NxButton.UP)
-        state.onButton(NxButton.MENU); state.onButton(NxButton.X); state.onButton(NxButton.Y)   // nothing on the tab row
-        assertTrue(state.tabFocus.value)
-        assertNull(assertIs<Screen.Systems>(state.screen.value).menu)
-    }
-
-    @Test fun up_on_the_tab_row_wraps_to_a_list_bottom_and_a_held_up_stops_at_the_edges() = runTest {
-        val state = carouselConsoles()
-        state.onButton(NxButton.UP, repeat = true)           // held: stays in the row
-        assertFalse(state.tabFocus.value); assertEquals(0, state.selection.value.index)
-        state.onButton(NxButton.UP)
-        state.onButton(NxButton.UP, repeat = true)           // held on the tab row: stays there
-        assertTrue(state.tabFocus.value)
-        state.onButton(NxButton.RIGHT)                       // Tools, a List, on the tab row
-        state.onButton(NxButton.UP)                          // a fresh press: the List's last row
-        assertFalse(state.tabFocus.value)
-        assertEquals(MenuCategory.TOOLS, state.category())
-        assertEquals(state.selection.value.count - 1, state.selection.value.index)
-    }
-
-    @Test fun l1_r1_switch_tabs_from_the_content_and_from_the_tab_row() = runTest {
-        val state = carouselConsoles()
         state.onButton(NxButton.R1)
-        assertEquals(MenuCategory.TOOLS, state.category()); assertFalse(state.tabFocus.value)
+        assertEquals(MenuCategory.TOOLS, state.category())
         state.onButton(NxButton.L1)
-        state.onButton(NxButton.UP); state.onButton(NxButton.R1)
-        assertEquals(MenuCategory.TOOLS, state.category()); assertTrue(state.tabFocus.value)
-        state.onButton(NxButton.L1)
-        assertEquals(MenuCategory.CONSOLES, state.category()); assertTrue(state.tabFocus.value)
-    }
-
-    @Test fun touch_clears_the_tab_row_and_a_tab_tap_never_enters_it() = runTest {
-        val state = carouselConsoles()                       // a tab tap
-        assertFalse(state.tabFocus.value)
-        state.onButton(NxButton.UP); state.select(1)         // a tap on an item
-        assertFalse(state.tabFocus.value); assertEquals(1, state.selection.value.index)
-        state.onButton(NxButton.UP)
-        assertTrue(state.tabFocus.value)
-        state.openContextMenu(0)                             // a long press
-        assertFalse(state.tabFocus.value)
-    }
-
-    // The main menu's hint bar sends its buttons through onButton: on the tab row it shows only SELECT Recent and A Open,
-    // and a tap on them does what the button does there.
-    @Test fun the_open_hint_on_the_tab_row_enters_the_content_and_recent_opens_the_switcher() = runTest {
-        val state = carouselConsoles()
-        state.onButton(NxButton.UP)
-        assertTrue(state.tabFocus.value)
-        state.onButton(NxButton.A)                           // the "A Open" hint: back to the content, nothing opened
-        assertFalse(state.tabFocus.value)
-        assertEquals(MenuCategory.CONSOLES, state.category()); assertEquals(0, state.selection.value.index)
-        state.onButton(NxButton.UP)
-        state.onButton(NxButton.SELECT)                      // the "SELECT Recent" hint: the switcher
-        assertFalse(state.tabFocus.value)
-        assertIs<Screen.Switcher>(state.screen.value)
-    }
-
-    @Test fun leaving_the_main_menu_clears_the_tab_row() = runTest {
-        val state = carouselConsoles()
-        state.onButton(NxButton.UP); state.goHome()
-        assertFalse(state.tabFocus.value)
-        assertEquals(MenuCategory.HOME, state.category())
-        state.onConsoles(); state.onButton(NxButton.UP)
-        state.openSelected()                                 // a tap on the highlighted console: opens it
-        assertIs<Screen.Games>(state.screen.value)
-        assertFalse(state.tabFocus.value)
-        state.onButton(NxButton.B)
-        assertFalse(state.tabFocus.value)
-        state.onButton(NxButton.UP); state.onButton(NxButton.SELECT)   // SELECT still opens the switcher
-        assertFalse(state.tabFocus.value)
+        assertEquals(MenuCategory.CONSOLES, state.category())
     }
 
     @Test fun game_lists_still_wrap_on_up_from_the_first_row() = runTest {
@@ -4833,53 +4713,43 @@ class AppStateTest {
         assertIs<Screen.Games>(state.screen.value)
         state.onButton(NxButton.UP)
         assertEquals(2, state.selection.value.index)
-        assertFalse(state.tabFocus.value)
     }
 
-    @Test fun grid_up_from_the_top_row_reaches_the_tab_row_and_up_there_lands_on_the_bottom_row() = runTest {
+    @Test fun grid_up_from_the_top_row_stays() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings)
         state.onConsoles()
         settings.menuStyles = LIST_TABS + mapOf(MenuCategory.CONSOLES to MenuStyle.GRID)
         state.onGridLayout(2)                                // 0 1 / 2
         state.onButton(NxButton.RIGHT); state.onButton(NxButton.UP)
-        assertTrue(state.tabFocus.value); assertEquals(1, state.selection.value.index)
-        state.onButton(NxButton.UP)                          // column 1 is empty below: the last tile
-        assertFalse(state.tabFocus.value); assertEquals(2, state.selection.value.index)
-        state.onButton(NxButton.UP); assertEquals(0, state.selection.value.index)   // the row above, no tab row
-        assertFalse(state.tabFocus.value)
-        state.onButton(NxButton.UP); state.onButton(NxButton.UP)   // the tab row, then the bottom of column 0
-        assertEquals(2, state.selection.value.index)
+        assertEquals(1, state.selection.value.index)         // the top row: stays, no wrap
+        state.select(2)
+        state.onButton(NxButton.UP); assertEquals(0, state.selection.value.index)   // the row above
+        state.onButton(NxButton.UP); assertEquals(0, state.selection.value.index)   // then stays
+        assertEquals(MenuCategory.CONSOLES, state.category())
     }
 
-    @Test fun carousel_up_reaches_the_tab_row_from_any_item_and_up_there_comes_back() = runTest {
+    @Test fun carousel_up_from_any_item_stays() = runTest {
         val settings = MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + mapOf(MenuCategory.CONSOLES to MenuStyle.CAROUSEL) }
         val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings = settings)
         state.onConsoles()
         state.onButton(NxButton.RIGHT); state.onButton(NxButton.DOWN)
-        assertFalse(state.tabFocus.value)                    // DOWN in a row: nothing
+        assertEquals(1, state.selection.value.index)         // DOWN in a row: nothing
         state.onButton(NxButton.UP)
-        assertTrue(state.tabFocus.value); assertEquals(1, state.selection.value.index)
-        state.onButton(NxButton.UP)                          // one row: its bottom is the item it was on
-        assertFalse(state.tabFocus.value); assertEquals(1, state.selection.value.index)
+        assertEquals(1, state.selection.value.index)         // UP too
+        assertEquals(MenuCategory.CONSOLES, state.category())
     }
-    @Test fun home_up_from_the_top_reaches_the_tab_row_and_up_there_lands_on_the_last_pin() = runTest {
+    @Test fun home_up_from_the_top_stays_and_its_edges_still_switch_tabs() = runTest {
         val state = threeGamesTwoTools(); state.load(); advanceUntilIdle()
         state.onHomeLayout(PORT)                             // Pick a game, Cheat DB, Settings | Tetris, Mario | Mario Kart
-        state.onButton(NxButton.DOWN); state.onButton(NxButton.UP)   // a pin, then the top: not the tab row yet
-        assertFalse(state.tabFocus.value)
-        state.onButton(NxButton.UP)
-        assertTrue(state.tabFocus.value); assertEquals(0, state.selection.value.index)
-        state.onButton(NxButton.DOWN)                        // back on the item it was on
-        assertFalse(state.tabFocus.value); assertEquals(0, state.selection.value.index)
-        state.onButton(NxButton.UP); state.onButton(NxButton.UP)   // the tab row, then the bottom: the last pin
-        assertFalse(state.tabFocus.value); assertEquals("Mario Kart DS", state.homePin())
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.UP)   // a pin, then the top
+        assertEquals(0, state.selection.value.index)
+        state.onButton(NxButton.UP)                          // the top: stays
+        assertEquals(0, state.selection.value.index); assertEquals(MenuCategory.HOME, state.category())
+        state.onButton(NxButton.UP, repeat = true)           // held too
+        assertEquals(0, state.selection.value.index)
         state.onButton(NxButton.LEFT)                        // Home's own edges still switch tabs: past the row's start
-        assertEquals(MenuCategory.TOOLS, state.category()); assertFalse(state.tabFocus.value)
-        state.onButton(NxButton.R1); state.onButton(NxButton.UP)   // Home again, on its pin; UP from the second row
-        assertFalse(state.tabFocus.value)
-        state.select(0); state.onButton(NxButton.UP); state.onButton(NxButton.LEFT)   // the tab row: LEFT is the tab before
-        assertEquals(MenuCategory.TOOLS, state.category()); assertTrue(state.tabFocus.value)
+        assertEquals(MenuCategory.TOOLS, state.category())
     }
 
     @Test fun game_list_left_right_never_switch_tabs() = runTest {
@@ -4905,8 +4775,7 @@ class AppStateTest {
         assertEquals(3, count)                                  // the fixture's consoles, as in the grid tests
         state.onButton(NxButton.RIGHT); assertEquals(1, state.selection.value.index)
         state.onButton(NxButton.UP); state.onButton(NxButton.DOWN)
-        assertEquals(1, state.selection.value.index)            // UP is the tab row, DOWN back: the row keeps its item
-        assertFalse(state.tabFocus.value)
+        assertEquals(1, state.selection.value.index)            // UP and DOWN stay: the row keeps its item
         state.onButton(NxButton.RIGHT); state.onButton(NxButton.RIGHT, repeat = true)
         assertEquals(2, state.selection.value.index)            // held at the end: stays
         assertEquals(MenuCategory.CONSOLES, assertIs<Screen.Systems>(state.screen.value).category)
@@ -4949,7 +4818,7 @@ class AppStateTest {
         state.onButton(NxButton.RIGHT)                          // a row step of 1, not the grid's 3 columns
         assertEquals(1, state.selection.value.index)
         assertEquals(MenuCategory.TOOLS, assertIs<Screen.Systems>(state.screen.value).category)
-        state.onButton(NxButton.UP)                             // UP in a row: the tab row, the item kept
+        state.onButton(NxButton.UP)                             // UP in a row: stays, the item kept
         assertEquals(1, state.selection.value.index)
         state.onButton(NxButton.L1)                             // back to the Grid tab: its row kept
         assertEquals(MenuCategory.CONSOLES, assertIs<Screen.Systems>(state.screen.value).category)
@@ -5001,11 +4870,11 @@ class AppStateTest {
         state.onButton(NxButton.DOWN, repeat = true); assertEquals(2, state.selection.value.index)   // held at the last: stops
         state.onButton(NxButton.DOWN); assertEquals(0, state.selection.value.index)                  // a fresh press: wraps to the first
         state.onButton(NxButton.UP, repeat = true)                                                   // held at the first: stays
-        assertEquals(0, state.selection.value.index); assertFalse(state.tabFocus.value)
-        state.onButton(NxButton.UP)                                                                  // a fresh press: the last, never the tab row
-        assertFalse(state.tabFocus.value); assertEquals(2, state.selection.value.index)
+        assertEquals(0, state.selection.value.index)
+        state.onButton(NxButton.UP)                                                                  // a fresh press: the last
+        assertEquals(2, state.selection.value.index)
         state.onButton(NxButton.UP)                                                                  // a step
-        assertFalse(state.tabFocus.value); assertEquals(1, state.selection.value.index)
+        assertEquals(1, state.selection.value.index)
         state.onButton(NxButton.RIGHT, repeat = true)                                                // held: no tab switch, no step
         assertEquals(MenuCategory.CONSOLES, assertIs<Screen.Systems>(state.screen.value).category)
         assertEquals(1, state.selection.value.index)
@@ -5040,8 +4909,8 @@ class AppStateTest {
             state.openSelected()                                    // the GB games
             val list = assertIs<Screen.Games>(state.screen.value)
             assertEquals(3, state.selection.value.count)
-            state.onButton(NxButton.UP, repeat = true)              // held at the first: stays (no tab row here)
-            assertEquals(0, state.selection.value.index); assertFalse(state.tabFocus.value); assertSame(list, state.screen.value)
+            state.onButton(NxButton.UP, repeat = true)              // held at the first: stays
+            assertEquals(0, state.selection.value.index); assertSame(list, state.screen.value)
             state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN, repeat = true)
             assertEquals(2, state.selection.value.index, "$style")  // the last: a held key stops
             state.onButton(NxButton.LEFT); state.onButton(NxButton.RIGHT)
@@ -9098,7 +8967,7 @@ class AppStateTest {
         assertEquals(MenuCategory.CONSOLES, s().category)                     // Home pressed: the first visible tab
     }
 
-    @Test fun a_single_tab_never_switches_or_takes_the_tab_row() = runTest {
+    @Test fun a_single_tab_never_switches_and_up_stays() = runTest {
         val settings = MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + (MenuCategory.TOOLS to MenuStyle.CAROUSEL) }
         val state = hiddenTabsState(MenuCategory.HOME, MenuCategory.CONSOLES, settings = settings)
         val s = assertIs<Screen.Systems>(state.screen.value)
@@ -9108,8 +8977,8 @@ class AppStateTest {
         state.select(0); state.onButton(NxButton.LEFT)                        // past the first item: no tab to switch to
         assertEquals(MenuCategory.TOOLS, state.category())
         assertEquals(0, state.selection.value.index)
-        state.onButton(NxButton.UP)                                           // a row's UP reaches the tab row: a title here
-        assertFalse(state.tabFocus.value)
+        state.onButton(NxButton.UP)                                           // a row's UP: stays
+        assertEquals(0, state.selection.value.index); assertEquals(MenuCategory.TOOLS, state.category())
     }
 
     @Test fun the_current_tab_hidden_lands_on_the_next_visible_tab() = runTest {
@@ -9360,14 +9229,6 @@ class AppStateTest {
         assertEquals("NX Redux", menu.caption)
     }
 
-    @Test fun a_long_press_on_the_tab_row_with_nothing_hidden_keeps_the_tab_focus() = runTest {
-        val state = hiddenTabsState()
-        state.onButton(NxButton.UP); assertTrue(state.tabFocus.value)          // Home's first item: UP goes to the tab row
-        state.openTabMenu()                                                   // nothing to offer: the focus stays put
-        assertTrue(state.tabFocus.value)
-        assertNull(assertIs<Screen.Systems>(state.screen.value).menu)
-    }
-
     @Test fun nothing_hidden_keeps_todays_menus() = runTest {
         val state = hiddenTabsState()
         state.onConsoles(); state.onButton(NxButton.MENU)                     // a console row has no menu
@@ -9417,17 +9278,6 @@ class AppStateTest {
         state.onButton(NxButton.B)
         state.openTabMenu()                                                   // no long-press menu over a pushed tab
         assertNull(assertIs<Screen.Systems>(state.screen.value).menu)
-    }
-
-    @Test fun tabs_dropping_to_one_take_the_d_pad_back_from_the_tab_row() = runTest {
-        val settings = MemorySettings(ContentRef("Home"))
-        val state = hiddenTabsState(settings = settings)
-        state.onButton(NxButton.UP)
-        assertTrue(state.tabFocus.value)                                      // the tab row has the d-pad
-        settings.showConsolesTab = false; settings.showToolsTab = false       // one tab left: the title, no row to light
-        state.onForeground(); advanceUntilIdle()
-        assertEquals(1, assertIs<Screen.Systems>(state.screen.value).tabs.size)
-        assertFalse(state.tabFocus.value)
     }
 
     @Test fun a_screen_lists_the_hidden_tabs_with_content_and_follows_a_rescan() = runTest {
@@ -13086,17 +12936,6 @@ class AppStateTest {
         assertNull(assertIs<Screen.Games>(state.screen.value).layoutMenu)
         state.toggleLayoutMenu(); state.toggleLayoutMenu()   // the icon again closes it
         assertNull(assertIs<Screen.Games>(state.screen.value).layoutMenu)
-    }
-
-    @Test fun start_on_the_tab_row_opens_search() = runTest {
-        val settings = MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + mapOf(MenuCategory.CONSOLES to MenuStyle.CAROUSEL) }
-        val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings = settings)
-        state.onConsoles()
-        state.onButton(NxButton.UP)
-        assertTrue(state.tabFocus.value)
-        state.onButton(NxButton.START)
-        assertFalse(state.tabFocus.value)
-        assertEquals("", assertIs<Screen.Systems>(state.screen.value).search)
     }
 
     @Test fun search_lists_matches_across_consoles_and_a_launches() = runTest {
