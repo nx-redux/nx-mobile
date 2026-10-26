@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -209,7 +208,7 @@ fun NxScreenScaffold(
                                 } else {
                                     // The list spans the width over the art App draws behind (NX Redux draws titles over it), its
                                     // labels reaching [NX_LABEL_REACH] of the screen.
-                                    val insets = WindowInsets.systemBars.union(WindowInsets.displayCutout)   // the insets App pads the screens by
+                                    val insets = restingSystemBars().union(WindowInsets.displayCutout)   // the insets App pads the screens by
                                     val dir = LocalLayoutDirection.current
                                     val endPad = with(density) {
                                         nxLabelEndPad(listWidth, insets.getLeft(this, dir).toDp(), insets.getRight(this, dir).toDp(), nxListInset())

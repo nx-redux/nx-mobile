@@ -35,7 +35,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -93,6 +92,7 @@ import com.nxredux.mobile.ui.nx.LocalFooterMode
 import com.nxredux.mobile.ui.nx.LocalLauncherChrome
 import com.nxredux.mobile.ui.nx.launcherChromeFor
 import com.nxredux.mobile.ui.nx.LocalNxColors
+import com.nxredux.mobile.ui.nx.restingSystemBars
 import com.nxredux.mobile.ui.nx.LocalAppIcons
 import com.nxredux.mobile.ui.nx.LocalGridPresses
 import com.nxredux.mobile.ui.nx.LocalPadBelow
@@ -176,7 +176,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     LaunchedEffect(controllerConnected) { state.onControllerConnected(controllerConnected) }   // a Shortcuts bind row's line
     val touchscreen = rememberHasTouchscreen()   // for a game list's Recent, Search and Layout icons
     // Bars and cutout only, never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
-    Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))) {
+    Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).windowInsetsPadding(restingSystemBars().union(WindowInsets.displayCutout))) {
         HandheldShell(
             pad = { m -> NxTheme { PadVibrationProvider(padVibration) { PadThemeProvider(padTheme) { VirtualPad(onPadEvent, m, layout = menuPortraitLayout) } } } },
             controllerConnected = controllerConnected,
