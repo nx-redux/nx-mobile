@@ -1353,6 +1353,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         if (isN3ds) offerN3dsMotion()
         val view = GLRetroView(this, data)
+        view.pictureHeld = true   // black until the first frame's layout places the picture ([PictureHold])
         retroView = view
         speed.apply()   // a speed set before the view existed (the launch's rows reach it again in applyFrontend)
         // Not in netplay: a link cable's step may wait out the peer's hold (sio_lockstep: up to 30 s), and the session

@@ -1174,6 +1174,14 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setScreenO
     LibretroDroid::getInstance().setScreenOffset(x, y);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPictureHeld(
+    JNIEnv* env,
+    jclass obj,
+    jboolean held
+) {
+    LibretroDroid::getInstance().setPictureHeld(held);
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setScreenRegions(
     JNIEnv* env,
     jclass obj,

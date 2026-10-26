@@ -89,6 +89,8 @@ public:
     void updateShaderType(ShaderManager::Config shaderConfig);
     void updateScaleMode(unsigned int scaleMode);
     void updateScreenOffset(float x, float y);
+    // Held: frames clear to black and draw no picture (the frontend hasn't placed it yet). Release redraws.
+    void setPictureHeld(bool held);
     void updateContentSize(unsigned width, unsigned height);
     void updateScreenRegions(std::vector<ScreenRegion> regions);
     // Regions drawn on a second surface by renderSecondary; dst is 0..1 of that whole surface. Doesn't redraw the main
@@ -161,6 +163,7 @@ private:
     std::optional<ShaderManager::Config> loadedShaderType = std::nullopt;
 
     bool isDirty = false;
+    bool pictureHeld = false;
     bool skipDuplicateFrames = false;
     bool linearTexture = true;
 

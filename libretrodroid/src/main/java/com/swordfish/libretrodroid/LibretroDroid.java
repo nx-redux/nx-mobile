@@ -155,6 +155,8 @@ public class LibretroDroid {
     public static native void setViewportAlignment(int viewportAlignment);
     public static native void setScaleMode(int scaleMode);
     public static native void setScreenOffset(float x, float y);
+    /** While held the view draws black, no picture. GL thread. */
+    public static native void setPictureHeld(boolean held);
     /** 11 floats per region: src l,t,r,b (0..1 of the frame), dst l,t,r,b (0..1 of the viewport), shaded, touch (0/1), alpha (0..1). */
     public static native void setScreenRegions(float[] packed);
     /** Same packing as setScreenRegions; dst is 0..1 of the whole second surface. GL thread. */

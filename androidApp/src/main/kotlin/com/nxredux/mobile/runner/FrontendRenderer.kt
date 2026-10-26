@@ -484,6 +484,8 @@ internal class FrontendRenderer(
             PadRoom.BAND, PadRoom.NONE -> Unit
         }
         if (frameKnown) padLayout.onPictureKnown()
+        // After the viewport and regions above: queued on the GL thread in order, so the first picture drawn is placed.
+        retroView?.let { if (!PictureHold.held(frameKnown, gameReady)) it.pictureHeld = false }
     }
 
     /** The core's frame from [g] (the view's geometry), or null before it is known (0x0 until the first frame). */
