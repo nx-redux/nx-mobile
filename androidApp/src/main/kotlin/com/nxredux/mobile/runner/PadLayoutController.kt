@@ -255,6 +255,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private var frame: CoreFrame? = null
     /** The pad layouts the current pads were built from: a change made in the editor meanwhile lays out again ([onResume]). */
     private var builtLayouts: PadLayoutMap? = null
+    /** The window's portrait band ([WindowShape.portraitBandPx], whole px) the current pads were built for ([applyGameTopMargin]). */
+    private var builtBandPx = 0
 
     // ---- Flex mode (tabletop) ----
     /** The posture the layout follows ([applyLayout]); [Posture.Flat] until a half-opened horizontal hinge is seen. */
@@ -283,6 +285,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         bandWaits = false
         shoulderReachPx.value = null
         builtLayouts = AndroidAppSettings(activity).padLayouts
+        builtBandPx = activity.windowShape().portraitBandPx.roundToInt()
 
         val portrait = !isLandscape(orientation)
         val pads = controllers()
@@ -651,15 +654,17 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     /** Portrait keeps the game below a top camera cutout; landscape leaves the (centred) picture full-screen. */
     fun applyGameTopMargin(orientation: Int) {
         // The tabletop game area starts at the cutout too; below Android 11 the portrait band's height read the cutout
-        // ([windowShape]) before it was known: lay it out again whole.
-        val bandFromInsets = Build.VERSION.SDK_INT < 30 && orientation == Configuration.ORIENTATION_PORTRAIT
-        if (tabletop() != null || bandFromInsets) {
+        // ([windowShape]) before it was known: lay it out again whole, unless the band comes out the same (a rotation
+        // already laid out from the configuration change), when only the game's top moves.
+        val portrait = orientation == Configuration.ORIENTATION_PORTRAIT
+        val bandPx = activity.windowShape().portraitBandPx.roundToInt()
+        if (cutoutNeedsRelayout(Build.VERSION.SDK_INT, portrait, tabletop() != null, builtBandPx, bandPx)) {
             applyLayout(orientation)
             return
         }
         val game = findViewById<FrameLayout>(R.id.gameContainer)
         val lp = game.layoutParams as? FrameLayout.LayoutParams ?: return
-        val top = if (orientation == Configuration.ORIENTATION_PORTRAIT) cutoutTop else 0
+        val top = if (portrait) cutoutTop else 0
         if (lp.topMargin != top) {
             lp.topMargin = top
             game.layoutParams = lp
@@ -770,3 +775,12 @@ private fun PortraitPadToggle(hidden: Boolean, alpha: Float, onLongPress: () -> 
 @Composable
 private fun Modifier.clearOfCutout(side: WindowInsetsSides): Modifier =
     windowInsetsPadding(WindowInsets.displayCutout.only(side))
+
+/**
+ * Whether a new top cutout inset lays the pads out again whole: in tabletop (its split starts at the cutout), and below
+ * Android 11 ([sdk]) in portrait when the window's band ([bandPx], read with the inset now known) differs from the one
+ * the pads were built for ([builtBandPx]); else only the game's top margin follows, so a rotation that was laid out
+ * from its configuration change is not built twice.
+ */
+internal fun cutoutNeedsRelayout(sdk: Int, portrait: Boolean, tabletop: Boolean, builtBandPx: Int, bandPx: Int): Boolean =
+    tabletop || (sdk < 30 && portrait && bandPx != builtBandPx)
