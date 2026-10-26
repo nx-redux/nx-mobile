@@ -32,7 +32,7 @@ internal fun RaSplitScreen(state: AppState, s: Screen, page: @Composable () -> U
 private fun RaParentPane(state: AppState, parent: RaParent) {
     val c = state.achievements ?: return
     val tap: (Int) -> Unit = remember(parent.screen::class) { { i -> state.raParentTap(parent.screen, i) } }
-    val dim = Modifier.alpha(UNFOCUSED_ALPHA)
+    val dim = Modifier.alpha(UNFOCUSED_ALPHA)   // role: an unfocused pane, dimmed
     when (val p = parent.screen) {
         is Screen.RetroAchievements -> RetroAchievementsScreen(p, c, parent.row, tap, tap, modifier = dim, focused = false)
         is Screen.RaGames -> RaGamesScreen(p, parent.row, tap, tap, modifier = dim, onHint = {}, split = true, focused = false)

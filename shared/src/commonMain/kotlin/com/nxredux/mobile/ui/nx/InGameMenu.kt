@@ -212,7 +212,7 @@ private fun InGameMenuContent(
     Column(
         Modifier
             .fillMaxSize()
-            .background(if (opaque) LocalNxColors.current.background else MenuWash)
+            .background(if (opaque) LocalNxColors.current.background else LocalNxColors.current.scrimMenuWash)
             .pointerInput(Unit) { detectTapGestures { /* swallow */ } }
             // The wash covers the camera cutout; the content stays clear of it on whichever side it is.
             .windowInsetsPadding(WindowInsets.displayCutout),
@@ -274,12 +274,12 @@ private fun RootBody(
     // No top room: the panel's tab row sits right under the header, as in the dual-screen panel, the list's first row beside it.
     Row(modifier.fillMaxWidth().padding(start = nxListInset() - MenuPillPadding, end = 20.dp, bottom = 8.dp)) {
         if (panes.focusLeft) {
-            Box(Modifier.weight(listShare).fillMaxHeight().alpha(rootListAlpha(state)), contentAlignment = Alignment.TopStart) {
+            Box(Modifier.weight(listShare).fillMaxHeight().alpha(rootListAlpha(state)), contentAlignment = Alignment.TopStart) {   // role: an unfocused pane, dimmed
                 RootList(panes.left, rowHeight, onSelect, onActivate, onChange)
             }
         } else {
             val tap: (Int) -> Unit = { i -> split.onParentTap(panes.left.kind, i) }
-            Box(Modifier.weight(listShare).fillMaxHeight().alpha(UNFOCUSED_ALPHA), contentAlignment = Alignment.TopStart) {
+            Box(Modifier.weight(listShare).fillMaxHeight().alpha(UNFOCUSED_ALPHA), contentAlignment = Alignment.TopStart) {   // role: an unfocused pane, dimmed
                 RootList(panes.left, rowHeight, tap, tap, {})
             }
         }
@@ -322,7 +322,7 @@ private fun PagePane(
 ) {
     when {
         !focused -> key(page.kind) {
-            OptionsBody(page.copy(selected = -1), rowHeight, split.onPreviewTap, {}, {}, { _, _ -> }, modifier.alpha(UNFOCUSED_ALPHA))
+            OptionsBody(page.copy(selected = -1), rowHeight, split.onPreviewTap, {}, {}, { _, _ -> }, modifier.alpha(UNFOCUSED_ALPHA))   // role: an unfocused pane, dimmed
         }
         page.kind == PageKind.Achievements -> AchievementsBody(page, detail, onSelect, modifier)
         else -> key(page.kind) { OptionsBody(page, rowHeight, onSelect, onActivate, onOption, onInfoTruncated, modifier) }
@@ -408,10 +408,10 @@ private fun SplitBody(
             divider = false,
             left = {
                 if (panes.focusLeft) {
-                    PaneBody(panes.left, rowHeight, onSelect, onActivate, onChange, detail, Modifier.alpha(rootListAlpha(state)))
+                    PaneBody(panes.left, rowHeight, onSelect, onActivate, onChange, detail, Modifier.alpha(rootListAlpha(state)))   // role: an unfocused pane, dimmed
                 } else {
                     val tap: (Int) -> Unit = { i -> split.onParentTap(panes.left.kind, i) }
-                    PaneBody(panes.left, rowHeight, tap, tap, {}, detail, Modifier.alpha(UNFOCUSED_ALPHA))
+                    PaneBody(panes.left, rowHeight, tap, tap, {}, detail, Modifier.alpha(UNFOCUSED_ALPHA))   // role: an unfocused pane, dimmed
                 }
             },
             right = {
@@ -454,9 +454,6 @@ private fun PaneBody(
         else -> key(page.kind) { RowsBody(page, rowHeight, onSelect, onActivate, onChange, modifier.fillMaxSize()) }
     }
 }
-
-/** The wash over the paused frame behind the menu's pages: dark enough that the game shows only faintly. */
-private val MenuWash = Color(0xF5000000)
 
 /** Horizontal padding inside a label pill on the root list and the adjust strip (the rows pages use [NxOptionsRow]). */
 private val MenuPillPadding = 10.dp
@@ -623,7 +620,7 @@ private fun AdjustContent(
         Box(Modifier.weight(1f).fillMaxWidth().pointerInput(Unit) { detectTapGestures { dismiss() } })
         Column(
             Modifier.fillMaxWidth()
-                .background(Color(0xD9000000))
+                .background(LocalNxColors.current.scrimAdjust)
                 .pointerInput(Unit) { detectTapGestures { /* swallow */ } }
                 .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)),
         ) {
@@ -841,7 +838,7 @@ private fun SlotPreview(
             if (slot != null && occupied) {
                 Text(
                     text = slot.subtitle,
-                    color = Color(0xFF3A3A3A),
+                    color = LocalNxColors.current.slotDate,
                     fontFamily = LocalNxFont.current,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = small,
@@ -885,7 +882,7 @@ private fun SlotPreview(
                         Box(
                             Modifier.size(if (i == slotIndex) 9.dp else 7.dp)
                                 .clip(CircleShape)
-                                .background(if (i == slotIndex) Color(0xFF111111) else Color(0xFF8C8C8C)),
+                                .background(if (i == slotIndex) LocalNxColors.current.slotDotLit else LocalNxColors.current.slotDot),
                         )
                     }
                 }

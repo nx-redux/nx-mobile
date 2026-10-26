@@ -396,7 +396,7 @@ internal fun BoxScope.PageOverlays(state: AppState, chooser: ValueChooser?, erro
     notice?.let {
         Text(
             it, color = LocalNxColors.current.main, fontSize = 12.sp,
-            modifier = Modifier.align(Alignment.TopCenter).background(Color(0xCC000000), RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.align(Alignment.TopCenter).background(LocalNxColors.current.scrimNotice, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
         )
     }
 }
@@ -421,7 +421,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             val still = remember(menu, at) { mutableStateOf(at) }
             PageContent(state, menu, still, resume, allInfo, live)
         }
-        Box(Modifier.fillMaxSize().background(Color(0x66000000)).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } })
+        Box(Modifier.fillMaxSize().background(LocalNxColors.current.scrimUnder).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } })
         return
     }
     if (!onTop && page is Screen.Games && DualMenu.bottom(page, dualMenu) == BottomContent.Details) {

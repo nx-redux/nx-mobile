@@ -38,7 +38,6 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -268,7 +267,7 @@ internal data class BackdropPlacement(val rowTop: Float, val captionTop: Float, 
 /**
  * The Backdrop row's vertical placement in a body [bodyH] dp tall: one block, the band ([slotH]) and its
  * shadow room ([GRID_RING_ROOM]), a [BACKDROP_ROW_CAPTION_GAP] × [f] gap, then the caption reserve (the name's one line
- * and two info rows, [captionH] dp), centred between the header and the hint bar (the [BACKDROP_DIM] layer keeps the
+ * and two info rows, [captionH] dp), centred between the header and the hint bar (the [NxColors.scrimBackdrop] layer keeps the
  * text readable anywhere). A null [captionH] (the main menu's rows: no caption block): the row and its
  * shadow room alone, centred; the caption's top and bottom are the block's end.
  * A body too short keeps the band [GRID_RING_ROOM] under the header.
@@ -337,12 +336,6 @@ internal fun backdropCaptionRows(lines: List<InfoLine>): List<List<InfoLine>> {
 /** The screenshot a Backdrop game list's picture shows: the selected game's [url] while its page is [live]; none (black) on the page sliding out. */
 internal fun backdropPictureTarget(live: Boolean, url: String?): String? = if (live) url else null
 
-/**
- * The uniform black layer over a Backdrop game list's screenshot, under [BACKDROP_SHADE]: the text, the caption
- * included, reads anywhere, even over bright screenshots.
- */
-internal const val BACKDROP_DIM = 0.65f
-
 /** How long a Backdrop picture waits on a new screenshot while the selection may still be moving (one step's settle). */
 internal const val BACKDROP_PICTURE_SETTLE_MS = 150L
 
@@ -355,8 +348,9 @@ internal fun backdropPictureDelayMs(shown: String?, next: String?): Long =
     if (shown != null && next != null && shown != next) BACKDROP_PICTURE_SETTLE_MS else 0L
 
 /**
- * The Backdrop game tab's full-screen picture: the selected game's screenshot [url] (Crop) under a [BACKDROP_DIM] black
- * layer and the shade ([BACKDROP_SHADE], of the theme's background), crossfading (0.35 s, [NxMenuEasing]) when it changes. A null [url] (no
+ * The Backdrop game tab's full-screen picture: the selected game's screenshot [url] (Crop) under the
+ * [NxColors.scrimBackdrop] layer (so the text, the caption included, reads even over bright screenshots) and the shade
+ * ([BACKDROP_SHADE], of the theme's background), crossfading (0.35 s, [NxMenuEasing]) when it changes. A null [url] (no
  * screenshot, or a page sliding out: [backdropPictureTarget]) is the plain background. A freshly composed picture
  * starts plain and fades its first screenshot in, so opening the list (or coming back to it) doesn't pop. Only the
  * screenshots crossfade; the dim and shade are drawn once above them, fading out with the picture when it goes plain,
@@ -365,8 +359,9 @@ internal fun backdropPictureDelayMs(shown: String?, next: String?): Long =
 @Composable
 fun NxBackdropPicture(url: String?, modifier: Modifier = Modifier) {
     val ground = LocalNxColors.current.background
+    val dim = LocalNxColors.current.scrimBackdrop
     val shade = remember(ground) {
-        Brush.verticalGradient(*BACKDROP_SHADE.map { (at, alpha) -> at to ground.copy(alpha = alpha) }.toTypedArray())
+        Brush.verticalGradient(*BACKDROP_SHADE.map { (at, alpha) -> at to ground.copy(alpha = alpha) }.toTypedArray())   // role: the shade's gradient stops
     }
     var target by remember { mutableStateOf<String?>(null) }   // black first; the url a frame later, so it fades in
     LaunchedEffect(url) {
@@ -383,7 +378,7 @@ fun NxBackdropPicture(url: String?, modifier: Modifier = Modifier) {
         Box(
             Modifier.fillMaxSize().drawBehind {
                 if (layers <= 0f) return@drawBehind
-                drawRect(Color.Black, alpha = BACKDROP_DIM * layers)
+                drawRect(dim, alpha = layers)
                 drawRect(shade, alpha = layers)
             },
         )
@@ -657,10 +652,10 @@ internal fun BoxCase(w: Float, h: Float, content: @Composable () -> Unit) {
                 .blur(SHADOW_BLUR, BlurredEdgeTreatment.Unbounded).graphicsLayer { alpha = SHADOW_ALPHA }
                 .background(colors.background, shape),
         )
-        Box(Modifier.fillMaxSize().clip(shape).background(colors.background.copy(alpha = 0.85f))) {
+        Box(Modifier.fillMaxSize().clip(shape).background(colors.background.copy(alpha = 0.85f))) {   // role: the placeholder case's ground, the picture faint through it
             content()
-            Box(Modifier.fillMaxHeight().width((w * SPINE_SHARE).dp).background(colors.main.copy(alpha = 0.10f)))
-            Box(Modifier.fillMaxSize().border(1.dp, colors.main.copy(alpha = 0.12f), shape))
+            Box(Modifier.fillMaxHeight().width((w * SPINE_SHARE).dp).background(colors.inkEdge))
+            Box(Modifier.fillMaxSize().border(1.dp, colors.inkFaint, shape))
         }
     }
 }
@@ -689,7 +684,7 @@ internal fun BoxPlaceholder(game: BackdropGame) {
         BoxCase(w, h) {
             if (cover != null) {
                 AsyncImage(model = cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                Box(Modifier.fillMaxSize().background(colors.background.copy(alpha = ABSTRACT_COVER_SHADE)))
+                Box(Modifier.fillMaxSize().background(colors.background.copy(alpha = ABSTRACT_COVER_SHADE)))   // role: the shade over an abstract cover, so its title reads
             }
             Column(
                 Modifier.fillMaxSize().padding(start = (w * (SPINE_SHARE + 0.06f)).dp, end = (w * 0.06f).dp, top = (h * 0.07f).dp, bottom = (h * 0.07f).dp),
@@ -739,7 +734,7 @@ internal fun SlotTile(tile: GridTile, k: Float, slotW: Float, scale: () -> Float
                     Image(
                         padPainter(p.res), contentDescription = null,
                         modifier = Modifier.align(Alignment.Center).offset(y = pad.box.dy.dp).requiredSize(pad.box.w.dp, pad.box.h.dp)
-                            .graphicsLayer { alpha = pad.alpha() },
+                            .graphicsLayer { alpha = pad.alpha() },   // role: controller-art brightness
                         contentScale = ContentScale.Fit,
                         colorFilter = ColorFilter.colorMatrix(ColorMatrix(padColorMatrix(CAROUSEL_PAD_BRIGHTNESS * p.brightness, PAD_SATURATION))),
                     )

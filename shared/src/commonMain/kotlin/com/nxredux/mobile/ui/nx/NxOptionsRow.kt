@@ -155,7 +155,7 @@ fun NxOptionsRow(
                 Text(
                     row.label, color = when { selected -> selection.text; row.section -> colors.hint; else -> colors.listText },
                     fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = labelSize, lineHeight = labelSize,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(alpha),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(alpha),   // role: a disabled row
                 )
             }
             if (value != null) {
@@ -167,7 +167,7 @@ fun NxOptionsRow(
                     Text(
                         value, color = if (selected) selection.barText else colors.listText,
                         fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = valueSize, lineHeight = valueSize,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(alpha),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(alpha),   // role: a disabled row
                     )
                 }
             }

@@ -165,7 +165,7 @@ private val PadColors.lift: Dp get() = if (outline) 0.dp else PadStyle.faceLift
  * the buttons apart without a filled button on the outline pad.
  */
 internal fun PadColors.faceOf(override: PadFace): PadFace =
-    if (!outline) override else override.tint?.let { outlineFace(it, pressedFill = it.copy(alpha = 0.3f), pressedRim = it) } ?: face
+    if (!outline) override else override.tint?.let { outlineFace(it, pressedFill = it.copy(alpha = 0.3f), pressedRim = it) } ?: face   // role: an outline pad button's pressed fill
 
 /** The label colour on a button drawn with [override]'s face and [labelColor]: on an outline pad, the face's tint (a dark letter meant for a filled yellow face would vanish on black). */
 internal fun PadColors.labelOf(override: PadFace?, labelColor: Color?): Color =
@@ -889,7 +889,7 @@ private fun MicFace(mic: PadMic, size: Dp, modifier: Modifier = Modifier) {
         pressed = pressed || mic.on,
         modifier = modifier
             .size(size)
-            .then(if (mic.on) Modifier else Modifier.alpha(0.45f))
+            .then(if (mic.on) Modifier else Modifier.alpha(0.45f))   // role: the mic pill while off
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
@@ -951,7 +951,7 @@ private fun ToolButton(
         shape = PadStyle.pillShape,
         face = LocalPadColors.current.pill,
         pressed = pressed || latched,
-        modifier = Modifier.width(width).height(height).then(if (alpha != null) Modifier.alpha(alpha) else Modifier).pointerInput(hasLongPress) {
+        modifier = Modifier.width(width).height(height).then(if (alpha != null) Modifier.alpha(alpha) else Modifier).pointerInput(hasLongPress) {   // role: a pad toggle pill while off (MOTION)
             detectTapGestures(
                 onPress = {
                     pressed = true

@@ -153,7 +153,7 @@ fun NxScreenBackground(
                             // A long, gradual ramp so dark blends smoothly into the art.
                             0f to colors.background,
                             FADE_OPAQUE_STOP to colors.background,
-                            0.7f to colors.background.copy(alpha = 0.35f),
+                            0.7f to colors.background.copy(alpha = 0.35f),   // role: a fade gradient's stop
                             1f to Color.Transparent,
                             start = start, end = end,
                         ),

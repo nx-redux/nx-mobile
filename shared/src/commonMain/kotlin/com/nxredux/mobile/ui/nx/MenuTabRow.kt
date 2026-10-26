@@ -82,10 +82,10 @@ internal const val NX_MENU_GLIDE_MS = 240
 
 
 /**
- * The main menu's category tabs: plain words in the ink, the current one full and the rest at 42%, with a 3 dp pill under it that glides to the next
+ * The main menu's category tabs: plain words in the ink, the current one full and the rest in [NxColors.inkDim], with a 3 dp pill under it that glides to the next
  * tab (L1/R1 and LEFT/RIGHT switch tabs; no shoulder glyphs are drawn). Left-aligned on the gutter in either
  * orientation. Words that do not fit the row scroll, keeping the current tab in view. [overArt] (a Backdrop game tab,
- * over its picture): the inactive words are 62% instead of 42%, and every word gets a dark shadow
+ * over its picture): the inactive words are the ink at 62% instead, and every word gets a dark shadow
  * ([overArtShadow]). [focused] (the d-pad is on the tab row): the current word sits on the accent pill ([TAB_PLATE_X] ×
  * [TAB_PLATE_Y] round it) in place of the underline. [onLongPress]: a long press anywhere on the row opens the
  * hidden-tab menu. [underline] false: no pill under the current word (the main menu's bottom tabs; the lit word alone
@@ -149,9 +149,11 @@ fun MenuTabRow(
                 labels.forEachIndexed { i, label ->
                     val lit = focused && i == selected
                     Text(
-                        label, color = if (lit) colors.onAccent else colors.main, fontFamily = LocalNxFont.current, fontSize = size, maxLines = 1,
+                        label, color = when { lit -> colors.onAccent; i == selected || overArt -> colors.main; else -> colors.inkDim },
+                        fontFamily = LocalNxFont.current, fontSize = size, maxLines = 1,
                         style = if (shadow == null || lit) LocalTextStyle.current else LocalTextStyle.current.copy(shadow = shadow),
-                        modifier = Modifier.alpha(if (i == selected) 1f else if (overArt) 0.62f else 0.42f)
+                        // role: an unselected word over art, brighter than inkDim; the alpha fades its shadow with it
+                        modifier = Modifier.alpha(if (i != selected && overArt) 0.62f else 1f)
                             .onGloballyPositioned { val v = it.positionInParent().x.toInt() to it.size.width; if (bounds[i] != v) bounds[i] = v }
                             .combinedClickable(onClick = { onTab(i) }, onLongClick = onLongPress)
                             .padding(bottom = TAB_WORD_BOTTOM)

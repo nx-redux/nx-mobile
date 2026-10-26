@@ -27,9 +27,6 @@ import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxFont
 import com.nxredux.mobile.ui.nx.NxButton
-import com.nxredux.mobile.ui.nx.NxModalCardColor
-import com.nxredux.mobile.ui.nx.NxModalPanelColor
-import com.nxredux.mobile.ui.nx.NxModalScrimColor
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingsList
 import com.nxredux.mobile.ui.nx.NxTextSizes
@@ -55,18 +52,18 @@ internal fun GameSettingsModal(
     val font = LocalNxFont.current
     val rows = remember(screen.rows) { screen.rows.map(::emulatorTouchRow) }   // not per d-pad move
     BoxWithConstraints(
-        Modifier.fillMaxSize().background(NxModalScrimColor).pointerInput(Unit) { detectTapGestures { onClose() } },
+        Modifier.fillMaxSize().background(LocalNxColors.current.scrimModal).pointerInput(Unit) { detectTapGestures { onClose() } },
         contentAlignment = Alignment.Center,
     ) {
         Column(
             Modifier.padding(horizontal = 24.dp).widthIn(max = GAME_SETTINGS_MAX_WIDTH).fillMaxWidth()
                 .heightIn(max = maxHeight * GAME_SETTINGS_MAX_HEIGHT)
-                .background(NxModalPanelColor, RoundedCornerShape(24.dp))
+                .background(LocalNxColors.current.modalPanel, RoundedCornerShape(24.dp))
                 .pointerInput(Unit) { detectTapGestures { } }   // taps inside stay inside
                 .padding(8.dp),
         ) {
             Column(
-                Modifier.weight(1f, fill = false).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(NxModalCardColor)
+                Modifier.weight(1f, fill = false).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(LocalNxColors.current.modalCard)
                     .padding(vertical = 12.dp),
             ) {
                 Text(

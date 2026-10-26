@@ -75,7 +75,7 @@ class NxHintsBand(
  * match those lists', and its bottom gap; the top gap takes what is left ([nxListFitUnder]'s rowPx, bottomRows).
  * [onPageRows]: told the whole rows the list shows, again when that changes (a game list pages LEFT / RIGHT by them).
  * [hideHints]: no hint bar is drawn but its room is kept, so nothing moves. [hintShade] keeps the bar's
- * [NX_HINT_BAR_ALPHA] shade there (with [NxHintsBand.barInfo] drawn on it).
+ * [NxColors.scrimHints] shade there (with [NxHintsBand.barInfo] drawn on it).
  */
 @Composable
 fun NxScreenScaffold(
@@ -229,8 +229,8 @@ fun NxScreenScaffold(
                 // The bar laid out unseen, so its room matches the shown bar's exactly; no taps (no onHint). Touch only
                 // the bar draws nothing, so the room is a plain row of its height ([NX_HINT_BAR_ROW_HEIGHT]).
                 if (touchOnly()) Spacer(Modifier.fillMaxWidth().height(NX_HINT_BAR_ROW_HEIGHT))
-                else NxHintBar(hints, Modifier.alpha(0f), alpha = 0f)
-                if (hintShade) Box(Modifier.matchParentSize().background(LocalNxColors.current.background.copy(alpha = NX_HINT_BAR_ALPHA)))
+                else NxHintBar(hints, Modifier.alpha(0f))   // role: laid out unseen
+                if (hintShade) Box(Modifier.matchParentSize().background(LocalNxColors.current.scrimHints))
                 band?.barInfo?.let { info -> Box(Modifier.matchParentSize()) { info() } }
             }
         }

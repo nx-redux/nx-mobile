@@ -343,7 +343,7 @@ internal fun HomeToolSquare(tile: GridTile.Tool, lit: Boolean, side: Float, modi
     val colors = LocalNxColors.current
     val icon = max(0f, min(46f, side * 0.55f))
     Box(modifier.homeCard(lit, fill = true), contentAlignment = Alignment.Center) {
-        ToolIcon(tile.icon, tile.appId, if (lit) colors.onAccent else colors.listText.copy(alpha = 0.82f), Modifier.size(icon.dp))
+        ToolIcon(tile.icon, tile.appId, if (lit) colors.onAccent else colors.listText.copy(alpha = 0.82f), Modifier.size(icon.dp))   // role: an unlit tool icon, a touch under the ink
     }
 }
 
@@ -390,7 +390,7 @@ private fun StripText(text: String, color: Color, modifier: Modifier = Modifier)
 
 @Composable
 private fun StripDot(pad: Float) =
-    StripText("·", LocalNxColors.current.hint.copy(alpha = 0.55f), Modifier.padding(horizontal = pad.dp))
+    StripText("·", LocalNxColors.current.hint.copy(alpha = 0.55f), Modifier.padding(horizontal = pad.dp))   // role: the strip's separator dot, the grey softened
 
 /** "This month ‹played› · ‹n› achievements" (signed out: the played time alone). */
 @Composable
@@ -428,7 +428,7 @@ private fun Modifier.homeCard(lit: Boolean, fill: Boolean): Modifier {
     val colors = LocalNxColors.current
     val shaped = clip(RoundedCornerShape(NX_TILE_CORNER.dp))
     return when {
-        !lit -> shaped.tilePlate(colors.background, colors.main)
+        !lit -> shaped.tilePlate(colors.background, colors.inkEdge)
         fill -> shaped.background(nxHighlight())
         else -> shaped.background(colors.background)
     }
@@ -514,7 +514,7 @@ private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLin
                 }
             }
             // The card's subtle edge over its picture too; selected, the ring takes its place.
-            if (!lit) Box(Modifier.fillMaxSize().border(1.dp, colors.main.copy(alpha = 0.08f), RoundedCornerShape(NX_TILE_CORNER.dp)))
+            if (!lit) Box(Modifier.fillMaxSize().border(1.dp, colors.inkEdge, RoundedCornerShape(NX_TILE_CORNER.dp)))
             // The Continue badge, top-left, as on Carousel Home ([HomeBadge]); Pick a game has none.
             HomeBadge(HOME_CONTINUE_BADGE, portrait, Modifier.align(Alignment.TopStart))
         }
@@ -541,7 +541,7 @@ internal fun HomeBadge(text: String, portrait: Boolean, modifier: Modifier = Mod
     val inset = if (portrait) 8.dp else 10.dp   // three quarters of Continue's caption inset (10.2 / 13.6 dp)
     Box(
         modifier.padding(start = inset, top = inset)
-            .background(Color.Black.copy(alpha = HOME_BADGE_ALPHA), RoundedCornerShape(50))
+            .background(Color.Black.copy(alpha = HOME_BADGE_ALPHA), RoundedCornerShape(50))   // role: a Home badge's pill, the handheld's black
             .padding(horizontal = 9.dp, vertical = 3.dp),
     ) {
         val pin = LocalDensity.current.fontScale   // pinned: the sizes divided by the font scale draw at 12 and 16
@@ -575,13 +575,13 @@ internal fun PickCard(lit: Boolean, portrait: Boolean, cardH: Float, modifier: M
             AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             Image(
                 painterResource(homePickMark), contentDescription = null, contentScale = ContentScale.Fit,
-                colorFilter = ColorFilter.tint(colors.listText.copy(alpha = homeMarkAlpha(false))),
+                colorFilter = ColorFilter.tint(colors.listText.copy(alpha = homeMarkAlpha(false))),   // role: the Pick card's watermark mark
                 // Wider than a narrow card is fine: the mark itself is 41% of the box, and the card clips the rest.
                 modifier = Modifier.requiredSize(homeMarkBox(cardH).dp),
             )
             PickText(portrait)
             // The card's subtle edge over its picture; selected, the ring takes its place.
-            if (!lit) Box(Modifier.fillMaxSize().border(1.dp, colors.main.copy(alpha = 0.08f), RoundedCornerShape(NX_TILE_CORNER.dp)))
+            if (!lit) Box(Modifier.fillMaxSize().border(1.dp, colors.inkEdge, RoundedCornerShape(NX_TILE_CORNER.dp)))
         }
     }
 }
@@ -589,7 +589,7 @@ internal fun PickCard(lit: Boolean, portrait: Boolean, cardH: Float, modifier: M
 @Composable
 private fun PickText(portrait: Boolean) {
     val colors = LocalNxColors.current
-    val shadow = Shadow(Color.Black.copy(alpha = PICK_TEXT_SHADOW_ALPHA), Offset(0f, 1f), 8f)
+    val shadow = Shadow(Color.Black.copy(alpha = PICK_TEXT_SHADOW_ALPHA), Offset(0f, 1f), 8f)   // role: a text shadow
     Column(
         Modifier.fillMaxSize().padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally,

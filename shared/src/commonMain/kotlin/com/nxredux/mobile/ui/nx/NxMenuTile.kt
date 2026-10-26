@@ -91,9 +91,9 @@ private fun Modifier.gameFade(ground: Color, tileH: Float, solid: Float): Modifi
     if (tileH <= 0f) return this
     val soft = Array(GAME_FADE_STOPS) { i ->
         val up = reach - (reach - solid).coerceAtLeast(0f) * i / (GAME_FADE_STOPS - 1f)   // reach down to solid
-        (1f - up / tileH) to ground.copy(alpha = gameFadeAlpha(up, solid, reach))
+        (1f - up / tileH) to ground.copy(alpha = gameFadeAlpha(up, solid, reach))   // role: a fade gradient's stops
     }
-    return background(Brush.verticalGradient(0f to ground.copy(alpha = 0f), *soft, 1f to ground.copy(alpha = GAME_FADE_EDGE)))
+    return background(Brush.verticalGradient(0f to ground.copy(alpha = 0f), *soft, 1f to ground.copy(alpha = GAME_FADE_EDGE)))   // role: a fade gradient's stops
 }
 
 /**
@@ -176,7 +176,7 @@ private fun TileContent(
     // Unlit: the mockup's black tile with a 1 dp inset 8% white edge. Lit: the Logo look's plain dark plate, or its own
     // accent fill.
     val plate = when {
-        !lit -> Modifier.tilePlate(colors.background, colors.main)
+        !lit -> Modifier.tilePlate(colors.background, colors.inkEdge)
         logoLook -> Modifier.background(colors.background)
         else -> Modifier.background(highlight)
     }
@@ -316,7 +316,7 @@ private fun GameTile(
                 }
             }
             // The tile's subtle edge, over the screenshot's too; lit, the ring takes its place.
-            GameTileLayer.EDGE -> Box(Modifier.fillMaxSize().border(1.dp, colors.main.copy(alpha = 0.08f), RoundedCornerShape(NX_TILE_CORNER.dp)))
+            GameTileLayer.EDGE -> Box(Modifier.fillMaxSize().border(1.dp, colors.inkEdge, RoundedCornerShape(NX_TILE_CORNER.dp)))
             GameTileLayer.FADE -> if (gameFade) {
                 val infoDp = with(LocalDensity.current) { (statsSize * LINE_HEIGHT).toDp().value }
                 Box(Modifier.fillMaxSize().gameFade(colors.background, maxHeight.value, gameFadeSolid(infoDp * statRows.size.coerceAtLeast(1))))
@@ -324,7 +324,7 @@ private fun GameTile(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(HOME_CAPTION_SHARE).homeCaptionFade(colors.background),
             ) else Box(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.55f)
-                    .background(Brush.verticalGradient(listOf(colors.background.copy(alpha = 0f), colors.background.copy(alpha = 0.85f)))),
+                    .background(Brush.verticalGradient(listOf(colors.background.copy(alpha = 0f), colors.background.copy(alpha = 0.85f)))),   // role: a caption fade's stops
             )
             GameTileLayer.CAPTION -> {
                 // The info line with the List's inline trophy ([infoText]), the icon fitted to the 11 sp line (12 dp where
@@ -386,9 +386,9 @@ private fun GameTile(
     }
 }
 
-/** An unlit tile's ground: [ground] (black) with a 1 dp inset edge of [edge] at 8%, on the tile's rounded shape. */
+/** An unlit tile's ground: [ground] (black) with a 1 dp inset [edge] ([NxColors.inkEdge]), on the tile's rounded shape. */
 internal fun Modifier.tilePlate(ground: Color, edge: Color): Modifier =
-    background(ground).border(1.dp, edge.copy(alpha = 0.08f), RoundedCornerShape(NX_TILE_CORNER.dp))
+    background(ground).border(1.dp, edge, RoundedCornerShape(NX_TILE_CORNER.dp))
 
 /**
  * The Grid's name tile (a collection, a logo-less console): its name on up to 3 lines, and with a [count] "N games" 4 dp
@@ -423,7 +423,7 @@ private fun TileTitle(text: String, color: Color, size: TextUnit, maxLines: Int)
 @Composable
 internal fun titleShadow(): Shadow {
     val d = LocalDensity.current.density
-    return Shadow(Color.Black.copy(alpha = 0.9f), Offset(0f, 1f * d), 6f * d)
+    return Shadow(Color.Black.copy(alpha = 0.9f), Offset(0f, 1f * d), 6f * d)   // role: a text shadow
 }
 
 @Composable

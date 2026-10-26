@@ -76,12 +76,58 @@ data class NxColors(
     val inkEdge: Color = main.copy(alpha = 0.08f)
     /** Opacity for carousel items two or more steps out (a Float, not a colour). */
     val artFar: Float = 0.30f
-    /** The hint bar drawn over art. */
+    /**
+     * The hint bar over art: NxHintBar's ground and the shade over a hidden bar's kept room (NxScreenScaffold). Its alpha
+     * is [NX_HINT_BAR_ALPHA], where an info band's fade starts.
+     */
     val scrimHints: Color = Color(0xCC000000)
-    /** The Game Switcher's bar. */
+    /**
+     * The Game Switcher's bar (GameSwitcherScreen's NxHintBar and its hidden bar's shade): darker, as screenshots can be
+     * light. Its alpha is [NX_SWITCHER_BAR_ALPHA], where the switcher's info band and the tab row's top band fade from.
+     */
     val scrimSwitcher: Color = Color(0xE6000000)
-    /** What dims a Backdrop screenshot. */
+    /** What dims a Backdrop game list's screenshot (NxBackdropPicture), under its shade. */
     val scrimBackdrop: Color = Color(0xA6000000)
+    /** A notice's backing: App's notice line and NxNotifications' toasts. */
+    val scrimNotice: Color = Color(0xCC000000)
+    /** Over the menu kept still under a tool that has the focus on the top screen (App's PageContent). */
+    val scrimUnder: Color = Color(0x66000000)
+    /** The in-game menu's wash over the paused frame behind its pages (InGameMenu): the game shows only faintly. */
+    val scrimMenuWash: Color = Color(0xF5000000)
+    /** The in-game menu's adjust strip over the paused frame (InGameMenu's AdjustContent). */
+    val scrimAdjust: Color = Color(0xD9000000)
+    /** The screen under a modal: NxModal, GameSettingsModal, RaPanelView, NxTouchRows' picker. */
+    val scrimModal: Color = Color(0xB3000000)
+    /** NxLoadingOverlay's scrim: darker than [scrimModal], so its message reads over list text. */
+    val scrimLoading: Color = Color(0xE6000000)
+    /** A modal's panel: NxModal, GameSettingsModal, GameListLayoutMenu, RaPanelView, NxTouchRows' picker. */
+    val modalPanel: Color = Color(0xFF121212)
+    /** The card in a modal's panel that holds its body: NxModal, GameSettingsModal, NxTouchRows' picker. */
+    val modalCard: Color = Color(0xFF1E1E1E)
+    /** The fast-forward / rewind indicator's backing (SpeedIndicator). */
+    val indicatorBacking: Color = Color(0xB3000000)
+    /** A text field's ground: NxTextPrompt, NxSignInPrompt. */
+    val fieldGround: Color = Color(0xFF2A2A2A)
+    /** The ground behind a picture that may be missing or see-through: NxBadge, NxRichList's round thumbnails. */
+    val pictureGround: Color = Color(0xFF1A1A1A)
+    /** A hint badge's label on its [main] disc or pill (NxBadgeGlyph). */
+    val badgeText: Color = Color(0xFF1C1C1C)
+    /** The in-game menu's save-slot card (on [main]): its date line. */
+    val slotDate: Color = Color(0xFF3A3A3A)
+    /** The save-slot card's dot for the shown slot. */
+    val slotDotLit: Color = Color(0xFF111111)
+    /** The save-slot card's dots for the other slots. */
+    val slotDot: Color = Color(0xFF8C8C8C)
+    /** The pad layout editor (PadLayoutEditor): the game picture's stand-in. */
+    val editorGameBlock: Color = Color(0xFF3A3A3A)
+    /** The pad layout editor: a control overlapping another or the game. */
+    val editorOverlap: Color = Color(0xFFE5484D)
+    /** The pad layout editor: the hinge between a foldable's two halves. */
+    val editorHinge: Color = Color(0xFF6A6A6A)
+    /** The pad layout editor's floating toolbar panel. */
+    val editorPanel: Color = Color(0xE6121212)
+    /** The pad layout editor's toolbar buttons (not the primary one, on the accent). */
+    val editorButton: Color = Color(0xFF2A2A2A)
 }
 
 /**

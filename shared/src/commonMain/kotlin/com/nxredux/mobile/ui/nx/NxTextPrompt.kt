@@ -18,7 +18,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -50,7 +49,7 @@ fun NxTextPrompt(title: String, value: String, onValueChange: (String) -> Unit, 
             cursorBrush = SolidColor(colors.listText),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { onConfirm() }),
-            modifier = Modifier.fillMaxWidth().focusRequester(focus).background(Color(0xFF2A2A2A), RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().focusRequester(focus).background(LocalNxColors.current.fieldGround, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
         )
     }
 }

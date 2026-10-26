@@ -135,7 +135,7 @@ fun NxBadgeGlyph(text: String, size: Dp, modifier: Modifier = Modifier) {
     val disc = size * 0.75f
     val fontSize = NxTextSizes.badge(disc).pinned()   // ~60% of the disc, whatever the label's length or the font scale
     val label = @Composable {
-        Text(text, color = Color(0xFF1C1C1C), fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold,
+        Text(text, color = LocalNxColors.current.badgeText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold,
             fontSize = fontSize, lineHeight = fontSize, maxLines = 1, softWrap = false, textAlign = TextAlign.Center)
     }
     if (text.length <= 1) {
@@ -157,27 +157,27 @@ private val HINT_GAP = 18.dp
 /** The hint bar's height: its glyph row and 6 dp above and below ([NxHintBar]'s padding). */
 internal val NX_HINT_BAR_ROW_HEIGHT: Dp = HINT_GLYPH_SIZE + 12.dp
 
-/** The hint bar's share of the ground: dark enough for the hints to read over any art, still slightly see-through. The
- * info band's fade starts at this, so it reads as the bar continuing upward. */
-const val NX_HINT_BAR_ALPHA = 0.8f
+/** The hint bar's share of the ground ([NxColors.scrimHints]'s alpha): dark enough for the hints to read over any art, still
+ * slightly see-through. The info band's fade starts at this, so it reads as the bar continuing upward. */
+val NX_HINT_BAR_ALPHA: Float = NxDefaults.colors.scrimHints.alpha
 
 /** Hint bars below keep their height when empty ([NxHintBar]'s keepHeight): provided by the two-pane Settings only. */
 val LocalNxHintBarKeepHeight = staticCompositionLocalOf { false }
 
-/** The Game Switcher's bar (and its info band's edge): darker, as its screenshots can be light. */
-const val NX_SWITCHER_BAR_ALPHA = 0.9f
+/** The Game Switcher's bar's share of the ground ([NxColors.scrimSwitcher]'s alpha), its info band's edge too. */
+val NX_SWITCHER_BAR_ALPHA: Float = NxDefaults.colors.scrimSwitcher.alpha
 
 /**
  * [onHint], when given, makes each hint tappable: tapping it sends that hint's button. Each hint's glyph comes from
  * [LocalHintGlyphs]: the standard art, a pad symbol's art, the on-screen pad's label as a badge, or no glyph (the hint's
  * text alone, still tappable, where the on-screen pad does not draw the button). On a touch-only screen
- * ([LocalFooterMode] BUTTONS: no controller, no on-screen pad) it draws nothing and takes no room. [alpha]: the bar's share of the ground.
+ * ([LocalFooterMode] BUTTONS: no controller, no on-screen pad) it draws nothing and takes no room. [scrim]: the bar's ground.
  * [keepHeight]: an empty bar keeps a glyph's height (the two-pane Settings, where only the focused pane has hints, so
  * both panes' rows stay level).
  */
 @Composable
 fun NxHintBar(
-    hints: List<Hint>, modifier: Modifier = Modifier, onHint: ((NxButton) -> Unit)? = null, alpha: Float = NX_HINT_BAR_ALPHA,
+    hints: List<Hint>, modifier: Modifier = Modifier, onHint: ((NxButton) -> Unit)? = null, scrim: Color = LocalNxColors.current.scrimHints,
     keepHeight: Boolean = LocalNxHintBarKeepHeight.current,
 ) {
     val colors = LocalNxColors.current
@@ -210,7 +210,7 @@ fun NxHintBar(
                 }
             }
         },
-        modifier = modifier.fillMaxWidth().background(colors.background.copy(alpha = alpha)).padding(horizontal = 16.dp, vertical = 6.dp).let { if (keepHeight) it.heightIn(min = glyphSize) else it },
+        modifier = modifier.fillMaxWidth().background(scrim).padding(horizontal = 16.dp, vertical = 6.dp).let { if (keepHeight) it.heightIn(min = glyphSize) else it },
     ) { measurables, c ->
         val gap = HINT_GAP.roundToPx()
         val shown = ArrayList<Pair<Placeable, Int>>()

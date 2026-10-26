@@ -264,7 +264,7 @@ internal fun LayoutPreviewPage(
     // Too little room left (a short page of many rows): no picture rather than a thumbnail.
     val framed: @Composable (Dp) -> Unit = { w -> if (picture != null && w >= PREVIEW_MIN_WIDTH) {
         val shape = RoundedCornerShape(12.dp)
-        Box(Modifier.width(w).background(Color.Black, shape).border(PICTURE_BORDER, colors.hint.copy(alpha = 0.6f), shape).padding(PICTURE_MAT)) {
+        Box(Modifier.width(w).background(Color.Black, shape).border(PICTURE_BORDER, colors.hint.copy(alpha = 0.6f), shape).padding(PICTURE_MAT)) {   // role: the picture's frame ring, the pictures' grey softened
             Image(
                 painterResource(picture), contentDescription = null, contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxWidth().aspectRatio(aspect).clip(RoundedCornerShape(PICTURE_INNER_CORNER)),

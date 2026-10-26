@@ -240,9 +240,9 @@ internal fun nxInfoBandGeometry(lineDp: Float, inkTopDp: Float, touch: Boolean =
  * over the bottom [hold] (the stop follows the measured height), then fading linearly to nothing at the top edge.
  */
 internal fun Modifier.nxVerticalFade(ground: Color, edgeAlpha: Float, hold: Dp): Modifier = drawWithCache {
-    val edge = ground.copy(alpha = edgeAlpha)
+    val edge = ground.copy(alpha = edgeAlpha)   // role: a fade gradient's stops
     val solid = if (size.height > 0f) (hold.toPx() / size.height).coerceIn(0f, 1f) else 0f
-    val brush = Brush.verticalGradient(0f to ground.copy(alpha = 0f), 1f - solid to edge, 1f to edge)
+    val brush = Brush.verticalGradient(0f to ground.copy(alpha = 0f), 1f - solid to edge, 1f to edge)   // role: a fade gradient's stops
     onDrawBehind { drawRect(brush) }
 }
 
@@ -257,7 +257,7 @@ internal fun Modifier.nxEasedFade(ground: Color, edgeAlpha: Float, fromTop: Bool
     Brush.verticalGradient(*Array(EASE_STOPS) { i ->
         val y = i / (EASE_STOPS - 1f)          // 0 at the top
         val t = if (fromTop) y else 1f - y      // 0 at the edge
-        y to ground.copy(alpha = easedFadeAlpha(edgeAlpha, t, power))
+        y to ground.copy(alpha = easedFadeAlpha(edgeAlpha, t, power))   // role: a fade gradient's stops
     }),
 )
 

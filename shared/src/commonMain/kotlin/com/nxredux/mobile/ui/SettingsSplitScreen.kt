@@ -22,9 +22,6 @@ import com.nxredux.mobile.ui.nx.LocalNxHintBarKeepHeight
 /** An unfocused pane's opacity. */
 internal const val UNFOCUSED_ALPHA = 0.6f
 
-/** The divider between the panes: 1 dp of white at 8%. */
-private const val DIVIDER_ALPHA = 0.08f
-
 /**
  * The two-pane Settings on a wide landscape window ([settingsSplit]): the categories on the left, the category's page
  * on the right, a faint divider between. The focus follows the screen ([settingsPane]): on the Settings root the left
@@ -48,7 +45,7 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
                 SettingsMenuScreen(
                     Screen.SettingsMenu(categories), current,
                     onSelect = state::settingsCategoryTap, onOpen = state::settingsCategoryTap,
-                    modifier = Modifier.alpha(UNFOCUSED_ALPHA), hints = emptyList(),
+                    modifier = Modifier.alpha(UNFOCUSED_ALPHA), hints = emptyList(),   // role: an unfocused pane, dimmed
                 )
             }
         },
@@ -62,7 +59,7 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
                         SettingsScreen(
                             preview, -1,
                             onSelect = state::settingsPreviewTap, onOpen = state::settingsPreviewTap,
-                            modifier = Modifier.alpha(UNFOCUSED_ALPHA), titled = true, hints = emptyList(),
+                            modifier = Modifier.alpha(UNFOCUSED_ALPHA), titled = true, hints = emptyList(),   // role: an unfocused pane, dimmed
                         )
                     }
                 }
@@ -92,7 +89,7 @@ internal fun SplitPanes(
         CompositionLocalProvider(LocalNxHintBarKeepHeight provides true) {
             Row(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(leftShare).fillMaxHeight()) { left() }
-                if (divider) Box(Modifier.width(1.dp).fillMaxHeight().background(colors.listText.copy(alpha = DIVIDER_ALPHA)))
+                if (divider) Box(Modifier.width(1.dp).fillMaxHeight().background(colors.inkEdge))   // the divider between the panes: a hairline
                 Box(Modifier.weight(1f - leftShare).fillMaxHeight()) { right() }
             }
         }

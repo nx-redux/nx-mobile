@@ -52,6 +52,6 @@ fun Modifier.nxEdgeFade(above: () -> Boolean, below: () -> Boolean, height: Dp =
 /** The fade's alpha from its edge in: linear, or [strong] (ease-in: a fifth of the way in at half the height). [toEdge]: running towards the edge. */
 private fun fadeStops(strong: Boolean, toEdge: Boolean): Array<Pair<Float, Color>> {
     val fromEdge = if (strong) listOf(0f to 0f, 0.5f to 0.2f, 1f to 1f) else listOf(0f to 0f, 1f to 1f)
-    val stops = fromEdge.map { (at, a) -> (if (toEdge) 1f - at else at) to Color.Black.copy(alpha = a) }
+    val stops = fromEdge.map { (at, a) -> (if (toEdge) 1f - at else at) to Color.Black.copy(alpha = a) }   // role: a fade mask's stops
     return (if (toEdge) stops.reversed() else stops).toTypedArray()
 }

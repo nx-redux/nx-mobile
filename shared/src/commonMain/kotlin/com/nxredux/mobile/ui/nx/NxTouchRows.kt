@@ -169,9 +169,9 @@ internal fun NxTouchRow(
     LaunchedEffect(selected, truncated, info) { if (selected && info.isNotBlank()) onTruncated(info, truncated) }
     Column(
         Modifier.fillMaxWidth().height(height).padding(vertical = 2.dp).clip(shape)
-            .then(if (selected) Modifier.background(colors.accent.copy(alpha = SOFT_SELECTION_ALPHA), shape) else Modifier)
+            .then(if (selected) Modifier.background(colors.accent.copy(alpha = SOFT_SELECTION_ALPHA), shape) else Modifier)   // role: a touch row's soft selection
             .clickable(onClick = onTap).padding(horizontal = NxOptionsInnerPad)
-            .alpha(if (enabled) 1f else NX_DISABLED_ALPHA),
+            .alpha(if (enabled) 1f else NX_DISABLED_ALPHA),   // role: a disabled row
         verticalArrangement = Arrangement.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -235,7 +235,7 @@ internal fun NxSwitch(on: Boolean, onClick: (() -> Unit)?, lit: Boolean = false)
     val colors = LocalNxColors.current
     Box(
         Modifier.size(SwitchWidth, SwitchHeight).clip(CircleShape)
-            .background(if (on) colors.secondaryAccent else if (lit) colors.background.copy(alpha = 0.35f) else colors.main.copy(alpha = 0.22f))
+            .background(if (on) colors.secondaryAccent else if (lit) colors.background.copy(alpha = 0.35f) else colors.main.copy(alpha = 0.22f))   // role: a switch's off track, lit and unlit
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(3.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -255,7 +255,7 @@ private val SwitchHeight = 24.dp
 internal fun NxSegments(choices: List<String>, selected: Int, size: TextUnit, onPick: ((Int) -> Unit)?) {
     val colors = LocalNxColors.current
     val shape = RoundedCornerShape(50)
-    Row(Modifier.clip(shape).border(1.dp, colors.main.copy(alpha = 0.3f), shape).padding(2.dp)) {
+    Row(Modifier.clip(shape).border(1.dp, colors.main.copy(alpha = 0.3f), shape).padding(2.dp)) {   // role: an outlined control's ring
         choices.forEachIndexed { i, label ->
             val lit = i == selected
             Box(
@@ -313,15 +313,15 @@ fun NxSettingPicker(title: String, choices: List<String>, current: Int, cursor: 
     val list = rememberLazyListState(initialFirstVisibleItemIndex = (cursor - 2).coerceAtLeast(0))
     NxKeepSelectedInView(list, cursor, choices.size, margin = 1)
     Box(
-        Modifier.fillMaxSize().background(NxModalScrimColor).pointerInput(Unit) { detectTapGestures { onDismiss() } },
+        Modifier.fillMaxSize().background(LocalNxColors.current.scrimModal).pointerInput(Unit) { detectTapGestures { onDismiss() } },
         contentAlignment = Alignment.Center,
     ) {
         Column(
-            Modifier.padding(24.dp).widthIn(max = 420.dp).fillMaxWidth().background(NxModalPanelColor, RoundedCornerShape(24.dp))
+            Modifier.padding(24.dp).widthIn(max = 420.dp).fillMaxWidth().background(LocalNxColors.current.modalPanel, RoundedCornerShape(24.dp))
                 .pointerInput(Unit) { detectTapGestures { } }   // taps inside stay inside
                 .padding(8.dp),
         ) {
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(NxModalCardColor).padding(vertical = 12.dp)) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(LocalNxColors.current.modalCard).padding(vertical = 12.dp)) {
                 Text(
                     title, color = colors.hint, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold,
                     fontSize = nxModalSmall(), maxLines = 1, overflow = TextOverflow.Ellipsis,

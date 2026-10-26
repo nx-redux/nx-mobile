@@ -15,8 +15,6 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.shortcuts.SpeedIndicator
 
-private val IndicatorBacking = Color(0xB3000000)
-
 /**
  * The game's fast forward / rewind mark: two chevron triangles pointing right ([SpeedIndicator.FAST_FORWARD]) or, mirrored,
  * left ([SpeedIndicator.REWIND]), in the app's white mono glyph style on a soft dark backing so it reads over any picture.
@@ -25,7 +23,7 @@ private val IndicatorBacking = Color(0xB3000000)
 @Composable
 fun NxSpeedIndicator(kind: SpeedIndicator?, modifier: Modifier = Modifier) {
     if (kind == null) return
-    Canvas(modifier.background(IndicatorBacking, RoundedCornerShape(8.dp)).padding(5.dp).size(20.dp)) {
+    Canvas(modifier.background(LocalNxColors.current.indicatorBacking, RoundedCornerShape(8.dp)).padding(5.dp).size(20.dp)) {
         val w = size.width
         val h = size.height
         // Two triangles side by side, each half the width, the glyph centred vertically with a little air at the sides.

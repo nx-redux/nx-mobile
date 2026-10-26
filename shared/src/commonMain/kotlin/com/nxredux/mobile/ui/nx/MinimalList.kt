@@ -106,7 +106,7 @@ private const val MINIMAL_SELECTED_SCALE = 1.04f
 /**
  * A name's tag (only Home's Continue wears one) after its name, [MINIMAL_TAG_GAP] dp from its end so every name keeps its
  * left edge; a name too long for both is cut short with an ellipsis before the tag. A round-ended pill
- * of the ink at [MINIMAL_TAG_FILL], its word in [NxColors.hint] at [MINIMAL_TAG_SP] sp (pinned), padded
+ * of [NxColors.inkFaint], its word in [NxColors.hint] at [MINIMAL_TAG_SP] sp (pinned), padded
  * [MINIMAL_TAG_PAD_Y] × [MINIMAL_TAG_PAD_X] dp; never an accent. Centred on the name's x-height ([MINIMAL_X_HEIGHT]), it
  * does not grow with the selected name, and an unselected Continue's tag fades with its row.
  */
@@ -116,7 +116,6 @@ private const val MINIMAL_TAG_PAD_X = 8f
 private const val MINIMAL_TAG_PAD_Y = 2f
 private const val MINIMAL_TAG_H = MINIMAL_TAG_LINE_SP + 2 * MINIMAL_TAG_PAD_Y
 private const val MINIMAL_TAG_GAP = 12f
-private const val MINIMAL_TAG_FILL = .14f
 /** The name font's x-height as a share of its size (MiSans), where the tag centres. */
 private const val MINIMAL_X_HEIGHT = .52f
 private const val MINIMAL_TAG_INLINE = "tag"
@@ -156,7 +155,7 @@ internal fun minimalNameSize(bandHeightDp: Float, textScale: Float): Float {
  * ([minimalLadderExponent]) to 0 at D and past it. The band's edge mask ([MINIMAL_EDGE_MASK]) is the hard stop, so
  * nothing draws under either row.
  */
-private const val MINIMAL_OUTLINE_CEILING = .5f
+private const val MINIMAL_OUTLINE_CEILING = .5f   // role: Minimal distance ladder
 
 internal fun minimalOutlineAlpha(d: Float, reach: Float, exponent: Float): Float {
     if (reach <= 0f) return 0f
@@ -473,7 +472,7 @@ private fun MinimalNames(
                 drawRect(minimalEdgeMask(area.top, area.bottom, maskPx, this.size.height), blendMode = BlendMode.DstIn)
             },
     ) {
-        val pill = colors.main.copy(alpha = MINIMAL_TAG_FILL)
+        val pill = colors.inkFaint
         for (i in window) key(slots.getValue(i)) {
             val lit = i == sel
             val row = names[i]
@@ -489,7 +488,7 @@ private fun MinimalNames(
                         val f = fill(i)
                         val ladder = minimalOutlineAlpha(d, if (d < 0f) reachUp else reachDown, exponent)
                         val r = motion.rise(i - first)
-                        alpha = (ladder + (1f - ladder) * f) * r * (if (lit) motion.selection() else motion.others())
+                        alpha = (ladder + (1f - ladder) * f) * r * (if (lit) motion.selection() else motion.others())   // role: Minimal distance ladder
                         translationY = (1f - r) * risePx
                         // The alpha on each draw, not through a layer the row's size, which would cut the letters' tails past the tight line.
                         compositingStrategy = CompositingStrategy.ModulateAlpha

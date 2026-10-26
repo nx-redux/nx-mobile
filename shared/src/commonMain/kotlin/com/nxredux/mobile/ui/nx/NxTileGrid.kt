@@ -264,7 +264,7 @@ fun NxTileGrid(
             val (moreLeft, moreRight) = edges
             val left = rememberEased(if (moreLeft) 1f else 0f, reset, SLIDE_MS)
             val right = rememberEased(if (moreRight) 1f else 0f, reset, SLIDE_MS)
-            val clear = colors.background.copy(alpha = 0f)
+            val clear = colors.background.copy(alpha = 0f)   // role: a fade gradient's clear end
             Box(
                 Modifier.align(Alignment.CenterStart).fillMaxHeight().fillMaxWidth(EDGE_SHARE)
                     .graphicsLayer { alpha = left.value }

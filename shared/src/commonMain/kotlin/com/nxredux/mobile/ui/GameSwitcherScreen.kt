@@ -257,13 +257,13 @@ private fun GameSwitcherFullScreen(screen: Screen.Switcher, onButton: (NxButton)
             val swallow = Modifier.pointerInput(Unit) { detectTapGestures { } }
             if (hintsShown) {
                 if (entry != null) GameInfoBand(info, edgeAlpha = NX_SWITCHER_BAR_ALPHA, fadeReach = NX_EASED_FADE_REACH)
-                NxHintBar(hints, modifier = swallow, onHint = onButton, alpha = NX_SWITCHER_BAR_ALPHA)
+                NxHintBar(hints, modifier = swallow, onHint = onButton, scrim = colors.scrimSwitcher)
             } else {
                 // Hidden: the bar's row keeps its room and its scrim, the info line centred in it under the same fade.
                 if (entry != null && info.isNotEmpty()) Box(Modifier.fillMaxWidth().height(NX_EASED_FADE_REACH).nxEasedFade(colors.background, NX_SWITCHER_BAR_ALPHA))
                 Box(swallow) {
-                    NxHintBar(hints, Modifier.alpha(0f), alpha = 0f)   // laid out unseen: the shown bar's room exactly
-                    Box(Modifier.matchParentSize().background(colors.background.copy(alpha = NX_SWITCHER_BAR_ALPHA)))
+                    NxHintBar(hints, Modifier.alpha(0f))   // role: laid out unseen, the shown bar's room exactly
+                    Box(Modifier.matchParentSize().background(colors.scrimSwitcher))
                     if (entry != null) SwitcherBarInfoLine(info, Modifier.matchParentSize())
                 }
             }

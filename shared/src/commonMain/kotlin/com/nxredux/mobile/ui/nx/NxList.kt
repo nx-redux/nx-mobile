@@ -212,7 +212,7 @@ private fun NxListRow(
         val tag = row.tag
         val icon = row.icon
         if (tag == null && icon == null) NxListRowLabel(row, selected, lit, style, textModifier)
-        else Row(textModifier.alpha(if (row.enabled) 1f else NX_DISABLED_ALPHA), verticalAlignment = Alignment.CenterVertically) {
+        else Row(textModifier.alpha(if (row.enabled) 1f else NX_DISABLED_ALPHA), verticalAlignment = Alignment.CenterVertically) {   // role: a disabled row
             if (icon != null) NxRowIcon(icon, lit, style)
             if (tag != null) NxRowTag(tag, lit, style)
             // The pill wraps the icon, the tag and the label; the label alone scrolls (marquee) or ellipsizes in what's left.
@@ -229,7 +229,7 @@ private fun NxListRow(
 @Composable
 private fun NxRowTag(tag: String, lit: Boolean, style: NxListRowStyle) {
     val colors = style.colors
-    val fill = if (lit) Color.Black.copy(alpha = NX_TAG_FILL_ALPHA) else colors.listText.copy(alpha = NX_TAG_FILL_ALPHA)
+    val fill = if (lit) Color.Black.copy(alpha = NX_TAG_FILL_ALPHA) else colors.inkFaint   // role: lit, the tag pill on the accent
     Box(
         Modifier.padding(end = 10.dp).background(fill, RoundedCornerShape(50))
             .padding(horizontal = 8.dp, vertical = 2.dp),
@@ -274,7 +274,7 @@ private fun NxListRowLabel(row: NxRow, selected: Boolean, lit: Boolean, style: N
         fontFamily = style.font, fontWeight = FontWeight.SemiBold, fontSize = listFont, lineHeight = listFont,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = textModifier.alpha(if (row.enabled) 1f else NX_DISABLED_ALPHA).let { if (selected) it.basicMarquee() else it },
+        modifier = textModifier.alpha(if (row.enabled) 1f else NX_DISABLED_ALPHA).let { if (selected) it.basicMarquee() else it },   // role: a disabled row
     )
 }
 
@@ -441,7 +441,7 @@ fun NxScrollArrow(up: Boolean, width: Dp, modifier: Modifier = Modifier, opacity
 
 /** A button's grey ring (Continue), so it reads as one: the pictures' grey, round as the pill. Lit, the pill takes its place. */
 internal fun Modifier.nxButtonRing(colors: NxColors): Modifier =
-    border(NX_BUTTON_RING, colors.hint.copy(alpha = 0.6f), RoundedCornerShape(50))
+    border(NX_BUTTON_RING, colors.hint.copy(alpha = 0.6f), RoundedCornerShape(50))   // role: a button's grey ring
 
 /** [nxButtonRing]'s width. */
 private val NX_BUTTON_RING = 1.5.dp

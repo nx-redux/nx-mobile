@@ -68,7 +68,7 @@ private fun NxChoiceButton(label: String, highlighted: Boolean, onClick: () -> U
     val colors = LocalNxColors.current
     val shape = RoundedCornerShape(50)
     val base = Modifier.fillMaxWidth().height(48.dp).clip(shape).clickable(onClick = onClick)
-    val styled = if (highlighted) base.background(colors.main, shape) else base.border(1.dp, colors.main.copy(alpha = 0.3f), shape)
+    val styled = if (highlighted) base.background(colors.main, shape) else base.border(1.dp, colors.main.copy(alpha = 0.3f), shape)   // role: an outlined button's ring
     Box(styled, contentAlignment = Alignment.Center) {
         Text(label, color = if (highlighted) colors.listTextSelected else colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxModalButton(), maxLines = 1)
     }
