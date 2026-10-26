@@ -3865,7 +3865,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     fun onControllerConnected(connected: Boolean) {
         if (controllerConnected == connected) return
         controllerConnected = connected
-        if (!connected && _capturingShortcut.value != null) { capture.cancel(); _capturingShortcut.value = null }
+        if (!connected) cancelCapture()
         refreshShortcuts()
     }
 

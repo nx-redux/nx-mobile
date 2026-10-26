@@ -317,11 +317,11 @@ internal class InGameMenuController(
                     // No controller: hints show the on-screen pad's own labels (Sega C, PS ○); one attached: the A/B art.
                     // Keyed on the profile's revision: a live Controller Type change redraws them with the menu open.
                     val connected = padLayout.controllerConnected.value
-                    // Shortcuts' bind rows come and go with a controller (the on-screen pad binds nothing).
-                    LaunchedEffect(connected) { menuModel?.let { it.setControllerConnected(connected); menuState.value = it.state } }
                     val hintGlyphs = remember(connected, padProfileRevision.value) {
                         if (connected) HintGlyphs.STANDARD else HintGlyphs.forPad(padProfile())
                     }
+                    // Shortcuts' bind rows come and go with a controller (the on-screen pad binds nothing).
+                    LaunchedEffect(connected) { menuModel?.let { it.setControllerConnected(connected); menuState.value = it.state } }
                     // The page title's gutter follows the app's: the narrow one while the pad sits below (portrait, or a
                     // tabletop pad under the hinge), as HandheldShell sets it; a controller-dropped band keeps it, with no pad below.
                     // Half-folded with nothing under the hinge (a controller; on a DS / 3DS one leaves the touch screen alone
