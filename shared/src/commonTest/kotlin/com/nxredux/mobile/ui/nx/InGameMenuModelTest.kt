@@ -1504,6 +1504,12 @@ class InGameMenuModelTest {
         assertEquals(listOf("1x", "2x", "3x"), row.choices)
     }
 
+    @Test fun aNewDisplayMaxRebuildsTheOpenScaleLists() {
+        val m = model().apply { displayMax3d = 3 }.openConsoleSettings()
+        m.displayMax3d = 5   // a rotation or fold with the menu open
+        assertEquals(listOf("1x", "2x", "3x", "4x", "5x"), m.row3d("Max Scale").choices)
+    }
+
     @Test fun x_shows_the_full_text_of_a_compact_visual_row() {
         // NDS Console Settings: Layout (portrait) is visual (A would Adjust) and compact, its text behind the info icon.
         val m = model().openConsoleSettings()

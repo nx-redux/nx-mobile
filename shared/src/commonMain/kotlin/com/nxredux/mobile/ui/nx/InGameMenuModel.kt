@@ -307,8 +307,16 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      */
     var screen: ScreenClass? = null
 
-    /** The biggest DS 3D scale this display reaches (null: unknown): the 3D Resolution rows offer scales up to it. Set before the menu's pages are built. */
+    /**
+     * The biggest DS 3D scale this display reaches (null: unknown): the 3D Resolution rows offer scales up to it. Set before
+     * the menu's pages are built; a change while open (a rotation, a fold) rebuilds open Console Settings/Frontend/Adjust pages.
+     */
     var displayMax3d: Int? = null
+        set(value) {
+            if (value == field) return
+            field = value
+            refreshFrontendPages()
+        }
 
     private var nds3dNow: Int? = null            // the DS 3D scale in use (null: unknown / not DS)
     private var nds3dSoftware = false            // the core renders in software: the 3D Resolution rows take no effect

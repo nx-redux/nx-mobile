@@ -766,14 +766,24 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (!setsNds3d()) return
         nds3dCurrent = current
         nds3dDisplayMax = displayMax
+        // An open menu's Max Scale / Scale lists follow a rotation or fold.
+        menu.menuModel?.takeIf { it.displayMax3d != displayMax }?.let { it.displayMax3d = displayMax; menu.menuState.value = it.state }
         offerNds3d(sizeChange)
     }
+
+    /**
+     * A new DS 3D scale can reach the core now: not under netplay (no core option changes mid-session, so nothing is
+     * offered and the sender keeps the value the core has; [playLocally] offers again), not while quitting, not once the
+     * view is gone.
+     */
+    private fun canSendNds3d(): Boolean = netplayNow == null && !quitting && retroView?.isAttachedToWindow == true
 
     /**
      * The DS 3D scale for the rows' values and the layout now, to the core if it changed: at once, or for a game area that
      * only changed size, once it has settled ([Nds3dSender]; [tickNds3d] drains it every 100 ms meanwhile).
      */
     private fun offerNds3d(sizeChange: Boolean) {
+        if (!canSendNds3d()) return
         val max = nds3dDisplayMax ?: return
         val value = Nds3dResolution.valueFor(frontendValues, nds3dCurrent, max)
         nds3dSender.offer(value, sizeChange, SystemClock.uptimeMillis())?.let(::sendNds3d)
@@ -781,6 +791,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     private fun tickNds3d() {
+        if (!canSendNds3d()) return   // a held size waits; the next offer (or playLocally's) replaces it
         nds3dSender.tick(SystemClock.uptimeMillis())?.let(::sendNds3d)
         scheduleNds3dTick()
     }
@@ -973,6 +984,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun onDestroy() {
         renderer.cancelGeometryWatch()
+        window?.decorView?.removeCallbacks(nds3dTick)
         rumbles.forEach { it.release() }
         motionSensors?.stop()
         if (isWii) LibretroDroid.setSensorEnabled(0, false)   // a next Wii game sets its own on its first frame
@@ -2731,6 +2743,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         dual.refreshDiscs()
         dual.refreshDualPanel()
+        // The core kept the launch's DS 3D scale through the session: the one for the layout now goes once.
+        if (setsNds3d()) offerNds3d(sizeChange = false)
     }
 
     // ------------------------------------------------------------------ achievements
