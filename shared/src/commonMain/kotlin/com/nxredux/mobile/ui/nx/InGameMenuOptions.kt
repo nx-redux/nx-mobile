@@ -68,20 +68,27 @@ internal fun OptionsBody(
             val total = with(LocalDensity.current) { page.rows.sumOf { sizes.heightOf(it).roundToPx() }.toDp() }
             // Rows differ in height (a bare row, segments under the text): kept clear of the fade in px.
             NxKeepSelectedInView(listState, page.selected, count, edge = with(LocalDensity.current) { (sizes.row / 2).roundToPx() })
-            LazyColumn(
-                Modifier.fillMaxWidth().height(minOf(total, maxHeight)).nxScrollFade(listState, height = sizes.row / 2, strong = true),
-                state = listState, flingBehavior = rememberNxRowSnapFling(listState),
-            ) {
-                items(count) { i ->
-                    val row = page.rows[i]
-                    val selected = i == page.selected
-                    val default = { nxTap(i, selected, tapOpens(i), onSelect, onActivate) }
-                    OptionTouchRow(
-                        row, selected, sizes,
-                        onTap = optionRowTap(row, i, onSelect, onOption) ?: default,
-                        onOption = { onOption(it) }, index = i,
-                        onTruncated = { info, t -> if (selected) onInfoTruncated(info, t) },
-                    )
+            Column(Modifier.fillMaxWidth()) {
+                // The page's intro: plain text above the rows, as Settings' paragraphs; never selected or tapped.
+                if (page.intro.isNotEmpty()) Text(
+                    page.intro, color = colors.hint, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal, fontSize = sizes.desc, lineHeight = sizes.descLine,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = NxOptionsInnerPad, vertical = 6.dp),
+                )
+                LazyColumn(
+                    Modifier.fillMaxWidth().weight(1f, fill = false).height(total).nxScrollFade(listState, height = sizes.row / 2, strong = true),
+                    state = listState, flingBehavior = rememberNxRowSnapFling(listState),
+                ) {
+                    items(count) { i ->
+                        val row = page.rows[i]
+                        val selected = i == page.selected
+                        val default = { nxTap(i, selected, tapOpens(i), onSelect, onActivate) }
+                        OptionTouchRow(
+                            row, selected, sizes,
+                            onTap = optionRowTap(row, i, onSelect, onOption) ?: default,
+                            onOption = { onOption(it) }, index = i,
+                            onTruncated = { info, t -> if (selected) onInfoTruncated(info, t) },
+                        )
+                    }
                 }
             }
         }

@@ -21,6 +21,7 @@ import com.nxredux.mobile.shortcuts.ShortcutBinding
 import com.nxredux.mobile.shortcuts.ShortcutOverrides
 import com.nxredux.mobile.shortcuts.ShortcutSet
 import com.nxredux.mobile.shortcuts.TouchSlot
+import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -2170,6 +2171,29 @@ class InGameMenuModelTest {
         assertEquals("MENU+R1", m.row("Toggle FF").valueLabel)
         assertEquals("None", m.row("Hold FF").valueLabel)
         assertEquals("Reset Game", m.row("Touch button 1").valueLabel)
+    }
+
+    // Touch only: the bind rows give way to the page's intro text (the on-screen pad binds nothing); the overrides stay.
+    @Test fun touchOnlyHidesTheBindRows() {
+        val m = shortcuts(overrides = ShortcutOverrides(mapOf(ShortcutAction.TOGGLE_FF to menuR1), emptyMap()))
+        assertEquals("", m.state.page.intro)
+        m.setControllerConnected(false)
+        assertEquals(listOf("Touch button 1", "Touch button 2"), m.state.page.rows.map { it.label })
+        assertEquals(SHORTCUTS_NO_CONTROLLER, m.state.page.intro)
+        assertEquals("Touch button 1", m.state.page.rows[m.state.page.selected].label)
+        m.setControllerConnected(true)
+        assertEquals("", m.state.page.intro)
+        assertEquals("MENU+R1", m.row("Toggle FF").valueLabel)
+    }
+
+    @Test fun losingTheControllerEndsACapture() {
+        val m = shortcuts()
+        m.selectRow("Toggle FF")
+        m.press(NxButton.A)
+        assertTrue(m.capturingShortcut)
+        m.setControllerConnected(false)
+        assertFalse(m.capturingShortcut)
+        assertFalse(m.takesKey(KeyCodes.BUTTON_R1, true))
     }
 
     @Test fun captureSetsOverride() {

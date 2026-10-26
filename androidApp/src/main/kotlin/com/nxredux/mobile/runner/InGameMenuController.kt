@@ -5,6 +5,7 @@ import android.view.Gravity
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -287,6 +288,7 @@ internal class InGameMenuController(
         model.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams)
         model.setCheats(cheatSet.entries, cheatsFolder, cheatSet.expected)
         host.publishShortcuts(model)
+        model.setControllerConnected(padLayout.controllerConnected.value)
         publishPlayers(model)
         publishSecondScreen(model)
         publishSpeed(model)
@@ -318,6 +320,8 @@ internal class InGameMenuController(
                     val hintGlyphs = remember(connected, padProfileRevision.value) {
                         if (connected) HintGlyphs.STANDARD else HintGlyphs.forPad(padProfile())
                     }
+                    // Shortcuts' bind rows come and go with a controller (the on-screen pad binds nothing).
+                    LaunchedEffect(connected) { menuModel?.let { it.setControllerConnected(connected); menuState.value = it.state } }
                     // The page title's gutter follows the app's: the narrow one while the pad sits below (portrait, or a
                     // tabletop pad under the hinge), as HandheldShell sets it; a controller-dropped band keeps it, with no pad below.
                     // Half-folded with nothing under the hinge (a controller; on a DS / 3DS one leaves the touch screen alone
