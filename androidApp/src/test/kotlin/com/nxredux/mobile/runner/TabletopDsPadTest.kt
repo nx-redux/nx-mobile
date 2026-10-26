@@ -32,10 +32,13 @@ class TabletopDsPadTest {
         }
     }
 
-    @Test fun ds_pad_over_the_touch_screen_is_see_through() {
-        // The bottom screen leaves 284 px each side, less than the 432 px reach: the halves overlap it, not clear.
-        val box = tabletopDsPadBoxes(place(DsKind.DS), rootH = 2448)!!
-        assertFalse(box.clear)
+    @Test fun boxes_beside_the_touch_screen_at_the_fold() {
+        // The 4x DS touch screen (1024 x 768 at 412, 1236) leaves 412 px each side of the 1848 px window.
+        val p = place(DsKind.DS)
+        assertEquals(412f, p.bottom.x)
+        assertEquals(1236f, p.bottom.y)
+        val box = tabletopDsPadBoxes(p, rootH = 2448)!!
+        assertTrue(box.widthPx >= 412)
     }
 
     @Test fun box_kept_inside_a_short_root() {

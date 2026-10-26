@@ -5,10 +5,9 @@ import kotlin.math.roundToInt
 
 /**
  * The half-folded DS / 3DS pad halves' boxes, root px: each [widthPx] x [heightPx] at [topMarginPx] from the root's top,
- * against its own side edge (the right half mirrors the left); [insetPx] moves the buttons in from that edge, and
- * [clear] draws them solid (they miss the touch screen).
+ * against its own side edge (the right half mirrors the left); [insetPx] moves the buttons in from that edge.
  */
-internal data class TabletopDsPadBoxes(val widthPx: Int, val heightPx: Int, val topMarginPx: Int, val insetPx: Float, val clear: Boolean)
+internal data class TabletopDsPadBoxes(val widthPx: Int, val heightPx: Int, val topMarginPx: Int, val insetPx: Float)
 
 /**
  * The pad halves' boxes for placement [p] (window px; the root fills the window) in a root [rootH] tall, kept inside it;
@@ -18,7 +17,7 @@ internal fun tabletopDsPadBoxes(p: TabletopDsPlacement, rootH: Int): TabletopDsP
     val half = p.left ?: return null
     val h = half.boxHeightPx.roundToInt().coerceAtMost(rootH)
     val top = half.topMarginPx.roundToInt().coerceIn(0, rootH - h)
-    return TabletopDsPadBoxes(half.boxWidthPx.roundToInt(), h, top, half.extraInsetPx, half.clear)
+    return TabletopDsPadBoxes(half.boxWidthPx.roundToInt(), h, top, half.extraInsetPx)
 }
 
 /** What a tabletop layout was built for: [halfFolded] (a tabletop split), a [controller] in the layout, the root's size. */

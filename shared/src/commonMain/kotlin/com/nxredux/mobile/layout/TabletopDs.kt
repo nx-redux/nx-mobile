@@ -36,8 +36,10 @@ private const val EPSILON = 0.001f
  * The top screen fills the area above the hinge (x 0..[windowW], [cutoutTop]..[hingeTop]); the bottom screen sits in
  * the area below it ([hingeBottom]..[windowH]) between the pad halves. DS screens are whole multiples of 256 x 192
  * (the bottom never below 1x); 3DS screens are fitted at their aspect (400 x 240 top, 320 x 240 bottom) in whole
- * pixels. The halves set aside half the [reach] each side ([setAsidePx] for a near-square tablet), nothing with a
- * [controller]. Each screen is centred in its area. Only a tablet-class [screen] has the width for the touch screen
+ * pixels. The halves set aside [LayoutConstants.TABLETOP_DS_SET_ASIDE] of the [reach] each side (the touch screen
+ * overlaps each by a quarter of it at most), nothing with a [controller]. The screens meet at the fold, as on a DS:
+ * the top one's bottom edge on [hingeTop], the touch screen's top edge on [hingeBottom], each centred across.
+ * Only a tablet-class [screen] has the width for the touch screen
  * between the pad halves; a phone-shaped foldable stacks both screens above the hinge instead. [secondRow]: the halves
  * draw their second row (STYLUS / SWAP), so their boxes are that row taller, as the landscape pad's.
  */
@@ -58,7 +60,7 @@ fun tabletopDs(
     val topArea = PxRect(0f, cutoutTop.toFloat(), windowW.toFloat(), (hingeTop - cutoutTop).toFloat())
     val bottomArea = PxRect(0f, hingeBottom.toFloat(), windowW.toFloat(), (windowH - hingeBottom).toFloat())
     if (!screen.isTablet) return stackedTop(topArea, kind)
-    val aside = if (controller) 0f else setAsidePx(ScreenClass.NEAR_SQUARE_TABLET, reach)
+    val aside = if (controller) 0f else LayoutConstants.TABLETOP_DS_SET_ASIDE * reach.total
     val bottomSpace = PxRect(aside, bottomArea.y, bottomArea.width - 2f * aside, bottomArea.height)
 
     val (topW, topH) = when (kind) {
@@ -69,8 +71,8 @@ fun tabletopDs(
         DsKind.DS -> wholeScale(bottomSpace, DS_W, DS_H, atLeast1 = true)
         DsKind.N3DS -> fitted(bottomSpace, N3DS_BOTTOM_W / N3DS_H)
     }
-    val top = centred(topArea, topW, topH)
-    val bottom = centred(bottomArea, bottomW, bottomH)
+    val top = atFold(topArea, topW, topH, y = hingeTop - topH)
+    val bottom = atFold(bottomArea, bottomW, bottomH, y = hingeBottom.toFloat())
     if (controller) return TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, null, null)
     val half = clusterPlacement(bottomArea, bottom, unitPx, reach, density, toolRow = secondRow)
     return TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, half, half)
@@ -114,6 +116,10 @@ private fun fitted(space: PxRect, aspect: Float): Pair<Float, Float> =
     } else {
         Pair(NdsLayout.wholePx(space.height * aspect), NdsLayout.wholePx(space.height))
     }
+
+/** A [w] x [h] screen centred across [space] at [y] (against the fold). */
+private fun atFold(space: PxRect, w: Float, h: Float, y: Float) =
+    PxRect(space.x + NdsLayout.wholePx((space.width - w) / 2f), y, w, h)
 
 private fun centred(space: PxRect, w: Float, h: Float) =
     PxRect(

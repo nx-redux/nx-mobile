@@ -14,11 +14,12 @@ class TabletopDsTest {
         tabletopDs(1848, h, ScreenClass.NEAR_SQUARE_TABLET, 0, 1212, hingeBottom, kind, 122f, reach, 2.625f, controller)
 
     @Test
-    fun fold_half_folded_ds_top_6x_bottom_5x() {
+    fun fold_half_folded_ds_top_6x_bottom_4x_meeting_at_the_fold() {
         val p = place(DsKind.DS)
         assertEquals(TabletopDsMode.SPLIT, p.mode)
-        assertEquals(PxRect(156f, 30f, 1536f, 1152f), p.top)
-        assertEquals(PxRect(284f, 1236f + 126f, 1280f, 960f), p.bottom)
+        // 3/4 of the 432 px reach set aside each side: 1200 px wide, 4x; the screens meet the hinge's two edges.
+        assertEquals(PxRect(156f, 1212f - 1152f, 1536f, 1152f), p.top)
+        assertEquals(PxRect(412f, 1236f, 1024f, 768f), p.bottom)
         assertNotNull(p.left)
         assertNotNull(p.right)
     }
@@ -29,10 +30,12 @@ class TabletopDsTest {
         assertEquals(1848f, p.top.width)
         assertEquals(1108f, p.top.height)
         assertEquals(0f, p.top.x)
-        // bottom space is 1416 x 1212: width-limited 4:3
-        assertEquals(1416f, p.bottom.width)
-        assertEquals(1062f, p.bottom.height)
-        assertEquals(216f, p.bottom.x)
+        assertEquals(1212f - 1108f, p.top.y)
+        // bottom space is 1200 x 1212: width-limited 4:3
+        assertEquals(1200f, p.bottom.width)
+        assertEquals(900f, p.bottom.height)
+        assertEquals(324f, p.bottom.x)
+        assertEquals(1236f, p.bottom.y)
     }
 
     @Test
@@ -41,8 +44,16 @@ class TabletopDsTest {
         assertNull(p.left)
         assertNull(p.right)
         // whole bottom area 1848 x 1212: 7x (1792 x 1344) is too tall, 6x fits
-        assertEquals(1536f, p.bottom.width)
-        assertEquals(1152f, p.bottom.height)
+        assertEquals(PxRect(156f, 1236f, 1536f, 1152f), p.bottom)
+        assertEquals(1212f, p.top.y + p.top.height)   // still meeting at the fold
+    }
+
+    @Test
+    fun touch_screen_overlaps_each_half_by_a_quarter_of_its_reach_at_most() {
+        for (kind in DsKind.entries) {
+            val p = place(kind)
+            assertTrue(reach.total - p.bottom.x <= reach.total / 4f, "$kind overlaps by ${reach.total - p.bottom.x}")
+        }
     }
 
     @Test

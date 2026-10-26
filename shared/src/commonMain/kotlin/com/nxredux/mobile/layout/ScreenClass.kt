@@ -29,6 +29,12 @@ object LayoutConstants {
 
     /** The half-folded DS pad unit: the Fold cover screen's (1248 - 2 x 16 dp x 2.625) / 9 = 129.3 px at 428 dpi, about 7.67 mm. */
     const val TABLETOP_DS_UNIT_MM = 7.7f
+
+    /**
+     * The share of the pad's reach the half-folded touch screen leaves free on each side: it may overlap each half by at
+     * most a quarter of its reach.
+     */
+    const val TABLETOP_DS_SET_ASIDE = 0.75f
 }
 
 /**

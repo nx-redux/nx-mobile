@@ -450,8 +450,11 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         placeTabletopDs(tabletopDsPlacement(shape, tt, pad))
     }
 
-    /** The clusters' alpha: solid while they clear the picture, else Pad Opacity (landscape). Read in composition. */
-    private fun clusterAlpha(): Float = if (clustersClear.value) 1f else padLandscapeAlpha.value
+    /**
+     * The clusters' alpha: solid while they clear the picture, else Pad Opacity (landscape). Read in composition. The
+     * half-folded DS / 3DS halves are always solid: the touch screen overlaps them by a quarter of their reach at most.
+     */
+    private fun clusterAlpha(): Float = if (clustersClear.value || tabletopDsViews != null) 1f else padLandscapeAlpha.value
 
     /**
      * A drawn group moved or resized: a pad width that changed by 2 px or more lays the picture out again (half-folded,
@@ -507,11 +510,10 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             controller = layoutControllerNames().isNotEmpty(), secondRow = pad.secondRow,
         )
 
-    /** The half-folded pad halves at [p]'s boxes ([tabletopDsPadBoxes]), solid when they miss the touch screen. */
+    /** The half-folded pad halves at [p]'s boxes ([tabletopDsPadBoxes]); always solid ([clusterAlpha]). */
     private fun placeTabletopDs(p: TabletopDsPlacement) {
         val (left, right) = tabletopDsViews ?: return
         val box = tabletopDsPadBoxes(p, rootSize().second) ?: return
-        clustersClear.value = box.clear
         clusterInsetPx.value = box.insetPx
         setBox(left, Gravity.START or Gravity.TOP, box.widthPx, box.heightPx, box.topMarginPx)
         setBox(right, Gravity.END or Gravity.TOP, box.widthPx, box.heightPx, box.topMarginPx)
