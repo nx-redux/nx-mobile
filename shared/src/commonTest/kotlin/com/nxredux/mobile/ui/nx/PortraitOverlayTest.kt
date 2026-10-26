@@ -38,8 +38,8 @@ class PortraitOverlayTest {
         )
     }
 
-    /** The overlay's C-stick on a band [w] x [h] units: in the middle row, centred between the clusters, clear of both. */
-    private fun assertCStickFits(w: Float, h: Float, minShare: Float) {
+    /** The overlay's C-stick on a band [w] x [h] units: in the middle row, centred between the clusters, clear of their boxes. */
+    private fun assertCStickFits(w: Float, h: Float, minWidth: Float) {
         val s = midRowScale(w, h)
         val f = faceClusterScale(w, h, s, 3f, 3f)
         val row = w - 2f * OVERLAY_EDGE_NUDGE
@@ -49,37 +49,33 @@ class PortraitOverlayTest {
         assertEquals(box.width, box.height, 1e-4f)
         assertTrue(box.top >= 0f && box.bottom <= 3f * s + 1e-4f, "$what: inside the middle row's height")
         assertTrue(box.width <= C_STICK_DIAMETER * s + 1e-4f, "$what: at most full size")
-        assertTrue(box.width >= minShare * C_STICK_DIAMETER * s - 1e-3f, "$what: ${box.width} wide, at least $minShare of full size")
+        assertTrue(box.width >= minWidth - 1e-3f, "$what: ${box.width} wide, at least $minWidth")
+        // Its well keeps 0.1 off both clusters' whole touch boxes (the d-pad takes touches across its square).
         val r = box.width / 2f
-        val (arms, circles) = overlayCStickNeighbours(row, s, f)
-        for (arm in arms) assertTrue(arm.distanceTo(box.center) >= r + PORTRAIT_C_STICK_BUTTON_GAP - 1e-3f, "$what: arm $arm")
-        for ((o, rr) in circles) assertTrue((o - box.center).getDistance() >= r + rr + PORTRAIT_C_STICK_BUTTON_GAP - 1e-3f, "$what: button $o")
+        for (b in overlayClusterBoxes(row, s, f)) assertTrue(b.distanceTo(box.center) >= r + PORTRAIT_C_STICK_BUTTON_GAP - 1e-3f, "$what: box $b")
     }
 
-    @Test fun c_stick_fits_the_fold_cover_band() {
+    @Test fun c_stick_is_full_size_on_the_fold_cover_band() {
         // The Fold's cover (1248 px wide): 9 x 6.91 units, the clusters at 1.13 and 1.82 units apart.
-        assertCStickFits(9f, 6.91f, minShare = 1f)   // full size
+        assertCStickFits(9f, 6.91f, minWidth = C_STICK_DIAMETER * 1.13f)
     }
 
-    @Test fun c_stick_fits_the_narrowest_band_at_the_largest_scale() {
-        // 9 units wide, tall enough that the width bounds the scale (1.233): the clusters only 1.2 units apart, the
-        // well (~1.4 across, over the clusters' empty top corners) a little under full size (1.48).
+    @Test fun c_stick_on_the_narrowest_band_at_the_largest_scale_fits_the_gap() {
+        // 9 units wide, tall enough that the width bounds the scale (1.233): the clusters only 1.2 units apart, so the
+        // well is that gap less 0.1 each side (1.0 across, full size would be 1.48).
         assertEquals(1.2333f, midRowScale(9f, 7.4f), 1e-3f)
-        assertCStickFits(9f, 7.4f, minShare = 0.9f)
+        assertCStickFits(9f, 7.4f, minWidth = 1.0f)
     }
 
     @Test fun c_stick_fits_every_band() {
-        for (w in listOf(9f, 9.5f, 10f, 11f, 13.05f, 16f)) for (h in listOf(6.2f, 6.91f, 7.4f, 9f)) assertCStickFits(w, h, minShare = 0.9f)
+        // The gap between the clusters is at least 1.2 units on every band 9 or more wide: the well at least 1.0.
+        for (w in listOf(9f, 9.5f, 10f, 11f, 13.05f, 16f)) for (h in listOf(6.2f, 6.91f, 7.4f, 9f)) assertCStickFits(w, h, minWidth = 1.0f)
     }
 
-    @Test fun c_stick_sits_at_the_row_top_where_the_corners_are_empty() {
+    @Test fun c_stick_sits_at_the_row_top_and_takes_only_touches_in_its_well() {
         val s = midRowScale(9f, 7.4f)
-        val row = 9f - 2f * OVERLAY_EDGE_NUDGE
-        val box = overlayCStick(row, s, s)
+        val box = overlayCStick(9f - 2f * OVERLAY_EDGE_NUDGE, s, s)
         assertEquals(0f, box.top, 1e-4f)
-        // Level with the row's middle the d-pad's right arm and Y leave a smaller well.
-        val gapAtMiddle = (row - 6f * s) / 2f - PORTRAIT_C_STICK_BUTTON_GAP
-        assertTrue(box.width / 2f > gapAtMiddle, "${box.width / 2f} vs $gapAtMiddle")
         assertTrue(cStickWellHit(box, box.center) && !cStickWellHit(box, Offset(box.left + 0.01f, box.bottom - 0.01f)))
     }
 }

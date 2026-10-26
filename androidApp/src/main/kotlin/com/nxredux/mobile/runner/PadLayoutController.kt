@@ -320,7 +320,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                     FrameLayout.LayoutParams.MATCH_PARENT, bandPx, Gravity.BOTTOM))
                 bandShown = true
                 bandView = pad
-                bandWaits = bandAwaitsFrame(PadOptions.portraitPadHidden(layoutTag(), frontendValues), consoleScale(layoutTag()), frame)
+                bandWaits = bandWaitsNow()
             } else if (layoutPadHidden && names.isEmpty()) {
                 // One see-through pad across the bottom, its buttons the band's size. No touch cut-off under it: its buttons
                 // take their own touches and the gaps pass to the game, so a DS touch screen reaching into it still answers.
@@ -336,11 +336,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             if (names.isEmpty()) addBesideClusters(root)
         }
         root.removeCallbacks(revealTimeout)
-        if (clusterViews != null || overlayView != null || bandWaits) {
-            // Hidden until the renderer places the picture; the timeout shows them for a game that never draws.
-            reveal.onLayoutStart(SystemClock.uptimeMillis())
-            root.postDelayed(revealTimeout, reveal.timeoutMs)
-        }
+        // Hidden until the renderer places the picture; the timeout shows them for a game that never draws.
+        if (clusterViews != null || overlayView != null || bandWaits) startReveal(root)
         game.requestLayout()
         updatePadVisibility()
         syncN3dsCore()
@@ -515,6 +512,43 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         overlayView != null -> PadRoom.HIDDEN_BAND
         bandShown -> PadRoom.BAND
         else -> PadRoom.NONE
+    }
+
+    /** The pads of a new layout (or a band that starts waiting) wait for the picture ([reveal]), the timeout armed. */
+    private fun startReveal(root: FrameLayout) {
+        reveal.onLayoutStart(SystemClock.uptimeMillis())
+        armRevealTimeout(root)
+    }
+
+    /** Posts the reveal's timeout for when it falls due; none until the core runs ([onCoreRunning]). */
+    private fun armRevealTimeout(root: FrameLayout) {
+        root.removeCallbacks(revealTimeout)
+        reveal.timeoutInMs(SystemClock.uptimeMillis())?.let { root.postDelayed(revealTimeout, it) }
+    }
+
+    /** The core has loaded the game and runs: the waiting pads' timeout counts from now, so a slow load shows none. */
+    fun onCoreRunning() {
+        reveal.onCoreRunning(SystemClock.uptimeMillis())
+        if (reveal.pending()) armRevealTimeout(findViewById(R.id.root))
+    }
+
+    /** The band would wait unseen for the first frame now ([bandAwaitsFrame]). */
+    private fun bandWaitsNow(): Boolean =
+        bandAwaitsFrame(PadOptions.portraitPadHidden(layoutTag(), frontendValues), consoleScale(layoutTag()), frame)
+
+    /**
+     * The frontend values changed (the menu, the corner icon, or the launch's values after onCreate's layout, which had
+     * the defaults): a Portrait Pad flip lays out again (posted: the icon's own view is still dispatching its long
+     * press); else a shown band starts or stops waiting for the first frame ([bandGate]).
+     */
+    fun onFrontendValues() {
+        val root = findViewById<FrameLayout>(R.id.root)
+        when (bandGate(layoutPadHidden, portraitPadHidden(), bandView != null, bandWaits, bandWaitsNow())) {
+            BandGate.RELAYOUT -> root.post { applyLayout(resources.configuration.orientation) }
+            BandGate.START_WAIT -> { bandWaits = true; startReveal(root); updatePadVisibility() }
+            BandGate.STOP_WAIT -> { bandWaits = false; updatePadVisibility() }
+            BandGate.NONE -> Unit
+        }
     }
 
     /**

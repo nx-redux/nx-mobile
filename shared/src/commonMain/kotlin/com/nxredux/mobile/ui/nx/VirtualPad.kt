@@ -1548,55 +1548,31 @@ internal fun portraitOverlayUnits(midScale: Float): Float =
     OVERLAY_SHOULDER_UNITS + 2 * OVERLAY_GAP_UNITS + 3f * midScale + OVERLAY_SYSTEM_UNITS
 
 /**
- * The actual buttons beside the hidden-band overlay's C-stick ([overlayCStick]), in middle-row units (from the row's
- * left end, after the edge nudge, its top 0): with the d-pad / stick at [stickScale] on the left and the X/Y/B/A
- * diamond at [faceScale] on the right of a row [rowWidthUnits] wide, both centred in the row's 3 x [stickScale]
- * height, the d-pad's up, right and down arms (rects), and as circles (centre, radius) the left stick's well (its
- * whole 3 x [stickScale] box, for the stick mode) and the diamond's X, Y, B and A.
+ * The touch boxes beside the hidden-band overlay's C-stick ([overlayCStick]), in middle-row units (from the row's left
+ * end, after the edge nudge, its top 0): the d-pad / stick's whole 3 x [stickScale] square on the left (the d-pad takes
+ * touches across its box, not only on its arms; so does the stick's well) and the X/Y/B/A diamond's 3 x [faceScale]
+ * box on the right of a row [rowWidthUnits] wide, both centred in the row's 3 x [stickScale] height.
  */
-internal fun overlayCStickNeighbours(rowWidthUnits: Float, stickScale: Float, faceScale: Float): Pair<List<Rect>, List<Pair<Offset, Float>>> {
-    val s = stickScale
-    val f = faceScale
-    val faceL = rowWidthUnits - 3f * f
-    val faceT = 1.5f * (s - f)
-    val arms = listOf(
-        Rect(s, 0f, 2f * s, s),                 // up
-        Rect(2f * s, s, 3f * s, 2f * s),        // right
-        Rect(s, 2f * s, 2f * s, 3f * s),        // down
+internal fun overlayClusterBoxes(rowWidthUnits: Float, stickScale: Float, faceScale: Float): List<Rect> {
+    val faceT = 1.5f * (stickScale - faceScale)
+    return listOf(
+        Rect(0f, 0f, 3f * stickScale, 3f * stickScale),
+        Rect(rowWidthUnits - 3f * faceScale, faceT, rowWidthUnits, faceT + 3f * faceScale),
     )
-    val circles = listOf(
-        Offset(1.5f * s, 1.5f * s) to 1.5f * s,                          // the left stick's well
-        Offset(faceL + 1.5f * f, faceT + 0.5f * f) to 0.5f * f,          // X
-        Offset(faceL + 0.5f * f, faceT + 1.5f * f) to 0.5f * f,          // Y
-        Offset(faceL + 1.5f * f, faceT + 2.5f * f) to 0.5f * f,          // B
-        Offset(faceL + 2.5f * f, faceT + 1.5f * f) to 0.5f * f,          // A
-    )
-    return arms to circles
 }
 
 /**
- * The hidden-band overlay's New 3DS C-stick box in middle-row units ([overlayCStickNeighbours]' frame): centred across
- * the row between the d-pad / stick and the diamond, its well's top at the row's top, where the d-pad's top-right and
- * the diamond's top-left corners are empty (level with the row's middle, the d-pad's right arm and Y leave it least).
- * [C_STICK_DIAMETER] x [stickScale] across where its well keeps [PORTRAIT_C_STICK_BUTTON_GAP] off every button, else
- * as big as keeps it. Inside the row's height, so the overlay keeps its [portraitOverlayUnits] height. The well may
- * cover the clusters' empty corners: it is drawn above them and takes only the touches that start inside it.
+ * The hidden-band overlay's New 3DS C-stick box in middle-row units ([overlayClusterBoxes]' frame): centred across the
+ * row between the d-pad / stick and the diamond, its well's top at the row's top. [C_STICK_DIAMETER] x [stickScale]
+ * across where its well keeps [PORTRAIT_C_STICK_BUTTON_GAP] off both clusters' touch boxes, else as big as keeps it
+ * (the gap between the boxes less that margin each side). Inside the row's height, so the overlay keeps its
+ * [portraitOverlayUnits] height; only a touch inside the round well is the stick's.
  */
 internal fun overlayCStick(rowWidthUnits: Float, stickScale: Float, faceScale: Float): Rect {
-    val cx = (3f * stickScale + rowWidthUnits - 3f * faceScale) / 2f
-    val (rects, circles) = overlayCStickNeighbours(rowWidthUnits, stickScale, faceScale)
-    fun clear(r: Float): Boolean {
-        val c = Offset(cx, r)
-        return rects.all { it.distanceTo(c) >= r + PORTRAIT_C_STICK_BUTTON_GAP } &&
-            circles.all { (o, rr) -> (o - c).getDistance() >= r + rr + PORTRAIT_C_STICK_BUTTON_GAP }
-    }
-    var r = C_STICK_DIAMETER * stickScale / 2f
-    if (!clear(r)) {
-        var lo = 0f
-        var hi = r
-        repeat(30) { val mid = (lo + hi) / 2f; if (clear(mid)) lo = mid else hi = mid }
-        r = lo
-    }
+    val boxes = overlayClusterBoxes(rowWidthUnits, stickScale, faceScale)
+    val cx = (boxes[0].right + boxes[1].left) / 2f
+    val room = (boxes[1].left - boxes[0].right) / 2f - PORTRAIT_C_STICK_BUTTON_GAP
+    val r = minOf(C_STICK_DIAMETER * stickScale / 2f, room).coerceAtLeast(0f)
     return Rect(cx - r, 0f, cx + r, 2f * r)
 }
 
