@@ -1378,6 +1378,24 @@ internal fun padSystemRow(side: PadSide, profile: PadProfile = PadProfile.STANDA
     }
 
 /**
+ * The pill count of the widest landscape system row [profile]'s pad draws ([padSystemRow], the Wii's MOTION when
+ * [motion]): 3 for the Wii's SELECT HOME START (and its MENU STICK MOTION), else 2. The layout model's
+ * reach estimate sizes the clusters' boxes by it until the drawn groups are measured.
+ */
+fun systemRowPills(profile: PadProfile, motion: Boolean): Int =
+    maxOf(padSystemRow(PadSide.LEFT, profile, motion).size, padSystemRow(PadSide.RIGHT, profile).size)
+
+/**
+ * Beside the picture, how many pills in from the screen edge [side]'s touch shortcut sits on the second row: left
+ * under the d-pad / stick toggle (BUTTON 1 under STICK), right under SELECT (BUTTON 2 under SELECT, so on the Wii's
+ * SELECT HOME START the spots under HOME and START stay empty); on a pad without SELECT, one in from START.
+ */
+internal fun besideShortcutFromEdge(side: PadSide, keys: List<PadSystemKey>): Int = when (side) {
+    PadSide.LEFT -> keys.indexOf(PadSystemKey.TOGGLE).coerceAtLeast(0)
+    PadSide.RIGHT -> keys.indexOf(PadSystemKey.SELECT).let { i -> if (i >= 0) keys.lastIndex - i else 1 }
+}
+
+/**
  * Where an over-the-game cluster's touch shortcut sits: under the pill [fromEdge] pills in from the screen edge of its
  * system row ([padSystemRow]), or, when not [under], on that row's line in the place after its last pill. Left: under the
  * d-pad / stick toggle. Right: under SELECT; on a pad without one (GameCube, N64, Sega 3-button) in SELECT's empty place
@@ -1675,7 +1693,7 @@ fun VirtualPadLeft(
                             if (besidePicture && secondRow) {
                                 ShortcutPiece(
                                     TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW,
-                                    Modifier.padding(start = nudge + sysW + SYSTEM_PILL_GAP.dp, top = sysH + gap),
+                                    Modifier.padding(start = nudge + (sysW + SYSTEM_PILL_GAP.dp) * besideShortcutFromEdge(PadSide.LEFT, systemKeys), top = sysH + gap),
                                 )
                             }
                         }
@@ -1768,11 +1786,11 @@ fun VirtualPadRight(
                                     }
                                 }
                             }
-                            // Beside the picture: touch shortcut 2 on the second row, beside SWAP (under the key before START).
+                            // Beside the picture: touch shortcut 2 on the second row, under SELECT ([besideShortcutFromEdge]).
                             if (besidePicture && secondRow) {
                                 ShortcutPiece(
                                     TouchSlot.TWO, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW,
-                                    Modifier.align(Alignment.TopEnd).padding(end = nudge + sysW + SYSTEM_PILL_GAP.dp, top = sysH + gap),
+                                    Modifier.align(Alignment.TopEnd).padding(end = nudge + (sysW + SYSTEM_PILL_GAP.dp) * besideShortcutFromEdge(PadSide.RIGHT, systemKeys), top = sysH + gap),
                                 )
                             }
                         }

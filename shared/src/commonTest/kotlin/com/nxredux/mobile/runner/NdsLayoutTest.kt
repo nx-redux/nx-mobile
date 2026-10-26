@@ -102,7 +102,7 @@ class NdsLayoutTest {
      */
     private val unfoldedLandscape: PxRect = run {
         val unit = landscapeUnitPx(NEAR_SQUARE_TABLET, 1848f, 1848f, 420f, 2.625f, toolRow = true)
-        val side = setAsidePx(NEAR_SQUARE_TABLET, reach(unit, 2.625f, 0f, 0f, measuredButtonsPx = 600f, faceUnits = 3f), controller = false)
+        val side = setAsidePx(NEAR_SQUARE_TABLET, reach(unit, 2.625f, 0f, 0f, measuredButtonsPx = 600f, faceUnits = 3f, systemPills = 2), controller = false)
         PxRect(side, 0f, 2448f - 2f * side, 1848f)
     }
 

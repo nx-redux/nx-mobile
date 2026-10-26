@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui.nx
 
 import com.nxredux.mobile.runner.SegaPad
+import com.nxredux.mobile.runner.WiiPad
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -99,11 +100,28 @@ class PadSystemRowTest {
     // The layout editor arranges the Wii's fullest pad (Classic: C-stick, every shoulder, HOME); other tags as in game.
     @Test fun theLayoutEditorGetsTheFullestWiiPad() {
         val wii = PadProfile.forLayoutEditor("WII")
-        assertEquals(com.nxredux.mobile.runner.WiiPad.CLASSIC, wii.wiiPad)
+        assertEquals(WiiPad.CLASSIC, wii.wiiPad)
         assertEquals(true, wii.cStick)
         assertEquals(true, wii.homeButton)
         assertEquals(listOf(NxButton.L1, NxButton.L2), padShoulders(PadSide.LEFT, wii))
         assertEquals(PadProfile.GC.toString(), PadProfile.forLayoutEditor("GC").toString())
         assertEquals(PadProfile.N3DS_NEW.toString(), PadProfile.forLayoutEditor("3DS").toString())
+    }
+
+    @Test fun theWidestSystemRowCountsTheWiisThreePills() {
+        val wii = PadProfile.forTag("WII", wii = WiiPad.SIDEWAYS)
+        assertEquals(2, systemRowPills(PadProfile.STANDARD, motion = false))
+        assertEquals(2, systemRowPills(PadProfile.N3DS_NEW, motion = false))
+        assertEquals(3, systemRowPills(wii, motion = false))
+        assertEquals(3, systemRowPills(PadProfile.forTag("WII", wii = WiiPad.CLASSIC), motion = true))
+    }
+
+    @Test fun besideThePictureButtonOneSitsUnderStickAndButtonTwoUnderSelect() {
+        val wii = PadProfile.forTag("WII", wii = WiiPad.SIDEWAYS)
+        assertEquals(1, besideShortcutFromEdge(PadSide.LEFT, padSystemRow(PadSide.LEFT, wii, motion = true)))
+        assertEquals(1, besideShortcutFromEdge(PadSide.RIGHT, padSystemRow(PadSide.RIGHT)))
+        assertEquals(1, besideShortcutFromEdge(PadSide.RIGHT, padSystemRow(PadSide.RIGHT, PadProfile.N3DS_NEW)))
+        assertEquals(2, besideShortcutFromEdge(PadSide.RIGHT, padSystemRow(PadSide.RIGHT, wii)))   // SELECT HOME START
+        assertEquals(1, besideShortcutFromEdge(PadSide.RIGHT, padSystemRow(PadSide.RIGHT, PadProfile.GC)))   // START alone
     }
 }

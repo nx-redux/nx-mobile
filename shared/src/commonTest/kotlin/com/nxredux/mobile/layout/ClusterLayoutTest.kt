@@ -38,15 +38,29 @@ class ClusterLayoutTest {
         assertEquals(0f, setAsidePx(ScreenClass.WIDE_TABLET, reach, controller = true), 0.01f)
 
     @Test fun cutout_beyond_margin_moves_both_halves() {
-        val r = reach(182f, 2.625f, 136f, 0f, null, 0f)
+        val r = reach(182f, 2.625f, 136f, 0f, null, 0f, systemPills = 2)
         assertEquals(42f + 36.4f + 57.6f, r.edgePx, 0.1f)
         assertEquals(136f, r.edgePx, 0.1f)
     }
 
     @Test fun reach_counts_tweaked_group_bounds() {
-        val r = reach(182f, 2.625f, 0f, 0f, 900f, 0f)
+        val r = reach(182f, 2.625f, 0f, 0f, 900f, 0f, systemPills = 2)
         assertEquals(900f, r.buttonsPx, 0.01f)
-        assertEquals(2f * 1.4f * 182f + 12f * 2.625f, reach(182f, 2.625f, 0f, 0f, null, 0f).buttonsPx, 0.01f)
+        assertEquals(2f * 1.4f * 182f + 12f * 2.625f, reach(182f, 2.625f, 0f, 0f, null, 0f, systemPills = 2).buttonsPx, 0.01f)
+    }
+
+    @Test fun reach_estimate_counts_a_three_pill_system_row() =
+        assertEquals(3f * 1.4f * 182f + 2f * 12f * 2.625f, reach(182f, 2.625f, 0f, 0f, null, 3f, systemPills = 3).buttonsPx, 0.01f)
+
+    @Test fun box_holds_the_widest_row_drawn() {
+        // A Wii pad's SELECT HOME START (3 x 1.4 units + 2 x 12 dp) is wider than the 4.5-unit floor's content once
+        // the 0.2-unit nudge is added: the box takes the buttons plus the nudge and both paddings, even in a tight column.
+        val window = PxRect(0f, 0f, 2400f, 1080f)
+        val buttons = 3f * 1.4f * 100f + 2f * 12f * 2f
+        val p = clusterPlacement(window, PxRect(100f, 0f, 2200f, 1080f), 100f, Reach(52f, buttons), 2f, false)
+        assertEquals(buttons + 20f + 64f, p.boxWidthPx, 0.01f)
+        // Narrow buttons keep the 4.5-unit floor.
+        assertEquals(450f + 64f, clusterPlacement(window, PxRect(100f, 0f, 2200f, 1080f), 100f, Reach(52f, 300f), 2f, false).boxWidthPx, 0.01f)
     }
 
     @Test fun clear_when_both_columns_hold_the_reach() {

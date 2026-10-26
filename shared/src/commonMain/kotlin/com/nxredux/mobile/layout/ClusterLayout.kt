@@ -42,7 +42,8 @@ data class Reach(val edgePx: Float, val buttonsPx: Float) {
 /**
  * Edge = pad + 0.2 unit + extra, where extra = max(0, max(cutoutLeft, cutoutRight) - pad - 0.2 unit), so a camera
  * cutout wider than the margin moves both halves. Buttons = [measuredButtonsPx] (the user's tweaked group bounds)
- * when known, else the estimate max(2 x 1.4 unit + 12 dp, faceUnits x unit).
+ * when known, else the estimate max(systemPills x 1.4 unit + (systemPills - 1) x 12 dp, faceUnits x unit), where
+ * [systemPills] is the pill count of the widest system row drawn (3 for the Wii's SELECT HOME START).
  */
 fun reach(
     unitPx: Float,
@@ -51,12 +52,16 @@ fun reach(
     cutoutRight: Float,
     measuredButtonsPx: Float?,
     faceUnits: Float,
+    systemPills: Int,
 ): Reach {
     val margin = LayoutConstants.CLUSTER_PADDING_DP * density + LayoutConstants.EDGE_NUDGE_UNITS * unitPx
     val extra = max(0f, max(cutoutLeft, cutoutRight) - margin)
-    val estimate = max(2f * BUTTON_GROUP_UNITS * unitPx + BUTTON_GAP_DP * density, faceUnits * unitPx)
-    return Reach(margin + extra, measuredButtonsPx ?: estimate)
+    return Reach(margin + extra, measuredButtonsPx ?: max(systemRowPx(systemPills, unitPx, density), faceUnits * unitPx))
 }
+
+/** A system row of [pills] 1.4-unit pills, 12 dp apart, px. */
+private fun systemRowPx(pills: Int, unitPx: Float, density: Float): Float =
+    if (pills <= 0) 0f else pills * BUTTON_GROUP_UNITS * unitPx + (pills - 1) * BUTTON_GAP_DP * density
 
 /** Per side, how much of the picture's span the pad halves take from the picture: 0 with a controller, the full
  * reach on a wide tablet, half of it otherwise. */
@@ -81,7 +86,8 @@ data class ClusterPlacement(
 /**
  * Columns: left = picture.x - window.x, right = window.right - picture.right.
  * - cutout extra = reach.edge - pad - 0.2 unit
- * - boxWidth = max(min(left, right), 4.5 unit + 2 pad) + cutout extra (the controller widens each side to its own column)
+ * - boxWidth = max(min(left, right), 4.5 unit + 2 pad, reach.buttons + 0.2 unit + 2 pad) + cutout extra, so the box
+ *   holds the widest row drawn (reach.buttons: the measured groups, else the estimate with the system row's pills)
  * - boxHeight = (6 + toolRows) unit + 2 pad
  * - topMargin = window centre y + pad + (2.57 + toolRows) unit - boxHeight, so the d-pad centre sits at mid-height
  *   (rows stack from the box bottom: pad, [tool row 1.07], system 0.72, gap 0.35, half d-pad 1.5); may be negative
@@ -103,7 +109,8 @@ fun clusterPlacement(
     val narrow = min(left, right)
     val cutoutExtra = max(0f, reach.edgePx - pad - LayoutConstants.EDGE_NUDGE_UNITS * unitPx)
     val clear = left >= reach.total && right >= reach.total
-    val boxWidth = max(narrow, BOX_MIN_WIDTH_UNITS * unitPx + 2f * pad) + cutoutExtra
+    val content = max(BOX_MIN_WIDTH_UNITS * unitPx, reach.buttonsPx + LayoutConstants.EDGE_NUDGE_UNITS * unitPx)
+    val boxWidth = max(narrow, content + 2f * pad) + cutoutExtra
     val boxHeight = (BOX_ROWS + toolRows) * unitPx + 2f * pad
     val centreY = window.y + window.height / 2f
     val topMargin = centreY + pad + (CLUSTER_ROWS + toolRows) * unitPx - boxHeight

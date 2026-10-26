@@ -84,6 +84,7 @@ import com.nxredux.mobile.ui.nx.VirtualPadRight
 import com.nxredux.mobile.ui.nx.besideSecondRow
 import com.nxredux.mobile.ui.nx.faceWidthUnits
 import com.nxredux.mobile.ui.nx.shoulderReach
+import com.nxredux.mobile.ui.nx.systemRowPills
 import com.swordfish.libretrodroid.NxLog
 import kotlin.math.roundToInt
 
@@ -418,6 +419,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         )
         val reach = reach(
             unit, shape.density, shape.cutoutLeft.toFloat(), shape.cutoutRight.toFloat(), measured.accepted, faceWidthUnits(padProfile()),
+            systemRowPills(padProfile(), padMotion() != null),
         )
         return LandscapePad(shape, unit, reach, secondRow, measured.accepted != null)
     }
