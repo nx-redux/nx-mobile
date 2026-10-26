@@ -305,13 +305,14 @@ internal fun GameListFrame(
                             )
                         }
                     }
-                    // Minimal: the names alone (no art, tags or info), running on under the title.
+                    // Minimal: the names alone (no art, tags or info), in the band from the title (or icons' room) to the hint
+                    // bar's top, or the page's bottom with hints hidden.
                     MenuStyle.MINIMAL -> {
                         val names = remember(dataKey) { minimalRows() }
                         MinimalScreen(
                             names, selectedIndex, hints.value, onSelect, onOpen, onLongPress, onHint, minimalSelected,
-                            Modifier.weight(1f).zIndex(-1f), hideHints = chrome.emptyBarRoom, layoutKey = layoutKey, leaving = minimalOpening != null,
-                            tapOpens = LocalNxTapOpens.current,   // the list's own rule (two taps, but for the preview's)
+                            Modifier.weight(1f).zIndex(-1f), hideHints = chrome.emptyBarRoom, toBoxBottom = chrome.emptyBarRoom,
+                            layoutKey = layoutKey, leaving = minimalOpening != null, tapOpens = LocalNxTapOpens.current,   // the list's own rule (two taps, but for the preview's)
                             onPageRows = onPageRows,
                         )
                     }

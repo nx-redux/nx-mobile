@@ -77,13 +77,14 @@ import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
-import kotlin.math.max
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /*
  * The Minimal layout (Layouts → a tab's or the game lists' layout: Minimal): big names only, no art. The selected name is
- * solid in the accent (the only accent on the page) and a little larger, a third of the way down; the others are outlines
- * in the ink, fading by row ([minimalAlpha]), running on behind the title or tab row and the hints to the screen's edges. Home adds its stats
+ * solid in the accent (the only accent on the page) and a little larger, a third of the way down the band; the others are
+ * outlines in the ink, one line each, fading by distance to the band's edges ([minimalOutlineAlpha]): nothing shows under
+ * the stats row, the title or the tab row. Home adds its stats
  * strip and the tags of its rows ([HomeMinimalScreen]); the tabs and the game lists show the names alone. A on the
  * selection grows its band over the screen before it opens ([MinimalOpenBand], AppState's minimalOpening). Between two
  * Minimal pages a folder morphs ([MinimalFlight]): its name flies into the list's title as the list's names rise in, and
@@ -96,7 +97,7 @@ private const val MINIMAL_MOVE_MS = 340
 /** A jump of more than this many names (a wrap from the last to the first) snaps instead of gliding through them all. */
 internal const val MINIMAL_SNAP_STEPS = 8
 
-/** An unselected name's outline: the ink ([NxColors.main]), [MINIMAL_STROKE] dp wide, at its row's opacity ([minimalAlpha]). */
+/** An unselected name's outline: the ink ([NxColors.main]), [MINIMAL_STROKE] dp wide, at its row's opacity ([minimalOutlineAlpha]). */
 private const val MINIMAL_STROKE = 1f
 
 /** The selected name grows by this much, from its left edge. */
@@ -104,7 +105,7 @@ private const val MINIMAL_SELECTED_SCALE = 1.04f
 
 /**
  * A name's tag (only Home's Continue wears one) after its name, [MINIMAL_TAG_GAP] dp from its end so every name keeps its
- * left edge: on the name's last line when it fits there, else wrapping to the next with the words. A round-ended pill
+ * left edge; a name too long for both is cut short with an ellipsis before the tag. A round-ended pill
  * of the ink at [MINIMAL_TAG_FILL], its word in [NxColors.hint] at [MINIMAL_TAG_SP] sp (pinned), padded
  * [MINIMAL_TAG_PAD_Y] × [MINIMAL_TAG_PAD_X] dp; never an accent. Centred on the name's x-height ([MINIMAL_X_HEIGHT]), it
  * does not grow with the selected name, and an unselected Continue's tag fades with its row.
@@ -119,12 +120,6 @@ private const val MINIMAL_TAG_FILL = .14f
 /** The name font's x-height as a share of its size (MiSans), where the tag centres. */
 private const val MINIMAL_X_HEIGHT = .52f
 private const val MINIMAL_TAG_INLINE = "tag"
-
-/** A name too long for its row wraps at its words onto at most this many lines (an ellipsis on the last); each name takes the rows its lines need. */
-private const val MINIMAL_MAX_LINES = 3
-
-/** A name behind the strip, the tab row or the title keeps this share of its fade step, so their text reads over it. */
-private const val MINIMAL_UNDER_STRIP = .3f
 
 /** A swipe's release carries on this long at the finger's speed to pick the name it lands on. */
 private const val MINIMAL_THROW_S = .25f
@@ -150,18 +145,18 @@ private const val MINIMAL_RISE_END = (MINIMAL_RISE_DELAY_MS + MINIMAL_RISE_STAGG
 private const val MINIMAL_NAME_DP = 38f
 
 /**
- * A name's opacity by its distance in rows from the selection, the same above and below: the next name at
- * [MINIMAL_NEXT_ALPHA], each row further [MINIMAL_ALPHA_STEP] less, never below [MINIMAL_FLOOR_ALPHA]: a faint ladder.
+ * The outline ladder: an outlined name's opacity at [d] px (centre to centre) from the selected name's line, [reach] px
+ * being the line's distance to the band's edge the name is moving toward (the stats row's bottom above, the tab row's
+ * top below). [MINIMAL_OUTLINE_CEILING] next to the line, falling as (1 − t)^[MINIMAL_OUTLINE_GAMMA] (even to the eye: no
+ * plateau near the selection, no cliff at the far end) to 0 at the edge and past it, so nothing draws under either row.
  */
-private const val MINIMAL_NEXT_ALPHA = .5f
-private const val MINIMAL_ALPHA_STEP = .12f
-private const val MINIMAL_FLOOR_ALPHA = .06f
+private const val MINIMAL_OUTLINE_CEILING = .5f
+private const val MINIMAL_OUTLINE_GAMMA = 2.2f
 
-/** A name's opacity [distance] names from the shown position (either side), linear between rows so it stays smooth while the names slide. */
-internal fun minimalAlpha(distance: Float): Float {
-    val d = abs(distance)
-    if (d <= 1f) return 1f + (MINIMAL_NEXT_ALPHA - 1f) * d
-    return max(MINIMAL_FLOOR_ALPHA, MINIMAL_NEXT_ALPHA - MINIMAL_ALPHA_STEP * (d - 1f))
+internal fun minimalOutlineAlpha(d: Float, reach: Float): Float {
+    if (reach <= 0f) return 0f
+    val t = (abs(d) / reach).coerceIn(0f, 1f)
+    return MINIMAL_OUTLINE_CEILING * (1f - t).pow(MINIMAL_OUTLINE_GAMMA)
 }
 
 /**
@@ -227,13 +222,13 @@ private fun minimalNameStyle(): TextStyle {
 
 /**
  * A page body in the Minimal layout: [names] ([NxRow.label], and an [NxRow.tag] on Home's rows; nothing else shows) over
- * the whole box, the hint bar at the bottom ([NxScreenScaffold]). The selection sits a third of the way down the box, at
- * least one row under the body's top ([top] down the box: Home's strip room), the names running on above and below it
- * ([minimalAnchor]). A drag moves the names with the finger and,
+ * the whole box, the hint bar at the bottom ([NxScreenScaffold]). The band: from [top] down the box (Home's strip room,
+ * or the page's icons') to the hint bar's top, or to the box's bottom with [toBoxBottom] (the main menu's box ends on its
+ * tab row's top). The selection's line sits a third of the way down it ([minimalAnchor]), the outlines fading to nothing
+ * at its edges ([minimalOutlineAlpha]). A drag moves the names with the finger and,
  * released, they settle on the name the throw lands on, selected ([axisSwipe]). A tap selects, a tap on the selected name
  * opens it (every name, so the open band starts at the selection's place; [tapOpens] may open on one tap), a long press calls [onLongPress]. The d-pad
- * lives in AppState (UP / DOWN wrap on a fresh press, as a List). [overlay] draws over the names (Home's strip). Draw it
- * under the tab row or title (zIndex), so the names run on under it. [leaving]: a row is opening (AppState's minimalOpening),
+ * lives in AppState (UP / DOWN wrap on a fresh press, as a List). [overlay] draws over the names (Home's strip). [leaving]: a row is opening (AppState's minimalOpening),
  * the other names fading out. Come in by a morph ([LocalMinimalPage]), a list's names rise in ([NavMotion.MINIMAL_FORWARD])
  * or the last list's title drops into the selected row as the others fade in ([NavMotion.MINIMAL_BACK]).
  */
@@ -242,7 +237,7 @@ internal fun MinimalScreen(
     names: List<NxRow>, selection: () -> Int, hints: List<Hint>,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, onHint: ((NxButton) -> Unit)?,
     selected: MinimalSelected, modifier: Modifier = Modifier, top: Float = 0f, hideHints: Boolean = false,
-    layoutKey: Any? = null, leaving: Boolean = false, tapOpens: (Int) -> Boolean = NxTapNeverOpens,
+    toBoxBottom: Boolean = false, layoutKey: Any? = null, leaving: Boolean = false, tapOpens: (Int) -> Boolean = NxTapNeverOpens,
     onSwipeSelect: ((Int) -> Unit)? = null,   // a swipe's release: moves the highlight only (default: onSelect)
     onPageRows: ((Int) -> Unit)? = null,   // the names one screen shows under the selection (a game list's LEFT / RIGHT page)
     overlay: @Composable BoxScope.() -> Unit = {},
@@ -269,12 +264,13 @@ internal fun MinimalScreen(
             },
         )
     }
-    // The body between [top] and the hint bar, in this box: where the selection is placed.
+    // The body between [top] and the hint bar, in this box: the band the names show in (to the box's bottom: [toBoxBottom]).
     val box = remember { arrayOfNulls<LayoutCoordinates>(1) }
     var area by remember { mutableStateOf<Rect?>(null) }
     var boxH by remember { mutableFloatStateOf(0f) }
     Box(modifier.fillMaxSize().onGloballyPositioned { box[0] = it; boxH = it.size.height.toFloat() }) {
-        area?.let { a ->
+        area?.let { body ->
+            val a = if (toBoxBottom) body.copy(bottom = boxH) else body
             CompositionLocalProvider(LocalNxTapOpens provides tapOpens) {
                 MinimalNames(names, a, boxH, selection, onSelect, onOpen, onLongPress, selected, gutter, layoutKey, motion, page, onSwipeSelect, onPageRows)
             }
@@ -302,77 +298,50 @@ internal fun MinimalScreen(
 private class MinimalMotion(val others: () -> Float, val selection: () -> Float, val rise: (k: Int) -> Float)
 
 /**
- * The names' text and lines at one row width and style, built and measured only for the names that come into view
- * (cached): a list of thousands measures the few on screen. A name with a tag that doesn't fit after its last line's
- * words takes that line's last word down with the tag ("Metroid - Zero" / "Mission [Continue]"), so the tag never sits
- * alone on a line under a full one.
+ * The names' text at one row width and style, built only for the names that come into view (cached): a list of
+ * thousands builds the few on screen. Every name is one line; a name with a tag too long for both is cut short with an
+ * ellipsis before the tag ("Metroid - Zero Mi… [Continue]"), so the tag always shows.
  */
 private class MinimalTexts(
     private val names: List<NxRow>, private val measurer: TextMeasurer, private val solid: TextStyle, private val rowW: Int,
-    private val tagWidths: Map<String, Int>, private val placeholders: Map<String, Placeholder>, private val pitchPx: Float,
+    private val tagWidths: Map<String, Int>,
 ) {
     private val texts = arrayOfNulls<AnnotatedString>(names.size)
-    private val lines = IntArray(names.size)   // 0: not measured yet
-    private val space by lazy { measurer.measure("a a", solid).size.width - measurer.measure("aa", solid).size.width }
 
     fun text(i: Int): AnnotatedString = texts[i] ?: build(names[i]).also { texts[i] = it }
 
-    fun lines(i: Int): Int {
-        if (lines[i] > 0) return lines[i]
-        val tag = names[i].tag
-        val t = text(i)
-        val ranges = if (tag == null) emptyList() else listOf(AnnotatedString.Range(placeholders.getValue(tag), t.length - tag.length, t.length))
-        return measurer.measure(t, solid, maxLines = MINIMAL_MAX_LINES, placeholders = ranges, constraints = Constraints(maxWidth = rowW)).lineCount
-            .coerceAtLeast(1).also { lines[i] = it }
-    }
-
-    /** Name [i]'s top less name [base]'s, in the stacked names. */
-    fun relTop(i: Int, base: Int): Float {
-        var t = 0f
-        if (i > base) for (j in base until i) t += lines(j) * pitchPx
-        else for (j in i until base) t -= lines(j) * pitchPx
-        return t
-    }
-
-    /**
-     * The shown position [p]'s top less its name's (the one it is on or past): between two names it reads between their
-     * tops, so a step glides by the names' own heights; pulled past either end, a row a step.
-     */
-    fun shift(p: Float, count: Int): Float {
-        val f = floor(p).toInt()
-        return when {
-            f < 0 -> p * pitchPx
-            f >= count - 1 -> (p - (count - 1)) * pitchPx
-            else -> lines(f) * pitchPx * (p - f)
-        }
-    }
+    private fun width(s: String) = measurer.measure(s, solid, maxLines = 1, softWrap = false).size.width
 
     private fun build(row: NxRow): AnnotatedString {
         val tag = row.tag ?: return minimalText(row.label, null)
-        val lay = measurer.measure(row.label, solid, maxLines = MINIMAL_MAX_LINES, constraints = Constraints(maxWidth = rowW))
-        val last = lay.lineCount - 1
-        val start = lay.getLineStart(last)
-        val lineText = row.label.substring(start, lay.getLineEnd(last)).trimEnd()
-        val fits = lay.getLineRight(last) - lay.getLineLeft(last) + space + tagWidths.getValue(tag) <= rowW
-        val cut = lineText.lastIndexOf(' ')
-        val label = if (fits || cut <= 0 || lay.lineCount >= MINIMAL_MAX_LINES) row.label
-            else row.label.substring(0, start + cut) + "\n" + row.label.substring(start + cut + 1)
-        return minimalText(label, tag)
+        val room = rowW - tagWidths.getValue(tag) - width(" ")
+        if (width(row.label) <= room) return minimalText(row.label, tag)
+        // The longest start of the name that fits with an ellipsis.
+        var lo = 0
+        var hi = row.label.length
+        while (lo < hi) {
+            val m = (lo + hi + 1) / 2
+            if (width(row.label.substring(0, m).trimEnd() + "\u2026") <= room) lo = m else hi = m - 1
+        }
+        return minimalText(row.label.substring(0, lo).trimEnd() + "\u2026", tag)
     }
 }
 
 /**
- * The names over the whole box ([boxH] tall), placed so the shown position sits one row down [area] and drawn past the
- * box's edges unclipped. The position eases to the selection (a far jump snaps: [MINIMAL_SNAP_STEPS]) and follows a
- * finger's drag. Only the names in view are composed ([minimalWindow]), keyed by recycled slots ([ItemSlots]).
+ * The selected name's line (its centre), px down its box: [MINIMAL_ANCHOR_SHARE] of the way down the band from its top
+ * edge [bandTop] (the stats row's bottom, or the content's top) to its bottom edge [bandBottom]. The list moves, the line
+ * does not; the first name leaves the band's top empty.
  */
-/**
- * Where a Minimal page's selected name's top sits, px down its box ([boxH] tall): a third of the way down, so the list
- * starts in the upper third rather than right under Home's strip or the title; never higher than one row ([pitchPx])
- * under the body's top [bodyTop].
- */
-internal fun minimalAnchor(bodyTop: Float, pitchPx: Float, boxH: Float): Float = max(bodyTop + pitchPx, boxH / 3f)
+private const val MINIMAL_ANCHOR_SHARE = .33f
 
+internal fun minimalAnchor(bandTop: Float, bandBottom: Float): Float = bandTop + MINIMAL_ANCHOR_SHARE * (bandBottom - bandTop)
+
+/**
+ * The names over the whole box ([boxH] tall), the shown position's name centred on the band's ([area]) line
+ * ([minimalAnchor]), drawn unclipped but faded to nothing at the band's edges. The position eases to the selection (a
+ * far jump snaps: [MINIMAL_SNAP_STEPS]) and follows a finger's drag. Only the names in view are composed
+ * ([minimalWindow]), keyed by recycled slots ([ItemSlots]).
+ */
 @Composable
 private fun MinimalNames(
     names: List<NxRow>, area: Rect, boxH: Float, selection: () -> Int, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit,
@@ -387,10 +356,10 @@ private fun MinimalNames(
     val size = MINIMAL_NAME_DP * nxTextScale()
     val pitch = size + 2f
     val pitchPx = with(density) { pitch.dp.toPx() }
-    // The selection a third of the way down the box, the names above it running on up behind the strip or title, faded
-    // further there; never higher than one row under the body's top (a short landscape box under a tall strip).
-    val anchorPx = minimalAnchor(area.top, pitchPx, boxH)
-    // A page: the one-line names from the selection down to the body's bottom.
+    // The selection's line a third of the way down the band, and the top of its row.
+    val line = minimalAnchor(area.top, area.bottom)
+    val anchorPx = line - pitchPx / 2
+    // A page: the names from the selection down to the band's bottom.
     if (onPageRows != null) {
         val rows = ((area.bottom - anchorPx) / pitchPx).toInt().coerceAtLeast(1)
         val report by rememberUpdatedState(onPageRows)
@@ -414,7 +383,7 @@ private fun MinimalNames(
     val solid = minimalNameStyle()
     val outline = solid.copy(color = colors.main, drawStyle = Stroke(width = with(density) { MINIMAL_STROKE.dp.toPx() }))
     val measurer = rememberTextMeasurer()
-    // Each name's lines at the row's width (a little narrower for the selection's grow).
+    // Each name's one line at the row's width (a little narrower for the selection's grow), an ellipsis at the gutter.
     val rowW = ((area.width - 2 * with(density) { gutter.toPx() }) / MINIMAL_SELECTED_SCALE).toInt().coerceAtLeast(1)
     // Each tag's pill (its text padded [MINIMAL_TAG_PAD_X] a side) as an inline placeholder after the name and a space,
     // the placeholder's start making up the rest of the [MINIMAL_TAG_GAP]. Its bottom on the baseline: the pill is moved
@@ -434,23 +403,23 @@ private fun MinimalNames(
     }
     // The pill's centre from the placeholder's (half its height over the baseline) down to the x-height's middle.
     val tagDrop = with(density) { (MINIMAL_TAG_H / 2).dp.toPx() } - with(density) { size.dp.toPx() } * MINIMAL_X_HEIGHT / 2
-    val texts = remember(names, rowW, solid, tagWidths, pitchPx) { MinimalTexts(names, measurer, solid, rowW, tagWidths, placeholders, pitchPx) }
-    val nameW = with(density) { rowW.toDp() }   // every name drawn at the width its lines were counted at
-    // The names below make room for the selection's grow (it grows down from its top: [MINIMAL_SELECTED_SCALE] of its
-    // lines' height, by its fill), so the gap under it matches the others.
+    val texts = remember(names, rowW, solid, tagWidths) { MinimalTexts(names, measurer, solid, rowW, tagWidths) }
+    val nameW = with(density) { rowW.toDp() }   // every name drawn at the width it was cut to
+    // The names below make room for the selection's grow (it grows down from its top: [MINIMAL_SELECTED_SCALE] of a row,
+    // by its fill), so the gap under it matches the others.
     val grown = { i: Int ->
         var g = 0f
         val p = at()
         for (j in floor(p).toInt().coerceIn(0, count - 1)..ceil(p).toInt().coerceIn(0, count - 1)) {
-            if (j < i) g += texts.lines(j) * pitchPx * (MINIMAL_SELECTED_SCALE - 1f) * fill(j)
+            if (j < i) g += pitchPx * (MINIMAL_SELECTED_SCALE - 1f) * fill(j)
         }
         g
     }
-    val y = { i: Int ->
-        val p = at()
-        val b = floor(p).toInt().coerceIn(0, count - 1)
-        anchorPx + texts.relTop(i, b) - texts.shift(p, count) + grown(i)
-    }
+    // A name's top: a row a step from the shown position's (pulled past either end too).
+    val y = { i: Int -> anchorPx + (i - at()) * pitchPx + grown(i) }
+    // The band's edges' distances from the line: the reach of the fade above it and below it.
+    val reachUp = line - area.top
+    val reachDown = area.bottom - line
     // The names in view: a screen's rows above the selection's place and below it, around the shown position and the
     // selection (so a step's incoming name is there before it glides in).
     val above = ceil(anchorPx / pitchPx).toInt() + 1
@@ -479,17 +448,18 @@ private fun MinimalNames(
             val lit = i == sel
             val row = names[i]
             val text = texts.text(i)
-            val lines = texts.lines(i)
             Box(
                 Modifier
                     .offset { IntOffset(0, y(i).roundToInt()) }
-                    .fillMaxWidth().height((pitch * lines).dp).padding(horizontal = gutter)
+                    .fillMaxWidth().height(pitch.dp).padding(horizontal = gutter)
                     .graphicsLayer {
-                        val d = i - at()
-                        // Behind the strip and the tab row (above the body's top) a name fades to [MINIMAL_UNDER_STRIP] more, over one name's height.
-                        val under = ((area.top - y(i) - pitchPx / 2) / pitchPx).coerceIn(0f, 1f)
+                        // Its outline's place on the ladder from its centre's distance to the line this frame (mid-scroll
+                        // too), toward the edge it is moving to; solid as it becomes the shown position ([fill]).
+                        val d = y(i) + pitchPx / 2 - line
+                        val f = fill(i)
+                        val ladder = minimalOutlineAlpha(d, if (d < 0f) reachUp else reachDown)
                         val r = motion.rise(i - first)
-                        alpha = minimalAlpha(d) * (1f - (1f - MINIMAL_UNDER_STRIP) * under) * r * (if (lit) motion.selection() else motion.others())
+                        alpha = (ladder + (1f - ladder) * f) * r * (if (lit) motion.selection() else motion.others())
                         translationY = (1f - r) * risePx
                         // The alpha on each draw, not through a layer the row's size, which would cut the letters' tails past the tight line.
                         compositingStrategy = CompositingStrategy.ModulateAlpha
@@ -543,12 +513,12 @@ private fun minimalText(label: String, tag: String?): AnnotatedString = buildAnn
     tag?.let { append(" "); appendInlineContent(MINIMAL_TAG_INLINE, it) }
 }
 
-/** One name (with its tag's [inline] content), wrapped at its words onto up to [MINIMAL_MAX_LINES] lines at most [width] wide (where its rows were counted). */
+/** One name (with its tag's [inline] content) on one line at most [width] wide, an ellipsis where it is cut. */
 @Composable
 private fun MinimalName(text: AnnotatedString, style: TextStyle, width: Dp, inline: Map<String, InlineTextContent>) {
-    // Unbounded: its lines run a little taller than the rows' pitch, and a height limit would cut it back to fewer.
+    // Unbounded: its line runs a little taller than the rows' pitch, and a height limit would clip it.
     Text(
-        text, style = style, maxLines = MINIMAL_MAX_LINES, overflow = TextOverflow.Ellipsis, inlineContent = inline,
+        text, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, inlineContent = inline,
         modifier = Modifier.widthIn(max = width).wrapContentHeight(Alignment.Top, unbounded = true),
     )
 }
@@ -583,7 +553,7 @@ internal fun MinimalFlight(
     }
     Box(Modifier.fillMaxSize()) {
         Text(
-            from.text, style = from.style, maxLines = MINIMAL_MAX_LINES, overflow = TextOverflow.Ellipsis,
+            from.text, style = from.style, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.widthIn(max = with(density) { from.width.coerceAtLeast(1f).toDp() }).wrapContentHeight(Alignment.Top, unbounded = true)
                 .graphicsLayer {
                     val g = progress()
@@ -652,7 +622,7 @@ internal fun MinimalOpenBand(name: String, from: Rect, style: TextStyle, modifie
             }.background(band),
         )
         Text(
-            name, style = style.copy(drawStyle = Fill), maxLines = MINIMAL_MAX_LINES, overflow = TextOverflow.Ellipsis,
+            name, style = style.copy(drawStyle = Fill), maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.offset { IntOffset(from.left.roundToInt(), from.top.roundToInt()) }
                 .graphicsLayer { val s = if (laidW > 0f) from.width / laidW else 1f; scaleX = s; scaleY = s; transformOrigin = TransformOrigin(0f, 0f) }
                 .widthIn(max = with(density) { laidW.coerceAtLeast(1f).toDp() }).wrapContentHeight(Alignment.Top, unbounded = true),

@@ -11,16 +11,12 @@ class HomeMinimalTest {
         assertEquals("Settings", rows[1].label)
     }
 
-    // The same either side of the selection: 0.5 for the next name, 12% less each row on, never under 6%.
-    @Test fun the_fade_steps_down_by_row_to_a_floor() {
-        assertEquals(1f, minimalAlpha(0f))
-        assertEquals(.5f, minimalAlpha(1f), 1e-6f)
-        assertEquals(.5f, minimalAlpha(-1f), 1e-6f)
-        assertEquals(.75f, minimalAlpha(.5f), 1e-6f)
-        assertEquals(.38f, minimalAlpha(2f), 1e-6f)
-        assertEquals(.26f, minimalAlpha(-3f), 1e-6f)
-        assertEquals(.14f, minimalAlpha(4f), 1e-6f)
-        assertEquals(.06f, minimalAlpha(5f), 1e-6f)
-        assertEquals(.06f, minimalAlpha(-20f), 1e-6f)
+    // 0.5 next to the selected name's line, falling by gamma 2.2 to nothing at the band's edge (and past it).
+    @Test fun outline_alpha_is_half_next_to_the_line_and_zero_at_the_edge() {
+        assertEquals(.5f, minimalOutlineAlpha(0f, 300f), 1e-6f)
+        assertEquals(0f, minimalOutlineAlpha(300f, 300f))
+        assertEquals(0f, minimalOutlineAlpha(400f, 300f))
+        assertEquals(.5f * kotlin.math.exp(2.2f * kotlin.math.ln(.5f)), minimalOutlineAlpha(150f, 300f), 1e-4f)
+        assertEquals(0f, minimalOutlineAlpha(10f, 0f))
     }
 }

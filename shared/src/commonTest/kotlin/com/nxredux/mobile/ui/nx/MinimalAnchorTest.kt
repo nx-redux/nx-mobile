@@ -4,12 +4,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class MinimalAnchorTest {
-    @Test fun the_selection_sits_a_third_of_the_way_down() {
-        assertEquals(300f, minimalAnchor(bodyTop = 100f, pitchPx = 60f, boxH = 900f))
-    }
-
-    // A short landscape box under a tall strip: one row under the body's top, never over it.
-    @Test fun never_higher_than_one_row_under_the_body_top() {
-        assertEquals(220f, minimalAnchor(bodyTop = 160f, pitchPx = 60f, boxH = 420f))
+    // The selected name's centre line: a third (0.33) of the way down the band from its top edge.
+    @Test fun the_line_sits_a_third_down_the_band() {
+        assertEquals(397f, minimalAnchor(bandTop = 100f, bandBottom = 1000f), 1e-3f)
     }
 }

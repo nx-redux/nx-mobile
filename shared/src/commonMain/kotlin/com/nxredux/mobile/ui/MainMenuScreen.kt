@@ -183,8 +183,8 @@ fun MainMenuScreen(
                         }
                         MenuStyle.MINIMAL -> HomeMinimalScreen(
                             rows, selection, homeView.strip, hints, onSelect, onOpen, onLongPress, onHint,
-                            minimalSelected, modifier = Modifier.weight(1f).zIndex(-1f),   // its names run on under the tab row
-                            leaving = minimalOpening != null,
+                            minimalSelected, modifier = Modifier.weight(1f).zIndex(-1f),   // its band ends on the tab row's top
+                            leaving = minimalOpening != null, iconsRoom = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad,
                         )
                         MenuStyle.GRID -> slot { m ->
                             HomeScreen(
@@ -230,12 +230,14 @@ fun MainMenuScreen(
                             )
                         }
                     }
-                    // Minimal: the names alone, as Minimal Home's without its strip and tags, running on under the tab row.
+                    // Minimal: the names alone, as Minimal Home's without its strip and tags, in the band from under the page's
+                    // icons (tab row hidden) down to the tab row's top (the box's bottom).
                     MenuStyle.MINIMAL -> {
                         val names = remember(rows) { minimalTabRows(rows) }
                         MinimalScreen(
                             names, selection, hints, onSelect, onOpen, onLongPress, onHint, minimalSelected,
-                            Modifier.weight(1f).zIndex(-1f), hideHints = chrome.emptyBarRoom, layoutKey = layoutKey, leaving = minimalOpening != null, onSwipeSelect = onSwipeSelect,
+                            Modifier.weight(1f).zIndex(-1f), top = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad.value,
+                            hideHints = chrome.emptyBarRoom, toBoxBottom = true, layoutKey = layoutKey, leaving = minimalOpening != null, onSwipeSelect = onSwipeSelect,
                         )
                     }
                     // List: the info band on the hint bar; the rows fade where more scrolls in.

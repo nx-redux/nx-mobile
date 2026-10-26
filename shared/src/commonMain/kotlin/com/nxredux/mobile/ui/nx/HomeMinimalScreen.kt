@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.HomeStrip
 import com.nxredux.mobile.ui.MainRow
@@ -17,15 +18,15 @@ internal fun homeMinimalRows(rows: List<MainRow>): List<NxRow> = rows.mapNotNull
 /**
  * Home in the Minimal style (Layouts → Home layout: Minimal): the stats strip, then Home's [rows] as big names
  * ([homeMinimalRows]: Continue, the pinned games, the shelves' games, the pinned tools) in the shared Minimal layout
- * ([MinimalScreen]), the selection one row under the strip and the selected name's tag at the end of its name. The
- * names run on behind the strip, the tab row and the hints to the screen's edges. [selected] keeps the selected name for
- * the open band MainMenuScreen draws over the whole screen ([MinimalOpenOverlay]). MainMenuScreen draws this under its tab row.
+ * ([MinimalScreen]), the selected name's tag at the end of its name. The names' band runs from the strip's bottom (or,
+ * with no strip, from under the page's icons: [iconsRoom]) to the box's bottom, the tab row's top: nothing shows under
+ * either. [selected] keeps the selected name for the open band MainMenuScreen draws over the whole screen ([MinimalOpenOverlay]).
  */
 @Composable
 internal fun HomeMinimalScreen(
     rows: List<MainRow>, selection: () -> Int, strip: HomeStrip?, hints: List<Hint>,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, onHint: ((NxButton) -> Unit)?,
-    selected: MinimalSelected, modifier: Modifier = Modifier, leaving: Boolean = false,
+    selected: MinimalSelected, modifier: Modifier = Modifier, leaving: Boolean = false, iconsRoom: Dp = 0.dp,
 ) {
     val chrome = LocalLauncherChrome.current
     val portrait = LocalPortrait.current
@@ -42,11 +43,11 @@ internal fun HomeMinimalScreen(
     val top = when {
         header != null -> header.height.toFloat()
         pageStrip != null -> max(0f, inkTop + inkH + 4f)
-        else -> 0f
+        else -> iconsRoom.value
     }
     MinimalScreen(
         names, selection, hints, onSelect, onOpen, onLongPress, onHint, selected, modifier, top = top,
-        hideHints = chrome.emptyBarRoom, leaving = leaving,
+        hideHints = chrome.emptyBarRoom, toBoxBottom = true, leaving = leaving,
     ) {
         HomeStripOverlay(shownStrip, pageStrip, header, stripLines, inkTop, capTop, frame, gutter)
     }
