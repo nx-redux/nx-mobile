@@ -35,7 +35,7 @@ class PadRevealTest {
         // onCreate's layout, then a 4 s load (a big arcade ROM): nothing shows while it loads.
         val reveal = PadReveal(timeoutMs = 1500)
         reveal.onLayoutStart(nowMs = 1000)
-        assertEquals(null, reveal.timeoutInMs(nowMs = 1000))
+        assertEquals(PadReveal.LOAD_CAP_MS, reveal.timeoutInMs(nowMs = 1000))
         assertFalse(reveal.shouldShow(nowMs = 4999))
         reveal.onCoreRunning(nowMs = 5000)
         assertEquals(1500L, reveal.timeoutInMs(nowMs = 5000))
@@ -62,5 +62,15 @@ class PadRevealTest {
         assertEquals(BandGate.STOP_WAIT, bandGate(builtHidden = false, hiddenNow = false, bandShown = true, waiting = true, waitsNow = false))
         // No band (a controller, landscape): nothing to wait.
         assertEquals(BandGate.NONE, bandGate(builtHidden = false, hiddenNow = false, bandShown = false, waiting = false, waitsNow = true))
+    }
+
+    @Test fun a_core_that_never_runs_still_shows_the_pads_after_the_load_cap() {
+        // A hung copy, a netplay peer, a core stuck loading: MENU comes back for a touch-only player.
+        val reveal = PadReveal(timeoutMs = 1500)
+        assertEquals(null, reveal.timeoutInMs(nowMs = 0))
+        reveal.onLayoutStart(nowMs = 1000)
+        assertFalse(reveal.shouldShow(nowMs = 8999))
+        assertEquals(1L, reveal.timeoutInMs(nowMs = 8999))
+        assertTrue(reveal.shouldShow(nowMs = 9000))
     }
 }

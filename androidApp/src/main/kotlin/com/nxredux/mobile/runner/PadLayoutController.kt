@@ -520,7 +520,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         armRevealTimeout(root)
     }
 
-    /** Posts the reveal's timeout for when it falls due; none until the core runs ([onCoreRunning]). */
+    /** Posts the reveal's timeout for when it falls due (the load cap until the core runs, [onCoreRunning] re-arms it). */
     private fun armRevealTimeout(root: FrameLayout) {
         root.removeCallbacks(revealTimeout)
         reveal.timeoutInMs(SystemClock.uptimeMillis())?.let { root.postDelayed(revealTimeout, it) }
