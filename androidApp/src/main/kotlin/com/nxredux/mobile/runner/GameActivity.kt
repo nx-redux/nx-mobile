@@ -1079,7 +1079,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             // 3DS Large screen: the touch screen at half size (onConfigurationChanged follows a rotation).
             if (N3dsOptions.appliesTo(tag)) listOf(
                 Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsTabletop())),
-                Variable(N3dsOptions.TOUCH_MAIN_ONLY, DualScreen.n3dsTouchMainOnly(launchDual, padLayout.overlayPadShown.value && !n3dsTabletop())),
+                Variable(N3dsOptions.TOUCH_MAIN_ONLY, DualScreen.n3dsTouchMainOnly(launchDual, padLayout.overlayPadShown.value, halfFolded = n3dsTabletop())),
                 Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(false)),   // stylus mode is off at launch
                 // The locked core layout ([N3dsOptions.LAYOUT]) from the row in use; the descriptor's default is replaced.
                 Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsTabletop())),
@@ -1796,7 +1796,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen, n3dsTabletop())),
             // Under the main display's panel the pad is hidden, so it covers nothing on the picture screen. Half-folded, the
             // screens are regions that decide where a finger touches (as split), so the core takes it anywhere.
-            Variable(N3dsOptions.TOUCH_MAIN_ONLY, DualScreen.n3dsTouchMainOnly(dual.dualMode, padLayout.overlayPadShown.value && !dual.mainPanelShown() && !n3dsTabletop())),
+            Variable(N3dsOptions.TOUCH_MAIN_ONLY, DualScreen.n3dsTouchMainOnly(dual.dualMode, padLayout.overlayPadShown.value && !dual.mainPanelShown(), halfFolded = n3dsTabletop())),
             Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(input.n3dsHotkeys.stylus)),
         ).withN3dsSplit(DualScreen.n3dsForcedOptions(dual.dualMode, n3dsTabletop()))
         // Half-folded pins the swap (the app's SWAP moves the screens across the hinge): the user's values are noted as it

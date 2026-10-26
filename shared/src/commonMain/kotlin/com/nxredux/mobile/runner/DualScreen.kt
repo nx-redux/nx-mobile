@@ -173,6 +173,13 @@ object DualScreen {
     fun n3dsTouchMainOnly(mode: DualMode, padOverGame: Boolean): String =
         N3dsOptions.touchMainOnly(padOverGame && mode != DualMode.SPLIT)
 
+    /**
+     * [n3dsTouchMainOnly], and off while [halfFolded]: the screens are regions there too, which decide where a finger
+     * touches (the touch screen wherever it is drawn), so the core takes it anywhere. Flat, the rule as before.
+     */
+    fun n3dsTouchMainOnly(mode: DualMode, padOverGame: Boolean, halfFolded: Boolean): String =
+        n3dsTouchMainOnly(mode, padOverGame && !halfFolded)
+
     private fun single(w: Float, h: Float, screen: NdsScreen, src: FrameRect, aspect: Float): List<NdsRegion> {
         if (w <= 0f || h <= 0f) return emptyList()
         val size = NdsLayout.ScreenSize(min(w, h * aspect), aspect)

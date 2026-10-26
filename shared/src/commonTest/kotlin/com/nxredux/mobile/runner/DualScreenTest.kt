@@ -85,6 +85,12 @@ class DualScreenTest {
         assertEquals(mapOf("citra_swap_screen" to "Top", "citra_swap_screen_mode" to "Hold"),
             DualScreen.n3dsSwapRestore(mapOf("citra_swap_screen_mode" to "Hold"), emptyMap()))
     }
+    @Test fun n3ds_touch_anywhere_half_folded_else_as_flat() {
+        assertEquals("disabled", DualScreen.n3dsTouchMainOnly(DualMode.OFF, padOverGame = true, halfFolded = true))
+        assertEquals("enabled", DualScreen.n3dsTouchMainOnly(DualMode.OFF, padOverGame = true, halfFolded = false))
+        assertEquals("disabled", DualScreen.n3dsTouchMainOnly(DualMode.OFF, padOverGame = false, halfFolded = false))
+        assertEquals("disabled", DualScreen.n3dsTouchMainOnly(DualMode.SPLIT, padOverGame = true, halfFolded = false))
+    }
     @Test fun n3ds_touch_anywhere_in_split() {
         assertEquals("disabled", DualScreen.n3dsTouchMainOnly(DualMode.SPLIT, padOverGame = true))
         assertEquals("enabled", DualScreen.n3dsTouchMainOnly(DualMode.OFF, padOverGame = true))
