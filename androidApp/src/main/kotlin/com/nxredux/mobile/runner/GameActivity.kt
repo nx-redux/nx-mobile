@@ -1221,7 +1221,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             // first layout makes it fill the height left ([onN3dsPictureSpace]).
             if (N3dsOptions.appliesTo(tag)) listOf(
                 Variable(N3dsOptions.STACKED_SMALL_PROPORTION, n3dsProportion()),
-                Variable(N3dsOptions.TOUCH_MAIN_ONLY, DualScreen.n3dsTouchMainOnly(launchDual, padLayout.padCoversPicture, halfFolded = n3dsTabletop())),
+                Variable(N3dsOptions.TOUCH_MAIN_ONLY, N3dsOptions.TOUCH_MAIN_ONLY_OFF),
                 Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(false)),   // stylus mode is off at launch
                 // The locked core layout ([N3dsOptions.LAYOUT]) from the row in use; the descriptor's default is replaced.
                 Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsTabletop())),
@@ -1932,8 +1932,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun isLandscape(): Boolean = isLandscape(resources.configuration.orientation)
 
     /**
-     * 3DS: the core's layout from the row in use (orientation, controller); with the pad covering part of the picture, a finger
-     * touching the bottom screen only while it is the main one (the core's rule); and the cursor kept shown in stylus mode.
+     * 3DS: the core's layout from the row in use (orientation, controller) and the cursor kept shown in stylus mode.
      * A value the core has is not sent again.
      */
     override fun syncN3dsCore() {
@@ -1944,10 +1943,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             // Large screen halves the touch screen (portrait: fills the height left), Stacked keeps both alike: a layout
             // change updates it too.
             Variable(N3dsOptions.STACKED_SMALL_PROPORTION, n3dsProportion(screen = screen)),
-            // Only a pad covering part of the picture limits touch (beside it, clear of it, it takes none of the screen).
-            // Under the main display's panel the pad is hidden, so it covers nothing on the picture screen. Half-folded, the
-            // screens are regions that decide where a finger touches (as split), so the core takes it anywhere.
-            Variable(N3dsOptions.TOUCH_MAIN_ONLY, DualScreen.n3dsTouchMainOnly(dual.dualMode, padLayout.padCoversPicture && !dual.mainPanelShown(), halfFolded = n3dsTabletop())),
             Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(input.n3dsHotkeys.stylus)),
         ).withN3dsSplit(DualScreen.n3dsForcedOptions(dual.dualMode, n3dsTabletop()))
         // Half-folded pins the swap (the app's SWAP moves the screens across the hinge): the user's values are noted as it

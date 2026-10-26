@@ -267,15 +267,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     /** The hidden band's overlay misses the picture: drawn solid ([overlayClear]). */
     val overlayClear = mutableStateOf(false)
 
-    /** The pad covers part of the picture now ([DualScreen.padCoversPicture]): the 3DS then limits touch to its main screen. */
-    val padCoversPicture: Boolean
-        get() = DualScreen.padCoversPicture(overlayPadShown.value, clustersClear.value, overlayClear.value)
-
-    /** Sets [overlayClear]; a change re-sends the 3DS core's touch rule. */
+    /** Sets [overlayClear]. */
     fun setOverlayClear(clear: Boolean) {
-        if (overlayClear.value == clear) return
         overlayClear.value = clear
-        syncN3dsCore()
     }
     /**
      * How far the clusters' shoulders reach in from each screen edge while they sit beside the picture, px; null
@@ -590,7 +584,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         // Unknown picture: as if it took the middle half, so the unit and rows are already right when it shows.
         val p = besidePlacement(window, picture, pad.unitPx, pad.reach, pad.shape.density, pad.secondRow)
         val clear = picture != null && p.clear
-        val changed = clustersClear.value != clear
         clustersClear.value = clear
         clusterInsetPx.value = p.extraInsetPx
         clusterUnitPx.value = pad.unitPx
@@ -601,7 +594,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val top = p.topMarginPx.roundToInt()
         setBox(left, Gravity.START or Gravity.TOP, w, h, top)
         setBox(right, Gravity.END or Gravity.TOP, w, h, top)
-        if (changed) syncN3dsCore()   // clear of the picture, the 3DS takes touch on both screens
     }
 
     /**

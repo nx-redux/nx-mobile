@@ -8,6 +8,12 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class N3dsOptionsTest {
+    @Test fun touch_main_only_is_always_sent_disabled() = assertEquals("disabled", N3dsOptions.TOUCH_MAIN_ONLY_OFF)
+    @Test fun large_screen_help_says_at_least_half_and_portrait_fills() {
+        val info = N3dsOptions.layoutRows.first().info.replace("\n", " ")
+        assertTrue("the bottom one under it at least half its size" in info)
+        assertTrue("in portrait it fills the height left" in info)
+    }
     @Test fun applies_to_the_3ds_tag_only() {
         assertTrue(N3dsOptions.appliesTo("3DS"))
         assertTrue(N3dsOptions.appliesTo(" 3ds "))

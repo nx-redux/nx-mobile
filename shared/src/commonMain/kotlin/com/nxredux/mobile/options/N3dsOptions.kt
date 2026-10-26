@@ -44,12 +44,12 @@ object N3dsOptions {
     const val STACKED_SMALL_PROPORTION = "citra_stacked_small_proportion"
 
     /**
-     * While the on-screen buttons cover part of the picture, a finger touches the bottom screen only when it is the main one
-     * (swapped); the stylus cursor still touches anywhere (nx-mobile's core patch; not declared, never shown or saved).
+     * The core's "touch only the main screen" rule (nx-mobile's core patch; not declared, never shown or saved). The app
+     * keeps the pad beside or below the picture, so the bottom screen takes touch wherever it is drawn: sent
+     * [TOUCH_MAIN_ONLY_OFF] at launch.
      */
     const val TOUCH_MAIN_ONLY = "citra_touch_main_only"
-
-    fun touchMainOnly(padOverGame: Boolean): String = if (padOverGame) "enabled" else "disabled"
+    const val TOUCH_MAIN_ONLY_OFF = "disabled"
 
     /**
      * While stylus mode is on the core keeps its touch cursor shown however long it is left still, like the DS's pen dot;
@@ -106,7 +106,7 @@ object N3dsOptions {
         else -> "side_by_side"
     }
 
-    private const val LAYOUT_INFO_LIST = "Large screen: the top one big, the bottom one\nhalf its size under it.\n" +
+    private const val LAYOUT_INFO_LIST = "Large screen: the top one big, the bottom one\nunder it at least half its size (in portrait it fills\nthe height left, up to the top's size).\n" +
         "Stacked: one above the other, the same size.\nSingle screen: the top one only.\n" +
         "Side by side: next to each other.\nSELECT + Left/Right cycles it."
 
