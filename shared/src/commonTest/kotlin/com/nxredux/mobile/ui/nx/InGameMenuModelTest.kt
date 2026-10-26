@@ -180,6 +180,9 @@ class InGameMenuModelTest {
         val page = m.state.page
         assertEquals(PageKind.CoreOptions, page.kind)
         assertEquals("Core Options", page.title)
+        // Only the live options: the line says where the ones read at start are.
+        assertEquals(InGameMenuModel.CORE_OPTIONS_INTRO, page.intro)
+        assertTrue("Game Settings" in page.intro && "Tools → Settings → Emulation → Default settings" in page.intro)
         assertEquals(
             listOf(
                 MenuRow.Submenu("Video", PageKind.Category("video"), detail = "Display settings."),   // the core's text: info icon only

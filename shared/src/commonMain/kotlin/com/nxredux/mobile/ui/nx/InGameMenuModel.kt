@@ -1655,7 +1655,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         val live = CoreOptionFilter.live(options, locked)
         val rows = CoreOptionFilter.categories(live).map { MenuRow.Submenu(it.label, PageKind.Category(it.key), detail = it.info) } +
             CoreOptionFilter.uncategorized(live).map { optionRow(it, inCategory = false) }
-        return MenuPage(PageKind.CoreOptions, "Core Options", rows)
+        return MenuPage(PageKind.CoreOptions, "Core Options", rows, intro = CORE_OPTIONS_INTRO)
     }
 
     private fun categoryPage(key: String): MenuPage {
@@ -1709,6 +1709,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val OVERLAY_UNAVAILABLE_LINE = "Off while the DS screens are drawn apart"
         const val OVERLAY_UNAVAILABLE_INFO = "Overlays are off while the DS screens\nare drawn apart."
         private const val NO_LIVE_OPTIONS = "This core has no options that\ncan be changed while running."
+
+        /** The Core Options page's line: only live options are here, and where the ones read at start are. */
+        internal const val CORE_OPTIONS_INTRO = "Only options that change while you play are listed. For the rest, which apply when a " +
+            "game starts, use Game Settings in the game's context menu, or Tools → Settings → Emulation → Default settings."
         private const val NO_CATEGORY_OPTIONS = "This category has no options."
     }
 }
