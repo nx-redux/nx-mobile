@@ -21,6 +21,7 @@ import android.view.MotionEvent
 import android.view.PixelCopy
 import android.view.Surface
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
@@ -209,6 +210,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Instance-state key: the slot to resume from when the system recreates this activity after a process kill.
         private const val KEY_RESUME_SLOT = "nx_resume_slot"
         private const val KEY_NETPLAY_LOCAL = "nx_netplay_local"   // netplay link: the session had ended ([netplayLocal])
+        private const val KEY_NAME_HOLD_SHOWN_AT = "nx_name_hold_shown_at"   // the launch name's hold was up ([LaunchNameHold.shownAt])
         private const val NETPLAY_NOTICE_MS = 5000L   // netplay: "Netplay ended ...", "Using <core> for this match ..."
         private const val NETPLAY_PILL_MS = 1000L     // netplay: a countdown pill outlives one 250 ms status tick
         /** Beside a real-path cache copy: what it was copied from ([realPathCopyStamp]). */
@@ -378,6 +380,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     @Volatile override var resumePending = false
         private set
     private var resumeCover: ResumeCover? = null   // the resume's screenshot over the game until its frame shows (main thread only)
+    // The launch sequence's name (a Minimal launch; null: none, the screen opens as before) and its hold over the window.
+    private val launchName by lazy { launchNameFrom(intent.extras) }
+    private var nameHold: LaunchNameHold? = null   // main thread only; null once it has gone
     private var autoWrittenOnStop = false   // onStop serialized an auto state (its write is queued) since the last onStart
     // Home screenshot for the switcher (main thread only): onPause starts a PixelCopy; its bitmap is written as
     // the slot-9 thumb once onStop has queued the auto state. [homeThumbGen] drops callbacks from an older pause.
@@ -560,13 +565,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         // Cross-fade in from the menu instead of the default slide-from-right: the bottom pad is
         // identical and in the same position in both screens, so a fade keeps it visually steady while
-        // only the top (game) area changes. Back to the menu is a cut, no animation (see [finish]): the page it returns
-        // to (the switcher, a list, Home) is already there. Only while the game shares the menu's task (launcher mode
-        // off); in launcher mode it has its own task and the system task animation runs, as Android ignores these
-        // overrides for a task change (LibretroRunner's gameLaunchFlags).
+        // only the top (game) area changes. A launch sequence's (a [launchName]) opens with none: the menu's black meets
+        // this screen's black and the name hold (below Android 14 LibretroRunner skips the open animation). Back to the
+        // menu the game fades to black over 150 ms (launch_return_out, see [finish]); the menu fades itself in. Only while
+        // the game shares the menu's task (launcher mode off); in launcher mode it has its own task and the system task
+        // animation runs, as Android ignores these overrides for a task change (LibretroRunner's gameLaunchFlags).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, android.R.anim.fade_in, android.R.anim.fade_out)
-            overrideActivityTransition(Activity.OVERRIDE_TRANSITION_CLOSE, 0, 0)
+            if (launchName != null) overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, 0, 0)
+            else overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, android.R.anim.fade_in, android.R.anim.fade_out)
+            overrideActivityTransition(Activity.OVERRIDE_TRANSITION_CLOSE, 0, R.anim.launch_return_out)
         }
         // The game's own Recents entry (launcher mode) carries its title; sharing the menu's task, the entry stays the app's.
         if (isTaskRoot) {
@@ -575,6 +582,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             else @Suppress("DEPRECATION") setTaskDescription(ActivityManager.TaskDescription(recentsLabel))
         }
         setContentView(R.layout.activity_game)
+        showNameHold(savedInstanceState)
         dual.readPlayTotal()   // before this launch's own slices land: the header's total stays as it was
         volumeControlStream = AudioManager.STREAM_MUSIC   // volume keys set the game's (media) volume, even between sounds
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -911,6 +919,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         super.onSaveInstanceState(outState)
         putResumeSlot(outState)
         if (netplayLocal) outState.putBoolean(KEY_NETPLAY_LOCAL, true)
+        nameHold?.let { outState.putLong(KEY_NAME_HOLD_SHOWN_AT, it.shownAt) }
         pendingOutState = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) outState else null
     }
 
@@ -980,10 +989,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         homeThumb = null
     }
 
-    /** Back to the menu with no animation: below Android 14 (no close override set in onCreate) the default one is skipped here. */
+    /** Back to the menu the game fades to black over 150 ms: below Android 14 (no close override set in onCreate) set here. */
     override fun finish() {
         super.finish()
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) @Suppress("DEPRECATION") overridePendingTransition(0, 0)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) @Suppress("DEPRECATION") overridePendingTransition(0, R.anim.launch_return_out)
     }
 
     override fun onDestroy() {
@@ -1627,6 +1636,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     }
                 }
             }
+            // The launch name's hold fades now (or once its minimum is up); the resume cover under it goes on its own frames.
+            nameHold?.release { nameHold = null }
             // A frame means the core loaded the game (a load error aborts the view before any): the launcher may record it.
             PendingLaunches.take(launchId)?.invoke()
             // netplay: the engine starts once the core has loaded and can serialize, so a handheld's 10 s state
@@ -1688,6 +1699,19 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (dropped) {
             resumeSlot = null
             resumePending = false
+        }
+    }
+
+    /**
+     * The launch sequence's hold ([LaunchNameHold]) over the whole window, the resume cover included, from this screen's
+     * first frame until the game's. A recreation (the GLES relaunch) puts it back up with its first clock, so its minimum
+     * is not counted twice and nothing fades in between; a restore after it had gone shows none.
+     */
+    private fun showNameHold(saved: Bundle?) {
+        val name = launchName ?: return
+        val shownAt = if (saved == null) SystemClock.uptimeMillis() else saved.getLong(KEY_NAME_HOLD_SHOWN_AT, -1L).takeIf { it >= 0L } ?: return
+        nameHold = LaunchNameHold(this, name, shownAt).also {
+            findViewById<ViewGroup>(android.R.id.content).addView(it, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         }
     }
 
@@ -1804,6 +1828,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (isFinishing || isDestroyed || failShown) return   // observeErrors can report more than once: one dialog, never a stack
         failShown = true
         rumbles.forEach { it.release() }
+        nameHold?.remove()   // the dialog never sits on the launch name
+        nameHold = null
         // A controller's A only focuses the button (Android clicks on ENTER): A, B and BACK leave on release. A release
         // needs its press here first, so a button held from the game as the dialog opens does not close it unseen.
         var pressed = -1
