@@ -126,8 +126,8 @@ object N3dsOptions {
         )
     }
 
-    /** [layoutRowsFor] an unknown screen. */
-    val layoutRows: List<FrontendOption> = layoutRowsFor(null)
+    /** [layoutRowsFor] an unknown screen; built when read, as [NdsOptions.table]. */
+    val layoutRows: List<FrontendOption> get() = layoutRowsFor(null)
 
     /** The row in use: landscape, else portrait with a (non-clip-on) controller ([controllerMode]), else portrait. */
     fun layoutKey(landscape: Boolean, controllerMode: Boolean): String = when {

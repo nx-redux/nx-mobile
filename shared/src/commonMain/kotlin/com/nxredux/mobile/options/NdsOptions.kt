@@ -204,8 +204,11 @@ object NdsOptions {
     fun tableFor(screen: ScreenClass?, canHalfFold: Boolean = DeviceTraits.canHalfFold): List<FrontendOption> =
         layoutRows(screen, canHalfFold) + otherRows
 
-    /** Every row with every layout value ([tableFor] an unknown screen). */
-    val table: List<FrontendOption> = tableFor(null)
+    /**
+     * Every row with every layout value ([tableFor] an unknown screen). Built when read, so the info text follows
+     * [com.nxredux.mobile.layout.DeviceTraits.canHalfFold] whenever it is set.
+     */
+    val table: List<FrontendOption> get() = tableFor(null)
 
     /**
      * SELECT + Left/Right: the next layout ([delta] steps, wrapping) to set, as key to value: [LAYOUT_LANDSCAPE], else
