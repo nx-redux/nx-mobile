@@ -3,6 +3,7 @@ package com.nxredux.mobile.options
 import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.runner.N3dsNewControls
+import com.nxredux.mobile.runner.Res3dConsole
 import com.nxredux.mobile.settings.stepFrom
 
 /**
@@ -29,6 +30,9 @@ object N3dsOptions {
     )
 
     fun appliesTo(tag: String): Boolean = tag.trim().uppercase() == "3DS"
+
+    /** The 3D Resolution row and its Max Scale and Scale sub-rows ([resolutionRows]), for a display reaching [displayMax] (null: unknown). */
+    fun resolutionRows(displayMax: Int?): List<FrontendOption> = resolutionRows(Res3dConsole.N3DS, displayMax)
 
     /**
      * How many times smaller Azahar draws the second screen in its top over bottom (nx-mobile's core patch; not a declared

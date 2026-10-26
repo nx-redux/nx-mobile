@@ -3,6 +3,7 @@ package com.nxredux.mobile.options
 import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.runner.Nds3dMode
+import com.nxredux.mobile.runner.Res3dConsole
 import com.nxredux.mobile.runner.Nds3dResolution
 import com.nxredux.mobile.settings.stepFrom
 
@@ -238,34 +239,8 @@ object NdsOptions {
         ),
     )
 
-    private fun scales(max: Int): List<String> = (1..max.coerceIn(1, Nds3dResolution.CORE_MAX)).map { it.toString() }
-
-    /**
-     * The 3D Resolution row and its two sub-rows: Max Scale (Auto) and Scale (Performance). [displayMax] is the biggest scale
-     * the display reaches ([Nds3dResolution.displayMax]); null (unknown) offers every scale the core has. Not [visual]: the
-     * core is paused while the menu shows, so an Adjust strip over the frozen frame could never show the 3D change.
-     */
-    fun resolutionRows(displayMax: Int?): List<FrontendOption> {
-        val maxScales = scales(displayMax ?: Nds3dResolution.CORE_MAX)
-        val perfScales = scales(displayMax?.let(Nds3dResolution::performanceCeiling) ?: Nds3dResolution.CORE_MAX)
-        return listOf(
-            FrontendOption(
-                MODE_3D, "3D Resolution", Nds3dMode.entries.map { it.value }, Nds3dMode.AUTO.value,
-                "How sharply 3D models are drawn. 2D art, text and the screen's size don't change.",
-                visual = false, valueLabels = Nds3dMode.entries.map { it.label },
-            ),
-            FrontendOption(
-                MAX_SCALE_3D, "Max Scale", maxScales, Nds3dResolution.DEFAULT_CAP.toString(),
-                "The most Auto draws 3D at, as a multiple of the DS screen.",
-                visual = false, valueLabels = maxScales.map { "${it}x" }, shownWhen = MODE_3D to setOf(Nds3dMode.AUTO.value),
-            ),
-            FrontendOption(
-                SCALE_3D, "Scale", perfScales, Nds3dResolution.DEFAULT_PERFORMANCE_SCALE.toString(),
-                "The fixed resolution Performance draws 3D at, as a multiple of the DS screen.",
-                visual = false, valueLabels = perfScales.map { "${it}x" }, shownWhen = MODE_3D to setOf(Nds3dMode.PERFORMANCE.value),
-            ),
-        )
-    }
+    /** [resolutionRows] for the DS. */
+    fun resolutionRows(displayMax: Int?): List<FrontendOption> = resolutionRows(Res3dConsole.DS, displayMax)
 
     /** The keys of [resolutionRows]. */
     val RESOLUTION_KEYS: Set<String> = setOf(MODE_3D, MAX_SCALE_3D, SCALE_3D)
@@ -314,4 +289,34 @@ object NdsOptions {
 
     /** The label a hotkey shows for its new value ("Bottom screen", "Stacked"). */
     fun valueLabel(key: String, value: String): String = FrontendOptions.option(key)?.labelOf(value) ?: value
+}
+
+private fun scales(console: Res3dConsole, max: Int): List<String> = (1..max.coerceIn(1, console.coreMax)).map { it.toString() }
+
+/**
+ * [console]'s 3D Resolution row and its two sub-rows: Max Scale (Auto) and Scale (Performance). [displayMax] is the biggest
+ * scale the display reaches (null, unknown, offers every scale the core has). Not [visual][FrontendOption.visual]: the
+ * core is paused while the menu shows, so an Adjust strip over the frozen frame could never show the 3D change.
+ */
+fun resolutionRows(console: Res3dConsole, displayMax: Int?): List<FrontendOption> {
+    val maxScales = scales(console, displayMax ?: console.coreMax)
+    val perfScales = scales(console, displayMax?.let { Nds3dResolution.performanceCeiling(it, console) } ?: console.coreMax)
+    val screen = if (console == Res3dConsole.DS) "DS" else "3DS"
+    return listOf(
+        FrontendOption(
+            console.modeKey, "3D Resolution", Nds3dMode.entries.map { it.value }, Nds3dMode.AUTO.value,
+            "How sharply 3D models are drawn. 2D art, text and the screen's size don't change.",
+            visual = false, valueLabels = Nds3dMode.entries.map { it.label },
+        ),
+        FrontendOption(
+            console.maxScaleKey, "Max Scale", maxScales, console.defaultCap.toString(),
+            "The most Auto draws 3D at, as a multiple of the $screen screen.",
+            visual = false, valueLabels = maxScales.map { "${it}x" }, shownWhen = console.modeKey to setOf(Nds3dMode.AUTO.value),
+        ),
+        FrontendOption(
+            console.scaleKey, "Scale", perfScales, Nds3dResolution.DEFAULT_PERFORMANCE_SCALE.toString(),
+            "The fixed resolution Performance draws 3D at, as a multiple of the $screen screen.",
+            visual = false, valueLabels = perfScales.map { "${it}x" }, shownWhen = console.modeKey to setOf(Nds3dMode.PERFORMANCE.value),
+        ),
+    )
 }

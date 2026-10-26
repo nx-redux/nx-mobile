@@ -1,6 +1,7 @@
 package com.nxredux.mobile.options
 
 import com.nxredux.mobile.layout.ScreenClass
+import com.nxredux.mobile.runner.Res3dConsole
 
 /**
  * App-owned settings that belong to a console: shown on the in-game Options → Console Settings page,
@@ -10,12 +11,12 @@ import com.nxredux.mobile.layout.ScreenClass
  */
 object ConsoleSettings {
     /**
-     * [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows, [displayMax] (null: unknown) the DS 3D
-     * Resolution scales.
+     * [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows, [displayMax] (null: unknown) the DS and 3DS
+     * 3D Resolution scales.
      */
     fun tableFor(tag: String, screen: ScreenClass? = null, displayMax: Int? = null): List<FrontendOption> = when {
         NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen, displayMax = displayMax)
-        N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.newControlsRow
+        N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.resolutionRows(displayMax) + N3dsOptions.newControlsRow
         WiiOptions.appliesTo(tag) -> WiiOptions.table
         else -> emptyList()
     } + graphicsRows(tag) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table
@@ -27,16 +28,19 @@ object ConsoleSettings {
      * shows the list's last scale. An unknown stored 3D Resolution mode shows as the default (Auto). Any other row is returned as it is.
      */
     fun fitted(option: FrontendOption, value: String): Pair<FrontendOption, String> = when {
-        option.key == NdsOptions.MODE_3D && value !in option.values -> option to option.default
-        option.key != NdsOptions.MAX_SCALE_3D && option.key != NdsOptions.SCALE_3D || value in option.values -> option to value
+        option.key in MODE_KEYS && value !in option.values -> option to option.default
+        option.key !in SCALE_KEYS || value in option.values -> option to value
         value == option.default -> option to option.values.last()
         else -> option.copy(values = option.values + value, valueLabels = option.valueLabels + "${value}x") to value
     }
+
+    private val MODE_KEYS = Res3dConsole.entries.map { it.modeKey }.toSet()
+    private val SCALE_KEYS = Res3dConsole.entries.flatMap { listOf(it.maxScaleKey, it.scaleKey) }.toSet()
 
     private fun graphicsRows(tag: String): List<FrontendOption> =
         if (GraphicsApiOptions.appliesTo(tag)) listOf(GraphicsApiOptions.row) else emptyList()
 
     /** Every console's rows (keys are unique across them); built when read, as [NdsOptions.table]. */
     val all: List<FrontendOption> get() =
-        NdsOptions.table + N3dsOptions.layoutRows + N3dsOptions.newControlsRow + WiiOptions.table + GraphicsApiOptions.row + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table
+        NdsOptions.table + N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + N3dsOptions.newControlsRow + WiiOptions.table + GraphicsApiOptions.row + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table
 }

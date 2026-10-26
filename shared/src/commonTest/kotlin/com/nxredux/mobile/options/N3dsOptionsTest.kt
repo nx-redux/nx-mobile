@@ -132,4 +132,23 @@ class N3dsOptionsTest {
         assertTrue(N3dsOptions.layoutRowsFor(ScreenClass.NEAR_SQUARE_TABLET, canHalfFold = true).all { NdsOptions.FOLD_NOTE in it.info })
         assertTrue(N3dsOptions.layoutRowsFor(ScreenClass.NEAR_SQUARE_TABLET, canHalfFold = false).none { NdsOptions.FOLD_NOTE in it.info })
     }
+
+    @Test fun resolutionRows() {
+        val (mode, max, scale) = N3dsOptions.resolutionRows(null)
+        assertEquals(listOf("3D Resolution", "Max Scale", "Scale"), listOf(mode, max, scale).map { it.label })
+        assertEquals(listOf("nx_3ds_3d_resolution", "nx_3ds_3d_max_scale", "nx_3ds_3d_scale"), listOf(mode, max, scale).map { it.key })
+        assertEquals(listOf("auto", "3", "2"), listOf(mode, max, scale).map { it.default })
+        assertEquals("nx_3ds_3d_resolution" to setOf("auto"), max.shownWhen)
+        assertEquals("nx_3ds_3d_resolution" to setOf("performance"), scale.shownWhen)
+        assertTrue(N3dsOptions.resolutionRows(null).none { it.visual })
+        assertEquals((1..10).map { it.toString() }, max.values)
+        assertEquals((1..10).map { "${it}x" }, max.valueLabels)
+        assertTrue("3DS screen" in max.info && "3DS screen" in scale.info)
+    }
+
+    @Test fun resolutionRowsFollowTheDisplay() {
+        val (_, max, scale) = N3dsOptions.resolutionRows(6)
+        assertEquals((1..6).map { it.toString() }, max.values)
+        assertEquals((1..3).map { it.toString() }, scale.values)
+    }
 }
