@@ -251,6 +251,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     // What [placeClusters] last set, read in the clusters' composition: solid when clear of the picture, the inset from
     // the screen edge (the cutout beyond the margin and the centring in a roomy column), the unit and the second row.
     private val clustersClear = mutableStateOf(false)
+    /** The halves are the half-folded DS / 3DS pad: always solid. State, set before they compose ([addTabletopDsHalves]). */
+    private val clustersSolid = mutableStateOf(false)
     private val clusterInsetPx = mutableStateOf(0f)
     private val clusterUnitPx = mutableStateOf<Float?>(null)
     private val clusterSecondRow = mutableStateOf(false)
@@ -388,6 +390,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      */
     private fun addBesideClusters(root: FrameLayout) {
         val halfW = (root.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels) / 2
+        clustersSolid.value = false
         clusterViews = addClusterHalves(
             root,
             FrameLayout.LayoutParams(halfW, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.START or Gravity.BOTTOM),
@@ -441,6 +444,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      */
     private fun addTabletopDsHalves(root: FrameLayout, tt: TabletopLayout) {
         fun lp(side: Int) = FrameLayout.LayoutParams(0, 0, side or Gravity.TOP)
+        clustersSolid.value = true   // before they compose: the first frame is already solid
         tabletopDsViews = addClusterHalves(root, lp(Gravity.START), lp(Gravity.END))
         val shape = activity.windowShape()
         val pad = tabletopDsPad(shape)
@@ -453,7 +457,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      * The clusters' alpha: solid while they clear the picture, else Pad Opacity (landscape). Read in composition. The
      * half-folded DS / 3DS halves are always solid: the touch screen overlaps them by a quarter of their reach at most.
      */
-    private fun clusterAlpha(): Float = if (clustersClear.value || tabletopDsViews != null) 1f else padLandscapeAlpha.value
+    private fun clusterAlpha(): Float = if (clustersSolid.value || clustersClear.value) 1f else padLandscapeAlpha.value
 
     /**
      * A drawn group moved or resized: a pad width that changed by 2 px or more lays the picture out again (half-folded,
