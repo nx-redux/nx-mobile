@@ -40,6 +40,7 @@ import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
+import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_ART_PATH
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_GAME_PATH
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_TITLE
@@ -216,7 +217,10 @@ internal class DualScreenController(
         if (netplayNow != null) return
         if (padLayout.tabletop() != null && dualMode == DualMode.OFF) return
         val stored = storedValues
-        val proportion = N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), activity.screenClass(), padLayout.tabletop() != null)
+        val proportion = N3dsOptions.stackedSmallProportion(
+            frontendValues, isLandscape(), renderer.ndsControllerMode(), activity.screenClass(), padLayout.tabletop() != null, renderer.n3dsPictureSpace,
+        )
+        renderer.n3dsProportion = proportion
         view.queueEvent {
             val vars = DualScreen.n3dsSwapRestore(n3dsSwapBeforeSplit, stored).map { (k, v) -> Variable(k, v) } +
                 Variable(N3dsOptions.STACKED_SMALL_PROPORTION, proportion)
@@ -269,15 +273,29 @@ internal class DualScreenController(
      * side-by-side frame checks where a finger lands). Null before the first frame.
      */
     private fun wholeFrameRegion(w: Float, h: Float, g: FloatArray): ScreenRegion? {
-        val aspect = g[2].takeIf { it > 0f } ?: if (g[0] > 0f && g[1] > 0f) g[0] / g[1] else return null
-        val dst = DualScreen.fullFrame(w, h, aspect)
-        if (dst.width <= 0f || dst.height <= 0f) return null
+        val dst = wholeFrame(w, h, g) ?: return null
         return ScreenRegion(
             src = ScreenRect(0f, 0f, 1f, 1f),
             dst = ScreenRect(dst.x / w, dst.y / h, (dst.x + dst.width) / w, (dst.y + dst.height) / h),
             shaded = true,
             touch = isN3ds,
         )
+    }
+
+    /** The whole core frame fitted at the game's aspect on a [w] x [h] surface (px of it); null before the first frame or with no room. */
+    private fun wholeFrame(w: Float, h: Float, g: FloatArray): PxRect? {
+        val aspect = g[2].takeIf { it > 0f } ?: if (g[0] > 0f && g[1] > 0f) g[0] / g[1] else return null
+        return DualScreen.fullFrame(w, h, aspect).takeIf { it.width > 0f && it.height > 0f }
+    }
+
+    /**
+     * Where the second display draws the whole frame (px of its surface) when it does ([secondDsRegions] null: the 3DS
+     * picture there with the panel on main); null otherwise. [g]: the game geometry.
+     */
+    fun secondWholeFrame(g: FloatArray): PxRect? {
+        val surface = secondSurface ?: return null
+        if (!secondDraws() || secondDsRegions(g) != null) return null
+        return wholeFrame(surface.width.toFloat(), surface.height.toFloat(), g)
     }
 
     /**

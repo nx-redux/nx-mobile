@@ -468,14 +468,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var ndsRenderMode: String? = null               // melonds_render_mode this game started with (the notice's)
     private var ndsFellBack = false                         // OpenGL was asked for, the core draws in software ([NdsRenderer.showFallbackNotice])
 
-    // ---- Nintendo DS 3D resolution (Nds3dResolution): melonDS's GL internal scale follows the layout ----
+    // ---- DS / 3DS 3D resolution (Nds3dResolution, N3ds3dResolution): melonDS's GL scale, Azahar's factor follow the layout ----
     private val nds3dSender = Nds3dSender()
-    /** The DS 3D scale last sent to melonDS DS (the launch's included); null for another core. */
+    /** The 3D scale last sent to melonDS DS or Azahar (the launch's included); null for another core. */
     var nds3dValue: Int? = null
         private set
-    private var nds3dCurrent: Int? = null                   // the scale the DS screens show now (FrontendRenderer.onNds3dLayout)
+    private var nds3dCurrent: Int? = null                   // the scale the DS / 3DS screens show now (FrontendRenderer.onNds3dLayout)
     override val ndsView: com.nxredux.mobile.options.NdsView?
-        get() = if (isNds) com.nxredux.mobile.options.NdsView(isLandscape(), renderer.ndsControllerMode()) else null
+        get() = if (isNds || isN3ds) com.nxredux.mobile.options.NdsView(isLandscape(), renderer.ndsControllerMode()) else null
     override var nds3dDisplayMax: Int? = null               // the most any layout reaches on the displays in use; null before the first layout
         private set
     private val nds3dTick = Runnable { tickNds3d() }
@@ -761,35 +761,38 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun corePaused(): Boolean = menuOpen || focusPaused
 
-    /** melonDS DS runs this game: the only core whose 3D scale the app sets. */
-    private fun setsNds3d(): Boolean = isNds && gameCoreId == NdsRenderer.CORE_ID_MELONDSDS
+    /** The console whose 3D scale the app sets for this game: a DS on melonDS DS, a 3DS on Azahar; null for any other. */
+    private val res3d: Res3dConsole? get() = Res3dConsole.forTag(gameTag)?.takeIf { gameCoreId == it.coreId }
+
+    private fun setsRes3d(): Boolean = res3d != null
 
     override fun onNds3dLayout(current: Int?, displayMax: Int, sizeChange: Boolean) {
-        if (!setsNds3d()) return
+        if (!setsRes3d()) return
         nds3dCurrent = current
         nds3dDisplayMax = displayMax
         // An open menu's Max Scale / Scale lists follow a rotation or fold.
         menu.menuModel?.takeIf { it.displayMax3d != displayMax }?.let { it.displayMax3d = displayMax; menu.menuState.value = it.state }
-        // An open menu's DS layout row follows a rotation or a controller hiding the pad.
+        // An open menu's DS / 3DS layout row follows a rotation or a controller hiding the pad.
         menu.menuModel?.takeIf { it.ndsView != ndsView }?.let { it.ndsView = ndsView; menu.menuState.value = it.state }
         offerNds3d(sizeChange)
     }
 
     /**
-     * A new DS 3D scale can reach the core now: not under netplay (no core option changes mid-session, so nothing is
+     * A new DS / 3DS 3D scale can reach the core now: not under netplay (no core option changes mid-session, so nothing is
      * offered and the sender keeps the value the core has; [playLocally] offers again), not while quitting, not once the
      * view is gone.
      */
     private fun canSendNds3d(): Boolean = netplayNow == null && !quitting && retroView?.isAttachedToWindow == true
 
     /**
-     * The DS 3D scale for the rows' values and the layout now, to the core if it changed: at once, or for a game area that
+     * The 3D scale for the console's rows' values and the layout now, to the core if it changed: at once, or for a game area that
      * only changed size, once it has settled ([Nds3dSender]; [tickNds3d] drains it every 100 ms meanwhile).
      */
     private fun offerNds3d(sizeChange: Boolean) {
+        val console = res3d ?: return
         if (!canSendNds3d()) return
         val max = nds3dDisplayMax ?: return
-        val value = Nds3dResolution.valueFor(frontendValues, nds3dCurrent, max)
+        val value = Nds3dResolution.valueFor(frontendValues, nds3dCurrent, max, console)
         nds3dSender.offer(value, sizeChange, SystemClock.uptimeMillis())?.let(::sendNds3d)
         scheduleNds3dTick()
     }
@@ -806,27 +809,38 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (nds3dSender.pending) root.postDelayed(nds3dTick, 100)
     }
 
-    /** [value] to melonDS DS (a locked option: only the app sets it), which rebuilds its 3D surfaces on its next frame. */
+    /**
+     * [value] to melonDS DS or Azahar (a locked option: only the app sets it), which rebuilds its surfaces on its next
+     * frame; Azahar's frame size follows a frame or more later ([FrontendRenderer.onN3dsFactorSent]).
+     */
     private fun sendNds3d(value: Int) {
+        val console = res3d ?: return
         nds3dValue = value
-        NxLog.i(TAG_LOG, "NDS 3D resolution ${value}x (${Nds3dMode.parse(frontendValues[NdsOptions.MODE_3D]).value})")
-        applyOptions(listOf(Variable(NdsOptions.CORE_RESOLUTION, value.toString())))
+        NxLog.i(TAG_LOG, "$gameTag 3D resolution ${value}x (${Nds3dMode.parse(frontendValues[console.modeKey]).value})")
+        applyOptions(listOf(Variable(console.coreKey, value.toString())))
+        if (console == Res3dConsole.N3DS) renderer.onN3dsFactorSent(value)
         menu.menuModel?.let { publishNds3d(it); menu.menuState.value = it.state }
     }
 
     /**
-     * The launch's DS 3D scale (no screens placed yet: the window's display maximum stands in for the shown scale), as a
+     * The launch's DS / 3DS 3D scale (no screens placed yet: the window's display maximum stands in for the shown scale), as a
      * forced option over the locked default; the sender starts from it, so the first layout sends only a different value.
+     * The 3DS frame's factor starts from it (or the locked default without one).
      */
     private fun nds3dLaunchOption(): Map<String, String> {
-        if (!setsNds3d()) return emptyMap()
+        val console = res3d ?: return emptyMap()
         val shape = windowShape()
-        val max = Nds3dResolution.displayMaxOf(shape.widthPx to shape.heightPx, shape.screenClass) ?: return emptyMap()
-        val value = Nds3dResolution.valueFor(frontendValues, null, max)
+        val max = console.displayMaxOf(shape.widthPx to shape.heightPx, shape.screenClass)
+        if (max == null) {
+            if (console == Res3dConsole.N3DS) CoreRegistry.forId(console.coreId)?.defaultOptions?.get(console.coreKey)?.toIntOrNull()?.let(renderer::startN3dsFactor)
+            return emptyMap()
+        }
+        val value = Nds3dResolution.valueFor(frontendValues, null, max, console)
         nds3dSender.offer(value, sizeChange = false, SystemClock.uptimeMillis())
         nds3dValue = value
-        NxLog.i(TAG_LOG, "NDS 3D resolution ${value}x at launch (${Nds3dMode.parse(frontendValues[NdsOptions.MODE_3D]).value})")
-        return mapOf(NdsOptions.CORE_RESOLUTION to value.toString())
+        if (console == Res3dConsole.N3DS) renderer.startN3dsFactor(value)
+        NxLog.i(TAG_LOG, "$gameTag 3D resolution ${value}x at launch (${Nds3dMode.parse(frontendValues[console.modeKey]).value})")
+        return mapOf(console.coreKey to value.toString())
     }
 
     /**
@@ -834,8 +848,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * mode it started with, or OpenGL's fallback; a Render Mode changed in the menu waits for the next launch).
      */
     override fun publishNds3d(model: InGameMenuModel) {
-        if (!setsNds3d()) return
-        model.setNds3d(nds3dValue, software = NdsRenderer.rendersSoftware(ndsRenderMode, ndsFellBack))
+        val console = res3d ?: return
+        // The 3DS has no software renderer to fall back to (Software API hidden): its scale always applies.
+        model.setNds3d(nds3dValue, software = console == Res3dConsole.DS && NdsRenderer.rendersSoftware(ndsRenderMode, ndsFellBack))
     }
 
     /**
@@ -1202,14 +1217,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             .filterNot { (k, _) -> k == N3dsOptions.LAYOUT && N3dsOptions.appliesTo(tag) }   // set from the row below
             .filterNot { (k, _) -> n3dsSplit?.containsKey(k) == true }
             .map { (k, v) -> Variable(k, v) } +
-            // 3DS Large screen: the touch screen at half size (onConfigurationChanged follows a rotation).
+            // 3DS Large screen: the touch screen at half size (onConfigurationChanged follows a rotation); in portrait the
+            // first layout makes it fill the height left ([onN3dsPictureSpace]).
             if (N3dsOptions.appliesTo(tag)) listOf(
-                Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsTabletop())),
-                Variable(N3dsOptions.TOUCH_MAIN_ONLY, DualScreen.n3dsTouchMainOnly(launchDual, padLayout.padCoversPicture, halfFolded = n3dsTabletop())),
+                Variable(N3dsOptions.STACKED_SMALL_PROPORTION, n3dsProportion()),
+                Variable(N3dsOptions.TOUCH_MAIN_ONLY, N3dsOptions.TOUCH_MAIN_ONLY_OFF),
                 Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(false)),   // stylus mode is off at launch
                 // The locked core layout ([N3dsOptions.LAYOUT]) from the row in use; the descriptor's default is replaced.
                 Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsTabletop())),
             ).withN3dsSplit(n3dsSplit) else emptyList()
+        options.firstOrNull { it.key == N3dsOptions.STACKED_SMALL_PROPORTION }?.value?.let { renderer.n3dsProportion = it }
         // netplay link: gambatte gets its link options; a GBA link engine starts now, before the core loads, so
         // a joiner learns the host's gpsp_serial from its READY and runs with it (the handheld reloads instead).
         val linkKind = np?.let { NetplayCores.link(it.coreId) }
@@ -1887,15 +1904,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        padLayout.applyLayout(newConfig.orientation)   // also re-sizes the menu and the notifications to the game area
-        // Split keeps its own fixed proportion.
-        if (isN3ds && DualScreen.n3dsCoreOptions(dual.dualMode) == null) {
-            val landscape = isLandscape(newConfig.orientation)
-            val screen = screenClass()
-            applyOptions(listOf(
-                Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, landscape, renderer.ndsControllerMode(), screen, n3dsTabletop())),
-            ))
-        }
+        // 3DS: the picture's space was the other orientation's, so the layout's sync below ([syncN3dsCore]) sends Large
+        // screen's half size (and watches for its frame) until the relayout fills the new space ([onN3dsPictureSpace]).
+        if (isN3ds) renderer.forgetN3dsPictureSpace()
+        padLayout.applyLayout(newConfig.orientation)   // also re-sizes the menu and the notifications to the game area; syncs the 3DS core
         // The motion level is captured in the display's frame: a new rotation takes the phone's attitude as level again.
         if (isWii) displayRotation().let { r -> if (r != lastRotation) { lastRotation = r; motionSensors?.recenter() } }
         if (retroView != null) {
@@ -1915,8 +1927,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun isLandscape(): Boolean = isLandscape(resources.configuration.orientation)
 
     /**
-     * 3DS: the core's layout from the row in use (orientation, controller); with the pad covering part of the picture, a finger
-     * touching the bottom screen only while it is the main one (the core's rule); and the cursor kept shown in stylus mode.
+     * 3DS: the core's layout from the row in use (orientation, controller) and the cursor kept shown in stylus mode.
      * A value the core has is not sent again.
      */
     override fun syncN3dsCore() {
@@ -1924,12 +1935,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val screen = screenClass()
         val options = listOf(
             Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen, n3dsTabletop())),
-            // Large screen halves the touch screen, Stacked keeps both alike: a layout change updates it too.
-            Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen, n3dsTabletop())),
-            // Only a pad covering part of the picture limits touch (beside it, clear of it, it takes none of the screen).
-            // Under the main display's panel the pad is hidden, so it covers nothing on the picture screen. Half-folded, the
-            // screens are regions that decide where a finger touches (as split), so the core takes it anywhere.
-            Variable(N3dsOptions.TOUCH_MAIN_ONLY, DualScreen.n3dsTouchMainOnly(dual.dualMode, padLayout.padCoversPicture && !dual.mainPanelShown(), halfFolded = n3dsTabletop())),
+            // Large screen halves the touch screen (portrait: fills the height left), Stacked keeps both alike: a layout
+            // change updates it too.
+            Variable(N3dsOptions.STACKED_SMALL_PROPORTION, n3dsProportion(screen = screen)),
             Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(input.n3dsHotkeys.stylus)),
         ).withN3dsSplit(DualScreen.n3dsForcedOptions(dual.dualMode, n3dsTabletop()))
         // Half-folded pins the swap (the app's SWAP moves the screens across the hinge): the user's values are noted as it
@@ -1967,6 +1975,28 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     private fun n3dsTabletop(): Boolean = padLayout.tabletop() != null
 
+    /**
+     * The 3DS touch screen's proportion for the row in use ([N3dsOptions.stackedSmallProportion]): Large screen in portrait
+     * fills the height left in the picture's space when it is known ([FrontendRenderer.n3dsPictureSpace]).
+     */
+    private fun n3dsProportion(landscape: Boolean = isLandscape(), screen: ScreenClass = screenClass()): String =
+        N3dsOptions.stackedSmallProportion(frontendValues, landscape, renderer.ndsControllerMode(), screen, n3dsTabletop(), renderer.n3dsPictureSpace)
+
+    /**
+     * The 3DS was laid out flat: a Large screen in portrait whose space now gives another proportion than the core has
+     * ([FrontendRenderer.n3dsProportion]) sends it, as a layout switch ([syncN3dsCore]): the new frame is watched for and
+     * the 3D scale held until it comes. Not while a second screen's split or the half-folded pin holds the core's options,
+     * nor under netplay (no option changes mid-session).
+     */
+    override fun onN3dsPictureSpace() {
+        if (!isN3ds || netplayNow != null || DualScreen.n3dsForcedOptions(dual.dualMode, n3dsTabletop()) != null) return
+        val proportion = n3dsProportion()
+        if (proportion == renderer.n3dsProportion) return
+        lastN3dsLayout = lastN3dsLayout?.plus(N3dsOptions.STACKED_SMALL_PROPORTION to proportion)
+        renderer.watchGeometry(why = "3DS Large screen proportion $proportion sent")
+        applyOptions(listOf(Variable(N3dsOptions.STACKED_SMALL_PROPORTION, proportion)))
+    }
+
     /** The core layout and touch-screen proportion last sent for the 3DS ([syncN3dsCore]); null before the first. */
     private var lastN3dsLayout: Map<String?, String?>? = null
     /** Whether that layout was the half-folded one: a change between the two holds the picture for the new frame. */
@@ -1985,10 +2015,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun applyFrontend(values: Map<String, String>) {
         val oldSegaSetting = frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
         val oldBottomScreen = frontendValues[BottomScreenOptions.KEY]
-        val old3d = NdsOptions.RESOLUTION_KEYS.map { frontendValues[it] }
+        val res3dKeys = res3d?.keys.orEmpty()
+        val old3d = res3dKeys.map { frontendValues[it] }
         frontendValues = values
         // Console Settings → 3D Resolution (the menu, live): the new value goes at once, not as a size change.
-        if (setsNds3d() && NdsOptions.RESOLUTION_KEYS.map { values[it] } != old3d) offerNds3d(sizeChange = false)
+        if (setsRes3d() && res3dKeys.map { values[it] } != old3d) offerNds3d(sizeChange = false)
         // Console Settings → Bottom screen (the menu, live): the picture may move. Posted, as for the Sega pad.
         if (values[BottomScreenOptions.KEY] != oldBottomScreen) findViewById<View?>(R.id.root)?.post { dual.recheckPictureOn() }
         val segaSetting = values[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
@@ -2326,6 +2357,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (netplayNow != null) return   // netplay: no core option changes mid-session (the other device would not follow)
         val view = retroView ?: return
         if (vars.isEmpty()) return
+        vars.firstOrNull { it.key == N3dsOptions.STACKED_SMALL_PROPORTION }?.value?.let { renderer.n3dsProportion = it }
         view.queueEvent { runCatching { view.updateVariables(*vars.toTypedArray()) }.onFailure { NxLog.w("GameActivity", "setting options failed", it) } }
     }
 
@@ -2747,8 +2779,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         dual.refreshDiscs()
         dual.refreshDualPanel()
-        // The core kept the launch's DS 3D scale through the session: the one for the layout now goes once.
-        if (setsNds3d()) offerNds3d(sizeChange = false)
+        // The core kept the launch's DS / 3DS 3D scale through the session: the one for the layout now goes once.
+        if (setsRes3d()) offerNds3d(sizeChange = false)
     }
 
     // ------------------------------------------------------------------ achievements
@@ -2938,6 +2970,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override val pictureOn: PictureOn get() = dual.pictureOn
     override val n3dsPicture: NdsScreen get() = dual.n3dsPicture
     override fun secondDsRegions(g: FloatArray): List<NdsRegion>? = dual.secondDsRegions(g)
+    override fun secondWholeFrame(g: FloatArray): com.nxredux.mobile.options.PxRect? = dual.secondWholeFrame(g)
     override fun secondRegions(g: FloatArray, ds: List<NdsRegion>?): List<ScreenRegion> = dual.secondRegions(g, ds)
     override fun onN3dsSwapPressed(down: Boolean): Boolean = dual.onN3dsSwapPressed(down) || renderer.onTabletopN3dsSwap(down)
     override fun mainPanelShown(): Boolean = dual.mainPanelShown()

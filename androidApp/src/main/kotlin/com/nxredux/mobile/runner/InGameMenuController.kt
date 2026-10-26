@@ -138,11 +138,11 @@ internal interface InGameMenuHost : LifecycleOwner {
     fun setMic(on: Boolean)
     /** The Reset dialog's Reset: the game restarts ([GLRetroView.reset]); a toggled rewind ends, a toggled FF stays. */
     fun resetGame()
-    /** The biggest DS 3D scale the displays in use reach (null: unknown, not a DS game): the 3D Resolution rows' scales. */
+    /** The biggest DS / 3DS 3D scale the displays in use reach (null: unknown, neither): the 3D Resolution rows' scales. */
     val nds3dDisplayMax: Int?
-    /** How the running DS game is shown (null: not DS): Console Settings lists only the layout rows in use. */
+    /** How the running DS or 3DS game is shown (null: neither): Console Settings lists only the layout rows in use. */
     val ndsView: com.nxredux.mobile.options.NdsView?
-    /** The DS 3D Resolution rows' live state ([InGameMenuModel.setNds3d]): the scale in use, software rendering. */
+    /** The DS / 3DS 3D Resolution rows' live state ([InGameMenuModel.setNds3d]): the scale in use, software rendering. */
     fun publishNds3d(model: InGameMenuModel)
 }
 
@@ -264,8 +264,8 @@ internal class InGameMenuController(
         ).also {
             it.setStatus(configSource); it.cheatsAvailable = cheatsSupported
             it.screen = activity.screenClass()   // the DS / 3DS layout rows: this window's values and defaults
-            it.displayMax3d = host.nds3dDisplayMax   // the DS 3D Resolution rows' scales
-            it.ndsView = host.ndsView                 // the DS layout row in use, and the inset rows only in Picture in picture
+            it.displayMax3d = host.nds3dDisplayMax   // the DS / 3DS 3D Resolution rows' scales
+            it.ndsView = host.ndsView                 // the DS / 3DS layout row in use, and the DS inset rows only in Picture in picture
             // netplay: the root is "Leave netplay?" only; Continue / Quit once the session has ended. An ended link
             // session's game is a local one ([netplayNow] null): the normal root.
             if (netplayNow != null) {

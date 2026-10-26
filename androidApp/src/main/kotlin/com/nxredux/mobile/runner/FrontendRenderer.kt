@@ -102,11 +102,19 @@ internal interface FrontendHost : LifecycleOwner {
     /** The core is held (the in-game menu, another app focused): it makes no new frame meanwhile. */
     fun corePaused(): Boolean
     /**
-     * A DS game's screens were laid out again: the scale they show ([Nds3dResolution.currentScale]; null: none placed),
-     * the biggest any layout reaches on the displays in use ([Nds3dResolution.displayMax]), and whether only the game
-     * area's size changed since the last layout ([Nds3dArea.isSizeChangeFrom]).
+     * A DS or 3DS game's screens were laid out again: the scale they show ([Nds3dResolution.currentScale],
+     * [N3ds3dResolution.currentScale] / [N3ds3dResolution.regionScale]; null: none placed), the biggest any layout reaches
+     * on the displays in use (the console's displayMax), and whether only the game area's size changed since the last
+     * layout ([Nds3dArea.isSizeChangeFrom]).
      */
     fun onNds3dLayout(current: Int?, displayMax: Int, sizeChange: Boolean)
+    /** Where the second display draws the whole frame (px of its surface; the 3DS picture there), else null. [g]: the game geometry. */
+    fun secondWholeFrame(g: FloatArray): PxRect?
+    /**
+     * A 3DS game was laid out flat in [FrontendRenderer.n3dsPictureSpace]: Large screen in portrait sends the proportion
+     * that space gives when it is not the one the core has.
+     */
+    fun onN3dsPictureSpace()
 }
 
 /**
@@ -162,7 +170,26 @@ internal class FrontendRenderer(
     private var ndsFrameWarned = false                      // the "not 256x384" warning is logged once
     private var nds3dArea: Nds3dArea? = null                // the game area the DS 3D scale was last reported for
     private var nds3dMaxFor: Triple<Float, Float, ScreenClass>? = null   // the area [nds3dMainMax] was worked out for
-    private var nds3dMainMax = 1                            // Nds3dResolution.displayMax of that area
+    private var nds3dMainMax = 1                            // the console's displayMax of that area
+    private var n3dsFactor = Res3dConsole.N3DS.defaultCap   // the factor the last 3DS frame read was rendered at (N3ds3dResolution.frameFactor)
+
+    /**
+     * The 3DS second screen's proportion the core was last sent ([N3dsOptions.STACKED_SMALL_PROPORTION]): the frame is read
+     * against its shapes ([N3ds3dResolution.frameFactor]); a send's frame comes later, awaited by its [watchGeometry].
+     */
+    var n3dsProportion = "2"
+
+    /**
+     * The space the 3DS picture was last fitted in on the main display (Screen Scaling Auto, flat, the picture there); null
+     * otherwise or before the first frame. Large screen in portrait fills its height ([N3dsOptions.stackedSmallProportion]).
+     */
+    var n3dsPictureSpace: PxRect? = null
+        private set
+
+    /** The game area turned: [n3dsPictureSpace] was the other orientation's, unknown until the next layout. */
+    fun forgetN3dsPictureSpace() {
+        n3dsPictureSpace = null
+    }
 
     // ---- shader presets ----
     var shaderValues: Map<String, String> = ShaderOptions.fromConfig(emptyMap())   // nx_shader + stored nx_shader_param_*
@@ -349,6 +376,8 @@ internal class FrontendRenderer(
                     val paused = host.corePaused()
                     NxLog.i(TAG_LOG, "3DS frame: no new geometry in ${geometryWatch.framesWaited} frames (${g.fmt()})${if (paused && geometryHold.held) ", core paused: picture held until it runs" else ""}")
                     if (geometryHold.onGaveUp(paused)) showHeldPicture()
+                    // The 3D scale held for the layout's frame ([reportN3ds3d]) is read from the frame there is.
+                    if (watchIsLayoutSwitch) relayoutFrontend(g)
                 }
                 GeometryWatch.Tick.IDLE -> {}
             }
@@ -367,15 +396,16 @@ internal class FrontendRenderer(
      * that gives up while the core is paused keeps it held until the core runs ([onCoreResumed]) or its geometry arrives
      * ([GeometryHold]). False: nothing is watched (no view, or the core has no geometry yet).
      */
-    fun watchGeometry(frames: Int = 90, holdPicture: Boolean = false): Boolean {
+    fun watchGeometry(frames: Int = 90, holdPicture: Boolean = false, why: String = "3DS layout switched", layoutSwitch: Boolean = true): Boolean {
         val view = retroView ?: return false
         val before = view.getGameGeometry()
         if (!geometryWatch.start(before, frames)) return false   // the core has no geometry yet (still launching)
+        watchIsLayoutSwitch = layoutSwitch
         if (holdPicture) {
             geometryHold.start()
             view.pictureHeld = true
         }
-        NxLog.i(TAG_LOG, "3DS layout switched: watching the frame size for up to $frames frames from ${before.fmt()}${if (holdPicture) ", picture held" else ""}")
+        NxLog.i(TAG_LOG, "$why: watching the frame size for up to $frames frames from ${before.fmt()}${if (holdPicture) ", picture held" else ""}")
         Choreographer.getInstance().removeFrameCallback(geometryFrame)
         Choreographer.getInstance().postFrameCallback(geometryFrame)
         return true
@@ -403,6 +433,9 @@ internal class FrontendRenderer(
         // A hold that outlasted its watch (paused) ends with the geometry it waited for, whichever path brings it.
         if (seen || geometryHold.awaitsRun) endGeometryHold()
     }
+
+    /** The [watchGeometry] under way waits for a layout switch's frame (not a 3D resolution's): the 3DS 3D scale is held meanwhile. */
+    private var watchIsLayoutSwitch = false
 
     /** A [watchGeometry] holds the picture until its new frame size is laid out ([endGeometryHold]). */
     private val geometryHold = GeometryHold()
@@ -472,6 +505,7 @@ internal class FrontendRenderer(
         val secondDs = secondDsRegions(g)
         secondNdsRegions = secondDs.takeIf { isNds }.orEmpty()
         if (isNds) reportNds3d(w, h, screen, halfFolded = tabletop != null)
+        if (isN3ds && nds != null) reportN3ds3d(w, h, screen, halfFolded = tabletop != null, g, flat = null, secondDs)
         input.positionPen()   // on whichever display shows the bottom screen
         setNdsSplit(nds != null)
         view.secondaryRegions = secondRegions(g, secondDs)
@@ -506,6 +540,10 @@ internal class FrontendRenderer(
         val shown: PxRect
         val offset: PointF
         val foldTop = halfFoldedTopArea(shape, g, w)
+        if (isN3ds) {
+            val auto = foldTop == null && s.scaling == ScreenScaling.AUTO && frame != null
+            n3dsPictureSpace = space.takeIf { auto && (dualMode == DualMode.OFF || pictureOn == PictureOn.MAIN) }
+        }
         if (foldTop != null) {
             // Half-folded with a DS frame that is not the plain stack: drawn whole above the hinge, not across it.
             val fit = DualScreen.fullFrame(foldTop.width, foldTop.height, g[2])
@@ -529,6 +567,10 @@ internal class FrontendRenderer(
         val viewport = RectF(box.x / w, box.y / h, (box.x + box.width) / w, (box.y + box.height) / h)
         pictureBox.value = windowRect(origin, if (s.scaling == ScreenScaling.AUTO) shown else box)
         shownPicture = shown
+        if (isN3ds) {
+            reportN3ds3d(w, h, screen, halfFolded = false, g, flat = shown, secondDs)
+            host.onN3dsPictureSpace()   // after the report: it read this frame against the proportion it was drawn at
+        }
         if (viewport != lastViewport) {
             lastViewport = viewport
             view.viewport = viewport
@@ -553,16 +595,61 @@ internal class FrontendRenderer(
      * those screens' scale (one screen fills it, so that is the most it reaches).
      */
     private fun reportNds3d(w: Float, h: Float, screen: ScreenClass, halfFolded: Boolean) {
+        val second = Nds3dResolution.currentScale(secondNdsRegions) ?: 1
+        report3d(w, h, screen, halfFolded, Nds3dResolution.currentScale(ndsRegions + secondNdsRegions), second) {
+            Nds3dResolution.displayMax(w, h, screen)
+        }
+    }
+
+    /**
+     * The 3DS 3D scale's inputs to the host, as [reportNds3d]: flat, the [flat] picture's scale at the factor the frame
+     * was rendered at, read from its size ([N3ds3dResolution.frameFactor]; an unknown frame keeps the last one read);
+     * half-folded or split ([flat] null), the screens' regions ([N3ds3dResolution.regionScale]). A second display drawing
+     * 3DS screens ([secondDs]) or the whole frame counts as for the DS. Nothing before the first frame (the launch's value
+     * stands), nor while a layout switch's frame is awaited ([watchGeometry]): the old layout's frame laid out in the new
+     * space would start a send for a scale never shown; the new frame (or the watch giving up) reports. [g]: the game
+     * geometry laid out.
+     */
+    private fun reportN3ds3d(w: Float, h: Float, screen: ScreenClass, halfFolded: Boolean, g: FloatArray, flat: PxRect?, secondDs: List<NdsRegion>?) {
+        if (g[0] <= 0f || g[1] <= 0f) return
+        if (geometryWatch.active && watchIsLayoutSwitch) return
+        N3ds3dResolution.frameFactor(g[0], g[1], n3dsProportion.toFloatOrNull())?.let { n3dsFactor = it }
+        val factor = n3dsFactor
+        val main = if (flat != null) N3ds3dResolution.currentScale(flat.width, g[0], factor) else N3ds3dResolution.regionScale(ndsRegions)
+        val second = secondDs?.let(N3ds3dResolution::regionScale)
+            ?: host.secondWholeFrame(g)?.let { N3ds3dResolution.currentScale(it.width, g[0], factor) }
+        report3d(w, h, screen, halfFolded, listOfNotNull(main, second).maxOrNull(), second ?: 1) {
+            N3ds3dResolution.displayMax(w, h, screen)
+        }
+    }
+
+    /**
+     * [current] and the display maximum to the host: the main display's ([mainMax], worked out once per area) or the
+     * second display's [second] scale when bigger; with whether only the game area's size changed ([Nds3dArea]).
+     */
+    private fun report3d(w: Float, h: Float, screen: ScreenClass, halfFolded: Boolean, current: Int?, second: Int, mainMax: () -> Int) {
         val key = Triple(w, h, screen)
         if (key != nds3dMaxFor) {
             nds3dMaxFor = key
-            nds3dMainMax = Nds3dResolution.displayMax(w, h, screen)
+            nds3dMainMax = mainMax()
         }
-        val second = Nds3dResolution.currentScale(secondNdsRegions) ?: 1
         val area = Nds3dArea(w, h, screen, retroView?.display?.displayId, isLandscape(), halfFolded, dualMode)
         val sizeChange = area.isSizeChangeFrom(nds3dArea)
         nds3dArea = area
-        host.onNds3dLayout(Nds3dResolution.currentScale(ndsRegions + secondNdsRegions), maxOf(nds3dMainMax, second), sizeChange)
+        host.onNds3dLayout(current, maxOf(nds3dMainMax, second), sizeChange)
+    }
+
+    /** The 3DS game launched with internal resolution [factor]: what a frame of a size no layout explains is taken to carry. */
+    fun startN3dsFactor(factor: Int) {
+        n3dsFactor = factor
+    }
+
+    /**
+     * [factor] went to Azahar, whose frame size follows a frame or more later: watched for ([watchGeometry]) so the new
+     * frame is laid out and measured. A layout switch's watch under way is left as it is (it ends on the next change too).
+     */
+    fun onN3dsFactorSent(factor: Int) {
+        if (!geometryWatch.active) watchGeometry(why = "3DS 3D resolution ${factor}x sent", layoutSwitch = false)
     }
 
     /**

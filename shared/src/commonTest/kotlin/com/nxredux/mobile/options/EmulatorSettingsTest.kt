@@ -128,6 +128,18 @@ class EmulatorSettingsTest {
         assertEquals("7x", row.option.labelOf("7"))
     }
 
+    @Test fun threeDsResolutionRowsShowWithoutASoftwareNoteAndKeepAStoredExtraScale() {
+        val n3ds = com.nxredux.mobile.runner.CoreRegistry.forTag("3DS")!!
+        fun rows(text: String?) = EmulatorSettings.page("3DS", n3ds, null, n3ds.defaultOptions, text?.let(::cfg), null, forGame = false, displayMax = 6)
+            .console.filter { it.option.key in com.nxredux.mobile.runner.Res3dConsole.N3DS.keys }
+        assertEquals(listOf("3D Resolution", "Max Scale"), rows(null).map { it.option.label })
+        assertEquals(listOf(null, null), rows("melonds_render_mode = software\n").map { it.disabledNote })
+        val max = rows("nx_3ds_3d_max_scale = 8\n").single { it.option.key == "nx_3ds_3d_max_scale" }
+        assertEquals("8", max.value)
+        assertEquals("8x", max.option.labelOf("8"))
+        assertEquals("3", rows(null).single { it.option.key == "nx_3ds_3d_max_scale" }.value)
+    }
+
     @Test fun anUnknownStoredModeShowsAsAutoWithNoExtraChoice() {
         val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
         val row = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, cfg("nx_nds_3d_resolution = bogus\n"), null, forGame = false, displayMax = 3)

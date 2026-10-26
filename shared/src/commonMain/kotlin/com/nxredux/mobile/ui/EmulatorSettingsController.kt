@@ -12,7 +12,7 @@ import com.nxredux.mobile.options.EmulatorPage
 import com.nxredux.mobile.options.EmulatorSettings
 import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
-import com.nxredux.mobile.runner.Nds3dResolution
+import com.nxredux.mobile.runner.Res3dConsole
 import com.nxredux.mobile.storage.EmulatorConfigStore
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
@@ -138,7 +138,7 @@ internal class EmulatorSettingsController(
     private val secondScreen: () -> Boolean = { true },
     /** The current window's screen class (null: unknown): the DS and 3DS layout rows follow it. */
     private val screenClass: () -> ScreenClass? = { null },
-    /** The current window's size in px, width to height (null: unknown): the DS 3D Resolution scales go up to what it reaches. */
+    /** The current window's size in px, width to height (null: unknown): the DS and 3DS 3D Resolution scales go up to what it reaches. */
     private val windowPx: () -> Pair<Int, Int>? = { null },
 ) {
     private val lock = Mutex()
@@ -264,7 +264,7 @@ internal class EmulatorSettingsController(
         val screen = screenClass()
         return EmulatorSettings.page(
             tag, d, coreOptions.table(d.id), defaults(d), files.first, files.second, forGame = game != null, vulkanFailed = vulkanFailed(d.id),
-            secondScreen = secondScreen(), screen = screen, displayMax = Nds3dResolution.displayMaxOf(windowPx(), screen),
+            secondScreen = secondScreen(), screen = screen, displayMax = Res3dConsole.forTag(tag)?.displayMaxOf(windowPx(), screen),
         )
     }
 

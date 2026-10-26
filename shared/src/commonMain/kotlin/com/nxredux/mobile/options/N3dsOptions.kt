@@ -3,7 +3,11 @@ package com.nxredux.mobile.options
 import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.runner.N3dsNewControls
+import com.nxredux.mobile.runner.Res3dConsole
 import com.nxredux.mobile.settings.stepFrom
+import kotlin.math.ceil
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Nintendo 3DS (Azahar) screen controls. Unlike the DS, the core draws both screens itself: the layout is Azahar's own
@@ -30,19 +34,23 @@ object N3dsOptions {
 
     fun appliesTo(tag: String): Boolean = tag.trim().uppercase() == "3DS"
 
+    /** The 3D Resolution row and its Max Scale and Scale sub-rows ([resolutionRows]), for a display reaching [displayMax] (null: unknown). */
+    fun resolutionRows(displayMax: Int?): List<FrontendOption> = resolutionRows(Res3dConsole.N3DS, displayMax)
+
     /**
      * How many times smaller Azahar draws the second screen in its top over bottom (nx-mobile's core patch; not a declared
-     * option, so never shown or saved): half for Large screen, alike for Stacked ([stackedSmallProportion]).
+     * option, so never shown or saved): half for Large screen (in portrait, filling the height left), alike for Stacked
+     * ([stackedSmallProportion]).
      */
     const val STACKED_SMALL_PROPORTION = "citra_stacked_small_proportion"
 
     /**
-     * While the on-screen buttons cover part of the picture, a finger touches the bottom screen only when it is the main one
-     * (swapped); the stylus cursor still touches anywhere (nx-mobile's core patch; not declared, never shown or saved).
+     * The core's "touch only the main screen" rule (nx-mobile's core patch; not declared, never shown or saved). The app
+     * keeps the pad beside or below the picture, so the bottom screen takes touch wherever it is drawn: sent
+     * [TOUCH_MAIN_ONLY_OFF] at launch.
      */
     const val TOUCH_MAIN_ONLY = "citra_touch_main_only"
-
-    fun touchMainOnly(padOverGame: Boolean): String = if (padOverGame) "enabled" else "disabled"
+    const val TOUCH_MAIN_ONLY_OFF = "disabled"
 
     /**
      * While stylus mode is on the core keeps its touch cursor shown however long it is left still, like the DS's pen dot;
@@ -99,12 +107,13 @@ object N3dsOptions {
         else -> "side_by_side"
     }
 
-    private const val LAYOUT_INFO_LIST = "Large screen: the top one big, the bottom one\nhalf its size under it.\n" +
+    private const val LAYOUT_INFO_LIST = "Large screen: the top one big, the bottom one\nunder it at least half its size (in portrait it fills\nthe height left, up to the top's size).\n" +
         "Stacked: one above the other, the same size.\nSingle screen: the top one only.\n" +
         "Side by side: next to each other.\nSELECT + Left/Right cycles it."
 
+    /** Not visual: Azahar composes the 3DS layout, so the paused frame never shows a change; it shows on Continue. */
     private fun layoutRow(key: String, label: String, default: String, info: String, fold: String, brief: String = "") = FrontendOption(
-        key, label, LAYOUT_CYCLE, default, info + fold, visual = true, valueLabels = LAYOUT_CYCLE.map(::layoutLabel), brief = brief,
+        key, label, LAYOUT_CYCLE, default, info + fold, visual = false, valueLabels = LAYOUT_CYCLE.map(::layoutLabel), brief = brief,
     )
 
     /**
@@ -136,6 +145,15 @@ object N3dsOptions {
         else -> LAYOUT_PORTRAIT
     }
 
+    /**
+     * The running game's 3DS rows of [rows]: only the layout row in use on [view] ([layoutKey]) among the three layout rows.
+     * The rest pass through. Game Settings and Emulator Settings keep every row: they set up every orientation at once.
+     */
+    fun inGameRows(rows: List<FrontendOption>, view: NdsView): List<FrontendOption> {
+        val active = layoutKey(view.landscape, view.controllerMode)
+        return rows.filter { it.key !in OLD_LAYOUT_KEYS || it.key == active }
+    }
+
     /** The app's layout for the row in use on [screen]: the pick (old keys read too), else the screen's [defaultLayout]. */
     fun appLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): String =
         layoutValue(values, layoutKey(landscape, controllerMode)) ?: defaultLayout(screen, landscape)
@@ -151,11 +169,40 @@ object N3dsOptions {
         }
 
     /**
-     * How many times smaller the core draws the touch screen in its top over bottom: half for Large screen, else alike.
-     * Half-folded ([tabletop]) the screens are equal ("1") whatever the player saved.
+     * How many times smaller the core draws the touch screen in its top over bottom: for Large screen half, or in portrait
+     * with the picture's [space] known the [fillProportion] of it ([proportionText]); else alike. Half-folded ([tabletop])
+     * the screens are equal ("1") whatever the player saved.
      */
-    fun stackedSmallProportion(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean): String =
-        if (!tabletop && appLayoutFor(values, landscape, controllerMode, screen) == "large") "2" else "1"
+    fun stackedSmallProportion(
+        values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean, space: PxRect? = null,
+    ): String = when {
+        tabletop || appLayoutFor(values, landscape, controllerMode, screen) != "large" -> "1"
+        landscape || space == null -> "2"
+        else -> proportionText(fillProportion(space.width, space.height))
+    }
+
+    /**
+     * Large screen's proportion in portrait for a [spaceW] x [spaceH] px picture space: the top screen fills the width and
+     * the bottom one takes the height left under it, up to the top's size (1 to 2, rounded up to hundredths so the frame
+     * never outgrows the space and near-equal spaces send one value). A space too short for the top over a half-size bottom keeps the half size (2), the picture shrinking to fit.
+     */
+    fun fillProportion(spaceW: Float, spaceH: Float): Float {
+        if (spaceW <= 0f || spaceH <= 0f) return 2f
+        val top = spaceW / TOP_WIDTH
+        if (SCREEN_HEIGHT * top * 1.5f > spaceH) return 2f
+        val bottom = min((spaceH - SCREEN_HEIGHT * top) / SCREEN_HEIGHT, top)
+        // Up to the next hundredth: the bottom never comes out bigger than the height left (a hair under 1 tolerated).
+        return ceil((top / bottom).coerceIn(1f, 2f) * 100f - 0.001f) / 100f
+    }
+
+    /** [proportion] as the core option's text: two decimals, a whole one as before ("1", "2"). */
+    fun proportionText(proportion: Float): String {
+        val hundredths = (proportion * 100f).roundToInt()
+        return if (hundredths % 100 == 0) "${hundredths / 100}" else "${hundredths / 100}.${(hundredths % 100).toString().padStart(2, '0')}"
+    }
+
+    private const val TOP_WIDTH = 400f
+    private const val SCREEN_HEIGHT = 240f
 
     /** SELECT + Left/Right: the row in use, as key to the layout [delta] steps from the one showing on [screen], wrapping. */
     fun cycleLayout(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, delta: Int, screen: ScreenClass): Pair<String, String> {

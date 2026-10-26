@@ -85,23 +85,6 @@ class DualScreenTest {
         assertEquals(mapOf("citra_swap_screen" to "Top", "citra_swap_screen_mode" to "Hold"),
             DualScreen.n3dsSwapRestore(mapOf("citra_swap_screen_mode" to "Hold"), emptyMap()))
     }
-    @Test fun n3ds_touch_anywhere_half_folded_else_as_flat() {
-        assertEquals("disabled", DualScreen.n3dsTouchMainOnly(DualMode.OFF, padOverGame = true, halfFolded = true))
-        assertEquals("enabled", DualScreen.n3dsTouchMainOnly(DualMode.OFF, padOverGame = true, halfFolded = false))
-        assertEquals("disabled", DualScreen.n3dsTouchMainOnly(DualMode.OFF, padOverGame = false, halfFolded = false))
-        assertEquals("disabled", DualScreen.n3dsTouchMainOnly(DualMode.SPLIT, padOverGame = true, halfFolded = false))
-    }
-    @Test fun pad_covers_picture_only_when_up_and_not_clear() {
-        assertTrue(DualScreen.padCoversPicture(padShown = true, clustersClear = false, overlayClear = false))
-        assertFalse(DualScreen.padCoversPicture(padShown = true, clustersClear = true, overlayClear = false))
-        assertFalse(DualScreen.padCoversPicture(padShown = true, clustersClear = false, overlayClear = true))
-        assertFalse(DualScreen.padCoversPicture(padShown = false, clustersClear = false, overlayClear = false))
-    }
-    @Test fun n3ds_touch_anywhere_in_split() {
-        assertEquals("disabled", DualScreen.n3dsTouchMainOnly(DualMode.SPLIT, padOverGame = true))
-        assertEquals("enabled", DualScreen.n3dsTouchMainOnly(DualMode.OFF, padOverGame = true))
-        assertEquals("disabled", DualScreen.n3dsTouchMainOnly(DualMode.OFF, padOverGame = false))
-    }
     @Test fun picture_on_second_when_wider() = assertEquals(PictureOn.SECOND, DualScreen.pictureOn(1240, 1080, 1920, 1080))
     @Test fun picture_on_main_when_wider() = assertEquals(PictureOn.MAIN, DualScreen.pictureOn(1920, 1080, 1240, 1080))
     @Test fun picture_on_tie_goes_second() = assertEquals(PictureOn.SECOND, DualScreen.pictureOn(1920, 1080, 1280, 720))

@@ -27,7 +27,7 @@ class CoreRegistry3dsTest {
         assertEquals("OpenGL", n3ds.defaultOptions["citra_graphics_api"])
         assertEquals(mapOf("citra_graphics_api" to setOf("Software")), n3ds.hiddenValues)
         assertTrue(n3ds.hiddenValues.all { (k, v) -> n3ds.defaultOptions[k] !in v })
-        assertEquals("2", n3ds.defaultOptions["citra_resolution_factor"])
+        assertEquals("3", n3ds.defaultOptions["citra_resolution_factor"])
         assertEquals("enabled", n3ds.defaultOptions["citra_use_disk_shader_cache"])
         assertEquals("default", n3ds.defaultOptions["citra_layout_option"])   // the core's top-over-bottom
         assertEquals("enabled", n3ds.defaultOptions["citra_enable_touch_touchscreen"])
@@ -48,9 +48,21 @@ class CoreRegistry3dsTest {
                 "citra_graphics_api", "citra_use_libretro_save_path", "citra_enable_mouse_touchscreen", "citra_enable_motion",
                 "citra_motion_sensitivity", "citra_layout_option",   // the layout comes from the app's per-orientation rows
                 "citra_input_type",   // the mic, fed by the app's Mic toggle
+                "citra_resolution_factor", "citra_large_screen_proportion", "citra_render_3d",
             ),
             n3ds.lockedOptions,
         )
+    }
+
+    @Test fun lockedResolutionAndScreenOptions() {
+        // The 3D resolution is the app's (Nx scale), the large screen proportion is the core's default, 2D only.
+        assertTrue(listOf("citra_resolution_factor", "citra_large_screen_proportion", "citra_render_3d").all { it in n3ds.lockedOptions })
+        assertEquals("3", n3ds.defaultOptions["citra_resolution_factor"])
+        assertEquals("4.00", n3ds.defaultOptions["citra_large_screen_proportion"])
+        assertEquals("off", n3ds.defaultOptions["citra_render_3d"])
+        // The swap options stay visible: the user picks the prominent screen and the swap mode.
+        assertFalse("citra_swap_screen" in n3ds.lockedOptions)
+        assertFalse("citra_swap_screen_mode" in n3ds.lockedOptions)
     }
 
     @Test fun three_ds_console_owns_only_its_specific_extensions() {
