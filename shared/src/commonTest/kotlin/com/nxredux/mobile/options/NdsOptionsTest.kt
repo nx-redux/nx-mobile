@@ -290,4 +290,27 @@ class NdsOptionsTest {
         assertTrue(NdsOptions.layoutRows(ScreenClass.REGULAR_PHONE, canHalfFold = false).none { NdsOptions.FOLD_NOTE in it.info })
         assertTrue(NdsOptions.layoutRows(ScreenClass.REGULAR_PHONE, canHalfFold = false).all { it.info.endsWith("do not apply to the DS screens.") })
     }
+
+    @Test fun inGameShowsOnlyTheLayoutRowInUse() {
+        val rows = NdsOptions.tableFor(ScreenClass.REGULAR_PHONE)
+        fun layoutKeys(view: NdsView) = NdsOptions.inGameRows(rows, emptyMap(), view, ScreenClass.REGULAR_PHONE).map { it.key }.filter { it in NdsOptions.LAYOUT_KEYS }
+        assertEquals(listOf(LAYOUT_LANDSCAPE), layoutKeys(NdsView(landscape = true, controllerMode = false)))
+        assertEquals(listOf(LAYOUT_PORTRAIT), layoutKeys(NdsView(landscape = false, controllerMode = false)))
+        assertEquals(listOf(LAYOUT_PORTRAIT_CONTROLLER), layoutKeys(NdsView(landscape = false, controllerMode = true)))
+        // The rest pass through: Big Screen stays.
+        assertTrue(BIG_SCREEN in NdsOptions.inGameRows(rows, emptyMap(), NdsView(true, false), ScreenClass.REGULAR_PHONE).map { it.key })
+    }
+
+    @Test fun insetRowsOnlyInPictureInPicture() {
+        val rows = NdsOptions.tableFor(ScreenClass.REGULAR_PHONE)
+        val inset = setOf(PIP_CORNER, PIP_SIZE, PIP_OPACITY)
+        fun insetShown(values: Map<String, String>, view: NdsView) =
+            NdsOptions.inGameRows(rows, values, view, ScreenClass.REGULAR_PHONE).map { it.key }.filter { it in inset }
+        val landscape = NdsView(landscape = true, controllerMode = false)
+        assertEquals(emptyList(), insetShown(emptyMap(), landscape))
+        assertEquals(listOf(PIP_CORNER, PIP_SIZE, PIP_OPACITY), insetShown(mapOf(LAYOUT_LANDSCAPE to "pip"), landscape))
+        // PiP set for landscape only: portrait shows no inset rows.
+        assertEquals(emptyList(), insetShown(mapOf(LAYOUT_LANDSCAPE to "pip"), NdsView(landscape = false, controllerMode = false)))
+        assertEquals(3, insetShown(mapOf(LAYOUT_PORTRAIT_CONTROLLER to "pip"), NdsView(landscape = false, controllerMode = true)).size)
+    }
 }

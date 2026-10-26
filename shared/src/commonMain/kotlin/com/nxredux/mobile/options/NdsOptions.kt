@@ -57,6 +57,9 @@ enum class PipOpacity(override val value: String, override val label: String) : 
  * "not chosen yet": the screen's default applies ([layoutShown]). [controller] is the portrait layout used instead of
  * [portrait] while a non-clip-on controller has dropped the pad band.
  */
+/** How a running DS game is shown: in [landscape], and in portrait whether a non-clip-on controller hides the pad ([controllerMode]). */
+data class NdsView(val landscape: Boolean, val controllerMode: Boolean)
+
 data class NdsSettings(
     val portrait: NdsLayoutChoice? = null,
     val landscape: NdsLayoutChoice? = null,
@@ -139,6 +142,33 @@ object NdsOptions {
 
     /** The keys that can be absent ("no pick"): left out of [FrontendOptions.defaults] and of a config read when unset. */
     val NO_PICK_KEYS: Set<String> = OLD_LAYOUT_KEYS.keys
+
+    /** The three layout rows' keys. */
+    val LAYOUT_KEYS: Set<String> = setOf(LAYOUT_PORTRAIT, LAYOUT_PORTRAIT_CONTROLLER, LAYOUT_LANDSCAPE)
+
+    /** The picture-in-picture inset's rows: they only change the picture in Picture in picture. */
+    val INSET_KEYS: Set<String> = setOf(PIP_CORNER, PIP_SIZE, PIP_OPACITY)
+
+    /**
+     * The layout row in use on [view]: landscape's, else the controller row while a controller that is not a clip-on
+     * hides the pad ([NdsView.controllerMode]), else portrait's.
+     */
+    fun activeLayoutKey(view: NdsView): String = when {
+        view.landscape -> LAYOUT_LANDSCAPE
+        view.controllerMode -> LAYOUT_PORTRAIT_CONTROLLER
+        else -> LAYOUT_PORTRAIT
+    }
+
+    /**
+     * The running game's DS rows of [rows]: only the layout row in use on [view] ([activeLayoutKey]), and the inset rows
+     * only while the layout shown there ([values], [screen]: an unset row's default) is Picture in picture. The rest
+     * pass through. Game Settings and Emulator Settings keep every row: they set up every orientation at once.
+     */
+    fun inGameRows(rows: List<FrontendOption>, values: Map<String, String>, view: NdsView, screen: ScreenClass?): List<FrontendOption> {
+        val active = activeLayoutKey(view)
+        val pip = layoutShown(values, view.landscape, view.controllerMode, screen ?: ScreenClass.REGULAR_PHONE) == NdsLayoutChoice.PIP
+        return rows.filter { (it.key !in LAYOUT_KEYS || it.key == active) && (it.key !in INSET_KEYS || pip) }
+    }
 
     private const val SPLIT_NOTE = "Screen Scaling and the screen offsets do not apply to the DS screens."
 

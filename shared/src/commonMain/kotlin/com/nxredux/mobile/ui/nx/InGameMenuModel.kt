@@ -16,6 +16,7 @@ import com.nxredux.mobile.options.CoreOptionFilter
 import com.nxredux.mobile.options.FrontendOption
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.NdsOptions
+import com.nxredux.mobile.options.NdsView
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.shownFor
 import com.nxredux.mobile.runner.Nds3dMode
@@ -312,6 +313,18 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * the menu's pages are built; a change while open (a rotation, a fold) rebuilds open Console Settings/Frontend/Adjust pages.
      */
     var displayMax3d: Int? = null
+        set(value) {
+            if (value == field) return
+            field = value
+            refreshFrontendPages()
+        }
+
+    /**
+     * How the running DS game is shown (null: unknown, not a DS game): Console Settings then lists only the layout row in
+     * use and the inset rows only in Picture in picture ([NdsOptions.inGameRows]). A change while open (a rotation, a
+     * controller) rebuilds the open pages.
+     */
+    var ndsView: NdsView? = null
         set(value) {
             if (value == field) return
             field = value
@@ -1403,7 +1416,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      */
     private fun consoleRows() = ConsoleSettings.tableFor(frontendTag, screen, displayMax3d).filter {
         it.key !in frontendLocked && !it.atLaunch && (secondConnected || it.key != BottomScreenOptions.KEY)
-    }.shownFor(frontend).map { ConsoleSettings.fitted(it, frontend[it.key] ?: it.default).first }
+    }.shownFor(frontend).let { rows ->
+        val view = ndsView
+        if (view != null && NdsOptions.appliesTo(frontendTag)) NdsOptions.inGameRows(rows, frontend, view, screen) else rows
+    }.map { ConsoleSettings.fitted(it, frontend[it.key] ?: it.default).first }
 
     private fun frontendPage() = MenuPage(
         PageKind.Frontend, "Frontend",

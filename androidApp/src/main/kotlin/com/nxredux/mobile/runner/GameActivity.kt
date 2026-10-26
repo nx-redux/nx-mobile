@@ -474,6 +474,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     var nds3dValue: Int? = null
         private set
     private var nds3dCurrent: Int? = null                   // the scale the DS screens show now (FrontendRenderer.onNds3dLayout)
+    override val ndsView: com.nxredux.mobile.options.NdsView?
+        get() = if (isNds) com.nxredux.mobile.options.NdsView(isLandscape(), renderer.ndsControllerMode()) else null
     override var nds3dDisplayMax: Int? = null               // the most any layout reaches on the displays in use; null before the first layout
         private set
     private val nds3dTick = Runnable { tickNds3d() }
@@ -768,6 +770,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         nds3dDisplayMax = displayMax
         // An open menu's Max Scale / Scale lists follow a rotation or fold.
         menu.menuModel?.takeIf { it.displayMax3d != displayMax }?.let { it.displayMax3d = displayMax; menu.menuState.value = it.state }
+        // An open menu's DS layout row follows a rotation or a controller hiding the pad.
+        menu.menuModel?.takeIf { it.ndsView != ndsView }?.let { it.ndsView = ndsView; menu.menuState.value = it.state }
         offerNds3d(sizeChange)
     }
 

@@ -14,6 +14,7 @@ import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.SpeedOptions
 import com.nxredux.mobile.options.NdsOptions
+import com.nxredux.mobile.options.NdsView
 import com.nxredux.mobile.shortcuts.ConsoleHotkeys
 import com.nxredux.mobile.shortcuts.KeyCodes
 import com.nxredux.mobile.shortcuts.ShortcutAction
@@ -1465,6 +1466,23 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.SetFrontend(NdsOptions.MODE_3D, "performance"), m.press(NxButton.RIGHT))
         assertTrue("Max Scale" !in m.state.page.rows.map { it.label })
         assertTrue("Scale" in m.state.page.rows.map { it.label })
+    }
+
+    @Test fun ndsLayoutRowsFollowTheView() {
+        val m = model()
+        m.ndsView = NdsView(landscape = true, controllerMode = false)
+        m.openConsoleSettings()
+        val labels = { m.state.page.rows.map { it.label } }
+        assertTrue("Layout (landscape)" in labels())
+        assertTrue("Layout (portrait)" !in labels() && "Layout (portrait, controller)" !in labels())
+        assertTrue("Inset Corner" !in labels())
+        // Picking Picture in picture brings the inset rows in at once.
+        m.setFrontend(FrontendOptions.defaults("NDS") + (NdsOptions.LAYOUT_LANDSCAPE to "pip"), emptyList(), emptySet(), "NDS")
+        assertTrue(listOf("Inset Corner", "Inset Size", "Inset Opacity").all { it in labels() })
+        // Turning to portrait swaps the layout row; PiP was landscape's, so the inset rows go.
+        m.ndsView = NdsView(landscape = false, controllerMode = false)
+        assertTrue("Layout (portrait)" in labels() && "Layout (landscape)" !in labels())
+        assertTrue("Inset Corner" !in labels())
     }
 
     private fun InGameMenuModel.row3d(label: String) = state.page.rows.filterIsInstance<MenuRow.Option>().single { it.label == label }
