@@ -467,7 +467,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 input::onPad, input::onStick, unitDp, Modifier.fillMaxSize().alpha(if (overlayClear.value) 1f else padLandscapeAlpha.value),
                 analog = true, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode,
                 latched = input.gcLatched.value, shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut,
-                bandWidthUnits = units.widthUnits, bandHeightUnits = units.heightUnits, tools = padTools(),
+                bandWidthUnits = units.widthUnits, bandHeightUnits = units.heightUnits, tools = padTools(), onCStick = padCStick(),
             )
         }
         addPad(root, pad, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, height, Gravity.BOTTOM))

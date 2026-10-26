@@ -1304,7 +1304,7 @@ private const val SYSTEM_PILL_W_UNITS = 1.4f
 private const val SYSTEM_PILL_GAP = 12f
 
 /** An overlay cluster's inset from its screen edge, units: the right cluster's, which the left mirrors over the game. */
-private const val OVERLAY_EDGE_NUDGE = 0.2f
+internal const val OVERLAY_EDGE_NUDGE = 0.2f
 
 /**
  * How far an over-the-game cluster's system row (two pills) reaches in from its screen edge on a [screenW] ×
@@ -1548,14 +1548,67 @@ internal fun portraitOverlayUnits(midScale: Float): Float =
     OVERLAY_SHOULDER_UNITS + 2 * OVERLAY_GAP_UNITS + 3f * midScale + OVERLAY_SYSTEM_UNITS
 
 /**
+ * The actual buttons beside the hidden-band overlay's C-stick ([overlayCStick]), in middle-row units (from the row's
+ * left end, after the edge nudge, its top 0): with the d-pad / stick at [stickScale] on the left and the X/Y/B/A
+ * diamond at [faceScale] on the right of a row [rowWidthUnits] wide, both centred in the row's 3 x [stickScale]
+ * height, the d-pad's up, right and down arms (rects), and as circles (centre, radius) the left stick's well (its
+ * whole 3 x [stickScale] box, for the stick mode) and the diamond's X, Y, B and A.
+ */
+internal fun overlayCStickNeighbours(rowWidthUnits: Float, stickScale: Float, faceScale: Float): Pair<List<Rect>, List<Pair<Offset, Float>>> {
+    val s = stickScale
+    val f = faceScale
+    val faceL = rowWidthUnits - 3f * f
+    val faceT = 1.5f * (s - f)
+    val arms = listOf(
+        Rect(s, 0f, 2f * s, s),                 // up
+        Rect(2f * s, s, 3f * s, 2f * s),        // right
+        Rect(s, 2f * s, 2f * s, 3f * s),        // down
+    )
+    val circles = listOf(
+        Offset(1.5f * s, 1.5f * s) to 1.5f * s,                          // the left stick's well
+        Offset(faceL + 1.5f * f, faceT + 0.5f * f) to 0.5f * f,          // X
+        Offset(faceL + 0.5f * f, faceT + 1.5f * f) to 0.5f * f,          // Y
+        Offset(faceL + 1.5f * f, faceT + 2.5f * f) to 0.5f * f,          // B
+        Offset(faceL + 2.5f * f, faceT + 1.5f * f) to 0.5f * f,          // A
+    )
+    return arms to circles
+}
+
+/**
+ * The hidden-band overlay's New 3DS C-stick box in middle-row units ([overlayCStickNeighbours]' frame): centred across
+ * the row between the d-pad / stick and the diamond, its well's top at the row's top, where the d-pad's top-right and
+ * the diamond's top-left corners are empty (level with the row's middle, the d-pad's right arm and Y leave it least).
+ * [C_STICK_DIAMETER] x [stickScale] across where its well keeps [PORTRAIT_C_STICK_BUTTON_GAP] off every button, else
+ * as big as keeps it. Inside the row's height, so the overlay keeps its [portraitOverlayUnits] height. The well may
+ * cover the clusters' empty corners: it is drawn above them and takes only the touches that start inside it.
+ */
+internal fun overlayCStick(rowWidthUnits: Float, stickScale: Float, faceScale: Float): Rect {
+    val cx = (3f * stickScale + rowWidthUnits - 3f * faceScale) / 2f
+    val (rects, circles) = overlayCStickNeighbours(rowWidthUnits, stickScale, faceScale)
+    fun clear(r: Float): Boolean {
+        val c = Offset(cx, r)
+        return rects.all { it.distanceTo(c) >= r + PORTRAIT_C_STICK_BUTTON_GAP } &&
+            circles.all { (o, rr) -> (o - c).getDistance() >= r + rr + PORTRAIT_C_STICK_BUTTON_GAP }
+    }
+    var r = C_STICK_DIAMETER * stickScale / 2f
+    if (!clear(r)) {
+        var lo = 0f
+        var hi = r
+        repeat(30) { val mid = (lo + hi) / 2f; if (clear(mid)) lo = mid else hi = mid }
+        r = lo
+    }
+    return Rect(cx - r, 0f, cx + r, 2f * r)
+}
+
+/**
  * The portrait pad with its band hidden: one see-through piece for the bottom of the screen. The shoulders sit in the top
  * corners (the DS / 3DS STYLUS and SWAP beside them, [tools]), the d-pad / stick and the face cluster under them, and one
  * left-aligned row of MENU, the toggle, SELECT, START and the touch shortcuts that are assigned ([shortcuts]); the
  * show / hide chevron is the host's, at the row's right end. [unit] and the middle row's scale (from [bandWidthUnits] x
  * [bandHeightUnits], the band this replaces) match the band's buttons on this screen; the height is
  * [portraitOverlayUnits] units plus the padding. No background, and only the buttons take touches: the gaps pass to
- * the game. No C-stick in the hidden-band overlay: the rows have a fixed height, so the New 3DS cluster draws without
- * one. [analog] is the joystick's mode, as on the portrait band.
+ * the game. The New 3DS C-stick ([onCStick], sent as the right stick) sits in the middle row between the clusters
+ * ([overlayCStick]), inside the row's height. [analog] is the joystick's mode, as on the portrait band.
  */
 @Composable
 fun PortraitOverlayPad(
@@ -1573,6 +1626,7 @@ fun PortraitOverlayPad(
     bandWidthUnits: Float = 9f,
     bandHeightUnits: Float = 6.2f,
     tools: PadTools? = null,
+    onCStick: ((Float, Float) -> Unit)? = null,
 ) {
     val emit = rememberEmit(onEvent)
     val stick = rememberStickChoice(useJoystick, onUseJoystickChange)
@@ -1597,11 +1651,21 @@ fun PortraitOverlayPad(
                 }
             }
             Spacer(Modifier.height(gap))
-            Row(sides.height(unit * 3f * mid), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                val stickMid = unit * mid
-                val faceMid = unit * faceScale
-                if (stick.useJoystick) NeuJoystick(stickMid, emit, analog = analog, onStick = onStick) else NeuDpad(stickMid, emit)
-                FaceClusterBox(profile, faceMid, (faceMid.value * 0.46f).sp, emit)
+            Box(sides.height(unit * 3f * mid)) {
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    val stickMid = unit * mid
+                    val faceMid = unit * faceScale
+                    if (stick.useJoystick) NeuJoystick(stickMid, emit, analog = analog, onStick = onStick) else NeuDpad(stickMid, emit)
+                    FaceClusterBox(profile, faceMid, (faceMid.value * 0.46f).sp, emit)
+                }
+                // The New 3DS C-stick between the clusters: drawn last, so above them; clipped round, so only a touch
+                // inside the well ([cStickWellHit]) is its and one on the box's corners falls through to the cluster.
+                if (profile.cStick && onCStick != null) {
+                    val c = overlayCStick(bandWidthUnits - 2f * OVERLAY_EDGE_NUDGE, mid, faceScale)
+                    if (c.width > 0f) {
+                        NeuJoystick(unit * (c.width / 3f), emit, Modifier.offset(x = unit * c.left, y = unit * c.top).clip(CircleShape), analog = true, onStick = onCStick)
+                    }
+                }
             }
             Spacer(Modifier.height(gap))
             Row(Modifier.padding(start = nudge).height(sysH), verticalAlignment = Alignment.CenterVertically) {
