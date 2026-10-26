@@ -45,11 +45,7 @@ fun PermissionsStepScreen(
     val hints = listOfNotNull(if (canGoBack) Hint(NxButton.B, "Back") else null, Hint(NxButton.A, "Choose"))
     NxDetailListBody(
         title = title,
-        details = listOf(
-            "Permissions",
-            "All files access lets NX Redux read your library faster, sync ROMs with a handheld and use its own folder picker. " +
-                "Notifications show artwork and sync progress.",
-        ),
+        details = listOf("Permissions", permissionsText(screen)),
         rows = rows, selectedIndex = selected, hints = hints, onSelect = onSelect, onOpen = onRow, onHint = onHint,
         rowKind = NxRowKind.OPTIONS, actionRows = 1, actionsAtTop = true, landscapeWidth = NxSetupLandscapeWidth,
     )

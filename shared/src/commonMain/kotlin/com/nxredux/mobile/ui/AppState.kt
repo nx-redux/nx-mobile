@@ -6699,6 +6699,13 @@ internal fun permissionRows(s: Screen.PermissionsStep): List<PermissionRow> = li
     PermissionRow.CONTINUE,
 )
 
+/** The Permissions page's text: a line per permission it shows (a Play build declares no All files access). */
+internal fun permissionsText(s: Screen.PermissionsStep): String = listOfNotNull(
+    "All files access lets NX Redux read your library faster, sync ROMs with a handheld and use its own folder picker."
+        .takeIf { s.allFiles != null },
+    "Notifications show artwork and sync progress.".takeIf { s.notifications != null },
+).joinToString(" ")
+
 /** Where setup's sync page has the selection: the Sync ROMs row, the link the page shows, or Skip. */
 enum class SyncFocus { ROMS, LINK, SKIP }
 

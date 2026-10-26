@@ -2815,6 +2815,20 @@ class AppStateTest {
         assertEquals(3, st.selection.value.count)
     }
 
+    // A Play build has no All files access: the page's text names only the permissions it shows.
+    @Test fun permissions_text_names_only_the_rows_shown() {
+        assertEquals(
+            "All files access lets NX Redux read your library faster, sync ROMs with a handheld and use its own folder picker. " +
+                "Notifications show artwork and sync progress.",
+            permissionsText(Screen.PermissionsStep(allFiles = false, notifications = false)),
+        )
+        assertEquals("Notifications show artwork and sync progress.", permissionsText(Screen.PermissionsStep(allFiles = null, notifications = false)))
+        assertEquals(
+            "All files access lets NX Redux read your library faster, sync ROMs with a handheld and use its own folder picker.",
+            permissionsText(Screen.PermissionsStep(allFiles = false, notifications = null)),
+        )
+    }
+
     @Test fun no_permissions_page_when_everything_is_granted() = runTest {
         val st = state(MemorySettings(), allFiles = FakeAllFilesAccess(declared = true, isGranted = true), notifications = FakeNotificationAccess(isGranted = true))
         st.load()

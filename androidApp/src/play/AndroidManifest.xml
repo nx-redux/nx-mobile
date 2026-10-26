@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The play flavor: Play allows All files access only for file managers and the like, so this build drops it. Its home
+     is Android/media/<package>/ and other folders come through SAF; AndroidAllFilesAccess.declared is false here. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:node="remove" />
+
+</manifest>
