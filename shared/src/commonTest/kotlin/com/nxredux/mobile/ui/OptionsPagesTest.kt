@@ -3,6 +3,7 @@ package com.nxredux.mobile.ui
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.options.ConsoleRow
+import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.CoreOption
 import com.nxredux.mobile.options.EmulatorPage
 import com.nxredux.mobile.options.PadOptions
@@ -120,6 +121,20 @@ class OptionsPagesTest {
         assertTrue(emulatorNxRow(EmulatorRow.Core(opt, inCategory = false)).cycleable)
         assertFalse(emulatorNxRow(EmulatorRow.Category("video", "Video")).cycleable)
         assertFalse(emulatorNxRow(EmulatorRow.Header("Console settings")).cycleable)
+    }
+
+    @Test fun aDisabledConsoleRowShowsItsNoteAndStaysSelectable() {
+        val mode = ConsoleRow(NdsOptions.resolutionRows(null).first { it.key == NdsOptions.MODE_3D }, "auto", NdsOptions.SOFTWARE_NOTE)
+        val row = EmulatorRow.Console(mode)
+        val nx = emulatorNxRow(row)
+        assertEquals(NdsOptions.SOFTWARE_NOTE, nx.secondary)
+        assertFalse(nx.enabled)
+        assertFalse(nx.cycleable)
+        val touch = emulatorTouchRow(row)
+        assertEquals(NdsOptions.SOFTWARE_NOTE, touch.info)
+        assertFalse(touch.enabled)
+        assertTrue(touch.choices.isEmpty())
+        assertTrue(row.selectable)   // a pad user can land on it to read the note
     }
 
     private fun folder(tag: String, games: Int = 1, unassigned: Boolean = false) = SystemFolder(

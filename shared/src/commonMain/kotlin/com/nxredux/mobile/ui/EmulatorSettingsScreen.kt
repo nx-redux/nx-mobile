@@ -118,7 +118,7 @@ internal const val USE_EMULATOR_SETTINGS_DETAIL = "Delete this game's settings, 
 internal fun emulatorNxRow(row: EmulatorRow): NxRow = when (row) {
     is EmulatorRow.Header -> NxRow(row.label, section = true)   // a group's label: grey, never selected
     EmulatorRow.UseEmulatorSettings -> NxRow("Use emulator settings")
-    is EmulatorRow.Console -> NxRow(row.row.option.label, enabled = row.row.disabledNote == null, secondary = row.row.option.labelOf(row.row.value), cycleable = row.row.disabledNote == null)
+    is EmulatorRow.Console -> NxRow(row.row.option.label, enabled = row.row.disabledNote == null, secondary = row.row.disabledNote ?: row.row.option.labelOf(row.row.value), cycleable = row.row.disabledNote == null)
     is EmulatorRow.Core -> NxRow(CoreOptionFilter.rowLabel(row.option, row.inCategory), secondary = CoreOptionFilter.valueLabel(row.option), cycleable = true)
     is EmulatorRow.Category -> NxRow(row.label, secondary = "›")
     is EmulatorRow.Notice -> NxRow(row.text)
