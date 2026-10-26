@@ -20,7 +20,7 @@ object ConsoleSettings {
     private fun graphicsRows(tag: String): List<FrontendOption> =
         if (GraphicsApiOptions.appliesTo(tag)) listOf(GraphicsApiOptions.row) else emptyList()
 
-    /** Every console's rows (keys are unique across them). */
-    val all: List<FrontendOption> =
+    /** Every console's rows (keys are unique across them); built when read, as [NdsOptions.table]. */
+    val all: List<FrontendOption> get() =
         NdsOptions.table + N3dsOptions.layoutRows + N3dsOptions.newControlsRow + WiiOptions.table + GraphicsApiOptions.row + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table
 }

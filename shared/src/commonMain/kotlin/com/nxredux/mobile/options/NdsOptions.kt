@@ -1,5 +1,6 @@
 package com.nxredux.mobile.options
 
+import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.settings.stepFrom
 
@@ -133,6 +134,12 @@ object NdsOptions {
 
     private const val SPLIT_NOTE = "Screen Scaling and the screen offsets do not apply to the DS screens."
 
+    /** The DS / 3DS layout rows' note: half-folded, the fold places the screens and SELECT + Left/Right does nothing. */
+    const val FOLD_NOTE = "This is the layout when not half-folded:\nhalf-folded, the fold sets it."
+
+    /** [FOLD_NOTE] on its own line for a device that [canHalfFold]; nothing elsewhere, where it never applies. */
+    fun foldNote(canHalfFold: Boolean): String = if (canHalfFold) "\n$FOLD_NOTE" else ""
+
     fun appliesTo(tag: String): Boolean = tag.trim().uppercase() == "NDS"
 
     private fun <E : NdsChoice> row(key: String, label: String, all: List<E>, default: E, info: String, brief: String = "") =
@@ -142,7 +149,8 @@ object NdsOptions {
      * The three layout rows for [screen] (null: unknown, so every value and the regular phone's defaults). The row default
      * is the screen's [ndsDefault], shown while nothing is stored. Landscape omits Side by side on a Fold-shaped screen.
      */
-    fun layoutRows(screen: ScreenClass?): List<FrontendOption> {
+    fun layoutRows(screen: ScreenClass?, canHalfFold: Boolean = DeviceTraits.canHalfFold): List<FrontendOption> {
+        val fold = foldNote(canHalfFold)
         val known = screen ?: ScreenClass.REGULAR_PHONE
         val portraitDefault = ndsDefault(known, false)
         val landscapeAll = NdsLayoutChoice.entries.filter { offers(it, true, screen) }
@@ -154,12 +162,12 @@ object NdsOptions {
                     "Stacked: one above the other.\nSingle screen: the big one only.\n" +
                     "Picture in picture: one big, the other small in a corner.\n" +
                     "Side by side: half the width each.\nSELECT + Left/Right cycles it, or Layout (portrait, controller)\n" +
-                    "while a controller hides the pad.\n$SPLIT_NOTE",
+                    "while a controller hides the pad.\n$SPLIT_NOTE$fold",
             ),
             row(
                 LAYOUT_PORTRAIT_CONTROLLER, "Layout (portrait, controller)", NdsLayoutChoice.entries, portraitDefault,
                 "The portrait layout while a controller that is not a clip-on\n(Pocket Taco, FlipPad) is connected and the pad is hidden.\n" +
-                    "SELECT + Left/Right cycles it then.\n$SPLIT_NOTE",
+                    "SELECT + Left/Right cycles it then.\n$SPLIT_NOTE$fold",
                 brief = "Used while a controller (not a clip-on) hides the pad",
             ),
             row(
@@ -168,7 +176,7 @@ object NdsOptions {
                     "Stacked: one above the other, the first three times the size.\nSingle screen: the big one, centred.\n" +
                     "Picture in picture: the big one centred, the other small in a corner.\n" +
                     (if (NdsLayoutChoice.SIDE_BY_SIDE in landscapeAll) "Side by side: half the width each.\n" else "") +
-                    "SELECT + Left/Right cycles it.\n$SPLIT_NOTE",
+                    "SELECT + Left/Right cycles it.\n$SPLIT_NOTE$fold",
             ),
         )
     }
@@ -193,10 +201,14 @@ object NdsOptions {
     )
 
     /** The page's rows for [screen] (null: unknown). */
-    fun tableFor(screen: ScreenClass?): List<FrontendOption> = layoutRows(screen) + otherRows
+    fun tableFor(screen: ScreenClass?, canHalfFold: Boolean = DeviceTraits.canHalfFold): List<FrontendOption> =
+        layoutRows(screen, canHalfFold) + otherRows
 
-    /** Every row with every layout value ([tableFor] an unknown screen). */
-    val table: List<FrontendOption> = tableFor(null)
+    /**
+     * Every row with every layout value ([tableFor] an unknown screen). Built when read, so the info text follows
+     * [com.nxredux.mobile.layout.DeviceTraits.canHalfFold] whenever it is set.
+     */
+    val table: List<FrontendOption> get() = tableFor(null)
 
     /**
      * SELECT + Left/Right: the next layout ([delta] steps, wrapping) to set, as key to value: [LAYOUT_LANDSCAPE], else

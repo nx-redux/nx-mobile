@@ -42,17 +42,25 @@ import androidx.compose.ui.unit.dp
 import androidx.window.layout.WindowMetricsCalculator
 import com.nxredux.mobile.R
 import com.nxredux.mobile.layout.CoreFrame
+import com.nxredux.mobile.layout.DsKind
 import com.nxredux.mobile.layout.LayoutConstants
 import com.nxredux.mobile.layout.PadRoom
 import com.nxredux.mobile.layout.Reach
+import com.nxredux.mobile.layout.TabletopDsPlacement
 import com.nxredux.mobile.layout.bandAwaitsFrame
 import com.nxredux.mobile.layout.besideMeasures
 import com.nxredux.mobile.layout.besidePlacement
 import com.nxredux.mobile.layout.consoleScale
 import com.nxredux.mobile.layout.hideOffered
 import com.nxredux.mobile.layout.overlayHeightPx
+import com.nxredux.mobile.layout.reach
+import com.nxredux.mobile.layout.tabletopDs
+import com.nxredux.mobile.layout.tabletopDsPadBoxes
+import com.nxredux.mobile.layout.usableTabletop
+import com.nxredux.mobile.layout.tabletopDsUnitPx
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.PxRect
@@ -98,7 +106,8 @@ internal interface PadLayoutHost {
     val gameTag: String
     val inputManager: android.hardware.input.InputManager?
     val menuOpen: Boolean
-    val isNds: Boolean
+    /** The second display's use: a DS / 3DS keeps its Dual screen layouts in any mode but [DualMode.OFF]. */
+    val dualMode: DualMode
     val isWii: Boolean
     val wiiPad: WiiPad?
     val frontendValues: Map<String, String>
@@ -146,7 +155,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private fun <T : View> findViewById(id: Int): T = host.activity.findViewById(id)
     private val inputManager get() = host.inputManager
     private val menuOpen get() = host.menuOpen
-    private val isNds get() = host.isNds
     private val isWii get() = host.isWii
     private val wiiPad get() = host.wiiPad
     private val frontendValues get() = host.frontendValues
@@ -221,6 +229,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private val reveal = PadReveal()
     /** The landscape clusters beside the picture now; null without them (portrait, a controller, tabletop). */
     private var clusterViews: Pair<ComposeView, ComposeView>? = null
+    /** The half-folded DS / 3DS pad halves below the hinge, beside the touch screen; null without them. */
+    private var tabletopDsViews: Pair<ComposeView, ComposeView>? = null
     /** The portrait band hidden: its see-through overlay across the bottom, and that overlay's height, px. */
     private var overlayView: ComposeView? = null
     private var overlayHeight = 0
@@ -243,6 +253,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     // What [placeClusters] last set, read in the clusters' composition: solid when clear of the picture, the inset from
     // the screen edge (the cutout beyond the margin and the centring in a roomy column), the unit and the second row.
     private val clustersClear = mutableStateOf(false)
+    /** The halves are the half-folded DS / 3DS pad: always solid. State, set before they compose ([addTabletopDsHalves]). */
+    private val clustersSolid = mutableStateOf(false)
     private val clusterInsetPx = mutableStateOf(0f)
     private val clusterUnitPx = mutableStateOf<Float?>(null)
     private val clusterSecondRow = mutableStateOf(false)
@@ -279,6 +291,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         overlayPadShown.value = false   // set again below where the landscape clusters are added
         layoutPadHidden = portraitPadHidden()
         clusterViews = null
+        tabletopDsViews = null
         overlayView = null
         toggleView = null
         overlayHeight = 0
@@ -286,7 +299,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         bandView = null
         bandWaits = false
         shoulderReachPx.value = null
-        builtTabletopSize = null
         builtLayouts = AndroidAppSettings(activity).padLayouts
         builtBandPx = activity.windowShape().portraitBandPx.roundToInt()
 
@@ -302,6 +314,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         // What the layout goes by: a multiplayer game's benched pads leave the on-screen pad up for Player 1.
         val names = layoutControllerNames(pads)
         val tt = tabletop(names)
+        builtTabletop = tabletopBuild(tt, names)
         if (tt != null) {
             applyTabletopLayout(root, game, tt, names, portrait, orientation)
             syncN3dsCore()
@@ -379,7 +392,25 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      */
     private fun addBesideClusters(root: FrameLayout) {
         val halfW = (root.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels) / 2
-        val overlayLayout = padLayout(PadShape.OVERLAY)
+        clustersSolid.value = false
+        clusterViews = addClusterHalves(
+            root, padLayout(PadShape.OVERLAY),
+            FrameLayout.LayoutParams(halfW, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.START or Gravity.BOTTOM),
+            FrameLayout.LayoutParams(halfW, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END or Gravity.BOTTOM),
+        )
+        clustersClear.value = false
+        clusterInsetPx.value = 0f
+        clusterUnitPx.value = null
+        overlayPadShown.value = true
+    }
+
+    /**
+     * The two halves of a pad beside the picture (the landscape rows: MENU and the stick toggle left, SELECT START right,
+     * the second row under them), at [leftLp] and [rightLp]: see-through over the game ([clusterAlpha]), sized by
+     * [clusterUnitPx] and [clusterSecondRow], their drawn groups reported to [measured]. Their buttons take their own
+     * touches; the gaps pass to the game below.
+     */
+    private fun addClusterHalves(root: FrameLayout, overlayLayout: PadLayout, leftLp: FrameLayout.LayoutParams, rightLp: FrameLayout.LayoutParams): Pair<ComposeView, ComposeView> {
         val generation = ++clusterGeneration
         measured.clear()
         // Each half reports its groups as drawn (Pad layout editor moves included); an old pad's last reports are ignored.
@@ -402,23 +433,47 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, onGroupBounds = rightBounds,
                 besidePicture = true, unitOverride = clusterUnitPx.value?.let { with(density) { it.toDp() } }, secondRow = clusterSecondRow.value)
         }
-        addPad(root, left, FrameLayout.LayoutParams(halfW, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.START or Gravity.BOTTOM))
-        addPad(root, right, FrameLayout.LayoutParams(halfW, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END or Gravity.BOTTOM))
-        clusterViews = left to right
-        clustersClear.value = false
-        clusterInsetPx.value = 0f
-        clusterUnitPx.value = null
-        overlayPadShown.value = true
+        addPad(root, left, leftLp)
+        addPad(root, right, rightLp)
+        return left to right
     }
 
-    /** The clusters' alpha: solid while they clear the picture, else Pad Opacity (landscape). Read in composition. */
-    private fun clusterAlpha(): Float = if (clustersClear.value) 1f else padLandscapeAlpha.value
+    /**
+     * Half-folded DS / 3DS on the Fold, no controller: the pad halves below the hinge at the cover screen's button size
+     * ([tabletopDsPad]), placed beside the touch screen ([placeTabletopDs]). Hidden until the picture and the drawn
+     * buttons are known ([reveal]), as the landscape clusters.
+     */
+    private fun addTabletopDsHalves(root: FrameLayout, tt: TabletopLayout) {
+        val shape = activity.windowShape()
+        // [tabletop] only gives a split here; a placement without halves would be a reading it already turned down.
+        if (tabletopDsPlacement(shape, tt).left == null) return
+        fun lp(side: Int) = FrameLayout.LayoutParams(0, 0, side or Gravity.TOP)
+        clustersSolid.value = true   // before they compose: the first frame is already solid
+        // Controls → Pad layout's Half-folded layout: the halves' own moves, apart from the landscape pad's.
+        tabletopDsViews = addClusterHalves(root, padLayout(PadShape.HALF_FOLDED), lp(Gravity.START), lp(Gravity.END))
+        val pad = tabletopDsPad(shape)
+        clusterUnitPx.value = pad.unitPx
+        clusterSecondRow.value = pad.secondRow
+        placeTabletopDs(tabletopDsPlacement(shape, tt, pad))
+    }
 
-    /** A drawn group moved or resized: a pad width that changed by 2 px or more lays the picture out again. */
+    /**
+     * The clusters' alpha: solid while they clear the picture, else Pad Opacity (landscape). Read in composition. The
+     * half-folded DS / 3DS halves are always solid: the touch screen overlaps them by a quarter of their reach at most.
+     */
+    private fun clusterAlpha(): Float = if (clustersSolid.value || clustersClear.value) 1f else padLandscapeAlpha.value
+
+    /**
+     * A drawn group moved or resized: a pad width that changed by 2 px or more lays the picture out again (half-folded,
+     * the halves move with the touch screen it sizes).
+     */
     private fun onMeasured() {
         if (!measured.accept()) return
         NxLog.i(TAG_LOG, "pad measured: buttons ${measured.accepted} px wide")
-        findViewById<FrameLayout>(R.id.root).post { relayoutFrontend() }
+        findViewById<FrameLayout>(R.id.root).post {
+            if (tabletopDsViews != null) tabletop()?.let { placeTabletopDs(tabletopDsPlacement(activity.windowShape(), it)) }
+            relayoutFrontend()
+        }
     }
 
     /**
@@ -434,6 +489,67 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             systemRowPills(padProfile(), padMotion() != null),
         )
         return LandscapePad(shape, m.unitPx, m.reach, secondRow, measured.accepted != null)
+    }
+
+    /**
+     * The half-folded DS / 3DS pad's unit (the cover screen's button size, [tabletopDsUnitPx]) and reach in the window
+     * [shape]: the halves' drawn buttons once both have reported ([MeasuredButtons]), else the estimate.
+     */
+    fun tabletopDsPad(shape: WindowShape = activity.windowShape()): LandscapePad {
+        val unit = tabletopDsUnitPx(shape.ydpi, shape.density)
+        val secondRow = besideSecondRow(padTools(), host.padShortcuts, placeholders = false)
+        val drawn = measured.accepted.takeIf { tabletopDsViews != null }
+        val r = reach(
+            unit, shape.density, shape.cutoutLeft.toFloat(), shape.cutoutRight.toFloat(), measuredButtonsPx = drawn,
+            faceWidthUnits(padProfile()), systemRowPills(padProfile(), padMotion() != null),
+        )
+        return LandscapePad(shape, unit, r, secondRow, measured = drawn != null)
+    }
+
+    /**
+     * Where half-folded [tt] puts this DS / 3DS game's screens and pad halves in the window [shape] ([tabletopDs], window
+     * px): the hinge from [tt], the [pad]'s unit, reach and second row, no halves with a controller in the layout.
+     */
+    fun tabletopDsPlacement(shape: WindowShape, tt: TabletopLayout, pad: LandscapePad = tabletopDsPad(shape)): TabletopDsPlacement =
+        tabletopDs(
+            shape.widthPx, shape.heightPx, shape.screenClass, shape.cutoutTop, hingeTop = tt.menuBottom, hingeBottom = tt.padTop,
+            if (N3dsOptions.appliesTo(layoutTag())) DsKind.N3DS else DsKind.DS, pad.unitPx, pad.reach, shape.density,
+            controller = layoutControllerNames().isNotEmpty(), secondRow = pad.secondRow, big = n3dsTabletopBig,
+        )
+
+    /**
+     * Half-folded 3DS: the screen drawn first (above the hinge, or on top of the Flip's stack); SWAP trades it
+     * ([swapTabletopN3ds]). Lasts the session, unfolds and folds included, as the Dual screen split's swap; the DS
+     * keeps its stored Big Screen instead.
+     */
+    var n3dsTabletopBig = NdsScreen.TOP
+        private set
+
+    /** 3DS SWAP while half-folded: the screens trade places and sizes, and the pad halves follow the new touch screen. */
+    fun swapTabletopN3ds() {
+        n3dsTabletopBig = n3dsTabletopBig.other
+        if (tabletopDsViews != null) tabletop()?.let { placeTabletopDs(tabletopDsPlacement(activity.windowShape(), it)) }
+    }
+
+    /** The half-folded pad halves at [p]'s boxes ([tabletopDsPadBoxes]); always solid ([clusterAlpha]). */
+    private fun placeTabletopDs(p: TabletopDsPlacement) {
+        val (left, right) = tabletopDsViews ?: return
+        val box = tabletopDsPadBoxes(p, rootSize().second) ?: return
+        clusterInsetPx.value = box.insetPx
+        setBox(left, Gravity.START or Gravity.TOP, box.widthPx, box.heightPx, box.topMarginPx)
+        setBox(right, Gravity.END or Gravity.TOP, box.widthPx, box.heightPx, box.topMarginPx)
+    }
+
+    /** [v]'s layout params to a [w] x [h] box at [gravity], [top] from the root's top; untouched when already so. */
+    private fun setBox(v: View, gravity: Int, w: Int, h: Int, top: Int) {
+        val lp = v.layoutParams as FrameLayout.LayoutParams
+        if (lp.width != w || lp.height != h || lp.gravity != gravity || lp.topMargin != top) {
+            lp.width = w
+            lp.height = h
+            lp.gravity = gravity
+            lp.topMargin = top
+            v.layoutParams = lp
+        }
     }
 
     /**
@@ -455,17 +571,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val w = p.boxWidthPx.roundToInt()
         val h = p.boxHeightPx.roundToInt()
         val top = p.topMarginPx.roundToInt()
-        listOf(left to Gravity.START, right to Gravity.END).forEach { (v, side) ->
-            val lp = v.layoutParams as FrameLayout.LayoutParams
-            val gravity = side or Gravity.TOP
-            if (lp.width != w || lp.height != h || lp.gravity != gravity || lp.topMargin != top) {
-                lp.width = w
-                lp.height = h
-                lp.gravity = gravity
-                lp.topMargin = top
-                v.layoutParams = lp
-            }
-        }
+        setBox(left, Gravity.START or Gravity.TOP, w, h, top)
+        setBox(right, Gravity.END or Gravity.TOP, w, h, top)
     }
 
     /**
@@ -560,7 +667,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      */
     fun onPictureKnown() {
         if (reveal.shouldShow(SystemClock.uptimeMillis())) return
-        if (clusterViews != null && measured.accepted == null) return
+        if ((clusterViews != null || tabletopDsViews != null) && measured.accepted == null) return
         // The first frame flipped band / overlay in portrait ([onFrame]): the pads of this layout never show, the next do.
         if (!isLandscape(resources.configuration.orientation) && portraitPadHidden() != layoutPadHidden) return
         reveal.onPictureKnown()
@@ -622,7 +729,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         game.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, tt.gameBottom - tt.gameTop, Gravity.TOP)
             .apply { topMargin = tt.gameTop }
         val (rootW, rootH) = rootSize()
-        builtTabletopSize = rootW to rootH
         val padH = rootH - tt.padTop
         when (tt.pad) {
             TabletopPad.PORTRAIT -> {
@@ -644,8 +750,12 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 addPad(root, left, FrameLayout.LayoutParams(halfW, padH, Gravity.START or Gravity.BOTTOM))
                 addPad(root, right, FrameLayout.LayoutParams(halfW, padH, Gravity.END or Gravity.BOTTOM))
             }
+            // The halves beside the touch screen; a controller leaves the bottom half to the touch screen alone.
+            TabletopPad.DS -> if (names.isEmpty()) addTabletopDsHalves(root, tt)
             TabletopPad.NONE -> Unit
         }
+        root.removeCallbacks(revealTimeout)
+        if (tabletopDsViews != null) startReveal(root)
         game.requestLayout()
         updatePadVisibility()
         menuView?.layoutParams = menuLayoutParams(orientation, overPanel = mainPanelShown())
@@ -653,12 +763,16 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         game.post { relayoutFrontend() }
     }
 
-    /** The tabletop split for the current [posture] and root size ([rootSize]), or null (flat, a DS game, no size yet). */
+    /** The tabletop split for the current [posture] and root size ([rootSize]), or null (flat, no size yet). */
     fun tabletop(names: List<String> = layoutControllerNames()): TabletopLayout? {
         if (posture == Posture.Flat) return null
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null
-        return tabletopLayout(posture, w, h, cutoutTop, controllerConnected = names.isNotEmpty(), isDs = isNds)
+        val shape = activity.windowShape()
+        val tt = tabletopLayout(posture, w, h, shape.screenClass, cutoutTop, controllerConnected = names.isNotEmpty(), isDualScreenConsole = tabletopDualScreen(layoutTag(), host.dualMode))
+        // A hinge reading the Fold's split cannot fit is not used for the DS / 3DS: flat, with its pad ([usableTabletop]).
+        if (tt?.pad == TabletopPad.DS && !usableTabletop(spansHinge = true, tabletopDsPlacement(shape, tt))) return null
+        return tt
     }
 
     /**
@@ -672,8 +786,32 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         return bounds.width() to bounds.height()
     }
 
-    /** The root size the current tabletop layout was built for ([applyTabletopLayout]); null for a flat layout. */
-    private var builtTabletopSize: Pair<Int, Int>? = null
+    /** What the current layout was built for ([applyLayout]): a change while half-folded lays it out again ([collectPosture]). */
+    private var builtTabletop: TabletopBuild? = null
+
+    private fun tabletopBuild(tt: TabletopLayout?, names: List<String>): TabletopBuild {
+        val (w, h) = rootSize()
+        return TabletopBuild(tt != null, tt?.pad, names.isNotEmpty(), w, h)
+    }
+
+    /**
+     * The launch set the game's tag: a tabletop layout built for something else lays out again ([tabletopRelayoutNeeded]).
+     * The layout reads the intent's tag before that ([tabletopDualScreen]), so this only catches a tag the launch changed.
+     */
+    fun onGameTagKnown() {
+        val names = layoutControllerNames()
+        if (tabletopRelayoutNeeded(builtTabletop, tabletopBuild(tabletop(names), names))) applyLayout(resources.configuration.orientation)
+    }
+
+    /**
+     * Whether the pad drawn below the hinge of half-folded [tt]: none for [TabletopPad.NONE], nor for the DS / 3DS halves
+     * with a controller in the layout (the touch screen has the bottom half to itself).
+     */
+    fun tabletopPadDrawn(tt: TabletopLayout): Boolean = when (tt.pad) {
+        TabletopPad.NONE -> false
+        TabletopPad.DS -> layoutControllerNames().isEmpty()
+        TabletopPad.PORTRAIT, TabletopPad.CLUSTERS -> true
+    }
 
     /**
      * Before onCreate's first [applyLayout]: starts from the menu's posture ([PostureTracker.seed]), so a game launched
@@ -687,15 +825,16 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     /**
      * Starts [postureTracker], and re-reads the posture when the root's size changes (the first report can come before
      * the root is laid out; a rotation resizes it). Each posture change re-runs [applyLayout] ([onPosture]); a tabletop
-     * layout built for another size (a seeded one, the window's size taken before the root's) is laid out again.
+     * layout built for anything else ([tabletopRelayoutNeeded]: another size, as a seeded one taken from the window's
+     * size before the root's) is laid out again.
      */
     fun collectPosture() {
         val root = findViewById<FrameLayout>(R.id.root)
         root.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or_, ob ->
             if (r - l != or_ - ol || b - t != ob - ot) root.post {
                 postureTracker.update()
-                val built = builtTabletopSize
-                if (built != null && built != (root.width to root.height) && tabletop() != null) applyLayout(resources.configuration.orientation)
+                val names = layoutControllerNames()
+                if (tabletopRelayoutNeeded(builtTabletop, tabletopBuild(tabletop(names), names))) applyLayout(resources.configuration.orientation)
             }
         }
         postureTracker.start()
@@ -749,7 +888,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val hide = (menuOpen && overGame && tabletop() == null) || mainPanelShown()
         // Waiting for the picture ([reveal]): invisible, not gone, so the clusters are still laid out and measured.
         val waiting = !reveal.shouldShow(SystemClock.uptimeMillis())
-        val placed = listOfNotNull(clusterViews?.first, clusterViews?.second, overlayView, bandView?.takeIf { bandWaits })
+        val placed = listOfNotNull(
+            clusterViews?.first, clusterViews?.second, tabletopDsViews?.first, tabletopDsViews?.second, overlayView, bandView?.takeIf { bandWaits },
+        )
         padViews.forEach { v ->
             v.visibility = when {
                 hide -> View.GONE

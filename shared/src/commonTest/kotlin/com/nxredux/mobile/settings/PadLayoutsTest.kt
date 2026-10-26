@@ -204,4 +204,40 @@ class PadLayoutsTest {
         assertEquals(emptyMap(), PadLayouts.decodeStored(current = "", beforeBeside = PadLayouts.encode(before)))
         assertEquals(emptyMap(), PadLayouts.decodeStored(current = null, beforeBeside = null))
     }
+
+    private val halfFoldedWide = PadSlot(PadShape.HALF_FOLDED, PadScreen.WIDE)
+
+    @Test fun half_folded_slot_round_trips() {
+        assertEquals("HALF_FOLDED.WIDE", halfFoldedWide.code)
+        assertEquals(halfFoldedWide, PadSlot.fromCode("HALF_FOLDED.WIDE"))
+        val all = PadLayouts.withLayout(emptyMap(), "nds", halfFoldedWide, PadLayout.EMPTY.with(PadGroup.DPAD, GroupTweak(1f, -0.5f, 1.2f)))
+        assertEquals(all, PadLayouts.decode(PadLayouts.encode(all)))
+    }
+
+    @Test fun half_folded_starts_at_the_default_pad_not_the_landscape_one() {
+        val landscape = PadLayout.EMPTY.with(PadGroup.FACE, GroupTweak(2f, 0f, 1f))
+        val all = PadLayouts.withLayout(emptyMap(), PadLayouts.SHARED_KEY, PadSlot(PadShape.OVERLAY, PadScreen.WIDE), landscape)
+        assertEquals(PadLayout.EMPTY, PadLayouts.resolve(all, "nds", halfFoldedWide))
+        assertEquals(PadLayout.EMPTY, PadLayouts.startingLayout(all, "nds", halfFoldedWide))
+        // Its own moves stay its own: the landscape slot is unchanged by them.
+        val moved = PadLayouts.withLayout(all, "nds", halfFoldedWide, PadLayout.EMPTY.with(PadGroup.DPAD, GroupTweak(0f, 1f, 1f)))
+        assertEquals(landscape, PadLayouts.resolve(moved, "nds", PadSlot(PadShape.OVERLAY, PadScreen.WIDE)))
+    }
+
+    @Test fun landscape_moves_from_before_the_beside_pad_leave_half_folded_alone() {
+        val half = PadLayout.EMPTY.with(PadGroup.DPAD, GroupTweak(0f, 1f, 1f))
+        val all = PadLayouts.withLayout(emptyMap(), "nds", halfFoldedWide, half)
+        assertEquals(all, PadLayouts.withoutLandscapeMoves(all))
+    }
+
+    @Test fun half_folded_offered_for_ds_3ds_and_shared_on_a_wide_half_folding_screen() {
+        val all = listOf(PadShape.PORTRAIT, PadShape.OVERLAY, PadShape.HALF_FOLDED)
+        val flat = listOf(PadShape.PORTRAIT, PadShape.OVERLAY)
+        assertEquals(all, PadShape.offered(null, PadScreen.WIDE, canHalfFold = true))
+        assertEquals(all, PadShape.offered(listOf("NDS"), PadScreen.WIDE, canHalfFold = true))
+        assertEquals(all, PadShape.offered(listOf("3DS"), PadScreen.WIDE, canHalfFold = true))
+        assertEquals(flat, PadShape.offered(listOf("GBA"), PadScreen.WIDE, canHalfFold = true))
+        assertEquals(flat, PadShape.offered(listOf("NDS"), PadScreen.NARROW, canHalfFold = true))
+        assertEquals(flat, PadShape.offered(null, PadScreen.WIDE, canHalfFold = false))
+    }
 }

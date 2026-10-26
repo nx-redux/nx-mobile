@@ -45,9 +45,12 @@ object DualScreen {
     private const val SWAP_SCREEN = "citra_swap_screen"
     private const val SWAP_SCREEN_MODE = "citra_swap_screen_mode"
 
-    /** The 3DS frame in Azahar's "default" layout at proportion 1, unswapped: 400s x 480s, the bottom screen centred. */
-    private val N3DS_TOP_SRC = FrameRect(0f, 0f, 1f, 0.5f)
-    private val N3DS_BOTTOM_SRC = FrameRect(0.1f, 0.5f, 0.9f, 1f)
+    /**
+     * The 3DS frame in Azahar's "default" layout at proportion 1, unswapped: 400s x 480s, the bottom screen centred. The
+     * half-folded layout runs the core the same way and cuts the same rects ([tabletopRegions]).
+     */
+    internal val N3DS_TOP_SRC = FrameRect(0f, 0f, 1f, 0.5f)
+    internal val N3DS_BOTTOM_SRC = FrameRect(0.1f, 0.5f, 0.9f, 1f)
 
     /** A DS/3DS game ([dualGame]) splits (or shows both screens with [panelUp]); any other game gets the panel. */
     fun mode(secondConnected: Boolean, settingOn: Boolean, dualGame: Boolean, panelUp: Boolean): DualMode = when {
@@ -121,8 +124,8 @@ object DualScreen {
         }
     }
 
-    /** [screen]'s rectangle in the 3DS frame in the split layout. */
-    private fun n3dsSrc(screen: NdsScreen): FrameRect = if (screen == NdsScreen.TOP) N3DS_TOP_SRC else N3DS_BOTTOM_SRC
+    /** [screen]'s rectangle in the 3DS frame in the split (and half-folded) layout. */
+    internal fun n3dsSrc(screen: NdsScreen): FrameRect = if (screen == NdsScreen.TOP) N3DS_TOP_SRC else N3DS_BOTTOM_SRC
 
     /** Split, 3DS screen [which] alone on a display's area, as [ndsScreen]: the top fitted 5:3, the bottom 4:3, centred. */
     fun n3dsScreen(areaW: Float, areaH: Float, which: NdsScreen): List<NdsRegion> =
@@ -145,6 +148,15 @@ object DualScreen {
         DualMode.OFF, DualMode.PANEL -> null
     }
 
+    /**
+     * The Azahar options held for the session now: a second screen's mode's ([n3dsCoreOptions]) first; else, [halfFolded]
+     * with no second screen in use ([DualMode.OFF]: the screens are regions of the unswapped Stacked frame,
+     * [tabletopRegions]), the swap pinned to Top / Hold, so SWAP is the app's (the screens trade places across the hinge)
+     * and the core never turns its frame under the cuts. Null: nothing held, the user's values apply (Azahar's own swap).
+     */
+    fun n3dsForcedOptions(mode: DualMode, halfFolded: Boolean): Map<String, String>? =
+        n3dsCoreOptions(mode) ?: if (halfFolded && mode == DualMode.OFF) mapOf(SWAP_SCREEN to "Top", SWAP_SCREEN_MODE to "Hold") else null
+
     /** The swap options [n3dsCoreOptions] overrides while split, which leaving it must put back. */
     val N3DS_SWAP_KEYS: Set<String> = setOf(SWAP_SCREEN, SWAP_SCREEN_MODE)
 
@@ -160,6 +172,13 @@ object DualScreen {
     /** Azahar's touch-main-only rule: split, the app's regions decide where a finger touches, so the core takes it anywhere. */
     fun n3dsTouchMainOnly(mode: DualMode, padOverGame: Boolean): String =
         N3dsOptions.touchMainOnly(padOverGame && mode != DualMode.SPLIT)
+
+    /**
+     * [n3dsTouchMainOnly], and off while [halfFolded]: the screens are regions there too, which decide where a finger
+     * touches (the touch screen wherever it is drawn), so the core takes it anywhere. Flat, the rule as before.
+     */
+    fun n3dsTouchMainOnly(mode: DualMode, padOverGame: Boolean, halfFolded: Boolean): String =
+        n3dsTouchMainOnly(mode, padOverGame && !halfFolded)
 
     private fun single(w: Float, h: Float, screen: NdsScreen, src: FrameRect, aspect: Float): List<NdsRegion> {
         if (w <= 0f || h <= 0f) return emptyList()

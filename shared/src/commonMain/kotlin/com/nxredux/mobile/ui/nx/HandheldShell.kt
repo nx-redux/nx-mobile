@@ -118,7 +118,7 @@ fun HandheldShell(
                             Modifier.fillMaxWidth(CLUSTER_MAX_WIDTH_SHARE).fillMaxHeight().align(Alignment.BottomEnd),
                         )
                     }
-                    TabletopPad.NONE -> Unit
+                    TabletopPad.NONE, TabletopPad.DS -> Unit
                 }
             } else if (!portrait || !showPad) {
                 // Menu pad Off keeps the portrait layout, the screen filling the area.

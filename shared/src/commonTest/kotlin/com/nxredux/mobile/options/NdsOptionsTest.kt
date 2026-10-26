@@ -245,4 +245,15 @@ class NdsOptionsTest {
         assertTrue(NdsOptions.appliesTo("NDS"))
         assertFalse(NdsOptions.appliesTo("MGBA"))
     }
+
+    @Test fun layout_rows_say_the_fold_sets_the_layout_half_folded() {
+        for (screen in listOf(null, ScreenClass.NEAR_SQUARE_TABLET)) {
+            assertTrue(NdsOptions.layoutRows(screen, canHalfFold = true).all { NdsOptions.FOLD_NOTE in it.info })
+        }
+    }
+
+    @Test fun layout_rows_leave_the_fold_out_where_the_device_cannot_half_fold() {
+        assertTrue(NdsOptions.layoutRows(ScreenClass.REGULAR_PHONE, canHalfFold = false).none { NdsOptions.FOLD_NOTE in it.info })
+        assertTrue(NdsOptions.layoutRows(ScreenClass.REGULAR_PHONE, canHalfFold = false).all { it.info.endsWith("do not apply to the DS screens.") })
+    }
 }

@@ -88,6 +88,8 @@ internal interface GameInputHost : LifecycleOwner {
     fun ndsControllerMode(): Boolean
     /** The game window's screen class ([windowShape]): the DS and 3DS layout cycles skip what it does not offer. */
     fun screenClass(): ScreenClass
+    /** Half-folded, the fold places the DS / 3DS screens: the layout cycle does nothing then. */
+    fun layoutSetByFold(): Boolean
     /** The activity's own handling (super) of an event the router leaves to the system. */
     fun superGenericMotionEvent(event: MotionEvent?): Boolean
     fun superKeyDown(keyCode: Int, event: KeyEvent): Boolean
@@ -104,6 +106,8 @@ internal class GameInputRouter(private val host: GameInputHost) {
     companion object {
         private const val NDS_LABEL_MS = 1500L   // a DS hotkey's label ("Bottom screen", "Stylus on")
         private const val PLAYER_NOTICE_MS = 2500L   // "Player 2: <pad>" when a pad takes a player slot
+        /** SELECT + Left/Right's notice while half-folded ([GameInputHost.layoutSetByFold]). */
+        const val LAYOUT_SET_BY_FOLD = "Layout is set by the fold"
         private const val PEN_TICK_MS = 16L
         /**
          * Cores that read the left stick as analog (N64, PSP, PS1 DualShock, Dreamcast, and Dolphin's GameCube stick and
@@ -358,6 +362,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         when (action) {
             NdsAction.SwapScreens -> setNdsKey(NdsOptions.swapBigScreen(frontendValues))
             is NdsAction.CycleLayout -> {
+                if (host.layoutSetByFold()) { showNdsLabel(LAYOUT_SET_BY_FOLD); return }
                 // From the layout showing on this screen (an unset row steps from its default).
                 setNdsKey(NdsOptions.cycleLayout(
                     frontendValues, landscape, ndsControllerMode(), action.delta, host.screenClass(),
@@ -505,6 +510,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private fun applyN3dsAction(action: N3dsAction) {
         when (action) {
             is N3dsAction.CycleLayout -> {
+                if (host.layoutSetByFold()) { showNdsLabel(LAYOUT_SET_BY_FOLD); return }
                 // The row in use (orientation, controller), as the DS's; applyFrontend sets the core's layout from it.
                 val (key, value) = N3dsOptions.cycleLayout(frontendValues, isLandscape(), ndsControllerMode(), action.delta, host.screenClass())
                 if (key in lockedOptions) return

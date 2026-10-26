@@ -1,5 +1,6 @@
 package com.nxredux.mobile.options
 
+import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.runner.N3dsNewControls
 import com.nxredux.mobile.settings.stepFrom
@@ -102,29 +103,31 @@ object N3dsOptions {
         "Stacked: one above the other, the same size.\nSingle screen: the top one only.\n" +
         "Side by side: next to each other.\nSELECT + Left/Right cycles it."
 
-    private fun layoutRow(key: String, label: String, default: String, info: String, brief: String = "") = FrontendOption(
-        key, label, LAYOUT_CYCLE, default, info, visual = true, valueLabels = LAYOUT_CYCLE.map(::layoutLabel), brief = brief,
+    private fun layoutRow(key: String, label: String, default: String, info: String, fold: String, brief: String = "") = FrontendOption(
+        key, label, LAYOUT_CYCLE, default, info + fold, visual = true, valueLabels = LAYOUT_CYCLE.map(::layoutLabel), brief = brief,
     )
 
     /**
      * Console Settings' layout rows, one per orientation as on the DS (in-game: applied live), for [screen] (null: unknown,
      * so the regular phone's defaults). The row default is the screen's [defaultLayout], shown while nothing is stored.
+     * On a device that [canHalfFold] each says it is the layout when not half-folded ([NdsOptions.foldNote]).
      */
-    fun layoutRowsFor(screen: ScreenClass?): List<FrontendOption> {
+    fun layoutRowsFor(screen: ScreenClass?, canHalfFold: Boolean = DeviceTraits.canHalfFold): List<FrontendOption> {
         val known = screen ?: ScreenClass.REGULAR_PHONE
+        val fold = NdsOptions.foldNote(canHalfFold)
         return listOf(
-            layoutRow(LAYOUT_PORTRAIT, "Layout (portrait)", defaultLayout(known, false), "How the two screens share a portrait screen.\n$LAYOUT_INFO_LIST"),
+            layoutRow(LAYOUT_PORTRAIT, "Layout (portrait)", defaultLayout(known, false), "How the two screens share a portrait screen.\n$LAYOUT_INFO_LIST", fold),
             layoutRow(
                 LAYOUT_PORTRAIT_CONTROLLER, "Layout (portrait, controller)", defaultLayout(known, false),
-                "The portrait layout while a controller that is not a clip-on\nis connected and the pad is hidden.\nSELECT + Left/Right cycles it then.",
+                "The portrait layout while a controller that is not a clip-on\nis connected and the pad is hidden.\nSELECT + Left/Right cycles it then.", fold,
                 brief = "Used while a controller (not a clip-on) hides the pad",
             ),
-            layoutRow(LAYOUT_LANDSCAPE, "Layout (landscape)", defaultLayout(known, true), "How the two screens share a landscape screen.\n$LAYOUT_INFO_LIST"),
+            layoutRow(LAYOUT_LANDSCAPE, "Layout (landscape)", defaultLayout(known, true), "How the two screens share a landscape screen.\n$LAYOUT_INFO_LIST", fold),
         )
     }
 
-    /** [layoutRowsFor] an unknown screen. */
-    val layoutRows: List<FrontendOption> = layoutRowsFor(null)
+    /** [layoutRowsFor] an unknown screen; built when read, as [NdsOptions.table]. */
+    val layoutRows: List<FrontendOption> get() = layoutRowsFor(null)
 
     /** The row in use: landscape, else portrait with a (non-clip-on) controller ([controllerMode]), else portrait. */
     fun layoutKey(landscape: Boolean, controllerMode: Boolean): String = when {
@@ -137,16 +140,22 @@ object N3dsOptions {
     fun appLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): String =
         layoutValue(values, layoutKey(landscape, controllerMode)) ?: defaultLayout(screen, landscape)
 
-    /** The core's [LAYOUT] value for the row in use: Large screen and Stacked are its top over bottom ("default"). */
-    fun coreLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): String =
-        when (val app = appLayoutFor(values, landscape, controllerMode, screen)) {
+    /**
+     * The core's [LAYOUT] value for the row in use: Large screen and Stacked are its top over bottom ("default"). Half-folded
+     * ([tabletop]) it is always that, whatever the player saved: the app lays the two screens out itself, from a Stacked frame.
+     */
+    fun coreLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean): String =
+        if (tabletop) "default" else when (val app = appLayoutFor(values, landscape, controllerMode, screen)) {
             "large", "stacked" -> "default"
             else -> app
         }
 
-    /** How many times smaller the core draws the touch screen in its top over bottom: half for Large screen, else alike. */
-    fun stackedSmallProportion(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): String =
-        if (appLayoutFor(values, landscape, controllerMode, screen) == "large") "2" else "1"
+    /**
+     * How many times smaller the core draws the touch screen in its top over bottom: half for Large screen, else alike.
+     * Half-folded ([tabletop]) the screens are equal ("1") whatever the player saved.
+     */
+    fun stackedSmallProportion(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean): String =
+        if (!tabletop && appLayoutFor(values, landscape, controllerMode, screen) == "large") "2" else "1"
 
     /** SELECT + Left/Right: the row in use, as key to the layout [delta] steps from the one showing on [screen], wrapping. */
     fun cycleLayout(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, delta: Int, screen: ScreenClass): Pair<String, String> {

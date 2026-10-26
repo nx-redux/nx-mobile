@@ -110,6 +110,7 @@ import com.nxredux.mobile.settings.PadScreen
 import com.nxredux.mobile.settings.PadSlot
 import com.nxredux.mobile.settings.PadLayouts
 import com.nxredux.mobile.settings.PadShape
+import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.settings.PadButtons
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.settings.PadVibration
@@ -3811,8 +3812,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private fun padLayoutRows(): List<SettingsRow> {
         val all = deps.settings.padLayouts
         val key = padLayoutConsole
+        val tags = if (key == PadLayouts.SHARED_KEY) null else CoreRegistry.consoles.firstOrNull { it.id == key }?.tags.orEmpty()
         return listOf(SettingsRow(SettingsKind.PAD_LAYOUT_CONSOLE, "Console", padLayoutConsoleName(key))) +
-            PadShape.entries.map { shape ->
+            PadShape.offered(tags, _padScreen.value, DeviceTraits.canHalfFold).map { shape ->
                 val own = PadLayouts.own(all, key, PadSlot(shape, _padScreen.value))
                 val value = when {
                     own != null -> if (own.tweaks.isEmpty()) "Default" else "Custom"   // empty: a console's explicit default

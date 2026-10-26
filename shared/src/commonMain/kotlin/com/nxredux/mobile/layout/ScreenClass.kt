@@ -26,6 +26,15 @@ object LayoutConstants {
     const val EDGE_NUDGE_UNITS = 0.2f
     const val REFERENCE_LINES = 224
     const val HIDDEN_BAND_REACH = 0.25f
+
+    /** The half-folded DS pad unit: the Fold cover screen's (1248 - 2 x 16 dp x 2.625) / 9 = 129.3 px at 428 dpi, about 7.67 mm. */
+    const val TABLETOP_DS_UNIT_MM = 7.7f
+
+    /**
+     * The share of the pad's reach the half-folded touch screen leaves free on each side: it may overlap each half by at
+     * most a quarter of its reach.
+     */
+    const val TABLETOP_DS_SET_ASIDE = 0.75f
 }
 
 /**
@@ -44,7 +53,13 @@ fun screenClass(widthPx: Int, heightPx: Int, smallestWidthDp: Int): ScreenClass 
 }
 
 /** Pixels in one layout unit (11 mm); ydpi outside 40..1200 falls back to density x 160. */
-fun unitPx(ydpi: Float, density: Float): Float {
+fun unitPx(ydpi: Float, density: Float): Float = mmToPx(LayoutConstants.UNIT_MM, ydpi, density)
+
+/** [mm] in pixels at [ydpi], or at density x 160 when ydpi is outside 40..1200 (an unreported or bogus value). */
+private fun mmToPx(mm: Float, ydpi: Float, density: Float): Float {
     val dpi = if (ydpi in 40f..1200f) ydpi else density * 160f
-    return LayoutConstants.UNIT_MM / 25.4f * dpi
+    return mm / 25.4f * dpi
 }
+
+/** Pixels in one half-folded DS layout unit ([LayoutConstants.TABLETOP_DS_UNIT_MM]); ydpi as [unitPx]. */
+fun tabletopDsUnitPx(ydpi: Float, density: Float): Float = mmToPx(LayoutConstants.TABLETOP_DS_UNIT_MM, ydpi, density)
