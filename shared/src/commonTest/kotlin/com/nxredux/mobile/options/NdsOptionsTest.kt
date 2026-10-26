@@ -42,7 +42,7 @@ class NdsOptionsTest {
         assertEquals(keys.indexOf(PIP_SIZE) + 1, keys.indexOf(PIP_OPACITY))    // right after the size row
         assertEquals(keys.indexOf(LAYOUT_PORTRAIT) + 1, keys.indexOf(LAYOUT_PORTRAIT_CONTROLLER))    // right after the portrait row
         assertEquals(PIP_OPACITY, keys.last())    // the last row
-        assertTrue(NdsOptions.table.all { it.visual && it.valueLabels.size == it.values.size })
+        assertTrue(NdsOptions.table.all { (it.visual || it.key in NdsOptions.RESOLUTION_KEYS) && it.valueLabels.size == it.values.size })
     }
 
     @Test fun resolutionRows() {
@@ -58,7 +58,8 @@ class NdsOptionsTest {
         assertEquals(NdsOptions.MODE_3D to setOf("performance"), scale.shownWhen)
         assertEquals((1..8).map { "${it}x" }, max.valueLabels)
         assertNull(mode.shownWhen)
-        assertTrue(NdsOptions.resolutionRows(null).all { it.visual })
+        // No Adjust strip: the paused core draws no new frame, so the change only shows after Continue.
+        assertTrue(NdsOptions.resolutionRows(null).none { it.visual })
     }
 
     @Test fun listsFollowTheDisplay() {

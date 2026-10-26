@@ -212,7 +212,8 @@ object NdsOptions {
 
     /**
      * The 3D Resolution row and its two sub-rows: Max Scale (Auto) and Scale (Performance). [displayMax] is the biggest scale
-     * the display reaches ([Nds3dResolution.displayMax]); null (unknown) offers every scale the core has.
+     * the display reaches ([Nds3dResolution.displayMax]); null (unknown) offers every scale the core has. Not [visual]: the
+     * core is paused while the menu shows, so an Adjust strip over the frozen frame could never show the 3D change.
      */
     fun resolutionRows(displayMax: Int?): List<FrontendOption> {
         val maxScales = scales(displayMax ?: Nds3dResolution.CORE_MAX)
@@ -221,17 +222,17 @@ object NdsOptions {
             FrontendOption(
                 MODE_3D, "3D Resolution", Nds3dMode.entries.map { it.value }, Nds3dMode.AUTO.value,
                 "How sharply 3D models are drawn. 2D art, text and the screen's size don't change.",
-                visual = true, valueLabels = Nds3dMode.entries.map { it.label },
+                visual = false, valueLabels = Nds3dMode.entries.map { it.label },
             ),
             FrontendOption(
                 MAX_SCALE_3D, "Max Scale", maxScales, Nds3dResolution.DEFAULT_CAP.toString(),
                 "The most Auto draws 3D at, as a multiple of the DS screen.",
-                visual = true, valueLabels = maxScales.map { "${it}x" }, shownWhen = MODE_3D to setOf(Nds3dMode.AUTO.value),
+                visual = false, valueLabels = maxScales.map { "${it}x" }, shownWhen = MODE_3D to setOf(Nds3dMode.AUTO.value),
             ),
             FrontendOption(
                 SCALE_3D, "Scale", perfScales, Nds3dResolution.DEFAULT_PERFORMANCE_SCALE.toString(),
                 "The fixed resolution Performance draws 3D at, as a multiple of the DS screen.",
-                visual = true, valueLabels = perfScales.map { "${it}x" }, shownWhen = MODE_3D to setOf(Nds3dMode.PERFORMANCE.value),
+                visual = false, valueLabels = perfScales.map { "${it}x" }, shownWhen = MODE_3D to setOf(Nds3dMode.PERFORMANCE.value),
             ),
         )
     }
