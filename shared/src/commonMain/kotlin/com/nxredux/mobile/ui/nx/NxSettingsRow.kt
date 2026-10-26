@@ -217,7 +217,7 @@ private fun SettingControlView(row: NxSettingRow, sizes: NxTouchRowSizes, choose
         row.enabled && row.control == NxSettingControl.SEGMENTED -> NxSegments(row.choices, row.index, sizes.value, choose)
         row.enabled && row.control == NxSettingControl.PICKER -> NxPickerValue(current.orEmpty(), sizes.value, openPicker)
         row.button != null -> Box(
-            Modifier.clip(RoundedCornerShape(50)).border(1.dp, colors.main.copy(alpha = 0.3f), RoundedCornerShape(50))   // role: an outlined button's ring
+            Modifier.clip(RoundedCornerShape(50)).border(1.dp, colors.inkRing, RoundedCornerShape(50))
                 .padding(horizontal = 14.dp, vertical = 6.dp),
         ) { NxValueText(row.button, sizes.value, colors.listText) }
         else -> Row(verticalAlignment = Alignment.CenterVertically) {

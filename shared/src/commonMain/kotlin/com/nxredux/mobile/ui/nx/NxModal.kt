@@ -125,7 +125,7 @@ internal fun NxModalButton(action: FooterAction, onClick: () -> Unit) {
     val colors = LocalNxColors.current
     val shape = RoundedCornerShape(50)
     val base = Modifier.height(36.dp).clip(shape).clickable(onClick = onClick)
-    val styled = if (action.primary) base.background(colors.main, shape) else base.border(1.dp, colors.main.copy(alpha = 0.2f), shape)   // role: a modal's secondary button ring
+    val styled = if (action.primary) base.background(colors.main, shape) else base.border(1.dp, colors.inkRing, shape)
     Box(styled.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
         Text(action.label, color = if (action.primary) colors.listTextSelected else colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxModalButton(), maxLines = 1)
     }

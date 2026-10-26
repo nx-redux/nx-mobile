@@ -68,13 +68,24 @@ data class NxColors(
 
     /** Unselected tab words and the top-right icons: the [main] ink at 38%. */
     val inkDim: Color = main.copy(alpha = 0.38f)
-    /** Unselected pictures: grid tiles, cards, and carousel items one step out. The [main] ink at 55%. */
+    /**
+     * Reserved for unselected pictures (grid tiles, cards, carousel items one step out); not yet wired. The carousel
+     * uses MENU_FIRST_ALPHA (0.35) in RowLayout.kt. The [main] ink at 55%.
+     */
     val inkMuted: Color = main.copy(alpha = 0.55f)
     /** An unlit tag pill (Continue) and the unlit plate behind a word: the [main] ink at 14%. */
     val inkFaint: Color = main.copy(alpha = 0.14f)
+    /**
+     * The ring of every outlined button and segment: NxModal's secondary button, NxDialog, NxSettingsRow's outlined
+     * button and NxTouchRows' segmented control. The [main] ink at 30%.
+     */
+    val inkRing: Color = main.copy(alpha = 0.30f)
     /** Hairlines: a tile's edge, a placeholder spine, a sheet's edge. The [main] ink at 8%. */
     val inkEdge: Color = main.copy(alpha = 0.08f)
-    /** Opacity for carousel items two or more steps out (a Float, not a colour). */
+    /**
+     * Reserved for carousel items two or more steps out (a Float, not a colour); not yet wired. The carousel uses
+     * MENU_FAR_ALPHA (0.2) in RowLayout.kt.
+     */
     val artFar: Float = 0.30f
     /**
      * The hint bar over art: NxHintBar's ground and the shade over a hidden bar's kept room (NxScreenScaffold). Its alpha

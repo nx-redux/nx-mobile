@@ -15,9 +15,10 @@ class ColourRolesLockTest {
     private val themeFile = "com/nxredux/mobile/ui/nx/NxTheme.kt"
 
     private val literal = Regex("""Color\(\s*(\w+\s*=\s*)?0x""")
-    private val ladderMember = Regex("""inkDim|inkMuted|inkFaint|inkEdge|artFar|\w*[sS]crim\w*""")
-    // An alpha: `.copy(... alpha = ...)` (any layout) or `.alpha(`; group 1 is the receiver, if a plain name.
-    private val alphaCall = Regex("""(\w+)?\s*\.\s*(?:copy\s*\(\s*(?:[^()]*,\s*)?alpha\s*=|alpha\s*\()""")
+    // An alpha: `.copy(... alpha = ...)` (any layout), `.alpha(`, or a named `alpha = <number>` argument (Image, Icon).
+    private val alphaCall = Regex("""\.\s*(?:copy\s*\(\s*(?:[^()]*,\s*)?alpha\s*=|alpha\s*\()|,\s*alpha\s*=\s*\d""")
+    // The one alpha that needs no tag: the ladder's own Float, e.g. `.alpha(colors.artFar)`.
+    private val ladderFloat = Regex("""alpha\s*(?:=|\()\s*(?:\w+\.)*artFar\b""")
 
     private fun sourceRoot(): File {
         var dir: File? = File("").absoluteFile
@@ -50,6 +51,7 @@ class ColourRolesLockTest {
             hit(rx, lines, text)
                 .filter { (i, m) -> !isProse(lines[i]) && !ok(lines, i, m) }
                 .map { (i, _) -> "$rel:${i + 1}: ${lines[i].trim()}" }
+                .distinct()
         }
     }
 
@@ -73,11 +75,10 @@ class ColourRolesLockTest {
 
     @Test fun every_alpha_names_its_role() {
         val bad = scan({ it == themeFile }, ::matches, { lines, i, m ->
-            val receiver = m.groupValues[1]
             "// role:" in lines[i] ||
                 (i > 0 && "// role:" in lines[i - 1]) ||
-                (receiver.isNotEmpty() && ladderMember.matches(receiver))
+                ladderFloat.containsMatchIn(m.value + lines[i].substringAfter(m.value, ""))
         }, alphaCall)
-        assertTrue(bad.isEmpty(), "Alphas without a role (add `// role: ...` on the line or the line above, or use a ladder member):\n" + bad.joinToString("\n"))
+        assertTrue(bad.isEmpty(), "Alphas without a role (add `// role: ...` on the line or the line above, or pass the ladder's artFar):\n" + bad.joinToString("\n"))
     }
 }

@@ -255,7 +255,7 @@ private val SwitchHeight = 24.dp
 internal fun NxSegments(choices: List<String>, selected: Int, size: TextUnit, onPick: ((Int) -> Unit)?) {
     val colors = LocalNxColors.current
     val shape = RoundedCornerShape(50)
-    Row(Modifier.clip(shape).border(1.dp, colors.main.copy(alpha = 0.3f), shape).padding(2.dp)) {   // role: an outlined control's ring
+    Row(Modifier.clip(shape).border(1.dp, colors.inkRing, shape).padding(2.dp)) {
         choices.forEachIndexed { i, label ->
             val lit = i == selected
             Box(

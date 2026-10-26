@@ -724,7 +724,7 @@ private fun MainMenuBackground(bg: MenuBackground) {
             val portrait = LocalPortrait.current
             Image(
                 painterResource(bg.res), contentDescription = null,
-                colorFilter = ColorFilter.tint(LocalNxColors.current.main), contentScale = ContentScale.Fit, alpha = 0.16f,
+                colorFilter = ColorFilter.tint(LocalNxColors.current.main), contentScale = ContentScale.Fit, alpha = 0.16f,   // role: the console logo, ink at 16%
                 modifier = Modifier.align(Alignment.CenterEnd).padding(end = if (portrait) 16.dp else 32.dp)
                     .fillMaxWidth(if (portrait) 0.44f else 0.40f).fillMaxHeight(0.6f),
             )
