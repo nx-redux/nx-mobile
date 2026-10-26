@@ -64,8 +64,9 @@ Decisions for sub-project 1:
   core (`:cores:ppsspp`). The `github` build downloads packs over HTTPS. The GitHub path is proven
   first on a real device. The Play path is checked with `bundletool --local-testing` (no store
   account needed).
-- **Flavours:** a `distribution` dimension with `play` and `github`, and the same `applicationId`
-  (one saves identity; different signing already stops them installing over each other).
+- **Flavours:** a `distribution` dimension with `play` and `github`. `play` has its own
+  `applicationId` (`com.nxredux.mobile.play`): its saves live in `Android/media/<package>/`, not the
+  All files home, so the two are separate apps that install side by side.
   `checkCores` checks each flavour's bundled list.
 - **Missing core UX:** games stay visible. Launching one opens a modal: "<System> needs the <core>
   core (N MB). Install?". It shows download, verify and install progress, then continues the

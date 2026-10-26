@@ -95,10 +95,12 @@ android {
     }
     // github: the build the release workflow ships, which updates itself from GitHub releases. play: for a store listing,
     // which must not download and install APKs itself, so it carries no updater (each flavor's src set holds its side).
+    // play is its own app (com.nxredux.mobile.play): it keeps saves in Android/media/<package>/ where github uses the
+    // All files home, so one never installs over the other, and the two sit side by side.
     flavorDimensions += "distribution"
     productFlavors {
         create("github") { dimension = "distribution" }
-        create("play") { dimension = "distribution" }
+        create("play") { dimension = "distribution"; applicationIdSuffix = ".play" }
     }
     buildTypes {
         // The debug build is "NX Redux Dev" (com.nxredux.mobile.dev, inverted icon in src/debug/res): it installs beside the
