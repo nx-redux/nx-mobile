@@ -17,6 +17,15 @@ fun hideOffered(scale: ConsoleScale, frame: CoreFrame?): Boolean {
 }
 
 /**
+ * Whether the portrait band waits unseen for the first frame: the player chose Hidden ([hiddenChosen]) on a console of
+ * [scale] whose hiding depends on the picture's shape ([hideOffered] is false for no frame, so not DS / 3DS) and
+ * [frame] is not known yet. The band is laid out (a wide game keeps it) but drawn only once that frame decides, so a
+ * tall game going to the overlay never shows it.
+ */
+fun bandAwaitsFrame(hiddenChosen: Boolean, scale: ConsoleScale, frame: CoreFrame?): Boolean =
+    hiddenChosen && frame == null && !hideOffered(scale, null)
+
+/**
  * Height in pixels of the pad overlay drawn over the game when the band is hidden: the portrait pad column's
  * fixed 2.42 units (equal to `portraitOverlayUnits` in ui/nx/VirtualPad.kt, pinned by PortraitOverlayTest) plus three times the middle row's scale ([midRowScale] for a band [bandWidthUnits] x
  * [bandHeightUnits]), times [bandUnitPx], plus the cluster padding top and bottom.

@@ -42,4 +42,16 @@ class HiddenBandTest {
         assertTrue(overlayClear(1068f, 1868f, 800f))
         assertFalse(overlayClear(1069f, 1868f, 800f))
     }
+
+    @Test fun band_waits_for_the_first_frame_only_when_hidden_is_chosen_and_the_shape_decides() {
+        // Arcade set Hidden: the band waits until the first frame says tall (overlay) or wide (band).
+        assertTrue(bandAwaitsFrame(hiddenChosen = true, ConsoleScale.WHOLE_HEIGHT, frame = null))
+        assertFalse(bandAwaitsFrame(hiddenChosen = true, ConsoleScale.WHOLE_HEIGHT, wide))
+        assertFalse(bandAwaitsFrame(hiddenChosen = true, ConsoleScale.WHOLE_HEIGHT, tall))
+        // Shown: nothing to decide.
+        assertFalse(bandAwaitsFrame(hiddenChosen = false, ConsoleScale.WHOLE_HEIGHT, frame = null))
+        // DS / 3DS hide without a frame: their layout starts with the overlay, no band.
+        assertFalse(bandAwaitsFrame(hiddenChosen = true, ConsoleScale.DS, frame = null))
+        assertFalse(bandAwaitsFrame(hiddenChosen = true, ConsoleScale.N3DS, frame = null))
+    }
 }

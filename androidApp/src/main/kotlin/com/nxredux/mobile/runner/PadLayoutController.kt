@@ -44,6 +44,7 @@ import com.nxredux.mobile.layout.CoreFrame
 import com.nxredux.mobile.layout.LayoutConstants
 import com.nxredux.mobile.layout.PadRoom
 import com.nxredux.mobile.layout.Reach
+import com.nxredux.mobile.layout.bandAwaitsFrame
 import com.nxredux.mobile.layout.besideMeasures
 import com.nxredux.mobile.layout.besidePlacement
 import com.nxredux.mobile.layout.consoleScale
@@ -227,6 +228,13 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private val revealTimeout = Runnable { updatePadVisibility() }
     /** The portrait band is shown in the current layout. */
     private var bandShown = false
+    /** The portrait band's view, while it is laid out. */
+    private var bandView: ComposeView? = null
+    /**
+     * The band waits unseen for the first frame ([bandAwaitsFrame]): Portrait Pad is Hidden and only the picture's shape
+     * decides band or overlay, so a tall game never shows the band before its overlay.
+     */
+    private var bandWaits = false
     /** The clusters' drawn buttons ([MeasuredButtons]); each layout's own listeners ([clusterGeneration]) report here. */
     private val measured = MeasuredButtons()
     private var clusterGeneration = 0
@@ -271,6 +279,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         toggleView = null
         overlayHeight = 0
         bandShown = false
+        bandView = null
+        bandWaits = false
         shoulderReachPx.value = null
         builtLayouts = AndroidAppSettings(activity).padLayouts
 
@@ -306,6 +316,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 addPad(root, pad, FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT, bandPx, Gravity.BOTTOM))
                 bandShown = true
+                bandView = pad
+                bandWaits = bandAwaitsFrame(PadOptions.portraitPadHidden(layoutTag(), frontendValues), consoleScale(layoutTag()), frame)
             } else if (layoutPadHidden && names.isEmpty()) {
                 // One see-through pad across the bottom, its buttons the band's size. No touch cut-off under it: its buttons
                 // take their own touches and the gaps pass to the game, so a DS touch screen reaching into it still answers.
@@ -321,7 +333,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             if (names.isEmpty()) addBesideClusters(root)
         }
         root.removeCallbacks(revealTimeout)
-        if (clusterViews != null || overlayView != null) {
+        if (clusterViews != null || overlayView != null || bandWaits) {
             // Hidden until the renderer places the picture; the timeout shows them for a game that never draws.
             reveal.onLayoutStart(SystemClock.uptimeMillis())
             root.postDelayed(revealTimeout, reveal.timeoutMs)
@@ -509,6 +521,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     fun onPictureKnown() {
         if (reveal.shouldShow(SystemClock.uptimeMillis())) return
         if (clusterViews != null && measured.accepted == null) return
+        // The first frame flipped band / overlay in portrait ([onFrame]): the pads of this layout never show, the next do.
+        if (!isLandscape(resources.configuration.orientation) && portraitPadHidden() != layoutPadHidden) return
         reveal.onPictureKnown()
         updatePadVisibility()
     }
@@ -663,7 +677,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val hide = (menuOpen && overGame && tabletop() == null) || mainPanelShown()
         // Waiting for the picture ([reveal]): invisible, not gone, so the clusters are still laid out and measured.
         val waiting = !reveal.shouldShow(SystemClock.uptimeMillis())
-        val placed = listOfNotNull(clusterViews?.first, clusterViews?.second, overlayView)
+        val placed = listOfNotNull(clusterViews?.first, clusterViews?.second, overlayView, bandView?.takeIf { bandWaits })
         padViews.forEach { v ->
             v.visibility = when {
                 hide -> View.GONE
