@@ -144,14 +144,31 @@ object N3ds3dResolution {
     internal val FRAME_SHAPES_1X = listOf(400 to 480, 400 to 360, 320 to 360, 400 to 240, 320 to 240, 720 to 240)
 
     /**
-     * The factor a [frameW] x [frameH] frame was rendered at: the whole f (1 to 10) for which it is f times one of
-     * [FRAME_SHAPES_1X]; null for any other frame (none yet, or a layout this does not know).
+     * Azahar's 1x top over bottom frames (Large screen and Stacked: the top, then the bottom screen prominent) with the
+     * second screen [proportion] times smaller, as our core patch sizes them (whole px, rounded down).
      */
-    fun frameFactor(frameW: Float, frameH: Float): Int? {
+    internal fun stackedShapes(proportion: Float): List<Pair<Int, Int>> {
+        val h = 240 + (240f / proportion).toInt()
+        return listOf(400 to h, maxOf(320, (400f / proportion).toInt()) to h)
+    }
+
+    /**
+     * The 1x frames Azahar can report while [proportion] is in effect: its top over bottom ([stackedShapes]), Single screen
+     * and Side by side. For every proportion the app sends no two reach the same size at factors 1 to 10.
+     */
+    internal fun shapesInUse(proportion: Float): List<Pair<Int, Int>> = stackedShapes(proportion) + listOf(400 to 240, 320 to 240, 720 to 240)
+
+    /**
+     * The factor a [frameW] x [frameH] frame was rendered at: the whole f (1 to 10) for which it is f times one of the
+     * shapes [shapesInUse] under the [proportion] in effect (null: not known), else one of [FRAME_SHAPES_1X]; null for any
+     * other frame (none yet, or a layout this does not know).
+     */
+    fun frameFactor(frameW: Float, frameH: Float, proportion: Float? = null): Int? {
         val w = frameW.roundToInt()
         val h = frameH.roundToInt()
         if (w <= 0 || h <= 0) return null
-        return FRAME_SHAPES_1X.firstNotNullOfOrNull { (bw, bh) ->
+        val shapes = proportion?.takeIf { it >= 1f }?.let(::shapesInUse).orEmpty() + FRAME_SHAPES_1X
+        return shapes.firstNotNullOfOrNull { (bw, bh) ->
             (w / bw).takeIf { f -> f in 1..Res3dConsole.N3DS.coreMax && w == bw * f && h == bh * f }
         }
     }

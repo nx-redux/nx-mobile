@@ -5,6 +5,8 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.runner.N3dsNewControls
 import com.nxredux.mobile.runner.Res3dConsole
 import com.nxredux.mobile.settings.stepFrom
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Nintendo 3DS (Azahar) screen controls. Unlike the DS, the core draws both screens itself: the layout is Azahar's own
@@ -36,7 +38,8 @@ object N3dsOptions {
 
     /**
      * How many times smaller Azahar draws the second screen in its top over bottom (nx-mobile's core patch; not a declared
-     * option, so never shown or saved): half for Large screen, alike for Stacked ([stackedSmallProportion]).
+     * option, so never shown or saved): half for Large screen (in portrait, filling the height left), alike for Stacked
+     * ([stackedSmallProportion]).
      */
     const val STACKED_SMALL_PROPORTION = "citra_stacked_small_proportion"
 
@@ -165,11 +168,39 @@ object N3dsOptions {
         }
 
     /**
-     * How many times smaller the core draws the touch screen in its top over bottom: half for Large screen, else alike.
-     * Half-folded ([tabletop]) the screens are equal ("1") whatever the player saved.
+     * How many times smaller the core draws the touch screen in its top over bottom: for Large screen half, or in portrait
+     * with the picture's [space] known the [fillProportion] of it ([proportionText]); else alike. Half-folded ([tabletop])
+     * the screens are equal ("1") whatever the player saved.
      */
-    fun stackedSmallProportion(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean): String =
-        if (!tabletop && appLayoutFor(values, landscape, controllerMode, screen) == "large") "2" else "1"
+    fun stackedSmallProportion(
+        values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean, space: PxRect? = null,
+    ): String = when {
+        tabletop || appLayoutFor(values, landscape, controllerMode, screen) != "large" -> "1"
+        landscape || space == null -> "2"
+        else -> proportionText(fillProportion(space.width, space.height))
+    }
+
+    /**
+     * Large screen's proportion in portrait for a [spaceW] x [spaceH] px picture space: the top screen fills the width and
+     * the bottom one takes the height left under it, up to the top's size (1 to 2, in hundredths so near-equal spaces send
+     * one value). A space too short for the top over a half-size bottom keeps the half size (2), the picture shrinking to fit.
+     */
+    fun fillProportion(spaceW: Float, spaceH: Float): Float {
+        if (spaceW <= 0f || spaceH <= 0f) return 2f
+        val top = spaceW / TOP_WIDTH
+        if (SCREEN_HEIGHT * top * 1.5f > spaceH) return 2f
+        val bottom = min((spaceH - SCREEN_HEIGHT * top) / SCREEN_HEIGHT, top)
+        return ((top / bottom).coerceIn(1f, 2f) * 100f).roundToInt() / 100f
+    }
+
+    /** [proportion] as the core option's text: two decimals, a whole one as before ("1", "2"). */
+    fun proportionText(proportion: Float): String {
+        val hundredths = (proportion * 100f).roundToInt()
+        return if (hundredths % 100 == 0) "${hundredths / 100}" else "${hundredths / 100}.${(hundredths % 100).toString().padStart(2, '0')}"
+    }
+
+    private const val TOP_WIDTH = 400f
+    private const val SCREEN_HEIGHT = 240f
 
     /** SELECT + Left/Right: the row in use, as key to the layout [delta] steps from the one showing on [screen], wrapping. */
     fun cycleLayout(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, delta: Int, screen: ScreenClass): Pair<String, String> {

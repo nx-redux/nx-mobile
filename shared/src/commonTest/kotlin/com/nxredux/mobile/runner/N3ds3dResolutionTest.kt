@@ -92,4 +92,31 @@ class N3ds3dResolutionTest {
         val sizes = N3ds3dResolution.FRAME_SHAPES_1X.flatMap { (w, h) -> (1..10).map { f -> (w * f to h * f) } }
         assertEquals(sizes.size, sizes.toSet().size)
     }
+
+    @Test
+    fun frameFactorReadsTheProportionInEffect() {
+        // Large screen at 1.71: 1x is 400 x (240 + 140) = 400 x 380.
+        assertEquals(3, N3ds3dResolution.frameFactor(1200f, 1140f, 1.71f))
+        assertEquals(4, N3ds3dResolution.frameFactor(1280f, 1520f, 1.71f))   // the bottom screen prominent: 320 x 380
+        assertNull(N3ds3dResolution.frameFactor(1200f, 1140f))               // a shape only that proportion makes
+        // The other layouts' frames still read.
+        assertEquals(5, N3ds3dResolution.frameFactor(2000f, 1200f, 1.71f))
+        assertEquals(2, N3ds3dResolution.frameFactor(800f, 720f, 1.71f))
+        assertNull(N3ds3dResolution.frameFactor(1000f, 700f, 1.71f))
+        assertNull(N3ds3dResolution.frameFactor(0f, 0f, 1.71f))
+    }
+
+    @Test
+    fun noTwoFrameShapesInUseShareASize() {
+        // Every proportion the fill rule sends (1 to 2 in hundredths): its top over bottom shapes with Single screen and
+        // Side by side never reach one size at two factors.
+        for (c in 100..200) {
+            val shapes = N3ds3dResolution.shapesInUse(c / 100f)
+            val seen = mutableMapOf<Pair<Int, Int>, Int>()
+            for ((w, h) in shapes) for (f in 1..10) {
+                val prev = seen.put(w * f to h * f, f)
+                if (prev != null) assertEquals(prev, f, "proportion ${c / 100f}: ${w * f} x ${h * f}")
+            }
+        }
+    }
 }

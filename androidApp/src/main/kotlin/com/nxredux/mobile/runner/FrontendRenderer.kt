@@ -110,6 +110,11 @@ internal interface FrontendHost : LifecycleOwner {
     fun onNds3dLayout(current: Int?, displayMax: Int, sizeChange: Boolean)
     /** Where the second display draws the whole frame (px of its surface; the 3DS picture there), else null. [g]: the game geometry. */
     fun secondWholeFrame(g: FloatArray): PxRect?
+    /**
+     * A 3DS game was laid out flat in [FrontendRenderer.n3dsPictureSpace]: Large screen in portrait sends the proportion
+     * that space gives when it is not the one the core has.
+     */
+    fun onN3dsPictureSpace()
 }
 
 /**
@@ -167,6 +172,24 @@ internal class FrontendRenderer(
     private var nds3dMaxFor: Triple<Float, Float, ScreenClass>? = null   // the area [nds3dMainMax] was worked out for
     private var nds3dMainMax = 1                            // the console's displayMax of that area
     private var n3dsFactor = Res3dConsole.N3DS.defaultCap   // the factor the last 3DS frame read was rendered at (N3ds3dResolution.frameFactor)
+
+    /**
+     * The 3DS second screen's proportion the core was last sent ([N3dsOptions.STACKED_SMALL_PROPORTION]): the frame is read
+     * against its shapes ([N3ds3dResolution.frameFactor]); a send's frame comes later, awaited by its [watchGeometry].
+     */
+    var n3dsProportion = "2"
+
+    /**
+     * The space the 3DS picture was last fitted in on the main display (Screen Scaling Auto, flat, the picture there); null
+     * otherwise or before the first frame. Large screen in portrait fills its height ([N3dsOptions.stackedSmallProportion]).
+     */
+    var n3dsPictureSpace: PxRect? = null
+        private set
+
+    /** The game area turned: [n3dsPictureSpace] was the other orientation's, unknown until the next layout. */
+    fun forgetN3dsPictureSpace() {
+        n3dsPictureSpace = null
+    }
 
     // ---- shader presets ----
     var shaderValues: Map<String, String> = ShaderOptions.fromConfig(emptyMap())   // nx_shader + stored nx_shader_param_*
@@ -517,6 +540,10 @@ internal class FrontendRenderer(
         val shown: PxRect
         val offset: PointF
         val foldTop = halfFoldedTopArea(shape, g, w)
+        if (isN3ds) {
+            val auto = foldTop == null && s.scaling == ScreenScaling.AUTO && frame != null
+            n3dsPictureSpace = space.takeIf { auto && (dualMode == DualMode.OFF || pictureOn == PictureOn.MAIN) }
+        }
         if (foldTop != null) {
             // Half-folded with a DS frame that is not the plain stack: drawn whole above the hinge, not across it.
             val fit = DualScreen.fullFrame(foldTop.width, foldTop.height, g[2])
@@ -540,7 +567,10 @@ internal class FrontendRenderer(
         val viewport = RectF(box.x / w, box.y / h, (box.x + box.width) / w, (box.y + box.height) / h)
         pictureBox.value = windowRect(origin, if (s.scaling == ScreenScaling.AUTO) shown else box)
         shownPicture = shown
-        if (isN3ds) reportN3ds3d(w, h, screen, halfFolded = false, g, flat = shown, secondDs)
+        if (isN3ds) {
+            reportN3ds3d(w, h, screen, halfFolded = false, g, flat = shown, secondDs)
+            host.onN3dsPictureSpace()   // after the report: it read this frame against the proportion it was drawn at
+        }
         if (viewport != lastViewport) {
             lastViewport = viewport
             view.viewport = viewport
@@ -583,7 +613,7 @@ internal class FrontendRenderer(
     private fun reportN3ds3d(w: Float, h: Float, screen: ScreenClass, halfFolded: Boolean, g: FloatArray, flat: PxRect?, secondDs: List<NdsRegion>?) {
         if (g[0] <= 0f || g[1] <= 0f) return
         if (geometryWatch.active && watchIsLayoutSwitch) return
-        N3ds3dResolution.frameFactor(g[0], g[1])?.let { n3dsFactor = it }
+        N3ds3dResolution.frameFactor(g[0], g[1], n3dsProportion.toFloatOrNull())?.let { n3dsFactor = it }
         val factor = n3dsFactor
         val main = if (flat != null) N3ds3dResolution.currentScale(flat.width, g[0], factor) else N3ds3dResolution.regionScale(ndsRegions)
         val second = secondDs?.let(N3ds3dResolution::regionScale)

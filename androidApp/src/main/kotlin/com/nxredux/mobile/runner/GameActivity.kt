@@ -1217,14 +1217,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             .filterNot { (k, _) -> k == N3dsOptions.LAYOUT && N3dsOptions.appliesTo(tag) }   // set from the row below
             .filterNot { (k, _) -> n3dsSplit?.containsKey(k) == true }
             .map { (k, v) -> Variable(k, v) } +
-            // 3DS Large screen: the touch screen at half size (onConfigurationChanged follows a rotation).
+            // 3DS Large screen: the touch screen at half size (onConfigurationChanged follows a rotation); in portrait the
+            // first layout makes it fill the height left ([onN3dsPictureSpace]).
             if (N3dsOptions.appliesTo(tag)) listOf(
-                Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsTabletop())),
+                Variable(N3dsOptions.STACKED_SMALL_PROPORTION, n3dsProportion()),
                 Variable(N3dsOptions.TOUCH_MAIN_ONLY, DualScreen.n3dsTouchMainOnly(launchDual, padLayout.padCoversPicture, halfFolded = n3dsTabletop())),
                 Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(false)),   // stylus mode is off at launch
                 // The locked core layout ([N3dsOptions.LAYOUT]) from the row in use; the descriptor's default is replaced.
                 Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsTabletop())),
             ).withN3dsSplit(n3dsSplit) else emptyList()
+        options.firstOrNull { it.key == N3dsOptions.STACKED_SMALL_PROPORTION }?.value?.let { renderer.n3dsProportion = it }
         // netplay link: gambatte gets its link options; a GBA link engine starts now, before the core loads, so
         // a joiner learns the host's gpsp_serial from its READY and runs with it (the handheld reloads instead).
         val linkKind = np?.let { NetplayCores.link(it.coreId) }
@@ -1905,10 +1907,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         padLayout.applyLayout(newConfig.orientation)   // also re-sizes the menu and the notifications to the game area
         // Split keeps its own fixed proportion.
         if (isN3ds && DualScreen.n3dsCoreOptions(dual.dualMode) == null) {
-            val landscape = isLandscape(newConfig.orientation)
-            val screen = screenClass()
+            // The picture's space was the other orientation's: Large screen's half size until the relayout fills it.
+            renderer.forgetN3dsPictureSpace()
             applyOptions(listOf(
-                Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, landscape, renderer.ndsControllerMode(), screen, n3dsTabletop())),
+                Variable(N3dsOptions.STACKED_SMALL_PROPORTION, n3dsProportion(isLandscape(newConfig.orientation))),
             ))
         }
         // The motion level is captured in the display's frame: a new rotation takes the phone's attitude as level again.
@@ -1939,8 +1941,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val screen = screenClass()
         val options = listOf(
             Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen, n3dsTabletop())),
-            // Large screen halves the touch screen, Stacked keeps both alike: a layout change updates it too.
-            Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen, n3dsTabletop())),
+            // Large screen halves the touch screen (portrait: fills the height left), Stacked keeps both alike: a layout
+            // change updates it too.
+            Variable(N3dsOptions.STACKED_SMALL_PROPORTION, n3dsProportion(screen = screen)),
             // Only a pad covering part of the picture limits touch (beside it, clear of it, it takes none of the screen).
             // Under the main display's panel the pad is hidden, so it covers nothing on the picture screen. Half-folded, the
             // screens are regions that decide where a finger touches (as split), so the core takes it anywhere.
@@ -1981,6 +1984,28 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * which calls [syncN3dsCore]. A second screen's split still wins ([withN3dsSplit]).
      */
     private fun n3dsTabletop(): Boolean = padLayout.tabletop() != null
+
+    /**
+     * The 3DS touch screen's proportion for the row in use ([N3dsOptions.stackedSmallProportion]): Large screen in portrait
+     * fills the height left in the picture's space when it is known ([FrontendRenderer.n3dsPictureSpace]).
+     */
+    private fun n3dsProportion(landscape: Boolean = isLandscape(), screen: ScreenClass = screenClass()): String =
+        N3dsOptions.stackedSmallProportion(frontendValues, landscape, renderer.ndsControllerMode(), screen, n3dsTabletop(), renderer.n3dsPictureSpace)
+
+    /**
+     * The 3DS was laid out flat: a Large screen in portrait whose space now gives another proportion than the core has
+     * ([FrontendRenderer.n3dsProportion]) sends it, as a layout switch ([syncN3dsCore]): the new frame is watched for and
+     * the 3D scale held until it comes. Not while a second screen's split or the half-folded pin holds the core's options,
+     * nor under netplay (no option changes mid-session).
+     */
+    override fun onN3dsPictureSpace() {
+        if (!isN3ds || netplayNow != null || DualScreen.n3dsForcedOptions(dual.dualMode, n3dsTabletop()) != null) return
+        val proportion = n3dsProportion()
+        if (proportion == renderer.n3dsProportion) return
+        lastN3dsLayout = lastN3dsLayout?.plus(N3dsOptions.STACKED_SMALL_PROPORTION to proportion)
+        renderer.watchGeometry(why = "3DS Large screen proportion $proportion sent")
+        applyOptions(listOf(Variable(N3dsOptions.STACKED_SMALL_PROPORTION, proportion)))
+    }
 
     /** The core layout and touch-screen proportion last sent for the 3DS ([syncN3dsCore]); null before the first. */
     private var lastN3dsLayout: Map<String?, String?>? = null
@@ -2342,6 +2367,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (netplayNow != null) return   // netplay: no core option changes mid-session (the other device would not follow)
         val view = retroView ?: return
         if (vars.isEmpty()) return
+        vars.firstOrNull { it.key == N3dsOptions.STACKED_SMALL_PROPORTION }?.value?.let { renderer.n3dsProportion = it }
         view.queueEvent { runCatching { view.updateVariables(*vars.toTypedArray()) }.onFailure { NxLog.w("GameActivity", "setting options failed", it) } }
     }
 

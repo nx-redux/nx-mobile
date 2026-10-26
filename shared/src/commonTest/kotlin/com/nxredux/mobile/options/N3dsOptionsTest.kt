@@ -128,6 +128,34 @@ class N3dsOptionsTest {
         assertTrue(NdsOptions.layoutRows(null).all { it.visual })
     }
 
+    @Test fun fill_proportion_fills_the_height_left_under_the_top() {
+        // The unfolded Fold, portrait, band hidden: the top 4.62x fills the width, the bottom takes the 650 px left.
+        assertEquals(1.71f, N3dsOptions.fillProportion(1848f, 1759f))
+        // Too short for the top and a half-size bottom: today's half size (the picture shrinks to fit).
+        assertEquals(2f, N3dsOptions.fillProportion(1400f, 1080f))
+        assertEquals(2f, N3dsOptions.fillProportion(1080f, 900f))
+        // Room for both at the top's scale: the bottom as big as the top, never bigger.
+        assertEquals(1f, N3dsOptions.fillProportion(1848f, 3000f))
+        assertEquals(1f, N3dsOptions.fillProportion(1080f, 1400f))
+        // Rounded to two decimals: near-equal spaces give the same value.
+        assertEquals(N3dsOptions.fillProportion(1848f, 1759f), N3dsOptions.fillProportion(1848f, 1758.9f))
+        assertEquals(2f, N3dsOptions.fillProportion(0f, 0f))
+    }
+
+    @Test fun portrait_large_sends_the_fill_proportion() {
+        val large = v(N3dsOptions.LAYOUT_PORTRAIT to "large", N3dsOptions.LAYOUT_PORTRAIT_CONTROLLER to "large", N3dsOptions.LAYOUT_LANDSCAPE to "large")
+        val fold = PxRect(0f, 0f, 1848f, 1759f)
+        assertEquals("1.71", N3dsOptions.stackedSmallProportion(large, false, false, phone, false, fold))
+        assertEquals("1.71", N3dsOptions.stackedSmallProportion(large, false, true, phone, false, fold))   // the controller row
+        assertEquals("2", N3dsOptions.stackedSmallProportion(large, false, false, phone, false, PxRect(0f, 0f, 1400f, 1080f)))
+        assertEquals("1", N3dsOptions.stackedSmallProportion(large, false, false, phone, false, PxRect(0f, 0f, 1848f, 3000f)))
+        assertEquals("2", N3dsOptions.stackedSmallProportion(large, false, false, phone, false, null))   // no space yet
+        assertEquals("2", N3dsOptions.stackedSmallProportion(large, true, false, phone, false, fold))    // landscape
+        assertEquals("1", N3dsOptions.stackedSmallProportion(large, false, false, phone, true, fold))    // half-folded
+        assertEquals("1", N3dsOptions.stackedSmallProportion(v(N3dsOptions.LAYOUT_PORTRAIT to "stacked"), false, false, phone, false, fold))
+        assertEquals("1", N3dsOptions.stackedSmallProportion(v(N3dsOptions.LAYOUT_PORTRAIT to "single_screen"), false, false, phone, false, fold))
+    }
+
     @Test fun deadzone_reads_the_core_percentage() {
         assertEquals(0.15f, N3dsOptions.deadzone(null))
         assertEquals(0.15f, N3dsOptions.deadzone("x"))
