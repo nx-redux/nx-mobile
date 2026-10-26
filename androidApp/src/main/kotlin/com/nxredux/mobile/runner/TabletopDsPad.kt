@@ -40,6 +40,8 @@ internal fun tabletopRelayoutNeeded(old: TabletopBuild?, new: TabletopBuild): Bo
 /**
  * Whether a game of [tag] gets the DS / 3DS tabletop (the screens across the hinge, [TabletopPad.DS]). Read from the
  * layout's tag ([PadLayoutHost.layoutTag]: the intent's until the launch sets the game's), so onCreate's first layout,
- * seeded half-folded, is already the DS one.
+ * seeded half-folded, is already the DS one. Not with a second screen in use ([dualMode] other than OFF): the Dual
+ * screen layouts stay the DS / 3DS's own, in the generic tabletop's game area.
  */
-internal fun tabletopDualScreen(tag: String): Boolean = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
+internal fun tabletopDualScreen(tag: String, dualMode: DualMode): Boolean =
+    dualMode == DualMode.OFF && (NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag))

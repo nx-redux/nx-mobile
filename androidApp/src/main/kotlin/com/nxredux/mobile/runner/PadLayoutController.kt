@@ -104,8 +104,8 @@ internal interface PadLayoutHost {
     val gameTag: String
     val inputManager: android.hardware.input.InputManager?
     val menuOpen: Boolean
-    val isNds: Boolean
-    val isN3ds: Boolean
+    /** The second display's use: a DS / 3DS keeps its Dual screen layouts in any mode but [DualMode.OFF]. */
+    val dualMode: DualMode
     val isWii: Boolean
     val wiiPad: WiiPad?
     val frontendValues: Map<String, String>
@@ -760,7 +760,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         if (posture == Posture.Flat) return null
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null
-        return tabletopLayout(posture, w, h, activity.windowShape().screenClass, cutoutTop, controllerConnected = names.isNotEmpty(), isDualScreenConsole = tabletopDualScreen(layoutTag()))
+        return tabletopLayout(posture, w, h, activity.windowShape().screenClass, cutoutTop, controllerConnected = names.isNotEmpty(), isDualScreenConsole = tabletopDualScreen(layoutTag(), host.dualMode))
     }
 
     /**

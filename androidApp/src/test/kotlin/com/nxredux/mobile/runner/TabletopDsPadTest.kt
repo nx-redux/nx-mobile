@@ -65,10 +65,17 @@ class TabletopDsPadTest {
 
     @Test fun dual_screen_console_from_the_launch_tag() {
         // onCreate's first layout has only the intent's tag: it must already pick the DS / 3DS tabletop.
-        assertTrue(tabletopDualScreen("NDS"))
-        assertTrue(tabletopDualScreen("3DS"))
-        assertFalse(tabletopDualScreen("UNKNOWN"))
-        assertFalse(tabletopDualScreen("GBA"))
+        assertTrue(tabletopDualScreen("NDS", DualMode.OFF))
+        assertTrue(tabletopDualScreen("3DS", DualMode.OFF))
+        assertFalse(tabletopDualScreen("UNKNOWN", DualMode.OFF))
+        assertFalse(tabletopDualScreen("GBA", DualMode.OFF))
+    }
+
+    @Test fun dual_screen_keeps_its_own_layouts_half_folded() {
+        for (mode in listOf(DualMode.SPLIT, DualMode.PANEL_UP, DualMode.PANEL)) {
+            assertFalse(tabletopDualScreen("NDS", mode))
+            assertFalse(tabletopDualScreen("3DS", mode))
+        }
     }
 
     @Test fun relayout_on_posture_flip() {

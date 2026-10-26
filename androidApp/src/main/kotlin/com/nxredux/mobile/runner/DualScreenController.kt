@@ -338,6 +338,9 @@ internal class DualScreenController(
             syncN3dsCore()
             if (forcedBefore && !forced) restoreN3dsScreen()
         }
+        // Half-folded, a DS / 3DS gets its own tabletop only without a second screen ([tabletopDualScreen]): a new mode
+        // builds the other tabletop (the pad, the game area, the menu's bounds).
+        if (changed && padLayout.tabletop() != null) padLayout.applyLayout(activity.resources.configuration.orientation)
         renderer.relayoutFrontend(geometry)
     }
 
