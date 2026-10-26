@@ -80,6 +80,8 @@ import com.nxredux.mobile.ui.nx.CLUSTER_MAX_WIDTH_SHARE
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.PadMic
+import com.nxredux.mobile.ui.nx.portraitMicCentre
+import com.nxredux.mobile.ui.nx.portraitMicEdge
 import com.nxredux.mobile.ui.nx.PadGroupBoundsListener
 import com.nxredux.mobile.ui.nx.PadMotion
 import com.nxredux.mobile.ui.nx.PadStickModes
@@ -396,7 +398,14 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             return
         }
         val hidden = layoutPadHidden
-        val toggle = composePad { PortraitPadToggle(hidden, if (hidden) padLandscapeAlpha.value else 1f, ::togglePortraitPad) }
+        val shape = activity.windowShape()
+        val unitDp = bandUnits(shape).unitPx / shape.density
+        val toggle = composePad {
+            // DS / 3DS: mirrors the mic button in the bottom-left corner (the band's, or the hidden band's overlay row),
+            // read in composition, so it moves once the game shows the button (after this layout) and back if it goes.
+            val inset = if (padMic() != null) portraitToggleInset(portraitMicEdge(unitDp, hidden), portraitMicCentre(unitDp, hidden)) else PortraitToggleInset.NONE
+            PortraitPadToggle(hidden, if (hidden) padLandscapeAlpha.value else 1f, ::togglePortraitPad, Modifier.padding(end = inset.endDp.dp, bottom = inset.bottomDp.dp))
+        }
         addPad(root, toggle, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END))
         toggleView = toggle
@@ -967,18 +976,35 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     }
 }
 
+/** [PortraitPadToggle]'s circle: its 6 dp padding from its own edges, and half its 36 dp size above that. */
+private const val PORTRAIT_TOGGLE_EDGE_DP = 6f
+private const val PORTRAIT_TOGGLE_CENTRE_DP = 24f
+
+/** Extra room round [PortraitPadToggle], dp, past its own padding: [endDp] from the right, [bottomDp] from the bottom. */
+internal data class PortraitToggleInset(val endDp: Float, val bottomDp: Float) {
+    companion object { val NONE = PortraitToggleInset(0f, 0f) }
+}
+
+/**
+ * The hide / show icon's inset that mirrors the mic button: its circle [micEdgeDp] from the right, as the mic's is from
+ * the left, and its centre [micCentreDp] above the bottom, level with the mic's. Never past the corner.
+ */
+internal fun portraitToggleInset(micEdgeDp: Float, micCentreDp: Float): PortraitToggleInset = PortraitToggleInset(
+    (micEdgeDp - PORTRAIT_TOGGLE_EDGE_DP).coerceAtLeast(0f), (micCentreDp - PORTRAIT_TOGGLE_CENTRE_DP).coerceAtLeast(0f),
+)
+
 /**
  * The DS / 3DS portrait pad's hide / show icon in the bottom-right corner: a long press flips the band; a tap does
  * nothing, so a thumb landing on it mid-game changes nothing. The chevron points where the band goes: down to hide it,
  * up (over the game, [hidden]) to bring it back.
  */
 @Composable
-private fun PortraitPadToggle(hidden: Boolean, alpha: Float, onLongPress: () -> Unit) {
+private fun PortraitPadToggle(hidden: Boolean, alpha: Float, onLongPress: () -> Unit, modifier: Modifier = Modifier) {
     val haptics = LocalHapticFeedback.current
     val action by rememberUpdatedState(onLongPress)
     val ink = LocalNxColors.current.main
     Box(
-        Modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Right + WindowInsetsSides.Bottom))
+        modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Right + WindowInsetsSides.Bottom))
             .padding(6.dp).size(36.dp).alpha(alpha)
             .background(Color(0x66000000), CircleShape)
             .pointerInput(Unit) {

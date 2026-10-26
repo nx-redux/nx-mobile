@@ -33,6 +33,17 @@ class PadMicTest {
         }
     }
 
+    @Test fun portraitCentreIsTheBandCornerOrTheOverlayRow() {
+        // unit 40: the band's button 6 up, 36 across (centre 16 + 6 + 18); the overlay row 28.8 tall (centre 16 + 14.4).
+        near(portraitMicCentre(40f, hiddenBand = false), 40f)
+        near(portraitMicCentre(40f, hiddenBand = true), 30.4f)
+    }
+
+    @Test fun portraitEdgeIsTheBandInsetOrTheOverlayNudge() {
+        near(portraitMicEdge(40f, hiddenBand = false), 22f)   // 16 + 0.15 units
+        near(portraitMicEdge(40f, hiddenBand = true), 24f)    // 16 + 0.2 units
+    }
+
     @Test fun theEditorShowsItForDsAnd3dsAndShared() {
         assertTrue(padLayoutShowsMic(""))
         assertTrue(padLayoutShowsMic("NDS"))

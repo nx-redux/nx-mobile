@@ -844,6 +844,21 @@ internal fun micButtonSize(unit: Float): Float = unit * 0.9f
 internal fun micButtonInset(unit: Float): Float = unit * 0.15f
 
 /**
+ * How far the portrait mic button's centre sits above its pad's bottom edge, dp, on a pad whose unit is [unit] dp
+ * (the 16 dp padding included): the band's corner button, or with the band hidden ([hiddenBand]) the first of
+ * [PortraitOverlayPad]'s bottom row. The host lines the band's hide / show icon up with it.
+ */
+fun portraitMicCentre(unit: Float, hiddenBand: Boolean): Float =
+    CLUSTER_PADDING + if (hiddenBand) unit * OVERLAY_SYSTEM_UNITS / 2f else micButtonInset(unit) + micButtonSize(unit) / 2f
+
+/**
+ * How far the portrait mic button's left edge sits from the screen's left, dp, as [portraitMicCentre]: the band's
+ * corner inset, or the hidden band's overlay row's edge nudge. The host mirrors it for the hide / show icon's right.
+ */
+fun portraitMicEdge(unit: Float, hiddenBand: Boolean): Float =
+    CLUSTER_PADDING + if (hiddenBand) unit * OVERLAY_EDGE_NUDGE else micButtonInset(unit)
+
+/**
  * The mic button's inset from a landscape cluster's left edge ([VirtualPadLeft]), dp: past the d-pad / stick (3 units)
  * and MENU + toggle (two pills and their gap, the bottom row off the game), both from the cluster's [nudge], so it sits
  * in the bottom corner beside them, toward the screen's middle. Over the game that still ends inside the 4.5-unit cluster.
