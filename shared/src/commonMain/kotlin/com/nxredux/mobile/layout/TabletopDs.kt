@@ -189,10 +189,9 @@ fun halfFoldedPreview(
     faceUnits: Float,
     systemPills: Int,
     kind: DsKind,
-    mic: Boolean = false,
 ): HalfFoldedPreview? {
     val unit = tabletopDsUnitPx(ydpi, density)
-    val r = reach(unit, density, cutoutLeft, cutoutRight, null, faceUnits, systemPills, mic)
+    val r = reach(unit, density, cutoutLeft, cutoutRight, null, faceUnits, systemPills)
     val hinge = (windowH / 2f).roundToInt()
     val tablet = if (screen.isTablet) screen else ScreenClass.NEAR_SQUARE_TABLET
     val p = tabletopDs(

@@ -832,8 +832,8 @@ private fun MotionButton(motion: PadMotion, height: Dp, width: Dp) =
 
 /**
  * The DS / 3DS pad's mic button: [on] says whether the game hears the phone's mic (the session's Mic toggle), a tap
- * flips it ([onTap]). Not a [PadGroup]: fixed at the pad's bottom left whatever the Pad layout, drawn above every group
- * and taking a touch on one it overlaps.
+ * flips it ([onTap]). Not a [PadGroup]: fixed whatever the Pad layout (the portrait pad's bottom left, right of L on the
+ * landscape and half-folded halves), drawn above every group and taking a touch on one it overlaps.
  */
 data class PadMic(val on: Boolean, val onTap: () -> Unit)
 
@@ -859,13 +859,12 @@ fun portraitMicEdge(unit: Float, hiddenBand: Boolean): Float =
     CLUSTER_PADDING + if (hiddenBand) unit * OVERLAY_EDGE_NUDGE else micButtonInset(unit)
 
 /**
- * The mic button's inset from a landscape cluster's left edge ([VirtualPadLeft]), dp: past the d-pad / stick (3 units)
- * and MENU + toggle (two pills and their gap), both from the cluster's [nudge], so it sits in the bottom corner beside
- * them, toward the screen's middle. The halves' reach counts it ([com.nxredux.mobile.layout.micReachPx]), so the
- * picture, or the half-folded touch screen, keeps clear of it.
+ * How far the landscape left half's mic button ends past the edge nudge, dp: [shoulders] (L1 [unit] wide, L2 [trigger],
+ * 8 dp apart), then the button 8 dp on and [micButtonSize] across. Inside the d-pad's 3 units, so the halves' measured
+ * reach (its groups) already holds it, and the picture or the half-folded touch screen keeps clear of it.
  */
-internal fun clusterMicStart(unit: Float, nudge: Float): Float =
-    nudge + maxOf(3f * unit, 2f * SYSTEM_PILL_W_UNITS * unit + SYSTEM_PILL_GAP) + micButtonInset(unit)
+internal fun shoulderMicEnd(shoulders: List<NxButton>, unit: Float, trigger: Float): Float =
+    shoulders.sumOf { (if (it == NxButton.L1) unit else trigger).toDouble() }.toFloat() + 8f * shoulders.size + micButtonSize(unit)
 
 /**
  * [mic]'s round button in its pad's root box, [start] dp from the left and [micButtonInset] up from the bottom: the pad's
@@ -1879,7 +1878,7 @@ fun PortraitOverlayPad(
  * bottom-left so the d-pad sits low for the left thumb. Transparent. [overGame] (the clusters drawn over the game)
  * moves the MENU/toggle row to the top of the box. Touch shortcut 1 ([shortcuts], [onShortcut], [shortcutPlaceholders]
  * as on [VirtualPad]) sits under the toggle over the game ([overlayShortcutPlace]), else beside the shoulders, toward
- * the screen's middle. [mic] (DS / 3DS) is the fixed mic button in the bottom corner right of the d-pad ([clusterMicStart]).
+ * the screen's middle. [mic] (DS / 3DS) is the fixed mic button, right of L ([shoulderMicEnd]).
  */
 @Composable
 fun VirtualPadLeft(
@@ -1960,6 +1959,8 @@ fun VirtualPadLeft(
                                     ShoulderButtons(padShoulders(PadSide.LEFT, profile), profile, bumper, trigger, emit, latched)
                                 }
                             }
+                            // The mic right of L (and ZL): no group, so it stays here whatever the Pad layout.
+                            if (mic != null) MicFace(mic, micButtonSize(unit.value).dp, Modifier.padding(start = 8.dp).zIndex(1f))
                             if (!overGame && !besidePicture) ShortcutPiece(TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW, Modifier.padding(start = gap))
                         }
                         PadRow.CLUSTER -> PadGroupBox(PadGroup.DPAD, Modifier.padding(start = nudge)) {
@@ -1969,7 +1970,6 @@ fun VirtualPadLeft(
                     }
                 }
             }
-            mic?.let { MicButton(it, unit, clusterMicStart(unit.value, nudge.value).dp) }
             }
             }
         }
