@@ -879,6 +879,28 @@ class AppStateTest {
         assertEquals(PadTheme.CHARCOAL, settings.padTheme)
     }
 
+    // On Black the pad page adds Pad buttons under the theme, stepping the same setting in place; off Black it goes.
+    @Test fun the_pad_page_shows_pad_buttons_only_on_black() = runTest {
+        val (state, settings) = atCustomise()
+        fun rows() = assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label to it.secondary }
+        state.select(1); state.onButton(NxButton.LEFT)                      // Charcoal → Black (wraps)
+        assertEquals(PadTheme.BLACK, settings.padTheme)
+        assertEquals(listOf("On-screen pad" to "Show", "Pad theme" to "Black", "Pad buttons" to "Grey", "Continue" to null), rows())
+        state.select(2); state.onButton(NxButton.A)                         // Grey → Outline, the page stays
+        assertEquals(PadButtons.OUTLINE, settings.padButtons)
+        assertEquals(OnboardingStep.PAD, step(state))
+        assertEquals("Outline", rows()[2].second)
+        state.onButton(NxButton.RIGHT)
+        assertEquals(PadButtons.GREY, settings.padButtons)
+        state.select(1); state.onButton(NxButton.RIGHT)                     // Black → Charcoal: the row goes
+        assertEquals(listOf("On-screen pad", "Pad theme", "Continue"), rows().map { it.first })
+        state.select(0); state.onButton(NxButton.A)                         // pad hidden on Black: no theme or buttons rows
+        settings.padTheme = PadTheme.BLACK; state.onButton(NxButton.RIGHT); state.onButton(NxButton.LEFT)
+        assertEquals(listOf("On-screen pad", "Continue"), rows().map { it.first })
+        state.select(1); state.onButton(NxButton.A)                         // Continue
+        assertEquals(OnboardingStep.TAB_HOME, step(state))
+    }
+
     // A phone with no controller, set up in landscape, still gets the pad page: it uses the pad when held upright.
     @Test fun a_phone_without_a_controller_gets_the_pad_page_in_landscape_too() = runTest {
         val (state, _) = atCustomise(portrait = false)

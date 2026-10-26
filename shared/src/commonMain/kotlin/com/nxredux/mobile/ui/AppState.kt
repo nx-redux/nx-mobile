@@ -593,7 +593,8 @@ internal val ONBOARDING_TAB_STEPS = mapOf(
 private val ONBOARDING_VALUE_KINDS = mapOf(
     OnboardingStep.TEXT_SIZE to listOf(SettingsKind.TEXT_SIZE),
     OnboardingStep.SAVE_FORMATS to listOf(SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME),
-    OnboardingStep.PAD to listOf(SettingsKind.MENU_PAD, SettingsKind.PAD_THEME),
+    // Pad buttons is the third row only while the pad shows and Black is the theme; else Continue is there (never stepped).
+    OnboardingStep.PAD to listOf(SettingsKind.MENU_PAD, SettingsKind.PAD_THEME, SettingsKind.PAD_BUTTONS),
     OnboardingStep.TITLE to listOf(SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS),
     OnboardingStep.ACCENT to listOf(SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT),
 )
@@ -1959,7 +1960,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /**
      * A value page's row [row] stepped by [by] (-1: the one before; A steps forward), in place: SAVE_FORMATS' save
      * format, state format and extracted name; TEXT_SIZE's size; ACCENT's accent and secondary accent; TITLE's page
-     * title and button hints (Show / Hide); PAD's pad (shown / hidden) and theme ([ONBOARDING_VALUE_KINDS]). The same
+     * title and button hints (Show / Hide); PAD's pad (shown / hidden), theme and Black's buttons ([ONBOARDING_VALUE_KINDS]). The same
      * settings Settings steps ([settingValue]), applied at once and the page republished on that row, so the real pad
      * (or the preview picture, or the colours, or the text size) changes and the step count follows ([App] reads them
      * per screen). A row past the page's values, or another [step], does nothing.
@@ -2091,6 +2092,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             listOfNotNull(
                 NxRow("On-screen pad", secondary = if (deps.settings.menuPad) "Show" else "Hide", cycleable = true),
                 if (deps.settings.menuPad) NxRow("Pad theme", secondary = padThemeLabel(deps.settings.padTheme), cycleable = true) else null,
+                // Black's button set, as in Settings → Appearance: only while Black is picked.
+                if (deps.settings.menuPad && deps.settings.padTheme == PadTheme.BLACK) NxRow("Pad buttons", secondary = deps.settings.padButtons.label, cycleable = true) else null,
                 NxRow("Continue"),
             ),
         )
