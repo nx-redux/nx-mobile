@@ -54,8 +54,10 @@ fun picture(
     }
 }
 
+/** A [width] x [height] picture centred in [space], at a whole-pixel position (rounded down), so a whole-number scale
+ * puts every source pixel on whole screen pixels. */
 private fun centred(space: PxRect, width: Float, height: Float) =
-    PxRect(space.x + (space.width - width) / 2f, space.y + (space.height - height) / 2f, width, height)
+    PxRect(floor(space.x + (space.width - width) / 2f), floor(space.y + (space.height - height) / 2f), width, height)
 
 private fun fitIn(space: PxRect, aspect: Float): PxRect =
     if (space.width / space.height > aspect) centred(space, space.height * aspect, space.height)

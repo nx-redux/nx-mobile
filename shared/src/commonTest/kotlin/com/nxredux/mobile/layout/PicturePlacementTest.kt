@@ -51,13 +51,21 @@ class PicturePlacementTest {
     @Test fun controller_uses_whole_window_centred() {
         val frame = CoreFrame(304f, 224f, 4f / 3f, rotated = false)
         val r = picture(window, frame, ConsoleScale.WHOLE_HEIGHT, ScreenScaling.AUTO, window, null)
-        assertRect(PxRect((2400f - 1194.67f) / 2f, 92f, 1194.67f, 896f), r)
+        assertRect(PxRect(602f, 92f, 1194.67f, 896f), r)   // x 602.67 rounded down
     }
 
     @Test fun overlay_box_counts_as_picture() {
         val frame = CoreFrame(256f, 224f, 4f / 3f, rotated = false)
         val space = PxRect(372f, 0f, 1656f, 1080f)
         val r = picture(space, frame, ConsoleScale.WHOLE_HEIGHT, ScreenScaling.AUTO, window, 16f / 9f)
-        assertRect(PxRect(372f, (1080f - 931.5f) / 2f, 1656f, 931.5f), r)
+        assertRect(PxRect(372f, 74f, 1656f, 931.5f), r)   // y 74.25 rounded down
+    }
+
+    @Test fun whole_number_scale_lands_on_whole_pixels() {
+        // GBA 6x (1440 x 960) in a space at a fractional offset and of an odd size: 478.75, 60.5 round down.
+        val frame = CoreFrame(240f, 160f, 1.5f, rotated = false)
+        val space = PxRect(310.25f, 0f, 1777f, 1081f)
+        val r = picture(space, frame, ConsoleScale.NATIVE, ScreenScaling.AUTO, window, null)
+        assertRect(PxRect(478f, 60f, 1440f, 960f), r)
     }
 }
