@@ -20,7 +20,7 @@ internal fun homeMinimalRows(rows: List<MainRow>): List<NxRow> = rows.mapNotNull
  * ([homeMinimalRows]: Continue, the pinned games, the shelves' games, the pinned tools) in the shared Minimal layout
  * ([MinimalScreen]), the selected name's tag at the end of its name. The names' band runs from the strip's bottom (or,
  * with no strip, from under the page's icons: [iconsRoom]) to the box's bottom, the tab row's top: nothing shows under
- * either. [selected] keeps the selected name for the open band MainMenuScreen draws over the whole screen ([MinimalOpenOverlay]).
+ * either. [selected] keeps the selected name as laid out, where B's morph lands (a launch reports it itself: [LocalLaunchTargets]).
  */
 @Composable
 internal fun HomeMinimalScreen(

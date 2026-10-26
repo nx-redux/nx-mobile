@@ -80,7 +80,6 @@ import com.nxredux.mobile.ui.nx.LocalMinimalPage
 import com.nxredux.mobile.ui.nx.MINIMAL_MORPH_MS
 import com.nxredux.mobile.ui.nx.MinimalFlight
 import com.nxredux.mobile.ui.nx.MinimalMorphEasing
-import com.nxredux.mobile.ui.nx.MinimalOpenOverlay
 import com.nxredux.mobile.ui.nx.MorphText
 import com.nxredux.mobile.ui.nx.menuTitleStyle
 import com.nxredux.mobile.ui.nx.morphPlace
@@ -127,7 +126,7 @@ fun GameListScreen(
     layoutOpen: Boolean = false,          // the dropdown is open: its icon lit
     onAchievements: (() -> Unit)? = null, // the trophy icon (touchscreens) and X's hint: the achievements panel
     achievementsOpen: Boolean = false,    // the panel is open: its icon lit
-    minimalOpening: MinimalOpening? = null,   // Minimal: the selected game being opened (this list's), its band growing over the screen
+    minimalOpening: MinimalOpening? = null,   // Minimal: this list's selected row opening as a folder: the others fade (a launch runs App's [LaunchOverlay])
     tapOpens: (Int) -> Boolean = NxTapNeverOpens,   // one tap on another game opens it too ([LocalNxTapOpens]); the second display's preview
 ) {
     val index = rememberUpdatedState(selectedIndex)
@@ -201,7 +200,7 @@ internal fun GameListFrame(
     recentIcon: Boolean = true,   // false inside Recent itself: no Recent icon on touch
     onSearch: (() -> Unit)? = null, onLayout: (() -> Unit)? = null, layoutOpen: Boolean = false,   // a game list's Search and Layout icons
     onAchievements: (() -> Unit)? = null, achievementsOpen: Boolean = false,   // and its trophy icon
-    minimalOpening: MinimalOpening? = null,   // Minimal: the selected game being opened: the others fade, its band grows ([MinimalOpenOverlay])
+    minimalOpening: MinimalOpening? = null,   // Minimal: this list's selected row opening as a folder: the others fade
 ) {
     // Layouts → Page title and Button hints, in effect ([LocalLauncherChrome]): hidden, the hint bar keeps its room; the
     // title's goes to the body (a List gets more rows, the other styles centre in it).
@@ -212,7 +211,7 @@ internal fun GameListFrame(
     // The selected game's name and info open the achievements panel too, as the trophy does (Carousel, Backdrop, List's info).
     val iconsUp = !chrome.listTitle && titleIcons.isNotEmpty()   // the icons at the page's top right
     val topCut = rememberNxListTopCut()
-    // Minimal: the selected name as last laid out, and this page's box: where the open band starts.
+    // Minimal: the selected name as last laid out (where B's morph lands), and this page's box (a morph's flight's).
     val minimalSelected = remember { MinimalSelected() }
     val pageBox = remember { arrayOfNulls<LayoutCoordinates>(1) }
     // A Minimal list come in by a folder's morph: the last page's selected name flies into this title as the names rise in.
@@ -227,8 +226,8 @@ internal fun GameListFrame(
         Box(modifier.fillMaxSize().onGloballyPositioned { pageBox[0] = it }) {
             // The main menu's top band behind the title, so the rows line up with the tabs' and the grey name reads over art.
             // Not over a Backdrop picture: its shade does this job, and the two would stack; nor over Minimal's names, which
-            // run on under the title, faded there. No title, no band, unless a List runs up under the page's icons: they
-            // keep the band, as the main menu's List does.
+            // stop at their band's edges, faded to nothing before the title. No title, no band, unless a List runs up under
+            // the page's icons: they keep the band, as the main menu's List does.
             if (style != MenuStyle.BACKDROP && style != MenuStyle.MINIMAL && chrome.listTitle || style == MenuStyle.LIST && iconsUp) Box(Modifier.fillMaxWidth().height(MENU_TAB_ROW_HEIGHT + NX_TOP_BAND_REACH).nxTopBandFade(LocalNxColors.current.background))
             Column(Modifier.fillMaxSize()) {
                 // The name starts where the body's text does: the list labels' inset in List style, the gutter the Grid's tiles
@@ -351,8 +350,6 @@ internal fun GameListFrame(
                     Text(it, color = LocalNxColors.current.listText, fontFamily = LocalNxFont.current, fontSize = nxModalText())
                 }
             }
-            // Minimal's open: the selected game's band grows over the whole page, then it goes dark.
-            if (style == MenuStyle.MINIMAL && minimalOpening?.band == true) MinimalOpenOverlay(minimalSelected, pageBox[0])
             // The folder's name landing in the title (none with Page title Off: it fades where it was).
             if (flight != null && flown.value < 1f) {
                 MinimalFlight(flight, title, menuTitleStyle(), { titleText[0]?.takeIf { it.isAttached && chrome.listTitle }?.let(::morphPlace) }, { flown.value }, { pageBox[0] })

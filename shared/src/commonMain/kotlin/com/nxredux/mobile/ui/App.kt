@@ -6,7 +6,11 @@ import coil3.compose.AsyncImagePainter
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.request.addLastModifiedToFileCacheKey
 import com.nxredux.mobile.update.AppRelease
+import com.nxredux.mobile.ui.nx.LaunchOverlay
+import com.nxredux.mobile.ui.nx.LaunchTargets
+import com.nxredux.mobile.ui.nx.LocalLaunchTargets
 import com.nxredux.mobile.ui.nx.LocalMinimalPage
+import com.nxredux.mobile.ui.nx.toLaunchName
 import com.nxredux.mobile.ui.nx.MinimalMorph
 import com.nxredux.mobile.ui.nx.MinimalPage
 import com.nxredux.mobile.ui.nx.abstractArtFetcher
@@ -42,6 +46,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
@@ -176,6 +181,16 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     val controllerConnected = rememberControllerConnected()   // once, above the shell: survives rotation and pad/no-pad flips
     LaunchedEffect(controllerConnected) { state.onControllerConnected(controllerConnected) }   // a Shortcuts bind row's line
     val touchscreen = rememberHasTouchscreen()   // for a game list's Recent, Search and Layout icons
+    // A launch: the page showing reports its selected name ([LocalLaunchTargets]); the overlay spreads from it, and the
+    // game carries it (in the accent it ends on) to draw again on the same pixels.
+    val launchSequence by state.launchSequence.collectAsState()
+    val launchTargets = remember { LaunchTargets() }
+    val launchAccent = rememberUpdatedState(look.colors.accent)
+    DisposableEffect(state) {
+        val provider = { launchTargets.current?.toLaunchName(launchAccent.value) }
+        state.launchNameProvider = provider
+        onDispose { if (state.launchNameProvider === provider) state.launchNameProvider = null }
+    }
     // Bars and cutout only, never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
     Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).windowInsetsPadding(restingSystemBars().union(WindowInsets.displayCutout))) {
         HandheldShell(
@@ -202,6 +217,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                     val separate = rememberSeparateController()
                     LaunchedEffect(portrait, separate) { state.onPadContext(portrait, separate) }
                     MenuLocals(state, look, footer, touchscreen) {
+                        CompositionLocalProvider(LocalLaunchTargets provides launchTargets) {
                         Box(m) {
                             // A tool on the top screen ([MenuTopScreen]): this one keeps the menu, still.
                             val toolAbove = DualMenu.bottom(screen, dualMenu, toolOnTop) == BottomContent.Menu
@@ -239,6 +255,8 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                             // menu on the second display it goes with the game list, to the top screen ([MenuTopScreen]).
                             val bottom = DualMenu.bottom(screen, dualMenu, toolOnTop)
                             if (bottom == BottomContent.Normal) netplayPage?.value?.let { p -> NetplayOverlay(state, p) }
+                            // Over the whole screen (tabs, stats, icons, content), before a tool on the top screen returns.
+                            LaunchOverlay(launchSequence, launchTargets, reducedMotion = state.reducedMotion)
                             if (bottom == BottomContent.Menu) return@Box   // a tool on the top screen: its loading, dialogs and notices are there ([MenuTopScreen])
                             if (loading) NxLoadingOverlay(loadingMessage)
                             // An installed library's Android games question over the menu (first setup asks it as a step). A one-time
@@ -253,6 +271,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                                     onCancel = { state.answerUpdate(false) }, cancelLabel = "Not now", scrimDismisses = false, scrollSteps = state.updateScroll)
                             }
                             PageOverlays(state, chooser, error, notice)
+                        }
                         }
                     }
                 }

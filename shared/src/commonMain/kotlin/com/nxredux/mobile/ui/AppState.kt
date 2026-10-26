@@ -569,9 +569,9 @@ private const val ART_MAX_WAIT_MS = 15_000L
 /**
  * A Minimal page's folder being opened ([AppState.minimalOpening]): the page it is on ([page]: a tab's [MenuCategory], a
  * game list's [ListSource]; only that page draws it) and the row's [index]; the other names fade before its list comes in.
- * [band] is always false now (a launch runs [AppState.launchSequence]); it goes with the band's drawing.
+ * A launch is not one: it runs [AppState.launchSequence], and nothing on the page moves or fades.
  */
-data class MinimalOpening(val page: Any, val index: Int, val band: Boolean = false)
+data class MinimalOpening(val page: Any, val index: Int)
 
 /** The deepest a Settings right pane goes below its category (Library -> Emulator Settings -> consoles -> options), and some. */
 private const val SETTINGS_MAX_DEPTH = 6

@@ -9,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Fill
@@ -50,22 +48,20 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -73,7 +69,6 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.ui.MINIMAL_LEAVE_MS
 import com.nxredux.mobile.ui.NavMotion
-import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -85,8 +80,8 @@ import kotlin.math.roundToInt
  * solid in the accent (the only accent on the page) and a little larger, a third of the way down the band; the others are
  * outlines in the ink, one line each, fading by distance to the band's edges ([minimalOutlineAlpha]): nothing shows under
  * the stats row, the title or the tab row. Home adds its stats
- * strip and the tags of its rows ([HomeMinimalScreen]); the tabs and the game lists show the names alone. A on the
- * selection grows its band over the screen before it opens ([MinimalOpenBand], AppState's minimalOpening). Between two
+ * strip and the tags of its rows ([HomeMinimalScreen]); the tabs and the game lists show the names alone. A on a game or
+ * a tool runs the launch sequence from the selected name ([LaunchOverlay], which it reports: [LocalLaunchTargets]). Between two
  * Minimal pages a folder morphs ([MinimalFlight]): its name flies into the list's title as the list's names rise in, and
  * B drops the title back into its row as the other names fade in.
  */
@@ -123,13 +118,6 @@ private const val MINIMAL_TAG_INLINE = "tag"
 
 /** A swipe's release carries on this long at the finger's speed to pick the name it lands on. */
 private const val MINIMAL_THROW_S = .25f
-
-/** The open band: after the other names fade out ([MINIMAL_LEAVE_MS]), it grows to the whole screen, going black over its last [OPEN_DARK_FROM]. */
-private const val OPEN_GROW_MS = 350
-private const val OPEN_DARK_FROM = .4f
-private val OpenEasing = CubicBezierEasing(.65f, 0f, .35f, 1f)
-/** The open band's colour: this share of the accent over the background, a deep shade (dark grey for White) that doesn't flash. */
-private const val OPEN_BAND_TINT = .28f
 
 /** A folder's morph: the name's (or the title's) flight, and the new list's names rising in after a moment, one after another. */
 internal const val MINIMAL_MORPH_MS = 280
@@ -170,10 +158,7 @@ internal fun minimalWindow(pos: Float, count: Int, above: Int, below: Int): IntR
     return (at - above).coerceIn(0, count - 1)..(at + 1 + below).coerceIn(0, count - 1)
 }
 
-/**
- * Where the open band starts: the selected name as last laid out (its coordinates, text style and label), reported by
- * [MinimalNames] and read when the band first composes ([MinimalOpenOverlay]).
- */
+/** The selected name as last laid out (its coordinates, text style and label), reported by [MinimalNames]: where B's morph lands. */
 internal class MinimalSelected {
     var coords: LayoutCoordinates? = null
     var style: TextStyle? = null
@@ -227,9 +212,9 @@ private fun minimalNameStyle(): TextStyle {
  * tab row's top). The selection's line sits a third of the way down it ([minimalAnchor]), the outlines fading to nothing
  * at its edges ([minimalOutlineAlpha]). A drag moves the names with the finger and,
  * released, they settle on the name the throw lands on, selected ([axisSwipe]). A tap selects, a tap on the selected name
- * opens it (every name, so the open band starts at the selection's place; [tapOpens] may open on one tap), a long press calls [onLongPress]. The d-pad
- * lives in AppState (UP / DOWN wrap on a fresh press, as a List). [overlay] draws over the names (Home's strip). [leaving]: a row is opening (AppState's minimalOpening),
- * the other names fading out. Come in by a morph ([LocalMinimalPage]), a list's names rise in ([NavMotion.MINIMAL_FORWARD])
+ * opens it (every name, so a launch starts from the selection's place; [tapOpens] may open on one tap), a long press calls [onLongPress]. The d-pad
+ * lives in AppState (UP / DOWN wrap on a fresh press, as a List). [overlay] draws over the names (Home's strip). [leaving]: a folder is opening (AppState's minimalOpening),
+ * the other names fading out; a launch moves and fades nothing (its black covers the page). Come in by a morph ([LocalMinimalPage]), a list's names rise in ([NavMotion.MINIMAL_FORWARD])
  * or the last list's title drops into the selected row as the others fade in ([NavMotion.MINIMAL_BACK]).
  */
 @Composable
@@ -353,6 +338,7 @@ private fun MinimalNames(
     val colors = LocalNxColors.current
     val density = LocalDensity.current
     val font = LocalNxFont.current
+    val launchTargets = LocalLaunchTargets.current
     val size = MINIMAL_NAME_DP * nxTextScale()
     val pitch = size + 2f
     val pitchPx = with(density) { pitch.dp.toPx() }
@@ -490,16 +476,20 @@ private fun MinimalNames(
                     MinimalName(text, outline, nameW, badge)
                 }
                 if (lit || i in near) {
-                    // The open band starts on the selected name as drawn: its own box, at the text's left.
+                    val laid = remember { arrayOfNulls<TextLayoutResult>(1) }
+                    // The selected name as drawn (its own box, at the text's left): where B's morph lands, where a folder's
+                    // morph starts and, on the page showing, where a launch starts (its full name, at the selection's grow).
                     Box(
                         Modifier.graphicsLayer { alpha = fill(i); compositingStrategy = CompositingStrategy.ModulateAlpha }
-                            .then(if (lit) Modifier.onGloballyPositioned {
-                                selected.coords = it; selected.style = solid; selected.label = row.label
-                                // the page showing: where a folder's morph to its list starts
-                                if (page?.live?.value == true) morphPlace(it).let { (at, s) -> page.morph.name = MorphText(row.label, at, it.size.width.toFloat(), s, solid) }
+                            .then(if (lit) Modifier.onGloballyPositioned { c ->
+                                selected.coords = c; selected.style = solid; selected.label = row.label
+                                if (page?.live?.value != false) launchTargets.report(
+                                    LaunchTarget(AnnotatedString(row.label), { laid[0] }, { c }, solid, colors.accent, { 1f + (MINIMAL_SELECTED_SCALE - 1f) * fill(i) }),
+                                )
+                                if (page?.live?.value == true) morphPlace(c).let { (at, s) -> page.morph.name = MorphText(row.label, at, c.size.width.toFloat(), s, solid) }
                             } else Modifier),
                     ) {
-                        MinimalName(text, solid, nameW, badge)
+                        MinimalName(text, solid, nameW, badge, onTextLayout = if (lit) { r -> laid[0] = r } else null)
                     }
                 }
             }
@@ -513,12 +503,14 @@ private fun minimalText(label: String, tag: String?): AnnotatedString = buildAnn
     tag?.let { append(" "); appendInlineContent(MINIMAL_TAG_INLINE, it) }
 }
 
-/** One name (with its tag's [inline] content) on one line at most [width] wide, an ellipsis where it is cut. */
+/** One name (with its tag's [inline] content) on one line at most [width] wide, an ellipsis where it is cut; its layout to [onTextLayout]. */
 @Composable
-private fun MinimalName(text: AnnotatedString, style: TextStyle, width: Dp, inline: Map<String, InlineTextContent>) {
+private fun MinimalName(
+    text: AnnotatedString, style: TextStyle, width: Dp, inline: Map<String, InlineTextContent>, onTextLayout: ((TextLayoutResult) -> Unit)? = null,
+) {
     // Unbounded: its line runs a little taller than the rows' pitch, and a height limit would clip it.
     Text(
-        text, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, inlineContent = inline,
+        text, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, inlineContent = inline, onTextLayout = onTextLayout ?: {},
         modifier = Modifier.widthIn(max = width).wrapContentHeight(Alignment.Top, unbounded = true),
     )
 }
@@ -569,65 +561,5 @@ internal fun MinimalFlight(
                 compositingStrategy = CompositingStrategy.ModulateAlpha
             }.flying { it / ratio },
         )
-    }
-}
-
-/**
- * The open band over a page drawn in its box ([box]): from the selected name as [selected] last saw it, read once as it
- * first composes. Draw it while AppState's minimalOpening is this page's; the page opens the row as it fills.
- */
-@Composable
-internal fun MinimalOpenOverlay(selected: MinimalSelected, box: LayoutCoordinates?) {
-    val start = remember {
-        val row = selected.coords
-        val style = selected.style
-        val name = selected.label
-        if (box != null && row != null && style != null && name != null && box.isAttached && row.isAttached) {
-            Triple(name, box.localBoundingBoxOf(row, clipBounds = false), style) to row.size.width
-        } else null
-    } ?: return
-    val (band, w) = start
-    // Its laid-out width, and the scale it is drawn at (the selection's grow), so it keeps its size and lines.
-    MinimalOpenBand(band.first, band.second, band.third, laidW = w.toFloat())
-}
-
-/**
- * The Minimal open: as the other names fade out ([MINIMAL_LEAVE_MS], the list's own draw), nothing here; then [name]'s
- * row ([from], in this box's coordinates) becomes a band, a dark tint of the accent, that grows to fill the box
- * ([OPEN_GROW_MS]) and goes black as it nears it, the name (in its own accent, at its drawn size) staying where it was
- * and going dark with it. No longer started: a launch runs AppState's launch sequence ([com.nxredux.mobile.ui.AppState.launchSequence]),
- * and this goes with it.
- */
-@Composable
-internal fun MinimalOpenBand(name: String, from: Rect, style: TextStyle, modifier: Modifier = Modifier, laidW: Float = from.width) {
-    val colors = LocalNxColors.current
-    // A dark tint of the accent, not the accent itself: a White accent filling the black screen would flash.
-    val band = lerp(colors.background, colors.accent, OPEN_BAND_TINT)
-    val grow = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        delay(MINIMAL_LEAVE_MS)
-        grow.animateTo(1f, tween(OPEN_GROW_MS, easing = LinearEasing))
-    }
-    BoxWithConstraints(modifier.fillMaxSize().graphicsLayer { alpha = if (grow.value > 0f) 1f else 0f }) {
-        val h = constraints.maxHeight.toFloat()
-        val density = LocalDensity.current
-        val pad = with(density) { 6.dp.toPx() }
-        val g = { OpenEasing.transform(grow.value) }
-        Box(
-            Modifier.fillMaxWidth().layout { m, c ->
-                val top = (from.top - pad) * (1 - g())
-                val bottom = from.bottom + pad + (h - from.bottom - pad) * g()
-                val p = m.measure(Constraints.fixed(c.maxWidth, (bottom - top).roundToInt().coerceAtLeast(0)))
-                layout(p.width, p.height) { p.place(0, top.roundToInt()) }
-            }.background(band),
-        )
-        Text(
-            name, style = style.copy(drawStyle = Fill), maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.offset { IntOffset(from.left.roundToInt(), from.top.roundToInt()) }
-                .graphicsLayer { val s = if (laidW > 0f) from.width / laidW else 1f; scaleX = s; scaleY = s; transformOrigin = TransformOrigin(0f, 0f) }
-                .widthIn(max = with(density) { laidW.coerceAtLeast(1f).toDp() }).wrapContentHeight(Alignment.Top, unbounded = true),
-        )
-        // Black once the band has (nearly) filled the box.
-        Box(Modifier.fillMaxSize().graphicsLayer { alpha = ((grow.value - OPEN_DARK_FROM) / (1f - OPEN_DARK_FROM)).coerceIn(0f, 1f) }.background(Color.Black))
     }
 }
