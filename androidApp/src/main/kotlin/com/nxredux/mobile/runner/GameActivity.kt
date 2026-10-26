@@ -1790,7 +1790,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /** The core layout and touch-screen proportion last sent for the 3DS ([syncN3dsCore]); null before the first. */
-    private var lastN3dsLayout: Map<String, String>? = null
+    private var lastN3dsLayout: Map<String?, String?>? = null
 
     /** These options with a second-screen [split]'s fixed ones in place of the same keys; unchanged without one. */
     private fun List<Variable>.withN3dsSplit(split: Map<String, String>?): List<Variable> =
