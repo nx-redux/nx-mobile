@@ -46,13 +46,13 @@ import com.nxredux.mobile.layout.DsKind
 import com.nxredux.mobile.layout.LayoutConstants
 import com.nxredux.mobile.layout.PadRoom
 import com.nxredux.mobile.layout.Reach
+import com.nxredux.mobile.layout.TabletopDsPlacement
 import com.nxredux.mobile.layout.bandAwaitsFrame
 import com.nxredux.mobile.layout.besideMeasures
 import com.nxredux.mobile.layout.besidePlacement
 import com.nxredux.mobile.layout.consoleScale
 import com.nxredux.mobile.layout.hideOffered
 import com.nxredux.mobile.layout.overlayHeightPx
-import com.nxredux.mobile.layout.TabletopDsPlacement
 import com.nxredux.mobile.layout.reach
 import com.nxredux.mobile.layout.tabletopDs
 import com.nxredux.mobile.layout.tabletopDsUnitPx
