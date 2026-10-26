@@ -1071,11 +1071,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             .map { (k, v) -> Variable(k, v) } +
             // 3DS Large screen: the touch screen at half size (onConfigurationChanged follows a rotation).
             if (N3dsOptions.appliesTo(tag)) listOf(
-                Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass())),
+                Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsTabletop())),
                 Variable(N3dsOptions.TOUCH_MAIN_ONLY, DualScreen.n3dsTouchMainOnly(launchDual, padLayout.overlayPadShown.value)),
                 Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(false)),   // stylus mode is off at launch
                 // The locked core layout ([N3dsOptions.LAYOUT]) from the row in use; the descriptor's default is replaced.
-                Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass())),
+                Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsTabletop())),
             ).withN3dsSplit(n3dsSplit) else emptyList()
         // netplay link: gambatte gets its link options; a GBA link engine starts now, before the core loads, so
         // a joiner learns the host's gpsp_serial from its READY and runs with it (the handheld reloads instead).
@@ -1754,7 +1754,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             val landscape = isLandscape(newConfig.orientation)
             val screen = screenClass()
             applyOptions(listOf(
-                Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, landscape, renderer.ndsControllerMode(), screen)),
+                Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, landscape, renderer.ndsControllerMode(), screen, n3dsTabletop())),
             ))
         }
         // The motion level is captured in the display's frame: a new rotation takes the phone's attitude as level again.
@@ -1784,9 +1784,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (!isN3ds) return
         val screen = screenClass()
         val options = listOf(
-            Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen)),
+            Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen, n3dsTabletop())),
             // Large screen halves the touch screen, Stacked keeps both alike: a layout change updates it too.
-            Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen)),
+            Variable(N3dsOptions.STACKED_SMALL_PROPORTION, N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen, n3dsTabletop())),
             // Under the main display's panel the pad is hidden, so it covers nothing on the picture screen.
             Variable(N3dsOptions.TOUCH_MAIN_ONLY, DualScreen.n3dsTouchMainOnly(dual.dualMode, padLayout.overlayPadShown.value && !dual.mainPanelShown())),
             Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(input.n3dsHotkeys.stylus)),
@@ -1799,6 +1799,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         lastN3dsLayout = layout
         applyOptions(options)
     }
+
+    /**
+     * Half-folded with a tabletop layout (the Fold's DS halves or the Flip's portrait one): the 3DS core is then Stacked with
+     * equal screens ([N3dsOptions.coreLayoutFor]), whatever layout the player saved. A posture change re-runs [PadLayoutController.applyLayout],
+     * which calls [syncN3dsCore]. A second screen's split still wins ([withN3dsSplit]).
+     */
+    private fun n3dsTabletop(): Boolean = padLayout.tabletop() != null
 
     /** The core layout and touch-screen proportion last sent for the 3DS ([syncN3dsCore]); null before the first. */
     private var lastN3dsLayout: Map<String?, String?>? = null

@@ -53,19 +53,41 @@ class N3dsOptionsTest {
         assertFalse(N3dsOptions.LAYOUT_PORTRAIT in FrontendOptions.defaults("3DS"))
     }
 
+    @Test fun tabletop_forces_stacked_equal() {
+        val values = v(N3dsOptions.LAYOUT_PORTRAIT to "large")
+        assertEquals("default", N3dsOptions.coreLayoutFor(values, false, false, phone, true))
+        assertEquals("1", N3dsOptions.stackedSmallProportion(values, false, false, phone, true))
+        assertEquals("default", N3dsOptions.coreLayoutFor(v(), true, false, fold, true))   // an unpicked Fold landscape is Large
+        assertEquals("1", N3dsOptions.stackedSmallProportion(v(), true, false, fold, true))
+    }
+
+    @Test fun tabletop_ignores_saved_side_by_side() {
+        for (saved in listOf("side_by_side", "single_screen")) {
+            val values = v(N3dsOptions.LAYOUT_PORTRAIT to saved, N3dsOptions.LAYOUT_LANDSCAPE to saved)
+            assertEquals("default", N3dsOptions.coreLayoutFor(values, false, false, phone, true))
+            assertEquals("default", N3dsOptions.coreLayoutFor(values, true, false, phone, true))
+            assertEquals("1", N3dsOptions.stackedSmallProportion(values, true, false, phone, true))
+        }
+    }
+
+    @Test fun flat_keeps_saved_layout() {
+        assertEquals("side_by_side", N3dsOptions.coreLayoutFor(v(N3dsOptions.LAYOUT_PORTRAIT to "side_by_side"), false, false, phone, false))
+        assertEquals("2", N3dsOptions.stackedSmallProportion(v(N3dsOptions.LAYOUT_PORTRAIT to "large"), false, false, phone, false))
+    }
+
     @Test fun large_is_core_default_with_half_touch() {
         val values = v(N3dsOptions.LAYOUT_PORTRAIT to "large")
-        assertEquals("default", N3dsOptions.coreLayoutFor(values, false, false, phone))
-        assertEquals("2", N3dsOptions.stackedSmallProportion(values, false, false, phone))
-        assertEquals("single_screen", N3dsOptions.coreLayoutFor(v(N3dsOptions.LAYOUT_PORTRAIT to "single_screen"), false, false, phone))
-        assertEquals("side_by_side", N3dsOptions.coreLayoutFor(v(N3dsOptions.LAYOUT_PORTRAIT to "side_by_side"), false, false, phone))
-        assertEquals("1", N3dsOptions.stackedSmallProportion(v(N3dsOptions.LAYOUT_PORTRAIT to "single_screen"), false, false, phone))
+        assertEquals("default", N3dsOptions.coreLayoutFor(values, false, false, phone, false))
+        assertEquals("2", N3dsOptions.stackedSmallProportion(values, false, false, phone, false))
+        assertEquals("single_screen", N3dsOptions.coreLayoutFor(v(N3dsOptions.LAYOUT_PORTRAIT to "single_screen"), false, false, phone, false))
+        assertEquals("side_by_side", N3dsOptions.coreLayoutFor(v(N3dsOptions.LAYOUT_PORTRAIT to "side_by_side"), false, false, phone, false))
+        assertEquals("1", N3dsOptions.stackedSmallProportion(v(N3dsOptions.LAYOUT_PORTRAIT to "single_screen"), false, false, phone, false))
     }
 
     @Test fun stacked_same_size() {
         val values = v(N3dsOptions.LAYOUT_LANDSCAPE to "stacked")
-        assertEquals("default", N3dsOptions.coreLayoutFor(values, true, false, phone))
-        assertEquals("1", N3dsOptions.stackedSmallProportion(values, true, false, phone))
+        assertEquals("default", N3dsOptions.coreLayoutFor(values, true, false, phone, false))
+        assertEquals("1", N3dsOptions.stackedSmallProportion(values, true, false, phone, false))
     }
 
     @Test fun defaults_per_screen() {

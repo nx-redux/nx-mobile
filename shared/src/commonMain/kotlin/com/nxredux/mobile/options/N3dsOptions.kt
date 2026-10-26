@@ -137,16 +137,22 @@ object N3dsOptions {
     fun appLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): String =
         layoutValue(values, layoutKey(landscape, controllerMode)) ?: defaultLayout(screen, landscape)
 
-    /** The core's [LAYOUT] value for the row in use: Large screen and Stacked are its top over bottom ("default"). */
-    fun coreLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): String =
-        when (val app = appLayoutFor(values, landscape, controllerMode, screen)) {
+    /**
+     * The core's [LAYOUT] value for the row in use: Large screen and Stacked are its top over bottom ("default"). Half-folded
+     * ([tabletop]) it is always that, whatever the player saved: the app lays the two screens out itself, from a Stacked frame.
+     */
+    fun coreLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean): String =
+        if (tabletop) "default" else when (val app = appLayoutFor(values, landscape, controllerMode, screen)) {
             "large", "stacked" -> "default"
             else -> app
         }
 
-    /** How many times smaller the core draws the touch screen in its top over bottom: half for Large screen, else alike. */
-    fun stackedSmallProportion(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): String =
-        if (appLayoutFor(values, landscape, controllerMode, screen) == "large") "2" else "1"
+    /**
+     * How many times smaller the core draws the touch screen in its top over bottom: half for Large screen, else alike.
+     * Half-folded ([tabletop]) the screens are equal ("1") whatever the player saved.
+     */
+    fun stackedSmallProportion(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean): String =
+        if (!tabletop && appLayoutFor(values, landscape, controllerMode, screen) == "large") "2" else "1"
 
     /** SELECT + Left/Right: the row in use, as key to the layout [delta] steps from the one showing on [screen], wrapping. */
     fun cycleLayout(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, delta: Int, screen: ScreenClass): Pair<String, String> {
