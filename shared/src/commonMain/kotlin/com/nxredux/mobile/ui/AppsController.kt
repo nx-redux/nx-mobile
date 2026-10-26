@@ -59,21 +59,25 @@ internal class AppsController(
 
     /**
      * An Android game: the platform starts its app; nothing is recorded (no recent, no game time). A failed start (the
-     * app gone meanwhile) says so and re-lists the apps, so the console drops it.
+     * app gone meanwhile) says so and re-lists the apps, so the console drops it. True when it started.
      */
-    fun launchApp(entry: Listed) {
-        if (launcher?.launch(entry.game.fileName) == true) return
+    fun launchApp(entry: Listed): Boolean {
+        if (launcher?.launch(entry.game.fileName) == true) return true
         host.showNotice("Could not open ${entry.shown}")
         host.refreshInstalled()
+        return false
     }
 
-    /** A Tools row for an Android app ([ToolKind.APP]): the platform starts it; a failed start says so and rebuilds the rows. */
-    fun openApp(row: ToolRow) {
-        row.appId?.let { id ->
-            if (launcher?.launch(id) == true) return
-            host.showNotice("Could not open ${row.label}")
-            scope.launch { host.rebuildMainRows(); host.swapMainRows() }   // likely gone since the menu was built
-        }
+    /**
+     * A Tools row for an Android app ([ToolKind.APP]): the platform starts it; a failed start says so and rebuilds the
+     * rows. True when it started.
+     */
+    fun openApp(row: ToolRow): Boolean {
+        val id = row.appId ?: return false
+        if (launcher?.launch(id) == true) return true
+        host.showNotice("Could not open ${row.label}")
+        scope.launch { host.rebuildMainRows(); host.swapMainRows() }   // likely gone since the menu was built
+        return false
     }
 
     /**

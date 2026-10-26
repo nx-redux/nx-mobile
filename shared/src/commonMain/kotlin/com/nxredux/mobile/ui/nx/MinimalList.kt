@@ -625,8 +625,8 @@ internal fun MinimalOpenOverlay(selected: MinimalSelected, box: LayoutCoordinate
  * The Minimal open: as the other names fade out ([MINIMAL_LEAVE_MS], the list's own draw), nothing here; then [name]'s
  * row ([from], in this box's coordinates) becomes a band, a dark tint of the accent, that grows to fill the box
  * ([OPEN_GROW_MS]) and goes black as it nears it, the name (in its own accent, at its drawn size) staying where it was
- * and going dark with it. AppState opens the row as it is black ([com.nxredux.mobile.ui.MINIMAL_OPEN_MS]); a game as
- * the band starts, loading under it.
+ * and going dark with it. No longer started: a launch runs AppState's launch sequence ([com.nxredux.mobile.ui.AppState.launchSequence]),
+ * and this goes with it.
  */
 @Composable
 internal fun MinimalOpenBand(name: String, from: Rect, style: TextStyle, modifier: Modifier = Modifier, laidW: Float = from.width) {

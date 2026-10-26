@@ -122,6 +122,7 @@ import com.nxredux.mobile.ui.nx.homeCarouselShownRow
 import com.nxredux.mobile.ui.nx.FooterMode
 import com.nxredux.mobile.ui.nx.LauncherChrome
 import com.nxredux.mobile.ui.nx.ListSelection
+import com.nxredux.mobile.ui.nx.LaunchTimeline
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
@@ -4117,10 +4118,10 @@ class AppStateTest {
             .also { it.load(); advanceUntilIdle() }
     }
 
-    // A Minimal Consoles tab: A fades the other names on the console (its page the tab's, no band: its list is Minimal too)
-    // and opens its list by the morph once they have; the Minimal list's A grows the band on its game, and launches it as
-    // the band fills. B morphs back to the tab.
-    @Test fun minimal_tab_and_game_list_open_after_their_band() = runTest {
+    // A Minimal Consoles tab: A fades the other names on the console (its page the tab's: its list is Minimal too) and
+    // opens its list by the morph once they have; the Minimal list's A runs the launch sequence on its game, launching it
+    // as the spread ends. B morphs back to the tab.
+    @Test fun minimal_tab_and_game_list_open_after_their_fade_or_spread() = runTest {
         val runner = RecordingRunner()
         val state = minimalEverywhere(runner)
         val tabs = assertIs<Screen.Systems>(state.screen.value).tabs
@@ -4130,21 +4131,24 @@ class AppStateTest {
         val nds = consoles.rows.indexOfFirst { (it as? MainRow.System)?.system?.tag == "NDS" }
         state.select(nds)
         state.onButton(NxButton.A)
-        assertEquals(MinimalOpening(MenuCategory.CONSOLES, nds, band = false), state.minimalOpening.value)
+        assertEquals(MinimalOpening(MenuCategory.CONSOLES, nds), state.minimalOpening.value)
         assertIs<Screen.Systems>(state.screen.value)   // not yet
         advanceTimeBy(MINIMAL_LEAVE_MS + 1)
         val games = assertIs<Screen.Games>(state.screen.value)
         assertEquals(NavMotion.MINIMAL_FORWARD, state.nav.value.motion)
         assertEquals(null, state.minimalOpening.value)   // the faded tab is gone
         assertEquals(listOf("Mario Kart DS"), games.games.map { it.shownName })
-        state.onButton(NxButton.A)   // the game's band
-        assertEquals(MinimalOpening(games.source, 0), state.minimalOpening.value)
+        state.onButton(NxButton.A)   // the game's spread
+        assertEquals(null, state.minimalOpening.value)
+        assertEquals(LaunchPhase.SPREAD, state.launchSequence.value?.phase)
+        assertEquals(games.source, state.launchSequence.value?.page)
         assertTrue(runner.launched.isEmpty())
-        advanceTimeBy(MINIMAL_OPEN_MS + 1)
+        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
         assertEquals(1, runner.launched.size)
         assertEquals("Mario Kart DS.nds", runner.launched[0].fileName)
+        assertEquals(LaunchPhase.HANDED_OFF, state.launchSequence.value?.phase)
         advanceUntilIdle()
-        assertEquals(null, state.minimalOpening.value)
+        assertEquals(null, state.launchSequence.value)   // never back in front: given up
     }
 
     // B on a Minimal list morphs back only to a Minimal tab; a List tab slides, and so does A from it into a Minimal list.
@@ -4194,21 +4198,21 @@ class AppStateTest {
         assertTrue(assertIs<Screen.Systems>(state.screen.value).category != MenuCategory.CONSOLES)
     }
 
-    // Minimal Home's open: A starts the band (homeOpening) and the row opens a moment later; input waits meanwhile.
-    @Test fun minimal_home_opens_the_row_after_its_band() = runTest {
+    // Minimal Home's tool: A starts the launch sequence and the row opens as the spread ends; input waits meanwhile.
+    @Test fun minimal_home_opens_the_row_after_its_spread() = runTest {
         val state = homeFixture(MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + (MenuCategory.HOME to MenuStyle.MINIMAL) })
         val rows = assertIs<Screen.Systems>(state.screen.value).rows
         val tool = rows.indexOfFirst { it is MainRow.PinnedTool }
         state.select(tool)
         state.onButton(NxButton.A)
-        assertEquals(tool, state.minimalOpening.value?.index)
+        assertEquals(tool, state.launchSequence.value?.index)
         assertIs<Screen.Systems>(state.screen.value)   // not yet
         state.onButton(NxButton.UP)
         assertEquals(tool, state.selection.value.index)   // input waits
-        advanceTimeBy(MINIMAL_OPEN_MS + 1)
+        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
         assertTrue(state.screen.value !is Screen.Systems)   // the tool opened
         advanceUntilIdle()
-        assertEquals(null, state.minimalOpening.value?.index)
+        assertEquals(null, state.launchSequence.value)
     }
 
     @Test fun switching_home_layout_keeps_the_focused_game() = runTest {
