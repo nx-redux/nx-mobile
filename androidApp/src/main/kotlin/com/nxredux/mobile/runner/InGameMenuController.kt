@@ -320,7 +320,9 @@ internal class InGameMenuController(
                     }
                     // The page title's gutter follows the app's: the narrow one while the pad sits below (portrait, or a
                     // tabletop pad under the hinge), as HandheldShell sets it; a controller-dropped band keeps it, with no pad below.
-                    val portraitLayout = padLayout.tabletop()?.let { it.pad != TabletopPad.NONE } ?: (config.orientation == Configuration.ORIENTATION_PORTRAIT)
+                    // Half-folded with nothing under the hinge (a controller; on a DS / 3DS one leaves the touch screen alone
+                    // there) the menu above it is laid out as landscape, with no pad below.
+                    val portraitLayout = padLayout.tabletop()?.let(padLayout::tabletopPadDrawn) ?: (config.orientation == Configuration.ORIENTATION_PORTRAIT)
                     val padBelow = portraitLayout && (padLayout.tabletop() != null || padLayout.portraitBandPx() > 0)
                     // The window decides the two panes, as Settings' ([inGameMenuSplit]): portrait never splits.
                     val window = DpSize(config.screenWidthDp.dp, config.screenHeightDp.dp)

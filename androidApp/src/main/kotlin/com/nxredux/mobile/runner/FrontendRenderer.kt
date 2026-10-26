@@ -435,6 +435,8 @@ internal class FrontendRenderer(
         // size. Keep whatever is drawn now rather than letting an empty list flip a split game to the whole 256x384
         // frame (and the overlay back on) for that moment; the next size change lays it out again.
         if (nds != null && nds.isEmpty()) return
+        // Likewise a half-folded screen with no pixel (a hinge reading leaving no room above it): keep what is drawn.
+        if (tabletop != null && listOf(tabletop.placement.top, tabletop.placement.bottom).any { it.width <= 0f || it.height <= 0f }) return
         // Before its first frame a DS game's frame size is unknown (0x0): it stays split as it started, overlay off. The
         // clusters still take their unit and rows (hidden), so they are measured by the first frame.
         if (nds == null && ndsSplit && !gameReady) {
@@ -455,18 +457,19 @@ internal class FrontendRenderer(
             }
             view.screenOffset = PointF(0f, 0f)
             val shown = nds.shownRect()
-            // Half-folded split: the touch screen below the hinge is the picture the pad there keeps clear of.
-            val splitBottom = tabletop?.placement?.takeIf { it.mode == TabletopDsMode.SPLIT }?.bottom
-            pictureBox.value = windowRect(origin, splitBottom ?: shown)
+            // Half-folded split: the speed indicator goes on the screen above the hinge (the Flip stacks both there).
+            val splitTop = tabletop?.placement?.takeIf { it.mode == TabletopDsMode.SPLIT }?.top
+            pictureBox.value = windowRect(origin, splitTop ?: shown)
             shownPicture = null
             view.screenRegions = nds.map { it.toScreenRegion(w, h) }
             // Half-folded, the pad below the hinge is placed from the placement, not beside the screens.
             fitPad(if (tabletop != null) PadRoom.NONE else room, pad, shown, frameKnown = true, h, overlayH)
             val scales = nds.joinToString(" + ") { "${it.screen.value}${if (it.inset) " inset" else ""} %.2fx".format(java.util.Locale.US, it.dst.height / 192f) }
             if (tabletop != null) {
-                logLayout(w, h, shape, "TABLETOP_DS", tabletop.pad.takeIf { tabletop.placement.left != null }, 0f, space, shown, "${tabletop.placement.mode} ${if (isN3ds) "3ds" else "ds"} $scales")
+                val p = tabletop.placement
+                logLayout(w, h, shape, "TABLETOP_DS", tabletop.pad.takeIf { p.left != null }, 0f, "top=${p.top.short()} bottom=${p.bottom.short()}", "${p.mode} ${if (isN3ds) "3ds" else "ds"} $scales")
             } else {
-                logLayout(w, h, shape, room.name, pad, setAside, space, shown, "ds $scales")
+                logLayout(w, h, shape, room.name, pad, setAside, spaceAndPicture(space, shown), "ds $scales")
             }
             return
         }
@@ -507,7 +510,7 @@ internal class FrontendRenderer(
         val covered = if (s.scaling != ScreenScaling.AUTO && overlayAspect != null && overlayAspect > 0f) box else shown
         fitPad(room, pad, covered, frameKnown = frame != null, h, overlayH)
         val scale = frame?.let { shown.height / (if (it.rotated) it.width else it.height) }
-        logLayout(w, h, shape, room.name, pad, setAside, space, shown, "${s.scaling} frame=${frame?.let { "${it.width.roundToInt()}x${it.height.roundToInt()}" }} scale=${scale?.let { "%.2f".format(java.util.Locale.US, it) }}")
+        logLayout(w, h, shape, room.name, pad, setAside, spaceAndPicture(space, shown), "${s.scaling} frame=${frame?.let { "${it.width.roundToInt()}x${it.height.roundToInt()}" }} scale=${scale?.let { "%.2f".format(java.util.Locale.US, it) }}")
     }
 
     /**
@@ -539,10 +542,13 @@ internal class FrontendRenderer(
     /** The relayout's inputs and outcome, once per change, for the Debug log (the device checks read the spec's tables from it). */
     private var lastLayoutLog: String? = null
 
-    private fun logLayout(w: Float, h: Float, shape: WindowShape, room: String, pad: LandscapePad?, setAside: Float, space: PxRect, picture: PxRect, what: String) {
+    private fun spaceAndPicture(space: PxRect, picture: PxRect) = "space=${space.short()} picture=${picture.short()}"
+
+    /** [rects]: where the picture went ([spaceAndPicture]; half-folded, the two screens' rects). */
+    private fun logLayout(w: Float, h: Float, shape: WindowShape, room: String, pad: LandscapePad?, setAside: Float, rects: String, what: String) {
         val reach = pad?.let { "reach=${it.reach.edgePx.roundToInt()}+${it.reach.buttonsPx.roundToInt()}${if (it.measured) " measured" else " estimated"} unit=${"%.1f".format(java.util.Locale.US, it.unitPx)}" } ?: "no clusters"
         val line = "relayout: window=${shape.widthPx}x${shape.heightPx} ${shape.screenClass} area=${w.roundToInt()}x${h.roundToInt()} room=$room $reach setAside=${setAside.roundToInt()} " +
-            "space=${space.short()} picture=${picture.short()} $what"
+            "$rects $what"
         if (line == lastLayoutLog) return
         lastLayoutLog = line
         NxLog.i(TAG_LOG, line)
