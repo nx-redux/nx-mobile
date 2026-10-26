@@ -1,5 +1,6 @@
 package com.nxredux.mobile.options
 
+import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.runner.N3dsNewControls
 import com.nxredux.mobile.settings.stepFrom
@@ -102,24 +103,26 @@ object N3dsOptions {
         "Stacked: one above the other, the same size.\nSingle screen: the top one only.\n" +
         "Side by side: next to each other.\nSELECT + Left/Right cycles it."
 
-    private fun layoutRow(key: String, label: String, default: String, info: String, brief: String = "") = FrontendOption(
-        key, label, LAYOUT_CYCLE, default, "$info\n${NdsOptions.FOLD_NOTE}", visual = true, valueLabels = LAYOUT_CYCLE.map(::layoutLabel), brief = brief,
+    private fun layoutRow(key: String, label: String, default: String, info: String, fold: String, brief: String = "") = FrontendOption(
+        key, label, LAYOUT_CYCLE, default, info + fold, visual = true, valueLabels = LAYOUT_CYCLE.map(::layoutLabel), brief = brief,
     )
 
     /**
      * Console Settings' layout rows, one per orientation as on the DS (in-game: applied live), for [screen] (null: unknown,
      * so the regular phone's defaults). The row default is the screen's [defaultLayout], shown while nothing is stored.
+     * On a device that [canHalfFold] each says it is the layout when not half-folded ([NdsOptions.foldNote]).
      */
-    fun layoutRowsFor(screen: ScreenClass?): List<FrontendOption> {
+    fun layoutRowsFor(screen: ScreenClass?, canHalfFold: Boolean = DeviceTraits.canHalfFold): List<FrontendOption> {
         val known = screen ?: ScreenClass.REGULAR_PHONE
+        val fold = NdsOptions.foldNote(canHalfFold)
         return listOf(
-            layoutRow(LAYOUT_PORTRAIT, "Layout (portrait)", defaultLayout(known, false), "How the two screens share a portrait screen.\n$LAYOUT_INFO_LIST"),
+            layoutRow(LAYOUT_PORTRAIT, "Layout (portrait)", defaultLayout(known, false), "How the two screens share a portrait screen.\n$LAYOUT_INFO_LIST", fold),
             layoutRow(
                 LAYOUT_PORTRAIT_CONTROLLER, "Layout (portrait, controller)", defaultLayout(known, false),
-                "The portrait layout while a controller that is not a clip-on\nis connected and the pad is hidden.\nSELECT + Left/Right cycles it then.",
+                "The portrait layout while a controller that is not a clip-on\nis connected and the pad is hidden.\nSELECT + Left/Right cycles it then.", fold,
                 brief = "Used while a controller (not a clip-on) hides the pad",
             ),
-            layoutRow(LAYOUT_LANDSCAPE, "Layout (landscape)", defaultLayout(known, true), "How the two screens share a landscape screen.\n$LAYOUT_INFO_LIST"),
+            layoutRow(LAYOUT_LANDSCAPE, "Layout (landscape)", defaultLayout(known, true), "How the two screens share a landscape screen.\n$LAYOUT_INFO_LIST", fold),
         )
     }
 

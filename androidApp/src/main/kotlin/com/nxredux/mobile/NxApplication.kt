@@ -3,7 +3,10 @@ package com.nxredux.mobile
 import android.app.Activity
 import android.app.Application
 import android.app.NotificationManager
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.storage.DataRoot
 import com.nxredux.mobile.ui.NxImages
@@ -46,6 +49,9 @@ class NxApplication : Application() {
             DataRoot.startIfDue(this)
         }, "data-root").start()
         NxImages.install()   // before any screen: a game started from another launcher never composes App
+        // A hinge to half-fold at: the half-folded texts and the Half-folded pad layout show only on such a device.
+        DeviceTraits.canHalfFold = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_SENSOR_HINGE_ANGLE)
         // A dead process's install wait notice: that wait ended with it.
         getSystemService(NotificationManager::class.java)?.cancel(NotificationIds.APP_UPDATE_WAIT)
         // Off is both flags' default: only On needs setting, so a launcher-only start never loads the native library.
