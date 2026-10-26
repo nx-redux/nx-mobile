@@ -1904,15 +1904,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        padLayout.applyLayout(newConfig.orientation)   // also re-sizes the menu and the notifications to the game area
-        // Split keeps its own fixed proportion.
-        if (isN3ds && DualScreen.n3dsCoreOptions(dual.dualMode) == null) {
-            // The picture's space was the other orientation's: Large screen's half size until the relayout fills it.
-            renderer.forgetN3dsPictureSpace()
-            applyOptions(listOf(
-                Variable(N3dsOptions.STACKED_SMALL_PROPORTION, n3dsProportion(isLandscape(newConfig.orientation))),
-            ))
-        }
+        // 3DS: the picture's space was the other orientation's, so the layout's sync below ([syncN3dsCore]) sends Large
+        // screen's half size (and watches for its frame) until the relayout fills the new space ([onN3dsPictureSpace]).
+        if (isN3ds) renderer.forgetN3dsPictureSpace()
+        padLayout.applyLayout(newConfig.orientation)   // also re-sizes the menu and the notifications to the game area; syncs the 3DS core
         // The motion level is captured in the display's frame: a new rotation takes the phone's attitude as level again.
         if (isWii) displayRotation().let { r -> if (r != lastRotation) { lastRotation = r; motionSensors?.recenter() } }
         if (retroView != null) {

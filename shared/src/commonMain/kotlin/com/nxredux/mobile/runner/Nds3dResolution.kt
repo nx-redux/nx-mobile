@@ -159,16 +159,24 @@ object N3ds3dResolution {
     internal fun shapesInUse(proportion: Float): List<Pair<Int, Int>> = stackedShapes(proportion) + listOf(400 to 240, 320 to 240, 720 to 240)
 
     /**
+     * The 1x frames [frameFactor] reads under [proportion]: [FRAME_SHAPES_1X] for an unknown one or the whole ones the app
+     * always sent (1, 2); for a fractional one only its [shapesInUse], since its top over bottom shapes can meet the
+     * half-size ones at other factors (1.14: 400 x 450 at 4x is 320 x 360 at 5x). A late frame of the proportion before
+     * (awaited by the send's layout watch) then reads as unknown, keeping the factor last read.
+     */
+    internal fun framesTried(proportion: Float?): List<Pair<Int, Int>> =
+        if (proportion == null || proportion < 1f || proportion == 1f || proportion == 2f) FRAME_SHAPES_1X else shapesInUse(proportion)
+
+    /**
      * The factor a [frameW] x [frameH] frame was rendered at: the whole f (1 to 10) for which it is f times one of the
-     * shapes [shapesInUse] under the [proportion] in effect (null: not known), else one of [FRAME_SHAPES_1X]; null for any
-     * other frame (none yet, or a layout this does not know).
+     * shapes [framesTried] under the [proportion] in effect (null: not known); null for any other frame (none yet, or a
+     * layout this does not know).
      */
     fun frameFactor(frameW: Float, frameH: Float, proportion: Float? = null): Int? {
         val w = frameW.roundToInt()
         val h = frameH.roundToInt()
         if (w <= 0 || h <= 0) return null
-        val shapes = proportion?.takeIf { it >= 1f }?.let(::shapesInUse).orEmpty() + FRAME_SHAPES_1X
-        return shapes.firstNotNullOfOrNull { (bw, bh) ->
+        return framesTried(proportion).firstNotNullOfOrNull { (bw, bh) ->
             (w / bw).takeIf { f -> f in 1..Res3dConsole.N3DS.coreMax && w == bw * f && h == bh * f }
         }
     }

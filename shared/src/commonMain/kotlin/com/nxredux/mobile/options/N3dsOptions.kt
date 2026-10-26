@@ -5,6 +5,7 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.runner.N3dsNewControls
 import com.nxredux.mobile.runner.Res3dConsole
 import com.nxredux.mobile.settings.stepFrom
+import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -182,15 +183,16 @@ object N3dsOptions {
 
     /**
      * Large screen's proportion in portrait for a [spaceW] x [spaceH] px picture space: the top screen fills the width and
-     * the bottom one takes the height left under it, up to the top's size (1 to 2, in hundredths so near-equal spaces send
-     * one value). A space too short for the top over a half-size bottom keeps the half size (2), the picture shrinking to fit.
+     * the bottom one takes the height left under it, up to the top's size (1 to 2, rounded up to hundredths so the frame
+     * never outgrows the space and near-equal spaces send one value). A space too short for the top over a half-size bottom keeps the half size (2), the picture shrinking to fit.
      */
     fun fillProportion(spaceW: Float, spaceH: Float): Float {
         if (spaceW <= 0f || spaceH <= 0f) return 2f
         val top = spaceW / TOP_WIDTH
         if (SCREEN_HEIGHT * top * 1.5f > spaceH) return 2f
         val bottom = min((spaceH - SCREEN_HEIGHT * top) / SCREEN_HEIGHT, top)
-        return ((top / bottom).coerceIn(1f, 2f) * 100f).roundToInt() / 100f
+        // Up to the next hundredth: the bottom never comes out bigger than the height left (a hair under 1 tolerated).
+        return ceil((top / bottom).coerceIn(1f, 2f) * 100f - 0.001f) / 100f
     }
 
     /** [proportion] as the core option's text: two decimals, a whole one as before ("1", "2"). */

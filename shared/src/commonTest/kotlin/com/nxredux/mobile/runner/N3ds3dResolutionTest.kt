@@ -101,17 +101,25 @@ class N3ds3dResolutionTest {
         assertNull(N3ds3dResolution.frameFactor(1200f, 1140f))               // a shape only that proportion makes
         // The other layouts' frames still read.
         assertEquals(5, N3ds3dResolution.frameFactor(2000f, 1200f, 1.71f))
-        assertEquals(2, N3ds3dResolution.frameFactor(800f, 720f, 1.71f))
+        assertEquals(4, N3ds3dResolution.frameFactor(2880f, 960f, 1.71f))   // Side by side
+        // A late half-size frame reads as unknown (the factor last read stands); under 1 or 2 it reads as before.
+        assertNull(N3ds3dResolution.frameFactor(800f, 720f, 1.71f))
+        assertEquals(2, N3ds3dResolution.frameFactor(800f, 720f, 2f))
+        assertEquals(3, N3ds3dResolution.frameFactor(1200f, 1440f, 1f))
+        assertEquals(2, N3ds3dResolution.frameFactor(800f, 720f, 1f))
+        // 1.14: 400 x 450 at 4x is the half-size bottom-prominent 320 x 360 at 5x; the proportion in effect wins.
+        assertEquals(4, N3ds3dResolution.frameFactor(1600f, 1800f, 1.14f))
+        assertEquals(5, N3ds3dResolution.frameFactor(1600f, 1920f, 1.66f))   // 320 x 384 at 5x, not Stacked's 400 x 480 at 4x
         assertNull(N3ds3dResolution.frameFactor(1000f, 700f, 1.71f))
         assertNull(N3ds3dResolution.frameFactor(0f, 0f, 1.71f))
     }
 
     @Test
     fun noTwoFrameShapesInUseShareASize() {
-        // Every proportion the fill rule sends (1 to 2 in hundredths): its top over bottom shapes with Single screen and
-        // Side by side never reach one size at two factors.
+        // Every proportion the fill rule sends (1 to 2 in hundredths): the shapes frameFactor tries under it never reach
+        // one size at two factors.
         for (c in 100..200) {
-            val shapes = N3ds3dResolution.shapesInUse(c / 100f)
+            val shapes = N3ds3dResolution.framesTried(c / 100f)
             val seen = mutableMapOf<Pair<Int, Int>, Int>()
             for ((w, h) in shapes) for (f in 1..10) {
                 val prev = seen.put(w * f to h * f, f)

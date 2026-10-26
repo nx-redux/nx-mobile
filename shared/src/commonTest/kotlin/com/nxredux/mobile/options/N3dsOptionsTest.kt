@@ -143,8 +143,16 @@ class N3dsOptionsTest {
         // Room for both at the top's scale: the bottom as big as the top, never bigger.
         assertEquals(1f, N3dsOptions.fillProportion(1848f, 3000f))
         assertEquals(1f, N3dsOptions.fillProportion(1080f, 1400f))
-        // Rounded to two decimals: near-equal spaces give the same value.
+        // Rounded up to hundredths: near-equal spaces give the same value, and 1.7043 is 1.71, not 1.70.
         assertEquals(N3dsOptions.fillProportion(1848f, 1759f), N3dsOptions.fillProportion(1848f, 1758.9f))
+        assertEquals(1.71f, N3dsOptions.fillProportion(1848f, 1759.4f))
+        assertEquals(1.5f, N3dsOptions.fillProportion(1200f, 1200f))   // exactly 1.5 stays 1.5
+        // Never taller than the space: the top fills the width, the bottom at the rounded proportion fits under it.
+        for ((w, h) in listOf(1848f to 1759f, 1848f to 1759.4f, 1080f to 1000f, 1200f to 1100f, 2000f to 1999f)) {
+            val p = N3dsOptions.fillProportion(w, h)
+            val top = w / 400f
+            assertTrue(240f * top + 240f * top / p <= h + 0.01f, "$w x $h at $p")
+        }
         assertEquals(2f, N3dsOptions.fillProportion(0f, 0f))
     }
 
