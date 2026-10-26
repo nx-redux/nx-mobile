@@ -40,7 +40,8 @@ private const val EPSILON = 0.001f
  * pixels. The halves set aside [LayoutConstants.TABLETOP_DS_SET_ASIDE] of the [reach] each side (the touch screen
  * overlaps each by a quarter of it at most), nothing with a [controller]. The screens meet at the fold, as on a DS:
  * the top one's bottom edge on [hingeTop], the touch screen's top edge on [hingeBottom], each centred across.
- * Only a tablet-class [screen] has the width for the touch screen
+ * A hinge reading that leaves no room below it for a 1x DS touch screen (or any 3DS one) between the halves stacks both
+ * screens above it instead, as a phone-shaped foldable does. Only a tablet-class [screen] has the width for the touch screen
  * between the pad halves; a phone-shaped foldable stacks both screens above the hinge instead. [secondRow]: the halves
  * draw their second row (STYLUS / SWAP), so their boxes are that row taller, as the landscape pad's. [big]: the screen
  * drawn first (above the hinge, or on top in the stack); after a 3DS SWAP the touch screen, so each rect is fitted to
@@ -68,16 +69,21 @@ fun tabletopDs(
     val bottomSpace = PxRect(aside, bottomArea.y, bottomArea.width - 2f * aside, bottomArea.height)
 
     val (topW, topH) = when (kind) {
-        DsKind.DS -> wholeScale(topArea, DS_W, DS_H, atLeast1 = false)
+        DsKind.DS -> wholeScale(topArea, DS_W, DS_H, atLeast1 = true)
         DsKind.N3DS -> fitted(topArea, n3dsAspect(big))
     }
     val (bottomW, bottomH) = when (kind) {
         DsKind.DS -> wholeScale(bottomSpace, DS_W, DS_H, atLeast1 = true)
         DsKind.N3DS -> fitted(bottomSpace, n3dsAspect(big.other))
     }
+    // The touch screen must fit below the hinge between the halves, and the top screen above it (DS: 1x at least).
+    if (bottomW < 1f || bottomH < 1f || bottomW > bottomSpace.width || bottomH > bottomSpace.height ||
+        topW < 1f || topH < 1f || topH > topArea.height
+    ) return stackedTop(topArea, kind, big)
     val top = atFold(topArea, topW, topH, y = hingeTop - topH)
     val bottom = atFold(bottomArea, bottomW, bottomH, y = hingeBottom.toFloat())
     if (controller) return TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, null, null)
+    // One placement for both halves: the caller mirrors it to the right edge.
     val half = clusterPlacement(bottomArea, bottom, unitPx, reach, density, toolRow = secondRow)
     return TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, half, half)
 }

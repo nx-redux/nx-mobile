@@ -53,13 +53,13 @@ fun screenClass(widthPx: Int, heightPx: Int, smallestWidthDp: Int): ScreenClass 
 }
 
 /** Pixels in one layout unit (11 mm); ydpi outside 40..1200 falls back to density x 160. */
-fun unitPx(ydpi: Float, density: Float): Float {
+fun unitPx(ydpi: Float, density: Float): Float = mmToPx(LayoutConstants.UNIT_MM, ydpi, density)
+
+/** [mm] in pixels at [ydpi], or at density x 160 when ydpi is outside 40..1200 (an unreported or bogus value). */
+private fun mmToPx(mm: Float, ydpi: Float, density: Float): Float {
     val dpi = if (ydpi in 40f..1200f) ydpi else density * 160f
-    return LayoutConstants.UNIT_MM / 25.4f * dpi
+    return mm / 25.4f * dpi
 }
 
 /** Pixels in one half-folded DS layout unit ([LayoutConstants.TABLETOP_DS_UNIT_MM]); ydpi as [unitPx]. */
-fun tabletopDsUnitPx(ydpi: Float, density: Float): Float {
-    val dpi = if (ydpi in 40f..1200f) ydpi else density * 160f
-    return LayoutConstants.TABLETOP_DS_UNIT_MM / 25.4f * dpi
-}
+fun tabletopDsUnitPx(ydpi: Float, density: Float): Float = mmToPx(LayoutConstants.TABLETOP_DS_UNIT_MM, ydpi, density)

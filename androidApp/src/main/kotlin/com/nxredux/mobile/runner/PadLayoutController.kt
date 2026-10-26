@@ -443,10 +443,12 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      * buttons are known ([reveal]), as the landscape clusters.
      */
     private fun addTabletopDsHalves(root: FrameLayout, tt: TabletopLayout) {
+        val shape = activity.windowShape()
+        // A hinge reading with no room for the touch screen below it stacks both screens above it: no halves then.
+        if (tabletopDsPlacement(shape, tt).left == null) return
         fun lp(side: Int) = FrameLayout.LayoutParams(0, 0, side or Gravity.TOP)
         clustersSolid.value = true   // before they compose: the first frame is already solid
         tabletopDsViews = addClusterHalves(root, lp(Gravity.START), lp(Gravity.END))
-        val shape = activity.windowShape()
         val pad = tabletopDsPad(shape)
         clusterUnitPx.value = pad.unitPx
         clusterSecondRow.value = pad.secondRow

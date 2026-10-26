@@ -59,7 +59,8 @@ class TabletopDsTest {
 
     @Test
     fun bottom_never_below_1x() {
-        val p = place(DsKind.DS, h = 1300, hingeBottom = 1236)
+        val p = place(DsKind.DS, h = 1436, hingeBottom = 1236)   // a 200 px bottom area: 1x, still split
+        assertEquals(TabletopDsMode.SPLIT, p.mode)
         assertEquals(256f, p.bottom.width)
         assertEquals(192f, p.bottom.height)
     }
@@ -107,5 +108,62 @@ class TabletopDsTest {
     @Test
     fun ds_swap_changes_nothing() {
         assertEquals(place(DsKind.DS), tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1212, 1236, DsKind.DS, 122f, reach, 2.625f, false, big = NdsScreen.BOTTOM))
+    }
+
+    @Test
+    fun bottom_area_too_short_for_1x_stacks_above_the_hinge() {
+        // A 150 px bottom area: no 1x DS touch screen fits there, so both screens go above the hinge.
+        val p = place(DsKind.DS, h = 1386, hingeBottom = 1236)
+        assertEquals(TabletopDsMode.STACKED_TOP, p.mode)
+        assertNull(p.left)
+        assertTrue(p.bottom.y + p.bottom.height <= 1212f)
+    }
+
+    @Test
+    fun top_area_too_short_for_1x_stacks() {
+        // A 150 px top area cannot hold a 1x top screen: the stack's own 1x floor applies there instead.
+        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 150, 174, DsKind.DS, 122f, reach, 2.625f, false)
+        assertEquals(TabletopDsMode.STACKED_TOP, p.mode)
+    }
+
+    @Test
+    fun top_ds_screen_at_least_1x() {
+        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 200, 224, DsKind.DS, 122f, reach, 2.625f, false)
+        assertEquals(TabletopDsMode.SPLIT, p.mode)
+        assertEquals(PxRect(796f, 8f, 256f, 192f), p.top)
+    }
+
+    @Test
+    fun controller_3ds_bottom_fills_the_bottom_area() {
+        val p = place(DsKind.N3DS, controller = true)
+        assertNull(p.left)
+        // 1848 x 1212: height-limited 4:3, 1616 x 1212, centred, against the hinge.
+        assertEquals(PxRect(116f, 1236f, 1616f, 1212f), p.bottom)
+        assertEquals(1212f, p.top.y + p.top.height)
+    }
+
+    @Test
+    fun wide_tablet_splits() {
+        val p = tabletopDs(2560, 1600, ScreenClass.WIDE_TABLET, 0, 790, 810, DsKind.DS, 122f, reach, 2.625f, false)
+        assertEquals(TabletopDsMode.SPLIT, p.mode)
+        assertNotNull(p.left)
+    }
+
+    @Test
+    fun flip_stacked_3ds_bottom_centred_under_the_top() {
+        val n = tabletopDs(1080, 2640, ScreenClass.REGULAR_PHONE, 0, 1308, 1332, DsKind.N3DS, 100f, reach, 2.625f, false)
+        // 1080 wide frame, 648 per screen: the touch screen 864 wide, centred under the top one.
+        assertEquals(PxRect(0f, 6f, 1080f, 648f), n.top)
+        assertEquals(PxRect(108f, 654f, 864f, 648f), n.bottom)
+    }
+
+    @Test
+    fun touch_screen_stays_between_the_set_asides() {
+        val aside = LayoutConstants.TABLETOP_DS_SET_ASIDE * reach.total
+        for (kind in DsKind.entries) {
+            val p = place(kind)
+            assertTrue(p.bottom.x >= aside, "$kind left")
+            assertTrue(p.bottom.x + p.bottom.width <= 1848f - aside, "$kind right")
+        }
     }
 }
