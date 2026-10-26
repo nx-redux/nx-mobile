@@ -14,10 +14,8 @@ import kotlin.test.assertEquals
  */
 class ToolAppBadgeTest {
     @Test fun aLitTileInvertsTheAccent() {
-        val teal = nxColorsFor(AccentPreset.TEAL)
-        assertEquals(Color(0xFFDCDCDC) to Color(0xFF006666), toolAppBadgeColors(teal, lit = true))
         val red = nxColorsFor(AccentPreset.RED)
-        assertEquals(Color(0xFFDCDCDC) to Color(0xFF660000), toolAppBadgeColors(red, lit = true))
+        assertEquals(Color.Black to Color(0xFFF87171), toolAppBadgeColors(red, lit = true))
         val white = nxColorsFor(AccentPreset.WHITE)
         assertEquals(Color.Black to white.accent, toolAppBadgeColors(white, lit = true))
     }

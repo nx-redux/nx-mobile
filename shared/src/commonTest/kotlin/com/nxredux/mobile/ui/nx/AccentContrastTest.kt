@@ -5,7 +5,7 @@ import com.nxredux.mobile.settings.AccentPreset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** Text on the accent is the preset's own: black, but Red's and Teal's light #DCDCDC; the default is the #E4E4E7 pill. */
+/** Text on the accent is always black (every preset is light); the default is the #E4E4E7 pill. */
 class AccentContrastTest {
     @Test fun theUiWhiteIsTheD8InkAndTheAccentOneStepBrighter() {
         val c = NxColors()
@@ -29,26 +29,8 @@ class AccentContrastTest {
         assertEquals(Color.Black.copy(alpha = 0.55f), red.onAccentMuted)
     }
 
-    @Test fun redGetsTheHandheldsLightText() {
-        val c = nxColorsFor(AccentPreset.RED)
-        assertEquals(Color(0xFF660000), c.accent)
-        assertEquals(Color(0xFFDCDCDC), c.onAccent)
-        assertEquals(Color(0xFFDCDCDC).copy(alpha = 0.55f), c.onAccentMuted)
-        assertEquals(c.success, c.successOnAccent)   // the plain tones read on the dark red
-        assertEquals(c.warning, c.warningOnAccent)
-    }
-
-    @Test fun tealIsNxTealWithTheHandheldsLightText() {
-        val c = nxColorsFor(AccentPreset.TEAL)
-        assertEquals(Color(0xFF006666), c.accent)
-        assertEquals(c.optionBar, c.accent)            // the in-game bar's teal
-        assertEquals(Color(0xFFDCDCDC), c.onAccent)
-        assertEquals(c.success, c.successOnAccent)
-        assertEquals(c.warning, c.warningOnAccent)
-    }
-
-    @Test fun everyOtherPresetGetsBlackText() {
-        for (p in AccentPreset.entries - AccentPreset.RED - AccentPreset.TEAL) {
+    @Test fun everyPresetGetsBlackText() {
+        for (p in AccentPreset.entries) {
             val c = nxColorsFor(p)
             assertEquals(Color(p.argb), c.accent)
             assertEquals(Color.Black, c.onAccent, p.label)
@@ -56,8 +38,8 @@ class AccentContrastTest {
         }
     }
 
-    @Test fun toneColoursOnABlackTextAccentAreTheDarkOnes() {
-        for (p in AccentPreset.entries - AccentPreset.RED - AccentPreset.TEAL) {
+    @Test fun toneColoursOnTheAccentAreTheDarkOnes() {
+        for (p in AccentPreset.entries) {
             val c = nxColorsFor(p)
             assertEquals(c.successSelected, c.successOnAccent, p.label)
             assertEquals(c.warningSelected, c.warningOnAccent, p.label)

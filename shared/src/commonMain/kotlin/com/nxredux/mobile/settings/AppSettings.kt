@@ -425,7 +425,7 @@ interface AppSettings {
     var gameRumble: GameRumble
     /** Appearance → Accent: the selection colour; unset or unknown is [AccentPreset.DEFAULT] (White). */
     var accent: AccentPreset
-    /** Appearance → Secondary accent: the bar behind a selected option's value; unset or unknown is [SecondaryAccent.DEFAULT] (Teal). */
+    /** Appearance → Secondary accent: the bar behind a selected option's value; unset or unknown is [SecondaryAccent.DEFAULT] (Auto). */
     var secondaryAccent: SecondaryAccent
 }
 

@@ -77,6 +77,7 @@ import com.nxredux.mobile.settings.VerticalListAlignment
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.settings.AccentPreset
 import com.nxredux.mobile.settings.SecondaryAccent
+import com.nxredux.mobile.settings.SecondaryPreset
 import com.nxredux.mobile.settings.MenuStyles
 import com.nxredux.mobile.settings.PadButtons
 import com.nxredux.mobile.settings.PadTheme
@@ -5450,7 +5451,7 @@ class AppStateTest {
             listOf(
                 SettingsRow(SettingsKind.PAD_THEME, "Pad theme", "Charcoal"),
                 SettingsRow(SettingsKind.ACCENT, "Accent", "White"),
-                SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", "Teal"),
+                SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", "Auto"),
                 SettingsRow(SettingsKind.TEXT_SIZE, "Text size", "Large"),
                 SettingsRow(SettingsKind.RESET_DEFAULTS, "Reset to defaults"),
             ),
@@ -9682,7 +9683,7 @@ class AppStateTest {
 
     @Test fun secondary_accent_row_cycles_auto_then_the_presets_and_keeps_the_selection() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
-        assertEquals(SecondaryAccent.Preset(AccentPreset.TEAL), settings.secondaryAccent)   // a fresh store
+        assertEquals(SecondaryAccent.Auto, settings.secondaryAccent)   // a fresh store
         val state = state(settings)
         state.load()
         state.openSettings(SettingsSection.APPEARANCE)
@@ -9696,17 +9697,17 @@ class AppStateTest {
             seen += rows()[i].secondary
             state.onButton(NxButton.RIGHT)
         }
-        assertEquals(listOf<String?>("Teal", "Sky", "Violet", "Pink", "Auto", "White", "Red", "Orange", "Amber", "Lime"), seen)
-        assertEquals(SecondaryAccent.Preset(AccentPreset.TEAL), settings.secondaryAccent)   // wrapped round
+        assertEquals(listOf<String?>("Auto", "Teal", "Red", "Rust", "Bronze", "Moss", "Navy", "Plum", "Wine", "Graphite"), seen)
+        assertEquals(SecondaryAccent.Auto, settings.secondaryAccent)   // wrapped round
         assertEquals(i, state.selection.value.index)
         settings.secondaryAccent = SecondaryAccent.Auto
         state.onButton(NxButton.LEFT)
-        assertEquals(SecondaryAccent.Preset(AccentPreset.PINK), settings.secondaryAccent)   // Auto <- Pink
-        assertEquals("Pink", rows()[i].secondary)
+        assertEquals(SecondaryAccent.Preset(SecondaryPreset.GRAPHITE), settings.secondaryAccent)   // Auto <- Graphite
+        assertEquals("Graphite", rows()[i].secondary)
         state.onButton(NxButton.RIGHT)
-        assertEquals(SecondaryAccent.Auto, settings.secondaryAccent)                        // Pink -> Auto
+        assertEquals(SecondaryAccent.Auto, settings.secondaryAccent)                        // Graphite -> Auto
         state.onButton(NxButton.RIGHT)
-        assertEquals(SecondaryAccent.Preset(AccentPreset.WHITE), settings.secondaryAccent)
+        assertEquals(SecondaryAccent.Preset(SecondaryPreset.TEAL), settings.secondaryAccent)
     }
 
     /** The rows of the Layouts page shown now: Layouts itself or one of its groups (the page must be open). */
@@ -9805,7 +9806,7 @@ class AppStateTest {
     private fun assertAppearanceAtDefaults(settings: AppSettings) {
         assertEquals(PadTheme.CHARCOAL, settings.padTheme)
         assertEquals(AccentPreset.WHITE, settings.accent)
-        assertEquals(SecondaryAccent.Preset(AccentPreset.TEAL), settings.secondaryAccent)
+        assertEquals(SecondaryAccent.Auto, settings.secondaryAccent)
     }
 
     private fun assertLayoutsAtDefaults(settings: AppSettings) {
