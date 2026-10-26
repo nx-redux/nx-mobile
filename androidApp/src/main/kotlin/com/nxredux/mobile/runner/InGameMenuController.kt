@@ -377,7 +377,7 @@ internal class InGameMenuController(
     fun menuLayoutParams(orientation: Int, overPanel: Boolean = false): FrameLayout.LayoutParams {
         if (overPanel) return FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         // Tabletop: confined above the hinge, the controls below still drive it.
-        padLayout.tabletop()?.let { tt -> return FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, tt.gameBottom, Gravity.TOP) }
+        padLayout.tabletop()?.let { tt -> return FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, tt.menuBottom, Gravity.TOP) }
         return if (orientation == Configuration.ORIENTATION_PORTRAIT) {
             // Down to the band's top: the window's height less the band, both from the one window reading.
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, activity.windowShape().heightPx - padLayout.portraitBandPx(), Gravity.TOP)

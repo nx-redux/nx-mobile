@@ -99,6 +99,7 @@ internal interface PadLayoutHost {
     val inputManager: android.hardware.input.InputManager?
     val menuOpen: Boolean
     val isNds: Boolean
+    val isN3ds: Boolean
     val isWii: Boolean
     val wiiPad: WiiPad?
     val frontendValues: Map<String, String>
@@ -147,6 +148,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private val inputManager get() = host.inputManager
     private val menuOpen get() = host.menuOpen
     private val isNds get() = host.isNds
+    private val isN3ds get() = host.isN3ds
     private val isWii get() = host.isWii
     private val wiiPad get() = host.wiiPad
     private val frontendValues get() = host.frontendValues
@@ -644,7 +646,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 addPad(root, left, FrameLayout.LayoutParams(halfW, padH, Gravity.START or Gravity.BOTTOM))
                 addPad(root, right, FrameLayout.LayoutParams(halfW, padH, Gravity.END or Gravity.BOTTOM))
             }
-            TabletopPad.NONE -> Unit
+            // No pad yet: the DS tabletop pad is added with the DS layout.
+            TabletopPad.NONE, TabletopPad.DS -> Unit
         }
         game.requestLayout()
         updatePadVisibility()
@@ -653,12 +656,12 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         game.post { relayoutFrontend() }
     }
 
-    /** The tabletop split for the current [posture] and root size ([rootSize]), or null (flat, a DS game, no size yet). */
+    /** The tabletop split for the current [posture] and root size ([rootSize]), or null (flat, no size yet). */
     fun tabletop(names: List<String> = layoutControllerNames()): TabletopLayout? {
         if (posture == Posture.Flat) return null
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null
-        return tabletopLayout(posture, w, h, cutoutTop, controllerConnected = names.isNotEmpty(), isDs = isNds)
+        return tabletopLayout(posture, w, h, activity.windowShape().screenClass, cutoutTop, controllerConnected = names.isNotEmpty(), isDualScreenConsole = isNds || isN3ds)
     }
 
     /**
