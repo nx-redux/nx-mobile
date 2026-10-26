@@ -47,7 +47,7 @@ data class FrontendSettings(
     companion object {
         /** A missing key takes its default, as in [FrontendOptions.fromConfig]: Auto scaling, overlay None. */
         fun parse(values: Map<String, String>): FrontendSettings = FrontendSettings(
-            scaling = when (FrontendOptions.migrateKey(values, FrontendOptions.SCALING, FrontendOptions.SCALING_V1, "Aspect")) {
+            scaling = when (FrontendOptions.migrateKey(values, FrontendOptions.SCALING, FrontendOptions.SCALING_V1, FrontendOptions.SCALING_V1_DEFAULT)) {
                 "Native" -> ScreenScaling.NATIVE
                 "Aspect" -> ScreenScaling.ASPECT
                 "Fullscreen" -> ScreenScaling.FULLSCREEN
@@ -72,6 +72,8 @@ object FrontendOptions {
     const val SCALING = "nx_screen_scaling_v2"
     /** Screen Scaling before Auto: read when [SCALING] is absent, never written. */
     const val SCALING_V1 = "nx_screen_scaling"
+    /** [SCALING_V1]'s default: stored, it counts as untouched and reads as Auto. */
+    const val SCALING_V1_DEFAULT = "Aspect"
     const val SHARPNESS = "nx_scale_filter"
     /** Not a row: read once by [ShaderOptions] to migrate Line/Grid to a preset. */
     const val EFFECT = "nx_screen_effect"
@@ -177,11 +179,32 @@ object FrontendOptions {
      */
     fun droppedOnSave(key: String): Boolean = key in ShaderOptions.MIGRATED_KEYS || isHandheldOnlyKey(key)
 
-    /** [values] with legacy keys renamed, handheld-only ones left out; an existing `nx_` value wins over its legacy twin. */
+    /**
+     * Each old key a versioned key replaced, to that key: Screen Scaling before Auto ([SCALING_V1]) and the DS and 3DS
+     * layout rows' earlier keys ([NdsOptions.OLD_LAYOUT_KEYS], [N3dsOptions.OLD_LAYOUT_KEYS]).
+     */
+    val SUPERSEDED_KEYS: Map<String, String> = mapOf(SCALING_V1 to SCALING) +
+        (NdsOptions.OLD_LAYOUT_KEYS + N3dsOptions.OLD_LAYOUT_KEYS).map { (newKey, old) -> old.first to newKey }
+
+    /**
+     * Whether a save writing the keys [written] drops a line with [key]: [droppedOnSave], or an old key
+     * ([SUPERSEDED_KEYS]) whose new key the same save writes. The new key then carries the value read through the old
+     * one (an explicit old pick, migrated), so nothing is lost; a save without the new key (one other key changed, or a
+     * DS layout row with no pick) keeps the old line.
+     */
+    fun droppedOnSave(key: String, written: Set<String>): Boolean =
+        droppedOnSave(key) || SUPERSEDED_KEYS[key]?.let { it in written } == true
+
+    /**
+     * [values] with legacy keys renamed, handheld-only ones left out; an existing `nx_` value wins over its legacy twin.
+     * An old Screen Scaling pick ([SCALING_V1], not its old default Aspect) is carried to [SCALING] when that is unset,
+     * here on the stored values, so defaults laid under them later ([CoreConfig.resolve]) cannot hide it.
+     */
     fun migrateKeys(values: Map<String, String>): Map<String, String> {
         val out = LinkedHashMap<String, String>()
         values.forEach { (k, v) -> if (!isLegacyKey(k)) out[k] = v }
         values.forEach { (k, v) -> if (isLegacyKey(k) && !isHandheldOnlyKey(k)) out.putIfAbsent(migrateKey(k), v) }
+        migrateKey(out, SCALING, SCALING_V1, SCALING_V1_DEFAULT)?.let { out.putIfAbsent(SCALING, it) }
         return out
     }
 
@@ -203,7 +226,7 @@ object FrontendOptions {
         return allFor(tag).mapNotNull { option ->
             val key = option.key
             val value = when {
-                key == SCALING -> migrateKey(values, SCALING, SCALING_V1, "Aspect")
+                key == SCALING -> migrateKey(values, SCALING, SCALING_V1, SCALING_V1_DEFAULT)
                 key in NO_PICK_KEYS -> layoutValue(values, key)   // null = no pick: left out
                 else -> values[key]
             }

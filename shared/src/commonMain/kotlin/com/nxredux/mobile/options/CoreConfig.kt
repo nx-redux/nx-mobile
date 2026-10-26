@@ -77,10 +77,11 @@ object CoreConfig {
     /**
      * The game file after one [key] changed outside the menu (a DS hotkey): [game] updated in place, or, for a game
      * without one, a copy of [console] with the key. Reading uses the game file instead of the console file whole, so a
-     * game file holding only the key would drop every console value. A locked line keeps its value.
+     * game file holding only the key would drop every console value. A locked line keeps its value. The old key [key]
+     * replaced ([FrontendOptions.SUPERSEDED_KEYS]) goes: the new one now holds the pick.
      */
     fun withKey(console: ConfigFile?, game: ConfigFile?, key: String, value: String): String =
-        render(game ?: console, listOf(key to value), FrontendOptions::migrateKey, drop = { it in ShaderOptions.MIGRATED_KEYS })
+        render(game ?: console, listOf(key to value), FrontendOptions::migrateKey, drop = { it in ShaderOptions.MIGRATED_KEYS || FrontendOptions.SUPERSEDED_KEYS[it] == key })
 
     /**
      * What Save Changes writes: the [running] values, except a [sessionForced] key (one this launch forced, such as
