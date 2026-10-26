@@ -1985,8 +1985,8 @@ class AppStateTest {
         assertEquals(2, runner.launched.size)
     }
 
-    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, padEditor: ((PadEditRequest) -> Unit)? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }) =
-        AppState(AppDeps(settings, src, runner, picker, data, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, padEditor = padEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, padEditor: ((PadEditRequest) -> Unit)? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }) =
+        AppState(AppDeps(settings, src, runner, picker, data, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, padEditor = padEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
 
     /** What a scan of [src] for [settings] stores, built without an AppState (so without the skeleton). */
     private suspend fun scannedIndex(settings: MemorySettings, src: RomsSource = source): LibraryIndex =
@@ -5262,6 +5262,50 @@ class AppStateTest {
         assertEquals(listOf(SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.ADD_EXTRA, SettingsKind.SAVES, SettingsKind.UNASSIGNED, SettingsKind.RESCAN, SettingsKind.HOME), seen)   // row by row; wraps to the top
         st.onButton(NxButton.UP); st.onButton(NxButton.UP)
         assertEquals(SettingsKind.UNASSIGNED, rows[st.selection.value.index].kind)
+    }
+
+    private class FakeMic(override val usable: Boolean = true, var isGranted: Boolean = false) : com.nxredux.mobile.runner.MicAccess {
+        var requests = 0
+        override fun granted() = isGranted
+        override fun request() { requests++ }
+    }
+
+    @Test fun micRowAfterAllFiles() = runTest {
+        val mic = FakeMic()
+        val st = state(MemorySettings(ContentRef("Home")), allFiles = FakeAllFilesAccess(isGranted = true), mic = mic)
+        st.load()
+        st.openSettings(SettingsSection.LIBRARY)
+        val rows = assertIs<Screen.Settings>(st.screen.value).rows
+        val at = rows.indexOfFirst { it.kind == SettingsKind.ALL_FILES }
+        assertEquals(SettingsKind.MIC_ACCESS, rows[at + 1].kind)
+        assertEquals("Microphone access", rows[at + 1].label)
+        assertEquals("Off", rows[at + 1].secondary)
+        mic.isGranted = true
+        st.onAllFilesAccessChanged()
+        assertEquals("On", libraryRow(st, SettingsKind.MIC_ACCESS).secondary)
+    }
+
+    @Test fun micRowHiddenWhenUnusable() = runTest {
+        val st = state(MemorySettings(ContentRef("Home")), mic = FakeMic(usable = false))
+        st.load()
+        st.openSettings(SettingsSection.LIBRARY)
+        assertTrue(assertIs<Screen.Settings>(st.screen.value).rows.none { it.kind == SettingsKind.MIC_ACCESS })
+        val none = state(MemorySettings(ContentRef("Home")))
+        none.load()
+        none.openSettings(SettingsSection.LIBRARY)
+        assertTrue(assertIs<Screen.Settings>(none.screen.value).rows.none { it.kind == SettingsKind.MIC_ACCESS })
+    }
+
+    @Test fun micRowTapRequests() = runTest {
+        val mic = FakeMic()
+        val st = state(MemorySettings(ContentRef("Home")), mic = mic)
+        st.load()
+        st.openSettings(SettingsSection.LIBRARY)
+        st.chooseSetting(rowIndex(st, SettingsKind.MIC_ACCESS), 1)
+        assertEquals(1, mic.requests)
+        st.select(rowIndex(st, SettingsKind.MIC_ACCESS))
+        st.onButton(NxButton.A)
+        assertEquals(2, mic.requests)
     }
 
     @Test fun the_all_files_switch_opens_androids_page_and_follows_the_grant() = runTest {

@@ -139,6 +139,11 @@ public class LibretroDroid {
      * setFrameSpeed's pause, so a pause and resume keep it; never applied in netplay or a GBA link session.
      */
     public static native void setFastForward(int maxSpeed, boolean audible);
+    /**
+     * What a core's mic hears: 0 silence, 1 the phone mic (noise if it can't open), 2 noise. Any thread, not queued:
+     * leaving 1 closes the phone mic at once, even while the game is paused.
+     */
+    public static native void setMicrophoneSource(int source);
     /** Rewind snapshots (once the core can serialize); off frees them. Never in netplay or a GBA link session. */
     public static native void setRewindEnabled(boolean enabled);
     /** Steps back through the snapshots instead of playing; wins over fast forward. */

@@ -227,4 +227,13 @@ class SpeedControlTest {
         c.tap(ShortcutAction.TOGGLE_REWIND)
         assertFalse(c.output.rewinding)
     }
+
+    @Test fun micActionIgnored() {
+        val c = control()
+        c.tap(ShortcutAction.TOGGLE_FF)
+        val before = c.output
+        assertNull(c.onAction(ShortcutAction.TOGGLE_MIC, true))
+        assertNull(c.onAction(ShortcutAction.TOGGLE_MIC, false))
+        assertEquals(before, c.output)
+    }
 }

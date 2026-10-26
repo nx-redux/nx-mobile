@@ -75,6 +75,7 @@ import com.nxredux.mobile.settings.PadButtons
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.shared.res.Res
+import com.nxredux.mobile.shared.res.pad_mic
 import com.nxredux.mobile.shared.res.pad_ps_circle
 import com.nxredux.mobile.shared.res.pad_ps_cross
 import com.nxredux.mobile.shared.res.pad_ps_square
@@ -830,6 +831,86 @@ private fun MotionButton(motion: PadMotion, height: Dp, width: Dp) =
     ToolButton("MOTION", height, width, alpha = if (motion.on) 1f else 0.45f, onTap = motion.onTap, onLongPress = motion.onLongPress)
 
 /**
+ * The DS / 3DS pad's mic button: [on] says whether the game hears the phone's mic (the session's Mic toggle), a tap
+ * flips it ([onTap]). Not a [PadGroup]: fixed at the pad's bottom left whatever the Pad layout, drawn above every group
+ * and taking a touch on one it overlaps.
+ */
+data class PadMic(val on: Boolean, val onTap: () -> Unit)
+
+/** The mic button's diameter on a pad whose unit is [unit] dp. */
+internal fun micButtonSize(unit: Float): Float = unit * 0.9f
+
+/** The mic button's inset from the pad's bottom (and, on the portrait pad, its left) edge, dp. */
+internal fun micButtonInset(unit: Float): Float = unit * 0.15f
+
+/**
+ * How far the portrait mic button's centre sits above its pad's bottom edge, dp, on a pad whose unit is [unit] dp
+ * (the 16 dp padding included): the band's corner button, or with the band hidden ([hiddenBand]) the first of
+ * [PortraitOverlayPad]'s bottom row. The host lines the band's hide / show icon up with it.
+ */
+fun portraitMicCentre(unit: Float, hiddenBand: Boolean): Float =
+    CLUSTER_PADDING + if (hiddenBand) unit * OVERLAY_SYSTEM_UNITS / 2f else micButtonInset(unit) + micButtonSize(unit) / 2f
+
+/**
+ * How far the portrait mic button's left edge sits from the screen's left, dp, as [portraitMicCentre]: the band's
+ * corner inset, or the hidden band's overlay row's edge nudge. The host mirrors it for the hide / show icon's right.
+ */
+fun portraitMicEdge(unit: Float, hiddenBand: Boolean): Float =
+    CLUSTER_PADDING + if (hiddenBand) unit * OVERLAY_EDGE_NUDGE else micButtonInset(unit)
+
+/**
+ * The mic button's inset from a landscape cluster's left edge ([VirtualPadLeft]), dp: past the d-pad / stick (3 units)
+ * and MENU + toggle (two pills and their gap), both from the cluster's [nudge], so it sits in the bottom corner beside
+ * them, toward the screen's middle. The halves' reach counts it ([com.nxredux.mobile.layout.micReachPx]), so the
+ * picture, or the half-folded touch screen, keeps clear of it.
+ */
+internal fun clusterMicStart(unit: Float, nudge: Float): Float =
+    nudge + maxOf(3f * unit, 2f * SYSTEM_PILL_W_UNITS * unit + SYSTEM_PILL_GAP) + micButtonInset(unit)
+
+/**
+ * [mic]'s round button in its pad's root box, [start] dp from the left and [micButtonInset] up from the bottom: the pad's
+ * pill face with the mic symbol, dimmed while off (as MOTION), pressed in while on. A tap toggles; there is no hold.
+ */
+@Composable
+private fun BoxScope.MicButton(mic: PadMic, unit: Dp, start: Dp) =
+    MicFace(
+        mic, micButtonSize(unit.value).dp,
+        Modifier.align(Alignment.BottomStart).zIndex(1f).padding(start = start, bottom = micButtonInset(unit.value).dp),
+    )
+
+/** The mic button's round face, [size] across, wherever [modifier] puts it ([MicButton]; first in [PortraitOverlayPad]'s row). */
+@Composable
+private fun MicFace(mic: PadMic, size: Dp, modifier: Modifier = Modifier) {
+    val haptic = rememberPadHaptic()
+    val latestTap by rememberUpdatedState(mic.onTap)
+    var pressed by remember { mutableStateOf(false) }
+    NeuSurface(
+        shape = CircleShape,
+        face = LocalPadColors.current.pill,
+        pressed = pressed || mic.on,
+        modifier = modifier
+            .size(size)
+            .then(if (mic.on) Modifier else Modifier.alpha(0.45f))
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        pressed = true
+                        haptic()
+                        try { tryAwaitRelease() } finally { pressed = false }
+                    },
+                    onTap = { latestTap() },
+                )
+            },
+    ) {
+        Image(
+            painterResource(Res.drawable.pad_mic), contentDescription = "Mic",
+            modifier = Modifier.size(size * 0.5f),
+            colorFilter = ColorFilter.tint(LocalPadColors.current.label),
+        )
+    }
+}
+
+/**
  * The 3DS pad's own STYLUS and SWAP pills, the on-screen forms of its SELECT + L1 / SELECT + R1 chords: [stylusOn] says
  * whether stylus mode is on (the pill stays pressed in), a STYLUS tap flips it ([onStylus]), and SWAP holds the core's
  * swap-screens key while pressed ([onSwap] down, then up), so it works in Azahar's toggle and hold swap modes alike.
@@ -989,7 +1070,7 @@ private fun rememberStickChoice(useJoystick: Boolean?, onUseJoystickChange: (Boo
  * (the GameCube's soft-pressed L / R). [tools] (DS / 3DS STYLUS and SWAP) and [motion] (the Wii's MOTION) join SELECT /
  * START in the top row ([portraitTopPills]). [shortcuts] are the touch shortcut buttons to draw ([visibleTouchShortcuts]),
  * either side of MENU and the toggle, each pressed and released through [onShortcut]; [shortcutPlaceholders] draws both
- * as stand-ins (the Pad layout editor).
+ * as stand-ins (the Pad layout editor). [mic] (DS / 3DS) is the fixed mic button at the bottom left ([MicButton]).
  */
 @Composable
 fun VirtualPad(
@@ -1009,6 +1090,7 @@ fun VirtualPad(
     shortcuts: Map<TouchSlot, TouchShortcut> = emptyMap(),
     onShortcut: (TouchSlot, Boolean) -> Unit = { _, _ -> },
     shortcutPlaceholders: Boolean = false,
+    mic: PadMic? = null,
 ) {
     // Track which buttons this pad currently holds so we can release them if the pad
     // leaves composition mid-hold. A duplicate Up (also emitted by the gesture's finally
@@ -1134,6 +1216,9 @@ fun VirtualPad(
                 }
             }
         }
+        // The mic button in the bottom-left corner, under the d-pad's row (which ends at least 1.92 units up: over MENU's
+        // row and the NX mark's room, or the dropped clusters' padding) and left of a touch shortcut 1.
+        mic?.let { MicButton(it, unit, micButtonInset(unit.value).dp) }
         }   // Box (arrange root)
         }   // ProvidePadArrange
     }
@@ -1676,14 +1761,34 @@ internal fun overlayCStick(rowWidthUnits: Float, stickScale: Float, faceScale: F
 }
 
 /**
+ * How wide one side's group of the hidden-band overlay's top row is, dp: its [shoulders] (L1 / R1 [unit] wide, the
+ * triggers [trigger], 8 dp apart), and with [tools] the STYLUS or SWAP pill ([pill] wide) [gap] from them.
+ */
+internal fun overlayTopSideWidth(shoulders: List<NxButton>, unit: Float, trigger: Float, pill: Float, gap: Float, tools: Boolean): Float {
+    val discs = shoulders.sumOf { (if (it == NxButton.L1 || it == NxButton.R1) unit else trigger).toDouble() }.toFloat() +
+        8f * (shoulders.size - 1).coerceAtLeast(0)
+    return discs + if (tools) gap + pill else 0f
+}
+
+/**
+ * The hidden-band overlay's touch shortcut width, dp: [pill] (MENU's), unless a button beside each side's group
+ * ([sideWidth], [overlayTopSideWidth]), [gap] from it, would leave less than a [gap] between the two in a row
+ * [rowWidth] wide (the New 3DS's ZL / ZR and STYLUS / SWAP on a phone): then what keeps that gap.
+ */
+internal fun overlayTopShortcutWidth(rowWidth: Float, pill: Float, gap: Float, sideWidth: Float): Float =
+    minOf(pill, (rowWidth - 2 * (sideWidth + gap) - gap) / 2).coerceAtLeast(0f)
+
+/**
  * The portrait pad with its band hidden: one see-through piece for the bottom of the screen. The shoulders sit in the top
- * corners (the DS / 3DS STYLUS and SWAP beside them, [tools]), the d-pad / stick and the face cluster under them, and one
- * left-aligned row of MENU, the toggle, SELECT, START and the touch shortcuts that are assigned ([shortcuts]); the
- * show / hide chevron is the host's, at the row's right end. [unit] and the middle row's scale (from [bandWidthUnits] x
- * [bandHeightUnits], the band this replaces) match the band's buttons on this screen; the height is
+ * corners (the DS / 3DS STYLUS and SWAP beside them, [tools]), each with its touch shortcut beside it toward the
+ * middle when assigned ([shortcuts]); the d-pad / stick and the face cluster under them; and one left-aligned row of
+ * MENU, the toggle, SELECT and START; the show / hide chevron is the host's, at the row's right end. [unit] and the
+ * middle row's scale (from [bandWidthUnits] x [bandHeightUnits], the band this replaces) match the band's buttons on
+ * this screen; the height is
  * [portraitOverlayUnits] units plus the padding. No background, and only the buttons take touches: the gaps pass to
  * the game. The New 3DS C-stick ([onCStick], sent as the right stick) sits in the middle row between the clusters
- * ([overlayCStick]), inside the row's height. [analog] is the joystick's mode, as on the portrait band.
+ * ([overlayCStick]), inside the row's height. [analog] is the joystick's mode, as on the portrait band. [mic] (DS / 3DS)
+ * is the fixed mic button, first in the bottom row.
  */
 @Composable
 fun PortraitOverlayPad(
@@ -1702,6 +1807,7 @@ fun PortraitOverlayPad(
     bandHeightUnits: Float = 6.2f,
     tools: PadTools? = null,
     onCStick: ((Float, Float) -> Unit)? = null,
+    mic: PadMic? = null,
 ) {
     val emit = rememberEmit(onEvent)
     val stick = rememberStickChoice(useJoystick, onUseJoystickChange)
@@ -1715,14 +1821,24 @@ fun PortraitOverlayPad(
             val pill = unit * 1.0f
             val nudge = unit * OVERLAY_EDGE_NUDGE
             val sides = Modifier.fillMaxWidth().padding(horizontal = nudge)
-            Row(sides.height(unit * OVERLAY_SHOULDER_UNITS), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    ShoulderButtons(padShoulders(PadSide.LEFT, profile), profile, unit, sysH, emit, latched)
-                    if (tools != null) { Spacer(Modifier.width(gap)); StylusButton(tools, sysH, pill) }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (tools != null) { SwapButton(tools, sysH, pill); Spacer(Modifier.width(gap)) }
-                    ShoulderButtons(padShoulders(PadSide.RIGHT, profile), profile, unit, sysH, emit, latched)
+            BoxWithConstraints(sides.height(unit * OVERLAY_SHOULDER_UNITS)) {
+                // Each touch button beside its side's STYLUS / SWAP (or shoulders), toward the middle: their own width,
+                // narrowed where the two sides would come within a gap of each other ([overlayTopShortcutWidth]).
+                val w = overlayTopShortcutWidth(
+                    maxWidth.value, pill.value, gap.value,
+                    PadSide.entries.maxOf { overlayTopSideWidth(padShoulders(it, profile), unit.value, sysH.value, pill.value, gap.value, tools != null) },
+                ).dp
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ShoulderButtons(padShoulders(PadSide.LEFT, profile), profile, unit, sysH, emit, latched)
+                        if (tools != null) { Spacer(Modifier.width(gap)); StylusButton(tools, sysH, pill) }
+                        ShortcutPiece(TouchSlot.ONE, shortcuts, false, onShortcut, sysH, w, Modifier.padding(start = gap))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ShortcutPiece(TouchSlot.TWO, shortcuts, false, onShortcut, sysH, w, Modifier.padding(end = gap))
+                        if (tools != null) { SwapButton(tools, sysH, pill); Spacer(Modifier.width(gap)) }
+                        ShoulderButtons(padShoulders(PadSide.RIGHT, profile), profile, unit, sysH, emit, latched)
+                    }
                 }
             }
             Spacer(Modifier.height(gap))
@@ -1745,6 +1861,7 @@ fun PortraitOverlayPad(
             Spacer(Modifier.height(gap))
             Row(Modifier.padding(start = nudge).height(sysH), verticalAlignment = Alignment.CenterVertically) {
                 val g = SYSTEM_PILL_GAP.dp
+                if (mic != null) { MicFace(mic, sysH); Spacer(Modifier.width(g)) }   // bottom left, the row's height
                 PadButton(NxButton.MENU, sysH, emit, shape = PadStyle.pillShape, width = pill)
                 Spacer(Modifier.width(g))
                 ToggleButton(if (stick.useJoystick) "D-PAD" else "STICK", stick::toggle, sysH, pill)
@@ -1752,8 +1869,6 @@ fun PortraitOverlayPad(
                 PadButton(NxButton.SELECT, sysH, emit, shape = PadStyle.pillShape, width = pill, label = profile.label(NxButton.SELECT))
                 Spacer(Modifier.width(g))
                 PadButton(NxButton.START, sysH, emit, shape = PadStyle.pillShape, width = pill, label = profile.label(NxButton.START))
-                ShortcutPiece(TouchSlot.ONE, shortcuts, false, onShortcut, sysH, pill, Modifier.padding(start = g))
-                ShortcutPiece(TouchSlot.TWO, shortcuts, false, onShortcut, sysH, pill, Modifier.padding(start = g))
             }
         }
     }
@@ -1764,7 +1879,7 @@ fun PortraitOverlayPad(
  * bottom-left so the d-pad sits low for the left thumb. Transparent. [overGame] (the clusters drawn over the game)
  * moves the MENU/toggle row to the top of the box. Touch shortcut 1 ([shortcuts], [onShortcut], [shortcutPlaceholders]
  * as on [VirtualPad]) sits under the toggle over the game ([overlayShortcutPlace]), else beside the shoulders, toward
- * the screen's middle.
+ * the screen's middle. [mic] (DS / 3DS) is the fixed mic button in the bottom corner right of the d-pad ([clusterMicStart]).
  */
 @Composable
 fun VirtualPadLeft(
@@ -1786,6 +1901,7 @@ fun VirtualPadLeft(
     besidePicture: Boolean = false,
     unitOverride: Dp? = null,
     secondRow: Boolean = false,
+    mic: PadMic? = null,
 ) {
     val emit = rememberEmit(onEvent)
     val stick = rememberStickChoice(useJoystick, onUseJoystickChange)
@@ -1853,6 +1969,7 @@ fun VirtualPadLeft(
                     }
                 }
             }
+            mic?.let { MicButton(it, unit, clusterMicStart(unit.value, nudge.value).dp) }
             }
             }
         }

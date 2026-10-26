@@ -10,8 +10,8 @@ import kotlin.test.assertTrue
 class ShortcutsTest {
     private val r1 = ShortcutBinding(null, KeyCodes.BUTTON_R1)
     private val l1 = ShortcutBinding(null, KeyCodes.BUTTON_L1)
-    private fun eff(base: ShortcutSet, o: ShortcutOverrides = ShortcutOverrides.NONE, tag: String = "GBA", rewind: Boolean = true) =
-        Shortcuts.effective(base, o, ConsoleHotkeys.claimed(tag), rewind)
+    private fun eff(base: ShortcutSet, o: ShortcutOverrides = ShortcutOverrides.NONE, tag: String = "GBA", rewind: Boolean = true, mic: Boolean = false) =
+        Shortcuts.effective(base, o, ConsoleHotkeys.claimed(tag), rewind, mic)
 
     @Test fun encodeDecodeRoundTrip() {
         for (b in listOf(ShortcutBinding(null, 103), ShortcutBinding(110, 103))) assertEquals(b, ShortcutBinding.decode(b.encode()))
@@ -89,6 +89,19 @@ class ShortcutsTest {
         assertEquals(setOf(ShortcutAction.RESET), e.bindings.keys)
         assertEquals(mapOf(TouchSlot.TWO to ShortcutAction.RESET), e.touch)
         assertEquals(2, eff(base).bindings.size - 1)
+    }
+
+    @Test fun micDroppedWithoutCanMic() {
+        val base = ShortcutSet(mapOf(ShortcutAction.TOGGLE_MIC to r1), emptyMap())
+        assertFalse(ShortcutAction.TOGGLE_MIC in eff(base, mic = false).bindings)
+        assertTrue(ShortcutAction.TOGGLE_MIC in eff(base, mic = true).bindings)
+    }
+
+    @Test fun micRoundTripsConfig() {
+        val o = ShortcutOverrides(mapOf(ShortcutAction.TOGGLE_MIC to ShortcutBinding(110, 103)), emptyMap())
+        val cfg = Shortcuts.toConfig(o)
+        assertTrue("nx_bind_toggle_mic" to "110+103" in cfg)
+        assertEquals(o, Shortcuts.fromConfig(cfg.toMap()))
     }
 
     @Test fun touchOverrides() {

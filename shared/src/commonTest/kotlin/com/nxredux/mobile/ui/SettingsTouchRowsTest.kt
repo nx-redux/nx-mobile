@@ -86,6 +86,11 @@ class SettingsTouchRowsTest {
         assertEquals("Off: some ROM folders can't be read", settingsInfo(SettingsRow(SettingsKind.ALL_FILES, "All files access", note = "Off: some ROM folders can't be read")).line)
     }
 
+    @Test fun micAccessRowHasItsInfoText() {
+        val row = SettingsRow(SettingsKind.MIC_ACCESS, "Microphone access", "Off")
+        assertEquals("Lets DS and 3DS games hear the Mic toggle's live mic", settingsInfo(row).detail)
+    }
+
     @Test fun everyDescriptionLineFitsTwoRowLines() {
         val rows = SettingsKind.entries.map { SettingsRow(it, "x") } + listOf(
             SettingsRow(SettingsKind.TAB_SHOWN, "x", category = MenuCategory.COLLECTIONS),
@@ -154,7 +159,7 @@ class SettingsTouchRowsTest {
         val touch = NxSettingRow("Use as home screen", choices = listOf("Off", "On"), index = 0)
         val back = Hint(NxButton.B, "Back")
         val toggle = Hint(NxButton.A, "Toggle")
-        for (kind in listOf(SettingsKind.HOME_SCREEN, SettingsKind.ALL_FILES))
+        for (kind in listOf(SettingsKind.HOME_SCREEN, SettingsKind.ALL_FILES, SettingsKind.MIC_ACCESS))
             assertEquals(listOf(back, toggle), settingsHints(listOf(SettingsRow(kind, touch.label)), 0, touch), "$kind")
         val pause = SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused")
         assertEquals(listOf(back, Hint(NxButton.LEFT, "Change"), toggle), settingsHints(listOf(pause), 0, touch.copy(label = pause.label)))

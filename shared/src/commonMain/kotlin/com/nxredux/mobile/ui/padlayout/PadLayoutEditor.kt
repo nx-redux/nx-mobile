@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.layout.BesidePreview
 import com.nxredux.mobile.layout.DsKind
 import com.nxredux.mobile.layout.HalfFoldedPreview
@@ -62,6 +63,7 @@ import com.nxredux.mobile.ui.nx.ModalKind
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxModal
 import com.nxredux.mobile.ui.nx.PadEvent
+import com.nxredux.mobile.ui.nx.PadMic
 import com.nxredux.mobile.ui.nx.PadMotion
 import com.nxredux.mobile.ui.nx.PadProfile
 import com.nxredux.mobile.ui.nx.PadTools
@@ -91,7 +93,8 @@ data class PadEditorWindow(val screen: ScreenClass, val ydpi: Float, val cutoutT
  * [state]'s layout, both touch shortcut pieces drawn as labelled stand-ins (in game each shows only once it has an
  * action). A tap selects a group, a drag moves it (clamped, snapping home), its corner handle resizes it and the toolbar
  * resets it; overlapping groups are outlined red. The pad's own buttons do not press here: the edit layer takes every
- * touch. [onClose] leaves without saving (after "Discard changes?" when something changed).
+ * touch. [onClose] leaves without saving (after "Discard changes?" when something changed). A DS / 3DS [consoleTag]
+ * (and Shared) draws the fixed mic button ([padLayoutShowsMic]) so the player sees its spot; it is no group, never selected.
  * Both shapes are laid out as the game lays them out on this [window] (null: from the editor's size alone): portrait's
  * band at the game's height under its game area ([portraitSplit]); landscape's halves beside the picture of [consoleTag]'s
  * console ([besidePreview]; a typical one for the Shared layout), with STYLUS / SWAP when the console has them ([tools]);
@@ -105,6 +108,7 @@ fun PadLayoutEditor(
 ) {
     val colors = LocalNxColors.current
     val noPad: (PadEvent) -> Unit = {}
+    val mic = if (padLayoutShowsMic(consoleTag)) PadMic(on = false, onTap = {}) else null
     val cStick: ((Float, Float) -> Unit)? = if (profile.cStick) { _, _ -> } else null
     // The Wii's MOTION pill where the game draws it ([PadProfile.motionButton]), so the system rows are as wide.
     val motion = remember(profile) { if (profile.motionButton) PadMotion(on = true, onTap = {}, onLongPress = {}) else null }
@@ -125,7 +129,7 @@ fun PadLayoutEditor(
                 gameArea = PxRect(0f, split.gameTop, w, split.bandTop - split.gameTop)
                 Box(Modifier.placedPx(gameArea).background(GameBlock))
                 Box(Modifier.placedPx(PxRect(0f, split.bandTop, w, split.bandPx))) {
-                    VirtualPad(noPad, Modifier.fillMaxSize(), profile = profile, onCStick = cStick, motion = motion, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true)
+                    VirtualPad(noPad, Modifier.fillMaxSize(), profile = profile, onCStick = cStick, motion = motion, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true, mic = mic)
                 }
             }
             PadShape.OVERLAY -> {
@@ -134,11 +138,11 @@ fun PadLayoutEditor(
                 val preview = besidePreview(
                     window?.screen ?: screenClass(w.roundToInt(), h.roundToInt(), (min(w, h) / d).toInt()), w, h, ydpi, d,
                     window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, faceWidthUnits(profile), systemRowPills(profile, motion = motion != null),
-                    tag = consoleTag,
+                    tag = consoleTag, mic = mic != null,
                 )
                 gameArea = preview.picture
                 Box(Modifier.placedPx(gameArea).background(GameBlock))
-                BesidePad(profile, state, cStick, motion, padTools, secondRow, preview)
+                BesidePad(profile, state, cStick, motion, padTools, secondRow, preview, mic)
             }
             PadShape.HALF_FOLDED -> {
                 val padTools = remember(tools) { if (tools) PadTools(stylusOn = false, onStylus = {}, onSwap = {}) else null }
@@ -147,14 +151,14 @@ fun PadLayoutEditor(
                 val preview = halfFoldedPreview(
                     w, h, window?.screen ?: screenClass(w.roundToInt(), h.roundToInt(), (min(w, h) / d).toInt()), window?.cutoutTop ?: 0f,
                     ydpi, d, window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, faceWidthUnits(profile),
-                    systemRowPills(profile, motion = motion != null), kind,
+                    systemRowPills(profile, motion = motion != null), kind, mic = mic != null,
                 )
                 gameArea = preview?.placement?.top ?: PxRect(0f, 0f, w, h / 2f)
                 if (preview != null) {
                     Box(Modifier.placedPx(preview.placement.top).background(GameBlock))
                     Box(Modifier.placedPx(preview.placement.bottom).background(GameBlock))
                     Box(Modifier.placedPx(PxRect(0f, preview.hingeY - d, w, 2f * d)).background(HingeLine))
-                    HalfFoldedPad(profile, state, cStick, motion, padTools, secondRow, preview)
+                    HalfFoldedPad(profile, state, cStick, motion, padTools, secondRow, preview, mic)
                 }
             }
         }
@@ -247,7 +251,7 @@ fun PadLayoutEditor(
  */
 @Composable
 private fun BoxScope.BesidePad(
-    profile: PadProfile, state: PadEditorState, cStick: ((Float, Float) -> Unit)?, motion: PadMotion?, padTools: PadTools?, secondRow: Boolean, preview: BesidePreview,
+    profile: PadProfile, state: PadEditorState, cStick: ((Float, Float) -> Unit)?, motion: PadMotion?, padTools: PadTools?, secondRow: Boolean, preview: BesidePreview, mic: PadMic?,
 ) {
     val noPad: (PadEvent) -> Unit = {}
     val density = LocalDensity.current
@@ -259,7 +263,7 @@ private fun BoxScope.BesidePad(
     VirtualPadLeft(
         noPad, { _, _ -> }, Modifier.align(Alignment.TopStart).then(box).padding(start = inset), profile = profile, overGame = true,
         motion = motion, layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
-        besidePicture = true, unitOverride = unit, secondRow = secondRow,
+        besidePicture = true, unitOverride = unit, secondRow = secondRow, mic = mic,
     )
     VirtualPadRight(
         noPad, Modifier.align(Alignment.TopEnd).then(box).padding(end = inset), profile = profile, overGame = true, onCStick = cStick,
@@ -274,7 +278,7 @@ private fun BoxScope.BesidePad(
  */
 @Composable
 private fun BoxScope.HalfFoldedPad(
-    profile: PadProfile, state: PadEditorState, cStick: ((Float, Float) -> Unit)?, motion: PadMotion?, padTools: PadTools?, secondRow: Boolean, preview: HalfFoldedPreview,
+    profile: PadProfile, state: PadEditorState, cStick: ((Float, Float) -> Unit)?, motion: PadMotion?, padTools: PadTools?, secondRow: Boolean, preview: HalfFoldedPreview, mic: PadMic?,
 ) {
     val noPad: (PadEvent) -> Unit = {}
     val density = LocalDensity.current
@@ -285,7 +289,7 @@ private fun BoxScope.HalfFoldedPad(
     VirtualPadLeft(
         noPad, { _, _ -> }, Modifier.align(Alignment.TopStart).then(box).padding(start = inset), profile = profile, overGame = true,
         motion = motion, layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
-        besidePicture = true, unitOverride = unit, secondRow = secondRow,
+        besidePicture = true, unitOverride = unit, secondRow = secondRow, mic = mic,
     )
     VirtualPadRight(
         noPad, Modifier.align(Alignment.TopEnd).then(box).padding(end = inset), profile = profile, overGame = true, onCStick = cStick,
@@ -358,3 +362,9 @@ private fun ToolbarButton(label: String, enabled: Boolean = true, primary: Boole
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) { Text(label, color = fg, fontFamily = LocalNxFont.current, fontSize = 13.sp) }
 }
+
+/**
+ * Whether the editor for the console of [tag] shows the fixed mic button: a console whose core hears the mic (DS and
+ * DSi, 3DS: [com.nxredux.mobile.runner.CoreDescriptor.microphone]), and Shared ([tag] empty), which they inherit.
+ */
+fun padLayoutShowsMic(tag: String): Boolean = tag.isBlank() || CoreRegistry.forTag(tag)?.microphone == true

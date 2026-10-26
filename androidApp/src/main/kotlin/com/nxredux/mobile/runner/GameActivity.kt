@@ -25,6 +25,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import android.window.OnBackInvokedDispatcher
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -153,6 +154,7 @@ import com.nxredux.mobile.ui.nx.nxTopCentreMaxWidth
 import com.nxredux.mobile.ui.nx.topCentreMaxWidth
 import com.nxredux.mobile.ui.nx.map
 import com.nxredux.mobile.ui.nx.SlotUi
+import com.nxredux.mobile.ui.nx.PadMic
 import com.nxredux.mobile.ui.nx.PadMotion
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -422,6 +424,21 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // So do the touch shortcut buttons' toggled look and their Rewind rows.
         SpeedController(lifecycleScope, lifecycle, onTiles = { dual.refreshDualPanel(); menu.menuModel?.let(menu::publishSpeed); refreshTouchShortcuts() }) { retroView }
     }
+    /** The core hears a mic ([CoreDescriptor.microphone]: DS, DSi, 3DS); false until the launch resolves the core. */
+    private var canMic = false
+    /**
+     * The session's Mic toggle ([MicControl]), made at launch for a mic core only; null for every other core, so every
+     * mic path (pad button, tile, binding, source) is inert. Off at every launch; [applyMic] pushes it everywhere.
+     */
+    private var mic: MicControl? = null
+    /** The pad's mic button, snapshot state read in the pads' composition ([padMic]): set by [applyMic]. */
+    private val padMicState = mutableStateOf<PadMic?>(null)
+    // RECORD_AUDIO, asked from the Mic toggle only ([setMic]): the answer is pushed at once, so a denial gives noise.
+    private val micPrompt = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        mic?.setGranted(granted)
+        applyMic()
+    }
+    private val micAccess by lazy { AndroidMicAccess(this) { micPrompt.launch(android.Manifest.permission.RECORD_AUDIO) } }
     // What [applyShortcuts] last built: the touch buttons' actions ([refreshTouchShortcuts]).
     private var effectiveShortcuts: EffectiveShortcuts? = null
     /** The touch shortcut buttons the pads draw: snapshot state, read in the pads' composition. */
@@ -652,6 +669,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (!quitting) writeBatterySave(notify = false)
         netplayGame?.pause()   // netplay: backgrounded: no input goes out; the other side stalls, 30 s ends the session
         syncMotionSensors(foreground = false)
+        // Closes the phone mic at once (the paused core stops reading it); the toggle stays as it is for onResume.
+        retroView?.microphoneSource = MicSource.SILENCE.native
         super.onPause()
     }
 
@@ -662,6 +681,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (!menuOpen && !focusPaused && !quitting) rumbles.forEach { it.resume() }
         if (!menuOpen && !focusPaused) netplayGame?.resume()   // netplay: input flows again; with the menu open it stays paused until Continue
         syncMotionSensors(foreground = true)
+        // The permission may have been granted or revoked in Android's settings meanwhile: live or noise again.
+        mic?.setGranted(micAccess.granted())
+        pushMicSource(foreground = true)
         dual.syncDual()   // Settings → Second screen may have changed meanwhile
         padLayout.onResume()   // Controls → Pad layout may have changed meanwhile
     }
@@ -681,6 +703,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         netplayGame?.takeIf { it.live }?.pause() ?: run { retroView?.frameSpeed = 0 }
         retroView?.audioEnabled = false
         rumbles.forEach { it.pause() }
+        pushMicSource()
     }
 
     /** Focused again: the game plays on, unless the menu opened meanwhile (closeMenu resumes it then). */
@@ -695,6 +718,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         rumbles.forEach { it.resume() }
         renderer.onCoreResumed()
+        pushMicSource()
     }
 
     /** The opening menu holds the game ([InGameMenuController.openMenu]), as [focusPause] does. */
@@ -704,12 +728,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         netplayGame?.takeIf { it.live }?.pause() ?: run { retroView?.frameSpeed = 0 }
         retroView?.audioEnabled = false
         rumbles.forEach { it.pause() }   // the core stops with its rumble latched: still while paused, back on closeMenu
+        pushMicSource()   // the phone mic closes under the menu
         lifecycleScope.launch(Dispatchers.IO) { writeBatterySave(notify = true) }
     }
 
     /** The menu closed ([InGameMenuController.closeMenu]): the game plays on, unless the focus pause still holds it. */
     override fun resumeAfterMenu() {
-        if (focusPaused) { syncMotionSensors(); return }   // another app has the focus: focusResume plays on later
+        if (focusPaused) { syncMotionSensors(); pushMicSource(); return }   // another app has the focus: focusResume plays on later
         netplayGame?.takeIf { it.live }?.resume()   // netplay: input goes out again (see openMenu)
         if (!netplayStartFailed) {   // netplay: a failed start keeps the game paused behind its dialog
             retroView?.frameSpeed = 1
@@ -718,6 +743,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (!quitting) rumbles.forEach { it.resume() }
         syncMotionSensors()
         renderer.onCoreResumed()
+        pushMicSource()
     }
 
     override fun corePaused(): Boolean = menuOpen || focusPaused
@@ -1057,10 +1083,18 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // turns them back on ([playLocally]); a lockstep session's does not: the game played on alone after it keeps them
         // off, as it has no save states.
         canRewind = descriptor?.rewind == true
+        // DS / 3DS: the Mic toggle, off; netplay hides it (as the speed shortcuts) until a link session's end.
+        canMic = descriptor?.microphone == true
+        mic = if (canMic) MicControl(micAccess.usable).apply {
+            setGranted(micAccess.granted())
+            setAsked(AndroidAppSettings(this@GameActivity).micAsked)
+            setSession(netplay = np != null)
+        } else null
         shortcutBase = Shortcuts.decodeBase(AndroidAppSettings(this).shortcuts)
         shortcutClaimed = ConsoleHotkeys.claimed(tag)
         applyShortcuts(Shortcuts.fromConfig(resolved.values))
         speed.setSession(netplay = np != null)
+        applyMic()
         refreshTouchShortcuts()
         val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id) else null
         renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
@@ -1301,6 +1335,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     } + forced.filterKeys { k -> options.none { it.key == k } }.map { (k, v) -> Variable(k, v) }).toTypedArray()
                     rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
                     preferLowLatencyAudio = true
+                    // DS / 3DS: the frontend feeds the core's mic ([applyMic] picks silence, the phone mic or noise).
+                    enableMicrophone = canMic
                     // GL driver messages and a frame probe to tag NXGL, with Settings → System → Debug log on at
                     // launch.
                     glDebugOutput = NxLog.enabled
@@ -1368,6 +1404,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         view.pictureHeld = true   // black until the first frame's layout places the picture ([PictureHold])
         retroView = view
         speed.apply()   // a speed set before the view existed (the launch's rows reach it again in applyFrontend)
+        pushMicSource()   // a Mic toggle tapped before the view existed
         // Not in netplay: a link cable's step may wait out the peer's hold (sio_lockstep: up to 30 s), and the session
         // has its own timeouts.
         coreWatchdog = CoreWatchdog({ if (netplay == null) view.stepStalledMillis() else 0L }, onHung = ::onCoreHung)
@@ -2091,6 +2128,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun padMotion(): PadMotion? =
         if (isWii && padProfile().motionButton && motionSensors?.hasSensors == true) PadMotion(wiiMotionOn, ::toggleWiiMotion, ::recenterWiiMotion) else null
 
+    /** The pad's fixed mic button ([PadMic]): the session's Mic toggle on DS / 3DS, hidden in netplay; null otherwise. */
+    override fun padMic(): PadMic? = padMicState.value
+
     /**
      * The keys the menu leaves out: the .cfg's locks, Motion Controls on a Wii game without both sensors, both Wii rows
      * for a GameCube disc under the WII tag, and the Rewind rows unless the core can rewind ([canRewind]: an unknown core
@@ -2239,6 +2279,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (quitting) return   // single-shot: a second job could serialize after the core is destroyed
         quitting = true
         rumbles.forEach { it.release() }
+        pushMicSource()   // silence now, so the phone's mic closes before the save, not at the pause
         endGameTime()
         val view = retroView
         val ss = saveStates
@@ -2591,6 +2632,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (netplayLocal) return
         netplayLocal = true
         speed.setSession(netplay = false)   // the shortcuts work again
+        mic?.setSession(netplay = false)   // the Mic toggle shows again, off
+        applyMic()
         refreshTouchShortcuts()
         saveStates = SaveStates(dataRoot, paths).also { ss ->
             // Read now, as openMenu does for a menu opened before the first read: an open menu shows this slot.
@@ -2809,6 +2852,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun backPressed() = menu.backPressed()
 
     override fun onShortcut(action: ShortcutAction, down: Boolean) {
+        if (action == ShortcutAction.TOGGLE_MIC) { if (down && mic != null) toggleMic(); return }
         when (speed.onAction(action, down)) {
             SpeedEffect.AskReset -> askReset()
             SpeedEffect.SaveAndQuit -> quitWithAutoState(chosen = true, autoState = true)   // the menu's Save & Quit
@@ -2852,19 +2896,57 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     override fun applyShortcuts(overrides: ShortcutOverrides) {
         shortcutOverrides = overrides
-        val effective = Shortcuts.effective(shortcutBase, overrides, shortcutClaimed, canRewind)
+        val effective = Shortcuts.effective(shortcutBase, overrides, shortcutClaimed, canRewind, canMic = canMic)
         effectiveShortcuts = effective
         shortcutKeys = ShortcutKeys(effective, shortcutClaimed, SystemClock::uptimeMillis)
         refreshTouchShortcuts()
     }
 
-    override fun publishShortcuts(model: InGameMenuModel) = model.setShortcuts(shortcutBase, shortcutOverrides, shortcutClaimed, canRewind)
+    override fun publishShortcuts(model: InGameMenuModel) = model.setShortcuts(shortcutBase, shortcutOverrides, shortcutClaimed, canRewind, canMic)
 
     override fun menuCaptureKey(keyCode: Int, down: Boolean, repeat: Boolean): Boolean = menu.captureKey(keyCode, down, repeat)
 
     override fun speedTiles(): Pair<Boolean, Boolean?> = speed.tiles()
 
     override fun setSpeedToggle(ff: Boolean?, rewind: Boolean?) = speed.setToggle(ff, rewind)
+    /** The panels' Mic tile: the toggle while shown ([MicControl.shown]); null (no tile) off DS / 3DS and in netplay. */
+    override fun micTile(): Boolean? = mic?.takeIf { it.shown }?.on
+
+    /**
+     * The one way the Mic toggle changes (the pad's mic button, the Mic tile in the menu or the dual-screen panel, the
+     * Toggle mic binding). The first turn on of the install asks for RECORD_AUDIO; meanwhile, and after a denial, the game
+     * hears noise. Ignored in netplay ([MicControl.setOn]).
+     */
+    override fun setMic(on: Boolean) {
+        val m = mic ?: return
+        if (m.setOn(on)) {
+            AndroidAppSettings(this).micAsked = true
+            m.setAsked(true)
+            micPrompt.launch(android.Manifest.permission.RECORD_AUDIO)   // the prompt only: never the settings page
+        }
+        applyMic()
+    }
+
+    private fun toggleMic() { mic?.let { setMic(!it.on) } }
+
+    /**
+     * What the core hears now: the toggle's source while the game runs in front, else silence, which closes the phone
+     * mic ([GLRetroView.microphoneSource]). [foreground]: as [syncMotionSensors].
+     */
+    private fun pushMicSource(foreground: Boolean = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+        val m = mic ?: return
+        val run = !menuOpen && !focusPaused && !quitting && foreground
+        retroView?.microphoneSource = (if (run) m.source else MicSource.SILENCE).native
+    }
+
+    /** The Mic toggle changed (or its permission or session): the source, the pad's button and both panels' tiles. */
+    private fun applyMic() {
+        val m = mic ?: return
+        pushMicSource()
+        padMicState.value = if (m.shown) PadMic(m.on, ::toggleMic) else null
+        menu.menuModel?.let(menu::publishSpeed)
+        dual.refreshDualPanel()
+    }
 
     /**
      * A Reset shortcut or the dual-screen panel's Reset tile: reset always asks first, so the in-game menu opens on its

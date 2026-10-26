@@ -216,6 +216,8 @@ sealed interface MenuEffect {
      * menu so the game runs with it on (spec). Turning one on turns the other off, as a Toggle binding does.
      */
     data class SetSpeed(val ff: Boolean?, val rewind: Boolean?) : MenuEffect
+    /** The panel's Mic tile: the session's mic to [on], then close the menu. */
+    data class SetMic(val on: Boolean) : MenuEffect
     /** The Reset dialog's Reset: restart the game, then close the menu. */
     data object ResetGame : MenuEffect
 }
@@ -249,6 +251,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** From [setSpeedTiles]: the panel's Fast forward and Rewind tiles' live state; [speedRewind] null: no Rewind tile. */
     private var speedFf = false
     private var speedRewind: Boolean? = null
+    /** From [setMicTile]: the panel's Mic tile's state; null: no tile (not a mic console). */
+    private var micTile: Boolean? = null
     /** The Reset dialog up was opened with the menu for it ([openResetDialog]): Cancel and B resume the game. */
     private var resetClosesOnCancel = false
     /** From [setPlayers]; the panel shows its Players tab when there is more than one slot. */
@@ -308,6 +312,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         private set
     private var shortcutClaimed: List<ClaimedInput> = ConsoleHotkeys.always
     private var shortcutRewind = false
+    private var shortcutMic = false
     /** A controller is connected ([setControllerConnected]): without one the page has no bind rows (the on-screen pad binds nothing). */
     private var controllerConnected = true
     /** Press to bind on the Shortcuts page; the host hands it raw key codes ([takesKey], [captureKey]). */
@@ -766,6 +771,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         refreshFrontendPages()
     }
 
+    /** The session's mic is on ([on]) or off; null where this isn't a mic console (DS/3DS): no Mic tile. */
+    fun setMicTile(on: Boolean?) {
+        micTile = on
+        fixPanel()
+    }
+
     /**
      * Fast forward runs now ([ff]) and rewinding does ([rewind]; null where this game can't rewind: the core or its Rewind
      * row): the panel's tiles show it, so a toggle a binding left on (or one removed live) can be turned off here.
@@ -866,7 +877,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         // Asked on every recomposition of the menu: rebuilt (the achievements sorted again) only when an input changed.
         val key = listOf(
             state.panelTab, state.panelFocus, panelHeader, achievements, achievementsAvailable, achievementSummary, achievementOrder,
-            badges, playerSlots, playerPads, discCount, discIndex, secondConnected, secondOn, speedFf, speedRewind, netplay, frontendTag, cheats, cheatsAvailable,
+            badges, playerSlots, playerPads, discCount, discIndex, secondConnected, secondOn, speedFf, speedRewind, micTile, netplay, frontendTag, cheats, cheatsAvailable,
             cheatsFolder, cheatsExpected,
         )
         panelCache?.takeIf { it.first == key }?.let { return it.second }
@@ -914,6 +925,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         // The tiles are hidden in netplay; a stale tap there does nothing.
         is GamePanelEvent.SetFastForward -> if (netplay) null else GamePanelModel.speedEffect(event)
         is GamePanelEvent.SetRewind -> if (netplay || speedRewind == null) null else GamePanelModel.speedEffect(event)
+        is GamePanelEvent.SetMic -> if (netplay || micTile == null) null else MenuEffect.SetMic(event.on)
         GamePanelEvent.Reset -> { if (!netplay) { push(resetPage()); resetClosesOnCancel = false }; null }
     }
 
@@ -940,7 +952,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     )
 
     private fun panelShortcuts(): List<ShortcutState> =
-        GamePanelModel.shortcuts(discCount, discIndex, secondConnected, secondOn, netplay, speedFf, speedRewind)
+        GamePanelModel.shortcuts(discCount, discIndex, secondConnected, secondOn, netplay, speedFf, speedRewind, micTile)
 
     private fun panelAchievements(): List<RaAchievement> = achievements.orEmpty().sortedBy(achievementOrder)
 
@@ -1013,6 +1025,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             is GamePanelEvent.SetSecondScreen -> Shortcut.SECOND_SCREEN
             is GamePanelEvent.SetFastForward -> Shortcut.FAST_FORWARD
             is GamePanelEvent.SetRewind -> Shortcut.REWIND
+            is GamePanelEvent.SetMic -> Shortcut.MIC
             GamePanelEvent.Reset -> Shortcut.RESET
             else -> null
         }?.let { s -> panelShortcuts().indexOfFirst { it.shortcut == s } }
@@ -1428,10 +1441,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * what this page set since launch), the console's hotkeys ([claimed]: [ConsoleHotkeys.claimed]) and whether the core
      * can rewind (no rewind rows without). Refreshes an open Shortcuts page.
      */
-    fun setShortcuts(base: ShortcutSet, overrides: ShortcutOverrides, claimed: List<ClaimedInput>, canRewind: Boolean) {
+    fun setShortcuts(base: ShortcutSet, overrides: ShortcutOverrides, claimed: List<ClaimedInput>, canRewind: Boolean, canMic: Boolean = false) {
         shortcutBase = base
         shortcutOverrides = overrides
         shortcutRewind = canRewind
+        shortcutMic = canMic
         // A new capture only for new hotkeys: the old one's held keys must keep their releases swallowed.
         if (claimed != shortcutClaimed) { shortcutClaimed = claimed; capture.cancel(); capture = ShortcutCapture(claimed); capturing = null }
         refreshShortcutsPage()
@@ -1536,10 +1550,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * controller the bind rows give way to [SHORTCUTS_NO_CONTROLLER] as the page's intro; their overrides stay.
      */
     private fun shortcutsPage(): MenuPage {
-        val effective = Shortcuts.effective(shortcutBase, shortcutOverrides, shortcutClaimed, shortcutRewind)
+        val effective = Shortcuts.effective(shortcutBase, shortcutOverrides, shortcutClaimed, shortcutRewind, shortcutMic)
         fun shown(value: String, inherited: Boolean) = if (inherited) "$value$DEFAULT_SUFFIX" else value
         val binds = if (!controllerConnected) emptyList()
-        else ShortcutAction.entries.filter { shortcutRewind || !it.rewind }.map { a ->
+        else ShortcutAction.entries.filter { (shortcutRewind || !it.rewind) && (shortcutMic || !it.mic) }.map { a ->
             val key = BIND_KEY_PREFIX + a.key
             val blocked = effective.blocked[a]
             when {

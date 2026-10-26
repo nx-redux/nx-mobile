@@ -17,6 +17,7 @@ fun touchShortcutLabel(a: ShortcutAction): String = when (a) {
     ShortcutAction.HOLD_REWIND -> "Hold RW"
     ShortcutAction.RESET -> "Reset"
     ShortcutAction.SAVE_AND_QUIT -> "Quit"   // never a touch button ([ShortcutAction.touch]); named for completeness
+    ShortcutAction.TOGGLE_MIC -> "Mic"   // never drawn: not offered for the touch slots
 }
 
 /**

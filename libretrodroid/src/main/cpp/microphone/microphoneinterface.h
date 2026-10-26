@@ -26,6 +26,10 @@ class MicrophoneInterface {
 public:
     static retro_microphone_interface* getInterface();
 
+    // The app's mic source (MicSource values; anything else is silence) for every mic, open or opened later. Any
+    // thread: called directly from JNI, so leaving live closes the phone mic even while the game is paused.
+    static void setSource(int source);
+
     static retro_microphone_t* libretroOpenMicrophone(const retro_microphone_params_t* params);
 
     static void libretroCloseMicrophone(retro_microphone_t* opaqueMicrophone);

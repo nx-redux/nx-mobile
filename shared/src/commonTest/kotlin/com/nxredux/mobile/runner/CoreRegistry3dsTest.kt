@@ -47,6 +47,7 @@ class CoreRegistry3dsTest {
             setOf(
                 "citra_graphics_api", "citra_use_libretro_save_path", "citra_enable_mouse_touchscreen", "citra_enable_motion",
                 "citra_motion_sensitivity", "citra_layout_option",   // the layout comes from the app's per-orientation rows
+                "citra_input_type",   // the mic, fed by the app's Mic toggle
             ),
             n3ds.lockedOptions,
         )

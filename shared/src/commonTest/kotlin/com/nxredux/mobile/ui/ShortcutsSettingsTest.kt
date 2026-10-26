@@ -246,6 +246,20 @@ class ShortcutsSettingsTest {
         assertFalse("Save & Quit" in s.page().choices[s.selection.value.index]!!.labels)
     }
 
+    @Test fun micRowNotesDsOnlyAndTouchSkipsIt() = runTest {
+        val s = state()
+        s.openShortcuts()
+        assertEquals("DS / 3DS only", s.row("Toggle mic").note)
+        assertNull(s.row("Reset Game").note)
+        s.select(s.page().rows.indexOfFirst { it.label == "Touch button 1" })
+        val labels = s.page().choices[s.selection.value.index]?.labels
+        assertEquals(listOf("None") + ShortcutAction.entries.filter { it.touch }.map { it.label }, labels)
+        assertFalse("Toggle mic" in labels!!)
+        repeat(ShortcutAction.entries.size + 1) { s.onButton(NxButton.RIGHT); assertTrue(s.row("Touch button 1").secondary != "Toggle mic") }
+        s.bind(ShortcutAction.TOGGLE_MIC)
+        assertTrue(s.row("Toggle mic").note != "DS / 3DS only")   // waiting keeps its own note
+    }
+
     @Test fun clearAllEmptiesThePage() = runTest {
         val s = state()
         s.openShortcuts()

@@ -123,6 +123,7 @@ import com.nxredux.mobile.settings.Sources
 import com.nxredux.mobile.settings.SourceConversion
 import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.AllFilesAccess
+import com.nxredux.mobile.runner.MicAccess
 import com.nxredux.mobile.storage.HomeLocator
 import com.nxredux.mobile.storage.StorageUpgradeGate
 import com.nxredux.mobile.storage.StorageUpgradePlatform
@@ -256,6 +257,8 @@ class AppDeps(
     val deviceSync: DeviceSyncController? = null,
     /** All files access (a sideloaded Android 11+ build); null: none (SAF only, no setup step, no Settings row). */
     val allFilesAccess: AllFilesAccess? = null,
+    /** Microphone access for DS / 3DS games' Mic toggle (Settings → Library row); null: none, or no mic to use. */
+    val micAccess: MicAccess? = null,
     /** Local folders for the list-style picker and the SAF → file conversion; null: Android's pickers only. */
     val localFiles: LocalFiles? = null,
     /**
@@ -459,7 +462,7 @@ sealed interface Screen {
     data class ArtworkReset(val scopes: List<ResetScope>, val confirm: ResetScope? = null) : Screen
 }
 
-enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_THEME, PAD_BUTTONS, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, MENU_PAD, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, APP_UPDATE,
+enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_THEME, PAD_BUTTONS, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, MENU_PAD, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     LAYOUT_HOME, LAYOUT_CONSOLES, LAYOUT_COLLECTIONS, LAYOUT_TOOLS, LAYOUT_GAME_LISTS, LAYOUT_TITLE_HINTS, LAYOUT_SWITCHER, TEXT_SIZE,
@@ -526,6 +529,9 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
 
 /** The last row of Appearance, Layouts and Controls (NX Redux's label; its description has no place on a Settings page here). */
 internal const val RESET_DEFAULTS_LABEL = "Reset to defaults"
+
+/** The global Shortcuts page's note on Toggle mic, which does nothing outside DS / 3DS. */
+internal const val MIC_ROW_NOTE = "DS / 3DS only"
 
 /** A Shortcuts bind row's value while it waits for a press. */
 internal const val SHORTCUT_PROMPT = "Press a button…"
@@ -3144,7 +3150,11 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * ([convertToFiles]).
      */
     fun onAllFilesAccessChanged() {
-        deps.allFilesAccess ?: return
+        deps.allFilesAccess ?: run {
+            // No All files access here, but the Microphone access row follows the same resume.
+            if (deps.micAccess != null && (_screen.value as? Screen.Settings)?.section == SettingsSection.LIBRARY) refreshSettings()
+            return
+        }
         if (upgradeOn) { upgradeAccessChanged(); return }   // the upgrade screen answers it, never a library reload
         if (_screen.value is Screen.PermissionsStep) { showPermissions(keep = true); return }   // back from a prompt: the rows show its answer
         if ((_screen.value as? Screen.Settings)?.section == SettingsSection.LIBRARY) refreshSettings()
@@ -3544,6 +3554,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val s = _screen.value as? Screen.Settings ?: return
         val r = s.rows.getOrNull(row)?.takeIf { it.enabled } ?: return
         select(row)
+        if (r.kind == SettingsKind.MIC_ACCESS) { deps.micAccess?.request(); return }   // the answer follows on resume
         if (r.kind == SettingsKind.ALL_FILES) { deps.allFilesAccess?.openSettings(); return }   // Android's page; the switch follows on resume
         if (r.kind == SettingsKind.HOME_SCREEN) {
             deps.launcher?.takeIf { (index == 1) != it.isHome() }?.let { it.setHome(index == 1); refreshSettings() }
@@ -3757,7 +3768,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** [row]'s values for its touch control: its [settingValue]'s labels and current one; Use as home screen's and All files access's Off / On. */
     private fun settingChoices(row: SettingsRow): SettingChoices? {
         if (row.kind == SettingsKind.HOME_SCREEN) return deps.launcher?.let { SettingChoices(ON_OFF, if (it.isHome()) 1 else 0) }
-        if (row.kind == SettingsKind.ALL_FILES) return SettingChoices(ON_OFF, if (row.secondary == "On") 1 else 0)   // as granted when the row was built
+        if (row.kind == SettingsKind.ALL_FILES || row.kind == SettingsKind.MIC_ACCESS) return SettingChoices(ON_OFF, if (row.secondary == "On") 1 else 0)   // as granted when the row was built
         val v = settingValue(row) ?: return null
         return v.labels?.let { SettingChoices(it, v.index) }
     }
@@ -3934,7 +3945,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val binds = if (!controllerConnected) listOf(SettingsRow(SettingsKind.TEXT, SHORTCUTS_NO_CONTROLLER))
         else ShortcutAction.entries.map { a ->
             if (a == waiting) SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, SHORTCUT_PROMPT, note = "Hold MENU for a combo", shortcut = a)
-            else SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, set.bindings[a]?.let(KeyLabels::label) ?: "None", shortcut = a)
+            else SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, set.bindings[a]?.let(KeyLabels::label) ?: "None", note = if (a.mic) MIC_ROW_NOTE else null, shortcut = a)
         }
         return binds + TouchSlot.entries.mapIndexed { i, t ->
             SettingsRow(SettingsKind.SHORTCUT_TOUCH, "Touch button ${i + 1}", set.touch[t]?.label ?: "None", touchSlot = t)
@@ -4102,6 +4113,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
         add(SettingsRow(SettingsKind.ADD_EXTRA, "Add ROM folder"))
         deps.allFilesAccess?.takeIf { it.declared }?.let { add(allFilesRow(it.granted(), root)) }
+        deps.micAccess?.takeIf { it.usable }?.let { add(SettingsRow(SettingsKind.MIC_ACCESS, "Microphone access", if (it.granted()) "On" else "Off")) }
         add(SettingsRow(SettingsKind.SAVES, "Saves"))
         if (deps.launcher != null) add(SettingsRow(SettingsKind.ANDROID_GAMES, "Android games", installedCache?.let { gamesCountLabel(androidGames(it).size) } ?: "…"))
         unassignedSystem()?.let { add(SettingsRow(SettingsKind.UNASSIGNED, "Unassigned games", gamesLabel(it.gameCount))) }
@@ -5603,6 +5615,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                     SettingsKind.ANDROID_GAMES -> openToolApps(AppPick.GAMES)
                     SettingsKind.RESET_DEFAULTS -> resetToDefaults(s.section)
                     SettingsKind.ALL_FILES -> deps.allFilesAccess?.openSettings()
+                    SettingsKind.MIC_ACCESS -> deps.micAccess?.request()
                     else -> Unit   // a value row with nothing to step ([settingValue] null): as before, nothing
                 }
             }

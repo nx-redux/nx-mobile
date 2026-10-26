@@ -230,6 +230,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.ANDROID_GAMES -> quiet("Pick the apps in the Android games console")
     // Library (the home, extras and game rows describe themselves: [settingsTouchRow]).
     SettingsKind.ALL_FILES -> SettingText(row.note.orEmpty(), "Lets cores and saves use your home folder's real path")   // a line only for the warning
+    SettingsKind.MIC_ACCESS -> quiet("Lets DS and 3DS games hear the Mic toggle's live mic")
     SettingsKind.ADD_EXTRA -> quiet("Scan another folder for games too, such as one on an SD card")
     // System's About group: what each read-only value is, and the two actions.
     SettingsKind.INFO -> SettingText("")   // System's About values read alone, compact (no description)

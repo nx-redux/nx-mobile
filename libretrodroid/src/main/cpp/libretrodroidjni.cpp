@@ -51,6 +51,7 @@
 #include "vulkanbridge.h"
 #include "achievements/achievements.h"
 #include "achievements/achievementshash.h"
+#include "microphone/microphoneinterface.h"
 
 namespace libretrodroid {
 
@@ -1085,6 +1086,14 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFastFor
     jboolean audible
 ) {
     LibretroDroid::getInstance().setFastForward(maxSpeed > 0 ? (unsigned) maxSpeed : 0u, audible);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setMicrophoneSource(
+    JNIEnv* env,
+    jclass obj,
+    jint source
+) {
+    MicrophoneInterface::setSource(source);
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setRewindEnabled(

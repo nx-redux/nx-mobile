@@ -79,6 +79,9 @@ import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.ui.nx.CLUSTER_MAX_WIDTH_SHARE
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.NxTheme
+import com.nxredux.mobile.ui.nx.PadMic
+import com.nxredux.mobile.ui.nx.portraitMicCentre
+import com.nxredux.mobile.ui.nx.portraitMicEdge
 import com.nxredux.mobile.ui.nx.PadGroupBoundsListener
 import com.nxredux.mobile.ui.nx.PadMotion
 import com.nxredux.mobile.ui.nx.PadStickModes
@@ -119,6 +122,8 @@ internal interface PadLayoutHost {
     fun layoutTag(): String
     fun padProfile(): com.nxredux.mobile.ui.nx.PadProfile
     fun padMotion(): PadMotion?
+    /** The DS / 3DS pad's fixed mic button ([PadMic]): null where the pad has none. */
+    fun padMic(): PadMic?
     /** The touch shortcut buttons to draw now ([com.nxredux.mobile.ui.nx.visibleTouchShortcuts]); snapshot state, so the pads follow a change. */
     val padShortcuts: Map<TouchSlot, TouchShortcut>
     /** A touch shortcut button's press ([down]) or release. */
@@ -165,6 +170,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private fun layoutTag() = host.layoutTag()
     private fun padProfile() = host.padProfile()
     private fun padMotion() = host.padMotion()
+    private fun padMic() = host.padMic()
     private fun isLandscape(orientation: Int) = host.isLandscape(orientation)
     private fun syncN3dsCore() = host.syncN3dsCore()
     private fun mainPanelShown() = host.mainPanelShown()
@@ -344,7 +350,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             ).apply { bottomMargin = bandPx; topMargin = cutoutTop }
             if (bandPx > 0) {
                 val bandLayout = padLayout(PadShape.PORTRAIT)
-                val pad = composePad { PadThemeProvider(padTheme, padButtons) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = bandLayout, tools = padTools(), shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut) } }
+                val pad = composePad { PadThemeProvider(padTheme, padButtons) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = bandLayout, tools = padTools(), shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic()) } }
                 addPad(root, pad, FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT, bandPx, Gravity.BOTTOM))
                 bandShown = true
@@ -392,7 +398,14 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             return
         }
         val hidden = layoutPadHidden
-        val toggle = composePad { PortraitPadToggle(hidden, if (hidden) padLandscapeAlpha.value else 1f, ::togglePortraitPad) }
+        val shape = activity.windowShape()
+        val unitDp = bandUnits(shape).unitPx / shape.density
+        val toggle = composePad {
+            // DS / 3DS: mirrors the mic button in the bottom-left corner (the band's, or the hidden band's overlay row),
+            // read in composition, so it moves once the game shows the button (after this layout) and back if it goes.
+            val inset = if (padMic() != null) portraitToggleInset(portraitMicEdge(unitDp, hidden), portraitMicCentre(unitDp, hidden)) else PortraitToggleInset.NONE
+            PortraitPadToggle(hidden, if (hidden) padLandscapeAlpha.value else 1f, ::togglePortraitPad, Modifier.padding(end = inset.endDp.dp, bottom = inset.bottomDp.dp))
+        }
         addPad(root, toggle, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END))
         toggleView = toggle
@@ -438,7 +451,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             VirtualPadLeft(input::onPad, input::onStick, Modifier.fillMaxSize().padding(start = with(density) { clusterInsetPx.value.toDp() }).alpha(clusterAlpha()), profile = padProfile(),
                 useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, overGame = true, motion = padMotion(), latched = input.gcLatched.value, layout = overlayLayout, tools = padTools(),
                 shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, onGroupBounds = leftBounds,
-                besidePicture = true, unitOverride = clusterUnitPx.value?.let { with(density) { it.toDp() } }, secondRow = clusterSecondRow.value)
+                besidePicture = true, unitOverride = clusterUnitPx.value?.let { with(density) { it.toDp() } }, secondRow = clusterSecondRow.value, mic = padMic())
         }
         val right = composePad {
             val density = LocalDensity.current
@@ -499,7 +512,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val m = besideMeasures(
             shape.screenClass, shape.widthPx.toFloat(), shape.heightPx.toFloat(), shape.ydpi, shape.density,
             shape.cutoutLeft.toFloat(), shape.cutoutRight.toFloat(), secondRow, measured.accepted, faceWidthUnits(padProfile()),
-            systemRowPills(padProfile(), padMotion() != null),
+            systemRowPills(padProfile(), padMotion() != null), mic = padReservesMic(),
         )
         return LandscapePad(shape, m.unitPx, m.reach, secondRow, measured.accepted != null)
     }
@@ -514,10 +527,16 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val drawn = measured.accepted.takeIf { tabletopDsViews != null }
         val r = reach(
             unit, shape.density, shape.cutoutLeft.toFloat(), shape.cutoutRight.toFloat(), measuredButtonsPx = drawn,
-            faceWidthUnits(padProfile()), systemRowPills(padProfile(), padMotion() != null),
+            faceWidthUnits(padProfile()), systemRowPills(padProfile(), padMotion() != null), mic = padReservesMic(),
         )
         return LandscapePad(shape, unit, r, secondRow, measured = drawn != null)
     }
+
+    /**
+     * Whether the halves keep room for the DS / 3DS mic button ([micReachPx]): from the console, known from the first
+     * layout (the button itself shows only once the game has started), and kept in netplay, where it hides.
+     */
+    private fun padReservesMic(): Boolean = CoreRegistry.forTag(layoutTag())?.microphone == true
 
     /**
      * Where half-folded [tt] puts this DS / 3DS game's screens and pad halves in the window [shape] ([tabletopDs], window
@@ -605,7 +624,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 input::onPad, input::onStick, unitDp, Modifier.fillMaxSize().alpha(if (overlayClear.value) 1f else padLandscapeAlpha.value),
                 analog = true, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode,
                 latched = input.gcLatched.value, shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut,
-                bandWidthUnits = units.widthUnits, bandHeightUnits = units.heightUnits, tools = padTools(), onCStick = padCStick(),
+                bandWidthUnits = units.widthUnits, bandHeightUnits = units.heightUnits, tools = padTools(), onCStick = padCStick(), mic = padMic(),
             )
         }
         addPad(root, pad, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, height, Gravity.BOTTOM))
@@ -749,7 +768,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         when (tt.pad) {
             TabletopPad.PORTRAIT -> {
                 val portraitLayout = padLayout(PadShape.PORTRAIT)
-                val pad = composePad { PadThemeProvider(padTheme, padButtons) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = portraitLayout, shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut) } }
+                val pad = composePad { PadThemeProvider(padTheme, padButtons) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = portraitLayout, shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic()) } }
                 addPad(root, pad, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, padH, Gravity.BOTTOM))
             }
             TabletopPad.CLUSTERS -> {
@@ -757,7 +776,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 val left = composePad {
                     VirtualPadLeft(input::onPad, input::onStick, Modifier.fillMaxSize().clearOfCutout(WindowInsetsSides.Start), profile = padProfile(),
                         useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, motion = padMotion(), latched = input.gcLatched.value,
-                        shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut)
+                        shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic())
                 }
                 val right = composePad {
                     VirtualPadRight(input::onPad, Modifier.fillMaxSize().clearOfCutout(WindowInsetsSides.End), profile = padProfile(), onCStick = padCStick(), latched = input.gcLatched.value,
@@ -963,18 +982,35 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     }
 }
 
+/** [PortraitPadToggle]'s circle: its 6 dp padding from its own edges, and half its 36 dp size above that. */
+private const val PORTRAIT_TOGGLE_EDGE_DP = 6f
+private const val PORTRAIT_TOGGLE_CENTRE_DP = 24f
+
+/** Extra room round [PortraitPadToggle], dp, past its own padding: [endDp] from the right, [bottomDp] from the bottom. */
+internal data class PortraitToggleInset(val endDp: Float, val bottomDp: Float) {
+    companion object { val NONE = PortraitToggleInset(0f, 0f) }
+}
+
+/**
+ * The hide / show icon's inset that mirrors the mic button: its circle [micEdgeDp] from the right, as the mic's is from
+ * the left, and its centre [micCentreDp] above the bottom, level with the mic's. Never past the corner.
+ */
+internal fun portraitToggleInset(micEdgeDp: Float, micCentreDp: Float): PortraitToggleInset = PortraitToggleInset(
+    (micEdgeDp - PORTRAIT_TOGGLE_EDGE_DP).coerceAtLeast(0f), (micCentreDp - PORTRAIT_TOGGLE_CENTRE_DP).coerceAtLeast(0f),
+)
+
 /**
  * The DS / 3DS portrait pad's hide / show icon in the bottom-right corner: a long press flips the band; a tap does
  * nothing, so a thumb landing on it mid-game changes nothing. The chevron points where the band goes: down to hide it,
  * up (over the game, [hidden]) to bring it back.
  */
 @Composable
-private fun PortraitPadToggle(hidden: Boolean, alpha: Float, onLongPress: () -> Unit) {
+private fun PortraitPadToggle(hidden: Boolean, alpha: Float, onLongPress: () -> Unit, modifier: Modifier = Modifier) {
     val haptics = LocalHapticFeedback.current
     val action by rememberUpdatedState(onLongPress)
     val ink = LocalNxColors.current.main
     Box(
-        Modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Right + WindowInsetsSides.Bottom))
+        modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Right + WindowInsetsSides.Bottom))
             .padding(6.dp).size(36.dp).alpha(alpha)
             .background(Color(0x66000000), CircleShape)
             .pointerInput(Unit) {

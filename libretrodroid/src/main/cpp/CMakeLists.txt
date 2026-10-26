@@ -162,6 +162,8 @@ add_library(libretrodroid SHARED
         microphone/microphone.cpp
         microphone/microphoneinterface.h
         microphone/microphoneinterface.cpp
+        microphone/micfeed.h
+        microphone/micfeed.cpp
         achievements/achievements.h
         achievements/achievements.cpp
         achievements/memoryregiontable.h

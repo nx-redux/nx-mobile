@@ -91,6 +91,8 @@ data class CoreDescriptor(
      * prboom, which don't support it, and Dolphin, whose states are too large to snapshot every frame on a phone.
      */
     val rewind: Boolean = true,
+    /** The core reads the libretro mic interface; the app shows the Mic toggle and offers the interface. */
+    val microphone: Boolean = false,
     /**
      * The emulator's name as the UI shows it (the core's retro_get_system_info library_name: "Genesis Plus GX", "gpSP").
      * One source for Emulator Settings and Default emulators; the id when unset.

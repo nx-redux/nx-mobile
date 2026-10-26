@@ -17,6 +17,7 @@
 
 #include "microphone.h"
 #include "oboe/AudioStream.h"
+#include "oboe/Utilities.h"
 #include "../log.h"
 #include "libretro.h"
 
@@ -32,11 +33,23 @@ oboe::DataCallbackResult Microphone::onAudioReady(
     return oboe::DataCallbackResult::Continue;
 }
 
+void Microphone::onErrorAfterClose(oboe::AudioStream* audioStream, oboe::Result error) {
+    // Only a flag: streamLock may be held by a read, and this is the last thing Oboe does with us for that stream.
+    LOGE("Microphone stream lost: %s", oboe::convertToText(error));
+    lostStream.store(audioStream);
+}
+
 Microphone::Microphone(int sampleRate):
     mSampleRate(sampleRate),
-    fifoBuffer(std::make_unique<oboe::FifoBuffer>(2, sampleRate / 2)) { }
+    fifoBuffer(std::make_unique<oboe::FifoBuffer>(2, sampleRate / 2)),
+    feed([this] { closeStream(); }) { }
 
-bool Microphone::open() {
+Microphone::~Microphone() {
+    std::lock_guard<std::mutex> s(streamLock);
+    closeStream();
+}
+
+bool Microphone::openStream() {
     oboe::AudioStreamBuilder builder;
     builder.setDirection(oboe::Direction::Input);
     builder.setInputPreset(oboe::InputPreset::Generic);
@@ -46,6 +59,7 @@ bool Microphone::open() {
     builder.setChannelCount(oboe::ChannelCount::Mono);
     builder.setFormat(oboe::AudioFormat::I16);
     builder.setCallback(this);
+    lostStream.store(nullptr);
 
     // Not under the lock: the stream's callback takes it, and starting or closing waits on the callback thread.
     std::shared_ptr<oboe::AudioStream> stream;
@@ -63,42 +77,69 @@ bool Microphone::open() {
     }
 
     inputStream = std::move(stream);
+    LOGI("Microphone stream opened");
     return true;
 }
 
-bool Microphone::close() {
+void Microphone::closeStream() {
     std::shared_ptr<oboe::AudioStream> stream = std::move(inputStream);
     inputStream = nullptr;
-    if (!stream) return true;
+    if (!stream) return;
 
     // Without the lock: stopping and closing wait for a running onAudioReady, which needs it.
     stream->stop();
-    oboe::Result result = stream->close();
-    if (result != oboe::Result::OK) {
-        LOGE("Failed to close stream");
-        return false;
-    }
-    return true;
+    if (stream->close() != oboe::Result::OK) LOGE("Failed to close stream");
+    LOGI("Microphone stream closed");
+
+    // Drop what's left, so going live again doesn't replay old audio.
+    std::lock_guard<std::mutex> l(lock);
+    fifoBuffer->setReadCounter(fifoBuffer->getWriteCounter());
+}
+
+void Microphone::setSource(MicSource source) {
+    std::lock_guard<std::mutex> s(streamLock);
+    if (source == feed.source()) return;
+    LOGI("Microphone source %d", (int) source);
+    feed.setSource(source);
 }
 
 void Microphone::setRunning(bool shouldRun) {
-    if (inputStream) {
-        if (shouldRun) {
-            inputStream->requestStart();
-        } else {
-            inputStream->requestStop();
-        }
-    }
-    mIsRunning = shouldRun;
+    std::lock_guard<std::mutex> s(streamLock);
+    if (shouldRun == feed.coreRunning()) return;
+    LOGI("Microphone state %s", shouldRun ? "running" : "stopped");
+    feed.setCoreRunning(shouldRun);
 }
 
 bool Microphone::isRunning() const {
-    return mIsRunning;
+    std::lock_guard<std::mutex> s(streamLock);
+    return feed.coreRunning();
 }
 
 int Microphone::read(int16_t* samples, int numSamples) {
-    std::lock_guard<std::mutex> l(lock);
-    return fifoBuffer->readNow(samples, numSamples);
+    std::lock_guard<std::mutex> s(streamLock);
+    if (inputStream && lostStream.load() == inputStream.get()) {
+        // Oboe already closed it: drop it without stop/close, and play noise for the rest of this live period.
+        inputStream = nullptr;
+        feed.onLiveFailed();
+        // Drop what it left, as closeStream does, so the next live period doesn't replay it.
+        std::lock_guard<std::mutex> l(lock);
+        fifoBuffer->setReadCounter(fifoBuffer->getWriteCounter());
+    }
+    // Opened here, on the core's thread, as libretro mics always were; a failure falls back to noise.
+    if (feed.wantsLive() && !inputStream && !openStream()) feed.onLiveFailed();
+
+    if (feed.wantsLive() && inputStream) {
+        int got;
+        {
+            std::lock_guard<std::mutex> l(lock);
+            got = fifoBuffer->readNow(samples, numSamples);
+        }
+        if (got < 0) got = 0;
+        for (int i = got; i < numSamples; i++) samples[i] = 0;
+    } else {
+        feed.fillSynthetic(samples, numSamples);
+    }
+    return numSamples;
 }
 
 int Microphone::sampleRate() const {

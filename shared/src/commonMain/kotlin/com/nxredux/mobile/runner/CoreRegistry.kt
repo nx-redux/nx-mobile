@@ -8,7 +8,8 @@ object CoreRegistry {
     // touchscreen as a pointer; the frontend lays the two screens out (NdsLayout), so those options are locked. Keys and
     // values: src/libretro/config/constants.hpp and config/definitions/screen.hpp at the pin. BIOS and firmware are
     // optional (built-in free ones); Bios/NDS/ is copied into the system dir when present. GL resolution defaults to 2x;
-    // the renderer's default comes from the device's GLES version at load (NdsRenderer).
+    // the renderer's default comes from the device's GLES version at load (NdsRenderer). The mic options are locked too: the
+    // app's Mic toggle drives the frontend feed, so the core always reads the microphone interface, always active, no overlay.
     private val melondsds = CoreDescriptor(
         "melondsds", "libmelondsds_libretro_android.so", setOf("nds", "ids", "dsi"),
         defaultOptions = mapOf(
@@ -18,10 +19,14 @@ object CoreRegistry {
             "melonds_screen_gap" to "0",
             "melonds_show_cursor" to "disabled",
             "melonds_opengl_resolution" to "2",
+            "melonds_mic_input" to "microphone",
+            "melonds_mic_input_active" to "always",
+            "melonds_show_mic_state" to "disabled",
         ),
         lockedOptions = setOf(
             "melonds_touch_mode", "melonds_number_of_screen_layouts", "melonds_screen_layout1",
-            "melonds_screen_gap", "melonds_show_cursor",
+            "melonds_screen_gap", "melonds_show_cursor", "melonds_mic_input", "melonds_mic_input_active",
+            "melonds_show_mic_state",
         ),
         biosFiles = listOf("bios7.bin", "bios9.bin", "firmware.bin", "dsi_bios7.bin", "dsi_bios9.bin"),
         restartOnlyOptions = RestartOnlyOptions.melondsds,
@@ -30,6 +35,7 @@ object CoreRegistry {
             "melonds_direct_network_interface",
         ),
         name = "melonDS DS",
+        microphone = true,
     )
     private val mupen64plusNext = CoreDescriptor(
         "mupen64plus_next", "libmupen64plus_next_gles3_libretro_android.so", setOf("n64", "z64", "v64"),
@@ -308,7 +314,7 @@ object CoreRegistry {
     // built in, no BIOS. Its user dir (NAND, SD card, shader cache) is <save dir>/Azahar/, kept local (not part of the
     // saves); the libretro save path keeps it under the runner's save dir. Defaults: the GL renderer ("Software" is not
     // built on Android), 2x internal resolution, the disk shader cache, the core's own top-over-bottom layout with the
-    // touchscreen taken from the pointer.
+    // touchscreen taken from the pointer. Its mic input is locked to the frontend: the app's Mic toggle drives the feed.
     private val azahar = CoreDescriptor(
         "azahar", "libazahar_libretro_android.so", setOf("3ds", "3dsx", "z3dsx", "elf", "axf", "cci", "zcci", "cxi", "zcxi", "app"),
         defaultOptions = mapOf(
@@ -324,10 +330,11 @@ object CoreRegistry {
             // as a 3DS has no switch for it and the core reads the option only when the game loads.
             "citra_enable_motion" to "enabled",
             "citra_motion_sensitivity" to "1.0",
+            "citra_input_type" to "frontend",
         ),
         lockedOptions = setOf(
             "citra_graphics_api", "citra_use_libretro_save_path", "citra_enable_mouse_touchscreen", "citra_enable_motion",
-            "citra_motion_sensitivity",
+            "citra_motion_sensitivity", "citra_input_type",
             // The app sets the layout from its per-orientation rows (N3dsOptions.layoutRows), so the core's is locked.
             "citra_layout_option",
         ),
@@ -338,6 +345,7 @@ object CoreRegistry {
         cheats = false,   // retro_cheat_set is empty
         name = "Azahar",
         rewind = false,
+        microphone = true,
     )
 
     // Wii and GameCube on Dolphin (libretro/dolphin 3aac3f05, patched; cores/Makefile), GLES or Vulkan (Graphics API). It
