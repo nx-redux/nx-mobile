@@ -1467,6 +1467,13 @@ class InGameMenuModelTest {
         assertTrue("Scale" in m.state.page.rows.map { it.label })
     }
 
+    @Test fun anUnstoredMaxScaleAboveTheDisplayShowsTheLast() {
+        val m = model().apply { displayMax3d = 3 }.openConsoleSettings()
+        val row = m.state.page.rows.filterIsInstance<MenuRow.Option>().single { it.label == "Max Scale" }
+        assertEquals("3x", row.valueLabel)
+        assertEquals(listOf("1x", "2x", "3x"), row.choices)
+    }
+
     @Test fun x_shows_the_full_text_of_a_compact_visual_row() {
         // NDS Console Settings: Layout (portrait) is visual (A would Adjust) and compact, its text behind the info icon.
         val m = model().openConsoleSettings()

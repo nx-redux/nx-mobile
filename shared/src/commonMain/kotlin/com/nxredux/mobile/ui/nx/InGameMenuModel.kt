@@ -1158,7 +1158,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         }
         if (key == FrontendOptions.OVERLAY && !overlayAvailable) return null
         // An unset DS layout row (no stored value) cycles from its shown default, like frontendRow shows it.
-        val current = frontend[key] ?: optionFor(key)?.default ?: return null
+        val option = optionFor(key)
+        val current = ConsoleSettings.fitted(option ?: return null, frontend[key] ?: option.default).second
         val values = settingValues(key) ?: return null
         return CoreOptionFilter.cycle(CoreOption(key, current, values = values), delta)?.let { setFrontendValue(key, it) }
     }
@@ -1375,7 +1376,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      */
     private fun consoleRows() = ConsoleSettings.tableFor(frontendTag, screen, displayMax3d).filter {
         it.key !in frontendLocked && !it.atLaunch && (secondConnected || it.key != BottomScreenOptions.KEY)
-    }.shownFor(frontend).map { ConsoleSettings.keeping(it, frontend[it.key] ?: it.default) }
+    }.shownFor(frontend).map { ConsoleSettings.fitted(it, frontend[it.key] ?: it.default).first }
 
     private fun frontendPage() = MenuPage(
         PageKind.Frontend, "Frontend",
@@ -1429,7 +1430,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         if (o.key == FrontendOptions.OVERLAY && !overlayAvailable) {
             MenuRow.Option(o.label, o.key, OVERLAY_UNAVAILABLE, OVERLAY_UNAVAILABLE_LINE, detail = OVERLAY_UNAVAILABLE_INFO)
         } else {
-            val value = frontend[o.key] ?: o.default
+            val value = ConsoleSettings.fitted(o, frontend[o.key] ?: o.default).second
             val values = if (o.key == FrontendOptions.OVERLAY) FrontendOptions.choices(o.key, overlays) else o.values
             // The row's brief line (none: compact); the full text in its info popup.
             MenuRow.Option(

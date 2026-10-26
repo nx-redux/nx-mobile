@@ -41,7 +41,7 @@ object EmulatorSettings {
             .map {
                 // The DS and 3DS layout rows read their old keys too, as the game does (no pick: the row default).
                 val value = (if (it.key in FrontendOptions.NO_PICK_KEYS) FrontendOptions.layoutValue(resolved.values, it.key) else resolved.values[it.key]) ?: it.default
-                ConsoleRow(ConsoleSettings.keeping(VulkanFallback.noted(it, vulkanFailed), value), value)
+                ConsoleSettings.fitted(VulkanFallback.noted(it, vulkanFailed), value).let { (option, shown) -> ConsoleRow(option, shown) }
             }
         val core = table?.let { t ->
             val withValues = t.options.filter { it.key !in descriptor.offlineHiddenOptions && !FrontendOptions.isFrontendKey(it.key) }.map { o ->

@@ -116,6 +116,16 @@ class EmulatorSettingsTest {
             .console.single { it.option.key == NdsOptions.MAX_SCALE_3D }
         assertEquals("7", row.value)
         assertTrue("7" in row.option.values)
+        assertEquals("7x", row.option.labelOf("7"))
+    }
+
+    @Test fun anUnstoredDefaultAboveTheListIsNotOffered() {
+        val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
+        val row = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, null, null, forGame = false, displayMax = 3)
+            .console.single { it.option.key == NdsOptions.MAX_SCALE_3D }
+        assertEquals("3", row.value)
+        assertEquals("3x", row.option.labelOf(row.value))
+        assertEquals(listOf("1", "2", "3"), row.option.values)
     }
 
     @Test fun ds_layout_rows_read_the_old_keys_like_the_game_does() {

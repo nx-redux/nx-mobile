@@ -21,11 +21,16 @@ object ConsoleSettings {
     } + graphicsRows(tag) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table
 
     /**
-     * This row with [value] among its choices: a stored scale the display no longer reaches (a smaller window, another
-     * phone) still shows and cycles. Only the 3D Resolution scales; any other row is returned as it is.
+     * The row and the value it shows for [value] (stored, else the row default). Only the 3D Resolution scales differ: a
+     * stored scale the display no longer reaches (a smaller window, another phone) is added as a choice, labelled "7x", so
+     * it still shows and cycles; the unstored default above the list (Max Scale 4x on a 3x display) is not added, the row
+     * shows the list's last scale. Any other row is returned as it is.
      */
-    fun keeping(option: FrontendOption, value: String): FrontendOption =
-        if (option.key in NdsOptions.RESOLUTION_KEYS && value !in option.values) option.copy(values = option.values + value) else option
+    fun fitted(option: FrontendOption, value: String): Pair<FrontendOption, String> = when {
+        option.key !in NdsOptions.RESOLUTION_KEYS || value in option.values -> option to value
+        value == option.default -> option to option.values.last()
+        else -> option.copy(values = option.values + value, valueLabels = option.valueLabels + "${value}x") to value
+    }
 
     private fun graphicsRows(tag: String): List<FrontendOption> =
         if (GraphicsApiOptions.appliesTo(tag)) listOf(GraphicsApiOptions.row) else emptyList()
