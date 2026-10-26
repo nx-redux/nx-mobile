@@ -269,7 +269,7 @@ internal val BlackGreyPadColors = PadColors(
     label = BLACK_LABEL,
     engraveLitLip = Color.Transparent,
     engraveInnerShadow = Color.Transparent,
-    engraveFloor = Color(0xFF2A2E33),
+    engraveFloor = Color(0xFF17191C),
 )
 
 /**
