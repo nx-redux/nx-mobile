@@ -97,6 +97,8 @@ internal interface FrontendHost : LifecycleOwner {
     fun toast(msg: String): android.widget.Toast
     /** The core's geometry changed to [g]: a dual mode checks which display the picture belongs on. */
     fun recheckPictureOn(g: FloatArray)
+    /** The core is held (the in-game menu, another app focused): it makes no new frame meanwhile. */
+    fun corePaused(): Boolean
 }
 
 /**
@@ -324,7 +326,7 @@ internal class FrontendRenderer(
     private val geometryFrame = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             val view = retroView
-            if (view == null || !view.isAttachedToWindow || activity.isDestroyed) { geometryWatch.cancel(); return }
+            if (view == null || !view.isAttachedToWindow || activity.isDestroyed) { cancelGeometryWatch(); return }
             val old = geometryWatch.before
             val g = view.getGameGeometry()
             when (geometryWatch.tick(g)) {
@@ -335,8 +337,9 @@ internal class FrontendRenderer(
                     endGeometryHold()
                 }
                 GeometryWatch.Tick.GAVE_UP -> {
-                    NxLog.i(TAG_LOG, "3DS frame: no new geometry in ${geometryWatch.framesWaited} frames (${g.fmt()})")
-                    endGeometryHold()
+                    val paused = host.corePaused()
+                    NxLog.i(TAG_LOG, "3DS frame: no new geometry in ${geometryWatch.framesWaited} frames (${g.fmt()})${if (paused && geometryHold.held) ", core paused: picture held until it runs" else ""}")
+                    if (geometryHold.onGaveUp(paused)) showHeldPicture()
                 }
                 GeometryWatch.Tick.IDLE -> {}
             }
@@ -351,19 +354,28 @@ internal class FrontendRenderer(
      * safety net behind the view's geometry flow ([onCoreGeometry] ends the watch when that already caught the change), so
      * one change lays out once. A newer switch restarts it; [cancelGeometryWatch] ends it. [holdPicture]: the picture is
      * held black ([GLRetroView.pictureHeld]) until the new frame size is laid out (or the watch gives up), as when a fold
-     * or unfold moves the screens' regions at once and the old frame would show cut by them for those frames.
+     * or unfold moves the screens' regions at once and the old frame would show cut by them for those frames; a watch
+     * that gives up while the core is paused keeps it held until the core runs ([onCoreResumed]) or its geometry arrives
+     * ([GeometryHold]). False: nothing is watched (no view, or the core has no geometry yet).
      */
-    fun watchGeometry(frames: Int = 90, holdPicture: Boolean = false) {
-        val view = retroView ?: return
+    fun watchGeometry(frames: Int = 90, holdPicture: Boolean = false): Boolean {
+        val view = retroView ?: return false
         val before = view.getGameGeometry()
-        if (!geometryWatch.start(before, frames)) return   // the core has no geometry yet (still launching)
+        if (!geometryWatch.start(before, frames)) return false   // the core has no geometry yet (still launching)
         if (holdPicture) {
-            geometryHold = true
+            geometryHold.start()
             view.pictureHeld = true
         }
         NxLog.i(TAG_LOG, "3DS layout switched: watching the frame size for up to $frames frames from ${before.fmt()}${if (holdPicture) ", picture held" else ""}")
         Choreographer.getInstance().removeFrameCallback(geometryFrame)
         Choreographer.getInstance().postFrameCallback(geometryFrame)
+        return true
+    }
+
+    /** The core runs again (the menu closed, the focus back): a hold that outlasted its watch while paused watches again. */
+    fun onCoreResumed() {
+        if (!geometryHold.onCoreRunning()) return
+        if (!watchGeometry(holdPicture = true)) endGeometryHold()
     }
 
     /** Ends a [watchGeometry] under way (the game is closing). */
@@ -379,16 +391,19 @@ internal class FrontendRenderer(
         val seen = geometryWatch.seen(g)
         if (seen) NxLog.i(TAG_LOG, "3DS frame: new geometry from the core after ${geometryWatch.framesWaited} frames, ${before.fmt()} -> ${g.fmt()}; laying out again")
         layOutFromCore(g)
-        if (seen) endGeometryHold()
+        // A hold that outlasted its watch (paused) ends with the geometry it waited for, whichever path brings it.
+        if (seen || geometryHold.awaitsRun) endGeometryHold()
     }
 
     /** A [watchGeometry] holds the picture until its new frame size is laid out ([endGeometryHold]). */
-    private var geometryHold = false
+    private val geometryHold = GeometryHold()
 
     /** The watch that held the picture is over: shown again (after the layout queued before it), once the game runs. */
     private fun endGeometryHold() {
-        if (!geometryHold) return
-        geometryHold = false
+        if (geometryHold.end()) showHeldPicture()
+    }
+
+    private fun showHeldPicture() {
         retroView?.let { if (!PictureHold.held(frameKnown = true, gameReady)) it.pictureHeld = false }
     }
 
@@ -527,7 +542,7 @@ internal class FrontendRenderer(
         if (frameKnown) padLayout.onPictureKnown()
         // After the viewport and regions above: queued on the GL thread in order, so the first picture drawn is placed.
         // A fold's 3DS switch keeps it held until the core's new frame size is laid out ([watchGeometry]).
-        retroView?.let { if (!geometryHold && !PictureHold.held(frameKnown, gameReady)) it.pictureHeld = false }
+        retroView?.let { if (!geometryHold.held && !PictureHold.held(frameKnown, gameReady)) it.pictureHeld = false }
     }
 
     /** The core's frame from [g] (the view's geometry), or null before it is known (0x0 until the first frame). */

@@ -444,9 +444,10 @@ internal class InGameMenuController(
             MenuEffect.OpenCoreOptions -> {
                 // Always answer the request, even without a view: the model blocks further opens while one is pending.
                 if (retroView == null) {
-                    menuModel?.let { it.showCoreOptions(emptyList(), lockedOptions + graphicsForcedOptions + restartOnlyOptions); menuState.value = it.state }
+                    menuModel?.let { it.showCoreOptions(emptyList(), lockedOptions + graphicsForcedOptions + restartOnlyOptions + dualForcedOptions()); menuState.value = it.state }
                 } else {
-                    withCoreOptions { all -> menuModel?.showCoreOptions(all ?: emptyList(), lockedOptions + graphicsForcedOptions + restartOnlyOptions) }
+                    // The split's (or half-folding's) held options show locked: a live change would turn the frame under the cuts.
+                    withCoreOptions { all -> menuModel?.showCoreOptions(all ?: emptyList(), lockedOptions + graphicsForcedOptions + restartOnlyOptions + dualForcedOptions()) }
                 }
             }
             is MenuEffect.SetOption -> {

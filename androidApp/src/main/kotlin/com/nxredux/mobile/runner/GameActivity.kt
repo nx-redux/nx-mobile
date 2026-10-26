@@ -694,6 +694,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             retroView?.audioEnabled = true
         }
         rumbles.forEach { it.resume() }
+        renderer.onCoreResumed()
     }
 
     /** The opening menu holds the game ([InGameMenuController.openMenu]), as [focusPause] does. */
@@ -716,7 +717,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         if (!quitting) rumbles.forEach { it.resume() }
         syncMotionSensors()
+        renderer.onCoreResumed()
     }
+
+    override fun corePaused(): Boolean = menuOpen || focusPaused
 
     /**
      * Leaving via Home/recents: grab the frame for the switcher preview now. This runs before the pause,
@@ -1813,8 +1817,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         n3dsSwapPinnedHalfFolded = pinned
     }
 
-    /** Half-folded alone (no second screen's mode holding the 3DS options) pins the core's swap ([DualScreen.n3dsForcedOptions]). */
-    private fun n3dsHalfFoldedPin(mode: DualMode): Boolean = n3dsTabletop() && DualScreen.n3dsCoreOptions(mode) == null
+    /** Half-folded with no second screen in use pins the core's swap ([DualScreen.n3dsForcedOptions]). */
+    private fun n3dsHalfFoldedPin(mode: DualMode): Boolean = n3dsTabletop() && mode == DualMode.OFF
 
     /** The core's swap was last pinned by half-folding ([syncN3dsCore]): flat again puts the user's values back. */
     private var n3dsSwapPinnedHalfFolded = false

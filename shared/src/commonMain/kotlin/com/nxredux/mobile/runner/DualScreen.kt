@@ -150,12 +150,12 @@ object DualScreen {
 
     /**
      * The Azahar options held for the session now: a second screen's mode's ([n3dsCoreOptions]) first; else, [halfFolded]
-     * (the screens are regions of the unswapped Stacked frame, [tabletopRegions]), the swap pinned to Top / Hold, so SWAP
-     * is the app's (the screens trade places across the hinge) and the core never turns its frame under the cuts. Null:
-     * nothing held, the user's values apply.
+     * with no second screen in use ([DualMode.OFF]: the screens are regions of the unswapped Stacked frame,
+     * [tabletopRegions]), the swap pinned to Top / Hold, so SWAP is the app's (the screens trade places across the hinge)
+     * and the core never turns its frame under the cuts. Null: nothing held, the user's values apply (Azahar's own swap).
      */
     fun n3dsForcedOptions(mode: DualMode, halfFolded: Boolean): Map<String, String>? =
-        n3dsCoreOptions(mode) ?: if (halfFolded) mapOf(SWAP_SCREEN to "Top", SWAP_SCREEN_MODE to "Hold") else null
+        n3dsCoreOptions(mode) ?: if (halfFolded && mode == DualMode.OFF) mapOf(SWAP_SCREEN to "Top", SWAP_SCREEN_MODE to "Hold") else null
 
     /** The swap options [n3dsCoreOptions] overrides while split, which leaving it must put back. */
     val N3DS_SWAP_KEYS: Set<String> = setOf(SWAP_SCREEN, SWAP_SCREEN_MODE)

@@ -212,7 +212,7 @@ internal class DualScreenController(
     fun restoreN3dsScreen() {
         val view = retroView ?: return
         if (netplayNow != null) return
-        if (padLayout.tabletop() != null) return
+        if (padLayout.tabletop() != null && dualMode == DualMode.OFF) return
         val stored = storedValues
         val proportion = N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), activity.screenClass(), padLayout.tabletop() != null)
         view.queueEvent {
