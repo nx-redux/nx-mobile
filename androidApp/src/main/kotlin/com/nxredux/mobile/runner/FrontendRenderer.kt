@@ -465,7 +465,9 @@ internal class FrontendRenderer(
             leftMargin = box.x.roundToInt()
             topMargin = box.y.roundToInt()
         }
-        fitPad(room, pad, shown, frameKnown = frame != null, h, overlayH)
+        // A bezel counts as picture: the pad over its border is see-through. Under Auto the shown rect is that box (offset).
+        val covered = if (s.scaling != ScreenScaling.AUTO && overlayAspect != null && overlayAspect > 0f) box else shown
+        fitPad(room, pad, covered, frameKnown = frame != null, h, overlayH)
         val scale = frame?.let { shown.height / (if (it.rotated) it.width else it.height) }
         logLayout(w, h, shape, room, pad, setAside, space, shown, "${s.scaling} frame=${frame?.let { "${it.width.roundToInt()}x${it.height.roundToInt()}" }} scale=${scale?.let { "%.2f".format(java.util.Locale.US, it) }}")
     }
