@@ -49,4 +49,22 @@ class SettingsBlockTest {
         assertEquals(SETTINGS_ROWS_LEFT, settingsStageLeft(blockPage = true))
         assertEquals(SETTINGS_SPLIT_LEFT, settingsStageLeft(blockPage = false))
     }
+
+    @Test fun narrowBlockPages() {
+        // The root is the section block alone; a page below it is the rows block, one level at a time.
+        assertFalse(settingsNarrowBlock(Screen.SettingsMenu(settingsCategories())))
+        assertTrue(settingsNarrowBlock(Screen.Settings(SettingsSection.LIBRARY, emptyList())))
+        assertTrue(settingsNarrowBlock(Screen.Settings(SettingsSection.SAVES, emptyList())))
+        assertTrue(settingsNarrowBlock(Screen.EmulatorList(emptyList())))
+        // Pages that draw whole stay whole.
+        assertFalse(settingsNarrowBlock(Screen.Settings(SettingsSection.LAYOUT_HOME, emptyList())))
+        assertFalse(settingsNarrowBlock(Screen.ToolApps(emptyList(), AppPick.GAMES)))
+    }
+
+    @Test fun blockLine() {
+        assertEquals("Settings / Library", settingsBlockLine("Settings", "Library"))
+        assertEquals("Library", settingsBlockLine(null, "Library"))
+        assertEquals("Settings", settingsBlockLine("Settings", null))
+        assertEquals("", settingsBlockLine(null, ""))
+    }
 }

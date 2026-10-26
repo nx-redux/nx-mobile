@@ -511,7 +511,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                 // A game's own Game Settings: a modal over the game list it came from, the list dimmed and inert behind it.
                 if (gameSettingsModal(s)) Unit   // no list to draw under it: the modal alone (below)
                 else if (settingsSplitView(LocalWindowSize.current, s)) SettingsSplitScreen(state, s, selection) { SettingsPage(state, s, selection, titled = true) }
-                else SettingsPage(state, s, selection, titled = false)
+                else NarrowSettingsPage(state, s, selection)
             is Screen.CheatDb -> state.cheatDb?.let { c -> WithIndex(selection) { CheatDbScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) } } ?: Box(Modifier.fillMaxSize())
             Screen.DeviceSync -> state.deviceSync?.let {
                 val setup by state.syncSetup.collectAsState()
@@ -593,6 +593,21 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     s.menu?.let { ContextMenuOverlay(it, onButton = state::onButton, onSelect = state::menuSelect, onOpen = state::menuOpen, onDraft = state::menuDraft, onColumns = state::onMenuLayout) }
 }
 
+/**
+ * Settings on a narrow window (a phone held upright, a landscape window too narrow for the stage), one level at a time:
+ * the root is the section block alone; a page below it is the rows block ([settingsNarrowBlock]), "Settings / <title>" its
+ * first line and, in touch mode ([settingsBackShown]), the Back word under its rows (a tap is B). A Layouts group and the
+ * Android games picker draw whole, as before.
+ */
+@Composable
+private fun NarrowSettingsPage(state: AppState, s: Screen, selection: State<ListSelection>) {
+    val back = settingsBackShown(LocalFooterMode.current)
+    val block = remember(state, back) { SettingsBlockMode(SETTINGS_TITLE, onBack = { state.onButton(NxButton.B) }.takeIf { back }) }
+    CompositionLocalProvider(LocalSettingsBlock provides block.takeIf { settingsNarrowBlock(s) }) {
+        SettingsPage(state, s, selection, titled = false)
+    }
+}
+
 /** A Settings screen drawn as one page (or as the two-pane Settings' focused right pane, [titled]: the split draws its dialog). */
 @Composable
 private fun SettingsPage(state: AppState, s: Screen, selection: State<ListSelection>, titled: Boolean) {
@@ -601,7 +616,7 @@ private fun SettingsPage(state: AppState, s: Screen, selection: State<ListSelect
         is Screen.Settings -> WithIndex(selection) {
             SettingsScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, titled = titled, dialog = !titled, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = settingTruncated)
         }
-        is Screen.EmulatorList -> WithIndex(selection) { EmulatorListScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, split = titled) }
+        is Screen.EmulatorList -> WithIndex(selection) { EmulatorListScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, split = titled || LocalSettingsBlock.current != null) }
         is Screen.EmulatorConsoles -> WithIndex(selection) { EmulatorConsolesScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton) }
         is Screen.EmulatorOptions -> WithIndex(selection) { EmulatorOptionsScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = settingTruncated) }
         is Screen.SettingsMenu -> WithIndex(selection) { SettingsMenuScreen(s, it, state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) }) }

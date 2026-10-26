@@ -104,13 +104,8 @@ fun SettingsSectionBlock(
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
     val scale = nxTextScale()   // Appearance → Text size
-    val size = settingsSectionSize(settingsSizeClass()).pinned() * scale
-    val pitch = size * SETTINGS_SECTION_LINE
-    val pitchDp = with(LocalDensity.current) { pitch.toDp() }
-    val wordStyle = TextStyle(
-        fontFamily = font, fontSize = size, letterSpacing = (-0.01).em, lineHeight = pitch,
-        lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
-    )
+    val wordStyle = settingsWordStyle()
+    val pitchDp = settingsWordPitch(wordStyle)
     Column(modifier) {
         Text(
             SETTINGS_TITLE, color = colors.hint, fontFamily = font, fontSize = NxTextSizes.menuInfo.pinned() * scale,
@@ -130,6 +125,24 @@ fun SettingsSectionBlock(
         }
     }
 }
+
+/**
+ * A section word's style: [settingsSectionSize] (Appearance → Text size), letter spacing −0.01 em, on a 1.2 line box
+ * with the word centred in it, so each word is one pitch.
+ */
+@Composable
+private fun settingsWordStyle(): TextStyle {
+    val size = settingsSectionSize(settingsSizeClass()).pinned() * nxTextScale()
+    val pitch = size * SETTINGS_SECTION_LINE
+    return TextStyle(
+        fontFamily = LocalNxFont.current, fontSize = size, letterSpacing = (-0.01).em, lineHeight = pitch,
+        lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
+    )
+}
+
+/** One line of [style] (a section word's pitch) in dp. */
+@Composable
+private fun settingsWordPitch(style: TextStyle): Dp = with(LocalDensity.current) { style.lineHeight.toDp() }
 
 /** One word of the block on its own line box, tappable without a ripple. */
 @Composable
@@ -162,10 +175,25 @@ internal fun SettingsBackground() {
 
 /**
  * A page drawn as the Settings rows block ([SettingsRowsBlock]) rather than as a whole page: its title the block's first
- * line, its rows anchored to the bottom. [crumb]: the words before the title ("Settings" on a phone held upright, as
- * "Settings / Layouts"); null on a wide window, where the section block beside it already says Settings.
+ * line, its rows anchored to the bottom. [crumb]: the words before the title ("Settings" on a narrow window, one level at
+ * a time, as "Settings / Layouts", the block then the gutter in from both sides); null on the wide stage, where the
+ * section block beside it already says Settings. [onBack]: the Back word one pitch under the rows (narrow, touch mode
+ * only, [settingsBackShown]); null: none.
  */
-data class SettingsBlockMode(val crumb: String?)
+data class SettingsBlockMode(val crumb: String?, val onBack: (() -> Unit)? = null)
+
+/**
+ * Whether [screen] draws as the rows block on a narrow window (one level at a time): a block page ([settingsBlockPage])
+ * other than the root, which is the section block alone.
+ */
+fun settingsNarrowBlock(screen: Screen): Boolean = screen !is Screen.SettingsMenu && settingsBlockPage(screen)
+
+/** The rows block's first line: "[crumb] / [title]", or the title alone without a crumb. */
+fun settingsBlockLine(crumb: String?, title: String?): String =
+    listOfNotNull(crumb, title?.takeIf { it.isNotEmpty() }).joinToString(SETTINGS_CRUMB_SEPARATOR)
+
+/** Between the crumb and the title in the rows block's first line. */
+private const val SETTINGS_CRUMB_SEPARATOR = " / "
 
 /** Set while a Settings page is drawn as the rows block ([SettingsBlockMode]); null everywhere else (a page draws whole). */
 val LocalSettingsBlock = compositionLocalOf<SettingsBlockMode?> { null }
@@ -205,13 +233,19 @@ fun SettingsRowsBlock(
 ) {
     val colors = LocalNxColors.current
     val scale = nxTextScale()
+    val gutter = settingsGutter(settingsSizeClass())
     Column(
-        modifier.fillMaxSize().padding(top = SETTINGS_ROWS_TOP, end = settingsGutter(settingsSizeClass()), bottom = SETTINGS_BLOCK_BOTTOM),
+        modifier.fillMaxSize().padding(
+            start = if (mode.crumb != null) gutter else 0.dp,   // narrow: the gutter on both sides; wide: from the stage's 44%
+            top = SETTINGS_ROWS_TOP, end = gutter, bottom = SETTINGS_BLOCK_BOTTOM,
+        ),
         verticalArrangement = Arrangement.Bottom,
     ) {
+        val text = settingsBlockLine(mode.crumb, title)
+        val crumbEnd = if (mode.crumb != null && text.length > mode.crumb.length) mode.crumb.length + SETTINGS_CRUMB_SEPARATOR.length else mode.crumb?.length ?: 0
         val line = buildAnnotatedString {
-            mode.crumb?.let { withStyle(SpanStyle(color = colors.inkDim)) { append("$it / ") } }
-            append(title.orEmpty())
+            withStyle(SpanStyle(color = colors.inkDim)) { append(text.take(crumbEnd)) }   // "Settings /" in inkDim
+            append(text.drop(crumbEnd))   // the title in the hint grey
         }
         if (line.isNotEmpty()) Text(
             line, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.menuInfo.pinned() * scale,
@@ -220,6 +254,12 @@ fun SettingsRowsBlock(
         )
         header?.invoke()
         Box(Modifier.fillMaxWidth().weight(1f, fill = false)) { rows() }
+        mode.onBack?.let { back ->
+            // The section block's Back: inkDim at the section size, one pitch under the rows, level with the row labels.
+            val style = settingsWordStyle()
+            Spacer(Modifier.height(settingsWordPitch(style)))
+            Box(Modifier.padding(start = nxListInset())) { SettingsWord("Back", colors.inkDim, style, back) }
+        }
     }
 }
 
