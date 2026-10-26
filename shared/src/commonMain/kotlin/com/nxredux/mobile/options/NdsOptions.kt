@@ -158,10 +158,10 @@ object NdsOptions {
             row(
                 LAYOUT_PORTRAIT, "Layout (portrait)", NdsLayoutChoice.entries, portraitDefault,
                 "How the two screens share a portrait screen.\n" +
-                    "Large screen: the big one, the other centred below it at\nhalf its size.\n" +
+                    "Large screen: the big one, the other centred below it at\nleast half its size; under 2x, it fills the leftover height up to 2x.\n" +
                     "Stacked: one above the other.\nSingle screen: the big one only.\n" +
                     "Picture in picture: one big, the other small in a corner.\n" +
-                    "Side by side: half the width each.\nEvery layout uses whole-number sizes.\n" +
+                    "Side by side: half the width each.\nThe screens use whole-number sizes, except the picture-in-picture\ninset and, a Large screen's touch screen filling leftover height in portrait.\n" +
                     "SELECT + Left/Right cycles it, or Layout (portrait, controller)\nwhile a controller hides the pad.\n$SPLIT_NOTE$fold",
             ),
             row(
@@ -172,11 +172,11 @@ object NdsOptions {
             ),
             row(
                 LAYOUT_LANDSCAPE, "Layout (landscape)", landscapeAll, ndsDefault(known, true),
-                "How the two screens share a landscape screen.\nLarge screen: the big one, the other centred below it at\nhalf its size.\n" +
+                "How the two screens share a landscape screen.\nLarge screen: the big one, the other centred below it at\nleast half its size.\n" +
                     "Stacked: one above the other, the same size.\nSingle screen: the big one, centred.\n" +
                     "Picture in picture: the big one centred, the other small in a corner.\n" +
                     (if (NdsLayoutChoice.SIDE_BY_SIDE in landscapeAll) "Side by side: half the width each.\n" else "") +
-                    "Every layout uses whole-number sizes.\nSELECT + Left/Right cycles it.\n$SPLIT_NOTE$fold",
+                    "The screens use whole-number sizes, except the picture-in-picture\ninset and, a Large screen's touch screen filling leftover height in portrait.\nSELECT + Left/Right cycles it.\n$SPLIT_NOTE$fold",
             ),
         )
     }
