@@ -5,7 +5,7 @@ import coil3.request.Options
 import com.nxredux.mobile.storage.FileRefs
 import java.io.File
 
-/** Local art as a [File]: Coil's own File mapper and keyer take it from there (keyed by path and last-modified). */
+/** A local picture as a [File] (its `?v=` version dropped): Coil's own File mapper and keyer take it from there (keyed by path and last-modified). */
 private object FileRefArtMapper : Mapper<String, File> {
     override fun map(data: String, options: Options): File? = FileRefs.artPath(data)?.let(::File)
 }

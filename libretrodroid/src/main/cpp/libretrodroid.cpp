@@ -311,6 +311,7 @@ void LibretroDroid::onSurfaceCreated() {
     video->updateContentSize(system_av_info.geometry.base_width, system_av_info.geometry.base_height);
     video->updateScaleMode(scaleMode);
     video->updateScreenOffset(screenOffsetX, screenOffsetY);
+    video->setPictureHeld(pictureHeld);
     video->updateScreenRegions(screenRegions);
     video->updateSecondaryRegions(secondaryRegions);
     video->setPresetChain(presetChain);
@@ -1311,6 +1312,14 @@ void LibretroDroid::setScreenOffset(float x, float y) {
 
     if (video) {
         video->updateScreenOffset(x, y);
+    }
+}
+
+void LibretroDroid::setPictureHeld(bool held) {
+    pictureHeld = held;
+
+    if (video) {
+        video->setPictureHeld(held);
     }
 }
 

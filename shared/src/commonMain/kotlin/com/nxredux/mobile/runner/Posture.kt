@@ -1,5 +1,7 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.layout.ScreenClass
+
 /** The device posture the game screen lays itself out for (Flex mode). Android supplies it; iOS reports [Flat]. */
 sealed interface Posture {
     data object Flat : Posture
@@ -22,22 +24,32 @@ fun postureFrom(halfOpened: Boolean, horizontal: Boolean, top: Int, bottom: Int,
     return Posture.Tabletop(top, bottom)
 }
 
-/** Which controls fill the half below the hinge. */
-enum class TabletopPad { PORTRAIT, CLUSTERS, NONE }
-
-/** The game area ([gameTop]..[gameBottom]) above the hinge and the pad area from [padTop] to the window bottom, px. */
-data class TabletopLayout(val gameTop: Int, val gameBottom: Int, val padTop: Int, val pad: TabletopPad)
+/** Which controls fill the half below the hinge. [DS] is a DS / 3DS game on a tablet-class window (its pad is built apart). */
+enum class TabletopPad { PORTRAIT, CLUSTERS, DS, NONE }
 
 /**
- * The tabletop split for [posture] in a [windowW] x [windowH] window, or null when the screen keeps its flat layout
- * (flat, or a DS game). A narrow window (portrait) gets the portrait pad below the hinge, a wide one (landscape) the two
- * clusters; a connected controller leaves the lower half empty. The game starts below [cutoutTop] in portrait.
+ * The game area ([gameTop]..[gameBottom]) and the pad area from [padTop] to the window bottom, px. [menuBottom] is where
+ * the in-game menu ends (the hinge's top): [gameBottom] is the window height for [TabletopPad.DS], whose game view spans
+ * both halves.
+ */
+data class TabletopLayout(val gameTop: Int, val gameBottom: Int, val padTop: Int, val pad: TabletopPad, val menuBottom: Int)
+
+/**
+ * The tabletop split for [posture] in a [windowW] x [windowH] window of class [screen], or null when the screen keeps its
+ * flat layout (flat). A DS / 3DS game ([isDualScreenConsole]) in a tablet-class window gets [TabletopPad.DS]: the game
+ * view spans the window and the two screens are placed by regions. Otherwise a narrow window (portrait) gets the portrait
+ * pad below the hinge, a wide one (landscape) the two clusters (a DS game in a phone-shaped window is the portrait case,
+ * its screens stacked in the game area); a connected controller leaves the lower half empty. The game starts below
+ * [cutoutTop] in portrait.
  */
 fun tabletopLayout(
-    posture: Posture, windowW: Int, windowH: Int, cutoutTop: Int,
-    controllerConnected: Boolean, isDs: Boolean,
+    posture: Posture, windowW: Int, windowH: Int, screen: ScreenClass, cutoutTop: Int,
+    controllerConnected: Boolean, isDualScreenConsole: Boolean,
 ): TabletopLayout? {
-    if (posture !is Posture.Tabletop || isDs) return null
+    if (posture !is Posture.Tabletop) return null
+    if (isDualScreenConsole && screen.isTablet) {
+        return TabletopLayout(gameTop = 0, gameBottom = windowH, padTop = posture.hingeBottom, pad = TabletopPad.DS, menuBottom = posture.hingeTop)
+    }
     val portrait = windowH > windowW
     val pad = when {
         controllerConnected -> TabletopPad.NONE
@@ -49,18 +61,19 @@ fun tabletopLayout(
         gameBottom = posture.hingeTop,
         padTop = posture.hingeBottom,
         pad = pad,
+        menuBottom = posture.hingeTop,
     )
 }
 
 /**
  * The tabletop split of an area that starts at window y [areaTop] and is [areaW] x [areaH] (the main app's shell, inside
  * the system bars), for a [posture] in window px; null when flat or the hinge does not split the area into two halves of
- * at least the minimum share. Positions are area-relative; the main app has no DS layout.
+ * at least the minimum share. Positions are area-relative; the main app has no DS layout, so the screen class is moot.
  */
 fun tabletopInArea(posture: Posture, areaTop: Int, areaW: Int, areaH: Int, controllerConnected: Boolean): TabletopLayout? {
     if (posture !is Posture.Tabletop) return null
     val local = postureFrom(halfOpened = true, horizontal = true, top = posture.hingeTop - areaTop, bottom = posture.hingeBottom - areaTop, windowH = areaH)
-    return tabletopLayout(local, areaW, areaH, cutoutTop = 0, controllerConnected = controllerConnected, isDs = false)
+    return tabletopLayout(local, areaW, areaH, screen = ScreenClass.REGULAR_PHONE, cutoutTop = 0, controllerConnected = controllerConnected, isDualScreenConsole = false)
 }
 
 /** The hinge angle range (degrees) read as half-opened when the fold itself reports flat: entered inside, left outside. */
@@ -84,4 +97,14 @@ fun postureFromHinge(
         else hingeAngle in HINGE_ENTER_MIN..HINGE_ENTER_MAX
     )
     return postureFrom(half, horizontal, top, bottom, windowH)
+}
+
+/**
+ * The posture a new window starts from, before its own reading arrives: [hint] (window px) as the menu's window last
+ * read it for a [hintW] x [hintH] window, kept only when this window is the same size (same display, same orientation)
+ * and the hinge still splits it ([postureFrom]); else [Posture.Flat], as without a hint.
+ */
+fun seededPosture(hint: Posture?, hintW: Int, hintH: Int, windowW: Int, windowH: Int): Posture {
+    if (hint !is Posture.Tabletop || hintW != windowW || hintH != windowH) return Posture.Flat
+    return postureFrom(halfOpened = true, horizontal = true, top = hint.hingeTop, bottom = hint.hingeBottom, windowH = windowH)
 }

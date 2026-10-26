@@ -115,12 +115,16 @@ fun NxScreenBackground(
     markShift: Float = 0f,   // moves the picture right by this share of the width (the two-pane Settings' mark)
     request: Any? = null,   // what loads in place of [url] (an ImageRequest with transformations: a trimmed resume frame)
     onFailed: (() -> Unit)? = null,   // [url] would not load (the caller moves on to its next picture)
+    onLoaded: (() -> Unit)? = null,   // [url] is drawn (a picture kept under it until then can go)
 ) {
     val colors = LocalNxColors.current
     val painter: Painter? = when {
         url != null -> rememberAsyncImagePainter(
             model = request ?: url,
-            onState = { if (it is AsyncImagePainter.State.Error) onFailed?.invoke() },
+            onState = {
+                if (it is AsyncImagePainter.State.Error) onFailed?.invoke()
+                if (it is AsyncImagePainter.State.Success) onLoaded?.invoke()
+            },
         )
         fallback != null -> org.jetbrains.compose.resources.painterResource(fallback)
         else -> null

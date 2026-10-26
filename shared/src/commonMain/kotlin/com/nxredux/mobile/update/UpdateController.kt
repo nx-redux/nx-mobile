@@ -106,6 +106,8 @@ class UpdateController(
     private var asked = false
     /** Update asked for the install permission before downloading; the next [onMainMenu] downloads once it is allowed. */
     private var permissionFor: AppRelease? = null
+    /** [installNow] was pressed: the host's "" (off the main menu) no longer holds this install; until the install ends. */
+    private var here = false
 
     private val busy: Boolean
         get() = _state.value.let { it is UpdateState.Checking || it is UpdateState.Downloading || it is UpdateState.Waiting || it is UpdateState.Installing }
@@ -191,6 +193,18 @@ class UpdateController(
                 finish(UpdateState.Failed("Update failed", release))
             }
         }
+    }
+
+    /**
+     * About's A on "Ready to install": installs now, as the main menu would. Only the host's "" may be waived (About can't
+     * launch a game); a real reason, or the platform's own "Ready to install" (the app hidden), keeps the wait.
+     */
+    fun installNow() {
+        val s = _state.value as? UpdateState.Waiting ?: return
+        if (awaitingPermission || s.reason != READY_REASON || platform.busyReason() != null || hostBusy() != "") return
+        poll?.cancel()
+        here = true
+        gate(s.release, s.file)
     }
 
     /** The popup's Not now: silences this version until a newer one. */
@@ -292,7 +306,7 @@ class UpdateController(
     private fun waitReason(): String? {
         val other = platform.busyReason()
         if (other == GAME_REASON) return other
-        val host = hostBusy()
+        val host = hostBusy().takeUnless { here && it == "" }
         if (!host.isNullOrEmpty()) return host
         return other ?: if (host == "") READY_REASON else null
     }
@@ -303,6 +317,7 @@ class UpdateController(
      */
     private fun waitFor(release: AppRelease, downloaded: UpdateFile, reason: String) {
         _state.value = UpdateState.Waiting(release, downloaded, reason)
+        here = false
         platform.keepAlive(false, null)
         platform.showWaiting(reason)
     }
@@ -310,6 +325,7 @@ class UpdateController(
     /** Leaves the download or the wait; offering the release again (or failing) ends the pending update. */
     private fun finish(state: UpdateState) {
         _state.value = state
+        if (state !is UpdateState.Installing) here = false
         platform.keepAlive(false, null)
         platform.showWaiting(null)
         if (state is UpdateState.Available || state is UpdateState.Failed) platform.pendingUpdate = null

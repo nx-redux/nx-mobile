@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -11,6 +12,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -21,10 +23,16 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.unit.toSize
 import com.nxredux.mobile.settings.PadGroup
 import com.nxredux.mobile.settings.PadLayout
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 
-/** Told where each group of a pad sits by default (root px), with its pad's bounds and unit: the editor's input. */
+/**
+ * Told where each group of a pad sits by default (root px), with its pad's bounds and unit: the editor's input. Also
+ * where it is [placedInRoot]: its final rect, after the layout's tweaks (the same as the default without one). A group
+ * that leaves the pad reports [Rect.Zero] for both, so a listener can forget it.
+ */
 fun interface PadGroupBoundsListener {
-    fun onGroup(group: PadGroup, defaultInRoot: Rect, padInRoot: Rect, unitPx: Float)
+    fun onGroup(group: PadGroup, defaultInRoot: Rect, padInRoot: Rect, unitPx: Float, placedInRoot: Rect)
 }
 
 /**
@@ -35,8 +43,11 @@ internal class PadArrange {
     var layout by mutableStateOf(PadLayout.EMPTY)
     var unitPx by mutableFloatStateOf(1f)
     var bounds by mutableStateOf(Rect.Zero)
-    var listener: PadGroupBoundsListener? = null
+    var listener by mutableStateOf<PadGroupBoundsListener?>(null)
     var root: LayoutCoordinates? = null
+
+    /** The pad's bounds in the window, px; zero until placed. */
+    var padInWindow by mutableStateOf(Rect.Zero)
     val defaults = mutableStateMapOf<PadGroup, Rect>()
 
     /** Where [group] is drawn, pad px: its default, or [placeGroup] of it with its tweak; null before it is measured. */
@@ -75,6 +86,7 @@ internal fun rememberPadArrange(layout: PadLayout, unitPx: Float, listener: PadG
 internal fun Modifier.padArrangeRoot(arrange: PadArrange): Modifier = onPlaced { c ->
     arrange.root = c
     arrange.bounds = Rect(androidx.compose.ui.geometry.Offset.Zero, c.size.toSize())
+    if (c.isAttached) arrange.padInWindow = c.findRootCoordinates().localBoundingBoxOf(c, false)
 }
 
 /**
@@ -87,17 +99,30 @@ internal fun Modifier.padArrangeRoot(arrange: PadArrange): Modifier = onPlaced {
 internal fun PadGroupBox(group: PadGroup, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val arrange = LocalPadArrange.current
     if (arrange == null) { Box(modifier) { content() }; return }
-    DisposableEffect(arrange, group) { onDispose { arrange.defaults.remove(group) } }
+    DisposableEffect(arrange, group) {
+        onDispose {
+            arrange.defaults.remove(group)
+            arrange.listener?.onGroup(group, Rect.Zero, arrange.padInWindow, arrange.unitPx, Rect.Zero)
+        }
+    }
+    // Reports the default and the placed rect (window px) whenever either, the pad or the unit changes: a layout edit
+    // moves the placed rect without the group being laid out again.
+    LaunchedEffect(arrange, group) {
+        snapshotFlow {
+            val l = arrange.listener
+            val d = arrange.defaults[group]
+            val pad = arrange.padInWindow
+            val p = arrange.placed(group)
+            if (l == null || d == null || p == null || pad.isEmpty) null
+            else GroupReport(l, d.translate(pad.topLeft), pad, arrange.unitPx, p.translate(pad.topLeft))
+        }.filterNotNull().distinctUntilChanged().collect { r -> r.listener.onGroup(group, r.default, r.pad, r.unitPx, r.placed) }
+    }
     Box(
         modifier.onPlaced { c ->
             val root = arrange.root ?: return@onPlaced
             if (!root.isAttached || !c.isAttached) return@onPlaced
             val local = root.localBoundingBoxOf(c, clipBounds = false)
             arrange.defaults[group] = local
-            arrange.listener?.let { l ->
-                val window = root.findRootCoordinates()
-                l.onGroup(group, window.localBoundingBoxOf(c, false), window.localBoundingBoxOf(root, false), arrange.unitPx)
-            }
         },
     ) {
         Box(
@@ -119,3 +144,12 @@ internal fun PadGroupBox(group: PadGroup, modifier: Modifier = Modifier, content
 @Composable
 internal fun ProvidePadArrange(arrange: PadArrange, content: @Composable () -> Unit) =
     CompositionLocalProvider(LocalPadArrange provides arrange, content = content)
+
+/** What a pad group last told its [listener]: a change in any of it is reported again. */
+private data class GroupReport(
+    val listener: PadGroupBoundsListener,
+    val default: Rect,
+    val pad: Rect,
+    val unitPx: Float,
+    val placed: Rect,
+)

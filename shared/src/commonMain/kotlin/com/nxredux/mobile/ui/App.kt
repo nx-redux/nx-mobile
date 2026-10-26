@@ -1,8 +1,10 @@
 package com.nxredux.mobile.ui
 
 import coil3.ImageLoader
+import coil3.PlatformContext
 import coil3.compose.AsyncImagePainter
 import coil3.compose.setSingletonImageLoaderFactory
+import coil3.request.addLastModifiedToFileCacheKey
 import com.nxredux.mobile.update.AppRelease
 import com.nxredux.mobile.ui.nx.LocalMinimalPage
 import com.nxredux.mobile.ui.nx.MinimalMorph
@@ -33,7 +35,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -91,6 +92,7 @@ import com.nxredux.mobile.ui.nx.LocalFooterMode
 import com.nxredux.mobile.ui.nx.LocalLauncherChrome
 import com.nxredux.mobile.ui.nx.launcherChromeFor
 import com.nxredux.mobile.ui.nx.LocalNxColors
+import com.nxredux.mobile.ui.nx.restingSystemBars
 import com.nxredux.mobile.ui.nx.LocalAppIcons
 import com.nxredux.mobile.ui.nx.LocalGridPresses
 import com.nxredux.mobile.ui.nx.LocalPadBelow
@@ -127,12 +129,21 @@ import com.nxredux.mobile.shared.res.background
 import org.jetbrains.compose.resources.painterResource
 import kotlinx.coroutines.delay
 
+/**
+ * The image loader every picture uses, the game screen's too: the generated abstract art's fetcher ([abstractArtFetcher])
+ * and key, and local files (ROM art, save-state screenshots) read by path: its mapper runs before Coil's String mapper,
+ * which would parse '#' and '?'. A file's cache key holds its modified time (Coil 3's default leaves it out): the mapper
+ * drops a ref's `?v=` version, so a screenshot rewritten under the same name would otherwise show from the memory cache.
+ */
+internal fun nxImageLoader(context: PlatformContext): ImageLoader =
+    ImageLoader.Builder(context).components { fileRefMapper()?.let { add(it) }; add(abstractArtFetcher()); abstractArtKeyer()?.let { add(it) } }
+        .addLastModifiedToFileCacheKey(true)
+        .build()
+
 /** Root composable. The host creates AppState once (so a folder pick can reach setHome/addExtra) and passes it in. */
 @Composable
 fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
-    // The image loader every picture uses, with the generated abstract art's fetcher ([abstractArtFetcher]) and key, and
-    // local ROM art as files: its mapper runs before Coil's String mapper, which would parse '#' and '?'.
-    setSingletonImageLoaderFactory { context -> ImageLoader.Builder(context).components { fileRefMapper()?.let { add(it) }; add(abstractArtFetcher()); abstractArtKeyer()?.let { add(it) } }.build() }
+    setSingletonImageLoaderFactory(::nxImageLoader)   // a no-op when the platform installed it first (Android: at process start)
     val screen by state.screen.collectAsState()
     val error by state.error.collectAsState()
     val androidGamesAsk by state.androidGamesAsk.collectAsState()
@@ -153,6 +164,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     LaunchedEffect(Unit) { state.loadOnce() }   // App may be composed again on the other display (the main menu there)
     // Settings are plain properties: every Pad theme change republishes the screen, so re-read it when the screen changes.
     val padTheme = remember(screen) { state.settings.padTheme }
+    val padButtons = remember(screen) { state.settings.padButtons }   // Appearance → Pad buttons (Black's set), likewise
     val padVibration = remember(screen) { state.settings.padVibration }   // Controls → Pad vibration, likewise
     // Controls → Menu pad, likewise; hidden while first setup and onboarding have not asked yet, previewed on its step.
     val menuPad = remember(screen, selection.value.index) { state.menuPadShown() }
@@ -165,9 +177,9 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     LaunchedEffect(controllerConnected) { state.onControllerConnected(controllerConnected) }   // a Shortcuts bind row's line
     val touchscreen = rememberHasTouchscreen()   // for a game list's Recent, Search and Layout icons
     // Bars and cutout only, never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
-    Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))) {
+    Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).windowInsetsPadding(restingSystemBars().union(WindowInsets.displayCutout))) {
         HandheldShell(
-            pad = { m -> NxTheme { PadVibrationProvider(padVibration) { PadThemeProvider(padTheme) { VirtualPad(onPadEvent, m, layout = menuPortraitLayout) } } } },
+            pad = { m -> NxTheme { PadVibrationProvider(padVibration) { PadThemeProvider(padTheme, padButtons) { VirtualPad(onPadEvent, m, layout = menuPortraitLayout) } } } },
             controllerConnected = controllerConnected,
             showPad = menuPad,
             // Flex mode on a wide window: the two clusters below the hinge (the main app has no analog stick use).
@@ -530,6 +542,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val orientation = state.orientationOf(s)
     // A Grid reports its columns only while its page is the one showing (a page sliding out never overwrites the count).
     val onGridLayout: (Int, Int) -> Unit = remember(s) { { columns, rows -> if (state.screen.value === s) state.onGridLayout(columns, rows) } }
+    val onPageRows: (Int) -> Unit = remember(s) { { rows -> if (state.screen.value === s) state.onPageRows(rows) } }   // likewise LEFT / RIGHT's page
     val index = { selection.value.index }
     val minimalOpening = state.minimalOpening.collectAsState()   // a Minimal page's row being opened (its page draws the band)
     val raPanel by state.raPanel.collectAsState()   // the achievements panel over the list
@@ -546,7 +559,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
         showTag = s.source == ListSource.Hidden || s.source is ListSource.Search,   // a search mixes consoles
         emptyText = if (s.source is ListSource.Search || s.source is ListSource.Filtered) "No results" else null,
         info = { gameInfoFor(gameInfo, now, current()?.game, full = true) },   // Grid shows none (its tiles have tileInfo)
-        style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, tileInfo = remember(s.entries, gameInfo, now) { entryTileInfo(s.entries, gameInfo, now) }, layoutKey = s.source,
+        style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = remember(s.entries, gameInfo, now) { entryTileInfo(s.entries, gameInfo, now) }, layoutKey = s.source,
         artBox = state.settings.gameListArt.boxed,
         backdropArt = state.settings.backdropArt,
         onSearch = state::openListSearch.takeIf { s.source.searchable },

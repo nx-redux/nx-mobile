@@ -44,7 +44,6 @@ import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_ART_PATH
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_GAME_PATH
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_TITLE
 import com.nxredux.mobile.settings.AndroidAppSettings
-import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.ui.nx.GamePanel
 import com.nxredux.mobile.ui.nx.GamePanelEvent
 import com.nxredux.mobile.ui.nx.GamePanelHeader
@@ -192,10 +191,11 @@ internal class DualScreenController(
     private var presentationShape: DisplayShape? = null   // the second display's size and density the window was made for
 
     /**
-     * 3DS entering split: notes the swap values the core runs now (an unsaved menu change included), queued ahead of the
-     * split's own, so leaving split can put them back. A launch straight into split noted the stored ones instead.
+     * 3DS entering split (or half-folding, [GameActivity.syncN3dsCore]): notes the swap values the core runs now (an unsaved
+     * menu change included), queued ahead of the split's own, so leaving split can put them back. A launch straight into
+     * split noted the stored ones instead; values already noted (the other of the two holds them) are kept.
      */
-    private fun captureN3dsSwap() {
+    fun captureN3dsSwap() {
         val view = retroView ?: return
         if (netplayNow != null) return   // no core option changes mid-session, so none to undo
         view.queueEvent {
@@ -207,12 +207,16 @@ internal class DualScreenController(
         }
     }
 
-    /** 3DS leaving split: the swap values from before it ([captureN3dsSwap]) and the orientation's proportion are back. */
-    private fun restoreN3dsScreen() {
+    /**
+     * 3DS leaving split (or unfolding): the swap values from before it ([captureN3dsSwap]) and the orientation's proportion
+     * are back. Still half-folded, the swap stays pinned and the noted values wait for the unfold.
+     */
+    fun restoreN3dsScreen() {
         val view = retroView ?: return
         if (netplayNow != null) return
+        if (padLayout.tabletop() != null && dualMode == DualMode.OFF) return
         val stored = storedValues
-        val proportion = N3dsOptions.stackedSmallProportion(isLandscape())
+        val proportion = N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), activity.screenClass(), padLayout.tabletop() != null)
         view.queueEvent {
             val vars = DualScreen.n3dsSwapRestore(n3dsSwapBeforeSplit, stored).map { (k, v) -> Variable(k, v) } +
                 Variable(N3dsOptions.STACKED_SMALL_PROPORTION, proportion)
@@ -336,6 +340,9 @@ internal class DualScreenController(
             syncN3dsCore()
             if (forcedBefore && !forced) restoreN3dsScreen()
         }
+        // Half-folded, a DS / 3DS gets its own tabletop only without a second screen ([tabletopDualScreen]): a new mode
+        // builds the other tabletop (the pad, the game area, the menu's bounds).
+        if (changed && padLayout.tabletop() != null) padLayout.applyLayout(activity.resources.configuration.orientation)
         renderer.relayoutFrontend(geometry)
     }
 
@@ -700,8 +707,8 @@ internal class DualScreenController(
      */
     fun panelHeader(): GamePanelHeader {
         val now = System.currentTimeMillis()
-        // A shared-storage ref as its plain path: the game screen's image loader may not have the app's ref mapper.
-        val art = intent.getStringExtra(EXTRA_ART_PATH)?.let { FileRefs.artPath(it) ?: it }
+        // A file ref as it is: the process's image loader ([com.nxredux.mobile.ui.NxImages]) reads it by path.
+        val art = intent.getStringExtra(EXTRA_ART_PATH)
         val minute = now / 60_000L
         if (minute != panelClockMinute) {
             panelClockMinute = minute

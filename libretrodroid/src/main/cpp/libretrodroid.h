@@ -210,6 +210,9 @@ public:
 
     void setScreenOffset(float x, float y);
 
+    // While held the main output draws no picture, only black (Video::setPictureHeld). Remembered for a later Video. GL thread.
+    void setPictureHeld(bool held);
+
     // Regions of the core frame drawn at places in the view (empty = one picture). Remembered, like the viewport, so a
     // Video created later (a new surface) gets them. GL thread.
     void setScreenRegions(std::vector<ScreenRegion> regions);
@@ -297,6 +300,7 @@ private:
     unsigned int scaleMode = SCALE_MODE_FIT;
     float screenOffsetX = 0.0F;
     float screenOffsetY = 0.0F;
+    bool pictureHeld = false;
     std::vector<ScreenRegion> screenRegions;
     std::vector<ScreenRegion> secondaryRegions;
 

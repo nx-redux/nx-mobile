@@ -63,6 +63,16 @@ class ShortcutKeysTest {
         assertEquals(KeyVerdict.Pass, k.onUp(r1))
     }
 
+    // Save & Quit on MENU+L1 fires as any combo; L1 alone stays the game's.
+    @Test fun saveAndQuitComboFires() {
+        val l1 = KeyCodes.BUTTON_L1
+        val k = keys(ShortcutAction.SAVE_AND_QUIT to ShortcutBinding(menu, l1))
+        assertEquals(KeyVerdict.Pass, k.onDown(l1)); k.onUp(l1)
+        assertEquals(KeyVerdict.Swallow, k.onDown(menu))
+        assertEquals(KeyVerdict.Fire(ShortcutAction.SAVE_AND_QUIT, true), k.onDown(l1))
+        assertEquals(KeyVerdict.Fire(ShortcutAction.SAVE_AND_QUIT, false), k.onUp(l1))
+    }
+
     @Test fun repeatOfAFiredKeyIsSwallowed() {
         val k = keys(ShortcutAction.HOLD_FF to ShortcutBinding(null, r1))
         k.onDown(r1)

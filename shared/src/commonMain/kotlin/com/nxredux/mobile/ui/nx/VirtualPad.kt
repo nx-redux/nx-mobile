@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -53,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.changedToDown
@@ -69,6 +71,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.nxredux.mobile.settings.PadGroup
 import com.nxredux.mobile.settings.PadLayout
+import com.nxredux.mobile.settings.PadButtons
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.shared.res.Res
@@ -97,6 +100,7 @@ private object PadStyle {
     val faceInset: Dp = 3.dp        // resting: how far the face sits inside the socket
     val pressedInset: Dp = 5.dp     // pressed: sink the face a little deeper
     val faceLift: Dp = 0.75.dp      // shift the face up slightly so the groove looks even top-to-bottom
+    val outlineWidth: Dp = 1.5.dp   // an outline button's stroke ([PadColors.outline]): thin, but not a hairline
 }
 
 /** The A / B / X / Y face buttons, which take the [PadColors.face] role; every other pad button is a [PadColors.pill]. */
@@ -110,9 +114,12 @@ private val FACE_BUTTONS = setOf(NxButton.A, NxButton.B, NxButton.X, NxButton.Y)
 internal fun isPill(button: NxButton): Boolean = button in PILL_BUTTONS
 private val PILL_BUTTONS = setOf(NxButton.L1, NxButton.L2, NxButton.R1, NxButton.R2, NxButton.START, NxButton.SELECT, NxButton.MENU)
 
-/** One button role's raised face: a domed resting fill and rim, and the darker sunken fill and rim shown while held. */
+/**
+ * One button role's raised face: a domed resting fill and rim, and the darker sunken fill and rim shown while held.
+ * [tint]: a console's own face colour ([coloredFace]), which an outline pad strokes the button in ([PadColors.faceOf]).
+ */
 @Immutable
-internal class PadFace(val raisedFill: Brush, val raisedRim: Brush, val pressedFill: Brush, val pressedRim: Brush)
+internal class PadFace(val raisedFill: Brush, val raisedRim: Brush, val pressedFill: Brush, val pressedRim: Brush, val tint: Color? = null)
 
 /**
  * Every colour of the pad, per theme ([CharcoalPadColors], [RetroPadColors]). Buttons differ by role: [face] is
@@ -139,6 +146,37 @@ internal class PadColors(
     val engraveLitLip: Color,       // lower edge of the NX mark's cut, catching the light
     val engraveInnerShadow: Color,  // upper wall of the cut, in shadow
     val engraveFloor: Color,        // bottom of the groove, darker than the surface
+    /**
+     * An outline pad (Black's Outline buttons): the faces, well and knob are strokes ([PadStyle.outlineWidth]) on no
+     * fill, with no socket, and sit centred (no [PadStyle.faceLift], which only evens out a groove).
+     */
+    val outline: Boolean = false,
+)
+
+/** The width of a face's, the d-pad cross's and the well's rim. */
+private val PadColors.rimWidth: Dp get() = if (outline) PadStyle.outlineWidth else 1.dp
+
+/** How far a face sits up in its socket; none on an outline pad, which has no groove to even out. */
+private val PadColors.lift: Dp get() = if (outline) 0.dp else PadStyle.faceLift
+
+/**
+ * A console's own face colours ([override]: the N64's, Dreamcast's, GameCube's) on this pad: as they are, or on an
+ * outline pad an outline in the face's [PadFace.tint] (the theme's own face if it has none), so the colours still tell
+ * the buttons apart without a filled button on the outline pad.
+ */
+internal fun PadColors.faceOf(override: PadFace): PadFace =
+    if (!outline) override else override.tint?.let { outlineFace(it, pressedFill = it.copy(alpha = 0.3f), pressedRim = it) } ?: face
+
+/** The label colour on a button drawn with [override]'s face and [labelColor]: on an outline pad, the face's tint (a dark letter meant for a filled yellow face would vanish on black). */
+internal fun PadColors.labelOf(override: PadFace?, labelColor: Color?): Color =
+    (if (outline) override?.tint else null) ?: labelColor ?: label
+
+/** An outline face: no fill at rest, a [stroke] rim; held, a faint [pressedFill] and a [pressedRim]. */
+private fun outlineFace(stroke: Color, pressedFill: Color, pressedRim: Color) = PadFace(
+    raisedFill = SolidColor(Color.Transparent),
+    raisedRim = SolidColor(stroke),
+    pressedFill = SolidColor(pressedFill),
+    pressedRim = SolidColor(pressedRim),
 )
 
 /** The Charcoal face: one domed, top-lit grey for every role (the pad's original look). */
@@ -204,18 +242,79 @@ internal val RetroPadColors = PadColors(
     engraveFloor = Color(0xFFB8B4AE),
 )
 
+/** Black's body, shared by both button sets. */
+private val BLACK_SURFACE = Color(0xFF000000)
+/** Black's caps: Charcoal's light grey, which reads on black without glaring. */
+private val BLACK_LABEL = Color(0xFFB4BAC2)
+/** The Outline set's stroke: a mid grey, quiet on black but clear of it. */
+private val BLACK_STROKE = Color(0xFF5A5F66)
+/** The Outline set's held stroke: brighter, with a faint white fill, so a press shows without a glow. */
+private val BLACK_STROKE_PRESSED = Color(0xFF8A9098)
+private val BLACK_PRESSED_FILL = Color(0x1FFFFFFF)
+
+/**
+ * Black, Grey buttons: Charcoal's domed grey buttons on a pure black body. Black has no darker tone for a groove, so
+ * a socket is the body's black and shows only Charcoal's lit lower edge, with no grey halo; the joystick well is a
+ * faint bowl rising out of black. The NX mark is a flat subtle grey, not cut: no lit lip or shadow, which read oddly on black.
+ */
+internal val BlackGreyPadColors = PadColors(
+    surface = BLACK_SURFACE,
+    face = CharcoalFace,
+    dpad = CharcoalFace,
+    pill = CharcoalFace,
+    socketFill = BLACK_SURFACE,
+    socketRim = CharcoalPadColors.socketRim,
+    wellFill = Brush.verticalGradient(listOf(Color(0xFF000000), Color(0xFF0B0C0E), Color(0xFF15171A))),
+    wellRim = CharcoalPadColors.wellRim,
+    knobShadow = CharcoalPadColors.knobShadow,
+    label = BLACK_LABEL,
+    engraveLitLip = Color.Transparent,
+    engraveInnerShadow = Color.Transparent,
+    engraveFloor = Color(0xFF17191C),
+)
+
+/**
+ * Black, Outline buttons: every button, the d-pad cross, the joystick well and knob only a thin mid-grey stroke with
+ * its label, on a pure black body with no sockets; a held button lights its stroke and fills faintly. The d-pad's held
+ * arm fills without a rim of its own (the cross's outline is its edge).
+ */
+internal val BlackOutlinePadColors = PadColors(
+    surface = BLACK_SURFACE,
+    face = outlineFace(BLACK_STROKE, BLACK_PRESSED_FILL, BLACK_STROKE_PRESSED),
+    dpad = outlineFace(BLACK_STROKE, BLACK_PRESSED_FILL, Color.Transparent),
+    pill = outlineFace(BLACK_STROKE, BLACK_PRESSED_FILL, BLACK_STROKE_PRESSED),
+    socketFill = Color.Transparent,
+    socketRim = SolidColor(Color.Transparent),
+    wellFill = SolidColor(Color.Transparent),
+    wellRim = SolidColor(BLACK_STROKE),
+    knobShadow = SolidColor(Color.Transparent),
+    label = BLACK_LABEL,
+    engraveLitLip = BlackGreyPadColors.engraveLitLip,
+    engraveInnerShadow = BlackGreyPadColors.engraveInnerShadow,
+    engraveFloor = BlackGreyPadColors.engraveFloor,
+    outline = true,
+)
+
 /** The pad colours in effect; Charcoal unless a [PadThemeProvider] says otherwise (so [NxEmblem] elsewhere stays Charcoal). */
 internal val LocalPadColors = staticCompositionLocalOf { CharcoalPadColors }
 
-internal fun padColorsFor(theme: PadTheme): PadColors = when (theme) {
+/** [theme]'s colours; [buttons] picks Black's button set and is ignored by the other themes. */
+internal fun padColorsFor(theme: PadTheme, buttons: PadButtons = PadButtons.DEFAULT): PadColors = when (theme) {
     PadTheme.CHARCOAL -> CharcoalPadColors
     PadTheme.RETRO -> RetroPadColors
+    PadTheme.BLACK -> when (buttons) {
+        PadButtons.GREY -> BlackGreyPadColors
+        PadButtons.OUTLINE -> BlackOutlinePadColors
+    }
 }
 
-/** Draws the portrait [VirtualPad] in [content] with [theme]'s colours. The landscape clusters ignore it (always Charcoal). */
+/**
+ * Draws the portrait [VirtualPad] in [content] with [theme]'s colours ([buttons]: Black's button set). The landscape
+ * clusters ignore it (always Charcoal).
+ */
 @Composable
-fun PadThemeProvider(theme: PadTheme, content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalPadColors provides padColorsFor(theme), content = content)
+fun PadThemeProvider(theme: PadTheme, buttons: PadButtons = PadButtons.DEFAULT, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalPadColors provides padColorsFor(theme, buttons), content = content)
 }
 
 /**
@@ -247,14 +346,14 @@ private fun NeuSurface(
     val inset = if (pressed) PadStyle.pressedInset else PadStyle.faceInset
     Box(modifier, contentAlignment = Alignment.Center) {
         // Flat body: the countersink groove carries the depth, no outer halo.
-        Box(Modifier.matchParentSize().background(colors.socketFill, shape).border(1.dp, colors.socketRim, shape))
+        if (!colors.outline) Box(Modifier.matchParentSize().background(colors.socketFill, shape).border(1.dp, colors.socketRim, shape))
         // The raised face; on press it sinks deeper (larger inset) and darkens with an inner shadow.
         // The face sits [faceLift] higher in the socket so the groove looks even top-to-bottom.
         Box(
             Modifier.matchParentSize()
-                .padding(start = inset, top = inset - PadStyle.faceLift, end = inset, bottom = inset + PadStyle.faceLift)
+                .padding(start = inset, top = inset - colors.lift, end = inset, bottom = inset + colors.lift)
                 .background(if (pressed) face.pressedFill else face.raisedFill, shape)
-                .border(1.dp, if (pressed) face.pressedRim else face.raisedRim, shape),
+                .border(colors.rimWidth, if (pressed) face.pressedRim else face.raisedRim, shape),
             contentAlignment = Alignment.Center,
             content = content,
         )
@@ -402,7 +501,7 @@ private fun PadButton(
     val origin = boxes.firstOrNull { it.button == button }?.rect?.topLeft ?: Offset.Zero
     NeuSurface(
         shape = shape,
-        face = face ?: if (button in FACE_BUTTONS) colors.face else colors.pill,
+        face = face?.let(colors::faceOf) ?: if (button in FACE_BUTTONS) colors.face else colors.pill,
         pressed = lit || button in group.pressed,
         modifier = modifier.width(width).height(size)
             .padPointers(group, listOf(button, boxes, slop)) { p, held, down ->
@@ -410,7 +509,7 @@ private fun PadButton(
                 setOfNotNull(padButtonAt(p + origin, boxes, held.firstOrNull(), slop) ?: button.takeIf { down })
             },
     ) {
-        val color = labelColor ?: LocalPadColors.current.label
+        val color = colors.labelOf(face, labelColor)
         if (icon != null) {
             Image(
                 painterResource(icon.padDrawable()), contentDescription = label,
@@ -525,8 +624,9 @@ private fun FaceClusterBox(
  */
 @Composable
 private fun BoxScope.DpadArm(button: NxButton, size: Dp, alignment: Alignment, pressedShape: Shape, pressed: Boolean) {
+    val colors = LocalPadColors.current
     val g = PadStyle.faceInset
-    val lift = PadStyle.faceLift
+    val lift = colors.lift
     val rim = 1.dp      // the hub line's half that falls on this arm (the cross border straddles the other bar's edge)
     // Slide the box in toward the hub by the groove width, then trim the groove off the sides and the rim off the inner end.
     val armFace = when (button) {
@@ -541,11 +641,11 @@ private fun BoxScope.DpadArm(button: NxButton, size: Dp, alignment: Alignment, p
                 // The arm face sunk a further (pressedInset − faceInset) all round.
                 Box(
                     Modifier.matchParentSize().padding(PadStyle.pressedInset - PadStyle.faceInset)
-                        .background(LocalPadColors.current.dpad.pressedFill, pressedShape)
-                        .border(1.dp, LocalPadColors.current.dpad.pressedRim, pressedShape),
+                        .background(colors.dpad.pressedFill, pressedShape)
+                        .border(1.dp, colors.dpad.pressedRim, pressedShape),
                 )
             }
-            DpadArrow(button, size * 0.36f, LocalPadColors.current.label, Modifier.matchParentSize())
+            DpadArrow(button, size * 0.36f, colors.label, Modifier.matchParentSize())
         }
     }
 }
@@ -601,8 +701,8 @@ private fun NeuDpad(unit: Dp, onEvent: (PadEvent) -> Unit, modifier: Modifier = 
     ) {
         // The countersink groove (full cross), then the raised face — a uniform inset cross so the
         // groove is the same width on every side.
-        Box(Modifier.matchParentSize().background(colors.socketFill, dpadCrossShape).border(1.dp, colors.socketRim, dpadCrossShape))
-        Box(Modifier.matchParentSize().offset(y = -PadStyle.faceLift).background(colors.dpad.raisedFill, faceCross).border(1.dp, colors.dpad.raisedRim, faceCross))
+        if (!colors.outline) Box(Modifier.matchParentSize().background(colors.socketFill, dpadCrossShape).border(1.dp, colors.socketRim, dpadCrossShape))
+        Box(Modifier.matchParentSize().offset(y = -colors.lift).background(colors.dpad.raisedFill, faceCross).border(colors.rimWidth, colors.dpad.raisedRim, faceCross))
         // The four arms; each held one presses in with its outer end rounded.
         DpadArm(NxButton.UP, unit, Alignment.TopCenter, RoundedCornerShape(topStart = armR, topEnd = armR), NxButton.UP in held)
         DpadArm(NxButton.DOWN, unit, Alignment.BottomCenter, RoundedCornerShape(bottomStart = armR, bottomEnd = armR), NxButton.DOWN in held)
@@ -694,7 +794,7 @@ private fun NeuJoystick(
     ) {
         // Outer well = the range the knob can move: a shallow bowl, dark at the top rim and lighter at
         // the bottom (lit from the top), so it reads as a natural depression rather than a hard ring.
-        Box(Modifier.matchParentSize().background(colors.wellFill, CircleShape).border(1.dp, colors.wellRim, CircleShape))
+        Box(Modifier.matchParentSize().background(colors.wellFill, CircleShape).border(colors.rimWidth, colors.wellRim, CircleShape))
         // The knob's soft drop shadow, offset below it (light from the top), grounding the raised stick.
         Box(
             Modifier.offset { IntOffset(knob.x.roundToInt(), (knob.y + shadowDropPx).roundToInt()) }
@@ -756,17 +856,23 @@ internal fun clusterMicStart(unit: Float, nudge: Float): Float =
  * pill face with the mic symbol, dimmed while off (as MOTION), pressed in while on. A tap toggles; there is no hold.
  */
 @Composable
-private fun BoxScope.MicButton(mic: PadMic, unit: Dp, start: Dp) {
+private fun BoxScope.MicButton(mic: PadMic, unit: Dp, start: Dp) =
+    MicFace(
+        mic, micButtonSize(unit.value).dp,
+        Modifier.align(Alignment.BottomStart).zIndex(1f).padding(start = start, bottom = micButtonInset(unit.value).dp),
+    )
+
+/** The mic button's round face, [size] across, wherever [modifier] puts it ([MicButton]; first in [PortraitOverlayPad]'s row). */
+@Composable
+private fun MicFace(mic: PadMic, size: Dp, modifier: Modifier = Modifier) {
     val haptic = rememberPadHaptic()
     val latestTap by rememberUpdatedState(mic.onTap)
     var pressed by remember { mutableStateOf(false) }
-    val size = micButtonSize(unit.value).dp
     NeuSurface(
         shape = CircleShape,
         face = LocalPadColors.current.pill,
         pressed = pressed || mic.on,
-        modifier = Modifier.align(Alignment.BottomStart).zIndex(1f)
-            .padding(start = start, bottom = micButtonInset(unit.value).dp)
+        modifier = modifier
             .size(size)
             .then(if (mic.on) Modifier else Modifier.alpha(0.45f))
             .pointerInput(Unit) {
@@ -1062,22 +1168,23 @@ fun VirtualPad(
             // group moved over MENU's row (Pad layout) sits on top of it.
             Column(Modifier.fillMaxWidth().zIndex(-1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 if (clusterDrop == 0f) Spacer(Modifier.height(unit * (PORTRAIT_EMBLEM_H + PORTRAIT_EMBLEM_GAP)))   // the dropped clusters take it
-                // The touch shortcuts either side of MENU's row: the equal weights keep the row centred with or without them.
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                        val w = portraitShortcutWidth(sysW.value, maxWidth.value, PORTRAIT_SHORTCUT_GAP).dp
-                        ShortcutPiece(TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, w, Modifier.padding(end = PORTRAIT_SHORTCUT_GAP.dp))
-                    }
-                    PadGroupBox(PadGroup.SYSTEM_LEFT) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            PadButton(NxButton.MENU, sysH, emit, shape = PadStyle.pillShape, width = sysW)
-                            Spacer(Modifier.width(12.dp))
-                            ToggleButton(if (stick.useJoystick) "D-PAD" else "STICK", stick::toggle, sysH, sysW)
+                // The buttons actually shown (a touch shortcut only where assigned, MENU + the toggle always) centred as one
+                // row, so a single shortcut no longer leaves MENU off the middle of what is drawn.
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    portraitBottomRow(shortcuts, shortcutPlaceholders).forEach { piece ->
+                        when (piece) {
+                            PortraitBottomPiece.SHORTCUT_1 ->
+                                ShortcutPiece(TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW, Modifier.padding(end = PORTRAIT_SHORTCUT_GAP.dp))
+                            PortraitBottomPiece.SYSTEM -> PadGroupBox(PadGroup.SYSTEM_LEFT) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    PadButton(NxButton.MENU, sysH, emit, shape = PadStyle.pillShape, width = sysW)
+                                    Spacer(Modifier.width(12.dp))
+                                    ToggleButton(if (stick.useJoystick) "D-PAD" else "STICK", stick::toggle, sysH, sysW)
+                                }
+                            }
+                            PortraitBottomPiece.SHORTCUT_2 ->
+                                ShortcutPiece(TouchSlot.TWO, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW, Modifier.padding(start = PORTRAIT_SHORTCUT_GAP.dp))
                         }
-                    }
-                    BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                        val w = portraitShortcutWidth(sysW.value, maxWidth.value, PORTRAIT_SHORTCUT_GAP).dp
-                        ShortcutPiece(TouchSlot.TWO, shortcuts, shortcutPlaceholders, onShortcut, sysH, w, Modifier.padding(start = PORTRAIT_SHORTCUT_GAP.dp))
                     }
                 }
             }
@@ -1103,6 +1210,20 @@ fun VirtualPad(
 
 /** The gap between a portrait touch shortcut and MENU's row, dp: the row's own pill gap. */
 private const val PORTRAIT_SHORTCUT_GAP = 12f
+
+/** A piece of the portrait pad's bottom row ([portraitBottomRow]). */
+internal enum class PortraitBottomPiece { SHORTCUT_1, SYSTEM, SHORTCUT_2 }
+
+/**
+ * The portrait bottom row's pieces, left to right, that are drawn: MENU with the toggle ([PortraitBottomPiece.SYSTEM])
+ * always, a touch shortcut only where [shortcuts] assigns it (or both as stand-ins with [placeholders], the Pad layout
+ * editor). The row centres what it holds, so one shortcut does not push MENU off the middle.
+ */
+internal fun portraitBottomRow(shortcuts: Map<TouchSlot, TouchShortcut>, placeholders: Boolean): List<PortraitBottomPiece> = listOfNotNull(
+    PortraitBottomPiece.SHORTCUT_1.takeIf { placeholders || shortcuts[TouchSlot.ONE] != null },
+    PortraitBottomPiece.SYSTEM,
+    PortraitBottomPiece.SHORTCUT_2.takeIf { placeholders || shortcuts[TouchSlot.TWO] != null },
+)
 
 /** The portrait NX mark's height and its gap over MENU's row, units. */
 private const val PORTRAIT_EMBLEM_H = 1.1f
@@ -1145,7 +1266,7 @@ private const val MID_MIN_GAP = 0.5f      // units kept between the d-pad and th
 private const val MID_MIN_SLACK = 0.4f    // units of vertical space kept free in the column
 
 /** The face cluster's width in face-button units: 3 for the X/Y/B/A diamond, else its cluster's WIDTH. */
-internal fun faceWidthUnits(profile: PadProfile): Float = when (profile.cluster) {
+fun faceWidthUnits(profile: PadProfile): Float = when (profile.cluster) {
     FaceCluster.DIAMOND -> 3f
     FaceCluster.N64 -> N64Cluster.WIDTH
     FaceCluster.SEGA -> SegaCluster.WIDTH
@@ -1162,9 +1283,9 @@ internal fun faceHeightUnits(profile: PadProfile): Float = when (profile.cluster
  * The portrait pad's d-pad / stick scale for a pad [widthUnits] x [heightUnits] button units, the same on every
  * console: [MID_SCALE], or less so the row (0.55-unit side padding each side, the 3-unit d-pad / stick, the 3-unit
  * face diamond, [MID_MIN_GAP] between) fits the width and the column (3.12 fixed units + the 3-unit row, scaled,
- * + [MID_MIN_SLACK]) fits the height. Never below 1.
+ * + [MID_MIN_SLACK]) fits the height. Never below 1. The layout model (hidden-band overlay height) uses it too.
  */
-internal fun midRowScale(widthUnits: Float, heightUnits: Float): Float =
+fun midRowScale(widthUnits: Float, heightUnits: Float): Float =
     minOf(MID_SCALE, (widthUnits - 1.1f - MID_MIN_GAP) / 6f, (heightUnits - 3.12f - MID_MIN_SLACK) / 3f).coerceAtLeast(1f)
 
 /**
@@ -1351,7 +1472,7 @@ private const val SYSTEM_PILL_W_UNITS = 1.4f
 private const val SYSTEM_PILL_GAP = 12f
 
 /** An overlay cluster's inset from its screen edge, units: the right cluster's, which the left mirrors over the game. */
-private const val OVERLAY_EDGE_NUDGE = 0.2f
+internal const val OVERLAY_EDGE_NUDGE = 0.2f
 
 /**
  * How far an over-the-game cluster's system row (two pills) reaches in from its screen edge on a [screenW] ×
@@ -1368,6 +1489,21 @@ internal fun overlaySystemRowReach(screenW: Float, h: Float, inset: Float): Floa
  */
 fun nxTopCentreMaxWidth(screenW: Float, h: Float, inset: Float): Float =
     (screenW - 2 * overlaySystemRowReach(screenW, h, inset)).coerceAtLeast(0f)
+
+/** The shoulder row's reach from its screen edge beyond the edge margin, units: nudge, bumper, trigger and the gap. */
+private const val SHOULDER_REACH_UNITS = OVERLAY_EDGE_NUDGE + 1f + 0.72f + 0.35f
+
+/**
+ * How far the shoulders (L1 L2 / R2 R1 in the top corners) of a pad beside the picture reach in from their screen edge:
+ * the [edge] margin (padding and any cutout) plus the shoulders' 0.2 + 1 + 0.72 + 0.35 [unit]s. Same length unit as both.
+ */
+fun shoulderReach(unit: Float, edge: Float): Float = edge + unit * SHOULDER_REACH_UNITS
+
+/**
+ * The widest the top-centre notifications may be on a [screenW] wide screen so they clear only the shoulders in the top
+ * corners ([shoulderReach]), not the system rows, which sit lower beside the picture; a long toast wraps instead.
+ */
+fun topCentreMaxWidth(screenW: Float, shoulderReach: Float): Float = (screenW - 2 * shoulderReach).coerceAtLeast(0f)
 
 /** The width a cluster at [unit] takes, its padding and a cutout [inset] on its edge included, dp. */
 internal fun landscapeClusterWidth(unit: Float, inset: Float = 0f): Float = CLUSTER_W_UNITS * unit + 2 * CLUSTER_PADDING + inset
@@ -1408,6 +1544,24 @@ internal fun padSystemRow(side: PadSide, profile: PadProfile = PadProfile.STANDA
             PadSystemKey.SELECT.takeIf { !profile.isHidden(NxButton.SELECT) }, PadSystemKey.HOME.takeIf { profile.homeButton }, PadSystemKey.START,
         )
     }
+
+/**
+ * The pill count of the widest landscape system row [profile]'s pad draws ([padSystemRow], the Wii's MOTION when
+ * [motion]): 3 for the Wii's SELECT HOME START (and its MENU STICK MOTION), else 2. The layout model's
+ * reach estimate sizes the clusters' boxes by it until the drawn groups are measured.
+ */
+fun systemRowPills(profile: PadProfile, motion: Boolean): Int =
+    maxOf(padSystemRow(PadSide.LEFT, profile, motion).size, padSystemRow(PadSide.RIGHT, profile).size)
+
+/**
+ * Beside the picture, how many pills in from the screen edge [side]'s touch shortcut sits on the second row: left
+ * under the d-pad / stick toggle (BUTTON 1 under STICK), right under SELECT (BUTTON 2 under SELECT, so on the Wii's
+ * SELECT HOME START the spots under HOME and START stay empty); on a pad without SELECT, one in from START.
+ */
+internal fun besideShortcutFromEdge(side: PadSide, keys: List<PadSystemKey>): Int = when (side) {
+    PadSide.LEFT -> keys.indexOf(PadSystemKey.TOGGLE).coerceAtLeast(0)
+    PadSide.RIGHT -> keys.indexOf(PadSystemKey.SELECT).let { i -> if (i >= 0) keys.lastIndex - i else 1 }
+}
 
 /**
  * Where an over-the-game cluster's touch shortcut sits: under the pill [fromEdge] pills in from the screen edge of its
@@ -1485,11 +1639,28 @@ internal enum class PadRow { SYSTEM, SHOULDERS, CLUSTER }
 /**
  * A landscape cluster's rows, top to bottom. Over the game ([overGame]) the system row goes to the top of
  * the box (the screen's top corner, away from the thumbs that kept touching it) and the rest stays bottom-anchored;
- * elsewhere (main menu, flex-mode pad under the hinge) it stays lowest, under the d-pad / face cluster.
+ * elsewhere (main menu, flex-mode pad under the hinge) it stays lowest, under the d-pad / face cluster. Beside the
+ * picture ([besidePicture], which wins over [overGame]: the pad has its own column) the system row is lowest too.
  */
-internal fun clusterRows(overGame: Boolean): List<PadRow> =
-    if (overGame) listOf(PadRow.SYSTEM, PadRow.SHOULDERS, PadRow.CLUSTER)
+internal fun clusterRows(overGame: Boolean, besidePicture: Boolean = false): List<PadRow> =
+    if (overGame && !besidePicture) listOf(PadRow.SYSTEM, PadRow.SHOULDERS, PadRow.CLUSTER)
     else listOf(PadRow.SHOULDERS, PadRow.CLUSTER, PadRow.SYSTEM)
+
+/**
+ * Whether a pad beside the picture draws its second row (STYLUS / BUTTON 1 left, BUTTON 2 / SWAP right) for this
+ * half's [tools], [shortcuts] and [placeholders]. The caller ORs both halves' answers into each half's `secondRow`, so
+ * L1 / R1 and the d-pad / face cluster line up whichever half has the row.
+ */
+internal fun padSecondRow(tools: PadTools?, shortcuts: Map<TouchSlot, TouchShortcut>, placeholders: Boolean): Boolean =
+    tools != null || shortcuts.isNotEmpty() || placeholders
+
+/**
+ * The `secondRow` both halves of a pad beside the picture take: either half's [padSecondRow], the left with STYLUS and
+ * touch shortcut 1, the right with SWAP and touch shortcut 2, so a row on one side keeps the other's rows level.
+ */
+fun besideSecondRow(tools: PadTools?, shortcuts: Map<TouchSlot, TouchShortcut>, placeholders: Boolean): Boolean =
+    padSecondRow(tools, shortcuts.filterKeys { it == TouchSlot.ONE }, placeholders) ||
+        padSecondRow(tools, shortcuts.filterKeys { it == TouchSlot.TWO }, placeholders)
 
 /**
  * The row of [rows] ([clusterRows]) whose spacer above takes the free height: over the game ([overGame])
@@ -1531,6 +1702,135 @@ private fun SystemRow(
     }
 }
 
+/** The hidden-band overlay's rows in units: the shoulders, the system row, and the gap between each pair of rows. */
+internal const val OVERLAY_SHOULDER_UNITS = 1f
+internal const val OVERLAY_SYSTEM_UNITS = 0.72f
+internal const val OVERLAY_GAP_UNITS = 0.35f
+
+/**
+ * The hidden-band overlay's height in button units, inside its padding: the shoulders, the middle row at [midScale]
+ * ([midRowScale]) 3 units tall, the system row and the two gaps between the rows. The layout model's overlay height
+ * (`overlayHeightPx`) is this times the unit plus the padding.
+ */
+internal fun portraitOverlayUnits(midScale: Float): Float =
+    OVERLAY_SHOULDER_UNITS + 2 * OVERLAY_GAP_UNITS + 3f * midScale + OVERLAY_SYSTEM_UNITS
+
+/**
+ * The touch boxes beside the hidden-band overlay's C-stick ([overlayCStick]), in middle-row units (from the row's left
+ * end, after the edge nudge, its top 0): the d-pad / stick's whole 3 x [stickScale] square on the left (the d-pad takes
+ * touches across its box, not only on its arms; so does the stick's well) and the X/Y/B/A diamond's 3 x [faceScale]
+ * box on the right of a row [rowWidthUnits] wide, both centred in the row's 3 x [stickScale] height.
+ */
+internal fun overlayClusterBoxes(rowWidthUnits: Float, stickScale: Float, faceScale: Float): List<Rect> {
+    val faceT = 1.5f * (stickScale - faceScale)
+    return listOf(
+        Rect(0f, 0f, 3f * stickScale, 3f * stickScale),
+        Rect(rowWidthUnits - 3f * faceScale, faceT, rowWidthUnits, faceT + 3f * faceScale),
+    )
+}
+
+/**
+ * The hidden-band overlay's New 3DS C-stick box in middle-row units ([overlayClusterBoxes]' frame): centred across the
+ * row between the d-pad / stick and the diamond, its well's top at the row's top. [C_STICK_DIAMETER] x [stickScale]
+ * across where its well keeps [PORTRAIT_C_STICK_BUTTON_GAP] off both clusters' touch boxes, else as big as keeps it
+ * (the gap between the boxes less that margin each side). Inside the row's height, so the overlay keeps its
+ * [portraitOverlayUnits] height; only a touch inside the round well is the stick's.
+ */
+internal fun overlayCStick(rowWidthUnits: Float, stickScale: Float, faceScale: Float): Rect {
+    val boxes = overlayClusterBoxes(rowWidthUnits, stickScale, faceScale)
+    val cx = (boxes[0].right + boxes[1].left) / 2f
+    val room = (boxes[1].left - boxes[0].right) / 2f - PORTRAIT_C_STICK_BUTTON_GAP
+    val r = minOf(C_STICK_DIAMETER * stickScale / 2f, room).coerceAtLeast(0f)
+    return Rect(cx - r, 0f, cx + r, 2f * r)
+}
+
+/**
+ * The portrait pad with its band hidden: one see-through piece for the bottom of the screen. The shoulders sit in the top
+ * corners (the DS / 3DS STYLUS and SWAP beside them, [tools]), the d-pad / stick and the face cluster under them, and one
+ * left-aligned row of MENU, the toggle, SELECT, START and the touch shortcuts that are assigned ([shortcuts]); the
+ * show / hide chevron is the host's, at the row's right end. [unit] and the middle row's scale (from [bandWidthUnits] x
+ * [bandHeightUnits], the band this replaces) match the band's buttons on this screen; the height is
+ * [portraitOverlayUnits] units plus the padding. No background, and only the buttons take touches: the gaps pass to
+ * the game. The New 3DS C-stick ([onCStick], sent as the right stick) sits in the middle row between the clusters
+ * ([overlayCStick]), inside the row's height. [analog] is the joystick's mode, as on the portrait band. [mic] (DS / 3DS)
+ * is the fixed mic button, first in the bottom row.
+ */
+@Composable
+fun PortraitOverlayPad(
+    onEvent: (PadEvent) -> Unit,
+    onStick: (Float, Float) -> Unit,
+    unit: Dp,
+    modifier: Modifier = Modifier,
+    analog: Boolean = false,
+    profile: PadProfile = PadProfile.STANDARD,
+    useJoystick: Boolean? = null,
+    onUseJoystickChange: (Boolean) -> Unit = {},
+    latched: Set<NxButton> = emptySet(),
+    shortcuts: Map<TouchSlot, TouchShortcut> = emptyMap(),
+    onShortcut: (TouchSlot, Boolean) -> Unit = { _, _ -> },
+    bandWidthUnits: Float = 9f,
+    bandHeightUnits: Float = 6.2f,
+    tools: PadTools? = null,
+    onCStick: ((Float, Float) -> Unit)? = null,
+    mic: PadMic? = null,
+) {
+    val emit = rememberEmit(onEvent)
+    val stick = rememberStickChoice(useJoystick, onUseJoystickChange)
+    val mid = midRowScale(bandWidthUnits, bandHeightUnits)
+    val faceScale = faceClusterScale(bandWidthUnits, bandHeightUnits, mid, faceWidthUnits(profile), faceHeightUnits(profile))
+    // Always Charcoal, like the clusters over the game: the overlay is translucent over the picture.
+    CompositionLocalProvider(LocalPadColors provides CharcoalPadColors) {
+        Column(modifier.fillMaxSize().padding(CLUSTER_PADDING.dp), verticalArrangement = Arrangement.Bottom) {
+            val gap = unit * OVERLAY_GAP_UNITS
+            val sysH = unit * OVERLAY_SYSTEM_UNITS
+            val pill = unit * 1.0f
+            val nudge = unit * OVERLAY_EDGE_NUDGE
+            val sides = Modifier.fillMaxWidth().padding(horizontal = nudge)
+            Row(sides.height(unit * OVERLAY_SHOULDER_UNITS), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ShoulderButtons(padShoulders(PadSide.LEFT, profile), profile, unit, sysH, emit, latched)
+                    if (tools != null) { Spacer(Modifier.width(gap)); StylusButton(tools, sysH, pill) }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (tools != null) { SwapButton(tools, sysH, pill); Spacer(Modifier.width(gap)) }
+                    ShoulderButtons(padShoulders(PadSide.RIGHT, profile), profile, unit, sysH, emit, latched)
+                }
+            }
+            Spacer(Modifier.height(gap))
+            Box(sides.height(unit * 3f * mid)) {
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    val stickMid = unit * mid
+                    val faceMid = unit * faceScale
+                    if (stick.useJoystick) NeuJoystick(stickMid, emit, analog = analog, onStick = onStick) else NeuDpad(stickMid, emit)
+                    FaceClusterBox(profile, faceMid, (faceMid.value * 0.46f).sp, emit)
+                }
+                // The New 3DS C-stick between the clusters: drawn last, so above them; clipped round, so only a touch
+                // inside the well ([cStickWellHit]) is its and one on the box's corners falls through to the cluster.
+                if (profile.cStick && onCStick != null) {
+                    val c = overlayCStick(bandWidthUnits - 2f * OVERLAY_EDGE_NUDGE, mid, faceScale)
+                    if (c.width > 0f) {
+                        NeuJoystick(unit * (c.width / 3f), emit, Modifier.offset(x = unit * c.left, y = unit * c.top).clip(CircleShape), analog = true, onStick = onCStick)
+                    }
+                }
+            }
+            Spacer(Modifier.height(gap))
+            Row(Modifier.padding(start = nudge).height(sysH), verticalAlignment = Alignment.CenterVertically) {
+                val g = SYSTEM_PILL_GAP.dp
+                if (mic != null) { MicFace(mic, sysH); Spacer(Modifier.width(g)) }   // bottom left, the row's height
+                PadButton(NxButton.MENU, sysH, emit, shape = PadStyle.pillShape, width = pill)
+                Spacer(Modifier.width(g))
+                ToggleButton(if (stick.useJoystick) "D-PAD" else "STICK", stick::toggle, sysH, pill)
+                Spacer(Modifier.width(g))
+                PadButton(NxButton.SELECT, sysH, emit, shape = PadStyle.pillShape, width = pill, label = profile.label(NxButton.SELECT))
+                Spacer(Modifier.width(g))
+                PadButton(NxButton.START, sysH, emit, shape = PadStyle.pillShape, width = pill, label = profile.label(NxButton.START))
+                ShortcutPiece(TouchSlot.ONE, shortcuts, false, onShortcut, sysH, pill, Modifier.padding(start = g))
+                ShortcutPiece(TouchSlot.TWO, shortcuts, false, onShortcut, sysH, pill, Modifier.padding(start = g))
+            }
+        }
+    }
+}
+
 /**
  * Left cluster (landscape): [clusterRows] of MENU/toggle, shoulders L1/L2 and the d-pad/analog-stick, pushed to the
  * bottom-left so the d-pad sits low for the left thumb. Transparent. [overGame] (the clusters drawn over the game)
@@ -1555,6 +1855,9 @@ fun VirtualPadLeft(
     shortcuts: Map<TouchSlot, TouchShortcut> = emptyMap(),
     onShortcut: (TouchSlot, Boolean) -> Unit = { _, _ -> },
     shortcutPlaceholders: Boolean = false,
+    besidePicture: Boolean = false,
+    unitOverride: Dp? = null,
+    secondRow: Boolean = false,
     mic: PadMic? = null,
 ) {
     val emit = rememberEmit(onEvent)
@@ -1562,19 +1865,19 @@ fun VirtualPadLeft(
     // Always Charcoal: the clusters sit translucent over the game, whatever the portrait Pad theme.
     CompositionLocalProvider(LocalPadColors provides CharcoalPadColors) {
         BoxWithConstraints(modifier.fillMaxSize().padding(CLUSTER_PADDING.dp)) {
-            val unit = clusterUnit(maxWidth.value, maxHeight.value).dp
+            val unit = unitOverride ?: clusterUnit(maxWidth.value, maxHeight.value).dp
             val arrange = rememberPadArrange(layout, with(LocalDensity.current) { unit.toPx() }, onGroupBounds)
             val bumper = unit * 1.0f
             val trigger = unit * 0.72f
             val sysH = unit * 0.72f
             val sysW = unit * SYSTEM_PILL_W_UNITS
-            val nudge = unit * leftClusterNudge(overGame)   // inset from the left screen edge
+            val nudge = unit * leftClusterNudge(overGame || besidePicture)   // inset from the left screen edge
             val gap = unit * 0.35f
             val systemKeys = padSystemRow(PadSide.LEFT, profile, motion != null)
             ProvidePadArrange(arrange) {
             Box(Modifier.fillMaxSize().padArrangeRoot(arrange)) {
             // Over the game: touch shortcut 1 under the toggle, drawn first (under the rest, as the editor's hit order has it).
-            if (overGame) {
+            if (overGame && !besidePicture) {
                 val place = overlayShortcutPlace(PadSide.LEFT, systemKeys)
                 ShortcutPiece(
                     TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW,
@@ -1582,18 +1885,28 @@ fun VirtualPadLeft(
                 )
             }
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.Start) {
-                val rows = clusterRows(overGame)
-                val flex = flexSpacerRow(rows, overGame)
+                val rows = clusterRows(overGame, besidePicture)
+                val flex = flexSpacerRow(rows, overGame && !besidePicture)
                 rows.forEachIndexed { i, row ->
                     if (i > 0) Spacer(rowSpacer(i == flex, gap))
                     when (row) {
-                        PadRow.SYSTEM -> PadGroupBox(PadGroup.SYSTEM_LEFT, Modifier.padding(start = nudge)) {
-                            Column(horizontalAlignment = Alignment.Start) {
-                                SystemRow(systemKeys, emit, profile, sysH, sysW, stick.useJoystick, stick::toggle, motion)
-                                if (tools != null) {   // under MENU
-                                    Spacer(Modifier.height(gap))
-                                    StylusButton(tools, sysH, sysW)
+                        PadRow.SYSTEM -> Box(Modifier.heightIn(min = if (besidePicture && secondRow) sysH * 2 + gap else 0.dp)) {
+                            PadGroupBox(PadGroup.SYSTEM_LEFT, Modifier.padding(start = nudge)) {
+                                Column(horizontalAlignment = Alignment.Start) {
+                                    SystemRow(systemKeys, emit, profile, sysH, sysW, stick.useJoystick, stick::toggle, motion)
+                                    if (tools != null) {   // under MENU
+                                        Spacer(Modifier.height(gap))
+                                        StylusButton(tools, sysH, sysW)
+                                    }
                                 }
+                            }
+                            // Beside the picture: touch shortcut 1 on the second row, under the toggle (the column stays
+                            // whether or not STYLUS is there, so the halves keep their rows).
+                            if (besidePicture && secondRow) {
+                                ShortcutPiece(
+                                    TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW,
+                                    Modifier.padding(start = nudge + (sysW + SYSTEM_PILL_GAP.dp) * besideShortcutFromEdge(PadSide.LEFT, systemKeys), top = sysH + gap),
+                                )
                             }
                         }
                         // With MENU's row under the d-pad (main menu, flex-mode pad), touch shortcut 1 sits beside the
@@ -1604,7 +1917,7 @@ fun VirtualPadLeft(
                                     ShoulderButtons(padShoulders(PadSide.LEFT, profile), profile, bumper, trigger, emit, latched)
                                 }
                             }
-                            if (!overGame) ShortcutPiece(TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW, Modifier.padding(start = gap))
+                            if (!overGame && !besidePicture) ShortcutPiece(TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW, Modifier.padding(start = gap))
                         }
                         PadRow.CLUSTER -> PadGroupBox(PadGroup.DPAD, Modifier.padding(start = nudge)) {
                             if (stick.useJoystick) NeuJoystick(unit, emit, analog = true, onStick = onStick)
@@ -1641,12 +1954,15 @@ fun VirtualPadRight(
     shortcuts: Map<TouchSlot, TouchShortcut> = emptyMap(),
     onShortcut: (TouchSlot, Boolean) -> Unit = { _, _ -> },
     shortcutPlaceholders: Boolean = false,
+    besidePicture: Boolean = false,
+    unitOverride: Dp? = null,
+    secondRow: Boolean = false,
 ) {
     val emit = rememberEmit(onEvent)
     // Always Charcoal: the clusters sit translucent over the game, whatever the portrait Pad theme.
     CompositionLocalProvider(LocalPadColors provides CharcoalPadColors) {
         BoxWithConstraints(modifier.fillMaxSize().padding(CLUSTER_PADDING.dp)) {
-            val unit = clusterUnit(maxWidth.value, maxHeight.value).dp
+            val unit = unitOverride ?: clusterUnit(maxWidth.value, maxHeight.value).dp
             val arrange = rememberPadArrange(layout, with(LocalDensity.current) { unit.toPx() }, onGroupBounds)
             val bumper = unit * 1.0f
             val trigger = unit * 0.72f
@@ -1659,7 +1975,7 @@ fun VirtualPadRight(
             ProvidePadArrange(arrange) {
             Box(Modifier.fillMaxSize().padArrangeRoot(arrange)) {
             // Over the game: touch shortcut 2 under SELECT (in its place where the pad has none), drawn first, as on the left.
-            if (overGame) {
+            if (overGame && !besidePicture) {
                 val place = overlayShortcutPlace(PadSide.RIGHT, systemKeys)
                 ShortcutPiece(
                     TouchSlot.TWO, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW,
@@ -1668,18 +1984,27 @@ fun VirtualPadRight(
                 )
             }
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.End) {
-                val rows = clusterRows(overGame)
-                val flex = flexSpacerRow(rows, overGame)
+                val rows = clusterRows(overGame, besidePicture)
+                val flex = flexSpacerRow(rows, overGame && !besidePicture)
                 rows.forEachIndexed { i, row ->
                     if (i > 0) Spacer(rowSpacer(i == flex, gap))
                     when (row) {
-                        PadRow.SYSTEM -> PadGroupBox(PadGroup.SYSTEM_RIGHT, Modifier.padding(end = nudge)) {
-                            Column(horizontalAlignment = Alignment.End) {
-                                SystemRow(systemKeys, emit, profile, sysH, sysW, false, {}, null)
-                                if (tools != null) {   // under START
-                                    Spacer(Modifier.height(gap))
-                                    SwapButton(tools, sysH, sysW)
+                        PadRow.SYSTEM -> Box(Modifier.heightIn(min = if (besidePicture && secondRow) sysH * 2 + gap else 0.dp)) {
+                            PadGroupBox(PadGroup.SYSTEM_RIGHT, Modifier.padding(end = nudge).align(Alignment.TopEnd)) {
+                                Column(horizontalAlignment = Alignment.End) {
+                                    SystemRow(systemKeys, emit, profile, sysH, sysW, false, {}, null)
+                                    if (tools != null) {   // under START
+                                        Spacer(Modifier.height(gap))
+                                        SwapButton(tools, sysH, sysW)
+                                    }
                                 }
+                            }
+                            // Beside the picture: touch shortcut 2 on the second row, under SELECT ([besideShortcutFromEdge]).
+                            if (besidePicture && secondRow) {
+                                ShortcutPiece(
+                                    TouchSlot.TWO, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW,
+                                    Modifier.align(Alignment.TopEnd).padding(end = nudge + (sysW + SYSTEM_PILL_GAP.dp) * besideShortcutFromEdge(PadSide.RIGHT, systemKeys), top = sysH + gap),
+                                )
                             }
                         }
                         // With the C-stick the face cluster is taller, which would lift the shoulders above the left cluster's:
@@ -1687,7 +2012,7 @@ fun VirtualPadRight(
                         // With SELECT's row under the face cluster (main menu, flex-mode pad), touch shortcut 2 sits beside
                         // them, toward the middle, as on the left; it does not drop with them, so it stays above the C-stick's well.
                         PadRow.SHOULDERS -> Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (!overGame) ShortcutPiece(TouchSlot.TWO, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW, Modifier.padding(end = gap))
+                            if (!overGame && !besidePicture) ShortcutPiece(TouchSlot.TWO, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW, Modifier.padding(end = gap))
                             PadGroupBox(
                                 PadGroup.R_SHOULDERS,
                                 Modifier.padding(end = nudge)

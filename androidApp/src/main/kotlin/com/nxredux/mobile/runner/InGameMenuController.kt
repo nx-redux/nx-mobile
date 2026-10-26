@@ -5,6 +5,7 @@ import android.view.Gravity
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -256,6 +257,7 @@ internal class InGameMenuController(
             initialSlot = (lastSlotCache ?: saveStates?.lastSlot()?.also { lastSlotCache = it } ?: 1) - 1,
         ).also {
             it.setStatus(configSource); it.cheatsAvailable = cheatsSupported
+            it.screen = activity.screenClass()   // the DS / 3DS layout rows: this window's values and defaults
             // netplay: the root is "Leave netplay?" only; Continue / Quit once the session has ended. An ended link
             // session's game is a local one ([netplayNow] null): the normal root.
             if (netplayNow != null) {
@@ -291,6 +293,7 @@ internal class InGameMenuController(
         model.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams)
         model.setCheats(cheatSet.entries, cheatsFolder, cheatSet.expected)
         host.publishShortcuts(model)
+        model.setControllerConnected(padLayout.controllerConnected.value)
         publishPlayers(model)
         publishSecondScreen(model)
         publishSpeed(model)
@@ -322,9 +325,13 @@ internal class InGameMenuController(
                     val hintGlyphs = remember(connected, padProfileRevision.value) {
                         if (connected) HintGlyphs.STANDARD else HintGlyphs.forPad(padProfile())
                     }
+                    // Shortcuts' bind rows come and go with a controller (the on-screen pad binds nothing).
+                    LaunchedEffect(connected) { menuModel?.let { it.setControllerConnected(connected); menuState.value = it.state } }
                     // The page title's gutter follows the app's: the narrow one while the pad sits below (portrait, or a
                     // tabletop pad under the hinge), as HandheldShell sets it; a controller-dropped band keeps it, with no pad below.
-                    val portraitLayout = padLayout.tabletop()?.let { it.pad != TabletopPad.NONE } ?: (config.orientation == Configuration.ORIENTATION_PORTRAIT)
+                    // Half-folded with nothing under the hinge (a controller; on a DS / 3DS one leaves the touch screen alone
+                    // there) the menu above it is laid out as landscape, with no pad below.
+                    val portraitLayout = padLayout.tabletop()?.let(padLayout::tabletopPadDrawn) ?: (config.orientation == Configuration.ORIENTATION_PORTRAIT)
                     val padBelow = portraitLayout && (padLayout.tabletop() != null || padLayout.portraitBandPx() > 0)
                     // The window decides the two panes, as Settings' ([inGameMenuSplit]): portrait never splits.
                     val window = DpSize(config.screenWidthDp.dp, config.screenHeightDp.dp)
@@ -381,10 +388,10 @@ internal class InGameMenuController(
     fun menuLayoutParams(orientation: Int, overPanel: Boolean = false): FrameLayout.LayoutParams {
         if (overPanel) return FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         // Tabletop: confined above the hinge, the controls below still drive it.
-        padLayout.tabletop()?.let { tt -> return FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, tt.gameBottom, Gravity.TOP) }
+        padLayout.tabletop()?.let { tt -> return FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, tt.menuBottom, Gravity.TOP) }
         return if (orientation == Configuration.ORIENTATION_PORTRAIT) {
-            val dm = resources.displayMetrics
-            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dm.heightPixels - padLayout.portraitBandPx(), Gravity.TOP)
+            // Down to the band's top: the window's height less the band, both from the one window reading.
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, activity.windowShape().heightPx - padLayout.portraitBandPx(), Gravity.TOP)
         } else {
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         }
@@ -446,9 +453,10 @@ internal class InGameMenuController(
             MenuEffect.OpenCoreOptions -> {
                 // Always answer the request, even without a view: the model blocks further opens while one is pending.
                 if (retroView == null) {
-                    menuModel?.let { it.showCoreOptions(emptyList(), lockedOptions + graphicsForcedOptions + restartOnlyOptions); menuState.value = it.state }
+                    menuModel?.let { it.showCoreOptions(emptyList(), lockedOptions + graphicsForcedOptions + restartOnlyOptions + dualForcedOptions()); menuState.value = it.state }
                 } else {
-                    withCoreOptions { all -> menuModel?.showCoreOptions(all ?: emptyList(), lockedOptions + graphicsForcedOptions + restartOnlyOptions) }
+                    // The split's (or half-folding's) held options show locked: a live change would turn the frame under the cuts.
+                    withCoreOptions { all -> menuModel?.showCoreOptions(all ?: emptyList(), lockedOptions + graphicsForcedOptions + restartOnlyOptions + dualForcedOptions()) }
                 }
             }
             is MenuEffect.SetOption -> {
@@ -521,8 +529,9 @@ internal class InGameMenuController(
         }
     }
 
-    /** The 3DS options the second-screen split holds for the session: a save keeps their stored values. */
-    private fun dualForcedOptions(): Set<String> = if (isN3ds) DualScreen.n3dsCoreOptions(dual.dualMode)?.keys.orEmpty() else emptySet()
+    /** The 3DS options the second-screen split (or half-folding) holds for the session: a save keeps their stored values. */
+    private fun dualForcedOptions(): Set<String> =
+        if (isN3ds) DualScreen.n3dsForcedOptions(dual.dualMode, padLayout.tabletop() != null)?.keys.orEmpty() else emptySet()
 
     /**
      * Reads the core's options on the emulation thread, then runs [then] on the main thread and redraws.

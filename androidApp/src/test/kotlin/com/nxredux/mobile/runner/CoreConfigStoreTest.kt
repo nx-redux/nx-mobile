@@ -9,7 +9,7 @@ import org.junit.Test
 import java.io.File
 import java.nio.file.Files
 
-/** Save Changes' shortcut lines: only the overridden rows are written, and one given back to the default leaves the file. */
+/** Save Changes: only the overridden shortcut rows are written, one given back to the default leaves the file; an old key goes once its new key is written. */
 class CoreConfigStoreTest {
     private val dir = Files.createTempDirectory("cfg").toFile()
     private val console = File(dir, "console.cfg")
@@ -22,5 +22,13 @@ class CoreConfigStoreTest {
         assertEquals("foo = 2\nnx_bind_reset = 109+102\n", game.readText())
         CoreConfigStore(console, game).saveConsole(listOf("foo" to "3"), Shortcuts.droppedOnSave(ShortcutOverrides.NONE))
         assertEquals("foo = 3\n", console.readText())
+    }
+
+    @Test fun a_save_drops_an_old_key_only_with_its_new_key() {
+        game.writeText("nx_screen_scaling = Native\nfoo = 1\n")
+        CoreConfigStore(console, game).saveGame(listOf("foo" to "2"))
+        assertEquals("nx_screen_scaling = Native\nfoo = 2\n", game.readText())   // the old pick kept
+        CoreConfigStore(console, game).saveGame(listOf("foo" to "2", "nx_screen_scaling_v2" to "Native"))
+        assertEquals("foo = 2\nnx_screen_scaling_v2 = Native\n", game.readText())
     }
 }

@@ -38,8 +38,23 @@ class ShortcutsTest {
     @Test fun aSelectOrStartBindingNeverTakesEffect() {
         val start = ShortcutBinding(null, KeyCodes.BUTTON_START)
         val menuSelect = ShortcutBinding(KeyCodes.BUTTON_MODE, KeyCodes.BUTTON_SELECT)
-        val e = eff(ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to start, ShortcutAction.RESET to menuSelect), emptyMap()))
+        val e = eff(ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to start, ShortcutAction.SAVE_AND_QUIT to menuSelect), emptyMap()))
         assertTrue(e.bindings.isEmpty())
+    }
+
+    // Save & Quit binds as any action, on a MENU combo of another button.
+    @Test fun saveAndQuitBindsOnAMenuCombo() {
+        val menuL1 = ShortcutBinding(KeyCodes.BUTTON_MODE, KeyCodes.BUTTON_L1)
+        assertEquals(mapOf(ShortcutAction.SAVE_AND_QUIT to menuL1), eff(ShortcutSet(mapOf(ShortcutAction.SAVE_AND_QUIT to menuL1), emptyMap())).bindings)
+        assertEquals("save_and_quit=110+102", Shortcuts.encodeBase(ShortcutSet(mapOf(ShortcutAction.SAVE_AND_QUIT to menuL1), emptyMap())))
+    }
+
+    // Save & Quit is a controller shortcut only: never a touch button, a stored one reads as none.
+    @Test fun saveAndQuitIsNeverATouchButton() {
+        assertFalse(ShortcutAction.SAVE_AND_QUIT.touch)
+        val e = eff(ShortcutSet(emptyMap(), mapOf(TouchSlot.ONE to ShortcutAction.SAVE_AND_QUIT, TouchSlot.TWO to ShortcutAction.RESET)))
+        assertEquals(mapOf(TouchSlot.TWO to ShortcutAction.RESET), e.touch)
+        assertEquals(null, Shortcuts.decodeBase("").bindings[ShortcutAction.SAVE_AND_QUIT])   // nothing bound by default
     }
 
     @Test fun overrideInherits() {

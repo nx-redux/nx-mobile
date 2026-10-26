@@ -34,6 +34,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -246,6 +247,7 @@ internal fun MinimalScreen(
     bodyAlpha: () -> Float, selected: MinimalSelected, modifier: Modifier = Modifier, top: Float = 0f, hideHints: Boolean = false,
     layoutKey: Any? = null, leaving: Boolean = false, tapOpens: (Int) -> Boolean = NxTapNeverOpens,
     onSwipeSelect: ((Int) -> Unit)? = null,   // a swipe's release: moves the highlight only (default: onSelect)
+    onPageRows: ((Int) -> Unit)? = null,   // the names one screen shows under the selection (a game list's LEFT / RIGHT page)
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     val gutter = if (LocalPortrait.current) 16.dp else 24.dp
@@ -277,7 +279,7 @@ internal fun MinimalScreen(
     Box(modifier.fillMaxSize().onGloballyPositioned { box[0] = it; boxH = it.size.height.toFloat() }) {
         area?.let { a ->
             CompositionLocalProvider(LocalNxTapOpens provides tapOpens) {
-                MinimalNames(names, a, boxH, selection, onSelect, onOpen, onLongPress, selected, gutter, bodyAlpha, layoutKey, motion, page, onSwipeSelect)
+                MinimalNames(names, a, boxH, selection, onSelect, onOpen, onLongPress, selected, gutter, bodyAlpha, layoutKey, motion, page, onSwipeSelect, onPageRows)
             }
         }
         // B from a Minimal list: its title flies down into the selected row.
@@ -371,7 +373,7 @@ private class MinimalTexts(
 private fun MinimalNames(
     names: List<NxRow>, area: Rect, boxH: Float, selection: () -> Int, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit,
     onLongPress: ((Int) -> Unit)?, selected: MinimalSelected, gutter: Dp, bodyAlpha: () -> Float, layoutKey: Any?,
-    motion: MinimalMotion, page: MinimalPage?, onSwipeSelect: ((Int) -> Unit)?,
+    motion: MinimalMotion, page: MinimalPage?, onSwipeSelect: ((Int) -> Unit)?, onPageRows: ((Int) -> Unit)?,
 ) {
     val count = names.size
     if (count == 0) return
@@ -383,6 +385,12 @@ private fun MinimalNames(
     val pitchPx = with(density) { pitch.dp.toPx() }
     // The selection one row under the body's top: a row of the name above shows, the rest run on behind the strip or title, faded further there.
     val anchorPx = area.top + pitchPx
+    // A page: the one-line names from the selection down to the body's bottom.
+    if (onPageRows != null) {
+        val rows = ((area.bottom - anchorPx) / pitchPx).toInt().coerceAtLeast(1)
+        val report by rememberUpdatedState(onPageRows)
+        LaunchedEffect(rows) { report(rows) }
+    }
     val pos = remember(layoutKey) { Animatable(selectionNow(selection, count).toFloat()) }
     val sel = selection().coerceIn(0, count - 1)
     LaunchedEffect(pos, sel) {

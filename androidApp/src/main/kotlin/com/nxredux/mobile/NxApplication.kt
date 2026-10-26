@@ -3,9 +3,13 @@ package com.nxredux.mobile
 import android.app.Activity
 import android.app.Application
 import android.app.NotificationManager
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.storage.DataRoot
+import com.nxredux.mobile.ui.NxImages
 import com.swordfish.libretrodroid.NxLog
 import java.io.File
 
@@ -13,7 +17,7 @@ import java.io.File
  * Applies Settings → System → Debug log when the process starts, whichever activity starts it (a game
  * launched from another launcher starts at GameActivity), moves the saves, states, settings and cheats an earlier
  * version kept in private storage into the home folder when it can do so quietly, and clears an earlier run's in-app
- * update download.
+ * update download. Installs the image loader every screen shares.
  */
 class NxApplication : Application() {
     companion object {
@@ -44,6 +48,10 @@ class NxApplication : Application() {
             File(cacheDir, "update").deleteRecursively()
             DataRoot.startIfDue(this)
         }, "data-root").start()
+        NxImages.install()   // before any screen: a game started from another launcher never composes App
+        // A hinge to half-fold at: the half-folded texts and the Half-folded pad layout show only on such a device.
+        DeviceTraits.canHalfFold = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_SENSOR_HINGE_ANGLE)
         // A dead process's install wait notice: that wait ended with it.
         getSystemService(NotificationManager::class.java)?.cancel(NotificationIds.APP_UPDATE_WAIT)
         // Off is both flags' default: only On needs setting, so a launcher-only start never loads the native library.

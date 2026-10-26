@@ -1,8 +1,8 @@
 package com.nxredux.mobile.runner
 
 import android.content.Context
-import android.net.Uri
 import com.nxredux.mobile.storage.DataRoot
+import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.NxPaths
 import com.nxredux.mobile.storage.PathLines
 import com.nxredux.mobile.storage.Recent
@@ -60,6 +60,6 @@ class AndroidUserDataStore(context: Context) : UserDataStore {
         val slot = ResumeInfo.slotFrom(slotText) ?: return@withContext ResumeInfo.NONE
         // NxPaths.thumb accepts 0..7 and 9; slot 8 has no screenshot in minarch's scheme.
         val bmp = slot.takeIf { it != 8 }?.let { File(root, paths.thumb(it)) }?.takeIf { it.exists() }
-        ResumeInfo(slot, bmp?.let { Uri.fromFile(it).buildUpon().fragment(it.lastModified().toString()).build().toString() })
+        ResumeInfo(slot, bmp?.let { FileRefs.versioned(it.absolutePath, it.lastModified()) })
     }
 }

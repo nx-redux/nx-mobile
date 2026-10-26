@@ -161,6 +161,16 @@ class GLRetroView(
     }
 
     /**
+     * While true the view draws black instead of the picture: set before the game runs, it keeps the first frames from
+     * showing at a provisional place until the frontend has laid the picture out from the core's geometry (set false
+     * after that layout, which is queued first, so the first picture shown is at its place). Re-applied after create().
+     */
+    var pictureHeld: Boolean by Delegates.observable(false) { _, old, value ->
+        if (old == value) return@observable
+        queueEvent { LibretroDroid.setPictureHeld(value) }
+    }
+
+    /**
      * Parts of the core frame drawn at places in the view (a DS screen each); empty = the single picture. While set,
      * [scaleMode] and [screenOffset] don't apply; dst is relative to [viewport]. Touches map through the topmost region
      * ([ScreenRegions.mapTouch]). Main thread; applied on the GL thread, and re-applied after create().
@@ -358,11 +368,13 @@ class GLRetroView(
         val regions = ScreenRegions.pack(screenRegions)
         val secondary = ScreenRegions.pack(secondaryRegions)
         val sticky = stickyPointer
+        val held = pictureHeld
         val chain = shaderChain?.let { it.copy(params = it.params + shaderParameterOverrides) }
         queueEvent {
             LibretroDroid.setViewport(left, top, width, height)
             LibretroDroid.setScaleMode(mode)
             LibretroDroid.setScreenOffset(offsetX, offsetY)
+            LibretroDroid.setPictureHeld(held)
             LibretroDroid.setScreenRegions(regions)
             LibretroDroid.setSecondaryRegions(secondary)
             setStickyPointers(sticky)

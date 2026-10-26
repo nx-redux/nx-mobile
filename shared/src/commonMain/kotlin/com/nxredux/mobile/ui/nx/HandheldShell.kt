@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -22,8 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import com.nxredux.mobile.layout.portraitBandPx
 import com.nxredux.mobile.runner.Posture
 import com.nxredux.mobile.runner.TabletopPad
 import com.nxredux.mobile.runner.tabletopInArea
@@ -114,15 +118,16 @@ fun HandheldShell(
                             Modifier.fillMaxWidth(CLUSTER_MAX_WIDTH_SHARE).fillMaxHeight().align(Alignment.BottomEnd),
                         )
                     }
-                    TabletopPad.NONE -> Unit
+                    TabletopPad.NONE, TabletopPad.DS -> Unit
                 }
             } else if (!portrait || !showPad) {
                 // Menu pad Off keeps the portrait layout, the screen filling the area.
                 CompositionLocalProvider(LocalPortrait provides portrait, LocalPadBelow provides false, LocalWindowSize provides window) { movableScreen(screenSlot) }
             } else {
-                // Reserve the physical pad height; never let it take more than 60% of a short screen.
-                val availablePx = with(density) { maxHeight.toPx() }
-                val padHeight = with(density) { padBandPx(PAD_PORTRAIT_CM, ydpi, density.density, availablePx).toDp() }
+                // Same band the game reserves, measured the same way (window minus the top cutout).
+                val container = LocalWindowInfo.current.containerSize
+                val areaPx = container.height - WindowInsets.displayCutout.getTop(density)
+                val padHeight = with(density) { portraitBandPx(container.width.toFloat(), areaPx.toFloat(), ydpi, density.density).toDp() }
                 val screenH = maxHeight - padHeight
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxWidth().height(screenH)) {

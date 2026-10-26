@@ -43,7 +43,8 @@ object CoreConfig {
     /**
      * Rewrites [existing] with [values]: each existing key is first [rename]d (its lock kept), then known keys are
      * updated in place (locked ones keep their value), repeated lines for a key are dropped, lines whose renamed key
-     * matches [drop] are removed, other lines are kept, and new keys are appended in order.
+     * matches [drop] are removed, other lines are kept, and new keys are appended in order. A dropped line's lock moves
+     * to the key [lockMovesTo] names (an old key's to the versioned key replacing it), so a hand lock outlives the rename.
      *
      * When a legacy line and its renamed twin are both present, the first in the file wins here, while
      * [resolve] lets the `nx_` one win on read; only a hand-edited file has both.
@@ -53,10 +54,14 @@ object CoreConfig {
         values: List<Pair<String, String>>,
         rename: (String) -> String = { it },
         drop: (String) -> Boolean = { false },
+        lockMovesTo: (String) -> String? = { null },
     ): String {
         val pending = LinkedHashMap<String, String>().apply { values.forEach { (k, v) -> put(k, v) } }
         val written = HashSet<String>()
         val out = mutableListOf<String>()
+        // The locks the dropped lines hand on, wherever in the file their new key's line is.
+        val movedLocks = existing?.lines.orEmpty().filterIsInstance<ConfigLine.Entry>()
+            .filter { it.locked && drop(rename(it.key)) }.mapNotNull { lockMovesTo(rename(it.key)) }.toSet()
         existing?.lines?.forEach { line ->
             when (line) {
                 is ConfigLine.Other -> out += line.text
@@ -66,21 +71,26 @@ object CoreConfig {
                     if (!written.add(key)) return@forEach
                     val newValue = pending.remove(key)
                     val value = if (line.locked || newValue == null) line.value else newValue
-                    out += (if (line.locked) "-" else "") + key + SEP + value
+                    out += (if (line.locked || key in movedLocks) "-" else "") + key + SEP + value
                 }
             }
         }
-        pending.forEach { (k, v) -> if (written.add(k)) out += k + SEP + v }
+        pending.forEach { (k, v) -> if (written.add(k)) out += (if (k in movedLocks) "-" else "") + k + SEP + v }
         return out.joinToString(separator = "\n", postfix = "\n")
     }
 
     /**
      * The game file after one [key] changed outside the menu (a DS hotkey): [game] updated in place, or, for a game
      * without one, a copy of [console] with the key. Reading uses the game file instead of the console file whole, so a
-     * game file holding only the key would drop every console value. A locked line keeps its value.
+     * game file holding only the key would drop every console value. A locked line keeps its value. The old key [key]
+     * replaced ([FrontendOptions.SUPERSEDED_KEYS]) goes: the new one now holds the pick (and its lock).
      */
     fun withKey(console: ConfigFile?, game: ConfigFile?, key: String, value: String): String =
-        render(game ?: console, listOf(key to value), FrontendOptions::migrateKey, drop = { it in ShaderOptions.MIGRATED_KEYS })
+        render(
+            game ?: console, listOf(key to value), FrontendOptions::migrateKey,
+            drop = { it in ShaderOptions.MIGRATED_KEYS || FrontendOptions.SUPERSEDED_KEYS[it] == key },
+            lockMovesTo = FrontendOptions.SUPERSEDED_KEYS::get,
+        )
 
     /**
      * What Save Changes writes: the [running] values, except a [sessionForced] key (one this launch forced, such as
@@ -99,7 +109,8 @@ object CoreConfig {
 
     /**
      * [defaults] overlaid by the game file if present, else the console file (never both). Legacy `minarch_` keys read as
-     * `nx_`. A [forced] key keeps its default whatever the file says, and counts as locked (hidden from the menu). A stored
+     * `nx_`; a locked old key ([FrontendOptions.SUPERSEDED_KEYS]) locks the key that replaced it too. A [forced] key
+     * keeps its default whatever the file says, and counts as locked (hidden from the menu). A stored
      * value in [hidden] (key -> values the app never offers) is ignored: the key takes its default, or the core's without one.
      */
     fun resolve(
@@ -117,7 +128,8 @@ object CoreConfig {
         }
         val values = FrontendOptions.migrateKeys(user?.values ?: emptyMap())
             .filter { (k, v) -> k !in forced && hidden[k]?.contains(v) != true }
-        val locked = (user?.locked ?: emptySet()).map(FrontendOptions::migrateKey).toSet() + forced
+        val fileLocks = (user?.locked ?: emptySet()).map(FrontendOptions::migrateKey).toSet()
+        val locked = fileLocks + fileLocks.mapNotNull { FrontendOptions.SUPERSEDED_KEYS[it] } + forced
         return Resolved(defaults + values, source, locked)
     }
 }

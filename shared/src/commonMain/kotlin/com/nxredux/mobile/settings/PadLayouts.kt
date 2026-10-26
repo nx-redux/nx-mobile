@@ -1,5 +1,8 @@
 package com.nxredux.mobile.settings
 
+import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.NdsOptions
+
 /**
  * Controls → Pad layout. The on-screen pad's button groups: each moves and resizes as one (the d-pad and
  * the stick share [DPAD]'s spot). [C_STICK] is the New 3DS C-stick of the portrait pad; in the landscape clusters it is
@@ -10,11 +13,27 @@ package com.nxredux.mobile.settings
 enum class PadGroup { DPAD, FACE, L_SHOULDERS, R_SHOULDERS, SYSTEM_LEFT, SYSTEM_RIGHT, C_STICK, SHORTCUT_1, SHORTCUT_2 }
 
 /**
- * The pad's two editable arrangements: the portrait band ([PORTRAIT], also flex mode's band and the main menu's pad)
- * and the clusters over the game ([OVERLAY]). Flex mode's clusters below the hinge (wide foldables only) keep the
- * default layout. A stored line for another shape is skipped.
+ * The pad's editable arrangements: the portrait band ([PORTRAIT], also flex mode's band and the main menu's pad), the
+ * landscape halves beside the picture ([OVERLAY], named for the clusters once drawn over the game) and the half-folded
+ * DS / 3DS halves beside the touch screen below the hinge ([HALF_FOLDED]; its own moves, starting at the default pad).
+ * Flex mode's clusters below the hinge (wide foldables only) keep the default layout. A stored line for another shape
+ * is skipped.
  */
-enum class PadShape(val label: String) { PORTRAIT("Portrait band"), OVERLAY("Landscape overlay") }
+enum class PadShape(val label: String) {
+    PORTRAIT("Portrait band"), OVERLAY("Landscape"), HALF_FOLDED("Half-folded");
+
+    companion object {
+        /**
+         * The shapes Controls → Pad layout offers for a console of [consoleTags] (null: Shared) on [screen]: the
+         * half-folded one only for Shared and the DS / 3DS, on a wide (tablet-class) screen of a device that
+         * [canHalfFold], the one place the game draws it.
+         */
+        fun offered(consoleTags: List<String>?, screen: PadScreen, canHalfFold: Boolean): List<PadShape> {
+            val dualScreen = consoleTags == null || consoleTags.any { NdsOptions.appliesTo(it) || N3dsOptions.appliesTo(it) }
+            return if (canHalfFold && screen == PadScreen.WIDE && dualScreen) entries else entries - HALF_FOLDED
+        }
+    }
+}
 
 /**
  * The screen a pad is drawn on, by its smallest side: a Fold's cover screen (and a phone or handheld) is [NARROW], its
@@ -131,6 +150,23 @@ object PadLayouts {
 
     /** Any tweak stored (an explicit default does not count): Controls' Pad layout row reads "Custom". */
     fun isCustom(all: PadLayoutMap): Boolean = all.values.any { slots -> slots.values.any { it.tweaks.isNotEmpty() } }
+
+    /**
+     * The stored layouts from [current] (the versioned line, written by every save since the landscape pad moved beside
+     * the picture) or, before the first such save, from [beforeBeside] with [withoutLandscapeMoves]: those moves were
+     * made against the old overlay's spots, so they would land elsewhere now. Once [current] is written it always wins
+     * (the old line stays stored for an earlier build, unread here), so this happens once.
+     */
+    fun decodeStored(current: String?, beforeBeside: String?): PadLayoutMap =
+        if (current != null) decode(current) else withoutLandscapeMoves(decode(beforeBeside))
+
+    /**
+     * [all] without its landscape ([PadShape.OVERLAY]) moves and sizes, every screen; portrait layouts and a console's
+     * explicit landscape default (an empty layout) stay.
+     */
+    fun withoutLandscapeMoves(all: PadLayoutMap): PadLayoutMap = all.mapValues { (_, slots) ->
+        slots.filter { (slot, layout) -> slot.shape != PadShape.OVERLAY || layout.tweaks.isEmpty() }
+    }.filterValues { it.isNotEmpty() }
 
     /**
      * One line per tweak: `key TAB SLOT TAB GROUP TAB dx TAB dy TAB scale` (SLOT: [PadSlot.code]); a console's explicit

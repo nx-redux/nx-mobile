@@ -52,6 +52,28 @@ class PadOptionsTest {
         assertFalse(PadOptions.portraitPadHidden("NDS", mapOf(PadOptions.PORTRAIT_PAD to "junk")))
     }
 
+    // Arcade offers it for its tall boards (the game decides per picture); its text says so.
+    @Test fun arcade_offers_portrait_pad_for_tall_games() {
+        val hidden = mapOf(PadOptions.PORTRAIT_PAD to PadOptions.HIDDEN)
+        assertTrue(PadOptions.portraitPadHidden("FBN", hidden))
+        assertTrue(PadOptions.portraitPadTallRow in PadOptions.tableFor("FBN"))
+        assertFalse(PadOptions.portraitPadRow in PadOptions.tableFor("FBN"))
+        assertTrue(PadOptions.portraitPadRow in PadOptions.tableFor("NDS"))
+        assertFalse(PadOptions.tableFor("GBA").any { it.key == PadOptions.PORTRAIT_PAD })
+        assertTrue(PadOptions.portraitPadTallRow.info.lines().all { it.length <= 48 }, PadOptions.portraitPadTallRow.info)
+    }
+
+    // The handhelds with upright games (WonderSwan, both tags; Lynx) offer it too; other handhelds do not.
+    @Test fun upright_handhelds_offer_portrait_pad_for_tall_games() {
+        val hidden = mapOf(PadOptions.PORTRAIT_PAD to PadOptions.HIDDEN)
+        for (tag in listOf("WSC", "LYNX")) {
+            assertTrue(PadOptions.hasPortraitPadRow(tag), tag)
+            assertTrue(PadOptions.portraitPadHidden(tag, hidden), tag)
+            assertTrue(PadOptions.portraitPadTallRow in PadOptions.tableFor(tag), tag)
+        }
+        for (tag in listOf("GBA", "GB", "GG", "NGPC")) assertFalse(PadOptions.hasPortraitPadRow(tag), tag)
+    }
+
     @Test fun keys_are_unique_and_findable() {
         val keys = ConsoleSettings.all.map { it.key }
         assertEquals(keys.toSet().size, keys.size)

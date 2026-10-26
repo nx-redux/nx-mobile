@@ -39,7 +39,9 @@ import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.ui.FilePickMode
 import com.nxredux.mobile.ui.HOME_NOT_WRITABLE
 import com.nxredux.mobile.runner.PostureTracker
+import com.nxredux.mobile.runner.screenClass
 import com.nxredux.mobile.ui.nx.LocalPosture
+import com.nxredux.mobile.ui.nx.LocalRestingBars
 import com.nxredux.mobile.achievements.AchievementsService
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.gametime.LazyGameTimeData
@@ -47,6 +49,7 @@ import com.nxredux.mobile.launcher.AndroidAppLauncher
 import com.nxredux.mobile.launcher.TopScreenHost
 import com.nxredux.mobile.launcher.currentDisplayId
 import com.nxredux.mobile.launcher.topScreenDisplay
+import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.AndroidNetplay
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.usb.UsbCables
@@ -230,6 +233,11 @@ class MainActivity : ComponentActivity(), FolderPicker {
     private val menuOnSecond = mutableStateOf(false)
     /** A game is starting ([LibretroRunner.beforeLaunch]): the second display stays clear for it until the menu resumes. */
     private var launching = false
+    /**
+     * This window's screen class, for Emulator Settings' DS and 3DS layout rows: read on the main thread (here and on
+     * every configuration change), since the pages are built off it.
+     */
+    @Volatile private var windowScreenClass: ScreenClass? = null
     /** Between onResume and onPause: [reclaimKeyFocus] must not pull the task forward from behind another window. */
     private var resumed = false
     private var inFront = false
@@ -325,6 +333,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         asHome = intent.hasCategory(Intent.CATEGORY_HOME)
         launcher = AndroidAppLauncher(this) { requestHomeRole.launch(it) }
         if (handOverToHome()) return   // nothing built: onStart/onStop never run for an activity finished in onCreate
+        windowScreenClass = screenClass()
         if (asHome) closeOtherInstances()
         thread(name = "nx-temp-sweep") {
             NxStorage.sweepTemps(this)
@@ -384,6 +393,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                     np.screenOn = { on -> runOnUiThread { keepScreenOn(on) } }
                 },
                 padEditor = { request -> padLayoutEditor.launch(PadLayoutActivity.intent(this, request)) },
+                screenClass = { windowScreenClass },
                 saveTransfer = saveTransfer,
                 deviceSync = DeviceSyncs.get(this),
                 updater = AppUpdates.get(this),
@@ -431,7 +441,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
             val padScreen = PadScreen.of(LocalConfiguration.current.smallestScreenWidthDp.toFloat())
             LaunchedEffect(padScreen) { state.onPadScreen(padScreen) }
             // One App at a time: with the menu on the second display ([syncMenuScreen]) this window has the top screen.
-            CompositionLocalProvider(LocalPosture provides posture.value) { if (menuOnSecond.value) MenuTopScreen(state) else App(state, ::pad) }
+            // This window's root gets the insets unconsumed: the pages may pad for the bars at rest ([LocalRestingBars]).
+            CompositionLocalProvider(LocalPosture provides posture.value, LocalRestingBars provides true) { if (menuOnSecond.value) MenuTopScreen(state) else App(state, ::pad) }
         }
         collectPosture()
         // Dual mode: apps open on the top screen; one there takes our window on that display down until it leaves.
@@ -629,6 +640,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
     /** The window's own size changed (a Fold folded or unfolded): the menu may belong on the other screen now. */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        windowScreenClass = screenClass()
         syncMenuScreen()
     }
 

@@ -12,6 +12,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
+import androidx.window.layout.WindowMetricsCalculator
 import com.swordfish.libretrodroid.NxLog
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -22,6 +23,9 @@ import kotlinx.coroutines.launch
  * present, the hinge angle sensor (for foldables that report the feature flat at a laptop angle, [postureFromHinge]).
  * [area] gives the laid-out area's top in window px and its height (null: not laid out yet); [onChange] gets each
  * posture change, debounced by [DEBOUNCE_MS], with the hinge angle it was decided at.
+ *
+ * Each posture it holds while started is also published as the process's [PostureHint], so a window opened meanwhile
+ * (the game, launched from the menu) can lay itself out for it before its own reading arrives ([seed]).
  *
  * Construction touches no system service (safe as an activity field, before onCreate); call [start] from onCreate.
  */
@@ -56,6 +60,17 @@ class PostureTracker(
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
     }
 
+    /**
+     * Starts from [PostureHint] instead of [Posture.Flat] ([seededPosture]: only for a window of the hint's size), before
+     * [start]: the first reading that agrees changes nothing, one that does not replaces it as any change does.
+     */
+    fun seed(): Posture {
+        val bounds = WindowMetricsCalculator.getOrCreate().computeCurrentWindowMetrics(activity).bounds
+        val hint = PostureHint.seen
+        posture = seededPosture(hint?.posture, hint?.windowW ?: 0, hint?.windowH ?: 0, bounds.width(), bounds.height())
+        return posture
+    }
+
     fun start() {
         activity.lifecycleScope.launch {
             activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -68,6 +83,7 @@ class PostureTracker(
                     }
                 } finally {
                     listen(false)
+                    PostureHint.forget(this@PostureTracker)   // stopped: no longer a live reading for a new window
                 }
             }
         }
@@ -85,6 +101,7 @@ class PostureTracker(
         )
         if (next == posture) {
             pendingJob?.cancel(); pendingJob = null; pending = null
+            publish(top)
             return
         }
         if (next == pending) return   // already waiting to commit it: the sensor's stream must not keep restarting the wait
@@ -94,8 +111,17 @@ class PostureTracker(
             delay(DEBOUNCE_MS)
             pending = null
             posture = next
+            publish(top)
             onChange(next, angle)
         }
+    }
+
+    /** [posture] (area-relative, the area at window y [top]) as the process's [PostureHint], in window px. */
+    private fun publish(top: Int) {
+        val bounds = WindowMetricsCalculator.getOrCreate().computeCurrentWindowMetrics(activity).bounds
+        val p = posture
+        val inWindow = if (p is Posture.Tabletop) Posture.Tabletop(p.hingeTop + top, p.hingeBottom + top) else p
+        PostureHint.publish(this, inWindow, bounds.width(), bounds.height())
     }
 
     private fun listen(on: Boolean) {
@@ -112,5 +138,26 @@ class PostureTracker(
     companion object {
         private const val TAG = "NXAPP"
         const val DEBOUNCE_MS = 200L
+    }
+}
+
+/**
+ * The last posture a started [PostureTracker] decided, in window px for a [Seen.windowW] x [Seen.windowH] window; null
+ * when none is started. Main thread only. The menu's tracker is still started while the game's activity is created
+ * (the menu stops after it), so a game launched half-folded reads it and builds the tabletop layout first.
+ */
+object PostureHint {
+    class Seen(val owner: PostureTracker, val posture: Posture, val windowW: Int, val windowH: Int)
+
+    var seen: Seen? = null
+        private set
+
+    fun publish(owner: PostureTracker, posture: Posture, windowW: Int, windowH: Int) {
+        seen = Seen(owner, posture, windowW, windowH)
+    }
+
+    /** [owner] stopped: its reading goes, unless another tracker has published since. */
+    fun forget(owner: PostureTracker) {
+        if (seen?.owner === owner) seen = null
     }
 }

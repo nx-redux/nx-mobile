@@ -14,8 +14,8 @@ import kotlin.test.assertTrue
 class PadEditorStateTest {
     private val pad = Rect(0f, 600f, 1000f, 1000f)          // the band, root px
     private fun state(initial: PadLayout = PadLayout.EMPTY) = PadEditorState(initial).apply {
-        onGroup(PadGroup.DPAD, Rect(100f, 750f, 250f, 900f), pad, 50f)
-        onGroup(PadGroup.FACE, Rect(750f, 750f, 900f, 900f), pad, 50f)
+        onGroup(PadGroup.DPAD, Rect(100f, 750f, 250f, 900f), pad, 50f, Rect(100f, 750f, 250f, 900f))
+        onGroup(PadGroup.FACE, Rect(750f, 750f, 900f, 900f), pad, 50f, Rect(750f, 750f, 900f, 900f))
     }
 
     @Test fun a_tap_on_a_group_selects_it_and_empty_space_clears() {
@@ -39,7 +39,7 @@ class PadEditorStateTest {
     }
 
     @Test fun a_drag_before_the_pad_has_a_unit_is_ignored() {
-        val s = PadEditorState(PadLayout.EMPTY).apply { onGroup(PadGroup.DPAD, Rect(100f, 750f, 250f, 900f), pad, 0f) }
+        val s = PadEditorState(PadLayout.EMPTY).apply { onGroup(PadGroup.DPAD, Rect(100f, 750f, 250f, 900f), pad, 0f, Rect(100f, 750f, 250f, 900f)) }
         s.dragBy(PadGroup.DPAD, Offset(100f, 0f))
         assertEquals(PadLayout.EMPTY, s.layout)
     }
@@ -95,9 +95,9 @@ class PadEditorStateTest {
 
     @Test fun untweaked_groups_that_overlap_by_default_are_not_flagged() {
         val s = PadEditorState(PadLayout.EMPTY).apply {
-            onGroup(PadGroup.DPAD, Rect(100f, 750f, 250f, 900f), pad, 50f)
-            onGroup(PadGroup.FACE, Rect(750f, 750f, 900f, 900f), pad, 50f)
-            onGroup(PadGroup.C_STICK, Rect(700f, 700f, 800f, 800f), pad, 50f)   // covers FACE's corner, as today's pad does
+            onGroup(PadGroup.DPAD, Rect(100f, 750f, 250f, 900f), pad, 50f, Rect(100f, 750f, 250f, 900f))
+            onGroup(PadGroup.FACE, Rect(750f, 750f, 900f, 900f), pad, 50f, Rect(750f, 750f, 900f, 900f))
+            onGroup(PadGroup.C_STICK, Rect(700f, 700f, 800f, 800f), pad, 50f, Rect(700f, 700f, 800f, 800f))   // covers FACE's corner, as today's pad does
         }
         assertEquals(emptySet(), s.overlapping())
         s.dragBy(PadGroup.DPAD, Offset(600f, 0f))                 // DPAD now sits on FACE and the C-stick
@@ -112,8 +112,8 @@ class PadEditorStateTest {
 
     @Test fun where_groups_overlap_the_one_drawn_on_top_is_picked() {
         val s = state()
-        s.onGroup(PadGroup.SYSTEM_LEFT, Rect(100f, 750f, 250f, 900f), pad, 50f)   // MENU's row moved over the d-pad
-        s.onGroup(PadGroup.L_SHOULDERS, Rect(700f, 700f, 950f, 950f), pad, 50f)   // shoulders under the face buttons
+        s.onGroup(PadGroup.SYSTEM_LEFT, Rect(100f, 750f, 250f, 900f), pad, 50f, Rect(100f, 750f, 250f, 900f))   // MENU's row moved over the d-pad
+        s.onGroup(PadGroup.L_SHOULDERS, Rect(700f, 700f, 950f, 950f), pad, 50f, Rect(700f, 700f, 950f, 950f))   // shoulders under the face buttons
         assertEquals(PadGroup.DPAD, s.groupAt(Offset(150f, 800f)))
         assertEquals(PadGroup.FACE, s.groupAt(Offset(800f, 800f)))
         assertEquals(PadGroup.L_SHOULDERS, s.groupAt(Offset(720f, 720f)))
@@ -129,5 +129,50 @@ class PadEditorStateTest {
         s.setScale(1f)
         s.endResize()
         assertEquals(before, s.rectOf(PadGroup.DPAD))
+    }
+
+    @Test fun a_group_reported_empty_leaves_the_editor() {
+        val s = state()
+        s.onGroup(PadGroup.DPAD, Rect.Zero, pad, 50f, Rect.Zero)                  // the group left composition
+        assertNull(s.groupAt(Offset(150f, 800f)))
+        assertEquals(setOf(PadGroup.FACE), s.groups)
+    }
+
+    @Test fun beside_the_picture_every_group_on_the_bottom_rows_can_be_picked() {
+        // A DS pad's halves beside the picture, root px: MENU + STICK over STYLUS make SYSTEM_LEFT's rect, which holds
+        // BUTTON 1 (under STICK); SELECT + START over SWAP hold BUTTON 2 (under SELECT) the same way.
+        val left = Rect(0f, 0f, 600f, 1080f)
+        val right = Rect(1800f, 0f, 2400f, 1080f)
+        val s = PadEditorState(PadLayout.EMPTY, besidePicture = true).apply {
+            onGroup(PadGroup.L_SHOULDERS, Rect(40f, 200f, 300f, 300f), left, 100f, Rect(40f, 200f, 300f, 300f))
+            onGroup(PadGroup.DPAD, Rect(40f, 390f, 340f, 690f), left, 100f, Rect(40f, 390f, 340f, 690f))
+            onGroup(PadGroup.SYSTEM_LEFT, Rect(40f, 725f, 340f, 904f), left, 100f, Rect(40f, 725f, 340f, 904f))
+            onGroup(PadGroup.SHORTCUT_1, Rect(200f, 832f, 340f, 904f), left, 100f, Rect(200f, 832f, 340f, 904f))
+            onGroup(PadGroup.SYSTEM_RIGHT, Rect(2060f, 725f, 2360f, 904f), right, 100f, Rect(2060f, 725f, 2360f, 904f))
+            onGroup(PadGroup.SHORTCUT_2, Rect(2060f, 832f, 2200f, 904f), right, 100f, Rect(2060f, 832f, 2200f, 904f))
+            onGroup(PadGroup.FACE, Rect(2060f, 390f, 2360f, 690f), right, 100f, Rect(2060f, 390f, 2360f, 690f))
+            onGroup(PadGroup.R_SHOULDERS, Rect(2100f, 200f, 2360f, 300f), right, 100f, Rect(2100f, 200f, 2360f, 300f))
+        }
+        assertEquals(PadGroup.SHORTCUT_1, s.groupAt(Offset(270f, 870f)))     // BUTTON 1
+        assertEquals(PadGroup.SYSTEM_LEFT, s.groupAt(Offset(100f, 870f)))    // STYLUS
+        assertEquals(PadGroup.SYSTEM_LEFT, s.groupAt(Offset(270f, 760f)))    // STICK
+        assertEquals(PadGroup.SHORTCUT_2, s.groupAt(Offset(2130f, 870f)))    // BUTTON 2
+        assertEquals(PadGroup.SYSTEM_RIGHT, s.groupAt(Offset(2300f, 870f)))  // SWAP
+        assertEquals(PadGroup.DPAD, s.groupAt(Offset(190f, 540f)))
+        assertEquals(PadGroup.FACE, s.groupAt(Offset(2200f, 540f)))
+        assertEquals(PadGroup.L_SHOULDERS, s.groupAt(Offset(100f, 250f)))
+        assertEquals(PadGroup.R_SHOULDERS, s.groupAt(Offset(2300f, 250f)))
+        // The bottom row draws last there: a d-pad moved onto it sits under MENU's group, as a game's touch finds it.
+        s.dragBy(PadGroup.DPAD, Offset(0f, 300f))
+        assertEquals(PadGroup.SYSTEM_LEFT, s.groupAt(Offset(100f, 760f)))
+    }
+
+    @Test fun the_portrait_pad_keeps_its_hit_order() {
+        val s = state()
+        s.onGroup(PadGroup.SYSTEM_LEFT, Rect(100f, 750f, 250f, 900f), pad, 50f, Rect(100f, 750f, 250f, 900f))
+        s.onGroup(PadGroup.SHORTCUT_1, Rect(100f, 750f, 250f, 900f), pad, 50f, Rect(100f, 750f, 250f, 900f))
+        assertEquals(PadGroup.DPAD, s.groupAt(Offset(150f, 800f)))
+        s.onGroup(PadGroup.DPAD, Rect.Zero, pad, 50f, Rect.Zero)
+        assertEquals(PadGroup.SYSTEM_LEFT, s.groupAt(Offset(150f, 800f)))
     }
 }

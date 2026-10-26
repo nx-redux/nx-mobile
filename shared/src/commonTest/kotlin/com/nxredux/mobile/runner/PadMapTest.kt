@@ -75,7 +75,7 @@ class PadMapTest {
     }
 
     @Test fun identity_consoles_have_no_labels_and_hide_nothing() {
-        for (tag in listOf("SFC", "SUPA", "A5200", "COLECO", "FBN", "PRBOOM", "WSC", "UNKNOWN")) for (b in NxButton.entries) {
+        for (tag in listOf("SFC", "SUPA", "A5200", "COLECO", "PRBOOM", "WSC", "UNKNOWN")) for (b in NxButton.entries) {
             assertNull(PadMap.forTag(tag).label(b), "$tag $b"); assertFalse(PadMap.forTag(tag).isHidden(b), "$tag $b")
         }
     }

@@ -274,6 +274,9 @@ void Video::drawFrame(bool force) {
     glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    // Not placed yet: black, as the surface was, rather than the picture somewhere it is about to leave.
+    if (pictureHeld) return;
+
     // Immersive mode's blurred background samples the whole texture, not the frame's sub-rectangle (frameCoordinates).
     if (immersiveModeEnabled) {
         immersiveMode.renderBackground(
@@ -607,6 +610,12 @@ void Video::updateRendererSize(unsigned int width, unsigned int height) {
 
 void Video::updateScaleMode(unsigned int scaleMode) {
     videoLayout.updateScaleMode(scaleMode);
+}
+
+void Video::setPictureHeld(bool held) {
+    if (pictureHeld == held) return;
+    pictureHeld = held;
+    isDirty = true;   // released while paused or with duplicate frames skipped: draw the picture now
 }
 
 void Video::updateScreenOffset(float x, float y) {

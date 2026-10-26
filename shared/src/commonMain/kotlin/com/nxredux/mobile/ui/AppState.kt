@@ -110,6 +110,8 @@ import com.nxredux.mobile.settings.PadScreen
 import com.nxredux.mobile.settings.PadSlot
 import com.nxredux.mobile.settings.PadLayouts
 import com.nxredux.mobile.settings.PadShape
+import com.nxredux.mobile.layout.DeviceTraits
+import com.nxredux.mobile.settings.PadButtons
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.settings.PadVibration
 import com.nxredux.mobile.settings.GameRumble
@@ -245,6 +247,8 @@ class AppDeps(
     val rumblePreview: (GameRumble) -> Unit = {},
     /** Wi-Fi netplay's platform side (sockets, discovery, save staging); null: no netplay (tests, other platforms). */
     val netplay: com.nxredux.mobile.netplay.NetplayPlatform? = null,
+    /** The menu window's screen class now (Emulator Settings' DS and 3DS layout rows); null: unknown. */
+    val screenClass: () -> com.nxredux.mobile.layout.ScreenClass? = { null },
     /** Opens the pad layout editor (Android: its own activity); it saves to the settings and ends with [AppState.onPadLayoutEdited]. Null: no editor. */
     val padEditor: ((PadEditRequest) -> Unit)? = null,
     /** Settings → Library → Saves: Export and Import (null: rows do nothing). */
@@ -458,7 +462,7 @@ sealed interface Screen {
     data class ArtworkReset(val scopes: List<ResetScope>, val confirm: ResetScope? = null) : Screen
 }
 
-enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, MENU_PAD, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
+enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_THEME, PAD_BUTTONS, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, MENU_PAD, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     LAYOUT_HOME, LAYOUT_CONSOLES, LAYOUT_COLLECTIONS, LAYOUT_TOOLS, LAYOUT_GAME_LISTS, LAYOUT_TITLE_HINTS, LAYOUT_SWITCHER, TEXT_SIZE,
@@ -526,9 +530,14 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
 /** The last row of Appearance, Layouts and Controls (NX Redux's label; its description has no place on a Settings page here). */
 internal const val RESET_DEFAULTS_LABEL = "Reset to defaults"
 
-/** A Shortcuts bind row's value while it waits for a press. */
+/** The global Shortcuts page's note on Toggle mic, which does nothing outside DS / 3DS. */
 internal const val MIC_ROW_NOTE = "DS / 3DS only"
+
+/** A Shortcuts bind row's value while it waits for a press. */
 internal const val SHORTCUT_PROMPT = "Press a button…"
+
+/** Both Shortcuts pages' line in place of the bind rows while no controller is connected (the on-screen pad binds nothing). */
+internal const val SHORTCUTS_NO_CONTROLLER = "Connect a controller to bind buttons. On the on-screen pad, use Touch button 1 and 2 instead."
 
 /** How long a notice stays before it clears itself. */
 private const val NOTICE_MILLIS = 3_000L
@@ -594,7 +603,8 @@ internal val ONBOARDING_TAB_STEPS = mapOf(
 private val ONBOARDING_VALUE_KINDS = mapOf(
     OnboardingStep.TEXT_SIZE to listOf(SettingsKind.TEXT_SIZE),
     OnboardingStep.SAVE_FORMATS to listOf(SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME),
-    OnboardingStep.PAD to listOf(SettingsKind.MENU_PAD, SettingsKind.PAD_THEME),
+    // Pad buttons is the third row only while the pad shows and Black is the theme; else Continue is there (never stepped).
+    OnboardingStep.PAD to listOf(SettingsKind.MENU_PAD, SettingsKind.PAD_THEME, SettingsKind.PAD_BUTTONS),
     OnboardingStep.TITLE to listOf(SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS),
     OnboardingStep.ACCENT to listOf(SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT),
 )
@@ -818,6 +828,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private val tabSelections = HashMap<MenuCategory, ListSelection>()   // each tab's row, remembered across visits
     private var gridColumns = 0   // the Grid body's column count for the screen showing now; 0 until it lays out
     private var gridRows = 2      // and its row count: 2 on phones, 3–4 on a tablet-class window
+    private var pageRows = 0      // a game list's rows (or stack items) on one screen ([onPageRows]); 0 until it lays out: a page is one row
     private var installedCache: List<InstalledApp>? = null   // the last [AppLauncher.installedApps]; null until the first load
     private var installedJob: Job? = null
     /**
@@ -1959,7 +1970,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /**
      * A value page's row [row] stepped by [by] (-1: the one before; A steps forward), in place: SAVE_FORMATS' save
      * format, state format and extracted name; TEXT_SIZE's size; ACCENT's accent and secondary accent; TITLE's page
-     * title and button hints (Show / Hide); PAD's pad (shown / hidden) and theme ([ONBOARDING_VALUE_KINDS]). The same
+     * title and button hints (Show / Hide); PAD's pad (shown / hidden), theme and Black's buttons ([ONBOARDING_VALUE_KINDS]). The same
      * settings Settings steps ([settingValue]), applied at once and the page republished on that row, so the real pad
      * (or the preview picture, or the colours, or the text size) changes and the step count follows ([App] reads them
      * per screen). A row past the page's values, or another [step], does nothing.
@@ -2091,6 +2102,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             listOfNotNull(
                 NxRow("On-screen pad", secondary = if (deps.settings.menuPad) "Show" else "Hide", cycleable = true),
                 if (deps.settings.menuPad) NxRow("Pad theme", secondary = padThemeLabel(deps.settings.padTheme), cycleable = true) else null,
+                // Black's button set, as in Settings → Appearance: only while Black is picked.
+                if (deps.settings.menuPad && deps.settings.padTheme == PadTheme.BLACK) NxRow("Pad buttons", secondary = deps.settings.padButtons.label, cycleable = true) else null,
                 NxRow("Continue"),
             ),
         )
@@ -3813,8 +3826,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private fun padLayoutRows(): List<SettingsRow> {
         val all = deps.settings.padLayouts
         val key = padLayoutConsole
+        val tags = if (key == PadLayouts.SHARED_KEY) null else CoreRegistry.consoles.firstOrNull { it.id == key }?.tags.orEmpty()
         return listOf(SettingsRow(SettingsKind.PAD_LAYOUT_CONSOLE, "Console", padLayoutConsoleName(key))) +
-            PadShape.entries.map { shape ->
+            PadShape.offered(tags, _padScreen.value, DeviceTraits.canHalfFold).map { shape ->
                 val own = PadLayouts.own(all, key, PadSlot(shape, _padScreen.value))
                 val value = when {
                     own != null -> if (own.tweaks.isEmpty()) "Default" else "Custom"   // empty: a console's explicit default
@@ -3855,11 +3869,15 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     private var controllerConnected = true
 
-    /** The UI reports whether a controller is connected: a bind row waiting for a press says what it needs. */
+    /**
+     * The UI reports whether a controller is connected: the Shortcuts page shows its bind rows only with one (the
+     * on-screen pad binds nothing), so a wait ends when it goes.
+     */
     fun onControllerConnected(connected: Boolean) {
         if (controllerConnected == connected) return
         controllerConnected = connected
-        if (_capturingShortcut.value != null) refreshSettings()
+        if (!connected) cancelCapture()
+        refreshShortcuts()
     }
 
     /**
@@ -3918,16 +3936,18 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /**
      * Controls -> Shortcuts: one press-to-bind row per action (its button or combo, None unbound; the one waiting shows
-     * [SHORTCUT_PROMPT] and, as its line, how to bind), the two touch buttons' actions, then Clear all.
+     * [SHORTCUT_PROMPT] and, as its line, how to bind), the two touch buttons' actions, then Clear all. With no
+     * controller the bind rows give way to [SHORTCUTS_NO_CONTROLLER]; their bindings stay.
      */
     private fun shortcutRows(): List<SettingsRow> {
         val set = shortcutSet()
         val waiting = _capturingShortcut.value
-        val note = if (controllerConnected) "Hold MENU for a combo" else "Connect a controller to bind"
-        return ShortcutAction.entries.map { a ->
-            if (a == waiting) SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, SHORTCUT_PROMPT, note = note, shortcut = a)
+        val binds = if (!controllerConnected) listOf(SettingsRow(SettingsKind.TEXT, SHORTCUTS_NO_CONTROLLER))
+        else ShortcutAction.entries.map { a ->
+            if (a == waiting) SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, SHORTCUT_PROMPT, note = "Hold MENU for a combo", shortcut = a)
             else SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, set.bindings[a]?.let(KeyLabels::label) ?: "None", note = if (a.mic) MIC_ROW_NOTE else null, shortcut = a)
-        } + TouchSlot.entries.mapIndexed { i, t ->
+        }
+        return binds + TouchSlot.entries.mapIndexed { i, t ->
             SettingsRow(SettingsKind.SHORTCUT_TOUCH, "Touch button ${i + 1}", set.touch[t]?.label ?: "None", touchSlot = t)
         } + SettingsRow(SettingsKind.RESET_DEFAULTS, "Clear all")
     }
@@ -3963,14 +3983,16 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         SettingsSection.DEFAULT_EMULATORS -> defaultEmulatorRows()
         SettingsSection.PAD_LAYOUT -> padLayoutRows()
         SettingsSection.SHORTCUTS -> shortcutRows()
-        SettingsSection.APPEARANCE -> listOf(
+        SettingsSection.APPEARANCE -> listOf<SettingsRow?>(
             SettingsRow(SettingsKind.PAD_THEME, "Pad theme", padThemeLabel(deps.settings.padTheme)),
+            // The Black theme's button set: only Black has one, so the row shows only while it is the theme.
+            if (deps.settings.padTheme == PadTheme.BLACK) SettingsRow(SettingsKind.PAD_BUTTONS, "Pad buttons", deps.settings.padButtons.label) else null,
             SettingsRow(SettingsKind.ACCENT, "Accent", deps.settings.accent.label),
             SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", deps.settings.secondaryAccent.label),
             // The options lists' text (Settings, Game Settings, the in-game menu): Large or Small.
             SettingsRow(SettingsKind.TEXT_SIZE, "Text size", deps.settings.optionTextSize.label),
             SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
-        )
+        ).filterNotNull()
         SettingsSection.MAIN_MENU -> layoutsRows()
         SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS ->
             layoutTabRows(section.tab!!)
@@ -4050,6 +4072,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private fun padThemeLabel(theme: PadTheme): String = when (theme) {
         PadTheme.CHARCOAL -> "Charcoal"
         PadTheme.RETRO -> "Retro"
+        PadTheme.BLACK -> "Black"
     }
 
 
@@ -4128,6 +4151,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         return when (row.kind) {
             // Appearance: the pad theme, the accent presets, Auto and the presets, Large / Small.
             SettingsKind.PAD_THEME -> cycle(PadTheme.entries, s.padTheme, ::padThemeLabel) { s.padTheme = it }
+            SettingsKind.PAD_BUTTONS -> cycle(PadButtons.entries, s.padButtons, { it.label }) { s.padButtons = it }
             SettingsKind.ACCENT -> cycle(AccentPreset.entries, s.accent, { it.label }) { s.accent = it }
             SettingsKind.SECONDARY_ACCENT -> cycle(SecondaryAccent.entries, s.secondaryAccent, { it.label }) { s.secondaryAccent = it }
             SettingsKind.TEXT_SIZE -> cycle(OptionTextSize.entries, s.optionTextSize, { it.label }) { s.optionTextSize = it }
@@ -4197,7 +4221,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             SettingsKind.PAD_VIBRATION -> cycle(PadVibration.entries, s.padVibration, { it.label }) { s.padVibration = it }
             SettingsKind.GAME_RUMBLE -> cycle(GameRumble.entries, s.gameRumble, { it.label }, after = { refreshSettings(); deps.rumblePreview(it) }) { s.gameRumble = it }
             SettingsKind.MENU_PAD -> flip(s.menuPad) { s.menuPad = it }
-            // A touch button: None, then every action.
+            // A touch button: None, then every action a touch button can do ([ShortcutAction.touch]).
             SettingsKind.SHORTCUT_TOUCH -> row.touchSlot?.let { slot ->
                 cycle(listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { it.touch }, shortcutSet().touch[slot], { it?.label ?: "None" }) { setTouch(slot, it) }
             }
@@ -4280,7 +4304,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /**
      * Appearance's, Layouts' or Controls' "Reset to defaults" (NX Redux settings.c): the page's own options back to their
-     * defaults. Appearance: Pad theme, Accent, Secondary accent. Layouts: every tab's style and orientation
+     * defaults. Appearance: Pad theme, Pad buttons, Accent, Secondary accent. Layouts: every tab's style and orientation
      * unset (so [MenuStyles.styleOf] and [MenuStyles.orientationOf] give theirs), the game lists', the tabs', shelves'
      * and hints' Show/Hide, Consoles background, List art, Backdrop art, Page title, Button hints, Extra info, Home stats,
      * Layout options, Achievements panel and Game Switcher layout. Controls: Pad vibration, Game rumble and every pad
@@ -4294,6 +4318,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             shortcutDraft = ShortcutSet.EMPTY   // Clear all: written with the rest when the page closes
         } else if (section == SettingsSection.APPEARANCE) {
             s.padTheme = PadTheme.DEFAULT
+            s.padButtons = PadButtons.DEFAULT
             s.accent = AccentPreset.DEFAULT
             s.secondaryAccent = SecondaryAccent.DEFAULT
             s.optionTextSize = OptionTextSize.DEFAULT
@@ -4894,15 +4919,16 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         launch(entry, resumeSlot = null, coreOverride = core, netplay = session)
     }
 
-    private fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null, fromSwitcher: Boolean = false) {
+    /** Starts [entry] (see the steps inside); the start's job, or null when none began (an app, no core, one in flight). */
+    private fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null, fromSwitcher: Boolean = false): Job? {
         val listed = entry.system
         val game = entry.game
         // After a game the menu is its own tab again (the pushed one is not restored): dropped only for a launch that
         // happens (an app's start, or the runner's call), so a coreless, in-flight, vanished or unreadable game leaves the
         // push for B to return to.
-        if (listed.android) { dropPushedTab(); androidApps.launchApp(entry); return }
-        if (coreOverride == null && listed.core == null) return
-        if (launchJob?.isActive == true) return   // a launch is already in flight
+        if (listed.android) { dropPushedTab(); androidApps.launchApp(entry); return null }
+        if (coreOverride == null && listed.core == null) return null
+        if (launchJob?.isActive == true) return null   // a launch is already in flight
         switcherJob?.cancel()   // a switcher still loading must not open over the launched game
         val job = scope.launch {
             val gone = "Could not find ${game.fileName}. If it was moved or deleted, use Rescan in Settings → Library."
@@ -4974,6 +5000,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
         launchJob = job
         job.invokeOnCompletion { if (launchJob === job) launchJob = null }
+        return job
     }
 
     /**
@@ -5037,16 +5064,21 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * rebuild uses app-private reads only (recents, pins, resume markers, tool pins, the in-memory index), never the tree.
      */
     fun onForeground() {
+        val switcherBack = switcherUnderGame && _screen.value is Screen.Switcher
+        switcherUnderGame = false
         checkArt(reuse = true)   // art deleted or added while away (only changed art folders are listed)
         if (!minimalPending) _minimalOpening.value?.let { minimalJob?.cancel(); _minimalOpening.value = null }   // back from a game a Minimal band opened
         onLauncherChanged()   // back from Android's home settings or the role dialog: System re-reads its state
         refreshInstalled()    // apps may have been installed or removed meanwhile
         refreshGameInfo()   // back from a game (or another app): its time and unlocks may have moved
         homeTab.refreshStatsIfAsked()   // Home's stats too (before the menu's first show, that show computes them)
-        // Back from a game resumed from the switcher: the switcher again (its game first, the latest recent), over the
-        // page it opened from. Over the main menu, after the rows rebuilt below (a swap would abandon an open under way);
-        // read again there, so a Home landing meanwhile (onNewIntent may follow onStart) drops it.
-        val s = _screen.value as? Screen.Systems ?: run { reopenSwitcher(); return }
+        // Back from a game opened from the switcher, which stayed up under it: its cards read again in place, no slide, and
+        // Home's rows rebuilt behind it. A switcher game whose switcher went meanwhile (a Home landing) reopens it once
+        // ([reopenSwitcher]): over the main menu after the rows rebuilt below (a swap would abandon an open under way).
+        // Back on a list or a page: Home's rows are rebuilt all the same (the page stays as it is; [swapMainRows] only acts
+        // on the menu), so B to the menu shows Continue's new resume frame, not the one read when the game launched.
+        if (switcherBack) { switcherReturn = false; switcherRowsRebuilt = true; scope.launch { rebuildMainRows() }; refreshSwitcher(); return }
+        val s = _screen.value as? Screen.Systems ?: run { scope.launch { rebuildMainRows(); swapMainRows() }; reopenSwitcher(); return }
         if (s.menu != null) { switcherReturn = false; return }
         if (!firstSetup) updaterOnMainMenu()   // back over the menu (from a game, or the install-permission screen)
         scope.launch { rebuildMainRows(); swapMainRows(); reopenSwitcher() }   // Continue's save (its resume frame) may be new since the rows were built
@@ -5094,6 +5126,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     fun openSwitcher() {
+        switcherUnderGame = false   // a refused launch's flag never closes a switcher opened since
         val here = _screen.value
         if (here !is Screen.Systems && here !is Screen.Games) return
         _tabFocus.value = false   // the menu under it comes back on its content
@@ -5342,14 +5375,55 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             if (info.canResume) SwitcherEntry(e.system, e.game, info) else null
         }.distinctBy { it.game.path }   // a hidden copy's line and its home game's are one game
 
-    private fun closeSwitcher() {
+    /**
+     * A game was opened from the switcher, which stays up under it the whole game: the game opens over it and Save & Quit
+     * cuts back to it, with no slide either way ([refreshSwitcher] on the way back).
+     */
+    private var switcherUnderGame = false
+    /** Home's rows were rebuilt after a game the switcher stayed up over: its close swaps them in ([closeSwitcher]). */
+    private var switcherRowsRebuilt = false
+
+    /**
+     * A from the switcher: the game opens over the switcher, which stays ([switcherUnderGame]). A launch that never reaches the runner
+     * (the game gone, a transfer running: [launch]'s refusals) closes it as before, so B and the error land on its page.
+     */
+    private fun launchFromSwitcher(entry: Listed, resumeSlot: Int?) {
+        switcherUnderGame = true
+        val job = launch(entry, resumeSlot, fromSwitcher = true) ?: run { closeSwitcher(); return }
+        scope.launch {
+            job.join()
+            if (switcherUnderGame && !switcherReturn) closeSwitcher()   // refused: [switcherReturn] is set only at the runner's call
+        }
+    }
+
+    /**
+     * The switcher back on screen after its game: its cards read again (the game just played first, the latest recent),
+     * in place; none left resumable, it closes.
+     */
+    private fun refreshSwitcher() {
+        val here = _screen.value as? Screen.Switcher ?: return
+        switcherJob?.cancel()
+        switcherJob = scope.launch {
+            val entries = switcherEntries()
+            if (_screen.value !== here) return@launch   // the user moved on meanwhile
+            if (entries.isEmpty()) closeSwitcher(slide = false)
+            else _screen.value = here.copy(entries = entries, index = 0, confirmRemove = false)
+        }
+    }
+
+    /** Back to the page the switcher opened over; [slide]: the switcher's slide down (none: an instant swap). */
+    private fun closeSwitcher(slide: Boolean = true) {
         val (screen, selection) = beforeSwitcher
             ?: menuScreen().let { m -> m to (m.category?.let(tabSelections::get) ?: ListSelection(0, 0)).clampedTo(m.rows.size) }
         beforeSwitcher = null
-        navStep(NavMotion.SWITCHER_CLOSE)
+        switcherUnderGame = false
+        if (slide) navStep(NavMotion.SWITCHER_CLOSE)
         _screen.value = screen
         homeTab.publishHomeView()   // the restored Home rows' own view, not one built while the switcher was up
         _selection.value = selection
+        // After a game the switcher stayed up over, the tabs were rebuilt (Continue's new resume frame): those, not the
+        // snapshot. Otherwise the snapshot stays, with its own Home view ([publishHomeView] above).
+        if (switcherRowsRebuilt) { switcherRowsRebuilt = false; swapMainRows() }
         refreshResume()
         // A Y Remove changed recent.txt: once written, rebuild the tabs, so Home's Continue moves past the game (the
         // snapshot above still shows it); the highlight stays on its row where that row is still there.
@@ -5375,10 +5449,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             NxButton.DOWN -> if (s.list) _screen.value = s.copy(index = at.down(wrap = !repeat).index)
             NxButton.LEFT -> if (!s.list) _screen.value = s.copy(index = at.up(wrap = false).index)
             NxButton.RIGHT -> if (!s.list) _screen.value = s.copy(index = at.down(wrap = false).index)
-            NxButton.A -> s.entries.getOrNull(s.index)?.let { e ->
-                closeSwitcher()
-                launch(Listed(e.system, e.game), e.resume.slot, fromSwitcher = true)
-            }
+            // The switcher stays up while the game opens over it (no slide back to the menu first) and through the game.
+            NxButton.A -> s.entries.getOrNull(s.index)?.let { e -> launchFromSwitcher(Listed(e.system, e.game), e.resume.slot) }
             NxButton.Y -> if (s.entries.getOrNull(s.index) != null) _screen.value = s.copy(confirmRemove = true)
             NxButton.B, NxButton.SELECT -> closeSwitcher()
             else -> Unit
@@ -5606,6 +5678,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         work = deps.compute,
         vulkanFailed = { it in deps.settings.vulkanFailedCores },
         secondScreen = { secondConnected },
+        screenClass = deps.screenClass,
     )
 
     // --- Tools -> Artwork: AppState hosts the controller (index writes stay here); the pages live in ArtworkScreenController ---
@@ -5927,6 +6000,33 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         gridColumns = columns.coerceAtLeast(0); gridRows = rows.coerceAtLeast(1)
     }
 
+    /** A game list's List, Minimal or vertical stack reports the items one screen shows: LEFT / RIGHT page by them ([pageMove]). */
+    fun onPageRows(rows: Int) {
+        pageRows = rows.coerceAtLeast(0)
+    }
+
+    /**
+     * LEFT / RIGHT on a game list whose d-pad runs up and down (List, Minimal, a vertical Carousel or Backdrop): a page of
+     * [pageRows] up or down, held at the ends, a held key's repeat paging on (NX Redux's game lists).
+     */
+    private fun pageMove(button: NxButton) {
+        val sel = _selection.value
+        val next = ListJumps.page(sel.count, pageRows, sel.index, if (button == NxButton.RIGHT) 1 else -1)
+        if (next != sel.index) { _selection.value = sel.copy(index = next); refreshResume() }
+    }
+
+    /**
+     * L1 / R1 on a game list, every layout: the previous / next letter's first game ([ListJumps.letter]), a held key's
+     * repeat jumping on. Only a console's list is in name order: Recently Played, a collection, Hidden and a search's
+     * results are not, so there they do nothing.
+     */
+    private fun letterJump(s: Screen.Games, button: NxButton) {
+        if (s.source !is ListSource.Console) return
+        val sel = _selection.value
+        val next = ListJumps.letter(s.entries.map { it.shown }, sel.index, if (button == NxButton.R1) 1 else -1)
+        if (next != sel.index) { _selection.value = sel.copy(index = next); refreshResume() }
+    }
+
     /** Home's layout (Layouts → Home): Grid (the dashboard), List or Carousel. */
     internal fun homeStyle(): MenuStyle = MenuStyles.styleOf(deps.settings.menuStyles, MenuCategory.HOME)
 
@@ -6008,12 +6108,19 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /**
      * The d-pad on a Vertical Carousel stack (main menu tab or game list) or a game list's Backdrop stack ([stackStep]):
      * UP / DOWN step one item; past an end a fresh press wraps (UP on the first to the last, DOWN on the last to the
-     * first), a held key's [repeat] stops there, as the List. UP reaches the tab row only from an empty main menu stack. LEFT / RIGHT have no move of their own: on the main menu
-     * a fresh press switches tab (never a key [repeat]); a game list ignores them. False for any other button.
+     * first), a held key's [repeat] stops there, as the List. UP reaches the tab row only from an empty main menu stack. LEFT / RIGHT: on the main menu
+     * a fresh press switches tab (never a key [repeat]); a game list pages ([pageMove]). False for any other button.
      */
     private fun stackMove(s: Screen, button: NxButton, repeat: Boolean): Boolean {
         when (button) {
-            NxButton.LEFT, NxButton.RIGHT -> { if (s is Screen.Systems && !repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1); return true }
+            NxButton.LEFT, NxButton.RIGHT -> {
+                when (s) {
+                    is Screen.Systems -> if (!repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)
+                    is Screen.Games -> pageMove(button)   // a game list's stack pages, as its List
+                    else -> Unit
+                }
+                return true
+            }
             NxButton.UP, NxButton.DOWN -> {
                 val sel = _selection.value
                 val next = stackStep(sel.index, sel.count, button, fresh = !repeat)   // only an empty stack's UP is null: the tab row
@@ -6176,8 +6283,12 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             }
             NxButton.DOWN -> if (!rowMove(button, repeat) && !gridMove(button)) { _selection.value = _selection.value.down(wrap = !repeat || !launcherList()); refreshResume() }
             // The main menu: LEFT / RIGHT are L1 / R1 (a Grid or row switches only past its ends), on a fresh press only: a held
-            // key's repeats never switch tabs. A List game list ignores them.
-            NxButton.LEFT, NxButton.RIGHT -> if (!rowMove(button, repeat) && !gridMove(button, repeat) && !repeat && _screen.value is Screen.Systems) switchTab(if (button == NxButton.RIGHT) 1 else -1)
+            // key's repeats never switch tabs. A List or Minimal game list pages ([pageMove]).
+            NxButton.LEFT, NxButton.RIGHT -> if (!rowMove(button, repeat) && !gridMove(button, repeat)) when (_screen.value) {
+                is Screen.Games -> pageMove(button)   // a List or Minimal game list pages
+                is Screen.Systems -> if (!repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)
+                else -> Unit
+            }
             NxButton.A -> openSelected()
             NxButton.B -> back()
             NxButton.Y -> when (val s = _screen.value) {
@@ -6189,8 +6300,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             NxButton.START -> if (_screen.value is Screen.Games) openListSearch() else openSearch()   // a game list searches its own games
             NxButton.X -> if (_screen.value is Screen.Games && !_dualMenu.value) ra.openRaPanel()   // the highlighted game's achievements (the second display's list has its own details)
             NxButton.MENU -> openContextMenu()
-            NxButton.L1 -> switchTab(-1)
-            NxButton.R1 -> switchTab(1)
+            NxButton.L1, NxButton.R1 -> when (val s = _screen.value) {
+                is Screen.Games -> letterJump(s, button)
+                else -> switchTab(if (button == NxButton.R1) 1 else -1)
+            }
             else -> Unit
         }
     }
@@ -6460,12 +6573,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         else -> null
     }
 
-    /** A on About's update row: Check for updates (also after a failed check), Update to after one found a release; nothing while busy. */
+    /** A on About's update row: Check for updates (also after a failed check), Update to after one found a release, Ready to install installs; nothing while busy. */
     private fun appUpdateRowA(u: UpdateController) {
         when (val s = u.state.value) {
             UpdateState.Idle, is UpdateState.UpToDate -> u.checkNow()
             is UpdateState.Failed -> if (s.release == null) u.checkNow() else confirmUpdate(s.release)
             is UpdateState.Available -> confirmUpdate(s.release)
+            is UpdateState.Waiting -> u.installNow()
             else -> Unit
         }
     }

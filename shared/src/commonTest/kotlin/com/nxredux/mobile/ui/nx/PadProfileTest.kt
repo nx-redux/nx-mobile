@@ -17,8 +17,13 @@ class PadProfileTest {
     }
 
     @Test fun identity_tags_are_standard() {
-        for (tag in listOf("FBN", "SFC", "UNKNOWN", ""))
+        for (tag in listOf("SFC", "UNKNOWN", ""))
             assertEquals(PadProfile.STANDARD, PadProfile.forTag(tag), tag)
+    }
+
+    @Test fun arcade_select_reads_coin() {
+        assertEquals("COIN", PadProfile.forTag("FBN").label(NxButton.SELECT))
+        assertEquals(NxButton.SELECT, PadMap.forTag("FBN").sends(NxButton.SELECT))   // label only
     }
 
     @Test fun the_ds_pad_has_l_and_r_only() {

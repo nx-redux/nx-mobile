@@ -12,11 +12,30 @@ import com.nxredux.mobile.storage.StateFormat
  */
 fun <T> List<T>.stepFrom(current: T, by: Int): T = this[(indexOf(current) + by).mod(size)]
 
-/** The portrait virtual pad's palette: CHARCOAL (the dark default) or RETRO (light-grey body, magenta face buttons). */
+/**
+ * The portrait virtual pad's palette: CHARCOAL (the dark default), RETRO (light-grey body, magenta face buttons) or BLACK
+ * (a pure black body, its buttons the [PadButtons] set).
+ */
 enum class PadTheme {
-    CHARCOAL, RETRO;
+    CHARCOAL, RETRO, BLACK;
 
     companion object { val DEFAULT = CHARCOAL }
+}
+
+/**
+ * Appearance → Pad buttons, shown and used only while the [PadTheme] is BLACK: GREY (the default), Charcoal's domed
+ * grey buttons, or OUTLINE, each button a thin outline and its label, filled faintly while held. Stored by [name]
+ * ([fromStored]).
+ */
+enum class PadButtons(val label: String) {
+    GREY("Grey"), OUTLINE("Outline");
+
+    companion object {
+        val DEFAULT = GREY
+
+        /** The set stored as [name]; missing or unknown reads as [DEFAULT]. */
+        fun fromStored(name: String?): PadButtons = entries.firstOrNull { it.name == name } ?: DEFAULT
+    }
 }
 
 /**
@@ -182,6 +201,8 @@ interface AppSettings {
     var defaultTags: Map<String, String>
     /** Palette of the portrait virtual pad (the landscape clusters always stay Charcoal). */
     var padTheme: PadTheme
+    /** The Black pad theme's button set (Appearance → Pad buttons); the other themes ignore it. */
+    var padButtons: PadButtons
     /**
      * Each main menu tab's style (List, Grid or Carousel), Home's too (Layouts → Home layout); a category missing from
      * the map is its default ([MenuStyles.defaultStyleOf]: Grid for Home and Tools, Minimal for Collections, Carousel for Consoles) and a stored

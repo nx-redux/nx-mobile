@@ -3,12 +3,13 @@ package com.nxredux.mobile.ui.nx
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
-/** A face button in its own colours: a [top]-[mid]-[bottom] raised gradient, [pressedTop]-[pressedBottom] when pressed. */
+/** A face button in its own colours: a [top]-[mid]-[bottom] raised gradient, [pressedTop]-[pressedBottom] when pressed; [mid] is its outline pad tint. */
 internal fun coloredFace(top: Color, mid: Color, bottom: Color, pressedTop: Color, pressedBottom: Color) = PadFace(
     raisedFill = Brush.verticalGradient(listOf(top, mid, bottom)),
     raisedRim = Brush.verticalGradient(listOf(Color(0x4DFFFFFF), Color(0x00FFFFFF))),
     pressedFill = Brush.verticalGradient(listOf(pressedTop, pressedBottom)),
     pressedRim = Brush.verticalGradient(listOf(Color(0x80000000), Color(0x00000000))),
+    tint = mid,
 )
 
 /** The N64 cluster's own colours (blue A, green B, yellow C), in every pad theme; change them here. */

@@ -3,6 +3,9 @@ package com.nxredux.mobile.ui.nx
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
@@ -38,6 +41,7 @@ fun NxBackdropStack(
     layoutKey: Any? = null,
     alignment: VerticalListAlignment = VerticalListAlignment.LEFT,
     titleRoom: Dp = 0.dp,
+    onPageRows: ((Int) -> Unit)? = null,   // the items one screen shows (a game list's LEFT / RIGHT page)
 ) {
     val portrait = LocalPortrait.current
     val window = LocalWindowSize.current
@@ -54,6 +58,11 @@ fun NxBackdropStack(
             val screenH = if (window.height.value > 0f) window.height.value else bodyH
             val g = backdropStackGeometry(bodyW, titleRoomSizingBody(bodyH, titleRoom.value), screenW, screenH, portrait, gutter, alignment = alignment)
                 .centredIn(bodyH)
+            if (onPageRows != null) {
+                val shown = stackPageItems(RowStyle.BACKDROP, g, bodyH)
+                val report by rememberUpdatedState(onPageRows)
+                LaunchedEffect(shown) { report(shown) }
+            }
             NxStack(
                 games.size, selectedIndex, g, RowStyle.BACKDROP, edgeFade = false,
                 onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,

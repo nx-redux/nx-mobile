@@ -16,6 +16,7 @@ fun touchShortcutLabel(a: ShortcutAction): String = when (a) {
     ShortcutAction.TOGGLE_REWIND -> "RW"
     ShortcutAction.HOLD_REWIND -> "Hold RW"
     ShortcutAction.RESET -> "Reset"
+    ShortcutAction.SAVE_AND_QUIT -> "Quit"   // never a touch button ([ShortcutAction.touch]); named for completeness
     ShortcutAction.TOGGLE_MIC -> "Mic"   // never drawn: not offered for the touch slots
 }
 
@@ -51,11 +52,3 @@ internal val TouchSlot.padGroup: PadGroup get() = when (this) {
 
 /** The editor's placeholder label for [slot]'s piece. */
 internal fun touchSlotPlaceholder(slot: TouchSlot): String = "Shortcut ${slot.ordinal + 1}"
-
-/**
- * A portrait shortcut pill's width beside the MENU row: MENU's [pillWidth] where the [sideRoom] (the row's width either
- * side of the centred MENU row) leaves it with a [gap] from that row, else what is left (a 3DS's four-pill row), so it
- * never reaches the row or past the band's edge.
- */
-internal fun portraitShortcutWidth(pillWidth: Float, sideRoom: Float, gap: Float): Float =
-    minOf(pillWidth, sideRoom - gap).coerceAtLeast(0f)

@@ -1,5 +1,7 @@
 package com.nxredux.mobile.options
 
+import com.nxredux.mobile.layout.ScreenClass
+
 /**
  * App-owned settings that belong to a console: shown on the in-game Options → Console Settings page,
  * saved like the Frontend rows (`nx_` keys, per game or console). Static and pure, so a settings screen outside a game
@@ -7,9 +9,10 @@ package com.nxredux.mobile.options
  * controller rows ([PadOptions]) and Bottom screen ([BottomScreenOptions]) are shared.
  */
 object ConsoleSettings {
-    fun tableFor(tag: String): List<FrontendOption> = when {
-        NdsOptions.appliesTo(tag) -> NdsOptions.table
-        N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRows + N3dsOptions.newControlsRow
+    /** [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows. */
+    fun tableFor(tag: String, screen: ScreenClass? = null): List<FrontendOption> = when {
+        NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen)
+        N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.newControlsRow
         WiiOptions.appliesTo(tag) -> WiiOptions.table
         else -> emptyList()
     } + graphicsRows(tag) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table
@@ -17,7 +20,7 @@ object ConsoleSettings {
     private fun graphicsRows(tag: String): List<FrontendOption> =
         if (GraphicsApiOptions.appliesTo(tag)) listOf(GraphicsApiOptions.row) else emptyList()
 
-    /** Every console's rows (keys are unique across them). */
-    val all: List<FrontendOption> =
+    /** Every console's rows (keys are unique across them); built when read, as [NdsOptions.table]. */
+    val all: List<FrontendOption> get() =
         NdsOptions.table + N3dsOptions.layoutRows + N3dsOptions.newControlsRow + WiiOptions.table + GraphicsApiOptions.row + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table
 }

@@ -29,7 +29,14 @@ enum class PadIcon(val label: String) {
  * leaves out. Most consoles read these from their [PadMap] (NX Redux's binds); DC and N64 keep their own rules. What each
  * button sends is decided elsewhere ([PadMap.sends], [N64Input], [DcInput]).
  */
-class PadProfile private constructor(val kind: Kind, private val map: PadMap, private val n3dsNew: Boolean = false, val wiiPad: WiiPad? = null) {
+class PadProfile private constructor(
+    val kind: Kind,
+    private val map: PadMap,
+    private val n3dsNew: Boolean = false,
+    val wiiPad: WiiPad? = null,
+    /** The layout editor's Wii pad ([forLayoutEditor]): the Classic Controller's groups and the Wiimote's MOTION. */
+    private val editorMotion: Boolean = false,
+) {
     enum class Kind {
         /** The console's [PadMap] labels (the buttons' own letters where it has none): X top, Y left, A right, B bottom. */
         TABLE,
@@ -72,8 +79,11 @@ class PadProfile private constructor(val kind: Kind, private val map: PadMap, pr
      */
     val cStick: Boolean get() = kind == Kind.N3DS && n3dsNew || wiiPad == WiiPad.CLASSIC || kind == Kind.GC
 
-    /** The pad shows the MOTION button (tap toggles motion, long-press recentres): every Wii pad but the Classic Controller. */
-    val motionButton: Boolean get() = kind == Kind.WII && wiiPad != WiiPad.CLASSIC
+    /**
+     * The pad shows the MOTION button (tap toggles motion, long-press recentres): every Wii pad but the Classic
+     * Controller; the layout editor's Wii pad too when the phone has motion ([forLayoutEditor]).
+     */
+    val motionButton: Boolean get() = kind == Kind.WII && (wiiPad != WiiPad.CLASSIC || editorMotion)
 
     /** The pad shows HOME between SELECT and START, as on a Wiimote: every Wii pad. */
     val homeButton: Boolean get() = kind == Kind.WII
@@ -179,10 +189,12 @@ class PadProfile private constructor(val kind: Kind, private val map: PadMap, pr
 
         /**
          * The pad the layout editor arranges for [tag]: the console's fullest, so every group it can show is placed (the
-         * New 3DS's C-stick; the Wii's Classic Controller, with its C-stick, every shoulder and HOME).
+         * New 3DS's C-stick; the Wii's Classic Controller, with its C-stick, every shoulder and HOME, plus the Wiimote's
+         * MOTION when [motion]: the phone has the sensors, so its Wiimote games draw it, [motionButton]).
          */
-        fun forLayoutEditor(tag: String): PadProfile =
-            forTag(tag, n3dsNew = true, wii = if (tag.trim().uppercase() == "WII") WiiPad.CLASSIC else null)
+        fun forLayoutEditor(tag: String, motion: Boolean = false): PadProfile =
+            if (tag.trim().uppercase() == "WII") PadProfile(Kind.WII, PadMap.IDENTITY, wiiPad = WiiPad.CLASSIC, editorMotion = motion)
+            else forTag(tag, n3dsNew = true)
 
         /**
          * [sega]: the resolved Sega pad for the Sega pad tags (null = unknown: all six drawn). [n3dsNew]: the 3DS pad

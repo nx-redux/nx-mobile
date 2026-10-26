@@ -4,6 +4,7 @@ import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.achievements.RaAchievementState
 import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.cheats.CheatEntry
+import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.ConsoleSettings
@@ -20,6 +21,7 @@ import com.nxredux.mobile.shortcuts.ShortcutBinding
 import com.nxredux.mobile.shortcuts.ShortcutOverrides
 import com.nxredux.mobile.shortcuts.ShortcutSet
 import com.nxredux.mobile.shortcuts.TouchSlot
+import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -358,15 +360,15 @@ class InGameMenuModelTest {
             listOf("Screen Scaling", "Screen Sharpness", "Overlay", "Offset screen X", "Offset screen Y", "Pad Opacity (landscape)", "Debug HUD"),
             m.state.page.rows.map { it.label },
         )
-        assertEquals(listOf("Aspect", "NEAREST", "None", "0", "0", "40%", "Off"), m.state.page.rows.map { (it as MenuRow.Option).valueLabel })
+        assertEquals(listOf("Auto", "NEAREST", "None", "0", "0", "40%", "Off"), m.state.page.rows.map { (it as MenuRow.Option).valueLabel })
         assertEquals(listOf(true, true, true, true, true, false, false), m.state.page.rows.map { (it as MenuRow.Option).visual })
     }
 
     @Test fun left_right_on_the_list_emit_set_frontend() {
         val m = model().openFrontend()
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Fullscreen"), m.press(NxButton.RIGHT))
-        assertEquals("Fullscreen", m.optionRow(0).valueLabel)
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Aspect"), m.press(NxButton.LEFT))
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.press(NxButton.RIGHT))
+        assertEquals("Native", m.optionRow(0).valueLabel)
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Auto"), m.press(NxButton.LEFT))
         m.select(5)
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.PAD_LANDSCAPE_OPACITY, "25"), m.press(NxButton.RIGHT))
         assertEquals("25%", m.optionRow(5).valueLabel)
@@ -375,11 +377,11 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "On"), m.press(NxButton.RIGHT))
     }
 
-    @Test fun frontend_page_shows_none_and_aspect_by_default_whatever_the_files() {
+    @Test fun frontend_page_shows_none_and_auto_by_default_whatever_the_files() {
         val m = model().openFrontend(values = emptyMap(), overlays = listOf("Aspect - LCD Grid.png", "Aspect.png"))
         assertEquals("None", m.optionRow(2).valueLabel)
         assertEquals("NEAREST", m.optionRow(1).valueLabel)
-        assertEquals("Aspect", m.optionRow(0).valueLabel)
+        assertEquals("Auto", m.optionRow(0).valueLabel)
         m.setFrontend(mapOf(FrontendOptions.OVERLAY to "Aspect - LCD Grid.png"), listOf("Aspect - LCD Grid.png"), emptySet())
         assertEquals("Aspect - LCD Grid.png", m.optionRow(2).valueLabel)   // a stored pick still shows
     }
@@ -476,7 +478,7 @@ class InGameMenuModelTest {
     @Test fun stored_raw_value_shows_raw_and_right_goes_to_first() {
         val m = model().openFrontend(values = FrontendOptions.defaults() + (FrontendOptions.SCALING to "Cropped"))
         assertEquals("Cropped", m.optionRow(0).valueLabel)
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.press(NxButton.RIGHT))
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Auto"), m.press(NxButton.RIGHT))
     }
 
     @Test fun locked_frontend_keys_are_hidden_and_skipped_in_adjust() {
@@ -1362,10 +1364,10 @@ class InGameMenuModelTest {
             ),
             m.state.page.rows.map { it.label },
         )
-        assertEquals("Auto", m.optionRow(0).valueLabel)                   // the portrait layout's default
-        assertEquals(MenuEffect.SetFrontend(NdsOptions.LAYOUT_PORTRAIT, "pip"), m.press(NxButton.RIGHT))
-        assertEquals("Picture in picture", m.optionRow(0).valueLabel)
-        assertEquals("Stacked", m.optionRow(1).valueLabel)                 // the controller layout's default
+        assertEquals("Large screen", m.optionRow(0).valueLabel)           // the portrait layout's default
+        assertEquals(MenuEffect.SetFrontend(NdsOptions.LAYOUT_PORTRAIT, "stacked"), m.press(NxButton.RIGHT))
+        assertEquals("Stacked", m.optionRow(0).valueLabel)
+        assertEquals("Large screen", m.optionRow(1).valueLabel)            // the controller layout's default
         m.select(3)                                                        // Big Screen
         assertEquals(MenuEffect.SetFrontend(NdsOptions.BIG_SCREEN, "bottom"), m.press(NxButton.RIGHT))
         assertNull(m.press(NxButton.A))                                    // a visual row: adjust mode
@@ -1378,6 +1380,43 @@ class InGameMenuModelTest {
         assertEquals(PageKind.ConsoleSettings, m.state.page.kind)
         assertEquals(4, m.state.page.selected)                             // the owner followed the strip
         assertEquals("Top screen", m.optionRow(3).valueLabel)              // refreshed from the edit
+    }
+
+    // The window's screen shapes the DS layout rows: a Fold-shaped screen's landscape row has no Side by side and starts
+    // at Large screen; a regular phone's starts at Side by side.
+    @Test fun console_settings_follow_the_window_screen() {
+        val fold = model().apply { screen = ScreenClass.NEAR_SQUARE_TABLET }.openConsoleSettings()
+        val landscape = fold.optionRow(2)
+        assertEquals("Layout (landscape)", landscape.label)
+        assertEquals("Large screen", landscape.valueLabel)
+        assertFalse("Side by side" in landscape.choices)
+        fold.select(2)
+        fold.press(NxButton.LEFT)                                          // Large screen back to the last one offered
+        assertEquals("Picture in picture", fold.optionRow(2).valueLabel)
+        val phone = model().apply { screen = ScreenClass.REGULAR_PHONE }.openConsoleSettings()
+        assertEquals("Side by side", phone.optionRow(2).valueLabel)
+        assertTrue("Side by side" in phone.optionRow(2).choices)
+    }
+
+    // The layout row's Adjust strip (A on a visual row) shows the same screen's values and default as the row.
+    @Test fun console_settings_adjust_strip_follows_the_window_screen() {
+        val m = model().apply { screen = ScreenClass.NEAR_SQUARE_TABLET }.openConsoleSettings()
+        m.select(2)
+        assertNull(m.press(NxButton.A))
+        assertEquals(PageKind.Adjust(NdsOptions.LAYOUT_LANDSCAPE), m.state.page.kind)
+        val strip = m.state.page.rows.single() as MenuRow.Option
+        assertEquals("Large screen", strip.valueLabel)
+        assertFalse("Side by side" in strip.choices)
+        assertEquals(0, strip.index)
+        assertEquals(MenuEffect.SetFrontend(NdsOptions.LAYOUT_LANDSCAPE, "stacked"), m.press(NxButton.RIGHT))
+        val next = m.state.page.rows.single() as MenuRow.Option
+        assertEquals("Stacked", next.valueLabel)
+        assertEquals(1, next.index)
+        m.press(NxButton.LEFT)                                             // back to Large screen
+        assertEquals(MenuEffect.SetFrontend(NdsOptions.LAYOUT_LANDSCAPE, "pip"), m.press(NxButton.LEFT))   // wraps past no Side by side
+        val last = m.state.page.rows.single() as MenuRow.Option
+        assertEquals("Picture in picture", last.valueLabel)
+        assertEquals(last.choices.lastIndex, last.index)
     }
 
     @Test fun a_locked_console_row_is_hidden() {
@@ -1902,8 +1941,9 @@ class InGameMenuModelTest {
     @Test fun frontend_rows_carry_their_value_labels_and_index() {
         val m = model().openFrontend()
         val scaling = m.optionRow(m.rowIndex("Screen Scaling"))
-        assertEquals(listOf("Native", "Aspect", "Fullscreen"), scaling.choices)
-        assertEquals(1, scaling.index)
+        assertEquals(listOf("Auto", "Native", "Aspect", "Fullscreen"), scaling.choices)
+        assertEquals(0, scaling.index)
+        assertEquals(NxSettingControl.PICKER, scaling.control)   // four values total 26 characters: past the segmented limit
         val overlay = m.optionRow(m.rowIndex("Overlay"))
         assertEquals(listOf("None", "Aspect.png", "Native.png"), overlay.choices)
         assertEquals(0, overlay.index)
@@ -1967,12 +2007,12 @@ class InGameMenuModelTest {
         val m = model().openFrontend()
         val scaling = m.rowIndex("Screen Scaling")
         m.select(scaling + 1)
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Fullscreen"), m.setChoice(scaling, 2))
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Fullscreen"), m.setChoice(scaling, 3))
         assertEquals(scaling, m.state.page.selected)
         assertEquals("Fullscreen", m.optionRow(scaling).valueLabel)
-        assertNull(m.setChoice(scaling, 2))                  // already that value
+        assertNull(m.setChoice(scaling, 3))                  // already that value
         assertNull(m.setChoice(scaling, -1))
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.press(NxButton.RIGHT))   // the cycle still works
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Auto"), m.press(NxButton.RIGHT))   // the cycle still works
     }
 
     @Test fun a_opens_the_picker_and_the_dpad_drives_it() {
@@ -2010,7 +2050,7 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.OVERLAY, "Native.png"), m.optionEvent(OptionEvent.Pick(2)))
         assertNull(m.state.popup)
         assertNull(m.optionEvent(OptionEvent.Pick(1)))      // no picker open
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.optionEvent(OptionEvent.Choose(m.rowIndex("Screen Scaling"), 0)))
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.optionEvent(OptionEvent.Choose(m.rowIndex("Screen Scaling"), 1)))
         val hud = m.rowIndex("Debug HUD")
         m.optionEvent(OptionEvent.Info(hud))
         assertEquals(MenuPopup.Info("Debug HUD", FrontendOptions.option(FrontendOptions.DEBUG_HUD)!!.info), m.state.popup)
@@ -2070,7 +2110,7 @@ class InGameMenuModelTest {
             assertTrue(o.info.isNotBlank() && o.info != o.brief, o.label)   // the full text kept for the info icon
         }
         // The full texts stay behind the info icon.
-        assertTrue("Auto: stacked when both screens fit the width, else picture in picture." in FrontendOptions.option(NdsOptions.LAYOUT_PORTRAIT)!!.info)
+        assertTrue("Large screen: the big one, the other centred below it at\nleast half its size; under 2x, it fills the leftover height up to 2x." in FrontendOptions.option(NdsOptions.LAYOUT_PORTRAIT)!!.info)
         // In game: the short line on the row, the full text in its popup (the info icon / X without a truncation report).
         val m = model().openFrontend()
         val hud = m.rowIndex("Debug HUD")
@@ -2140,6 +2180,29 @@ class InGameMenuModelTest {
         assertEquals("MENU+R1", m.row("Toggle FF").valueLabel)
         assertEquals("None", m.row("Hold FF").valueLabel)
         assertEquals("Reset Game", m.row("Touch button 1").valueLabel)
+    }
+
+    // Touch only: the bind rows give way to the page's intro text (the on-screen pad binds nothing); the overrides stay.
+    @Test fun touchOnlyHidesTheBindRows() {
+        val m = shortcuts(overrides = ShortcutOverrides(mapOf(ShortcutAction.TOGGLE_FF to menuR1), emptyMap()))
+        assertEquals("", m.state.page.intro)
+        m.setControllerConnected(false)
+        assertEquals(listOf("Touch button 1", "Touch button 2"), m.state.page.rows.map { it.label })
+        assertEquals(SHORTCUTS_NO_CONTROLLER, m.state.page.intro)
+        assertEquals("Touch button 1", m.state.page.rows[m.state.page.selected].label)
+        m.setControllerConnected(true)
+        assertEquals("", m.state.page.intro)
+        assertEquals("MENU+R1", m.row("Toggle FF").valueLabel)
+    }
+
+    @Test fun losingTheControllerEndsACapture() {
+        val m = shortcuts()
+        m.selectRow("Toggle FF")
+        m.press(NxButton.A)
+        assertTrue(m.capturingShortcut)
+        m.setControllerConnected(false)
+        assertFalse(m.capturingShortcut)
+        assertFalse(m.takesKey(KeyCodes.BUTTON_R1, true))
     }
 
     @Test fun captureSetsOverride() {
@@ -2243,11 +2306,11 @@ class InGameMenuModelTest {
 
     @Test fun noRewindRowsWithoutRewind() {
         assertEquals(
-            listOf("Toggle FF", "Hold FF", "Reset Game", "Touch button 1", "Touch button 2"),
+            listOf("Toggle FF", "Hold FF", "Reset Game", "Save & Quit", "Touch button 1", "Touch button 2"),
             shortcuts(canRewind = false).state.page.rows.map { it.label },
         )
         assertEquals(
-            listOf("Toggle FF", "Hold FF", "Toggle Rewind", "Hold Rewind", "Reset Game", "Touch button 1", "Touch button 2"),
+            listOf("Toggle FF", "Hold FF", "Toggle Rewind", "Hold Rewind", "Reset Game", "Save & Quit", "Touch button 1", "Touch button 2"),
             shortcuts(canRewind = true).state.page.rows.map { it.label },
         )
     }

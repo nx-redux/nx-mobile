@@ -6,6 +6,7 @@ import com.nxredux.mobile.achievements.RaBadgeFolders
 import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.achievements.sortedBy
 import com.nxredux.mobile.cheats.CheatEntry
+import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.BottomScreenOptions
@@ -27,6 +28,7 @@ import com.nxredux.mobile.shortcuts.ShortcutOverrides
 import com.nxredux.mobile.shortcuts.ShortcutSet
 import com.nxredux.mobile.shortcuts.Shortcuts
 import com.nxredux.mobile.shortcuts.TouchSlot
+import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 
 enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, CANCEL }
@@ -125,6 +127,8 @@ data class MenuPage(
     val rows: List<MenuRow>,
     val selected: Int = 0,
     val footer: String = "",
+    /** Plain text an options page shows above its rows (Shortcuts with no controller); not a row, never selected. */
+    val intro: String = "",
     /**
      * Message pages only: UP/DOWN ask the UI to scroll the text one step. [scrollSeq] counts the requests (the UI
      * scrolls once per new value), [scrollDir] is the latest one's direction (-1 up, +1 down).
@@ -275,11 +279,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /** What [optionsPage] reads: the Console Settings row's inputs ([consoleRows]) and the footer's [status]. */
-    private data class OptionsPreviewInputs(val tag: String, val locked: Set<String>, val second: Boolean, val status: ConfigSource)
+    private data class OptionsPreviewInputs(val tag: String, val locked: Set<String>, val second: Boolean, val status: ConfigSource, val screen: ScreenClass?)
 
     /** [optionsPage], rebuilt only when one of its inputs has changed since the last call. */
     private fun optionsPreview(): MenuPage {
-        val inputs = OptionsPreviewInputs(frontendTag, frontendLocked, secondConnected, status)
+        val inputs = OptionsPreviewInputs(frontendTag, frontendLocked, secondConnected, status, screen)
         previewPage?.let { (key, page) -> if (key == inputs) return page }
         return optionsPage().also { previewPage = inputs to it }
     }
@@ -294,6 +298,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var frontendTag = ""                 // the console's tag: selects the Console Settings rows
     private var overlayAvailable = true          // false while the DS screens are split (the overlay is off)
 
+    /**
+     * The game window's [ScreenClass] (null: unknown): the DS and 3DS layout rows offer that screen's values and show its
+     * defaults ([ConsoleSettings.tableFor]). Set before the menu's pages are built.
+     */
+    var screen: ScreenClass? = null
+
     // Options → Shortcuts ([setShortcuts]): Controls → Shortcuts, this console's or game's overrides over it, the
     // console's hotkeys (they win: a row on one is Unavailable, press to bind refuses one), whether the core rewinds.
     private var shortcutBase = ShortcutSet.EMPTY
@@ -303,6 +313,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var shortcutClaimed: List<ClaimedInput> = ConsoleHotkeys.always
     private var shortcutRewind = false
     private var shortcutMic = false
+    /** A controller is connected ([setControllerConnected]): without one the page has no bind rows (the on-screen pad binds nothing). */
+    private var controllerConnected = true
     /** Press to bind on the Shortcuts page; the host hands it raw key codes ([takesKey], [captureKey]). */
     private var capture = ShortcutCapture(shortcutClaimed)
     private var capturing: ShortcutAction? = null
@@ -1141,8 +1153,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             return ShaderOptions.cycle(key, current, delta, presets, params)?.let { setFrontendValue(key, it) }
         }
         if (key == FrontendOptions.OVERLAY && !overlayAvailable) return null
-        val current = frontend[key] ?: return null
-        return FrontendOptions.cycle(key, current, delta, overlays)?.let { setFrontendValue(key, it) }
+        // An unset DS layout row (no stored value) cycles from its shown default, like frontendRow shows it.
+        val current = frontend[key] ?: optionFor(key)?.default ?: return null
+        val values = settingValues(key) ?: return null
+        return CoreOptionFilter.cycle(CoreOption(key, current, values = values), delta)?.let { setFrontendValue(key, it) }
     }
 
     /** A shader key's value: stored, else (an unstored parameter) its default, which it cycles from too. */
@@ -1167,9 +1181,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun settingValues(key: String): List<String>? = when {
         ShaderOptions.isShaderKey(key) -> ShaderOptions.choices(key, presets, params)
         key == FrontendOptions.OVERLAY && !overlayAvailable -> emptyList()
-        FrontendOptions.option(key) != null -> FrontendOptions.choices(key, overlays)
-        else -> null
+        key == FrontendOptions.OVERLAY -> FrontendOptions.choices(key, overlays)
+        else -> optionFor(key)?.values
     }
+
+    /** The row for [key]: this console's on this [screen] (the DS / 3DS layout rows differ per screen), else the table's. */
+    private fun optionFor(key: String): FrontendOption? = consoleRows().firstOrNull { it.key == key } ?: FrontendOptions.option(key)
 
     /** The Players page's values for a slot: Empty, then every connected pad ([GamePanelModel.cyclePlayer]'s order). */
     private fun playerCandidates(): List<String?> = listOf<String?>(null) + playerPads.map { it.key }
@@ -1352,7 +1369,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * Game Settings / Emulator Settings) left out, and Bottom screen while no second display is [secondConnected]; none
      * left = the page is not offered.
      */
-    private fun consoleRows() = ConsoleSettings.tableFor(frontendTag).filter {
+    private fun consoleRows() = ConsoleSettings.tableFor(frontendTag, screen).filter {
         it.key !in frontendLocked && !it.atLaunch && (secondConnected || it.key != BottomScreenOptions.KEY)
     }
 
@@ -1399,7 +1416,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             key == ShaderOptions.PRESET -> presetRow()
             ShaderOptions.paramId(key) != null ->
                 paramRow(checkNotNull(params.firstOrNull { ShaderOptions.paramKey(it.id) == key }) { "not an active parameter: $key" })
-            else -> frontendRow(checkNotNull(FrontendOptions.option(key)) { "not a frontend key: $key" })
+            else -> frontendRow(checkNotNull(optionFor(key)) { "not a frontend key: $key" })
         }
         return MenuPage(PageKind.Adjust(key), row.label, listOf(row))
     }
@@ -1409,7 +1426,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             MenuRow.Option(o.label, o.key, OVERLAY_UNAVAILABLE, OVERLAY_UNAVAILABLE_LINE, detail = OVERLAY_UNAVAILABLE_INFO)
         } else {
             val value = frontend[o.key] ?: o.default
-            val values = FrontendOptions.choices(o.key, overlays)
+            val values = if (o.key == FrontendOptions.OVERLAY) FrontendOptions.choices(o.key, overlays) else o.values
             // The row's brief line (none: compact); the full text in its info popup.
             MenuRow.Option(
                 o.label, o.key, o.labelOf(value), o.brief, visual = o.visual,
@@ -1431,6 +1448,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         shortcutMic = canMic
         // A new capture only for new hotkeys: the old one's held keys must keep their releases swallowed.
         if (claimed != shortcutClaimed) { shortcutClaimed = claimed; capture.cancel(); capture = ShortcutCapture(claimed); capturing = null }
+        refreshShortcutsPage()
+    }
+
+    /** Whether a controller is [connected]; one going away ends a wait. Refreshes an open Shortcuts page. */
+    fun setControllerConnected(connected: Boolean) {
+        if (connected == controllerConnected) return
+        controllerConnected = connected
+        if (!connected) endWait()
         refreshShortcutsPage()
     }
 
@@ -1511,8 +1536,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun touchSlot(key: String): TouchSlot? =
         if (key.startsWith(TOUCH_KEY_PREFIX)) TouchSlot.entries.firstOrNull { it.key == key.removePrefix(TOUCH_KEY_PREFIX) } else null
 
-    /** What a touch button can do here: None, then every action the core has (no rewind ones without rewind). */
-    private fun touchChoices(): List<ShortcutAction?> = listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { it.touch && (shortcutRewind || !it.rewind) }
+    /** What a touch button can do here: None, then every action the core has (no rewind ones without rewind) a touch button can do. */
+    private fun touchChoices(): List<ShortcutAction?> = listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { (shortcutRewind || !it.rewind) && it.touch }
 
     private fun refreshShortcutsPage() {
         state = state.copy(stack = state.stack.map { p -> if (p.kind == PageKind.Shortcuts) rebuilt(p, shortcutsPage()).copy(footer = SHORTCUTS_FOOTER) else p })
@@ -1521,12 +1546,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /**
      * One row per action (no rewind rows without rewind), then the two touch buttons: each shows what fires here, marked
      * "(default)" while it inherits Controls → Shortcuts; an action on a button the console's hotkeys use shows
-     * Unavailable with the hotkey as its line (spec: built-in hotkeys win). The row waiting for a press says so.
+     * Unavailable with the hotkey as its line (spec: built-in hotkeys win). The row waiting for a press says so. With no
+     * controller the bind rows give way to [SHORTCUTS_NO_CONTROLLER] as the page's intro; their overrides stay.
      */
     private fun shortcutsPage(): MenuPage {
         val effective = Shortcuts.effective(shortcutBase, shortcutOverrides, shortcutClaimed, shortcutRewind, shortcutMic)
         fun shown(value: String, inherited: Boolean) = if (inherited) "$value$DEFAULT_SUFFIX" else value
-        val binds = ShortcutAction.entries.filter { (shortcutRewind || !it.rewind) && (shortcutMic || !it.mic) }.map { a ->
+        val binds = if (!controllerConnected) emptyList()
+        else ShortcutAction.entries.filter { (shortcutRewind || !it.rewind) && (shortcutMic || !it.mic) }.map { a ->
             val key = BIND_KEY_PREFIX + a.key
             val blocked = effective.blocked[a]
             when {
@@ -1543,7 +1570,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 choices = choices.map { it?.label ?: NONE_LABEL }, index = choices.indexOf(action),
             )
         }
-        return MenuPage(PageKind.Shortcuts, SHORTCUTS_LABEL, binds + touch, footer = SHORTCUTS_FOOTER)
+        return MenuPage(PageKind.Shortcuts, SHORTCUTS_LABEL, binds + touch, footer = SHORTCUTS_FOOTER, intro = if (controllerConnected) "" else SHORTCUTS_NO_CONTROLLER)
     }
 
     private fun saveChangesPage() = MenuPage(

@@ -11,6 +11,7 @@ import com.nxredux.mobile.settings.FolderPicker
 import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
+import com.nxredux.mobile.settings.PadButtons
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.shortcuts.KeyCodes
 import com.nxredux.mobile.shortcuts.ShortcutAction
@@ -43,6 +44,7 @@ class ShortcutsSettingsTest {
         override var extraFolders: List<ExtraFolder> = emptyList()
         override var defaultTags: Map<String, String> = emptyMap()
         override var padTheme = PadTheme.DEFAULT
+        override var padButtons: PadButtons = PadButtons.DEFAULT
         override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap()
         override var gameListStyle: MenuStyle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_GAME_LIST_STYLE
         override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap()
@@ -239,7 +241,9 @@ class ShortcutsSettingsTest {
         assertEquals("Hold FF", s.row("Touch button 1").secondary)
         s.onButton(NxButton.LEFT); s.onButton(NxButton.LEFT)
         assertEquals("None", s.row("Touch button 1").secondary)
+        // Every action a touch button can do: Save & Quit is a controller's only.
         assertEquals(listOf("None") + ShortcutAction.entries.filter { it.touch }.map { it.label }, s.page().choices[s.selection.value.index]?.labels)
+        assertFalse("Save & Quit" in s.page().choices[s.selection.value.index]!!.labels)
     }
 
     @Test fun micRowNotesDsOnlyAndTouchSkipsIt() = runTest {
@@ -301,13 +305,30 @@ class ShortcutsSettingsTest {
         assertEquals("Hold MENU for a combo", settingsInfo(s.row("Toggle FF")).line)
     }
 
-    // Touch only: A still starts a capture (a controller may be plugged in next), and the row says what it waits for.
-    @Test fun touchOnlySaysConnectAController() = runTest {
-        val s = state()
+    // Touch only: the on-screen pad binds nothing, so the bind rows give way to a line pointing at the touch buttons.
+    @Test fun touchOnlyHidesTheBindRows() = runTest {
+        val settings = Settings().apply { shortcuts = Shortcuts.encodeBase(ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to ShortcutBinding(null, KeyCodes.BUTTON_R1)), emptyMap())) }
+        val s = state(settings)
         s.onControllerConnected(false)
         s.openShortcuts()
+        val rows = s.page().rows
+        assertEquals(listOf(SettingsRow(SettingsKind.TEXT, SHORTCUTS_NO_CONTROLLER)), rows.filter { it.kind == SettingsKind.TEXT })
+        assertTrue(rows.none { it.kind == SettingsKind.SHORTCUT_BIND })
+        assertEquals(listOf("Touch button 1", "Touch button 2", "Clear all"), rows.filter { it.selectable }.map { it.label })
+        assertEquals("Touch button 1", s.page().rows[s.selection.value.index].label)   // never on the line
+        s.onControllerConnected(true)   // the binding was kept
+        assertEquals("R1", s.row("Toggle FF").secondary)
+    }
+
+    @Test fun losingTheControllerEndsACapture() = runTest {
+        val s = state()
+        s.openShortcuts()
         s.bind(ShortcutAction.TOGGLE_FF)
-        assertEquals("Connect a controller to bind", settingsInfo(s.row("Toggle FF")).line)
+        s.onControllerConnected(false)
+        assertNull(s.capturingShortcut.value)
+        assertFalse(s.captureKey(KeyCodes.BUTTON_R1, true))   // no wait takes the key
+        s.onControllerConnected(true)
+        assertEquals("None", s.row("Toggle FF").secondary)
     }
 
     @Test fun tappingAnotherRowEndsACapture() = runTest {
