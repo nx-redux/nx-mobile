@@ -4017,17 +4017,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         SettingsSection.SYSTEM -> systemRows()
     }
 
-    /** Settings -> System: the General, Launcher (with a launcher), Developer, About and Licenses groups. */
+    /**
+     * Settings -> System: its options as one group under the page's title (Pause when unfocused, Use as home screen with
+     * a launcher, Debug log), then the About and Licenses groups.
+     */
     private fun systemRows(): List<SettingsRow> = buildList {
-        add(SettingsRow(SettingsKind.SECTION, "General"))
         add(SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused", if (deps.settings.pauseWhenUnfocused) "On" else "Off"))
-        deps.launcher?.let { l ->
-            add(SettingsRow(SettingsKind.GAP, ""))
-            add(SettingsRow(SettingsKind.SECTION, "Launcher"))
-            add(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", if (l.isHome()) "On" else "Off"))
-        }
-        add(SettingsRow(SettingsKind.GAP, ""))
-        add(SettingsRow(SettingsKind.SECTION, "Developer"))
+        deps.launcher?.let { l -> add(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", if (l.isHome()) "On" else "Off")) }
         // Logging for a bug report; off, only errors reach logcat.
         add(SettingsRow(SettingsKind.DEBUG_LOG, "Debug log", if (deps.settings.debugLog) "On" else "Off"))
         add(SettingsRow(SettingsKind.GAP, ""))

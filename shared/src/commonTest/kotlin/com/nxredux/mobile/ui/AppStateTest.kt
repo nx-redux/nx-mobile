@@ -5066,7 +5066,7 @@ class AppStateTest {
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // System, the last
         val sys = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.SYSTEM, sys.section)
-        assertEquals(listOf("General", "Developer", "About", "Licenses"), sys.rows.filter { it.kind == SettingsKind.SECTION }.map { it.label })   // no launcher: no Launcher group
+        assertEquals(listOf("About", "Licenses"), sys.rows.filter { it.kind == SettingsKind.SECTION }.map { it.label })   // its options one group, under the title
         state.onButton(NxButton.B)
         assertIs<Screen.SettingsMenu>(state.screen.value)
         assertEquals(ListSelection(5, 6), state.selection.value)
@@ -10180,7 +10180,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.SYSTEM)
         fun row() = assertIs<Screen.Settings>(state.screen.value).rows.single { it.kind == SettingsKind.PAUSE_UNFOCUSED }
         assertEquals("Pause when unfocused" to "On", row().label to row().secondary)
-        assertEquals(1, state.selection.value.index)  // past the General label
+        assertEquals(0, state.selection.value.index)  // the first row: no group label above it
         state.onButton(NxButton.A)
         assertEquals(false, settings.pauseWhenUnfocused)
         assertEquals("Off", row().secondary)
@@ -11735,7 +11735,7 @@ class AppStateTest {
     @Test fun launcher_group_and_android_games_show_only_with_a_launcher() = runTest {
         val none = state(MemorySettings(ContentRef("Home"))); none.load()
         none.openSettings(SettingsSection.SYSTEM)
-        assertTrue(assertIs<Screen.Settings>(none.screen.value).rows.none { it.label == "Launcher" || it.kind == SettingsKind.HOME_SCREEN })
+        assertTrue(assertIs<Screen.Settings>(none.screen.value).rows.none { it.kind == SettingsKind.HOME_SCREEN })
         none.openSettings(SettingsSection.LIBRARY)
         assertTrue(assertIs<Screen.Settings>(none.screen.value).rows.none { it.kind == SettingsKind.ANDROID_GAMES })
         val with = state(MemorySettings(ContentRef("Home")), launcher = FakeLauncher()); with.load(); with.openSettingsMenu()
@@ -11743,7 +11743,10 @@ class AppStateTest {
         assertEquals(sections, assertIs<Screen.SettingsMenu>(with.screen.value).sections)   // no Launcher category: its rows are on System and Library
         assertEquals(sections, with.settingsSections())   // the two-pane left pane lists the same
         with.openSettings(SettingsSection.SYSTEM)
-        assertEquals(listOf("General", "Launcher", "Developer", "About", "Licenses"), assertIs<Screen.Settings>(with.screen.value).rows.filter { it.kind == SettingsKind.SECTION }.map { it.label })
+        // System's options are one group (Pause when unfocused, Use as home screen, Debug log), then About and Licenses.
+        val sys = assertIs<Screen.Settings>(with.screen.value).rows
+        assertEquals(listOf("About", "Licenses"), sys.filter { it.kind == SettingsKind.SECTION }.map { it.label })
+        assertEquals(listOf(SettingsKind.PAUSE_UNFOCUSED, SettingsKind.HOME_SCREEN, SettingsKind.DEBUG_LOG), sys.take(3).map { it.kind })
     }
 
     @Test fun launcher_page_toggles_the_home_screen() = runTest {
@@ -11754,7 +11757,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.SYSTEM)
         val page = assertIs<Screen.Settings>(state.screen.value)
         val at = rowIndex(state, SettingsKind.HOME_SCREEN)
-        assertEquals(SettingsRow(SettingsKind.SECTION, "Launcher"), page.rows[at - 1])         // in System's Launcher group
+        assertEquals(SettingsKind.PAUSE_UNFOCUSED, page.rows[at - 1].kind)                     // right under Pause when unfocused, no group of its own
         assertEquals(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", "Off"), page.rows[at])
         state.select(at); state.onButton(NxButton.A)
         assertEquals(listOf(true), launcher.homeRequests)
