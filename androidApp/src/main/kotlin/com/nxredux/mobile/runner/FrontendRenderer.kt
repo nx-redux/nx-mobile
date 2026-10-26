@@ -19,6 +19,9 @@ import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.R
 import com.nxredux.mobile.layout.CoreFrame
+import com.nxredux.mobile.layout.DsKind
+import com.nxredux.mobile.layout.TabletopDsMode
+import com.nxredux.mobile.layout.TabletopDsPlacement
 import com.nxredux.mobile.layout.PadRoom
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.layout.consoleScale
@@ -27,9 +30,11 @@ import com.nxredux.mobile.layout.picture
 import com.nxredux.mobile.layout.pictureSpace
 import com.nxredux.mobile.layout.placedFor
 import com.nxredux.mobile.layout.setAsidePx
+import com.nxredux.mobile.layout.tabletopDs
 import com.nxredux.mobile.options.BRICK_HEIGHT
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.NdsOptions
+import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.OverlayFile
 import com.nxredux.mobile.options.PxRect
@@ -376,7 +381,8 @@ internal class FrontendRenderer(
      * area) holds the picture: under Screen Scaling Auto at its console's scale ([picture]); Native, Aspect and Fullscreen
      * size it in the whole area as before. DS games (a plain 256x384 frame) get their screens as regions of the view
      * ([NdsLayout], in that same space), with the viewport the whole area and no offsets or overlay: the fork ignores the
-     * screen offset and the scaling mode for regions. Other games: the picture (or its overlay box) becomes the GL
+     * screen offset and the scaling mode for regions. Half-folded, DS / 3DS screens follow the fold instead
+     * ([tabletopDsLayout]). Other games: the picture (or its overlay box) becomes the GL
      * viewport and the overlay view's bounds; the offsets (scaled to the box) go to the view and move the picture after
      * its placement. The pad is then fitted to the final picture ([PadLayoutController.placeClusters]). No-op until laid
      * out. [geometry]: the view's, when the caller has just read it.
@@ -399,7 +405,8 @@ internal class FrontendRenderer(
         val overlayH = padLayout.hiddenOverlayHeightPx()
         val setAside = pad?.let { setAsidePx(screen, it.reach) } ?: 0f
         val space = pictureSpace(room, w, h, setAside, overlayH)
-        val nds = ndsLayout(w, h, g, space, room, overlayH, screen) ?: n3dsSplitLayout(w, h)
+        val tabletop = tabletopDsLayout(shape, g)
+        val nds = tabletop?.regions ?: ndsLayout(w, h, g, space, room, overlayH, screen) ?: n3dsSplitLayout(w, h)
         // An area too small for one DS screen pixel (NdsLayout returns no regions) is only ever a transient mid-resize
         // size. Keep whatever is drawn now rather than letting an empty list flip a split game to the whole 256x384
         // frame (and the overlay back on) for that moment; the next size change lays it out again.
@@ -424,12 +431,19 @@ internal class FrontendRenderer(
             }
             view.screenOffset = PointF(0f, 0f)
             val shown = nds.shownRect()
-            pictureBox.value = windowRect(origin, shown)
+            // Half-folded split: the touch screen below the hinge is the picture the pad there keeps clear of.
+            val splitBottom = tabletop?.placement?.takeIf { it.mode == TabletopDsMode.SPLIT }?.bottom
+            pictureBox.value = windowRect(origin, splitBottom ?: shown)
             shownPicture = null
             view.screenRegions = nds.map { it.toScreenRegion(w, h) }
-            fitPad(room, pad, shown, frameKnown = true, h, overlayH)
+            // Half-folded, the pad below the hinge is placed from the placement, not beside the screens.
+            fitPad(if (tabletop != null) PadRoom.NONE else room, pad, shown, frameKnown = true, h, overlayH)
             val scales = nds.joinToString(" + ") { "${it.screen.value}${if (it.inset) " inset" else ""} %.2fx".format(java.util.Locale.US, it.dst.height / 192f) }
-            logLayout(w, h, shape, room, pad, setAside, space, shown, "ds $scales")
+            if (tabletop != null) {
+                logLayout(w, h, shape, "TABLETOP_DS", tabletop.pad.takeIf { tabletop.placement.left != null }, 0f, space, shown, "${tabletop.placement.mode} ${if (isN3ds) "3ds" else "ds"} $scales")
+            } else {
+                logLayout(w, h, shape, room.name, pad, setAside, space, shown, "ds $scales")
+            }
             return
         }
         if (view.screenRegions.isNotEmpty()) view.screenRegions = emptyList()
@@ -469,7 +483,7 @@ internal class FrontendRenderer(
         val covered = if (s.scaling != ScreenScaling.AUTO && overlayAspect != null && overlayAspect > 0f) box else shown
         fitPad(room, pad, covered, frameKnown = frame != null, h, overlayH)
         val scale = frame?.let { shown.height / (if (it.rotated) it.width else it.height) }
-        logLayout(w, h, shape, room, pad, setAside, space, shown, "${s.scaling} frame=${frame?.let { "${it.width.roundToInt()}x${it.height.roundToInt()}" }} scale=${scale?.let { "%.2f".format(java.util.Locale.US, it) }}")
+        logLayout(w, h, shape, room.name, pad, setAside, space, shown, "${s.scaling} frame=${frame?.let { "${it.width.roundToInt()}x${it.height.roundToInt()}" }} scale=${scale?.let { "%.2f".format(java.util.Locale.US, it) }}")
     }
 
     /**
@@ -500,7 +514,7 @@ internal class FrontendRenderer(
     /** The relayout's inputs and outcome, once per change, for the Debug log (the device checks read the spec's tables from it). */
     private var lastLayoutLog: String? = null
 
-    private fun logLayout(w: Float, h: Float, shape: WindowShape, room: PadRoom, pad: LandscapePad?, setAside: Float, space: PxRect, picture: PxRect, what: String) {
+    private fun logLayout(w: Float, h: Float, shape: WindowShape, room: String, pad: LandscapePad?, setAside: Float, space: PxRect, picture: PxRect, what: String) {
         val reach = pad?.let { "reach=${it.reach.edgePx.roundToInt()}+${it.reach.buttonsPx.roundToInt()}${if (it.measured) " measured" else " estimated"} unit=${"%.1f".format(java.util.Locale.US, it.unitPx)}" } ?: "no clusters"
         val line = "relayout: window=${shape.widthPx}x${shape.heightPx} ${shape.screenClass} area=${w.roundToInt()}x${h.roundToInt()} room=$room $reach setAside=${setAside.roundToInt()} " +
             "space=${space.short()} picture=${picture.short()} $what"
@@ -542,6 +556,36 @@ internal class FrontendRenderer(
         val shown = regions.shownRect()
         val dy = (placedFor(room, shown, h, overlayH).y - shown.y).roundToInt().toFloat()
         return regions.map { it.copy(dst = it.dst.copy(y = it.dst.y + dy)) }
+    }
+
+    /** The half-folded DS / 3DS layout: the [placement] (game-area px), its screens as [regions], and the [pad] measures it used. */
+    private class HalfFolded(val placement: TabletopDsPlacement, val regions: List<NdsRegion>, val pad: LandscapePad)
+
+    /**
+     * Half-folded DS / 3DS ([PadLayoutController.tabletop]): on a tablet-class window ([TabletopPad.DS], the game view
+     * spanning the window) the top screen above the hinge and the touch screen below it; on a phone-shaped one (the game
+     * view above the hinge) both screens stacked there. [tabletopDs] places them, in window px moved into the game view's;
+     * the player's flat layout choice does not apply. Null otherwise: not half-folded, another console, a Dual screen mode
+     * (its own layouts come first), or a DS frame that is not the plain 256x384 stack (one picture, as [ndsLayout] warns).
+     */
+    private fun tabletopDsLayout(shape: WindowShape, g: FloatArray): HalfFolded? {
+        if (dualMode != DualMode.OFF) return null
+        val kind = when {
+            isN3ds -> DsKind.N3DS
+            NdsOptions.appliesTo(gameTag) && NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt()) -> DsKind.DS
+            else -> return null
+        }
+        val tt = padLayout.tabletop() ?: return null
+        val pad = padLayout.tabletopDsPad(shape)
+        val p = tabletopDs(
+            shape.widthPx, shape.heightPx, shape.screenClass, shape.cutoutTop, hingeTop = tt.menuBottom, hingeBottom = tt.padTop,
+            kind, pad.unitPx, pad.reach, shape.density, controller = padLayout.layoutControllerNames().isNotEmpty(),
+        )
+        val dy = tt.gameTop.toFloat()   // window px -> the game view's (it starts at gameTop)
+        val placement = p.copy(top = p.top.copy(y = p.top.y - dy), bottom = p.bottom.copy(y = p.bottom.y - dy))
+        // 3DS SWAP is Azahar's own key here, which turns its frame; the cuts follow the unswapped Stacked frame.
+        val big = if (kind == DsKind.DS) NdsSettings.parse(frontendValues).big else NdsScreen.TOP
+        return HalfFolded(placement, tabletopRegions(placement, kind, big), pad)
     }
 
     /**

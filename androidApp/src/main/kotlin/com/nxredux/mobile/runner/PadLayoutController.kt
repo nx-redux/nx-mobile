@@ -51,6 +51,8 @@ import com.nxredux.mobile.layout.besidePlacement
 import com.nxredux.mobile.layout.consoleScale
 import com.nxredux.mobile.layout.hideOffered
 import com.nxredux.mobile.layout.overlayHeightPx
+import com.nxredux.mobile.layout.reach
+import com.nxredux.mobile.layout.tabletopDsUnitPx
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
@@ -436,6 +438,20 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             systemRowPills(padProfile(), padMotion() != null),
         )
         return LandscapePad(shape, m.unitPx, m.reach, secondRow, measured.accepted != null)
+    }
+
+    /**
+     * The half-folded DS / 3DS pad's unit (the cover screen's button size, [tabletopDsUnitPx]) and reach in the window
+     * [shape]. The reach is the estimate for now; the pad below the hinge reports its drawn buttons later.
+     */
+    fun tabletopDsPad(shape: WindowShape = activity.windowShape()): LandscapePad {
+        val unit = tabletopDsUnitPx(shape.ydpi, shape.density)
+        val secondRow = besideSecondRow(padTools(), host.padShortcuts, placeholders = false)
+        val r = reach(
+            unit, shape.density, shape.cutoutLeft.toFloat(), shape.cutoutRight.toFloat(), measuredButtonsPx = null,
+            faceWidthUnits(padProfile()), systemRowPills(padProfile(), padMotion() != null),
+        )
+        return LandscapePad(shape, unit, r, secondRow, measured = false)
     }
 
     /**
