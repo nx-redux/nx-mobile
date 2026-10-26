@@ -128,7 +128,7 @@ internal fun withSteps(picks: List<Hsla>): List<Hsla> {
     for (step in listOf(25.0 * dir, 50.0 * dir, -25.0 * dir, -50.0 * dir)) {
         if (out.size == MIN_COLOURS) break
         val l = base.lightness + step
-        if (l in 6.0..96.0 && out.all { abs(it.lightness - l) >= MIN_LEVEL_GAP }) out += base.copy(lightness = l, alpha = 1.0)
+        if (l in 6.0..96.0 && out.all { abs(it.lightness - l) >= MIN_LEVEL_GAP }) out += base.copy(lightness = l, alpha = 1.0)   // role: an opaque candidate for the icon palette, not a see-through colour
     }
     return out
 }
