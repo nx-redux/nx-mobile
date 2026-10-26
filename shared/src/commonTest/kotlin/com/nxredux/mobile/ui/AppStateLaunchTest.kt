@@ -264,4 +264,22 @@ class AppStateLaunchTest {
         r.state.onButton(NxButton.A)   // input is free again
         assertEquals(LaunchPhase.SPREAD, r.state.phase())
     }
+
+    @Test fun a_long_session_still_fades_back_in() = runTest {
+        val r = rig()
+        r.state.selectRow { it is MainRow.Continue }
+        r.state.onButton(NxButton.A)
+        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
+        assertEquals(LaunchPhase.HANDED_OFF, r.state.phase())
+        r.state.onBackground()   // the game is in front
+        advanceTimeBy(LaunchTimeline.GIVE_UP_MS * 3)
+        assertEquals(LaunchPhase.HANDED_OFF, r.state.phase())
+        r.state.onForeground()
+        assertEquals(LaunchPhase.RETURNING, r.state.phase())
+        advanceTimeBy(LaunchTimeline.RETURN_FADE_MS + 1)
+        assertNull(r.state.launchSequence.value)
+        r.state.selectRow { it is MainRow.Continue }
+        r.state.onButton(NxButton.A)   // input works
+        assertEquals(LaunchPhase.SPREAD, r.state.phase())
+    }
 }

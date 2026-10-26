@@ -1442,6 +1442,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /** The app left the foreground: art results still waiting are written now, not left to a debounce a kill would lose. */
     fun onBackground() {
+        // The game (or app) a Minimal launch handed off to is in front: no give-up now, the next onForeground fades it.
+        if (_launchSequence.value?.phase == LaunchPhase.HANDED_OFF) launchSeqJob?.cancel()
         if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) { closeShortcuts(); refreshSettings() }
         scope.launch { flushArt() }
     }
@@ -5584,7 +5586,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             when {
                 launchHandedOff -> {
                     setLaunchPhase(id, LaunchPhase.HANDED_OFF)
-                    delay(LaunchTimeline.GIVE_UP_MS)   // never back in front: stop covering the menu
+                    delay(LaunchTimeline.GIVE_UP_MS)   // the app never left ([onBackground] cancels this): stop covering the menu
                     endLaunch(id)
                 }
                 tool != null && tool.kind != ToolKind.APP -> {
