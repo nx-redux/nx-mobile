@@ -33,7 +33,14 @@ class CoreRegistryNdsTest {
             mapOf(
                 "melonds_touch_mode" to "touch", "melonds_number_of_screen_layouts" to "1",
                 "melonds_screen_layout1" to "top-bottom", "melonds_screen_gap" to "0", "melonds_show_cursor" to "disabled",
-                "melonds_opengl_resolution" to "2",
+                "melonds_opengl_resolution" to "4",
+                "melonds_secondary_screen_scale" to "100", "melonds_secondary_screen_filtering" to "nearest",
+                "melonds_screen_layout2" to "left-right", "melonds_screen_layout3" to "largescreen-top",
+                "melonds_screen_layout4" to "largescreen-bottom", "melonds_screen_layout5" to "hybrid-top",
+                "melonds_screen_layout6" to "hybrid-bottom", "melonds_screen_layout7" to "top",
+                "melonds_screen_layout8" to "bottom", "melonds_hybrid_ratio" to "2",
+                "melonds_hybrid_small_screen" to "both", "melonds_opengl_filtering" to "nearest",
+                "melonds_cursor_timeout" to "3", "melonds_show_current_layout" to "enabled",
                 "melonds_mic_input" to "microphone",
                 "melonds_mic_input_active" to "always",
                 "melonds_show_mic_state" to "disabled",
@@ -43,7 +50,7 @@ class CoreRegistryNdsTest {
     }
 
     @Test fun layout_touch_and_cursor_keys_are_locked_to_their_defaults() {
-        assertEquals(nds.defaultOptions.keys - "melonds_opengl_resolution", nds.lockedOptions)
+        assertEquals(nds.defaultOptions.keys, nds.lockedOptions)
         // Dolphin also locks keys it leaves at the core's own default (debug, Bluetooth passthrough, logging): no default to pin.
         assertTrue(CoreRegistry.all.filter { it.id != "dolphin" }.all { it.defaultOptions.keys.containsAll(it.lockedOptions) })
     }
@@ -71,10 +78,26 @@ class CoreRegistryNdsTest {
         assertEquals(listOf("NDS"), BiosFolders.forTag("NDS"))
     }
 
-    @Test fun the_internal_resolution_is_the_users_at_2x_and_the_renderer_stays_a_visible_option() {
+    @Test fun lockedScreenOptions() {
+        // The one-layout top-bottom frame never reads these: the internal resolution is set by the app, and the rest are unused.
         val d = CoreRegistry.forId("melondsds")!!
-        assertEquals("2", d.defaultOptions["melonds_opengl_resolution"])
-        assertTrue("melonds_opengl_resolution" !in d.lockedOptions)
+        assertTrue(
+            d.lockedOptions.containsAll(
+                setOf(
+                    "melonds_opengl_resolution", "melonds_secondary_screen_scale", "melonds_secondary_screen_filtering",
+                    "melonds_hybrid_ratio", "melonds_hybrid_small_screen", "melonds_opengl_filtering",
+                    "melonds_cursor_timeout", "melonds_show_current_layout",
+                ) + (2..8).map { "melonds_screen_layout$it" },
+            ),
+        )
+        assertEquals("100", d.defaultOptions["melonds_secondary_screen_scale"])
+        assertEquals("4", d.defaultOptions["melonds_opengl_resolution"])
+    }
+
+    @Test fun the_internal_resolution_is_locked_and_the_renderer_stays_a_visible_option() {
+        val d = CoreRegistry.forId("melondsds")!!
+        assertEquals("4", d.defaultOptions["melonds_opengl_resolution"])
+        assertTrue("melonds_opengl_resolution" in d.lockedOptions)
         assertTrue("melonds_render_mode" !in d.defaultOptions)      // device default, set at load (NdsRenderer)
         assertFalse("melonds_render_mode" in d.restartOnlyOptions)  // visible, per-game; held until restart (NdsRenderer)
     }
