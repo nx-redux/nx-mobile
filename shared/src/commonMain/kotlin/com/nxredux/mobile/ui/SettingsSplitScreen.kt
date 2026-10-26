@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxHintBarKeepHeight
+import com.nxredux.mobile.ui.nx.NxButton
 
 /** An unfocused pane's opacity. */
 internal const val UNFOCUSED_ALPHA = 0.6f
@@ -38,14 +39,14 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
         left = {
             if (s is Screen.SettingsMenu) {
                 WithIndex(selection) {
-                    SettingsMenuScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton)
+                    SettingsMenuScreen(s, it, state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) })
                 }
             } else {
                 val current = categories.indexOf(settingsCategoryOf(s)).coerceAtLeast(0)
+                // The page has the focus: the current section drops to the main ink (no dimming of the block).
                 SettingsMenuScreen(
                     Screen.SettingsMenu(categories), current,
-                    onSelect = state::settingsCategoryTap, onOpen = state::settingsCategoryTap,
-                    modifier = Modifier.alpha(UNFOCUSED_ALPHA), hints = emptyList(),   // role: an unfocused pane, dimmed
+                    onTap = state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) }, rowsFocused = true,
                 )
             }
         },

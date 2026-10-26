@@ -82,6 +82,8 @@ data class NxColors(
     val inkRing: Color = main.copy(alpha = 0.30f)
     /** Hairlines: a tile's edge, a placeholder spine, a sheet's edge. The [main] ink at 8%. */
     val inkEdge: Color = main.copy(alpha = 0.08f)
+    /** The small NX mark at the top right of Settings (SettingsMark): the [main] ink at 5%. */
+    val inkMark: Color = main.copy(alpha = 0.05f)
     /**
      * Reserved for carousel items two or more steps out (a Float, not a colour); not yet wired. The carousel uses
      * MENU_FAR_ALPHA (0.2) in RowLayout.kt.

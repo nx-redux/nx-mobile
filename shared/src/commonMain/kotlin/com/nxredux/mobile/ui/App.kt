@@ -604,7 +604,7 @@ private fun SettingsPage(state: AppState, s: Screen, selection: State<ListSelect
         is Screen.EmulatorList -> WithIndex(selection) { EmulatorListScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, split = titled) }
         is Screen.EmulatorConsoles -> WithIndex(selection) { EmulatorConsolesScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton) }
         is Screen.EmulatorOptions -> WithIndex(selection) { EmulatorOptionsScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = settingTruncated) }
-        is Screen.SettingsMenu -> WithIndex(selection) { SettingsMenuScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton) }
+        is Screen.SettingsMenu -> WithIndex(selection) { SettingsMenuScreen(s, it, state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) }) }
         is Screen.ToolApps -> {
             // Only the picker showing reports its columns (one sliding out never overwrites the count).
             val onColumns: (Int) -> Unit = remember(s) { { columns -> if (state.screen.value === s) state.onToolAppsLayout(columns) } }
@@ -669,7 +669,8 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
         is Screen.Switcher -> Box(Modifier.fillMaxSize().background(Color.Black))
         // The welcome carries its own large mark: plain black behind it. Every other setup page has the tool pages' mark.
         is Screen.Onboarding -> if (s.step == OnboardingStep.WELCOME) Box(Modifier.fillMaxSize().background(Color.Black)) else MarkBackground(s)
-        else -> MarkBackground(s)
+        // Settings: the small mark at the top right alone ([SettingsBackground]); the large centred mark is not drawn.
+        else -> if (settingsPane(s) != null) SettingsBackground() else MarkBackground(s)
     }
 }
 

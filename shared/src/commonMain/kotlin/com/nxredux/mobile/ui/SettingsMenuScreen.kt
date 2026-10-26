@@ -1,29 +1,32 @@
 package com.nxredux.mobile.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.nxredux.mobile.ui.nx.Hint
-import com.nxredux.mobile.ui.nx.NxButton
-import com.nxredux.mobile.ui.nx.NxRow
-import com.nxredux.mobile.ui.nx.NxScreenScaffold
+import com.nxredux.mobile.ui.nx.LocalFooterMode
 
 /**
- * Tools -> Settings: one row per section, drawn like the Tools page, titled [SETTINGS_TITLE]. A opens the section, B goes
- * back to Tools. The rows rest at the bottom, over the hints, in reach of a thumb (a tablet's too). [hints] (null: its own)
- * the two-pane Settings' left pane's.
+ * Tools -> Settings: the section block ([SettingsSectionBlock]) alone, anchored bottom-left at the gutter and
+ * [SETTINGS_BLOCK_BOTTOM] up, the rest of the screen empty (the mark is the background's, [SettingsBackground]). A tap on
+ * a section selects it, a tap on the selected one opens it ([onTap]); A opens, B goes back to Tools. "Back" is drawn
+ * in touch mode only ([settingsBackShown]), and calls [onBack]. [rowsFocused]: the two-pane Settings' left pane while
+ * its page has the focus (the current section drops to the main ink).
  */
 @Composable
 fun SettingsMenuScreen(
     screen: Screen.SettingsMenu, selectedIndex: Int,
-    onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier = Modifier,
-    onHint: ((NxButton) -> Unit)? = null,
-    hints: List<Hint>? = null,
+    onTap: (Int) -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier,
+    rowsFocused: Boolean = false,
 ) {
-    NxScreenScaffold(
-        rows = screen.sections.map { NxRow(it.label) },
-        selectedIndex = selectedIndex, showArt = false,
-        hints = hints ?: listOf(Hint(NxButton.A, "Open"), Hint(NxButton.B, "Back")),
-        onSelect = onSelect, onOpen = onOpen, modifier = modifier, onHint = onHint, title = SETTINGS_TITLE,
-        bottomAligned = true,   // the categories rest on the hints, in reach of a thumb on a tablet
-    )
+    val back = onBack.takeIf { settingsBackShown(LocalFooterMode.current) }
+    Box(modifier.fillMaxSize()) {
+        SettingsSectionBlock(
+            screen.sections, selectedIndex, rowsFocused, onTap, back,
+            Modifier.align(Alignment.BottomStart)
+                .padding(start = settingsGutter(settingsSizeClass()), end = settingsGutter(settingsSizeClass()), bottom = SETTINGS_BLOCK_BOTTOM),
+        )
+    }
 }
