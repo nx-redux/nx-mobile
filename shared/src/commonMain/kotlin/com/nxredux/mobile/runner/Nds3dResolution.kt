@@ -49,7 +49,7 @@ enum class Res3dConsole(
 
     companion object {
         /** The console for a system [tag]; null when it has no 3D Resolution. */
-        fun forTag(tag: String): Res3dConsole? = when (tag) {
+        fun forTag(tag: String): Res3dConsole? = when (tag.trim().uppercase()) {
             "NDS" -> DS
             "3DS" -> N3DS
             else -> null

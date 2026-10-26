@@ -176,6 +176,8 @@ class Nds3dResolutionTest {
     fun forTagMapsConsoles() {
         assertEquals(Res3dConsole.N3DS, Res3dConsole.forTag("3DS"))
         assertEquals(Res3dConsole.DS, Res3dConsole.forTag("NDS"))
+        assertEquals(Res3dConsole.N3DS, Res3dConsole.forTag(" 3ds "))
+        assertEquals(Res3dConsole.DS, Res3dConsole.forTag("nds"))
         assertNull(Res3dConsole.forTag("GBA"))
         assertEquals(setOf("nx_3ds_3d_resolution", "nx_3ds_3d_max_scale", "nx_3ds_3d_scale"), Res3dConsole.N3DS.keys)
     }
