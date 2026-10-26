@@ -19,15 +19,17 @@ enum class PadRoom {
 
 /**
  * The picture's space in an [areaW] x [areaH] game area (its own pixels, top-left origin): [setAsidePx] off each side
- * for [PadRoom.BESIDE] (never past the middle), the [hiddenSpaceHeight] above an overlay [overlayH] tall for
- * [PadRoom.HIDDEN_BAND], else the whole area.
+ * for [PadRoom.BESIDE] (never past the middle), the [hiddenSpaceHeight] above an overlay [overlayH] tall, reaching
+ * [reach] into it, for [PadRoom.HIDDEN_BAND], else the whole area.
  */
-fun pictureSpace(room: PadRoom, areaW: Float, areaH: Float, setAsidePx: Float, overlayH: Float): PxRect = when (room) {
+fun pictureSpace(
+    room: PadRoom, areaW: Float, areaH: Float, setAsidePx: Float, overlayH: Float, reach: Float = LayoutConstants.HIDDEN_BAND_REACH,
+): PxRect = when (room) {
     PadRoom.BESIDE -> {
         val side = setAsidePx.coerceIn(0f, areaW / 2f)
         PxRect(side, 0f, areaW - 2f * side, areaH)
     }
-    PadRoom.HIDDEN_BAND -> PxRect(0f, 0f, areaW, hiddenSpaceHeight(areaH, overlayH).coerceAtLeast(0f))
+    PadRoom.HIDDEN_BAND -> PxRect(0f, 0f, areaW, hiddenSpaceHeight(areaH, overlayH, reach).coerceAtLeast(0f))
     PadRoom.BAND, PadRoom.NONE -> PxRect(0f, 0f, areaW, areaH)
 }
 

@@ -512,7 +512,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val m = besideMeasures(
             shape.screenClass, shape.widthPx.toFloat(), shape.heightPx.toFloat(), shape.ydpi, shape.density,
             shape.cutoutLeft.toFloat(), shape.cutoutRight.toFloat(), secondRow, measured.accepted, faceWidthUnits(padProfile()),
-            systemRowPills(padProfile(), padMotion() != null), mic = padReservesMic(),
+            systemRowPills(padProfile(), padMotion() != null),
         )
         return LandscapePad(shape, m.unitPx, m.reach, secondRow, measured.accepted != null)
     }
@@ -527,16 +527,10 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val drawn = measured.accepted.takeIf { tabletopDsViews != null }
         val r = reach(
             unit, shape.density, shape.cutoutLeft.toFloat(), shape.cutoutRight.toFloat(), measuredButtonsPx = drawn,
-            faceWidthUnits(padProfile()), systemRowPills(padProfile(), padMotion() != null), mic = padReservesMic(),
+            faceWidthUnits(padProfile()), systemRowPills(padProfile(), padMotion() != null),
         )
         return LandscapePad(shape, unit, r, secondRow, measured = drawn != null)
     }
-
-    /**
-     * Whether the halves keep room for the DS / 3DS mic button ([micReachPx]): from the console, known from the first
-     * layout (the button itself shows only once the game has started), and kept in netplay, where it hides.
-     */
-    private fun padReservesMic(): Boolean = CoreRegistry.forTag(layoutTag())?.microphone == true
 
     /**
      * Where half-folded [tt] puts this DS / 3DS game's screens and pad halves in the window [shape] ([tabletopDs], window

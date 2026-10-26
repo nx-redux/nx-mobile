@@ -1,7 +1,5 @@
 package com.nxredux.mobile.ui.nx
 
-import com.nxredux.mobile.layout.micReachPx
-import com.nxredux.mobile.layout.reach
 import com.nxredux.mobile.ui.padlayout.padLayoutShowsMic
 import kotlin.math.abs
 import kotlin.test.Test
@@ -9,7 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** The pad's fixed mic button: its size and inset follow the pad's unit, and on a cluster it sits right of the d-pad. */
+/** The pad's fixed mic button: its size and inset follow the pad's unit, and on a landscape half it sits right of L. */
 class PadMicTest {
     private fun near(a: Float, b: Float) = assertTrue(abs(a - b) < 0.001f, "expected $b, got $a")
 
@@ -19,23 +17,21 @@ class PadMicTest {
         assertEquals(3f, micButtonInset(20f))
     }
 
-    @Test fun aClusterPutsItPastTheDpadAndTheMenuRow() {
-        // unit 50, nudge 10: the d-pad reaches 150 from the nudge, MENU + toggle 2 x 70 + 12 = 152, so 10 + 152 + 7.5.
-        near(clusterMicStart(50f, 10f), 169.5f)
-        // A big unit: the d-pad (3 units) is the wider, so it starts past it.
-        near(clusterMicStart(100f, 20f), 20f + 300f + 15f)
+    @Test fun rightOfLItEndsPastTheShoulders() {
+        // unit 50: L (50), 8 dp, then the 45 dp button; with ZL (0.72 units) and its own 8 dp gap first.
+        near(shoulderMicEnd(listOf(NxButton.L1), 50f, 36f), 50f + 8f + 45f)
+        near(shoulderMicEnd(listOf(NxButton.L1, NxButton.L2), 50f, 36f), 50f + 8f + 36f + 8f + 45f)
     }
 
-    @Test fun theHalvesReachCountsIt() {
-        // Beside the picture and half-folded (the 0.2-unit nudge): the reach the picture keeps clear of ends where the
-        // button does, at a phone's, a tablet's and the half-folded unit, at density 1 (dp = px).
-        for (unit in listOf(36f, 54.7f, 49.3f)) {
-            near(micReachPx(unit, 1f), clusterMicStart(unit, unit * 0.2f) + micButtonSize(unit) - unit * 0.2f)
-            val r = reach(unit, 1f, 0f, 0f, measuredButtonsPx = 2.8f * unit + 12f, faceUnits = 3f, systemPills = 2, mic = true)
-            assertTrue(r.buttonsPx >= micReachPx(unit, 1f), "unit $unit: buttons ${r.buttonsPx}")
+    @Test fun rightOfLItStaysInsideTheDpadsWidth() {
+        // The halves' reach counts the d-pad (3 units), not the mic: it must end inside it, with ZL too, from a small
+        // phone's landscape unit up (45 dp; the half-folded Fold's 49.3; a big phone's 65).
+        for (unit in listOf(45f, 49.3f, 52f, 65f)) {
+            for (shoulders in listOf(listOf(NxButton.L1), listOf(NxButton.L1, NxButton.L2))) {
+                val end = shoulderMicEnd(shoulders, unit, unit * 0.72f)
+                assertTrue(end <= 3f * unit, "unit $unit, $shoulders: ends at $end, past ${3f * unit}")
+            }
         }
-        // Without a mic the measured buttons stand.
-        assertEquals(112f, reach(40f, 1f, 0f, 0f, measuredButtonsPx = 112f, faceUnits = 3f, systemPills = 2).buttonsPx)
     }
 
     @Test fun portraitCentreIsTheBandCornerOrTheOverlayRow() {
