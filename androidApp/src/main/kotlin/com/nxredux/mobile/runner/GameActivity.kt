@@ -2783,7 +2783,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun ndsControllerMode(): Boolean = renderer.ndsControllerMode()
     override fun screenClass(): ScreenClass = windowShape().screenClass
     // Half-folded (no second screen's mode, which places the screens itself) the screens follow the fold.
-    override fun layoutSetByFold(): Boolean = padLayout.tabletop() != null && dual.dualMode == DualMode.OFF
+    override fun layoutSetByFold(): Boolean = renderer.halfFoldedLayoutInUse()
 
     // The second display's state, owned by [dual]: read by the input, layout and picture code.
     override val presentation: SecondScreenPresentation? get() = dual.presentation

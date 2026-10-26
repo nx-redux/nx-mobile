@@ -492,7 +492,14 @@ internal class FrontendRenderer(
         val box: PxRect
         val shown: PxRect
         val offset: PointF
-        if (s.scaling == ScreenScaling.AUTO && frame != null) {
+        val foldTop = halfFoldedTopArea(shape, g, w)
+        if (foldTop != null) {
+            // Half-folded with a DS frame that is not the plain stack: drawn whole above the hinge, not across it.
+            val fit = DualScreen.fullFrame(foldTop.width, foldTop.height, g[2])
+            box = fit.copy(y = fit.y + foldTop.y)
+            offset = PointF(0f, 0f)
+            shown = box
+        } else if (s.scaling == ScreenScaling.AUTO && frame != null) {
             val placed = placedFor(room, picture(space, frame, consoleScale(gameTag), overlayAspect), h, overlayH)
             // The offsets as Native / Aspect / Fullscreen scale them: to the overlay's box, else the game area.
             val unit = (if (overlayAspect != null && overlayAspect > 0f) placed.height else h) / BRICK_HEIGHT
@@ -627,6 +634,32 @@ internal class FrontendRenderer(
         // The 3DS core's swap is pinned while half-folded (its frame stays unswapped under the cuts): SWAP is the app's.
         val big = if (kind == DsKind.DS) NdsSettings.parse(frontendValues).big else padLayout.n3dsTabletopBig
         return HalfFolded(placement, tabletopRegions(placement, kind, big), pad)
+    }
+
+    /**
+     * The area above the hinge (game-view px, [w] wide) while the Fold is half-folded with a DS frame that is not the
+     * plain 256 x 384 stack (another core layout): that frame is drawn whole there. Null otherwise.
+     */
+    private fun halfFoldedTopArea(shape: WindowShape, g: FloatArray, w: Float): PxRect? {
+        if (dualMode != DualMode.OFF || !NdsOptions.appliesTo(gameTag)) return null
+        if (g[0] <= 0f || g[1] <= 0f || NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt())) return null
+        val tt = padLayout.tabletop() ?: return null
+        if (tt.pad != TabletopPad.DS) return null   // the Flip's game view is already the area above the hinge
+        val top = (shape.cutoutTop - tt.gameTop).toFloat()
+        return PxRect(0f, top, w, (tt.menuBottom - tt.gameTop).toFloat() - top)
+    }
+
+    /**
+     * Whether the half-folded DS / 3DS layout places the screens now, so the layout shortcut does nothing: half-folded
+     * with no second screen in use, a 3DS, or a DS whose frame is the plain stack (or not known yet). A DS frame of
+     * another shape is drawn whole above the hinge instead ([halfFoldedTopArea]), and the shortcut works as flat.
+     */
+    fun halfFoldedLayoutInUse(): Boolean {
+        if (dualMode != DualMode.OFF || padLayout.tabletop() == null) return false
+        if (isN3ds) return true
+        if (!NdsOptions.appliesTo(gameTag)) return false
+        val g = retroView?.getGameGeometry() ?: return true
+        return g[0] <= 0f || g[1] <= 0f || NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt())
     }
 
     /**
