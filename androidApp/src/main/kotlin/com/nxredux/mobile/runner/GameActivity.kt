@@ -1060,11 +1060,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id) else null
         renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
         renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(privateRoot) }
-        // 3DS with a second display: Azahar starts in the split's fixed layout, which replaces the rows' values below. The core
-        // never runs the user's swap values then, so leaving split puts back the stored ones.
+        // 3DS with a second display: Azahar starts in the split's fixed layout, which replaces the rows' values below; launched
+        // half-folded, its swap is pinned likewise ([DualScreen.n3dsForcedOptions]). The core never runs the user's swap
+        // values then, so leaving split (or unfolding) puts back the stored ones.
         val launchDual = dual.dualModeNow()
-        val n3dsSplit = if (N3dsOptions.appliesTo(tag)) DualScreen.n3dsCoreOptions(launchDual) else null
+        val n3dsSplit = if (N3dsOptions.appliesTo(tag)) DualScreen.n3dsForcedOptions(launchDual, n3dsTabletop()) else null
         if (n3dsSplit != null) dual.n3dsSwapBeforeSplit = DualScreen.n3dsSwapRestore(null, resolved.values)
+        n3dsSwapPinnedHalfFolded = N3dsOptions.appliesTo(tag) && n3dsHalfFoldedPin(launchDual)
         val options = FrontendOptions.coreValues(resolved.values)
             .filterNot { (k, _) -> k == N3dsOptions.LAYOUT && N3dsOptions.appliesTo(tag) }   // set from the row below
             .filterNot { (k, _) -> n3dsSplit?.containsKey(k) == true }
@@ -1791,7 +1793,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             // screens are regions that decide where a finger touches (as split), so the core takes it anywhere.
             Variable(N3dsOptions.TOUCH_MAIN_ONLY, DualScreen.n3dsTouchMainOnly(dual.dualMode, padLayout.overlayPadShown.value && !dual.mainPanelShown() && !n3dsTabletop())),
             Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(input.n3dsHotkeys.stylus)),
-        ).withN3dsSplit(DualScreen.n3dsCoreOptions(dual.dualMode))
+        ).withN3dsSplit(DualScreen.n3dsForcedOptions(dual.dualMode, n3dsTabletop()))
+        // Half-folded pins the swap (the app's SWAP moves the screens across the hinge): the user's values are noted as it
+        // starts and put back when flat again. A second screen's split holds them meanwhile, and puts back none while
+        // half-folded ([DualScreenController.restoreN3dsScreen]).
+        val pinned = n3dsHalfFoldedPin(dual.dualMode)
+        if (pinned && !n3dsSwapPinnedHalfFolded) dual.captureN3dsSwap()
         // Azahar reports the new frame size some frames after its layout changes (a hotkey or menu cycle, a rotation, a
         // second screen's split or its restore): lay out again when it arrives, if the view's geometry flow has not.
         // Large screen and Stacked share the core layout and differ only in the touch screen's proportion, so either counts.
@@ -1799,7 +1806,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (lastN3dsLayout != null && layout != lastN3dsLayout) renderer.watchGeometry()
         lastN3dsLayout = layout
         applyOptions(options)
+        if (!pinned && n3dsSwapPinnedHalfFolded && DualScreen.n3dsCoreOptions(dual.dualMode) == null) dual.restoreN3dsScreen()
+        n3dsSwapPinnedHalfFolded = pinned
     }
+
+    /** Half-folded alone (no second screen's mode holding the 3DS options) pins the core's swap ([DualScreen.n3dsForcedOptions]). */
+    private fun n3dsHalfFoldedPin(mode: DualMode): Boolean = n3dsTabletop() && DualScreen.n3dsCoreOptions(mode) == null
+
+    /** The core's swap was last pinned by half-folding ([syncN3dsCore]): flat again puts the user's values back. */
+    private var n3dsSwapPinnedHalfFolded = false
 
     /**
      * Half-folded with a tabletop layout (the Fold's DS halves or the Flip's portrait one): the 3DS core is then Stacked with
@@ -2765,7 +2780,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override val n3dsPicture: NdsScreen get() = dual.n3dsPicture
     override fun secondDsRegions(g: FloatArray): List<NdsRegion>? = dual.secondDsRegions(g)
     override fun secondRegions(g: FloatArray, ds: List<NdsRegion>?): List<ScreenRegion> = dual.secondRegions(g, ds)
-    override fun onN3dsSwapPressed(down: Boolean): Boolean = dual.onN3dsSwapPressed(down)
+    override fun onN3dsSwapPressed(down: Boolean): Boolean = dual.onN3dsSwapPressed(down) || renderer.onTabletopN3dsSwap(down)
     override fun mainPanelShown(): Boolean = dual.mainPanelShown()
     override fun placeMainPanelHost() = dual.placeMainPanelHost()
 

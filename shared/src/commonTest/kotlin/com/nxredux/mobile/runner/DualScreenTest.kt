@@ -63,6 +63,16 @@ class DualScreenTest {
         DualScreen.n3dsCoreOptions(DualMode.PANEL_UP))
     @Test fun n3ds_off_restores() = assertNull(DualScreen.n3dsCoreOptions(DualMode.OFF))
 
+    @Test fun n3ds_half_folded_pins_the_swap() = assertEquals(
+        mapOf("citra_swap_screen" to "Top", "citra_swap_screen_mode" to "Hold"),
+        DualScreen.n3dsForcedOptions(DualMode.OFF, halfFolded = true))
+    @Test fun n3ds_split_wins_over_half_folded() =
+        assertEquals(DualScreen.n3dsCoreOptions(DualMode.SPLIT), DualScreen.n3dsForcedOptions(DualMode.SPLIT, halfFolded = true))
+    @Test fun n3ds_flat_forces_nothing() {
+        assertNull(DualScreen.n3dsForcedOptions(DualMode.OFF, halfFolded = false))
+        assertEquals(DualScreen.n3dsCoreOptions(DualMode.PANEL_UP), DualScreen.n3dsForcedOptions(DualMode.PANEL_UP, halfFolded = false))
+    }
+
     @Test fun n3ds_swap_restore_prefers_the_running_values() = assertEquals(
         mapOf("citra_swap_screen" to "Bottom", "citra_swap_screen_mode" to "Hold"),
         DualScreen.n3dsSwapRestore(mapOf("citra_swap_screen" to "Bottom", "citra_swap_screen_mode" to "Hold"),

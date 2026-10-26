@@ -150,6 +150,8 @@ internal class FrontendRenderer(
     var ndsSplit = false                            // regions are on: the overlay is off and shown unavailable
         internal set   // the launch sets it (a DS game starts split)
     private var ndsFrameWarned = false                      // the "not 256x384" warning is logged once
+    /** Half-folded 3DS: the screen above the hinge (SWAP trades it, [onTabletopN3dsSwap]); session only, as split's. */
+    private var n3dsTabletopBig = NdsScreen.TOP
 
     // ---- shader presets ----
     var shaderValues: Map<String, String> = ShaderOptions.fromConfig(emptyMap())   // nx_shader + stored nx_shader_param_*
@@ -579,9 +581,23 @@ internal class FrontendRenderer(
         val p = padLayout.tabletopDsPlacement(shape, tt, pad)
         val dy = tt.gameTop.toFloat()   // window px -> the game view's (it starts at gameTop)
         val placement = p.copy(top = p.top.copy(y = p.top.y - dy), bottom = p.bottom.copy(y = p.bottom.y - dy))
-        // 3DS SWAP is Azahar's own key here, which turns its frame; the cuts follow the unswapped Stacked frame.
-        val big = if (kind == DsKind.DS) NdsSettings.parse(frontendValues).big else NdsScreen.TOP
+        // The 3DS core's swap is pinned while half-folded (its frame stays unswapped under the cuts): SWAP is the app's.
+        val big = if (kind == DsKind.DS) NdsSettings.parse(frontendValues).big else n3dsTabletopBig
         return HalfFolded(placement, tabletopRegions(placement, kind, big), pad)
+    }
+
+    /**
+     * 3DS SWAP (the pill, SELECT + R, a pad's left-stick click) [down] or up while half-folded with the screens as regions
+     * ([tabletopDsLayout]): a press trades the screens above and below the hinge (touch follows the bottom screen) and the
+     * core never sees it. False otherwise: the key is someone else's (split's, else Azahar's own).
+     */
+    fun onTabletopN3dsSwap(down: Boolean): Boolean {
+        if (!isN3ds || dualMode != DualMode.OFF || padLayout.tabletop() == null) return false
+        if (down) {
+            n3dsTabletopBig = n3dsTabletopBig.other
+            relayoutFrontend()
+        }
+        return true
     }
 
     /**

@@ -189,10 +189,11 @@ internal class DualScreenController(
     private var presentationShape: DisplayShape? = null   // the second display's size and density the window was made for
 
     /**
-     * 3DS entering split: notes the swap values the core runs now (an unsaved menu change included), queued ahead of the
-     * split's own, so leaving split can put them back. A launch straight into split noted the stored ones instead.
+     * 3DS entering split (or half-folding, [GameActivity.syncN3dsCore]): notes the swap values the core runs now (an unsaved
+     * menu change included), queued ahead of the split's own, so leaving split can put them back. A launch straight into
+     * split noted the stored ones instead; values already noted (the other of the two holds them) are kept.
      */
-    private fun captureN3dsSwap() {
+    fun captureN3dsSwap() {
         val view = retroView ?: return
         if (netplayNow != null) return   // no core option changes mid-session, so none to undo
         view.queueEvent {
@@ -204,10 +205,14 @@ internal class DualScreenController(
         }
     }
 
-    /** 3DS leaving split: the swap values from before it ([captureN3dsSwap]) and the orientation's proportion are back. */
-    private fun restoreN3dsScreen() {
+    /**
+     * 3DS leaving split (or unfolding): the swap values from before it ([captureN3dsSwap]) and the orientation's proportion
+     * are back. Still half-folded, the swap stays pinned and the noted values wait for the unfold.
+     */
+    fun restoreN3dsScreen() {
         val view = retroView ?: return
         if (netplayNow != null) return
+        if (padLayout.tabletop() != null) return
         val stored = storedValues
         val proportion = N3dsOptions.stackedSmallProportion(frontendValues, isLandscape(), renderer.ndsControllerMode(), activity.screenClass(), padLayout.tabletop() != null)
         view.queueEvent {
