@@ -121,6 +121,9 @@ int Microphone::read(int16_t* samples, int numSamples) {
         // Oboe already closed it: drop it without stop/close, and play noise for the rest of this live period.
         inputStream = nullptr;
         feed.onLiveFailed();
+        // Drop what it left, as closeStream does, so the next live period doesn't replay it.
+        std::lock_guard<std::mutex> l(lock);
+        fifoBuffer->setReadCounter(fifoBuffer->getWriteCounter());
     }
     // Opened here, on the core's thread, as libretro mics always were; a failure falls back to noise.
     if (feed.wantsLive() && !inputStream && !openStream()) feed.onLiveFailed();

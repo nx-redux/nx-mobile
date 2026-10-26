@@ -2279,6 +2279,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (quitting) return   // single-shot: a second job could serialize after the core is destroyed
         quitting = true
         rumbles.forEach { it.release() }
+        pushMicSource()   // silence now, so the phone's mic closes before the save, not at the pause
         endGameTime()
         val view = retroView
         val ss = saveStates

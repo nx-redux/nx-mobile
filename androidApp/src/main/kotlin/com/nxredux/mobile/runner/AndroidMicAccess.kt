@@ -8,10 +8,11 @@ import android.provider.Settings
 
 /**
  * [MicAccess] on Android. [prompt] launches the RECORD_AUDIO request. A tap asks when Android would still show the
- * prompt (never asked, or it would explain first), else opens the app's system settings page. Never touches
- * `AppSettings.micAsked`: that only gates the in-game ask.
+ * prompt (never asked here or in game ([askedInGame]: `AppSettings.micAsked`), or it would explain first), else opens
+ * the app's system settings page, so a permanent deny given in game doesn't make the first tap here do nothing. Never
+ * writes `AppSettings.micAsked`: that only gates the in-game ask.
  */
-class AndroidMicAccess(private val activity: Activity, private val prompt: () -> Unit) : MicAccess {
+class AndroidMicAccess(private val activity: Activity, private val askedInGame: () -> Boolean = { false }, private val prompt: () -> Unit) : MicAccess {
     override val usable: Boolean
         get() = activity.packageManager.run {
             hasSystemFeature(PackageManager.FEATURE_MICROPHONE) && !hasSystemFeature(PackageManager.FEATURE_LEANBACK)
@@ -21,7 +22,8 @@ class AndroidMicAccess(private val activity: Activity, private val prompt: () ->
 
     override fun request() {
         val prefs = activity.getSharedPreferences(PREFS, Activity.MODE_PRIVATE)
-        if (!prefs.getBoolean(ASKED, false) || activity.shouldShowRequestPermissionRationale(PERMISSION)) {
+        val asked = prefs.getBoolean(ASKED, false) || askedInGame()
+        if (!asked || activity.shouldShowRequestPermissionRationale(PERMISSION)) {
             prefs.edit().putBoolean(ASKED, true).apply()
             prompt()
         } else {

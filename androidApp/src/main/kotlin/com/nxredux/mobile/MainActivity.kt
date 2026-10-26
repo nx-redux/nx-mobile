@@ -302,7 +302,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
     private val askMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         if (::state.isInitialized) state.onAllFilesAccessChanged()
     }
-    private val micAccess = AndroidMicAccess(this) { runCatching { askMic.launch(android.Manifest.permission.RECORD_AUDIO) } }
+    private val micAccess = AndroidMicAccess(this, askedInGame = { AndroidAppSettings(this).micAsked }) { runCatching { askMic.launch(android.Manifest.permission.RECORD_AUDIO) } }
 
     /** Setup's Permissions page: the notification permission on Android 13+, asked through [askNotifications]. */
     private val notificationAccess: NotificationAccess? = if (android.os.Build.VERSION.SDK_INT < 33) null else object : NotificationAccess {
