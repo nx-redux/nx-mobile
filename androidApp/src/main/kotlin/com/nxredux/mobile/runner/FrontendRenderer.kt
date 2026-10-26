@@ -397,7 +397,7 @@ internal class FrontendRenderer(
         val pad = padLayout.landscapePad(shape)
         val screen = shape.screenClass
         val overlayH = padLayout.hiddenOverlayHeightPx()
-        val setAside = pad?.let { setAsidePx(screen, it.reach, controller = false) } ?: 0f
+        val setAside = pad?.let { setAsidePx(screen, it.reach) } ?: 0f
         val space = pictureSpace(room, w, h, setAside, overlayH)
         val nds = ndsLayout(w, h, g, space, room, overlayH, screen) ?: n3dsSplitLayout(w, h)
         // An area too small for one DS screen pixel (NdsLayout returns no regions) is only ever a transient mid-resize
@@ -439,7 +439,7 @@ internal class FrontendRenderer(
         val shown: PxRect
         val offset: PointF
         if (s.scaling == ScreenScaling.AUTO && frame != null) {
-            val placed = placedFor(room, picture(space, frame, consoleScale(gameTag), s.scaling, PxRect(0f, 0f, w, h), overlayAspect), h, overlayH)
+            val placed = placedFor(room, picture(space, frame, consoleScale(gameTag), overlayAspect), h, overlayH)
             // The offsets as Native / Aspect / Fullscreen scale them: to the overlay's box, else the game area.
             val unit = (if (overlayAspect != null && overlayAspect > 0f) placed.height else h) / BRICK_HEIGHT
             box = placed

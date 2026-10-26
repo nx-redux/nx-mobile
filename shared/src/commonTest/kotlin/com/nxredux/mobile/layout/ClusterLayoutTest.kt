@@ -27,15 +27,12 @@ class ClusterLayoutTest {
     private val reach = Reach(100f, 300f)
 
     @Test fun wide_tablet_sets_aside_full_reach() =
-        assertEquals(400f, setAsidePx(ScreenClass.WIDE_TABLET, reach, controller = false), 0.01f)
+        assertEquals(400f, setAsidePx(ScreenClass.WIDE_TABLET, reach), 0.01f)
 
     @Test fun others_set_aside_half() {
-        assertEquals(200f, setAsidePx(ScreenClass.REGULAR_PHONE, reach, controller = false), 0.01f)
-        assertEquals(200f, setAsidePx(ScreenClass.NEAR_SQUARE_TABLET, reach, controller = false), 0.01f)
+        assertEquals(200f, setAsidePx(ScreenClass.REGULAR_PHONE, reach), 0.01f)
+        assertEquals(200f, setAsidePx(ScreenClass.NEAR_SQUARE_TABLET, reach), 0.01f)
     }
-
-    @Test fun controller_sets_aside_nothing() =
-        assertEquals(0f, setAsidePx(ScreenClass.WIDE_TABLET, reach, controller = true), 0.01f)
 
     @Test fun cutout_beyond_margin_moves_both_halves() {
         val r = reach(182f, 2.625f, 136f, 0f, null, 0f, systemPills = 2)

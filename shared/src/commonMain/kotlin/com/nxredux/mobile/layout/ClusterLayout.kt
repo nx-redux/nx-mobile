@@ -63,13 +63,10 @@ fun reach(
 private fun systemRowPx(pills: Int, unitPx: Float, density: Float): Float =
     if (pills <= 0) 0f else pills * BUTTON_GROUP_UNITS * unitPx + (pills - 1) * BUTTON_GAP_DP * density
 
-/** Per side, how much of the picture's span the pad halves take from the picture: 0 with a controller, the full
- * reach on a wide tablet, half of it otherwise. */
-fun setAsidePx(screen: ScreenClass, reach: Reach, controller: Boolean): Float = when {
-    controller -> 0f
-    screen == ScreenClass.WIDE_TABLET -> reach.total
-    else -> reach.total / 2f
-}
+/** Per side, how much of the picture's span the on-screen pad halves take from it: the full reach on a wide tablet,
+ * half of it otherwise. (With a controller there are no halves, so nothing is set aside: see [pictureSpace].) */
+fun setAsidePx(screen: ScreenClass, reach: Reach): Float =
+    if (screen == ScreenClass.WIDE_TABLET) reach.total else reach.total / 2f
 
 /**
  * Where the landscape pad halves sit. [boxWidthPx], [boxHeightPx], [topMarginPx] and [extraInsetPx] are pixels.

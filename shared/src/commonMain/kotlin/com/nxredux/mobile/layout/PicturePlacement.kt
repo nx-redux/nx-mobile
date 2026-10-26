@@ -1,7 +1,6 @@
 package com.nxredux.mobile.layout
 
 import com.nxredux.mobile.options.PxRect
-import com.nxredux.mobile.options.ScreenScaling
 import com.nxredux.mobile.options.frontendLayout
 import kotlin.math.floor
 import kotlin.math.min
@@ -13,8 +12,8 @@ import kotlin.math.min
 data class CoreFrame(val width: Float, val height: Float, val aspect: Float, val rotated: Boolean)
 
 /**
- * Where the game picture goes. With a [scaling] other than Auto the user's choice wins: today's layout in the
- * whole [window], ignoring [space]. With Auto the picture is sized for [scale] and centred in [space]:
+ * Where the game picture goes under Screen Scaling Auto (Native, Aspect and Fullscreen keep [frontendLayout] in the
+ * whole game area): sized for [scale] and centred in [space]:
  * whole-height consoles take the largest whole multiple of their displayed lines, native handhelds the largest
  * whole multiple of the core size, the rest fit at their aspect. DS and 3DS are placed like a fill here (their
  * screens are laid out separately). With an overlay ([overlayAspect]) the returned rect is the overlay's box,
@@ -24,16 +23,8 @@ fun picture(
     space: PxRect,
     frame: CoreFrame,
     scale: ConsoleScale,
-    scaling: ScreenScaling,
-    window: PxRect,
     overlayAspect: Float?,
 ): PxRect {
-    if (scaling != ScreenScaling.AUTO) {
-        return frontendLayout(
-            window.width, window.height, frame.width.toInt(), frame.height.toInt(), frame.aspect,
-            scaling, 0, 0, overlayAspect,
-        ).content
-    }
     if (space.width <= 0f || space.height <= 0f) return PxRect(space.x, space.y, 0f, 0f)
     if (overlayAspect != null && overlayAspect > 0f) return fitIn(space, overlayAspect)
 
