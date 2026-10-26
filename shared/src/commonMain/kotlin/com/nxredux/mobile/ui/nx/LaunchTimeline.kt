@@ -6,8 +6,9 @@ import kotlin.math.hypot
 import kotlin.math.max
 
 /**
- * Timing for the launch sequence: a feathered circle spreads from the pressed tile,
- * colour follows, the frame holds, then the menu retreats and the game fades in.
+ * Timing for the launch sequence: a feathered circle spreads from the selected name, the name's
+ * colour follows, the game screen holds the name on black until its first frame, then fades the name.
+ * A refused launch retreats the spread instead; on the way back from the game the menu's black fades out.
  * Pure numbers and curves, no Compose state, so the timeline can be tested directly.
  */
 object LaunchTimeline {
@@ -23,16 +24,16 @@ object LaunchTimeline {
     /** Colour fade length, after the delay. */
     const val COLOR_MS = 400L
 
-    /** Frame held after the spread ends, unless the game is slower to draw. */
+    /** The game screen's hold: at least this long on black with the name, longer while the game has not drawn. */
     const val HOLD_MS = 400L
 
-    /** Name fades out in this time. */
+    /** The hold's name fades out in this time, once the game drew and the hold's minimum is up. */
     const val NAME_FADE_MS = 180L
 
-    /** Menu retreat when the game is ready. */
+    /** A refused launch (the game never opened): the spread runs backwards over the menu in this time. */
     const val RETREAT_MS = 300L
 
-    /** Game fades in over the retreated menu. */
+    /** Back from the game: the menu overlay's black fades out in this time (the game screen's close fade too). */
     const val RETURN_FADE_MS = 150L
 
     /** Fade used instead of the spread when reduced motion is on. */
@@ -68,13 +69,4 @@ fun launchColorFraction(elapsedMs: Long): Float {
     if (into <= 0L) return 0f
     if (into >= LaunchTimeline.COLOR_MS) return 1f
     return ColorEase.transform(into.toFloat() / LaunchTimeline.COLOR_MS)
-}
-
-/**
- * When the held frame ends, or null while the game has not drawn its first frame.
- * At least [LaunchTimeline.HOLD_MS] past the spread, and never before the first frame.
- */
-fun launchHoldUntil(spreadEndMs: Long, firstFrameMs: Long?): Long? {
-    if (firstFrameMs == null) return null
-    return max(spreadEndMs + LaunchTimeline.HOLD_MS, firstFrameMs)
 }

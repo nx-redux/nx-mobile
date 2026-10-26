@@ -72,8 +72,8 @@ val LocalLaunchTargets = staticCompositionLocalOf { LaunchTargets() }
 private val PLACEHOLDERS = charArrayOf('\uFFFD', '\uFFFC')
 
 /**
- * The launch copy's lines in screen px: one line (the copy never wraps), [text] (the full name, any tag placeholder
- * dropped) from [lineLeft] on [baseline], both in the Text's own px, drawn at [scale] from its top left at [originInScreen].
+ * The launch copy's lines in window px: one line (the copy never wraps), [text] (the full name, any tag placeholder
+ * dropped) from [lineLeft] on [baseline], both in the Text's own px, drawn at [scale] from its top left at [originInScreen] (its place in the window).
  * None for a blank name.
  */
 internal fun launchLines(text: String, lineLeft: Float, baseline: Float, originInScreen: Offset, scale: Float): List<LaunchLine> {
@@ -88,8 +88,9 @@ internal fun launchLines(text: String, layout: TextLayoutResult, originInScreen:
 
 /**
  * The name for the game screen to draw on the same pixels, in the [accent] (it ends on it); null while the name isn't laid
- * out. Screen px are window px here: on Android the activity fills the screen, so the window's own offset is zero (a
- * freeform or split-screen window would put the copy off by its offset). Size and spacing after the selection's [LaunchTarget.scale].
+ * out. In window px ([LayoutCoordinates.localToWindow]); the game screen's hold takes its own place in its window off, so
+ * the two line up whenever the menu's window and the game's sit at the same place on the screen (full screen, or the same
+ * freeform / split-screen bounds). Size and spacing after the selection's [LaunchTarget.scale].
  */
 fun LaunchTarget.toLaunchName(accent: Color): LaunchName? {
     val layout = layout() ?: return null
@@ -142,7 +143,7 @@ private suspend fun frames(ms: Long, tick: (Long) -> Unit) {
  * (null: nothing). [LaunchPhase.SPREAD]: black opaque inside r, clear by r + [LaunchTimeline.FEATHER_DP], r from 0 to the
  * farthest corner ([launchEndRadius]) over [LaunchTimeline.SPREAD_MS] round the name's centre, the copy turning from its
  * captured colour to the accent ([launchColorFraction]); [LaunchPhase.HANDED_OFF]: held, black with the name; [LaunchPhase.RETREAT]: r back
- * to 0 over [LaunchTimeline.RETREAT_MS], the colour back; [LaunchPhase.RETURNING]: all of it fades out over
+ * to 0 over [LaunchTimeline.RETREAT_MS], the colour back; [LaunchPhase.RETURNING]: the black (no copy) fades out over
  * [LaunchTimeline.RETURN_FADE_MS]. Under [reducedMotion] no spread: the black fades in over [LaunchTimeline.REDUCED_FADE_MS]
  * under the copy. The name and the motion setting are read once, as the sequence starts ([targets]).
  */
@@ -213,7 +214,9 @@ fun LaunchOverlay(sequence: LaunchSequence?, targets: LaunchTargets, modifier: M
                 alpha = fade,
             )
         }
-        s.layout?.let { copy ->
+        // On the way back the black fades alone: the game screen drew the name last, and a copy here would show it twice
+        // (or, after a rotation during play, at a stale place).
+        if (phase != LaunchPhase.RETURNING) s.layout?.let { copy ->
             scale(s.scale, pivot = s.topLeft) { drawText(copy, color = lerp(s.from, s.to, anim.tint), topLeft = s.topLeft, alpha = fade) }
         }
     }

@@ -3,7 +3,6 @@ package com.nxredux.mobile.ui.nx
 import kotlin.math.hypot
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LaunchTimelineTest {
@@ -23,11 +22,5 @@ class LaunchTimelineTest {
         assertEquals(0f, launchColorFraction(79L), 0.001f)
         assertEquals(1f, launchColorFraction(480L), 0.001f)
         assertEquals(0.5f, launchColorFraction(280L), 0.05f)
-    }
-
-    @Test fun hold_lasts_400_ms_past_the_spread_or_until_the_first_frame() {
-        assertNull(launchHoldUntil(450L, null))
-        assertEquals(850L, launchHoldUntil(450L, 100L))
-        assertEquals(2000L, launchHoldUntil(450L, 2000L))
     }
 }

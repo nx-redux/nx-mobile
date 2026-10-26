@@ -19,9 +19,10 @@ import com.nxredux.mobile.ui.nx.LaunchTimeline
  * on (its [LaunchName], in window px, as the menu captured it; the view's own place in the window is taken off), until
  * the core's first frame and at least [LaunchTimeline.HOLD_MS] after it was first shown ([shownAt], kept across a GLES
  * relaunch). [release] fades the name out over [LaunchTimeline.NAME_FADE_MS] (ease-in, wall-clock: the system's animator
- * scale doesn't touch it) on the black, then the view goes and the game cuts in (spec steps 4-6). Over everything in the
- * window, the resume cover included: the player never sees its screenshot before the name goes. Touches stop here while
- * it is up; the activity holds keys back ([holdSwallows]). Main thread only.
+ * scale doesn't touch it) on the black, then the view goes and the game cuts in (spec steps 4-6). Over the game area (the
+ * game container: its picture, the resume cover, the frontend overlay), so the player never sees the cover's screenshot
+ * before the name goes, and under the on-screen pad, which stays lit as the menu left it. The activity holds input back
+ * while it is up: keys ([holdSwallows]), sticks, and touches ([HoldTouchGate]), the pad's included. Main thread only.
  */
 @SuppressLint("ViewConstructor")
 internal class LaunchNameHold(
@@ -90,9 +91,6 @@ internal class LaunchNameHold(
         }
     }
 
-    @SuppressLint("ClickableViewAccessibility")
-    override fun onTouchEvent(event: MotionEvent): Boolean = true   // the pad under the black waits for the game
-
     override fun onDetachedFromWindow() {
         removeCallbacks(startFade)
         removeCallbacks(fadeStep)
@@ -128,6 +126,23 @@ internal fun holdSwallows(keyCode: Int, heldForMs: Long): Boolean = when (keyCod
     KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> false
     KeyEvent.KEYCODE_BACK -> heldForMs < LaunchTimeline.GIVE_UP_MS
     else -> true
+}
+
+/**
+ * Touches while the launch name's hold is up wait for the game, as keys do ([holdSwallows]): a gesture that starts
+ * (ACTION_DOWN) while the hold is up is swallowed whole, to its UP or CANCEL, even after the hold went, so the pad never
+ * sees half a press; a gesture already going when the hold came up goes through. Fed every touch's masked action.
+ */
+internal class HoldTouchGate {
+    private var eating = false
+
+    /** Whether the touch with [actionMasked] is swallowed, the hold being up or not ([holdUp]). */
+    fun swallows(actionMasked: Int, holdUp: Boolean): Boolean {
+        if (actionMasked == MotionEvent.ACTION_DOWN) eating = holdUp
+        if (!eating) return false
+        if (actionMasked == MotionEvent.ACTION_UP || actionMasked == MotionEvent.ACTION_CANCEL) eating = false
+        return true
+    }
 }
 
 /** How long a hold shown at [shownAt] still has to stay before its name may fade ([LaunchTimeline.HOLD_MS] minimum); 0: now. */

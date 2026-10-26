@@ -21,7 +21,6 @@ import android.view.MotionEvent
 import android.view.PixelCopy
 import android.view.Surface
 import android.view.View
-import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
@@ -384,6 +383,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val launchName by lazy { launchNameFrom(intent.extras) }
     private var nameHold: LaunchNameHold? = null   // main thread only; null once it has gone
     private val heldDowns = HashSet<Int>()   // key codes whose press the hold swallowed: their release is swallowed too
+    private val holdTouches = HoldTouchGate()   // touches the hold swallows (the on-screen pad stays lit above it)
     private var autoWrittenOnStop = false   // onStop serialized an auto state (its write is queued) since the last onStart
     // Home screenshot for the switcher (main thread only): onPause starts a PixelCopy; its bitmap is written as
     // the slot-9 thumb once onStop has queued the auto state. [homeThumbGen] drops callbacks from an older pause.
@@ -1704,15 +1704,20 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /**
-     * The launch sequence's hold ([LaunchNameHold]) over the whole window, the resume cover included, from this screen's
-     * first frame until the game's. A recreation (the GLES relaunch) puts it back up with its first clock, so its minimum
+     * The launch sequence's hold ([LaunchNameHold]) from this screen's first frame until the game's: on the root right
+     * after the layout's own children (the game container, so its picture and the resume cover; the FPS line), so all the
+     * root gets later sits above it: the pads (the portrait band stays lit, identical to the menu's, never blinking; side
+     * and corner clusters over the black likewise), the notifications, the in-game menu. Without an on-screen pad it
+     * covers the whole window. Its input is held back by [dispatchKeyEvent], [dispatchGenericMotionEvent] and
+     * [dispatchTouchEvent]. A recreation (the GLES relaunch) puts it back up with its first clock, so its minimum
      * is not counted twice and nothing fades in between; a restore after it had gone shows none.
      */
     private fun showNameHold(saved: Bundle?) {
         val name = launchName ?: return
         val shownAt = if (saved == null) SystemClock.uptimeMillis() else saved.getLong(KEY_NAME_HOLD_SHOWN_AT, -1L).takeIf { it >= 0L } ?: return
         nameHold = LaunchNameHold(this, name, shownAt).also {
-            findViewById<ViewGroup>(android.R.id.content).addView(it, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            // Called right after setContentView: nothing but the layout's children is in the root yet.
+            findViewById<FrameLayout>(R.id.root).addView(it, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         }
     }
 
@@ -3161,6 +3166,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         nameHold?.remove()
         nameHold = null
     }
+
+    /** Touches wait for the game while the launch name's hold is up ([HoldTouchGate]): the lit pad above it does nothing yet. */
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean =
+        holdTouches.swallows(event.actionMasked, nameHold != null) || super.dispatchTouchEvent(event)
 
     /** Sticks wait for the game while the launch name's hold is up. */
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =

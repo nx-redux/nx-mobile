@@ -1,6 +1,7 @@
 package com.nxredux.mobile.runner
 
 import android.view.KeyEvent
+import android.view.MotionEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -76,6 +77,26 @@ class LaunchNameHoldTest {
         assertEquals(0f, nameFadeAlpha(fade), 0f)
         assertEquals(0f, nameFadeAlpha(fade * 3), 0f)
         assertEquals(1f, nameFadeAlpha(-5L), 0f)
+    }
+
+    @Test fun a_touch_that_starts_under_the_hold_is_swallowed_to_its_end() {
+        val gate = HoldTouchGate()
+        assertTrue(gate.swallows(MotionEvent.ACTION_DOWN, holdUp = true))
+        assertTrue(gate.swallows(MotionEvent.ACTION_POINTER_DOWN, holdUp = true))
+        assertTrue(gate.swallows(MotionEvent.ACTION_MOVE, holdUp = false))   // the hold went mid-press: still its gesture
+        assertTrue(gate.swallows(MotionEvent.ACTION_UP, holdUp = false))
+        assertFalse(gate.swallows(MotionEvent.ACTION_DOWN, holdUp = false))   // the next press reaches the pad
+        assertFalse(gate.swallows(MotionEvent.ACTION_UP, holdUp = false))
+        assertTrue(gate.swallows(MotionEvent.ACTION_DOWN, holdUp = true))
+        assertTrue(gate.swallows(MotionEvent.ACTION_CANCEL, holdUp = true))
+        assertFalse(gate.swallows(MotionEvent.ACTION_DOWN, holdUp = false))
+    }
+
+    @Test fun a_touch_already_going_when_the_hold_comes_up_goes_through() {
+        val gate = HoldTouchGate()
+        assertFalse(gate.swallows(MotionEvent.ACTION_DOWN, holdUp = false))
+        assertFalse(gate.swallows(MotionEvent.ACTION_MOVE, holdUp = true))
+        assertFalse(gate.swallows(MotionEvent.ACTION_UP, holdUp = true))
     }
 
     private companion object {
