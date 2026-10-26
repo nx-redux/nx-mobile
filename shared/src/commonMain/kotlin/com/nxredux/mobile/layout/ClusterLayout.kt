@@ -114,3 +114,38 @@ fun clusterPlacement(
     val roomy = if (clear) max(0f, (narrow - reach.total - reach.edgePx) / 2f) else 0f
     return ClusterPlacement(boxWidth, boxHeight, topMargin, cutoutExtra + roomy, clear)
 }
+
+/** The landscape pad halves' button unit and [reach] in one window, px. */
+data class BesideMeasures(val unitPx: Float, val reach: Reach)
+
+/**
+ * The pad beside the picture's unit ([landscapeUnitPx], on the window's height and short side) and [reach] in a
+ * [windowW] x [windowH] window: one computation for the game and the Pad layout editor's preview, so both draw the same
+ * pad. [secondRow]: both halves keep the second row. [measuredButtonsPx], [faceUnits] and [systemPills] as [reach].
+ */
+fun besideMeasures(
+    screen: ScreenClass,
+    windowW: Float,
+    windowH: Float,
+    ydpi: Float,
+    density: Float,
+    cutoutLeft: Float,
+    cutoutRight: Float,
+    secondRow: Boolean,
+    measuredButtonsPx: Float?,
+    faceUnits: Float,
+    systemPills: Int,
+): BesideMeasures {
+    val unit = landscapeUnitPx(screen, windowH, min(windowW, windowH), ydpi, density, secondRow)
+    return BesideMeasures(unit, reach(unit, density, cutoutLeft, cutoutRight, measuredButtonsPx, faceUnits, systemPills))
+}
+
+/**
+ * [clusterPlacement] beside [picture]; with the picture not known (null: the game before its first frame, and the Pad
+ * layout editor, which has no game) as if it took the window's middle half, so the unit, rows and boxes are already
+ * those the game draws.
+ */
+fun besidePlacement(window: PxRect, picture: PxRect?, unitPx: Float, reach: Reach, density: Float, secondRow: Boolean): ClusterPlacement =
+    clusterPlacement(
+        window, picture ?: PxRect(window.x + window.width / 4f, window.y, window.width / 2f, window.height), unitPx, reach, density, secondRow,
+    )

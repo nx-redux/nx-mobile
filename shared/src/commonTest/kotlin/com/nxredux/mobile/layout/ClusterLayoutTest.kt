@@ -82,4 +82,28 @@ class ClusterLayoutTest {
         assertEquals(6f * 100f + 64f, p.boxHeightPx, 0.01f)
         assertEquals(540f + 32f + 257f - p.boxHeightPx, p.topMarginPx, 0.01f)
     }
+
+    @Test fun beside_measures_are_the_unit_and_reach_the_game_reads() {
+        // A 20:9 phone in landscape, a 136 px cutout on the left, the second row kept.
+        val m = besideMeasures(ScreenClass.REGULAR_PHONE, 2400f, 1080f, 420f, 2.625f, 136f, 0f, secondRow = true, measuredButtonsPx = null, faceUnits = 3f, systemPills = 2)
+        val unit = landscapeUnitPx(ScreenClass.REGULAR_PHONE, 1080f, 1080f, 420f, 2.625f, toolRow = true)
+        assertEquals(unit, m.unitPx)
+        assertEquals(reach(unit, 2.625f, 136f, 0f, null, 3f, systemPills = 2), m.reach)
+    }
+
+    @Test fun beside_measures_on_a_stubby_phone_take_the_portrait_band_unit() {
+        val m = besideMeasures(ScreenClass.STUBBY_PHONE, 2176f, 1248f, 428f, 2.625f, 0f, 0f, secondRow = false, measuredButtonsPx = null, faceUnits = 3f, systemPills = 2)
+        assertEquals((1248f - 84f) / 9f, m.unitPx, 0.1f)
+    }
+
+    @Test fun beside_placement_without_a_picture_assumes_the_middle_half() {
+        val window = PxRect(0f, 0f, 2400f, 1080f)
+        val r = Reach(36f, 300f)
+        assertEquals(
+            clusterPlacement(window, PxRect(600f, 0f, 1200f, 1080f), 100f, r, 2f, toolRow = true),
+            besidePlacement(window, null, 100f, r, 2f, secondRow = true),
+        )
+        val picture = PxRect(500f, 0f, 1400f, 1080f)
+        assertEquals(clusterPlacement(window, picture, 100f, r, 2f, toolRow = false), besidePlacement(window, picture, 100f, r, 2f, secondRow = false))
+    }
 }

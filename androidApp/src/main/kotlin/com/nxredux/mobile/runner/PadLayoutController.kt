@@ -44,12 +44,11 @@ import com.nxredux.mobile.layout.CoreFrame
 import com.nxredux.mobile.layout.LayoutConstants
 import com.nxredux.mobile.layout.PadRoom
 import com.nxredux.mobile.layout.Reach
-import com.nxredux.mobile.layout.clusterPlacement
+import com.nxredux.mobile.layout.besideMeasures
+import com.nxredux.mobile.layout.besidePlacement
 import com.nxredux.mobile.layout.consoleScale
 import com.nxredux.mobile.layout.hideOffered
-import com.nxredux.mobile.layout.landscapeUnitPx
 import com.nxredux.mobile.layout.overlayHeightPx
-import com.nxredux.mobile.layout.reach
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
@@ -408,25 +407,23 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     }
 
     /**
-     * The landscape clusters' unit and reach now in the window [shape] ([landscapeUnitPx], [reach] with the measured
+     * The landscape clusters' unit and reach now in the window [shape] ([besideMeasures], with the measured
      * buttons once both halves have reported, else the estimate); null when no clusters are beside the picture.
      */
     fun landscapePad(shape: WindowShape = activity.windowShape()): LandscapePad? {
         if (clusterViews == null) return null
         val secondRow = besideSecondRow(padTools(), host.padShortcuts, placeholders = false)
-        val unit = landscapeUnitPx(
-            shape.screenClass, shape.heightPx.toFloat(), minOf(shape.widthPx, shape.heightPx).toFloat(), shape.ydpi, shape.density, secondRow,
-        )
-        val reach = reach(
-            unit, shape.density, shape.cutoutLeft.toFloat(), shape.cutoutRight.toFloat(), measured.accepted, faceWidthUnits(padProfile()),
+        val m = besideMeasures(
+            shape.screenClass, shape.widthPx.toFloat(), shape.heightPx.toFloat(), shape.ydpi, shape.density,
+            shape.cutoutLeft.toFloat(), shape.cutoutRight.toFloat(), secondRow, measured.accepted, faceWidthUnits(padProfile()),
             systemRowPills(padProfile(), padMotion() != null),
         )
-        return LandscapePad(shape, unit, reach, secondRow, measured.accepted != null)
+        return LandscapePad(shape, m.unitPx, m.reach, secondRow, measured.accepted != null)
     }
 
     /**
      * Sizes and places the clusters beside [picture] (root px; null: not known yet, so they stay as unplaced and
-     * hidden): [clusterPlacement]'s box at each side edge, its top set so the d-pad / face row centres on the screen's
+     * hidden): [besidePlacement]'s box at each side edge, its top set so the d-pad / face row centres on the screen's
      * mid-height; solid when both columns hold the reach.
      */
     fun placeClusters(picture: PxRect?, pad: LandscapePad) {
@@ -434,7 +431,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val root = findViewById<FrameLayout>(R.id.root)
         val window = PxRect(0f, 0f, (root.width.takeIf { it > 0 } ?: pad.shape.widthPx).toFloat(), (root.height.takeIf { it > 0 } ?: pad.shape.heightPx).toFloat())
         // Unknown picture: as if it took the middle half, so the unit and rows are already right when it shows.
-        val p = clusterPlacement(window, picture ?: PxRect(window.width / 4f, 0f, window.width / 2f, window.height), pad.unitPx, pad.reach, pad.shape.density, pad.secondRow)
+        val p = besidePlacement(window, picture, pad.unitPx, pad.reach, pad.shape.density, pad.secondRow)
         clustersClear.value = picture != null && p.clear
         clusterInsetPx.value = p.extraInsetPx
         clusterUnitPx.value = pad.unitPx
