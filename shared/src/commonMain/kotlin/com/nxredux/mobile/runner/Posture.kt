@@ -85,3 +85,13 @@ fun postureFromHinge(
     )
     return postureFrom(half, horizontal, top, bottom, windowH)
 }
+
+/**
+ * The posture a new window starts from, before its own reading arrives: [hint] (window px) as the menu's window last
+ * read it for a [hintW] x [hintH] window, kept only when this window is the same size (same display, same orientation)
+ * and the hinge still splits it ([postureFrom]); else [Posture.Flat], as without a hint.
+ */
+fun seededPosture(hint: Posture?, hintW: Int, hintH: Int, windowW: Int, windowH: Int): Posture {
+    if (hint !is Posture.Tabletop || hintW != windowW || hintH != windowH) return Posture.Flat
+    return postureFrom(halfOpened = true, horizontal = true, top = hint.hingeTop, bottom = hint.hingeBottom, windowH = windowH)
+}

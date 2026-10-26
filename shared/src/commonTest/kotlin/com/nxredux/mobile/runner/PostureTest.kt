@@ -121,4 +121,19 @@ class PostureTest {
             TabletopLayout(gameTop = 0, gameBottom = 1224, padTop = 1224, pad = TabletopPad.PORTRAIT),
             tabletopLayout(foldLaptop, windowW = 1848, windowH = 2448, cutoutTop = 0, controllerConnected = false, isDs = false),
         )
+
+    // A game launched while half-folded starts from the menu's reading, so its first layout is already tabletop.
+    @Test fun aSameSizeWindowKeepsTheMenusTabletop() =
+        assertEquals(flip, seededPosture(flip, hintW = 1080, hintH = 2520, windowW = 1080, windowH = 2520))
+
+    @Test fun noHintOrAFlatHintStartsFlat() {
+        assertEquals(Posture.Flat, seededPosture(null, hintW = 0, hintH = 0, windowW = 1080, windowH = 2520))
+        assertEquals(Posture.Flat, seededPosture(Posture.Flat, hintW = 1080, hintH = 2520, windowW = 1080, windowH = 2520))
+    }
+
+    @Test fun aWindowOfAnotherSizeIgnoresTheHint() {
+        // rotated, or the game on another display: the hinge is somewhere else there, so wait for this window's own reading
+        assertEquals(Posture.Flat, seededPosture(flip, hintW = 1080, hintH = 2520, windowW = 2520, windowH = 1080))
+        assertEquals(Posture.Flat, seededPosture(flip, hintW = 1080, hintH = 2520, windowW = 1080, windowH = 2400))
+    }
 }

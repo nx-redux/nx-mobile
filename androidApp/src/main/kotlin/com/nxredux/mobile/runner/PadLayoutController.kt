@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import androidx.window.layout.WindowMetricsCalculator
 import com.nxredux.mobile.R
 import com.nxredux.mobile.layout.CoreFrame
 import com.nxredux.mobile.layout.LayoutConstants
@@ -285,6 +286,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         bandView = null
         bandWaits = false
         shoulderReachPx.value = null
+        builtTabletopSize = null
         builtLayouts = AndroidAppSettings(activity).padLayouts
         builtBandPx = activity.windowShape().portraitBandPx.roundToInt()
 
@@ -619,7 +621,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     ) {
         game.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, tt.gameBottom - tt.gameTop, Gravity.TOP)
             .apply { topMargin = tt.gameTop }
-        val padH = root.height - tt.padTop
+        val (rootW, rootH) = rootSize()
+        builtTabletopSize = rootW to rootH
+        val padH = rootH - tt.padTop
         when (tt.pad) {
             TabletopPad.PORTRAIT -> {
                 val portraitLayout = padLayout(PadShape.PORTRAIT)
@@ -627,7 +631,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 addPad(root, pad, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, padH, Gravity.BOTTOM))
             }
             TabletopPad.CLUSTERS -> {
-                val halfW = (root.width * CLUSTER_MAX_WIDTH_SHARE).toInt()
+                val halfW = (rootW * CLUSTER_MAX_WIDTH_SHARE).toInt()
                 val left = composePad {
                     VirtualPadLeft(input::onPad, input::onStick, Modifier.fillMaxSize().clearOfCutout(WindowInsetsSides.Start), profile = padProfile(),
                         useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, motion = padMotion(), latched = input.gcLatched.value,
@@ -649,22 +653,50 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         game.post { relayoutFrontend() }
     }
 
-    /** The tabletop split for the current [posture] and root size, or null (flat, a DS game, root not laid out yet). */
+    /** The tabletop split for the current [posture] and root size ([rootSize]), or null (flat, a DS game, no size yet). */
     fun tabletop(names: List<String> = layoutControllerNames()): TabletopLayout? {
         if (posture == Posture.Flat) return null
+        val (w, h) = rootSize()
+        if (w <= 0 || h <= 0) return null
+        return tabletopLayout(posture, w, h, cutoutTop, controllerConnected = names.isNotEmpty(), isDs = isNds)
+    }
+
+    /**
+     * The root's size, or the window's before the root is laid out (onCreate's layout): the root fills the window (the
+     * game draws behind the system bars), so a seeded tabletop ([seedPosture]) splits it right from the first layout.
+     */
+    private fun rootSize(): Pair<Int, Int> {
         val root = findViewById<FrameLayout>(R.id.root)
-        if (root.width <= 0 || root.height <= 0) return null
-        return tabletopLayout(posture, root.width, root.height, cutoutTop, controllerConnected = names.isNotEmpty(), isDs = isNds)
+        if (root.width > 0 && root.height > 0) return root.width to root.height
+        val bounds = WindowMetricsCalculator.getOrCreate().computeCurrentWindowMetrics(activity).bounds
+        return bounds.width() to bounds.height()
+    }
+
+    /** The root size the current tabletop layout was built for ([applyTabletopLayout]); null for a flat layout. */
+    private var builtTabletopSize: Pair<Int, Int>? = null
+
+    /**
+     * Before onCreate's first [applyLayout]: starts from the menu's posture ([PostureTracker.seed]), so a game launched
+     * half-folded builds the tabletop layout first instead of the flat one the hinge reading would replace a moment later.
+     */
+    fun seedPosture() {
+        posture = postureTracker.seed()
+        if (posture != Posture.Flat) NxLog.i(TAG_LOG, "posture: $posture seeded from the menu")
     }
 
     /**
      * Starts [postureTracker], and re-reads the posture when the root's size changes (the first report can come before
-     * the root is laid out; a rotation resizes it). Each posture change re-runs [applyLayout] ([onPosture]).
+     * the root is laid out; a rotation resizes it). Each posture change re-runs [applyLayout] ([onPosture]); a tabletop
+     * layout built for another size (a seeded one, the window's size taken before the root's) is laid out again.
      */
     fun collectPosture() {
         val root = findViewById<FrameLayout>(R.id.root)
         root.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or_, ob ->
-            if (r - l != or_ - ol || b - t != ob - ot) root.post { postureTracker.update() }
+            if (r - l != or_ - ol || b - t != ob - ot) root.post {
+                postureTracker.update()
+                val built = builtTabletopSize
+                if (built != null && built != (root.width to root.height) && tabletop() != null) applyLayout(resources.configuration.orientation)
+            }
         }
         postureTracker.start()
     }

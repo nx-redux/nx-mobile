@@ -568,6 +568,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         findViewById<View>(R.id.root).addOnLayoutChangeListener { v, l, t, r, b, ol, ot, or_, ob ->
             if (r - l != or_ - ol || b - t != ob - ot) v.post { dual.recheckPictureOn() }
         }
+        padLayout.seedPosture()   // half-folded from the menu: the first layout is already the tabletop one
         padLayout.applyLayout(resources.configuration.orientation)
         padLayout.collectPosture()
         // Back as a gesture or a key on Android 16+ (targetSdk 36: predictive back, KEYCODE_BACK does not reach
