@@ -152,8 +152,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private fun <T : View> findViewById(id: Int): T = host.activity.findViewById(id)
     private val inputManager get() = host.inputManager
     private val menuOpen get() = host.menuOpen
-    private val isNds get() = host.isNds
-    private val isN3ds get() = host.isN3ds
     private val isWii get() = host.isWii
     private val wiiPad get() = host.wiiPad
     private val frontendValues get() = host.frontendValues
@@ -506,7 +504,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     fun tabletopDsPlacement(shape: WindowShape, tt: TabletopLayout, pad: LandscapePad = tabletopDsPad(shape)): TabletopDsPlacement =
         tabletopDs(
             shape.widthPx, shape.heightPx, shape.screenClass, shape.cutoutTop, hingeTop = tt.menuBottom, hingeBottom = tt.padTop,
-            if (isN3ds) DsKind.N3DS else DsKind.DS, pad.unitPx, pad.reach, shape.density,
+            if (N3dsOptions.appliesTo(layoutTag())) DsKind.N3DS else DsKind.DS, pad.unitPx, pad.reach, shape.density,
             controller = layoutControllerNames().isNotEmpty(), secondRow = pad.secondRow,
         )
 
@@ -747,7 +745,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         if (posture == Posture.Flat) return null
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null
-        return tabletopLayout(posture, w, h, activity.windowShape().screenClass, cutoutTop, controllerConnected = names.isNotEmpty(), isDualScreenConsole = isNds || isN3ds)
+        return tabletopLayout(posture, w, h, activity.windowShape().screenClass, cutoutTop, controllerConnected = names.isNotEmpty(), isDualScreenConsole = tabletopDualScreen(layoutTag()))
     }
 
     /**
@@ -766,7 +764,16 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 
     private fun tabletopBuild(tt: TabletopLayout?, names: List<String>): TabletopBuild {
         val (w, h) = rootSize()
-        return TabletopBuild(tt != null, names.isNotEmpty(), w, h)
+        return TabletopBuild(tt != null, tt?.pad, names.isNotEmpty(), w, h)
+    }
+
+    /**
+     * The launch set the game's tag: a tabletop layout built for something else lays out again ([tabletopRelayoutNeeded]).
+     * The layout reads the intent's tag before that ([tabletopDualScreen]), so this only catches a tag the launch changed.
+     */
+    fun onGameTagKnown() {
+        val names = layoutControllerNames()
+        if (tabletopRelayoutNeeded(builtTabletop, tabletopBuild(tabletop(names), names))) applyLayout(resources.configuration.orientation)
     }
 
     /**

@@ -972,6 +972,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val sessionDir = if (np?.onCopy == true) NetplaySessionDir.dir(filesDir) else null
         gameTag = tag
         gameCoreId = coreId
+        padLayout.onGameTagKnown()
         // Normally done by MainActivity; here too for a restore from recents in a fresh process. Not awaited:
         // it is synchronized, and a first-run or post-update copy (~10 MB) must not hold up the game. Re-read
         // once it is done.

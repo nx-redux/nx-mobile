@@ -56,11 +56,24 @@ class TabletopDsPadTest {
         assertNull(tabletopDsPadBoxes(flip, rootH = 2640))
     }
 
-    private val built = TabletopBuild(halfFolded = true, controller = false, rootW = 1848, rootH = 2448)
+    private val built = TabletopBuild(halfFolded = true, pad = TabletopPad.DS, controller = false, rootW = 1848, rootH = 2448)
+
+    @Test fun relayout_when_the_console_changes_the_tabletop_pad() {
+        // Laid out before the game's console was known (the generic portrait pad), then known as a DS / 3DS.
+        assertTrue(tabletopRelayoutNeeded(built.copy(pad = TabletopPad.PORTRAIT), built))
+    }
+
+    @Test fun dual_screen_console_from_the_launch_tag() {
+        // onCreate's first layout has only the intent's tag: it must already pick the DS / 3DS tabletop.
+        assertTrue(tabletopDualScreen("NDS"))
+        assertTrue(tabletopDualScreen("3DS"))
+        assertFalse(tabletopDualScreen("UNKNOWN"))
+        assertFalse(tabletopDualScreen("GBA"))
+    }
 
     @Test fun relayout_on_posture_flip() {
-        assertTrue(tabletopRelayoutNeeded(built, built.copy(halfFolded = false)))
-        assertTrue(tabletopRelayoutNeeded(built.copy(halfFolded = false), built))
+        assertTrue(tabletopRelayoutNeeded(built, built.copy(halfFolded = false, pad = null)))
+        assertTrue(tabletopRelayoutNeeded(built.copy(halfFolded = false, pad = null), built))
     }
 
     @Test fun relayout_on_controller_flip_while_half_folded() {
@@ -77,7 +90,7 @@ class TabletopDsPadTest {
     }
 
     @Test fun flat_changes_are_left_to_the_flat_layout() {
-        val flat = built.copy(halfFolded = false)
+        val flat = built.copy(halfFolded = false, pad = null)
         assertFalse(tabletopRelayoutNeeded(flat, flat.copy(rootW = 2448, rootH = 1848)))
         assertFalse(tabletopRelayoutNeeded(flat, flat.copy(controller = true)))
     }
