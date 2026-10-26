@@ -45,9 +45,37 @@ class SettingsBlockTest {
         assertFalse(settingsBlockPage(Screen.ToolApps(emptyList(), AppPick.GAMES)))
     }
 
-    @Test fun stageLeftEdge() {
-        assertEquals(SETTINGS_ROWS_LEFT, settingsStageLeft(blockPage = true))
-        assertEquals(SETTINGS_SPLIT_LEFT, settingsStageLeft(blockPage = false))
+    @Test fun wideBlockPages() {
+        // The wide stage's frame adds the Layouts groups (picture above the line); the Android games picker stays whole.
+        assertTrue(settingsWideBlockPage(Screen.Settings(SettingsSection.LAYOUT_HOME, emptyList())))
+        assertTrue(settingsWideBlockPage(Screen.Settings(SettingsSection.LIBRARY, emptyList())))
+        assertTrue(settingsWideBlockPage(Screen.SettingsMenu(settingsCategories())))
+        assertFalse(settingsWideBlockPage(Screen.ToolApps(emptyList(), AppPick.GAMES)))
+    }
+
+    @Test fun frameWidthAndLeft() {
+        // Room to spare: 560 dp, the right edge at the gutter.
+        assertEquals(560.dp, settingsFrameWidth(1200.dp, sectionRight = 250.dp, gutter = 48.dp))
+        assertEquals(1200.dp - 48.dp - 560.dp, settingsFrameLeft(1200.dp, sectionRight = 250.dp, gutter = 48.dp))
+        // A narrower wide window: the frame gives way, 24 dp clear of the section block.
+        assertEquals(800.dp - 48.dp - 250.dp - 24.dp, settingsFrameWidth(800.dp, sectionRight = 250.dp, gutter = 48.dp))
+        assertEquals(250.dp + 24.dp, settingsFrameLeft(800.dp, sectionRight = 250.dp, gutter = 48.dp))
+        // No room at all: none, never negative.
+        assertEquals(0.dp, settingsFrameWidth(200.dp, sectionRight = 250.dp, gutter = 24.dp))
+    }
+
+    @Test fun topLine() {
+        assertEquals(320.dp, settingsTopLine(800.dp))
+        assertEquals(0.dp, settingsTopLine(0.dp))
+    }
+
+    @Test fun pictureFit() {
+        // Height to spare: the room's width.
+        assertEquals(560.dp, settingsPictureWidth(560.dp, 1000.dp, aspect = 2f, mat = 8.dp))
+        // Short room: narrower, the aspect kept (the picture inside the mat 2:1).
+        assertEquals((116f * 2f + 16f).dp, settingsPictureWidth(560.dp, 132.dp, aspect = 2f, mat = 8.dp))
+        // No room: none.
+        assertEquals(0.dp, settingsPictureWidth(560.dp, 0.dp, aspect = 2f, mat = 8.dp))
     }
 
     @Test fun narrowBlockPages() {

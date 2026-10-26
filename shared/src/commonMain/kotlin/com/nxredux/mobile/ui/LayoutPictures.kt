@@ -271,6 +271,29 @@ internal fun LayoutPreviewPage(
             )
         }
     } }
+    // The wide Settings stage's fixed frame ([SettingsBlockMode.topLine]): the picture above the top line at the pane's
+    // width (smaller, its aspect kept, when the room there is short), the rows in the frame under the line.
+    LocalSettingsBlock.current?.takeIf { it.topLine != null }?.let { block ->
+        Column(modifier.fillMaxSize()) {
+            SettingsRowsBlock(
+                block, title, Modifier.weight(1f),
+                above = { BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
+                    framed(settingsPictureWidth(maxWidth, maxHeight, aspect, PICTURE_MAT))
+                } },
+            ) {
+                if (touchRows != null) touchRows(Modifier.fillMaxWidth())
+                else {
+                    val optionPitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
+                    NxOptionsList(
+                        values, selected.takeIf { it < values.size } ?: -1, onSelect, onRow, rowHeight = optionPitch, listText = NxTextSizes.listLabel(optionPitch),
+                        modifier = Modifier.fillMaxWidth().height(nxOptionsFitHeight(values, optionPitch)), scrollFade = true,
+                    )
+                }
+            }
+            NxHintBar(hints, onHint = onHint)
+        }
+        return
+    }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val wide = !portrait && maxWidth / maxHeight >= PREVIEW_WIDE_RATIO
         val pageH = maxHeight

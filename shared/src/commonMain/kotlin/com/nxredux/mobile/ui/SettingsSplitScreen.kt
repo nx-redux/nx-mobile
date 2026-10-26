@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.ListSelection
+import com.nxredux.mobile.ui.nx.LocalFooterMode
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxHintBarKeepHeight
 import com.nxredux.mobile.ui.nx.NxButton
@@ -29,65 +30,72 @@ internal const val UNFOCUSED_ALPHA = 0.6f
 
 /**
  * The wide Settings ([settingsSplit]): one stage, nothing above but the small mark (the background's). The section block
- * ([SettingsMenuScreen]) rests bottom-left; the page is the rows block ([LocalSettingsBlock]) at the bottom right, its
- * left edge at [SETTINGS_ROWS_LEFT] of the width, on the same baseline. On the Settings root the sections have the
+ * ([SettingsMenuScreen]) rests bottom-left; the page is the rows block ([LocalSettingsBlock]) in a fixed frame at the right
+ * ([settingsFrameWidth], [settingsFrameLeft]: up to 560 dp, its right edge the gutter in), its first line at
+ * [settingsTopLine] of the stage on every page, the rows growing down from it. On the Settings root the sections have the
  * focus and the rows preview the highlighted section (no selection, a tap opens it on that row,
  * [AppState.settingsPreviewTap]); on a page the rows have it and the current section drops to the main ink (a tap on a
- * section, [AppState.settingsCategoryTap]). A page that is not a rows block ([settingsBlockPage]: a Layouts group with
- * its picture, the Android games picker) draws whole from the old pane's edge. The root's hints are drawn on the left, a page's on the right; both sides keep
+ * section, [AppState.settingsCategoryTap]). A Layouts group's picture sits above the top line ([settingsWideBlockPage]);
+ * the Android games picker draws whole from the old pane's edge. The root's hints are drawn on the left, a page's on the right; both sides keep
  * the bar's height, so the blocks share the baseline. The Remove folder dialog is drawn here, over the whole stage.
  */
 @Composable
 internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<ListSelection>, page: @Composable () -> Unit) {
     val categories = state.settingsSections()   // not remembered: a second screen coming or going changes it
-    val blockPage = settingsBlockPage(s)
-    Box(Modifier.fillMaxSize()) {
-        CompositionLocalProvider(LocalNxHintBarKeepHeight provides true) {
-            BoxWithConstraints(Modifier.fillMaxSize()) {
-                val left = maxWidth * settingsStageLeft(blockPage)
-                Column(Modifier.width(left).fillMaxHeight()) {
-                    Box(Modifier.weight(1f).fillMaxWidth()) {
-                        if (s is Screen.SettingsMenu) {
-                            WithIndex(selection) {
-                                SettingsMenuScreen(s, it, state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) })
-                            }
-                        } else {
-                            val current = categories.indexOf(settingsCategoryOf(s)).coerceAtLeast(0)
-                            // The page has the focus: the current section drops to the main ink.
-                            SettingsMenuScreen(
-                                Screen.SettingsMenu(categories), current,
-                                onTap = state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) }, rowsFocused = true,
-                            )
-                        }
-                    }
-                    // The root shows its A/B hints here; a page shows its own on the right. Either way this bar keeps the room, so the baselines meet.
-                    NxHintBar(if (s is Screen.SettingsMenu) SETTINGS_ROOT_HINTS else emptyList(), onHint = state::onButton)
-                }
-                Box(Modifier.padding(start = left).fillMaxSize()) {
-                    CompositionLocalProvider(LocalSettingsBlock provides SettingsBlockMode(crumb = null).takeIf { blockPage }) {
-                        if (s is Screen.SettingsMenu) {
-                            WithIndex(selection) { i ->
-                                s.sections.getOrNull(i)?.let { section ->
-                                    val gpu by state.gpu.collectAsState()   // About's GPU row lands after its query
-                                    val update by state.updateLabel.collectAsState()   // and its update row follows the updater
-                                    val preview = remember(s, section, gpu, update) { state.settingsPreview(section) }
-                                    // No selection, undimmed: the current section is the one accent word.
-                                    SettingsScreen(
-                                        preview, -1,
-                                        onSelect = state::settingsPreviewTap, onOpen = state::settingsPreviewTap,
-                                        titled = true, hints = emptyList(),
-                                    )
+    val blockPage = settingsWideBlockPage(s)
+    val gutter = settingsGutter(settingsSizeClass())
+    WithSettingsSectionWidth(categories, back = settingsBackShown(LocalFooterMode.current)) { blockWidth ->
+        val sectionRight = gutter + blockWidth
+        Box(Modifier.fillMaxSize()) {
+            CompositionLocalProvider(LocalNxHintBarKeepHeight provides true) {
+                BoxWithConstraints(Modifier.fillMaxSize()) {
+                    val left = if (blockPage) settingsFrameLeft(maxWidth, sectionRight, gutter) else maxWidth * SETTINGS_SPLIT_LEFT
+                    val mode = SettingsBlockMode(crumb = null, topLine = settingsTopLine(maxHeight))
+                    // The section block keeps its gutter on the right even when the frame comes within 24 dp of it.
+                    Column(Modifier.width(if (blockPage) maxOf(left, sectionRight + gutter) else left).fillMaxHeight()) {
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            if (s is Screen.SettingsMenu) {
+                                WithIndex(selection) {
+                                    SettingsMenuScreen(s, it, state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) })
                                 }
+                            } else {
+                                val current = categories.indexOf(settingsCategoryOf(s)).coerceAtLeast(0)
+                                // The page has the focus: the current section drops to the main ink.
+                                SettingsMenuScreen(
+                                    Screen.SettingsMenu(categories), current,
+                                    onTap = state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) }, rowsFocused = true,
+                                )
                             }
-                        } else {
-                            page()
+                        }
+                        // The root shows its A/B hints here; a page shows its own on the right. Either way this bar keeps the room, so the baselines meet.
+                        NxHintBar(if (s is Screen.SettingsMenu) SETTINGS_ROOT_HINTS else emptyList(), onHint = state::onButton)
+                    }
+                    Box(Modifier.padding(start = left).fillMaxSize()) {
+                        CompositionLocalProvider(LocalSettingsBlock provides mode.takeIf { blockPage }) {
+                            if (s is Screen.SettingsMenu) {
+                                WithIndex(selection) { i ->
+                                    s.sections.getOrNull(i)?.let { section ->
+                                        val gpu by state.gpu.collectAsState()   // About's GPU row lands after its query
+                                        val update by state.updateLabel.collectAsState()   // and its update row follows the updater
+                                        val preview = remember(s, section, gpu, update) { state.settingsPreview(section) }
+                                        // No selection, undimmed: the current section is the one accent word.
+                                        SettingsScreen(
+                                            preview, -1,
+                                            onSelect = state::settingsPreviewTap, onOpen = state::settingsPreviewTap,
+                                            titled = true, hints = emptyList(),
+                                        )
+                                    }
+                                }
+                            } else {
+                                page()
+                            }
                         }
                     }
                 }
             }
+            // Over the whole stage, so its scrim takes every tap until it is answered.
+            if ((s as? Screen.Settings)?.confirmRemove != null) SettingsRemoveDialog(state::onButton)
         }
-        // Over the whole stage, so its scrim takes every tap until it is answered.
-        if ((s as? Screen.Settings)?.confirmRemove != null) SettingsRemoveDialog(state::onButton)
     }
 }
 

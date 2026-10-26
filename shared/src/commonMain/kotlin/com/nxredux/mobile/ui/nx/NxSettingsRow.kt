@@ -184,7 +184,7 @@ private fun settingRowTap(row: NxSettingRow, index: Int, onSelect: (Int) -> Unit
 /**
  * One touch settings row ([NxTouchRow]): the name with the info icon when the description is cut off or has a fuller
  * detail ([hasMoreInfo]), the description under it, and on the right the control ([NxSettingControl]), a value, a button
- * or a page's `›`; a segmented row's segments that don't fit there sit under the text at its start. A group label is a
+ * or a page's `›`; a segmented row's segments that don't fit there sit under the text (right-aligned in the Settings rows block). A group label is a
  * grey line, a spacer empty, a paragraph wrapping grey text (MiSans Regular, [LocalNxFontWeights]). [onEvent] null: the
  * controls take no taps (a preview). [onTruncated] hears whether the description fits.
  */

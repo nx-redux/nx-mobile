@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.nxredux.mobile.ui.LocalSettingsBlock
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -154,8 +155,8 @@ private const val SOFT_SELECTION_ALPHA = 0.16f
 /**
  * One touch row [height] high: the [label] (bold) with the info icon while it is [selected] and the [info] line is cut
  * off or [moreInfo] says there is more ([nxInfoIconShown]), the description under it (at most [SETTING_DESC_LINES], the warning colour when [warning]), and the
- * [control] on the right, or [below] under the text at its start (a segmented row's segments that don't fit on the
- * right). Selected: a soft rounded plate behind it, so the control stays readable; not [enabled]: dimmed. [onInfo] null:
+ * [control] on the right, or [below] under the text (a segmented row's segments that don't fit on the right): at its
+ * start, right-aligned in the Settings rows block ([LocalSettingsBlock]). Selected: a soft rounded plate behind it, so the control stays readable; not [enabled]: dimmed. [onInfo] null:
  * the info icon takes no taps. [onTruncated] hears whether the description fits while the row is [selected].
  */
 @Composable
@@ -204,7 +205,8 @@ internal fun NxTouchRow(
         }
         if (below != null) {
             Spacer(Modifier.height(SEGMENTS_GAP))
-            below()
+            // In the Settings rows block, right-aligned under the label (the pane never widens for it); elsewhere at the text's start.
+            Box(Modifier.fillMaxWidth(), contentAlignment = if (LocalSettingsBlock.current != null) Alignment.CenterEnd else Alignment.CenterStart) { below() }
         }
     }
 }
