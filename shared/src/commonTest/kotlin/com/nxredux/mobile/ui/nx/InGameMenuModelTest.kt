@@ -2102,7 +2102,7 @@ class InGameMenuModelTest {
             assertTrue(o.info.isNotBlank() && o.info != o.brief, o.label)   // the full text kept for the info icon
         }
         // The full texts stay behind the info icon.
-        assertTrue("Large screen: one big, the other small above or below it." in FrontendOptions.option(NdsOptions.LAYOUT_PORTRAIT)!!.info)
+        assertTrue("Large screen: the big one, the other centred below it at\nleast half its size; under 2x, it fills the leftover height up to 2x." in FrontendOptions.option(NdsOptions.LAYOUT_PORTRAIT)!!.info)
         // In game: the short line on the row, the full text in its popup (the info icon / X without a truncation report).
         val m = model().openFrontend()
         val hud = m.rowIndex("Debug HUD")

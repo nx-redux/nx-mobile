@@ -541,7 +541,7 @@ internal class FrontendRenderer(
     private fun fitPad(room: PadRoom, pad: LandscapePad?, picture: PxRect, frameKnown: Boolean, areaH: Float, overlayH: Float) {
         when (room) {
             PadRoom.BESIDE -> pad?.let { padLayout.placeClusters(picture.takeIf { frameKnown }, it) }
-            PadRoom.HIDDEN_BAND -> padLayout.overlayClear.value = frameKnown && overlayClear(picture.y + picture.height, areaH, overlayH)
+            PadRoom.HIDDEN_BAND -> padLayout.setOverlayClear(frameKnown && overlayClear(picture.y + picture.height, areaH, overlayH))
             PadRoom.BAND, PadRoom.NONE -> Unit
         }
         if (frameKnown) padLayout.onPictureKnown()

@@ -169,6 +169,13 @@ object DualScreen {
         SWAP_SCREEN_MODE to (running?.get(SWAP_SCREEN_MODE) ?: stored[SWAP_SCREEN_MODE] ?: "Toggle"),
     )
 
+    /**
+     * Whether the on-screen pad covers part of the picture: a pad is up over the game ([padShown]) and neither the landscape
+     * clusters ([clustersClear]) nor the portrait hidden band's overlay ([overlayClear]) sit clear of it.
+     */
+    fun padCoversPicture(padShown: Boolean, clustersClear: Boolean, overlayClear: Boolean): Boolean =
+        padShown && !clustersClear && !overlayClear
+
     /** Azahar's touch-main-only rule: split, the app's regions decide where a finger touches, so the core takes it anywhere. */
     fun n3dsTouchMainOnly(mode: DualMode, padOverGame: Boolean): String =
         N3dsOptions.touchMainOnly(padOverGame && mode != DualMode.SPLIT)
