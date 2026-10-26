@@ -78,4 +78,36 @@ class PortraitOverlayTest {
         assertEquals(0f, box.top, 1e-4f)
         assertTrue(cStickWellHit(box, box.center) && !cStickWellHit(box, Offset(box.left + 0.01f, box.bottom - 0.01f)))
     }
+
+    @Test fun touch_buttons_beside_stylus_and_swap_keep_their_width_on_a_ds() {
+        // A 411 dp phone: unit 42.1, the row 9 units less both 0.2-unit nudges. The DS's L + STYLUS on each side leaves
+        // room for a full-width button beside each, a gap apart.
+        val u = 42.1f
+        val gap = u * OVERLAY_GAP_UNITS
+        val side = overlayTopSideWidth(listOf(NxButton.L1), u, u * OVERLAY_SYSTEM_UNITS, u, gap, tools = true)
+        assertEquals(u + gap + u, side, 0.01f)
+        assertEquals(u, overlayTopShortcutWidth(8.6f * u, u, gap, side), 0.01f)
+    }
+
+    @Test fun touch_buttons_narrow_to_keep_a_gap_on_the_new_3ds() {
+        // ZL / ZR beside L / R: the two buttons narrow so the halves stay a gap apart, and never go below zero.
+        val u = 42.1f
+        val gap = u * OVERLAY_GAP_UNITS
+        val side = overlayTopSideWidth(listOf(NxButton.L1, NxButton.L2), u, u * OVERLAY_SYSTEM_UNITS, u, gap, tools = true)
+        val w = overlayTopShortcutWidth(8.6f * u, u, gap, side)
+        assertTrue(w < u)
+        assertEquals(8.6f * u, 2 * (side + gap + w) + gap, 0.01f)
+        assertEquals(0f, overlayTopShortcutWidth(100f, u, gap, side))
+    }
+
+    @Test fun bottom_row_ends_before_the_show_hide_icon() {
+        // The mic, MENU, the toggle, SELECT and START (12 dp apart) from the 16 dp padding and 0.2-unit nudge, against the
+        // icon's 36 dp circle mirrored to the mic's edge from the right, on a width-bound phone (width 9 units + 32 dp).
+        for (u in listOf(34f, 36f, 40f, 42.1f, 45f, 54.7f)) {
+            val w = 9f * u + 32f
+            val rowEnd = CLUSTER_PADDING + u * OVERLAY_EDGE_NUDGE + u * OVERLAY_SYSTEM_UNITS + 4f * u + 4f * 12f
+            val iconStart = w - portraitMicEdge(u, hiddenBand = true) - 36f
+            assertTrue(rowEnd < iconStart, "unit $u: row ends at $rowEnd, icon starts at $iconStart")
+        }
+    }
 }
