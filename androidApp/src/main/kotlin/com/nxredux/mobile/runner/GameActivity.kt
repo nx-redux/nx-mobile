@@ -1782,14 +1782,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         ).withN3dsSplit(DualScreen.n3dsCoreOptions(dual.dualMode))
         // Azahar reports the new frame size some frames after its layout changes (a hotkey or menu cycle, a rotation, a
         // second screen's split or its restore): lay out again when it arrives, if the view's geometry flow has not.
-        val layout = options.first { it.key == N3dsOptions.LAYOUT }.value
+        // Large screen and Stacked share the core layout and differ only in the touch screen's proportion, so either counts.
+        val layout = options.filter { it.key == N3dsOptions.LAYOUT || it.key == N3dsOptions.STACKED_SMALL_PROPORTION }.associate { it.key to it.value }
         if (lastN3dsLayout != null && layout != lastN3dsLayout) renderer.watchGeometry()
         lastN3dsLayout = layout
         applyOptions(options)
     }
 
-    /** The core layout last sent for the 3DS ([syncN3dsCore]); null before the first. */
-    private var lastN3dsLayout: String? = null
+    /** The core layout and touch-screen proportion last sent for the 3DS ([syncN3dsCore]); null before the first. */
+    private var lastN3dsLayout: Map<String, String>? = null
 
     /** These options with a second-screen [split]'s fixed ones in place of the same keys; unchanged without one. */
     private fun List<Variable>.withN3dsSplit(split: Map<String, String>?): List<Variable> =
