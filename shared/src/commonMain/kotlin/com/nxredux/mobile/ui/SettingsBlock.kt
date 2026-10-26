@@ -94,13 +94,17 @@ const val SETTINGS_TOP_LINE = 0.4f
 /** Between a Layouts group's picture and the top line under it, on the wide stage. */
 val SETTINGS_PICTURE_GAP = 24.dp
 
+/** The wide rows pane's least width: past this the pane keeps it, reaching into the gap rather than vanishing. */
+val SETTINGS_FRAME_MIN = 280.dp
+
 /**
  * The wide rows pane's width: [SETTINGS_FRAME_MAX], or less when the room between the section block's right edge
- * ([sectionRight], from the stage's left) plus [SETTINGS_FRAME_GAP] and the right [gutter] is narrower. Never sized by
- * the page, so its left edge is the same on every page.
+ * ([sectionRight], from the stage's left) plus [SETTINGS_FRAME_GAP] and the right [gutter] is narrower, never under
+ * [SETTINGS_FRAME_MIN] (nor the stage inside the gutter). Never sized by the page, so its left edge is the same on every page.
  */
 fun settingsFrameWidth(stageWidth: Dp, sectionRight: Dp, gutter: Dp): Dp =
-    minOf(SETTINGS_FRAME_MAX, stageWidth - gutter - sectionRight - SETTINGS_FRAME_GAP).coerceAtLeast(0.dp)
+    minOf(SETTINGS_FRAME_MAX, stageWidth - gutter - sectionRight - SETTINGS_FRAME_GAP)
+        .coerceAtLeast(minOf(SETTINGS_FRAME_MIN, stageWidth - gutter)).coerceAtLeast(0.dp)
 
 /** The wide rows pane's left edge from the stage's left: its right edge at the [gutter] ([settingsFrameWidth]). */
 fun settingsFrameLeft(stageWidth: Dp, sectionRight: Dp, gutter: Dp): Dp =
@@ -109,15 +113,28 @@ fun settingsFrameLeft(stageWidth: Dp, sectionRight: Dp, gutter: Dp): Dp =
 /** The wide rows pane's top line: [SETTINGS_TOP_LINE] of the [band] (the stage: the screen inside the system bars), every page. */
 fun settingsTopLine(band: Dp): Dp = band * SETTINGS_TOP_LINE
 
-/**
- * A framed picture's width ([mat] each side, the picture [aspect] wide over high inside) in a room [width] by [height]:
- * the room's width, or narrower so its height fits (the aspect kept); never below zero.
- */
-fun settingsPictureWidth(width: Dp, height: Dp, aspect: Float, mat: Dp): Dp =
+/** A framed picture's width ([mat] each side, [aspect] wide over high inside) in [width] by [height], the aspect kept; never below zero. */
+private fun framedFit(width: Dp, height: Dp, aspect: Float, mat: Dp): Dp =
     minOf(width, (height - mat * 2) * aspect + mat * 2).coerceAtLeast(0.dp)
 
-/** The least room above a picture over the top line: under the small mark ([SETTINGS_MARK_TOP] + [SETTINGS_MARK]), 16 dp clear. */
-val SETTINGS_PICTURE_TOP = SETTINGS_MARK_TOP + SETTINGS_MARK + 16.dp
+/** A picture over the top line stays this far from the mark: under it ([SETTINGS_PICTURE_TOP]) or left of its column. */
+private val SETTINGS_MARK_CLEAR = 16.dp
+
+/** The top of a picture over the top line that reaches the mark's column: under the small mark, [SETTINGS_MARK_CLEAR] clear. */
+val SETTINGS_PICTURE_TOP = SETTINGS_MARK_TOP + SETTINGS_MARK + SETTINGS_MARK_CLEAR
+
+/**
+ * A Layouts group's framed picture ([mat] each side, [aspect] wide over high inside) over the wide pane's top line, left-
+ * aligned in the pane ([paneWidth]) with its bottom [bottom] from the stage's top (the top line less [SETTINGS_PICTURE_GAP]):
+ * the larger of a picture that stays left of the mark's column (the pane's right [SETTINGS_MARK] + [SETTINGS_MARK_CLEAR])
+ * with its top as high as [SETTINGS_MARK_TOP], and one across the pane with its top under the mark ([SETTINGS_PICTURE_TOP]).
+ * The aspect is kept; never below zero.
+ */
+fun settingsPictureWidth(paneWidth: Dp, bottom: Dp, aspect: Float, mat: Dp): Dp {
+    val beside = minOf(framedFit(paneWidth, bottom - SETTINGS_MARK_TOP, aspect, mat), paneWidth - SETTINGS_MARK - SETTINGS_MARK_CLEAR)
+    val under = framedFit(paneWidth, bottom - SETTINGS_PICTURE_TOP, aspect, mat)
+    return maxOf(beside, under).coerceAtLeast(0.dp)
+}
 
 /**
  * The blocks' bottom inset inside the screen slot. App already pads the shell by the system bars (the gesture bar
@@ -279,13 +296,31 @@ fun settingsWideBlockPage(screen: Screen): Boolean =
  */
 @Composable
 internal fun WithSettingsSectionWidth(sections: List<SettingsSection>, back: Boolean, content: @Composable (Dp) -> Unit) {
+    // The content slot is kept while neither the width nor [content] changes, so a remeasure does not recompose the stage.
+    val slot = remember { SectionWidthSlot() }
     SubcomposeLayout { constraints ->
         val probe = subcompose("probe") {
             SettingsSectionBlock(sections, current = 0, rowsFocused = false, onTap = {}, onBack = if (back) ({}) else null)
         }
-        val width = probe.maxOfOrNull { it.maxIntrinsicWidth(constraints.maxHeight) } ?: 0
-        val placeables = subcompose("content") { content(width.toDp()) }.map { it.measure(constraints) }
+        val width = (probe.maxOfOrNull { it.maxIntrinsicWidth(constraints.maxHeight) } ?: 0).toDp()
+        val placeables = subcompose("content", slot.of(width, content)).map { it.measure(constraints) }
         layout(constraints.maxWidth, constraints.maxHeight) { placeables.forEach { it.place(0, 0) } }
+    }
+}
+
+/** [WithSettingsSectionWidth]'s content slot: the same lambda for the same width and content. */
+private class SectionWidthSlot {
+    private var width: Dp? = null
+    private var content: (@Composable (Dp) -> Unit)? = null
+    private var slot: @Composable () -> Unit = {}
+
+    fun of(width: Dp, content: @Composable (Dp) -> Unit): @Composable () -> Unit {
+        if (width != this.width || content !== this.content) {
+            this.width = width
+            this.content = content
+            slot = { content(width) }
+        }
+        return slot
     }
 }
 
@@ -293,8 +328,8 @@ internal fun WithSettingsSectionWidth(sections: List<SettingsSection>, back: Boo
  * The rows block. Narrow ([SettingsBlockMode.topLine] null): anchored to the bottom of what it is given,
  * [SETTINGS_BLOCK_BOTTOM] up and the gutter in from both sides. Wide: a fixed frame, its right edge the gutter in, its
  * first line [SettingsBlockMode.topLine] from the top on every page, growing down to [SETTINGS_BLOCK_BOTTOM] above the
- * bottom; [above] (a Layouts group's picture) in the room over that line, [SETTINGS_PICTURE_GAP] clear of it and of the
- * mark at the top ([SETTINGS_PICTURE_TOP]), given that room. Its first line is [title] in hint at 13 sp (after [mode]'s
+ * bottom; [above] (a Layouts group's picture, [settingsPictureWidth]) in the room over that line, bottom-start,
+ * [SETTINGS_PICTURE_GAP] clear of it, given the pane's width and the room's height from the stage's top. Its first line is [title] in hint at 13 sp (after [mode]'s
  * crumb in inkDim), level with the row labels and 6 dp above the first row; then [header] (a banner, a page's lines),
  * then [rows], which take what is left and scroll there (each list fades the edge it has more beyond, [SETTINGS_ROWS_FADE]).
  */
@@ -308,8 +343,8 @@ fun SettingsRowsBlock(
     val gutter = settingsGutter(settingsSizeClass())
     val topLine = mode.topLine
     Box(modifier.fillMaxSize()) {
-        if (topLine != null && above != null && topLine - SETTINGS_PICTURE_GAP > SETTINGS_PICTURE_TOP) Box(
-            Modifier.fillMaxWidth().height(topLine - SETTINGS_PICTURE_GAP).padding(top = SETTINGS_PICTURE_TOP, end = gutter),
+        if (topLine != null && above != null && topLine - SETTINGS_PICTURE_GAP > SETTINGS_MARK_TOP) Box(
+            Modifier.fillMaxWidth().height(topLine - SETTINGS_PICTURE_GAP).padding(end = gutter),
             contentAlignment = Alignment.BottomStart,
         ) { above() }
         Column(

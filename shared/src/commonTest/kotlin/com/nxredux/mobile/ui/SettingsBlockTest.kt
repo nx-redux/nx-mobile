@@ -60,8 +60,9 @@ class SettingsBlockTest {
         // A narrower wide window: the frame gives way, 24 dp clear of the section block.
         assertEquals(800.dp - 48.dp - 250.dp - 24.dp, settingsFrameWidth(800.dp, sectionRight = 250.dp, gutter = 48.dp))
         assertEquals(250.dp + 24.dp, settingsFrameLeft(800.dp, sectionRight = 250.dp, gutter = 48.dp))
-        // No room at all: none, never negative.
-        assertEquals(0.dp, settingsFrameWidth(200.dp, sectionRight = 250.dp, gutter = 24.dp))
+        // Too little room: the pane keeps its least width rather than vanishing (and never passes the gutter).
+        assertEquals(SETTINGS_FRAME_MIN, settingsFrameWidth(400.dp, sectionRight = 250.dp, gutter = 24.dp))
+        assertEquals(200.dp - 24.dp, settingsFrameWidth(200.dp, sectionRight = 250.dp, gutter = 24.dp))
     }
 
     @Test fun topLine() {
@@ -70,12 +71,18 @@ class SettingsBlockTest {
     }
 
     @Test fun pictureFit() {
-        // Height to spare: the room's width.
-        assertEquals(560.dp, settingsPictureWidth(560.dp, 1000.dp, aspect = 2f, mat = 8.dp))
-        // Short room: narrower, the aspect kept (the picture inside the mat 2:1).
-        assertEquals((116f * 2f + 16f).dp, settingsPictureWidth(560.dp, 132.dp, aspect = 2f, mat = 8.dp))
+        // Short room: a picture left of the mark's column, its top as high as the mark's top (16 dp).
+        val narrow = settingsPictureWidth(560.dp, bottom = 200.dp, aspect = 2f, mat = 8.dp)
+        assertEquals(((200f - 16f - 16f) * 2f + 16f).dp, narrow)
+        assertTrue(narrow <= 560.dp - SETTINGS_MARK - 16.dp)
+        // Room to reach the mark's column: across the pane, its top under the mark (80 dp).
+        val wide = settingsPictureWidth(560.dp, bottom = 400.dp, aspect = 2f, mat = 8.dp)
+        assertEquals(560.dp, wide)
+        assertTrue(400.dp - ((wide - 16.dp) / 2f + 16.dp) >= SETTINGS_PICTURE_TOP)
+        // Room for a picture past the mark's column only under the mark: held left of it instead, top still at 16 dp.
+        assertEquals(560.dp - SETTINGS_MARK - 16.dp, settingsPictureWidth(560.dp, bottom = 300.dp, aspect = 2f, mat = 8.dp))
         // No room: none.
-        assertEquals(0.dp, settingsPictureWidth(560.dp, 0.dp, aspect = 2f, mat = 8.dp))
+        assertEquals(0.dp, settingsPictureWidth(560.dp, bottom = 16.dp, aspect = 2f, mat = 8.dp))
     }
 
     @Test fun narrowBlockPages() {

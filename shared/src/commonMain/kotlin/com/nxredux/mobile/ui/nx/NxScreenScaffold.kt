@@ -392,8 +392,8 @@ internal fun NxTitledBody(title: String?, modifier: Modifier = Modifier, titleSu
 /**
  * A list page as the Settings rows block ([SettingsRowsBlock]): [title] its first line, [header] under it, the rows at
  * the list pitch (Appearance → Text size) taking only their own height, from the bottom; past the room they scroll under
- * a [SETTINGS_ROWS_FADE] fade, the selection kept clear of it. Pill rows keep the pill, options rows NX Redux's options
- * row; the hint bar below, as the page's.
+ * a [SETTINGS_ROWS_FADE] fade, the selection kept clear of it. Pill-kind rows draw as the section block's words
+ * ([SettingsWordList], no pill), options rows as NX Redux's options row; the hint bar below, as the page's.
  */
 @Composable
 internal fun NxRowsBlockPage(
