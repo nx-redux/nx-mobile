@@ -56,6 +56,7 @@ import com.nxredux.mobile.layout.overlayHeightPx
 import com.nxredux.mobile.layout.reach
 import com.nxredux.mobile.layout.tabletopDs
 import com.nxredux.mobile.layout.tabletopDsPadBoxes
+import com.nxredux.mobile.layout.usableTabletop
 import com.nxredux.mobile.layout.tabletopDsUnitPx
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
@@ -444,7 +445,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      */
     private fun addTabletopDsHalves(root: FrameLayout, tt: TabletopLayout) {
         val shape = activity.windowShape()
-        // A hinge reading with no room for the touch screen below it stacks both screens above it: no halves then.
+        // [tabletop] only gives a split here; a placement without halves would be a reading it already turned down.
         if (tabletopDsPlacement(shape, tt).left == null) return
         fun lp(side: Int) = FrameLayout.LayoutParams(0, 0, side or Gravity.TOP)
         clustersSolid.value = true   // before they compose: the first frame is already solid
@@ -767,7 +768,11 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         if (posture == Posture.Flat) return null
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null
-        return tabletopLayout(posture, w, h, activity.windowShape().screenClass, cutoutTop, controllerConnected = names.isNotEmpty(), isDualScreenConsole = tabletopDualScreen(layoutTag(), host.dualMode))
+        val shape = activity.windowShape()
+        val tt = tabletopLayout(posture, w, h, shape.screenClass, cutoutTop, controllerConnected = names.isNotEmpty(), isDualScreenConsole = tabletopDualScreen(layoutTag(), host.dualMode))
+        // A hinge reading the Fold's split cannot fit is not used for the DS / 3DS: flat, with its pad ([usableTabletop]).
+        if (tt?.pad == TabletopPad.DS && !usableTabletop(spansHinge = true, tabletopDsPlacement(shape, tt))) return null
+        return tt
     }
 
     /**

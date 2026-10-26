@@ -4,6 +4,7 @@ import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.PxRect
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -179,5 +180,17 @@ class TabletopDsTest {
         assertEquals(tabletopDsUnitPx(404.6f, 2.625f), pv.unitPx)
         // A phone-shaped window still gets the halves (laid out as a tablet-class one).
         assertNotNull(halfFoldedPreview(1080f, 2400f, ScreenClass.REGULAR_PHONE, 0f, 400f, 2.625f, 0f, 0f, true, 3.3f, 2, DsKind.N3DS))
+    }
+
+    @Test
+    fun a_reading_the_split_cannot_fit_is_not_used_on_the_fold() {
+        val bad = place(DsKind.DS, h = 1386, hingeBottom = 1236)   // 150 px below the hinge
+        assertEquals(TabletopDsMode.STACKED_TOP, bad.mode)
+        assertFalse(usableTabletop(spansHinge = true, bad))
+        assertTrue(usableTabletop(spansHinge = true, place(DsKind.DS)))
+        assertTrue(usableTabletop(spansHinge = true, place(DsKind.N3DS, controller = true)))
+        // The Flip's stack (its game view above the hinge, the portrait pad below) is the layout itself.
+        val flip = tabletopDs(1080, 2640, ScreenClass.REGULAR_PHONE, 0, 1308, 1332, DsKind.DS, 100f, reach, 2.625f, false)
+        assertTrue(usableTabletop(spansHinge = false, flip))
     }
 }

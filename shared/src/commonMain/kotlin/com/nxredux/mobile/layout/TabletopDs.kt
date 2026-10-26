@@ -41,8 +41,9 @@ private const val EPSILON = 0.001f
  * pixels. The halves set aside [LayoutConstants.TABLETOP_DS_SET_ASIDE] of the [reach] each side (the touch screen
  * overlaps each by a quarter of it at most), nothing with a [controller]. The screens meet at the fold, as on a DS:
  * the top one's bottom edge on [hingeTop], the touch screen's top edge on [hingeBottom], each centred across.
- * A hinge reading that leaves no room below it for a 1x DS touch screen (or any 3DS one) between the halves stacks both
- * screens above it instead, as a phone-shaped foldable does. Only a tablet-class [screen] has the width for the touch screen
+ * A hinge reading that leaves no room for the split (a 1x DS touch screen, or any 3DS one, between the halves below
+ * it, or the top screen above it) returns STACKED_TOP: on a tablet-class window that reading is not used for the DS
+ * layout, and the game lays out flat instead ([usableTabletop]). Only a tablet-class [screen] has the width for the touch screen
  * between the pad halves; a phone-shaped foldable stacks both screens above the hinge instead. [secondRow]: the halves
  * draw their second row (STYLUS / SWAP), so their boxes are that row taller, as the landscape pad's. [big]: the screen
  * drawn first (above the hinge, or on top in the stack); after a 3DS SWAP the touch screen, so each rect is fitted to
@@ -200,3 +201,13 @@ fun halfFoldedPreview(
     val boxes = tabletopDsPadBoxes(p, windowH.roundToInt()) ?: return null
     return HalfFoldedPreview(p, hinge.toFloat(), unit, boxes)
 }
+
+/**
+ * Whether a half-folded DS / 3DS [placement] can be used on a window whose game view spans both halves ([spansHinge]:
+ * the Fold's [com.nxredux.mobile.runner.TabletopPad.DS]): only as the split. A hinge reading the split cannot fit
+ * (STACKED_TOP there) is not used: no pad would be drawn below and the stack could run past the top area, so the game
+ * lays out flat, as when not half-folded. A phone-shaped window's stack (its game view above the hinge, the portrait
+ * pad below) is always usable.
+ */
+fun usableTabletop(spansHinge: Boolean, placement: TabletopDsPlacement): Boolean =
+    !spansHinge || placement.mode == TabletopDsMode.SPLIT
