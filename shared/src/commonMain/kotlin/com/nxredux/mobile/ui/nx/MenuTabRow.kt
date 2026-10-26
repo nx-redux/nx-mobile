@@ -88,14 +88,15 @@ internal const val NX_MENU_GLIDE_MS = 240
  * over its picture): the inactive words are 62% white instead of 38%, and every word gets a dark shadow
  * ([overArtShadow]). [focused] (the d-pad is on the tab row): the current word sits on the accent pill ([TAB_PLATE_X] ×
  * [TAB_PLATE_Y] round it) in place of the underline. [onLongPress]: a long press anywhere on the row opens the
- * hidden-tab menu. [trailing]: drawn at the row's right end (the touch-only Recent and Search icons,
+ * hidden-tab menu. [underline] false: no pill under the current word (the main menu's bottom tabs; the lit word alone
+ * marks it). [trailing]: drawn at the row's right end (the touch-only Recent and Search icons,
  * [LauncherTopIcons]); the words keep the rest of the row.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MenuTabRow(
     labels: List<String>, selected: Int, onTab: (Int) -> Unit, modifier: Modifier = Modifier, overArt: Boolean = false, focused: Boolean = false,
-    onLongPress: (() -> Unit)? = null, trailing: (@Composable () -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null, underline: Boolean = true, trailing: (@Composable () -> Unit)? = null,
 ) {
     val colors = LocalNxColors.current
     val portrait = LocalPortrait.current
@@ -158,7 +159,7 @@ fun MenuTabRow(
                     )
                 }
             }
-            if (placed && !focused) Box(
+            if (placed && !focused && underline) Box(
                 Modifier.align(Alignment.BottomStart).offset { IntOffset(x.value.roundToInt(), 0) }
                     .width(with(density) { w.value.toDp() }).height(3.dp).background(colors.accent, RoundedCornerShape(2.dp)),
             )

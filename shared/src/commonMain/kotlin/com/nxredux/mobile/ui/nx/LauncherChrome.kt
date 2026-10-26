@@ -60,5 +60,13 @@ fun launcherChromeFor(
     )
 }
 
+/**
+ * The main menu body's chrome under [shown] (the chrome in effect): the tabs moved to the bottom and the main menu has no
+ * hint bar, so the body is laid out as on a touch-only screen with the tab row hidden: no tab row and no bar above or
+ * under it, Recent and Search icons at the top right, Netplay in the game's menu.
+ */
+fun mainMenuBodyChrome(shown: LauncherChrome): LauncherChrome =
+    shown.copy(tabRow = false, buttonHints = false, netplayHint = false, topIcons = true, noBar = true)
+
 /** The launcher screens' chrome ([launcherChromeFor]); App provides it. Everything shown by default. */
 val LocalLauncherChrome = compositionLocalOf { LauncherChrome() }

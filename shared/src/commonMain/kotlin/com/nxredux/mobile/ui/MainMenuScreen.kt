@@ -11,10 +11,8 @@ import androidx.compose.foundation.layout.padding
 import com.nxredux.mobile.ui.nx.TOP_ICON_INSET
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -25,13 +23,15 @@ import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.ui.nx.BandGround
 import com.nxredux.mobile.ui.nx.GameInfoPlacement
-import com.nxredux.mobile.ui.nx.LauncherTopIcons
 import com.nxredux.mobile.ui.nx.NxTopIcons
 import com.nxredux.mobile.ui.nx.LocalNxListTopCut
 import com.nxredux.mobile.ui.nx.nxListTopCut
 import com.nxredux.mobile.ui.nx.rememberNxListTopCut
 import com.nxredux.mobile.ui.nx.launcherTopActions
 import com.nxredux.mobile.ui.nx.LocalLauncherChrome
+import com.nxredux.mobile.ui.nx.FooterMode
+import com.nxredux.mobile.ui.nx.LocalFooterMode
+import com.nxredux.mobile.ui.nx.mainMenuBodyChrome
 import com.nxredux.mobile.ui.nx.HomeFrame
 import com.nxredux.mobile.ui.nx.HomeCarouselScreen
 import com.nxredux.mobile.ui.nx.HomeListScreen
@@ -77,8 +77,6 @@ fun MainMenuScreen(
     onHint: ((NxButton) -> Unit)? = null, onLongPress: ((Int) -> Unit)? = null,
     info: () -> List<InfoLine> = { emptyList() },   // the selected row's info (a game's gameInfoLines, a console's or collection's game count): List's band
     rowInfo: (Int) -> List<InfoLine> = { emptyList() },   // Carousel Home: any row's full info by index (its caption stays on the last row item while the dock has focus)
-    canResume: () -> Boolean = { false },           // the highlighted Continue or pinned game has a save (A Resume)
-    canNetplay: () -> Boolean = { false },          // the highlighted Continue, pinned or shelf game has Netplay here (Y)
     style: MenuStyle = MenuStyle.LIST,    // the tab's style
     orientation: MenuOrientation = MenuOrientation.HORIZONTAL,   // the tab's orientation (Carousel only: Vertical is the stack)
     onGridLayout: (Int, Int) -> Unit = { _, _ -> },   // a Grid reports its column and row counts
@@ -102,27 +100,13 @@ fun MainMenuScreen(
     val shared = remember(rows) { rows.mapNotNull { (it as? MainRow.System)?.system }.groupingBy { it.displayName }.eachCount().filterValues { it > 1 }.keys }   // rows merge by name (GBA and MGBA are one row): a tag badge only if two rows still share one
     val index = rememberUpdatedState(selectedIndex)
     val selection = remember { { index.value() } }   // the row reads it where it shows (its slide, its items), not here
-    val resume = rememberUpdatedState(canResume)
-    val netplay = rememberUpdatedState(canNetplay)
-    val selectedRow = remember(rows) { derivedStateOf(structuralEqualityPolicy()) { rows.getOrNull(index.value()) } }
-    // Equal hints keep one list, so the hint bar recomposes only when they change (A Resume or A Play). The tab row
-    // focused: SELECT Recent and A Open. Recent, Search and Netplay leave the bar while their Layouts rows hide them.
-    // Recent and Search then become icons ([LauncherChrome.topIcons]), as on a touch-only screen or with Button hints
-    // hidden: at the tab row's right, or at the top right corner while the tab row is hidden.
+    // The tabs sit at the bottom, where a hint bar would be, and the main menu has no hint bar: its body is laid out as
+    // on a touch-only screen with the page title hidden ([mainMenuBodyChrome], touch footer mode): Home's stats header
+    // and the Recent and Search icons in the top row's room, no bar and no bar room under it. Layouts → Page title
+    // (in effect, [LocalLauncherChrome]) shows or hides the bottom tabs; L1 / R1 switch tabs either way.
     val shown = LocalLauncherChrome.current
-    val hints = remember(rows, canSearch, screen.pushed, tabMenu, shown) {
-        derivedStateOf(structuralEqualityPolicy()) {
-            mainMenuHints(
-                selectedRow.value, resume.value(), netplay.value() && shown.netplayHint, canSearch && shown.searchInBar,
-                pushed = screen.pushed, tabMenu = tabMenu, recent = shown.recentInBar,
-            )
-        }
-    }
-    // Layouts → Page title and Button hints, in effect ([LocalLauncherChrome]). With the tab row hidden, a List and Home
-    // take its room (the List more rows, Home its strip and top section); a Grid or Carousel takes it into its
-    // box, its items sized as with the tab row and centred in the taller box. With Button hints hidden, the hint bar's
-    // room is kept empty on every tab, Home too (the scaffold's hideHints: no hints, no taps).
-    val chrome = LocalLauncherChrome.current
+    val chrome = remember(shown) { mainMenuBodyChrome(shown) }
+    val hints = NoHints
     // Consoles with their controllers (a List or Carousel by Layouts → Consoles background): every pad
     // decoded ahead, off the main thread, nearest the selection first, so stepping through the consoles never decodes one inside a frame.
     if (!home && style != MenuStyle.GRID && style != MenuStyle.MINIMAL && controllerArt) {
@@ -132,6 +116,7 @@ fun MainMenuScreen(
     // A Minimal tab's selected name as last laid out, and this screen's box: where the open band starts.
     val minimalSelected = remember { MinimalSelected() }
     val screenBox = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    CompositionLocalProvider(LocalLauncherChrome provides chrome, LocalFooterMode provides FooterMode.BUTTONS) {
     Box(modifier.fillMaxSize().onGloballyPositioned { screenBox[0] = it }) {
         // Behind the tab row, over the backdrop App draws: the switcher title's eased top band, so the dim labels read over
         // bright art. It reaches [NX_TOP_BAND_REACH] past the row, over the list's top (the rows draw on top of it).
@@ -152,12 +137,6 @@ fun MainMenuScreen(
             // [titleRoom]).
             // One tab: no tab to switch to, so NX Redux's title stands in the row's place (same height: the page below keeps its place).
             val title = mainMenuTitle(screen)
-            if (chrome.tabRow) {
-                val longPress = onTabMenu?.let { f -> Modifier.pointerInput(f) { detectTapGestures(onLongPress = { f() }) } } ?: Modifier
-                val icons = @Composable { LauncherTopIcons(chrome, onHint, canSearch) }
-                if (title == null) MenuTabRow(labels, screen.tab, onTab, onLongPress = onTabMenu, trailing = icons)
-                else MenuTitleRow(title, modifier = longPress, textStart = if (LocalPortrait.current) 16.dp else 24.dp, trailing = icons)
-            }
             val titleRoom = if (chrome.tabRow) 0.dp else MENU_TAB_ROW_HEIGHT
             // One tap opens a console, collection, Tools tab tool or "+N"; a game (Continue, a pin) and a Home pinned tool
             // take two ([mainRowTakesTwoTaps]).
@@ -171,7 +150,7 @@ fun MainMenuScreen(
                 @Composable fun slot(keepBarRoom: Boolean = true, body: @Composable (Modifier) -> Unit) {
                     NxScreenScaffold(
                         rows = emptyList(), selectedIndex = 0,
-                        hints = hints.value, onSelect = onSelect, onOpen = onOpen, modifier = Modifier.weight(1f), onHint = onHint, grid = body,
+                        hints = hints, onSelect = onSelect, onOpen = onOpen, modifier = Modifier.weight(1f), onHint = onHint, grid = body,
                         hideHints = chrome.emptyBarRoom, keepBarRoom = keepBarRoom,
                     )
                 }
@@ -182,7 +161,7 @@ fun MainMenuScreen(
                         // Its rows level with Recent and Search (tab row hidden) stop short of them, as a List tab's.
                         MenuStyle.LIST -> CompositionLocalProvider(LocalNxListTopCut provides topCut.takeIf { topIcons.isNotEmpty() }) {
                             HomeListScreen(
-                                rows, selection, homeView.strip, info, hints.value, onSelect, onOpen, onLongPress, onHint,
+                                rows, selection, homeView.strip, info, hints, onSelect, onOpen, onLongPress, onHint,
                                 Modifier.weight(1f), tabMenu = tabMenu,
                             )
                         }
@@ -198,12 +177,12 @@ fun MainMenuScreen(
                             // rows sit in the same place whatever Button hints says.
                             NxScreenScaffold(
                                 rows = emptyList(), selectedIndex = 0,
-                                hints = hints.value, onSelect = onSelect, onOpen = onOpen, modifier = Modifier.weight(1f), onHint = onHint, grid = carousel,
+                                hints = hints, onSelect = onSelect, onOpen = onOpen, modifier = Modifier.weight(1f), onHint = onHint, grid = carousel,
                                 hideHints = chrome.emptyBarRoom || chrome.noBar,
                             )
                         }
                         MenuStyle.MINIMAL -> HomeMinimalScreen(
-                            rows, selection, homeView.strip, hints.value, onSelect, onOpen, onLongPress, onHint,
+                            rows, selection, homeView.strip, hints, onSelect, onOpen, onLongPress, onHint,
                             minimalSelected, modifier = Modifier.weight(1f).zIndex(-1f),   // its names run on under the tab row
                             leaving = minimalOpening != null,
                         )
@@ -255,7 +234,7 @@ fun MainMenuScreen(
                     MenuStyle.MINIMAL -> {
                         val names = remember(rows) { minimalTabRows(rows) }
                         MinimalScreen(
-                            names, selection, hints.value, onSelect, onOpen, onLongPress, onHint, minimalSelected,
+                            names, selection, hints, onSelect, onOpen, onLongPress, onHint, minimalSelected,
                             Modifier.weight(1f).zIndex(-1f), hideHints = chrome.emptyBarRoom, layoutKey = layoutKey, leaving = minimalOpening != null, onSwipeSelect = onSwipeSelect,
                         )
                     }
@@ -288,7 +267,7 @@ fun MainMenuScreen(
                             CompositionLocalProvider(LocalNxListTopCut provides topCut.takeIf { topIcons.isNotEmpty() }) { NxScreenScaffold(
                                 rows = listRows,
                                 selectedIndex = 0, selection = selection, showArt = false,   // App draws the tab's background behind; the rows read the selection
-                                hints = hints.value, onSelect = onSelect, onOpen = onOpen,
+                                hints = hints, onSelect = onSelect, onOpen = onOpen,
                                 modifier = scaffoldModifier, onHint = onHint, onLongPress = onLongPress, band = band,   // the list sits right under the tabs
                                 labelStart = gutter,
                                 listTopGap = if (portrait) 10.dp else 12.dp,   // the tab row hidden: the first row's gap under the page's top
@@ -303,8 +282,15 @@ fun MainMenuScreen(
                     }
                 }
             }
+            // The tabs at the bottom, in the hint bar's place: the selected word lit, no underline. A long press offers the
+            // hidden tabs. One tab or a pushed tab: its title stands there instead.
+            if (shown.tabRow) {
+                val longPress = onTabMenu?.let { f -> Modifier.pointerInput(f) { detectTapGestures(onLongPress = { f() }) } } ?: Modifier
+                if (title == null) MenuTabRow(labels, screen.tab, onTab, onLongPress = onTabMenu, underline = false)
+                else MenuTitleRow(title, modifier = longPress, textStart = if (LocalPortrait.current) 16.dp else 24.dp)
+            }
         }
-        // The tab row hidden (Page title), Recent and Search keep their icons at the top right corner. A List has the
+        // Recent and Search keep their icons at the top right corner. A List has the
         // tab row's eased band behind them (its rows scroll under them); a Grid keeps their room clear
         // ([topIconsRoom]) and a Carousel sits below them, so neither has a band dimming its first row's edge (Grid and
         // Carousel Home draw their own, under the stats header's strip).
@@ -318,7 +304,11 @@ fun MainMenuScreen(
         // A Minimal tab's open: the selected row's band grows over the whole screen, then it goes dark.
         if (style == MenuStyle.MINIMAL && minimalOpening?.band == true) MinimalOpenOverlay(minimalSelected, screenBox[0])
     }
+    }
 }
+
+/** The main menu draws no hint bar. */
+private val NoHints = emptyList<Hint>()
 
 /**
  * A bandless main menu List's gaps above its first row and below its last, in rows: a quarter under the tab row, half
@@ -414,26 +404,3 @@ internal fun mainMenuListBand(category: MenuCategory?): MainMenuListBand = when 
     MenuCategory.HOME, null -> MainMenuListBand(shade = true, info = true)
 }
 
-/**
- * The hint bar for the highlighted row: SELECT (the switcher) first. A game (Continue, a pin or a shelf game), a tool
- * (on the Tools tab, or pinned on Home) and a collection have MENU (Options: the game's menu, a tool's Pin / Unpin, a
- * collection's Rename / Delete). A resumes a game with a save ([canResume]) or plays it without one; a pinned tool's A
- * names it ("A Game Tracker"), "+N" is "A More tools" (it opens the Tools tab, no MENU), and A opens anything else (a
- * tool, Pick a game, a console, a collection).
- * [canNetplay]: the highlighted game has Netplay here, Y opens its sheet (a game row only).
- * [canSearch]: the library has games, START opens the search prompt. [tabMenu]: a hidden tab
- * is in MENU, so every row has MENU Options. [recent] false: SELECT Recent is not in the bar (an icon stands in).
- */
-internal fun mainMenuHints(row: MainRow?, canResume: Boolean = false, canNetplay: Boolean = false, canSearch: Boolean = false, pushed: Boolean = false, tabMenu: Boolean = false, recent: Boolean = true): List<Hint> = buildList {
-    if (pushed) add(Hint(NxButton.B, "Back"))   // a pushed tab: B returns to the tab underneath
-    if (recent) add(Hint(NxButton.SELECT, "Recent"))
-    if (canSearch) add(Hint(NxButton.START, "Search"))   // NX Redux's START search
-    if (tabMenu || row is MainRow.Pin || row is MainRow.Shelf || row is MainRow.Continue || row is MainRow.Tool || row is MainRow.PinnedTool || row is MainRow.Collection) add(Hint(NxButton.MENU, "Options"))
-    if (canNetplay && row.listed() != null) add(Hint(NxButton.Y, "Netplay"))
-    add(Hint(NxButton.A, when (row) {
-        is MainRow.Continue, is MainRow.Pin, is MainRow.Shelf -> if (canResume) "Resume" else "Play"
-        is MainRow.PinnedTool -> row.row.label
-        is MainRow.MoreTools -> "More tools"
-        else -> "Open"
-    }))
-}

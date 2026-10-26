@@ -461,8 +461,6 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                         }
                     },
                     rowInfo = { i -> gameInfoFor(gameInfo, now, s.rows.getOrNull(i).game(), full = true) },   // Carousel Home's caption, any row
-                    canResume = { resume.value.canResume },
-                    canNetplay = { state.canNetplay(s.rows.getOrNull(selection.value.index).listed()) },
                     style = style, orientation = orientation, onGridLayout = onGridLayout,
                     tileInfo = remember(s.rows, gameInfo, now) { rowTileInfo(s.rows, gameInfo, now) }, layoutKey = s.category,
                     onHomeLayout = onHomeLayout, homeView = homeView.value, homeRowLast = { homeRowLast.value },

@@ -5839,7 +5839,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             override fun fetchArt(entry: Listed) { artworkScreens?.fetchGame(entry) }
             override fun netplayOffered(entry: Listed): Boolean = this@AppState.netplay?.offers(entry) == true
             override fun openNetplay(entry: Listed) = this@AppState.openNetplay(entry)
-            override val netplayInMenu: Boolean get() = !launcherChrome().netplayHint
+            override val netplayInMenu: Boolean get() = !launcherChrome().netplayHint || _screen.value is Screen.Systems   // the main menu has no hint bar
             override val achievementsInMenu: Boolean get() = hasAchievements && !deps.settings.gameListAchievementsPanel && !_dualMenu.value
             override fun openAchievements() = ra.openRaPanel()
             override suspend fun canResume(entry: Listed): Boolean = deps.userData.resumeInfo(entry.system.tag, entry.game.fileName).canResume

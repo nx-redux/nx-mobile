@@ -1508,7 +1508,7 @@ class AppStateTest {
         assertTrue(state.launcherChrome().tabRow)                        // the tab row stays: the touch way to switch tabs
     }
 
-    @Test fun hidden_hints_put_netplay_first_on_a_home_game_menu() = runTest {
+    @Test fun netplay_leads_a_home_game_menu_whatever_the_hints() = runTest {
         val src = FakeRomsSource(
             dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to listOf("Super Nintendo (SFC)"), "Home/Roms/Super Nintendo (SFC)" to listOf("Super Mario Kart (USA).sfc")),
         )
@@ -1523,9 +1523,9 @@ class AppStateTest {
             state.onButton(NxButton.MENU)
             return menuKinds(state)
         }
-        // Hints hidden, Netplay leads the game's menu; Recent and Search are icons then, not menu items.
+        // The main menu has no hint bar, so Netplay leads the game's menu either way (Recent and Search are icons, not menu items).
         assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu(hints = false))
-        assertEquals(listOf(ContextKind.PIN), homeMenu(hints = true))
+        assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu(hints = true))
     }
 
     @Test fun a_home_game_with_a_save_offers_play_from_start() = runTest {
@@ -1549,8 +1549,9 @@ class AppStateTest {
         assertNull(runner.launched.single().resumeSlot)
     }
 
-    // Layouts → Recent / Search / Netplay hint. A hidden Netplay hint leads a game's menu; a hidden Recent or Search hint becomes an icon at the tab row's right, never a menu item.
-    @Test fun a_hidden_netplay_hint_moves_into_the_menu_recent_and_search_do_not() = runTest {
+    // Layouts → Recent / Search / Netplay hint. On the main menu (no hint bar) Netplay always leads a game's menu; a hidden
+    // Recent or Search hint is an icon, never a menu item.
+    @Test fun netplay_is_in_the_main_menus_game_menu_recent_and_search_never_are() = runTest {
         val src = FakeRomsSource(
             dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to listOf("Super Nintendo (SFC)"), "Home/Roms/Super Nintendo (SFC)" to listOf("Super Mario Kart (USA).sfc")),
         )
@@ -1566,10 +1567,10 @@ class AppStateTest {
         }
         suspend fun homeMenu(configure: MemorySettings.() -> Unit): List<ContextKind> =
             home(configure).also { it.onButton(NxButton.MENU) }.let(::menuKinds)
-        assertEquals(listOf(ContextKind.PIN), homeMenu {})
+        assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu {})
         assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu { showNetplayHint = false })
-        assertEquals(listOf(ContextKind.PIN), homeMenu { showRecentHint = false })
-        assertEquals(listOf(ContextKind.PIN), homeMenu { showSearchHint = false })
+        assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu { showRecentHint = false })
+        assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu { showSearchHint = false })
         assertTrue(home { showRecentHint = false }.launcherChrome().recentIcon)
         assertTrue(home { showSearchHint = false }.launcherChrome().searchIcon)
     }
@@ -7613,12 +7614,9 @@ class AppStateTest {
         assertEquals(listOf("GB", "GBA", "NDS", "collections", "tools"), rowKinds(state))
     }
 
-    @Test fun a_pin_row_shows_the_menu_hint_and_the_hint_opens_its_menu() = runTest {
+    @Test fun a_pin_rows_menu_button_opens_its_menu() = runTest {
         val state = state(MemorySettings(ContentRef("Home")), data = FakeUserData(pins = listOf(Shortcut(mario, "Mario"))))
         state.load()
-        val tabs = assertIs<Screen.Systems>(state.screen.value).tabs
-        assertEquals(listOf(Hint(NxButton.SELECT, "Recent"), Hint(NxButton.MENU, "Options"), Hint(NxButton.A, "Play")), mainMenuHints(tabs[0].rows.first { it is MainRow.Pin }))   // the pin
-        assertEquals(listOf(Hint(NxButton.SELECT, "Recent"), Hint(NxButton.A, "Open")), mainMenuHints(tabs[1].rows[0]))                                   // a console
         state.selectHome { it is MainRow.Pin }
         state.onButton(NxButton.MENU)                                    // what a tap on the MENU hint sends
         assertNotNull(assertIs<Screen.Systems>(state.screen.value).menu)
@@ -8806,7 +8804,6 @@ class AppStateTest {
         val menu = assertIs<Screen.Systems>(state.screen.value)
         assertEquals(MenuCategory.HOME, menu.category)
         assertTrue(state.resumeInfo.value.canResume)                     // Tetris has a save
-        assertTrue(Hint(NxButton.A, "Resume") in mainMenuHints(menu.rows[0], state.resumeInfo.value.canResume))
         state.onButton(NxButton.X)                                       // X does nothing on the main menu
         assertTrue(runner.launched.isEmpty())
         state.onButton(NxButton.A)
@@ -8817,7 +8814,6 @@ class AppStateTest {
         state.onForeground(); advanceUntilIdle()
         assertEquals("Mario Kart DS.nds", assertIs<MainRow.Continue>(state.screen.value.homeRows[0]).entry.game.fileName)
         assertFalse(state.resumeInfo.value.canResume)                    // no save: A Play
-        assertTrue(Hint(NxButton.A, "Play") in mainMenuHints(state.screen.value.homeRows[0], state.resumeInfo.value.canResume))
     }
 
     @Test fun back_from_a_game_over_its_list_rebuilds_continue_for_the_menu_after_it() = runTest {
@@ -9373,21 +9369,20 @@ class AppStateTest {
         assertEquals(4, runner.launched[2].resumeSlot)
     }
 
-    @Test fun a_pinned_game_on_home_resumes_its_save_or_plays_and_the_hint_says_which() = runTest {
+    @Test fun a_pinned_game_on_home_resumes_its_save_or_plays() = runTest {
         val runner = RecordingRunner()
         val resumable = HashMap(mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))   // Tetris has a save, Mario none
         val data = FakeUserData(pins = listOf(Shortcut(tetris, "Tetris"), Shortcut(mario, "Mario")), resumable = resumable)
         val state = state(MemorySettings(ContentRef("Home")), data = data, runner = runner)
         state.load(); advanceUntilIdle()
         state.onHomeLayout(LAND); advanceUntilIdle()                     // landscape
-        fun hint() = mainMenuHints(state.screen.value.homeRows[state.selection.value.index], state.resumeInfo.value.canResume)
         state.selectHome { it is MainRow.Pin && it.entry.game.path == tetris }; advanceUntilIdle()
-        assertTrue(Hint(NxButton.A, "Resume") in hint())
+        assertTrue(state.resumeInfo.value.canResume)
         state.onButton(NxButton.A); advanceUntilIdle()
         assertEquals(9, runner.launched.single().resumeSlot)             // resumed from its save
         state.onForeground(); advanceUntilIdle()                         // back from the game
         state.selectHome { it is MainRow.Pin && it.entry.game.path == mario }; advanceUntilIdle()
-        assertTrue(Hint(NxButton.A, "Play") in hint())                   // no save: A Play
+        assertFalse(state.resumeInfo.value.canResume)                    // no save: it plays
         state.onButton(NxButton.A); advanceUntilIdle()
         assertEquals("Mario.gba", runner.launched[1].fileName)
         assertNull(runner.launched[1].resumeSlot)                        // played
@@ -9396,7 +9391,7 @@ class AppStateTest {
         assertEquals(mario, assertIs<MainRow.Continue>(state.screen.value.homeRows[0]).entry.game.path)
         assertEquals(listOf(tetris), state.screen.value.homeRows.filterIsInstance<MainRow.Pin>().map { it.entry.game.path })   // Tetris back
         state.select(0); advanceUntilIdle()
-        assertTrue(Hint(NxButton.A, "Resume") in hint())                 // its new save: A Resume
+        assertTrue(state.resumeInfo.value.canResume)                     // its new save: it resumes
         state.onButton(NxButton.A); advanceUntilIdle()
         assertEquals(2, runner.launched[2].resumeSlot)
     }
@@ -11329,14 +11324,6 @@ class AppStateTest {
             achievements = controller, gameTime = gameTime, now = { now }, compute = UnconfinedTestDispatcher(testScheduler)), scope)
         state.load(); advanceUntilIdle()
         assertEquals("1", state.strip.achievements)
-    }
-
-    @Test fun home_hints_follow_the_focused_row() = runTest {
-        val data = FakeUserData(recents = listOf(Recent(tetris)), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))
-        val state = state(MemorySettings(ContentRef("Home")), data = data)
-        state.load(); advanceUntilIdle()
-        val row = state.screen.value.homeRows[0]
-        assertEquals(listOf(Hint(NxButton.SELECT, "Recent"), Hint(NxButton.MENU, "Options"), Hint(NxButton.A, "Resume")), mainMenuHints(row, state.resumeInfo.value.canResume))
     }
 
     @Test fun a_held_right_on_the_last_item_of_a_pinned_row_stays_and_a_fresh_press_switches_tab() = runTest {
