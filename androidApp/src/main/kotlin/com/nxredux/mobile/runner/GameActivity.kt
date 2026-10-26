@@ -1802,9 +1802,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Azahar reports the new frame size some frames after its layout changes (a hotkey or menu cycle, a rotation, a
         // second screen's split or its restore): lay out again when it arrives, if the view's geometry flow has not.
         // Large screen and Stacked share the core layout and differ only in the touch screen's proportion, so either counts.
+        // A fold or unfold moves the screens' regions at once, ahead of the new frame: the picture is held until it comes.
         val layout = options.filter { it.key == N3dsOptions.LAYOUT || it.key == N3dsOptions.STACKED_SMALL_PROPORTION }.associate { it.key to it.value }
-        if (lastN3dsLayout != null && layout != lastN3dsLayout) renderer.watchGeometry()
+        val halfFolded = n3dsTabletop()
+        if (lastN3dsLayout != null && layout != lastN3dsLayout) renderer.watchGeometry(holdPicture = halfFolded != lastN3dsHalfFolded)
         lastN3dsLayout = layout
+        lastN3dsHalfFolded = halfFolded
         applyOptions(options)
         if (!pinned && n3dsSwapPinnedHalfFolded && DualScreen.n3dsCoreOptions(dual.dualMode) == null) dual.restoreN3dsScreen()
         n3dsSwapPinnedHalfFolded = pinned
@@ -1825,6 +1828,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /** The core layout and touch-screen proportion last sent for the 3DS ([syncN3dsCore]); null before the first. */
     private var lastN3dsLayout: Map<String?, String?>? = null
+    /** Whether that layout was the half-folded one: a change between the two holds the picture for the new frame. */
+    private var lastN3dsHalfFolded = false
 
     /** These options with a second-screen [split]'s fixed ones in place of the same keys; unchanged without one. */
     private fun List<Variable>.withN3dsSplit(split: Map<String, String>?): List<Variable> =
