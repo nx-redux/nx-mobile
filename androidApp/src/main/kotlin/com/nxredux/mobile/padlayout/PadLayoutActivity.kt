@@ -12,7 +12,10 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
+import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.runner.goImmersive
+import com.nxredux.mobile.runner.windowShape
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.PadLayouts
 import com.nxredux.mobile.settings.PadScreen
@@ -22,6 +25,7 @@ import com.nxredux.mobile.ui.PadEditRequest
 import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.PadProfile
 import com.nxredux.mobile.ui.nx.nxColorsFor
+import com.nxredux.mobile.ui.padlayout.BesideScreen
 import com.nxredux.mobile.ui.padlayout.PadEditorState
 import com.nxredux.mobile.ui.padlayout.PadLayoutEditor
 
@@ -50,9 +54,16 @@ class PadLayoutActivity : ComponentActivity() {
         val profile = if (tag.isEmpty()) PadProfile.STANDARD else PadProfile.forLayoutEditor(tag)
         val screen = PadScreen.entries.firstOrNull { it.name == intent.getStringExtra(EXTRA_SCREEN) } ?: PadScreen.NARROW
         slot = PadSlot(shape, screen)
-        editor = PadEditorState(PadLayouts.startingLayout(settings.padLayouts, key, slot))
+        editor = PadEditorState(PadLayouts.startingLayout(settings.padLayouts, key, slot), besidePicture = shape == PadShape.OVERLAY)
+        // STYLUS / SWAP: the DS and 3DS pads beside the picture draw them in game.
+        val tools = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
         setContent {
             val colors = remember { nxColorsFor(settings.accent, settings.secondaryAccent) }
+            // The window as the game reads it, again after each rotation (the cutout moves to a side edge).
+            val config = LocalConfiguration.current
+            val besideScreen = remember(config.orientation, config.screenWidthDp, config.screenHeightDp) {
+                windowShape().let { BesideScreen(it.screenClass, it.ydpi, it.cutoutLeft.toFloat(), it.cutoutRight.toFloat()) }
+            }
             NxTheme(colors = colors) {
                 BackHandler { back() }
                 PadLayoutEditor(
@@ -65,6 +76,8 @@ class PadLayoutActivity : ComponentActivity() {
                         finish()
                     },
                     onClose = ::finish,
+                    besideScreen = besideScreen,
+                    tools = tools,
                 )
             }
         }
