@@ -179,6 +179,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     val padLandscapeAlpha = mutableStateOf(FrontendSettings().padLandscapeAlpha)
     // The portrait pad's palette (Settings → Appearance → Pad theme), read once per game: it is set from the menu, not in-game.
     private val padTheme by lazy { AndroidAppSettings(activity).padTheme }
+    private val padButtons by lazy { AndroidAppSettings(activity).padButtons }   // Black's button set (Appearance → Pad buttons)
     // Settings → Controls → Pad vibration, read once per game likewise; every pad ([composePad]) ticks at it.
     private val padVibration by lazy { AndroidAppSettings(activity).padVibration }
 
@@ -315,7 +316,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             ).apply { bottomMargin = bandPx; topMargin = cutoutTop }
             if (bandPx > 0) {
                 val bandLayout = padLayout(PadShape.PORTRAIT)
-                val pad = composePad { PadThemeProvider(padTheme) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = bandLayout, tools = padTools(), shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut) } }
+                val pad = composePad { PadThemeProvider(padTheme, padButtons) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = bandLayout, tools = padTools(), shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut) } }
                 addPad(root, pad, FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT, bandPx, Gravity.BOTTOM))
                 bandShown = true
@@ -622,7 +623,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         when (tt.pad) {
             TabletopPad.PORTRAIT -> {
                 val portraitLayout = padLayout(PadShape.PORTRAIT)
-                val pad = composePad { PadThemeProvider(padTheme) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = portraitLayout, shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut) } }
+                val pad = composePad { PadThemeProvider(padTheme, padButtons) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = portraitLayout, shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut) } }
                 addPad(root, pad, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, padH, Gravity.BOTTOM))
             }
             TabletopPad.CLUSTERS -> {
