@@ -99,7 +99,8 @@ class CoreConfigTest {
 
     @Test fun locked_frontend_key_is_reported_locked() {
         val resolved = CoreConfig.resolve(emptyMap(), CoreConfig.parse("-nx_screen_scaling = Native\n"), null)
-        assertEquals(setOf("nx_screen_scaling"), resolved.locked)
+        // An old key's lock locks the versioned key that replaced it too.
+        assertEquals(setOf("nx_screen_scaling", FrontendOptions.SCALING), resolved.locked)
     }
 
     @Test fun resolve_migrates_minarch_keys_to_nx() {

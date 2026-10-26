@@ -65,7 +65,10 @@ class OptionsMigrationTest {
     private fun fullSave(tag: String, console: ConfigFile): ConfigFile {
         val values = frontend(tag, console).toList()
         val written = values.mapTo(HashSet()) { it.first }
-        return CoreConfig.parse(CoreConfig.render(console, values, FrontendOptions::migrateKey, drop = { FrontendOptions.droppedOnSave(it, written) }))
+        return CoreConfig.parse(CoreConfig.render(
+            console, values, FrontendOptions::migrateKey, drop = { FrontendOptions.droppedOnSave(it, written) },
+            lockMovesTo = FrontendOptions.SUPERSEDED_KEYS::get,
+        ))
     }
 
     @Test fun a_full_save_drops_the_old_keys_it_replaced_and_reads_back_the_same() {
@@ -105,5 +108,28 @@ class OptionsMigrationTest {
         assertEquals(NdsOptions.LAYOUT_PORTRAIT, FrontendOptions.SUPERSEDED_KEYS["nx_nds_layout_portrait_v2"])
         assertEquals(N3dsOptions.LAYOUT_LANDSCAPE, FrontendOptions.SUPERSEDED_KEYS["nx_3ds_layout_landscape"])
         assertTrue(FrontendOptions.SUPERSEDED_KEYS.values.none { it in FrontendOptions.SUPERSEDED_KEYS })   // no chains
+    }
+
+    @Test fun a_hand_lock_on_an_old_key_locks_its_new_key_and_moves_to_it_on_save() {
+        val locked = CoreConfig.parse(
+            "-nx_screen_scaling = Native\n" +                   // locked explicit pick
+                "-nx_nds_layout_landscape = pip\n" +            // locked explicit pick
+                "nx_nds_big_screen = top\n",
+        )
+        val read = CoreConfig.resolve(FrontendOptions.defaults("NDS"), locked, null)
+        assertTrue(FrontendOptions.SCALING in read.locked)
+        assertTrue(NdsOptions.LAYOUT_LANDSCAPE in read.locked)
+        assertFalse(NdsOptions.BIG_SCREEN in read.locked)
+        // A full save drops the old lines and writes the new keys locked, with the same picks.
+        val saved = fullSave("NDS", locked)
+        assertFalse(FrontendOptions.SCALING_V1 in saved.values)
+        assertFalse("nx_nds_layout_landscape" in saved.values)
+        assertEquals(setOf(FrontendOptions.SCALING, NdsOptions.LAYOUT_LANDSCAPE), saved.locked)
+        assertEquals(frontend("NDS", locked), frontend("NDS", saved))
+        assertEquals(setOf(FrontendOptions.SCALING, NdsOptions.LAYOUT_LANDSCAPE), CoreConfig.resolve(FrontendOptions.defaults("NDS"), saved, null).locked)
+        // A one-key write of the new key (a hotkey) carries the lock too.
+        val one = CoreConfig.parse(CoreConfig.withKey(locked, null, NdsOptions.LAYOUT_LANDSCAPE, NdsLayoutChoice.LARGE.value))
+        assertTrue(NdsOptions.LAYOUT_LANDSCAPE in one.locked)
+        assertFalse("nx_nds_layout_landscape" in one.values)
     }
 }

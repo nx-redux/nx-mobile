@@ -39,7 +39,7 @@ class CoreConfigStore(private val console: File, private val game: File) {
 
     private fun write(file: File, values: List<Pair<String, String>>, drop: (String) -> Boolean): ConfigFile {
         val written = values.mapTo(HashSet()) { it.first }
-        val text = CoreConfig.render(readFileStrict(file), values, FrontendOptions::migrateKey, drop = { FrontendOptions.droppedOnSave(it, written) || drop(it) })
+        val text = CoreConfig.render(readFileStrict(file), values, FrontendOptions::migrateKey, drop = { FrontendOptions.droppedOnSave(it, written) || drop(it) }, lockMovesTo = FrontendOptions.SUPERSEDED_KEYS::get)
         file.writeAtomically(text.encodeToByteArray())
         return CoreConfig.parse(text)
     }
