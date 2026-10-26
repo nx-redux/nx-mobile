@@ -5,7 +5,7 @@ import android.graphics.Point
 import android.os.Build
 import android.view.WindowInsets
 import com.nxredux.mobile.layout.ScreenClass
-import com.nxredux.mobile.layout.portraitBandPx
+import com.nxredux.mobile.layout.portraitSplit
 import com.nxredux.mobile.layout.screenClass
 import kotlin.math.min
 
@@ -30,9 +30,9 @@ internal data class WindowShape(
 
     /**
      * The portrait pad band's height for this window, px: the main menu's rule on the window's height under the top
-     * cutout, so the band keeps its height between the menu and the game.
+     * cutout ([portraitSplit], whole pixels), so the band keeps its height between the menu and the game.
      */
-    val portraitBandPx: Float get() = portraitBandPx(widthPx.toFloat(), (heightPx - cutoutTop).toFloat(), ydpi, density)
+    val portraitBandPx: Float get() = portraitSplit(widthPx.toFloat(), heightPx.toFloat(), cutoutTop.toFloat(), ydpi, density).bandPx
 }
 
 /**

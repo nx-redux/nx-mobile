@@ -9,8 +9,12 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
@@ -25,8 +29,8 @@ import com.nxredux.mobile.ui.PadEditRequest
 import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.PadProfile
 import com.nxredux.mobile.ui.nx.nxColorsFor
-import com.nxredux.mobile.ui.padlayout.BesideScreen
 import com.nxredux.mobile.ui.padlayout.PadEditorState
+import com.nxredux.mobile.ui.padlayout.PadEditorWindow
 import com.nxredux.mobile.ui.padlayout.PadLayoutEditor
 
 /**
@@ -59,10 +63,14 @@ class PadLayoutActivity : ComponentActivity() {
         val tools = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
         setContent {
             val colors = remember { nxColorsFor(settings.accent, settings.secondaryAccent) }
-            // The window as the game reads it, again after each rotation (the cutout moves to a side edge).
+            // The window as the game reads it, again after each rotation (the cutout moves to another edge) and when the insets
+            // arrive: below Android 11 the cutout is only known once they are dispatched (windowShape), as in the game.
             val config = LocalConfiguration.current
-            val besideScreen = remember(config.orientation, config.screenWidthDp, config.screenHeightDp) {
-                windowShape().let { BesideScreen(it.screenClass, it.ydpi, it.cutoutLeft.toFloat(), it.cutoutRight.toFloat()) }
+            val density = LocalDensity.current
+            val cutout = WindowInsets.displayCutout
+            val insetKey = listOf(cutout.getTop(density), cutout.getLeft(density, LayoutDirection.Ltr), cutout.getRight(density, LayoutDirection.Ltr))
+            val editorWindow = remember(config.orientation, config.screenWidthDp, config.screenHeightDp, insetKey) {
+                windowShape().let { PadEditorWindow(it.screenClass, it.ydpi, it.cutoutTop.toFloat(), it.cutoutLeft.toFloat(), it.cutoutRight.toFloat()) }
             }
             NxTheme(colors = colors) {
                 BackHandler { back() }
@@ -76,7 +84,7 @@ class PadLayoutActivity : ComponentActivity() {
                         finish()
                     },
                     onClose = ::finish,
-                    besideScreen = besideScreen,
+                    window = editorWindow,
                     tools = tools,
                 )
             }

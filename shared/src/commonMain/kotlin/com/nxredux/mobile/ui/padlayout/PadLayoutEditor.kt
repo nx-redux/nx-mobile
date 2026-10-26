@@ -8,13 +8,11 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -45,9 +43,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nxredux.mobile.layout.BesidePreview
 import com.nxredux.mobile.layout.ScreenClass
-import com.nxredux.mobile.layout.besideMeasures
-import com.nxredux.mobile.layout.besidePlacement
+import com.nxredux.mobile.layout.besidePreview
+import com.nxredux.mobile.layout.portraitSplit
 import com.nxredux.mobile.layout.screenClass
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.settings.PadGroup
@@ -76,10 +75,10 @@ private val HandleRadius = 11.dp
 private val HandleHit = 28.dp   // a touch this near the handle resizes rather than moves
 
 /**
- * The window facts the landscape preview sizes its pad by, read as the game reads them: the [screen] class, the
- * display's [ydpi] (the button unit) and the side cutouts, px.
+ * The window facts the editor sizes its pad by, read as the game reads them: the [screen] class, the display's [ydpi]
+ * (the button unit) and the display cutout's insets, px.
  */
-data class BesideScreen(val screen: ScreenClass, val ydpi: Float, val cutoutLeft: Float, val cutoutRight: Float)
+data class PadEditorWindow(val screen: ScreenClass, val ydpi: Float, val cutoutTop: Float, val cutoutLeft: Float, val cutoutRight: Float)
 
 /**
  * Controls → Pad layout's editor for [shape]: a grey block for the game and the real pad ([profile]'s buttons) at
@@ -87,13 +86,14 @@ data class BesideScreen(val screen: ScreenClass, val ydpi: Float, val cutoutLeft
  * action). A tap selects a group, a drag moves it (clamped, snapping home), its corner handle resizes it and the toolbar
  * resets it; overlapping groups are outlined red. The pad's own buttons do not press here: the edit layer takes every
  * touch. [onClose] leaves without saving (after "Discard changes?" when something changed).
- * Landscape draws the halves beside the picture as the game does on this window ([besideScreen]; null: read from the
- * editor's size alone), with STYLUS / SWAP when the console has them ([tools]).
+ * Both shapes are laid out as the game lays them out on this [window] (null: from the editor's size alone): portrait's
+ * band at the game's height under its game area ([portraitSplit]); landscape's halves beside a typical picture
+ * ([besidePreview]), with STYLUS / SWAP when the console has them ([tools]).
  */
 @Composable
 fun PadLayoutEditor(
     shape: PadShape, profile: PadProfile, title: String, state: PadEditorState, onSave: (PadLayout) -> Unit, onClose: () -> Unit,
-    besideScreen: BesideScreen? = null, tools: Boolean = false,
+    window: PadEditorWindow? = null, tools: Boolean = false,
 ) {
     val colors = LocalNxColors.current
     val noPad: (PadEvent) -> Unit = {}
@@ -102,15 +102,33 @@ fun PadLayoutEditor(
     var downAt by remember { mutableStateOf(Offset.Zero) }   // the current touch's first point, edit layer px
     var layerCentre by remember { mutableStateOf(Offset.Zero) }   // the edit layer's middle, edit layer px
     var screenSize by remember { mutableStateOf(IntSize.Zero) }   // the editor's whole area, px (the toolbar stays inside)
-    Box(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { screenSize = it }) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).onSizeChanged { screenSize = it }) {
+        val w = constraints.maxWidth.toFloat()
+        val h = constraints.maxHeight.toFloat()
+        val d = LocalDensity.current.density
+        val ydpi = window?.ydpi ?: 0f   // outside 40..1200: the density's dpi, as the game falls back
+        // The game area the toolbar sits in: portrait's above the band, landscape's typical picture.
+        val gameArea: PxRect
         when (shape) {
-            PadShape.PORTRAIT -> Column(Modifier.fillMaxSize()) {
-                Box(Modifier.fillMaxWidth().aspectRatio(4f / 3f).background(GameBlock))
-                Box(Modifier.fillMaxWidth().weight(1f)) {
+            PadShape.PORTRAIT -> {
+                val split = portraitSplit(w, h, window?.cutoutTop ?: 0f, ydpi, d)
+                gameArea = PxRect(0f, split.gameTop, w, split.bandTop - split.gameTop)
+                Box(Modifier.placedPx(gameArea).background(GameBlock))
+                Box(Modifier.placedPx(PxRect(0f, split.bandTop, w, split.bandPx))) {
                     VirtualPad(noPad, Modifier.fillMaxSize(), profile = profile, onCStick = cStick, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true)
                 }
             }
-            PadShape.OVERLAY -> BesidePreview(profile, state, cStick, besideScreen, tools)
+            PadShape.OVERLAY -> {
+                val padTools = remember(tools) { if (tools) PadTools(stylusOn = false, onStylus = {}, onSwap = {}) else null }
+                val secondRow = besideSecondRow(padTools, emptyMap(), placeholders = true)
+                val preview = besidePreview(
+                    window?.screen ?: screenClass(w.roundToInt(), h.roundToInt(), (min(w, h) / d).toInt()), w, h, ydpi, d,
+                    window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, faceWidthUnits(profile), systemRowPills(profile, motion = false),
+                )
+                gameArea = preview.picture
+                Box(Modifier.placedPx(gameArea).background(GameBlock))
+                BesidePad(profile, state, cStick, padTools, secondRow, preview)
+            }
         }
         // The edit layer: over the pads, takes every touch (taps select, drags move).
         Canvas(
@@ -180,12 +198,11 @@ fun PadLayoutEditor(
         }
         // OVERLAY's side columns hold its pad halves, so its toolbar sits over the game block's middle.
         // PORTRAIT's sits at the game block's foot, just above the pad, clear of a top camera cutout.
-        val toolbar = @Composable { m: Modifier ->
-            EditorToolbar(title, shape, state, screenSize, onSave = { onSave(state.layout) }, onCancel = { if (state.requestCancel()) onClose() }, m)
-        }
-        when (shape) {
-            PadShape.OVERLAY -> toolbar(Modifier.align(Alignment.Center))
-            PadShape.PORTRAIT -> Box(Modifier.fillMaxWidth().aspectRatio(4f / 3f)) { toolbar(Modifier.align(Alignment.BottomCenter)) }
+        Box(Modifier.placedPx(gameArea)) {
+            EditorToolbar(
+                title, shape, state, screenSize, onSave = { onSave(state.layout) }, onCancel = { if (state.requestCancel()) onClose() },
+                Modifier.align(if (shape == PadShape.OVERLAY) Alignment.Center else Alignment.BottomCenter),
+            )
         }
         if (state.confirmDiscard) {
             NxModal(caption = null, kind = ModalKind.CONFIRM, onButton = { b -> if (b == NxButton.A) onClose() else state.keepEditing() }, confirmLabel = "Discard", cancelLabel = "Keep editing") {
@@ -196,44 +213,36 @@ fun PadLayoutEditor(
 }
 
 /**
- * The landscape pad as the game draws it beside the picture ([besideMeasures], [besidePlacement]): its unit, rows and
- * second row, each half in its box at a side edge with the d-pad / face row at mid-height. The editor has no game, so
- * the boxes are those the game uses before it knows the picture (the window's middle half) and the reach is the
- * estimate; the second row is always there, for the touch shortcut stand-ins.
+ * The landscape pad as the game draws it beside [preview]'s picture: its unit, rows and second row, each half in its
+ * box at a side edge with the d-pad / face row at mid-height. The second row is always there, for the touch shortcut
+ * stand-ins.
  */
 @Composable
-private fun BesidePreview(profile: PadProfile, state: PadEditorState, cStick: ((Float, Float) -> Unit)?, screen: BesideScreen?, tools: Boolean) {
+private fun BoxScope.BesidePad(
+    profile: PadProfile, state: PadEditorState, cStick: ((Float, Float) -> Unit)?, padTools: PadTools?, secondRow: Boolean, preview: BesidePreview,
+) {
     val noPad: (PadEvent) -> Unit = {}
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val density = LocalDensity.current
-        val w = constraints.maxWidth.toFloat()
-        val h = constraints.maxHeight.toFloat()
-        val padTools = remember(tools) { if (tools) PadTools(stylusOn = false, onStylus = {}, onSwap = {}) else null }
-        val secondRow = besideSecondRow(padTools, emptyMap(), placeholders = true)
-        val d = density.density
-        val m = besideMeasures(
-            screen?.screen ?: screenClass(w.roundToInt(), h.roundToInt(), (min(w, h) / d).toInt()), w, h, screen?.ydpi ?: 0f, d,
-            screen?.cutoutLeft ?: 0f, screen?.cutoutRight ?: 0f, secondRow, measuredButtonsPx = null, faceWidthUnits(profile),
-            systemRowPills(profile, motion = false),
-        )
-        val p = besidePlacement(PxRect(0f, 0f, w, h), null, m.unitPx, m.reach, d, secondRow)
-        val unit = with(density) { m.unitPx.toDp() }
-        val inset = with(density) { p.extraInsetPx.toDp() }
-        val box = Modifier.offset { IntOffset(0, p.topMarginPx.roundToInt()) }.sizePx(p.boxWidthPx.roundToInt(), p.boxHeightPx.roundToInt())
-        Box(Modifier.fillMaxHeight().aspectRatio(4f / 3f).align(Alignment.Center).background(GameBlock))
-        // Left first, as the game adds its views: the right half draws (and takes a touch) on top.
-        VirtualPadLeft(
-            noPad, { _, _ -> }, Modifier.align(Alignment.TopStart).then(box).padding(start = inset), profile = profile, overGame = true,
-            layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
-            besidePicture = true, unitOverride = unit, secondRow = secondRow,
-        )
-        VirtualPadRight(
-            noPad, Modifier.align(Alignment.TopEnd).then(box).padding(end = inset), profile = profile, overGame = true, onCStick = cStick,
-            layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
-            besidePicture = true, unitOverride = unit, secondRow = secondRow,
-        )
-    }
+    val density = LocalDensity.current
+    val p = preview.placement
+    val unit = with(density) { preview.measures.unitPx.toDp() }
+    val inset = with(density) { p.extraInsetPx.toDp() }
+    val box = Modifier.offset { IntOffset(0, p.topMarginPx.roundToInt()) }.sizePx(p.boxWidthPx.roundToInt(), p.boxHeightPx.roundToInt())
+    // Left first, as the game adds its views: the right half draws (and takes a touch) on top.
+    VirtualPadLeft(
+        noPad, { _, _ -> }, Modifier.align(Alignment.TopStart).then(box).padding(start = inset), profile = profile, overGame = true,
+        layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
+        besidePicture = true, unitOverride = unit, secondRow = secondRow,
+    )
+    VirtualPadRight(
+        noPad, Modifier.align(Alignment.TopEnd).then(box).padding(end = inset), profile = profile, overGame = true, onCStick = cStick,
+        layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
+        besidePicture = true, unitOverride = unit, secondRow = secondRow,
+    )
 }
+
+/** At [r] (px, in the editor), sized to it exactly, as the game places its views. */
+private fun Modifier.placedPx(r: PxRect): Modifier =
+    offset { IntOffset(r.x.roundToInt(), r.y.roundToInt()) }.sizePx(r.width.roundToInt(), r.height.roundToInt())
 
 /** Exactly [w] x [h] px, as the game sizes a pad half's view (a dp size would round). */
 private fun Modifier.sizePx(w: Int, h: Int): Modifier = layout { measurable, _ ->

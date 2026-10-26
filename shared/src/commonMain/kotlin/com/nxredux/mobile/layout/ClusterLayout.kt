@@ -149,3 +149,34 @@ fun besidePlacement(window: PxRect, picture: PxRect?, unitPx: Float, reach: Reac
     clusterPlacement(
         window, picture ?: PxRect(window.x + window.width / 4f, window.y, window.width / 2f, window.height), unitPx, reach, density, secondRow,
     )
+
+/** The typical picture the Pad layout editor previews the landscape pad around: a 224-line 4:3 console. */
+private val PREVIEW_FRAME = CoreFrame(256f, 224f, 4f / 3f, rotated = false)
+
+/** The Pad layout editor's landscape preview: the [measures], the typical [picture] and the halves' [placement] beside it. */
+data class BesidePreview(val measures: BesideMeasures, val picture: PxRect, val placement: ClusterPlacement)
+
+/**
+ * The pad beside the picture in a [windowW] x [windowH] window around a typical game, for the Pad layout editor, which
+ * has none: a 224-line 4:3 picture at the whole-number scale the game gives it under Auto in the space the pad leaves
+ * ([pictureSpace], [setAsidePx], [picture]), and the halves placed beside that same rect ([besidePlacement]). The reach
+ * is the estimate (nothing is measured in the editor). Arguments as [besideMeasures].
+ */
+fun besidePreview(
+    screen: ScreenClass,
+    windowW: Float,
+    windowH: Float,
+    ydpi: Float,
+    density: Float,
+    cutoutLeft: Float,
+    cutoutRight: Float,
+    secondRow: Boolean,
+    faceUnits: Float,
+    systemPills: Int,
+): BesidePreview {
+    val m = besideMeasures(screen, windowW, windowH, ydpi, density, cutoutLeft, cutoutRight, secondRow, null, faceUnits, systemPills)
+    val space = pictureSpace(PadRoom.BESIDE, windowW, windowH, setAsidePx(screen, m.reach), 0f)
+    val picture = picture(space, PREVIEW_FRAME, ConsoleScale.WHOLE_HEIGHT, overlayAspect = null)
+    val placement = besidePlacement(PxRect(0f, 0f, windowW, windowH), picture, m.unitPx, m.reach, density, secondRow)
+    return BesidePreview(m, picture, placement)
+}

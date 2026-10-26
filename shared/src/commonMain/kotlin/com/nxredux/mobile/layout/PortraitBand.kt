@@ -3,6 +3,7 @@ package com.nxredux.mobile.layout
 import com.nxredux.mobile.ui.nx.PAD_PORTRAIT_CM
 import com.nxredux.mobile.ui.nx.padBandPx
 import kotlin.math.floor
+import kotlin.math.roundToInt
 
 /** Tablet pad buttons span this many units, so the band has to hold them at full size. */
 private const val TABLET_BAND_UNITS = 6.2f
@@ -29,4 +30,17 @@ fun portraitBandPx(widthPx: Float, areaPx: Float, ydpi: Float, density: Float): 
     val ph = LayoutConstants.REFERENCE_LINES * k
     val gap = (widthPx - ph * 4f / 3f) / 2f
     return maxOf(0f, minOf(full, areaPx - ph - 2f * gap))
+}
+
+/** A portrait window split as the game lays it out: the game area from [gameTop] to [bandTop], the band [bandPx] tall under it, px. */
+data class PortraitSplit(val gameTop: Float, val bandTop: Float, val bandPx: Float)
+
+/**
+ * A [windowW] x [windowH] portrait window with a [cutoutTop] cutout, split as the game splits it (and the Pad layout
+ * editor previews it): the game area under the cutout, then the [portraitBandPx] band (on the height under the cutout),
+ * rounded to whole pixels as the game's band view is, at the bottom.
+ */
+fun portraitSplit(windowW: Float, windowH: Float, cutoutTop: Float, ydpi: Float, density: Float): PortraitSplit {
+    val band = portraitBandPx(windowW, windowH - cutoutTop, ydpi, density).roundToInt().toFloat()
+    return PortraitSplit(cutoutTop, windowH - band, band)
 }

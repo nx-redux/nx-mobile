@@ -106,4 +106,28 @@ class ClusterLayoutTest {
         val picture = PxRect(500f, 0f, 1400f, 1080f)
         assertEquals(clusterPlacement(window, picture, 100f, r, 2f, toolRow = false), besidePlacement(window, picture, 100f, r, 2f, secondRow = false))
     }
+
+    @Test fun the_editor_preview_places_the_pad_beside_its_own_picture() {
+        for ((screen, w, h, ydpi, d) in listOf(
+            Window(ScreenClass.WIDE_TABLET, 2304f, 1440f, 249f, 1.75f),     // Tab S10 FE
+            Window(ScreenClass.REGULAR_PHONE, 2400f, 1080f, 420f, 2.625f),
+            Window(ScreenClass.STUBBY_PHONE, 2176f, 1812f, 373f, 2.625f),  // Fold inner screen
+        )) {
+            val pv = besidePreview(screen, w, h, ydpi, d, 0f, 0f, secondRow = true, faceUnits = 3f, systemPills = 2)
+            val m = besideMeasures(screen, w, h, ydpi, d, 0f, 0f, secondRow = true, measuredButtonsPx = null, faceUnits = 3f, systemPills = 2)
+            assertEquals(m, pv.measures, "$screen")
+            // One rect: the boxes sit beside the very picture the grey block draws.
+            assertEquals(besidePlacement(PxRect(0f, 0f, w, h), pv.picture, m.unitPx, m.reach, d, secondRow = true), pv.placement, "$screen")
+            // That picture: 4:3, a whole multiple of 224 lines, inside the space the pad leaves, centred.
+            val space = pictureSpace(PadRoom.BESIDE, w, h, setAsidePx(screen, m.reach), 0f)
+            val k = pv.picture.height / 224f
+            assertEquals(kotlin.math.floor(k), k, "$screen")
+            assertTrue(k >= 1f)
+            assertEquals(pv.picture.height * 4f / 3f, pv.picture.width, 0.01f)
+            assertTrue(pv.picture.x >= space.x && pv.picture.x + pv.picture.width <= space.x + space.width, "$screen")
+            assertEquals(kotlin.math.floor((w - pv.picture.width) / 2f), pv.picture.x, 0.01f)
+        }
+    }
+
+    private data class Window(val screen: ScreenClass, val w: Float, val h: Float, val ydpi: Float, val density: Float)
 }
