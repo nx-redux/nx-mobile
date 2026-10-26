@@ -152,8 +152,6 @@ internal class FrontendRenderer(
     var ndsSplit = false                            // regions are on: the overlay is off and shown unavailable
         internal set   // the launch sets it (a DS game starts split)
     private var ndsFrameWarned = false                      // the "not 256x384" warning is logged once
-    /** Half-folded 3DS: the screen above the hinge (SWAP trades it, [onTabletopN3dsSwap]); session only, as split's. */
-    private var n3dsTabletopBig = NdsScreen.TOP
 
     // ---- shader presets ----
     var shaderValues: Map<String, String> = ShaderOptions.fromConfig(emptyMap())   // nx_shader + stored nx_shader_param_*
@@ -627,7 +625,7 @@ internal class FrontendRenderer(
         val dy = tt.gameTop.toFloat()   // window px -> the game view's (it starts at gameTop)
         val placement = p.copy(top = p.top.copy(y = p.top.y - dy), bottom = p.bottom.copy(y = p.bottom.y - dy))
         // The 3DS core's swap is pinned while half-folded (its frame stays unswapped under the cuts): SWAP is the app's.
-        val big = if (kind == DsKind.DS) NdsSettings.parse(frontendValues).big else n3dsTabletopBig
+        val big = if (kind == DsKind.DS) NdsSettings.parse(frontendValues).big else padLayout.n3dsTabletopBig
         return HalfFolded(placement, tabletopRegions(placement, kind, big), pad)
     }
 
@@ -639,7 +637,7 @@ internal class FrontendRenderer(
     fun onTabletopN3dsSwap(down: Boolean): Boolean {
         if (!isN3ds || dualMode != DualMode.OFF || padLayout.tabletop() == null) return false
         if (down) {
-            n3dsTabletopBig = n3dsTabletopBig.other
+            padLayout.swapTabletopN3ds()   // the halves move with the screens' new sizes
             relayoutFrontend()
         }
         return true

@@ -107,4 +107,15 @@ class TabletopRegionsTest {
             (r.src.top + v * (r.src.bottom - r.src.top)) * 480f,
         )
     }
+
+    @Test
+    fun n3ds_swap_regions_keep_each_screens_shape() {
+        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1212, 1236, DsKind.N3DS, 122f, reach, 2.625f, controller = false, big = NdsScreen.BOTTOM)
+        val (top, bottom) = tabletopRegions(p, DsKind.N3DS, NdsScreen.BOTTOM)
+        assertEquals(DualScreen.N3DS_BOTTOM_SRC, top.src)
+        assertTrue(top.touch)
+        assertEquals(4f / 3f, top.dst.width / top.dst.height, 0.01f)
+        assertEquals(DualScreen.N3DS_TOP_SRC, bottom.src)
+        assertEquals(5f / 3f, bottom.dst.width / bottom.dst.height, 0.01f)
+    }
 }

@@ -1,5 +1,6 @@
 package com.nxredux.mobile.layout
 
+import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.runner.NdsLayout
 import kotlin.math.floor
@@ -41,7 +42,9 @@ private const val EPSILON = 0.001f
  * the top one's bottom edge on [hingeTop], the touch screen's top edge on [hingeBottom], each centred across.
  * Only a tablet-class [screen] has the width for the touch screen
  * between the pad halves; a phone-shaped foldable stacks both screens above the hinge instead. [secondRow]: the halves
- * draw their second row (STYLUS / SWAP), so their boxes are that row taller, as the landscape pad's.
+ * draw their second row (STYLUS / SWAP), so their boxes are that row taller, as the landscape pad's. [big]: the screen
+ * drawn first (above the hinge, or on top in the stack); after a 3DS SWAP the touch screen, so each rect is fitted to
+ * the aspect of the screen it shows (the DS's two screens share one).
  */
 fun tabletopDs(
     windowW: Int,
@@ -56,20 +59,21 @@ fun tabletopDs(
     density: Float,
     controller: Boolean,
     secondRow: Boolean = false,
+    big: NdsScreen = NdsScreen.TOP,
 ): TabletopDsPlacement {
     val topArea = PxRect(0f, cutoutTop.toFloat(), windowW.toFloat(), (hingeTop - cutoutTop).toFloat())
     val bottomArea = PxRect(0f, hingeBottom.toFloat(), windowW.toFloat(), (windowH - hingeBottom).toFloat())
-    if (!screen.isTablet) return stackedTop(topArea, kind)
+    if (!screen.isTablet) return stackedTop(topArea, kind, big)
     val aside = if (controller) 0f else LayoutConstants.TABLETOP_DS_SET_ASIDE * reach.total
     val bottomSpace = PxRect(aside, bottomArea.y, bottomArea.width - 2f * aside, bottomArea.height)
 
     val (topW, topH) = when (kind) {
         DsKind.DS -> wholeScale(topArea, DS_W, DS_H, atLeast1 = false)
-        DsKind.N3DS -> fitted(topArea, N3DS_TOP_W / N3DS_H)
+        DsKind.N3DS -> fitted(topArea, n3dsAspect(big))
     }
     val (bottomW, bottomH) = when (kind) {
         DsKind.DS -> wholeScale(bottomSpace, DS_W, DS_H, atLeast1 = true)
-        DsKind.N3DS -> fitted(bottomSpace, N3DS_BOTTOM_W / N3DS_H)
+        DsKind.N3DS -> fitted(bottomSpace, n3dsAspect(big.other))
     }
     val top = atFold(topArea, topW, topH, y = hingeTop - topH)
     val bottom = atFold(bottomArea, bottomW, bottomH, y = hingeBottom.toFloat())
@@ -78,8 +82,14 @@ fun tabletopDs(
     return TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, half, half)
 }
 
-/** Both screens stacked in [area], touch screen under the top one: DS at one whole scale, 3DS as the 400 x 480 frame fitted. */
-private fun stackedTop(area: PxRect, kind: DsKind): TabletopDsPlacement {
+/** A 3DS screen's width over height: 400 x 240 on top, 320 x 240 the touch screen. */
+private fun n3dsAspect(screen: NdsScreen): Float = (if (screen == NdsScreen.TOP) N3DS_TOP_W else N3DS_BOTTOM_W) / N3DS_H
+
+/**
+ * Both screens stacked in [area], [big] first: DS at one whole scale, 3DS as the 400 x 480 frame fitted, the touch
+ * screen at its narrower width centred wherever it is.
+ */
+private fun stackedTop(area: PxRect, kind: DsKind, big: NdsScreen): TabletopDsPlacement {
     val (top, bottom) = when (kind) {
         DsKind.DS -> {
             val fit = floor(min(area.width / DS_W, area.height / (2f * DS_H)) + EPSILON).coerceAtLeast(1f)
@@ -94,10 +104,9 @@ private fun stackedTop(area: PxRect, kind: DsKind): TabletopDsPlacement {
             val block = centred(area, w, h)
             val screenH = NdsLayout.wholePx(h / 2f)
             val bottomW = NdsLayout.wholePx(w * N3DS_BOTTOM_W / N3DS_TOP_W)
-            Pair(
-                PxRect(block.x, block.y, w, screenH),
-                PxRect(block.x + NdsLayout.wholePx((w - bottomW) / 2f), block.y + screenH, bottomW, screenH),
-            )
+            fun widthOf(s: NdsScreen) = if (s == NdsScreen.TOP) w else bottomW
+            fun at(s: NdsScreen, y: Float) = PxRect(block.x + NdsLayout.wholePx((w - widthOf(s)) / 2f), y, widthOf(s), screenH)
+            Pair(at(big, block.y), at(big.other, block.y + screenH))
         }
     }
     return TabletopDsPlacement(TabletopDsMode.STACKED_TOP, top, bottom, null, null)

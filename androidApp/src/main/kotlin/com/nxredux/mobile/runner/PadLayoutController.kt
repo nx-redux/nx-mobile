@@ -58,6 +58,7 @@ import com.nxredux.mobile.layout.tabletopDs
 import com.nxredux.mobile.layout.tabletopDsUnitPx
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.PxRect
@@ -505,8 +506,22 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         tabletopDs(
             shape.widthPx, shape.heightPx, shape.screenClass, shape.cutoutTop, hingeTop = tt.menuBottom, hingeBottom = tt.padTop,
             if (N3dsOptions.appliesTo(layoutTag())) DsKind.N3DS else DsKind.DS, pad.unitPx, pad.reach, shape.density,
-            controller = layoutControllerNames().isNotEmpty(), secondRow = pad.secondRow,
+            controller = layoutControllerNames().isNotEmpty(), secondRow = pad.secondRow, big = n3dsTabletopBig,
         )
+
+    /**
+     * Half-folded 3DS: the screen drawn first (above the hinge, or on top of the Flip's stack); SWAP trades it
+     * ([swapTabletopN3ds]). Lasts the session, unfolds and folds included, as the Dual screen split's swap; the DS
+     * keeps its stored Big Screen instead.
+     */
+    var n3dsTabletopBig = NdsScreen.TOP
+        private set
+
+    /** 3DS SWAP while half-folded: the screens trade places and sizes, and the pad halves follow the new touch screen. */
+    fun swapTabletopN3ds() {
+        n3dsTabletopBig = n3dsTabletopBig.other
+        if (tabletopDsViews != null) tabletop()?.let { placeTabletopDs(tabletopDsPlacement(activity.windowShape(), it)) }
+    }
 
     /** The half-folded pad halves at [p]'s boxes ([tabletopDsPadBoxes]); always solid ([clusterAlpha]). */
     private fun placeTabletopDs(p: TabletopDsPlacement) {

@@ -1,5 +1,6 @@
 package com.nxredux.mobile.layout
 
+import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.PxRect
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -81,5 +82,30 @@ class TabletopDsTest {
     @Test
     fun tabletop_unit_is_cover_size() {
         assertTrue(kotlin.math.abs(tabletopDsUnitPx(404.6f, 2.625f) - 122.7f) < 1f)
+    }
+
+    @Test
+    fun n3ds_swap_fits_each_rect_to_the_screen_it_shows() {
+        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1212, 1236, DsKind.N3DS, 122f, reach, 2.625f, false, big = NdsScreen.BOTTOM)
+        // Above the hinge the 4:3 touch screen: 1212 tall, 1616 wide, centred, meeting the fold.
+        assertEquals(PxRect(116f, 0f, 1616f, 1212f), p.top)
+        // Below it the 5:3 top screen in the 1200 x 1212 space: 1200 x 720, against the hinge.
+        assertEquals(PxRect(324f, 1236f, 1200f, 720f), p.bottom)
+    }
+
+    @Test
+    fun n3ds_stacked_swap_keeps_the_touch_screen_narrow() {
+        val n = tabletopDs(1080, 2640, ScreenClass.REGULAR_PHONE, 0, 1308, 1332, DsKind.N3DS, 100f, reach, 2.625f, false)
+        val s = tabletopDs(1080, 2640, ScreenClass.REGULAR_PHONE, 0, 1308, 1332, DsKind.N3DS, 100f, reach, 2.625f, false, big = NdsScreen.BOTTOM)
+        assertEquals(n.bottom.width, s.top.width)
+        assertEquals(n.top.width, s.bottom.width)
+        assertEquals(n.top.y, s.top.y)
+        assertEquals(s.top.y + s.top.height, s.bottom.y)
+        assertEquals(n.bottom.x, s.top.x)
+    }
+
+    @Test
+    fun ds_swap_changes_nothing() {
+        assertEquals(place(DsKind.DS), tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1212, 1236, DsKind.DS, 122f, reach, 2.625f, false, big = NdsScreen.BOTTOM))
     }
 }
