@@ -34,7 +34,7 @@ internal const val UNFOCUSED_ALPHA = 0.6f
  * focus and the rows preview the highlighted section (no selection, a tap opens it on that row,
  * [AppState.settingsPreviewTap]); on a page the rows have it and the current section drops to the main ink (a tap on a
  * section, [AppState.settingsCategoryTap]). A page that is not a rows block ([settingsBlockPage]: a Layouts group with
- * its picture, the Android games picker) draws whole from the old pane's edge. Only the page shows hints; both sides keep
+ * its picture, the Android games picker) draws whole from the old pane's edge. The root's hints are drawn on the left, a page's on the right; both sides keep
  * the bar's height, so the blocks share the baseline. The Remove folder dialog is drawn here, over the whole stage.
  */
 @Composable
@@ -60,7 +60,8 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
                             )
                         }
                     }
-                    NxHintBar(emptyList())   // no hints here; with a pad it keeps the page bar's room, so the baselines meet
+                    // The root shows its A/B hints here; a page shows its own on the right. Either way this bar keeps the room, so the baselines meet.
+                    NxHintBar(if (s is Screen.SettingsMenu) SETTINGS_ROOT_HINTS else emptyList(), onHint = state::onButton)
                 }
                 Box(Modifier.padding(start = left).fillMaxSize()) {
                     CompositionLocalProvider(LocalSettingsBlock provides SettingsBlockMode(crumb = null).takeIf { blockPage }) {
@@ -94,7 +95,7 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
  * The two-pane frame on a wide landscape window ([settingsSplit]): [left] in [SETTINGS_SPLIT_LEFT] of the width, a 1 dp
  * divider at 8%, [right] in the rest, then [over] drawn over both panes (a dialog's scrim covers the whole window).
  * Both panes' hint bars keep their height, so their rows stay level when only the focused one shows hints. Used by the
- * two-pane Settings, the column browsers (RetroAchievements, Game Tracker, Artwork) and the in-game menu, which passes its
+ * column browsers (RetroAchievements, Game Tracker, Artwork) and the in-game menu, which passes its
  * own [leftShare] and no [divider] (its list sits beside the game panel as one surface).
  */
 @Composable

@@ -49,7 +49,7 @@ fun settingsSplitView(window: DpSize, screen: Screen): Boolean = settingsSplit(w
 fun gameSettingsModal(screen: Screen): Boolean = screen is Screen.EmulatorOptions && screen.game != null
 
 /**
- * How far the NX-mark watermark moves right, as a share of the width: split, it centres on the right pane (the left
+ * How far the NX-mark watermark moves right (the column browsers only; Settings has its own, [SettingsBackground]), as a share of the width: split, it centres on the right pane (the left
  * pane's share plus half the rest, less the middle); one page, it stays centred.
  */
 fun settingsMarkShift(split: Boolean): Float =

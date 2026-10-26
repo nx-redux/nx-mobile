@@ -619,7 +619,7 @@ private fun SettingsPage(state: AppState, s: Screen, selection: State<ListSelect
         is Screen.EmulatorList -> WithIndex(selection) { EmulatorListScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, split = titled || LocalSettingsBlock.current != null) }
         is Screen.EmulatorConsoles -> WithIndex(selection) { EmulatorConsolesScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton) }
         is Screen.EmulatorOptions -> WithIndex(selection) { EmulatorOptionsScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = settingTruncated) }
-        is Screen.SettingsMenu -> WithIndex(selection) { SettingsMenuScreen(s, it, state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) }) }
+        is Screen.SettingsMenu -> WithIndex(selection) { SettingsMenuScreen(s, it, state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) }, hintBar = true, onHint = state::onButton) }
         is Screen.ToolApps -> {
             // Only the picker showing reports its columns (one sliding out never overwrites the count).
             val onColumns: (Int) -> Unit = remember(s) { { columns -> if (state.screen.value === s) state.onToolAppsLayout(columns) } }
@@ -689,7 +689,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
     }
 }
 
-/** The NX mark; two panes (Settings, the RetroAchievements column browser), centred on the right pane (same size), as the page it sits behind. */
+/** The NX mark; two panes (the RetroAchievements column browser, Game Tracker, Artwork), centred on the right pane (same size), as the page it sits behind. */
 @Composable
 private fun MarkBackground(s: Screen) = NxScreenBackground(
     url = null, fallback = Res.drawable.background, fade = false, modifier = Modifier.fillMaxSize().clipToBounds(), centred = true,
