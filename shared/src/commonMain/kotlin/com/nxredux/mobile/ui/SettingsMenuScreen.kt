@@ -9,7 +9,8 @@ import com.nxredux.mobile.ui.nx.NxScreenScaffold
 
 /**
  * Tools -> Settings: one row per section, drawn like the Tools page, titled [SETTINGS_TITLE]. A opens the section, B goes
- * back to Tools. [hints] (null: its own) the two-pane Settings' left pane's.
+ * back to Tools. The rows rest at the bottom, over the hints, in reach of a thumb (a tablet's too). [hints] (null: its own)
+ * the two-pane Settings' left pane's.
  */
 @Composable
 fun SettingsMenuScreen(
@@ -23,5 +24,6 @@ fun SettingsMenuScreen(
         selectedIndex = selectedIndex, showArt = false,
         hints = hints ?: listOf(Hint(NxButton.A, "Open"), Hint(NxButton.B, "Back")),
         onSelect = onSelect, onOpen = onOpen, modifier = modifier, onHint = onHint, title = SETTINGS_TITLE,
+        bottomAligned = true,   // the categories rest on the hints, in reach of a thumb on a tablet
     )
 }

@@ -98,6 +98,7 @@ fun NxScreenScaffold(
     onFirstPill: ((Float) -> Unit)? = null,   // under a listTopEdge: the first pill's top, dp from the list's top (List Home centres its strip by it)
     keepBarRoom: Boolean = true,   // false: hidden hints leave no room either, the body runs to the bottom (a main menu Carousel, centred in what shows)
     header: (@Composable () -> Unit)? = null,   // under the title, above the rows (a page's banner); the rows fit what it leaves
+    bottomAligned: Boolean = false,   // a titled pill list that fits sits at the bottom, over the hints, in reach of a thumb (the Settings menu)
     scrollFade: Boolean = true,
     rowEdges: Pair<Float, Float>? = null,
     rowsLike: Pair<Float, Float>? = null,
@@ -165,7 +166,7 @@ fun NxScreenScaffold(
                     header?.invoke()
                     BoxWithConstraints(
                         Modifier.weight(1f).nxGrowUp(-topGap).fillMaxSize().padding(top = maxOf(0.dp, topGap), bottom = bottomPad),
-                        contentAlignment = if (centred) Alignment.CenterStart else Alignment.TopStart,
+                        contentAlignment = if (bottomAligned) Alignment.BottomStart else if (centred) Alignment.CenterStart else Alignment.TopStart,
                     ) {
                         // Untitled (the one-pane Settings pages), an options list keeps the pill list's half-row gutter, so
                         // its first row sits where the Settings menu's does.
@@ -185,7 +186,9 @@ fun NxScreenScaffold(
                     LaunchedEffect(whole) { report(whole) }
                 }
                         // In the rows' own rounded px, so the list rests on whole rows ([nxRowsSlotPx]).
-                        val slot = if (fits) optionsHeight else with(density) { nxRowsSlotPx(itemHeight.roundToPx(), whole, gap.roundToPx()).toDp() }
+                        // Bottom-aligned, a list that fits takes only its own rows, so they rest on the hints.
+                        val shown = if (bottomAligned && rowKind != NxRowKind.OPTIONS) minOf(whole, maxOf(1, rows.size)) else whole
+                        val slot = if (fits) optionsHeight else with(density) { nxRowsSlotPx(itemHeight.roundToPx(), shown, gap.roundToPx()).toDp() }
                         val listWidth = maxWidth
                         val listShift = Modifier.padding(start = labelStart?.let { maxOf(0.dp, it - nxListInset()) } ?: 0.dp)
                         Column(Modifier.fillMaxWidth()) {
