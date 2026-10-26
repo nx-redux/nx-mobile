@@ -251,6 +251,7 @@ internal class InGameMenuController(
             initialSlot = (lastSlotCache ?: saveStates?.lastSlot()?.also { lastSlotCache = it } ?: 1) - 1,
         ).also {
             it.setStatus(configSource); it.cheatsAvailable = cheatsSupported
+            it.screen = activity.screenClass()   // the DS / 3DS layout rows: this window's values and defaults
             // netplay: the root is "Leave netplay?" only; Continue / Quit once the session has ended. An ended link
             // session's game is a local one ([netplayNow] null): the normal root.
             if (netplayNow != null) {
@@ -378,8 +379,8 @@ internal class InGameMenuController(
         // Tabletop: confined above the hinge, the controls below still drive it.
         padLayout.tabletop()?.let { tt -> return FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, tt.gameBottom, Gravity.TOP) }
         return if (orientation == Configuration.ORIENTATION_PORTRAIT) {
-            val dm = resources.displayMetrics
-            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dm.heightPixels - padLayout.portraitBandPx(), Gravity.TOP)
+            // Down to the band's top: the window's height less the band, both from the one window reading.
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, activity.windowShape().heightPx - padLayout.portraitBandPx(), Gravity.TOP)
         } else {
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         }

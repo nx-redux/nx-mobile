@@ -48,7 +48,8 @@ fun frontendLayout(
     val picture = when (scaling) {
         ScreenScaling.FULLSCREEN -> box
         ScreenScaling.NATIVE -> integer(box, coreWidth, coreHeight) ?: fit(box, aspect)
-        ScreenScaling.ASPECT -> fit(box, aspect)
+        // The game screen places AUTO itself (layout.picture: the pad's room, the console's scale); here it reads as Aspect.
+        ScreenScaling.AUTO, ScreenScaling.ASPECT -> fit(box, aspect)
     }
     return FrontendLayout(box, picture.copy(x = picture.x + dx, y = picture.y + dy), dx, dy)
 }

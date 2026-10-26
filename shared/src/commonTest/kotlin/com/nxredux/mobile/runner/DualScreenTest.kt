@@ -1,6 +1,6 @@
 package com.nxredux.mobile.runner
 
-import com.nxredux.mobile.options.NdsLandscapeLayout
+import com.nxredux.mobile.options.NdsLayoutChoice
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.PxRect
@@ -40,8 +40,15 @@ class DualScreenTest {
     @Test fun nds_split_main_follows_area() =
         assertEquals(PxRect(0f, 0f, 1080f, 810f), DualScreen.ndsScreen(1080f, 1920f, NdsScreen.TOP).single().dst.let { it.copy(y = 0f) })
     @Test fun nds_panel_up_is_side_by_side_with_bottom_touch() {
-        val r = DualScreen.ndsPanelUp(1920f, 1080f, NdsSettings(landscape = NdsLandscapeLayout.PIP))
+        val r = DualScreen.ndsPanelUp(1920f, 1080f, NdsSettings(landscape = NdsLayoutChoice.PIP))
         assertEquals(2, r.size); assertEquals(listOf(false, true), r.map { it.touch })
+    }
+    @Test fun nds_panel_up_keeps_its_own_fractional_fit() {
+        val r = DualScreen.ndsPanelUp(2400f, 1080f, NdsSettings())
+        assertEquals(PxRect(0f, 90f, 1200f, 900f), r[0].dst)
+        assertEquals(PxRect(1200f, 90f, 1200f, 900f), r[1].dst)
+        assertEquals(listOf(NdsScreen.TOP, NdsScreen.BOTTOM), r.map { it.screen })
+        assertEquals(listOf(NdsScreen.BOTTOM, NdsScreen.TOP), DualScreen.ndsPanelUp(2400f, 1080f, NdsSettings(big = NdsScreen.BOTTOM)).map { it.screen })
     }
     @Test fun n3ds_split_rects() {
         assertEquals(FrameRect(0.1f, 0.5f, 0.9f, 1f), DualScreen.n3dsScreen(1240f, 1080f, NdsScreen.TOP.other).single().src)

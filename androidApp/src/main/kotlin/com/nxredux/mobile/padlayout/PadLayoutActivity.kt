@@ -9,10 +9,19 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.NdsOptions
+import com.nxredux.mobile.options.WiiOptions
+import com.nxredux.mobile.runner.MotionSensors
 import com.nxredux.mobile.runner.goImmersive
+import com.nxredux.mobile.runner.windowShape
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.PadLayouts
 import com.nxredux.mobile.settings.PadScreen
@@ -23,6 +32,7 @@ import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.PadProfile
 import com.nxredux.mobile.ui.nx.nxColorsFor
 import com.nxredux.mobile.ui.padlayout.PadEditorState
+import com.nxredux.mobile.ui.padlayout.PadEditorWindow
 import com.nxredux.mobile.ui.padlayout.PadLayoutEditor
 
 /**
@@ -46,13 +56,26 @@ class PadLayoutActivity : ComponentActivity() {
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "Shared"
         val settings = AndroidAppSettings(this)
         // The fullest pad a console's games can show, so every group is placeable: the New 3DS pad (C-stick, ZL / ZR),
-        // and a Sega console's 6-button pad (each game picks 3 or 6 buttons itself; the layout is the console's).
-        val profile = if (tag.isEmpty()) PadProfile.STANDARD else PadProfile.forLayoutEditor(tag)
+        // a Sega console's 6-button pad (each game picks 3 or 6 buttons itself; the layout is the console's), and the
+        // Wii's MOTION where the phone has the sensors its Wiimote games draw it for.
+        val motion = WiiOptions.appliesTo(tag) && MotionSensors(this) { _, _ -> }.hasSensors
+        val profile = if (tag.isEmpty()) PadProfile.STANDARD else PadProfile.forLayoutEditor(tag, motion)
         val screen = PadScreen.entries.firstOrNull { it.name == intent.getStringExtra(EXTRA_SCREEN) } ?: PadScreen.NARROW
         slot = PadSlot(shape, screen)
-        editor = PadEditorState(PadLayouts.startingLayout(settings.padLayouts, key, slot))
+        editor = PadEditorState(PadLayouts.startingLayout(settings.padLayouts, key, slot), besidePicture = shape == PadShape.OVERLAY)
+        // STYLUS / SWAP: the DS and 3DS pads beside the picture draw them in game.
+        val tools = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
         setContent {
             val colors = remember { nxColorsFor(settings.accent, settings.secondaryAccent) }
+            // The window as the game reads it, again after each rotation (the cutout moves to another edge) and when the insets
+            // arrive: below Android 11 the cutout is only known once they are dispatched (windowShape), as in the game.
+            val config = LocalConfiguration.current
+            val density = LocalDensity.current
+            val cutout = WindowInsets.displayCutout
+            val insetKey = listOf(cutout.getTop(density), cutout.getLeft(density, LayoutDirection.Ltr), cutout.getRight(density, LayoutDirection.Ltr))
+            val editorWindow = remember(config.orientation, config.screenWidthDp, config.screenHeightDp, insetKey) {
+                windowShape().let { PadEditorWindow(it.screenClass, it.ydpi, it.cutoutTop.toFloat(), it.cutoutLeft.toFloat(), it.cutoutRight.toFloat()) }
+            }
             NxTheme(colors = colors) {
                 BackHandler { back() }
                 PadLayoutEditor(
@@ -65,6 +88,9 @@ class PadLayoutActivity : ComponentActivity() {
                         finish()
                     },
                     onClose = ::finish,
+                    window = editorWindow,
+                    tools = tools,
+                    consoleTag = tag,
                 )
             }
         }

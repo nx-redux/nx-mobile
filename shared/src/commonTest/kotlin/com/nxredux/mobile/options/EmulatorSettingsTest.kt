@@ -51,7 +51,7 @@ class EmulatorSettingsTest {
         val rows = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, null, null, forGame = false, secondScreen = true).console.map { it.option }
         val layout = rows.single { it.key == NdsOptions.LAYOUT_PORTRAIT }
         assertEquals(NdsOptions.table.single { it.key == NdsOptions.LAYOUT_PORTRAIT }.info, layout.info)
-        assertTrue(layout.info.startsWith("How the two screens share a portrait screen.\nAuto: stacked"))
+        assertTrue(layout.info.startsWith("How the two screens share a portrait screen.\nLarge screen:"))
         assertTrue(rows.single { it.key == BottomScreenOptions.KEY }.info.endsWith("System default follows Settings → Second screen."))
     }
 
@@ -83,6 +83,31 @@ class EmulatorSettingsTest {
         val p = EmulatorSettings.page("MD", descriptor, table, descriptor.defaultOptions, cfg("nx_sega_pad_type = 6\n"), null, forGame = false)
         assertEquals(listOf(BottomScreenOptions.KEY, PadOptions.SEGA_PAD, PadOptions.LAYOUT) + SpeedOptions.table.map { it.key }, p.console.map { it.option.key })
         assertEquals("6", p.console[1].value); assertEquals(PadOptions.AUTO, p.console[2].value)
+    }
+
+    // The menu window's screen shapes the DS and 3DS layout rows, as in the game.
+    @Test fun layout_rows_follow_the_screen() {
+        val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
+        fun landscape(screen: com.nxredux.mobile.layout.ScreenClass?) = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, null, null, forGame = false, screen = screen)
+            .console.single { it.option.key == NdsOptions.LAYOUT_LANDSCAPE }
+        val fold = landscape(com.nxredux.mobile.layout.ScreenClass.STUBBY_PHONE)
+        assertEquals(NdsLayoutChoice.LARGE.value, fold.value)
+        assertTrue(NdsLayoutChoice.SIDE_BY_SIDE.value !in fold.option.values)
+        assertEquals(NdsLayoutChoice.SIDE_BY_SIDE.value, landscape(com.nxredux.mobile.layout.ScreenClass.REGULAR_PHONE).value)
+        val n3ds = com.nxredux.mobile.runner.CoreRegistry.forTag("3DS")!!
+        val tablet = EmulatorSettings.page("3DS", n3ds, null, n3ds.defaultOptions, null, null, forGame = false, screen = com.nxredux.mobile.layout.ScreenClass.WIDE_TABLET)
+        assertEquals("large", tablet.console.single { it.option.key == N3dsOptions.LAYOUT_LANDSCAPE }.value)
+    }
+
+    @Test fun ds_layout_rows_read_the_old_keys_like_the_game_does() {
+        val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
+        fun value(cfgText: String, key: String) = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, cfg(cfgText), null, forGame = false)
+            .console.single { it.option.key == key }.value
+        assertEquals("pip", value("nx_nds_layout_landscape = pip\n", NdsOptions.LAYOUT_LANDSCAPE))
+        assertEquals("single", value("nx_nds_layout_portrait_v2 = single\n", NdsOptions.LAYOUT_PORTRAIT))
+        // An untouched old default, or an old "auto", is no pick: the row default.
+        assertEquals(NdsOptions.table.single { it.key == NdsOptions.LAYOUT_LANDSCAPE }.default, value("nx_nds_layout_landscape = stacked\n", NdsOptions.LAYOUT_LANDSCAPE))
+        assertEquals(NdsOptions.table.single { it.key == NdsOptions.LAYOUT_PORTRAIT_CONTROLLER }.default, value("nx_nds_layout_portrait_controller = auto\n", NdsOptions.LAYOUT_PORTRAIT_CONTROLLER))
     }
 
     @Test fun game_page_reads_the_game_file_instead_of_the_console_file() {

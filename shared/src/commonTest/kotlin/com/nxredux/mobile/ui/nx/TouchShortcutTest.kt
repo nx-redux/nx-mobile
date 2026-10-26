@@ -63,11 +63,4 @@ class TouchShortcutTest {
         assertTrue(visibleTouchShortcuts(e, rewinding, netplay = false).values.none { it.on })
         assertTrue(visibleTouchShortcuts(effective(mapOf(TouchSlot.ONE to ShortcutAction.RESET)), ff, netplay = false).values.none { it.on })
     }
-
-    @Test fun portrait_shortcut_fits_beside_the_menu_row() {
-        // MENU's size where the side room allows, narrower where a long MENU row (3DS STYLUS..SWAP) leaves less, never past it.
-        assertEquals(50f, portraitShortcutWidth(pillWidth = 50f, sideRoom = 120f, gap = 12f))
-        assertEquals(30f, portraitShortcutWidth(pillWidth = 50f, sideRoom = 42f, gap = 12f))
-        assertEquals(0f, portraitShortcutWidth(pillWidth = 50f, sideRoom = 5f, gap = 12f))
-    }
 }

@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.options.ConfigFile
 import com.nxredux.mobile.options.ConsoleRow
@@ -134,6 +135,8 @@ internal class EmulatorSettingsController(
     private val vulkanFailed: (String) -> Boolean = { false },
     /** Whether a qualifying second screen is connected now: the Bottom screen row shows only then. */
     private val secondScreen: () -> Boolean = { true },
+    /** The current window's screen class (null: unknown): the DS and 3DS layout rows follow it. */
+    private val screenClass: () -> ScreenClass? = { null },
 ) {
     private val lock = Mutex()
     private var listRows: List<EmulatorListRow> = emptyList()
@@ -255,7 +258,7 @@ internal class EmulatorSettingsController(
     private fun defaults(d: CoreDescriptor) = coreDefaults(d.id) + d.defaultOptions
 
     private fun build(tag: String, d: CoreDescriptor, game: Listed?, files: Pair<ConfigFile?, ConfigFile?>): EmulatorPage =
-        EmulatorSettings.page(tag, d, coreOptions.table(d.id), defaults(d), files.first, files.second, forGame = game != null, vulkanFailed = vulkanFailed(d.id), secondScreen = secondScreen())
+        EmulatorSettings.page(tag, d, coreOptions.table(d.id), defaults(d), files.first, files.second, forGame = game != null, vulkanFailed = vulkanFailed(d.id), secondScreen = secondScreen(), screen = screenClass())
 
     private suspend fun readPage(tag: String, d: CoreDescriptor, game: Listed?): EmulatorPage =
         build(tag, d, game, configs.read(tag, d.id, game?.game?.fileName))

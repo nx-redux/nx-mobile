@@ -9,6 +9,7 @@ import android.widget.FrameLayout
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.N3dsOptions
@@ -85,6 +86,8 @@ internal interface GameInputHost : LifecycleOwner {
     fun syncN3dsCore()
     fun isLandscape(): Boolean
     fun ndsControllerMode(): Boolean
+    /** The game window's screen class ([windowShape]): the DS and 3DS layout cycles skip what it does not offer. */
+    fun screenClass(): ScreenClass
     /** The activity's own handling (super) of an event the router leaves to the system. */
     fun superGenericMotionEvent(event: MotionEvent?): Boolean
     fun superKeyDown(keyCode: Int, event: KeyEvent): Boolean
@@ -355,10 +358,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
         when (action) {
             NdsAction.SwapScreens -> setNdsKey(NdsOptions.swapBigScreen(frontendValues))
             is NdsAction.CycleLayout -> {
-                // From the layout showing: Auto resolves for the game area as ndsLayout lays it out.
-                val game = host.gameContainer
+                // From the layout showing on this screen (an unset row steps from its default).
                 setNdsKey(NdsOptions.cycleLayout(
-                    frontendValues, landscape, ndsControllerMode(), action.delta, game.width.toFloat(), game.height.toFloat(),
+                    frontendValues, landscape, ndsControllerMode(), action.delta, host.screenClass(),
                 ))
             }
             is NdsAction.CycleCorner -> NdsOptions.cycleCorner(frontendValues, action.delta).let { (key, value) ->
@@ -504,7 +506,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         when (action) {
             is N3dsAction.CycleLayout -> {
                 // The row in use (orientation, controller), as the DS's; applyFrontend sets the core's layout from it.
-                val (key, value) = N3dsOptions.cycleLayout(frontendValues, isLandscape(), ndsControllerMode(), action.delta)
+                val (key, value) = N3dsOptions.cycleLayout(frontendValues, isLandscape(), ndsControllerMode(), action.delta, host.screenClass())
                 if (key in lockedOptions) return
                 applyFrontend(frontendValues + (key to value))   // Azahar re-lays its screens out on its next frame
                 showNdsLabel(N3dsOptions.layoutLabel(value))

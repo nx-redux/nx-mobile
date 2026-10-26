@@ -110,6 +110,7 @@ import com.nxredux.mobile.settings.PadScreen
 import com.nxredux.mobile.settings.PadSlot
 import com.nxredux.mobile.settings.PadLayouts
 import com.nxredux.mobile.settings.PadShape
+import com.nxredux.mobile.settings.PadButtons
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.settings.PadVibration
 import com.nxredux.mobile.settings.GameRumble
@@ -244,6 +245,8 @@ class AppDeps(
     val rumblePreview: (GameRumble) -> Unit = {},
     /** Wi-Fi netplay's platform side (sockets, discovery, save staging); null: no netplay (tests, other platforms). */
     val netplay: com.nxredux.mobile.netplay.NetplayPlatform? = null,
+    /** The menu window's screen class now (Emulator Settings' DS and 3DS layout rows); null: unknown. */
+    val screenClass: () -> com.nxredux.mobile.layout.ScreenClass? = { null },
     /** Opens the pad layout editor (Android: its own activity); it saves to the settings and ends with [AppState.onPadLayoutEdited]. Null: no editor. */
     val padEditor: ((PadEditRequest) -> Unit)? = null,
     /** Settings → Library → Saves: Export and Import (null: rows do nothing). */
@@ -455,7 +458,7 @@ sealed interface Screen {
     data class ArtworkReset(val scopes: List<ResetScope>, val confirm: ResetScope? = null) : Screen
 }
 
-enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, MENU_PAD, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, APP_UPDATE,
+enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_THEME, PAD_BUTTONS, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, MENU_PAD, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, APP_UPDATE,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     LAYOUT_HOME, LAYOUT_CONSOLES, LAYOUT_COLLECTIONS, LAYOUT_TOOLS, LAYOUT_GAME_LISTS, LAYOUT_TITLE_HINTS, LAYOUT_SWITCHER, TEXT_SIZE,
@@ -590,7 +593,8 @@ internal val ONBOARDING_TAB_STEPS = mapOf(
 private val ONBOARDING_VALUE_KINDS = mapOf(
     OnboardingStep.TEXT_SIZE to listOf(SettingsKind.TEXT_SIZE),
     OnboardingStep.SAVE_FORMATS to listOf(SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME),
-    OnboardingStep.PAD to listOf(SettingsKind.MENU_PAD, SettingsKind.PAD_THEME),
+    // Pad buttons is the third row only while the pad shows and Black is the theme; else Continue is there (never stepped).
+    OnboardingStep.PAD to listOf(SettingsKind.MENU_PAD, SettingsKind.PAD_THEME, SettingsKind.PAD_BUTTONS),
     OnboardingStep.TITLE to listOf(SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS),
     OnboardingStep.ACCENT to listOf(SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT),
 )
@@ -1956,7 +1960,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /**
      * A value page's row [row] stepped by [by] (-1: the one before; A steps forward), in place: SAVE_FORMATS' save
      * format, state format and extracted name; TEXT_SIZE's size; ACCENT's accent and secondary accent; TITLE's page
-     * title and button hints (Show / Hide); PAD's pad (shown / hidden) and theme ([ONBOARDING_VALUE_KINDS]). The same
+     * title and button hints (Show / Hide); PAD's pad (shown / hidden), theme and Black's buttons ([ONBOARDING_VALUE_KINDS]). The same
      * settings Settings steps ([settingValue]), applied at once and the page republished on that row, so the real pad
      * (or the preview picture, or the colours, or the text size) changes and the step count follows ([App] reads them
      * per screen). A row past the page's values, or another [step], does nothing.
@@ -2088,6 +2092,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             listOfNotNull(
                 NxRow("On-screen pad", secondary = if (deps.settings.menuPad) "Show" else "Hide", cycleable = true),
                 if (deps.settings.menuPad) NxRow("Pad theme", secondary = padThemeLabel(deps.settings.padTheme), cycleable = true) else null,
+                // Black's button set, as in Settings → Appearance: only while Black is picked.
+                if (deps.settings.menuPad && deps.settings.padTheme == PadTheme.BLACK) NxRow("Pad buttons", secondary = deps.settings.padButtons.label, cycleable = true) else null,
                 NxRow("Continue"),
             ),
         )
@@ -3955,14 +3961,16 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         SettingsSection.DEFAULT_EMULATORS -> defaultEmulatorRows()
         SettingsSection.PAD_LAYOUT -> padLayoutRows()
         SettingsSection.SHORTCUTS -> shortcutRows()
-        SettingsSection.APPEARANCE -> listOf(
+        SettingsSection.APPEARANCE -> listOf<SettingsRow?>(
             SettingsRow(SettingsKind.PAD_THEME, "Pad theme", padThemeLabel(deps.settings.padTheme)),
+            // The Black theme's button set: only Black has one, so the row shows only while it is the theme.
+            if (deps.settings.padTheme == PadTheme.BLACK) SettingsRow(SettingsKind.PAD_BUTTONS, "Pad buttons", deps.settings.padButtons.label) else null,
             SettingsRow(SettingsKind.ACCENT, "Accent", deps.settings.accent.label),
             SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", deps.settings.secondaryAccent.label),
             // The options lists' text (Settings, Game Settings, the in-game menu): Large or Small.
             SettingsRow(SettingsKind.TEXT_SIZE, "Text size", deps.settings.optionTextSize.label),
             SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
-        )
+        ).filterNotNull()
         SettingsSection.MAIN_MENU -> layoutsRows()
         SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS ->
             layoutTabRows(section.tab!!)
@@ -4042,6 +4050,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private fun padThemeLabel(theme: PadTheme): String = when (theme) {
         PadTheme.CHARCOAL -> "Charcoal"
         PadTheme.RETRO -> "Retro"
+        PadTheme.BLACK -> "Black"
     }
 
 
@@ -4119,6 +4128,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         return when (row.kind) {
             // Appearance: the pad theme, the accent presets, Auto and the presets, Large / Small.
             SettingsKind.PAD_THEME -> cycle(PadTheme.entries, s.padTheme, ::padThemeLabel) { s.padTheme = it }
+            SettingsKind.PAD_BUTTONS -> cycle(PadButtons.entries, s.padButtons, { it.label }) { s.padButtons = it }
             SettingsKind.ACCENT -> cycle(AccentPreset.entries, s.accent, { it.label }) { s.accent = it }
             SettingsKind.SECONDARY_ACCENT -> cycle(SecondaryAccent.entries, s.secondaryAccent, { it.label }) { s.secondaryAccent = it }
             SettingsKind.TEXT_SIZE -> cycle(OptionTextSize.entries, s.optionTextSize, { it.label }) { s.optionTextSize = it }
@@ -4271,7 +4281,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /**
      * Appearance's, Layouts' or Controls' "Reset to defaults" (NX Redux settings.c): the page's own options back to their
-     * defaults. Appearance: Pad theme, Accent, Secondary accent. Layouts: every tab's style and orientation
+     * defaults. Appearance: Pad theme, Pad buttons, Accent, Secondary accent. Layouts: every tab's style and orientation
      * unset (so [MenuStyles.styleOf] and [MenuStyles.orientationOf] give theirs), the game lists', the tabs', shelves'
      * and hints' Show/Hide, Consoles background, List art, Backdrop art, Page title, Button hints, Extra info, Home stats,
      * Layout options, Achievements panel and Game Switcher layout. Controls: Pad vibration, Game rumble and every pad
@@ -4285,6 +4295,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             shortcutDraft = ShortcutSet.EMPTY   // Clear all: written with the rest when the page closes
         } else if (section == SettingsSection.APPEARANCE) {
             s.padTheme = PadTheme.DEFAULT
+            s.padButtons = PadButtons.DEFAULT
             s.accent = AccentPreset.DEFAULT
             s.secondaryAccent = SecondaryAccent.DEFAULT
             s.optionTextSize = OptionTextSize.DEFAULT
@@ -5643,6 +5654,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         work = deps.compute,
         vulkanFailed = { it in deps.settings.vulkanFailedCores },
         secondScreen = { secondConnected },
+        screenClass = deps.screenClass,
     )
 
     // --- Tools -> Artwork: AppState hosts the controller (index writes stay here); the pages live in ArtworkScreenController ---

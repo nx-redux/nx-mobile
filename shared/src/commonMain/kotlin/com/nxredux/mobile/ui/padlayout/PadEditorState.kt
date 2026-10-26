@@ -18,9 +18,11 @@ import kotlin.math.roundToInt
 
 /**
  * The pad layout editor's state. The pads drawn in the editor report each group's default rect, its pad's bounds and
- * unit ([onGroup], root px); drags and the resize handle edit [layout], clamped like the pads clamp it.
+ * unit ([onGroup], root px); drags and the resize handle edit [layout], clamped like the pads clamp it. [besidePicture]:
+ * the pad is the landscape halves beside the picture, whose groups stack in another order ([BesideHitOrder]).
  */
-class PadEditorState(initial: PadLayout) : PadGroupBoundsListener {
+class PadEditorState(initial: PadLayout, besidePicture: Boolean = false) : PadGroupBoundsListener {
+    private val hitOrder = if (besidePicture) BesideHitOrder else HitOrder
     private class Geom(val default: Rect, val bounds: Rect, val unitPx: Float)
 
     private val saved = initial
@@ -34,8 +36,9 @@ class PadEditorState(initial: PadLayout) : PadGroupBoundsListener {
     /** The groups this pad has (those that reported). */
     val groups: Set<PadGroup> get() = geoms.keys
 
-    override fun onGroup(group: PadGroup, defaultInRoot: Rect, padInRoot: Rect, unitPx: Float) {
-        geoms[group] = Geom(defaultInRoot, padInRoot, unitPx)
+    override fun onGroup(group: PadGroup, defaultInRoot: Rect, padInRoot: Rect, unitPx: Float, placedInRoot: Rect) {
+        if (defaultInRoot.isEmpty) geoms.remove(group)   // the group left the pad
+        else geoms[group] = Geom(defaultInRoot, padInRoot, unitPx)
     }
 
     private fun tweak(group: PadGroup) = layout.tweaks[group] ?: GroupTweak()
@@ -43,10 +46,10 @@ class PadEditorState(initial: PadLayout) : PadGroupBoundsListener {
     fun rectOf(group: PadGroup): Rect? = geoms[group]?.let { g -> placeGroup(g.default, tweak(group), g.unitPx, g.bounds) }
 
     /**
-     * The group under [p]: the topmost as the pads draw them ([HitOrder]), so the editor picks the group a game's touch
-     * would reach where two overlap.
+     * The group under [p]: the topmost as the pads draw them ([HitOrder], [BesideHitOrder]), so the editor picks the
+     * group a game's touch would reach where two overlap.
      */
-    fun groupAt(p: Offset): PadGroup? = HitOrder.firstOrNull { rectOf(it)?.contains(p) == true }
+    fun groupAt(p: Offset): PadGroup? = hitOrder.firstOrNull { rectOf(it)?.contains(p) == true }
 
     fun select(group: PadGroup?) { selected = group }
 
@@ -117,14 +120,25 @@ class PadEditorState(initial: PadLayout) : PadGroupBoundsListener {
 }
 
 /**
- * The pads' groups topmost first, as they draw: the C-stick over the clusters, the clusters over the shoulders, the
- * shoulders over the system rows (portrait: the top row over MENU's, which sits under everything with the NX mark, the
- * touch shortcuts beside it).
- * Overlay halves keep their groups apart, and the same order holds within each.
+ * The portrait pad's groups topmost first, as it draws: the C-stick over the clusters, the clusters over the shoulders,
+ * the shoulders over the system rows (the top row over MENU's, which sits under everything with the NX mark, the touch
+ * shortcuts beside it).
  */
 private val HitOrder = listOf(
     PadGroup.C_STICK, PadGroup.FACE, PadGroup.DPAD, PadGroup.R_SHOULDERS, PadGroup.SYSTEM_RIGHT, PadGroup.L_SHOULDERS, PadGroup.SYSTEM_LEFT,
     PadGroup.SHORTCUT_1, PadGroup.SHORTCUT_2,
+)
+
+/**
+ * The landscape halves beside the picture topmost first, as they draw: the right half over the left (its view is added
+ * last), and in each the bottom row over the rest (it comes last in the column), its touch shortcut over the system
+ * group, then the d-pad / face cluster over the shoulders. The shortcut on the second row sits inside the system
+ * group's rect (under STICK / SELECT, beside STYLUS / SWAP), so it must come first to be picked at all. No C-stick
+ * group: here it is part of the face cluster.
+ */
+private val BesideHitOrder = listOf(
+    PadGroup.SHORTCUT_2, PadGroup.SYSTEM_RIGHT, PadGroup.FACE, PadGroup.R_SHOULDERS,
+    PadGroup.SHORTCUT_1, PadGroup.SYSTEM_LEFT, PadGroup.DPAD, PadGroup.L_SHOULDERS,
 )
 
 /**

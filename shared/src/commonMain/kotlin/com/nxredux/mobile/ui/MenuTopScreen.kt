@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
@@ -32,6 +31,7 @@ import com.nxredux.mobile.ui.nx.LauncherChrome
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.LocalLauncherChrome
 import com.nxredux.mobile.ui.nx.LocalNxColors
+import com.nxredux.mobile.ui.nx.restingSystemBars
 import com.nxredux.mobile.ui.nx.LocalNxTapOpens
 import com.nxredux.mobile.ui.nx.NxLoadingOverlay
 import com.nxredux.mobile.ui.nx.LocalPortrait
@@ -71,7 +71,7 @@ fun MenuTopScreen(state: AppState) {
         MenuLocals(state, look, footerModeFor(controllerConnected, padVisible = false), touchscreen) {
             BoxWithConstraints(
                 Modifier.fillMaxSize().background(LocalNxColors.current.background)
-                    .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)).clipToBounds(),
+                    .windowInsetsPadding(restingSystemBars().union(WindowInsets.displayCutout)).clipToBounds(),
             ) {
                 // No HandheldShell here: the screen's own shape and size, as the shell gives App's pages.
                 CompositionLocalProvider(LocalPortrait provides (maxHeight > maxWidth), LocalWindowSize provides DpSize(maxWidth, maxHeight)) {

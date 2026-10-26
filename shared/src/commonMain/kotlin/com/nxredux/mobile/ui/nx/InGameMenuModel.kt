@@ -6,6 +6,7 @@ import com.nxredux.mobile.achievements.RaBadgeFolders
 import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.achievements.sortedBy
 import com.nxredux.mobile.cheats.CheatEntry
+import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.BottomScreenOptions
@@ -271,11 +272,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /** What [optionsPage] reads: the Console Settings row's inputs ([consoleRows]) and the footer's [status]. */
-    private data class OptionsPreviewInputs(val tag: String, val locked: Set<String>, val second: Boolean, val status: ConfigSource)
+    private data class OptionsPreviewInputs(val tag: String, val locked: Set<String>, val second: Boolean, val status: ConfigSource, val screen: ScreenClass?)
 
     /** [optionsPage], rebuilt only when one of its inputs has changed since the last call. */
     private fun optionsPreview(): MenuPage {
-        val inputs = OptionsPreviewInputs(frontendTag, frontendLocked, secondConnected, status)
+        val inputs = OptionsPreviewInputs(frontendTag, frontendLocked, secondConnected, status, screen)
         previewPage?.let { (key, page) -> if (key == inputs) return page }
         return optionsPage().also { previewPage = inputs to it }
     }
@@ -289,6 +290,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var frontendLocked: Set<String> = emptySet()
     private var frontendTag = ""                 // the console's tag: selects the Console Settings rows
     private var overlayAvailable = true          // false while the DS screens are split (the overlay is off)
+
+    /**
+     * The game window's [ScreenClass] (null: unknown): the DS and 3DS layout rows offer that screen's values and show its
+     * defaults ([ConsoleSettings.tableFor]). Set before the menu's pages are built.
+     */
+    var screen: ScreenClass? = null
 
     // Options → Shortcuts ([setShortcuts]): Controls → Shortcuts, this console's or game's overrides over it, the
     // console's hotkeys (they win: a row on one is Unavailable, press to bind refuses one), whether the core rewinds.
@@ -1128,8 +1135,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             return ShaderOptions.cycle(key, current, delta, presets, params)?.let { setFrontendValue(key, it) }
         }
         if (key == FrontendOptions.OVERLAY && !overlayAvailable) return null
-        val current = frontend[key] ?: return null
-        return FrontendOptions.cycle(key, current, delta, overlays)?.let { setFrontendValue(key, it) }
+        // An unset DS layout row (no stored value) cycles from its shown default, like frontendRow shows it.
+        val current = frontend[key] ?: optionFor(key)?.default ?: return null
+        val values = settingValues(key) ?: return null
+        return CoreOptionFilter.cycle(CoreOption(key, current, values = values), delta)?.let { setFrontendValue(key, it) }
     }
 
     /** A shader key's value: stored, else (an unstored parameter) its default, which it cycles from too. */
@@ -1154,9 +1163,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun settingValues(key: String): List<String>? = when {
         ShaderOptions.isShaderKey(key) -> ShaderOptions.choices(key, presets, params)
         key == FrontendOptions.OVERLAY && !overlayAvailable -> emptyList()
-        FrontendOptions.option(key) != null -> FrontendOptions.choices(key, overlays)
-        else -> null
+        key == FrontendOptions.OVERLAY -> FrontendOptions.choices(key, overlays)
+        else -> optionFor(key)?.values
     }
+
+    /** The row for [key]: this console's on this [screen] (the DS / 3DS layout rows differ per screen), else the table's. */
+    private fun optionFor(key: String): FrontendOption? = consoleRows().firstOrNull { it.key == key } ?: FrontendOptions.option(key)
 
     /** The Players page's values for a slot: Empty, then every connected pad ([GamePanelModel.cyclePlayer]'s order). */
     private fun playerCandidates(): List<String?> = listOf<String?>(null) + playerPads.map { it.key }
@@ -1339,7 +1351,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * Game Settings / Emulator Settings) left out, and Bottom screen while no second display is [secondConnected]; none
      * left = the page is not offered.
      */
-    private fun consoleRows() = ConsoleSettings.tableFor(frontendTag).filter {
+    private fun consoleRows() = ConsoleSettings.tableFor(frontendTag, screen).filter {
         it.key !in frontendLocked && !it.atLaunch && (secondConnected || it.key != BottomScreenOptions.KEY)
     }
 
@@ -1386,7 +1398,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             key == ShaderOptions.PRESET -> presetRow()
             ShaderOptions.paramId(key) != null ->
                 paramRow(checkNotNull(params.firstOrNull { ShaderOptions.paramKey(it.id) == key }) { "not an active parameter: $key" })
-            else -> frontendRow(checkNotNull(FrontendOptions.option(key)) { "not a frontend key: $key" })
+            else -> frontendRow(checkNotNull(optionFor(key)) { "not a frontend key: $key" })
         }
         return MenuPage(PageKind.Adjust(key), row.label, listOf(row))
     }
@@ -1396,7 +1408,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             MenuRow.Option(o.label, o.key, OVERLAY_UNAVAILABLE, OVERLAY_UNAVAILABLE_LINE, detail = OVERLAY_UNAVAILABLE_INFO)
         } else {
             val value = frontend[o.key] ?: o.default
-            val values = FrontendOptions.choices(o.key, overlays)
+            val values = if (o.key == FrontendOptions.OVERLAY) FrontendOptions.choices(o.key, overlays) else o.values
             // The row's brief line (none: compact); the full text in its info popup.
             MenuRow.Option(
                 o.label, o.key, o.labelOf(value), o.brief, visual = o.visual,

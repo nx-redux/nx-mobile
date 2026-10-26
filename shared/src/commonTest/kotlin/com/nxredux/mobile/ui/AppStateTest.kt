@@ -78,6 +78,7 @@ import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.settings.AccentPreset
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.settings.MenuStyles
+import com.nxredux.mobile.settings.PadButtons
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.settings.GroupTweak
 import com.nxredux.mobile.settings.PadGroup
@@ -167,6 +168,7 @@ class AppStateTest {
         override var stateFormat = StateFormat.DEFAULT
         override var useExtractedFileName = false
         override var padTheme: PadTheme = PadTheme.DEFAULT
+        override var padButtons: PadButtons = PadButtons.DEFAULT
         // Pinned to List, the default before Carousel: the walks below step Consoles, Collections and Tools as lists. The
         // real defaults (a missing tab is its MenuStyles.defaultStyleOf) are tested with menuStyles = emptyMap() ([freshSettings]).
         override var menuStyles: Map<MenuCategory, MenuStyle> = LIST_TABS
@@ -875,6 +877,28 @@ class AppStateTest {
         assertNotEquals(before, state.screen.value)                        // republished: App re-reads the theme
         state.onButton(NxButton.LEFT)
         assertEquals(PadTheme.CHARCOAL, settings.padTheme)
+    }
+
+    // On Black the pad page adds Pad buttons under the theme, stepping the same setting in place; off Black it goes.
+    @Test fun the_pad_page_shows_pad_buttons_only_on_black() = runTest {
+        val (state, settings) = atCustomise()
+        fun rows() = assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label to it.secondary }
+        state.select(1); state.onButton(NxButton.LEFT)                      // Charcoal → Black (wraps)
+        assertEquals(PadTheme.BLACK, settings.padTheme)
+        assertEquals(listOf("On-screen pad" to "Show", "Pad theme" to "Black", "Pad buttons" to "Grey", "Continue" to null), rows())
+        state.select(2); state.onButton(NxButton.A)                         // Grey → Outline, the page stays
+        assertEquals(PadButtons.OUTLINE, settings.padButtons)
+        assertEquals(OnboardingStep.PAD, step(state))
+        assertEquals("Outline", rows()[2].second)
+        state.onButton(NxButton.RIGHT)
+        assertEquals(PadButtons.GREY, settings.padButtons)
+        state.select(1); state.onButton(NxButton.RIGHT)                     // Black → Charcoal: the row goes
+        assertEquals(listOf("On-screen pad", "Pad theme", "Continue"), rows().map { it.first })
+        state.select(0); state.onButton(NxButton.A)                         // pad hidden on Black: no theme or buttons rows
+        settings.padTheme = PadTheme.BLACK; state.onButton(NxButton.RIGHT); state.onButton(NxButton.LEFT)
+        assertEquals(listOf("On-screen pad", "Continue"), rows().map { it.first })
+        state.select(1); state.onButton(NxButton.A)                         // Continue
+        assertEquals(OnboardingStep.TAB_HOME, step(state))
     }
 
     // A phone with no controller, set up in landscape, still gets the pad page: it uses the pad when held upright.
@@ -5531,8 +5555,40 @@ class AppStateTest {
         assertEquals("Retro", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
         assertEquals(ListSelection(0, 5), state.selection.value)   // the row stays highlighted
         state.onButton(NxButton.A)
+        assertEquals(PadTheme.BLACK, settings.padTheme)
+        assertEquals("Black", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
+        assertEquals(ListSelection(0, 6), state.selection.value)   // Pad buttons came in below
+        state.onButton(NxButton.A)
         assertEquals(PadTheme.CHARCOAL, settings.padTheme)
         assertEquals("Charcoal", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
+    }
+
+    // Pad buttons is Black's own: the row shows only while Black is the theme, steps Grey / Outline in place, and the
+    // page's Reset to defaults puts it back to Grey.
+    @Test fun the_pad_buttons_row_shows_only_on_black_and_steps_in_place() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
+        for (theme in listOf(PadTheme.CHARCOAL, PadTheme.RETRO)) {
+            settings.padTheme = theme
+            state.openSettings(SettingsSection.APPEARANCE)
+            assertEquals(null, rows().firstOrNull { it.kind == SettingsKind.PAD_BUTTONS }, "$theme")
+        }
+        settings.padTheme = PadTheme.BLACK
+        state.openSettings(SettingsSection.APPEARANCE)
+        assertEquals(SettingsRow(SettingsKind.PAD_BUTTONS, "Pad buttons", "Grey"), rows()[1])
+        state.select(1); state.onButton(NxButton.A)
+        assertEquals(PadButtons.OUTLINE, settings.padButtons)
+        assertEquals("Outline", rows()[1].secondary)
+        state.onButton(NxButton.RIGHT)
+        assertEquals(PadButtons.GREY, settings.padButtons)
+        state.onButton(NxButton.LEFT)
+        assertEquals(PadButtons.OUTLINE, settings.padButtons)
+        state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A)
+        assertEquals(PadTheme.CHARCOAL, settings.padTheme)
+        assertEquals(PadButtons.GREY, settings.padButtons)
+        assertEquals(null, rows().firstOrNull { it.kind == SettingsKind.PAD_BUTTONS })   // gone with Black
     }
 
     // NX Redux: every value row is ITEM_CYCLE, LEFT/RIGHT step it (A still steps forward).
@@ -5542,7 +5598,7 @@ class AppStateTest {
         state.load()
         state.openSettings(SettingsSection.APPEARANCE)
         state.select(0)
-        state.onButton(NxButton.LEFT); assertEquals(PadTheme.RETRO, settings.padTheme)
+        state.onButton(NxButton.LEFT); assertEquals(PadTheme.BLACK, settings.padTheme)
         state.onButton(NxButton.RIGHT); assertEquals(PadTheme.CHARCOAL, settings.padTheme)
         assertEquals(ListSelection(0, 5), state.selection.value)   // the row stays highlighted
     }
@@ -10012,7 +10068,7 @@ class AppStateTest {
             listOf(
                 SettingsRow(SettingsKind.PAD_LAYOUT_CONSOLE, "Console", "Shared"),
                 SettingsRow(SettingsKind.PAD_LAYOUT_SHAPE, "Portrait band", "Default", padShape = PadShape.PORTRAIT),
-                SettingsRow(SettingsKind.PAD_LAYOUT_SHAPE, "Landscape overlay", "Default", padShape = PadShape.OVERLAY),
+                SettingsRow(SettingsKind.PAD_LAYOUT_SHAPE, "Landscape", "Default", padShape = PadShape.OVERLAY),
                 SettingsRow(SettingsKind.PAD_LAYOUT_RESET, "Reset console"),
             ),
             page.rows,
@@ -10583,7 +10639,7 @@ class AppStateTest {
             assertEquals(s.rows.size, s.choices.size)
             return s.choices[s.rows.indexOfFirst { it.kind == kind }]
         }
-        assertEquals(SettingChoices(listOf("Charcoal", "Retro"), 0), choices(SettingsSection.APPEARANCE, SettingsKind.PAD_THEME))
+        assertEquals(SettingChoices(listOf("Charcoal", "Retro", "Black"), 0), choices(SettingsSection.APPEARANCE, SettingsKind.PAD_THEME))
         assertEquals(SettingChoices(AccentPreset.entries.map { it.label }, 0), choices(SettingsSection.APPEARANCE, SettingsKind.ACCENT))
         assertEquals(SettingChoices(listOf("Large", "Small"), 0), choices(SettingsSection.APPEARANCE, SettingsKind.TEXT_SIZE))
         assertNull(choices(SettingsSection.APPEARANCE, SettingsKind.RESET_DEFAULTS))
