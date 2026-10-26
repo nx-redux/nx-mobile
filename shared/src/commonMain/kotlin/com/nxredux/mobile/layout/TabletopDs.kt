@@ -38,7 +38,8 @@ private const val EPSILON = 0.001f
  * (the bottom never below 1x); 3DS screens are fitted at their aspect (400 x 240 top, 320 x 240 bottom) in whole
  * pixels. The halves set aside half the [reach] each side ([setAsidePx] for a near-square tablet), nothing with a
  * [controller]. Each screen is centred in its area. Only a tablet-class [screen] has the width for the touch screen
- * between the pad halves; a phone-shaped foldable stacks both screens above the hinge instead.
+ * between the pad halves; a phone-shaped foldable stacks both screens above the hinge instead. [secondRow]: the halves
+ * draw their second row (STYLUS / SWAP), so their boxes are that row taller, as the landscape pad's.
  */
 fun tabletopDs(
     windowW: Int,
@@ -52,6 +53,7 @@ fun tabletopDs(
     reach: Reach,
     density: Float,
     controller: Boolean,
+    secondRow: Boolean = false,
 ): TabletopDsPlacement {
     val topArea = PxRect(0f, cutoutTop.toFloat(), windowW.toFloat(), (hingeTop - cutoutTop).toFloat())
     val bottomArea = PxRect(0f, hingeBottom.toFloat(), windowW.toFloat(), (windowH - hingeBottom).toFloat())
@@ -70,7 +72,7 @@ fun tabletopDs(
     val top = centred(topArea, topW, topH)
     val bottom = centred(bottomArea, bottomW, bottomH)
     if (controller) return TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, null, null)
-    val half = clusterPlacement(bottomArea, bottom, unitPx, reach, density, toolRow = false)
+    val half = clusterPlacement(bottomArea, bottom, unitPx, reach, density, toolRow = secondRow)
     return TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, half, half)
 }
 

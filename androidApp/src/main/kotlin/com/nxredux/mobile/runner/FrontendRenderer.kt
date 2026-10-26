@@ -30,7 +30,6 @@ import com.nxredux.mobile.layout.picture
 import com.nxredux.mobile.layout.pictureSpace
 import com.nxredux.mobile.layout.placedFor
 import com.nxredux.mobile.layout.setAsidePx
-import com.nxredux.mobile.layout.tabletopDs
 import com.nxredux.mobile.options.BRICK_HEIGHT
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.NdsOptions
@@ -564,8 +563,8 @@ internal class FrontendRenderer(
     /**
      * Half-folded DS / 3DS ([PadLayoutController.tabletop]): on a tablet-class window ([TabletopPad.DS], the game view
      * spanning the window) the top screen above the hinge and the touch screen below it; on a phone-shaped one (the game
-     * view above the hinge) both screens stacked there. [tabletopDs] places them, in window px moved into the game view's;
-     * the player's flat layout choice does not apply. Null otherwise: not half-folded, another console, a Dual screen mode
+     * view above the hinge) both screens stacked there. [PadLayoutController.tabletopDsPlacement] places them, in window
+     * px moved into the game view's; the player's flat layout choice does not apply. Null otherwise: not half-folded, another console, a Dual screen mode
      * (its own layouts come first), or a DS frame that is not the plain 256x384 stack (one picture, as [ndsLayout] warns).
      */
     private fun tabletopDsLayout(shape: WindowShape, g: FloatArray): HalfFolded? {
@@ -577,10 +576,7 @@ internal class FrontendRenderer(
         }
         val tt = padLayout.tabletop() ?: return null
         val pad = padLayout.tabletopDsPad(shape)
-        val p = tabletopDs(
-            shape.widthPx, shape.heightPx, shape.screenClass, shape.cutoutTop, hingeTop = tt.menuBottom, hingeBottom = tt.padTop,
-            kind, pad.unitPx, pad.reach, shape.density, controller = padLayout.layoutControllerNames().isNotEmpty(),
-        )
+        val p = padLayout.tabletopDsPlacement(shape, tt, pad)
         val dy = tt.gameTop.toFloat()   // window px -> the game view's (it starts at gameTop)
         val placement = p.copy(top = p.top.copy(y = p.top.y - dy), bottom = p.bottom.copy(y = p.bottom.y - dy))
         // 3DS SWAP is Azahar's own key here, which turns its frame; the cuts follow the unswapped Stacked frame.
