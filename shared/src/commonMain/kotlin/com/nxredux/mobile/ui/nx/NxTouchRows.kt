@@ -145,12 +145,15 @@ internal fun nxTouchRowSizes(itemHeight: Dp, rowWidth: Dp, descOfLabel: Float): 
 /** The gap between a segmented row's description and its segments. */
 private val SEGMENTS_GAP = 6.dp
 
+/** Whether a touch row draws its info icon: only while [selected], and only when its line is [truncated] or [moreInfo]. */
+internal fun nxInfoIconShown(selected: Boolean, truncated: Boolean, moreInfo: Boolean): Boolean = selected && (truncated || moreInfo)
+
 /** The selected row's plate: the accent, faint, so the row's own colours read on it. */
 private const val SOFT_SELECTION_ALPHA = 0.16f
 
 /**
- * One touch row [height] high: the [label] (bold) with the info icon when the [info] line is cut off or [moreInfo] says
- * there is more, the description under it (at most [SETTING_DESC_LINES], the warning colour when [warning]), and the
+ * One touch row [height] high: the [label] (bold) with the info icon while it is [selected] and the [info] line is cut
+ * off or [moreInfo] says there is more ([nxInfoIconShown]), the description under it (at most [SETTING_DESC_LINES], the warning colour when [warning]), and the
  * [control] on the right, or [below] under the text at its start (a segmented row's segments that don't fit on the
  * right). Selected: a soft rounded plate behind it, so the control stays readable; not [enabled]: dimmed. [onInfo] null:
  * the info icon takes no taps. [onTruncated] hears whether the description fits while the row is [selected].
@@ -182,8 +185,9 @@ internal fun NxTouchRow(
                         fontSize = sizes.label, lineHeight = sizes.label * 1.25f, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    // Cut off, or a fuller text behind it: the popup shows it.
-                    if (truncated || moreInfo) NxInfoIcon(sizes.desc, onInfo)
+                    // Cut off, or a fuller text behind it: the popup shows it. Only on the selected row, so a page of long
+                    // descriptions isn't a column of icons.
+                    if (nxInfoIconShown(selected, truncated, moreInfo)) NxInfoIcon(sizes.desc, onInfo)
                 }
                 if (info.isNotBlank()) {
                     Text(
