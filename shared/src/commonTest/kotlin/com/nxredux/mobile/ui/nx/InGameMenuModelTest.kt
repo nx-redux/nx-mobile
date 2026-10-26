@@ -1488,6 +1488,18 @@ class InGameMenuModelTest {
         assertTrue("Inset Corner" !in labels())
     }
 
+    @Test fun anAdjustStripOnARowThatGoesAwayCloses() {
+        val m = model()
+        m.ndsView = NdsView(landscape = true, controllerMode = false)
+        m.openConsoleSettings()
+        m.select(m.state.page.rows.indexOfFirst { it.label == "Layout (landscape)" })
+        m.press(NxButton.A)
+        assertTrue(m.state.page.kind is PageKind.Adjust)
+        // Turned to portrait: the landscape row is no longer listed, so its strip closes back onto Console Settings.
+        m.ndsView = NdsView(landscape = false, controllerMode = false)
+        assertEquals(PageKind.ConsoleSettings, m.state.page.kind)
+    }
+
     private fun InGameMenuModel.row3d(label: String) = state.page.rows.filterIsInstance<MenuRow.Option>().single { it.label == label }
 
     @Test fun modeRowShowsTheValueInUse() {

@@ -1311,16 +1311,21 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * above it: back to Options, which no longer offers it.
      */
     private fun refreshFrontendPages() {
-        val stack = state.stack.mapNotNull { p ->
-            when (val k = p.kind) {
+        val stack = mutableListOf<MenuPage>()
+        for (p in state.stack) {
+            val page = when (val k = p.kind) {
                 PageKind.ConsoleSettings -> rebuilt(p, consoleSettingsPage())
                 PageKind.Frontend -> rebuilt(p, frontendPage())
                 PageKind.Shaders -> rebuilt(p, shadersPage())
                 PageKind.ShaderParams -> rebuilt(p, shaderParamsPage())
-                // A parameter the new preset no longer has: close its strip rather than show a stale row.
-                is PageKind.Adjust -> if (isVanishedParam(k.key)) null else adjustPage(k.key)
+                // A row its page no longer lists (a parameter the new preset lacks; a DS layout or inset row after a
+                // rotation or a controller): close its strip rather than adjust a row that is not shown.
+                is PageKind.Adjust ->
+                    if (isVanishedParam(k.key) || stack.lastOrNull()?.rows?.none { (it as? MenuRow.Option)?.key == k.key } == true) null
+                    else adjustPage(k.key)
                 else -> p
             }
+            if (page != null) stack += page
         }
         val empty = stack.indexOfFirst { it.kind == PageKind.ConsoleSettings && it.rows.isEmpty() }
         state = state.copy(stack = if (empty > 0) stack.take(empty) else stack)
