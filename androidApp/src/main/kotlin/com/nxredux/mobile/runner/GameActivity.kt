@@ -1067,11 +1067,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(privateRoot) }
         // 3DS with a second display: Azahar starts in the split's fixed layout, which replaces the rows' values below; launched
         // half-folded, its swap is pinned likewise ([DualScreen.n3dsForcedOptions]). The core never runs the user's swap
-        // values then, so leaving split (or unfolding) puts back the stored ones.
+        // values then, so leaving split (or unfolding) puts back the stored ones. Not under netplay: a session changes no
+        // core option once it runs, so an unfold could never put them back; it runs the user's swap, as it launched.
         val launchDual = dual.dualModeNow()
-        val n3dsSplit = if (N3dsOptions.appliesTo(tag)) DualScreen.n3dsForcedOptions(launchDual, n3dsTabletop()) else null
+        val n3dsSplit = if (N3dsOptions.appliesTo(tag)) DualScreen.n3dsForcedOptions(launchDual, n3dsTabletop() && np == null) else null
         if (n3dsSplit != null) dual.n3dsSwapBeforeSplit = DualScreen.n3dsSwapRestore(null, resolved.values)
-        n3dsSwapPinnedHalfFolded = N3dsOptions.appliesTo(tag) && n3dsHalfFoldedPin(launchDual)
+        n3dsSwapPinnedHalfFolded = N3dsOptions.appliesTo(tag) && np == null && n3dsHalfFoldedPin(launchDual)
         val options = FrontendOptions.coreValues(resolved.values)
             .filterNot { (k, _) -> k == N3dsOptions.LAYOUT && N3dsOptions.appliesTo(tag) }   // set from the row below
             .filterNot { (k, _) -> n3dsSplit?.containsKey(k) == true }
@@ -1818,8 +1819,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         n3dsSwapPinnedHalfFolded = pinned
     }
 
-    /** Half-folded with no second screen in use pins the core's swap ([DualScreen.n3dsForcedOptions]). */
-    private fun n3dsHalfFoldedPin(mode: DualMode): Boolean = n3dsTabletop() && mode == DualMode.OFF
+    /**
+     * Half-folded with no second screen in use pins the core's swap ([DualScreen.n3dsForcedOptions]); never under netplay,
+     * whose core options stay as the session launched them.
+     */
+    private fun n3dsHalfFoldedPin(mode: DualMode): Boolean = n3dsTabletop() && mode == DualMode.OFF && netplayNow == null
 
     /** The core's swap was last pinned by half-folding ([syncN3dsCore]): flat again puts the user's values back. */
     private var n3dsSwapPinnedHalfFolded = false
