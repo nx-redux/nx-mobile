@@ -65,6 +65,23 @@ data class NxColors(
     val onAccentMuted: Color = onAccent.copy(alpha = 0.55f)   // a row's secondary text on the accent ([secondarySelected] on white)
     val successOnAccent: Color = successSelected   // [success] on the accent
     val warningOnAccent: Color = warningSelected   // [warning] on the accent
+
+    /** Unselected tab words and the top-right icons: the [main] ink at 38%. */
+    val inkDim: Color = main.copy(alpha = 0.38f)
+    /** Unselected pictures: grid tiles, cards, and carousel items one step out. The [main] ink at 55%. */
+    val inkMuted: Color = main.copy(alpha = 0.55f)
+    /** An unlit tag pill (Continue) and the unlit plate behind a word: the [main] ink at 14%. */
+    val inkFaint: Color = main.copy(alpha = 0.14f)
+    /** Hairlines: a tile's edge, a placeholder spine, a sheet's edge. The [main] ink at 8%. */
+    val inkEdge: Color = main.copy(alpha = 0.08f)
+    /** Opacity for carousel items two or more steps out (a Float, not a colour). */
+    val artFar: Float = 0.30f
+    /** The hint bar drawn over art. */
+    val scrimHints: Color = Color(0xCC000000)
+    /** The Game Switcher's bar. */
+    val scrimSwitcher: Color = Color(0xE6000000)
+    /** What dims a Backdrop screenshot. */
+    val scrimBackdrop: Color = Color(0xA6000000)
 }
 
 /**
