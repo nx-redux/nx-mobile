@@ -58,6 +58,7 @@ import com.nxredux.mobile.ui.nx.ModalKind
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxModal
 import com.nxredux.mobile.ui.nx.PadEvent
+import com.nxredux.mobile.ui.nx.PadMotion
 import com.nxredux.mobile.ui.nx.PadProfile
 import com.nxredux.mobile.ui.nx.PadTools
 import com.nxredux.mobile.ui.nx.VirtualPad
@@ -98,6 +99,8 @@ fun PadLayoutEditor(
     val colors = LocalNxColors.current
     val noPad: (PadEvent) -> Unit = {}
     val cStick: ((Float, Float) -> Unit)? = if (profile.cStick) { _, _ -> } else null
+    // The Wii's MOTION pill where the game draws it ([PadProfile.motionButton]), so the system rows are as wide.
+    val motion = remember(profile) { if (profile.motionButton) PadMotion(on = true, onTap = {}, onLongPress = {}) else null }
     var origin by remember { mutableStateOf(Offset.Zero) }   // the edit layer's root offset (0 in a full-screen host)
     var downAt by remember { mutableStateOf(Offset.Zero) }   // the current touch's first point, edit layer px
     var layerCentre by remember { mutableStateOf(Offset.Zero) }   // the edit layer's middle, edit layer px
@@ -115,7 +118,7 @@ fun PadLayoutEditor(
                 gameArea = PxRect(0f, split.gameTop, w, split.bandTop - split.gameTop)
                 Box(Modifier.placedPx(gameArea).background(GameBlock))
                 Box(Modifier.placedPx(PxRect(0f, split.bandTop, w, split.bandPx))) {
-                    VirtualPad(noPad, Modifier.fillMaxSize(), profile = profile, onCStick = cStick, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true)
+                    VirtualPad(noPad, Modifier.fillMaxSize(), profile = profile, onCStick = cStick, motion = motion, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true)
                 }
             }
             PadShape.OVERLAY -> {
@@ -123,11 +126,11 @@ fun PadLayoutEditor(
                 val secondRow = besideSecondRow(padTools, emptyMap(), placeholders = true)
                 val preview = besidePreview(
                     window?.screen ?: screenClass(w.roundToInt(), h.roundToInt(), (min(w, h) / d).toInt()), w, h, ydpi, d,
-                    window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, faceWidthUnits(profile), systemRowPills(profile, motion = false),
+                    window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, faceWidthUnits(profile), systemRowPills(profile, motion = motion != null),
                 )
                 gameArea = preview.picture
                 Box(Modifier.placedPx(gameArea).background(GameBlock))
-                BesidePad(profile, state, cStick, padTools, secondRow, preview)
+                BesidePad(profile, state, cStick, motion, padTools, secondRow, preview)
             }
         }
         // The edit layer: over the pads, takes every touch (taps select, drags move).
@@ -219,7 +222,7 @@ fun PadLayoutEditor(
  */
 @Composable
 private fun BoxScope.BesidePad(
-    profile: PadProfile, state: PadEditorState, cStick: ((Float, Float) -> Unit)?, padTools: PadTools?, secondRow: Boolean, preview: BesidePreview,
+    profile: PadProfile, state: PadEditorState, cStick: ((Float, Float) -> Unit)?, motion: PadMotion?, padTools: PadTools?, secondRow: Boolean, preview: BesidePreview,
 ) {
     val noPad: (PadEvent) -> Unit = {}
     val density = LocalDensity.current
@@ -230,7 +233,7 @@ private fun BoxScope.BesidePad(
     // Left first, as the game adds its views: the right half draws (and takes a touch) on top.
     VirtualPadLeft(
         noPad, { _, _ -> }, Modifier.align(Alignment.TopStart).then(box).padding(start = inset), profile = profile, overGame = true,
-        layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
+        motion = motion, layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
         besidePicture = true, unitOverride = unit, secondRow = secondRow,
     )
     VirtualPadRight(

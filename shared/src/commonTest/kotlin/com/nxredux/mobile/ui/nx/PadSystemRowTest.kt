@@ -108,6 +108,22 @@ class PadSystemRowTest {
         assertEquals(PadProfile.N3DS_NEW.toString(), PadProfile.forLayoutEditor("3DS").toString())
     }
 
+    // With the phone's motion sensors the editor's Wii pad draws MOTION as the Wiimote pads do in game: the left system
+    // row MENU STICK MOTION and the same pill count the game's reach is sized by.
+    @Test fun theLayoutEditorsWiiPadDrawsMotionWhereTheGameDoes() {
+        val withMotion = PadProfile.forLayoutEditor("WII", motion = true)
+        val without = PadProfile.forLayoutEditor("WII")
+        assertEquals(true, withMotion.motionButton)
+        assertEquals(false, without.motionButton)
+        assertEquals(true, withMotion.cStick)   // still the Classic Controller's groups
+        val game = PadProfile.forTag("WII", wii = WiiPad.SIDEWAYS)
+        assertEquals(padSystemRow(PadSide.LEFT, game, motion = true), padSystemRow(PadSide.LEFT, withMotion, motion = true))
+        assertEquals(listOf(PadSystemKey.MENU, PadSystemKey.TOGGLE, PadSystemKey.MOTION), padSystemRow(PadSide.LEFT, withMotion, motion = true))
+        assertEquals(listOf(PadSystemKey.MENU, PadSystemKey.TOGGLE), padSystemRow(PadSide.LEFT, without, motion = true))
+        assertEquals(systemRowPills(game, motion = true), systemRowPills(withMotion, motion = true))
+        assertEquals(false, PadProfile.forTag("WII", wii = WiiPad.CLASSIC).motionButton)   // in game the Classic has none
+    }
+
     @Test fun theWidestSystemRowCountsTheWiisThreePills() {
         val wii = PadProfile.forTag("WII", wii = WiiPad.SIDEWAYS)
         assertEquals(2, systemRowPills(PadProfile.STANDARD, motion = false))

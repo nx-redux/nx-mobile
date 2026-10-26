@@ -18,6 +18,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
+import com.nxredux.mobile.options.WiiOptions
+import com.nxredux.mobile.runner.MotionSensors
 import com.nxredux.mobile.runner.goImmersive
 import com.nxredux.mobile.runner.windowShape
 import com.nxredux.mobile.settings.AndroidAppSettings
@@ -54,8 +56,10 @@ class PadLayoutActivity : ComponentActivity() {
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "Shared"
         val settings = AndroidAppSettings(this)
         // The fullest pad a console's games can show, so every group is placeable: the New 3DS pad (C-stick, ZL / ZR),
-        // and a Sega console's 6-button pad (each game picks 3 or 6 buttons itself; the layout is the console's).
-        val profile = if (tag.isEmpty()) PadProfile.STANDARD else PadProfile.forLayoutEditor(tag)
+        // a Sega console's 6-button pad (each game picks 3 or 6 buttons itself; the layout is the console's), and the
+        // Wii's MOTION where the phone has the sensors its Wiimote games draw it for.
+        val motion = WiiOptions.appliesTo(tag) && MotionSensors(this) { _, _ -> }.hasSensors
+        val profile = if (tag.isEmpty()) PadProfile.STANDARD else PadProfile.forLayoutEditor(tag, motion)
         val screen = PadScreen.entries.firstOrNull { it.name == intent.getStringExtra(EXTRA_SCREEN) } ?: PadScreen.NARROW
         slot = PadSlot(shape, screen)
         editor = PadEditorState(PadLayouts.startingLayout(settings.padLayouts, key, slot), besidePicture = shape == PadShape.OVERLAY)
