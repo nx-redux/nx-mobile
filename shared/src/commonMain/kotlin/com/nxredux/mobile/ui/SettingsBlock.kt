@@ -61,8 +61,11 @@ fun settingsGutter(c: SettingsSizeClass): Dp = when (c) {
     SettingsSizeClass.TABLET -> 48.dp
 }
 
-/** A section word's size: 24 sp on a phone held upright, else 26 sp (before Appearance → Text size). */
-fun settingsSectionSize(c: SettingsSizeClass): TextUnit = if (c == SettingsSizeClass.PHONE_UPRIGHT) 24.sp else 26.sp
+/** A section word's size on every screen, upright or not (before Appearance → Text size). */
+val SETTINGS_SECTION_SIZE: TextUnit = 26.sp
+
+/** The Back word's size, a step under the sections' (before Appearance → Text size). */
+val SETTINGS_BACK_SIZE: TextUnit = 24.sp
 
 /** The rows block's left edge on a wide window, as a share of the width. */
 const val SETTINGS_ROWS_LEFT = 0.44f
@@ -92,8 +95,8 @@ internal fun settingsSizeClass(): SettingsSizeClass = LocalWindowSize.current.le
 
 /**
  * The Settings section block: "Settings" in hint at 13 sp, 6 dp above the sections; the sections at
- * [settingsSectionSize], one per 1.2 line, the [current] one in the accent (the [main][com.nxredux.mobile.ui.nx.NxColors.main]
- * ink while [rowsFocused]) and the rest inkDim; then, one pitch below the last, "Back" in inkDim ([onBack] null: none).
+ * [SETTINGS_SECTION_SIZE], one per 1.2 line, the [current] one in the accent (the [main][com.nxredux.mobile.ui.nx.NxColors.main]
+ * ink while [rowsFocused]) and the rest inkDim; then, one pitch below the last, "Back" in inkDim at [SETTINGS_BACK_SIZE] ([onBack] null: none).
  * No pill, no underline, no plate; it never scrolls. A tap on a section calls [onTap] with its index.
  */
 @Composable
@@ -121,18 +124,18 @@ fun SettingsSectionBlock(
         }
         if (onBack != null) {
             Spacer(Modifier.height(pitchDp))
-            SettingsWord("Back", colors.inkDim, wordStyle, onBack)
+            SettingsWord("Back", colors.inkDim, settingsWordStyle(SETTINGS_BACK_SIZE), onBack)
         }
     }
 }
 
 /**
- * A section word's style: [settingsSectionSize] (Appearance → Text size), letter spacing −0.01 em, on a 1.2 line box
- * with the word centred in it, so each word is one pitch.
+ * A block word's style: [base] (a section's [SETTINGS_SECTION_SIZE], or Back's [SETTINGS_BACK_SIZE]) under Appearance →
+ * Text size, letter spacing −0.01 em, on a 1.2 line box with the word centred in it, so each word is one pitch.
  */
 @Composable
-private fun settingsWordStyle(): TextStyle {
-    val size = settingsSectionSize(settingsSizeClass()).pinned() * nxTextScale()
+private fun settingsWordStyle(base: TextUnit = SETTINGS_SECTION_SIZE): TextStyle {
+    val size = base.pinned() * nxTextScale()
     val pitch = size * SETTINGS_SECTION_LINE
     return TextStyle(
         fontFamily = LocalNxFont.current, fontSize = size, letterSpacing = (-0.01).em, lineHeight = pitch,
@@ -255,10 +258,9 @@ fun SettingsRowsBlock(
         header?.invoke()
         Box(Modifier.fillMaxWidth().weight(1f, fill = false)) { rows() }
         mode.onBack?.let { back ->
-            // The section block's Back: inkDim at the section size, one pitch under the rows, level with the row labels.
-            val style = settingsWordStyle()
-            Spacer(Modifier.height(settingsWordPitch(style)))
-            Box(Modifier.padding(start = nxListInset())) { SettingsWord("Back", colors.inkDim, style, back) }
+            // The section block's Back: inkDim at [SETTINGS_BACK_SIZE], one section pitch under the rows, level with the row labels.
+            Spacer(Modifier.height(settingsWordPitch(settingsWordStyle())))
+            Box(Modifier.padding(start = nxListInset())) { SettingsWord("Back", colors.inkDim, settingsWordStyle(SETTINGS_BACK_SIZE), back) }
         }
     }
 }

@@ -23,10 +23,10 @@ class SettingsBlockTest {
         assertEquals(48.dp, settingsGutter(SettingsSizeClass.TABLET))
     }
 
+    // One size on every screen, a phone held upright too.
     @Test fun sectionSize() {
-        assertEquals(24.sp, settingsSectionSize(SettingsSizeClass.PHONE_UPRIGHT))
-        assertEquals(26.sp, settingsSectionSize(SettingsSizeClass.PHONE_LANDSCAPE))
-        assertEquals(26.sp, settingsSectionSize(SettingsSizeClass.TABLET))
+        assertEquals(26.sp, SETTINGS_SECTION_SIZE)
+        assertEquals(24.sp, SETTINGS_BACK_SIZE)   // Back a step smaller
     }
 
     @Test fun backOnlyInTouchMode() {
