@@ -35,11 +35,18 @@ fun overlayHeightPx(bandUnitPx: Float, bandWidthUnits: Float, bandHeightUnits: F
         2f * LayoutConstants.CLUSTER_PADDING_DP * density
 
 /**
- * Height of the space the picture may use with the band hidden: the overlay of [overlayH] may cover the bottom
- * [LayoutConstants.HIDDEN_BAND_REACH] of itself with the picture, so only the rest is taken from [areaH].
+ * Height of the space the picture may use with the band hidden: the overlay of [overlayH] may cover the bottom [reach]
+ * of itself with the picture ([hiddenBandReach]), so only the rest is taken from [areaH].
  */
-fun hiddenSpaceHeight(areaH: Float, overlayH: Float): Float =
-    areaH - (1f - LayoutConstants.HIDDEN_BAND_REACH) * overlayH
+fun hiddenSpaceHeight(areaH: Float, overlayH: Float, reach: Float = LayoutConstants.HIDDEN_BAND_REACH): Float =
+    areaH - (1f - reach) * overlayH
+
+/**
+ * How far into the hidden band's overlay a [ds] game's picture may reach, as a share of the overlay's height: a third
+ * for the DS / 3DS ([LayoutConstants.DS_HIDDEN_BAND_REACH]), a quarter for the rest (tall arcade, WonderSwan, Lynx).
+ */
+fun hiddenBandReach(ds: Boolean): Float =
+    if (ds) LayoutConstants.DS_HIDDEN_BAND_REACH else LayoutConstants.HIDDEN_BAND_REACH
 
 /**
  * Top of a picture [pictureH] tall in [areaH] with an overlay of [overlayH] at the bottom: 0 when it reaches into

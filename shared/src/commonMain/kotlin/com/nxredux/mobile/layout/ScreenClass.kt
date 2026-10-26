@@ -26,6 +26,8 @@ object LayoutConstants {
     const val EDGE_NUDGE_UNITS = 0.2f
     const val REFERENCE_LINES = 224
     const val HIDDEN_BAND_REACH = 0.25f
+    /** DS / 3DS: a third, so the Fold's Large screen reaches 6x + 3x; the touch screen sits between the pad's corners. */
+    const val DS_HIDDEN_BAND_REACH = 1f / 3f
 
     /** The half-folded DS pad unit: the Fold cover screen's (1248 - 2 x 16 dp x 2.625) / 9 = 129.3 px at 428 dpi, about 7.67 mm. */
     const val TABLETOP_DS_UNIT_MM = 7.7f

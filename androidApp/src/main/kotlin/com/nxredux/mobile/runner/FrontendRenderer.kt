@@ -33,6 +33,8 @@ import com.nxredux.mobile.layout.setAsidePx
 import com.nxredux.mobile.options.BRICK_HEIGHT
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.NdsOptions
+import com.nxredux.mobile.layout.hiddenBandReach
+import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.OverlayFile
@@ -441,7 +443,8 @@ internal class FrontendRenderer(
         val screen = shape.screenClass
         val overlayH = padLayout.hiddenOverlayHeightPx()
         val setAside = pad?.let { setAsidePx(screen, it.reach) } ?: 0f
-        val space = pictureSpace(room, w, h, setAside, overlayH)
+        // The DS / 3DS may reach a third into the hidden band's overlay (the Fold's 6x + 3x), the rest a quarter.
+        val space = pictureSpace(room, w, h, setAside, overlayH, hiddenBandReach(NdsOptions.appliesTo(gameTag) || N3dsOptions.appliesTo(gameTag)))
         val tabletop = tabletopDsLayout(shape, g)
         val nds = tabletop?.regions ?: ndsLayout(w, h, g, space, room, overlayH, screen) ?: n3dsSplitLayout(w, h)
         // An area too small for one DS screen pixel (NdsLayout returns no regions) is only ever a transient mid-resize
