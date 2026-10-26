@@ -166,4 +166,18 @@ class TabletopDsTest {
             assertTrue(p.bottom.x + p.bottom.width <= 1848f - aside, "$kind right")
         }
     }
+
+    @Test
+    fun editor_preview_draws_the_game_layout_at_the_fold() {
+        val pv = assertNotNull(
+            halfFoldedPreview(1848f, 2448f, ScreenClass.NEAR_SQUARE_TABLET, 0f, 404.6f, 2.625f, 0f, 0f, true, 3.3f, 2, DsKind.DS),
+        )
+        assertEquals(1224f, pv.hingeY)
+        assertEquals(1224f, pv.placement.top.y + pv.placement.top.height)
+        assertEquals(1224f, pv.placement.bottom.y)
+        assertTrue(pv.boxes.topMarginPx >= 1224 && pv.boxes.topMarginPx + pv.boxes.heightPx <= 2448)
+        assertEquals(tabletopDsUnitPx(404.6f, 2.625f), pv.unitPx)
+        // A phone-shaped window still gets the halves (laid out as a tablet-class one).
+        assertNotNull(halfFoldedPreview(1080f, 2400f, ScreenClass.REGULAR_PHONE, 0f, 400f, 2.625f, 0f, 0f, true, 3.3f, 2, DsKind.N3DS))
+    }
 }

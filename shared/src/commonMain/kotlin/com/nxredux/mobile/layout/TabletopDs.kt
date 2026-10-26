@@ -5,6 +5,7 @@ import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.runner.NdsLayout
 import kotlin.math.floor
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** Which two-screen console a half-folded layout is for. */
 enum class DsKind { DS, N3DS }
@@ -143,3 +144,59 @@ private fun centred(space: PxRect, w: Float, h: Float) =
         w,
         h,
     )
+
+/**
+ * The half-folded DS / 3DS pad halves' boxes, px of a root that fills the window: each [widthPx] x [heightPx] at
+ * [topMarginPx] from the top, against its own side edge (the right half mirrors the left); [insetPx] moves the buttons
+ * in from that edge.
+ */
+data class TabletopDsPadBoxes(val widthPx: Int, val heightPx: Int, val topMarginPx: Int, val insetPx: Float)
+
+/**
+ * The pad halves' boxes for placement [p] (window px) in a root [rootH] tall, kept inside it; null when [p] has no
+ * halves (a controller, or both screens stacked above the hinge with the portrait pad below).
+ */
+fun tabletopDsPadBoxes(p: TabletopDsPlacement, rootH: Int): TabletopDsPadBoxes? {
+    val half = p.left ?: return null
+    val h = half.boxHeightPx.roundToInt().coerceAtMost(rootH)
+    val top = half.topMarginPx.roundToInt().coerceIn(0, rootH - h)
+    return TabletopDsPadBoxes(half.boxWidthPx.roundToInt(), h, top, half.extraInsetPx)
+}
+
+/**
+ * The Pad layout editor's half-folded preview on its window: the screens' [placement], the [hingeY] it splits at, the
+ * pad's [unitPx] (the cover screen's button size) and the halves' [boxes].
+ */
+data class HalfFoldedPreview(val placement: TabletopDsPlacement, val hingeY: Float, val unitPx: Float, val boxes: TabletopDsPadBoxes)
+
+/**
+ * The half-folded DS / 3DS layout as the game draws it ([tabletopDs], [tabletopDsPadBoxes]) on a [windowW] x [windowH]
+ * editor window folded at its middle, for the Pad layout editor, which runs no game: [kind]'s screens, the estimated
+ * reach (nothing is measured there), no controller. A phone-shaped [screen] is laid out as a tablet-class one, so the
+ * halves always show. Null when the window has no room for them. Arguments as [besideMeasures].
+ */
+fun halfFoldedPreview(
+    windowW: Float,
+    windowH: Float,
+    screen: ScreenClass,
+    cutoutTop: Float,
+    ydpi: Float,
+    density: Float,
+    cutoutLeft: Float,
+    cutoutRight: Float,
+    secondRow: Boolean,
+    faceUnits: Float,
+    systemPills: Int,
+    kind: DsKind,
+): HalfFoldedPreview? {
+    val unit = tabletopDsUnitPx(ydpi, density)
+    val r = reach(unit, density, cutoutLeft, cutoutRight, null, faceUnits, systemPills)
+    val hinge = (windowH / 2f).roundToInt()
+    val tablet = if (screen.isTablet) screen else ScreenClass.NEAR_SQUARE_TABLET
+    val p = tabletopDs(
+        windowW.roundToInt(), windowH.roundToInt(), tablet, cutoutTop.roundToInt(), hinge, hinge, kind, unit, r, density,
+        controller = false, secondRow = secondRow,
+    )
+    val boxes = tabletopDsPadBoxes(p, windowH.roundToInt()) ?: return null
+    return HalfFoldedPreview(p, hinge.toFloat(), unit, boxes)
+}

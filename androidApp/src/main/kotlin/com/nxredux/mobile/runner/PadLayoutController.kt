@@ -55,6 +55,7 @@ import com.nxredux.mobile.layout.hideOffered
 import com.nxredux.mobile.layout.overlayHeightPx
 import com.nxredux.mobile.layout.reach
 import com.nxredux.mobile.layout.tabletopDs
+import com.nxredux.mobile.layout.tabletopDsPadBoxes
 import com.nxredux.mobile.layout.tabletopDsUnitPx
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
@@ -392,7 +393,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val halfW = (root.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels) / 2
         clustersSolid.value = false
         clusterViews = addClusterHalves(
-            root,
+            root, padLayout(PadShape.OVERLAY),
             FrameLayout.LayoutParams(halfW, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.START or Gravity.BOTTOM),
             FrameLayout.LayoutParams(halfW, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.END or Gravity.BOTTOM),
         )
@@ -408,8 +409,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      * [clusterUnitPx] and [clusterSecondRow], their drawn groups reported to [measured]. Their buttons take their own
      * touches; the gaps pass to the game below.
      */
-    private fun addClusterHalves(root: FrameLayout, leftLp: FrameLayout.LayoutParams, rightLp: FrameLayout.LayoutParams): Pair<ComposeView, ComposeView> {
-        val overlayLayout = padLayout(PadShape.OVERLAY)
+    private fun addClusterHalves(root: FrameLayout, overlayLayout: PadLayout, leftLp: FrameLayout.LayoutParams, rightLp: FrameLayout.LayoutParams): Pair<ComposeView, ComposeView> {
         val generation = ++clusterGeneration
         measured.clear()
         // Each half reports its groups as drawn (Pad layout editor moves included); an old pad's last reports are ignored.
@@ -448,7 +448,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         if (tabletopDsPlacement(shape, tt).left == null) return
         fun lp(side: Int) = FrameLayout.LayoutParams(0, 0, side or Gravity.TOP)
         clustersSolid.value = true   // before they compose: the first frame is already solid
-        tabletopDsViews = addClusterHalves(root, lp(Gravity.START), lp(Gravity.END))
+        // Controls → Pad layout's Half-folded layout: the halves' own moves, apart from the landscape pad's.
+        tabletopDsViews = addClusterHalves(root, padLayout(PadShape.HALF_FOLDED), lp(Gravity.START), lp(Gravity.END))
         val pad = tabletopDsPad(shape)
         clusterUnitPx.value = pad.unitPx
         clusterSecondRow.value = pad.secondRow

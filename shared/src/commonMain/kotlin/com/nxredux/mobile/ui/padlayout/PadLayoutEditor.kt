@@ -44,6 +44,10 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.layout.BesidePreview
+import com.nxredux.mobile.layout.DsKind
+import com.nxredux.mobile.layout.HalfFoldedPreview
+import com.nxredux.mobile.layout.halfFoldedPreview
+import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.layout.besidePreview
 import com.nxredux.mobile.layout.portraitSplit
@@ -72,6 +76,7 @@ import kotlin.math.roundToInt
 
 private val GameBlock = Color(0xFF3A3A3A)
 private val OverlapRed = Color(0xFFE5484D)
+private val HingeLine = Color(0xFF6A6A6A)
 private val HandleRadius = 11.dp
 private val HandleHit = 28.dp   // a touch this near the handle resizes rather than moves
 
@@ -89,7 +94,9 @@ data class PadEditorWindow(val screen: ScreenClass, val ydpi: Float, val cutoutT
  * touch. [onClose] leaves without saving (after "Discard changes?" when something changed).
  * Both shapes are laid out as the game lays them out on this [window] (null: from the editor's size alone): portrait's
  * band at the game's height under its game area ([portraitSplit]); landscape's halves beside the picture of [consoleTag]'s
- * console ([besidePreview]; a typical one for the Shared layout), with STYLUS / SWAP when the console has them ([tools]).
+ * console ([besidePreview]; a typical one for the Shared layout), with STYLUS / SWAP when the console has them ([tools]);
+ * half-folded, the DS / 3DS top screen above a hinge line at the window's middle and the touch screen with the two halves
+ * below it ([halfFoldedPreview]; the 3DS's screens for a 3DS [consoleTag], else the DS's).
  */
 @Composable
 fun PadLayoutEditor(
@@ -132,6 +139,23 @@ fun PadLayoutEditor(
                 gameArea = preview.picture
                 Box(Modifier.placedPx(gameArea).background(GameBlock))
                 BesidePad(profile, state, cStick, motion, padTools, secondRow, preview)
+            }
+            PadShape.HALF_FOLDED -> {
+                val padTools = remember(tools) { if (tools) PadTools(stylusOn = false, onStylus = {}, onSwap = {}) else null }
+                val secondRow = besideSecondRow(padTools, emptyMap(), placeholders = true)
+                val kind = if (N3dsOptions.appliesTo(consoleTag)) DsKind.N3DS else DsKind.DS
+                val preview = halfFoldedPreview(
+                    w, h, window?.screen ?: screenClass(w.roundToInt(), h.roundToInt(), (min(w, h) / d).toInt()), window?.cutoutTop ?: 0f,
+                    ydpi, d, window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, faceWidthUnits(profile),
+                    systemRowPills(profile, motion = motion != null), kind,
+                )
+                gameArea = preview?.placement?.top ?: PxRect(0f, 0f, w, h / 2f)
+                if (preview != null) {
+                    Box(Modifier.placedPx(preview.placement.top).background(GameBlock))
+                    Box(Modifier.placedPx(preview.placement.bottom).background(GameBlock))
+                    Box(Modifier.placedPx(PxRect(0f, preview.hingeY - d, w, 2f * d)).background(HingeLine))
+                    HalfFoldedPad(profile, state, cStick, motion, padTools, secondRow, preview)
+                }
             }
         }
         // The edit layer: over the pads, takes every touch (taps select, drags move).
@@ -205,7 +229,7 @@ fun PadLayoutEditor(
         Box(Modifier.placedPx(gameArea)) {
             EditorToolbar(
                 title, shape, state, screenSize, onSave = { onSave(state.layout) }, onCancel = { if (state.requestCancel()) onClose() },
-                Modifier.align(if (shape == PadShape.OVERLAY) Alignment.Center else Alignment.BottomCenter),
+                Modifier.align(if (shape == PadShape.PORTRAIT) Alignment.BottomCenter else Alignment.Center),
             )
         }
         if (state.confirmDiscard) {
@@ -232,6 +256,32 @@ private fun BoxScope.BesidePad(
     val inset = with(density) { p.extraInsetPx.toDp() }
     val box = Modifier.offset { IntOffset(0, p.topMarginPx.roundToInt()) }.sizePx(p.boxWidthPx.roundToInt(), p.boxHeightPx.roundToInt())
     // Left first, as the game adds its views: the right half draws (and takes a touch) on top.
+    VirtualPadLeft(
+        noPad, { _, _ -> }, Modifier.align(Alignment.TopStart).then(box).padding(start = inset), profile = profile, overGame = true,
+        motion = motion, layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
+        besidePicture = true, unitOverride = unit, secondRow = secondRow,
+    )
+    VirtualPadRight(
+        noPad, Modifier.align(Alignment.TopEnd).then(box).padding(end = inset), profile = profile, overGame = true, onCStick = cStick,
+        layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
+        besidePicture = true, unitOverride = unit, secondRow = secondRow,
+    )
+}
+
+/**
+ * The half-folded pad as the game draws it below the hinge ([preview]): its cover-size unit, both halves in their boxes
+ * at the side edges beside the touch screen, solid.
+ */
+@Composable
+private fun BoxScope.HalfFoldedPad(
+    profile: PadProfile, state: PadEditorState, cStick: ((Float, Float) -> Unit)?, motion: PadMotion?, padTools: PadTools?, secondRow: Boolean, preview: HalfFoldedPreview,
+) {
+    val noPad: (PadEvent) -> Unit = {}
+    val density = LocalDensity.current
+    val b = preview.boxes
+    val unit = with(density) { preview.unitPx.toDp() }
+    val inset = with(density) { b.insetPx.toDp() }
+    val box = Modifier.offset { IntOffset(0, b.topMarginPx) }.sizePx(b.widthPx, b.heightPx)
     VirtualPadLeft(
         noPad, { _, _ -> }, Modifier.align(Alignment.TopStart).then(box).padding(start = inset), profile = profile, overGame = true,
         motion = motion, layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,

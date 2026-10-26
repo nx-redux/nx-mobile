@@ -197,7 +197,11 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "size keeps its own layouts; the page edits the screen you are on.",
     )
     SettingsKind.PAD_LAYOUT_SHAPE -> quiet(
-        if (row.padShape == PadShape.OVERLAY) "Edit the buttons beside a landscape game" else "Edit the pad below the screen in portrait",
+        when (row.padShape) {
+            PadShape.OVERLAY -> "Edit the buttons beside a landscape game"
+            PadShape.HALF_FOLDED -> "Edit the DS / 3DS buttons beside the touch screen half-folded"
+            else -> "Edit the pad below the screen in portrait"
+        },
     )
     SettingsKind.PAD_LAYOUT_RESET -> SettingText("Resets its layouts on this screen", "Put the chosen console's layouts on this screen back")
     SettingsKind.SHORTCUTS -> quiet(

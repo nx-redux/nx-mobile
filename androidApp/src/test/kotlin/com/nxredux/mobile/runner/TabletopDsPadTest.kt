@@ -4,6 +4,7 @@ import com.nxredux.mobile.layout.DsKind
 import com.nxredux.mobile.layout.Reach
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.layout.tabletopDs
+import com.nxredux.mobile.layout.tabletopDsPadBoxes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
