@@ -207,8 +207,12 @@ class AndroidAppSettings(context: Context) : AppSettings {
         set(value) = prefs.edit { putString(KEY_PAD_VIBRATION, value.name) }
 
     override var padLayouts: PadLayoutMap
-        get() = PadLayouts.decode(prefs.getString(KEY_PAD_LAYOUTS, null))
-        set(value) = prefs.edit { if (value.isEmpty()) remove(KEY_PAD_LAYOUTS) else putString(KEY_PAD_LAYOUTS, PadLayouts.encode(value)) }
+        // The old key's landscape moves are dropped on read until the first save writes the versioned key ([PadLayouts.decodeStored]).
+        get() = PadLayouts.decodeStored(prefs.getString(KEY_PAD_LAYOUTS_V2, null), prefs.getString(KEY_PAD_LAYOUTS_V1, null))
+        set(value) = prefs.edit {
+            remove(KEY_PAD_LAYOUTS_V1)
+            putString(KEY_PAD_LAYOUTS_V2, PadLayouts.encode(value))
+        }
 
     override var shortcuts: String
         get() = prefs.getString(KEY_SHORTCUTS, null).orEmpty()
@@ -336,7 +340,9 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_GAME_LIST_LAYOUT_OPTIONS = "game_list_layout_options"
         private const val KEY_GAME_LIST_ACHIEVEMENTS_PANEL = "game_list_achievements_panel"
         private const val KEY_PAD_VIBRATION = "pad_vibration"
-        private const val KEY_PAD_LAYOUTS = "pad_layouts"
+        /** Pad layouts before the landscape pad moved beside the picture: read once ([padLayouts]), dropped on save. */
+        private const val KEY_PAD_LAYOUTS_V1 = "pad_layouts"
+        private const val KEY_PAD_LAYOUTS_V2 = "pad_layouts_v2"
         private const val KEY_SHORTCUTS = "shortcuts"
         private const val KEY_GAME_RUMBLE = "game_rumble"
         private const val KEY_DEBUG_LOG = "debug_log"

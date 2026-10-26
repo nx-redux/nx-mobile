@@ -179,4 +179,29 @@ class PadLayoutsTest {
         assertEquals(GroupTweak(dx = 1f), PadLayouts.own(all, "gba", OVERLAY)?.tweaks?.get(PadGroup.SHORTCUT_2))
         assertEquals(all, PadLayouts.decode(PadLayouts.encode(all)))
     }
+
+    @Test fun the_old_line_loses_its_landscape_moves_once_and_keeps_the_rest() {
+        val overlayWide = PadSlot(PadShape.OVERLAY, PadScreen.WIDE)
+        val before: PadLayoutMap = mapOf(
+            PadLayouts.SHARED_KEY to mapOf(PORTRAIT to shared, OVERLAY to shared, overlayWide to n64),
+            "n64" to mapOf(PORTRAIT_WIDE to n64, OVERLAY to n64),
+            "gba" to mapOf(OVERLAY to PadLayout.EMPTY),           // an explicit landscape default: not a move, kept
+            "snes" to mapOf(OVERLAY to n64),                      // only landscape moves: the console goes
+        )
+        val migrated = PadLayouts.decodeStored(current = null, beforeBeside = PadLayouts.encode(before))
+        assertEquals(
+            mapOf(
+                PadLayouts.SHARED_KEY to mapOf(PORTRAIT to shared),
+                "n64" to mapOf(PORTRAIT_WIDE to n64),
+                "gba" to mapOf(OVERLAY to PadLayout.EMPTY),
+            ),
+            migrated,
+        )
+        // Once the versioned line is written it is read as is: a landscape move made since stays, the old line is ignored.
+        val since = PadLayouts.withLayout(migrated, PadLayouts.SHARED_KEY, OVERLAY, n64)
+        assertEquals(since, PadLayouts.decodeStored(current = PadLayouts.encode(since), beforeBeside = PadLayouts.encode(before)))
+        // Everything cleared since: an empty versioned line, not the old one.
+        assertEquals(emptyMap(), PadLayouts.decodeStored(current = "", beforeBeside = PadLayouts.encode(before)))
+        assertEquals(emptyMap(), PadLayouts.decodeStored(current = null, beforeBeside = null))
+    }
 }

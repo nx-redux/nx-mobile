@@ -133,6 +133,23 @@ object PadLayouts {
     fun isCustom(all: PadLayoutMap): Boolean = all.values.any { slots -> slots.values.any { it.tweaks.isNotEmpty() } }
 
     /**
+     * The stored layouts from [current] (the versioned line, written by every save since the landscape pad moved beside
+     * the picture) or, before the first such save, from [beforeBeside] with [withoutLandscapeMoves]: those moves were
+     * made against the old overlay's spots, so they would land elsewhere now. Once [current] is written the old line is
+     * never read again, so this happens once.
+     */
+    fun decodeStored(current: String?, beforeBeside: String?): PadLayoutMap =
+        if (current != null) decode(current) else withoutLandscapeMoves(decode(beforeBeside))
+
+    /**
+     * [all] without its landscape ([PadShape.OVERLAY]) moves and sizes, every screen; portrait layouts and a console's
+     * explicit landscape default (an empty layout) stay.
+     */
+    fun withoutLandscapeMoves(all: PadLayoutMap): PadLayoutMap = all.mapValues { (_, slots) ->
+        slots.filter { (slot, layout) -> slot.shape != PadShape.OVERLAY || layout.tweaks.isEmpty() }
+    }.filterValues { it.isNotEmpty() }
+
+    /**
      * One line per tweak: `key TAB SLOT TAB GROUP TAB dx TAB dy TAB scale` (SLOT: [PadSlot.code]); a console's explicit
      * default (an empty layout) is one line `key TAB SLOT TAB -`.
      */
