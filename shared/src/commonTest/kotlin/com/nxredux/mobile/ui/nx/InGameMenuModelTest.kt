@@ -13,6 +13,7 @@ import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.SpeedOptions
+import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsView
 import com.nxredux.mobile.shortcuts.ConsoleHotkeys
@@ -1498,6 +1499,53 @@ class InGameMenuModelTest {
         // Turned to portrait: the landscape row is no longer listed, so its strip closes back onto Console Settings.
         m.ndsView = NdsView(landscape = false, controllerMode = false)
         assertEquals(PageKind.ConsoleSettings, m.state.page.kind)
+    }
+
+    private fun InGameMenuModel.open3dsConsoleSettings(values: Map<String, String> = FrontendOptions.defaults("3DS")): InGameMenuModel {
+        setFrontend(values, emptyList(), emptySet(), "3DS", overlayAvailable = false)
+        select(3); activate(3)
+        assertNull(activate(0))
+        assertEquals(PageKind.ConsoleSettings, state.page.kind)
+        return this
+    }
+
+    @Test fun n3dsLayoutRowsFollowTheView() {
+        val m = model()
+        m.ndsView = NdsView(landscape = true, controllerMode = false)
+        m.open3dsConsoleSettings()
+        val labels = { m.state.page.rows.map { it.label } }
+        assertTrue("Layout (landscape)" in labels())
+        assertTrue("Layout (portrait)" !in labels() && "Layout (portrait, controller)" !in labels())
+        m.ndsView = NdsView(landscape = false, controllerMode = true)
+        assertTrue("Layout (portrait, controller)" in labels())
+        assertTrue("Layout (portrait)" !in labels() && "Layout (landscape)" !in labels())
+        assertTrue("3D Resolution" in labels())
+    }
+
+    @Test fun n3dsAdjustStripOnTheLandscapeRowClosesInPortrait() {
+        val m = model()
+        m.ndsView = NdsView(landscape = true, controllerMode = false)
+        m.open3dsConsoleSettings()
+        m.select(m.state.page.rows.indexOfFirst { it.label == "Layout (landscape)" })
+        m.press(NxButton.A)
+        assertTrue(m.state.page.kind is PageKind.Adjust)
+        m.ndsView = NdsView(landscape = false, controllerMode = false)
+        assertEquals(PageKind.ConsoleSettings, m.state.page.kind)
+    }
+
+    @Test fun n3dsModeRowShowsTheValueInUseAndSwapsScaleRows() {
+        val m = model().open3dsConsoleSettings()
+        m.setNds3d(3, false)
+        assertEquals("Auto · 3x now", m.row3d("3D Resolution").valueLabel)
+        assertTrue("Max Scale" in m.state.page.rows.map { it.label })
+        m.setFrontend(FrontendOptions.defaults("3DS") + ("nx_3ds_3d_resolution" to "quality"), emptyList(), emptySet(), "3DS")
+        assertEquals("Quality · 3x now", m.row3d("3D Resolution").valueLabel)
+        m.setFrontend(FrontendOptions.defaults("3DS") + ("nx_3ds_3d_resolution" to "performance"), emptyList(), emptySet(), "3DS")
+        assertEquals("Performance", m.row3d("3D Resolution").valueLabel)
+        assertTrue("Scale" in m.state.page.rows.map { it.label } && "Max Scale" !in m.state.page.rows.map { it.label })
+        // Software is DS-only: the 3DS rows stay live.
+        m.setNds3d(3, true)
+        assertTrue(m.row3d("3D Resolution").choices.isNotEmpty())
     }
 
     private fun InGameMenuModel.row3d(label: String) = state.page.rows.filterIsInstance<MenuRow.Option>().single { it.label == label }

@@ -140,6 +140,15 @@ object N3dsOptions {
         else -> LAYOUT_PORTRAIT
     }
 
+    /**
+     * The running game's 3DS rows of [rows]: only the layout row in use on [view] ([layoutKey]) among the three layout rows.
+     * The rest pass through. Game Settings and Emulator Settings keep every row: they set up every orientation at once.
+     */
+    fun inGameRows(rows: List<FrontendOption>, view: NdsView): List<FrontendOption> {
+        val active = layoutKey(view.landscape, view.controllerMode)
+        return rows.filter { it.key !in OLD_LAYOUT_KEYS || it.key == active }
+    }
+
     /** The app's layout for the row in use on [screen]: the pick (old keys read too), else the screen's [defaultLayout]. */
     fun appLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): String =
         layoutValue(values, layoutKey(landscape, controllerMode)) ?: defaultLayout(screen, landscape)

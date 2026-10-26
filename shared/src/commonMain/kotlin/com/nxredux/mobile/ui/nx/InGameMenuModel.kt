@@ -15,11 +15,13 @@ import com.nxredux.mobile.options.CoreOption
 import com.nxredux.mobile.options.CoreOptionFilter
 import com.nxredux.mobile.options.FrontendOption
 import com.nxredux.mobile.options.FrontendOptions
+import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsView
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.shownFor
 import com.nxredux.mobile.runner.Nds3dMode
+import com.nxredux.mobile.runner.Res3dConsole
 import com.nxredux.mobile.settings.stepFrom
 import com.nxredux.mobile.shaders.ShaderParam
 import com.nxredux.mobile.shortcuts.CaptureResult
@@ -309,7 +311,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     var screen: ScreenClass? = null
 
     /**
-     * The biggest DS 3D scale this display reaches (null: unknown): the 3D Resolution rows offer scales up to it. Set before
+     * The biggest DS or 3DS 3D scale this display reaches (null: unknown): the 3D Resolution rows offer scales up to it. Set before
      * the menu's pages are built; a change while open (a rotation, a fold) rebuilds open Console Settings/Frontend/Adjust pages.
      */
     var displayMax3d: Int? = null
@@ -320,8 +322,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         }
 
     /**
-     * How the running DS game is shown (null: unknown, not a DS game): Console Settings then lists only the layout row in
-     * use and the inset rows only in Picture in picture ([NdsOptions.inGameRows]). A change while open (a rotation, a
+     * How the running DS or 3DS game is shown (null: unknown, neither): Console Settings then lists only the layout row in
+     * use ([NdsOptions.inGameRows], [N3dsOptions.inGameRows]) and, on the DS, the inset rows only in Picture in picture. A change while open (a rotation, a
      * controller) rebuilds the open pages.
      */
     var ndsView: NdsView? = null
@@ -335,7 +337,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var nds3dSoftware = false            // the core renders in software: the 3D Resolution rows take no effect
 
     /**
-     * The DS 3D scale in use ([now], null: unknown) and whether the core renders in [software] (the 3D Resolution rows are
+     * The DS or 3DS 3D scale in use ([now], null: unknown) and whether the core renders in [software] (DS only: the 3D Resolution rows are
      * then static, with a note). Refreshes open Console Settings/Frontend/Adjust pages.
      */
     fun setNds3d(now: Int?, software: Boolean) {
@@ -1423,7 +1425,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         it.key !in frontendLocked && !it.atLaunch && (secondConnected || it.key != BottomScreenOptions.KEY)
     }.shownFor(frontend).let { rows ->
         val view = ndsView
-        if (view != null && NdsOptions.appliesTo(frontendTag)) NdsOptions.inGameRows(rows, frontend, view, screen) else rows
+        when {
+            view == null -> rows
+            NdsOptions.appliesTo(frontendTag) -> NdsOptions.inGameRows(rows, frontend, view, screen)
+            N3dsOptions.appliesTo(frontendTag) -> N3dsOptions.inGameRows(rows, view)
+            else -> rows
+        }
     }.map { ConsoleSettings.fitted(it, frontend[it.key] ?: it.default).first }
 
     private fun frontendPage() = MenuPage(
@@ -1485,7 +1492,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             val values = if (o.key == FrontendOptions.OVERLAY) FrontendOptions.choices(o.key, overlays) else o.values
             // The row's brief line (none: compact); the full text in its info popup.
             val now = nds3dNow
-            val shown = if (o.key == NdsOptions.MODE_3D && now != null && value != Nds3dMode.PERFORMANCE.value) "${o.labelOf(value)} · ${now}x now" else o.labelOf(value)
+            val shown = if (o.key == Res3dConsole.forTag(frontendTag)?.modeKey && now != null && value != Nds3dMode.PERFORMANCE.value) "${o.labelOf(value)} · ${now}x now" else o.labelOf(value)
             MenuRow.Option(
                 o.label, o.key, shown, o.brief, visual = o.visual,
                 choices = values.map(o::labelOf), index = values.indexOf(value), detail = o.info,
