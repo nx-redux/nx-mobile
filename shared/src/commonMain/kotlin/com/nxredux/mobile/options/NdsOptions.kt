@@ -24,7 +24,7 @@ fun ndsDefault(screen: ScreenClass, landscape: Boolean): NdsLayoutChoice =
     if (landscape && !screen.isFoldShaped && !screen.isTablet) NdsLayoutChoice.SIDE_BY_SIDE else NdsLayoutChoice.LARGE
 
 /** Side by side is not offered in landscape on a Fold-shaped screen: the two screens would be tiny there. */
-private fun offers(choice: NdsLayoutChoice, landscape: Boolean, screen: ScreenClass?): Boolean =
+internal fun offers(choice: NdsLayoutChoice, landscape: Boolean, screen: ScreenClass?): Boolean =
     !(choice == NdsLayoutChoice.SIDE_BY_SIDE && landscape && screen?.isFoldShaped == true)
 
 enum class NdsScreen(override val value: String, override val label: String) : NdsChoice {
