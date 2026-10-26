@@ -1,6 +1,9 @@
 package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.layout.ScreenClass
+import com.nxredux.mobile.layout.landscapeUnitPx
+import com.nxredux.mobile.layout.reach
+import com.nxredux.mobile.layout.setAsidePx
 import com.nxredux.mobile.layout.ScreenClass.NEAR_SQUARE_TABLET
 import com.nxredux.mobile.layout.ScreenClass.REGULAR_PHONE
 import com.nxredux.mobile.layout.ScreenClass.STUBBY_PHONE
@@ -92,13 +95,37 @@ class NdsLayoutTest {
 
     // --- Unfolded Fold (near-square tablet) ---
 
-    @Test fun unfolded_landscape_large_6x_3x() = assertScales(6f, 3f, actual = layout(1828f, 1848f, LARGE, true, NEAR_SQUARE_TABLET))
+    /**
+     * The unfolded Fold's landscape space (2448 x 1848 at 420 dpi): the window less the half-reach set-aside each side,
+     * with the buttons measured at 600 px (a pad a little wider than the 3-unit diamond estimate, e.g. after the Pad
+     * layout editor), which leaves under 7 x 256 px.
+     */
+    private val unfoldedLandscape: PxRect = run {
+        val unit = landscapeUnitPx(NEAR_SQUARE_TABLET, 1848f, 1848f, 420f, 2.625f, toolRow = true)
+        val side = setAsidePx(NEAR_SQUARE_TABLET, reach(unit, 2.625f, 0f, 0f, measuredButtonsPx = 600f, faceUnits = 3f), controller = false)
+        PxRect(side, 0f, 2448f - 2f * side, 1848f)
+    }
 
-    @Test fun unfolded_landscape_stacked_4x() = assertScales(4f, 4f, actual = layout(1828f, 1848f, STACKED, true, NEAR_SQUARE_TABLET))
+    private fun unfolded(choice: NdsLayoutChoice) =
+        NdsLayout.regions(unfoldedLandscape, choice, landscape = true, NEAR_SQUARE_TABLET, NdsSettings(), margin)
 
-    @Test fun unfolded_landscape_single_6x_one_under_the_7x_that_fits() {
-        assertScales(6f, actual = layout(1828f, 1848f, SINGLE, true, NEAR_SQUARE_TABLET))
-        assertScales(7f, actual = layout(1828f, 1848f, SINGLE, false, NEAR_SQUARE_TABLET))   // portrait keeps the most
+    @Test fun unfolded_landscape_space_is_under_7x() = assertTrue(unfoldedLandscape.width in 1536f..1791f, "${unfoldedLandscape.width}")
+
+    @Test fun unfolded_landscape_large_6x_3x() = assertScales(6f, 3f, actual = unfolded(LARGE))
+
+    @Test fun unfolded_landscape_stacked_4x() = assertScales(4f, 4f, actual = unfolded(STACKED))
+
+    @Test fun unfolded_landscape_single_and_pip_6x_the_most_that_fits() {
+        assertScales(6f, actual = unfolded(SINGLE))
+        near(6f, unfolded(PIP)[0].dst.width / 256f, "pip big")
+    }
+
+    @Test fun near_square_tablet_landscape_single_keeps_the_most_that_fits() =
+        assertScales(7f, actual = layout(1828f, 1848f, SINGLE, true, NEAR_SQUARE_TABLET))
+
+    @Test fun wide_tablet_landscape_single_one_under_the_most_that_fits() {
+        assertScales(6f, actual = layout(1828f, 1848f, SINGLE, true, WIDE_TABLET))   // 7x fits
+        assertScales(7f, actual = layout(1828f, 1848f, SINGLE, false, WIDE_TABLET))  // portrait keeps the most
     }
 
     @Test fun unfolded_portrait_large_4x_2x() = assertScales(4f, 2f, actual = layout(1848f, 1238f, LARGE, false, NEAR_SQUARE_TABLET))
