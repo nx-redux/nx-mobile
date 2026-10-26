@@ -21,7 +21,8 @@ private val RIGHT_PATH = floatArrayOf(401.7f, 115.7f, 364.3f, 115.7f, 155.2f, 32
 
 /**
  * The NX mark, engraved (cut) into the pad surface, lit from above, like the button sockets; its groove colours come
- * from [LocalPadColors]. Draw-only: no pointer handling, so touches pass through to whatever sits beneath.
+ * from [LocalPadColors] (a theme with transparent lip and shadow colours, Black, gets a flat mark in the floor colour).
+ * Draw-only: no pointer handling, so touches pass through to whatever sits beneath.
  */
 @Composable
 fun NxEmblem(modifier: Modifier = Modifier) {

@@ -254,7 +254,7 @@ private val BLACK_PRESSED_FILL = Color(0x1FFFFFFF)
 /**
  * Black, Grey buttons: Charcoal's domed grey buttons on a pure black body. Black has no darker tone for a groove, so
  * a socket is the body's black and shows only Charcoal's lit lower edge, with no grey halo; the joystick well is a
- * faint bowl rising out of black. The NX mark is cut with a dim lit lip and a floor just above black.
+ * faint bowl rising out of black. The NX mark is a flat subtle grey, not cut: no lit lip or shadow, which read oddly on black.
  */
 internal val BlackGreyPadColors = PadColors(
     surface = BLACK_SURFACE,
@@ -267,9 +267,9 @@ internal val BlackGreyPadColors = PadColors(
     wellRim = CharcoalPadColors.wellRim,
     knobShadow = CharcoalPadColors.knobShadow,
     label = BLACK_LABEL,
-    engraveLitLip = Color(0xFF2A2E33),
-    engraveInnerShadow = Color(0xFF000000),
-    engraveFloor = Color(0xFF0E1012),
+    engraveLitLip = Color.Transparent,
+    engraveInnerShadow = Color.Transparent,
+    engraveFloor = Color(0xFF2A2E33),
 )
 
 /**
