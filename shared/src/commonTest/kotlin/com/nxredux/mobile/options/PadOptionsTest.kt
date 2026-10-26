@@ -63,6 +63,17 @@ class PadOptionsTest {
         assertTrue(PadOptions.portraitPadTallRow.info.lines().all { it.length <= 48 }, PadOptions.portraitPadTallRow.info)
     }
 
+    // The handhelds with upright games (WonderSwan, both tags; Lynx) offer it too; other handhelds do not.
+    @Test fun upright_handhelds_offer_portrait_pad_for_tall_games() {
+        val hidden = mapOf(PadOptions.PORTRAIT_PAD to PadOptions.HIDDEN)
+        for (tag in listOf("WSC", "LYNX")) {
+            assertTrue(PadOptions.hasPortraitPadRow(tag), tag)
+            assertTrue(PadOptions.portraitPadHidden(tag, hidden), tag)
+            assertTrue(PadOptions.portraitPadTallRow in PadOptions.tableFor(tag), tag)
+        }
+        for (tag in listOf("GBA", "GB", "GG", "NGPC")) assertFalse(PadOptions.hasPortraitPadRow(tag), tag)
+    }
+
     @Test fun keys_are_unique_and_findable() {
         val keys = ConsoleSettings.all.map { it.key }
         assertEquals(keys.toSet().size, keys.size)

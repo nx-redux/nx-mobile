@@ -54,4 +54,13 @@ class HiddenBandTest {
         assertFalse(bandAwaitsFrame(hiddenChosen = true, ConsoleScale.DS, frame = null))
         assertFalse(bandAwaitsFrame(hiddenChosen = true, ConsoleScale.N3DS, frame = null))
     }
+
+    @Test fun upright_handheld_games_offer_hide_and_landscape_ones_do_not() {
+        // Beetle WonderSwan rotated: the 224 x 144 frame turned a quarter, reported at 9:14.
+        assertTrue(hideOffered(ConsoleScale.NATIVE, CoreFrame(224f, 144f, 9f / 14f, true)))
+        assertFalse(hideOffered(ConsoleScale.NATIVE, CoreFrame(224f, 144f, 14f / 9f, false)))
+        // Handy: a rotated cartridge swaps the frame to 102 x 160, its aspect with it.
+        assertTrue(hideOffered(ConsoleScale.NATIVE, CoreFrame(102f, 160f, 102f / 160f, false)))
+        assertFalse(hideOffered(ConsoleScale.NATIVE, CoreFrame(160f, 102f, 160f / 102f, false)))
+    }
 }

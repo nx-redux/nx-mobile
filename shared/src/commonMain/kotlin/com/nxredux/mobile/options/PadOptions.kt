@@ -50,22 +50,29 @@ object PadOptions {
     )
 
     /**
-     * Arcade: the same setting, for the boards whose picture is taller than wide (the game offers the corner icon only
-     * for those); a wide game keeps its band whatever this says.
+     * Arcade, WonderSwan and Lynx: the same setting, for the games whose picture is taller than wide (the game offers
+     * the corner icon only for those); a wide game keeps its band whatever this says.
      */
     val portraitPadTallRow = portraitPadRow.copy(
-        info = "Hidden gives a game taller than wide (a vertical\narcade board) the pad's room in portrait, with\n" +
-            "the see-through pad over the game. Wide games\nkeep the pad. Long-press the corner icon in\ngame to switch.",
+        info = "Hidden gives a game taller than wide (a vertical\narcade board, a handheld game held upright)\n" +
+            "the pad's room in portrait, with the see-through\npad over the game. Wide games keep the pad.\n" +
+            "Long-press the corner icon in game to switch.",
         brief = "Hidden: tall games get the pad's room",
     )
 
     /** The consoles with two screens. */
     private fun twoScreens(tag: String): Boolean = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
 
-    /** Arcade, whose vertical boards are taller than wide. */
-    private fun tallGames(tag: String): Boolean = CoreRegistry.consoleOf(tag)?.id == "fbn"
+    /**
+     * The consoles some of whose games are taller than wide: arcade's vertical boards, and the handhelds whose cores
+     * turn an upright game's picture (Beetle WonderSwan: Rotate display, a 9:14 aspect; Handy: the cartridge's
+     * rotation, its width and height swapped).
+     */
+    private val TALL_GAME_CONSOLES = setOf("fbn", "wsc", "lynx")
 
-    /** The consoles that offer Portrait Pad: the two-screen ones ([portraitPadRow]) and arcade ([portraitPadTallRow]). */
+    private fun tallGames(tag: String): Boolean = CoreRegistry.consoleOf(tag)?.id in TALL_GAME_CONSOLES
+
+    /** The consoles that offer Portrait Pad: the two-screen ones ([portraitPadRow]) and those with tall games ([portraitPadTallRow]). */
     fun hasPortraitPadRow(tag: String): Boolean = twoScreens(tag) || tallGames(tag)
 
     /** The portrait band is hidden: [values] say so and [tag] offers the row. */
