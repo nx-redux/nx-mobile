@@ -9,12 +9,9 @@ import com.nxredux.mobile.ui.HomeStrip
 import com.nxredux.mobile.ui.MainRow
 import kotlin.math.max
 
-/** Minimal Home's tag on a pinned tool. */
-private const val TOOL_TAG = "Tool"
-
-/** Minimal Home's names: List Home's rows ([homeListRows]), a pinned tool wearing a [TOOL_TAG] tag too. */
-internal fun homeMinimalRows(rows: List<MainRow>): List<NxRow> = rows.flatMap { r ->
-    if (r is MainRow.PinnedTool) listOf(NxRow(r.row.label, tag = TOOL_TAG)) else homeListRows(listOf(r))
+/** Minimal Home's names: List Home's rows ([homeListRows]), only Continue keeping its tag (no shelf tags). */
+internal fun homeMinimalRows(rows: List<MainRow>): List<NxRow> = rows.mapNotNull { r ->
+    homeListRows(listOf(r)).firstOrNull()?.let { if (r is MainRow.Continue) it else it.copy(tag = null) }
 }
 
 /**

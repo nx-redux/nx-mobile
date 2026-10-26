@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -81,8 +82,8 @@ import kotlin.math.roundToInt
 
 /*
  * The Minimal layout (Layouts → a tab's or the game lists' layout: Minimal): big names only, no art. The selected name is
- * solid in the accent and a little larger, one row under the body's top; the others are its outline in fade steps
- * ([minimalAlpha]), running on behind the title or tab row and the hints to the screen's edges. Home adds its stats
+ * solid in the accent (the only accent on the page) and a little larger, a third of the way down; the others are outlines
+ * in the ink, fading by row ([minimalAlpha]), running on behind the title or tab row and the hints to the screen's edges. Home adds its stats
  * strip and the tags of its rows ([HomeMinimalScreen]); the tabs and the game lists show the names alone. A on the
  * selection grows its band over the screen before it opens ([MinimalOpenBand], AppState's minimalOpening). Between two
  * Minimal pages a folder morphs ([MinimalFlight]): its name flies into the list's title as the list's names rise in, and
@@ -95,21 +96,28 @@ private const val MINIMAL_MOVE_MS = 340
 /** A jump of more than this many names (a wrap from the last to the first) snaps instead of gliding through them all. */
 internal const val MINIMAL_SNAP_STEPS = 8
 
-/** An unselected name's outline: this share of the accent, [MINIMAL_STROKE] dp wide; the fade steps ([minimalAlpha]) dim it further. */
-private const val MINIMAL_OUTLINE_ALPHA = .6f
+/** An unselected name's outline: the ink ([NxColors.main]), [MINIMAL_STROKE] dp wide, at its row's opacity ([minimalAlpha]). */
 private const val MINIMAL_STROKE = 1f
 
 /** The selected name grows by this much, from its left edge. */
 private const val MINIMAL_SELECTED_SCALE = 1.04f
 
 /**
- * A name's tag (Home's: Continue, New, Not started, Pick up again, Tool) at the end of its name, as its last word: on the
- * name's last line when it fits there, else wrapping to the next with the words. A solid pill in the Secondary accent
- * with its text in the Accent, a size smaller: [MINIMAL_TAG_SP] text, [MINIMAL_TAG_H] tall. Shown on
- * the selected name only; the other names keep its room (blank), so a name's lines don't change when it is selected.
+ * A name's tag (only Home's Continue wears one) after its name, [MINIMAL_TAG_GAP] dp from its end so every name keeps its
+ * left edge: on the name's last line when it fits there, else wrapping to the next with the words. A round-ended pill
+ * of the ink at [MINIMAL_TAG_FILL], its word in [NxColors.hint] at [MINIMAL_TAG_SP] sp (pinned), padded
+ * [MINIMAL_TAG_PAD_Y] × [MINIMAL_TAG_PAD_X] dp; never an accent. Centred on the name's x-height ([MINIMAL_X_HEIGHT]), it
+ * does not grow with the selected name, and an unselected Continue's tag fades with its row.
  */
-private const val MINIMAL_TAG_SP = 12f
-private const val MINIMAL_TAG_H = 20f
+private const val MINIMAL_TAG_SP = 13f
+private const val MINIMAL_TAG_LINE_SP = 17f
+private const val MINIMAL_TAG_PAD_X = 8f
+private const val MINIMAL_TAG_PAD_Y = 2f
+private const val MINIMAL_TAG_H = MINIMAL_TAG_LINE_SP + 2 * MINIMAL_TAG_PAD_Y
+private const val MINIMAL_TAG_GAP = 12f
+private const val MINIMAL_TAG_FILL = .14f
+/** The name font's x-height as a share of its size (MiSans), where the tag centres. */
+private const val MINIMAL_X_HEIGHT = .52f
 private const val MINIMAL_TAG_INLINE = "tag"
 
 /** A name too long for its row wraps at its words onto at most this many lines (an ellipsis on the last); each name takes the rows its lines need. */
@@ -142,31 +150,18 @@ private const val MINIMAL_RISE_END = (MINIMAL_RISE_DELAY_MS + MINIMAL_RISE_STAGG
 private const val MINIMAL_NAME_DP = 38f
 
 /**
- * A name's opacity by its distance from the selection. Below it the next name is at [MINIMAL_NEXT_ALPHA], and from there
- * the names fade smoothly with how far down the screen they sit ([minimalAlpha]'s depth) to [MINIMAL_BOTTOM_ALPHA] at
- * its bottom edge: a taller screen spreads the fade over more names, so each steps down less.
- * Above it fainter, in steps: 0.3, 0.22, then [MENU_FAR_ALPHA], so the list reads downwards from the selection.
+ * A name's opacity by its distance in rows from the selection, the same above and below: the next name at
+ * [MINIMAL_NEXT_ALPHA], each row further [MINIMAL_ALPHA_STEP] less, never below [MINIMAL_FLOOR_ALPHA]: a faint ladder.
  */
 private const val MINIMAL_NEXT_ALPHA = .5f
-private const val MINIMAL_BOTTOM_ALPHA = 0f
-private val MINIMAL_FADE_ABOVE = floatArrayOf(1f, .3f, .22f, MENU_FAR_ALPHA)
+private const val MINIMAL_ALPHA_STEP = .12f
+private const val MINIMAL_FLOOR_ALPHA = .06f
 
-/**
- * A name's opacity [distance] names from the shown position (negative above it), linear between the steps so it stays
- * smooth while the names slide. Below, [depth]: how far down it sits from the row under the selection to the screen's
- * bottom edge (0 to 1).
- */
-internal fun minimalAlpha(distance: Float, depth: Float = 0f): Float {
-    if (distance >= 0f) {
-        val near = 1f + (MINIMAL_NEXT_ALPHA - 1f) * distance.coerceAtMost(1f)
-        return near * (1f + (MINIMAL_BOTTOM_ALPHA / MINIMAL_NEXT_ALPHA - 1f) * depth.coerceIn(0f, 1f))
-    }
-    val steps = MINIMAL_FADE_ABOVE
-    val d = -distance
-    val last = steps.size - 1
-    if (d >= last) return steps[last]
-    val i = d.toInt()
-    return steps[i] + (steps[i + 1] - steps[i]) * (d - i)
+/** A name's opacity [distance] names from the shown position (either side), linear between rows so it stays smooth while the names slide. */
+internal fun minimalAlpha(distance: Float): Float {
+    val d = abs(distance)
+    if (d <= 1f) return 1f + (MINIMAL_NEXT_ALPHA - 1f) * d
+    return max(MINIMAL_FLOOR_ALPHA, MINIMAL_NEXT_ALPHA - MINIMAL_ALPHA_STEP * (d - 1f))
 }
 
 /**
@@ -415,23 +410,30 @@ private fun MinimalNames(
     // switches mid-move.
     val near by remember(count) { derivedStateOf { floor(at()).toInt().coerceIn(0, count - 1)..ceil(at()).toInt().coerceIn(0, count - 1) } }
     val fill = { i: Int -> (1f - abs(i - at())).coerceIn(0f, 1f) }
-    // The names in the accent (Appearance → Accent): the selection solid, the others its outline.
+    // The selection solid in the accent (Appearance → Accent); the others outlined in the ink.
     val solid = minimalNameStyle()
-    val outline = solid.copy(color = colors.accent.copy(alpha = MINIMAL_OUTLINE_ALPHA), drawStyle = Stroke(width = with(density) { MINIMAL_STROKE.dp.toPx() }))
+    val outline = solid.copy(color = colors.main, drawStyle = Stroke(width = with(density) { MINIMAL_STROKE.dp.toPx() }))
     val measurer = rememberTextMeasurer()
     // Each name's lines at the row's width (a little narrower for the selection's grow).
     val rowW = ((area.width - 2 * with(density) { gutter.toPx() }) / MINIMAL_SELECTED_SCALE).toInt().coerceAtLeast(1)
-    // Each tag's pill (its text padded 8 dp a side) as an inline placeholder after the name and a space.
+    // Each tag's pill (its text padded [MINIMAL_TAG_PAD_X] a side) as an inline placeholder after the name and a space,
+    // the placeholder's start making up the rest of the [MINIMAL_TAG_GAP]. Its bottom on the baseline: the pill is moved
+    // down onto the x-height's middle where it is drawn ([tagDrop]).
     val tagStyle = TextStyle(
-        fontFamily = font, fontWeight = FontWeight.SemiBold, color = colors.accent,
-        fontSize = (MINIMAL_TAG_SP / density.fontScale).sp, lineHeight = (16f / density.fontScale).sp,
+        fontFamily = font, fontWeight = FontWeight.SemiBold, color = colors.hint,
+        fontSize = (MINIMAL_TAG_SP / density.fontScale).sp, lineHeight = (MINIMAL_TAG_LINE_SP / density.fontScale).sp,
     )
-    val tagWidths = remember(names, tagStyle) {
-        names.mapNotNull { it.tag }.distinct().associateWith { tag -> measurer.measure(tag, tagStyle, maxLines = 1).size.width + with(density) { 16.dp.toPx() }.roundToInt() }
+    val space = remember(solid) { measurer.measure(" ", solid, maxLines = 1).size.width.toFloat() }
+    val lead = with(density) { MINIMAL_TAG_GAP.dp.toPx() } - space
+    val pillWidths = remember(names, tagStyle) {
+        names.mapNotNull { it.tag }.distinct().associateWith { tag -> measurer.measure(tag, tagStyle, maxLines = 1).size.width + with(density) { (2 * MINIMAL_TAG_PAD_X).dp.toPx() } }
     }
+    val tagWidths = pillWidths.mapValues { (_, w) -> (w + lead).roundToInt() }
     val placeholders = remember(tagWidths) {
-        tagWidths.mapValues { (_, w) -> with(density) { Placeholder(w.toSp(), MINIMAL_TAG_H.dp.toSp(), PlaceholderVerticalAlign.TextCenter) } }
+        tagWidths.mapValues { (_, w) -> with(density) { Placeholder(w.toSp(), MINIMAL_TAG_H.dp.toSp(), PlaceholderVerticalAlign.AboveBaseline) } }
     }
+    // The pill's centre from the placeholder's (half its height over the baseline) down to the x-height's middle.
+    val tagDrop = with(density) { (MINIMAL_TAG_H / 2).dp.toPx() } - with(density) { size.dp.toPx() } * MINIMAL_X_HEIGHT / 2
     val texts = remember(names, rowW, solid, tagWidths, pitchPx) { MinimalTexts(names, measurer, solid, rowW, tagWidths, placeholders, pitchPx) }
     val nameW = with(density) { rowW.toDp() }   // every name drawn at the width its lines were counted at
     // The names below make room for the selection's grow (it grows down from its top: [MINIMAL_SELECTED_SCALE] of its
@@ -472,7 +474,7 @@ private fun MinimalNames(
                 onSelect = { taps.swipeSelect(it) },
             ),
     ) {
-        val pill = colors.secondaryAccent
+        val pill = colors.main.copy(alpha = MINIMAL_TAG_FILL)
         for (i in window) key(slots.getValue(i)) {
             val lit = i == sel
             val row = names[i]
@@ -487,9 +489,7 @@ private fun MinimalNames(
                         // Behind the strip and the tab row (above the body's top) a name fades to [MINIMAL_UNDER_STRIP] more, over one name's height.
                         val under = ((area.top - y(i) - pitchPx / 2) / pitchPx).coerceIn(0f, 1f)
                         val r = motion.rise(i - first)
-                        // Below: how far down from the row under the selection to the screen's bottom edge.
-                        val depth = (y(i) - anchorPx - pitchPx) / (boxH - anchorPx - pitchPx).coerceAtLeast(1f)
-                        alpha = minimalAlpha(d, depth) * (1f - (1f - MINIMAL_UNDER_STRIP) * under) * r * (if (lit) motion.selection() else motion.others())
+                        alpha = minimalAlpha(d) * (1f - (1f - MINIMAL_UNDER_STRIP) * under) * r * (if (lit) motion.selection() else motion.others())
                         translationY = (1f - r) * risePx
                         // The alpha on each draw, not through a layer the row's size, which would cut the letters' tails past the tight line.
                         compositingStrategy = CompositingStrategy.ModulateAlpha
@@ -500,20 +500,26 @@ private fun MinimalNames(
                 contentAlignment = Alignment.TopStart,
             ) {
                 val tag = row.tag
-                // The tag's room, blank on the outline.
-                val blank = tag?.let { mapOf(MINIMAL_TAG_INLINE to InlineTextContent(placeholders.getValue(it)) {}) }.orEmpty()
+                // The tag's pill, drawn with the outline and with the solid name, so it fades with its row; it keeps its
+                // size while the selected name grows (the row's scale undone round its centre).
+                val badge = tag?.let {
+                    val pillW = with(density) { pillWidths.getValue(it).toDp() }
+                    mapOf(MINIMAL_TAG_INLINE to InlineTextContent(placeholders.getValue(it)) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
+                            Box(
+                                Modifier.width(pillW).height(MINIMAL_TAG_H.dp)
+                                    .graphicsLayer { val k = 1f / (1f + (MINIMAL_SELECTED_SCALE - 1f) * fill(i)); scaleX = k; scaleY = k; translationY = tagDrop }
+                                    .background(pill, RoundedCornerShape(50)),
+                                contentAlignment = Alignment.Center,
+                            ) { Text(it, style = tagStyle, maxLines = 1) }
+                        }
+                    })
+                }.orEmpty()
                 // The outline, fading out as the solid name fades in over it.
                 Box(Modifier.graphicsLayer { alpha = 1f - fill(i); compositingStrategy = CompositingStrategy.ModulateAlpha }) {
-                    MinimalName(text, outline, nameW, blank)
+                    MinimalName(text, outline, nameW, badge)
                 }
                 if (lit || i in near) {
-                    val badge = tag?.let {
-                        mapOf(MINIMAL_TAG_INLINE to InlineTextContent(placeholders.getValue(it)) {
-                            Box(Modifier.fillMaxSize().background(pill, RoundedCornerShape(50)), contentAlignment = Alignment.Center) {
-                                Text(it, style = tagStyle, maxLines = 1)
-                            }
-                        })
-                    }.orEmpty()
                     // The open band starts on the selected name as drawn: its own box, at the text's left.
                     Box(
                         Modifier.graphicsLayer { alpha = fill(i); compositingStrategy = CompositingStrategy.ModulateAlpha }
