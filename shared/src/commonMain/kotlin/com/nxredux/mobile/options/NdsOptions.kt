@@ -38,7 +38,7 @@ enum class PipCorner(override val value: String, override val label: String) : N
     BOTTOM_LEFT("bottom-left", "Bottom left"), BOTTOM_RIGHT("bottom-right", "Bottom right"),
 }
 
-/** [fraction]: the small screen's width as a share of the big screen's width (picture in picture and large screen). */
+/** [fraction]: the small screen's width as a share of the big screen's width (picture in picture). */
 enum class PipSize(override val value: String, override val label: String, val fraction: Float) : NdsChoice {
     SMALL("small", "Small", 0.25f), MEDIUM("medium", "Medium", 0.33f), LARGE("large", "Large", 0.40f),
 }
@@ -158,11 +158,11 @@ object NdsOptions {
             row(
                 LAYOUT_PORTRAIT, "Layout (portrait)", NdsLayoutChoice.entries, portraitDefault,
                 "How the two screens share a portrait screen.\n" +
-                    "Large screen: one big, the other small above or below it.\n" +
+                    "Large screen: the big one, the other centred below it at\nhalf its size.\n" +
                     "Stacked: one above the other.\nSingle screen: the big one only.\n" +
                     "Picture in picture: one big, the other small in a corner.\n" +
-                    "Side by side: half the width each.\nSELECT + Left/Right cycles it, or Layout (portrait, controller)\n" +
-                    "while a controller hides the pad.\n$SPLIT_NOTE$fold",
+                    "Side by side: half the width each.\nEvery layout uses whole-number sizes.\n" +
+                    "SELECT + Left/Right cycles it, or Layout (portrait, controller)\nwhile a controller hides the pad.\n$SPLIT_NOTE$fold",
             ),
             row(
                 LAYOUT_PORTRAIT_CONTROLLER, "Layout (portrait, controller)", NdsLayoutChoice.entries, portraitDefault,
@@ -172,11 +172,11 @@ object NdsOptions {
             ),
             row(
                 LAYOUT_LANDSCAPE, "Layout (landscape)", landscapeAll, ndsDefault(known, true),
-                "How the two screens share a landscape screen.\nLarge screen: one big, the other small beside it.\n" +
-                    "Stacked: one above the other, the first three times the size.\nSingle screen: the big one, centred.\n" +
+                "How the two screens share a landscape screen.\nLarge screen: the big one, the other centred below it at\nhalf its size.\n" +
+                    "Stacked: one above the other, the same size.\nSingle screen: the big one, centred.\n" +
                     "Picture in picture: the big one centred, the other small in a corner.\n" +
                     (if (NdsLayoutChoice.SIDE_BY_SIDE in landscapeAll) "Side by side: half the width each.\n" else "") +
-                    "SELECT + Left/Right cycles it.\n$SPLIT_NOTE$fold",
+                    "Every layout uses whole-number sizes.\nSELECT + Left/Right cycles it.\n$SPLIT_NOTE$fold",
             ),
         )
     }
@@ -184,15 +184,15 @@ object NdsOptions {
     private val otherRows: List<FrontendOption> = listOf(
         row(
             BIG_SCREEN, "Big Screen", NdsScreen.entries, NdsScreen.TOP,
-            "The screen shown big in picture in picture, large screen\nand single screen, and first in stacked and side by side.\nWith the on-screen pad over the game, only this screen takes\ntouches. R2 swaps it.",
+            "The screen shown big in picture in picture, large screen\nand single screen, and first in stacked and side by side.\nR2 swaps it.",
         ),
         row(
             PIP_CORNER, "Inset Corner", PipCorner.entries, PipCorner.TOP_RIGHT,
-            "Where the small screen sits in picture in picture\nand large screen. SELECT + Up/Down moves it to the next corner.",
+            "Where the small screen sits in picture in picture\n(large screen keeps it centred below). SELECT + Up/Down moves it to the next corner.",
         ),
         row(
             PIP_SIZE, "Inset Size", PipSize.entries, PipSize.MEDIUM,
-            "The small screen's width in picture in picture and large screen:\n25%, 33% or 40% of the big screen's width.",
+            "The small screen's width in picture in picture:\n25%, 33% or 40% of the big screen's width.",
         ),
         row(
             PIP_OPACITY, "Inset Opacity", PipOpacity.entries, PipOpacity.FULL,
