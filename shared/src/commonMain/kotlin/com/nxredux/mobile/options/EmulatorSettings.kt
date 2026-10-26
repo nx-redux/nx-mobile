@@ -2,8 +2,10 @@ package com.nxredux.mobile.options
 
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.runner.CoreDescriptor
+import com.nxredux.mobile.runner.NdsRenderer
 
-data class ConsoleRow(val option: FrontendOption, val value: String)
+/** A Console Settings row; [disabledNote] set: the row shows the note, dimmed, and takes no change. */
+data class ConsoleRow(val option: FrontendOption, val value: String, val disabledNote: String? = null)
 
 /** One emulator tag's settings as Emulator Settings / Game Settings show them. */
 data class EmulatorPage(
@@ -22,12 +24,13 @@ object EmulatorSettings {
      * descriptor's [CoreDescriptor.offlineHiddenOptions] and table keys in the frontend namespace never appear; console
      * rows locked in the cfg are hidden, as on the in-game Console Settings page. [secondScreen] false (none connected) hides Bottom screen, its value kept. [vulkanFailed]: Vulkan failed for the
      * core on this phone ([VulkanFallback]), noted on the Graphics API row. [screen]: the window's [ScreenClass] (null:
-     * unknown), which shapes the DS and 3DS layout rows ([ConsoleSettings.tableFor]).
+     * unknown), which shapes the DS and 3DS layout rows ([ConsoleSettings.tableFor]). [displayMax]: the biggest DS 3D scale the display reaches (null:
+     * unknown), which shapes the 3D Resolution scales.
      */
     fun page(
         tag: String, descriptor: CoreDescriptor, table: CoreOptionTable?, defaults: Map<String, String>,
         console: ConfigFile?, game: ConfigFile?, forGame: Boolean, vulkanFailed: Boolean = false,
-        secondScreen: Boolean = true, screen: ScreenClass? = null,
+        secondScreen: Boolean = true, screen: ScreenClass? = null, displayMax: Int? = null,
     ): EmulatorPage {
         val tableDefaults = table?.options.orEmpty().associate { it.key to it.defaultValue }
         val frontendDefaults = FrontendOptions.defaults(tag)
@@ -35,12 +38,16 @@ object EmulatorSettings {
             frontendDefaults + tableDefaults + defaults, console, if (forGame) game else null,
             forced = descriptor.lockedOptions, hidden = descriptor.hiddenValues,
         )
-        val consoleRows = ConsoleSettings.tableFor(tag, screen).filter { it.key !in resolved.locked && (descriptor.rewind || it.key !in SpeedOptions.REWIND_KEYS) && (secondScreen || it.key != BottomScreenOptions.KEY) }
-            .map { ConsoleRow(
-                VulkanFallback.noted(it, vulkanFailed),
+        val software = resolved.values[NdsRenderer.RENDER_MODE] == NdsRenderer.SOFTWARE
+        val consoleRows = ConsoleSettings.tableFor(tag, screen, displayMax).filter { it.key !in resolved.locked && (descriptor.rewind || it.key !in SpeedOptions.REWIND_KEYS) && (secondScreen || it.key != BottomScreenOptions.KEY) }
+            .shownFor(resolved.values)
+            .map {
                 // The DS and 3DS layout rows read their old keys too, as the game does (no pick: the row default).
-                (if (it.key in FrontendOptions.NO_PICK_KEYS) FrontendOptions.layoutValue(resolved.values, it.key) else resolved.values[it.key]) ?: it.default,
-            ) }
+                val value = (if (it.key in FrontendOptions.NO_PICK_KEYS) FrontendOptions.layoutValue(resolved.values, it.key) else resolved.values[it.key]) ?: it.default
+                ConsoleSettings.fitted(VulkanFallback.noted(it, vulkanFailed), value).let { (option, shown) ->
+                    ConsoleRow(option, shown, NdsOptions.SOFTWARE_NOTE.takeIf { software && option.key in NdsOptions.RESOLUTION_KEYS })
+                }
+            }
         val core = table?.let { t ->
             val withValues = t.options.filter { it.key !in descriptor.offlineHiddenOptions && !FrontendOptions.isFrontendKey(it.key) }.map { o ->
                 val v = resolved.values[o.key] ?: o.defaultValue

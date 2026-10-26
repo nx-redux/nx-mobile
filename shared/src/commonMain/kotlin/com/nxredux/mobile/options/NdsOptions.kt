@@ -2,6 +2,8 @@ package com.nxredux.mobile.options
 
 import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.layout.ScreenClass
+import com.nxredux.mobile.runner.Nds3dMode
+import com.nxredux.mobile.runner.Nds3dResolution
 import com.nxredux.mobile.settings.stepFrom
 
 /** A DS setting's stored [value] and what the menu and hotkey labels show. */
@@ -24,7 +26,7 @@ fun ndsDefault(screen: ScreenClass, landscape: Boolean): NdsLayoutChoice =
     if (landscape && !screen.isFoldShaped && !screen.isTablet) NdsLayoutChoice.SIDE_BY_SIDE else NdsLayoutChoice.LARGE
 
 /** Side by side is not offered in landscape on a Fold-shaped screen: the two screens would be tiny there. */
-private fun offers(choice: NdsLayoutChoice, landscape: Boolean, screen: ScreenClass?): Boolean =
+internal fun offers(choice: NdsLayoutChoice, landscape: Boolean, screen: ScreenClass?): Boolean =
     !(choice == NdsLayoutChoice.SIDE_BY_SIDE && landscape && screen?.isFoldShaped == true)
 
 enum class NdsScreen(override val value: String, override val label: String) : NdsChoice {
@@ -55,6 +57,9 @@ enum class PipOpacity(override val value: String, override val label: String) : 
  * "not chosen yet": the screen's default applies ([layoutShown]). [controller] is the portrait layout used instead of
  * [portrait] while a non-clip-on controller has dropped the pad band.
  */
+/** How a running DS game is shown: in [landscape], and in portrait whether a non-clip-on controller hides the pad ([controllerMode]). */
+data class NdsView(val landscape: Boolean, val controllerMode: Boolean)
+
 data class NdsSettings(
     val portrait: NdsLayoutChoice? = null,
     val landscape: NdsLayoutChoice? = null,
@@ -112,6 +117,12 @@ object NdsOptions {
     const val PIP_SIZE = "nx_nds_pip_size"
     const val PIP_OPACITY = "nx_nds_pip_opacity"
     const val CORE_RESOLUTION = "melonds_opengl_resolution"
+    const val MODE_3D = "nx_nds_3d_resolution"
+    const val MAX_SCALE_3D = "nx_nds_3d_max_scale"
+    const val SCALE_3D = "nx_nds_3d_scale"
+
+    /** The note on the 3D Resolution rows while the core renders in software (they take no effect there). */
+    const val SOFTWARE_NOTE = "Needs Render Mode → OpenGL"
 
     /** Each layout key to its previous key and that key's old default. */
     val OLD_LAYOUT_KEYS: Map<String, Pair<String, String>> = mapOf(
@@ -131,6 +142,33 @@ object NdsOptions {
 
     /** The keys that can be absent ("no pick"): left out of [FrontendOptions.defaults] and of a config read when unset. */
     val NO_PICK_KEYS: Set<String> = OLD_LAYOUT_KEYS.keys
+
+    /** The three layout rows' keys. */
+    val LAYOUT_KEYS: Set<String> = setOf(LAYOUT_PORTRAIT, LAYOUT_PORTRAIT_CONTROLLER, LAYOUT_LANDSCAPE)
+
+    /** The picture-in-picture inset's rows: they only change the picture in Picture in picture. */
+    val INSET_KEYS: Set<String> = setOf(PIP_CORNER, PIP_SIZE, PIP_OPACITY)
+
+    /**
+     * The layout row in use on [view]: landscape's, else the controller row while a controller that is not a clip-on
+     * hides the pad ([NdsView.controllerMode]), else portrait's.
+     */
+    fun activeLayoutKey(view: NdsView): String = when {
+        view.landscape -> LAYOUT_LANDSCAPE
+        view.controllerMode -> LAYOUT_PORTRAIT_CONTROLLER
+        else -> LAYOUT_PORTRAIT
+    }
+
+    /**
+     * The running game's DS rows of [rows]: only the layout row in use on [view] ([activeLayoutKey]), and the inset rows
+     * only while the layout shown there ([values], [screen]: an unset row's default) is Picture in picture. The rest
+     * pass through. Game Settings and Emulator Settings keep every row: they set up every orientation at once.
+     */
+    fun inGameRows(rows: List<FrontendOption>, values: Map<String, String>, view: NdsView, screen: ScreenClass?): List<FrontendOption> {
+        val active = activeLayoutKey(view)
+        val pip = layoutShown(values, view.landscape, view.controllerMode, screen ?: ScreenClass.REGULAR_PHONE) == NdsLayoutChoice.PIP
+        return rows.filter { (it.key !in LAYOUT_KEYS || it.key == active) && (it.key !in INSET_KEYS || pip) }
+    }
 
     private const val SPLIT_NOTE = "Screen Scaling and the screen offsets do not apply to the DS screens."
 
@@ -200,9 +238,44 @@ object NdsOptions {
         ),
     )
 
-    /** The page's rows for [screen] (null: unknown). */
-    fun tableFor(screen: ScreenClass?, canHalfFold: Boolean = DeviceTraits.canHalfFold): List<FrontendOption> =
-        layoutRows(screen, canHalfFold) + otherRows
+    private fun scales(max: Int): List<String> = (1..max.coerceIn(1, Nds3dResolution.CORE_MAX)).map { it.toString() }
+
+    /**
+     * The 3D Resolution row and its two sub-rows: Max Scale (Auto) and Scale (Performance). [displayMax] is the biggest scale
+     * the display reaches ([Nds3dResolution.displayMax]); null (unknown) offers every scale the core has. Not [visual]: the
+     * core is paused while the menu shows, so an Adjust strip over the frozen frame could never show the 3D change.
+     */
+    fun resolutionRows(displayMax: Int?): List<FrontendOption> {
+        val maxScales = scales(displayMax ?: Nds3dResolution.CORE_MAX)
+        val perfScales = scales(displayMax?.let(Nds3dResolution::performanceCeiling) ?: Nds3dResolution.CORE_MAX)
+        return listOf(
+            FrontendOption(
+                MODE_3D, "3D Resolution", Nds3dMode.entries.map { it.value }, Nds3dMode.AUTO.value,
+                "How sharply 3D models are drawn. 2D art, text and the screen's size don't change.",
+                visual = false, valueLabels = Nds3dMode.entries.map { it.label },
+            ),
+            FrontendOption(
+                MAX_SCALE_3D, "Max Scale", maxScales, Nds3dResolution.DEFAULT_CAP.toString(),
+                "The most Auto draws 3D at, as a multiple of the DS screen.",
+                visual = false, valueLabels = maxScales.map { "${it}x" }, shownWhen = MODE_3D to setOf(Nds3dMode.AUTO.value),
+            ),
+            FrontendOption(
+                SCALE_3D, "Scale", perfScales, Nds3dResolution.DEFAULT_PERFORMANCE_SCALE.toString(),
+                "The fixed resolution Performance draws 3D at, as a multiple of the DS screen.",
+                visual = false, valueLabels = perfScales.map { "${it}x" }, shownWhen = MODE_3D to setOf(Nds3dMode.PERFORMANCE.value),
+            ),
+        )
+    }
+
+    /** The keys of [resolutionRows]. */
+    val RESOLUTION_KEYS: Set<String> = setOf(MODE_3D, MAX_SCALE_3D, SCALE_3D)
+
+    /**
+     * The page's rows for [screen] (null: unknown): the layout rows, the 3D Resolution rows for a display that reaches
+     * [displayMax] (null: unknown), then the rest.
+     */
+    fun tableFor(screen: ScreenClass?, canHalfFold: Boolean = DeviceTraits.canHalfFold, displayMax: Int? = null): List<FrontendOption> =
+        layoutRows(screen, canHalfFold) + resolutionRows(displayMax) + otherRows
 
     /**
      * Every row with every layout value ([tableFor] an unknown screen). Built when read, so the info text follows

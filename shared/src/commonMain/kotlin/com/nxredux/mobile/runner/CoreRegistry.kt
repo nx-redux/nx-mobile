@@ -7,9 +7,11 @@ object CoreRegistry {
     // melonDS DS (JesseTG/melonds-ds v1.3.1). The core draws the plain top-over-bottom 256x384 stack and takes the
     // touchscreen as a pointer; the frontend lays the two screens out (NdsLayout), so those options are locked. Keys and
     // values: src/libretro/config/constants.hpp and config/definitions/screen.hpp at the pin. BIOS and firmware are
-    // optional (built-in free ones); Bios/NDS/ is copied into the system dir when present. GL resolution defaults to 2x;
-    // the renderer's default comes from the device's GLES version at load (NdsRenderer). The mic options are locked too: the
+    // optional (built-in free ones); Bios/NDS/ is copied into the system dir when present. The renderer's default comes from the device's GLES version at load (NdsRenderer). The mic options are locked too: the
     // app's Mic toggle drives the frontend feed, so the core always reads the microphone interface, always active, no overlay.
+    // One plain top-bottom frame: the app sets the internal resolution from the on-screen size (at launch from the
+    // window's size, then from each layout; the 4x default is never run).
+    // The screen options that frame never reads are locked at the core's own defaults, so a cfg cannot bring them back.
     private val melondsds = CoreDescriptor(
         "melondsds", "libmelondsds_libretro_android.so", setOf("nds", "ids", "dsi"),
         defaultOptions = mapOf(
@@ -18,7 +20,21 @@ object CoreRegistry {
             "melonds_screen_layout1" to "top-bottom",
             "melonds_screen_gap" to "0",
             "melonds_show_cursor" to "disabled",
-            "melonds_opengl_resolution" to "2",
+            "melonds_opengl_resolution" to "4",
+            "melonds_secondary_screen_scale" to "100",
+            "melonds_secondary_screen_filtering" to "nearest",
+            "melonds_screen_layout2" to "left-right",
+            "melonds_screen_layout3" to "largescreen-top",
+            "melonds_screen_layout4" to "largescreen-bottom",
+            "melonds_screen_layout5" to "hybrid-top",
+            "melonds_screen_layout6" to "hybrid-bottom",
+            "melonds_screen_layout7" to "top",
+            "melonds_screen_layout8" to "bottom",
+            "melonds_hybrid_ratio" to "2",
+            "melonds_hybrid_small_screen" to "both",
+            "melonds_opengl_filtering" to "nearest",
+            "melonds_cursor_timeout" to "3",
+            "melonds_show_current_layout" to "enabled",
             "melonds_mic_input" to "microphone",
             "melonds_mic_input_active" to "always",
             "melonds_show_mic_state" to "disabled",
@@ -26,8 +42,10 @@ object CoreRegistry {
         lockedOptions = setOf(
             "melonds_touch_mode", "melonds_number_of_screen_layouts", "melonds_screen_layout1",
             "melonds_screen_gap", "melonds_show_cursor", "melonds_mic_input", "melonds_mic_input_active",
-            "melonds_show_mic_state",
-        ),
+            "melonds_show_mic_state", "melonds_opengl_resolution", "melonds_secondary_screen_scale",
+            "melonds_secondary_screen_filtering", "melonds_hybrid_ratio", "melonds_hybrid_small_screen",
+            "melonds_opengl_filtering", "melonds_cursor_timeout", "melonds_show_current_layout",
+        ) + (2..8).map { "melonds_screen_layout$it" },
         biosFiles = listOf("bios7.bin", "bios9.bin", "firmware.bin", "dsi_bios7.bin", "dsi_bios9.bin"),
         restartOnlyOptions = RestartOnlyOptions.melondsds,
         offlineHiddenOptions = setOf(

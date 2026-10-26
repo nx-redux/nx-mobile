@@ -21,9 +21,20 @@ data class FrontendOption(
      * compact and [info] shows only from the icon.
      */
     val brief: String = "",
+    /** Shown only while the value of the first key is in the set (a sub-row of another row); null: always shown. */
+    val shownWhen: Pair<String, Set<String>>? = null,
 ) {
     /** The label for [value]; the value itself when it has none (or is unknown). */
     fun labelOf(value: String): String = valueLabels.getOrNull(values.indexOf(value))?.takeIf { it.isNotEmpty() } ?: value
+}
+
+/**
+ * The rows whose [FrontendOption.shownWhen] holds in [values]: each condition reads its key's value, else that row's default
+ * from this list.
+ */
+fun List<FrontendOption>.shownFor(values: Map<String, String>): List<FrontendOption> = filter { o ->
+    val (key, shown) = o.shownWhen ?: return@filter true
+    (values[key] ?: firstOrNull { it.key == key }?.default) in shown
 }
 
 /** How the game picture fills its box; [AUTO] lets the layout choose per screen and console. */

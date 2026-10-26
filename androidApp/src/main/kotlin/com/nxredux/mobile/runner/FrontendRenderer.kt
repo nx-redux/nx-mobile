@@ -101,6 +101,12 @@ internal interface FrontendHost : LifecycleOwner {
     fun recheckPictureOn(g: FloatArray)
     /** The core is held (the in-game menu, another app focused): it makes no new frame meanwhile. */
     fun corePaused(): Boolean
+    /**
+     * A DS game's screens were laid out again: the scale they show ([Nds3dResolution.currentScale]; null: none placed),
+     * the biggest any layout reaches on the displays in use ([Nds3dResolution.displayMax]), and whether only the game
+     * area's size changed since the last layout ([Nds3dArea.isSizeChangeFrom]).
+     */
+    fun onNds3dLayout(current: Int?, displayMax: Int, sizeChange: Boolean)
 }
 
 /**
@@ -154,6 +160,9 @@ internal class FrontendRenderer(
     var ndsSplit = false                            // regions are on: the overlay is off and shown unavailable
         internal set   // the launch sets it (a DS game starts split)
     private var ndsFrameWarned = false                      // the "not 256x384" warning is logged once
+    private var nds3dArea: Nds3dArea? = null                // the game area the DS 3D scale was last reported for
+    private var nds3dMaxFor: Triple<Float, Float, ScreenClass>? = null   // the area [nds3dMainMax] was worked out for
+    private var nds3dMainMax = 1                            // Nds3dResolution.displayMax of that area
 
     // ---- shader presets ----
     var shaderValues: Map<String, String> = ShaderOptions.fromConfig(emptyMap())   // nx_shader + stored nx_shader_param_*
@@ -462,6 +471,7 @@ internal class FrontendRenderer(
         ndsRegions = nds ?: emptyList()
         val secondDs = secondDsRegions(g)
         secondNdsRegions = secondDs.takeIf { isNds }.orEmpty()
+        if (isNds) reportNds3d(w, h, screen, halfFolded = tabletop != null)
         input.positionPen()   // on whichever display shows the bottom screen
         setNdsSplit(nds != null)
         view.secondaryRegions = secondRegions(g, secondDs)
@@ -534,6 +544,25 @@ internal class FrontendRenderer(
         fitPad(room, pad, covered, frameKnown = frame != null, h, overlayH)
         val scale = frame?.let { shown.height / (if (it.rotated) it.width else it.height) }
         logLayout(w, h, shape, room.name, pad, setAside, spaceAndPicture(space, shown), "${s.scaling} frame=${frame?.let { "${it.width.roundToInt()}x${it.height.roundToInt()}" }} scale=${scale?.let { "%.2f".format(java.util.Locale.US, it) }}")
+    }
+
+    /**
+     * The DS 3D scale's inputs to the host ([FrontendHost.onNds3dLayout]) for the layout just made in the [w] x [h] game
+     * area: the shown scale of every DS screen (both displays', or both halves when half-folded), and the display maximum,
+     * the main display's (worked out once per area) or with a second display drawing DS screens, the bigger of it and
+     * those screens' scale (one screen fills it, so that is the most it reaches).
+     */
+    private fun reportNds3d(w: Float, h: Float, screen: ScreenClass, halfFolded: Boolean) {
+        val key = Triple(w, h, screen)
+        if (key != nds3dMaxFor) {
+            nds3dMaxFor = key
+            nds3dMainMax = Nds3dResolution.displayMax(w, h, screen)
+        }
+        val second = Nds3dResolution.currentScale(secondNdsRegions) ?: 1
+        val area = Nds3dArea(w, h, screen, retroView?.display?.displayId, isLandscape(), halfFolded, dualMode)
+        val sizeChange = area.isSizeChangeFrom(nds3dArea)
+        nds3dArea = area
+        host.onNds3dLayout(Nds3dResolution.currentScale(ndsRegions + secondNdsRegions), maxOf(nds3dMainMax, second), sizeChange)
     }
 
     /**

@@ -249,6 +249,8 @@ class AppDeps(
     val netplay: com.nxredux.mobile.netplay.NetplayPlatform? = null,
     /** The menu window's screen class now (Emulator Settings' DS and 3DS layout rows); null: unknown. */
     val screenClass: () -> com.nxredux.mobile.layout.ScreenClass? = { null },
+    /** The menu window's size in px now, width to height (Emulator Settings' DS 3D scales); null: unknown. */
+    val windowPx: () -> Pair<Int, Int>? = { null },
     /** Opens the pad layout editor (Android: its own activity); it saves to the settings and ends with [AppState.onPadLayoutEdited]. Null: no editor. */
     val padEditor: ((PadEditRequest) -> Unit)? = null,
     /** Settings → Library → Saves: Export and Import (null: rows do nothing). */
@@ -5679,6 +5681,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         vulkanFailed = { it in deps.settings.vulkanFailedCores },
         secondScreen = { secondConnected },
         screenClass = deps.screenClass,
+        windowPx = deps.windowPx,
     )
 
     // --- Tools -> Artwork: AppState hosts the controller (index writes stay here); the pages live in ArtworkScreenController ---

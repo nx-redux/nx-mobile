@@ -92,7 +92,9 @@ internal fun emulatorTouchRow(row: EmulatorRow): NxSettingRow = when (row) {
     is EmulatorRow.Header -> NxSettingRow(row.label, section = true)
     EmulatorRow.UseEmulatorSettings -> NxSettingRow("Use emulator settings", info = USE_EMULATOR_SETTINGS_INFO, detail = USE_EMULATOR_SETTINGS_DETAIL)
     is EmulatorRow.Console -> row.row.option.let { o ->
-        NxSettingRow(
+        val note = row.row.disabledNote
+        if (note != null) NxSettingRow(o.label, info = note, enabled = false)
+        else NxSettingRow(
             o.label, info = o.brief, detail = o.info,
             choices = o.values.map(o::labelOf), index = o.values.indexOf(row.row.value),
         )
@@ -116,7 +118,7 @@ internal const val USE_EMULATOR_SETTINGS_DETAIL = "Delete this game's settings, 
 internal fun emulatorNxRow(row: EmulatorRow): NxRow = when (row) {
     is EmulatorRow.Header -> NxRow(row.label, section = true)   // a group's label: grey, never selected
     EmulatorRow.UseEmulatorSettings -> NxRow("Use emulator settings")
-    is EmulatorRow.Console -> NxRow(row.row.option.label, secondary = row.row.option.labelOf(row.row.value), cycleable = true)
+    is EmulatorRow.Console -> NxRow(row.row.option.label, enabled = row.row.disabledNote == null, secondary = row.row.disabledNote ?: row.row.option.labelOf(row.row.value), cycleable = row.row.disabledNote == null)
     is EmulatorRow.Core -> NxRow(CoreOptionFilter.rowLabel(row.option, row.inCategory), secondary = CoreOptionFilter.valueLabel(row.option), cycleable = true)
     is EmulatorRow.Category -> NxRow(row.label, secondary = "›")
     is EmulatorRow.Notice -> NxRow(row.text)

@@ -9,13 +9,29 @@ import com.nxredux.mobile.layout.ScreenClass
  * controller rows ([PadOptions]) and Bottom screen ([BottomScreenOptions]) are shared.
  */
 object ConsoleSettings {
-    /** [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows. */
-    fun tableFor(tag: String, screen: ScreenClass? = null): List<FrontendOption> = when {
-        NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen)
+    /**
+     * [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows, [displayMax] (null: unknown) the DS 3D
+     * Resolution scales.
+     */
+    fun tableFor(tag: String, screen: ScreenClass? = null, displayMax: Int? = null): List<FrontendOption> = when {
+        NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen, displayMax = displayMax)
         N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.newControlsRow
         WiiOptions.appliesTo(tag) -> WiiOptions.table
         else -> emptyList()
     } + graphicsRows(tag) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table
+
+    /**
+     * The row and the value it shows for [value] (stored, else the row default). Only the 3D Resolution scales differ: a
+     * stored scale the display no longer reaches (a smaller window, another phone) is added as a choice, labelled "7x", so
+     * it still shows and cycles; the unstored default above the list (Max Scale 4x on a 3x display) is not added, the row
+     * shows the list's last scale. An unknown stored 3D Resolution mode shows as the default (Auto). Any other row is returned as it is.
+     */
+    fun fitted(option: FrontendOption, value: String): Pair<FrontendOption, String> = when {
+        option.key == NdsOptions.MODE_3D && value !in option.values -> option to option.default
+        option.key != NdsOptions.MAX_SCALE_3D && option.key != NdsOptions.SCALE_3D || value in option.values -> option to value
+        value == option.default -> option to option.values.last()
+        else -> option.copy(values = option.values + value, valueLabels = option.valueLabels + "${value}x") to value
+    }
 
     private fun graphicsRows(tag: String): List<FrontendOption> =
         if (GraphicsApiOptions.appliesTo(tag)) listOf(GraphicsApiOptions.row) else emptyList()

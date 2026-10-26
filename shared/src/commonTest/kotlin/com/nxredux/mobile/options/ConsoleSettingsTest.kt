@@ -10,6 +10,7 @@ class ConsoleSettingsTest {
         assertEquals(
             listOf(
                 NdsOptions.LAYOUT_PORTRAIT, NdsOptions.LAYOUT_PORTRAIT_CONTROLLER, NdsOptions.LAYOUT_LANDSCAPE,
+                NdsOptions.MODE_3D, NdsOptions.MAX_SCALE_3D, NdsOptions.SCALE_3D,
                 NdsOptions.BIG_SCREEN, NdsOptions.PIP_CORNER, NdsOptions.PIP_SIZE, NdsOptions.PIP_OPACITY,
             ),
             rows.map { it.key },
@@ -17,7 +18,7 @@ class ConsoleSettingsTest {
         assertEquals(
             listOf(
                 "Layout (portrait)", "Layout (portrait, controller)", "Layout (landscape)",
-                "Big Screen", "Inset Corner", "Inset Size", "Inset Opacity",
+                "3D Resolution", "Max Scale", "Scale", "Big Screen", "Inset Corner", "Inset Size", "Inset Opacity",
             ),
             rows.map { it.label },
         )

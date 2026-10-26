@@ -99,6 +99,52 @@ class EmulatorSettingsTest {
         assertEquals("large", tablet.console.single { it.option.key == N3dsOptions.LAYOUT_LANDSCAPE }.value)
     }
 
+    @Test fun ndsResolutionRows() {
+        val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
+        fun labels(text: String?) = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, text?.let(::cfg), null, forGame = false, displayMax = 5)
+            .console.map { it.option.label }
+        val auto = labels(null)
+        assertEquals(listOf("3D Resolution", "Max Scale"), auto.subList(auto.indexOf("Layout (landscape)") + 1, auto.indexOf("Layout (landscape)") + 3))
+        assertTrue("Scale" !in auto)
+        val perf = labels("nx_nds_3d_resolution = performance\n")
+        assertTrue("Scale" in perf && "Max Scale" !in perf)
+    }
+
+    @Test fun softwareRenderModeDisablesOffline() {
+        val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
+        fun notes(text: String?) = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, text?.let(::cfg), null, forGame = false, displayMax = 5)
+            .console.filter { it.option.key in setOf(NdsOptions.MODE_3D, NdsOptions.MAX_SCALE_3D) }.map { it.disabledNote }
+        assertEquals(listOf(NdsOptions.SOFTWARE_NOTE, NdsOptions.SOFTWARE_NOTE), notes("melonds_render_mode = software\n"))
+        assertEquals(listOf(null, null), notes("melonds_render_mode = opengl\n"))
+        assertEquals(listOf(null, null), notes(null))
+    }
+
+    @Test fun storedValueOutsideTheListStillShows() {
+        val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
+        val row = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, cfg("nx_nds_3d_max_scale = 7\n"), null, forGame = false, displayMax = 3)
+            .console.single { it.option.key == NdsOptions.MAX_SCALE_3D }
+        assertEquals("7", row.value)
+        assertTrue("7" in row.option.values)
+        assertEquals("7x", row.option.labelOf("7"))
+    }
+
+    @Test fun anUnknownStoredModeShowsAsAutoWithNoExtraChoice() {
+        val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
+        val row = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, cfg("nx_nds_3d_resolution = bogus\n"), null, forGame = false, displayMax = 3)
+            .console.single { it.option.key == NdsOptions.MODE_3D }
+        assertEquals("auto", row.value)
+        assertEquals(NdsOptions.table.single { it.key == NdsOptions.MODE_3D }.values, row.option.values)
+    }
+
+    @Test fun anUnstoredDefaultAboveTheListIsNotOffered() {
+        val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
+        val row = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, null, null, forGame = false, displayMax = 3)
+            .console.single { it.option.key == NdsOptions.MAX_SCALE_3D }
+        assertEquals("3", row.value)
+        assertEquals("3x", row.option.labelOf(row.value))
+        assertEquals(listOf("1", "2", "3"), row.option.values)
+    }
+
     @Test fun ds_layout_rows_read_the_old_keys_like_the_game_does() {
         val nds = com.nxredux.mobile.runner.CoreRegistry.forTag("NDS")!!
         fun value(cfgText: String, key: String) = EmulatorSettings.page("NDS", nds, null, nds.defaultOptions, cfg(cfgText), null, forGame = false)

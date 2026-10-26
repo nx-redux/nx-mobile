@@ -14,6 +14,7 @@ import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.SpeedOptions
 import com.nxredux.mobile.options.NdsOptions
+import com.nxredux.mobile.options.NdsView
 import com.nxredux.mobile.shortcuts.ConsoleHotkeys
 import com.nxredux.mobile.shortcuts.KeyCodes
 import com.nxredux.mobile.shortcuts.ShortcutAction
@@ -179,6 +180,9 @@ class InGameMenuModelTest {
         val page = m.state.page
         assertEquals(PageKind.CoreOptions, page.kind)
         assertEquals("Core Options", page.title)
+        // Only the live options: the line says where the ones read at start are.
+        assertEquals(InGameMenuModel.CORE_OPTIONS_INTRO, page.intro)
+        assertTrue("Game Settings" in page.intro && "Tools → Settings → Emulation → Default settings" in page.intro)
         assertEquals(
             listOf(
                 MenuRow.Submenu("Video", PageKind.Category("video"), detail = "Display settings."),   // the core's text: info icon only
@@ -1356,10 +1360,10 @@ class InGameMenuModelTest {
     @Test fun console_settings_lists_the_ds_rows_and_edits_them_like_frontend_rows() {
         val m = model().openConsoleSettings()
         assertEquals("Console Settings", m.state.page.title)
-        assertEquals(ConsoleSettings.tableFor("NDS").filter { it != BottomScreenOptions.row }.map { it.label }, m.state.page.rows.map { it.label })
+        assertEquals(ConsoleSettings.tableFor("NDS").filter { it != BottomScreenOptions.row && it.key != NdsOptions.SCALE_3D }.map { it.label }, m.state.page.rows.map { it.label })
         assertEquals(
             listOf(
-                "Layout (portrait)", "Layout (portrait, controller)", "Layout (landscape)", "Big Screen", "Inset Corner", "Inset Size",
+                "Layout (portrait)", "Layout (portrait, controller)", "Layout (landscape)", "3D Resolution", "Max Scale", "Big Screen", "Inset Corner", "Inset Size",
                 "Inset Opacity", "Portrait Pad", "Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio",
             ),
             m.state.page.rows.map { it.label },
@@ -1368,7 +1372,7 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.SetFrontend(NdsOptions.LAYOUT_PORTRAIT, "stacked"), m.press(NxButton.RIGHT))
         assertEquals("Stacked", m.optionRow(0).valueLabel)
         assertEquals("Large screen", m.optionRow(1).valueLabel)            // the controller layout's default
-        m.select(3)                                                        // Big Screen
+        m.select(5)                                                        // Big Screen
         assertEquals(MenuEffect.SetFrontend(NdsOptions.BIG_SCREEN, "bottom"), m.press(NxButton.RIGHT))
         assertNull(m.press(NxButton.A))                                    // a visual row: adjust mode
         assertEquals(PageKind.Adjust(NdsOptions.BIG_SCREEN), m.state.page.kind)
@@ -1378,8 +1382,8 @@ class InGameMenuModelTest {
         assertEquals(PageKind.Adjust(NdsOptions.PIP_CORNER), m.state.page.kind)
         m.press(NxButton.B)
         assertEquals(PageKind.ConsoleSettings, m.state.page.kind)
-        assertEquals(4, m.state.page.selected)                             // the owner followed the strip
-        assertEquals("Top screen", m.optionRow(3).valueLabel)              // refreshed from the edit
+        assertEquals(6, m.state.page.selected)                             // the owner followed the strip
+        assertEquals("Top screen", m.optionRow(5).valueLabel)              // refreshed from the edit
     }
 
     // The window's screen shapes the DS layout rows: a Fold-shaped screen's landscape row has no Side by side and starts
@@ -1422,7 +1426,7 @@ class InGameMenuModelTest {
     @Test fun a_locked_console_row_is_hidden() {
         val m = model().openConsoleSettings(locked = setOf(NdsOptions.BIG_SCREEN))
         assertTrue(m.state.page.rows.none { it.label == "Big Screen" })
-        assertEquals(12, m.state.page.rows.size)
+        assertEquals(14, m.state.page.rows.size)
     }
 
     @Test fun other_consoles_keep_the_plain_frontend_page() {
@@ -1453,6 +1457,90 @@ class InGameMenuModelTest {
         m.press(NxButton.A)
         m.press(NxButton.DOWN)
         assertEquals(PageKind.Adjust(FrontendOptions.OFFSET_X), m.state.page.kind)
+    }
+
+    @Test fun ndsResolutionRowsFollowTheMode() {
+        val m = model().openConsoleSettings()
+        assertTrue("Max Scale" in m.state.page.rows.map { it.label })
+        assertTrue("Scale" !in m.state.page.rows.map { it.label })
+        m.select(m.state.page.rows.indexOfFirst { it.label == "3D Resolution" })
+        assertEquals(MenuEffect.SetFrontend(NdsOptions.MODE_3D, "quality"), m.press(NxButton.RIGHT))
+        assertTrue(m.state.page.rows.none { it.label.endsWith("Scale") && it.label != "Big Screen" })
+        assertEquals(MenuEffect.SetFrontend(NdsOptions.MODE_3D, "performance"), m.press(NxButton.RIGHT))
+        assertTrue("Max Scale" !in m.state.page.rows.map { it.label })
+        assertTrue("Scale" in m.state.page.rows.map { it.label })
+    }
+
+    @Test fun ndsLayoutRowsFollowTheView() {
+        val m = model()
+        m.ndsView = NdsView(landscape = true, controllerMode = false)
+        m.openConsoleSettings()
+        val labels = { m.state.page.rows.map { it.label } }
+        assertTrue("Layout (landscape)" in labels())
+        assertTrue("Layout (portrait)" !in labels() && "Layout (portrait, controller)" !in labels())
+        assertTrue("Inset Corner" !in labels())
+        // Picking Picture in picture brings the inset rows in at once.
+        m.setFrontend(FrontendOptions.defaults("NDS") + (NdsOptions.LAYOUT_LANDSCAPE to "pip"), emptyList(), emptySet(), "NDS")
+        assertTrue(listOf("Inset Corner", "Inset Size", "Inset Opacity").all { it in labels() })
+        // Turning to portrait swaps the layout row; PiP was landscape's, so the inset rows go.
+        m.ndsView = NdsView(landscape = false, controllerMode = false)
+        assertTrue("Layout (portrait)" in labels() && "Layout (landscape)" !in labels())
+        assertTrue("Inset Corner" !in labels())
+    }
+
+    @Test fun anAdjustStripOnARowThatGoesAwayCloses() {
+        val m = model()
+        m.ndsView = NdsView(landscape = true, controllerMode = false)
+        m.openConsoleSettings()
+        m.select(m.state.page.rows.indexOfFirst { it.label == "Layout (landscape)" })
+        m.press(NxButton.A)
+        assertTrue(m.state.page.kind is PageKind.Adjust)
+        // Turned to portrait: the landscape row is no longer listed, so its strip closes back onto Console Settings.
+        m.ndsView = NdsView(landscape = false, controllerMode = false)
+        assertEquals(PageKind.ConsoleSettings, m.state.page.kind)
+    }
+
+    private fun InGameMenuModel.row3d(label: String) = state.page.rows.filterIsInstance<MenuRow.Option>().single { it.label == label }
+
+    @Test fun modeRowShowsTheValueInUse() {
+        val m = model().openConsoleSettings()
+        m.setNds3d(6, false)
+        assertEquals("Auto · 6x now", m.row3d("3D Resolution").valueLabel)
+        m.setFrontend(FrontendOptions.defaults("NDS") + (NdsOptions.MODE_3D to "quality"), emptyList(), emptySet(), "NDS")
+        assertEquals("Quality · 6x now", m.row3d("3D Resolution").valueLabel)
+        m.setFrontend(FrontendOptions.defaults("NDS") + (NdsOptions.MODE_3D to "performance"), emptyList(), emptySet(), "NDS")
+        assertEquals("Performance", m.row3d("3D Resolution").valueLabel)
+        m.setFrontend(FrontendOptions.defaults("NDS"), emptyList(), emptySet(), "NDS")
+        m.setNds3d(null, false)
+        assertEquals("Auto", m.row3d("3D Resolution").valueLabel)
+    }
+
+    @Test fun softwareModeDisablesTheRows() {
+        val m = model().openConsoleSettings()
+        m.setNds3d(1, true)
+        for (label in listOf("3D Resolution", "Max Scale")) {
+            val row = m.row3d(label)
+            assertTrue(row.choices.isEmpty())
+            assertEquals(NdsOptions.SOFTWARE_NOTE, row.info)
+        }
+        m.select(m.state.page.rows.indexOfFirst { it.label == "3D Resolution" })
+        assertNull(m.press(NxButton.RIGHT))
+        m.setNds3d(4, false)
+        assertTrue(m.row3d("3D Resolution").choices.isNotEmpty())
+        assertTrue(m.row3d("Max Scale").choices.isNotEmpty())
+    }
+
+    @Test fun anUnstoredMaxScaleAboveTheDisplayShowsTheLast() {
+        val m = model().apply { displayMax3d = 3 }.openConsoleSettings()
+        val row = m.state.page.rows.filterIsInstance<MenuRow.Option>().single { it.label == "Max Scale" }
+        assertEquals("3x", row.valueLabel)
+        assertEquals(listOf("1x", "2x", "3x"), row.choices)
+    }
+
+    @Test fun aNewDisplayMaxRebuildsTheOpenScaleLists() {
+        val m = model().apply { displayMax3d = 3 }.openConsoleSettings()
+        m.displayMax3d = 5   // a rotation or fold with the menu open
+        assertEquals(listOf("1x", "2x", "3x", "4x", "5x"), m.row3d("Max Scale").choices)
     }
 
     @Test fun x_shows_the_full_text_of_a_compact_visual_row() {

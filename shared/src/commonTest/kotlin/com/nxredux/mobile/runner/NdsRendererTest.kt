@@ -28,4 +28,12 @@ class NdsRendererTest {
         assertFalse(NdsRenderer.showFallbackNotice("software", hardwareRendered = false))
         assertFalse(NdsRenderer.showFallbackNotice(null, hardwareRendered = false))
     }
+
+    @Test
+    fun theRunningGameRendersSoftwareInSoftwareModeOrAfterAFallback() {
+        assertFalse(NdsRenderer.rendersSoftware(NdsRenderer.OPENGL, fellBack = false))
+        assertTrue(NdsRenderer.rendersSoftware(NdsRenderer.OPENGL, fellBack = true))
+        assertTrue(NdsRenderer.rendersSoftware(NdsRenderer.SOFTWARE, fellBack = false))
+        assertTrue(NdsRenderer.rendersSoftware(null, fellBack = false))
+    }
 }

@@ -15,7 +15,11 @@ import com.nxredux.mobile.options.CoreOption
 import com.nxredux.mobile.options.CoreOptionFilter
 import com.nxredux.mobile.options.FrontendOption
 import com.nxredux.mobile.options.FrontendOptions
+import com.nxredux.mobile.options.NdsOptions
+import com.nxredux.mobile.options.NdsView
 import com.nxredux.mobile.options.ShaderOptions
+import com.nxredux.mobile.options.shownFor
+import com.nxredux.mobile.runner.Nds3dMode
 import com.nxredux.mobile.settings.stepFrom
 import com.nxredux.mobile.shaders.ShaderParam
 import com.nxredux.mobile.shortcuts.CaptureResult
@@ -303,6 +307,45 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * defaults ([ConsoleSettings.tableFor]). Set before the menu's pages are built.
      */
     var screen: ScreenClass? = null
+
+    /**
+     * The biggest DS 3D scale this display reaches (null: unknown): the 3D Resolution rows offer scales up to it. Set before
+     * the menu's pages are built; a change while open (a rotation, a fold) rebuilds open Console Settings/Frontend/Adjust pages.
+     */
+    var displayMax3d: Int? = null
+        set(value) {
+            if (value == field) return
+            field = value
+            refreshFrontendPages()
+        }
+
+    /**
+     * How the running DS game is shown (null: unknown, not a DS game): Console Settings then lists only the layout row in
+     * use and the inset rows only in Picture in picture ([NdsOptions.inGameRows]). A change while open (a rotation, a
+     * controller) rebuilds the open pages.
+     */
+    var ndsView: NdsView? = null
+        set(value) {
+            if (value == field) return
+            field = value
+            refreshFrontendPages()
+        }
+
+    private var nds3dNow: Int? = null            // the DS 3D scale in use (null: unknown / not DS)
+    private var nds3dSoftware = false            // the core renders in software: the 3D Resolution rows take no effect
+
+    /**
+     * The DS 3D scale in use ([now], null: unknown) and whether the core renders in [software] (the 3D Resolution rows are
+     * then static, with a note). Refreshes open Console Settings/Frontend/Adjust pages.
+     */
+    fun setNds3d(now: Int?, software: Boolean) {
+        if (now == nds3dNow && software == nds3dSoftware) return
+        nds3dNow = now
+        nds3dSoftware = software
+        refreshFrontendPages()
+    }
+
+    private fun softwareLocked(key: String) = nds3dSoftware && key in NdsOptions.RESOLUTION_KEYS
 
     // Options → Shortcuts ([setShortcuts]): Controls → Shortcuts, this console's or game's overrides over it, the
     // console's hotkeys (they win: a row on one is Unavailable, press to bind refuses one), whether the core rewinds.
@@ -1153,8 +1196,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             return ShaderOptions.cycle(key, current, delta, presets, params)?.let { setFrontendValue(key, it) }
         }
         if (key == FrontendOptions.OVERLAY && !overlayAvailable) return null
+        if (softwareLocked(key)) return null
         // An unset DS layout row (no stored value) cycles from its shown default, like frontendRow shows it.
-        val current = frontend[key] ?: optionFor(key)?.default ?: return null
+        val option = optionFor(key)
+        val current = ConsoleSettings.fitted(option ?: return null, frontend[key] ?: option.default).second
         val values = settingValues(key) ?: return null
         return CoreOptionFilter.cycle(CoreOption(key, current, values = values), delta)?.let { setFrontendValue(key, it) }
     }
@@ -1266,16 +1311,21 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * above it: back to Options, which no longer offers it.
      */
     private fun refreshFrontendPages() {
-        val stack = state.stack.mapNotNull { p ->
-            when (val k = p.kind) {
+        val stack = mutableListOf<MenuPage>()
+        for (p in state.stack) {
+            val page = when (val k = p.kind) {
                 PageKind.ConsoleSettings -> rebuilt(p, consoleSettingsPage())
                 PageKind.Frontend -> rebuilt(p, frontendPage())
                 PageKind.Shaders -> rebuilt(p, shadersPage())
                 PageKind.ShaderParams -> rebuilt(p, shaderParamsPage())
-                // A parameter the new preset no longer has: close its strip rather than show a stale row.
-                is PageKind.Adjust -> if (isVanishedParam(k.key)) null else adjustPage(k.key)
+                // A row its page no longer lists (a parameter the new preset lacks; a DS layout or inset row after a
+                // rotation or a controller): close its strip rather than adjust a row that is not shown.
+                is PageKind.Adjust ->
+                    if (isVanishedParam(k.key) || stack.lastOrNull()?.rows?.none { (it as? MenuRow.Option)?.key == k.key } == true) null
+                    else adjustPage(k.key)
                 else -> p
             }
+            if (page != null) stack += page
         }
         val empty = stack.indexOfFirst { it.kind == PageKind.ConsoleSettings && it.rows.isEmpty() }
         state = state.copy(stack = if (empty > 0) stack.take(empty) else stack)
@@ -1369,9 +1419,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * Game Settings / Emulator Settings) left out, and Bottom screen while no second display is [secondConnected]; none
      * left = the page is not offered.
      */
-    private fun consoleRows() = ConsoleSettings.tableFor(frontendTag, screen).filter {
+    private fun consoleRows() = ConsoleSettings.tableFor(frontendTag, screen, displayMax3d).filter {
         it.key !in frontendLocked && !it.atLaunch && (secondConnected || it.key != BottomScreenOptions.KEY)
-    }
+    }.shownFor(frontend).let { rows ->
+        val view = ndsView
+        if (view != null && NdsOptions.appliesTo(frontendTag)) NdsOptions.inGameRows(rows, frontend, view, screen) else rows
+    }.map { ConsoleSettings.fitted(it, frontend[it.key] ?: it.default).first }
 
     private fun frontendPage() = MenuPage(
         PageKind.Frontend, "Frontend",
@@ -1424,12 +1477,17 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun frontendRow(o: FrontendOption): MenuRow.Option =
         if (o.key == FrontendOptions.OVERLAY && !overlayAvailable) {
             MenuRow.Option(o.label, o.key, OVERLAY_UNAVAILABLE, OVERLAY_UNAVAILABLE_LINE, detail = OVERLAY_UNAVAILABLE_INFO)
+        } else if (softwareLocked(o.key)) {
+            val value = ConsoleSettings.fitted(o, frontend[o.key] ?: o.default).second
+            MenuRow.Option(o.label, o.key, o.labelOf(value), NdsOptions.SOFTWARE_NOTE)
         } else {
-            val value = frontend[o.key] ?: o.default
+            val value = ConsoleSettings.fitted(o, frontend[o.key] ?: o.default).second
             val values = if (o.key == FrontendOptions.OVERLAY) FrontendOptions.choices(o.key, overlays) else o.values
             // The row's brief line (none: compact); the full text in its info popup.
+            val now = nds3dNow
+            val shown = if (o.key == NdsOptions.MODE_3D && now != null && value != Nds3dMode.PERFORMANCE.value) "${o.labelOf(value)} · ${now}x now" else o.labelOf(value)
             MenuRow.Option(
-                o.label, o.key, o.labelOf(value), o.brief, visual = o.visual,
+                o.label, o.key, shown, o.brief, visual = o.visual,
                 choices = values.map(o::labelOf), index = values.indexOf(value), detail = o.info,
             )
         }
@@ -1602,7 +1660,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         val live = CoreOptionFilter.live(options, locked)
         val rows = CoreOptionFilter.categories(live).map { MenuRow.Submenu(it.label, PageKind.Category(it.key), detail = it.info) } +
             CoreOptionFilter.uncategorized(live).map { optionRow(it, inCategory = false) }
-        return MenuPage(PageKind.CoreOptions, "Core Options", rows)
+        return MenuPage(PageKind.CoreOptions, "Core Options", rows, intro = CORE_OPTIONS_INTRO)
     }
 
     private fun categoryPage(key: String): MenuPage {
@@ -1656,6 +1714,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val OVERLAY_UNAVAILABLE_LINE = "Off while the DS screens are drawn apart"
         const val OVERLAY_UNAVAILABLE_INFO = "Overlays are off while the DS screens\nare drawn apart."
         private const val NO_LIVE_OPTIONS = "This core has no options that\ncan be changed while running."
+
+        /** The Core Options page's line: only live options are here, and where the ones read at start are. */
+        internal const val CORE_OPTIONS_INTRO = "Only options that change while you play are listed. For the rest, which apply when a " +
+            "game starts, use Game Settings in the game's context menu, or Tools → Settings → Emulation → Default settings."
         private const val NO_CATEGORY_OPTIONS = "This category has no options."
     }
 }

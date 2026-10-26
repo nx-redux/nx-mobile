@@ -16,11 +16,11 @@ import kotlin.test.assertTrue
 
 class NdsOptionsTest {
     @Test fun keys_values_and_defaults_follow_the_spec() {
-        assertEquals(listOf("nx_nds_layout_portrait_v3", "nx_nds_layout_portrait_controller_v2", "nx_nds_layout_landscape_v2", "nx_nds_big_screen", "nx_nds_pip_corner", "nx_nds_pip_size",
+        assertEquals(listOf("nx_nds_layout_portrait_v3", "nx_nds_layout_portrait_controller_v2", "nx_nds_layout_landscape_v2", "nx_nds_3d_resolution", "nx_nds_3d_max_scale", "nx_nds_3d_scale", "nx_nds_big_screen", "nx_nds_pip_corner", "nx_nds_pip_size",
             "nx_nds_pip_opacity"),
             NdsOptions.table.map { it.key })
         assertEquals(
-            mapOf(LAYOUT_PORTRAIT to "large", LAYOUT_PORTRAIT_CONTROLLER to "large", LAYOUT_LANDSCAPE to "side-by-side", BIG_SCREEN to "top", PIP_CORNER to "top-right", PIP_SIZE to "medium",
+            mapOf(LAYOUT_PORTRAIT to "large", LAYOUT_PORTRAIT_CONTROLLER to "large", LAYOUT_LANDSCAPE to "side-by-side", NdsOptions.MODE_3D to "auto", NdsOptions.MAX_SCALE_3D to "4", NdsOptions.SCALE_3D to "2", BIG_SCREEN to "top", PIP_CORNER to "top-right", PIP_SIZE to "medium",
                 PIP_OPACITY to "100"),
             NdsOptions.table.associate { it.key to it.default },
         )
@@ -42,7 +42,41 @@ class NdsOptionsTest {
         assertEquals(keys.indexOf(PIP_SIZE) + 1, keys.indexOf(PIP_OPACITY))    // right after the size row
         assertEquals(keys.indexOf(LAYOUT_PORTRAIT) + 1, keys.indexOf(LAYOUT_PORTRAIT_CONTROLLER))    // right after the portrait row
         assertEquals(PIP_OPACITY, keys.last())    // the last row
-        assertTrue(NdsOptions.table.all { it.visual && it.valueLabels.size == it.values.size })
+        assertTrue(NdsOptions.table.all { (it.visual || it.key in NdsOptions.RESOLUTION_KEYS) && it.valueLabels.size == it.values.size })
+    }
+
+    @Test fun resolutionRows() {
+        val (mode, max, scale) = NdsOptions.resolutionRows(null)
+        assertEquals(listOf("3D Resolution", "Max Scale", "Scale"), listOf(mode.label, max.label, scale.label))
+        assertEquals(listOf("auto", "quality", "performance"), mode.values)
+        assertEquals(listOf("Auto", "Quality", "Performance"), mode.valueLabels)
+        assertEquals("auto", mode.default)
+        assertEquals("How sharply 3D models are drawn. 2D art, text and the screen's size don't change.", mode.info)
+        assertEquals("4", max.default)
+        assertEquals(NdsOptions.MODE_3D to setOf("auto"), max.shownWhen)
+        assertEquals("2", scale.default)
+        assertEquals(NdsOptions.MODE_3D to setOf("performance"), scale.shownWhen)
+        assertEquals((1..8).map { "${it}x" }, max.valueLabels)
+        assertNull(mode.shownWhen)
+        // No Adjust strip: the paused core draws no new frame, so the change only shows after Continue.
+        assertTrue(NdsOptions.resolutionRows(null).none { it.visual })
+    }
+
+    @Test fun listsFollowTheDisplay() {
+        fun lists(displayMax: Int?) = NdsOptions.resolutionRows(displayMax).let { (_, max, scale) -> max.values to scale.values }
+        fun upTo(n: Int) = (1..n).map { it.toString() }
+        assertEquals(upTo(8) to upTo(5), lists(9))
+        assertEquals(upTo(3) to upTo(2), lists(3))
+        assertEquals("4", NdsOptions.resolutionRows(3)[1].default)   // clamped where it is used
+        assertEquals(upTo(8) to upTo(8), lists(null))
+    }
+
+    @Test fun shownFor() {
+        val rows = NdsOptions.resolutionRows(null)
+        fun shown(values: Map<String, String>) = rows.shownFor(values).map { it.label }
+        assertEquals(listOf("3D Resolution", "Max Scale"), shown(emptyMap()))
+        assertEquals(listOf("3D Resolution", "Scale"), shown(mapOf(NdsOptions.MODE_3D to "performance")))
+        assertEquals(listOf("3D Resolution"), shown(mapOf(NdsOptions.MODE_3D to "quality")))
     }
 
     @Test fun only_nds_gets_the_ds_rows() {
@@ -255,5 +289,28 @@ class NdsOptionsTest {
     @Test fun layout_rows_leave_the_fold_out_where_the_device_cannot_half_fold() {
         assertTrue(NdsOptions.layoutRows(ScreenClass.REGULAR_PHONE, canHalfFold = false).none { NdsOptions.FOLD_NOTE in it.info })
         assertTrue(NdsOptions.layoutRows(ScreenClass.REGULAR_PHONE, canHalfFold = false).all { it.info.endsWith("do not apply to the DS screens.") })
+    }
+
+    @Test fun inGameShowsOnlyTheLayoutRowInUse() {
+        val rows = NdsOptions.tableFor(ScreenClass.REGULAR_PHONE)
+        fun layoutKeys(view: NdsView) = NdsOptions.inGameRows(rows, emptyMap(), view, ScreenClass.REGULAR_PHONE).map { it.key }.filter { it in NdsOptions.LAYOUT_KEYS }
+        assertEquals(listOf(LAYOUT_LANDSCAPE), layoutKeys(NdsView(landscape = true, controllerMode = false)))
+        assertEquals(listOf(LAYOUT_PORTRAIT), layoutKeys(NdsView(landscape = false, controllerMode = false)))
+        assertEquals(listOf(LAYOUT_PORTRAIT_CONTROLLER), layoutKeys(NdsView(landscape = false, controllerMode = true)))
+        // The rest pass through: Big Screen stays.
+        assertTrue(BIG_SCREEN in NdsOptions.inGameRows(rows, emptyMap(), NdsView(true, false), ScreenClass.REGULAR_PHONE).map { it.key })
+    }
+
+    @Test fun insetRowsOnlyInPictureInPicture() {
+        val rows = NdsOptions.tableFor(ScreenClass.REGULAR_PHONE)
+        val inset = setOf(PIP_CORNER, PIP_SIZE, PIP_OPACITY)
+        fun insetShown(values: Map<String, String>, view: NdsView) =
+            NdsOptions.inGameRows(rows, values, view, ScreenClass.REGULAR_PHONE).map { it.key }.filter { it in inset }
+        val landscape = NdsView(landscape = true, controllerMode = false)
+        assertEquals(emptyList(), insetShown(emptyMap(), landscape))
+        assertEquals(listOf(PIP_CORNER, PIP_SIZE, PIP_OPACITY), insetShown(mapOf(LAYOUT_LANDSCAPE to "pip"), landscape))
+        // PiP set for landscape only: portrait shows no inset rows.
+        assertEquals(emptyList(), insetShown(mapOf(LAYOUT_LANDSCAPE to "pip"), NdsView(landscape = false, controllerMode = false)))
+        assertEquals(3, insetShown(mapOf(LAYOUT_PORTRAIT_CONTROLLER to "pip"), NdsView(landscape = false, controllerMode = true)).size)
     }
 }
