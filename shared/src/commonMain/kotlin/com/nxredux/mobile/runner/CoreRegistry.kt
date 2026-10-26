@@ -331,13 +331,15 @@ object CoreRegistry {
     // nothing (cores/patches/azahar.patch). Decrypted games only; the AES keyblob and the open-source shared font are
     // built in, no BIOS. Its user dir (NAND, SD card, shader cache) is <save dir>/Azahar/, kept local (not part of the
     // saves); the libretro save path keeps it under the runner's save dir. Defaults: the GL renderer ("Software" is not
-    // built on Android), 2x internal resolution, the disk shader cache, the core's own top-over-bottom layout with the
+    // built on Android), 3x internal resolution, the disk shader cache, the core's own top-over-bottom layout with the
     // touchscreen taken from the pointer. Its mic input is locked to the frontend: the app's Mic toggle drives the feed.
+    // The internal resolution is the app's (3DS 3D Resolution and Scale, N3dsOptions), so it is locked; so are the large
+    // screen proportion (the core's default, 4.00) and the stereoscopic 3D mode (off: 2D only). The swap options stay visible.
     private val azahar = CoreDescriptor(
         "azahar", "libazahar_libretro_android.so", setOf("3ds", "3dsx", "z3dsx", "elf", "axf", "cci", "zcci", "cxi", "zcxi", "app"),
         defaultOptions = mapOf(
             "citra_graphics_api" to "OpenGL",
-            "citra_resolution_factor" to "2",
+            "citra_resolution_factor" to "3",
             "citra_use_disk_shader_cache" to "enabled",
             "citra_layout_option" to "default",
             "citra_use_libretro_save_path" to "LibRetro Default",
@@ -349,8 +351,11 @@ object CoreRegistry {
             "citra_enable_motion" to "enabled",
             "citra_motion_sensitivity" to "1.0",
             "citra_input_type" to "frontend",
+            "citra_large_screen_proportion" to "4.00",
+            "citra_render_3d" to "off",
         ),
         lockedOptions = setOf(
+            "citra_resolution_factor", "citra_large_screen_proportion", "citra_render_3d",
             "citra_graphics_api", "citra_use_libretro_save_path", "citra_enable_mouse_touchscreen", "citra_enable_motion",
             "citra_motion_sensitivity", "citra_input_type",
             // The app sets the layout from its per-orientation rows (N3dsOptions.layoutRows), so the core's is locked.
