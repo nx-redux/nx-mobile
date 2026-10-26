@@ -10012,7 +10012,7 @@ class AppStateTest {
             listOf(
                 SettingsRow(SettingsKind.PAD_LAYOUT_CONSOLE, "Console", "Shared"),
                 SettingsRow(SettingsKind.PAD_LAYOUT_SHAPE, "Portrait band", "Default", padShape = PadShape.PORTRAIT),
-                SettingsRow(SettingsKind.PAD_LAYOUT_SHAPE, "Landscape overlay", "Default", padShape = PadShape.OVERLAY),
+                SettingsRow(SettingsKind.PAD_LAYOUT_SHAPE, "Landscape", "Default", padShape = PadShape.OVERLAY),
                 SettingsRow(SettingsKind.PAD_LAYOUT_RESET, "Reset console"),
             ),
             page.rows,

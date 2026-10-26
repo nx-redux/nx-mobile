@@ -11,10 +11,10 @@ enum class PadGroup { DPAD, FACE, L_SHOULDERS, R_SHOULDERS, SYSTEM_LEFT, SYSTEM_
 
 /**
  * The pad's two editable arrangements: the portrait band ([PORTRAIT], also flex mode's band and the main menu's pad)
- * and the clusters over the game ([OVERLAY]). Flex mode's clusters below the hinge (wide foldables only) keep the
- * default layout. A stored line for another shape is skipped.
+ * and the landscape halves beside the picture ([OVERLAY], named for the clusters once drawn over the game). Flex mode's
+ * clusters below the hinge (wide foldables only) keep the default layout. A stored line for another shape is skipped.
  */
-enum class PadShape(val label: String) { PORTRAIT("Portrait band"), OVERLAY("Landscape overlay") }
+enum class PadShape(val label: String) { PORTRAIT("Portrait band"), OVERLAY("Landscape") }
 
 /**
  * The screen a pad is drawn on, by its smallest side: a Fold's cover screen (and a phone or handheld) is [NARROW], its
@@ -135,8 +135,8 @@ object PadLayouts {
     /**
      * The stored layouts from [current] (the versioned line, written by every save since the landscape pad moved beside
      * the picture) or, before the first such save, from [beforeBeside] with [withoutLandscapeMoves]: those moves were
-     * made against the old overlay's spots, so they would land elsewhere now. Once [current] is written the old line is
-     * never read again, so this happens once.
+     * made against the old overlay's spots, so they would land elsewhere now. Once [current] is written it always wins
+     * (the old line stays stored for an earlier build, unread here), so this happens once.
      */
     fun decodeStored(current: String?, beforeBeside: String?): PadLayoutMap =
         if (current != null) decode(current) else withoutLandscapeMoves(decode(beforeBeside))
