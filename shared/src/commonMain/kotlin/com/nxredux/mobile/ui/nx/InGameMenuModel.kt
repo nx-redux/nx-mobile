@@ -486,8 +486,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         return when (button) {
             NxButton.UP -> { move(-1); null }
             NxButton.DOWN -> { move(1); null }
-            NxButton.LEFT -> change(-1)
+            // A visual row's value changes in the live preview: its strip comes up first ([intoAdjust]).
+            NxButton.LEFT -> { intoAdjust(state.page.selected); change(-1) }
             NxButton.RIGHT -> when {
+                visualRow(state.page.selected) != null -> { intoAdjust(state.page.selected); change(1) }
                 // The Disc row keeps RIGHT for its value; every other row beside the panel enters it.
                 panelShown() && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Option -> { state = state.copy(panelFocus = PanelFocus.Tabs); null }
                 // Options moves into its preview, as A, whether or not the menu splits.
@@ -541,6 +543,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     fun openPicker(index: Int) {
         val row = state.page.rows.getOrNull(index) as? MenuRow.Option ?: return
         if (row.choices.isEmpty() || state.page.kind is PageKind.Adjust) return
+        if (intoAdjust(index)) return   // a visual row: its live preview, where LEFT/RIGHT step it, not a list
         select(index)
         state = state.copy(popup = MenuPopup.Picker(index, row.label, row.choices, row.index, row.index.coerceAtLeast(0)))
     }
@@ -577,6 +580,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         val r = state.page.rows.getOrNull(row) as? MenuRow.Option ?: return null
         if (index !in r.choices.indices || state.page.kind == PageKind.Achievements) return null
         select(row)
+        // A visual row: the value set, then its live preview comes up to show it.
+        if (visualRow(row) != null) return setChoiceValue(r, index).also { intoAdjust(row) }
+        return setChoiceValue(r, index)
+    }
+
+    /** [setChoice]'s value for [r] on the top page: the effect, null when [index] is already set. */
+    private fun setChoiceValue(r: MenuRow.Option, index: Int): MenuEffect? {
         if (index == r.index) return null
         return when {
             r.key.startsWith(PLAYER_KEY_PREFIX) -> {
@@ -1097,6 +1107,21 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             else -> f
         }
         if (tab != state.panelTab || focus != state.panelFocus) state = state.copy(panelTab = tab, panelFocus = focus)
+    }
+
+    /** Row [index] of the top page when it is a visual option (it changes the picture) on a page that isn't its strip. */
+    private fun visualRow(index: Int): MenuRow.Option? =
+        (state.page.rows.getOrNull(index) as? MenuRow.Option)?.takeIf { it.visual && state.page.kind !is PageKind.Adjust }
+
+    /**
+     * Every change to a visual row happens in its live preview: LEFT/RIGHT, a tap on its control, A. When row [index] is
+     * one, selects it and opens its strip over the paused frame (where the change then applies); false for any other row.
+     */
+    private fun intoAdjust(index: Int): Boolean {
+        val row = visualRow(index) ?: return false
+        select(index)
+        push(adjustPage(row.key))
+        return true
     }
 
     private fun pressAdjust(button: NxButton): MenuEffect? = when (button) {

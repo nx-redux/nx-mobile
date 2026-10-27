@@ -370,12 +370,15 @@ class InGameMenuModelTest {
 
     @Test fun left_right_on_the_list_emit_set_frontend() {
         val m = model().openFrontend()
+        // A visual row: RIGHT opens its live preview and changes it there; LEFT steps back in it.
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.press(NxButton.RIGHT))
+        assertEquals(PageKind.Adjust(FrontendOptions.SCALING), m.state.page.kind)
         assertEquals("Native", m.optionRow(0).valueLabel)
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Auto"), m.press(NxButton.LEFT))
+        m.press(NxButton.B)
         m.select(5)
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.PAD_LANDSCAPE_OPACITY, "25"), m.press(NxButton.RIGHT))
-        assertEquals("25%", m.optionRow(5).valueLabel)
+        assertEquals("25%", m.optionRow(5).valueLabel)                     // not a visual row: in place
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.PAD_LANDSCAPE_OPACITY, "40"), m.press(NxButton.LEFT))
         m.select(6)
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "On"), m.press(NxButton.RIGHT))
@@ -402,7 +405,7 @@ class InGameMenuModelTest {
         val m = model().openFrontend(overlays = emptyList())
         m.select(2)
         assertNull(m.press(NxButton.RIGHT))
-        assertEquals("None", m.optionRow(2).valueLabel)
+        assertEquals("None", m.optionRow(0).valueLabel)                   // its live preview, unchanged
     }
 
     @Test fun a_on_a_visual_row_enters_adjust_mode() {
@@ -1370,12 +1373,14 @@ class InGameMenuModelTest {
         )
         assertEquals("Large screen", m.optionRow(0).valueLabel)           // the portrait layout's default
         assertEquals(MenuEffect.SetFrontend(NdsOptions.LAYOUT_PORTRAIT, "stacked"), m.press(NxButton.RIGHT))
+        assertEquals(PageKind.Adjust(NdsOptions.LAYOUT_PORTRAIT), m.state.page.kind)   // a visual row changes in its live preview
         assertEquals("Stacked", m.optionRow(0).valueLabel)
+        m.press(NxButton.B)
         assertEquals("Large screen", m.optionRow(1).valueLabel)            // the controller layout's default
         m.select(5)                                                        // Big Screen
         assertEquals(MenuEffect.SetFrontend(NdsOptions.BIG_SCREEN, "bottom"), m.press(NxButton.RIGHT))
-        assertNull(m.press(NxButton.A))                                    // a visual row: adjust mode
-        assertEquals(PageKind.Adjust(NdsOptions.BIG_SCREEN), m.state.page.kind)
+        assertEquals(PageKind.Adjust(NdsOptions.BIG_SCREEN), m.state.page.kind)   // RIGHT went into its live preview
+        assertNull(m.press(NxButton.A))                                    // A there does nothing
         assertEquals("Bottom screen", (m.state.page.rows.single() as MenuRow.Option).valueLabel)
         assertEquals(MenuEffect.SetFrontend(NdsOptions.BIG_SCREEN, "top"), m.press(NxButton.LEFT))
         m.press(NxButton.DOWN)                                             // DOWN walks this page's visual rows
@@ -1396,7 +1401,7 @@ class InGameMenuModelTest {
         assertFalse("Side by side" in landscape.choices)
         fold.select(2)
         fold.press(NxButton.LEFT)                                          // Large screen back to the last one offered
-        assertEquals("Picture in picture", fold.optionRow(2).valueLabel)
+        assertEquals("Picture in picture", fold.optionRow(0).valueLabel)   // in its live preview
         val phone = model().apply { screen = ScreenClass.REGULAR_PHONE }.openConsoleSettings()
         assertEquals("Side by side", phone.optionRow(2).valueLabel)
         assertTrue("Side by side" in phone.optionRow(2).choices)
@@ -2061,7 +2066,9 @@ class InGameMenuModelTest {
         assertEquals(listOf("None", "crt/crt-pi.glslp", "nx/line.glslp"), preset.choices)
         assertEquals(1, preset.index)
         assertEquals(MenuEffect.SetShader("nx_shader", "nx/line.glslp"), m.setChoice(0, 2))
+        assertEquals(PageKind.Adjust(ShaderOptions.PRESET), m.state.page.kind)   // the live preview shows it
         assertEquals(2, m.optionRow(0).index)
+        m.press(NxButton.B)
         m.select(1); m.press(NxButton.A)                     // Shader Parameters
         val scanRow = m.optionRow(0)
         assertEquals(listOf("0.00", "0.50", "1.00"), scanRow.choices)
@@ -2132,13 +2139,17 @@ class InGameMenuModelTest {
 
     @Test fun touch_events_open_pick_and_close_popups() {
         val m = model().openFrontend()
-        val overlay = m.rowIndex("Overlay")                  // visual: A adjusts, its "Value ›" opens the picker
+        val overlay = m.rowIndex("Overlay")                  // visual: its "Value ›" opens its live preview, not a list
         assertNull(m.optionEvent(OptionEvent.OpenPicker(overlay)))
-        assertEquals(overlay, m.state.page.selected)
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.OVERLAY, "Native.png"), m.optionEvent(OptionEvent.Pick(2)))
         assertNull(m.state.popup)
+        assertEquals(PageKind.Adjust(FrontendOptions.OVERLAY), m.state.page.kind)
+        m.press(NxButton.B)
+        assertEquals(overlay, m.state.page.selected)
         assertNull(m.optionEvent(OptionEvent.Pick(1)))      // no picker open
+        // A tap on a visual row's control sets it, then its live preview shows it.
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.optionEvent(OptionEvent.Choose(m.rowIndex("Screen Scaling"), 1)))
+        assertEquals(PageKind.Adjust(FrontendOptions.SCALING), m.state.page.kind)
+        m.press(NxButton.B)
         val hud = m.rowIndex("Debug HUD")
         m.optionEvent(OptionEvent.Info(hud))
         assertEquals(MenuPopup.Info("Debug HUD", FrontendOptions.option(FrontendOptions.DEBUG_HUD)!!.info), m.state.popup)
@@ -2148,7 +2159,7 @@ class InGameMenuModelTest {
         m.optionEvent(OptionEvent.OpenPicker(overlay))
         m.press(NxButton.B)
         assertNull(m.state.popup)
-        assertEquals(PageKind.Frontend, m.state.page.kind)   // B closed the picker, not the page
+        assertEquals(PageKind.Frontend, m.state.page.kind)   // B closed the live preview, not the page
     }
 
     @Test fun no_popup_for_a_row_without_info_or_choices_and_a_page_change_closes_one() {
