@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -126,10 +127,10 @@ fun NxSettingInfoPopup(note: NxHelpText?, onClose: () -> Unit) {
         val corner = with(density) { HelpHoleCorner.toPx() }
         Layout(
             content = {
-                Box(Modifier.background(colors.accentFaint, RoundedCornerShape(20.dp)).padding(8.dp)) {
+                Box(Modifier.fillMaxWidth().background(colors.accentFaint, RoundedCornerShape(20.dp)).padding(8.dp)) {
                     val card = RoundedCornerShape(14.dp)
                     Column(
-                        Modifier.clip(card).background(colors.background).border(1.dp, colors.inkLine, card)
+                        Modifier.fillMaxWidth().clip(card).background(colors.background).border(1.dp, colors.inkLine, card)
                             .nxScrollFade(scroll).verticalScroll(scroll).padding(20.dp),
                     ) {
                         Text(
