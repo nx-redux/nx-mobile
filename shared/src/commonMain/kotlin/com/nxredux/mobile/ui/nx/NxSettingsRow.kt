@@ -141,19 +141,6 @@ internal fun nxFooterKeep(
 /** A description as a share of its name. */
 private const val DESC_OF_LABEL = 0.9f   // one text-size step ([NxTextSizes.STEP]) over 0.72
 
-/**
- * A page's description under its title (a Layouts group's), as a touch row's description reads: the hint grey, Regular,
- * at its size and line height (Appearance → Text size), wrapping.
- */
-@Composable
-fun NxRowDescription(text: String, modifier: Modifier = Modifier) {
-    val desc = nxOptionsLabelSize(nxListLabel()) * DESC_OF_LABEL
-    Text(
-        text, color = LocalNxColors.current.hint, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal,
-        fontSize = desc, lineHeight = desc * 1.25f, modifier = modifier,
-    )
-}
-
 /** Row [r]'s segments go under its text: an enabled segmented row whose choices don't fit on its right. */
 internal fun NxTouchRowSizes.segmentsBelow(r: NxSettingRow): Boolean = r.enabled && r.control == NxSettingControl.SEGMENTED && !segmentsRight(r.label, r.choices)
 

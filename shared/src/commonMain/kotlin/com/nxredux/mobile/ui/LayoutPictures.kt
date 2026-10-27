@@ -105,7 +105,6 @@ import com.nxredux.mobile.ui.nx.NxList
 import com.nxredux.mobile.ui.nx.NxListFooter
 import com.nxredux.mobile.ui.nx.NxOptionsSidePad
 import com.nxredux.mobile.ui.nx.NxRow
-import com.nxredux.mobile.ui.nx.NxRowDescription
 import com.nxredux.mobile.ui.nx.NxOptionsList
 import com.nxredux.mobile.ui.nx.nxOptionsFitHeight
 import com.nxredux.mobile.ui.nx.LocalNxOptionText
@@ -239,8 +238,7 @@ internal const val CHROME_PICTURE_AR = 624f / 442f
  * and rows to [landscapeWidth] of the width. A wide landscape screen ([PREVIEW_WIDE_RATIO]: a 16:9 phone, not the Fold's
  * near-square one) puts the picture in a column of its own at the right, as large as that column takes it.
  * [touchRows]: the value rows' own list in place of the options rows (a Settings group's touch rows), given the room it may take
- * and, in the wide Settings rows block, the picture to draw under its last row (scrolling with the rows). [description]:
- * a line under the title (a Layouts group's, [NxRowDescription]), in the rows block and on a whole page alike.
+ * and, in the wide Settings rows block, the picture to draw under its last row (scrolling with the rows).
  */
 @Composable
 internal fun LayoutPreviewPage(
@@ -248,13 +246,8 @@ internal fun LayoutPreviewPage(
     onSelect: (Int) -> Unit, onRow: (Int) -> Unit, onHint: (NxButton) -> Unit, modifier: Modifier = Modifier,
     landscapeWidth: Float = NxSetupLandscapeWidth, titleAction: Boolean = true,
     touchRows: (@Composable (Modifier, NxListFooter?) -> Unit)? = null,
-    description: String? = null,
 ) {
     val colors = LocalNxColors.current
-    // Under the title, level with it, before the rows.
-    val describe: (@Composable () -> Unit)? = description?.takeIf { it.isNotBlank() }?.let { d ->
-        { NxRowDescription(d, Modifier.fillMaxWidth().padding(start = nxListInset(), end = nxListInset(), bottom = 6.dp)) }
-    }
     val font = LocalNxFont.current
     val values = if (titleAction) rows.dropLast(1) else rows
     val last = rows.lastIndex
@@ -263,7 +256,6 @@ internal fun LayoutPreviewPage(
     val label = NxTextSizes.listLabel(NxListPitch) * nxTextScale()   // Appearance → Text size
     // [rowsMax]: the most the touch rows may take, so the picture under them keeps its room (they scroll past it).
     val text: @Composable (Modifier, Dp, NxListFooter?) -> Unit = { cap, rowsMax, footer -> Column(cap) {
-        describe?.invoke()
         Column(Modifier.padding(horizontal = nxListInset())) {
             details.forEachIndexed { i, line ->
                 if (i == 0) Text(line, color = colors.listText, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = NxTextSizes.headline(label))
@@ -304,7 +296,7 @@ internal fun LayoutPreviewPage(
     // room right of the sections ([SettingsBlockMode.pictureWidth], its right edge at the gutter); its aspect kept.
     LocalSettingsBlock.current?.let { block ->
         Column(modifier.fillMaxSize()) {
-            SettingsRowsBlock(block, title, Modifier.weight(1f), describe) {
+            SettingsRowsBlock(block, title, Modifier.weight(1f)) {
                 if (touchRows != null) BoxWithConstraints {
                     // maxWidth: the pane; the list sits [NxOptionsSidePad] inside it on both sides.
                     val wide = block.pictureWidth

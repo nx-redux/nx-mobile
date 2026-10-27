@@ -82,7 +82,7 @@ class SettingsTouchRowsTest {
     }
 
     // Layouts' group rows say nothing on the row (no line, no info icon, no X Info); each group's page says it under its title.
-    @Test fun layoutsGroupRowsMoveTheirDescriptionOntoTheirPages() {
+    @Test fun layoutsGroupRowsHaveNoDescription() {
         val groups = SettingsSection.entries.filter { it.layoutGroup }
         assertEquals(7, groups.size)
         for (g in groups) {
@@ -90,11 +90,7 @@ class SettingsTouchRowsTest {
             assertEquals("", row.info, "$g"); assertEquals("", row.detail, "$g")
             assertFalse(nxShowsInfo(row, null), "$g")
             assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Select")), settingsHints(listOf(SettingsRow(g.opener!!, g.label)), 0, row, info = false))
-            assertTrue(!layoutGroupDescription(g).isNullOrBlank(), "$g")
         }
-        assertEquals("Home tab, its layout, shelves and stats", layoutGroupDescription(SettingsSection.LAYOUT_HOME))
-        assertEquals(null, layoutGroupDescription(SettingsSection.MAIN_MENU))
-        assertEquals(null, layoutGroupDescription(SettingsSection.APPEARANCE))
     }
 
     // Every touch row: its text (the name, then its description's own lines) with the same air above and below.

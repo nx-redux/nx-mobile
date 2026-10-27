@@ -97,7 +97,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "follows Android's own font size setting.",
     )
     SettingsKind.RESET_DEFAULTS -> resetText(section)
-    // Layouts' group rows: no text on the row; the group's page says it under its title ([layoutGroupDescription]).
+    // Layouts' group rows: no text on the row (their pages' rows say what each group holds).
     SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER -> SettingText("")
     SettingsKind.EXTRA_INFO -> SettingText(
@@ -240,14 +240,3 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     else -> SettingText("")
 }
 
-/** A Layouts group's description, under the title of its page ([SettingsSection.layoutGroup]); null for any other page. */
-internal fun layoutGroupDescription(section: SettingsSection): String? = when (section) {
-    SettingsSection.LAYOUT_HOME -> "Home tab, its layout, shelves and stats"
-    SettingsSection.LAYOUT_CONSOLES -> "Consoles tab, its layout, orientation and background"
-    SettingsSection.LAYOUT_COLLECTIONS -> "Collections tab, its layout and orientation"
-    SettingsSection.LAYOUT_TOOLS -> "Tools tab, its layout and orientation"
-    SettingsSection.LAYOUT_GAME_LISTS -> "Game lists' layout, art, icons and achievements panel"
-    SettingsSection.LAYOUT_TITLE_HINTS -> "The main menu's page title and button hints"
-    SettingsSection.LAYOUT_SWITCHER -> "How the Game Switcher shows your recent games"
-    else -> null
-}
