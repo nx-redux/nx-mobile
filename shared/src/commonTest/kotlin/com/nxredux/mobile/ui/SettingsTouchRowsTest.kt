@@ -79,6 +79,8 @@ class SettingsTouchRowsTest {
     @Test fun aKeptRowShowsItsShortLine() {
         val shelf = settingsTouchRow(SettingsRow(SettingsKind.SHELF_SHOWN, "New shelf", shelf = HomeShelf.NEW), null)
         assertEquals("Games found in the last 30 days", shelf.info); assertTrue(shelf.hasMoreInfo)
+        val notStarted = settingsTouchRow(SettingsRow(SettingsKind.SHELF_SHOWN, "Not started shelf", shelf = HomeShelf.NOT_STARTED), null)
+        assertEquals("Games you have never played", notStarted.info); assertFalse(notStarted.hasMoreInfo)   // the line alone: no info icon
         val stats = settingsTouchRow(SettingsRow(SettingsKind.HOME_STATS, "Home stats"), null)
         assertEquals("This month and Most played", stats.info); assertTrue("stats strip" in stats.detail)
         // All files access: a line only for the warning.

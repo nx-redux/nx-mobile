@@ -119,7 +119,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.MENU_STYLE -> quiet("How the ${row.category?.label ?: "tab"} tab lays out its items")
     SettingsKind.SHELF_SHOWN -> when (row.shelf) {
         HomeShelf.NEW -> SettingText("Games found in the last 30 days", "Home's shelf of games found in the last 30 days")
-        HomeShelf.NOT_STARTED -> quiet("Home's shelf of games you have never played")
+        HomeShelf.NOT_STARTED -> SettingText("Games you have never played")   // the line says it all: no info icon
         else -> SettingText("")
     }
     SettingsKind.HOME_STATS -> SettingText(
