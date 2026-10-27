@@ -597,13 +597,11 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
 /**
  * Settings on a narrow window (a phone held upright, a landscape window too narrow for the stage), one level at a time:
  * the root is the section block alone; a page below it is the rows block ([settingsNarrowBlock]), "Settings / <title>" its
- * first line and, in touch mode ([settingsBackShown]), the Back word under its rows (a tap is B). A Layouts group and the
- * Android games picker draw whole, as before.
+ * first line; B (or the back gesture) goes back. A Layouts group and the Android games picker draw whole, as before.
  */
 @Composable
 private fun NarrowSettingsPage(state: AppState, s: Screen, selection: State<ListSelection>) {
-    val back = settingsBackShown(LocalFooterMode.current)
-    val block = remember(state, back) { SettingsBlockMode(SETTINGS_TITLE, onBack = { state.onButton(NxButton.B) }.takeIf { back }) }
+    val block = remember { SettingsBlockMode(SETTINGS_TITLE) }
     CompositionLocalProvider(LocalSettingsBlock provides block.takeIf { settingsNarrowBlock(s) }) {
         SettingsPage(state, s, selection, titled = false)
     }
@@ -620,7 +618,7 @@ private fun SettingsPage(state: AppState, s: Screen, selection: State<ListSelect
         is Screen.EmulatorList -> WithIndex(selection) { EmulatorListScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, split = titled || LocalSettingsBlock.current != null) }
         is Screen.EmulatorConsoles -> WithIndex(selection) { EmulatorConsolesScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton) }
         is Screen.EmulatorOptions -> WithIndex(selection) { EmulatorOptionsScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = settingTruncated) }
-        is Screen.SettingsMenu -> WithIndex(selection) { SettingsMenuScreen(s, it, state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) }, hintBar = true, onHint = state::onButton) }
+        is Screen.SettingsMenu -> WithIndex(selection) { SettingsMenuScreen(s, it, state::settingsCategoryTap, hintBar = true, onHint = state::onButton) }
         is Screen.ToolApps -> {
             // Only the picker showing reports its columns (one sliding out never overwrites the count).
             val onColumns: (Int) -> Unit = remember(s) { { columns -> if (state.screen.value === s) state.onToolAppsLayout(columns) } }

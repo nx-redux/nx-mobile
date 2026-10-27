@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -45,7 +44,6 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.nx_logo
-import com.nxredux.mobile.ui.nx.FooterMode
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxFont
 import com.nxredux.mobile.ui.nx.LocalWindowSize
@@ -74,9 +72,6 @@ fun settingsGutter(c: SettingsSizeClass): Dp = when (c) {
 
 /** A section word's size on every screen, upright or not (before Appearance → Text size). */
 val SETTINGS_SECTION_SIZE: TextUnit = 26.sp
-
-/** The Back word's size, a step under the sections' (before Appearance → Text size). */
-val SETTINGS_BACK_SIZE: TextUnit = 24.sp
 
 /** The NX mark at the top right: its size and its inset from the top. Its right inset is the gutter. */
 val SETTINGS_MARK = 48.dp
@@ -129,9 +124,6 @@ private val SETTINGS_LABEL_GAP = 6.dp
 /** A section's line box as a share of its size. */
 private const val SETTINGS_SECTION_LINE = 1.2f
 
-/** The Back word is drawn only in touch mode (no controller, the on-screen pad hidden); with a pad, B goes back. */
-fun settingsBackShown(footer: FooterMode): Boolean = footer == FooterMode.BUTTONS
-
 /** The size class of the window the screen is in ([LocalWindowSize]). */
 @Composable
 internal fun settingsSizeClass(): SettingsSizeClass = LocalWindowSize.current.let { settingsSizeClass(it.width.value, it.height.value) }
@@ -139,19 +131,18 @@ internal fun settingsSizeClass(): SettingsSizeClass = LocalWindowSize.current.le
 /**
  * The Settings section block: "Settings" in hint at 13 sp, 6 dp above the sections; the sections at
  * [SETTINGS_SECTION_SIZE], one per 1.2 line, the [current] one in the accent (the [main][com.nxredux.mobile.ui.nx.NxColors.main]
- * ink while [rowsFocused]) and the rest inkDim; then, one pitch below the last, "Back" in inkDim at [SETTINGS_BACK_SIZE] ([onBack] null: none).
+ * ink while [rowsFocused]) and the rest inkDim. No Back word: B (or the back gesture) goes back.
  * No pill, no underline, no plate; it never scrolls. A tap on a section calls [onTap] with its index.
  */
 @Composable
 fun SettingsSectionBlock(
     sections: List<SettingsSection>, current: Int, rowsFocused: Boolean,
-    onTap: (Int) -> Unit, onBack: (() -> Unit)?, modifier: Modifier = Modifier,
+    onTap: (Int) -> Unit, modifier: Modifier = Modifier,
 ) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
     val scale = nxTextScale()   // Appearance → Text size
     val wordStyle = settingsWordStyle()
-    val pitchDp = settingsWordPitch(wordStyle)
     Column(modifier) {
         Text(
             SETTINGS_TITLE, color = colors.hint, fontFamily = font, fontSize = NxTextSizes.menuInfo.pinned() * scale,
@@ -165,15 +156,11 @@ fun SettingsSectionBlock(
             }
             SettingsWord(section.label, color, wordStyle) { onTap(i) }
         }
-        if (onBack != null) {
-            Spacer(Modifier.height(pitchDp))
-            SettingsWord("Back", colors.inkDim, settingsWordStyle(SETTINGS_BACK_SIZE), onBack)
-        }
     }
 }
 
 /**
- * A block word's style: [base] (a section's [SETTINGS_SECTION_SIZE], or Back's [SETTINGS_BACK_SIZE]) under Appearance →
+ * A block word's style: [base] (a section's [SETTINGS_SECTION_SIZE]) under Appearance →
  * Text size, letter spacing −0.01 em, on a 1.2 line box with the word centred in it, so each word is one pitch.
  */
 @Composable
@@ -223,11 +210,10 @@ internal fun SettingsBackground() {
  * A page drawn as the Settings rows block ([SettingsRowsBlock]) rather than as a whole page: its title the block's first
  * line, its rows anchored to the bottom. [crumb]: the words before the title ("Settings" on a narrow window, one level at
  * a time, as "Settings / Layouts", the block then the gutter in from both sides); null on the wide stage, where the
- * section block beside it already says Settings. [onBack]: the Back word one pitch under the rows (narrow, touch mode
- * only, [settingsBackShown]); null: none. [pictureWidth]: a Layouts group's picture under the rows at this width, right
+ * section block beside it already says Settings. [pictureWidth]: a Layouts group's picture under the rows at this width, right
  * edge at the gutter, wider than the pane ([settingsLayoutPictureWidth], a phone on its side); null: the rows' width.
  */
-data class SettingsBlockMode(val crumb: String?, val onBack: (() -> Unit)? = null, val pictureWidth: Dp? = null)
+data class SettingsBlockMode(val crumb: String?, val pictureWidth: Dp? = null)
 
 /**
  * Whether [screen] draws as the rows block on a narrow window (one level at a time): a block page ([settingsBlockPage])
@@ -271,16 +257,16 @@ fun settingsWideBlockPage(screen: Screen): Boolean =
     settingsBlockPage(screen) || (screen is Screen.Settings && screen.section.layoutGroup)
 
 /**
- * [content] given the section block's width ([SettingsSectionBlock] for [sections], with the Back word when [back]): the
+ * [content] given the section block's width ([SettingsSectionBlock] for [sections]): the
  * block's own widest line as drawn, measured in the same pass (no frame late), so the wide frame can keep clear of it.
  */
 @Composable
-internal fun WithSettingsSectionWidth(sections: List<SettingsSection>, back: Boolean, content: @Composable (Dp) -> Unit) {
+internal fun WithSettingsSectionWidth(sections: List<SettingsSection>, content: @Composable (Dp) -> Unit) {
     // The content slot is kept while neither the width nor [content] changes, so a remeasure does not recompose the stage.
     val slot = remember { SectionWidthSlot() }
     SubcomposeLayout { constraints ->
         val probe = subcompose("probe") {
-            SettingsSectionBlock(sections, current = 0, rowsFocused = false, onTap = {}, onBack = if (back) ({}) else null)
+            SettingsSectionBlock(sections, current = 0, rowsFocused = false, onTap = {})
         }
         val width = (probe.maxOfOrNull { it.maxIntrinsicWidth(constraints.maxHeight) } ?: 0).toDp()
         val placeables = subcompose("content", slot.of(width, content)).map { it.measure(constraints) }
@@ -340,11 +326,6 @@ fun SettingsRowsBlock(
         )
         header?.invoke()
         Box(Modifier.fillMaxWidth().weight(1f, fill = false)) { rows() }
-        mode.onBack?.let { back ->
-            // The section block's Back: inkDim at [SETTINGS_BACK_SIZE], one section pitch under the rows, level with the row labels.
-            Spacer(Modifier.height(settingsWordPitch(settingsWordStyle())))
-            Box(Modifier.padding(start = nxListInset())) { SettingsWord("Back", colors.inkDim, settingsWordStyle(SETTINGS_BACK_SIZE), back) }
-        }
     }
 }
 

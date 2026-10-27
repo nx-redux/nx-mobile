@@ -2,7 +2,6 @@ package com.nxredux.mobile.ui
 
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.nxredux.mobile.ui.nx.FooterMode
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.NxFooterKeep
 import com.nxredux.mobile.ui.nx.nxFooterKeep
@@ -30,12 +29,6 @@ class SettingsBlockTest {
     // One size on every screen, a phone held upright too.
     @Test fun sectionSize() {
         assertEquals(26.sp, SETTINGS_SECTION_SIZE)
-        assertEquals(24.sp, SETTINGS_BACK_SIZE)   // Back a step smaller
-    }
-
-    @Test fun backOnlyInTouchMode() {
-        assertTrue(settingsBackShown(FooterMode.BUTTONS))
-        assertFalse(settingsBackShown(FooterMode.HINTS))
     }
 
     @Test fun blockPages() {

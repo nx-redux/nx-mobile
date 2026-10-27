@@ -9,7 +9,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.ui.nx.Hint
-import com.nxredux.mobile.ui.nx.LocalFooterMode
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxHintBar
 
@@ -19,22 +18,20 @@ internal val SETTINGS_ROOT_HINTS = listOf(Hint(NxButton.A, "Open"), Hint(NxButto
 /**
  * Tools -> Settings: the section block ([SettingsSectionBlock]) alone, anchored bottom-left at the gutter and
  * [SETTINGS_BLOCK_BOTTOM] up, the rest of the screen empty (the mark is the background's, [SettingsBackground]). A tap on
- * a section selects it, a tap on the selected one opens it ([onTap]); A opens, B goes back to Tools. "Back" is drawn
- * in touch mode only ([settingsBackShown]), and calls [onBack]. [rowsFocused]: the two-pane Settings' left pane while
+ * a section opens it ([onTap]); A opens, B goes back to Tools. [rowsFocused]: the two-pane Settings' left pane while
  * its page has the focus (the current section drops to the main ink). [hintBar]: draw the root's A/B hints below the
  * block ([onHint] answers a tap on one); the wide Settings draws its own bar, so it passes false.
  */
 @Composable
 fun SettingsMenuScreen(
     screen: Screen.SettingsMenu, selectedIndex: Int,
-    onTap: (Int) -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier,
+    onTap: (Int) -> Unit, modifier: Modifier = Modifier,
     rowsFocused: Boolean = false, hintBar: Boolean = false, onHint: ((NxButton) -> Unit)? = null,
 ) {
-    val back = onBack.takeIf { settingsBackShown(LocalFooterMode.current) }
     Column(modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             SettingsSectionBlock(
-                screen.sections, selectedIndex, rowsFocused, onTap, back,
+                screen.sections, selectedIndex, rowsFocused, onTap,
                 Modifier.align(Alignment.BottomStart)
                     .padding(start = settingsGutter(settingsSizeClass()), end = settingsGutter(settingsSizeClass()), bottom = SETTINGS_BLOCK_BOTTOM),
             )

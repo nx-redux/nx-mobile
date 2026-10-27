@@ -19,10 +19,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.ListSelection
-import com.nxredux.mobile.ui.nx.LocalFooterMode
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxHintBarKeepHeight
-import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxHintBar
 
 /** An unfocused pane's opacity. */
@@ -44,7 +42,7 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
     val categories = state.settingsSections()   // not remembered: a second screen coming or going changes it
     val blockPage = settingsWideBlockPage(s)
     val gutter = settingsGutter(settingsSizeClass())
-    WithSettingsSectionWidth(categories, back = settingsBackShown(LocalFooterMode.current)) { blockWidth ->
+    WithSettingsSectionWidth(categories) { blockWidth ->
         val sectionRight = gutter + blockWidth
         Box(Modifier.fillMaxSize()) {
             CompositionLocalProvider(LocalNxHintBarKeepHeight provides true) {
@@ -58,14 +56,14 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             if (s is Screen.SettingsMenu) {
                                 WithIndex(selection) {
-                                    SettingsMenuScreen(s, it, state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) })
+                                    SettingsMenuScreen(s, it, state::settingsCategoryTap)
                                 }
                             } else {
                                 val current = categories.indexOf(settingsCategoryOf(s)).coerceAtLeast(0)
                                 // The page has the focus: the current section drops to the main ink.
                                 SettingsMenuScreen(
                                     Screen.SettingsMenu(categories), current,
-                                    onTap = state::settingsCategoryTap, onBack = { state.onButton(NxButton.B) }, rowsFocused = true,
+                                    onTap = state::settingsCategoryTap, rowsFocused = true,
                                 )
                             }
                         }
