@@ -43,7 +43,7 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
     val blockPage = settingsWideBlockPage(s)
     val gutter = settingsGutter(settingsSizeClass())
     WithSettingsSectionWidth(categories) { blockWidth ->
-        val sectionRight = gutter + blockWidth
+        val sectionRight = settingsSectionStart() + blockWidth
         Box(Modifier.fillMaxSize()) {
             CompositionLocalProvider(LocalNxHintBarKeepHeight provides true) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {

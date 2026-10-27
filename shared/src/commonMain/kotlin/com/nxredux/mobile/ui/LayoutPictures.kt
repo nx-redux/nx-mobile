@@ -326,34 +326,38 @@ internal fun LayoutPreviewPage(
         val pageH = maxHeight
         val pageW = maxWidth
         val phoneUpright = settingsSizeClass() == SettingsSizeClass.PHONE_UPRIGHT
+        // The Settings gutter on both sides, as every Settings page: the rows' plates at it, their labels a row inset in.
+        val gutter = settingsGutter(settingsSizeClass())
         Column(Modifier.fillMaxSize()) {
-            NxPageTitle(title, bottom = 8.dp, trailing = if (titleAction) ({ NxTitleActions(listOf(rows[last].label), last, selected, onSelect, onRow) }) else null)
-            if (wide) {
-                // Text and rows at the left, the picture at the right, each half the width.
-                Row(Modifier.weight(1f).fillMaxWidth()) {
-                    Column(Modifier.weight(1f).fillMaxHeight()) { text(Modifier, Dp.Infinity, null) }
-                    BoxWithConstraints(
-                        Modifier.weight(1f).fillMaxHeight().padding(end = nxListInset(), bottom = 12.dp),
-                        contentAlignment = Alignment.TopCenter,
-                    ) {
-                        framed(min(maxWidth, (maxHeight - PICTURE_MAT * 2) * aspect + PICTURE_MAT * 2))
+            Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = gutter)) {
+                NxPageTitle(title, bottom = 8.dp, trailing = if (titleAction) ({ NxTitleActions(listOf(rows[last].label), last, selected, onSelect, onRow) }) else null)
+                if (wide) {
+                    // Text and rows at the left, the picture at the right, each half the width.
+                    Row(Modifier.weight(1f).fillMaxWidth()) {
+                        Column(Modifier.weight(1f).fillMaxHeight()) { text(Modifier, Dp.Infinity, null) }
+                        BoxWithConstraints(
+                            Modifier.weight(1f).fillMaxHeight().padding(end = nxListInset(), bottom = 12.dp),
+                            contentAlignment = Alignment.TopCenter,
+                        ) {
+                            framed(min(maxWidth, (maxHeight - PICTURE_MAT * 2) * aspect + PICTURE_MAT * 2))
+                        }
                     }
-                }
-            } else if (phoneUpright && touchRows != null) {
-                // A phone held upright (a Settings group): the picture across the screen inside the gutters, under the
-                // rows and scrolling with them, its aspect kept.
-                val picW = settingsLayoutPictureWidth(SettingsSizeClass.PHONE_UPRIGHT, pageW, 0.dp, settingsGutter(SettingsSizeClass.PHONE_UPRIGHT)) ?: pageW
-                val bleed = (picW - (pageW - NxOptionsSidePad * 2)) / 2
-                text(Modifier.weight(1f), Dp.Infinity, footerOf(bleed to bleed))
-            } else {
-                // Landscape (the Fold's near-square pane): the rows at most [PREVIEW_ROWS_SHARE] of the height, the picture the rest.
-                text(if (portrait) Modifier else Modifier.fillMaxWidth(landscapeWidth), if (portrait) Dp.Infinity else pageH * PREVIEW_ROWS_SHARE, null)   // landscape: long lines wrap
-                // The picture at the page's width (inset), smaller when the rows leave less height; the room left stays below.
-                BoxWithConstraints(
-                    Modifier.fillMaxWidth().weight(1f).padding(start = nxListInset(), end = nxListInset(), top = 16.dp, bottom = 12.dp),
-                    contentAlignment = Alignment.TopStart,
-                ) {
-                    framed(min(min(maxWidth, PREVIEW_MAX_WIDTH), ((maxHeight - PICTURE_MAT * 2) * aspect + PICTURE_MAT * 2).coerceAtLeast(0.dp)))
+                } else if (phoneUpright && touchRows != null) {
+                    // A phone held upright (a Settings group): the picture across the screen inside the gutters, under the
+                    // rows and scrolling with them, its aspect kept.
+                    val picW = settingsLayoutPictureWidth(SettingsSizeClass.PHONE_UPRIGHT, pageW, 0.dp, gutter) ?: pageW
+                    val bleed = (picW - (pageW - gutter * 2 - NxOptionsSidePad * 2)) / 2
+                    text(Modifier.weight(1f), Dp.Infinity, footerOf(bleed to bleed))
+                } else {
+                    // Landscape (the Fold's near-square pane): the rows at most [PREVIEW_ROWS_SHARE] of the height, the picture the rest.
+                    text(if (portrait) Modifier else Modifier.fillMaxWidth(landscapeWidth), if (portrait) Dp.Infinity else pageH * PREVIEW_ROWS_SHARE, null)   // landscape: long lines wrap
+                    // The picture at the page's width (inset), smaller when the rows leave less height; the room left stays below.
+                    BoxWithConstraints(
+                        Modifier.fillMaxWidth().weight(1f).padding(start = nxListInset(), end = nxListInset(), top = 16.dp, bottom = 12.dp),
+                        contentAlignment = Alignment.TopStart,
+                    ) {
+                        framed(min(min(maxWidth, PREVIEW_MAX_WIDTH), ((maxHeight - PICTURE_MAT * 2) * aspect + PICTURE_MAT * 2).coerceAtLeast(0.dp)))
+                    }
                 }
             }
             NxHintBar(hints, onHint = onHint)

@@ -124,6 +124,13 @@ private val SETTINGS_LABEL_GAP = 6.dp
 /** A section's line box as a share of its size. */
 private const val SETTINGS_SECTION_LINE = 1.2f
 
+/**
+ * Where the section words start: the gutter plus a list row's inset ([nxListInset]), so they line up with the row labels
+ * of a Settings page (whose plates sit at the gutter) and every Settings screen keeps the same side room.
+ */
+@Composable
+internal fun settingsSectionStart(): Dp = settingsGutter(settingsSizeClass()) + nxListInset()
+
 /** The size class of the window the screen is in ([LocalWindowSize]). */
 @Composable
 internal fun settingsSizeClass(): SettingsSizeClass = LocalWindowSize.current.let { settingsSizeClass(it.width.value, it.height.value) }
