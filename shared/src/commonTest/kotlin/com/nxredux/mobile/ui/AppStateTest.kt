@@ -127,6 +127,11 @@ import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.nxTap
+import com.nxredux.mobile.ui.nx.nxSettingRowTap
+import com.nxredux.mobile.ui.nx.NxSettingRowTap
+import com.nxredux.mobile.ui.nx.rowTap
+import com.nxredux.mobile.ui.nx.flipped
+import com.nxredux.mobile.ui.nx.fullInfo
 import kotlin.jvm.JvmName
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -6176,14 +6181,23 @@ class AppStateTest {
         assertEquals(SettingsSection.SYSTEM, assertIs<Screen.Settings>(state.screen.value).section)
     }
 
-    @Test fun split_one_tap_on_a_preview_row_acts_on_it() = runTest {
+    // A preview row with a control: one tap opens its page focused on it, its value unchanged; an opener opens its page.
+    @Test fun split_one_tap_on_a_preview_row_focuses_or_opens_it() = runTest {
         val (state, settings) = splitSettings()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN)                                   // Appearance, previewed
         val theme = settings.padTheme
-        nxTap(0, selected = false, opens = true, state::settingsPreviewTap, state::settingsPreviewTap)   // Pad theme
+        val preview = state.settingsPreview(SettingsSection.APPEARANCE)
+        nxSettingRowTap(settingsTouchRow(preview.rows[0], preview.choices[0], preview.section), 0, state::settingsPreviewTap, state::settingsPreviewTap)   // Pad theme
         assertEquals(SettingsSection.APPEARANCE, assertIs<Screen.Settings>(state.screen.value).section)
         assertEquals(0, state.selection.value.index)
-        assertNotEquals(theme, settings.padTheme)
+        assertEquals(theme, settings.padTheme)
+        state.back()
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN)                                   // Controls, previewed
+        assertIs<Screen.SettingsMenu>(state.screen.value)
+        val controls = state.settingsPreview(SettingsSection.CONTROLS)
+        val shortcuts = controls.rows.indexOfFirst { it.kind == SettingsKind.SHORTCUTS }
+        nxSettingRowTap(settingsTouchRow(controls.rows[shortcuts], controls.choices[shortcuts], controls.section), shortcuts, state::settingsPreviewTap, state::settingsPreviewTap)
+        assertEquals(SettingsSection.SHORTCUTS, assertIs<Screen.Settings>(state.screen.value).section)
     }
 
     @Test fun one_tap_beside_ra_settings_opens_that_row() = runTest {
@@ -10604,6 +10618,64 @@ class AppStateTest {
         val pad = assertIs<Screen.Settings>(state.screen.value).rows.indexOfFirst { it.kind == SettingsKind.MENU_PAD }
         state.select(pad); state.onButton(NxButton.A)                             // a switch flips
         assertFalse(settings.menuPad)
+    }
+
+    /** Settings row [i] as the page draws it ([settingsTouchRow]). */
+    private fun touchRowAt(state: AppState, i: Int): NxSettingRow {
+        val s = assertIs<Screen.Settings>(state.screen.value)
+        return settingsTouchRow(s.rows[i], s.choices.getOrNull(i), s.section)
+    }
+
+    /** A tap on row [i]'s own area (its name and description), as [com.nxredux.mobile.ui.nx.NxSettingsList] wires it. */
+    private fun labelTap(state: AppState, i: Int) = nxSettingRowTap(touchRowAt(state, i), i, state::select) { state.openSelected() }
+
+    // A tap on a row's label focuses it and changes nothing, however often; its control acts at once; an opener opens.
+    @Test fun settings_label_tap_focuses_control_tap_acts_opener_opens() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        state.openSettings(SettingsSection.CONTROLS)
+        fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
+        val pad = rows().indexOfFirst { it.kind == SettingsKind.MENU_PAD }
+        val before = settings.menuPad
+        assertEquals(NxSettingRowTap.FOCUS, touchRowAt(state, pad).rowTap)
+        labelTap(state, pad)                                                      // focus: the row, its value unchanged
+        assertEquals(pad, state.selection.value.index); assertEquals(before, settings.menuPad)
+        labelTap(state, pad)                                                      // again, on the focused row: still nothing
+        assertEquals(pad, state.selection.value.index); assertEquals(before, settings.menuPad)
+        assertIs<Screen.Settings>(state.screen.value)
+        state.select(0)
+        state.settingEvent(NxSettingEvent.Choose(pad, touchRowAt(state, pad).flipped))   // the switch itself: flips, focused
+        assertEquals(!before, settings.menuPad); assertEquals(pad, state.selection.value.index)
+        val vibration = rows().indexOfFirst { it.kind == SettingsKind.PAD_VIBRATION }   // segmented: the label focuses only
+        val vib = settings.padVibration
+        labelTap(state, vibration); labelTap(state, vibration)
+        assertEquals(vib, settings.padVibration); assertEquals(vibration, state.selection.value.index)
+        val shortcuts = rows().indexOfFirst { it.kind == SettingsKind.SHORTCUTS }
+        assertEquals(NxSettingRowTap.OPEN, touchRowAt(state, shortcuts).rowTap)
+        labelTap(state, shortcuts)                                                // a `›` row: one tap opens it
+        assertEquals(SettingsSection.SHORTCUTS, assertIs<Screen.Settings>(state.screen.value).section)
+    }
+
+    // A long press shows any row's description, even a line that fits with nothing more behind it; a row without one: nothing.
+    @Test fun settings_long_press_shows_a_description_that_fits_and_nothing_without_one() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        state.openSettings(SettingsSection.LAYOUT_HOME)
+        val rows = assertIs<Screen.Settings>(state.screen.value).rows
+        val shelf = rows.indexOfFirst { it.kind == SettingsKind.SHELF_SHOWN && it.shelf == HomeShelf.NOT_STARTED }
+        val touch = touchRowAt(state, shelf)
+        assertTrue(touch.info.isNotBlank()); assertFalse(nxShowsInfo(touch, state.settingInfoTruncated.value))   // fits: no icon, no X Info
+        state.settingEvent(NxSettingEvent.Info(shelf))                            // the long press
+        assertEquals(touch.info, state.settingInfo.value?.text); assertEquals(shelf, state.selection.value.index)
+        state.closeSettingInfo()
+        state.openSettings(SettingsSection.SYSTEM)
+        val version = assertIs<Screen.Settings>(state.screen.value).rows.indexOfFirst { it.kind == SettingsKind.INFO }
+        assertTrue(touchRowAt(state, version).fullInfo.isBlank())
+        state.select(0)
+        state.settingEvent(NxSettingEvent.Info(version))                          // no description: nothing
+        assertNull(state.settingInfo.value); assertEquals(0, state.selection.value.index)
     }
 
     // A row's full description: its info icon or X (when its line is cut off or says less) opens it; A, B or X close it.

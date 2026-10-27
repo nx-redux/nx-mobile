@@ -3,6 +3,7 @@ package com.nxredux.mobile.ui.nx
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -157,13 +158,15 @@ private const val SOFT_SELECTION_ALPHA = 0.16f
  * off or [moreInfo] says there is more ([nxInfoIconShown]), the description under it (at most [SETTING_DESC_LINES], the warning colour when [warning]), and the
  * [control] on the right, or [below] under the text (a segmented row's segments that don't fit on the right): at its
  * start, right-aligned in the Settings rows block ([LocalSettingsBlock]). Selected: a soft rounded plate behind it, so the control stays readable; not [enabled]: dimmed. [onInfo] null:
- * the info icon takes no taps. [onTruncated] hears whether the description fits while the row is [selected].
+ * the info icon takes no taps. [onLongPress]: a long press anywhere on the row's own area (its name and description);
+ * null, none (a long press is a tap). [onTruncated] hears whether the description fits while the row is [selected].
  */
 @Composable
 internal fun NxTouchRow(
     label: String, info: String, moreInfo: Boolean, selected: Boolean, sizes: NxTouchRowSizes, height: Dp,
     onTap: () -> Unit, onInfo: (() -> Unit)?, onTruncated: (String, Boolean) -> Unit,
     enabled: Boolean = true, warning: Boolean = false,
+    onLongPress: (() -> Unit)? = null,
     below: (@Composable () -> Unit)? = null,
     control: @Composable () -> Unit,
 ) {
@@ -174,7 +177,7 @@ internal fun NxTouchRow(
     Column(
         Modifier.fillMaxWidth().height(height).padding(vertical = 2.dp).clip(shape)
             .then(if (selected) Modifier.background(colors.accent.copy(alpha = SOFT_SELECTION_ALPHA), shape) else Modifier)   // role: a touch row's soft selection
-            .clickable(onClick = onTap).padding(horizontal = NxOptionsInnerPad)
+            .nxTapOrHold(onTap, onLongPress).padding(horizontal = NxOptionsInnerPad)
             .alpha(if (enabled) 1f else NX_DISABLED_ALPHA),   // role: a disabled row
         verticalArrangement = Arrangement.Center,
     ) {
@@ -211,18 +214,25 @@ internal fun NxTouchRow(
     }
 }
 
+/** A tap ([onTap], null none) and, when given, a long press ([onLongPress]) on this element. */
+internal fun Modifier.nxTapOrHold(onTap: (() -> Unit)?, onLongPress: (() -> Unit)?): Modifier = when {
+    onLongPress != null -> combinedClickable(onClick = onTap ?: {}, onLongClick = onLongPress)
+    onTap != null -> clickable(onClick = onTap)
+    else -> this
+}
+
 /** A touch row's value text: one line, Semibold. */
 @Composable
 internal fun NxValueText(text: String, size: TextUnit, color: Color, modifier: Modifier = Modifier) {
     Text(text, color = color, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = size, lineHeight = size, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
 }
 
-/** A picker row's control: the current value and a `›`; a tap ([onClick], null none) opens the picker. */
+/** A picker row's control: the current value and a `›`; a tap ([onClick], null none) opens the picker, a long press is [onLongPress]. */
 @Composable
-internal fun NxPickerValue(text: String, size: TextUnit, onClick: (() -> Unit)?) {
+internal fun NxPickerValue(text: String, size: TextUnit, onLongPress: (() -> Unit)? = null, onClick: (() -> Unit)?) {
     val colors = LocalNxColors.current
     Row(
-        Modifier.clip(RoundedCornerShape(8.dp)).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(vertical = 6.dp),
+        Modifier.clip(RoundedCornerShape(8.dp)).nxTapOrHold(onClick, onLongPress).padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         NxValueText(text, size, colors.listText, Modifier.widthIn(max = 180.dp))
@@ -237,12 +247,12 @@ internal fun NxPickerValue(text: String, size: TextUnit, onClick: (() -> Unit)?)
  * rows' and the game panel's Cheats rows'.
  */
 @Composable
-internal fun NxSwitch(on: Boolean, onClick: (() -> Unit)?, lit: Boolean = false) {
+internal fun NxSwitch(on: Boolean, onClick: (() -> Unit)?, lit: Boolean = false, onLongPress: (() -> Unit)? = null) {
     val colors = LocalNxColors.current
     Box(
         Modifier.size(SwitchWidth, SwitchHeight).clip(CircleShape)
             .background(if (on) colors.secondaryAccent else if (lit) colors.background.copy(alpha = 0.35f) else colors.main.copy(alpha = 0.22f))   // role: a switch's off track, lit and unlit
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(3.dp),
+            .nxTapOrHold(onClick, onLongPress).padding(3.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         val knob = SwitchHeight - 6.dp
@@ -256,9 +266,9 @@ internal fun NxSwitch(on: Boolean, onClick: (() -> Unit)?, lit: Boolean = false)
 private val SwitchWidth = 44.dp
 private val SwitchHeight = 24.dp
 
-/** A segmented button: one pill per choice in an outlined track, the [selected] one on the accent; a tap picks it ([onPick], null none). */
+/** A segmented button: one pill per choice in an outlined track, the [selected] one on the accent; a tap picks it ([onPick], null none), a long press is [onLongPress]. */
 @Composable
-internal fun NxSegments(choices: List<String>, selected: Int, size: TextUnit, onPick: ((Int) -> Unit)?) {
+internal fun NxSegments(choices: List<String>, selected: Int, size: TextUnit, onLongPress: (() -> Unit)? = null, onPick: ((Int) -> Unit)?) {
     val colors = LocalNxColors.current
     val shape = RoundedCornerShape(50)
     Row(Modifier.clip(shape).border(1.dp, colors.inkRing, shape).padding(2.dp)) {
@@ -266,7 +276,7 @@ internal fun NxSegments(choices: List<String>, selected: Int, size: TextUnit, on
             val lit = i == selected
             Box(
                 Modifier.clip(shape).then(if (lit) Modifier.background(colors.accent, shape) else Modifier)
-                    .then(if (onPick != null) Modifier.clickable { onPick(i) } else Modifier).padding(horizontal = 10.dp, vertical = 5.dp),
+                    .nxTapOrHold(onPick?.let { p -> { p(i) } }, onLongPress).padding(horizontal = 10.dp, vertical = 5.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 NxValueText(label, size * 0.9f, if (lit) colors.onAccent else colors.listText)

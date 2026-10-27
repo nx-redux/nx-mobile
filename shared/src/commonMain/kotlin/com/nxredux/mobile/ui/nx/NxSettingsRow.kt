@@ -172,9 +172,10 @@ fun NxSettingsPage(
 
 /**
  * Touch settings rows ([NxSettingTouchRow]) from the top, as tall as they need up to the room given; past it the list
- * scrolls smoothly under edge fades, the selection kept a row clear of them. A tap: a switch row flips, a picker row
- * opens its picker, a segmented row is selected (its segments take their own taps), any other row is the lists' tap
- * ([nxTap]). Group labels, spacers and paragraphs take none.
+ * scrolls smoothly under edge fades, the selection kept a row clear of them. One tap, never two ([nxSettingRowTap]): a
+ * control (switch, segment, picker value, button) acts at once and focuses its row; a tap on a row's own area focuses a
+ * row that has a control, and opens (A) any other (a `›` page, an action). A long press anywhere on a row shows its
+ * description ([NxSettingEvent.Info]). Group labels, spacers and paragraphs take none.
  */
 @Composable
 fun NxSettingsList(
@@ -187,7 +188,6 @@ fun NxSettingsList(
 ) {
     val itemHeight = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
     val listState = rememberLazyListState()
-    val tapOpens = LocalNxTapOpens.current
     BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = NxOptionsSidePad).padding(top = 4.dp), contentAlignment = Alignment.TopCenter) {
         val sizes = nxTouchRowSizes(itemHeight, maxWidth, DESC_OF_LABEL)
         // A paragraph wraps to its own height, unknown here: such a list takes all the room given.
@@ -229,13 +229,13 @@ fun NxSettingsList(
         ) {
             itemsIndexed(rows) { i, row ->
                 val selected = i == selectedIndex
-                val default = { nxTap(i, selected, tapOpens(i), onSelect, onOpen) }
                 // Padded back to the list's edges when the lazy list is widened for its footer.
                 Box(Modifier.padding(start = outStart, end = outEnd)) {
                     NxSettingTouchRow(
                         row, selected, sizes, index = i,
-                        onTap = if (preview) default else settingRowTap(row, i, onSelect, onEvent) ?: default,
+                        onTap = { nxSettingRowTap(row, i, onSelect, onOpen) },
                         onEvent = if (preview) null else onEvent,
+                        onButton = { nxTap(i, selected = false, opens = true, onSelect, onOpen) },
                         onTruncated = { info, t -> if (selected) onTruncated(info, t) },
                     )
                 }
@@ -264,13 +264,31 @@ private fun Modifier.nxBleed(start: Dp, end: Dp): Modifier =
         layout(constraints.maxWidth, placeable.height) { placeable.place(-s, 0) }
     }
 
-/** What a tap on row [index] does, when not the lists' tap (null): a switch flips, a picker opens, a segmented row is selected. */
-private fun settingRowTap(row: NxSettingRow, index: Int, onSelect: (Int) -> Unit, onEvent: (NxSettingEvent) -> Unit): (() -> Unit)? {
-    if (!row.enabled || row.choices.isEmpty()) return null
-    return when (row.control) {
-        NxSettingControl.SWITCH -> { { onEvent(NxSettingEvent.Choose(index, row.flipped)) } }
-        NxSettingControl.PICKER -> { { onEvent(NxSettingEvent.OpenPicker(index)) } }
-        NxSettingControl.SEGMENTED, NxSettingControl.VALUE -> { { onSelect(index) } }
+/** What a tap on a settings row's own area (its name and description, not its control) does ([nxSettingRowTap]). */
+internal enum class NxSettingRowTap {
+    /** The row is selected (its plate, its info icon), nothing changes: its control takes the act. */
+    FOCUS,
+    /** The row is selected and opened, as A: a `›` page, an action, a row with nothing else to tap. */
+    OPEN,
+}
+
+/**
+ * A tap on [this] row's own area: [NxSettingRowTap.FOCUS] for a row with a control that acts (a switch, segments, a
+ * picker value, a button) or a dimmed one; [NxSettingRowTap.OPEN] for every other row, whose whole area is its button.
+ */
+internal val NxSettingRow.rowTap: NxSettingRowTap get() = when {
+    !enabled || choices.size >= 2 || button != null -> NxSettingRowTap.FOCUS
+    else -> NxSettingRowTap.OPEN
+}
+
+/**
+ * One tap on row [index]'s own area ([rowTap]): focus selects it ([onSelect]) and nothing more, however often it is
+ * tapped; open selects it and opens it ([onOpen]) at once. Never a tap on the selected row to act (no double tap).
+ */
+internal fun nxSettingRowTap(row: NxSettingRow, index: Int, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit) {
+    when (row.rowTap) {
+        NxSettingRowTap.FOCUS -> onSelect(index)
+        NxSettingRowTap.OPEN -> nxTap(index, selected = false, opens = true, onSelect, onOpen)
     }
 }
 
@@ -279,12 +297,15 @@ private fun settingRowTap(row: NxSettingRow, index: Int, onSelect: (Int) -> Unit
  * detail ([hasMoreInfo]), the description under it, and on the right the control ([NxSettingControl]), a value, a button
  * or a page's `›`; a segmented row's segments that don't fit there sit under the text (right-aligned in the Settings rows block). A group label is a
  * grey line, a spacer empty, a paragraph wrapping grey text (MiSans Regular, [LocalNxFontWeights]). [onEvent] null: the
- * controls take no taps (a preview). [onTruncated] hears whether the description fits.
+ * controls take no taps and a long press nothing (a preview). [onButton]: a tap on the row's button (selects and
+ * presses it). A long press on the row or its control asks for its description ([NxSettingEvent.Info]; a row without one
+ * shows nothing). [onTruncated] hears whether the description fits.
  */
 @Composable
 private fun NxSettingTouchRow(
     row: NxSettingRow, selected: Boolean, sizes: NxTouchRowSizes, index: Int,
     onTap: () -> Unit, onEvent: ((NxSettingEvent) -> Unit)?, onTruncated: (String, Boolean) -> Unit,
+    onButton: () -> Unit,
 ) {
     val colors = LocalNxColors.current
     if (row.spacer) { Spacer(Modifier.fillMaxWidth().height(sizes.heightOf(row))); return }
@@ -302,30 +323,37 @@ private fun NxSettingTouchRow(
         return
     }
     val choose: ((Int) -> Unit)? = if (row.enabled) onEvent?.let { e -> { k: Int -> e(NxSettingEvent.Choose(index, k)) } } else null
+    val info = onEvent?.let { e -> { e(NxSettingEvent.Info(index)) } }
     NxTouchRow(
         row.label, row.info, row.hasMoreInfo, selected, sizes, sizes.heightOf(row),
-        onTap = onTap, onInfo = onEvent?.let { e -> { e(NxSettingEvent.Info(index)) } }, onTruncated = onTruncated,
-        enabled = row.enabled, warning = row.warning,
-        below = if (sizes.segmentsBelow(row)) { { NxSegments(row.choices, row.index, sizes.value, choose) } } else null,
+        onTap = onTap, onInfo = info, onTruncated = onTruncated,
+        enabled = row.enabled, warning = row.warning, onLongPress = info,
+        below = if (sizes.segmentsBelow(row)) { { NxSegments(row.choices, row.index, sizes.value, info, choose) } } else null,
     ) {
-        SettingControlView(row, sizes, choose, onEvent?.let { e -> { e(NxSettingEvent.OpenPicker(index)) } })
+        SettingControlView(
+            row, sizes, choose, onEvent?.let { e -> { e(NxSettingEvent.OpenPicker(index)) } },
+            onButton.takeIf { onEvent != null && row.enabled }, info,
+        )
     }
 }
 
 /** The right side of a row: its control by [NxSettingControl], else its button, or its value and a page's `›`. */
 @Composable
-private fun SettingControlView(row: NxSettingRow, sizes: NxTouchRowSizes, choose: ((Int) -> Unit)?, openPicker: (() -> Unit)?) {
+private fun SettingControlView(
+    row: NxSettingRow, sizes: NxTouchRowSizes, choose: ((Int) -> Unit)?, openPicker: (() -> Unit)?,
+    onButton: (() -> Unit)?, onLongPress: (() -> Unit)?,
+) {
     val colors = LocalNxColors.current
     val current = row.choices.getOrNull(row.index) ?: row.value
     when {
         row.enabled && row.control == NxSettingControl.SWITCH ->
-            NxSwitch(on = row.index == nxSwitchOnIndex(row.choices), onClick = choose?.let { c -> { c(row.flipped) } })
+            NxSwitch(on = row.index == nxSwitchOnIndex(row.choices), onClick = choose?.let { c -> { c(row.flipped) } }, onLongPress = onLongPress)
         // Short choices that fit on the right ([NxTouchRowSizes.segmentsRight]); longer ones draw under the text.
-        row.enabled && row.control == NxSettingControl.SEGMENTED -> NxSegments(row.choices, row.index, sizes.value, choose)
-        row.enabled && row.control == NxSettingControl.PICKER -> NxPickerValue(current.orEmpty(), sizes.value, openPicker)
+        row.enabled && row.control == NxSettingControl.SEGMENTED -> NxSegments(row.choices, row.index, sizes.value, onLongPress, choose)
+        row.enabled && row.control == NxSettingControl.PICKER -> NxPickerValue(current.orEmpty(), sizes.value, onLongPress, openPicker)
         row.button != null -> Box(
             Modifier.clip(RoundedCornerShape(50)).border(1.dp, colors.inkRing, RoundedCornerShape(50))
-                .padding(horizontal = 14.dp, vertical = 6.dp),
+                .nxTapOrHold(onButton, onLongPress).padding(horizontal = 14.dp, vertical = 6.dp),
         ) { NxValueText(row.button, sizes.value, colors.listText) }
         else -> Row(verticalAlignment = Alignment.CenterVertically) {
             if (current != null) NxValueText(current, sizes.value, colors.listText, Modifier.widthIn(max = 180.dp))
