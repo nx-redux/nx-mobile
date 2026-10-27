@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -124,6 +125,11 @@ internal class NxTouchRowSizes(
     val labelLineDp: Dp = 0.dp, val descLineDp: Dp = 0.dp,
     /** Whether a segmented row's choices fit on a line of their own ([rememberSegmentsFitLine]). */
     val segmentsFitLine: (List<String>) -> Boolean = { true },
+    /**
+     * The least a row's line is, whatever it holds: the tallest control's (a picker's value with its tap room, a
+     * segmented track), so a row is never taller for its control and every one-line row is one height.
+     */
+    val controlMin: Dp = 0.dp,
 ) {
     /**
      * A touch row's height as it lays out: its text (the name's line and its description's [descLines] lines, 0 to
@@ -132,7 +138,7 @@ internal class NxTouchRowSizes(
      * a one-line description no taller for a second line it doesn't have.
      */
     fun height(descLines: Int, segmentsBelow: Boolean, control: Dp = 0.dp): Dp =
-        maxOf(labelLineDp + descLineDp * descLines.coerceIn(0, SETTING_DESC_LINES), control) + TOUCH_ROW_AIR * 2 +
+        maxOf(labelLineDp + descLineDp * descLines.coerceIn(0, SETTING_DESC_LINES), control, controlMin) + TOUCH_ROW_AIR * 2 +
             if (segmentsBelow) segments else 0.dp
 }
 
@@ -157,9 +163,12 @@ internal fun nxTouchRowSizes(itemHeight: Dp, rowWidth: Dp, descOfLabel: Float): 
     // The segments' line under a segmented row's text: the track (2 dp inset, a choice's 5 dp padding, its text) and a gap.
     val segments = with(LocalDensity.current) { (value * 0.9f).toDp() } + (2.dp + 5.dp) * 2 + 2.dp + SEGMENTS_GAP
     val bare = with(LocalDensity.current) { (label * 1.25f).toDp() } + TOUCH_ROW_AIR * 2
+    // The tallest control: a picker's value ("Value ›", its `›` at 1.2 and 6 dp tap room above and below) or a segmented
+    // track (a choice's 0.9 text, 5 dp padding, the 2 dp inset).
+    val controlMin = with(LocalDensity.current) { maxOf((value * 1.2f).toDp() + PickerTapRoom * 2, (value * 0.9f).toDp() + (2.dp + 5.dp) * 2) }
     return NxTouchRowSizes(
         label, desc, descLine, value, maxOf(row, itemHeight), segments, rememberSegmentsFitRight(value, label, rowWidth - NxOptionsInnerPad * 2),
-        maxOf(bare, itemHeight), labelLine, descLineDp, rememberSegmentsFitLine(value, rowWidth - NxOptionsInnerPad * 2),
+        maxOf(bare, itemHeight), labelLine, descLineDp, rememberSegmentsFitLine(value, rowWidth - NxOptionsInnerPad * 2), controlMin,
     )
 }
 
@@ -208,7 +217,8 @@ internal fun NxTouchRow(
             .alpha(if (enabled) 1f else NX_DISABLED_ALPHA),   // role: a disabled row
         verticalArrangement = Arrangement.Center,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // At least the tallest control's line ([NxTouchRowSizes.controlMin]): every one-line row one height, whatever its control.
+        Row(Modifier.heightIn(min = sizes.controlMin), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
                 // The name's line exactly (the info icon, a touch taller, overflows it rather than growing the row when it shows).
                 Row(Modifier.height(sizes.labelLineDp), verticalAlignment = Alignment.CenterVertically) {
@@ -262,7 +272,7 @@ internal fun NxValueText(text: String, size: TextUnit, color: Color, modifier: M
 internal fun NxPickerValue(text: String, size: TextUnit, onLongPress: (() -> Unit)? = null, onClick: (() -> Unit)?) {
     val colors = LocalNxColors.current
     Row(
-        Modifier.clip(RoundedCornerShape(8.dp)).nxTapOrHold(onClick, onLongPress).padding(vertical = 6.dp),
+        Modifier.clip(RoundedCornerShape(8.dp)).nxTapOrHold(onClick, onLongPress).padding(vertical = PickerTapRoom),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         NxValueText(text, size, colors.listText, Modifier.widthIn(max = 180.dp))
@@ -292,6 +302,9 @@ internal fun NxSwitch(on: Boolean, onClick: (() -> Unit)?, lit: Boolean = false,
         )
     }
 }
+
+/** A picker value's tap room above and below its text. */
+private val PickerTapRoom = 6.dp
 
 private val SwitchWidth = 44.dp
 private val SwitchHeight = 24.dp

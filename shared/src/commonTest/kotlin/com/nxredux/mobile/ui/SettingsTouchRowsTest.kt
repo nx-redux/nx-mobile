@@ -106,6 +106,15 @@ class SettingsTouchRowsTest {
         for (lines in 0..2) assertEquals(air, sizes.height(lines, false) - (20.dp + 18.dp * lines))
     }
 
+    // Every one-line row is one height: the tallest control's line, whether the row has a picker, segments or plain text.
+    @Test fun oneLineRowsAreOneHeightWhateverTheirControl() {
+        val sizes = NxTouchRowSizes(16.sp, 14.4.sp, 18.sp, 14.sp, row = 100.dp, segments = 30.dp, bare = 64.dp, labelLineDp = 20.dp, descLineDp = 18.dp, controlMin = 29.dp)
+        val air = TOUCH_ROW_AIR * 2
+        assertEquals(29.dp + air, sizes.height(descLines = 0, segmentsBelow = false))                    // a value as text
+        assertEquals(29.dp + air, sizes.height(descLines = 0, segmentsBelow = false, control = 29.dp))   // a picker
+        assertEquals(20.dp + 18.dp + air, sizes.height(descLines = 1, segmentsBelow = false))           // a described row is taller anyway
+    }
+
     // Game lists' layout is segmented while its five styles fit on a line; too narrow even for that, a picker.
     @Test fun aForcedSegmentedRowFallsBackToAPickerWhenItsLineIsTooNarrow() {
         val styles = listOf("List", "Grid", "Carousel", "Backdrop", "Minimal")
