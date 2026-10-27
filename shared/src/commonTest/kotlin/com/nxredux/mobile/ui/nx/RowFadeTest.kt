@@ -36,10 +36,15 @@ class RowFadeTest {
         assertEquals(0.25f, alpha(rows, 5, 7, back = false, forward = true))
     }
 
-    @Test fun aRowTheEdgeCutsIsHiddenAtRestButShownWhileMoving() {
-        val rows = view(0, 6) + RowSpan(6, 550, 100)   // runs 50 px past the end
-        assertEquals(0f, alpha(rows, 6, 10, back = false, forward = true))
-        assertEquals(0.25f, alpha(rows, 6, 10, back = false, forward = true, moving = true))
+    @Test fun aRowTheEdgeCutsIsTheOuterStep() {
+        // Rows of differing heights: row 5 runs 50 px past the end. It is the faint row saying more is there.
+        val rows = view(0, 5) + RowSpan(5, 550, 100)
+        assertEquals(0.25f, alpha(rows, 5, 10, back = false, forward = true))
+        assertEquals(0.6f, alpha(rows, 4, 10, back = false, forward = true))
+        assertEquals(1f, alpha(rows, 3, 10, back = false, forward = true))
+        // The cut row the last there is: it alone fades.
+        assertEquals(0.25f, alpha(rows, 5, 6, back = false, forward = true))
+        assertEquals(1f, alpha(rows, 4, 6, back = false, forward = true))
     }
 
     @Test fun gapsAreNotRows() {
