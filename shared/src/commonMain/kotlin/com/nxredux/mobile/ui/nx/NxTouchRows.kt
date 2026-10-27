@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -76,6 +77,8 @@ enum class NxSettingControl {
     PICKER,
     /** No list (or a single value): the value only (in-game, LEFT/RIGHT still step it). */
     VALUE,
+    /** A colour per value (Appearance's accents): a row of circles under the text, a tap picks one; A steps, as RIGHT. */
+    SWATCHES,
 }
 
 /** On/off word pairs a switch stands for (lower case, the "on" word first); Show / Hide too, as Layouts' rows. */
@@ -339,6 +342,42 @@ private fun NxRowAction(word: String, size: TextUnit) {
         NxValueText(word, size, colors.inkDim)
     }
 }
+
+/** A swatch's most diameter, and the gap between two. */
+private val SwatchMax = 28.dp
+private val SwatchGap = 10.dp
+
+/**
+ * A colour row's control ([NxSettingControl.SWATCHES]): one circle per value in [swatches] (0xAARRGGBB; [NX_SWATCH_AUTO]
+ * draws [auto] with an "A"), the [selected] one ringed in the ink; as large as fits the width, up to [SwatchMax]. A tap
+ * picks one ([onPick], null none), a long press is [onLongPress].
+ */
+@Composable
+internal fun NxSwatches(swatches: List<Int>, selected: Int, auto: Color, onLongPress: (() -> Unit)? = null, onPick: ((Int) -> Unit)?) {
+    val colors = LocalNxColors.current
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val n = swatches.size.coerceAtLeast(1)
+        val d = minOf(SwatchMax, (maxWidth - SwatchGap * (n - 1)) / n)
+        Row(horizontalArrangement = Arrangement.spacedBy(SwatchGap), verticalAlignment = Alignment.CenterVertically) {
+            swatches.forEachIndexed { i, argb ->
+                val fill = if (argb == NX_SWATCH_AUTO) auto else Color(argb)
+                Box(
+                    Modifier.size(d).clip(CircleShape)
+                        .then(if (i == selected) Modifier.border(2.dp, colors.main, CircleShape) else Modifier)
+                        .nxTapOrHold(onPick?.let { p -> { p(i) } }, onLongPress)
+                        .padding(if (i == selected) 4.dp else 0.dp)
+                        .clip(CircleShape).background(fill).border(1.dp, colors.inkEdge, CircleShape),   // the edge: a dark colour on black
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (argb == NX_SWATCH_AUTO) Text("A", color = colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold, fontSize = with(LocalDensity.current) { (d * 0.4f).toSp() })
+                }
+            }
+        }
+    }
+}
+
+/** A swatch that follows another colour (the Secondary accent's Auto): drawn in the colour given as [NxSwatches]' auto. */
+const val NX_SWATCH_AUTO = 0
 
 /** The info icon: a question mark in a circle, sized from the description; a tap ([onClick], null none) shows the full text. */
 @Composable

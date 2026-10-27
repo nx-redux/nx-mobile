@@ -78,10 +78,15 @@ data class NxSettingRow(
      * and this word at its value's place, while it has the focus and a pad is in use. Null: A does the obvious.
      */
     val action: String? = null,
+    /** A colour per value (0xAARRGGBB, [NX_SWATCH_AUTO] for one that follows the accent): circles under the text ([NxSwatches]). */
+    val swatches: List<Int>? = null,
 ) : NxDescribedRow
 
-val NxSettingRow.control: NxSettingControl get() =
-    if (segmented && choices.size >= 2) NxSettingControl.SEGMENTED else nxSettingControl(choices)
+val NxSettingRow.control: NxSettingControl get() = when {
+    swatches != null && choices.size >= 2 -> NxSettingControl.SWATCHES
+    segmented && choices.size >= 2 -> NxSettingControl.SEGMENTED
+    else -> nxSettingControl(choices)
+}
 
 /**
  * [this] row as a list [fitsLine] wide draws it: a row made segmented ([NxSettingRow.segmented]) whose choices don't fit
@@ -150,7 +155,8 @@ internal fun nxFooterKeep(
 internal const val SETTING_DESC_OF_LABEL = 0.9f   // one text-size step ([NxTextSizes.STEP]) over 0.72
 
 /** Row [r]'s segments go under its text: an enabled segmented row whose choices don't fit on its right. */
-internal fun NxTouchRowSizes.segmentsBelow(r: NxSettingRow): Boolean = r.enabled && r.control == NxSettingControl.SEGMENTED && !segmentsRight(r.label, r.choices)
+internal fun NxTouchRowSizes.segmentsBelow(r: NxSettingRow): Boolean =
+    r.enabled && (r.control == NxSettingControl.SWATCHES || r.control == NxSettingControl.SEGMENTED && !segmentsRight(r.label, r.choices))
 
 /**
  * Row [r]'s height: a spacer half a bare row, a group label half a row. A touch row lays out as tall as its text
@@ -378,7 +384,11 @@ private fun NxSettingTouchRow(
         row.label, row.info, row.hasMoreInfo, selected, sizes,
         onTap = onTap, onInfo = info, onTruncated = onTruncated,
         enabled = row.enabled, warning = row.warning, onLongPress = hold, onFits = { cut = !it }, action = row.action,
-        below = if (sizes.segmentsBelow(row)) { { NxSegments(row.choices, row.index, sizes.value, hold, choose) } } else null,
+        below = when {
+            !sizes.segmentsBelow(row) -> null
+            row.control == NxSettingControl.SWATCHES -> { { NxSwatches(row.swatches.orEmpty(), row.index, nxAutoSecondary(), hold, choose) } }
+            else -> { { NxSegments(row.choices, row.index, sizes.value, hold, choose) } }
+        },
     ) {
         SettingControlView(
             row, sizes, choose, onEvent?.let { e -> { e(NxSettingEvent.OpenPicker(index)) } },

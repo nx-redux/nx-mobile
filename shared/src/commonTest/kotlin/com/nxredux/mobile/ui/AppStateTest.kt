@@ -9703,9 +9703,8 @@ class AppStateTest {
         assertEquals("Pink", rows()[i].secondary)
         state.onButton(NxButton.RIGHT)
         assertEquals(AccentPreset.WHITE, settings.accent)
-        state.onButton(NxButton.A)                                         // many values: A opens the picker
-        assertEquals(AccentPreset.entries.indexOf(AccentPreset.WHITE), state.chooser.value?.current)
-        state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
+        state.onButton(NxButton.A)                                         // its swatches: A steps, as RIGHT, no picker
+        assertNull(state.chooser.value)
         assertEquals(AccentPreset.RED, settings.accent)
     }
 
@@ -10488,7 +10487,7 @@ class AppStateTest {
         state.load()
         state.onFooterMode(FooterMode.BUTTONS)
         state.openSettings(SettingsSection.APPEARANCE)
-        state.select(2); state.openSelected()                              // Secondary accent
+        state.settingEvent(NxSettingEvent.OpenPicker(2))                   // Secondary accent's picker
         val chooser = state.chooser.value ?: error("no chooser")
         assertEquals("Secondary accent", chooser.title)
         assertEquals(SecondaryAccent.entries.map { it.label }, chooser.labels)
@@ -10507,13 +10506,13 @@ class AppStateTest {
         state.load()
         state.onFooterMode(FooterMode.BUTTONS)
         state.openSettings(SettingsSection.APPEARANCE)
-        state.select(1); state.openSelected()                              // Accent
+        state.settingEvent(NxSettingEvent.OpenPicker(1))                   // Accent's picker
         val before = settings.accent
         state.onButton(NxButton.DOWN)
         assertEquals((state.chooser.value!!.labels.indexOf(before.label) + 1) % state.chooser.value!!.labels.size, state.chooser.value!!.selected)
         state.onButton(NxButton.B)
         assertNull(state.chooser.value); assertEquals(before, settings.accent)
-        state.openSelected(); state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
+        state.settingEvent(NxSettingEvent.OpenPicker(1)); state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
         assertEquals(before.step(1), settings.accent)
     }
 
@@ -10528,8 +10527,8 @@ class AppStateTest {
         state.onFooterMode(FooterMode.HINTS)
         state.openSettings(SettingsSection.APPEARANCE)
         val accent = settings.accent
-        state.select(1); state.openSelected()                              // Accent, many values
-        assertNotNull(state.chooser.value); assertEquals(accent, settings.accent)   // a controller's A opens the picker too
+        state.select(1); state.openSelected()                              // Accent: its swatches step on A
+        assertNull(state.chooser.value); assertEquals(accent.step(1), settings.accent)
     }
 
     // Game lists' layout is segmented (all five styles side by side): A steps it, a segment sets it; Default emulators' rows pick.

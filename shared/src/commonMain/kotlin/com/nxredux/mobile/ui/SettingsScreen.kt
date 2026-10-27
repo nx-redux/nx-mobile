@@ -1,5 +1,8 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.NX_SWATCH_AUTO
+import com.nxredux.mobile.settings.SecondaryAccent
+import com.nxredux.mobile.settings.AccentPreset
 import com.nxredux.mobile.ui.nx.LocalNxHintBarHidden
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Box
@@ -196,6 +199,11 @@ internal fun settingsTouchRow(row: SettingsRow, choices: SettingChoices?, sectio
         warning = row.warning,
         button = "Rescan".takeIf { row.kind == SettingsKind.RESCAN },   // Library's counts row: the button on their right
         action = settingsRowAction(row, section),
+        swatches = when (row.kind) {   // the accents: a circle per colour
+            SettingsKind.ACCENT -> AccentPreset.entries.map { it.argb }
+            SettingsKind.SECONDARY_ACCENT -> SecondaryAccent.entries.map { if (it is SecondaryAccent.Preset) it.preset.argb else NX_SWATCH_AUTO }
+            else -> null
+        }.takeIf { values != null },
     )
 }
 

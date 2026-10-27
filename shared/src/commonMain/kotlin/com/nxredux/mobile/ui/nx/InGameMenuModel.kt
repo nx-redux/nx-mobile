@@ -647,7 +647,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 else -> when (row.control) {
                     NxSettingControl.SWITCH -> setChoice(index, 1 - row.index.coerceIn(0, 1))
                     NxSettingControl.PICKER -> { openPicker(index); null }
-                    NxSettingControl.SEGMENTED -> change(1)
+                    NxSettingControl.SEGMENTED, NxSettingControl.SWATCHES -> change(1)
                     NxSettingControl.VALUE -> null
                 }
             }

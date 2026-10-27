@@ -150,6 +150,15 @@ data class NxColors(
     val editorButton: Color = Color(0xFF2A2A2A)
 }
 
+/** The Secondary accent's Auto for the accent in use: the colour its swatch shows ([NxSwatches]). */
+@Composable
+@ReadOnlyComposable
+internal fun nxAutoSecondary(): Color {
+    val accent = LocalNxColors.current.accent
+    val preset = AccentPreset.entries.firstOrNull { Color(it.argb) == accent } ?: AccentPreset.DEFAULT
+    return Color(0xFF000000 or SecondaryAccent.Auto.rgb(preset).toLong())
+}
+
 /**
  * The theme's colours with [preset] as the accent and its text colour (the Accent setting), and [secondary]'s bar and text
  * for that accent (the Secondary accent setting); everything else as [NxDefaults].

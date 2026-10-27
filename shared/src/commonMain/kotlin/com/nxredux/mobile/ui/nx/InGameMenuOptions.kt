@@ -100,7 +100,7 @@ private fun optionRowTap(row: MenuRow, index: Int, onSelect: (Int) -> Unit, onOp
     return when (row.control) {
         NxSettingControl.SWITCH -> { { onOption(OptionEvent.Choose(index, 1 - row.index.coerceIn(0, 1))) } }
         NxSettingControl.PICKER -> { { onOption(OptionEvent.OpenPicker(index)) } }
-        NxSettingControl.SEGMENTED, NxSettingControl.VALUE -> { { onSelect(index) } }
+        NxSettingControl.SEGMENTED, NxSettingControl.VALUE, NxSettingControl.SWATCHES -> { { onSelect(index) } }
     }
 }
 
@@ -142,7 +142,7 @@ private fun OptionControlView(row: MenuRow.Option, index: Int, valueSize: TextUn
         )
         NxSettingControl.SEGMENTED -> NxSegments(row.choices, row.index, valueSize) { onOption(OptionEvent.Choose(index, it)) }
         NxSettingControl.PICKER -> NxPickerValue(row.valueLabel, valueSize) { onOption(OptionEvent.OpenPicker(index)) }
-        NxSettingControl.VALUE -> NxValueText(row.valueLabel, valueSize, LocalNxColors.current.listText, Modifier.widthIn(max = 180.dp))
+        NxSettingControl.VALUE, NxSettingControl.SWATCHES -> NxValueText(row.valueLabel, valueSize, LocalNxColors.current.listText, Modifier.widthIn(max = 180.dp))
     }
 }
 
