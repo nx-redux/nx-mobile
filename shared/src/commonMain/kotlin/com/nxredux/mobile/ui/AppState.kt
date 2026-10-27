@@ -4432,21 +4432,25 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         )
     }
 
-    /** The game lists' group: their layout and the options it has, the Layout icon and the achievements panel. */
+    /**
+     * The game lists' group: the options their layout has, the Layout icon and the achievements panel, a vertical list's
+     * alignment, then the layout and its orientation last, right above the picture they change.
+     */
     private fun layoutGameListRows(): List<SettingsRow> {
         val s = deps.settings
         fun shown(on: Boolean) = if (on) "Show" else "Hide"
         val list = s.gameListStyle
         return listOfNotNull(
-            SettingsRow(SettingsKind.GAME_LIST_STYLE, "Game lists layout", menuStyleLabel(list)),
-            SettingsRow(SettingsKind.GAME_LIST_ORIENTATION, "Game lists orientation", orientationLabel(s.gameListOrientation)).takeIf { MenuStyles.hasOrientation(list) },
-            SettingsRow(SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT, "Game lists alignment", verticalAlignmentLabel(s.gameListVerticalAlignment))
-                .takeIf { MenuStyles.effectiveOrientation(list, s.gameListOrientation) == MenuOrientation.VERTICAL },
             SettingsRow(SettingsKind.LIST_ART, "List art", s.gameListArt.label).takeIf { list == MenuStyle.LIST },
             SettingsRow(SettingsKind.BACKDROP_ART, "Backdrop art", s.backdropArt.label).takeIf { list == MenuStyle.BACKDROP },
             // A game list's Layout icon (hidden: Layouts only), and its trophy icon and X hint (hidden: X and the game's menu).
             SettingsRow(SettingsKind.LAYOUT_OPTIONS, "Layout options", shown(s.gameListLayoutOptions)),
             SettingsRow(SettingsKind.ACHIEVEMENTS_PANEL, "Achievements panel", shown(s.gameListAchievementsPanel)).takeIf { deps.achievements != null },
+            // A vertical list's alignment: with the layout rows, just above them.
+            SettingsRow(SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT, "Game lists alignment", verticalAlignmentLabel(s.gameListVerticalAlignment))
+                .takeIf { MenuStyles.effectiveOrientation(list, s.gameListOrientation) == MenuOrientation.VERTICAL },
+            SettingsRow(SettingsKind.GAME_LIST_STYLE, "Game lists layout", menuStyleLabel(list)),
+            SettingsRow(SettingsKind.GAME_LIST_ORIENTATION, "Game lists orientation", orientationLabel(s.gameListOrientation)).takeIf { MenuStyles.hasOrientation(list) },
         )
     }
 
@@ -4521,11 +4525,22 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /** Rebuilds the open page's rows in place (selection clamped). */
     private fun refreshSettings(confirm: ExtraFolder? = null) {
-        val section = (_screen.value as? Screen.Settings)?.section ?: SettingsSection.LIBRARY
+        val old = _screen.value as? Screen.Settings
+        val section = old?.section ?: SettingsSection.LIBRARY
         val page = settingsPage(section, confirm)
         _screen.value = page
-        _selection.value = selectableOn(page, _selection.value)
+        // The selected row moved (a row above it came or went, as Game lists' art row as its layout steps): the highlight follows it.
+        val sel = _selection.value
+        val moved = old?.rows?.getOrNull(sel.index)?.takeIf { old.section == section }?.let { was ->
+            page.rows.indices.filter { sameSettingsRow(page.rows[it], was) }.singleOrNull()
+        }
+        _selection.value = selectableOn(page, if (moved != null && moved != sel.index) sel.copy(index = moved) else sel)
     }
+
+    /** Whether [a] and [b] are the same Settings row across a refresh: its kind and what it is for, not its value or label. */
+    private fun sameSettingsRow(a: SettingsRow, b: SettingsRow): Boolean =
+        a.kind == b.kind && a.category == b.category && a.shelf == b.shelf && a.hint == b.hint && a.consoleId == b.consoleId &&
+            a.shortcut == b.shortcut && a.touchSlot == b.touchSlot && a.padShape == b.padShape && a.extra?.id == b.extra?.id
 
     /**
      * B on a sub-page: its section on the row that opened it. Leaving Default emulators (under Emulators) with a changed

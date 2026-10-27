@@ -64,9 +64,12 @@ data class NxSettingRow(
     val button: String? = null,
     /** [label] as a plain paragraph (System's licences): the hint colour across the row, wrapping; never selected or tapped. */
     val paragraph: Boolean = false,
+    /** Its values as a segmented button however many or long they are (they go under the text when they don't fit beside it). */
+    val segmented: Boolean = false,
 ) : NxDescribedRow
 
-val NxSettingRow.control: NxSettingControl get() = nxSettingControl(choices)
+val NxSettingRow.control: NxSettingControl get() =
+    if (segmented && choices.size >= 2) NxSettingControl.SEGMENTED else nxSettingControl(choices)
 
 /** The choice a switch row's flip sets: the other of its two values. */
 val NxSettingRow.flipped: Int get() = 1 - index.coerceIn(0, 1)

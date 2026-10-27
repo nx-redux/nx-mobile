@@ -5553,16 +5553,16 @@ class AppStateTest {
         assertEquals(listOf("Collections tab", "Collections layout", "Collections orientation"), page(SettingsSection.LAYOUT_COLLECTIONS))
         assertEquals(listOf("Tools tab", "Tools layout", "Tools orientation"), page(SettingsSection.LAYOUT_TOOLS))
         assertEquals(
-            listOf("Game lists layout", "Game lists orientation", "Game lists alignment", "Layout options"),
+            listOf("Layout options", "Game lists alignment", "Game lists layout", "Game lists orientation"),   // the layout and its orientation last, over the picture
             page(SettingsSection.LAYOUT_GAME_LISTS),
         )
         assertEquals(listOf("Page title", "Button hints", "Recent hint", "Search hint"), page(SettingsSection.LAYOUT_TITLE_HINTS))
         assertEquals(listOf("Game Switcher layout"), page(SettingsSection.LAYOUT_SWITCHER))
         settings.gameListStyle = MenuStyle.LIST
-        assertEquals(listOf("Game lists layout", "List art", "Layout options"), page(SettingsSection.LAYOUT_GAME_LISTS).take(3))
+        assertEquals(listOf("List art", "Layout options", "Game lists layout"), page(SettingsSection.LAYOUT_GAME_LISTS).filter { it != "Achievements panel" })
         settings.gameListStyle = MenuStyle.BACKDROP
         assertEquals(
-            listOf("Game lists layout", "Game lists orientation", "Game lists alignment", "Backdrop art", "Layout options"),
+            listOf("Backdrop art", "Layout options", "Game lists alignment", "Game lists layout", "Game lists orientation"),
             page(SettingsSection.LAYOUT_GAME_LISTS).take(5),
         )
     }
@@ -5647,7 +5647,8 @@ class AppStateTest {
         val at = state.selectLayoutsRow(SettingsKind.GAME_LIST_STYLE)
         state.onButton(NxButton.RIGHT)                                       // List -> Grid
         assertTrue(state.layoutsRows().none { it.kind == SettingsKind.LIST_ART })
-        assertEquals(at, state.selection.value.index)
+        assertEquals(at - 1, state.selection.value.index)                    // List art above it went: the highlight follows the row
+        assertEquals(SettingsKind.GAME_LIST_STYLE, state.layoutsRows()[state.selection.value.index].kind)
         assertEquals(GameListArt.MIX, settings.gameListArt)                  // kept while hidden
     }
 
@@ -5796,7 +5797,7 @@ class AppStateTest {
         settings.gameListStyle = MenuStyle.LIST
         state.openSettings(SettingsSection.LAYOUT_GAME_LISTS)
         val page = assertIs<Screen.Settings>(state.screen.value)
-        assertEquals(listOf("Game lists layout", "List art", "Layout options"), page.rows.map { it.label }.filter { it != "Achievements panel" })
+        assertEquals(listOf("List art", "Layout options", "Game lists layout"), page.rows.map { it.label }.filter { it != "Achievements panel" })
         assertEquals(LayoutShot.Games(MenuStyle.LIST), page.shot)
     }
 
@@ -5952,7 +5953,7 @@ class AppStateTest {
         assertEquals(listOf("Consoles tab" to "Show", "Consoles layout" to "List", "Consoles background" to settings.consoleArt.label), group(SettingsSection.LAYOUT_CONSOLES))
         assertEquals(listOf("Collections tab" to "Show", "Collections layout" to "List"), group(SettingsSection.LAYOUT_COLLECTIONS))
         assertEquals(listOf("Tools tab" to "Show", "Tools layout" to "List"), group(SettingsSection.LAYOUT_TOOLS))
-        assertEquals(listOf("Game lists layout" to "List", "List art" to "Screenshot", "Layout options" to "Show"), group(SettingsSection.LAYOUT_GAME_LISTS))
+        assertEquals(listOf("List art" to "Screenshot", "Layout options" to "Show", "Game lists layout" to "List"), group(SettingsSection.LAYOUT_GAME_LISTS))
         assertEquals(
             listOf("Page title" to "Show", "Button hints" to "Show", "Recent hint" to "Show", "Search hint" to "Show"),
             group(SettingsSection.LAYOUT_TITLE_HINTS),
@@ -9562,12 +9563,12 @@ class AppStateTest {
         val groups = listOf(SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS,
             SettingsSection.LAYOUT_GAME_LISTS, SettingsSection.LAYOUT_TITLE_HINTS, SettingsSection.LAYOUT_SWITCHER)
         val rows = groups.flatMap { g -> state.openLayoutsPage(g) }
-        assertEquals(listOf("Home tab", "New shelf", "Not started shelf", "Home stats", "Home layout", "Consoles tab", "Consoles layout", "Collections tab", "Collections layout", "Tools tab", "Tools layout", "Game lists layout", "List art", "Layout options", "Page title", "Button hints", "Recent hint", "Search hint", "Game Switcher layout"), rows.map { it.label })
+        assertEquals(listOf("Home tab", "New shelf", "Not started shelf", "Home stats", "Home layout", "Consoles tab", "Consoles layout", "Collections tab", "Collections layout", "Tools tab", "Tools layout", "List art", "Layout options", "Game lists layout", "Page title", "Button hints", "Recent hint", "Search hint", "Game Switcher layout"), rows.map { it.label })
         val styles = rows.filter { it.kind == SettingsKind.MENU_STYLE }
         assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), styles.map { it.category })
         assertTrue(styles.all { it.enabled })
         assertEquals(1, rows.count { it.kind == SettingsKind.GAME_LIST_STYLE })
-        assertEquals(listOf("Show", "Show", "Show", "Show", "Minimal", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "List", "Screenshot", "Show", "Show", "Show", "Show", "Show", "Full screen"), rows.map { it.secondary })
+        assertEquals(listOf("Show", "Show", "Show", "Show", "Minimal", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "Screenshot", "Show", "List", "Show", "Show", "Show", "Show", "Full screen"), rows.map { it.secondary })
     }
 
     @Test fun layouts_page_defaults_to_carousel_tools_grid_and_cycles_four_main_menu_styles() = runTest {
@@ -9579,7 +9580,7 @@ class AppStateTest {
         assertEquals(listOf("Consoles tab", "Consoles layout", "Consoles orientation", "Consoles background"), state.openLayoutsPage(SettingsSection.LAYOUT_CONSOLES).map { it.label })
         assertEquals(listOf("Collections tab", "Collections layout"), state.openLayoutsPage(SettingsSection.LAYOUT_COLLECTIONS).map { it.label })
         assertEquals(listOf("Tools tab", "Tools layout"), state.openLayoutsPage(SettingsSection.LAYOUT_TOOLS).map { it.label })
-        assertEquals(listOf("Game lists layout", "List art", "Layout options"), state.openLayoutsPage(SettingsSection.LAYOUT_GAME_LISTS).map { it.label })
+        assertEquals(listOf("List art", "Layout options", "Game lists layout"), state.openLayoutsPage(SettingsSection.LAYOUT_GAME_LISTS).map { it.label })
         // Layouts' group rows carry each layout: Tools' own default is Grid, Home's and Collections' Minimal; the fixture's game list is List.
         assertEquals(listOf("Minimal", "Carousel", "Minimal", "Grid", "List"), state.openLayoutsPage(SettingsSection.MAIN_MENU).take(5).map { it.secondary })
         state.selectLayoutsRow(SettingsKind.MENU_STYLE, MenuCategory.CONSOLES); state.onButton(NxButton.RIGHT)   // Consoles: Carousel to Minimal, no Backdrop
@@ -9617,10 +9618,10 @@ class AppStateTest {
         }
         val games = state.openLayoutsPage(SettingsSection.LAYOUT_GAME_LISTS)
         assertEquals(
-            listOf(SettingsKind.GAME_LIST_STYLE, SettingsKind.GAME_LIST_ORIENTATION, SettingsKind.BACKDROP_ART, SettingsKind.LAYOUT_OPTIONS),
+            listOf(SettingsKind.BACKDROP_ART, SettingsKind.LAYOUT_OPTIONS, SettingsKind.GAME_LIST_STYLE, SettingsKind.GAME_LIST_ORIENTATION),
             games.map { it.kind },
         )
-        assertEquals(listOf("Game lists layout", "Game lists orientation", "Backdrop art", "Layout options"), games.map { it.label })
+        assertEquals(listOf("Backdrop art", "Layout options", "Game lists layout", "Game lists orientation"), games.map { it.label })
         assertEquals(listOf("Horizontal", "Horizontal"), (consoles + games).filter { it.label.endsWith(" orientation") }.map { it.secondary })   // the default
     }
 
@@ -9873,7 +9874,7 @@ class AppStateTest {
         )
         assertEquals(listOf("Tools tab" to "Show", "Tools layout" to "Grid"), page(SettingsSection.LAYOUT_TOOLS))
         assertEquals(
-            listOf("Game lists layout" to "Carousel", "Game lists orientation" to "Horizontal", "Layout options" to "Show"),
+            listOf("Layout options" to "Show", "Game lists layout" to "Carousel", "Game lists orientation" to "Horizontal"),
             page(SettingsSection.LAYOUT_GAME_LISTS),
         )
         assertEquals(
@@ -10518,15 +10519,21 @@ class AppStateTest {
         assertNotNull(state.chooser.value); assertEquals(accent, settings.accent)   // a controller's A opens the picker too
     }
 
-    @Test fun touch_the_default_emulator_and_the_layouts_open_choosers() = runTest {
+    // Game lists' layout is segmented (all five styles side by side): A steps it, a segment sets it; Default emulators' rows pick.
+    @Test fun touch_the_default_emulator_opens_a_chooser_and_game_lists_layout_is_segmented() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings)
         state.load()
         state.onFooterMode(FooterMode.BUTTONS)
         state.openSettings(SettingsSection.LAYOUT_GAME_LISTS)
-        state.select(0); state.openSelected()
-        assertEquals(listOf("List", "Grid", "Carousel", "Backdrop", "Minimal"), state.chooser.value!!.labels)
-        state.chooseValue(3)
+        val page = assertIs<Screen.Settings>(state.screen.value)
+        val layout = page.rows.indexOfFirst { it.kind == SettingsKind.GAME_LIST_STYLE }
+        val touch = settingsTouchRow(page.rows[layout], page.choices[layout], page.section)
+        assertEquals(listOf("List", "Grid", "Carousel", "Backdrop", "Minimal"), touch.choices)
+        assertEquals(NxSettingControl.SEGMENTED, touch.control)
+        state.select(layout); state.openSelected()                        // A: a step, no picker
+        assertNull(state.chooser.value); assertEquals(MenuStyle.GRID, settings.gameListStyle)
+        state.settingEvent(NxSettingEvent.Choose(assertIs<Screen.Settings>(state.screen.value).rows.indexOfFirst { it.kind == SettingsKind.GAME_LIST_STYLE }, 3))   // a segment
         assertEquals(MenuStyle.BACKDROP, settings.gameListStyle)
         state.openSettings(SettingsSection.DEFAULT_EMULATORS)
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
@@ -11022,18 +11029,20 @@ class AppStateTest {
         assertEquals(MenuOrientation.VERTICAL, settings.menuOrientations[MenuCategory.CONSOLES])   // kept
         state.onButton(NxButton.RIGHT); state.onButton(NxButton.RIGHT)   // back to Carousel: it returns as it was
         assertEquals("Vertical", rows()[consoles + 1].secondary)
-        val last = state.selectLayoutsRow(SettingsKind.GAME_LIST_STYLE)
+        fun at(kind: SettingsKind) = rows().indexOfFirst { it.kind == kind }
+        state.selectLayoutsRow(SettingsKind.GAME_LIST_STYLE)
         state.onButton(NxButton.RIGHT); state.onButton(NxButton.RIGHT)   // List, Grid, Carousel
-        assertEquals(SettingsKind.GAME_LIST_ORIENTATION, rows()[last + 1].kind)
-        assertEquals(last, state.selection.value.index)
-        state.select(last + 1); state.onButton(NxButton.A)
+        assertEquals(rows().lastIndex, at(SettingsKind.GAME_LIST_ORIENTATION))   // the orientation row in, last, under the layout
+        assertEquals(at(SettingsKind.GAME_LIST_STYLE) + 1, at(SettingsKind.GAME_LIST_ORIENTATION))
+        assertEquals(at(SettingsKind.GAME_LIST_STYLE), state.selection.value.index)   // List art above went: the highlight follows the row
+        state.select(at(SettingsKind.GAME_LIST_ORIENTATION)); state.onButton(NxButton.A)
         assertEquals(MenuOrientation.VERTICAL, settings.gameListOrientation)
-        assertEquals("Vertical", rows()[last + 1].secondary)
-        state.select(last); state.onButton(NxButton.RIGHT); state.onButton(NxButton.RIGHT)   // Backdrop, then Minimal: the rows go
-        assertEquals(last + 2, rows().size)                              // Layout options alone: Minimal has no art row
+        assertEquals("Vertical", rows()[at(SettingsKind.GAME_LIST_ORIENTATION)].secondary)
+        state.select(at(SettingsKind.GAME_LIST_STYLE)); state.onButton(NxButton.RIGHT); state.onButton(NxButton.RIGHT)   // Backdrop, then Minimal: the rows go
+        assertEquals(listOf(SettingsKind.LAYOUT_OPTIONS, SettingsKind.GAME_LIST_STYLE), rows().map { it.kind })   // Minimal: no art row, no orientation
         state.onButton(NxButton.RIGHT)                                   // List
-        assertEquals(last + 3, rows().size)                              // List art, Layout options
-        assertEquals(last, state.selection.value.index)
+        assertEquals(listOf(SettingsKind.LIST_ART, SettingsKind.LAYOUT_OPTIONS, SettingsKind.GAME_LIST_STYLE), rows().map { it.kind })
+        assertEquals(at(SettingsKind.GAME_LIST_STYLE), state.selection.value.index)
         assertEquals(MenuOrientation.VERTICAL, settings.gameListOrientation)
     }
 
@@ -11049,8 +11058,8 @@ class AppStateTest {
             val shown = (style == MenuStyle.CAROUSEL || style == MenuStyle.BACKDROP) && o == MenuOrientation.VERTICAL
             assertEquals(shown, alignmentRow() != null, "$style $o")
             if (shown) {
-                val i = rows().indexOfFirst { it.kind == SettingsKind.GAME_LIST_ORIENTATION }
-                assertEquals(i + 1, rows().indexOf(alignmentRow()))   // directly under the orientation row
+                val i = rows().indexOfFirst { it.kind == SettingsKind.GAME_LIST_STYLE }
+                assertEquals(i - 1, rows().indexOf(alignmentRow()))   // directly above the layout and orientation rows
                 assertEquals("Game lists alignment", alignmentRow()!!.label)
                 assertEquals("Left", alignmentRow()!!.secondary)   // the default
             }
@@ -11073,9 +11082,9 @@ class AppStateTest {
         assertEquals(VerticalListAlignment.LEFT, settings.gameListVerticalAlignment)
         state.onButton(NxButton.A)
         assertEquals(VerticalListAlignment.RIGHT, settings.gameListVerticalAlignment)
-        state.select(i - 1); state.onButton(NxButton.A)                  // orientation to Horizontal: the row goes
+        state.select(rows().indexOfFirst { it.kind == SettingsKind.GAME_LIST_ORIENTATION }); state.onButton(NxButton.A)   // orientation to Horizontal: the row goes
         assertEquals(null, rows().firstOrNull { it.kind == SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT })
-        assertEquals(i - 1, state.selection.value.index)
+        assertEquals(SettingsKind.GAME_LIST_ORIENTATION, rows()[state.selection.value.index].kind)   // the highlight follows its row
         assertEquals(VerticalListAlignment.RIGHT, settings.gameListVerticalAlignment)   // kept
         state.onButton(NxButton.A)                                       // back to Vertical: it returns as it was
         assertEquals("Right", rows()[i].secondary)

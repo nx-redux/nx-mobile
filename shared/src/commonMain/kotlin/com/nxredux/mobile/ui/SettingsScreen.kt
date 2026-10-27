@@ -162,6 +162,9 @@ private val OPENER_KINDS = setOf(
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER,
 )
 
+/** Rows whose values are a segmented button however many they are (Game lists' layout: its five styles side by side). */
+private val SEGMENTED_KINDS = setOf(SettingsKind.GAME_LIST_STYLE)
+
 /** Rows whose secondary (a path, a state, a count, the last scan) is their description, not a value. */
 private val DESCRIBED_KINDS = setOf(SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.RESCAN, SettingsKind.UNASSIGNED, SettingsKind.HIDDEN)
 
@@ -182,6 +185,7 @@ internal fun settingsTouchRow(row: SettingsRow, choices: SettingChoices?, sectio
         choices = values?.labels.orEmpty(), index = values?.index ?: -1,
         value = if (values == null && !described && row.kind != SettingsKind.LICENSES_LINK) row.secondary else null,   // the link's URL: behind its info icon
         opens = row.kind in OPENER_KINDS, enabled = row.enabled,
+        segmented = row.kind in SEGMENTED_KINDS,
         warning = row.warning,
         button = "Rescan".takeIf { row.kind == SettingsKind.RESCAN },   // Library's counts row: the button on their right
     )
