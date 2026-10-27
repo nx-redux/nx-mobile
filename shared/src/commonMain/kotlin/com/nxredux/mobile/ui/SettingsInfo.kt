@@ -101,7 +101,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER -> SettingText("")
     SettingsKind.EXTRA_INFO -> SettingText(
-        "Play time and achievements in lists",
+        "Play time and achievements for games",
         "Hide removes the game stats (play time, achievements) from the main menu, the game lists and the Game " +
             "Switcher, for a cleaner look. It works in every mode. A console's or collection's game count stays, and the " +
             "in-game menu, the Game Tracker and RetroAchievements keep all their info.",
