@@ -107,6 +107,7 @@ import com.nxredux.mobile.ui.nx.NxDefaults
 import com.nxredux.mobile.ui.nx.NxBackdropPicture
 import com.nxredux.mobile.ui.nx.backdropPictureTarget
 import com.nxredux.mobile.ui.nx.LocalNxOptionText
+import com.nxredux.mobile.ui.nx.NxHelpText
 import com.nxredux.mobile.ui.nx.NxSettingInfoPopup
 import com.nxredux.mobile.ui.nx.NxSettingPicker
 import com.nxredux.mobile.ui.nx.NxDialog
@@ -385,7 +386,7 @@ internal fun BoxScope.PageOverlays(state: AppState, chooser: ValueChooser?, erro
     // A touch value row's picker (the in-game menu's).
     chooser?.let { c -> NxSettingPicker(c.title, c.labels, c.current, c.selected, onPick = state::chooseValue, onDismiss = state::closeChooser) }
     val settingInfo by state.settingInfo.collectAsState()   // a Settings row's full description
-    settingInfo?.let { p -> NxSettingInfoPopup(p.title, p.text, p.scrollSeq, p.scrollDir, onClose = state::closeSettingInfo) }
+    NxSettingInfoPopup(settingInfo?.let { p -> NxHelpText(p.title, p.text, p.scrollSeq, p.scrollDir) }, onClose = state::closeSettingInfo)
     // About's Update to: here, so it shows on whichever screen Settings is on (the top one in dual screen).
     val updateConfirm by state.updateConfirm.collectAsState()
     updateConfirm?.let { r ->

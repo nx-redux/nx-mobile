@@ -150,7 +150,7 @@ fun InGameMenu(
             NxChoiceDialog(dialog.title, dialog.footer, dialog.rows.map { it.label }, dialog.selected, onChoose = onActivate, onCancel = onDismiss)
         }
         // An options row's picker or full description, over everything (the hint bar too).
-        state.popup?.let { MenuPopupView(it, onOption) }
+        MenuPopupView(state.popup, onOption)
     }
 }
 

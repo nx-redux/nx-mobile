@@ -146,14 +146,12 @@ private fun OptionControlView(row: MenuRow.Option, index: Int, valueSize: TextUn
     }
 }
 
-/** The popup over the menu ([MenuState.popup]): the value picker or a row's full description. */
+/** The popup over the menu ([MenuState.popup], null none): the value picker or a row's help note (which fades out). */
 @Composable
-internal fun MenuPopupView(popup: MenuPopup, onOption: (OptionEvent) -> Unit) {
-    when (popup) {
-        is MenuPopup.Picker -> NxSettingPicker(
-            popup.title, popup.choices, popup.current, popup.cursor,
-            onPick = { onOption(OptionEvent.Pick(it)) }, onDismiss = { onOption(OptionEvent.ClosePopup) },
-        )
-        is MenuPopup.Info -> NxSettingInfoPopup(popup.title, popup.text, popup.scrollSeq, popup.scrollDir, onClose = { onOption(OptionEvent.ClosePopup) })
-    }
+internal fun MenuPopupView(popup: MenuPopup?, onOption: (OptionEvent) -> Unit) {
+    if (popup is MenuPopup.Picker) NxSettingPicker(
+        popup.title, popup.choices, popup.current, popup.cursor,
+        onPick = { onOption(OptionEvent.Pick(it)) }, onDismiss = { onOption(OptionEvent.ClosePopup) },
+    )
+    NxSettingInfoPopup((popup as? MenuPopup.Info)?.let { NxHelpText(it.title, it.text, it.scrollSeq, it.scrollDir) }, onClose = { onOption(OptionEvent.ClosePopup) })
 }

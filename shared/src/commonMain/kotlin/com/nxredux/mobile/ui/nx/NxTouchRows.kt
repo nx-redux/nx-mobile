@@ -37,13 +37,14 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.MutableSharedFlow
 
 /*
  * The touch rows both settings lists draw: the app's Settings rows (NxSettingsRow.kt) and the in-game menu's options
@@ -194,7 +195,10 @@ internal fun NxTouchRow(
     var truncated by remember(info) { mutableStateOf(false) }
     LaunchedEffect(selected, truncated, info) { if (selected && info.isNotBlank()) onTruncated(info, truncated) }
     Column(
-        Modifier.fillMaxWidth().padding(vertical = TOUCH_ROW_GAP).clip(shape)
+        Modifier.fillMaxWidth().padding(vertical = TOUCH_ROW_GAP)
+            // The selected row's plate, where the help note leaves it lit ([NxSettingInfoPopup]).
+            .then(if (selected) Modifier.onGloballyPositioned { NxHelpAnchor.row = NxHelpRow(label, it.boundsInWindow(), sizes.desc) } else Modifier)
+            .clip(shape)
             .then(if (selected) Modifier.background(colors.accent.copy(alpha = SOFT_SELECTION_ALPHA), shape) else Modifier)   // role: a touch row's soft selection
             .nxTapOrHold(onTap, onLongPress).padding(horizontal = NxOptionsInnerPad, vertical = TOUCH_ROW_AIR - TOUCH_ROW_GAP)
             .alpha(if (enabled) 1f else NX_DISABLED_ALPHA),   // role: a disabled row
@@ -318,17 +322,6 @@ private fun NxInfoIcon(textSize: TextUnit, onClick: (() -> Unit)?) {
         Box(Modifier.size(disc).border(1.5.dp, colors.hint, CircleShape), contentAlignment = Alignment.Center) {
             Text("?", color = colors.hint, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold, fontSize = textSize * 0.8f, lineHeight = textSize * 0.8f)
         }
-    }
-}
-
-/** A row's full description over the page ([NxModal] INFO): A, B, X or a tap close it; [scrollSeq] counts UP/DOWN steps ([scrollDir]). */
-@Composable
-fun NxSettingInfoPopup(title: String, text: String, scrollSeq: Int, scrollDir: Int, onClose: () -> Unit) {
-    // Each new scrollSeq is one step for the modal's scroll.
-    val steps = remember { MutableSharedFlow<Int>(extraBufferCapacity = 8) }
-    LaunchedEffect(scrollSeq) { if (scrollSeq > 0) steps.emit(scrollDir) }
-    NxModal(caption = title, kind = ModalKind.INFO, onButton = { onClose() }, scrollSteps = steps) {
-        Text(text, color = LocalNxColors.current.listText, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal, fontSize = nxDialogBody(), lineHeight = nxDialogBody() * 1.35f)   // Regular, as the row's description
     }
 }
 

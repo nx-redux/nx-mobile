@@ -6,6 +6,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalDensity
@@ -84,6 +85,10 @@ data class NxColors(
     val inkEdge: Color = main.copy(alpha = 0.08f)
     /** The small NX mark at the top right of Settings (SettingsMark): the [main] ink at 5%. */
     val inkMark: Color = main.copy(alpha = 0.05f)
+    /** The Settings help note's inner card border (NxSettingInfoPopup): the [main] ink at 10%. */
+    val inkLine: Color = main.copy(alpha = 0.10f)
+    /** The Settings help note's outer sheet (NxSettingInfoPopup): the [accent] at 14% over black, opaque. */
+    val accentFaint: Color = accent.copy(alpha = 0.14f).compositeOver(Color(0xFF000000))
     /**
      * Reserved for carousel items two or more steps out (a Float, not a colour); not yet wired. The carousel uses
      * MENU_FAR_ALPHA (0.2) in RowLayout.kt.
@@ -111,6 +116,8 @@ data class NxColors(
     val scrimAdjust: Color = Color(0xD9000000)
     /** The screen under a modal: NxModal, GameSettingsModal, RaPanelView, NxTouchRows' picker. */
     val scrimModal: Color = Color(0xB3000000)
+    /** Around the Settings help note (NxSettingInfoPopup): everything but the focused row, black at 80%. */
+    val scrimHelp: Color = Color(0xCC000000)
     /** NxLoadingOverlay's scrim: darker than [scrimModal], so its message reads over list text. */
     val scrimLoading: Color = Color(0xE6000000)
     /** A modal's panel: NxModal, GameSettingsModal, GameListLayoutMenu, RaPanelView, NxTouchRows' picker. */
