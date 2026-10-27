@@ -4001,7 +4001,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             layoutTabRows(section.tab!!)
         SettingsSection.LAYOUT_GAME_LISTS -> layoutGameListRows()
         SettingsSection.LAYOUT_TITLE_HINTS -> layoutTitleHintRows()
-        SettingsSection.LAYOUT_SWITCHER -> listOf(SettingsRow(SettingsKind.SWITCHER_LAYOUT, "Game Switcher layout", deps.settings.switcherLayout.label))
+        SettingsSection.LAYOUT_SWITCHER -> listOf(SettingsRow(SettingsKind.SWITCHER_LAYOUT, "Layout", deps.settings.switcherLayout.label))
         // The on-screen pad's press tick, then a core's rumble.
         SettingsSection.CONTROLS -> listOf(
             SettingsRow(SettingsKind.PAD_VIBRATION, "Pad vibration", deps.settings.padVibration.label),
@@ -4406,7 +4406,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     /**
-     * A tab's group: its Show / Hide, and while shown its layout and the options that layout has. Home's layout row comes
+     * A tab's group: its Show / Hide (Visible), and while shown its layout and the options that layout has. On a group's
+     * page the rows don't repeat its name (the page title says it): Visible, Layout, Orientation, Background, Stats. Home's layout row comes
      * last, right above the picture it changes (after its shelves and stats); the other tabs' follows the Show / Hide.
      */
     private fun layoutTabRows(c: MenuCategory): List<SettingsRow> {
@@ -4415,18 +4416,18 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val on = tabSetting(c)
         val style = MenuStyles.styleOf(s.menuStyles, c)
         val home = c == MenuCategory.HOME
-        val layout = SettingsRow(SettingsKind.MENU_STYLE, "${c.label} layout", menuStyleLabel(style), category = c).takeIf { on }
+        val layout = SettingsRow(SettingsKind.MENU_STYLE, "Layout", menuStyleLabel(style), category = c).takeIf { on }
         return listOfNotNull(
-            SettingsRow(SettingsKind.TAB_SHOWN, "${c.label} tab", shown(on), category = c),
+            SettingsRow(SettingsKind.TAB_SHOWN, "Visible", shown(on), category = c),
             layout.takeIf { !home },
             // Home's New and Not started shelves, Show / Hide, while the Home tab shows.
             SettingsRow(SettingsKind.SHELF_SHOWN, "New shelf", shown(s.showNewShelf), shelf = HomeShelf.NEW).takeIf { on && c == MenuCategory.HOME },
             SettingsRow(SettingsKind.SHELF_SHOWN, "Not started shelf", shown(s.showNotStartedShelf), shelf = HomeShelf.NOT_STARTED).takeIf { on && c == MenuCategory.HOME },
             // Home's stats strip (its cards' info follows Extra info).
-            SettingsRow(SettingsKind.HOME_STATS, "Home stats", shown(s.menuHomeStats)).takeIf { on && c == MenuCategory.HOME },
-            SettingsRow(SettingsKind.MENU_ORIENTATION, "${c.label} orientation", orientationLabel(MenuStyles.orientationOf(s.menuOrientations, c)), category = c)
+            SettingsRow(SettingsKind.HOME_STATS, "Stats", shown(s.menuHomeStats)).takeIf { on && c == MenuCategory.HOME },
+            SettingsRow(SettingsKind.MENU_ORIENTATION, "Orientation", orientationLabel(MenuStyles.orientationOf(s.menuOrientations, c)), category = c)
                 .takeIf { on && c != MenuCategory.HOME && style == MenuStyle.CAROUSEL },
-            SettingsRow(SettingsKind.CONTROLLER_ART, "Consoles background", s.consoleArt.label, category = c)
+            SettingsRow(SettingsKind.CONTROLLER_ART, "Background", s.consoleArt.label, category = c)
                 .takeIf { on && c == MenuCategory.CONSOLES && style != MenuStyle.GRID && style != MenuStyle.MINIMAL },   // List and Carousel; the Grid has no controllers, Minimal no art
             layout.takeIf { home },
         )
@@ -4447,10 +4448,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             SettingsRow(SettingsKind.LAYOUT_OPTIONS, "Layout options", shown(s.gameListLayoutOptions)),
             SettingsRow(SettingsKind.ACHIEVEMENTS_PANEL, "Achievements panel", shown(s.gameListAchievementsPanel)).takeIf { deps.achievements != null },
             // A vertical list's alignment: with the layout rows, just above them.
-            SettingsRow(SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT, "Game lists alignment", verticalAlignmentLabel(s.gameListVerticalAlignment))
+            SettingsRow(SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT, "Alignment", verticalAlignmentLabel(s.gameListVerticalAlignment))
                 .takeIf { MenuStyles.effectiveOrientation(list, s.gameListOrientation) == MenuOrientation.VERTICAL },
-            SettingsRow(SettingsKind.GAME_LIST_STYLE, "Game lists layout", menuStyleLabel(list)),
-            SettingsRow(SettingsKind.GAME_LIST_ORIENTATION, "Game lists orientation", orientationLabel(s.gameListOrientation)).takeIf { MenuStyles.hasOrientation(list) },
+            SettingsRow(SettingsKind.GAME_LIST_STYLE, "Layout", menuStyleLabel(list)),
+            SettingsRow(SettingsKind.GAME_LIST_ORIENTATION, "Orientation", orientationLabel(s.gameListOrientation)).takeIf { MenuStyles.hasOrientation(list) },
         )
     }
 

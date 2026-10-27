@@ -81,7 +81,7 @@ class SettingsTouchRowsTest {
         assertEquals("Games found in the last 30 days", shelf.info); assertTrue(shelf.hasMoreInfo)
         val notStarted = settingsTouchRow(SettingsRow(SettingsKind.SHELF_SHOWN, "Not started shelf", shelf = HomeShelf.NOT_STARTED), null)
         assertEquals("Games you have never played", notStarted.info); assertFalse(notStarted.hasMoreInfo)   // the line alone: no info icon
-        val stats = settingsTouchRow(SettingsRow(SettingsKind.HOME_STATS, "Home stats"), null)
+        val stats = settingsTouchRow(SettingsRow(SettingsKind.HOME_STATS, "Stats"), null)
         assertEquals("This month and Most played", stats.info); assertTrue("stats strip" in stats.detail)
         // All files access: a line only for the warning.
         assertEquals("", settingsInfo(SettingsRow(SettingsKind.ALL_FILES, "All files access")).line)
