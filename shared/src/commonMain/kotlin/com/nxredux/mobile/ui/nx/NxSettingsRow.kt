@@ -141,7 +141,7 @@ internal fun nxFooterKeep(
 }
 
 /** A description as a share of its name. */
-private const val DESC_OF_LABEL = 0.9f   // one text-size step ([NxTextSizes.STEP]) over 0.72
+internal const val SETTING_DESC_OF_LABEL = 0.9f   // one text-size step ([NxTextSizes.STEP]) over 0.72
 
 /** Row [r]'s segments go under its text: an enabled segmented row whose choices don't fit on its right. */
 internal fun NxTouchRowSizes.segmentsBelow(r: NxSettingRow): Boolean = r.enabled && r.control == NxSettingControl.SEGMENTED && !segmentsRight(r.label, r.choices)
@@ -214,7 +214,7 @@ fun NxSettingsList(
     val itemHeight = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
     val listState = rememberLazyListState()
     BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = NxOptionsSidePad).padding(top = 4.dp), contentAlignment = Alignment.TopCenter) {
-        val sizes = nxTouchRowSizes(itemHeight, maxWidth, DESC_OF_LABEL)
+        val sizes = nxTouchRowSizes(itemHeight, maxWidth, SETTING_DESC_OF_LABEL)
         // A forced segmented row too wide for even its own line here: a picker instead.
         val rows = remember(given, sizes.segmentsFitLine) { given.map { it.fittedTo(sizes.segmentsFitLine) } }
         // Rows (a touch row's description one or two lines, a paragraph) are as tall as they lay out: the list is as tall

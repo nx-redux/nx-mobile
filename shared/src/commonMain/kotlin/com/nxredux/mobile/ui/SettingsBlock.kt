@@ -1,5 +1,10 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.SETTING_DESC_OF_LABEL
+import com.nxredux.mobile.ui.nx.nxListLabel
+import com.nxredux.mobile.ui.nx.nxOptionsLabelSize
+import com.nxredux.mobile.ui.nx.LocalNxFontWeights
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -339,6 +344,9 @@ fun SettingsRowsBlock(
     }
 }
 
+/** An unselected word-list row's tag against the row's own inkDim (ink-38 × 0.6); the selected row's tag is inkDim. */
+const val SETTINGS_TAG_OF_ROW = 0.6f
+
 /** A list's edge fade: [SETTINGS_ROWS_FADE_ROWS] of its [row] pitch in the rows block, else the list's own [default]. */
 @Composable
 fun settingsRowsFade(row: Dp, default: Dp): Dp = if (LocalSettingsBlock.current != null) row * SETTINGS_ROWS_FADE_ROWS else default
@@ -346,8 +354,11 @@ fun settingsRowsFade(row: Dp, default: Dp): Dp = if (LocalSettingsBlock.current 
 
 /**
  * A pill-list page's rows in the Settings rows block, drawn as the section block's words ([settingsWordStyle]): one per
- * pitch, the [selection] row in the accent and the rest inkDim, no pill. A tap selects, a tap on the selected row opens
- * ([nxTap]); the selection is kept in view and the edges fade like the other rows.
+ * pitch, the [selection] row in the accent and the rest inkDim, no pill. A row's tag after its name (an emulator's
+ * consoles: 3DS, WII · GC) is at a Settings row's description size, medium weight, in its row's inkDim at
+ * [SETTINGS_TAG_OF_ROW] (the selected row's in inkDim itself, never the accent), so the edge fade, applied to the whole row,
+ * never leaves a tag brighter than its name. A tap selects, a tap on the selected row opens ([nxTap]); the selection is
+ * kept in view and the edges fade like the other rows.
  */
 @Composable
 internal fun SettingsWordList(
@@ -357,6 +368,8 @@ internal fun SettingsWordList(
     val colors = LocalNxColors.current
     val style = settingsWordStyle()
     val tapOpens = LocalNxTapOpens.current
+    val tagSize = nxOptionsLabelSize(nxListLabel()) * SETTING_DESC_OF_LABEL   // a Settings row's description size
+    val tagFont = LocalNxFontWeights.current
     NxKeepSelectedInView(listState, selection, rows.size, SETTINGS_ROWS_FADE_ROWS)   // the selection clear of the fade
     LazyColumn(
         modifier.nxScrollFade(listState, height = settingsWordPitch(style) * SETTINGS_ROWS_FADE_ROWS, strong = true),
@@ -368,7 +381,9 @@ internal fun SettingsWordList(
                 append(row.label)
                 row.secondary?.let {
                     append("  ")
-                    withStyle(SpanStyle(color = colors.hint, fontSize = NxTextSizes.secondary(style.fontSize))) { append(it) }
+                    // The selected row's tag in inkDim (not the accent); the others their row's inkDim at [SETTINGS_TAG_OF_ROW].
+                    val tag = if (selected) colors.inkDim else colors.inkDim.let { it.copy(alpha = it.alpha * SETTINGS_TAG_OF_ROW) }   // role: a word list's tag
+                    withStyle(SpanStyle(color = tag, fontSize = tagSize, fontFamily = tagFont, fontWeight = FontWeight.Medium)) { append(it) }
                 }
             }
             Text(
