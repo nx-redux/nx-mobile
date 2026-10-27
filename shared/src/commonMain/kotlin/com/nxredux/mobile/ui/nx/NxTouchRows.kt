@@ -141,7 +141,7 @@ internal class NxTouchRowSizes(
      * a one-line description no taller for a second line it doesn't have.
      */
     fun height(descLines: Int, segmentsBelow: Boolean, control: Dp = 0.dp): Dp =
-        maxOf(labelLineDp + descLineDp * descLines.coerceIn(0, SETTING_DESC_LINES), control, controlMin) + TOUCH_ROW_AIR * 2 +
+        maxOf(labelLineDp + descLineDp * descLines.coerceIn(0, SETTING_DESC_LINES), control, if (segmentsBelow) 0.dp else controlMin) + TOUCH_ROW_AIR * 2 +
             if (segmentsBelow) segments else 0.dp
 }
 
@@ -220,8 +220,9 @@ internal fun NxTouchRow(
             .alpha(if (enabled) 1f else NX_DISABLED_ALPHA),   // role: a disabled row
         verticalArrangement = Arrangement.Center,
     ) {
-        // At least the tallest control's line ([NxTouchRowSizes.controlMin]): every one-line row one height, whatever its control.
-        Row(Modifier.heightIn(min = sizes.controlMin), verticalAlignment = Alignment.CenterVertically) {
+        // At least the tallest control's line ([NxTouchRowSizes.controlMin]): every one-line row one height, whatever its
+        // control. Not when the control sits under the text (segments, swatches): the name's line is then just the name's.
+        Row(if (below == null) Modifier.heightIn(min = sizes.controlMin) else Modifier, verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
                 // The name's line exactly (the info icon, a touch taller, overflows it rather than growing the row when it shows).
                 Row(Modifier.height(sizes.labelLineDp), verticalAlignment = Alignment.CenterVertically) {

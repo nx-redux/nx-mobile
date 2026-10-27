@@ -113,6 +113,7 @@ class SettingsTouchRowsTest {
         assertEquals(29.dp + air, sizes.height(descLines = 0, segmentsBelow = false))                    // a value as text
         assertEquals(29.dp + air, sizes.height(descLines = 0, segmentsBelow = false, control = 29.dp))   // a picker
         assertEquals(20.dp + 18.dp + air, sizes.height(descLines = 1, segmentsBelow = false))           // a described row is taller anyway
+        assertEquals(20.dp + air + 30.dp, sizes.height(descLines = 0, segmentsBelow = true))              // a control under the name: the name's line alone
     }
 
     // Game lists' layout is segmented while its five styles fit on a line; too narrow even for that, a picker.
