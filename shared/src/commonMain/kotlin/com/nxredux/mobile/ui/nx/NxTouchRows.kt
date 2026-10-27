@@ -164,7 +164,7 @@ internal fun nxTouchRowSizes(itemHeight: Dp, rowWidth: Dp, descOfLabel: Float): 
     val row = labelLine + descLineDp * SETTING_DESC_LINES + TOUCH_ROW_AIR * 2
     val value = nxOptionsValueSize(listText)
     // The segments' line under a segmented row's text: the track (2 dp inset, a choice's 5 dp padding, its text) and a gap.
-    val segments = with(LocalDensity.current) { (value * 0.9f).toDp() } + (2.dp + 5.dp) * 2 + 2.dp + SEGMENTS_GAP
+    val segments = with(LocalDensity.current) { (value * 0.9f).toDp() + (label * LABEL_LEADING).toDp() } + (2.dp + 5.dp) * 2 + 2.dp + SEGMENTS_GAP
     val bare = with(LocalDensity.current) { (label * 1.25f).toDp() } + TOUCH_ROW_AIR * 2
     // The tallest control: a picker's value ("Value ›", its `›` at 1.2 and 6 dp tap room above and below) or a segmented
     // track (a choice's 0.9 text, 5 dp padding, the 2 dp inset).
@@ -174,6 +174,9 @@ internal fun nxTouchRowSizes(itemHeight: Dp, rowWidth: Dp, descOfLabel: Float): 
         maxOf(bare, itemHeight), labelLine, descLineDp, rememberSegmentsFitLine(value, rowWidth - NxOptionsInnerPad * 2), controlMin,
     )
 }
+
+/** The room the name's 1.25 line box leaves above its text (half its leading), as a share of the name's size. */
+private const val LABEL_LEADING = 0.125f
 
 /** The gap between a segmented row's description and its segments. */
 private val SEGMENTS_GAP = 6.dp
@@ -254,6 +257,8 @@ internal fun NxTouchRow(
             Spacer(Modifier.height(SEGMENTS_GAP))
             // In the Settings rows block, right-aligned under the label (the pane never widens for it); elsewhere at the text's start.
             Box(Modifier.fillMaxWidth(), contentAlignment = if (LocalSettingsBlock.current != null) Alignment.CenterEnd else Alignment.CenterStart) { below() }
+            // The name's line leading above its text, matched under the control: the same room above the name and below it.
+            Spacer(Modifier.height(with(LocalDensity.current) { (sizes.label * LABEL_LEADING).toDp() }))
         }
     }
 }
