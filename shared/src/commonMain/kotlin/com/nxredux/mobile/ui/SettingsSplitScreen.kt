@@ -25,17 +25,20 @@ import com.nxredux.mobile.ui.nx.LocalNxHintBarKeepHeight
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxHintBar
 
+/** The wide stage's rows block: no crumb (the section block beside it says Settings), no Back word. */
+private val WIDE_BLOCK = SettingsBlockMode(crumb = null)
+
 /** An unfocused pane's opacity. */
 internal const val UNFOCUSED_ALPHA = 0.6f
 
 /**
  * The wide Settings ([settingsSplit]): one stage, nothing above but the small mark (the background's). The section block
  * ([SettingsMenuScreen]) rests bottom-left; the page is the rows block ([LocalSettingsBlock]) in a fixed frame at the right
- * ([settingsFrameWidth], [settingsFrameLeft]: up to 560 dp, its right edge the gutter in), its first line at
- * [settingsTopLine] of the stage on every page, the rows growing down from it. On the Settings root the sections have the
+ * ([settingsFrameWidth], [settingsFrameLeft]: up to 560 dp, its right edge the gutter in), on the section block's
+ * baseline and growing up to 24 dp under the top, then scrolling. On the Settings root the sections have the
  * focus and the rows preview the highlighted section (no selection, a tap opens it on that row,
  * [AppState.settingsPreviewTap]); on a page the rows have it and the current section drops to the main ink (a tap on a
- * section, [AppState.settingsCategoryTap]). A Layouts group's picture sits above the top line ([settingsWideBlockPage]);
+ * section, [AppState.settingsCategoryTap]). A Layouts group's picture is part of its block, under the rows ([settingsWideBlockPage]);
  * the Android games picker draws whole from the old pane's edge. The root's hints are drawn on the left, a page's on the right; both sides keep
  * the bar's height, so the blocks share the baseline. The Remove folder dialog is drawn here, over the whole stage.
  */
@@ -50,7 +53,6 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
             CompositionLocalProvider(LocalNxHintBarKeepHeight provides true) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val left = if (blockPage) settingsFrameLeft(maxWidth, sectionRight, gutter) else maxWidth * SETTINGS_SPLIT_LEFT
-                    val mode = SettingsBlockMode(crumb = null, topLine = settingsTopLine(maxHeight))
                     // The section block keeps its gutter on the right even when the frame comes within 24 dp of it.
                     Column(Modifier.width(if (blockPage) maxOf(left, sectionRight + gutter) else left).fillMaxHeight()) {
                         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -71,7 +73,7 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
                         NxHintBar(if (s is Screen.SettingsMenu) SETTINGS_ROOT_HINTS else emptyList(), onHint = state::onButton)
                     }
                     Box(Modifier.padding(start = left).fillMaxSize()) {
-                        CompositionLocalProvider(LocalSettingsBlock provides mode.takeIf { blockPage }) {
+                        CompositionLocalProvider(LocalSettingsBlock provides WIDE_BLOCK.takeIf { blockPage }) {
                             if (s is Screen.SettingsMenu) {
                                 WithIndex(selection) { i ->
                                     s.sections.getOrNull(i)?.let { section ->

@@ -46,7 +46,7 @@ class SettingsBlockTest {
     }
 
     @Test fun wideBlockPages() {
-        // The wide stage's frame adds the Layouts groups (picture above the line); the Android games picker stays whole.
+        // The wide stage's frame adds the Layouts groups (their picture under the rows); the Android games picker stays whole.
         assertTrue(settingsWideBlockPage(Screen.Settings(SettingsSection.LAYOUT_HOME, emptyList())))
         assertTrue(settingsWideBlockPage(Screen.Settings(SettingsSection.LIBRARY, emptyList())))
         assertTrue(settingsWideBlockPage(Screen.SettingsMenu(settingsCategories())))
@@ -65,24 +65,10 @@ class SettingsBlockTest {
         assertEquals(200.dp - 24.dp, settingsFrameWidth(200.dp, sectionRight = 250.dp, gutter = 24.dp))
     }
 
-    @Test fun topLine() {
-        assertEquals(320.dp, settingsTopLine(800.dp))
-        assertEquals(0.dp, settingsTopLine(0.dp))
-    }
-
-    @Test fun pictureFit() {
-        // Short room: a picture left of the mark's column, its top as high as the mark's top (16 dp).
-        val narrow = settingsPictureWidth(560.dp, bottom = 200.dp, aspect = 2f, mat = 8.dp)
-        assertEquals(((200f - 16f - 16f) * 2f + 16f).dp, narrow)
-        assertTrue(narrow <= 560.dp - SETTINGS_MARK - 16.dp)
-        // Room to reach the mark's column: across the pane, its top under the mark (80 dp).
-        val wide = settingsPictureWidth(560.dp, bottom = 400.dp, aspect = 2f, mat = 8.dp)
-        assertEquals(560.dp, wide)
-        assertTrue(400.dp - ((wide - 16.dp) / 2f + 16.dp) >= SETTINGS_PICTURE_TOP)
-        // Room for a picture past the mark's column only under the mark: held left of it instead, top still at 16 dp.
-        assertEquals(560.dp - SETTINGS_MARK - 16.dp, settingsPictureWidth(560.dp, bottom = 300.dp, aspect = 2f, mat = 8.dp))
-        // No room: none.
-        assertEquals(0.dp, settingsPictureWidth(560.dp, bottom = 16.dp, aspect = 2f, mat = 8.dp))
+    @Test fun pictureUnderRowsHeight() {
+        // The Layouts picture under the rows: the capture's aspect kept inside the mat, at the rows' width.
+        assertEquals((8f + 8f + 200f).dp, framedPictureHeight(416.dp, aspect = 2f, mat = 8.dp))
+        assertEquals(0.dp, framedPictureHeight(0.dp, aspect = 2f, mat = 8.dp))
     }
 
     @Test fun narrowBlockPages() {

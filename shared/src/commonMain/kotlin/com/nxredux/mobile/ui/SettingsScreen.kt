@@ -110,7 +110,7 @@ private fun SettingsTouchPage(
             LayoutPreviewPage(
                 screen.section.label, emptyList(), emptyList(), screen.shot?.let(::layoutShotPicture), LAYOUT_PICTURE_AR, selectedIndex,
                 shownHints, onSelect, onOpen, onHint ?: {}, landscapeWidth = 1f, titleAction = false,
-                touchRows = { m -> NxSettingsList(rows, selectedIndex, onSelect, onOpen, events, m, report, preview) },
+                touchRows = { m, footer -> NxSettingsList(rows, selectedIndex, onSelect, onOpen, events, m, report, preview, footer) },
             )
         } else {
             NxSettingsPage(

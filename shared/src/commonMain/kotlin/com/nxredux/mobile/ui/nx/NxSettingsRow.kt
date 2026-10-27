@@ -75,6 +75,12 @@ sealed interface NxSettingEvent {
     data class Info(val row: Int) : NxSettingEvent
 }
 
+/**
+ * Something drawn under a list's last row, scrolling with the rows (a Layouts group's picture in the Settings rows
+ * block): [height] for the list's width, and its [content] at that width.
+ */
+class NxListFooter(val height: (Dp) -> Dp, val content: @Composable (Dp) -> Unit)
+
 /** A description as a share of its name. */
 private const val DESC_OF_LABEL = 0.9f   // one text-size step ([NxTextSizes.STEP]) over 0.72
 
@@ -104,12 +110,13 @@ fun NxSettingsPage(
     onHint: ((NxButton) -> Unit)? = null,
     header: (@Composable () -> Unit)? = null,
     preview: Boolean = false,
+    footer: NxListFooter? = null,   // the Settings rows block only: under the rows, scrolling with them
 ) {
     // The Settings rows block ([LocalSettingsBlock]): the title its first line, the rows from the bottom.
     LocalSettingsBlock.current?.let { block ->
         Column(modifier.fillMaxSize()) {
             SettingsRowsBlock(block, title, Modifier.weight(1f), header) {
-                NxSettingsList(rows, selectedIndex, onSelect, onOpen, onEvent, Modifier, onTruncated, preview)
+                NxSettingsList(rows, selectedIndex, onSelect, onOpen, onEvent, Modifier, onTruncated, preview, footer)
             }
             NxHintBar(hints, onHint = onHint)
         }
@@ -139,6 +146,7 @@ fun NxSettingsList(
     modifier: Modifier = Modifier,
     onTruncated: (String, Boolean) -> Unit = { _, _ -> },
     preview: Boolean = false,
+    footer: NxListFooter? = null,
 ) {
     val itemHeight = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
     val listState = rememberLazyListState()
@@ -149,10 +157,13 @@ fun NxSettingsList(
         // Summed in each row's own rounded px, as the list lays them out: a Dp sum can come out a px short, which would
         // leave the list scrollable by that px and its bottom fade showing over the last row.
         val density = LocalDensity.current
-        val total = if (rows.any { it.paragraph }) maxHeight else with(density) { rows.sumOf { sizes.heightOf(it).roundToPx() }.toDp() }
+        val listWidth = maxWidth
+        val footerHeight = footer?.height?.invoke(listWidth) ?: 0.dp
+        val total = if (rows.any { it.paragraph }) maxHeight
+            else with(density) { (rows.sumOf { sizes.heightOf(it).roundToPx() } + footerHeight.roundToPx()).toDp() }
         // Rows differ in height (a bare row, a group label, segments under the text): kept clear of the fade in px.
         val fade = settingsRowsFade(sizes.row / 2)   // the Settings rows block's 24 dp
-        NxKeepSelectedInView(listState, selectedIndex, rows.size, edge = with(density) { fade.roundToPx() })
+        NxKeepSelectedInView(listState, selectedIndex, rows.size + (if (footer != null) 1 else 0), edge = with(density) { fade.roundToPx() })
         LazyColumn(
             Modifier.fillMaxWidth().height(minOf(total, maxHeight)).nxScrollFade(listState, height = fade, strong = true),
             state = listState, flingBehavior = rememberNxRowSnapFling(listState),
@@ -166,6 +177,10 @@ fun NxSettingsList(
                     onEvent = if (preview) null else onEvent,
                     onTruncated = { info, t -> if (selected) onTruncated(info, t) },
                 )
+            }
+            // Under the last row, scrolling with them (a Layouts group's picture); never selected.
+            if (footer != null) item(key = "footer") {
+                Box(Modifier.fillMaxWidth().height(footerHeight)) { footer.content(listWidth) }
             }
         }
     }

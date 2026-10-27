@@ -88,12 +88,6 @@ val SETTINGS_FRAME_MAX = 560.dp
 /** The least gap between the section block's right edge and the wide rows pane. */
 val SETTINGS_FRAME_GAP = 24.dp
 
-/** The wide rows pane's top line ([settingsTopLine]), as a share of the band's height. */
-const val SETTINGS_TOP_LINE = 0.4f
-
-/** Between a Layouts group's picture and the top line under it, on the wide stage. */
-val SETTINGS_PICTURE_GAP = 24.dp
-
 /** The wide rows pane's least width: past this the pane keeps it, reaching into the gap rather than vanishing. */
 val SETTINGS_FRAME_MIN = 280.dp
 
@@ -109,32 +103,6 @@ fun settingsFrameWidth(stageWidth: Dp, sectionRight: Dp, gutter: Dp): Dp =
 /** The wide rows pane's left edge from the stage's left: its right edge at the [gutter] ([settingsFrameWidth]). */
 fun settingsFrameLeft(stageWidth: Dp, sectionRight: Dp, gutter: Dp): Dp =
     stageWidth - gutter - settingsFrameWidth(stageWidth, sectionRight, gutter)
-
-/** The wide rows pane's top line: [SETTINGS_TOP_LINE] of the [band] (the stage: the screen inside the system bars), every page. */
-fun settingsTopLine(band: Dp): Dp = band * SETTINGS_TOP_LINE
-
-/** A framed picture's width ([mat] each side, [aspect] wide over high inside) in [width] by [height], the aspect kept; never below zero. */
-private fun framedFit(width: Dp, height: Dp, aspect: Float, mat: Dp): Dp =
-    minOf(width, (height - mat * 2) * aspect + mat * 2).coerceAtLeast(0.dp)
-
-/** A picture over the top line stays this far from the mark: under it ([SETTINGS_PICTURE_TOP]) or left of its column. */
-private val SETTINGS_MARK_CLEAR = 16.dp
-
-/** The top of a picture over the top line that reaches the mark's column: under the small mark, [SETTINGS_MARK_CLEAR] clear. */
-val SETTINGS_PICTURE_TOP = SETTINGS_MARK_TOP + SETTINGS_MARK + SETTINGS_MARK_CLEAR
-
-/**
- * A Layouts group's framed picture ([mat] each side, [aspect] wide over high inside) over the wide pane's top line, left-
- * aligned in the pane ([paneWidth]) with its bottom [bottom] from the stage's top (the top line less [SETTINGS_PICTURE_GAP]):
- * the larger of a picture that stays left of the mark's column (the pane's right [SETTINGS_MARK] + [SETTINGS_MARK_CLEAR])
- * with its top as high as [SETTINGS_MARK_TOP], and one across the pane with its top under the mark ([SETTINGS_PICTURE_TOP]).
- * The aspect is kept; never below zero.
- */
-fun settingsPictureWidth(paneWidth: Dp, bottom: Dp, aspect: Float, mat: Dp): Dp {
-    val beside = minOf(framedFit(paneWidth, bottom - SETTINGS_MARK_TOP, aspect, mat), paneWidth - SETTINGS_MARK - SETTINGS_MARK_CLEAR)
-    val under = framedFit(paneWidth, bottom - SETTINGS_PICTURE_TOP, aspect, mat)
-    return maxOf(beside, under).coerceAtLeast(0.dp)
-}
 
 /**
  * The blocks' bottom inset inside the screen slot. App already pads the shell by the system bars (the gesture bar
@@ -244,10 +212,9 @@ internal fun SettingsBackground() {
  * line, its rows anchored to the bottom. [crumb]: the words before the title ("Settings" on a narrow window, one level at
  * a time, as "Settings / Layouts", the block then the gutter in from both sides); null on the wide stage, where the
  * section block beside it already says Settings. [onBack]: the Back word one pitch under the rows (narrow, touch mode
- * only, [settingsBackShown]); null: none. [topLine]: the wide stage's fixed frame ([settingsTopLine]): the block's first
- * line this far from the top on every page, the rows growing down from it; null: anchored to the bottom (narrow).
+ * only, [settingsBackShown]); null: none.
  */
-data class SettingsBlockMode(val crumb: String?, val onBack: (() -> Unit)? = null, val topLine: Dp? = null)
+data class SettingsBlockMode(val crumb: String?, val onBack: (() -> Unit)? = null)
 
 /**
  * Whether [screen] draws as the rows block on a narrow window (one level at a time): a block page ([settingsBlockPage])
@@ -285,7 +252,7 @@ fun settingsBlockPage(screen: Screen): Boolean = when (screen) {
 
 /**
  * Whether [screen] draws in the wide stage's fixed frame: a block page ([settingsBlockPage]) or a Layouts group (its
- * picture above the top line, its rows in the frame). The Android games picker draws whole.
+ * rows, then its picture under them, in the block). The Android games picker draws whole.
  */
 fun settingsWideBlockPage(screen: Screen): Boolean =
     settingsBlockPage(screen) || (screen is Screen.Settings && screen.section.layoutGroup)
@@ -325,53 +292,45 @@ private class SectionWidthSlot {
 }
 
 /**
- * The rows block. Narrow ([SettingsBlockMode.topLine] null): anchored to the bottom of what it is given,
- * [SETTINGS_BLOCK_BOTTOM] up and the gutter in from both sides. Wide: a fixed frame, its right edge the gutter in, its
- * first line [SettingsBlockMode.topLine] from the top on every page, growing down to [SETTINGS_BLOCK_BOTTOM] above the
- * bottom; [above] (a Layouts group's picture, [settingsPictureWidth]) in the room over that line, bottom-start,
- * [SETTINGS_PICTURE_GAP] clear of it, given the pane's width and the room's height from the stage's top. Its first line is [title] in hint at 13 sp (after [mode]'s
- * crumb in inkDim), level with the row labels and 6 dp above the first row; then [header] (a banner, a page's lines),
- * then [rows], which take what is left and scroll there (each list fades the edge it has more beyond, [SETTINGS_ROWS_FADE]).
+ * The rows block: anchored to the bottom of what it is given, [SETTINGS_BLOCK_BOTTOM] up, so it sits on the section
+ * block's baseline, and growing up as far as [SETTINGS_ROWS_TOP] under the top; past that its rows scroll. Narrow: the
+ * gutter in from both sides; wide: the fixed frame's width ([settingsFrameWidth]), its right edge the gutter in. Its
+ * first line is [title] in hint at 13 sp (after [mode]'s crumb in inkDim), level with the row labels and 6 dp above the
+ * first row; then [header] (a banner, a page's lines), then [rows], which take what is left and scroll there (each list
+ * fades the edge it has more beyond, [SETTINGS_ROWS_FADE]). No pane header, nothing at the top.
  */
 @Composable
 fun SettingsRowsBlock(
     mode: SettingsBlockMode, title: String?, modifier: Modifier = Modifier,
-    header: (@Composable () -> Unit)? = null, above: (@Composable () -> Unit)? = null, rows: @Composable () -> Unit,
+    header: (@Composable () -> Unit)? = null, rows: @Composable () -> Unit,
 ) {
     val colors = LocalNxColors.current
     val scale = nxTextScale()
     val gutter = settingsGutter(settingsSizeClass())
-    val topLine = mode.topLine
-    Box(modifier.fillMaxSize()) {
-        if (topLine != null && above != null && topLine - SETTINGS_PICTURE_GAP > SETTINGS_MARK_TOP) Box(
-            Modifier.fillMaxWidth().height(topLine - SETTINGS_PICTURE_GAP).padding(end = gutter),
-            contentAlignment = Alignment.BottomStart,
-        ) { above() }
-        Column(
-            Modifier.fillMaxSize().padding(
-                start = if (mode.crumb != null) gutter else 0.dp,   // narrow: the gutter on both sides; wide: from the frame's left edge
-                top = topLine ?: SETTINGS_ROWS_TOP, end = gutter, bottom = SETTINGS_BLOCK_BOTTOM,
-            ),
-            verticalArrangement = if (topLine != null) Arrangement.Top else Arrangement.Bottom,
-        ) {
-            val text = settingsBlockLine(mode.crumb, title)
-            val crumbEnd = if (mode.crumb != null && text.length > mode.crumb.length) mode.crumb.length + SETTINGS_CRUMB_SEPARATOR.length else mode.crumb?.length ?: 0
-            val line = buildAnnotatedString {
-                withStyle(SpanStyle(color = colors.inkDim)) { append(text.take(crumbEnd)) }   // "Settings /" in inkDim
-                append(text.drop(crumbEnd))   // the title in the hint grey
-            }
-            if (line.isNotEmpty()) Text(
-                line, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.menuInfo.pinned() * scale,
-                maxLines = 1, softWrap = false,
-                modifier = Modifier.fillMaxWidth().padding(start = nxListInset(), end = nxListInset(), bottom = SETTINGS_LABEL_GAP),
-            )
-            header?.invoke()
-            Box(Modifier.fillMaxWidth().weight(1f, fill = false)) { rows() }
-            mode.onBack?.let { back ->
-                // The section block's Back: inkDim at [SETTINGS_BACK_SIZE], one section pitch under the rows, level with the row labels.
-                Spacer(Modifier.height(settingsWordPitch(settingsWordStyle())))
-                Box(Modifier.padding(start = nxListInset())) { SettingsWord("Back", colors.inkDim, settingsWordStyle(SETTINGS_BACK_SIZE), back) }
-            }
+    Column(
+        modifier.fillMaxSize().padding(
+            start = if (mode.crumb != null) gutter else 0.dp,   // narrow: the gutter on both sides; wide: from the frame's left edge
+            top = SETTINGS_ROWS_TOP, end = gutter, bottom = SETTINGS_BLOCK_BOTTOM,
+        ),
+        verticalArrangement = Arrangement.Bottom,
+    ) {
+        val text = settingsBlockLine(mode.crumb, title)
+        val crumbEnd = if (mode.crumb != null && text.length > mode.crumb.length) mode.crumb.length + SETTINGS_CRUMB_SEPARATOR.length else mode.crumb?.length ?: 0
+        val line = buildAnnotatedString {
+            withStyle(SpanStyle(color = colors.inkDim)) { append(text.take(crumbEnd)) }   // "Settings /" in inkDim
+            append(text.drop(crumbEnd))   // the title in the hint grey
+        }
+        if (line.isNotEmpty()) Text(
+            line, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.menuInfo.pinned() * scale,
+            maxLines = 1, softWrap = false,
+            modifier = Modifier.fillMaxWidth().padding(start = nxListInset(), end = nxListInset(), bottom = SETTINGS_LABEL_GAP),
+        )
+        header?.invoke()
+        Box(Modifier.fillMaxWidth().weight(1f, fill = false)) { rows() }
+        mode.onBack?.let { back ->
+            // The section block's Back: inkDim at [SETTINGS_BACK_SIZE], one section pitch under the rows, level with the row labels.
+            Spacer(Modifier.height(settingsWordPitch(settingsWordStyle())))
+            Box(Modifier.padding(start = nxListInset())) { SettingsWord("Back", colors.inkDim, settingsWordStyle(SETTINGS_BACK_SIZE), back) }
         }
     }
 }
