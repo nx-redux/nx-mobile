@@ -605,9 +605,12 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
  */
 @Composable
 private fun NarrowSettingsPage(state: AppState, s: Screen, selection: State<ListSelection>) {
-    val block = remember { SettingsBlockMode(SETTINGS_TITLE) }
-    CompositionLocalProvider(LocalSettingsBlock provides block.takeIf { settingsNarrowBlock(s) }) {
-        SettingsPage(state, s, selection, titled = false)
+    // At least the section block's height, so a short page's first line sits where "Settings" does on the root.
+    WithSettingsSectionSize(state.settingsSections()) { size ->
+        val block = remember(size.height) { SettingsBlockMode(SETTINGS_TITLE, minHeight = size.height) }
+        CompositionLocalProvider(LocalSettingsBlock provides block.takeIf { settingsNarrowBlock(s) }) {
+            SettingsPage(state, s, selection, titled = false)
+        }
     }
 }
 

@@ -42,15 +42,15 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
     val categories = state.settingsSections()   // not remembered: a second screen coming or going changes it
     val blockPage = settingsWideBlockPage(s)
     val gutter = settingsGutter(settingsSizeClass())
-    WithSettingsSectionWidth(categories) { blockWidth ->
-        val sectionRight = settingsSectionStart() + blockWidth
+    WithSettingsSectionSize(categories) { block ->
+        val sectionRight = settingsSectionStart() + block.width
         Box(Modifier.fillMaxSize()) {
             CompositionLocalProvider(LocalNxHintBarKeepHeight provides true) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val left = if (blockPage) settingsFrameLeft(maxWidth, sectionRight, gutter) else maxWidth * SETTINGS_SPLIT_LEFT
                     // A phone on its side: a Layouts group's picture takes the whole room right of the sections.
                     val pictureWidth = settingsLayoutPictureWidth(settingsSizeClass(), maxWidth, sectionRight, gutter)
-                    val wideBlock = remember(pictureWidth) { SettingsBlockMode(crumb = null, pictureWidth = pictureWidth) }
+                    val wideBlock = remember(pictureWidth, block.height) { SettingsBlockMode(crumb = null, pictureWidth = pictureWidth, minHeight = block.height) }
                     // The section block keeps its gutter on the right even when the frame comes within 24 dp of it.
                     Column(Modifier.width(if (blockPage) maxOf(left, sectionRight + gutter) else left).fillMaxHeight()) {
                         Box(Modifier.weight(1f).fillMaxWidth()) {

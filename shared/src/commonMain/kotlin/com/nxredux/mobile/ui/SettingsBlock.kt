@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.BoxWithConstraints
 import com.nxredux.mobile.ui.nx.rememberNxRowSnapFling
@@ -229,8 +230,10 @@ internal fun SettingsBackground() {
  * a time, as "Settings / Layouts", the block then the gutter in from both sides); null on the wide stage, where the
  * section block beside it already says Settings. [pictureWidth]: a Layouts group's picture under the rows at this width, right
  * edge at the gutter, wider than the pane ([settingsLayoutPictureWidth], a phone on its side); null: the rows' width.
+ * [minHeight]: the least the block is, its first line, header and rows from the top (the section block's height, so a
+ * short page's first line sits where "Settings" does); a longer page grows up from the bottom past it.
  */
-data class SettingsBlockMode(val crumb: String?, val pictureWidth: Dp? = null)
+data class SettingsBlockMode(val crumb: String?, val pictureWidth: Dp? = null, val minHeight: Dp = 0.dp)
 
 /**
  * Whether [screen] draws as the rows block on a narrow window (one level at a time): a block page ([settingsBlockPage])
@@ -281,34 +284,36 @@ fun settingsWideBlockPage(screen: Screen): Boolean =
     settingsBlockPage(screen) || (screen is Screen.Settings && screen.section.layoutGroup)
 
 /**
- * [content] given the section block's width ([SettingsSectionBlock] for [sections]): the
- * block's own widest line as drawn, measured in the same pass (no frame late), so the wide frame can keep clear of it.
+ * [content] given the section block's size ([SettingsSectionBlock] for [sections]): its widest line as drawn, so the
+ * wide frame keeps clear of it, and its height, the rows block's least ([SettingsBlockMode.minHeight]); measured in the
+ * same pass (no frame late).
  */
 @Composable
-internal fun WithSettingsSectionWidth(sections: List<SettingsSection>, content: @Composable (Dp) -> Unit) {
-    // The content slot is kept while neither the width nor [content] changes, so a remeasure does not recompose the stage.
-    val slot = remember { SectionWidthSlot() }
+internal fun WithSettingsSectionSize(sections: List<SettingsSection>, content: @Composable (DpSize) -> Unit) {
+    // The content slot is kept while neither the size nor [content] changes, so a remeasure does not recompose the stage.
+    val slot = remember { SectionSizeSlot() }
     SubcomposeLayout { constraints ->
         val probe = subcompose("probe") {
             SettingsSectionBlock(sections, current = 0, rowsFocused = false, onTap = {})
         }
-        val width = (probe.maxOfOrNull { it.maxIntrinsicWidth(constraints.maxHeight) } ?: 0).toDp()
-        val placeables = subcompose("content", slot.of(width, content)).map { it.measure(constraints) }
+        val width = probe.maxOfOrNull { it.maxIntrinsicWidth(constraints.maxHeight) } ?: 0
+        val height = probe.maxOfOrNull { it.minIntrinsicHeight(width) } ?: 0
+        val placeables = subcompose("content", slot.of(DpSize(width.toDp(), height.toDp()), content)).map { it.measure(constraints) }
         layout(constraints.maxWidth, constraints.maxHeight) { placeables.forEach { it.place(0, 0) } }
     }
 }
 
-/** [WithSettingsSectionWidth]'s content slot: the same lambda for the same width and content. */
-private class SectionWidthSlot {
-    private var width: Dp? = null
-    private var content: (@Composable (Dp) -> Unit)? = null
+/** [WithSettingsSectionSize]'s content slot: the same lambda for the same size and content. */
+private class SectionSizeSlot {
+    private var size: DpSize? = null
+    private var content: (@Composable (DpSize) -> Unit)? = null
     private var slot: @Composable () -> Unit = {}
 
-    fun of(width: Dp, content: @Composable (Dp) -> Unit): @Composable () -> Unit {
-        if (width != this.width || content !== this.content) {
-            this.width = width
+    fun of(size: DpSize, content: @Composable (DpSize) -> Unit): @Composable () -> Unit {
+        if (size != this.size || content !== this.content) {
+            this.size = size
             this.content = content
-            slot = { content(width) }
+            slot = { content(size) }
         }
         return slot
     }
@@ -337,19 +342,22 @@ fun SettingsRowsBlock(
         ),
         verticalArrangement = Arrangement.Bottom,
     ) {
-        val text = settingsBlockLine(mode.crumb, title)
-        val crumbEnd = if (mode.crumb != null && text.length > mode.crumb.length) mode.crumb.length + SETTINGS_CRUMB_SEPARATOR.length else mode.crumb?.length ?: 0
-        val line = buildAnnotatedString {
-            withStyle(SpanStyle(color = colors.inkDim)) { append(text.take(crumbEnd)) }   // "Settings /" in inkDim
-            append(text.drop(crumbEnd))   // the title in the hint grey
+        // At least [SettingsBlockMode.minHeight], from the top: a short page's first line level with the section block's.
+        Column(Modifier.fillMaxWidth().heightIn(min = mode.minHeight)) {
+            val text = settingsBlockLine(mode.crumb, title)
+            val crumbEnd = if (mode.crumb != null && text.length > mode.crumb.length) mode.crumb.length + SETTINGS_CRUMB_SEPARATOR.length else mode.crumb?.length ?: 0
+            val line = buildAnnotatedString {
+                withStyle(SpanStyle(color = colors.inkDim)) { append(text.take(crumbEnd)) }   // "Settings /" in inkDim
+                append(text.drop(crumbEnd))   // the title in the hint grey
+            }
+            if (line.isNotEmpty()) Text(
+                line, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.menuInfo.pinned() * scale,
+                maxLines = 1, softWrap = false,
+                modifier = Modifier.fillMaxWidth().padding(start = nxListInset(), end = nxListInset(), bottom = SETTINGS_LABEL_GAP),
+            )
+            header?.invoke()
+            Box(Modifier.fillMaxWidth().weight(1f, fill = false)) { rows() }
         }
-        if (line.isNotEmpty()) Text(
-            line, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.menuInfo.pinned() * scale,
-            maxLines = 1, softWrap = false,
-            modifier = Modifier.fillMaxWidth().padding(start = nxListInset(), end = nxListInset(), bottom = SETTINGS_LABEL_GAP),
-        )
-        header?.invoke()
-        Box(Modifier.fillMaxWidth().weight(1f, fill = false)) { rows() }
     }
 }
 
