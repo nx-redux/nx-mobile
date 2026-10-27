@@ -97,14 +97,9 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "follows Android's own font size setting.",
     )
     SettingsKind.RESET_DEFAULTS -> resetText(section)
-    // Layouts.
-    SettingsKind.LAYOUT_HOME -> quiet("Home tab, its layout, shelves and stats")
-    SettingsKind.LAYOUT_CONSOLES -> quiet("Consoles tab, its layout, orientation and background")
-    SettingsKind.LAYOUT_COLLECTIONS -> quiet("Collections tab, its layout and orientation")
-    SettingsKind.LAYOUT_TOOLS -> quiet("Tools tab, its layout and orientation")
-    SettingsKind.LAYOUT_GAME_LISTS -> quiet("Game lists' layout, art, icons and achievements panel")
-    SettingsKind.LAYOUT_TITLE_HINTS -> quiet("The main menu's page title and button hints")
-    SettingsKind.LAYOUT_SWITCHER -> quiet("How the Game Switcher shows your recent games")
+    // Layouts' group rows: no text on the row; the group's page says it under its title ([layoutGroupDescription]).
+    SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
+    SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER -> SettingText("")
     SettingsKind.EXTRA_INFO -> SettingText(
         "Play time and achievements in lists",
         "Hide removes the game stats (play time, achievements) from the main menu, the game lists and the Game " +
@@ -245,3 +240,14 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     else -> SettingText("")
 }
 
+/** A Layouts group's description, under the title of its page ([SettingsSection.layoutGroup]); null for any other page. */
+internal fun layoutGroupDescription(section: SettingsSection): String? = when (section) {
+    SettingsSection.LAYOUT_HOME -> "Home tab, its layout, shelves and stats"
+    SettingsSection.LAYOUT_CONSOLES -> "Consoles tab, its layout, orientation and background"
+    SettingsSection.LAYOUT_COLLECTIONS -> "Collections tab, its layout and orientation"
+    SettingsSection.LAYOUT_TOOLS -> "Tools tab, its layout and orientation"
+    SettingsSection.LAYOUT_GAME_LISTS -> "Game lists' layout, art, icons and achievements panel"
+    SettingsSection.LAYOUT_TITLE_HINTS -> "The main menu's page title and button hints"
+    SettingsSection.LAYOUT_SWITCHER -> "How the Game Switcher shows your recent games"
+    else -> null
+}

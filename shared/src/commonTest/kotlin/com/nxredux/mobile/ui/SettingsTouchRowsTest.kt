@@ -76,6 +76,22 @@ class SettingsTouchRowsTest {
         assertEquals(SettingText("", "Scan another folder for games too, such as one on an SD card"), addFolder)
     }
 
+    // Layouts' group rows say nothing on the row (no line, no info icon, no X Info); each group's page says it under its title.
+    @Test fun layoutsGroupRowsMoveTheirDescriptionOntoTheirPages() {
+        val groups = SettingsSection.entries.filter { it.layoutGroup }
+        assertEquals(7, groups.size)
+        for (g in groups) {
+            val row = settingsTouchRow(SettingsRow(g.opener!!, g.label, "List"), null, SettingsSection.MAIN_MENU)
+            assertEquals("", row.info, "$g"); assertEquals("", row.detail, "$g")
+            assertFalse(nxShowsInfo(row, null), "$g")
+            assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Select")), settingsHints(listOf(SettingsRow(g.opener!!, g.label)), 0, row, info = false))
+            assertTrue(!layoutGroupDescription(g).isNullOrBlank(), "$g")
+        }
+        assertEquals("Home tab, its layout, shelves and stats", layoutGroupDescription(SettingsSection.LAYOUT_HOME))
+        assertEquals(null, layoutGroupDescription(SettingsSection.MAIN_MENU))
+        assertEquals(null, layoutGroupDescription(SettingsSection.APPEARANCE))
+    }
+
     @Test fun aKeptRowShowsItsShortLine() {
         val shelf = settingsTouchRow(SettingsRow(SettingsKind.SHELF_SHOWN, "New shelf", shelf = HomeShelf.NEW), null)
         assertEquals("Games found in the last 30 days", shelf.info); assertTrue(shelf.hasMoreInfo)

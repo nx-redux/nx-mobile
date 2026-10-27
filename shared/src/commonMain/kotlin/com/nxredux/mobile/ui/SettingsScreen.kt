@@ -66,6 +66,7 @@ fun SettingsScreen(
             LayoutPreviewPage(
                 screen.section.label, emptyList(), rows, screen.shot?.let(::layoutShotPicture), LAYOUT_PICTURE_AR, selectedIndex,
                 shownHints, onSelect, onOpen, onHint ?: {}, landscapeWidth = 1f, titleAction = false,   // the rows across the page, as the other Settings pages'
+                description = layoutGroupDescription(screen.section),
             )
         } else if (screen.section.detailed) {
             NxDetailListBody(
@@ -111,6 +112,7 @@ private fun SettingsTouchPage(
                 screen.section.label, emptyList(), emptyList(), screen.shot?.let(::layoutShotPicture), LAYOUT_PICTURE_AR, selectedIndex,
                 shownHints, onSelect, onOpen, onHint ?: {}, landscapeWidth = 1f, titleAction = false,
                 touchRows = { m, footer -> NxSettingsList(rows, selectedIndex, onSelect, onOpen, events, m, report, preview, footer) },
+                description = layoutGroupDescription(screen.section),
             )
         } else {
             NxSettingsPage(
