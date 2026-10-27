@@ -5548,7 +5548,7 @@ class AppStateTest {
             listOf("Home", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", "Reset to defaults"),
             page(SettingsSection.MAIN_MENU),
         )
-        assertEquals(listOf("Home tab", "Home layout", "New shelf", "Not started shelf", "Home stats"), page(SettingsSection.LAYOUT_HOME))   // Home never has an orientation row
+        assertEquals(listOf("Home tab", "New shelf", "Not started shelf", "Home stats", "Home layout"), page(SettingsSection.LAYOUT_HOME))   // Home never has an orientation row
         assertEquals(listOf("Consoles tab", "Consoles layout", "Consoles orientation", "Consoles background"), page(SettingsSection.LAYOUT_CONSOLES))
         assertEquals(listOf("Collections tab", "Collections layout", "Collections orientation"), page(SettingsSection.LAYOUT_COLLECTIONS))
         assertEquals(listOf("Tools tab", "Tools layout", "Tools orientation"), page(SettingsSection.LAYOUT_TOOLS))
@@ -5658,16 +5658,17 @@ class AppStateTest {
         state.openSettings(SettingsSection.LAYOUT_HOME)
         val page = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsRow(SettingsKind.TAB_SHOWN, "Home tab", "Show", category = MenuCategory.HOME), page.rows[0])
-        assertEquals("Home layout", page.rows[1].label)
-        assertEquals("Grid", page.rows[1].secondary)
-        state.select(1); state.onButton(NxButton.RIGHT)
+        val layout = page.rows.lastIndex                                     // Home layout: the last row, over the picture
+        assertEquals("Home layout", page.rows[layout].label)
+        assertEquals("Grid", page.rows[layout].secondary)
+        state.select(layout); state.onButton(NxButton.RIGHT)
         assertEquals(MenuStyle.CAROUSEL, MenuStyles.styleOf(settings.menuStyles, MenuCategory.HOME))
         state.onButton(NxButton.RIGHT)
         assertEquals(MenuStyle.MINIMAL, MenuStyles.styleOf(settings.menuStyles, MenuCategory.HOME))
-        assertEquals("Minimal", assertIs<Screen.Settings>(state.screen.value).rows[1].secondary)
+        assertEquals("Minimal", assertIs<Screen.Settings>(state.screen.value).rows[layout].secondary)
         state.onButton(NxButton.RIGHT)
         assertEquals(MenuStyle.LIST, MenuStyles.styleOf(settings.menuStyles, MenuCategory.HOME))
-        assertEquals("List", assertIs<Screen.Settings>(state.screen.value).rows[1].secondary)
+        assertEquals("List", assertIs<Screen.Settings>(state.screen.value).rows[layout].secondary)
     }
 
     // Layouts groups its options: a row per tab, the game lists, the title and hints and the Game Switcher, each a page.
@@ -5700,9 +5701,9 @@ class AppStateTest {
         state.select(0); state.onButton(NxButton.A)
         val page = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.LAYOUT_HOME, page.section)
-        assertEquals(listOf("Home tab", "Home layout", "New shelf", "Not started shelf", "Home stats"), page.rows.map { it.label })
+        assertEquals(listOf("Home tab", "New shelf", "Not started shelf", "Home stats", "Home layout"), page.rows.map { it.label })
         assertEquals(LayoutShot.Tab(MenuCategory.HOME, MenuStyle.GRID), page.shot)
-        state.select(1); state.onButton(NxButton.RIGHT)                      // Grid -> Carousel: the picture follows
+        state.select(page.rows.lastIndex); state.onButton(NxButton.RIGHT)    // Home layout, Grid -> Carousel: the picture follows
         assertEquals(LayoutShot.Tab(MenuCategory.HOME, MenuStyle.CAROUSEL), assertIs<Screen.Settings>(state.screen.value).shot)
         state.onButton(NxButton.B)                                           // back on Home
         assertEquals(SettingsSection.MAIN_MENU, assertIs<Screen.Settings>(state.screen.value).section)
@@ -5947,7 +5948,7 @@ class AppStateTest {
             page.rows.map { it.label to it.secondary },
         )
         fun group(section: SettingsSection) = state.openLayoutsPage(section).map { it.label to it.secondary }
-        assertEquals(listOf("Home tab" to "Show", "Home layout" to "Grid", "New shelf" to "Show", "Not started shelf" to "Show", "Home stats" to "Show"), group(SettingsSection.LAYOUT_HOME))
+        assertEquals(listOf("Home tab" to "Show", "New shelf" to "Show", "Not started shelf" to "Show", "Home stats" to "Show", "Home layout" to "Grid"), group(SettingsSection.LAYOUT_HOME))
         assertEquals(listOf("Consoles tab" to "Show", "Consoles layout" to "List", "Consoles background" to settings.consoleArt.label), group(SettingsSection.LAYOUT_CONSOLES))
         assertEquals(listOf("Collections tab" to "Show", "Collections layout" to "List"), group(SettingsSection.LAYOUT_COLLECTIONS))
         assertEquals(listOf("Tools tab" to "Show", "Tools layout" to "List"), group(SettingsSection.LAYOUT_TOOLS))
@@ -9561,12 +9562,12 @@ class AppStateTest {
         val groups = listOf(SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS,
             SettingsSection.LAYOUT_GAME_LISTS, SettingsSection.LAYOUT_TITLE_HINTS, SettingsSection.LAYOUT_SWITCHER)
         val rows = groups.flatMap { g -> state.openLayoutsPage(g) }
-        assertEquals(listOf("Home tab", "Home layout", "New shelf", "Not started shelf", "Home stats", "Consoles tab", "Consoles layout", "Collections tab", "Collections layout", "Tools tab", "Tools layout", "Game lists layout", "List art", "Layout options", "Page title", "Button hints", "Recent hint", "Search hint", "Game Switcher layout"), rows.map { it.label })
+        assertEquals(listOf("Home tab", "New shelf", "Not started shelf", "Home stats", "Home layout", "Consoles tab", "Consoles layout", "Collections tab", "Collections layout", "Tools tab", "Tools layout", "Game lists layout", "List art", "Layout options", "Page title", "Button hints", "Recent hint", "Search hint", "Game Switcher layout"), rows.map { it.label })
         val styles = rows.filter { it.kind == SettingsKind.MENU_STYLE }
         assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), styles.map { it.category })
         assertTrue(styles.all { it.enabled })
         assertEquals(1, rows.count { it.kind == SettingsKind.GAME_LIST_STYLE })
-        assertEquals(listOf("Show", "Minimal", "Show", "Show", "Show", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "List", "Screenshot", "Show", "Show", "Show", "Show", "Show", "Full screen"), rows.map { it.secondary })
+        assertEquals(listOf("Show", "Show", "Show", "Show", "Minimal", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "List", "Screenshot", "Show", "Show", "Show", "Show", "Show", "Full screen"), rows.map { it.secondary })
     }
 
     @Test fun layouts_page_defaults_to_carousel_tools_grid_and_cycles_four_main_menu_styles() = runTest {
@@ -9574,7 +9575,7 @@ class AppStateTest {
         val state = state(settings)
         state.load()
         fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(listOf("Home tab", "Home layout", "New shelf", "Not started shelf", "Home stats"), state.openLayoutsPage(SettingsSection.LAYOUT_HOME).map { it.label })
+        assertEquals(listOf("Home tab", "New shelf", "Not started shelf", "Home stats", "Home layout"), state.openLayoutsPage(SettingsSection.LAYOUT_HOME).map { it.label })
         assertEquals(listOf("Consoles tab", "Consoles layout", "Consoles orientation", "Consoles background"), state.openLayoutsPage(SettingsSection.LAYOUT_CONSOLES).map { it.label })
         assertEquals(listOf("Collections tab", "Collections layout"), state.openLayoutsPage(SettingsSection.LAYOUT_COLLECTIONS).map { it.label })
         assertEquals(listOf("Tools tab", "Tools layout"), state.openLayoutsPage(SettingsSection.LAYOUT_TOOLS).map { it.label })
@@ -9602,7 +9603,7 @@ class AppStateTest {
         state.load()
         val home = state.openLayoutsPage(SettingsSection.LAYOUT_HOME)
         assertEquals(
-            listOf(SettingsKind.TAB_SHOWN, SettingsKind.MENU_STYLE, SettingsKind.SHELF_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HOME_STATS),
+            listOf(SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HOME_STATS, SettingsKind.MENU_STYLE),
             home.map { it.kind },
         )
         val consoles = state.openLayoutsPage(SettingsSection.LAYOUT_CONSOLES)
@@ -9862,7 +9863,7 @@ class AppStateTest {
             page(SettingsSection.MAIN_MENU),
         )
         assertEquals(
-            listOf("Home tab" to "Show", "Home layout" to "Minimal", "New shelf" to "Show", "Not started shelf" to "Show", "Home stats" to "Show"),
+            listOf("Home tab" to "Show", "New shelf" to "Show", "Not started shelf" to "Show", "Home stats" to "Show", "Home layout" to "Minimal"),
             page(SettingsSection.LAYOUT_HOME),
         )
         assertEquals(listOf("Consoles tab" to "Show", "Consoles layout" to "Carousel", "Consoles orientation" to "Horizontal", "Consoles background" to "Controller"), page(SettingsSection.LAYOUT_CONSOLES))

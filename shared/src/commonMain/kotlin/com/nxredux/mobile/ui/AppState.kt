@@ -4405,16 +4405,21 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         )
     }
 
-    /** A tab's group: its Show / Hide, and while shown its layout and the options that layout has. */
+    /**
+     * A tab's group: its Show / Hide, and while shown its layout and the options that layout has. Home's layout row comes
+     * last, right above the picture it changes (after its shelves and stats); the other tabs' follows the Show / Hide.
+     */
     private fun layoutTabRows(c: MenuCategory): List<SettingsRow> {
         val s = deps.settings
         fun shown(on: Boolean) = if (on) "Show" else "Hide"
         val on = tabSetting(c)
         val style = MenuStyles.styleOf(s.menuStyles, c)
+        val home = c == MenuCategory.HOME
+        val layout = SettingsRow(SettingsKind.MENU_STYLE, "${c.label} layout", menuStyleLabel(style), category = c).takeIf { on }
         return listOfNotNull(
             SettingsRow(SettingsKind.TAB_SHOWN, "${c.label} tab", shown(on), category = c),
-            SettingsRow(SettingsKind.MENU_STYLE, "${c.label} layout", menuStyleLabel(style), category = c).takeIf { on },
-            // Home's New and Not started shelves, Show / Hide, under Home layout while the Home tab shows.
+            layout.takeIf { !home },
+            // Home's New and Not started shelves, Show / Hide, while the Home tab shows.
             SettingsRow(SettingsKind.SHELF_SHOWN, "New shelf", shown(s.showNewShelf), shelf = HomeShelf.NEW).takeIf { on && c == MenuCategory.HOME },
             SettingsRow(SettingsKind.SHELF_SHOWN, "Not started shelf", shown(s.showNotStartedShelf), shelf = HomeShelf.NOT_STARTED).takeIf { on && c == MenuCategory.HOME },
             // Home's stats strip (its cards' info follows Extra info).
@@ -4423,6 +4428,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 .takeIf { on && c != MenuCategory.HOME && style == MenuStyle.CAROUSEL },
             SettingsRow(SettingsKind.CONTROLLER_ART, "Consoles background", s.consoleArt.label, category = c)
                 .takeIf { on && c == MenuCategory.CONSOLES && style != MenuStyle.GRID && style != MenuStyle.MINIMAL },   // List and Carousel; the Grid has no controllers, Minimal no art
+            layout.takeIf { home },
         )
     }
 
