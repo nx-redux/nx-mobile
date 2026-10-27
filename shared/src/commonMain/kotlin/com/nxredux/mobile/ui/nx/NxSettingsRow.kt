@@ -22,7 +22,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.gestures.animateScrollBy
 import kotlinx.coroutines.flow.first
@@ -332,8 +334,8 @@ internal fun nxSettingRowTap(row: NxSettingRow, index: Int, onSelect: (Int) -> U
  * or a page's `›`; a segmented row's segments that don't fit there sit under the text (right-aligned in the Settings rows block). A group label is a
  * grey line, a spacer empty, a paragraph wrapping grey text (MiSans Regular, [LocalNxFontWeights]). [onEvent] null: the
  * controls take no taps and a long press nothing (a preview). [onButton]: a tap on the row's button (selects and
- * presses it). A long press on the row or its control asks for its description ([NxSettingEvent.Info]; a row without one
- * shows nothing). [onTruncated] hears whether the description fits.
+ * presses it). A long press on the row or its control asks for its description ([NxSettingEvent.Info]) when the help
+ * circle would show; otherwise it only focuses the row. [onTruncated] hears whether the description fits.
  */
 @Composable
 private fun NxSettingTouchRow(
@@ -358,15 +360,19 @@ private fun NxSettingTouchRow(
     }
     val choose: ((Int) -> Unit)? = if (row.enabled) onEvent?.let { e -> { k: Int -> e(NxSettingEvent.Choose(index, k)) } } else null
     val info = onEvent?.let { e -> { e(NxSettingEvent.Info(index)) } }
+    // A long press opens the help only where the help circle would show (the line cut off, or a fuller text behind
+    // it); elsewhere it only focuses the row, so a control never acts on it either.
+    var cut by remember(row.info) { mutableStateOf(false) }
+    val hold = info?.let { if (row.hasMoreInfo || cut) it else onTap }
     NxTouchRow(
         row.label, row.info, row.hasMoreInfo, selected, sizes,
         onTap = onTap, onInfo = info, onTruncated = onTruncated,
-        enabled = row.enabled, warning = row.warning, onLongPress = info,
-        below = if (sizes.segmentsBelow(row)) { { NxSegments(row.choices, row.index, sizes.value, info, choose) } } else null,
+        enabled = row.enabled, warning = row.warning, onLongPress = hold, onFits = { cut = !it },
+        below = if (sizes.segmentsBelow(row)) { { NxSegments(row.choices, row.index, sizes.value, hold, choose) } } else null,
     ) {
         SettingControlView(
             row, sizes, choose, onEvent?.let { e -> { e(NxSettingEvent.OpenPicker(index)) } },
-            onButton.takeIf { onEvent != null && row.enabled }, info,
+            onButton.takeIf { onEvent != null && row.enabled }, hold,
         )
     }
 }

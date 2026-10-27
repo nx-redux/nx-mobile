@@ -179,7 +179,8 @@ private const val SOFT_SELECTION_ALPHA = 0.16f
  * [control] on the right, or [below] under the text (a segmented row's segments that don't fit on the right): at its
  * start, right-aligned in the Settings rows block ([LocalSettingsBlock]). Selected: a soft rounded plate behind it, so the control stays readable; not [enabled]: dimmed. [onInfo] null:
  * the info icon takes no taps. [onLongPress]: a long press anywhere on the row's own area (its name and description);
- * null, none (a long press is a tap). [onTruncated] hears whether the description fits while the row is [selected].
+ * null, none (a long press is a tap). [onTruncated] hears whether the description fits while the row is [selected];
+ * [onFits] whether it fits, selected or not.
  */
 @Composable
 internal fun NxTouchRow(
@@ -187,6 +188,7 @@ internal fun NxTouchRow(
     onTap: () -> Unit, onInfo: (() -> Unit)?, onTruncated: (String, Boolean) -> Unit,
     enabled: Boolean = true, warning: Boolean = false,
     onLongPress: (() -> Unit)? = null,
+    onFits: ((Boolean) -> Unit)? = null,
     below: (@Composable () -> Unit)? = null,
     control: @Composable () -> Unit,
 ) {
@@ -194,6 +196,7 @@ internal fun NxTouchRow(
     val shape = RoundedCornerShape(14.dp)
     var truncated by remember(info) { mutableStateOf(false) }
     LaunchedEffect(selected, truncated, info) { if (selected && info.isNotBlank()) onTruncated(info, truncated) }
+    LaunchedEffect(truncated, info) { onFits?.invoke(!truncated) }
     Column(
         Modifier.fillMaxWidth().padding(vertical = TOUCH_ROW_GAP)
             // The selected row's plate, where the help note leaves it lit ([NxSettingInfoPopup]).
