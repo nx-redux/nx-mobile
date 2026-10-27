@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
+import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE_STEPS
 import com.nxredux.mobile.ui.LocalSettingsBlock
 import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE_ROWS
 import com.nxredux.mobile.ui.settingsRowsFade
@@ -224,13 +225,15 @@ fun NxOptionsList(
         val spacers = remember(rows) { rows.map { it.spacer } }
         val geometry = remember(spacers, rowPx, gapPx, viewportPx) { NxOptionsGeometry.of(spacers, rowPx, gapPx, viewportPx) }
         // Clear of the fade: a row, or in the Settings rows block its fade's rows ([SETTINGS_ROWS_FADE_ROWS]).
-        val fadeRows = if (LocalSettingsBlock.current != null) SETTINGS_ROWS_FADE_ROWS else 1
+        val block = LocalSettingsBlock.current != null
+        val fadeRows = if (block) SETTINGS_ROWS_FADE_ROWS else 1
         val margin = if (scrollFade && viewportPx >= rowPx * (fadeRows * 2 + 1)) rowPx * fadeRows else 0
         NxOptionsKeepSelectedInView(listState, selectedIndex, geometry, margin)
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().nxOptionsWholeRows(listState, geometry)
-                .then(if (scrollFade) Modifier.nxScrollFade(listState, height = settingsRowsFade(rowDp, rowDp / 2), strong = true) else Modifier),
+                // The Settings rows block fades by row ([nxRowFade]); elsewhere the edges fade by pixel.
+                .then(if (!scrollFade) Modifier else if (block) Modifier.nxRowEdgeMask(listState) else Modifier.nxScrollFade(listState, height = rowDp / 2, strong = true)),
             contentPadding = PaddingValues(bottom = with(density) { geometry.endPadPx.toDp() }),
             flingBehavior = rememberNxOptionsSnapFling(listState, geometry),
         ) {
@@ -239,7 +242,7 @@ fun NxOptionsList(
                 val selected = i == selectedIndex
                 NxOptionsRow(
                     row, selected, rowDp, labelSize, valueSize, innerPad,
-                    Modifier.combinedClickable(
+                    Modifier.then(if (scrollFade && block) Modifier.nxRowFade(listState, i, SETTINGS_ROWS_FADE_STEPS) { !rows[it].spacer } else Modifier).combinedClickable(
                         onClick = { nxTap(i, selected, tapOpens(i), onSelect, onOpen) },
                         onLongClick = onLongPress?.let { lp -> { lp(i) } },
                     ).padding(horizontal = sidePad),

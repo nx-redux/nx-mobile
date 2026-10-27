@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
+import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE_STEPS
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -234,6 +235,8 @@ fun NxSettingsList(
         val footerHeight = footer?.height?.invoke(footerWidth) ?: 0.dp
         // Rows differ in height (a bare row, a group label, segments under the text): kept clear of the fade in px.
         val fade = settingsRowsFade(sizes.bare, sizes.row / 2)   // the Settings rows block's: two one-line rows
+        val block = LocalSettingsBlock.current != null
+        val isRow: (Int) -> Boolean = { it >= rows.size || !rows[it].spacer }   // a spacer is no row; the footer is
         val edgePx = with(density) { fade.roundToPx() }
         // The selected row's and the list's laid-out heights (before the first layout, the most the row can take and the room).
         val footerPx = with(density) { footerHeight.roundToPx() }
@@ -265,13 +268,15 @@ fun NxSettingsList(
             listState.animateScrollBy(-edgePx.toFloat())
         }
         LazyColumn(
-            Modifier.nxBleed(outStart, outEnd).heightIn(max = maxHeight).nxScrollFade(listState, height = fade, strong = true),
+            // The Settings rows block fades by row ([nxRowFade]); elsewhere the edges fade by pixel.
+            Modifier.nxBleed(outStart, outEnd).heightIn(max = maxHeight)
+                .then(if (block) Modifier.nxRowEdgeMask(listState) else Modifier.nxScrollFade(listState, height = fade, strong = true)),
             state = listState, flingBehavior = rememberNxRowSnapFling(listState),
         ) {
             itemsIndexed(rows) { i, row ->
                 val selected = i == selectedIndex
                 // Padded back to the list's edges when the lazy list is widened for its footer.
-                Box(Modifier.padding(start = outStart, end = outEnd)) {
+                Box(Modifier.then(if (block) Modifier.nxRowFade(listState, i, SETTINGS_ROWS_FADE_STEPS, isRow) else Modifier).padding(start = outStart, end = outEnd)) {
                     NxSettingTouchRow(
                         row, selected, sizes, index = i,
                         onTap = { nxSettingRowTap(row, i, onSelect, onOpen) },
@@ -284,7 +289,7 @@ fun NxSettingsList(
             // Under the last row, scrolling with them (a Layouts group's picture); never selected.
             if (footer != null) item(key = NX_LIST_FOOTER_KEY) {
                 // From the lazy list's left: the list's own left ([outStart]) less the footer's start bleed.
-                Box(Modifier.fillMaxWidth().height(footerHeight).padding(start = outStart - footer.bleedStart)) {
+                Box(Modifier.fillMaxWidth().height(footerHeight).then(if (block) Modifier.nxRowFade(listState, rows.size, SETTINGS_ROWS_FADE_STEPS, isRow) else Modifier).padding(start = outStart - footer.bleedStart)) {
                     footer.content(footerWidth)
                 }
             }

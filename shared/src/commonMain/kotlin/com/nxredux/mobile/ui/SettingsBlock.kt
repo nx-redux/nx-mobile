@@ -1,5 +1,10 @@
 package com.nxredux.mobile.ui
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.BoxWithConstraints
+import com.nxredux.mobile.ui.nx.rememberNxRowSnapFling
+import com.nxredux.mobile.ui.nx.nxRowEdgeMask
+import com.nxredux.mobile.ui.nx.nxRowFade
 import com.nxredux.mobile.ui.nx.SETTING_DESC_OF_LABEL
 import com.nxredux.mobile.ui.nx.nxListLabel
 import com.nxredux.mobile.ui.nx.nxOptionsLabelSize
@@ -244,10 +249,14 @@ private const val SETTINGS_CRUMB_SEPARATOR = " / "
 val LocalSettingsBlock = compositionLocalOf<SettingsBlockMode?> { null }
 
 /**
- * The rows block's fade at an edge it scrolls past, in rows of its list: from the second-last row in view down to black
- * at the last one's far edge (and the same at the top). The selection is kept clear of it.
+ * The rows block's edge fade, by row ([nxRowFade]): how many rows in view are dimmed while there is more beyond, the
+ * last ones in view below (the first ones above once scrolled), at [SETTINGS_ROWS_FADE_STEPS]. The selection stops
+ * clear of them, on the last full-opacity row.
  */
 const val SETTINGS_ROWS_FADE_ROWS = 2
+
+/** The dimmed rows' opacities, from the inner one to the one at the edge ([SETTINGS_ROWS_FADE_ROWS] of them). */
+val SETTINGS_ROWS_FADE_STEPS = listOf(0.6f, 0.25f)
 
 /** The least room the rows block leaves above it when it fills the height (it then scrolls). */
 val SETTINGS_ROWS_TOP = 24.dp
@@ -371,27 +380,33 @@ internal fun SettingsWordList(
     val tagSize = nxOptionsLabelSize(nxListLabel()) * SETTING_DESC_OF_LABEL   // a Settings row's description size
     val tagFont = LocalNxFontWeights.current
     NxKeepSelectedInView(listState, selection, rows.size, SETTINGS_ROWS_FADE_ROWS)   // the selection clear of the fade
-    LazyColumn(
-        modifier.nxScrollFade(listState, height = settingsWordPitch(style) * SETTINGS_ROWS_FADE_ROWS, strong = true),
-        state = listState,
-    ) {
-        itemsIndexed(rows) { i, row ->
-            val selected = i == selection()
-            val text = buildAnnotatedString {
-                append(row.label)
-                row.secondary?.let {
-                    append("  ")
-                    // The selected row's tag in inkDim (not the accent); the others their row's inkDim at [SETTINGS_TAG_OF_ROW].
-                    val tag = if (selected) colors.inkDim else colors.inkDim.let { it.copy(alpha = it.alpha * SETTINGS_TAG_OF_ROW) }   // role: a word list's tag
-                    withStyle(SpanStyle(color = tag, fontSize = tagSize, fontFamily = tagFont, fontWeight = FontWeight.Medium)) { append(it) }
+    val pitchPx = with(LocalDensity.current) { settingsWordPitch(style).roundToPx() }
+    // As tall as a whole number of rows, snapping to a row's top: at rest it ends on a row boundary.
+    BoxWithConstraints(modifier) {
+        val fit = if (constraints.hasBoundedHeight) (constraints.maxHeight / maxOf(1, pitchPx)) * pitchPx else Int.MAX_VALUE
+        LazyColumn(
+            Modifier.fillMaxWidth().heightIn(max = with(LocalDensity.current) { fit.toDp() }).nxRowEdgeMask(listState),
+            state = listState, flingBehavior = rememberNxRowSnapFling(listState),
+        ) {
+            itemsIndexed(rows) { i, row ->
+                val selected = i == selection()
+                val text = buildAnnotatedString {
+                    append(row.label)
+                    row.secondary?.let {
+                        append("  ")
+                        // The selected row's tag in inkDim (not the accent); the others their row's inkDim at [SETTINGS_TAG_OF_ROW].
+                        val tag = if (selected) colors.inkDim else colors.inkDim.let { it.copy(alpha = it.alpha * SETTINGS_TAG_OF_ROW) }   // role: a word list's tag
+                        withStyle(SpanStyle(color = tag, fontSize = tagSize, fontFamily = tagFont, fontWeight = FontWeight.Medium)) { append(it) }
+                    }
                 }
+                Text(
+                    text, color = if (selected) colors.accent else colors.inkDim, style = style, maxLines = 1, softWrap = false,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().nxRowFade(listState, i, SETTINGS_ROWS_FADE_STEPS).padding(start = nxListInset())
+                        .alpha(if (row.enabled) 1f else NX_DISABLED_ALPHA)   // role: a disabled row
+                        .clickable(remember { MutableInteractionSource() }, indication = null) { nxTap(i, selected, tapOpens(i), onSelect, onOpen) },
+                )
             }
-            Text(
-                text, color = if (selected) colors.accent else colors.inkDim, style = style, maxLines = 1, softWrap = false,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth().padding(start = nxListInset()).alpha(if (row.enabled) 1f else NX_DISABLED_ALPHA)   // role: a disabled row
-                    .clickable(remember { MutableInteractionSource() }, indication = null) { nxTap(i, selected, tapOpens(i), onSelect, onOpen) },
-            )
         }
     }
 }
