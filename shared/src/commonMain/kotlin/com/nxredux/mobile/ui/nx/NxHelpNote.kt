@@ -1,5 +1,8 @@
 package com.nxredux.mobile.ui.nx
 
+import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.core.MutableTransitionState
@@ -121,16 +124,17 @@ fun NxSettingInfoPopup(note: NxHelpText?, onClose: () -> Unit) {
         val scroll = rememberScrollState()
         val stepPx = with(density) { HelpScrollStep.toPx() }
         LaunchedEffect(n.scrollSeq) { if (n.scrollSeq > 0) scroll.animateScrollBy(n.scrollDir * stepPx) }
+        val hintScope = rememberCoroutineScope()
         var origin by remember { mutableStateOf<Offset?>(null) }
         val anchor = NxHelpAnchor.row?.takeIf { it.label == n.title }
         val hole = origin?.let { o -> anchor?.bounds?.translate(-o) }
         val corner = with(density) { HelpHoleCorner.toPx() }
         Layout(
             content = {
-                Box(Modifier.fillMaxWidth().background(colors.accentFaint, RoundedCornerShape(20.dp)).padding(8.dp)) {
+                Column(Modifier.fillMaxWidth().background(colors.accentFaint, RoundedCornerShape(20.dp)).padding(8.dp)) {
                     val card = RoundedCornerShape(14.dp)
                     Column(
-                        Modifier.fillMaxWidth().clip(card).background(colors.background).border(1.dp, colors.inkLine, card)
+                        Modifier.weight(1f, fill = false).fillMaxWidth().clip(card).background(colors.background).border(1.dp, colors.inkLine, card)
                             .nxScrollFade(scroll).verticalScroll(scroll).padding(20.dp),
                     ) {
                         Text(
@@ -140,6 +144,14 @@ fun NxSettingInfoPopup(note: NxHelpText?, onClose: () -> Unit) {
                         Spacer(Modifier.height(8.dp))
                         val body = 16.sp * nxTextScale()   // Appearance → Text size
                         Text(n.text, color = colors.main, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal, fontSize = body, lineHeight = body * 1.45f)
+                    }
+                    // No OK row: with a pad, a one-word bar under the card (Close, and Scroll while the d-pad scrolls it).
+                    if (LocalFooterMode.current == FooterMode.HINTS) {
+                        val hints = listOfNotNull(Hint(NxButton.DOWN, "Scroll").takeIf { scroll.maxValue > 0 }, Hint(NxButton.B, "Close"))
+                        NxHintBar(
+                            hints, Modifier.padding(top = 4.dp), scrim = Color.Transparent, always = true,
+                            onHint = { b -> if (b == NxButton.DOWN) hintScope.launch { if (scroll.canScrollForward) scroll.animateScrollBy(stepPx) else scroll.animateScrollTo(0) } else onClose() },
+                        )
                     }
                 }
             },

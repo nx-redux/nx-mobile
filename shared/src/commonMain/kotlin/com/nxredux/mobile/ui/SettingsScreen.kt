@@ -1,5 +1,7 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.LocalNxHintBarHidden
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -114,15 +116,18 @@ private fun SettingsTouchPage(
                 touchRows = { m, footer -> NxSettingsList(rows, selectedIndex, onSelect, onOpen, events, m, report, preview, footer) },
             )
         } else {
-            NxSettingsPage(
-                screen.section.label, rows, selectedIndex, shownHints, onSelect, onOpen, events,
-                onTruncated = report, onHint = onHint, preview = preview,
-                header = when {
-                    screen.banner != null -> ({ NxBanner(screen.banner) })
-                    screen.details.isNotEmpty() -> ({ SettingsDetailLines(screen.details) })
-                    else -> null
-                },
-            )
+            // Shortcuts' binding keeps its bar: A Bind, X Clear and B Cancel are no console menu's, and a wrong press rebinds.
+            CompositionLocalProvider(LocalNxHintBarHidden provides (LocalNxHintBarHidden.current && screen.section != SettingsSection.SHORTCUTS)) {
+                NxSettingsPage(
+                    screen.section.label, rows, selectedIndex, shownHints, onSelect, onOpen, events,
+                    onTruncated = report, onHint = onHint, preview = preview,
+                    header = when {
+                        screen.banner != null -> ({ NxBanner(screen.banner) })
+                        screen.details.isNotEmpty() -> ({ SettingsDetailLines(screen.details) })
+                        else -> null
+                    },
+                )
+            }
         }
         if (dialog && screen.confirmRemove != null) SettingsRemoveDialog(onHint)
         if (dialog && screen.confirmReset) settingsResetAsk(screen, selectedIndex)?.let { SettingsResetDialog(it, onHint) }
@@ -190,7 +195,21 @@ internal fun settingsTouchRow(row: SettingsRow, choices: SettingChoices?, sectio
         segmented = row.kind in SEGMENTED_KINDS,
         warning = row.warning,
         button = "Rescan".takeIf { row.kind == SettingsKind.RESCAN },   // Library's counts row: the button on their right
+        action = settingsRowAction(row, section),
     )
+}
+
+/**
+ * What A does on [row] when it is no console menu's obvious act, shown on the focused row ([NxSettingRow.action]): Copy
+ * device info, the update row's Check or Install, a reset (Shortcuts' Clear all), a ROM folder's Remove. Null elsewhere.
+ */
+internal fun settingsRowAction(row: SettingsRow, section: SettingsSection?): String? = when (row.kind) {
+    SettingsKind.COPY_INFO -> "Copy"
+    SettingsKind.APP_UPDATE -> appUpdateHint(row.label)
+    SettingsKind.RESET_DEFAULTS -> if (section == SettingsSection.SHORTCUTS) "Clear all" else "Reset"
+    SettingsKind.PAD_LAYOUT_RESET -> "Reset"
+    SettingsKind.EXTRA -> "Remove"
+    else -> null
 }
 
 /** A reset's question: its title, the one line saying what it puts back, and its confirm button. */

@@ -111,17 +111,18 @@ val HINT_GLYPH_SIZE: Dp = 18.dp
 internal const val NAV_ART_MARGIN = 16f / 128f
 
 @Composable
-fun NxButtonGlyph(button: NxButton, size: Dp, modifier: Modifier = Modifier) = NxArtGlyph(button.navDrawable(), button.name, size, modifier)
+fun NxButtonGlyph(button: NxButton, size: Dp, modifier: Modifier = Modifier, tint: Color = LocalNxColors.current.main) =
+    NxArtGlyph(button.navDrawable(), button.name, size, modifier, tint)
 
 @Composable
-private fun NxArtGlyph(art: DrawableResource, description: String, size: Dp, modifier: Modifier = Modifier) {
+private fun NxArtGlyph(art: DrawableResource, description: String, size: Dp, modifier: Modifier = Modifier, tint: Color = LocalNxColors.current.main) {
     Image(
         painter = painterResource(art),
         contentDescription = description,
         modifier = modifier.size(size),
         contentScale = ContentScale.Fit,
         // The art's white disc in the UI ink, its colours (the d-pad's red) scaled alike: a multiply.
-        colorFilter = ColorFilter.tint(LocalNxColors.current.main, BlendMode.Modulate),
+        colorFilter = ColorFilter.tint(tint, BlendMode.Modulate),
     )
 }
 
@@ -161,6 +162,12 @@ internal val NX_HINT_BAR_ROW_HEIGHT: Dp = HINT_GLYPH_SIZE + 12.dp
  * slightly see-through. The info band's fade starts at this, so it reads as the bar continuing upward. */
 val NX_HINT_BAR_ALPHA: Float = NxDefaults.colors.scrimHints.alpha
 
+/**
+ * Hint bars below draw nothing and take no room ([NxHintBar]): Settings, where every button does what a console menu's
+ * does, unless Layouts → Button hints shows them. A bar that must show (Shortcuts' binding, a pop-up's) passes `always`.
+ */
+val LocalNxHintBarHidden = staticCompositionLocalOf { false }
+
 /** Hint bars below keep their height when empty ([NxHintBar]'s keepHeight): provided by the two-pane Settings only. */
 val LocalNxHintBarKeepHeight = staticCompositionLocalOf { false }
 
@@ -173,16 +180,18 @@ val NX_SWITCHER_BAR_ALPHA: Float = NxDefaults.colors.scrimSwitcher.alpha
  * text alone, still tappable, where the on-screen pad does not draw the button). On a touch-only screen
  * ([LocalFooterMode] BUTTONS: no controller, no on-screen pad) it draws nothing and takes no room. [scrim]: the bar's ground.
  * [keepHeight]: an empty bar keeps a glyph's height (the two-pane Settings, where only the focused pane has hints, so
- * both panes' rows stay level).
+ * both panes' rows stay level). Under [LocalNxHintBarHidden] (Settings) it draws nothing unless [always].
  */
 @Composable
 fun NxHintBar(
     hints: List<Hint>, modifier: Modifier = Modifier, onHint: ((NxButton) -> Unit)? = null, scrim: Color = LocalNxColors.current.scrimHints,
     keepHeight: Boolean = LocalNxHintBarKeepHeight.current,
+    always: Boolean = false,
 ) {
     val colors = LocalNxColors.current
     // A touch-only screen has no hint bar: its hints are reached by touch ([Hint.touch], taps, long press, back).
     if (LocalFooterMode.current == FooterMode.BUTTONS) return
+    if (LocalNxHintBarHidden.current && !always) return   // Settings: no bar unless Button hints shows it
     val glyphs = LocalHintGlyphs.current
     // ~60% of the glyph height; fixed, not screen- or font-scaled, but scaled by Appearance → Text size with the glyph.
     val scale = nxTextScale()

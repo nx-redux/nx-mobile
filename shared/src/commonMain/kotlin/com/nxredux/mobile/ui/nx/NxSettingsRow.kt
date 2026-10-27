@@ -72,6 +72,11 @@ data class NxSettingRow(
     val paragraph: Boolean = false,
     /** Its values as a segmented button however many or long they are (they go under the text when they don't fit beside it). */
     val segmented: Boolean = false,
+    /**
+     * What A does here when no console menu would guess it (Copy, Install, Reset, Remove): shown on the row, the A glyph
+     * and this word at its value's place, while it has the focus and a pad is in use. Null: A does the obvious.
+     */
+    val action: String? = null,
 ) : NxDescribedRow
 
 val NxSettingRow.control: NxSettingControl get() =
@@ -367,7 +372,7 @@ private fun NxSettingTouchRow(
     NxTouchRow(
         row.label, row.info, row.hasMoreInfo, selected, sizes,
         onTap = onTap, onInfo = info, onTruncated = onTruncated,
-        enabled = row.enabled, warning = row.warning, onLongPress = hold, onFits = { cut = !it },
+        enabled = row.enabled, warning = row.warning, onLongPress = hold, onFits = { cut = !it }, action = row.action,
         below = if (sizes.segmentsBelow(row)) { { NxSegments(row.choices, row.index, sizes.value, hold, choose) } } else null,
     ) {
         SettingControlView(

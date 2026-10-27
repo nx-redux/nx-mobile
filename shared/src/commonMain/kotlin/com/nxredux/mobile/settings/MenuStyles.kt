@@ -19,7 +19,7 @@ object MenuStyles {
     /** Layouts → Page title: Show. */
     const val DEFAULT_PAGE_TITLE = true
     /** Layouts → Button hints: Show. */
-    const val DEFAULT_BUTTON_HINTS = true
+    const val DEFAULT_BUTTON_HINTS = false
     /** Layouts → Extra info: Show. */
     const val DEFAULT_EXTRA_INFO = true
     /** Layouts → Home stats: Show. */

@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.LocalNxHintBarHidden
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.compose.AsyncImagePainter
@@ -510,9 +511,12 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             // Settings: two panes on a wide landscape window (the root on the left, its pages on the right), else one page.
             is Screen.Settings, is Screen.EmulatorList, is Screen.EmulatorConsoles, is Screen.EmulatorOptions, is Screen.SettingsMenu, is Screen.ToolApps ->
                 // A game's own Game Settings: a modal over the game list it came from, the list dimmed and inert behind it.
+                // No hint bar in Settings unless Layouts → Button hints shows it: every button there is a console menu's.
                 if (gameSettingsModal(s)) Unit   // no list to draw under it: the modal alone (below)
-                else if (settingsSplitView(LocalWindowSize.current, s)) SettingsSplitScreen(state, s, selection) { SettingsPage(state, s, selection, titled = true) }
-                else NarrowSettingsPage(state, s, selection)
+                else CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints) {
+                    if (settingsSplitView(LocalWindowSize.current, s)) SettingsSplitScreen(state, s, selection) { SettingsPage(state, s, selection, titled = true) }
+                    else NarrowSettingsPage(state, s, selection)
+                }
             is Screen.CheatDb -> state.cheatDb?.let { c -> WithIndex(selection) { CheatDbScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) } } ?: Box(Modifier.fillMaxSize())
             Screen.DeviceSync -> state.deviceSync?.let {
                 val setup by state.syncSetup.collectAsState()

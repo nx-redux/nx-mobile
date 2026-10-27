@@ -180,7 +180,7 @@ private const val SOFT_SELECTION_ALPHA = 0.16f
  * start, right-aligned in the Settings rows block ([LocalSettingsBlock]). Selected: a soft rounded plate behind it, so the control stays readable; not [enabled]: dimmed. [onInfo] null:
  * the info icon takes no taps. [onLongPress]: a long press anywhere on the row's own area (its name and description);
  * null, none (a long press is a tap). [onTruncated] hears whether the description fits while the row is [selected];
- * [onFits] whether it fits, selected or not.
+ * [onFits] whether it fits, selected or not. [action]: an unusual A, drawn in the control's place while [selected] with a pad.
  */
 @Composable
 internal fun NxTouchRow(
@@ -189,6 +189,7 @@ internal fun NxTouchRow(
     enabled: Boolean = true, warning: Boolean = false,
     onLongPress: (() -> Unit)? = null,
     onFits: ((Boolean) -> Unit)? = null,
+    action: String? = null,
     below: (@Composable () -> Unit)? = null,
     control: @Composable () -> Unit,
 ) {
@@ -230,7 +231,9 @@ internal fun NxTouchRow(
             }
             if (below == null) {
                 Spacer(Modifier.width(12.dp))
-                control()
+                // An unusual A ([NxSettingRow.action]) on the focused row while a pad is in use: its glyph and word there.
+                if (selected && action != null && LocalFooterMode.current == FooterMode.HINTS) NxRowAction(action, sizes.value)
+                else control()
             }
         }
         if (below != null) {
@@ -312,11 +315,32 @@ internal fun NxSegments(choices: List<String>, selected: Int, size: TextUnit, on
     }
 }
 
-/** The info icon: a question mark in a circle, sized from the description; a tap ([onClick], null none) shows the full text. */
+/** A focused row's unusual A ([NxSettingRow.action]): the A glyph and [word], in inkDim, at the value's size. */
+@Composable
+private fun NxRowAction(word: String, size: TextUnit) {
+    val colors = LocalNxColors.current
+    val glyph = with(LocalDensity.current) { (size * 1.25f).toDp() }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        NxButtonGlyph(NxButton.A, glyph, tint = colors.inkDim)
+        Spacer(Modifier.width(4.dp))
+        NxValueText(word, size, colors.inkDim)
+    }
+}
+
+/**
+ * The info icon, sized from the description; a tap ([onClick], null none) shows the full text. With a pad in use it is
+ * the X button's glyph in [NxColors.inkHelpGlyph] (X opens the help); touch alone, a question mark in a circle.
+ */
 @Composable
 private fun NxInfoIcon(textSize: TextUnit, onClick: (() -> Unit)?) {
     val colors = LocalNxColors.current
     val disc = with(LocalDensity.current) { (textSize * 1.25f).toDp() }
+    if (LocalFooterMode.current == FooterMode.HINTS) {
+        Box(Modifier.clip(CircleShape).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 6.dp, vertical = 2.dp)) {
+            NxButtonGlyph(NxButton.X, disc, tint = colors.inkHelpGlyph)
+        }
+        return
+    }
     // The padding widens the tap target past the small disc.
     Box(
         Modifier.clip(CircleShape).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 6.dp, vertical = 2.dp),
