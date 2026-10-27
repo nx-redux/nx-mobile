@@ -3708,23 +3708,28 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     fun settingsPreview(section: SettingsSection): Screen.Settings = settingsPage(section)
 
     /**
-     * A tap on the left pane's category [index]. On the Settings root it is a list tap (select, or open the selected
-     * one). From a right-pane page it focuses the left pane on that category: the pane's own back stack unwinds as B
-     * would (each page keeping its row; a Library reload or rescan lands on the root by itself). A one-tap list
-     * ([com.nxredux.mobile.ui.nx.nxTap]) calls this twice: the second call, now on the root, opens that category.
+     * A tap on the section list's [index]: one tap opens that section. From a right-pane page the pane's own back stack
+     * unwinds as B would (each page keeping its row; a Library reload or rescan lands on the root by itself), then the
+     * tapped section opens.
      */
     fun settingsCategoryTap(index: Int) {
         if (loader.active) return
         if ((_screen.value as? Screen.Settings)?.let { it.confirmRemove != null || it.confirmReset } == true) return   // a dialog answers first
+        // One tap opens the section, from the root or from another section's page.
         if (_screen.value is Screen.SettingsMenu) {
-            if (index == _selection.value.index) openSelected() else select(index)
+            select(index)
+            openSelected()
             return
         }
         if (settingsPane(_screen.value) != SettingsPane.RIGHT) return   // a stale tap from a page drawn whole: the root's row stays
         val count = settingsSections().size
         settingsMenuSelection = ListSelection(index, count).clampedTo(count)
         repeat(SETTINGS_MAX_DEPTH) {
-            if (settingsPane(_screen.value) != SettingsPane.RIGHT || loader.active) return
+            if (loader.active) return
+            if (settingsPane(_screen.value) != SettingsPane.RIGHT) {
+                if (_screen.value is Screen.SettingsMenu) { select(index); openSelected() }
+                return
+            }
             back()
         }
     }

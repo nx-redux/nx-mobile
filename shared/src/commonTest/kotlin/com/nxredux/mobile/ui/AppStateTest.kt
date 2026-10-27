@@ -6371,15 +6371,23 @@ class AppStateTest {
         assertEquals(2, state.selection.value.index)
     }
 
-    @Test fun split_tapping_a_category_from_a_sub_page_focuses_the_left_pane_on_it() = runTest {
+    // One tap on another section opens it, even from a sub-page; B then lands on the section list on it.
+    @Test fun split_tapping_a_category_from_a_sub_page_opens_it() = runTest {
         val (state, _) = splitSettings()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.onButton(NxButton.RIGHT)
-        state.select(2); state.onButton(NxButton.A)                     // Layouts
-        state.settingsCategoryTap(3)                                    // About
+        state.select(2); state.onButton(NxButton.A)                     // a sub-page
+        state.settingsCategoryTap(3)
+        assertEquals(state.settingsSections()[3], assertIs<Screen.Settings>(state.screen.value).section)
+        state.onButton(NxButton.B)
         assertIs<Screen.SettingsMenu>(state.screen.value)
         assertEquals(3, state.selection.value.index)
-        state.onButton(NxButton.UP); state.onButton(NxButton.A)         // Appearance again: still on its Layouts row
-        assertEquals(2, state.selection.value.index)
+    }
+
+    // One tap on a section of the Settings root opens it (no select-then-open).
+    @Test fun a_tap_on_a_section_opens_it_at_once() = runTest {
+        val (state, _) = splitSettings()
+        state.settingsCategoryTap(4)
+        assertEquals(state.settingsSections()[4], assertIs<Screen.Settings>(state.screen.value).section)
     }
 
     @Test fun split_tapping_a_row_of_the_preview_opens_the_category_on_that_row() = runTest {
