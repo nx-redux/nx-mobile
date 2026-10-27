@@ -386,7 +386,8 @@ internal fun NxKeepSelectedInView(state: LazyListState, selectedIndex: Int, coun
         val layoutInfo = snapshotFlow { state.layoutInfo }
             .first { it.totalItemsCount == count && it.viewportEndOffset > it.viewportStartOffset && it.visibleItemsInfo.isNotEmpty() }
         val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == selectedIndex }
-        val rowPx = layoutInfo.visibleItemsInfo.maxOf { it.size }   // a row, not an options gap
+        // A row, not an options gap, nor a list's footer (a picture under the rows).
+        val rowPx = layoutInfo.visibleItemsInfo.filter { it.key != NX_LIST_FOOTER_KEY }.maxOfOrNull { it.size } ?: layoutInfo.visibleItemsInfo.maxOf { it.size }
         val shown = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset) / maxOf(1, rowPx)
         val scroll = if (edge > 0) nxKeepInViewEdge(
             selectedIndex, item?.offset, item?.size ?: rowPx, edge,
@@ -401,7 +402,7 @@ internal fun NxKeepSelectedInView(state: LazyListState, selectedIndex: Int, coun
             itemOffset = item?.offset, itemSize = item?.size ?: 0,
             viewportStart = layoutInfo.viewportStartOffset, viewportEnd = layoutInfo.viewportEndOffset,
             lastVisible = layoutInfo.visibleItemsInfo.last().index,
-            rowHeight = layoutInfo.visibleItemsInfo.maxOf { it.size },   // a row, not an options gap
+            rowHeight = rowPx,
         )
         val animate = placed[0]
         placed[0] = true

@@ -100,6 +100,18 @@ fun settingsFrameWidth(stageWidth: Dp, sectionRight: Dp, gutter: Dp): Dp =
     minOf(SETTINGS_FRAME_MAX, stageWidth - gutter - sectionRight - SETTINGS_FRAME_GAP)
         .coerceAtLeast(minOf(SETTINGS_FRAME_MIN, stageWidth - gutter)).coerceAtLeast(0.dp)
 
+/**
+ * A Layouts group's picture width on a phone, the whole room it has: upright ([SettingsSizeClass.PHONE_UPRIGHT]) the
+ * window inside the [gutter] on both sides; on its side (the wide stage) from the section block's right edge
+ * ([sectionRight]) plus [SETTINGS_FRAME_GAP] to the right gutter, wider than the rows pane. A tablet-class window: null
+ * (the rows' width, as before). Never below zero.
+ */
+fun settingsLayoutPictureWidth(sizeClass: SettingsSizeClass, windowWidth: Dp, sectionRight: Dp, gutter: Dp): Dp? = when (sizeClass) {
+    SettingsSizeClass.PHONE_UPRIGHT -> (windowWidth - gutter * 2).coerceAtLeast(0.dp)
+    SettingsSizeClass.PHONE_LANDSCAPE -> (windowWidth - gutter - sectionRight - SETTINGS_FRAME_GAP).coerceAtLeast(0.dp)
+    SettingsSizeClass.TABLET -> null
+}
+
 /** The wide rows pane's left edge from the stage's left: its right edge at the [gutter] ([settingsFrameWidth]). */
 fun settingsFrameLeft(stageWidth: Dp, sectionRight: Dp, gutter: Dp): Dp =
     stageWidth - gutter - settingsFrameWidth(stageWidth, sectionRight, gutter)
@@ -212,9 +224,10 @@ internal fun SettingsBackground() {
  * line, its rows anchored to the bottom. [crumb]: the words before the title ("Settings" on a narrow window, one level at
  * a time, as "Settings / Layouts", the block then the gutter in from both sides); null on the wide stage, where the
  * section block beside it already says Settings. [onBack]: the Back word one pitch under the rows (narrow, touch mode
- * only, [settingsBackShown]); null: none.
+ * only, [settingsBackShown]); null: none. [pictureWidth]: a Layouts group's picture under the rows at this width, right
+ * edge at the gutter, wider than the pane ([settingsLayoutPictureWidth], a phone on its side); null: the rows' width.
  */
-data class SettingsBlockMode(val crumb: String?, val onBack: (() -> Unit)? = null)
+data class SettingsBlockMode(val crumb: String?, val onBack: (() -> Unit)? = null, val pictureWidth: Dp? = null)
 
 /**
  * Whether [screen] draws as the rows block on a narrow window (one level at a time): a block page ([settingsBlockPage])

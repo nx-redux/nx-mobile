@@ -25,9 +25,6 @@ import com.nxredux.mobile.ui.nx.LocalNxHintBarKeepHeight
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxHintBar
 
-/** The wide stage's rows block: no crumb (the section block beside it says Settings), no Back word. */
-private val WIDE_BLOCK = SettingsBlockMode(crumb = null)
-
 /** An unfocused pane's opacity. */
 internal const val UNFOCUSED_ALPHA = 0.6f
 
@@ -53,6 +50,9 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
             CompositionLocalProvider(LocalNxHintBarKeepHeight provides true) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val left = if (blockPage) settingsFrameLeft(maxWidth, sectionRight, gutter) else maxWidth * SETTINGS_SPLIT_LEFT
+                    // A phone on its side: a Layouts group's picture takes the whole room right of the sections.
+                    val pictureWidth = settingsLayoutPictureWidth(settingsSizeClass(), maxWidth, sectionRight, gutter)
+                    val wideBlock = remember(pictureWidth) { SettingsBlockMode(crumb = null, pictureWidth = pictureWidth) }
                     // The section block keeps its gutter on the right even when the frame comes within 24 dp of it.
                     Column(Modifier.width(if (blockPage) maxOf(left, sectionRight + gutter) else left).fillMaxHeight()) {
                         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -73,7 +73,7 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
                         NxHintBar(if (s is Screen.SettingsMenu) SETTINGS_ROOT_HINTS else emptyList(), onHint = state::onButton)
                     }
                     Box(Modifier.padding(start = left).fillMaxSize()) {
-                        CompositionLocalProvider(LocalSettingsBlock provides WIDE_BLOCK.takeIf { blockPage }) {
+                        CompositionLocalProvider(LocalSettingsBlock provides wideBlock.takeIf { blockPage }) {
                             if (s is Screen.SettingsMenu) {
                                 WithIndex(selection) { i ->
                                     s.sections.getOrNull(i)?.let { section ->

@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -76,10 +77,27 @@ sealed interface NxSettingEvent {
 }
 
 /**
- * Something drawn under a list's last row, scrolling with the rows (a Layouts group's picture in the Settings rows
- * block): [height] for the list's width, and its [content] at that width.
+ * Something drawn under a list's last row, scrolling with the rows (a Layouts group's picture): its own width is the
+ * list's plus [bleedStart] and [bleedEnd] (negative: inside the list's edges); [height] for that width, and its
+ * [content] at it. With a pad it is kept in view while the last row is selected ([nxKeepInViewTarget]).
  */
-class NxListFooter(val height: (Dp) -> Dp, val content: @Composable (Dp) -> Unit)
+class NxListFooter(
+    val bleedStart: Dp = 0.dp, val bleedEnd: Dp = 0.dp,
+    val height: (Dp) -> Dp, val content: @Composable (Dp) -> Unit,
+)
+
+/** The footer item's key in a list ([NxListFooter]): not a row, so keep-in-view does not size rows by it. */
+internal const val NX_LIST_FOOTER_KEY = "footer"
+
+/**
+ * The list item keep-in-view follows for the selected row [selected] of [rows]: the row itself, or with a [footer] the
+ * footer item (index [rows] size) while the last row that can be selected is, so a pad brings the whole picture into
+ * view; the selection stays on the row.
+ */
+internal fun nxKeepInViewTarget(rows: List<NxSettingRow>, selected: Int, footer: Boolean): Int {
+    val last = rows.indexOfLast { !it.section && !it.spacer && !it.paragraph }
+    return if (footer && selected >= 0 && selected == last) rows.size else selected
+}
 
 /** A description as a share of its name. */
 private const val DESC_OF_LABEL = 0.9f   // one text-size step ([NxTextSizes.STEP]) over 0.72
@@ -158,33 +176,60 @@ fun NxSettingsList(
         // leave the list scrollable by that px and its bottom fade showing over the last row.
         val density = LocalDensity.current
         val listWidth = maxWidth
-        val footerHeight = footer?.height?.invoke(listWidth) ?: 0.dp
+        // The footer's own width: the list's and its bleeds. A bleed past the list's edge widens the lazy list itself by
+        // it (the rows padded back in), so the footer is laid out, faded and scrolled inside it rather than clipped.
+        val outStart = maxOf(0.dp, footer?.bleedStart ?: 0.dp)
+        val outEnd = maxOf(0.dp, footer?.bleedEnd ?: 0.dp)
+        val footerWidth = listWidth + (footer?.bleedStart ?: 0.dp) + (footer?.bleedEnd ?: 0.dp)
+        val footerHeight = footer?.height?.invoke(footerWidth) ?: 0.dp
         val total = if (rows.any { it.paragraph }) maxHeight
             else with(density) { (rows.sumOf { sizes.heightOf(it).roundToPx() } + footerHeight.roundToPx()).toDp() }
         // Rows differ in height (a bare row, a group label, segments under the text): kept clear of the fade in px.
         val fade = settingsRowsFade(sizes.row / 2)   // the Settings rows block's 24 dp
-        NxKeepSelectedInView(listState, selectedIndex, rows.size + (if (footer != null) 1 else 0), edge = with(density) { fade.roundToPx() })
+        NxKeepSelectedInView(
+            listState, nxKeepInViewTarget(rows, selectedIndex, footer != null), rows.size + (if (footer != null) 1 else 0),
+            edge = with(density) { fade.roundToPx() },
+        )
         LazyColumn(
-            Modifier.fillMaxWidth().height(minOf(total, maxHeight)).nxScrollFade(listState, height = fade, strong = true),
+            Modifier.nxBleed(outStart, outEnd).height(minOf(total, maxHeight)).nxScrollFade(listState, height = fade, strong = true),
             state = listState, flingBehavior = rememberNxRowSnapFling(listState),
         ) {
             itemsIndexed(rows) { i, row ->
                 val selected = i == selectedIndex
                 val default = { nxTap(i, selected, tapOpens(i), onSelect, onOpen) }
-                NxSettingTouchRow(
-                    row, selected, sizes, index = i,
-                    onTap = if (preview) default else settingRowTap(row, i, onSelect, onEvent) ?: default,
-                    onEvent = if (preview) null else onEvent,
-                    onTruncated = { info, t -> if (selected) onTruncated(info, t) },
-                )
+                // Padded back to the list's edges when the lazy list is widened for its footer.
+                Box(Modifier.padding(start = outStart, end = outEnd)) {
+                    NxSettingTouchRow(
+                        row, selected, sizes, index = i,
+                        onTap = if (preview) default else settingRowTap(row, i, onSelect, onEvent) ?: default,
+                        onEvent = if (preview) null else onEvent,
+                        onTruncated = { info, t -> if (selected) onTruncated(info, t) },
+                    )
+                }
             }
             // Under the last row, scrolling with them (a Layouts group's picture); never selected.
-            if (footer != null) item(key = "footer") {
-                Box(Modifier.fillMaxWidth().height(footerHeight)) { footer.content(listWidth) }
+            if (footer != null) item(key = NX_LIST_FOOTER_KEY) {
+                // From the lazy list's left: the list's own left ([outStart]) less the footer's start bleed.
+                Box(Modifier.fillMaxWidth().height(footerHeight).padding(start = outStart - footer.bleedStart)) {
+                    footer.content(footerWidth)
+                }
             }
         }
     }
 }
+
+/**
+ * This element [start] wider on its left and [end] on its right than it is given, drawn that far past its slot's edges
+ * (a list whose footer runs past the rows). Nothing when both are zero.
+ */
+private fun Modifier.nxBleed(start: Dp, end: Dp): Modifier =
+    if (start <= 0.dp && end <= 0.dp) fillMaxWidth()
+    else layout { measurable, constraints ->
+        val s = start.roundToPx()
+        val w = constraints.maxWidth + s + end.roundToPx()
+        val placeable = measurable.measure(constraints.copy(minWidth = w, maxWidth = w))
+        layout(constraints.maxWidth, placeable.height) { placeable.place(-s, 0) }
+    }
 
 /** What a tap on row [index] does, when not the lists' tap (null): a switch flips, a picker opens, a segmented row is selected. */
 private fun settingRowTap(row: NxSettingRow, index: Int, onSelect: (Int) -> Unit, onEvent: (NxSettingEvent) -> Unit): (() -> Unit)? {

@@ -3,6 +3,8 @@ package com.nxredux.mobile.ui
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.ui.nx.FooterMode
+import com.nxredux.mobile.ui.nx.NxSettingRow
+import com.nxredux.mobile.ui.nx.nxKeepInViewTarget
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -69,6 +71,33 @@ class SettingsBlockTest {
         // The Layouts picture under the rows: the capture's aspect kept inside the mat, at the rows' width.
         assertEquals((8f + 8f + 200f).dp, framedPictureHeight(416.dp, aspect = 2f, mat = 8.dp))
         assertEquals(0.dp, framedPictureHeight(0.dp, aspect = 2f, mat = 8.dp))
+    }
+
+    @Test fun layoutPictureWidthBySizeClass() {
+        // A phone upright: the window inside the 16 dp gutters.
+        assertEquals(412.dp - 32.dp, settingsLayoutPictureWidth(SettingsSizeClass.PHONE_UPRIGHT, 412.dp, sectionRight = 0.dp, gutter = 16.dp))
+        // A phone on its side (the wide stage): from the section block's right edge + 24 dp to the right gutter,
+        // wider than the 560 dp rows pane.
+        val side = settingsLayoutPictureWidth(SettingsSizeClass.PHONE_LANDSCAPE, 915.dp, sectionRight = 180.dp, gutter = 24.dp)
+        assertEquals(915.dp - 24.dp - 180.dp - 24.dp, side)
+        assertTrue(side!! > settingsFrameWidth(915.dp, sectionRight = 180.dp, gutter = 24.dp))
+        // A tablet-class window: unchanged, the rows' width.
+        assertEquals(null, settingsLayoutPictureWidth(SettingsSizeClass.TABLET, 1200.dp, sectionRight = 250.dp, gutter = 48.dp))
+        // Never below zero.
+        assertEquals(0.dp, settingsLayoutPictureWidth(SettingsSizeClass.PHONE_UPRIGHT, 20.dp, sectionRight = 0.dp, gutter = 16.dp))
+    }
+
+    @Test fun padKeepsThePictureInView() {
+        val rows = listOf(
+            NxSettingRow("Group", section = true), NxSettingRow("A"), NxSettingRow("B"),
+            NxSettingRow("", spacer = true),
+        )
+        // The last row that can be selected (B, index 2) follows the footer item (index rows.size); the others themselves.
+        assertEquals(rows.size, nxKeepInViewTarget(rows, selected = 2, footer = true))
+        assertEquals(1, nxKeepInViewTarget(rows, selected = 1, footer = true))
+        // No footer, or nothing selected: the row as before.
+        assertEquals(2, nxKeepInViewTarget(rows, selected = 2, footer = false))
+        assertEquals(-1, nxKeepInViewTarget(rows, selected = -1, footer = true))
     }
 
     @Test fun narrowBlockPages() {

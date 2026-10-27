@@ -103,6 +103,7 @@ import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxHintBar
 import com.nxredux.mobile.ui.nx.NxList
 import com.nxredux.mobile.ui.nx.NxListFooter
+import com.nxredux.mobile.ui.nx.NxOptionsSidePad
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxOptionsList
 import com.nxredux.mobile.ui.nx.nxOptionsFitHeight
@@ -254,7 +255,7 @@ internal fun LayoutPreviewPage(
     val portrait = LocalPortrait.current
     val label = NxTextSizes.listLabel(NxListPitch) * nxTextScale()   // Appearance → Text size
     // [rowsMax]: the most the touch rows may take, so the picture under them keeps its room (they scroll past it).
-    val text: @Composable (Modifier, Dp) -> Unit = { cap, rowsMax -> Column(cap) {
+    val text: @Composable (Modifier, Dp, NxListFooter?) -> Unit = { cap, rowsMax, footer -> Column(cap) {
         Column(Modifier.padding(horizontal = nxListInset())) {
             details.forEachIndexed { i, line ->
                 if (i == 0) Text(line, color = colors.listText, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = NxTextSizes.headline(label))
@@ -264,7 +265,7 @@ internal fun LayoutPreviewPage(
         if (details.isNotEmpty()) Spacer(Modifier.height(12.dp))
         // The value rows, as the formats step draws them ("< value >" while selected); on a short page they scroll.
         val optionPitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
-        if (touchRows != null) touchRows(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = rowsMax), null)
+        if (touchRows != null) touchRows(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = rowsMax), footer)
         else NxOptionsList(
             values, selected.takeIf { it < values.size } ?: -1, onSelect, onRow, rowHeight = optionPitch, listText = NxTextSizes.listLabel(optionPitch),
             modifier = Modifier.fillMaxWidth().weight(1f, fill = false).height(nxOptionsFitHeight(values, optionPitch)), scrollFade = true,
@@ -280,17 +281,30 @@ internal fun LayoutPreviewPage(
             )
         }
     } }
-    // The wide Settings stage's rows block ([LocalSettingsBlock]): the title its first line, the rows, then the picture
-    // under them at the rows' width (its aspect kept), part of the block: it scrolls with the rows.
-    LocalSettingsBlock.current?.let { block ->
-        val footer = picture?.let {
-            NxListFooter(height = { w -> LAYOUT_PICTURE_ROWS_GAP + framedPictureHeight(w, aspect, PICTURE_MAT) }) { w ->
-                Box(Modifier.padding(top = LAYOUT_PICTURE_ROWS_GAP)) { framed(w) }
-            }
+    // The picture under the touch rows, scrolling with them, [bleed] past the list's edges each side (start, end);
+    // none when the picture is narrower than [PREVIEW_MIN_WIDTH].
+    val footerOf: (Pair<Dp, Dp>) -> NxListFooter? = { bleed ->
+        picture?.let {
+            NxListFooter(
+                bleedStart = bleed.first, bleedEnd = bleed.second,
+                height = { w -> if (w >= PREVIEW_MIN_WIDTH) LAYOUT_PICTURE_ROWS_GAP + framedPictureHeight(w, aspect, PICTURE_MAT) else 0.dp },
+            ) { w -> Box(Modifier.padding(top = LAYOUT_PICTURE_ROWS_GAP)) { framed(w) } }
         }
+    }
+    // The wide Settings stage's rows block ([LocalSettingsBlock]): the title its first line, the rows, then the picture
+    // under them, part of the block: it scrolls with the rows. At the rows' width, or on a phone on its side the whole
+    // room right of the sections ([SettingsBlockMode.pictureWidth], its right edge at the gutter); its aspect kept.
+    LocalSettingsBlock.current?.let { block ->
         Column(modifier.fillMaxSize()) {
             SettingsRowsBlock(block, title, Modifier.weight(1f)) {
-                if (touchRows != null) touchRows(Modifier.fillMaxWidth(), footer)
+                if (touchRows != null) BoxWithConstraints {
+                    // maxWidth: the pane; the list sits [NxOptionsSidePad] inside it on both sides.
+                    val wide = block.pictureWidth
+                    touchRows(
+                        Modifier.fillMaxWidth(),
+                        footerOf(if (wide == null) 0.dp to 0.dp else (wide - maxWidth + NxOptionsSidePad) to NxOptionsSidePad),
+                    )
+                }
                 else Column {
                     // No value rows (not a Settings group today): the options rows, the picture under them.
                     val optionPitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
@@ -298,7 +312,7 @@ internal fun LayoutPreviewPage(
                         values, selected.takeIf { it < values.size } ?: -1, onSelect, onRow, rowHeight = optionPitch, listText = NxTextSizes.listLabel(optionPitch),
                         modifier = Modifier.fillMaxWidth().weight(1f, fill = false).height(nxOptionsFitHeight(values, optionPitch)), scrollFade = true,
                     )
-                    BoxWithConstraints(Modifier.fillMaxWidth()) { footer?.content?.invoke(maxWidth) }
+                    BoxWithConstraints(Modifier.fillMaxWidth()) { footerOf(0.dp to 0.dp)?.content?.invoke(maxWidth) }
                 }
             }
             NxHintBar(hints, onHint = onHint)
@@ -308,12 +322,14 @@ internal fun LayoutPreviewPage(
     BoxWithConstraints(modifier.fillMaxSize()) {
         val wide = !portrait && maxWidth / maxHeight >= PREVIEW_WIDE_RATIO
         val pageH = maxHeight
+        val pageW = maxWidth
+        val phoneUpright = settingsSizeClass() == SettingsSizeClass.PHONE_UPRIGHT
         Column(Modifier.fillMaxSize()) {
             NxPageTitle(title, bottom = 8.dp, trailing = if (titleAction) ({ NxTitleActions(listOf(rows[last].label), last, selected, onSelect, onRow) }) else null)
             if (wide) {
                 // Text and rows at the left, the picture at the right, each half the width.
                 Row(Modifier.weight(1f).fillMaxWidth()) {
-                    Column(Modifier.weight(1f).fillMaxHeight()) { text(Modifier, Dp.Infinity) }
+                    Column(Modifier.weight(1f).fillMaxHeight()) { text(Modifier, Dp.Infinity, null) }
                     BoxWithConstraints(
                         Modifier.weight(1f).fillMaxHeight().padding(end = nxListInset(), bottom = 12.dp),
                         contentAlignment = Alignment.TopCenter,
@@ -321,9 +337,15 @@ internal fun LayoutPreviewPage(
                         framed(min(maxWidth, (maxHeight - PICTURE_MAT * 2) * aspect + PICTURE_MAT * 2))
                     }
                 }
+            } else if (phoneUpright && touchRows != null) {
+                // A phone held upright (a Settings group): the picture across the screen inside the gutters, under the
+                // rows and scrolling with them, its aspect kept.
+                val picW = settingsLayoutPictureWidth(SettingsSizeClass.PHONE_UPRIGHT, pageW, 0.dp, settingsGutter(SettingsSizeClass.PHONE_UPRIGHT)) ?: pageW
+                val bleed = (picW - (pageW - NxOptionsSidePad * 2)) / 2
+                text(Modifier.weight(1f), Dp.Infinity, footerOf(bleed to bleed))
             } else {
                 // Landscape (the Fold's near-square pane): the rows at most [PREVIEW_ROWS_SHARE] of the height, the picture the rest.
-                text(if (portrait) Modifier else Modifier.fillMaxWidth(landscapeWidth), if (portrait) Dp.Infinity else pageH * PREVIEW_ROWS_SHARE)   // landscape: long lines wrap
+                text(if (portrait) Modifier else Modifier.fillMaxWidth(landscapeWidth), if (portrait) Dp.Infinity else pageH * PREVIEW_ROWS_SHARE, null)   // landscape: long lines wrap
                 // The picture at the page's width (inset), smaller when the rows leave less height; the room left stays below.
                 BoxWithConstraints(
                     Modifier.fillMaxWidth().weight(1f).padding(start = nxListInset(), end = nxListInset(), top = 16.dp, bottom = 12.dp),
