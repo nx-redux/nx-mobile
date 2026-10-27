@@ -121,6 +121,8 @@ internal class NxTouchRowSizes(
     /** A list gap's measure (an options gap, a spacer): a bare row at least the list's pitch. */
     val bare: Dp = row,
     val labelLineDp: Dp = 0.dp, val descLineDp: Dp = 0.dp,
+    /** Whether a segmented row's choices fit on a line of their own ([rememberSegmentsFitLine]). */
+    val segmentsFitLine: (List<String>) -> Boolean = { true },
 ) {
     /**
      * A touch row's height as it lays out: its text (the name's line and its description's [descLines] lines, 0 to
@@ -156,7 +158,7 @@ internal fun nxTouchRowSizes(itemHeight: Dp, rowWidth: Dp, descOfLabel: Float): 
     val bare = with(LocalDensity.current) { (label * 1.25f).toDp() } + TOUCH_ROW_AIR * 2
     return NxTouchRowSizes(
         label, desc, descLine, value, maxOf(row, itemHeight), segments, rememberSegmentsFitRight(value, label, rowWidth - NxOptionsInnerPad * 2),
-        maxOf(bare, itemHeight), labelLine, descLineDp,
+        maxOf(bare, itemHeight), labelLine, descLineDp, rememberSegmentsFitLine(value, rowWidth - NxOptionsInnerPad * 2),
     )
 }
 

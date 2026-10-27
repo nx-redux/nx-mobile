@@ -6,6 +6,7 @@ import com.nxredux.mobile.ui.nx.FooterMode
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.NxFooterKeep
 import com.nxredux.mobile.ui.nx.nxFooterKeep
+import com.nxredux.mobile.ui.nx.nxKeepRowPx
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -86,6 +87,19 @@ class SettingsBlockTest {
         assertEquals(null, settingsLayoutPictureWidth(SettingsSizeClass.TABLET, 1200.dp, sectionRight = 250.dp, gutter = 48.dp))
         // Never below zero.
         assertEquals(0.dp, settingsLayoutPictureWidth(SettingsSizeClass.PHONE_UPRIGHT, 20.dp, sectionRight = 0.dp, gutter = 16.dp))
+    }
+
+    // A touch scroll takes the selected last row out of view: its last laid-out height stands, not the two-line estimate,
+    // so the footer decision holds and the list isn't pulled back.
+    @Test fun keepUsesTheSelectedRowsLastHeightWhileItIsOutOfView() {
+        assertEquals(100, nxKeepRowPx(measured = 100, last = 80, estimate = 160))
+        assertEquals(100, nxKeepRowPx(measured = null, last = 100, estimate = 160))   // scrolled out: as last laid out
+        assertEquals(160, nxKeepRowPx(measured = null, last = null, estimate = 160))  // never laid out yet
+        val rows = listOf(NxSettingRow("A"), NxSettingRow("B", info = "Line"))
+        val px = nxKeepRowPx(measured = null, last = 100, estimate = 160)
+        assertEquals(NxFooterKeep.FOOTER, nxFooterKeep(rows, 1, footer = true, footerPx = 400, rowPx = px, edge = 60, viewportPx = 620))
+        // The estimate would have flipped it.
+        assertEquals(NxFooterKeep.ROW_AT_TOP, nxFooterKeep(rows, 1, footer = true, footerPx = 400, rowPx = 160, edge = 60, viewportPx = 620))
     }
 
     @Test fun padKeepsThePictureInView() {

@@ -12,6 +12,7 @@ import com.nxredux.mobile.ui.nx.NxSettingControl
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.flipped
+import com.nxredux.mobile.ui.nx.fittedTo
 import com.nxredux.mobile.ui.nx.fullInfo
 import com.nxredux.mobile.ui.nx.hasMoreInfo
 import com.nxredux.mobile.ui.nx.nxSettingControl
@@ -107,6 +108,18 @@ class SettingsTouchRowsTest {
         assertEquals(20.dp + 18.dp + air + 30.dp, sizes.height(descLines = 1, segmentsBelow = true))   // segments under the text add their line
         assertEquals(24.dp + air, sizes.height(descLines = 0, segmentsBelow = false, control = 24.dp))   // a switch taller than the name
         for (lines in 0..2) assertEquals(air, sizes.height(lines, false) - (20.dp + 18.dp * lines))
+    }
+
+    // Game lists' layout is segmented while its five styles fit on a line; too narrow even for that, a picker.
+    @Test fun aForcedSegmentedRowFallsBackToAPickerWhenItsLineIsTooNarrow() {
+        val styles = listOf("List", "Grid", "Carousel", "Backdrop", "Minimal")
+        val row = settingsTouchRow(SettingsRow(SettingsKind.GAME_LIST_STYLE, "Layout", "List"), SettingChoices(styles, 0))
+        assertEquals(NxSettingControl.SEGMENTED, row.control)
+        assertEquals(NxSettingControl.SEGMENTED, row.fittedTo { true }.control)
+        assertEquals(NxSettingControl.PICKER, row.fittedTo { false }.control)
+        assertEquals(styles, row.fittedTo { false }.choices)
+        val accent = NxSettingRow("Pad vibration", choices = listOf("Off", "Low", "High"), index = 0)
+        assertEquals(accent, accent.fittedTo { false })                                       // a row not forced: as it is
     }
 
     @Test fun aKeptRowShowsItsShortLine() {

@@ -75,6 +75,19 @@ data class NxSettingRow(
 val NxSettingRow.control: NxSettingControl get() =
     if (segmented && choices.size >= 2) NxSettingControl.SEGMENTED else nxSettingControl(choices)
 
+/**
+ * [this] row as a list [fitsLine] wide draws it: a row made segmented ([NxSettingRow.segmented]) whose choices don't fit
+ * even on a line of their own falls back to its values' own control (a picker: "Value ›", a tap opens it).
+ */
+internal fun NxSettingRow.fittedTo(fitsLine: (List<String>) -> Boolean): NxSettingRow =
+    if (segmented && choices.size >= 2 && !fitsLine(choices)) copy(segmented = false) else this
+
+/**
+ * The selected row's height for keep-in-view: as laid out now ([measured]), else as last laid out ([last], while it is
+ * scrolled out of view), else the most it can take ([estimate]) before it has been laid out at all.
+ */
+internal fun nxKeepRowPx(measured: Int?, last: Int?, estimate: Int): Int = measured ?: last ?: estimate
+
 /** The choice a switch row's flip sets: the other of its two values. */
 val NxSettingRow.flipped: Int get() = 1 - index.coerceIn(0, 1)
 
@@ -202,7 +215,7 @@ fun NxSettingsPage(
  */
 @Composable
 fun NxSettingsList(
-    rows: List<NxSettingRow>, selectedIndex: Int,
+    given: List<NxSettingRow>, selectedIndex: Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onEvent: (NxSettingEvent) -> Unit,
     modifier: Modifier = Modifier,
     onTruncated: (String, Boolean) -> Unit = { _, _ -> },
@@ -213,6 +226,8 @@ fun NxSettingsList(
     val listState = rememberLazyListState()
     BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = NxOptionsSidePad).padding(top = 4.dp), contentAlignment = Alignment.TopCenter) {
         val sizes = nxTouchRowSizes(itemHeight, maxWidth, DESC_OF_LABEL)
+        // A forced segmented row too wide for even its own line here: a picker instead.
+        val rows = remember(given, sizes.segmentsFitLine) { given.map { it.fittedTo(sizes.segmentsFitLine) } }
         // Rows (a touch row's description one or two lines, a paragraph) are as tall as they lay out: the list is as tall
         // as they and the footer are, up to the room given, where it scrolls.
         val density = LocalDensity.current
@@ -231,10 +246,15 @@ fun NxSettingsList(
         val estimatePx = with(density) { rows.getOrNull(selectedIndex)?.let { sizes.heightOf(it).roundToPx() } ?: 0 }
         val roomPx = with(density) { maxHeight.roundToPx() }
         val hasFooter = footer != null
+        // The selected row's last laid-out height: kept while a touch scroll takes it out of view, so the decision
+        // doesn't flip to the two-line estimate and pull the list back.
+        val lastRowPx = remember(selectedIndex) { arrayOfNulls<Int>(1) }
         val keep by remember(rows, selectedIndex, hasFooter, footerPx, estimatePx, edgePx, roomPx) {
             derivedStateOf {
                 val info = listState.layoutInfo
-                val rowPx = info.visibleItemsInfo.firstOrNull { it.index == selectedIndex && it.key != NX_LIST_FOOTER_KEY }?.size ?: estimatePx
+                val measured = info.visibleItemsInfo.firstOrNull { it.index == selectedIndex && it.key != NX_LIST_FOOTER_KEY }?.size
+                if (measured != null) lastRowPx[0] = measured
+                val rowPx = nxKeepRowPx(measured, lastRowPx[0], estimatePx)
                 val viewport = info.viewportSize.height.takeIf { it > 0 } ?: roomPx
                 nxFooterKeep(rows, selectedIndex, hasFooter, footerPx, rowPx, edgePx, viewport)
             }
