@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -19,6 +20,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.gestures.animateScrollBy
 import kotlinx.coroutines.flow.first
@@ -140,11 +144,14 @@ fun NxRowDescription(text: String, modifier: Modifier = Modifier) {
 /** Row [r]'s segments go under its text: an enabled segmented row whose choices don't fit on its right. */
 internal fun NxTouchRowSizes.segmentsBelow(r: NxSettingRow): Boolean = r.enabled && r.control == NxSettingControl.SEGMENTED && !segmentsRight(r.label, r.choices)
 
-/** Row [r]'s height: a spacer half a bare row, a group label half a row, else the touch row's ([NxTouchRowSizes.height]). */
+/**
+ * Row [r]'s height: a spacer half a bare row, a group label half a row. A touch row lays out as tall as its text
+ * ([NxTouchRowSizes.height]); here, before it has, the most it can take (a description's two lines).
+ */
 internal fun NxTouchRowSizes.heightOf(r: NxSettingRow): Dp = when {
     r.spacer -> bare * NX_OPTIONS_GAP
     r.section -> row * SECTION_OF_ROW
-    else -> height(described = r.info.isNotBlank(), segmentsBelow = segmentsBelow(r))
+    else -> height(descLines = if (r.info.isBlank()) 0 else SETTING_DESC_LINES, segmentsBelow = segmentsBelow(r))
 }
 
 /** A group label's row as a share of a row. */
@@ -206,9 +213,8 @@ fun NxSettingsList(
     val listState = rememberLazyListState()
     BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = NxOptionsSidePad).padding(top = 4.dp), contentAlignment = Alignment.TopCenter) {
         val sizes = nxTouchRowSizes(itemHeight, maxWidth, DESC_OF_LABEL)
-        // A paragraph wraps to its own height, unknown here: such a list takes all the room given.
-        // Summed in each row's own rounded px, as the list lays them out: a Dp sum can come out a px short, which would
-        // leave the list scrollable by that px and its bottom fade showing over the last row.
+        // Rows (a touch row's description one or two lines, a paragraph) are as tall as they lay out: the list is as tall
+        // as they and the footer are, up to the room given, where it scrolls.
         val density = LocalDensity.current
         val listWidth = maxWidth
         // The footer's own width: the list's and its bleeds. A bleed past the list's edge widens the lazy list itself by
@@ -217,16 +223,21 @@ fun NxSettingsList(
         val outEnd = maxOf(0.dp, footer?.bleedEnd ?: 0.dp)
         val footerWidth = listWidth + (footer?.bleedStart ?: 0.dp) + (footer?.bleedEnd ?: 0.dp)
         val footerHeight = footer?.height?.invoke(footerWidth) ?: 0.dp
-        val total = if (rows.any { it.paragraph }) maxHeight
-            else with(density) { (rows.sumOf { sizes.heightOf(it).roundToPx() } + footerHeight.roundToPx()).toDp() }
         // Rows differ in height (a bare row, a group label, segments under the text): kept clear of the fade in px.
         val fade = settingsRowsFade(sizes.row / 2)   // the Settings rows block's 24 dp
         val edgePx = with(density) { fade.roundToPx() }
-        val keep = with(density) {
-            nxFooterKeep(
-                rows, selectedIndex, footer != null, footerHeight.roundToPx(),
-                rows.getOrNull(selectedIndex)?.let { sizes.heightOf(it).roundToPx() } ?: 0, edgePx, minOf(total, maxHeight).roundToPx(),
-            )
+        // The selected row's and the list's laid-out heights (before the first layout, the most the row can take and the room).
+        val footerPx = with(density) { footerHeight.roundToPx() }
+        val estimatePx = with(density) { rows.getOrNull(selectedIndex)?.let { sizes.heightOf(it).roundToPx() } ?: 0 }
+        val roomPx = with(density) { maxHeight.roundToPx() }
+        val hasFooter = footer != null
+        val keep by remember(rows, selectedIndex, hasFooter, footerPx, estimatePx, edgePx, roomPx) {
+            derivedStateOf {
+                val info = listState.layoutInfo
+                val rowPx = info.visibleItemsInfo.firstOrNull { it.index == selectedIndex && it.key != NX_LIST_FOOTER_KEY }?.size ?: estimatePx
+                val viewport = info.viewportSize.height.takeIf { it > 0 } ?: roomPx
+                nxFooterKeep(rows, selectedIndex, hasFooter, footerPx, rowPx, edgePx, viewport)
+            }
         }
         NxKeepSelectedInView(
             listState, if (keep == NxFooterKeep.FOOTER) rows.size else selectedIndex, rows.size + (if (footer != null) 1 else 0),
@@ -240,7 +251,7 @@ fun NxSettingsList(
             listState.animateScrollBy(-edgePx.toFloat())
         }
         LazyColumn(
-            Modifier.nxBleed(outStart, outEnd).height(minOf(total, maxHeight)).nxScrollFade(listState, height = fade, strong = true),
+            Modifier.nxBleed(outStart, outEnd).heightIn(max = maxHeight).nxScrollFade(listState, height = fade, strong = true),
             state = listState, flingBehavior = rememberNxRowSnapFling(listState),
         ) {
             itemsIndexed(rows) { i, row ->
@@ -341,7 +352,7 @@ private fun NxSettingTouchRow(
     val choose: ((Int) -> Unit)? = if (row.enabled) onEvent?.let { e -> { k: Int -> e(NxSettingEvent.Choose(index, k)) } } else null
     val info = onEvent?.let { e -> { e(NxSettingEvent.Info(index)) } }
     NxTouchRow(
-        row.label, row.info, row.hasMoreInfo, selected, sizes, sizes.heightOf(row),
+        row.label, row.info, row.hasMoreInfo, selected, sizes,
         onTap = onTap, onInfo = info, onTruncated = onTruncated,
         enabled = row.enabled, warning = row.warning, onLongPress = info,
         below = if (sizes.segmentsBelow(row)) { { NxSegments(row.choices, row.index, sizes.value, info, choose) } } else null,

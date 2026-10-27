@@ -109,20 +109,35 @@ fun nxSettingControl(choices: List<String>): NxSettingControl = when {
 /** A description's most lines on its row; past them it ends in an ellipsis and the name gets the info icon. */
 internal const val SETTING_DESC_LINES = 2
 
-/** The touch rows' sizes from a list row's pitch: the name, the description and its line, the value, the row, a segmented row's extra line. */
+/**
+ * The touch rows' sizes from a list row's pitch: the name, the description and its line, the value, a two-line row
+ * ([row]: the fades' and keep-in-view's measure), a segmented row's extra line. [labelLineDp] and [descLineDp]: the
+ * name's and a description line's height.
+ */
 internal class NxTouchRowSizes(
     val label: TextUnit, val desc: TextUnit, val descLine: TextUnit, val value: TextUnit, val row: Dp, val segments: Dp,
     /** Whether a segmented row's choices fit on its right ([rememberSegmentsFitRight]); else they go under its text. */
     val segmentsRight: (String, List<String>) -> Boolean = { _, _ -> false },
-    /** A row with no description: its name and the air alone. */
+    /** A list gap's measure (an options gap, a spacer): a bare row at least the list's pitch. */
     val bare: Dp = row,
+    val labelLineDp: Dp = 0.dp, val descLineDp: Dp = 0.dp,
 ) {
-    /** A row's height: [bare] without a description, [row] with one; segments under the text add their line ([segments]). */
-    fun height(described: Boolean, segmentsBelow: Boolean): Dp = (if (described) row else bare) + if (segmentsBelow) segments else 0.dp
+    /**
+     * A touch row's height as it lays out: its text (the name's line and its description's [descLines] lines, 0 to
+     * [SETTING_DESC_LINES]) or a taller [control] beside it, [TOUCH_ROW_AIR] above and below whatever it has; segments
+     * under the text add their line ([segments]). Every row the same air: a bare row is no taller for the list's pitch,
+     * a one-line description no taller for a second line it doesn't have.
+     */
+    fun height(descLines: Int, segmentsBelow: Boolean, control: Dp = 0.dp): Dp =
+        maxOf(labelLineDp + descLineDp * descLines.coerceIn(0, SETTING_DESC_LINES), control) + TOUCH_ROW_AIR * 2 +
+            if (segmentsBelow) segments else 0.dp
 }
 
-/** The room above and below a touch row's text (inside its plate, which keeps a 2 dp gap to its neighbours). */
-private val TOUCH_ROW_AIR = 12.dp
+/** The room above and below a touch row's text, the same on every row (its 2 dp gap to its neighbours, outside its plate, included). */
+internal val TOUCH_ROW_AIR = 12.dp
+
+/** A touch row's gap to its neighbours, outside its plate (part of [TOUCH_ROW_AIR]). */
+private val TOUCH_ROW_GAP = 2.dp
 
 /** The touch rows' sizes for list rows [itemHeight] high and [rowWidth] wide, the description [descOfLabel] of the name. */
 @Composable
@@ -131,16 +146,17 @@ internal fun nxTouchRowSizes(itemHeight: Dp, rowWidth: Dp, descOfLabel: Float): 
     val label = nxOptionsLabelSize(listText)
     val desc = label * descOfLabel
     val descLine = desc * 1.25f
-    // The name, two description lines and [TOUCH_ROW_AIR] above and below them, every described row the same height
-    // (the snap and fades as elsewhere), so a selected row's plate has room.
-    val row = with(LocalDensity.current) { (label * 1.25f).toDp() + (descLine * SETTING_DESC_LINES).toDp() } + TOUCH_ROW_AIR * 2
+    // The name, two description lines and [TOUCH_ROW_AIR] above and below them: the fades' and keep-in-view's measure.
+    val labelLine = with(LocalDensity.current) { (label * 1.25f).toDp() }
+    val descLineDp = with(LocalDensity.current) { descLine.toDp() }
+    val row = labelLine + descLineDp * SETTING_DESC_LINES + TOUCH_ROW_AIR * 2
     val value = nxOptionsValueSize(listText)
     // The segments' line under a segmented row's text: the track (2 dp inset, a choice's 5 dp padding, its text) and a gap.
     val segments = with(LocalDensity.current) { (value * 0.9f).toDp() } + (2.dp + 5.dp) * 2 + 2.dp + SEGMENTS_GAP
     val bare = with(LocalDensity.current) { (label * 1.25f).toDp() } + TOUCH_ROW_AIR * 2
     return NxTouchRowSizes(
         label, desc, descLine, value, maxOf(row, itemHeight), segments, rememberSegmentsFitRight(value, label, rowWidth - NxOptionsInnerPad * 2),
-        maxOf(bare, itemHeight),
+        maxOf(bare, itemHeight), labelLine, descLineDp,
     )
 }
 
@@ -154,7 +170,8 @@ internal fun nxInfoIconShown(selected: Boolean, truncated: Boolean, moreInfo: Bo
 private const val SOFT_SELECTION_ALPHA = 0.16f
 
 /**
- * One touch row [height] high: the [label] (bold) with the info icon while it is [selected] and the [info] line is cut
+ * One touch row, as tall as its text ([NxTouchRowSizes.height]: the name's line, the description's own lines, the same
+ * [TOUCH_ROW_AIR] above and below on every row): the [label] (bold) with the info icon while it is [selected] and the [info] line is cut
  * off or [moreInfo] says there is more ([nxInfoIconShown]), the description under it (at most [SETTING_DESC_LINES], the warning colour when [warning]), and the
  * [control] on the right, or [below] under the text (a segmented row's segments that don't fit on the right): at its
  * start, right-aligned in the Settings rows block ([LocalSettingsBlock]). Selected: a soft rounded plate behind it, so the control stays readable; not [enabled]: dimmed. [onInfo] null:
@@ -163,7 +180,7 @@ private const val SOFT_SELECTION_ALPHA = 0.16f
  */
 @Composable
 internal fun NxTouchRow(
-    label: String, info: String, moreInfo: Boolean, selected: Boolean, sizes: NxTouchRowSizes, height: Dp,
+    label: String, info: String, moreInfo: Boolean, selected: Boolean, sizes: NxTouchRowSizes,
     onTap: () -> Unit, onInfo: (() -> Unit)?, onTruncated: (String, Boolean) -> Unit,
     enabled: Boolean = true, warning: Boolean = false,
     onLongPress: (() -> Unit)? = null,
@@ -175,15 +192,16 @@ internal fun NxTouchRow(
     var truncated by remember(info) { mutableStateOf(false) }
     LaunchedEffect(selected, truncated, info) { if (selected && info.isNotBlank()) onTruncated(info, truncated) }
     Column(
-        Modifier.fillMaxWidth().height(height).padding(vertical = 2.dp).clip(shape)
+        Modifier.fillMaxWidth().padding(vertical = TOUCH_ROW_GAP).clip(shape)
             .then(if (selected) Modifier.background(colors.accent.copy(alpha = SOFT_SELECTION_ALPHA), shape) else Modifier)   // role: a touch row's soft selection
-            .nxTapOrHold(onTap, onLongPress).padding(horizontal = NxOptionsInnerPad)
+            .nxTapOrHold(onTap, onLongPress).padding(horizontal = NxOptionsInnerPad, vertical = TOUCH_ROW_AIR - TOUCH_ROW_GAP)
             .alpha(if (enabled) 1f else NX_DISABLED_ALPHA),   // role: a disabled row
         verticalArrangement = Arrangement.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // The name's line exactly (the info icon, a touch taller, overflows it rather than growing the row when it shows).
+                Row(Modifier.height(sizes.labelLineDp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         label, color = colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold,
                         fontSize = sizes.label, lineHeight = sizes.label * 1.25f, maxLines = 1, overflow = TextOverflow.Ellipsis,

@@ -16,6 +16,10 @@ import com.nxredux.mobile.ui.nx.fullInfo
 import com.nxredux.mobile.ui.nx.hasMoreInfo
 import com.nxredux.mobile.ui.nx.nxSettingControl
 import com.nxredux.mobile.ui.nx.nxSwitchOnIndex
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.nxredux.mobile.ui.nx.NxTouchRowSizes
+import com.nxredux.mobile.ui.nx.TOUCH_ROW_AIR
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -90,6 +94,19 @@ class SettingsTouchRowsTest {
         assertEquals("Home tab, its layout, shelves and stats", layoutGroupDescription(SettingsSection.LAYOUT_HOME))
         assertEquals(null, layoutGroupDescription(SettingsSection.MAIN_MENU))
         assertEquals(null, layoutGroupDescription(SettingsSection.APPEARANCE))
+    }
+
+    // Every touch row: its text (the name, then its description's own lines) with the same air above and below.
+    @Test fun touchRowsKeepTheSameAirWhateverTheirText() {
+        val sizes = NxTouchRowSizes(16.sp, 14.4.sp, 18.sp, 14.sp, row = 100.dp, segments = 30.dp, bare = 64.dp, labelLineDp = 20.dp, descLineDp = 18.dp)
+        val air = TOUCH_ROW_AIR * 2
+        assertEquals(20.dp + air, sizes.height(descLines = 0, segmentsBelow = false))            // the name alone: no list-pitch minimum
+        assertEquals(20.dp + 18.dp + air, sizes.height(descLines = 1, segmentsBelow = false))   // one line: no room for a second
+        assertEquals(20.dp + 36.dp + air, sizes.height(descLines = 2, segmentsBelow = false))
+        assertEquals(sizes.height(2, false), sizes.height(5, false))                              // at most two lines (then an ellipsis)
+        assertEquals(20.dp + 18.dp + air + 30.dp, sizes.height(descLines = 1, segmentsBelow = true))   // segments under the text add their line
+        assertEquals(24.dp + air, sizes.height(descLines = 0, segmentsBelow = false, control = 24.dp))   // a switch taller than the name
+        for (lines in 0..2) assertEquals(air, sizes.height(lines, false) - (20.dp + 18.dp * lines))
     }
 
     @Test fun aKeptRowShowsItsShortLine() {
