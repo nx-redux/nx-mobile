@@ -266,6 +266,8 @@ class ShortcutsSettingsTest {
         s.bind(ShortcutAction.TOGGLE_FF); s.press(KeyCodes.BUTTON_R1)
         s.select(s.page().rows.indexOfFirst { it.label == "Touch button 2" }); s.onButton(NxButton.RIGHT)
         s.select(s.page().rows.lastIndex); s.openSelected()
+        assertTrue(s.page().confirmReset)                       // Clear all asks first
+        s.onButton(NxButton.A)
         assertTrue(s.page().rows.filter { it.kind != SettingsKind.RESET_DEFAULTS }.all { it.secondary == "None" })
     }
 

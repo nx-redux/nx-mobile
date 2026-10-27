@@ -1595,7 +1595,7 @@ class AppStateTest {
         state.onButton(NxButton.A); assertTrue(settings.showSearchHint)
         settings.showRecentHint = false
         state.onButton(NxButton.B)                                           // Reset to defaults is on Layouts itself
-        state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A)
+        state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A); state.onButton(NxButton.A)   /* asks, then Reset */
         assertTrue(settings.showRecentHint)
         settings.menuButtonHints = false
         state.openSettings(SettingsSection.LAYOUT_TITLE_HINTS)
@@ -5509,7 +5509,7 @@ class AppStateTest {
         assertEquals(PadButtons.GREY, settings.padButtons)
         state.onButton(NxButton.LEFT)
         assertEquals(PadButtons.OUTLINE, settings.padButtons)
-        state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A)
+        state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A); state.onButton(NxButton.A)   /* asks, then Reset */
         assertEquals(PadTheme.CHARCOAL, settings.padTheme)
         assertEquals(PadButtons.GREY, settings.padButtons)
         assertEquals(null, rows().firstOrNull { it.kind == SettingsKind.PAD_BUTTONS })   // gone with Black
@@ -9906,6 +9906,8 @@ class AppStateTest {
         state.openSettings(SettingsSection.APPEARANCE)
         val reset = assertIs<Screen.Settings>(state.screen.value).rows.lastIndex
         state.select(reset); state.onButton(NxButton.A)
+        assertTrue(assertIs<Screen.Settings>(state.screen.value).confirmReset)   // asks first
+        state.onButton(NxButton.A)
         assertAppearanceAtDefaults(settings)
         assertEquals(MenuStyle.BACKDROP, settings.gameListStyle)            // Layouts' options stay
         assertEquals(ConsoleArt.NONE, settings.consoleArt)
@@ -9913,7 +9915,7 @@ class AppStateTest {
         assertEquals(false, settings.menuButtonHints)
         assertEquals(false, settings.menuExtraInfo)
         val page = assertIs<Screen.Settings>(state.screen.value)
-        assertEquals(SettingsSection.APPEARANCE, page.section)                        // no dialog, no page change
+        assertEquals(SettingsSection.APPEARANCE, page.section); assertFalse(page.confirmReset)   // the question gone, no page change
         assertEquals(listOf("Charcoal", "White"), page.rows.take(2).map { it.secondary })   // the rows re-read
         assertEquals(ListSelection(reset, page.rows.size), state.selection.value)       // still on the reset row
     }
@@ -9923,7 +9925,7 @@ class AppStateTest {
         val state = state(settings)
         state.load()
         state.openSettings(SettingsSection.MAIN_MENU)
-        state.select(assertIs<Screen.Settings>(state.screen.value).rows.lastIndex); state.onButton(NxButton.A)
+        state.select(assertIs<Screen.Settings>(state.screen.value).rows.lastIndex); state.onButton(NxButton.A); state.onButton(NxButton.A)   // asks, then Reset
         assertLayoutsAtDefaults(settings)                     // Page title and Button hints too
         assertEquals(PadTheme.RETRO, settings.padTheme)       // Appearance's own options stay
         assertEquals(AccentPreset.RED, settings.accent)
@@ -10030,7 +10032,7 @@ class AppStateTest {
         settings.padLayouts = PadLayouts.withLayout(settings.padLayouts, PadLayouts.SHARED_KEY, wide, l)
         state.onPadLayoutEdited()
         state.select(3)
-        state.onButton(NxButton.A)                               // Reset console: this screen's only
+        state.onButton(NxButton.A); state.onButton(NxButton.A)   // Reset console (asks, then Reset): this screen's only
         assertEquals(mapOf(PadLayouts.SHARED_KEY to mapOf(narrow to l)), settings.padLayouts)
     }
 
@@ -10089,7 +10091,7 @@ class AppStateTest {
         while (rows()[0].secondary != "Game Boy Advance") state.onButton(NxButton.RIGHT)
         assertEquals(listOf("Default", "Custom"), rows().subList(1, 3).map { it.secondary })
         state.select(3)
-        state.onButton(NxButton.A)
+        state.onButton(NxButton.A); state.onButton(NxButton.A)   // asks, then Reset
         assertEquals(mapOf(PadLayouts.SHARED_KEY to mapOf(PadSlot(PadShape.PORTRAIT, PadScreen.NARROW) to l)), settings.padLayouts)
         assertEquals(listOf("Shared", "Shared"), rows().subList(1, 3).map { it.secondary })
     }
@@ -10106,6 +10108,9 @@ class AppStateTest {
         while (assertIs<Screen.Settings>(state.screen.value).rows[0].secondary != "Game Boy Advance") state.onButton(NxButton.RIGHT)
         state.select(3)
         state.onButton(NxButton.A)
+        assertEquals(l, settings.padLayouts["gba"]?.get(PadSlot(PadShape.PORTRAIT, PadScreen.NARROW)))   // asked: nothing yet
+        assertEquals("Reset pad layouts?", settingsResetAsk(assertIs<Screen.Settings>(state.screen.value), 3)?.title)
+        state.onButton(NxButton.A)
         assertEquals(mapOf(PadLayouts.SHARED_KEY to mapOf(PadSlot(PadShape.PORTRAIT, PadScreen.NARROW) to l)), settings.padLayouts)
         assertEquals(settings.padLayouts, state.padLayouts.value)
         assertEquals(SettingsKind.PAD_LAYOUT_RESET, assertIs<Screen.Settings>(state.screen.value).rows[state.selection.value.index].kind)
@@ -10119,7 +10124,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.CONTROLS)
         assertEquals("Custom", assertIs<Screen.Settings>(state.screen.value).rows[3].secondary)
         state.select(5)
-        state.onButton(NxButton.A)
+        state.onButton(NxButton.A); state.onButton(NxButton.A)   // asks, then Reset
         assertEquals(emptyMap(), settings.padLayouts)
         assertEquals(emptyMap(), state.padLayouts.value)
         assertEquals("Default", assertIs<Screen.Settings>(state.screen.value).rows[3].secondary)
@@ -10464,7 +10469,7 @@ class AppStateTest {
         state.onButton(NxButton.RIGHT)
         assertEquals(com.nxredux.mobile.settings.OptionTextSize.LARGE, settings.optionTextSize)
         state.onButton(NxButton.LEFT)
-        state.select(assertIs<Screen.Settings>(state.screen.value).rows.indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A)
+        state.select(assertIs<Screen.Settings>(state.screen.value).rows.indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A); state.onButton(NxButton.A)   /* asks, then Reset */
         assertEquals(com.nxredux.mobile.settings.OptionTextSize.LARGE, settings.optionTextSize)
     }
 
@@ -10684,6 +10689,51 @@ class AppStateTest {
         state.select(0)
         state.settingEvent(NxSettingEvent.Info(version))                          // no description: nothing
         assertNull(state.settingInfo.value); assertEquals(0, state.selection.value.index)
+    }
+
+    // Every Settings reset asks first: the row (A or a tap) shows the question and changes nothing; Reset (A) resets,
+    // Cancel (B) or Back keeps everything. Layouts' Reset to defaults, Shortcuts' Clear all, the preview pane's tap too.
+    @Test fun settings_resets_ask_first() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        state.openSettings(SettingsSection.MAIN_MENU)
+        fun page() = assertIs<Screen.Settings>(state.screen.value)
+        settings.menuExtraInfo = false
+        val reset = page().rows.indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }
+        labelTap(state, reset)                                                    // a tap: the question, nothing reset
+        assertTrue(page().confirmReset); assertFalse(settings.menuExtraInfo)
+        assertEquals("Reset to defaults?", settingsResetAsk(page(), state.selection.value.index)?.title)
+        state.onButton(NxButton.DOWN)                                             // the dialog holds the pad
+        assertEquals(reset, state.selection.value.index)
+        state.onButton(NxButton.B)                                                // Cancel: kept
+        assertFalse(page().confirmReset); assertFalse(settings.menuExtraInfo)
+        state.onButton(NxButton.A)                                                // A on the row: asks again
+        assertTrue(page().confirmReset)
+        assertTrue(state.back())                                                  // Back: kept, still on the page
+        assertFalse(page().confirmReset); assertFalse(settings.menuExtraInfo); assertEquals(SettingsSection.MAIN_MENU, page().section)
+        state.onButton(NxButton.A); state.onButton(NxButton.A)                    // ask, then Reset
+        assertFalse(page().confirmReset); assertTrue(settings.menuExtraInfo)
+        // Shortcuts' Clear all asks with its own words.
+        state.openSettings(SettingsSection.SHORTCUTS)
+        val clear = page().rows.indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }
+        state.select(clear); state.onButton(NxButton.A)
+        assertTrue(page().confirmReset)
+        assertEquals("Clear all shortcuts?", settingsResetAsk(page(), clear)?.title)
+        state.onButton(NxButton.B)
+        assertFalse(page().confirmReset)
+    }
+
+    @Test fun split_preview_tap_on_reset_asks_first() = runTest {
+        val (state, settings) = splitSettings()
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN)             // Appearance, previewed
+        val theme = settings.padTheme
+        val preview = state.settingsPreview(SettingsSection.APPEARANCE)
+        val reset = preview.rows.indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }
+        nxSettingRowTap(settingsTouchRow(preview.rows[reset], preview.choices[reset], preview.section), reset, state::settingsPreviewTap, state::settingsPreviewTap)
+        val page = assertIs<Screen.Settings>(state.screen.value)
+        assertEquals(SettingsSection.APPEARANCE, page.section); assertTrue(page.confirmReset)
+        assertEquals(theme, settings.padTheme)
     }
 
     // A row's full description: its info icon or X (when its line is cut off or says less) opens it; A, B or X close it.
@@ -10960,7 +11010,7 @@ class AppStateTest {
         val state = state(settings, rumblePreview = { previews += it })
         state.load()
         state.openSettings(SettingsSection.CONTROLS)
-        state.select(5); state.onButton(NxButton.A)
+        state.select(5); state.onButton(NxButton.A); state.onButton(NxButton.A)   // asks, then Reset
         assertEquals(PadVibration.LIGHT, settings.padVibration)
         assertEquals(GameRumble.MEDIUM, settings.gameRumble)
         assertEquals(true, settings.menuPad)
@@ -11227,7 +11277,7 @@ class AppStateTest {
         assertEquals(listOf(HomeShelf.NOT_STARTED to 3), state.homeView.value.shelves)
         settings.showNewShelf = false; settings.showNotStartedShelf = false
         state.onButton(NxButton.B)                                       // Reset to defaults is on Layouts itself
-        state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A)
+        state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A); state.onButton(NxButton.A)   /* asks, then Reset */
         assertTrue(settings.showNewShelf && settings.showNotStartedShelf)
     }
 
@@ -11242,7 +11292,7 @@ class AppStateTest {
         state.select(rows().indexOfFirst { it.shelf == HomeShelf.NOT_STARTED }); state.onButton(NxButton.RIGHT); advanceUntilIdle()
         assertEquals(emptyList(), state.homeView.value.shelves)
         state.onButton(NxButton.B)                                       // Layouts
-        state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A); advanceUntilIdle()
+        state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A); state.onButton(NxButton.A)   /* asks, then Reset */; advanceUntilIdle()
         assertTrue(settings.showNotStartedShelf)
         assertEquals(listOf(HomeShelf.NOT_STARTED to 3), state.homeView.value.shelves)   // Home rebuilt with it
     }

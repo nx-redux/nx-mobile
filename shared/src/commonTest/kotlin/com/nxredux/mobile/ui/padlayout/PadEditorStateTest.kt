@@ -72,6 +72,25 @@ class PadEditorStateTest {
         assertEquals(PadLayout.EMPTY, s.layout)
     }
 
+    // The toolbar's resets ask first: nothing changes until Reset; Cancel keeps the layout.
+    @Test fun resets_ask_first() {
+        val tweaked = PadLayout(mapOf(PadGroup.DPAD to GroupTweak(dx = 1f), PadGroup.FACE to GroupTweak(dy = 1f)))
+        val s = state(tweaked)
+        s.askReset(PadReset.GROUP)                                       // nothing selected: no question
+        assertNull(s.confirmReset)
+        s.select(PadGroup.DPAD)
+        s.askReset(PadReset.GROUP)
+        assertEquals(PadReset.GROUP, s.confirmReset); assertEquals(tweaked, s.layout)
+        s.keepLayout()
+        assertNull(s.confirmReset); assertEquals(tweaked, s.layout)
+        s.askReset(PadReset.GROUP); s.confirmResetNow()
+        assertEquals(setOf(PadGroup.FACE), s.layout.tweaks.keys); assertNull(s.confirmReset)
+        s.askReset(PadReset.ALL)
+        assertEquals(setOf(PadGroup.FACE), s.layout.tweaks.keys)
+        s.confirmResetNow()
+        assertEquals(PadLayout.EMPTY, s.layout)
+    }
+
     @Test fun overlapping_groups_are_reported() {
         val s = state()
         assertEquals(emptySet(), s.overlapping())

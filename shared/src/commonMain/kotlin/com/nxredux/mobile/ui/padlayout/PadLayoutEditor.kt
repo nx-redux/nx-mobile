@@ -233,6 +233,17 @@ fun PadLayoutEditor(
                 Modifier.align(if (shape == PadShape.PORTRAIT) Alignment.BottomCenter else Alignment.Center),
             )
         }
+        state.confirmReset?.let { reset ->
+            NxModal(
+                caption = if (reset == PadReset.ALL) "Reset all?" else "Reset this group?", kind = ModalKind.CONFIRM,
+                onButton = { b -> if (b == NxButton.A) state.confirmResetNow() else state.keepLayout() }, confirmLabel = "Reset", cancelLabel = "Cancel",
+            ) {
+                Text(
+                    if (reset == PadReset.ALL) "Every group goes back to its default place and size." else "This group goes back to its default place and size.",
+                    color = colors.listText, fontFamily = LocalNxFont.current, fontSize = 18.sp,
+                )
+            }
+        }
         if (state.confirmDiscard) {
             NxModal(caption = null, kind = ModalKind.CONFIRM, onButton = { b -> if (b == NxButton.A) onClose() else state.keepEditing() }, confirmLabel = "Discard", cancelLabel = "Keep editing") {
                 Text("Discard changes?", color = colors.listText, fontFamily = LocalNxFont.current, fontSize = 18.sp)
@@ -341,8 +352,8 @@ private fun EditorToolbar(title: String, shape: PadShape, state: PadEditorState,
             color = colors.hint, fontFamily = font, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            ToolbarButton("Reset", enabled = sel != null) { state.resetGroup() }
-            ToolbarButton("Reset all") { state.resetAll() }
+            ToolbarButton("Reset", enabled = sel != null) { state.askReset(PadReset.GROUP) }   // both ask first
+            ToolbarButton("Reset all") { state.askReset(PadReset.ALL) }
             ToolbarButton("Cancel", onClick = onCancel)
             ToolbarButton("Save", primary = true, onClick = onSave)
         }

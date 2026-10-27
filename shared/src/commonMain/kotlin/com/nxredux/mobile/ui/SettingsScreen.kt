@@ -85,6 +85,7 @@ fun SettingsScreen(
             )
         }
         if (dialog && screen.confirmRemove != null) SettingsRemoveDialog(onHint)
+        if (dialog && screen.confirmReset) settingsResetAsk(screen, selectedIndex)?.let { SettingsResetDialog(it, onHint) }
     }
 }
 
@@ -126,6 +127,7 @@ private fun SettingsTouchPage(
             )
         }
         if (dialog && screen.confirmRemove != null) SettingsRemoveDialog(onHint)
+        if (dialog && screen.confirmReset) settingsResetAsk(screen, selectedIndex)?.let { SettingsResetDialog(it, onHint) }
     }
 }
 
@@ -190,6 +192,37 @@ internal fun settingsTouchRow(row: SettingsRow, choices: SettingChoices?, sectio
         segmented = row.kind in SEGMENTED_KINDS,
         warning = row.warning,
         button = "Rescan".takeIf { row.kind == SettingsKind.RESCAN },   // Library's counts row: the button on their right
+    )
+}
+
+/** A reset's question: its title, the one line saying what it puts back, and its confirm button. */
+internal data class SettingsResetAsk(val title: String, val text: String, val confirm: String)
+
+/**
+ * What [page]'s reset row at [selected] asks before it acts ([Screen.Settings.confirmReset]): Shortcuts' Clear all,
+ * Pad layout's Reset console, every other page's Reset to defaults with that page's scope. Null for any other row.
+ */
+internal fun settingsResetAsk(page: Screen.Settings, selected: Int): SettingsResetAsk? = when (page.rows.getOrNull(selected)?.kind) {
+    SettingsKind.RESET_DEFAULTS -> when (page.section) {
+        SettingsSection.SHORTCUTS -> SettingsResetAsk("Clear all shortcuts?", "Every action goes back to None and both touch buttons come off the pad.", "Clear all")
+        SettingsSection.APPEARANCE -> SettingsResetAsk("Reset to defaults?", "Pad theme, Pad buttons, Accent, Secondary accent and Text size go back to their defaults.", "Reset")
+        SettingsSection.MAIN_MENU -> SettingsResetAsk("Reset to defaults?", "Every Layouts group and Extra info go back to their defaults.", "Reset")
+        SettingsSection.CONTROLS -> SettingsResetAsk("Reset to defaults?", "Vibration, Menu pad and every pad layout go back to their defaults.", "Reset")
+        else -> SettingsResetAsk("Reset to defaults?", "This page's settings go back to their defaults.", "Reset")
+    }
+    SettingsKind.PAD_LAYOUT_RESET -> {
+        val console = page.rows.firstOrNull { it.kind == SettingsKind.PAD_LAYOUT_CONSOLE }?.secondary ?: "This console"
+        SettingsResetAsk("Reset pad layouts?", "$console's pad layouts on this screen go back to their defaults.", "Reset")
+    }
+    else -> null
+}
+
+/** [ask] over the page ([Screen.Settings.confirmReset]): A resets, B (Cancel) keeps everything. */
+@Composable
+internal fun SettingsResetDialog(ask: SettingsResetAsk, onHint: ((NxButton) -> Unit)?) {
+    NxDialog(
+        ask.title, ask.text,
+        onConfirm = { onHint?.invoke(NxButton.A) }, confirmLabel = ask.confirm, onCancel = { onHint?.invoke(NxButton.B) },
     )
 }
 

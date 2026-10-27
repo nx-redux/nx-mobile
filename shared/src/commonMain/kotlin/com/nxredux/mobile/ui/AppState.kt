@@ -384,6 +384,8 @@ sealed interface Screen {
         val shot: LayoutShot? = null, val banner: String? = null,
         /** Each row's values for its touch control ([SettingChoices]), in [rows]' order; null for a row that holds none. */
         val choices: List<SettingChoices?> = emptyList(),
+        /** The selected reset row (Reset to defaults, Clear all, Reset console) asks first ([settingsResetConfirm]): A resets, B keeps. */
+        val confirmReset: Boolean = false,
     ) : Screen
     /** Tools -> Settings: one row per section. */
     data class SettingsMenu(val sections: List<SettingsSection>) : Screen
@@ -3713,7 +3715,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      */
     fun settingsCategoryTap(index: Int) {
         if (loader.active) return
-        if ((_screen.value as? Screen.Settings)?.confirmRemove != null) return   // the Remove folder dialog answers first
+        if ((_screen.value as? Screen.Settings)?.let { it.confirmRemove != null || it.confirmReset } == true) return   // a dialog answers first
         if (_screen.value is Screen.SettingsMenu) {
             if (index == _selection.value.index) openSelected() else select(index)
             return
@@ -4590,6 +4592,14 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /** Settings sections and the section menu: UP/DOWN move, A opens or acts, B goes back. */
     private fun onSettingsButton(s: Screen, button: NxButton) {
+        (s as? Screen.Settings)?.takeIf { it.confirmReset }?.let { page ->
+            when (button) {
+                NxButton.A -> { _screen.value = page.copy(confirmReset = false); runSettingsReset(page) }
+                NxButton.B -> _screen.value = page.copy(confirmReset = false)
+                else -> Unit
+            }
+            return
+        }
         (s as? Screen.Settings)?.confirmRemove?.let { extra ->
             when (button) {
                 NxButton.A -> removeExtra(extra)
@@ -4616,6 +4626,15 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             } else (s as? Screen.Settings)?.rows?.getOrNull(_selection.value.index)?.let { row ->
                 if (row.enabled) settingValue(row)?.change(if (button == NxButton.LEFT) -1 else 1)   // a dimmed row (one tag) stays
             }
+            else -> Unit
+        }
+    }
+
+    /** The confirmed reset of [page]'s selected row: Reset to defaults (Shortcuts' Clear all) or Pad layout's Reset console. */
+    private fun runSettingsReset(page: Screen.Settings) {
+        when (page.rows.getOrNull(_selection.value.index)?.kind) {
+            SettingsKind.RESET_DEFAULTS -> resetToDefaults(page.section)
+            SettingsKind.PAD_LAYOUT_RESET -> resetPadLayoutConsole()
             else -> Unit
         }
     }
@@ -5699,7 +5718,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                     SettingsKind.IMPORT_DONE -> leaveSubPage(SettingsSection.IMPORT_RESULT)
                     SettingsKind.PAD_LAYOUT -> { sectionSelections[s.section] = _selection.value; padLayoutConsole = PadLayouts.SHARED_KEY; openSettings(SettingsSection.PAD_LAYOUT) }
                     SettingsKind.PAD_LAYOUT_SHAPE -> row.padShape?.let { openPadEditor(it) }
-                    SettingsKind.PAD_LAYOUT_RESET -> resetPadLayoutConsole()
+                    SettingsKind.PAD_LAYOUT_RESET -> _screen.value = s.copy(confirmReset = true)   // asks first
                     SettingsKind.SHORTCUTS -> { sectionSelections[s.section] = _selection.value; openSettings(SettingsSection.SHORTCUTS) }
                     // Without a controller too: one plugged in next answers it (the row says to connect one).
                     SettingsKind.SHORTCUT_BIND -> row.shortcut?.let(::startCapture)
@@ -5711,7 +5730,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                     SettingsKind.APP_UPDATE -> deps.updater?.let(::appUpdateRowA)
                     SettingsKind.HOME_SCREEN -> deps.launcher?.let { it.setHome(!it.isHome()); refreshSettings() }
                     SettingsKind.ANDROID_GAMES -> openToolApps(AppPick.GAMES)
-                    SettingsKind.RESET_DEFAULTS -> resetToDefaults(s.section)
+                    SettingsKind.RESET_DEFAULTS -> _screen.value = s.copy(confirmReset = true)   // asks first
                     SettingsKind.ALL_FILES -> deps.allFilesAccess?.openSettings()
                     SettingsKind.MIC_ACCESS -> deps.micAccess?.request()
                     else -> Unit   // a value row with nothing to step ([settingValue] null): as before, nothing
@@ -6406,7 +6425,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 else if (s.menu != null) { if (!s.menu.busy) closeContextMenu(); true }
                 else if (s.pushed) { popHiddenTab(); true }
                 else false
-            is Screen.Settings -> {
+            is Screen.Settings -> if (s.confirmReset) { _screen.value = s.copy(confirmReset = false); true } else {   // Back keeps the settings
                 sectionSelections[s.section] = _selection.value
                 // A sub-page goes back to its section. Library or Emulators: after a change ([libraryDirty]), or an extra set
                 // or default tag changed behind the page's back (it fails the fit), it reloads (rescanning if needed); either
