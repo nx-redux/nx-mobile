@@ -83,8 +83,6 @@ data class NxColors(
     val inkRing: Color = main.copy(alpha = 0.30f)
     /** Hairlines: a tile's edge, a placeholder spine, a sheet's edge. The [main] ink at 8%. */
     val inkEdge: Color = main.copy(alpha = 0.08f)
-    /** The help circle as the X button's glyph on a focused Settings row while a pad is in use: the [main] ink at 42%. */
-    val inkHelpGlyph: Color = main.copy(alpha = 0.42f)
     /** The small NX mark at the top right of Settings (SettingsMark): the [main] ink at 5%. */
     val inkMark: Color = main.copy(alpha = 0.05f)
     /** The Settings help note's inner card border (NxSettingInfoPopup): the [main] ink at 10%. */

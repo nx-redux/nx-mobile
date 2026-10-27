@@ -327,20 +327,11 @@ private fun NxRowAction(word: String, size: TextUnit) {
     }
 }
 
-/**
- * The info icon, sized from the description; a tap ([onClick], null none) shows the full text. With a pad in use it is
- * the X button's glyph in [NxColors.inkHelpGlyph] (X opens the help); touch alone, a question mark in a circle.
- */
+/** The info icon: a question mark in a circle, sized from the description; a tap ([onClick], null none) shows the full text. */
 @Composable
 private fun NxInfoIcon(textSize: TextUnit, onClick: (() -> Unit)?) {
     val colors = LocalNxColors.current
     val disc = with(LocalDensity.current) { (textSize * 1.25f).toDp() }
-    if (LocalFooterMode.current == FooterMode.HINTS) {
-        Box(Modifier.clip(CircleShape).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 6.dp, vertical = 2.dp)) {
-            NxButtonGlyph(NxButton.X, disc, tint = colors.inkHelpGlyph)
-        }
-        return
-    }
     // The padding widens the tap target past the small disc.
     Box(
         Modifier.clip(CircleShape).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 6.dp, vertical = 2.dp),
