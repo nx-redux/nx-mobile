@@ -107,7 +107,8 @@ private val HelpScrollStep = 72.dp
 /**
  * A row's help note ([note] null: none; it fades out): two layers (the accent-faint sheet, a black card with the row's
  * name in [NxColors.inkDim] and the text in full ink) beside the focused row, which stays lit through the scrim around
- * it. No OK row: A, B, X (the host) or a tap anywhere close it ([onClose]); UP / DOWN scroll it ([NxHelpText.scrollSeq]).
+ * it. No OK row: A, B, X (the host) or a tap anywhere close it ([onClose]); UP / DOWN scroll it ([NxHelpText.scrollSeq]),
+ * a Scroll hint under the card while it can (a pad in use).
  */
 @Composable
 fun NxSettingInfoPopup(note: NxHelpText?, onClose: () -> Unit) {
@@ -145,9 +146,9 @@ fun NxSettingInfoPopup(note: NxHelpText?, onClose: () -> Unit) {
                         val body = 16.sp * nxTextScale()   // Appearance → Text size
                         Text(n.text, color = colors.main, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal, fontSize = body, lineHeight = body * 1.45f)
                     }
-                    // No OK row: with a pad, a one-word bar under the card (Close, and Scroll while the d-pad scrolls it).
-                    if (LocalFooterMode.current == FooterMode.HINTS) {
-                        val hints = listOfNotNull(Hint(NxButton.DOWN, "Scroll").takeIf { scroll.maxValue > 0 }, Hint(NxButton.B, "Close"))
+                    // No OK row and no Close (B closes, as anywhere): with a pad, only Scroll under the card while the d-pad scrolls it.
+                    if (LocalFooterMode.current == FooterMode.HINTS && scroll.maxValue > 0) {
+                        val hints = listOf(Hint(NxButton.DOWN, "Scroll"))
                         NxHintBar(
                             hints, Modifier.padding(top = 4.dp), scrim = Color.Transparent, always = true,
                             onHint = { b -> if (b == NxButton.DOWN) hintScope.launch { if (scroll.canScrollForward) scroll.animateScrollBy(stepPx) else scroll.animateScrollTo(0) } else onClose() },
