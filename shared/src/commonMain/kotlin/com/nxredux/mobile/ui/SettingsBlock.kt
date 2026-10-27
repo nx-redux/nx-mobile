@@ -238,8 +238,11 @@ private const val SETTINGS_CRUMB_SEPARATOR = " / "
 /** Set while a Settings page is drawn as the rows block ([SettingsBlockMode]); null everywhere else (a page draws whole). */
 val LocalSettingsBlock = compositionLocalOf<SettingsBlockMode?> { null }
 
-/** The rows block's fade at an edge it scrolls past. */
-val SETTINGS_ROWS_FADE = 24.dp
+/**
+ * The rows block's fade at an edge it scrolls past, in rows of its list: from the second-last row in view down to black
+ * at the last one's far edge (and the same at the top). The selection is kept clear of it.
+ */
+const val SETTINGS_ROWS_FADE_ROWS = 2
 
 /** The least room the rows block leaves above it when it fills the height (it then scrolls). */
 val SETTINGS_ROWS_TOP = 24.dp
@@ -303,7 +306,7 @@ private class SectionWidthSlot {
  * gutter in from both sides; wide: the fixed frame's width ([settingsFrameWidth]), its right edge the gutter in. Its
  * first line is [title] in hint at 13 sp (after [mode]'s crumb in inkDim), level with the row labels and 6 dp above the
  * first row; then [header] (a banner, a page's lines), then [rows], which take what is left and scroll there (each list
- * fades the edge it has more beyond, [SETTINGS_ROWS_FADE]). No pane header, nothing at the top.
+ * fades the edge it has more beyond over [SETTINGS_ROWS_FADE_ROWS] rows). No pane header, nothing at the top.
  */
 @Composable
 fun SettingsRowsBlock(
@@ -336,9 +339,9 @@ fun SettingsRowsBlock(
     }
 }
 
-/** A list's edge fade: [SETTINGS_ROWS_FADE] in the rows block, else the list's own [default]. */
+/** A list's edge fade: [SETTINGS_ROWS_FADE_ROWS] of its [row] pitch in the rows block, else the list's own [default]. */
 @Composable
-fun settingsRowsFade(default: Dp): Dp = if (LocalSettingsBlock.current != null) SETTINGS_ROWS_FADE else default
+fun settingsRowsFade(row: Dp, default: Dp): Dp = if (LocalSettingsBlock.current != null) row * SETTINGS_ROWS_FADE_ROWS else default
 
 
 /**
@@ -354,9 +357,9 @@ internal fun SettingsWordList(
     val colors = LocalNxColors.current
     val style = settingsWordStyle()
     val tapOpens = LocalNxTapOpens.current
-    NxKeepSelectedInView(listState, selection, rows.size, 1)
+    NxKeepSelectedInView(listState, selection, rows.size, SETTINGS_ROWS_FADE_ROWS)   // the selection clear of the fade
     LazyColumn(
-        modifier.nxScrollFade(listState, height = SETTINGS_ROWS_FADE, strong = true),
+        modifier.nxScrollFade(listState, height = settingsWordPitch(style) * SETTINGS_ROWS_FADE_ROWS, strong = true),
         state = listState,
     ) {
         itemsIndexed(rows) { i, row ->

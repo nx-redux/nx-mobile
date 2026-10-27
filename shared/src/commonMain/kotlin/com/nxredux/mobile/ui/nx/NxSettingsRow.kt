@@ -228,7 +228,7 @@ fun NxSettingsList(
         val footerWidth = listWidth + (footer?.bleedStart ?: 0.dp) + (footer?.bleedEnd ?: 0.dp)
         val footerHeight = footer?.height?.invoke(footerWidth) ?: 0.dp
         // Rows differ in height (a bare row, a group label, segments under the text): kept clear of the fade in px.
-        val fade = settingsRowsFade(sizes.row / 2)   // the Settings rows block's 24 dp
+        val fade = settingsRowsFade(sizes.bare, sizes.row / 2)   // the Settings rows block's: two one-line rows
         val edgePx = with(density) { fade.roundToPx() }
         // The selected row's and the list's laid-out heights (before the first layout, the most the row can take and the room).
         val footerPx = with(density) { footerHeight.roundToPx() }

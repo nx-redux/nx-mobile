@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.nxredux.mobile.ui.LocalSettingsBlock
-import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE
+import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE_ROWS
 import com.nxredux.mobile.ui.SettingsBlockMode
 import com.nxredux.mobile.ui.SettingsRowsBlock
 import com.nxredux.mobile.ui.SettingsWordList
@@ -392,7 +392,7 @@ internal fun NxTitledBody(title: String?, modifier: Modifier = Modifier, titleSu
 /**
  * A list page as the Settings rows block ([SettingsRowsBlock]): [title] its first line, [header] under it, the rows at
  * the list pitch (Appearance → Text size) taking only their own height, from the bottom; past the room they scroll under
- * a [SETTINGS_ROWS_FADE] fade, the selection kept clear of it. Pill-kind rows draw as the section block's words
+ * a [SETTINGS_ROWS_FADE_ROWS]-row fade, the selection kept clear of it. Pill-kind rows draw as the section block's words
  * ([SettingsWordList], no pill), options rows as NX Redux's options row; the hint bar below, as the page's.
  */
 @Composable
