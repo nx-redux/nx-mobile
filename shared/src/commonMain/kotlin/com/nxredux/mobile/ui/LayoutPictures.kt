@@ -312,7 +312,9 @@ internal fun LayoutPreviewPage(
                         values, selected.takeIf { it < values.size } ?: -1, onSelect, onRow, rowHeight = optionPitch, listText = NxTextSizes.listLabel(optionPitch),
                         modifier = Modifier.fillMaxWidth().weight(1f, fill = false).height(nxOptionsFitHeight(values, optionPitch)), scrollFade = true,
                     )
-                    BoxWithConstraints(Modifier.fillMaxWidth()) { footerOf(0.dp to 0.dp)?.content?.invoke(maxWidth) }
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        if (maxWidth >= PREVIEW_MIN_WIDTH) footerOf(0.dp to 0.dp)?.content?.invoke(maxWidth)
+                    }
                 }
             }
             NxHintBar(hints, onHint = onHint)

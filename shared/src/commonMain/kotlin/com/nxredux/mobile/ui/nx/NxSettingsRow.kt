@@ -18,6 +18,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.gestures.animateScrollBy
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
@@ -79,7 +83,7 @@ sealed interface NxSettingEvent {
 /**
  * Something drawn under a list's last row, scrolling with the rows (a Layouts group's picture): its own width is the
  * list's plus [bleedStart] and [bleedEnd] (negative: inside the list's edges); [height] for that width, and its
- * [content] at it. With a pad it is kept in view while the last row is selected ([nxKeepInViewTarget]).
+ * [content] at it. With a pad it is kept in view while the last row is selected ([nxFooterKeep]).
  */
 class NxListFooter(
     val bleedStart: Dp = 0.dp, val bleedEnd: Dp = 0.dp,
@@ -89,14 +93,29 @@ class NxListFooter(
 /** The footer item's key in a list ([NxListFooter]): not a row, so keep-in-view does not size rows by it. */
 internal const val NX_LIST_FOOTER_KEY = "footer"
 
+/** How keep-in-view treats a list's footer for the selected row ([nxFooterKeep]). */
+internal enum class NxFooterKeep {
+    /** The row alone, as any list. */
+    ROW,
+    /** The footer item: it fits under the row, so the whole picture comes into view. */
+    FOOTER,
+    /** The row at the top, [edge][nxFooterKeep] clear: the footer is too tall to show whole with it, so as much as fits under it. */
+    ROW_AT_TOP,
+}
+
 /**
- * The list item keep-in-view follows for the selected row [selected] of [rows]: the row itself, or with a [footer] the
- * footer item (index [rows] size) while the last row that can be selected is, so a pad brings the whole picture into
- * view; the selection stays on the row.
+ * Keep-in-view for the selected row [selected] of [rows] with a footer [footerPx] tall ([footer] false: none): while
+ * the last row that can be selected is selected, the footer item ([NxFooterKeep.FOOTER]) when it, the row
+ * ([rowPx]) and the fade [edge] above and below fit the [viewportPx]; else the row at the top under its fade edge
+ * ([NxFooterKeep.ROW_AT_TOP]), so the picture shows as far as fits and the selection never leaves the screen. Any other
+ * row: [NxFooterKeep.ROW]. The selection stays on the row.
  */
-internal fun nxKeepInViewTarget(rows: List<NxSettingRow>, selected: Int, footer: Boolean): Int {
+internal fun nxFooterKeep(
+    rows: List<NxSettingRow>, selected: Int, footer: Boolean, footerPx: Int, rowPx: Int, edge: Int, viewportPx: Int,
+): NxFooterKeep {
     val last = rows.indexOfLast { !it.section && !it.spacer && !it.paragraph }
-    return if (footer && selected >= 0 && selected == last) rows.size else selected
+    if (!footer || selected < 0 || selected != last) return NxFooterKeep.ROW
+    return if (footerPx + rowPx + edge * 2 <= viewportPx) NxFooterKeep.FOOTER else NxFooterKeep.ROW_AT_TOP
 }
 
 /** A description as a share of its name. */
@@ -186,10 +205,24 @@ fun NxSettingsList(
             else with(density) { (rows.sumOf { sizes.heightOf(it).roundToPx() } + footerHeight.roundToPx()).toDp() }
         // Rows differ in height (a bare row, a group label, segments under the text): kept clear of the fade in px.
         val fade = settingsRowsFade(sizes.row / 2)   // the Settings rows block's 24 dp
+        val edgePx = with(density) { fade.roundToPx() }
+        val keep = with(density) {
+            nxFooterKeep(
+                rows, selectedIndex, footer != null, footerHeight.roundToPx(),
+                rows.getOrNull(selectedIndex)?.let { sizes.heightOf(it).roundToPx() } ?: 0, edgePx, minOf(total, maxHeight).roundToPx(),
+            )
+        }
         NxKeepSelectedInView(
-            listState, nxKeepInViewTarget(rows, selectedIndex, footer != null), rows.size + (if (footer != null) 1 else 0),
-            edge = with(density) { fade.roundToPx() },
+            listState, if (keep == NxFooterKeep.FOOTER) rows.size else selectedIndex, rows.size + (if (footer != null) 1 else 0),
+            edge = edgePx,
         )
+        // A footer too tall to show whole under the last row: that row at the top under its fade edge, the picture
+        // below it as far as fits.
+        if (keep == NxFooterKeep.ROW_AT_TOP) LaunchedEffect(selectedIndex) {
+            snapshotFlow { listState.layoutInfo }.first { it.totalItemsCount > selectedIndex && it.visibleItemsInfo.isNotEmpty() }
+            listState.animateScrollToItem(selectedIndex)
+            listState.animateScrollBy(-edgePx.toFloat())
+        }
         LazyColumn(
             Modifier.nxBleed(outStart, outEnd).height(minOf(total, maxHeight)).nxScrollFade(listState, height = fade, strong = true),
             state = listState, flingBehavior = rememberNxRowSnapFling(listState),

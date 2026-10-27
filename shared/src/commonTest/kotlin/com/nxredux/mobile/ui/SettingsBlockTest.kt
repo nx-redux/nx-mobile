@@ -4,7 +4,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.ui.nx.FooterMode
 import com.nxredux.mobile.ui.nx.NxSettingRow
-import com.nxredux.mobile.ui.nx.nxKeepInViewTarget
+import com.nxredux.mobile.ui.nx.NxFooterKeep
+import com.nxredux.mobile.ui.nx.nxFooterKeep
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -92,12 +93,15 @@ class SettingsBlockTest {
             NxSettingRow("Group", section = true), NxSettingRow("A"), NxSettingRow("B"),
             NxSettingRow("", spacer = true),
         )
-        // The last row that can be selected (B, index 2) follows the footer item (index rows.size); the others themselves.
-        assertEquals(rows.size, nxKeepInViewTarget(rows, selected = 2, footer = true))
-        assertEquals(1, nxKeepInViewTarget(rows, selected = 1, footer = true))
-        // No footer, or nothing selected: the row as before.
-        assertEquals(2, nxKeepInViewTarget(rows, selected = 2, footer = false))
-        assertEquals(-1, nxKeepInViewTarget(rows, selected = -1, footer = true))
+        // The last row that can be selected (B, index 2) with a footer that fits under it (and the fade edges): the footer.
+        assertEquals(NxFooterKeep.FOOTER, nxFooterKeep(rows, 2, footer = true, footerPx = 400, rowPx = 100, edge = 60, viewportPx = 620))
+        // Too tall to show whole with the row: the row at the top, the picture as far as fits.
+        assertEquals(NxFooterKeep.ROW_AT_TOP, nxFooterKeep(rows, 2, footer = true, footerPx = 900, rowPx = 100, edge = 60, viewportPx = 620))
+        assertEquals(NxFooterKeep.ROW_AT_TOP, nxFooterKeep(rows, 2, footer = true, footerPx = 401, rowPx = 100, edge = 60, viewportPx = 620))
+        // Any other row, no footer, or nothing selected: the row as any list.
+        assertEquals(NxFooterKeep.ROW, nxFooterKeep(rows, 1, footer = true, footerPx = 400, rowPx = 100, edge = 60, viewportPx = 620))
+        assertEquals(NxFooterKeep.ROW, nxFooterKeep(rows, 2, footer = false, footerPx = 0, rowPx = 100, edge = 60, viewportPx = 620))
+        assertEquals(NxFooterKeep.ROW, nxFooterKeep(rows, -1, footer = true, footerPx = 400, rowPx = 100, edge = 60, viewportPx = 620))
     }
 
     @Test fun narrowBlockPages() {
