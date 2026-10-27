@@ -80,7 +80,7 @@ check-tools:
 # flycast) has a curated ../LICENSES/<core>.txt instead. check-licenses fails when a core has neither.
 CORES = gambatte fceumm snes9x genesis_plus_gx mgba melondsds mupen64plus_next ppsspp \
   race mednafen_pce_fast mednafen_vb handy stella2014 prosystem a5200 mednafen_wswan mednafen_supafaust pokemini fake08 prboom gpsp pcsx_rearmed \
-  swanstation picodrive gearcoleco fbneo flycast azahar dolphin
+  swanstation picodrive gearcoleco fbneo flycast azahar dolphin armsx2
 
 gambatte_REPO = https://github.com/libretro/gambatte-libretro
 gambatte_HASH = d9d6cd06382d1ced30de34d56d3609452323dab1
@@ -500,6 +500,46 @@ dolphin_NINJA = $(SDK)/cmake/3.30.3/bin/ninja
 dolphin_PLATFORM = android-24
 dolphin_FLAGS = -DLIBRETRO=ON -DENABLE_LTO=ON -DANDROID_STL=c++_static
 
+# ARMSX2 (PS2): ARMSX2/ARMSX2 at its 2.9 release tag, a PCSX2 fork with arm64 recompilers. Its libretro port is
+# pcsx2-libretro/ (SHARED pcsx2-libretro, OUTPUT_NAME armsx2_libretro, empty prefix), added only with ENABLE_LIBRETRO=ON;
+# the build tree's bin/ holds it. Flags follow upstream's Android libretro CI (.gitlab-ci.yml .core-defs-android, API 28:
+# bionic's posix_spawn). The page size is fixed at build time (ARMSX2_ANDROID_HOST_PAGE_SIZE=0x1000): the core fails on a
+# 16 KB kernel even though the ELF is 16 KB aligned. NDK r29 like upstream's own Android app (armsx2.ndkVersion); the
+# other cores stay on $(NDK_VERSION). Its static dependencies (png, jpeg-turbo, zstd, lz4, webp, SDL3, freetype, plutovg,
+# plutosvg, curl without TLS, libpcap, shaderc) come from upstream's own script, run once into $(ARMSX2_DEPS) with the
+# same NDK; the stamp names the pin, so a bump rebuilds them. CMake >= 3.25 policy range: 3.30.3, as azahar/dolphin.
+# Renders on GLES 3.2 or Vulkan (armsx2_renderer, set by the app per Graphics API). bin/resources (shaders, GameIndex,
+# fonts) is staged to system/pcsx2/resources, where the core looks; the BIOS goes in system/pcsx2/bios (Bios/PS2/).
+armsx2_REPO = https://github.com/ARMSX2/ARMSX2
+armsx2_HASH = 023224576867a3846faedc7640911772c7783529
+armsx2_LICENSE = COPYING.GPLv3 3rdparty/cpuinfo/LICENSE 3rdparty/cubeb/LICENSE 3rdparty/discord-rpc/LICENSE \
+  3rdparty/fast_float/LICENSE-MIT 3rdparty/fmt/LICENSE 3rdparty/imgui/LICENSE.txt 3rdparty/libchdr/LICENSE.txt \
+  3rdparty/libzip/LICENSE 3rdparty/lzma/LICENSE.txt 3rdparty/plutosvg/LICENSE 3rdparty/plutovg/LICENSE \
+  3rdparty/promptfont/LICENSE.txt 3rdparty/rainterface/LICENSE 3rdparty/rapidjson/license.txt 3rdparty/rcheevos/LICENSE \
+  3rdparty/simpleini/LICENCE.txt 3rdparty/soundtouch/COPYING.TXT 3rdparty/vixl/LICENCE 3rdparty/vulkan/LICENSE.md
+# The static dependencies' own licences, from their checkouts under $(ARMSX2_DEPS) (built before the .so, so present).
+# TODO before shipping: ccc, demangler, freesurround, glad, rapidyaml and the libretro headers keep their notices in
+# source headers only; they need notices/armsx2-*.txt like dolphin's KissFFT.
+ARMSX2_DEPS_SRC = $(BUILD_ROOT)/armsx2-deps/deps-build
+armsx2_LICENSE_EXTRA = $(addprefix $(ARMSX2_DEPS_SRC)/,libpng/LICENSE libjpeg-turbo/LICENSE.md libjpeg-turbo/README.ijg \
+  zstd/LICENSE lz4/LICENSE libwebp/COPYING sdl3/LICENSE.txt freetype/LICENSE.TXT plutovg/LICENSE plutosvg/LICENSE \
+  curl/COPYING libpcap/LICENSE shaderc/LICENSE shaderc/third_party/glslang/LICENSE.txt \
+  shaderc/third_party/spirv-tools/LICENSE shaderc/third_party/spirv-headers/LICENSE)
+armsx2_KIND = cmake
+armsx2_BUILD_PATH = .
+armsx2_CMAKE_TARGET = pcsx2-libretro
+armsx2_ARTIFACT = bin/armsx2_libretro.so
+armsx2_CMAKE = $(SDK)/cmake/3.30.3/bin/cmake
+armsx2_NINJA = $(SDK)/cmake/3.30.3/bin/ninja
+armsx2_NDK_VERSION = 29.0.14206865
+armsx2_NDK = $(SDK)/ndk/$(armsx2_NDK_VERSION)
+armsx2_PLATFORM = android-28
+ARMSX2_DEPS = $(abspath $(BUILD_ROOT))/armsx2-deps
+armsx2_FLAGS = -DCMAKE_PREFIX_PATH=$(ARMSX2_DEPS)/prefix -DCMAKE_FIND_ROOT_PATH=$(ARMSX2_DEPS)/prefix -DANDROID_STL=c++_static \
+  -DENABLE_LIBRETRO=ON -DENABLE_QT_UI=OFF -DENABLE_SDL_FRONTEND=OFF -DENABLE_GSRUNNER=OFF -DENABLE_TESTS=OFF \
+  -DENABLE_RECOMPILER_TEST_HOOKS=OFF -DENABLE_SETCAP=OFF -DUSE_BACKTRACE=OFF -DX11_API=OFF -DWAYLAND_API=OFF \
+  -DDISABLE_ADVANCE_SIMD=TRUE -DARMSX2_ANDROID_HOST_PAGE_SIZE=0x1000 -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON
+
 # Deviation from the generic pattern: ppsspp reads its data files (flash0, fonts,
 # shaders, ...) from <system>/PPSSPP/ at runtime, so stage the repo's assets/ dir
 # next to the core. This extra prerequisite on the ppsspp target runs after the
@@ -545,6 +585,28 @@ $(OUTPUT_ROOT)/system/dolphin-emu/Sys/.staged: $(OUTPUT_ROOT)/dolphin_libretro_a
 	touch $(OUTPUT_ROOT)/system/dolphin-emu/Sys/.staged
 dolphin: $(OUTPUT_ROOT)/system/dolphin-emu/Sys/.staged
 
+# Deviation: ARMSX2's dependencies, built by upstream's .github/workflows/scripts/android/build-dependencies.sh from the
+# pinned checkout (it clones each library at a fixed tag into deps-build/ under its working directory) with the core's
+# NDK and the 3.30.3 cmake/ninja on PATH. Done once per pin; clean-armsx2 keeps them, distclean-armsx2 drops them.
+$(ARMSX2_DEPS)/.built-$(armsx2_HASH): $(SRC_ROOT)/armsx2/.patched
+	rm -rf $(ARMSX2_DEPS)/prefix $(ARMSX2_DEPS)/.built-*
+	mkdir -p $(ARMSX2_DEPS)/prefix
+	cd $(ARMSX2_DEPS) && PATH="$(dir $(armsx2_CMAKE)):$$PATH" ANDROID_NDK=$(armsx2_NDK) ANDROID_ABI=$(ABI) ANDROID_API=28 \
+	  bash $(CURDIR)/$(SRC_ROOT)/armsx2/.github/workflows/scripts/android/build-dependencies.sh $(ARMSX2_DEPS)/prefix
+	touch $@
+$(OUTPUT_ROOT)/armsx2_libretro_android.so: $(ARMSX2_DEPS)/.built-$(armsx2_HASH)
+distclean-armsx2: distclean-armsx2-deps
+distclean-armsx2-deps:
+	rm -rf $(ARMSX2_DEPS)
+.PHONY: distclean-armsx2-deps
+
+$(OUTPUT_ROOT)/system/pcsx2/resources/.staged: $(OUTPUT_ROOT)/armsx2_libretro_android.so
+	rm -rf $(OUTPUT_ROOT)/system/pcsx2/resources
+	mkdir -p $(OUTPUT_ROOT)/system/pcsx2/resources
+	cp -R $(SRC_ROOT)/armsx2/bin/resources/. $(OUTPUT_ROOT)/system/pcsx2/resources/
+	touch $(OUTPUT_ROOT)/system/pcsx2/resources/.staged
+armsx2: $(OUTPUT_ROOT)/system/pcsx2/resources/.staged
+
 # Deviation: melonDS DS's dependencies (see its entry) are cloned at their pinned SHAs before its configure step. The
 # stamp names the whole list, so editing a pin re-runs the checkout.
 $(MELONDSDS_DEPS_DIR)/.checkout-$(MELONDSDS_DEPS_STAMP):
@@ -586,6 +648,7 @@ $1_OPTIONS_ID ?= $(1)
 $1_CMAKE ?= $(CMAKE)
 $1_NINJA ?= $(NINJA)
 $1_PLATFORM ?= $(PLATFORM)
+$1_NDK ?= $(NDK)
 
 ifneq (40,$$(strip $$(shell printf %s '$$($1_HASH)' | grep -cE '^[0-9a-f]{40}$$$$' >/dev/null && echo 40)))
 $(1):
@@ -622,7 +685,7 @@ else
 $(OUTPUT_ROOT)/$$($1_CORE): $(SRC_ROOT)/$(1)/.patched
 	mkdir -p $(OUTPUT_ROOT) $(BUILD_ROOT)/$(1)
 	$$($1_CMAKE) -S $(SRC_ROOT)/$(1)/$$($1_BUILD_PATH) -B $(BUILD_ROOT)/$(1) -G Ninja -DCMAKE_MAKE_PROGRAM=$$($1_NINJA) \
-	  -DCMAKE_TOOLCHAIN_FILE=$(NDK)/build/cmake/android.toolchain.cmake -DANDROID_ABI=$(ABI) -DANDROID_PLATFORM=$$($1_PLATFORM) \
+	  -DCMAKE_TOOLCHAIN_FILE=$$($1_NDK)/build/cmake/android.toolchain.cmake -DANDROID_ABI=$(ABI) -DANDROID_PLATFORM=$$($1_PLATFORM) \
 	  -DCMAKE_BUILD_TYPE=Release "-DCMAKE_SHARED_LINKER_FLAGS=$(PAGE_LDFLAGS)" $$($1_FLAGS)
 	$$($1_CMAKE) --build $(BUILD_ROOT)/$(1) --target $$($1_CMAKE_TARGET) $(PROCS)
 	$(STRIP) --strip-unneeded -o $(OUTPUT_ROOT)/$$($1_CORE) $(BUILD_ROOT)/$(1)/$$($1_ARTIFACT)
@@ -705,6 +768,10 @@ options:
 COMMA := ,
 cores-json:
 	@echo '[$(subst " ","$(COMMA)",$(patsubst %,"%",$(strip $(CORES))))]'
+# armsx2's NDK pin, for the release workflow's sdkmanager step (make -s -C cores print-armsx2-ndk).
+print-armsx2-ndk:
+	@echo '$(armsx2_NDK_VERSION)'
+.PHONY: print-armsx2-ndk
 
 clean: $(foreach CORE,$(CORES),clean-$(CORE))
 nuke:

@@ -165,6 +165,17 @@ object CoreRegistry {
         vulkan = VulkanSwitch(vulkan = mapOf("swanstation_GPU_Renderer" to "Auto"), lock = false),
         name = "SwanStation",
     )
+    // SPIKE: PS2 on ARMSX2 (ARMSX2/ARMSX2 2.9, cores/Makefile). Reads <system>/pcsx2/{bios,resources}.
+    private val armsx2 = CoreDescriptor(
+        "armsx2", "libarmsx2_libretro_android.so", setOf("iso", "chd", "cso", "zso", "bin", "elf", "gz", "m3u"),
+        loadMode = LoadMode.REAL_PATH,
+        biosSubdir = "pcsx2/bios",
+        defaultOptions = mapOf("armsx2_renderer" to "OpenGL"),
+        lockedOptions = setOf("armsx2_renderer"),
+        vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan")),
+        name = "ARMSX2",
+        rewind = false,
+    )
     private val race = CoreDescriptor(
         "race", "librace_libretro_android.so", setOf("ngp", "ngc", "ngpc", "npc"),
         defaultOptions = mapOf("race_dark_filter_level" to "50"),
@@ -464,6 +475,7 @@ object CoreRegistry {
         "DC" to flycast,
         "3DS" to azahar,
         "WII" to dolphinWii, "GC" to dolphinGc,
+        "PS2" to armsx2,
     )
 
     /** Extensions too generic to name a console on their own (disc images and sheets shared by many systems). */
@@ -478,6 +490,7 @@ object CoreRegistry {
         Console("nds", "Nintendo DS", listOf("NDS"), setOf("nds", "ds", "nintendo ds"), setOf("nds"), rawSram = false),
         Console("n64", "Nintendo 64", listOf("N64"), setOf("n64", "nintendo 64"), setOf("n64", "z64", "v64"), rawSram = false),
         Console("psp", "Sony Playstation Portable", listOf("PSP"), setOf("psp", "ppsspp", "playstation portable", "sony playstation portable"), setOf("iso", "cso", "chd", "pbp", "elf", "prx"), rawSram = false),
+        Console("ps2", "Sony PlayStation 2", listOf("PS2"), setOf("ps2", "playstation 2", "sony playstation 2"), setOf("iso", "chd", "cso", "zso"), rawSram = false),
         Console("ps", "Sony PlayStation", listOf("PS", "PSX"), setOf("ps", "ps1", "psx", "playstation", "sony playstation"), setOf("bin", "cue", "img", "mdf", "toc", "cbn", "m3u", "chd", "iso"), rawSram = false),
         Console("gb", "Game Boy", listOf("GB"), setOf("gb", "game boy"), setOf("gb", "dmg"), rawSram = true),
         Console("gbc", "Game Boy Color", listOf("GBC"), setOf("gbc", "game boy color"), setOf("gbc"), rawSram = true),
