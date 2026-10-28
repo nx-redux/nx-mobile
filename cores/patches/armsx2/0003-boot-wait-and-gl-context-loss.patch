@@ -1,0 +1,341 @@
+diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -76,6 +76,7 @@
+ #ifdef ENABLE_OPENGL
+ #include "pcsx2/GS/Renderers/OpenGL/GLLibretro.h"
+ #include "pcsx2/GS/Renderers/OpenGL/GSDeviceOGL.h"
++#include "pcsx2/GS/Renderers/Common/GSRenderer.h"
+ #endif
+ #include "pcsx2/GameList.h"
+ #include "pcsx2/Host.h"
+@@ -138,6 +139,29 @@
+ 	static bool s_hw_render_gl = false;
+ 	static std::atomic<bool> s_cpu_thread_initialized{false};
+ 	static std::atomic<bool> s_context_ready{false};
++
++	// True from load_game until the CPU thread's VMManager::Initialize returns,
++	// either way. The boot runs on the CPU thread while retro_run already
++	// returns frames, so a frontend that loads a state right after the first
++	// frame arrives before there is a VM to load it into; retro_unserialize
++	// waits out a boot that is still under way (WaitForPendingBoot).
++	static std::atomic<bool> s_boot_pending{false};
++	static bool WaitForPendingBoot();
++
++#ifdef ENABLE_OPENGL
++	// GL context loss, carried out by the CPU thread between Execute() calls so
++	// that the GS stops receiving work before it lets go of its context (see
++	// OnGLContextDestroy). The frontend thread raises a request and waits for
++	// the CPU thread to clear it.
++	static std::atomic<bool> s_gl_release_requested{false};
++	static std::atomic<bool> s_gl_rebuild_requested{false};
++	// The GS device has no context: nothing may reach the GS until it is rebuilt.
++	static std::atomic<bool> s_gl_abandoned{false};
++	// CPU thread only: the VM was paused for the context loss, so resume it
++	// once the device is back.
++	static bool s_gl_paused_vm = false;
++	static void ServiceGLContextRequests();
++#endif
+ } // namespace LibretroCore
+ 
+ // Settings persistence (INI under the frontend's system directory).
+@@ -477,6 +501,18 @@
+ 	if (s_shutdown_requested.load(std::memory_order_acquire) && VMManager::HasValidVM())
+ 		VMManager::SetState(VMState::Stopping);
+ 
++#ifdef ENABLE_OPENGL
++	// The frontend is about to lose its GL context: leave Execute() at this
++	// vsync, so the CPU thread's main loop can retire the GS context with
++	// nothing more queued behind it.
++	if (LibretroCore::s_gl_release_requested.load(std::memory_order_acquire) &&
++		VMManager::GetState() == VMState::Running)
++	{
++		VMManager::SetState(VMState::Paused);
++		LibretroCore::s_gl_paused_vm = true;
++	}
++#endif
++
+ 	LibretroCore::DrainCPUThreadQueue();
+ }
+ 
+@@ -678,6 +714,7 @@
+ 	{
+ 		Console.Error("CPU thread init failed.");
+ 		VMManager::Internal::CPUThreadShutdown();
++		s_boot_pending.store(false, std::memory_order_release);
+ 		s_vm_thread_running.store(false, std::memory_order_release);
+ 		s_cpu_thread_initialized.store(true, std::memory_order_release); // unblock load_game
+ 		return;
+@@ -701,6 +738,9 @@
+ 	while (!s_shutdown_requested.load(std::memory_order_acquire))
+ 	{
+ 		DrainCPUThreadQueue();
++#ifdef ENABLE_OPENGL
++		ServiceGLContextRequests();
++#endif
+ 
+ 		const VMState state = VMManager::GetState();
+ 		switch (state)
+@@ -733,6 +773,11 @@
+ 					Error boot_error;
+ 					const VMBootResult br = VMManager::Initialize(bp, &boot_error);
+ 					std::fprintf(stderr, "[libretro] CPU thread: Initialize -> %d\n", (int)br);
++					// A state load waiting in retro_unserialize gives up on a failed
++					// boot; on a good one it finds the VM valid (Paused counts) and
++					// queues the load, which the drain above runs before the first
++					// Execute().
++					s_boot_pending.store(false, std::memory_order_release);
+ 					if (br != VMBootResult::StartupSuccess)
+ 					{
+ 						Console.ErrorFmt("VMManager::Initialize failed (result {}): {}",
+@@ -762,6 +807,7 @@
+ 		}
+ 	}
+ 
++	s_boot_pending.store(false, std::memory_order_release);
+ 	if (VMManager::HasValidVM())
+ 		VMManager::Shutdown(false);
+ 	if (MTGS::IsOpen())
+@@ -1472,6 +1518,14 @@
+ 	}
+ 
+ 	s_gl_present_fbo = 0;
++	// After a context loss that was not the end of the session, the GS device
++	// is still the abandoned one: have the CPU thread rebuild it against the
++	// context captured above, and resume the VM it paused.
++	if (LibretroCore::s_gl_abandoned.load(std::memory_order_acquire))
++	{
++		LibretroCore::s_gl_rebuild_requested.store(true, std::memory_order_release);
++		s_cpu_queue_cv.notify_all();
++	}
+ 	LibretroCore::s_context_ready.store(true, std::memory_order_release);
+ }
+ 
+@@ -1491,24 +1545,21 @@
+ 	GLLibretro::AbortPacing();
+ 	LibretroCore::s_context_ready.store(false, std::memory_order_release);
+ 
+-	if (MTGS::IsOpen())
++	// Letting go of the context is not enough on its own: a running VM keeps
++	// feeding the GS draws, and the GS thread would carry on into a device with
++	// no context and its buffers freed (SIGSEGV in DoRenderHW, on Save & Quit).
++	// So the CPU thread does it, outside Execute(): it pauses the VM, then
++	// queues the release behind whatever the GS still has, and waits for it
++	// (ServiceGLContextRequests). Two seconds covers the wait for the next
++	// vsync many times over; past that the frontend goes on without us.
++	if (LibretroCore::s_vm_thread_running.load(std::memory_order_acquire) && MTGS::IsOpen())
+ 	{
+-		// Through Host::RunOnGSThread rather than MTGS::RunOnGSThread: this is
+-		// the frontend's thread, and the ring takes packets from the CPU thread
+-		// only.
+-		//
+-		// The flag is shared rather than a local by reference, because the wait
+-		// below gives up after two seconds: a callback that ran after that
+-		// would be writing through a reference to a stack slot that is gone.
+-		auto gs_released = std::make_shared<std::atomic_bool>(false);
+-		Host::RunOnGSThread([gs_released]() {
+-			if (g_gs_device && g_gs_device->GetRenderAPI() == RenderAPI::OpenGL)
+-				static_cast<GSDeviceOGL*>(g_gs_device.get())->AbandonContext(true);
+-			gs_released->store(true, std::memory_order_release);
+-		});
+-		for (int i = 0; i < 2000 && !gs_released->load(std::memory_order_acquire); i++)
++		LibretroCore::s_gl_rebuild_requested.store(false, std::memory_order_release);
++		LibretroCore::s_gl_release_requested.store(true, std::memory_order_release);
++		s_cpu_queue_cv.notify_all();
++		for (int i = 0; i < 2000 && LibretroCore::s_gl_release_requested.load(std::memory_order_acquire); i++)
+ 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+-		if (!gs_released->load(std::memory_order_acquire))
++		if (LibretroCore::s_gl_release_requested.load(std::memory_order_acquire))
+ 			log_cb(RETRO_LOG_ERROR, "The GS thread did not let go of its GL context in time.\n");
+ 	}
+ 
+@@ -1517,6 +1568,63 @@
+ 	s_gl_present_fbo = 0;
+ 	GLLibretro::ReleaseFrontendContext();
+ }
++
++// CPU thread, between Execute() calls: the only place where pausing the VM
++// really means nothing more reaches the GS.
++void LibretroCore::ServiceGLContextRequests()
++{
++	if (s_gl_release_requested.load(std::memory_order_acquire))
++	{
++		if (VMManager::GetState() == VMState::Running)
++		{
++			VMManager::SetState(VMState::Paused);
++			s_gl_paused_vm = true;
++		}
++		if (MTGS::IsOpen())
++		{
++			MTGS::RunOnGSThread([]() {
++				if (!g_gs_device || g_gs_device->GetRenderAPI() != RenderAPI::OpenGL)
++					return;
++				// Draw what the GS has batched while there is a context to draw
++				// it with; otherwise the rebuild's own flush would draw it into
++				// the abandoned device.
++				if (g_gs_renderer)
++					g_gs_renderer->Flush(GSState::GSFlushReason::GSREOPEN);
++				static_cast<GSDeviceOGL*>(g_gs_device.get())->AbandonContext(true);
++				s_gl_abandoned.store(true, std::memory_order_release);
++			});
++			MTGS::WaitGS(false);
++		}
++		s_gl_release_requested.store(false, std::memory_order_release);
++	}
++
++	if (s_gl_rebuild_requested.exchange(false, std::memory_order_acq_rel))
++	{
++		if (s_gl_abandoned.load(std::memory_order_acquire) && MTGS::IsOpen())
++		{
++			// The device-loss arm of GSreopen: keep the renderer and its GS
++			// memory, purge the textures that died with the context, and open
++			// a new device, which shares the context the frontend just handed
++			// over. A failed open leaves the device abandoned and the VM paused:
++			// a still picture rather than a crash.
++			bool ok = false;
++			MTGS::RunOnGSThread([&ok]() {
++				ok = GSreopen(true, false, GSGetCurrentRenderer(), std::nullopt);
++			});
++			MTGS::WaitGS(false);
++			if (ok)
++				s_gl_abandoned.store(false, std::memory_order_release);
++			else
++				Console.Error("Could not rebuild the GS device after a GL context loss.");
++		}
++		if (s_gl_paused_vm && !s_gl_abandoned.load(std::memory_order_acquire))
++		{
++			s_gl_paused_vm = false;
++			if (VMManager::GetState() == VMState::Paused)
++				VMManager::SetState(VMState::Running);
++		}
++	}
++}
+ #endif // ENABLE_OPENGL
+ 
+ static void OnContextReset(void)
+@@ -2099,6 +2207,7 @@
+ 
+ 	SysMemory::ReserveMemory();
+ 
++	LibretroCore::s_boot_pending.store(true, std::memory_order_release);
+ 	LibretroCore::s_cpu_thread = std::thread([params = std::move(params)]() mutable {
+ 		LibretroCore::CPUThreadMain(std::move(params));
+ 	});
+@@ -2156,6 +2265,12 @@
+ #endif
+ 	LibretroCore::s_context_ready.store(false, std::memory_order_release);
+ 	LibretroCore::s_cpu_thread_initialized.store(false, std::memory_order_release);
++#ifdef ENABLE_OPENGL
++	LibretroCore::s_gl_release_requested.store(false, std::memory_order_release);
++	LibretroCore::s_gl_rebuild_requested.store(false, std::memory_order_release);
++	LibretroCore::s_gl_abandoned.store(false, std::memory_order_release);
++	LibretroCore::s_gl_paused_vm = false;
++#endif
+ }
+ 
+ RETRO_API void retro_run(void)
+@@ -2391,8 +2506,18 @@
+ 
+ RETRO_API bool retro_serialize(void* data, size_t size)
+ {
++	// No waiting for a boot here, unlike retro_unserialize: a save taken before
++	// the VM exists (a quit during the boot) would be a freshly booted machine,
++	// and writing that over the frontend's resume state loses the player's game.
++	// Failing tells the frontend there is nothing to save yet.
+ 	if (!VMManager::HasValidVM())
++		return false;
++#ifdef ENABLE_OPENGL
++	// The GS device has no context (lost, not yet rebuilt): a state needs the
++	// GS to read its textures back, which it cannot do now.
++	if (LibretroCore::s_gl_abandoned.load(std::memory_order_acquire))
+ 		return false;
++#endif
+ 
+ 	// Pacing must be off while retro_run isn't being called, or the GS
+ 	// thread stays parked in PublishFrame and the state freeze (which needs
+@@ -2444,12 +2569,45 @@
+ 	std::memcpy(data, &zip_len, sizeof(zip_len));
+ 	std::memcpy(static_cast<u8*>(data) + sizeof(zip_len), buffer.data(), buffer.size());
+ 	return true;
++}
++
++// Waits for a VM boot that is still under way, for a state load that arrives
++// before the VM exists (the frontend's first frame comes before the boot ends).
++// Runs on the frontend's thread, inside retro_unserialize, with pacing already
++// off. That cannot deadlock: nothing the boot does needs this thread. The GS
++// device opens on the GS thread against the context context_reset captured
++// earlier (GL) or the device create_device negotiated (Vulkan), and with
++// pacing off no present parks the GS thread on a retro_run. Only waits while a
++// boot can still finish: the CPU thread is up, the context is there (the boot
++// is parked on it otherwise) and nothing asked for a shutdown.
++//
++// 30 seconds: a boot on a phone takes a few (BIOS, disc and GS device, shader
++// cache misses included); anything far past that is a boot that is not going
++// to end, and the frontend's thread must not hang on it.
++bool LibretroCore::WaitForPendingBoot()
++{
++	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
++	while (!VMManager::HasValidVM() && s_boot_pending.load(std::memory_order_acquire) &&
++		   s_vm_thread_running.load(std::memory_order_acquire) &&
++		   s_context_ready.load(std::memory_order_acquire) &&
++		   !s_shutdown_requested.load(std::memory_order_acquire) &&
++		   std::chrono::steady_clock::now() < deadline)
++	{
++		std::this_thread::sleep_for(std::chrono::milliseconds(2));
++	}
++	return VMManager::HasValidVM();
+ }
+ 
+ RETRO_API bool retro_unserialize(const void* data, size_t size)
+ {
+-	if (!VMManager::HasValidVM() || size < sizeof(u64))
++	if (size < sizeof(u64))
+ 		return false;
++	if (!VMManager::HasValidVM() && !LibretroCore::s_boot_pending.load(std::memory_order_acquire))
++		return false;
++#ifdef ENABLE_OPENGL
++	if (LibretroCore::s_gl_abandoned.load(std::memory_order_acquire))
++		return false;
++#endif
+ 
+ 	u64 zip_size;
+ 	std::memcpy(&zip_size, data, sizeof(u64));
+@@ -2464,15 +2622,30 @@
+ #endif
+ 
+ 	bool ok = false;
++	if (!VMManager::HasValidVM())
++	{
++		const auto boot_wait_start = std::chrono::steady_clock::now();
++		const bool booted = LibretroCore::WaitForPendingBoot();
++		log_cb(booted ? RETRO_LOG_WARN : RETRO_LOG_ERROR,
++			"retro_unserialize: %s the VM boot (%lld ms).\n", booted ? "waited for" : "gave up on",
++			static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
++				std::chrono::steady_clock::now() - boot_wait_start).count()));
++	}
++
+ 	const u8* zip_data = static_cast<const u8*>(data) + sizeof(u64);
+-	Host::RunOnCPUThread([zip_data, zip_size, &ok]() {
+-		if (!VMManager::HasValidVM())
+-			return;
+-		Error error;
+-		ok = SaveState_UnzipFromBuffer(zip_data, static_cast<size_t>(zip_size), &error);
+-		if (!ok)
+-			Console.ErrorFmt("retro_unserialize failed: {}", error.GetDescription());
+-	}, true);
++	// Only with a VM: after a failed boot the CPU thread is on its way out and
++	// would never run a blocking request.
++	if (VMManager::HasValidVM())
++	{
++		Host::RunOnCPUThread([zip_data, zip_size, &ok]() {
++			if (!VMManager::HasValidVM())
++				return;
++			Error error;
++			ok = SaveState_UnzipFromBuffer(zip_data, static_cast<size_t>(zip_size), &error);
++			if (!ok)
++				Console.ErrorFmt("retro_unserialize failed: {}", error.GetDescription());
++		}, true);
++	}
+ 
+ #ifdef ENABLE_VULKAN
+ 	if (LibretroCore::s_context_ready.load(std::memory_order_acquire))
