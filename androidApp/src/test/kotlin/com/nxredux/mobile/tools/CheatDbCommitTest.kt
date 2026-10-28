@@ -1,5 +1,6 @@
 package com.nxredux.mobile.tools
 
+import com.nxredux.mobile.cheats.db.CheatDbCommit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -10,11 +11,11 @@ class CheatDbCommitTest {
     @Test fun takes_the_newest_commits_own_sha_ahead_of_its_tree() {
         val json = """[{"sha":"$sha","node_id":"C_x","commit":{"author":{"name":"a","date":"2026-10-20T10:00:00Z"},"committer":{"date":"2026-10-20T10:00:00Z"},
             "tree":{"sha":"1111111111111111111111111111111111111111","url":"u"}},"parents":[{"sha":"2222222222222222222222222222222222222222"}]}]"""
-        assertEquals(sha, CheatDbFiles.parseChtCommit(json))
+        assertEquals(CheatDbCommit(sha, 1_792_490_400_000L), CheatDbFiles.parseChtCommit(json))
     }
 
     @Test fun pretty_printed_and_upper_case_ids_come_back_lower_case() {
-        assertEquals(sha, CheatDbFiles.parseChtCommit("[\n  {\n    \"sha\": \"${sha.uppercase()}\"\n  }\n]"))
+        assertEquals(CheatDbCommit(sha, null), CheatDbFiles.parseChtCommit("[\n  {\n    \"sha\": \"${sha.uppercase()}\"\n  }\n]"))
     }
 
     @Test fun an_empty_list_or_an_error_body_has_no_commit() {

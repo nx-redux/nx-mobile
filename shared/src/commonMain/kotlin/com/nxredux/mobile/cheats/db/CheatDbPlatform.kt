@@ -33,8 +33,8 @@ interface CheatDbPlatform {
     fun freeBytes(): Long
     /** The server's Last-Modified for [source]'s archive (HEAD), or null when it can't be reached. */
     suspend fun remoteStamp(source: CheatDbSource): String?
-    /** The id of the newest commit that touched `cht` in libretro-database (GitHub's API), or null when it can't be reached. */
-    suspend fun latestChtCommit(): String?
+    /** The newest commit that touched `cht` in libretro-database (GitHub's API), or null when it can't be reached. Gives up quickly: a download waits on it. */
+    suspend fun latestChtCommit(): CheatDbCommit?
     /** Downloads [source]'s archive to the cache. [onProgress] gets (bytes so far, total or -1 when unknown). */
     suspend fun download(source: CheatDbSource, onProgress: (done: Long, total: Long) -> Unit): CheatDbArchive
     /**

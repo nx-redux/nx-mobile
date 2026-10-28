@@ -4,6 +4,8 @@ import android.content.Context
 import android.os.StatFs
 import com.nxredux.mobile.cheats.db.CheatDatabase
 import com.nxredux.mobile.cheats.db.CheatDbArchive
+import com.nxredux.mobile.cheats.db.CheatDbCommit
+import com.nxredux.mobile.cheats.db.CheatDbDates
 import com.nxredux.mobile.cheats.db.CheatDbException
 import com.nxredux.mobile.cheats.db.CheatDbInstall
 import com.nxredux.mobile.cheats.db.CheatDbInstallResult
@@ -51,11 +53,11 @@ class AndroidCheatDb(context: Context) : CheatDbPlatform {
         }.onFailure { if (it is CancellationException) throw it; NxLog.w(TAG, "update check failed", it) }.getOrNull()
     }
 
-    override suspend fun latestChtCommit(): String? = withContext(Dispatchers.IO) {
+    override suspend fun latestChtCommit(): CheatDbCommit? = withContext(Dispatchers.IO) {
         runCatching {
             val c = (URL(CheatDatabase.COMMITS_URL).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 15_000
-                readTimeout = 30_000
+                connectTimeout = 5_000   // short: the zip download waits on this, and a miss only costs the commit guard
+                readTimeout = 5_000
                 setRequestProperty("Accept", "application/vnd.github+json")
                 setRequestProperty("User-Agent", "NXReduxMobile")   // GitHub refuses requests without one
             }
@@ -167,9 +169,17 @@ class AndroidCheatDb(context: Context) : CheatDbPlatform {
 internal object CheatDbFiles {
     private const val TAG = "CheatDb"
     private val SHA = Regex("\"sha\"\\s*:\\s*\"([0-9a-fA-F]{40})\"")
+    private val COMMITTED = Regex("\"committer\"\\s*:\\s*\\{[^}]*?\"date\"\\s*:\\s*\"([^\"]+)\"")
 
-    /** The newest commit's id in GitHub's commits-list [json] (its first `sha`: the commit's own, ahead of its tree's); null when there is none. */
-    fun parseChtCommit(json: String): String? = SHA.find(json)?.groupValues?.get(1)?.lowercase()
+    /**
+     * The newest commit in GitHub's commits-list [json]: its first `sha` (the commit's own, ahead of its tree's) and the
+     * committer date after it; null when there is no sha.
+     */
+    fun parseChtCommit(json: String): CheatDbCommit? {
+        val sha = SHA.find(json) ?: return null
+        val date = COMMITTED.find(json, sha.range.first)?.groupValues?.get(1)?.let(CheatDbDates::parseIso)
+        return CheatDbCommit(sha.groupValues[1].lowercase(), date)
+    }
 
     /** [CheatDbPlatform.install] into [sdRoot]. */
     suspend fun install(sdRoot: File, installs: List<CheatDbInstall>, onProgress: (String, Int, Int) -> Unit): CheatDbInstallResult {

@@ -80,7 +80,8 @@ class CheatDbController(
      * Compares each source's Last-Modified with its installed stamp, and the installed rows with the table; downloads
      * (every source) when any differs. libretro's cheats.zip is also rebuilt when no cheat changed, so when both the
      * install and GitHub name the `cht` commit, the commit decides: the same one is up to date, a new one downloads once
-     * the zip's date has moved too (until then the buildbot has not rebuilt, and the old commit stays for the next check). A best-effort source that does not answer ([bestEffort]) is left out of the
+     * the zip's date has moved and the zip was built after that commit (until then the buildbot has not rebuilt, and the
+     * old commit stays for the next check). A best-effort source that does not answer ([bestEffort]) is left out of the
      * comparison: the check fails only when a source the install needs does not answer.
      */
     fun checkForUpdates() {
@@ -103,7 +104,10 @@ class CheatDbController(
             val answered = remotes.filterValues { it != null }
             val same = answered.all { (source, remote) ->
                 val dated = remote == current.stampOf(source) && remote != CheatDbManifest.UNKNOWN_STAMP
-                if (source == CheatDbSource.LIBRETRO && commit != null && current.chtCommit != null) commit == current.chtCommit || dated else dated
+                if (source == CheatDbSource.LIBRETRO && commit != null && current.chtCommit != null) {
+                    // A new commit counts only once the zip is newer than the install and than the commit (unknown dates: the install's alone).
+                    commit.sha == current.chtCommit || dated || CheatDbDates.builtAfter(remote, commit) == false
+                } else dated
             }
             when {
                 remotes.any { (source, remote) -> remote == null && !bestEffort(source) } -> emit(CheatDbMessage.Failure("Could not check for updates (Wi-Fi?)"))
@@ -159,7 +163,7 @@ class CheatDbController(
             // except a best-effort source's ([bestEffort]): it takes back only its own files and the rest installs.
             val archives = ArrayList<CheatDbArchive>()
             // Asked before the zip, so a cheat committed meanwhile reads as new at the next check, never as already installed.
-            val commit = if (CheatDbSource.LIBRETRO in tableSources) latestCommit() else null
+            val newest = if (CheatDbSource.LIBRETRO in tableSources) latestCommit() else null
             val missed = ArrayList<CheatDbSource>()   // best-effort sources that could not be downloaded or installed
             try {
                 try {
@@ -187,6 +191,10 @@ class CheatDbController(
                     val files = result.files + kept
                     val stamps = archives.filter { it.source !in missed }.associate { it.source to (it.stamp ?: CheatDbManifest.UNKNOWN_STAMP) }
                     val patchesStamp = if (CheatDbSource.PCSX2 in missed) previous?.patchesStamp else stamps[CheatDbSource.PCSX2]
+                    // The commit is recorded only when the zip was built after it: else the files lack that commit's cheats, and
+                    // naming it would make every later check read as up to date. Otherwise the previous commit stays.
+                    val libretroStamp = stamps[CheatDbSource.LIBRETRO]
+                    val commit = if (newest != null && CheatDbDates.builtAfter(libretroStamp, newest) == true) newest.sha else previous?.chtCommit
                     val manifest = CheatDbManifest(
                         stamps[CheatDbSource.LIBRETRO] ?: CheatDbManifest.UNKNOWN_STAMP, now(), files, tableTags, patchesStamp, commit,
                     )
@@ -245,7 +253,7 @@ class CheatDbController(
     private fun bestEffort(source: CheatDbSource): Boolean = source == CheatDbSource.PCSX2 && CheatDbSource.LIBRETRO in tableSources
 
     /** GitHub's newest `cht` commit, or null when it did not answer: the checks then go by the zip's date alone. */
-    private suspend fun latestCommit(): String? = try {
+    private suspend fun latestCommit(): CheatDbCommit? = try {
         platform.latestChtCommit()
     } catch (e: CancellationException) {
         throw e
