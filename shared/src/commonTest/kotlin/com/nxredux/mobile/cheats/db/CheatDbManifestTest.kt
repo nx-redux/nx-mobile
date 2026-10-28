@@ -25,6 +25,14 @@ class CheatDbManifestTest {
         assertNull(CheatDbManifest.parse(manifest.render())!!.tags)
     }
 
+    @Test fun cht_commit_round_trips_and_an_older_manifest_parses_without_it() {
+        val committed = manifest.copy(tags = listOf("GB"), patchesStamp = "p", chtCommit = "0123456789abcdef0123456789abcdef01234567")
+        assertTrue(committed.render().contains("\ncht_commit = 0123456789abcdef0123456789abcdef01234567\n"))
+        assertEquals(committed, CheatDbManifest.parse(committed.render()))
+        assertNull(CheatDbManifest.parse(manifest.render())!!.chtCommit)
+        assertFalse(manifest.render().contains("cht_commit"))
+    }
+
     @Test fun counts_group_by_tag() {
         assertEquals(mapOf("GB" to 2, "GBA" to 1, "MGBA" to 1), manifest.countsByTag)
         assertEquals(3, manifest.systems)

@@ -9,6 +9,8 @@ class FakeCheatDbPlatform : CheatDbPlatform {
     /** PCSX2's patches.zip's stamps (the libretro ones are [remote] and [downloadStamp]). */
     var patchesRemote: String? = "patches-2"
     var patchesDownloadStamp: String? = "patches-2"
+    /** GitHub's newest `cht` commit; null = the API did not answer. */
+    var commit: String? = null
     var downloadStamp: String? = "stamp-2"
     var downloadError: CheatDbException? = null
     var installError: CheatDbException? = null
@@ -43,6 +45,7 @@ class FakeCheatDbPlatform : CheatDbPlatform {
         remoteCalls++
         return if (source == CheatDbSource.PCSX2) patchesRemote else remote
     }
+    override suspend fun latestChtCommit(): String? = commit
     override suspend fun download(source: CheatDbSource, onProgress: (Long, Long) -> Unit): CheatDbArchive {
         downloads += source
         downloadError?.let { throw it }

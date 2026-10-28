@@ -2,6 +2,7 @@ package com.nxredux.mobile.tools
 
 import android.content.Context
 import android.os.StatFs
+import com.nxredux.mobile.cheats.db.CheatDatabase
 import com.nxredux.mobile.cheats.db.CheatDbArchive
 import com.nxredux.mobile.cheats.db.CheatDbException
 import com.nxredux.mobile.cheats.db.CheatDbInstall
@@ -48,6 +49,20 @@ class AndroidCheatDb(context: Context) : CheatDbPlatform {
                 if (c.responseCode in 200..299) c.getHeaderField("Last-Modified")?.takeIf { it.isNotBlank() } else null
             } finally { c.disconnect() }
         }.onFailure { if (it is CancellationException) throw it; NxLog.w(TAG, "update check failed", it) }.getOrNull()
+    }
+
+    override suspend fun latestChtCommit(): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val c = (URL(CheatDatabase.COMMITS_URL).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                setRequestProperty("Accept", "application/vnd.github+json")
+                setRequestProperty("User-Agent", "NXReduxMobile")   // GitHub refuses requests without one
+            }
+            try {
+                if (c.responseCode in 200..299) CheatDbFiles.parseChtCommit(c.inputStream.bufferedReader().use { it.readText() }) else null
+            } finally { c.disconnect() }
+        }.onFailure { if (it is CancellationException) throw it; NxLog.w(TAG, "cht commit check failed", it) }.getOrNull()
     }
 
     override suspend fun download(source: CheatDbSource, onProgress: (Long, Long) -> Unit): CheatDbArchive = withContext(Dispatchers.IO) {
@@ -151,6 +166,10 @@ class AndroidCheatDb(context: Context) : CheatDbPlatform {
 /** The archive and folder work of [AndroidCheatDb], on a given root (no Context: unit-tested on a temp folder). */
 internal object CheatDbFiles {
     private const val TAG = "CheatDb"
+    private val SHA = Regex("\"sha\"\\s*:\\s*\"([0-9a-fA-F]{40})\"")
+
+    /** The newest commit's id in GitHub's commits-list [json] (its first `sha`: the commit's own, ahead of its tree's); null when there is none. */
+    fun parseChtCommit(json: String): String? = SHA.find(json)?.groupValues?.get(1)?.lowercase()
 
     /** [CheatDbPlatform.install] into [sdRoot]. */
     suspend fun install(sdRoot: File, installs: List<CheatDbInstall>, onProgress: (String, Int, Int) -> Unit): CheatDbInstallResult {

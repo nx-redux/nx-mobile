@@ -214,6 +214,85 @@ class CheatDbControllerTest {
         assertEquals(CheatDbMessage.Notice("Cheats & Patches updated: 2 files for 2 systems"), messages.last())
     }
 
+    private fun commitController(fake: FakeCheatDbPlatform, scope: CoroutineScope, messages: MutableList<CheatDbMessage>) =
+        controller(fake, scope, ArrayList(), messages).also { it.refresh() }
+
+    private fun withCommit(commit: String?, stamp: String = "stamp-1") =
+        CheatDbManifest(stamp, 1L, listOf("Cheats/FDS/old.cht"), table, chtCommit = commit)
+
+    @Test fun the_same_cht_commit_is_up_to_date_though_the_zip_date_moved() = runTest {
+        val fake = FakeCheatDbPlatform().apply { manifestText = withCommit("aaa").render(); remote = "stamp-2"; commit = "aaa" }
+        val messages = ArrayList<CheatDbMessage>()
+        val c = commitController(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), messages)
+        c.checkForUpdates()
+        assertEquals(listOf<CheatDbMessage>(CheatDbMessage.Notice("Cheats & Patches are up to date")), messages)
+        assertTrue(fake.downloads.isEmpty())
+    }
+
+    @Test fun a_new_cht_commit_with_a_new_zip_date_downloads_and_records_the_commit() = runTest {
+        val fake = FakeCheatDbPlatform().apply { manifestText = withCommit("aaa").render(); remote = "stamp-2"; commit = "bbb" }
+        val messages = ArrayList<CheatDbMessage>()
+        val c = commitController(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), messages)
+        c.checkForUpdates()
+        assertEquals(CheatDbMessage.Notice("Cheats & Patches updated: 2 files for 2 systems"), messages.last())
+        assertEquals("bbb", assertIs<CheatDbState.Installed>(c.state.value).manifest.chtCommit)
+    }
+
+    @Test fun a_new_cht_commit_before_the_buildbot_rebuilt_is_up_to_date_and_keeps_the_old_commit() = runTest {
+        val fake = FakeCheatDbPlatform().apply { manifestText = withCommit("aaa").render(); remote = "stamp-1"; commit = "bbb" }
+        val messages = ArrayList<CheatDbMessage>()
+        val c = commitController(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), messages)
+        c.checkForUpdates()
+        assertEquals(listOf<CheatDbMessage>(CheatDbMessage.Notice("Cheats & Patches are up to date")), messages)
+        assertTrue(fake.downloads.isEmpty())
+        assertEquals("aaa", assertIs<CheatDbState.Installed>(c.state.value).manifest.chtCommit)
+    }
+
+    @Test fun without_a_stored_commit_or_an_api_answer_the_zip_date_decides() = runTest {
+        // Older install: no commit stored. Then the API failing / answering must not change the old behaviour.
+        for ((stored, api) in listOf<Pair<String?, String?>>(null to "bbb", "aaa" to null, null to null)) {
+            val fake = FakeCheatDbPlatform().apply { manifestText = withCommit(stored).render(); remote = "stamp-1"; commit = api }
+            val messages = ArrayList<CheatDbMessage>()
+            val c = commitController(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), messages)
+            c.checkForUpdates()
+            assertEquals(CheatDbMessage.Notice("Cheats & Patches are up to date"), messages.last())
+            fake.remote = "stamp-2"; fake.downloadStamp = "stamp-2"
+            c.checkForUpdates()
+            assertEquals(CheatDbMessage.Notice("Cheats & Patches updated: 2 files for 2 systems"), messages.last())
+            assertEquals(api, assertIs<CheatDbState.Installed>(c.state.value).manifest.chtCommit)
+        }
+    }
+
+    @Test fun a_changed_table_still_downloads_when_the_commit_is_the_same() = runTest {
+        val previous = withCommit("aaa", "stamp-2").copy(tags = listOf("FDS"))
+        val fake = FakeCheatDbPlatform().apply { manifestText = previous.render(); remote = "stamp-2"; commit = "aaa" }
+        val messages = ArrayList<CheatDbMessage>()
+        val c = commitController(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), messages)
+        c.checkForUpdates()
+        assertEquals(CheatDbMessage.Notice("Cheats & Patches updated: 2 files for 2 systems"), messages.last())
+    }
+
+    @Test fun a_fresh_install_records_the_commit_and_a_failing_api_records_none() = runTest {
+        val fake = FakeCheatDbPlatform().apply { commit = "ccc" }
+        val c = controller(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), ArrayList(), ArrayList())
+        c.download()
+        assertEquals("ccc", CheatDbManifest.parse(fake.manifestText!!)!!.chtCommit)
+        fake.commit = null
+        c.download()
+        assertEquals(null, CheatDbManifest.parse(fake.manifestText!!)!!.chtCommit)
+    }
+
+    @Test fun a_patches_failure_with_a_commit_still_follows_the_libretro_answer() = runTest {
+        val previous = CheatDbManifest("stamp-2", 1L, listOf("Cheats/PS2/a.cht", "Cheats/PS2/Patches/a.pnach"), listOf("FDS", "PS2"), "patches-2", "aaa")
+        val fake = FakeCheatDbPlatform().apply { manifestText = previous.render(); remote = "stamp-9"; commit = "aaa"; patchesRemote = null }
+        val messages = ArrayList<CheatDbMessage>()
+        val c = CheatDbController(fake, setOf("PS2", "FDS"), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), now = { 42L })
+        val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        scope.launch { c.messages.collect { messages += it } }
+        c.refresh(); c.checkForUpdates()
+        assertEquals(listOf<CheatDbMessage>(CheatDbMessage.Notice("Cheats & Patches are up to date")), messages)
+    }
+
     @Test fun remove_deletes_exactly_the_manifest_files() = runTest {
         val previous = CheatDbManifest("s", 1L, listOf("Cheats/FDS/a.cht", "Cheats/GBA/b.cht"))
         val fake = FakeCheatDbPlatform().apply { manifestText = previous.render() }

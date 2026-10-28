@@ -31,6 +31,8 @@ enum class CheatDbSource(val url: String, val extension: String, private val sub
  */
 object CheatDatabase {
     const val URL = "https://buildbot.libretro.com/assets/frontend/cheats.zip"
+    /** GitHub's newest commit under libretro-database's `cht` folder: the cheats changed only when this id did. */
+    const val COMMITS_URL = "https://api.github.com/repos/libretro/libretro-database/commits?path=cht&per_page=1"
     /** The pcsx2_patches release PCSX2 itself downloads: every game's `.pnach` at the zip's top level. */
     const val PATCHES_URL = "https://github.com/PCSX2/pcsx2_patches/releases/download/latest/patches.zip"
     /** `Cheats/PS2/Patches/`: the PS2 core reads game patches there and cheats from `Cheats/PS2/` (cores/patches/armsx2/0005). */
