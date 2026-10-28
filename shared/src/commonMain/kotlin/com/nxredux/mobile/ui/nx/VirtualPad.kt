@@ -2145,8 +2145,10 @@ fun VirtualPadLeft(
             val nudge = unit * leftClusterNudge(overGame || besidePicture)   // inset from the left screen edge
             val gap = unit * 0.35f
             val systemKeys = padSystemRow(PadSide.LEFT, profile, motion != null)
-            // The PS2 over the game: touch shortcut 1 in MENU's place, MENU under it; its sides as big as the half allows.
+            // The PS2: touch shortcut 1 in MENU's place, MENU under it (beside the picture, on the pad's second row); its
+            // sides as big as the half allows.
             val ps2Overlay = profile.dualSticks && overGame && !besidePicture
+            val ps2Beside = profile.dualSticks && besidePicture && secondRow
             val dualUnit = unit * dualStickFit(maxWidth / unit, maxHeight / unit, ps2OtherRowsUnits(overGame, besidePicture, secondRow), leftClusterNudge(overGame || besidePicture))
             ProvidePadArrange(arrange) {
             Box(Modifier.fillMaxSize().padArrangeRoot(arrange)) {
@@ -2165,7 +2167,7 @@ fun VirtualPadLeft(
                     if (i > 0) Spacer(rowSpacer(i == flex, gap))
                     when (row) {
                         PadRow.SYSTEM -> Box(Modifier.heightIn(min = if (besidePicture && secondRow) sysH * 2 + gap else 0.dp)) {
-                            PadGroupBox(PadGroup.SYSTEM_LEFT, Modifier.padding(start = nudge, top = if (ps2Overlay) unit * PS2_SYSTEM_DROP else 0.dp)) {
+                            PadGroupBox(PadGroup.SYSTEM_LEFT, Modifier.padding(start = nudge, top = if (ps2Overlay) unit * PS2_SYSTEM_DROP else if (ps2Beside) sysH + gap else 0.dp)) {
                                 Column(horizontalAlignment = Alignment.Start) {
                                     SystemRow(systemKeys, emit, profile, sysH, sysW, stick.useJoystick, stick::toggle, motion)
                                     if (tools != null) {   // under MENU
@@ -2179,7 +2181,8 @@ fun VirtualPadLeft(
                             if (besidePicture && secondRow) {
                                 ShortcutPiece(
                                     TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW,
-                                    Modifier.padding(start = nudge + (sysW + SYSTEM_PILL_GAP.dp) * besideShortcutFromEdge(PadSide.LEFT, systemKeys), top = sysH + gap),
+                                    if (ps2Beside) Modifier.padding(start = nudge)   // the PS2: in MENU's place, MENU under it
+                                    else Modifier.padding(start = nudge + (sysW + SYSTEM_PILL_GAP.dp) * besideShortcutFromEdge(PadSide.LEFT, systemKeys), top = sysH + gap),
                                 )
                             }
                         }
@@ -2248,8 +2251,9 @@ fun VirtualPadRight(
             val nudge = unit * OVERLAY_EDGE_NUDGE   // small inset from the right screen edge
             val gap = unit * 0.35f
             val systemKeys = padSystemRow(PadSide.RIGHT, profile)
-            // The PS2 over the game: touch shortcut 2 in START's place, SELECT and START under it.
+            // The PS2: touch shortcut 2 in START's place, SELECT and START under it (beside the picture, on the second row).
             val ps2Overlay = profile.dualSticks && overGame && !besidePicture
+            val ps2Beside = profile.dualSticks && besidePicture && secondRow
             val dualUnit = unit * dualStickFit(maxWidth / unit, maxHeight / unit, ps2OtherRowsUnits(overGame, besidePicture, secondRow), OVERLAY_EDGE_NUDGE)
             ProvidePadArrange(arrange) {
             Box(Modifier.fillMaxSize().padArrangeRoot(arrange)) {
@@ -2269,7 +2273,7 @@ fun VirtualPadRight(
                     if (i > 0) Spacer(rowSpacer(i == flex, gap))
                     when (row) {
                         PadRow.SYSTEM -> Box(Modifier.heightIn(min = if (besidePicture && secondRow) sysH * 2 + gap else 0.dp)) {
-                            PadGroupBox(PadGroup.SYSTEM_RIGHT, Modifier.padding(end = nudge, top = if (ps2Overlay) unit * PS2_SYSTEM_DROP else 0.dp).align(Alignment.TopEnd)) {
+                            PadGroupBox(PadGroup.SYSTEM_RIGHT, Modifier.padding(end = nudge, top = if (ps2Overlay) unit * PS2_SYSTEM_DROP else if (ps2Beside) sysH + gap else 0.dp).align(Alignment.TopEnd)) {
                                 Column(horizontalAlignment = Alignment.End) {
                                     SystemRow(systemKeys, emit, profile, sysH, sysW, false, {}, null)
                                     if (tools != null) {   // under START
@@ -2282,7 +2286,8 @@ fun VirtualPadRight(
                             if (besidePicture && secondRow) {
                                 ShortcutPiece(
                                     TouchSlot.TWO, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW,
-                                    Modifier.align(Alignment.TopEnd).padding(end = nudge + (sysW + SYSTEM_PILL_GAP.dp) * besideShortcutFromEdge(PadSide.RIGHT, systemKeys), top = sysH + gap),
+                                    if (ps2Beside) Modifier.align(Alignment.TopEnd).padding(end = nudge)   // the PS2: in START's place, SELECT / START under it
+                                    else Modifier.align(Alignment.TopEnd).padding(end = nudge + (sysW + SYSTEM_PILL_GAP.dp) * besideShortcutFromEdge(PadSide.RIGHT, systemKeys), top = sysH + gap),
                                 )
                             }
                         }
