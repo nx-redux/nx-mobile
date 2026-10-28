@@ -92,9 +92,11 @@ internal fun MenuMarkCell(tile: GridTile, lit: Boolean, cellW: Float, cellH: Flo
             is GridTile.Tool -> {
                 ToolIcon(tile.icon, tile.appId, ink, Modifier.size((min(cellW, cellH) * TOOL_ICON_SHARE).dp))
                 Spacer(Modifier.height(CONSOLE_COUNT_GAP))
+                // One line where it fits, else it wraps between its words onto a second ("Retro Achievements").
                 Text(
                     tile.lines.joinToString(" "), color = ink, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Medium,
-                    fontSize = small, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp),
+                    fontSize = small, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                    lineHeight = small * 1.3f, modifier = Modifier.padding(horizontal = 6.dp),
                 )
             }
             is GridTile.Game -> Unit
