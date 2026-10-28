@@ -171,16 +171,15 @@ object CoreRegistry {
         "armsx2", "libarmsx2_libretro_android.so", setOf("iso", "chd", "cso", "zso", "bin", "elf", "gz", "m3u"),
         biosSubdir = "pcsx2/bios",
         // BIOS: Auto lets the core pick from <system>/pcsx2/bios; Console Settings' BIOS row forces one file at launch.
-        // Off and hidden: the patch options need a patches.zip the app doesn't ship, .pnach cheats are not offered for PS2,
-        // and the Software renderer's threads matter only to a renderer the app never picks.
+        // Patches and cheats off until the player turns them on: the core reads the game's .pnach patches from
+        // Cheats/PS2/Patches/ (Tools → Cheats & Patches downloads PCSX2's patches.zip there) and its cheats from Cheats/PS2/
+        // (cores/patches/armsx2/0005), never shipped with the app. Software renderer threads stay hidden: they matter only
+        // to a renderer the app never picks.
         defaultOptions = mapOf(
             "armsx2_renderer" to "OpenGL", "armsx2_bios" to "auto", "armsx2_upscale" to "2x",
             "armsx2_widescreen_patches" to "disabled", "armsx2_no_interlacing_patches" to "disabled", "armsx2_cheats" to "disabled", "armsx2_sw_threads" to "2",
         ),
-        lockedOptions = setOf(
-            "armsx2_renderer", "armsx2_bios", "armsx2_upscale",
-            "armsx2_widescreen_patches", "armsx2_no_interlacing_patches", "armsx2_cheats", "armsx2_sw_threads",
-        ),
+        lockedOptions = setOf("armsx2_renderer", "armsx2_bios", "armsx2_upscale", "armsx2_sw_threads"),
         vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan")),
         name = "ARMSX2",
         cheats = false,

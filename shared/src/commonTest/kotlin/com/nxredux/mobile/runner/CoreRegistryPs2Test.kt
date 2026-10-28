@@ -2,6 +2,7 @@ package com.nxredux.mobile.runner
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class CoreRegistryPs2Test {
@@ -30,12 +31,17 @@ class CoreRegistryPs2Test {
         assertTrue("armsx2_upscale" in core.lockedOptions)
     }
 
-    @Test fun patchesCheatsAndSoftwareThreadsLockedOff() {
+    @Test fun patchesAndCheatsOffButUnlocked() {   // the player's to turn on; their files come from Cheats/PS2
         val core = CoreRegistry.forTag("PS2")!!
         for (k in listOf("armsx2_widescreen_patches", "armsx2_no_interlacing_patches", "armsx2_cheats")) {
             assertEquals("disabled", core.defaultOptions[k], k)
-            assertTrue(k in core.lockedOptions, k)
+            assertFalse(k in core.lockedOptions, k)
         }
+    }
+
+    @Test fun softwareThreadsLocked() {
+        val core = CoreRegistry.forTag("PS2")!!
+        assertEquals("2", core.defaultOptions["armsx2_sw_threads"])
         assertTrue("armsx2_sw_threads" in core.lockedOptions)
     }
 }
