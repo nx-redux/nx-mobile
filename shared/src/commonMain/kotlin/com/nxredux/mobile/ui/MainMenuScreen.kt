@@ -40,7 +40,6 @@ import com.nxredux.mobile.ui.nx.HomeMinimalScreen
 import com.nxredux.mobile.ui.nx.MinimalScreen
 import com.nxredux.mobile.ui.nx.MinimalSelected
 import androidx.compose.ui.zIndex
-import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxTapOpens
 import com.nxredux.mobile.ui.nx.LocalPortrait
@@ -98,9 +97,9 @@ fun MainMenuScreen(
     controllerArt: Boolean = false,       // a List or Carousel Consoles tab: Layouts → Consoles background is Controller
     bandShade: Boolean = true,            // List: the info band's shade ([mainMenuListBand]: none on Consoles, Collections and Tools)
     bandInfo: Boolean = true,             // List: the band shows the row's info ([mainMenuListBand]: none on Consoles, Collections and Tools)
-    canSearch: Boolean = false,           // the library has games: START Search in the hints
+    canSearch: Boolean = false,           // the library has games: the Search icon
     onTabMenu: (() -> Unit)? = null,      // a long press on the tab row or the single-tab title: the hidden-tab menu
-    tabMenu: Boolean = false,             // a hidden tab can be opened from MENU: every row's hints offer Options, every Home row takes a long press
+    tabMenu: Boolean = false,             // a hidden tab can be opened from MENU: every row's MENU offers Options, every Home row takes a long press
     minimalOpening: MinimalOpening? = null,   // Minimal: this tab's selected folder being opened: the others fade (a launch runs App's [LaunchOverlay])
 ) {
     val rows = screen.rows
@@ -114,7 +113,6 @@ fun MainMenuScreen(
     // (in effect, [LocalLauncherChrome]) shows or hides the bottom tabs; L1 / R1 switch tabs either way.
     val shown = LocalLauncherChrome.current
     val chrome = remember(shown) { mainMenuBodyChrome(shown) }
-    val hints = NoHints
     // Consoles with their controllers (a List or Carousel by Layouts → Consoles background): every pad
     // decoded ahead, off the main thread, nearest the selection first, so stepping through the consoles never decodes one inside a frame.
     if (!home && style != MenuStyle.GRID && style != MenuStyle.MINIMAL && controllerArt) {
@@ -173,7 +171,7 @@ fun MainMenuScreen(
                 @Composable fun slot(keepBarRoom: Boolean = true, body: @Composable (Modifier) -> Unit) {
                     NxScreenScaffold(
                         rows = emptyList(), selectedIndex = 0,
-                        hints = hints, onSelect = onSelect, onOpen = onOpen, modifier = Modifier.weight(1f), onHint = onHint, grid = body,
+                        hints = emptyList(), onSelect = onSelect, onOpen = onOpen, modifier = Modifier.weight(1f), onHint = onHint, grid = body,
                         hideHints = chrome.emptyBarRoom, keepBarRoom = keepBarRoom,
                     )
                 }
@@ -183,7 +181,7 @@ fun MainMenuScreen(
                     when (style) {
                         // Its rows level with Recent and Search (tab row hidden) stop short of them, as a List tab's.
                         MenuStyle.LIST -> HomeListScreen(
-                            rows, selection, homeView.strip, info, hints, onSelect, onOpen, onLongPress, onHint,
+                            rows, selection, homeView.strip, info, onSelect, onOpen, onLongPress, onHint,
                             Modifier.weight(1f), tabMenu = tabMenu, iconsRoom = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad,
                         )
                         MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
@@ -198,12 +196,12 @@ fun MainMenuScreen(
                             // rows sit in the same place whatever Button hints says.
                             NxScreenScaffold(
                                 rows = emptyList(), selectedIndex = 0,
-                                hints = hints, onSelect = onSelect, onOpen = onOpen, modifier = Modifier.weight(1f), onHint = onHint, grid = carousel,
+                                hints = emptyList(), onSelect = onSelect, onOpen = onOpen, modifier = Modifier.weight(1f), onHint = onHint, grid = carousel,
                                 hideHints = chrome.emptyBarRoom || chrome.noBar,
                             )
                         }
                         MenuStyle.MINIMAL -> HomeMinimalScreen(
-                            rows, selection, homeView.strip, hints, onSelect, onOpen, onLongPress, onHint,
+                            rows, selection, homeView.strip, onSelect, onOpen, onLongPress, onHint,
                             minimalSelected, modifier = Modifier.weight(1f).zIndex(-1f),   // its band ends on the tab row's top
                             leaving = minimalOpening != null, iconsRoom = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad,
                         )
@@ -256,7 +254,7 @@ fun MainMenuScreen(
                     MenuStyle.MINIMAL -> {
                         val names = remember(rows) { minimalTabRows(rows) }
                         MinimalScreen(
-                            names, selection, hints, onSelect, onOpen, onLongPress, onHint, minimalSelected,
+                            names, selection, emptyList(), onSelect, onOpen, onLongPress, onHint, minimalSelected,
                             Modifier.weight(1f).zIndex(-1f), top = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad.value,
                             hideHints = chrome.emptyBarRoom, toBoxBottom = true, layoutKey = layoutKey, leaving = minimalOpening != null, onSwipeSelect = onSwipeSelect,
                         )
@@ -332,8 +330,6 @@ internal fun smoothFadeStops(ground: Color): Array<Pair<Float, Color>> = Array(S
 
 private const val SMOOTH_FADE_STOPS = 20
 
-/** The main menu draws no hint bar. */
-private val NoHints = emptyList<Hint>()
 
 /**
  * A bandless main menu List's gaps above its first row and below its last, in rows: a quarter under the tab row, half

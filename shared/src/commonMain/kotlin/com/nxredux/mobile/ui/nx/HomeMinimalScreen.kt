@@ -22,7 +22,7 @@ internal fun homeMinimalRows(rows: List<MainRow>): List<NxRow> = homeListRows(ro
  */
 @Composable
 internal fun HomeMinimalScreen(
-    rows: List<MainRow>, selection: () -> Int, strip: HomeStrip?, hints: List<Hint>,
+    rows: List<MainRow>, selection: () -> Int, strip: HomeStrip?,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, onHint: ((NxButton) -> Unit)?,
     selected: MinimalSelected, modifier: Modifier = Modifier, leaving: Boolean = false, iconsRoom: Dp = 0.dp,
 ) {
@@ -44,7 +44,7 @@ internal fun HomeMinimalScreen(
         else -> iconsRoom.value
     }
     MinimalScreen(
-        names, selection, hints, onSelect, onOpen, onLongPress, onHint, selected, modifier, top = top,
+        names, selection, emptyList(), onSelect, onOpen, onLongPress, onHint, selected, modifier, top = top,
         hideHints = chrome.emptyBarRoom, toBoxBottom = true, leaving = leaving,
     ) {
         HomeStripOverlay(shownStrip, pageStrip, header, stripLines, inkTop, capTop, frame, gutter)

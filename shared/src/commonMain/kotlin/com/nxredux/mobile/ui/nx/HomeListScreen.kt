@@ -56,7 +56,7 @@ internal fun homeListRows(rows: List<MainRow>): List<NxRow> = rows.mapNotNull { 
  */
 @Composable
 internal fun HomeListScreen(
-    rows: List<MainRow>, selection: () -> Int, strip: HomeStrip?, info: () -> List<InfoLine>, hints: List<Hint>,
+    rows: List<MainRow>, selection: () -> Int, strip: HomeStrip?, info: () -> List<InfoLine>,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, onHint: ((NxButton) -> Unit)?,
     modifier: Modifier = Modifier, tabMenu: Boolean = false, iconsRoom: Dp = 0.dp,
 ) {
@@ -93,7 +93,7 @@ internal fun HomeListScreen(
             if (rows == listOf(MainRow.PickAGame)) {
                 // Nothing played yet: the Pick a game card fills the body (the selection is always on it).
                 NxScreenScaffold(
-                    rows = emptyList(), selectedIndex = 0, hints = hints, onSelect = onSelect, onOpen = onOpen,
+                    rows = emptyList(), selectedIndex = 0, hints = emptyList(), onSelect = onSelect, onOpen = onOpen,
                     modifier = Modifier.weight(1f), onHint = onHint, hideHints = chrome.emptyBarRoom || chrome.noBar,
                     grid = { m -> HomePickCard(selection, onSelect, onOpen, onLongPress?.takeIf { tabMenu }, portrait, m.padding(horizontal = gutter, vertical = 12.dp).fillMaxSize()) },
                 )
