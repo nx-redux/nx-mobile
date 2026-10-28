@@ -122,9 +122,10 @@ fun MainMenuScreen(
     // A Minimal tab's selected name as last laid out: where B's morph lands.
     val minimalSelected = remember { MinimalSelected() }
     CompositionLocalProvider(LocalLauncherChrome provides chrome, LocalFooterMode provides FooterMode.BUTTONS) {
-    // List, Minimal and Grid scroll vertically: a sideways swipe moves between the tabs ([tabSwipe]); a Carousel keeps it
-    // for its own row.
-    val swipeable = style == MenuStyle.LIST || style == MenuStyle.MINIMAL || style == MenuStyle.GRID
+    // List, Minimal, Grid and a Carousel stood on end scroll vertically: a sideways swipe moves between the tabs
+    // ([tabSwipe]); a horizontal Carousel (Home's always is) keeps it for its own row.
+    val swipeable = style == MenuStyle.LIST || style == MenuStyle.MINIMAL || style == MenuStyle.GRID ||
+        (style == MenuStyle.CAROUSEL && orientation == MenuOrientation.VERTICAL && !home)
     val textInset = listTextInset(style)   // the tab words and the icons in line with a List's names
     val tabRowPx = remember { mutableIntStateOf(0) }   // the tab row's height as laid out (0: hidden): List Home's art ends on its top
     Box(modifier.fillMaxSize().tabSwipe(swipeable && screen.tabs.size > 1 && screen.menu == null && screen.search == null, onTabSwipe)) {
