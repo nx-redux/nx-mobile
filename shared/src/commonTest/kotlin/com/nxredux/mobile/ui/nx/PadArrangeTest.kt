@@ -1,9 +1,11 @@
 package com.nxredux.mobile.ui.nx
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import com.nxredux.mobile.settings.GroupTweak
 import com.nxredux.mobile.settings.PadGroup
 import com.nxredux.mobile.settings.PadLayout
+import kotlin.math.hypot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -27,27 +29,53 @@ class PadArrangeTest {
 
     @Test fun an_unmeasured_group_has_no_rect() = assertNull(arrange(PadLayout.EMPTY).placed(PadGroup.C_STICK))
 
-    @Test fun ps2LandscapeKeepsDpadAndStickApart() {
+    @Test fun ps2LandscapeDpadIsFullSizeAndTheStickClearsItsButtons() {
         for (side in PadSide.entries) {
             val c = dualStickCluster(side)
-            val bounds = Rect(0f, 0f, c.width, c.height)
+            assertEquals(3f, c.main.width, 1e-4f)   // the other pads' d-pad / diamond
+            for (r in listOf(c.main, c.stick, c.thumb)) assertTrue(r.left >= -1e-4f && r.top >= -1e-4f && r.right <= c.width + 1e-4f && r.bottom <= c.height + 1e-4f, "$side: $r outside")
+            assertTrue(c.thumb.top >= c.stick.bottom, "$side: L3 / R3 not under the stick")
+            assertFalse(c.thumb.overlaps(c.main), "$side: the pill over the d-pad / diamond")
+            val m = c.main
+            val centre = c.stick.center
+            val radius = c.stick.width / 2f
+            if (side == PadSide.LEFT) {
+                // The cross's arms: right (middle row, right third) and down (bottom row, middle third).
+                for (arm in listOf(Rect(m.left + 2f, m.top + 1f, m.right, m.top + 2f), Rect(m.left + 1f, m.top + 2f, m.left + 2f, m.bottom))) {
+                    val nx = centre.x.coerceIn(arm.left, arm.right); val ny = centre.y.coerceIn(arm.top, arm.bottom)
+                    assertTrue(hypot(centre.x - nx, centre.y - ny) >= radius, "$side: the stick over the arm $arm")
+                }
+                assertTrue(c.stick.left > m.left + 1.5f && c.stick.top > m.top + 1.5f)   // below-right of the d-pad's middle
+            } else {
+                // The diamond's left and bottom buttons (radius 0.5 in their thirds).
+                for (b in listOf(Offset(m.left + 0.5f, m.top + 1.5f), Offset(m.left + 1.5f, m.top + 2.5f))) {
+                    assertTrue((centre - b).getDistance() >= radius + 0.5f, "$side: the stick over the button at $b")
+                }
+                assertTrue(c.stick.right < m.right - 1.5f && c.stick.top > m.top + 1.5f)   // below-left of the diamond's middle
+            }
+        }
+    }
+
+    @Test fun ps2LandscapeSidesFitTheHalf() {
+        val other = ps2OtherRowsUnits(overGame = true, besidePicture = false, secondRow = false)
+        assertEquals(1f, dualStickFit(boxW = 4.7f, boxH = 13f, otherH = other, nudge = 0.15f))   // a tall half: full size
+        val phone = dualStickFit(boxW = 4.5f, boxH = 6f, otherH = other, nudge = 0.15f)
+        assertTrue(phone < 1f && other + dualStickCluster(PadSide.LEFT).height * phone <= 6f + 1e-4f)   // a phone: shrunk to fit
+    }
+
+    @Test fun ps2CompactSidesKeepDpadAndStickApart() {
+        for (side in PadSide.entries) {
+            val c = compactDualStickCluster(side)
             assertFalse(c.main.overlaps(c.stick), "$side: d-pad / face and stick overlap")
-            for (r in listOf(c.main, c.stick, c.thumb)) assertTrue(bounds.contains(r.topLeft) && r.right <= c.width + 1e-4f && r.bottom <= c.height + 1e-4f, "$side: $r outside $bounds")
-            assertFalse(c.thumb.overlaps(c.main) || c.thumb.overlaps(c.stick), "$side: the thumb pill overlaps")
-            // The stick group (stick + its thumb pill) keeps out of the d-pad / face box, so the editor picks either cleanly.
             assertFalse(c.stickGroup.overlaps(c.main), "$side: stick group over the d-pad / face")
         }
-        val left = dualStickCluster(PadSide.LEFT)
-        assertTrue(left.stick.left >= left.main.right && left.stick.top > left.main.top)        // below-right of the d-pad
-        val right = dualStickCluster(PadSide.RIGHT)
-        assertTrue(right.stick.right <= right.main.left && right.stick.top > right.main.top)    // below-left of the face
     }
 
     @Test fun ps2OverlaySidesFitTheBand() {
         // A 9-unit band less the edges: both sides the d-pad row's gap apart, no taller than the row.
         val row = 8.4f
         val s = dualStickScale(row, stickScale = 1f)
-        assertTrue(2f * dualStickCluster(PadSide.LEFT).width * s + 0.5f <= row + 1e-4f)
+        assertTrue(2f * compactDualStickCluster(PadSide.LEFT).width * s + 0.5f <= row + 1e-4f)
         assertTrue(3f * s <= 3f)
         assertEquals(1.25f, dualStickScale(20f, stickScale = 1.25f))   // a wide band: the d-pad row's own scale
     }

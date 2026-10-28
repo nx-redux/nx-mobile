@@ -642,10 +642,10 @@ private fun FaceClusterBox(
 }
 
 /**
- * One side of the PS2 pad ([dualStickCluster]) at [unit]: the d-pad ([PadGroup.DPAD], left) or the face diamond
- * ([PadGroup.FACE], right) by the screen edge, and toward the middle the stick with its L3 / R3 pill over it
- * ([PadGroup.L_STICK] / [PadGroup.R_STICK]), each group its own. Both are always drawn: no d-pad / stick toggle. The left
- * stick is the core's left analog, the right one its right ([onStick] each).
+ * One side of the PS2 pad, [c] ([dualStickCluster] in landscape, [compactDualStickCluster] on the portrait overlay) at
+ * [unit]: the d-pad ([PadGroup.DPAD], left) or the face diamond ([PadGroup.FACE], right) by the screen edge, and toward
+ * the middle the stick with its L3 / R3 pill ([PadGroup.L_STICK] / [PadGroup.R_STICK]), each group its own. Both are
+ * always drawn: no d-pad / stick toggle. The left stick is the core's left analog, the right one its right ([onStick] each).
  */
 @Composable
 private fun DualStickSide(
@@ -655,8 +655,8 @@ private fun DualStickSide(
     emit: (PadEvent) -> Unit,
     onStick: ((Float, Float) -> Unit)?,
     modifier: Modifier = Modifier,
+    c: DualStickCluster = dualStickCluster(side),
 ) {
-    val c = dualStickCluster(side)
     val left = side == PadSide.LEFT
     Box(modifier.size(width = unit * c.width, height = unit * c.height)) {
         val main = c.main
@@ -1566,28 +1566,29 @@ internal fun clusterUnit(innerW: Float, innerH: Float): Float = minOf(innerH / C
 internal fun landscapeClusterUnit(screenW: Float, h: Float, inset: Float = 0f): Float =
     clusterUnit(screenW * CLUSTER_MAX_WIDTH_SHARE - inset - 2 * CLUSTER_PADDING, h - 2 * CLUSTER_PADDING)
 
-/** The PS2 cluster's d-pad / face diamond and stick boxes, units square, and the gap between the two, units ([dualStickCluster]). */
+/** The compact PS2 cluster's d-pad / face diamond and stick boxes, units square, and the gap between the two ([compactDualStickCluster]). */
 private const val DUAL_MAIN_UNITS = 2.1f
 private const val DUAL_STICK_UNITS = 2.1f
 private const val DUAL_GAP_UNITS = 0.1f
-/** The L3 / R3 pill, units, and its gap over the stick's box. */
+/** The L3 / R3 pill, units, and its gap to the stick's box. */
 private const val THUMB_PILL_W_UNITS = 1f
 private const val THUMB_PILL_H_UNITS = 0.6f
 private const val THUMB_PILL_GAP_UNITS = 0.15f
 
 /**
- * One side of the PS2 pad ([PadProfile.dualSticks]) in pad units, [width] x [height] (4.3 x 3: the landscape cluster's
- * 3-unit d-pad row, 4.5 units less the edge nudge). [main] is the d-pad (left) or the face diamond (right) in the top
- * corner by the screen edge, [stick] the stick below it toward the screen's middle (a DualShock 2's left stick sits
- * below-right of its d-pad, the right stick below-left of the face buttons), and [thumb] its L3 / R3 pill centred over
- * the stick. Side by side, not stacked, the two keep their size in the d-pad's row: about 70 % of the other pads' d-pad.
- * [stickGroup] (the stick and its pill, [PadGroup.L_STICK] / [PadGroup.R_STICK]) keeps clear of [main]'s box.
+ * One side of the PS2 pad ([PadProfile.dualSticks]) in pad units, [width] x [height]: [main] the d-pad (left) or the face
+ * diamond (right) by the screen edge, [stick] its stick toward the screen's middle (a DualShock 2's left stick sits
+ * below-right of its d-pad, the right stick below-left of the face buttons) and [thumb] its L3 / R3 pill.
  */
 internal data class DualStickCluster(val width: Float, val height: Float, val main: Rect, val stick: Rect, val thumb: Rect) {
-    val stickGroup: Rect get() = Rect(stick.left, thumb.top, stick.right, stick.bottom)
+    val stickGroup: Rect get() = StickPiece(stick, thumb).group
 }
 
-internal fun dualStickCluster(side: PadSide): DualStickCluster {
+/**
+ * The compact side for the portrait overlay ([dualStickScale]), 4.3 x 3 (a d-pad row): the d-pad / diamond 2.1 units in
+ * the top corner, the stick beside it lower down with its pill over it, the two side by side so both fit the row.
+ */
+internal fun compactDualStickCluster(side: PadSide): DualStickCluster {
     val w = DUAL_MAIN_UNITS + DUAL_GAP_UNITS + DUAL_STICK_UNITS
     val h = 3f
     val main = if (side == PadSide.LEFT) Rect(0f, 0f, DUAL_MAIN_UNITS, DUAL_MAIN_UNITS) else Rect(w - DUAL_MAIN_UNITS, 0f, w, DUAL_MAIN_UNITS)
@@ -1596,6 +1597,39 @@ internal fun dualStickCluster(side: PadSide): DualStickCluster {
     val thumbTop = stick.top - THUMB_PILL_GAP_UNITS - THUMB_PILL_H_UNITS
     val thumb = Rect(stick.center.x - THUMB_PILL_W_UNITS / 2f, thumbTop, stick.center.x + THUMB_PILL_W_UNITS / 2f, thumbTop + THUMB_PILL_H_UNITS)
     return DualStickCluster(w, h, main, stick, thumb)
+}
+
+/** The landscape PS2 stick's box, units, its reach into the d-pad / diamond's box and its top ([dualStickCluster]). */
+private const val LANDSCAPE_STICK_UNITS = 2.1f
+private const val LANDSCAPE_STICK_INTO_MAIN = 0.6f
+private const val LANDSCAPE_STICK_TOP = 1.9f
+
+/**
+ * The landscape side, 4.5 x 4.75 at full size: the d-pad / diamond the other pads' 3 units in the top corner by the edge,
+ * the stick (2.1) below its middle toward the screen's middle, in the cross's empty lower corner (clear of its arms and
+ * the diamond's buttons) and below, its L3 / R3 pill under it. [dualStickFit] scales it down where the half is too short.
+ */
+internal fun dualStickCluster(side: PadSide): DualStickCluster {
+    val m = 3f
+    val d = LANDSCAPE_STICK_UNITS
+    val w = m - LANDSCAPE_STICK_INTO_MAIN + d
+    val h = LANDSCAPE_STICK_TOP + d + THUMB_PILL_GAP_UNITS + THUMB_PILL_H_UNITS
+    val main = if (side == PadSide.LEFT) Rect(0f, 0f, m, m) else Rect(w - m, 0f, w, m)
+    val stickLeft = if (side == PadSide.LEFT) w - d else 0f
+    val stick = Rect(stickLeft, LANDSCAPE_STICK_TOP, stickLeft + d, LANDSCAPE_STICK_TOP + d)
+    val pillTop = stick.bottom + THUMB_PILL_GAP_UNITS
+    val thumb = Rect(stick.center.x - THUMB_PILL_W_UNITS / 2f, pillTop, stick.center.x + THUMB_PILL_W_UNITS / 2f, pillTop + THUMB_PILL_H_UNITS)
+    return DualStickCluster(w, h, main, stick, thumb)
+}
+
+/**
+ * The landscape PS2 side's scale ([dualStickCluster]) in a half [boxW] x [boxH] units whose other rows (shoulders, system
+ * row, the gaps) take [otherH] of the height and whose edge nudge is [nudge]: full size where it fits (the Fold), else as
+ * big as fits (a phone's 6-unit-tall half).
+ */
+internal fun dualStickFit(boxW: Float, boxH: Float, otherH: Float, nudge: Float): Float {
+    val c = dualStickCluster(PadSide.LEFT)
+    return minOf(1f, (boxH - otherH) / c.height, (boxW - nudge) / c.width).coerceAtLeast(0f)
 }
 
 /** A stick and its L3 / R3 pill, pad units; [group] is the box round both. */
@@ -1631,7 +1665,7 @@ internal fun portraitDualSticks(widthUnits: Float, heightUnits: Float, stickScal
 }
 
 /**
- * The PS2 sides' scale ([dualStickCluster]) in a portrait middle row [rowWidthUnits] wide (inside its edge insets) whose
+ * The PS2 sides' scale ([compactDualStickCluster]) in a portrait middle row [rowWidthUnits] wide (inside its edge insets) whose
  * d-pad is at [stickScale]: that scale, or less so both sides fit the row [MID_MIN_GAP] apart. Their 3 units tall then
  * never pass the row's 3 x [stickScale].
  */
@@ -1641,11 +1675,14 @@ internal fun dualStickScale(rowWidthUnits: Float, stickScale: Float): Float =
 /** The PS2 cluster's width, units ([dualStickCluster]): the landscape reach estimate's face width for that pad. */
 internal val DUAL_STICK_CLUSTER_W_UNITS: Float = DUAL_MAIN_UNITS + DUAL_GAP_UNITS + DUAL_STICK_UNITS
 
+/** The landscape PS2 side's width at full size, units ([dualStickCluster]). */
+internal val LANDSCAPE_DUAL_W_UNITS: Float = dualStickCluster(PadSide.LEFT).width
+
 /**
  * The width a landscape half's cluster takes, in face-button units, for the reach estimate before the drawn groups are
  * measured: [faceWidthUnits], or the PS2's d-pad / face beside its stick ([dualStickCluster]).
  */
-fun landscapeClusterUnits(profile: PadProfile): Float = if (profile.dualSticks) DUAL_STICK_CLUSTER_W_UNITS else faceWidthUnits(profile)
+fun landscapeClusterUnits(profile: PadProfile): Float = if (profile.dualSticks) LANDSCAPE_DUAL_W_UNITS else faceWidthUnits(profile)
 
 /** A system pill's width in units (MENU, the toggle, SELECT, START), and the gap between two, dp. */
 private const val SYSTEM_PILL_W_UNITS = 1.4f
@@ -1759,6 +1796,23 @@ internal fun overlayShortcutPlace(side: PadSide, keys: List<PadSystemKey>): Over
     PadSide.RIGHT -> keys.indexOf(PadSystemKey.SELECT).let { i ->
         if (i >= 0) OverlayShortcutPlace(keys.lastIndex - i, under = true) else OverlayShortcutPlace(keys.size, under = false)
     }
+}
+
+/** How far the PS2's system row sits under the top over the game, units: under its touch shortcut ([OVERLAY_SHORTCUT_GAP] between). */
+internal const val PS2_SYSTEM_DROP = 0.72f + 0.2f
+
+/**
+ * The height a landscape half's rows other than the PS2 sides take, units ([dualStickFit]): the shoulders (1), the two
+ * 0.35 gaps and the system row: over the game ([overGame]) under its shortcut ([PS2_SYSTEM_DROP] + 0.72), beside the
+ * picture ([besidePicture]) one or two pill rows ([secondRow]), else one.
+ */
+internal fun ps2OtherRowsUnits(overGame: Boolean, besidePicture: Boolean, secondRow: Boolean): Float {
+    val system = when {
+        besidePicture -> if (secondRow) 0.72f * 2 + 0.35f else 0.72f
+        overGame -> PS2_SYSTEM_DROP + 0.72f
+        else -> 0.72f
+    }
+    return 1f + 2 * 0.35f + system
 }
 
 /** The gap between an over-the-game cluster's system row and the touch shortcut under it, units ([overlayShortcutTop]). */
@@ -2014,8 +2068,8 @@ fun PortraitOverlayPad(
                     val faceMid = unit * faceScale
                     if (profile.dualSticks) {   // the PS2's sides, as on the band
                         val dual = unit * dualStickScale(bandWidthUnits - 2f * OVERLAY_EDGE_NUDGE, mid)
-                        DualStickSide(PadSide.LEFT, profile, dual, emit, onStick)
-                        DualStickSide(PadSide.RIGHT, profile, dual, emit, onCStick)
+                        DualStickSide(PadSide.LEFT, profile, dual, emit, onStick, c = compactDualStickCluster(PadSide.LEFT))
+                        DualStickSide(PadSide.RIGHT, profile, dual, emit, onCStick, c = compactDualStickCluster(PadSide.RIGHT))
                     } else {
                         if (stick.useJoystick) NeuJoystick(stickMid, emit, analog = analog, onStick = onStick) else NeuDpad(stickMid, emit)
                         FaceClusterBox(profile, faceMid, (faceMid.value * 0.46f).sp, emit)
@@ -2091,11 +2145,14 @@ fun VirtualPadLeft(
             val nudge = unit * leftClusterNudge(overGame || besidePicture)   // inset from the left screen edge
             val gap = unit * 0.35f
             val systemKeys = padSystemRow(PadSide.LEFT, profile, motion != null)
+            // The PS2 over the game: touch shortcut 1 in MENU's place, MENU under it; its sides as big as the half allows.
+            val ps2Overlay = profile.dualSticks && overGame && !besidePicture
+            val dualUnit = unit * dualStickFit(maxWidth / unit, maxHeight / unit, ps2OtherRowsUnits(overGame, besidePicture, secondRow), leftClusterNudge(overGame || besidePicture))
             ProvidePadArrange(arrange) {
             Box(Modifier.fillMaxSize().padArrangeRoot(arrange)) {
             // Over the game: touch shortcut 1 under the toggle, drawn first (under the rest, as the editor's hit order has it).
             if (overGame && !besidePicture) {
-                val place = overlayShortcutPlace(PadSide.LEFT, systemKeys)
+                val place = if (ps2Overlay) OverlayShortcutPlace(0, under = false) else overlayShortcutPlace(PadSide.LEFT, systemKeys)
                 ShortcutPiece(
                     TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW,
                     Modifier.padding(start = nudge + (sysW + SYSTEM_PILL_GAP.dp) * place.fromEdge, top = unit * overlayShortcutTop(place, tools != null)),
@@ -2108,7 +2165,7 @@ fun VirtualPadLeft(
                     if (i > 0) Spacer(rowSpacer(i == flex, gap))
                     when (row) {
                         PadRow.SYSTEM -> Box(Modifier.heightIn(min = if (besidePicture && secondRow) sysH * 2 + gap else 0.dp)) {
-                            PadGroupBox(PadGroup.SYSTEM_LEFT, Modifier.padding(start = nudge)) {
+                            PadGroupBox(PadGroup.SYSTEM_LEFT, Modifier.padding(start = nudge, top = if (ps2Overlay) unit * PS2_SYSTEM_DROP else 0.dp)) {
                                 Column(horizontalAlignment = Alignment.Start) {
                                     SystemRow(systemKeys, emit, profile, sysH, sysW, stick.useJoystick, stick::toggle, motion)
                                     if (tools != null) {   // under MENU
@@ -2138,7 +2195,7 @@ fun VirtualPadLeft(
                             if (mic != null) MicFace(mic, micButtonSize(unit.value).dp, Modifier.padding(start = 8.dp).zIndex(1f))
                             if (!overGame && !besidePicture) ShortcutPiece(TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW, Modifier.padding(start = gap))
                         }
-                        PadRow.CLUSTER -> if (profile.dualSticks) DualStickSide(PadSide.LEFT, profile, unit, emit, onStick, Modifier.padding(start = nudge))
+                        PadRow.CLUSTER -> if (profile.dualSticks) DualStickSide(PadSide.LEFT, profile, dualUnit, emit, onStick, Modifier.padding(start = nudge))
                         else PadGroupBox(PadGroup.DPAD, Modifier.padding(start = nudge)) {
                             if (stick.useJoystick) NeuJoystick(unit, emit, analog = true, onStick = onStick)
                             else NeuDpad(unit, emit)
@@ -2191,11 +2248,14 @@ fun VirtualPadRight(
             val nudge = unit * OVERLAY_EDGE_NUDGE   // small inset from the right screen edge
             val gap = unit * 0.35f
             val systemKeys = padSystemRow(PadSide.RIGHT, profile)
+            // The PS2 over the game: touch shortcut 2 in START's place, SELECT and START under it.
+            val ps2Overlay = profile.dualSticks && overGame && !besidePicture
+            val dualUnit = unit * dualStickFit(maxWidth / unit, maxHeight / unit, ps2OtherRowsUnits(overGame, besidePicture, secondRow), OVERLAY_EDGE_NUDGE)
             ProvidePadArrange(arrange) {
             Box(Modifier.fillMaxSize().padArrangeRoot(arrange)) {
             // Over the game: touch shortcut 2 under SELECT (in its place where the pad has none), drawn first, as on the left.
             if (overGame && !besidePicture) {
-                val place = overlayShortcutPlace(PadSide.RIGHT, systemKeys)
+                val place = if (ps2Overlay) OverlayShortcutPlace(0, under = false) else overlayShortcutPlace(PadSide.RIGHT, systemKeys)
                 ShortcutPiece(
                     TouchSlot.TWO, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW,
                     Modifier.align(Alignment.TopEnd)
@@ -2209,7 +2269,7 @@ fun VirtualPadRight(
                     if (i > 0) Spacer(rowSpacer(i == flex, gap))
                     when (row) {
                         PadRow.SYSTEM -> Box(Modifier.heightIn(min = if (besidePicture && secondRow) sysH * 2 + gap else 0.dp)) {
-                            PadGroupBox(PadGroup.SYSTEM_RIGHT, Modifier.padding(end = nudge).align(Alignment.TopEnd)) {
+                            PadGroupBox(PadGroup.SYSTEM_RIGHT, Modifier.padding(end = nudge, top = if (ps2Overlay) unit * PS2_SYSTEM_DROP else 0.dp).align(Alignment.TopEnd)) {
                                 Column(horizontalAlignment = Alignment.End) {
                                     SystemRow(systemKeys, emit, profile, sysH, sysW, false, {}, null)
                                     if (tools != null) {   // under START
@@ -2242,7 +2302,7 @@ fun VirtualPadRight(
                                 }
                             }
                         }
-                        PadRow.CLUSTER -> if (profile.dualSticks) DualStickSide(PadSide.RIGHT, profile, unit, emit, onCStick, Modifier.padding(end = nudge))
+                        PadRow.CLUSTER -> if (profile.dualSticks) DualStickSide(PadSide.RIGHT, profile, dualUnit, emit, onCStick, Modifier.padding(end = nudge))
                         else PadGroupBox(PadGroup.FACE, Modifier.padding(end = nudge)) {
                             FaceClusterBox(
                                 profile, unit, glyph, emit, onCStick = onCStick,
