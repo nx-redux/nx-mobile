@@ -17,8 +17,6 @@ class ColourRolesLockTest {
     private val literal = Regex("""Color\(\s*(\w+\s*=\s*)?0x""")
     // An alpha: `.copy(... alpha = ...)` (any layout), `.alpha(`, or a named `alpha = <number>` argument (Image, Icon).
     private val alphaCall = Regex("""\.\s*(?:copy\s*\(\s*(?:[^()]*,\s*)?alpha\s*=|alpha\s*\()|,\s*alpha\s*=\s*\d""")
-    // The one alpha that needs no tag: the ladder's own Float, e.g. `.alpha(colors.artFar)`.
-    private val ladderFloat = Regex("""alpha\s*(?:=|\()\s*(?:\w+\.)*artFar\b""")
 
     private fun sourceRoot(): File {
         var dir: File? = File("").absoluteFile
@@ -74,11 +72,9 @@ class ColourRolesLockTest {
     }
 
     @Test fun every_alpha_names_its_role() {
-        val bad = scan({ it == themeFile }, ::matches, { lines, i, m ->
-            "// role:" in lines[i] ||
-                (i > 0 && "// role:" in lines[i - 1]) ||
-                ladderFloat.containsMatchIn(m.value + lines[i].substringAfter(m.value, ""))
+        val bad = scan({ it == themeFile }, ::matches, { lines, i, _ ->
+            "// role:" in lines[i] || (i > 0 && "// role:" in lines[i - 1])
         }, alphaCall)
-        assertTrue(bad.isEmpty(), "Alphas without a role (add `// role: ...` on the line or the line above, or pass the ladder's artFar):\n" + bad.joinToString("\n"))
+        assertTrue(bad.isEmpty(), "Alphas without a role (add `// role: ...` on the line or the line above):\n" + bad.joinToString("\n"))
     }
 }

@@ -47,8 +47,8 @@ private val GRID_EDGE_STEPS = listOf(0.4f)
  * row from an edge so it is never in it ([homeListScroll]). A grid that fits sits on the box's bottom, its last row a gap
  * over what is under it. Sideways swipes are the main menu's (they switch tabs); Carousels alone scroll sideways.
  * Reports its columns through [onColumns], so the d-pad steps by whole rows ([gridStep]).
- * A tile lights up in place ([GridTileFace]: the "Logo" look, a game's ring); the Consoles tab ([consoles]) draws each
- * console as its logo alone ([ConsoleLogoCell]). A tap selects, a tap on the selected one opens it, a long press calls
+ * A game is drawn in colour while selected, the rest grey ([NxMenuTile]'s drained); a console, collection or tool as its
+ * mark ([MenuMarkCell]), a console's logo alone on the Consoles tab ([consoles]). A tap selects, a tap on the selected one opens it, a long press calls
  * [onLongPress]. [games]: a game list's wide tiles, the bottom shade on the lit game with art.
  * [layoutKey]: the owner of this grid; a new key re-reports the columns.
  */

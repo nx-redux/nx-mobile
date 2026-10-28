@@ -3,7 +3,7 @@ package com.nxredux.mobile.ui.nx
 import androidx.compose.ui.graphics.Color
 
 /**
- * Every colour literal of the on-screen pad, by theme and console, in one place. [VirtualPad] and [ConsolePadColors]
+ * Every colour literal of the on-screen pad, by theme and console, in one place. [VirtualPad] and ConsolePadColors.kt
  * build their gradients and faces from these; change a colour here. Gradient stops are named top to bottom.
  */
 internal object PadPalettes {

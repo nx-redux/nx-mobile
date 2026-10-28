@@ -71,8 +71,6 @@ data class NxColors(
     val inkDim: Color = main.copy(alpha = 0.38f)
     /** List Home's unselected names: the [main] ink at 70%. */
     val inkName: Color = main.copy(alpha = 0.70f)
-    /** Reserved for unselected pictures; not yet wired. The [main] ink at 55%. */
-    val inkMuted: Color = main.copy(alpha = 0.55f)
     /** An unlit tag pill (Continue) and the unlit plate behind a word: the [main] ink at 14%. */
     val inkFaint: Color = main.copy(alpha = 0.14f)
     /**
@@ -88,11 +86,6 @@ data class NxColors(
     val inkLine: Color = main.copy(alpha = 0.10f)
     /** The Settings help note's outer sheet (NxSettingInfoPopup): the [accent] at 14% over black, opaque. */
     val accentFaint: Color = accent.copy(alpha = 0.14f).compositeOver(Color(0xFF000000))
-    /**
-     * Reserved for carousel items two or more steps out (a Float, not a colour); not yet wired. The carousel uses
-     * MENU_FAR_ALPHA (0.2) in RowLayout.kt.
-     */
-    val artFar: Float = 0.30f
     /**
      * The hint bar over art: NxHintBar's ground and the shade over a hidden bar's kept room (NxScreenScaffold). Its alpha
      * is [NX_HINT_BAR_ALPHA], where an info band's fade starts.

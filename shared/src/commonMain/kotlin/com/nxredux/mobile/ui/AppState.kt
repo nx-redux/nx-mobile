@@ -384,7 +384,7 @@ sealed interface Screen {
         val shot: LayoutShot? = null, val banner: String? = null,
         /** Each row's values for its touch control ([SettingChoices]), in [rows]' order; null for a row that holds none. */
         val choices: List<SettingChoices?> = emptyList(),
-        /** The selected reset row (Reset to defaults, Clear all, Reset console) asks first ([settingsResetConfirm]): A resets, B keeps. */
+        /** The selected reset row (Reset to defaults, Clear all, Reset console) asks first ([settingsResetAsk]): A resets, B keeps. */
         val confirmReset: Boolean = false,
     ) : Screen
     /** Tools -> Settings: one row per section. */

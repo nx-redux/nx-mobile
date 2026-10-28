@@ -9,16 +9,13 @@ class ColourRolesTest {
     @Test fun theLadderFollowsTheInk() {
         val c = NxColors()
         assertEquals(Color(0xFFD8D8D8).copy(alpha = 0.38f), c.inkDim)
-        assertEquals(Color(0xFFD8D8D8).copy(alpha = 0.55f), c.inkMuted)
         assertEquals(Color(0xFFD8D8D8).copy(alpha = 0.14f), c.inkFaint)
         assertEquals(Color(0xFFD8D8D8).copy(alpha = 0.08f), c.inkEdge)
-        assertEquals(0.30f, c.artFar)
     }
 
     @Test fun theLadderDerivesFromMainNotTheDefaultInk() {
         val c = NxColors(main = Color.Red)
         assertEquals(Color.Red.copy(alpha = 0.38f), c.inkDim)
-        assertEquals(Color.Red.copy(alpha = 0.55f), c.inkMuted)
         assertEquals(Color.Red.copy(alpha = 0.14f), c.inkFaint)
         assertEquals(Color.Red.copy(alpha = 0.08f), c.inkEdge)
     }

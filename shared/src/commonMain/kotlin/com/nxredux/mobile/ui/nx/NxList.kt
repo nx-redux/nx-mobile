@@ -107,7 +107,7 @@ fun NxList(
     textSizeOverride: TextUnit? = null,
     onLongPress: ((Int) -> Unit)? = null,
     endPadOverride: Dp? = null,   // the row's right margin; the scaffold sets it so labels reach 90% of the screen
-    outlined: Boolean = false,    // a button row (Continue): a grey ring round the pill's place while unlit ([NxButtonRing])
+    outlined: Boolean = false,    // a button row (Continue): a grey ring round the pill's place while unlit ([nxButtonRing])
     edgeMargin: Int = 0,          // rows kept in view past the selection: 1 under a scroll fade
 ) = NxList(
     rows, { selectedIndex }, onSelect, onOpen, modifier, listState, rowHeightOverride, pillPaddingOverride, textSizeOverride,
