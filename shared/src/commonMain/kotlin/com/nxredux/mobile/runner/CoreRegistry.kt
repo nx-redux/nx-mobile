@@ -165,10 +165,10 @@ object CoreRegistry {
         vulkan = VulkanSwitch(vulkan = mapOf("swanstation_GPU_Renderer" to "Auto"), lock = false),
         name = "SwanStation",
     )
-    // SPIKE: PS2 on ARMSX2 (ARMSX2/ARMSX2 2.9, cores/Makefile). Reads <system>/pcsx2/{bios,resources}.
+    // SPIKE: PS2 on ARMSX2 (ARMSX2/ARMSX2 2.9, cores/Makefile). Reads <system>/pcsx2/{bios,resources}. Opens the game
+    // through the runner's libretro VFS (/rom/<name>, need_fullpath), like Dolphin: no cache copy, so Play builds work.
     private val armsx2 = CoreDescriptor(
         "armsx2", "libarmsx2_libretro_android.so", setOf("iso", "chd", "cso", "zso", "bin", "elf", "gz", "m3u"),
-        loadMode = LoadMode.REAL_PATH,
         biosSubdir = "pcsx2/bios",
         defaultOptions = mapOf("armsx2_renderer" to "OpenGL"),
         lockedOptions = setOf("armsx2_renderer"),
