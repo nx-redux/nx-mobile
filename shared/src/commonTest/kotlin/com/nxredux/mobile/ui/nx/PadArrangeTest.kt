@@ -43,12 +43,30 @@ class PadArrangeTest {
         assertTrue(right.stick.right <= right.main.left && right.stick.top > right.main.top)    // below-left of the face
     }
 
-    @Test fun ps2PortraitSidesFitTheBand() {
-        // A 9-unit band: both sides 0.3 in from the edges and the d-pad row's gap apart, no taller than the row.
-        val row = 9f - 2f * DUAL_PORTRAIT_EDGE
+    @Test fun ps2OverlaySidesFitTheBand() {
+        // A 9-unit band less the edges: both sides the d-pad row's gap apart, no taller than the row.
+        val row = 8.4f
         val s = dualStickScale(row, stickScale = 1f)
         assertTrue(2f * dualStickCluster(PadSide.LEFT).width * s + 0.5f <= row + 1e-4f)
         assertTrue(3f * s <= 3f)
         assertEquals(1.25f, dualStickScale(20f, stickScale = 1.25f))   // a wide band: the d-pad row's own scale
+    }
+
+    @Test fun ps2PortraitSticksSitUnderTheClustersByTheEdges() {
+        for ((h, scale) in listOf(6.2f to 1f, 7.5f to 1.2f, 10f to 1.25f)) {
+            val w = 9f
+            val (l, r) = portraitDualSticks(w, h, scale)
+            val rowBottom = 1f + (h - 3.12f - 3f * scale) / 2f + 3f * scale
+            for (p in listOf(l, r)) {
+                assertTrue(p.group.left >= 0f && p.group.right <= w + 1e-4f && p.group.bottom <= h + 1e-4f, "h=$h: ${p.group} outside the pad")
+                assertTrue(p.stick.top >= rowBottom - 1e-4f, "h=$h: the stick reaches into the d-pad row")
+                assertFalse(p.thumb.overlaps(p.stick), "h=$h: the pill over the stick")
+                // MENU (1.4 wide) and the NX mark (1.15) stay in the middle, clear of both sticks.
+                assertTrue(p.group.right <= w / 2f - 0.7f || p.group.left >= w / 2f + 0.7f, "h=$h: ${p.group} reaches MENU")
+            }
+            assertEquals(0.55f, l.stick.left, 1e-4f)
+            assertEquals(w - 0.55f, r.stick.right, 1e-4f)
+            assertEquals(PS2_PORTRAIT_STICK_UNITS * scale, l.stick.width, 1e-4f)
+        }
     }
 }
