@@ -29,4 +29,13 @@ class CoreRegistryPs2Test {
         assertEquals("2x", core.defaultOptions["armsx2_upscale"])
         assertTrue("armsx2_upscale" in core.lockedOptions)
     }
+
+    @Test fun patchesCheatsAndSoftwareThreadsLockedOff() {
+        val core = CoreRegistry.forTag("PS2")!!
+        for (k in listOf("armsx2_widescreen_patches", "armsx2_no_interlacing_patches", "armsx2_cheats")) {
+            assertEquals("disabled", core.defaultOptions[k], k)
+            assertTrue(k in core.lockedOptions, k)
+        }
+        assertTrue("armsx2_sw_threads" in core.lockedOptions)
+    }
 }
