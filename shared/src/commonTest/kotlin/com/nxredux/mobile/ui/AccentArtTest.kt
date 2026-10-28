@@ -11,9 +11,9 @@ import kotlin.test.assertTrue
 class AccentArtTest {
     @Test fun theUrlCarriesTheColourAsSixHexDigits() {
         assertEquals("nxabstract://accent/e4e4e7", abstractAccentArtUrl(AccentPreset.WHITE.rgb))
-        assertEquals("nxabstract://accent/660000", abstractAccentArtUrl(AccentPreset.RED.rgb))
+        assertEquals("nxabstract://accent/f87171", abstractAccentArtUrl(AccentPreset.RED.rgb))
         assertEquals("nxabstract://accent/00000a", abstractAccentArtUrl(0x0A))
-        assertEquals("nxabstract://accent/660000", abstractAccentArtUrl(AccentPreset.RED.argb))   // alpha dropped
+        assertEquals("nxabstract://accent/f87171", abstractAccentArtUrl(AccentPreset.RED.argb))   // alpha dropped
         assertNotEquals(abstractAccentArtUrl(AccentPreset.WHITE.rgb), abstractAccentArtUrl(AccentPreset.SKY.rgb))   // the cache key differs per colour
     }
 
@@ -38,7 +38,7 @@ class AccentArtTest {
         for (c in red) { assertEquals(base.hue, c.hue, 0.01); assertEquals(base.saturation, c.saturation, 0.01) }
         assertEquals(red.map { it.lightness }.toSet().size, 3)
         assertEquals(withSteps(listOf(base)), red)   // the single-hue derivation an icon gets
-        assertEquals(listOf(20L, 45L, 70L), red.map { kotlin.math.round(it.lightness).toLong() })   // #660000 steps lighter
+        assertEquals(listOf(71L, 46L, 21L), red.map { kotlin.math.round(it.lightness).toLong() })   // #F87171 steps darker
     }
 
     @Test fun whiteGivesGreyscaleSteps() {

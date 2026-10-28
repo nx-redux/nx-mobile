@@ -150,7 +150,7 @@ internal fun ArtworkSplitScreen(state: AppState, s: Screen, selection: State<Lis
                 val tap: (Int) -> Unit = remember(p.screen) { { i -> state.artworkParentTap(p.screen, i) } }
                 ArtworkPageBody(
                     p.screen, p.row, onSelect = {}, onOpen = tap, onHint = {},
-                    modifier = Modifier.alpha(UNFOCUSED_ALPHA), split = true, focused = false,
+                    modifier = Modifier.alpha(UNFOCUSED_ALPHA), split = true, focused = false,   // role: an unfocused pane, dimmed
                 )
             }
         },

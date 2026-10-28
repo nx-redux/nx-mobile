@@ -77,6 +77,6 @@ class HomeBandNavTest {
         assertEquals(0, homeStep(1, t, m, NxButton.LEFT))
         assertEquals(10, homeStep(1, t, m, NxButton.DOWN)); assertEquals(8, homeStep(0, t, m, NxButton.DOWN))
         assertEquals(1, homeStep(10, t, HomeMemory(lastTop = 1), NxButton.UP))
-        assertEquals(1, homeStep(1, t, m, NxButton.UP))         // the tab row
+        assertEquals(1, homeStep(1, t, m, NxButton.UP))         // the top: stays
     }
 }

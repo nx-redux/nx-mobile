@@ -124,12 +124,9 @@ internal fun homeStep(index: Int, shape: HomeShape, memory: HomeMemory, button: 
     }
 }
 
-/** UP from [index] finds nothing above: it reaches the main menu's tab row. */
+/** UP from [index] finds nothing above: it stays. */
 internal fun homeAtTop(index: Int, shape: HomeShape, memory: HomeMemory): Boolean =
     index < shape.topCount && homeStep(index, shape, memory, NxButton.UP) == index
-
-/** Where UP on the tab row lands: the last pin, else the last top tile. */
-internal fun homeBottom(shape: HomeShape): Int = (shape.count - 1).coerceAtLeast(0)
 
 /** [m] after a move [from] → [to]: inside the top, the tile left is the tie-break; any top tile is the one last on. */
 internal fun homeRemember(m: HomeMemory, from: Int, to: Int, shape: HomeShape): HomeMemory = when {

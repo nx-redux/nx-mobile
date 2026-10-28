@@ -67,4 +67,15 @@ class HomeStripSpacingTest {
         assertTrue(capTop > 0f && capTop < homeStripLineH(f))
         near(homeStripPitch(f), two - one)
     }
+
+    // Sideways, the card and the dock are centred on the screen's middle: a body 100 dp down, the screen's centre 200 dp down, puts the
+    // group's middle at 100 dp into the body, held inside the room the body gives it.
+    @Test fun sidewaysCarouselCentresOnTheScreen() {
+        val p = HomeCarouselPlace(stripInkTop = 0f, boxTop = 120f, boxH = 100f, dockTop = 236f)
+        val c = homeCarouselScreenCentred(p, stripInkH = 0f, dockH = 40f, bodyTop = 100f, centreY = 200f, minTop = 12f, maxBottom = 288f)
+        near(100f, (c.boxTop + c.dockTop + 40f) / 2, "group middle")
+        near(c.boxTop + 116f, c.dockTop, "dock keeps its gap")
+        val low = homeCarouselScreenCentred(p, stripInkH = 0f, dockH = 40f, bodyTop = -200f, centreY = 200f, minTop = 12f, maxBottom = 288f)
+        near(288f, low.dockTop + 40f, "held above the body's bottom")
+    }
 }

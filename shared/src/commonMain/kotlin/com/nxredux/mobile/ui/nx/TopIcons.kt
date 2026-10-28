@@ -10,7 +10,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.unit.dp
@@ -37,7 +36,7 @@ data class TopIconAction(val art: DrawableResource, val description: String, val
 
 /**
  * A touch-only screen's icons at the right of the tab row or a page title ([LauncherChrome.topIcons],
- * [HintTouch.Icon]). In the inactive tab words' grey, a little brighter, as they act; a lit one at full strength.
+ * [HintTouch.Icon]). In the unselected tab words' [NxColors.inkDim]; a lit one in the full ink.
  */
 @Composable
 fun NxTopIcons(actions: List<TopIconAction>, modifier: Modifier = Modifier) {
@@ -50,8 +49,8 @@ private fun TopIcon(action: TopIconAction) {
     Box(Modifier.size(TOP_ICON_TARGET).clip(CircleShape).clickable(onClick = action.onClick), contentAlignment = Alignment.Center) {
         Image(
             painterResource(action.art), contentDescription = action.description,
-            modifier = Modifier.size(TOP_ICON_SIZE).alpha(if (action.lit) 1f else 0.7f),
-            colorFilter = ColorFilter.tint(LocalNxColors.current.listText),
+            modifier = Modifier.size(TOP_ICON_SIZE),
+            colorFilter = ColorFilter.tint(LocalNxColors.current.let { if (action.lit) it.main else it.inkDim }),
         )
     }
 }

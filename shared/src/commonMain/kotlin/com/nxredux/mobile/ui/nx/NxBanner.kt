@@ -28,7 +28,7 @@ fun NxBanner(text: String, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(12.dp)
     Row(
         modifier.fillMaxWidth().padding(start = nxListInset(), end = nxListInset(), top = 8.dp, bottom = 20.dp)   // more room under it, before the rows
-            .background(colors.warning.copy(alpha = 0.12f), shape).border(1.dp, colors.warning.copy(alpha = 0.45f), shape)
+            .background(colors.warning.copy(alpha = 0.12f), shape).border(1.dp, colors.warning.copy(alpha = 0.45f), shape)   // role: the warning banner's tint and ring
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
     ) {

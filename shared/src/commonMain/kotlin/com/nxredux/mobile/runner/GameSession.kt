@@ -32,4 +32,6 @@ data class GameSession(
     val artPath: String? = null,
     /** Set for a Wi-Fi netplay launch: this device's role, the peer and the agreed core; null for every other launch. */
     val netplay: NetplaySession? = null,
+    /** The name a Minimal launch spread its black from, for the game screen to hold on the same pixels; null: none (no sequence). */
+    val launchName: LaunchName? = null,
 )

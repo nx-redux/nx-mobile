@@ -27,9 +27,6 @@ private const val DESC_OF_LABEL = 0.72f
 /** Row [r]'s segments go under its text: a segmented option whose choices don't fit on its right. */
 private fun NxTouchRowSizes.segmentsBelow(r: MenuRow): Boolean = r is MenuRow.Option && r.control == NxSettingControl.SEGMENTED && !segmentsRight(r.label, r.choices)
 
-/** Row [r]'s height ([NxTouchRowSizes.height]): a row with no description is bare; segments under the text add their line. */
-private fun NxTouchRowSizes.heightOf(r: MenuRow): Dp = height(described = r.info.isNotBlank(), segmentsBelow = segmentsBelow(r))
-
 /**
  * An options page as touch rows ([OptionTouchRow]): every row its name and description, an option its control on the
  * right. Whole rows from the top, the list scrolling smoothly under them with the edge fades, the selection kept a row
@@ -63,19 +60,17 @@ internal fun OptionsBody(
         ) {
             val sizes = nxTouchRowSizes(itemHeight, maxWidth, DESC_OF_LABEL)
             val count = page.rows.size
-            // The rows' own heights (a segmented row is taller), the list no taller than the room.
-            // In each row's own rounded px, as the list lays them out (a Dp sum can fall a px short and leave a fade).
-            val total = with(LocalDensity.current) { page.rows.sumOf { sizes.heightOf(it).roundToPx() }.toDp() }
             // Rows differ in height (a bare row, segments under the text): kept clear of the fade in px.
             NxKeepSelectedInView(listState, page.selected, count, edge = with(LocalDensity.current) { (sizes.row / 2).roundToPx() })
             Column(Modifier.fillMaxWidth()) {
+                // The rows as tall as they lay out ([NxTouchRowSizes.height]), the list no taller than them nor the room.
                 // The page's intro: plain text above the rows, as Settings' paragraphs; never selected or tapped.
                 if (page.intro.isNotEmpty()) Text(
                     page.intro, color = colors.hint, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal, fontSize = sizes.desc, lineHeight = sizes.descLine,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = NxOptionsInnerPad, vertical = 6.dp),
                 )
                 LazyColumn(
-                    Modifier.fillMaxWidth().weight(1f, fill = false).height(total).nxScrollFade(listState, height = sizes.row / 2, strong = true),
+                    Modifier.fillMaxWidth().weight(1f, fill = false).nxScrollFade(listState, height = sizes.row / 2, strong = true),
                     state = listState, flingBehavior = rememberNxRowSnapFling(listState),
                 ) {
                     items(count) { i ->
@@ -105,7 +100,7 @@ private fun optionRowTap(row: MenuRow, index: Int, onSelect: (Int) -> Unit, onOp
     return when (row.control) {
         NxSettingControl.SWITCH -> { { onOption(OptionEvent.Choose(index, 1 - row.index.coerceIn(0, 1))) } }
         NxSettingControl.PICKER -> { { onOption(OptionEvent.OpenPicker(index)) } }
-        NxSettingControl.SEGMENTED, NxSettingControl.VALUE -> { { onSelect(index) } }
+        NxSettingControl.SEGMENTED, NxSettingControl.VALUE, NxSettingControl.SWATCHES -> { { onSelect(index) } }
     }
 }
 
@@ -122,7 +117,7 @@ private fun OptionTouchRow(
     onTruncated: (String, Boolean) -> Unit,
 ) {
     NxTouchRow(
-        row.label, row.info, row.hasMoreInfo, selected, sizes, sizes.heightOf(row),
+        row.label, row.info, row.hasMoreInfo, selected, sizes,
         onTap = onTap, onInfo = { onOption(OptionEvent.Info(index)) }, onTruncated = onTruncated,
         below = if (row is MenuRow.Option && sizes.segmentsBelow(row)) {
             { NxSegments(row.choices, row.index, sizes.value) { onOption(OptionEvent.Choose(index, it)) } }
@@ -147,18 +142,16 @@ private fun OptionControlView(row: MenuRow.Option, index: Int, valueSize: TextUn
         )
         NxSettingControl.SEGMENTED -> NxSegments(row.choices, row.index, valueSize) { onOption(OptionEvent.Choose(index, it)) }
         NxSettingControl.PICKER -> NxPickerValue(row.valueLabel, valueSize) { onOption(OptionEvent.OpenPicker(index)) }
-        NxSettingControl.VALUE -> NxValueText(row.valueLabel, valueSize, LocalNxColors.current.listText, Modifier.widthIn(max = 180.dp))
+        NxSettingControl.VALUE, NxSettingControl.SWATCHES -> NxValueText(row.valueLabel, valueSize, LocalNxColors.current.listText, Modifier.widthIn(max = 180.dp))
     }
 }
 
-/** The popup over the menu ([MenuState.popup]): the value picker or a row's full description. */
+/** The popup over the menu ([MenuState.popup], null none): the value picker or a row's help note (which fades out). */
 @Composable
-internal fun MenuPopupView(popup: MenuPopup, onOption: (OptionEvent) -> Unit) {
-    when (popup) {
-        is MenuPopup.Picker -> NxSettingPicker(
-            popup.title, popup.choices, popup.current, popup.cursor,
-            onPick = { onOption(OptionEvent.Pick(it)) }, onDismiss = { onOption(OptionEvent.ClosePopup) },
-        )
-        is MenuPopup.Info -> NxSettingInfoPopup(popup.title, popup.text, popup.scrollSeq, popup.scrollDir, onClose = { onOption(OptionEvent.ClosePopup) })
-    }
+internal fun MenuPopupView(popup: MenuPopup?, onOption: (OptionEvent) -> Unit) {
+    if (popup is MenuPopup.Picker) NxSettingPicker(
+        popup.title, popup.choices, popup.current, popup.cursor,
+        onPick = { onOption(OptionEvent.Pick(it)) }, onDismiss = { onOption(OptionEvent.ClosePopup) },
+    )
+    NxSettingInfoPopup((popup as? MenuPopup.Info)?.let { NxHelpText(it.title, it.text, it.scrollSeq, it.scrollDir) }, onClose = { onOption(OptionEvent.ClosePopup) })
 }

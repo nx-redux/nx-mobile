@@ -81,6 +81,7 @@ import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.EmulatorRunner
 import com.nxredux.mobile.runner.GameSession
+import com.nxredux.mobile.runner.LaunchName
 import com.nxredux.mobile.scraper.AndroidArtStore
 import com.nxredux.mobile.scraper.ArtHave
 import com.nxredux.mobile.scraper.ArtworkController
@@ -149,6 +150,7 @@ import com.nxredux.mobile.storage.SidecarStore
 import com.nxredux.mobile.storage.ToolPins
 import com.nxredux.mobile.storage.UserDataStore
 import com.nxredux.mobile.ui.nx.HomeFrame
+import com.nxredux.mobile.ui.nx.LaunchTimeline
 import com.nxredux.mobile.ui.nx.HomeShelf
 import com.nxredux.mobile.ui.nx.FooterMode
 import com.nxredux.mobile.ui.nx.LauncherChrome
@@ -162,9 +164,7 @@ import com.nxredux.mobile.ui.nx.fullInfo
 import com.nxredux.mobile.ui.nx.launcherChromeFor
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.gridAtTop
-import com.nxredux.mobile.ui.nx.gridBottom
 import com.nxredux.mobile.ui.nx.gridStep
-import com.nxredux.mobile.ui.nx.homeBottom
 import com.nxredux.mobile.ui.nx.homeClamp
 import com.nxredux.mobile.ui.nx.rowStep
 import com.nxredux.mobile.ui.nx.stackStep
@@ -283,6 +283,8 @@ class AppDeps(
     val storageUpgrade: StorageUpgradePlatform? = null,
     /** The in-app updater (Android's, process-wide): the main menu's Update available popup and About's update row; null: neither. */
     val updater: UpdateController? = null,
+    /** The system asks for reduced motion (animator scale 0, remove animations): a launch fades instead of spreading. */
+    val reducedMotion: () -> Boolean = { false },
 )
 
 /**
@@ -382,6 +384,8 @@ sealed interface Screen {
         val shot: LayoutShot? = null, val banner: String? = null,
         /** Each row's values for its touch control ([SettingChoices]), in [rows]' order; null for a row that holds none. */
         val choices: List<SettingChoices?> = emptyList(),
+        /** The selected reset row (Reset to defaults, Clear all, Reset console) asks first ([settingsResetAsk]): A resets, B keeps. */
+        val confirmReset: Boolean = false,
     ) : Screen
     /** Tools -> Settings: one row per section. */
     data class SettingsMenu(val sections: List<SettingsSection>) : Screen
@@ -551,14 +555,11 @@ private const val NOTICE_MILLIS = 3_000L
 internal const val ANDROID_ASK_GUARD_MILLIS = 300L
 
 /**
- * A Minimal page's open: the other names fade out over [MINIMAL_LEAVE_MS] (a folder's list opens then), and a launch's
- * band grows over the screen as it goes black, the row opening this long after A; the band clears this long after.
+ * A Minimal page's folder open: the other names fade out over [MINIMAL_LEAVE_MS] and its list opens then; the opening
+ * clears this long after. A game or a tool runs the launch sequence instead ([AppState.launchSequence]).
  */
 internal const val MINIMAL_LEAVE_MS = 120L
-internal const val MINIMAL_OPEN_MS = MINIMAL_LEAVE_MS + 350L
 private const val MINIMAL_CLEAR_MS = 1_000L
-/** A game's band stays black until the app is back in front ([AppState.onForeground]), or this long if it never left. */
-private const val MINIMAL_GAME_CLEAR_MS = 10_000L
 
 /**
  * Art results are written and shown once they stop coming for [ART_QUIET_MS], or every [ART_MAX_WAIT_MS] while they keep
@@ -568,11 +569,11 @@ private const val ART_QUIET_MS = 1_500L
 private const val ART_MAX_WAIT_MS = 15_000L
 
 /**
- * A Minimal page's row being opened ([AppState.minimalOpening]): the page it is on ([page]: a tab's [MenuCategory], a game
- * list's [ListSource]; only that page draws it) and the row's [index]. [band]: a launch, its band growing over the screen;
- * false for a folder whose list is Minimal too, which only fades the other names before it morphs in.
+ * A Minimal page's folder being opened ([AppState.minimalOpening]): the page it is on ([page]: a tab's [MenuCategory], a
+ * game list's [ListSource]; only that page draws it) and the row's [index]; the other names fade before its list comes in.
+ * A launch is not one: it runs [AppState.launchSequence], and nothing on the page moves or fades.
  */
-data class MinimalOpening(val page: Any, val index: Int, val band: Boolean = true)
+data class MinimalOpening(val page: Any, val index: Int)
 
 /** The deepest a Settings right pane goes below its category (Library -> Emulator Settings -> consoles -> options), and some. */
 private const val SETTINGS_MAX_DEPTH = 6
@@ -829,7 +830,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private var pushedTab: MenuCategory? = null   // a hidden tab opened over the menu ([openHiddenTab]); [menuCategory] stays the tab under it
     private val tabSelections = HashMap<MenuCategory, ListSelection>()   // each tab's row, remembered across visits
     private var gridColumns = 0   // the Grid body's column count for the screen showing now; 0 until it lays out
-    private var gridRows = 2      // and its row count: 2 on phones, 3–4 on a tablet-class window
     private var pageRows = 0      // a game list's rows (or stack items) on one screen ([onPageRows]); 0 until it lays out: a page is one row
     private var installedCache: List<InstalledApp>? = null   // the last [AppLauncher.installedApps]; null until the first load
     private var installedJob: Job? = null
@@ -887,9 +887,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private var afterAndroidStep: (() -> Unit)? = null   // what first setup's Android games step goes on to (a load or the extra's scan)
     /** Android apps' icons for the session (Tools tiles, Home pins, the picker); null without a launcher. */
     val appIcons: AppIcons? = deps.launcher?.let { AppIcons(it, scope) }
-    private val _gridPresses = MutableStateFlow(0)
-    /** Counts the d-pad presses a laid-out Grid takes (a move or not): the Grid brings a swipe-scrolled selection back on one. */
-    val gridPresses: StateFlow<Int> = _gridPresses.asStateFlow()
 
     private val _selection = MutableStateFlow(ListSelection(0, 0))
     val selection: StateFlow<ListSelection> = _selection.asStateFlow()
@@ -905,7 +902,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             override fun shelvesFor(inputs: HomeInputs): List<Pair<HomeShelf, List<Listed>>> = this@AppState.shelvesFor(inputs)
             override fun rebuildHomeTab() = this@AppState.rebuildHomeTab()
             override fun refreshResume() = this@AppState.refreshResume()
-            override fun toTabRow(repeat: Boolean) = this@AppState.toTabRow(repeat)
             override fun switchTab(step: Int) = this@AppState.switchTab(step)
         },
     )
@@ -1100,38 +1096,45 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         if (opens) openSelected()
     }
 
-    private val _tabFocus = MutableStateFlow(false)
-    /**
-     * The main menu's tab row has the d-pad (UP from the top of a Grid, a horizontal row or Home, or on an empty tab; a
-     * List or a stack wraps instead): LEFT / RIGHT switch tabs there, DOWN,
-     * A and B go back to the content's [selection] (kept as it was), UP to the content's bottom ([toContentBottom]). Its
-     * own flag, not part of [Screen.Systems]: the menu is rebuilt in place often ([swapMainRows]) and keeps it; leaving
-     * the menu, a touch on its content, the switcher and Home clear it, and so does the row being hidden
-     * ([dropHiddenTabFocus]): never true while it is.
-     */
-    val tabFocus: StateFlow<Boolean> = _tabFocus.asStateFlow()
-
     private val _minimalOpening = MutableStateFlow<MinimalOpening?>(null)
     /**
-     * A Minimal page's row being opened, while its band grows over the screen and a moment after ([openMinimal]); null
-     * otherwise. Input waits until the row opens ([minimalPending]).
+     * A Minimal page's folder being opened, while the other names fade and a moment after ([openMinimal]); null otherwise.
+     * Input waits until the row opens ([minimalPending]). A game or a tool runs [launchSequence] instead.
      */
     val minimalOpening: StateFlow<MinimalOpening?> = _minimalOpening.asStateFlow()
-    /** A Minimal open's band is growing: the row opens in a moment, and input waits till then. */
+    /** A Minimal open is under way (a folder's names fading, a launch's spread and hand-off): input waits till it lands. */
     private var minimalPending = false
     private var minimalJob: Job? = null
+
+    private val _launchSequence = MutableStateFlow<LaunchSequence?>(null)
+    /**
+     * A Minimal game's or tool's launch ([openMinimal]): black spreads from its name for [LaunchTimeline.SPREAD_MS] (a
+     * [LaunchTimeline.REDUCED_FADE_MS] fade under [reducedMotion]) and the row opens at its end; a game or an app then has
+     * the screen ([LaunchPhase.HANDED_OFF]) until [onForeground] fades the overlay out ([LaunchPhase.RETURNING]), an
+     * in-app tool comes up under it fading out at once, and a refusal retreats ([LaunchPhase.RETREAT]) before its Problem
+     * shows. Null otherwise, and [LaunchTimeline.GIVE_UP_MS] after a hand-off that never came back.
+     */
+    val launchSequence: StateFlow<LaunchSequence?> = _launchSequence.asStateFlow()
+    /** The system's reduced motion, as the platform reports it now ([AppDeps.reducedMotion]). */
+    val reducedMotion: () -> Boolean = deps.reducedMotion
+    /** The UI's capture of the selected name (set by the menu): a launch sequence's game carries it ([GameSession.launchName]). */
+    var launchNameProvider: (() -> LaunchName?)? = null
+    private var launchSeqJob: Job? = null
+    private var launchSeqIds = 0L
+    /** The runner (or an app's start) was called since the sequence's open: a hand-off, not a refusal. */
+    private var launchHandedOff = false
+    /** A launch's Problem met during the spread: shown once the black has retreated. */
+    private var heldLaunchError: String? = null
 
     /** The screen's footer mode as App last reported it ([onFooterMode]); HINTS until then, as [LocalFooterMode]'s default. */
     private var footerMode = FooterMode.HINTS
 
     /**
      * The UI reports the footer mode ([footerModeFor]: a controller or the portrait pad, else touch only), which decides
-     * whether Layouts → Page title's Hide is in effect ([launcherChromeFor]). A change that hides the tab row (a
-     * controller connected, a rotation to the pad) takes the d-pad back from it.
+     * whether Layouts → Page title's Hide is in effect ([launcherChromeFor]).
      */
     fun onFooterMode(mode: FooterMode) {
         footerMode = mode
-        dropHiddenTabFocus()
     }
 
     /** The launcher screens' chrome in effect: the settings under [footerMode], the rule App draws by. */
@@ -1139,9 +1142,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         deps.settings.let { s ->
             launcherChromeFor(s.menuPageTitle, s.menuButtonHints, footerMode, s.menuExtraInfo, s.showRecentHint, s.showSearchHint, s.showNetplayHint, homeStats = s.menuHomeStats)
         }
-
-    /** The tab row is hidden (Layouts → Page title, in effect): it never holds the d-pad, so the content takes it back. */
-    private fun dropHiddenTabFocus() { if (!launcherChrome().tabRow) _tabFocus.value = false }
 
     private val _nav = MutableStateFlow(NavStep())
     val nav: StateFlow<NavStep> = _nav.asStateFlow()
@@ -1440,6 +1440,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /** The app left the foreground: art results still waiting are written now, not left to a debounce a kill would lose. */
     fun onBackground() {
+        // The game (or app) a Minimal launch handed off to is in front: no give-up now, the next onForeground fades it.
+        if (_launchSequence.value?.phase == LaunchPhase.HANDED_OFF) launchSeqJob?.cancel()
         if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) { closeShortcuts(); refreshSettings() }
         scope.launch { flushArt() }
     }
@@ -1708,7 +1710,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val s = _screen.value as? Screen.Systems ?: return
         if (s.pushed || s.menu != null || s.search != null) return
         if (menuTabs.any { it.category == category } || allMenuTabs.none { it.category == category }) return
-        _tabFocus.value = false
         rememberMenuSelection()
         pushedTab = category
         tabSelections.remove(category)
@@ -1763,8 +1764,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         // Another tab (or the menu from another screen): its grid reports its own columns on its first layout. The same
         // tab rebuilt in place keeps them, as its grid stays laid out.
         if (prev !is Screen.Systems || prev.category != screen.category) gridColumns = 0
-        if (prev !is Screen.Systems) _tabFocus.value = false   // back from another screen: on the content
-        if (screen.tabs.size < 2 || screen.pushed) _tabFocus.value = false   // no tab row to hold the d-pad (one tab: the title)
         _screen.value = screen
         homeTab.publishHomeView()   // the Home rows on screen may be the ones last built now
         if (!screen.pushed) screen.category?.let { menuCategory = it }
@@ -2678,6 +2677,23 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val s = _screen.value as? Screen.Systems ?: return
         if (s.menu != null || s.search != null || s.tabs.size < 2) return
         selectTab((s.tab + step).mod(s.tabs.size))
+    }
+
+    /**
+     * A swipe across a List or Minimal main menu page: the next ([step] 1) or previous (−1) shown tab, wrapping as L1 /
+     * R1 do. App's pager has that tab's page beside the one showing already, and slides it in from where the finger let go.
+     */
+    fun swipeTab(step: Int) = switchTab(step)
+
+    /**
+     * The main menu's tab [index] as it would show beside the one showing (App's pager): its screen (no menu or search
+     * over it) and its remembered row. Nothing changes.
+     */
+    fun tabPage(index: Int): Pair<Screen.Systems, ListSelection>? {
+        val s = _screen.value as? Screen.Systems ?: return null
+        val n = s.copy(tab = index, menu = null, search = null)
+        val category = n.category ?: return null
+        return n to rememberedRow(category, n.rows).clampedTo(n.rows.size)
     }
 
     /** A tap on a tab, or [switchTab]. Landing on Tools refreshes what its pages show. */
@@ -3705,23 +3721,28 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     fun settingsPreview(section: SettingsSection): Screen.Settings = settingsPage(section)
 
     /**
-     * A tap on the left pane's category [index]. On the Settings root it is a list tap (select, or open the selected
-     * one). From a right-pane page it focuses the left pane on that category: the pane's own back stack unwinds as B
-     * would (each page keeping its row; a Library reload or rescan lands on the root by itself). A one-tap list
-     * ([com.nxredux.mobile.ui.nx.nxTap]) calls this twice: the second call, now on the root, opens that category.
+     * A tap on the section list's [index]: one tap opens that section. From a right-pane page the pane's own back stack
+     * unwinds as B would (each page keeping its row; a Library reload or rescan lands on the root by itself), then the
+     * tapped section opens.
      */
     fun settingsCategoryTap(index: Int) {
         if (loader.active) return
-        if ((_screen.value as? Screen.Settings)?.confirmRemove != null) return   // the Remove folder dialog answers first
+        if ((_screen.value as? Screen.Settings)?.let { it.confirmRemove != null || it.confirmReset } == true) return   // a dialog answers first
+        // One tap opens the section, from the root or from another section's page.
         if (_screen.value is Screen.SettingsMenu) {
-            if (index == _selection.value.index) openSelected() else select(index)
+            select(index)
+            openSelected()
             return
         }
         if (settingsPane(_screen.value) != SettingsPane.RIGHT) return   // a stale tap from a page drawn whole: the root's row stays
         val count = settingsSections().size
         settingsMenuSelection = ListSelection(index, count).clampedTo(count)
         repeat(SETTINGS_MAX_DEPTH) {
-            if (settingsPane(_screen.value) != SettingsPane.RIGHT || loader.active) return
+            if (loader.active) return
+            if (settingsPane(_screen.value) != SettingsPane.RIGHT) {
+                if (_screen.value is Screen.SettingsMenu) { select(index); openSelected() }
+                return
+            }
             back()
         }
     }
@@ -4000,7 +4021,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             layoutTabRows(section.tab!!)
         SettingsSection.LAYOUT_GAME_LISTS -> layoutGameListRows()
         SettingsSection.LAYOUT_TITLE_HINTS -> layoutTitleHintRows()
-        SettingsSection.LAYOUT_SWITCHER -> listOf(SettingsRow(SettingsKind.SWITCHER_LAYOUT, "Game Switcher layout", deps.settings.switcherLayout.label))
+        SettingsSection.LAYOUT_SWITCHER -> listOf(SettingsRow(SettingsKind.SWITCHER_LAYOUT, "Layout", deps.settings.switcherLayout.label))
         // The on-screen pad's press tick, then a core's rumble.
         SettingsSection.CONTROLS -> listOf(
             SettingsRow(SettingsKind.PAD_VIBRATION, "Pad vibration", deps.settings.padVibration.label),
@@ -4016,17 +4037,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         SettingsSection.SYSTEM -> systemRows()
     }
 
-    /** Settings -> System: the General, Launcher (with a launcher), Developer, About and Licenses groups. */
+    /**
+     * Settings -> System: its options as one group under the page's title (Pause when unfocused, Use as home screen with
+     * a launcher, Debug log), then the About and Licenses groups.
+     */
     private fun systemRows(): List<SettingsRow> = buildList {
-        add(SettingsRow(SettingsKind.SECTION, "General"))
         add(SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused", if (deps.settings.pauseWhenUnfocused) "On" else "Off"))
-        deps.launcher?.let { l ->
-            add(SettingsRow(SettingsKind.GAP, ""))
-            add(SettingsRow(SettingsKind.SECTION, "Launcher"))
-            add(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", if (l.isHome()) "On" else "Off"))
-        }
-        add(SettingsRow(SettingsKind.GAP, ""))
-        add(SettingsRow(SettingsKind.SECTION, "Developer"))
+        deps.launcher?.let { l -> add(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", if (l.isHome()) "On" else "Off")) }
         // Logging for a bug report; off, only errors reach logcat.
         add(SettingsRow(SettingsKind.DEBUG_LOG, "Debug log", if (deps.settings.debugLog) "On" else "Off"))
         add(SettingsRow(SettingsKind.GAP, ""))
@@ -4212,8 +4229,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                     }
                 }
             }
-            // Hidden, the tab row gives up the d-pad ([dropHiddenTabFocus]).
-            SettingsKind.PAGE_TITLE -> flip(s.menuPageTitle, show = true, after = { dropHiddenTabFocus(); refreshSettings() }) { s.menuPageTitle = it }
+            SettingsKind.PAGE_TITLE -> flip(s.menuPageTitle, show = true, after = { refreshSettings() }) { s.menuPageTitle = it }
             SettingsKind.BUTTON_HINTS -> flip(s.menuButtonHints, show = true) { s.menuButtonHints = it }
             SettingsKind.EXTRA_INFO -> flip(s.menuExtraInfo, show = true) { s.menuExtraInfo = it }
             SettingsKind.HOME_STATS -> flip(s.menuHomeStats, show = true) { s.menuHomeStats = it }   // Home's board follows through its frame
@@ -4342,9 +4358,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             s.gameListLayoutOptions = true
             s.gameListAchievementsPanel = true
             s.switcherLayout = SwitcherLayout.DEFAULT
-            // As the single rows do: Home's rows follow its style and shelves; a hidden tab row gives up the d-pad.
+            // As the single rows do: Home's rows follow its style and shelves.
             rebuildHomeTab()
-            dropHiddenTabFocus()
         } else if (section == SettingsSection.CONTROLS) {
             s.padVibration = PadVibration.DEFAULT
             s.gameRumble = GameRumble.DEFAULT
@@ -4410,42 +4425,53 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         )
     }
 
-    /** A tab's group: its Show / Hide, and while shown its layout and the options that layout has. */
+    /**
+     * A tab's group: its Show / Hide (Visible), and while shown its layout and the options that layout has. On a group's
+     * page the rows don't repeat its name (the page title says it): Visible, Layout, Orientation, Background, Stats. Home's layout row comes
+     * last, right above the picture it changes (after its shelves and stats); the other tabs' follows the Show / Hide.
+     */
     private fun layoutTabRows(c: MenuCategory): List<SettingsRow> {
         val s = deps.settings
         fun shown(on: Boolean) = if (on) "Show" else "Hide"
         val on = tabSetting(c)
         val style = MenuStyles.styleOf(s.menuStyles, c)
+        val home = c == MenuCategory.HOME
+        val layout = SettingsRow(SettingsKind.MENU_STYLE, "Layout", menuStyleLabel(style), category = c).takeIf { on }
         return listOfNotNull(
-            SettingsRow(SettingsKind.TAB_SHOWN, "${c.label} tab", shown(on), category = c),
-            SettingsRow(SettingsKind.MENU_STYLE, "${c.label} layout", menuStyleLabel(style), category = c).takeIf { on },
-            // Home's New and Not started shelves, Show / Hide, under Home layout while the Home tab shows.
+            SettingsRow(SettingsKind.TAB_SHOWN, "Visible", shown(on), category = c),
+            layout.takeIf { !home },
+            // Home's New and Not started shelves, Show / Hide, while the Home tab shows.
             SettingsRow(SettingsKind.SHELF_SHOWN, "New shelf", shown(s.showNewShelf), shelf = HomeShelf.NEW).takeIf { on && c == MenuCategory.HOME },
             SettingsRow(SettingsKind.SHELF_SHOWN, "Not started shelf", shown(s.showNotStartedShelf), shelf = HomeShelf.NOT_STARTED).takeIf { on && c == MenuCategory.HOME },
             // Home's stats strip (its cards' info follows Extra info).
-            SettingsRow(SettingsKind.HOME_STATS, "Home stats", shown(s.menuHomeStats)).takeIf { on && c == MenuCategory.HOME },
-            SettingsRow(SettingsKind.MENU_ORIENTATION, "${c.label} orientation", orientationLabel(MenuStyles.orientationOf(s.menuOrientations, c)), category = c)
+            SettingsRow(SettingsKind.HOME_STATS, "Stats", shown(s.menuHomeStats)).takeIf { on && c == MenuCategory.HOME },
+            SettingsRow(SettingsKind.MENU_ORIENTATION, "Orientation", orientationLabel(MenuStyles.orientationOf(s.menuOrientations, c)), category = c)
                 .takeIf { on && c != MenuCategory.HOME && style == MenuStyle.CAROUSEL },
-            SettingsRow(SettingsKind.CONTROLLER_ART, "Consoles background", s.consoleArt.label, category = c)
+            SettingsRow(SettingsKind.CONTROLLER_ART, "Background", s.consoleArt.label, category = c)
                 .takeIf { on && c == MenuCategory.CONSOLES && style != MenuStyle.GRID && style != MenuStyle.MINIMAL },   // List and Carousel; the Grid has no controllers, Minimal no art
+            layout.takeIf { home },
         )
     }
 
-    /** The game lists' group: their layout and the options it has, the Layout icon and the achievements panel. */
+    /**
+     * The game lists' group: the options their layout has, the Layout icon and the achievements panel, a vertical list's
+     * alignment, then the layout and its orientation last, right above the picture they change.
+     */
     private fun layoutGameListRows(): List<SettingsRow> {
         val s = deps.settings
         fun shown(on: Boolean) = if (on) "Show" else "Hide"
         val list = s.gameListStyle
         return listOfNotNull(
-            SettingsRow(SettingsKind.GAME_LIST_STYLE, "Game lists layout", menuStyleLabel(list)),
-            SettingsRow(SettingsKind.GAME_LIST_ORIENTATION, "Game lists orientation", orientationLabel(s.gameListOrientation)).takeIf { MenuStyles.hasOrientation(list) },
-            SettingsRow(SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT, "Game lists alignment", verticalAlignmentLabel(s.gameListVerticalAlignment))
-                .takeIf { MenuStyles.effectiveOrientation(list, s.gameListOrientation) == MenuOrientation.VERTICAL },
             SettingsRow(SettingsKind.LIST_ART, "List art", s.gameListArt.label).takeIf { list == MenuStyle.LIST },
             SettingsRow(SettingsKind.BACKDROP_ART, "Backdrop art", s.backdropArt.label).takeIf { list == MenuStyle.BACKDROP },
             // A game list's Layout icon (hidden: Layouts only), and its trophy icon and X hint (hidden: X and the game's menu).
             SettingsRow(SettingsKind.LAYOUT_OPTIONS, "Layout options", shown(s.gameListLayoutOptions)),
             SettingsRow(SettingsKind.ACHIEVEMENTS_PANEL, "Achievements panel", shown(s.gameListAchievementsPanel)).takeIf { deps.achievements != null },
+            // A vertical list's alignment: with the layout rows, just above them.
+            SettingsRow(SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT, "Alignment", verticalAlignmentLabel(s.gameListVerticalAlignment))
+                .takeIf { MenuStyles.effectiveOrientation(list, s.gameListOrientation) == MenuOrientation.VERTICAL },
+            SettingsRow(SettingsKind.GAME_LIST_STYLE, "Layout", menuStyleLabel(list)),
+            SettingsRow(SettingsKind.GAME_LIST_ORIENTATION, "Orientation", orientationLabel(s.gameListOrientation)).takeIf { MenuStyles.hasOrientation(list) },
         )
     }
 
@@ -4520,11 +4546,22 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /** Rebuilds the open page's rows in place (selection clamped). */
     private fun refreshSettings(confirm: ExtraFolder? = null) {
-        val section = (_screen.value as? Screen.Settings)?.section ?: SettingsSection.LIBRARY
+        val old = _screen.value as? Screen.Settings
+        val section = old?.section ?: SettingsSection.LIBRARY
         val page = settingsPage(section, confirm)
         _screen.value = page
-        _selection.value = selectableOn(page, _selection.value)
+        // The selected row moved (a row above it came or went, as Game lists' art row as its layout steps): the highlight follows it.
+        val sel = _selection.value
+        val moved = old?.rows?.getOrNull(sel.index)?.takeIf { old.section == section }?.let { was ->
+            page.rows.indices.filter { sameSettingsRow(page.rows[it], was) }.singleOrNull()
+        }
+        _selection.value = selectableOn(page, if (moved != null && moved != sel.index) sel.copy(index = moved) else sel)
     }
+
+    /** Whether [a] and [b] are the same Settings row across a refresh: its kind and what it is for, not its value or label. */
+    private fun sameSettingsRow(a: SettingsRow, b: SettingsRow): Boolean =
+        a.kind == b.kind && a.category == b.category && a.shelf == b.shelf && a.hint == b.hint && a.consoleId == b.consoleId &&
+            a.shortcut == b.shortcut && a.touchSlot == b.touchSlot && a.padShape == b.padShape && a.extra?.id == b.extra?.id
 
     /**
      * B on a sub-page: its section on the row that opened it. Leaving Default emulators (under Emulators) with a changed
@@ -4573,6 +4610,14 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /** Settings sections and the section menu: UP/DOWN move, A opens or acts, B goes back. */
     private fun onSettingsButton(s: Screen, button: NxButton) {
+        (s as? Screen.Settings)?.takeIf { it.confirmReset }?.let { page ->
+            when (button) {
+                NxButton.A -> { _screen.value = page.copy(confirmReset = false); runSettingsReset(page) }
+                NxButton.B -> _screen.value = page.copy(confirmReset = false)
+                else -> Unit
+            }
+            return
+        }
         (s as? Screen.Settings)?.confirmRemove?.let { extra ->
             when (button) {
                 NxButton.A -> removeExtra(extra)
@@ -4599,6 +4644,15 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             } else (s as? Screen.Settings)?.rows?.getOrNull(_selection.value.index)?.let { row ->
                 if (row.enabled) settingValue(row)?.change(if (button == NxButton.LEFT) -1 else 1)   // a dimmed row (one tag) stays
             }
+            else -> Unit
+        }
+    }
+
+    /** The confirmed reset of [page]'s selected row: Reset to defaults (Shortcuts' Clear all) or Pad layout's Reset console. */
+    private fun runSettingsReset(page: Screen.Settings) {
+        when (page.rows.getOrNull(_selection.value.index)?.kind) {
+            SettingsKind.RESET_DEFAULTS -> resetToDefaults(page.section)
+            SettingsKind.PAD_LAYOUT_RESET -> resetPadLayoutConsole()
             else -> Unit
         }
     }
@@ -4728,7 +4782,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     fun openSearch() {
         val s = _screen.value as? Screen.Systems ?: return
         if (s.menu != null || s.search != null || !canSearch) return
-        _tabFocus.value = false
         _screen.value = s.copy(search = lastSearch)
     }
 
@@ -4892,7 +4945,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     private fun listed(game: GameEntry): Listed? = (_screen.value as? Screen.Games)?.entries?.firstOrNull { it.game == game }
 
-    fun play(game: GameEntry) { listed(game)?.let { launch(it, resumeSlot = null) } }
+    fun play(game: GameEntry): Job? = listed(game)?.let { launch(it, resumeSlot = null) }
 
     /** The context menu's Play from start (a game with a save state, which A resumes): [entry] from the start. */
     private fun playFromStart(entry: Listed) {
@@ -4904,11 +4957,11 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * Continues [entry] from its last save, read now (never a slot read earlier); without one it plays [entry] when
      * [orPlay] (A on a game), else does nothing. An Unassigned game never launches; an Android game has no save.
      */
-    private fun resumeFromSave(entry: Listed, orPlay: Boolean = false) {
-        val e = entry.takeIf { !it.system.unassigned && !it.system.android } ?: return
-        scope.launch {
+    private fun resumeFromSave(entry: Listed, orPlay: Boolean = false): Job? {
+        val e = entry.takeIf { !it.system.unassigned && !it.system.android } ?: return null
+        return scope.launch {   // ends with the launch's own job (a launch sequence waits on it)
             val info = deps.userData.resumeInfo(e.system.tag, e.game.fileName)
-            if (info.canResume) launch(e, info.slot) else if (orPlay) launch(e, resumeSlot = null)
+            (if (info.canResume) launch(e, info.slot) else if (orPlay) launch(e, resumeSlot = null) else null)?.join()
         }
     }
 
@@ -4928,14 +4981,14 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         // After a game the menu is its own tab again (the pushed one is not restored): dropped only for a launch that
         // happens (an app's start, or the runner's call), so a coreless, in-flight, vanished or unreadable game leaves the
         // push for B to return to.
-        if (listed.android) { dropPushedTab(); androidApps.launchApp(entry); return null }
+        if (listed.android) { dropPushedTab(); if (androidApps.launchApp(entry)) launchHandedOff = true; return null }
         if (coreOverride == null && listed.core == null) return null
         if (launchJob?.isActive == true) return null   // a launch is already in flight
         switcherJob?.cancel()   // a switcher still loading must not open over the launched game
         val job = scope.launch {
             val gone = "Could not find ${game.fileName}. If it was moved or deleted, use Rescan in Settings → Library."
             if (!stillThere(game)) {   // the index can be older than the tree: no recents entry, no runner call
-                _error.value = gone
+                launchError(gone)
                 return@launch
             }
             // A netplay launch keeps the agreed core.
@@ -4950,8 +5003,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 null
             }
             val companions = when (lookup) {
-                null -> { _error.value = gone; return@launch }
-                is CompanionLookup.Missing -> { _error.value = "Missing ${lookup.name} next to ${lookup.sheet}"; return@launch }
+                null -> { launchError(gone); return@launch }
+                is CompanionLookup.Missing -> { launchError("Missing ${lookup.name} next to ${lookup.sheet}"); return@launch }
                 is CompanionLookup.Found -> lookup.companions
             }
             // An fbneo set also loads its parent and BIOS sets: the ones beside it go along, a BIOS not beside it is checked in the system dir.
@@ -4968,7 +5021,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
-                    _error.value = gone; return@launch
+                    launchError(gone); return@launch
                 }
                 systemSets = arcade.systemSets
                 companions + arcade.companions
@@ -4981,7 +5034,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
-                    _error.value = gone; return@launch
+                    launchError(gone); return@launch
                 }
                 companions + parent
             } else companions
@@ -4995,14 +5048,22 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             SaveTransferRules.launchRefusal(deps.saveTransfer?.importing == true, deps.deviceSync?.running == true)?.let { showNotice(it); return@launch }
             dropPushedTab()
             switcherReturn = fromSwitcher   // set only once the runner is called: a refused launch never gets here
+            // A launch sequence's spread hands its name over; any other launch has none.
+            val launchName = if (_launchSequence.value?.phase == LaunchPhase.SPREAD) launchNameProvider?.invoke() else null
+            launchHandedOff = true
             deps.runner.launch(GameSession(sys.tag, game.shownName, core, game.ref, game.folder, game.fileName, resumeSlot, all, systemSets = systemSets, gamePath = game.path,
-                artPath = panelArt(game.boxartRef?.value, game.box2dRef?.value, game.gridRef?.value, game.screenshotRef?.value), netplay = netplay)) {
+                artPath = panelArt(game.boxartRef?.value, game.box2dRef?.value, game.gridRef?.value, game.screenshotRef?.value), netplay = netplay, launchName = launchName)) {
                 recorder.record(recent)
             }
         }
         launchJob = job
         job.invokeOnCompletion { if (launchJob === job) launchJob = null }
         return job
+    }
+
+    /** [launch]'s Problem: held during a launch sequence's spread (shown after its retreat, [openMinimal]), else shown now. */
+    private fun launchError(text: String) {
+        if (_launchSequence.value?.phase == LaunchPhase.SPREAD) heldLaunchError = text else _error.value = text
     }
 
     /**
@@ -5069,7 +5130,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val switcherBack = switcherUnderGame && _screen.value is Screen.Switcher
         switcherUnderGame = false
         checkArt(reuse = true)   // art deleted or added while away (only changed art folders are listed)
-        if (!minimalPending) _minimalOpening.value?.let { minimalJob?.cancel(); _minimalOpening.value = null }   // back from a game a Minimal band opened
+        returnFromLaunch()   // back from a game or an app a Minimal launch handed off to
+        if (!minimalPending) _minimalOpening.value?.let { minimalJob?.cancel(); _minimalOpening.value = null }
         onLauncherChanged()   // back from Android's home settings or the role dialog: System re-reads its state
         refreshInstalled()    // apps may have been installed or removed meanwhile
         refreshGameInfo()   // back from a game (or another app): its time and unlocks may have moved
@@ -5131,7 +5193,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         switcherUnderGame = false   // a refused launch's flag never closes a switcher opened since
         val here = _screen.value
         if (here !is Screen.Systems && here !is Screen.Games) return
-        _tabFocus.value = false   // the menu under it comes back on its content
         if (switcherJob?.isActive == true) return   // already loading
         val sel = _selection.value
         switcherJob = scope.launch {
@@ -5157,7 +5218,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * stale library ([libraryStale], which also covers Default emulators' changed default) before landing.
      */
     fun goHome() {
-        _tabFocus.value = false   // Home lands on its content (a stale-library reload too)
         // Onboarding (and its embedded Device Sync) stays put, as first setup does.
         if (_screen.value is Screen.Onboarding || (_screen.value == Screen.DeviceSync && onboardingSync)) return
         when (_screen.value) { Screen.Loading, is Screen.PermissionsStep, Screen.PickFolder, Screen.AddFirstExtra, is Screen.AndroidGamesStep, is Screen.FilePicker, is Screen.StorageUpgrade -> return; else -> Unit }
@@ -5287,7 +5347,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             }
             ToolKind.SETTINGS -> openSettingsMenu()
             ToolKind.APPS -> openToolApps(AppPick.TOOLS)
-            ToolKind.APP -> androidApps.openApp(row)
+            ToolKind.APP -> if (androidApps.openApp(row)) launchHandedOff = true
         }
     }
 
@@ -5476,31 +5536,38 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /**
      * Opens main menu row [index] of [s]: a console or collection's list, a game (resumed, or played), a tool, a hidden tab.
-     * [forward]: how a list comes in.
+     * [forward]: how a list comes in. A game's start job, which ends once the runner was called or refused it; else null.
      */
-    private fun openMainRow(s: Screen.Systems, index: Int, forward: NavMotion = NavMotion.FORWARD) {
+    private fun openMainRow(s: Screen.Systems, index: Int, forward: NavMotion = NavMotion.FORWARD): Job? {
         when (val row = s.rows.getOrNull(index)) {
             is MainRow.System -> { intendNav(forward); openSystem(row.system) }
             // Home's pinned game, as Continue: its save read now resumes, none plays. An Android game opens its app.
-            is MainRow.Pin -> { rememberMenuSelection(); if (row.entry.system.android) androidApps.launchApp(row.entry) else resumeFromSave(row.entry, orPlay = true) }
+            is MainRow.Pin -> {
+                rememberMenuSelection()
+                if (!row.entry.system.android) return resumeFromSave(row.entry, orPlay = true)
+                if (androidApps.launchApp(row.entry)) launchHandedOff = true
+            }
             // A shelf game, as a pin (never an Android game).
-            is MainRow.Shelf -> { rememberMenuSelection(); resumeFromSave(row.entry, orPlay = true) }
+            is MainRow.Shelf -> { rememberMenuSelection(); return resumeFromSave(row.entry, orPlay = true) }
             is MainRow.Collection -> { intendNav(forward); openList(ListSource.Collection(row.name)) }
             is MainRow.Tool -> { rememberMenuSelection(); openTool(row.row) }
             // Its save is read again now: one made since the row was built resumes, one deleted since plays.
-            is MainRow.Continue -> { rememberMenuSelection(); resumeFromSave(row.entry, orPlay = true) }
+            is MainRow.Continue -> { rememberMenuSelection(); return resumeFromSave(row.entry, orPlay = true) }
             is MainRow.PinnedTool -> { rememberMenuSelection(); openTool(row.row) }
             // Home's "+N" and Pick a game: the Tools / Consoles tab, pushed over Home while Layouts hides it.
             is MainRow.MoreTools -> showTab(MenuCategory.TOOLS)
             MainRow.PickAGame -> showTab(MenuCategory.CONSOLES)
             null -> Unit
         }
+        return null
     }
 
-    /** Opens game list row [index] of [s]: its save state resumes (its menu has Play from start), none plays; an Android game opens its app. */
-    private fun openGameRow(s: Screen.Games, index: Int) {
+    /**
+     * Opens game list row [index] of [s]: its save state resumes (its menu has Play from start), none plays; an Android
+     * game opens its app. The start's job, as [openMainRow]'s.
+     */
+    private fun openGameRow(s: Screen.Games, index: Int): Job? =
         s.entries.getOrNull(index)?.let { if (it.system.android || it.system.unassigned) play(it.game) else resumeFromSave(it, orPlay = true) }
-    }
 
     /** The page a Minimal open belongs to ([MinimalOpening.page]): a tab's category, a game list's source; null for any other screen. */
     private fun minimalPage(s: Screen): Any? = when (s) {
@@ -5517,40 +5584,107 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     /**
-     * A on a Minimal page (a tab, Home's too, or a game list): the other names fade out and the selected row's band grows
-     * over the screen ([minimalOpening]), and the row opens as it fills ([MINIMAL_OPEN_MS]) if its page still shows it; the
-     * band clears a moment later, behind the game, tool or list (sooner on the next press: [onButton]). A console or a
-     * collection whose list is Minimal too opens as the names have faded ([MINIMAL_LEAVE_MS]), its name morphing into the
-     * list's title ([NavMotion.MINIMAL_FORWARD]). A game starts launching as the band starts growing: the emulator loads
-     * under it and fades in over it, instead of after a black screen.
+     * A on a Minimal page (a tab, Home's too, or a game list). A game or a tool runs the launch sequence
+     * ([launchMinimal]). A folder (a console, a collection, Home's "+N" and Pick a game) fades the other names out
+     * ([minimalOpening]) and opens as they have ([MINIMAL_LEAVE_MS]) if its page still shows it: a console or collection
+     * whose list is Minimal too by its name morphing into the list's title ([NavMotion.MINIMAL_FORWARD]), else sliding in;
+     * the opening clears a moment later (sooner on the next press: [onButton]).
      */
     private fun openMinimal(s: Screen) {
         if (minimalPending) return
         val page = minimalPage(s) ?: return
         val index = _selection.value.index
         val row = minimalRow(s, index) ?: return
-        val list = (row is MainRow.System || row is MainRow.Collection) && deps.settings.gameListStyle == MenuStyle.MINIMAL
         val game = row !is MainRow || row is MainRow.Pin || row is MainRow.Shelf || row is MainRow.Continue
+        val tool = (row as? MainRow.Tool)?.row ?: (row as? MainRow.PinnedTool)?.row
+        if (game || tool != null) return launchMinimal(page, index, row, tool)
+        val list = (row is MainRow.System || row is MainRow.Collection) && deps.settings.gameListStyle == MenuStyle.MINIMAL
         minimalJob?.cancel()
-        _minimalOpening.value = MinimalOpening(page, index, band = !list)
+        _minimalOpening.value = MinimalOpening(page, index)
         minimalPending = true
         minimalJob = scope.launch {
-            delay(if (list || game) MINIMAL_LEAVE_MS else MINIMAL_OPEN_MS)
+            delay(MINIMAL_LEAVE_MS)
             minimalPending = false
             val now = _screen.value
-            if (minimalPage(now) == page && minimalRow(now, index) == row) when (now) {
-                is Screen.Systems -> openMainRow(now, index, if (list) NavMotion.MINIMAL_FORWARD else NavMotion.FORWARD)
-                is Screen.Games -> openGameRow(now, index)
-                else -> Unit
-            }
-            delay(if (game) MINIMAL_GAME_CLEAR_MS else MINIMAL_CLEAR_MS)
+            if (now is Screen.Systems && minimalPage(now) == page && minimalRow(now, index) == row)
+                openMainRow(now, index, if (list) NavMotion.MINIMAL_FORWARD else NavMotion.FORWARD)
+            delay(MINIMAL_CLEAR_MS)
             _minimalOpening.value = null
         }
     }
 
+    /**
+     * [openMinimal]'s game or [tool] ([row], [index] on [page]): [LaunchPhase.SPREAD] for [LaunchTimeline.SPREAD_MS]
+     * ([LaunchTimeline.REDUCED_FADE_MS] under [reducedMotion]), input waiting ([minimalPending]); then the row opens if its
+     * page still shows it. A runner call or an app's start hands off ([LaunchPhase.HANDED_OFF], till [onForeground] or
+     * [LaunchTimeline.GIVE_UP_MS]); an in-app tool is up under the black, which fades ([LaunchPhase.RETURNING]); anything
+     * else (the row gone, a refused or coreless game, an app that would not start) retreats, its Problem held till after.
+     */
+    private fun launchMinimal(page: Any, index: Int, row: Any, tool: ToolRow?) {
+        minimalJob?.cancel(); _minimalOpening.value = null
+        launchSeqJob?.cancel()
+        val id = ++launchSeqIds
+        _launchSequence.value = LaunchSequence(id, page, index, LaunchPhase.SPREAD, clockNow(), tool != null)
+        minimalPending = true
+        heldLaunchError = null
+        launchSeqJob = scope.launch {
+            delay(if (reducedMotion()) LaunchTimeline.REDUCED_FADE_MS else LaunchTimeline.SPREAD_MS)
+            val now = _screen.value
+            if (minimalPage(now) != page || minimalRow(now, index) != row) return@launch retreatLaunch(id)
+            launchHandedOff = false
+            val start = when (now) {
+                is Screen.Systems -> openMainRow(now, index)
+                is Screen.Games -> openGameRow(now, index)
+                else -> null
+            }
+            start?.join()   // a game's checks and runner call (or refusal)
+            when {
+                launchHandedOff -> {
+                    setLaunchPhase(id, LaunchPhase.HANDED_OFF)
+                    delay(LaunchTimeline.GIVE_UP_MS)   // the app never left ([onBackground] cancels this): stop covering the menu
+                    endLaunch(id)
+                }
+                tool != null && tool.kind != ToolKind.APP -> {
+                    setLaunchPhase(id, LaunchPhase.RETURNING)
+                    minimalPending = false
+                    delay(LaunchTimeline.RETURN_FADE_MS)
+                    endLaunch(id)
+                }
+                else -> retreatLaunch(id)
+            }
+        }
+    }
+
+    /** Sequence [id]'s black retreats into its name over [LaunchTimeline.RETREAT_MS]; then the held Problem shows. */
+    private suspend fun retreatLaunch(id: Long) {
+        setLaunchPhase(id, LaunchPhase.RETREAT)
+        delay(LaunchTimeline.RETREAT_MS)
+        endLaunch(id)
+        heldLaunchError?.let { heldLaunchError = null; _error.value = it }
+    }
+
+    private fun setLaunchPhase(id: Long, phase: LaunchPhase) {
+        _launchSequence.value?.takeIf { it.id == id }?.let { _launchSequence.value = it.copy(phase = phase) }
+    }
+
+    /** Sequence [id] is over (a newer one keeps its state): the overlay gone, input free. */
+    private fun endLaunch(id: Long) {
+        if (_launchSequence.value?.id != id) return
+        _launchSequence.value = null
+        minimalPending = false
+    }
+
+    /** Back in front over a handed-off launch: the overlay fades out over [LaunchTimeline.RETURN_FADE_MS], input free now. */
+    private fun returnFromLaunch() {
+        val seq = _launchSequence.value?.takeIf { it.phase == LaunchPhase.HANDED_OFF } ?: return
+        launchSeqJob?.cancel()
+        _launchSequence.value = seq.copy(phase = LaunchPhase.RETURNING)
+        minimalPending = false
+        launchSeqJob = scope.launch { delay(LaunchTimeline.RETURN_FADE_MS); endLaunch(seq.id) }
+    }
+
     fun select(index: Int) {
-        if (minimalPending) return   // a Minimal open's band is growing: the selection stays on the row opening
-        _tabFocus.value = false   // a touch on the content takes the focus there
+        if (minimalPending) return   // a Minimal open is under way: the selection stays on the row opening
         if (index != _selection.value.index) cancelCapture()   // a tap on another Shortcuts row ends a wait for a press
         _selection.value = _selection.value.copy(index = index).clampedTo(_selection.value.count)
         (_screen.value as? Screen.Systems)?.takeIf { it.category == MenuCategory.HOME }?.let { homeTab.noteHomeFocus(_selection.value.index, it.rows) }
@@ -5559,8 +5693,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     fun openSelected() {
         if (loader.active) return   // a screen is loading: only B (cancel) acts
-        if (minimalPending) return   // a Minimal open's band is growing: a tap waits too
-        _tabFocus.value = false   // a tap on the highlighted item (A on the tab row never gets here: it returns to the content)
+        if (minimalPending) return   // a Minimal open is under way: a tap waits too
         when (val s = _screen.value) {
             is Screen.Onboarding -> onboardingRow(_selection.value.index)
             is Screen.Systems -> if (styleOf(s) == MenuStyle.MINIMAL) openMinimal(s) else openMainRow(s, _selection.value.index)
@@ -5603,7 +5736,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                     SettingsKind.IMPORT_DONE -> leaveSubPage(SettingsSection.IMPORT_RESULT)
                     SettingsKind.PAD_LAYOUT -> { sectionSelections[s.section] = _selection.value; padLayoutConsole = PadLayouts.SHARED_KEY; openSettings(SettingsSection.PAD_LAYOUT) }
                     SettingsKind.PAD_LAYOUT_SHAPE -> row.padShape?.let { openPadEditor(it) }
-                    SettingsKind.PAD_LAYOUT_RESET -> resetPadLayoutConsole()
+                    SettingsKind.PAD_LAYOUT_RESET -> _screen.value = s.copy(confirmReset = true)   // asks first
                     SettingsKind.SHORTCUTS -> { sectionSelections[s.section] = _selection.value; openSettings(SettingsSection.SHORTCUTS) }
                     // Without a controller too: one plugged in next answers it (the row says to connect one).
                     SettingsKind.SHORTCUT_BIND -> row.shortcut?.let(::startCapture)
@@ -5615,7 +5748,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                     SettingsKind.APP_UPDATE -> deps.updater?.let(::appUpdateRowA)
                     SettingsKind.HOME_SCREEN -> deps.launcher?.let { it.setHome(!it.isHome()); refreshSettings() }
                     SettingsKind.ANDROID_GAMES -> openToolApps(AppPick.GAMES)
-                    SettingsKind.RESET_DEFAULTS -> resetToDefaults(s.section)
+                    SettingsKind.RESET_DEFAULTS -> _screen.value = s.copy(confirmReset = true)   // asks first
                     SettingsKind.ALL_FILES -> deps.allFilesAccess?.openSettings()
                     SettingsKind.MIC_ACCESS -> deps.micAccess?.request()
                     else -> Unit   // a value row with nothing to step ([settingValue] null): as before, nothing
@@ -5868,7 +6001,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             override fun fetchArt(entry: Listed) { artworkScreens?.fetchGame(entry) }
             override fun netplayOffered(entry: Listed): Boolean = this@AppState.netplay?.offers(entry) == true
             override fun openNetplay(entry: Listed) = this@AppState.openNetplay(entry)
-            override val netplayInMenu: Boolean get() = !launcherChrome().netplayHint
+            override val netplayInMenu: Boolean get() = !launcherChrome().netplayHint || _screen.value is Screen.Systems   // the main menu has no hint bar
             override val achievementsInMenu: Boolean get() = hasAchievements && !deps.settings.gameListAchievementsPanel && !_dualMenu.value
             override fun openAchievements() = ra.openRaPanel()
             override suspend fun canResume(entry: Listed): Boolean = deps.userData.resumeInfo(entry.system.tag, entry.game.fileName).canResume
@@ -5902,10 +6035,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     /** MENU or a long press on row [index] (null = the highlighted row): a game list's menu, or a pinned or recent main-menu row's. */
-    fun openContextMenu(index: Int? = null) { _tabFocus.value = false; contextMenus.openContextMenu(index) }
+    fun openContextMenu(index: Int? = null) { contextMenus.openContextMenu(index) }
 
-    /** A long press on the tab row or the single-tab title: the hidden-tab menu (the tab row's focus ends only if it opens). */
-    fun openTabMenu() { if (contextMenus.openTabMenu()) _tabFocus.value = false }
+    /** A long press on the tab row or the single-tab title: the hidden-tab menu. */
+    fun openTabMenu() { contextMenus.openTabMenu() }
 
     fun closeContextMenu() = contextMenus.closeContextMenu()
 
@@ -5998,9 +6131,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         return true
     }
 
-    /** The Grid body reports its column count (it knows the screen size); the d-pad then steps by tiles. */
-    fun onGridLayout(columns: Int, rows: Int = 2) {
-        gridColumns = columns.coerceAtLeast(0); gridRows = rows.coerceAtLeast(1)
+    /** The Grid body reports its column count (it knows the screen size); the d-pad then steps by tiles, a row at a time. */
+    fun onGridLayout(columns: Int) {
+        gridColumns = columns.coerceAtLeast(0)
     }
 
     /** A game list's List, Minimal or vertical stack reports the items one screen shows: LEFT / RIGHT page by them ([pageMove]). */
@@ -6061,17 +6194,15 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /**
      * The d-pad on a laid-out Grid (main menu tab or game list) steps by tiles. Past the first / last tile the main menu
      * switches tab (a fresh press only, never a key [repeat]: a held key stops at the edge); a game list stops. On the main
-     * menu UP from the top row reaches the tab row ([gridAtTop], [toTabRow]) instead of wrapping; with the tab row hidden
-     * it stays. False when the screen is not a laid-out Grid (the caller does the List step).
+     * menu UP from the top row ([gridAtTop]) stays instead of wrapping. False when the screen is not a laid-out Grid (the caller does the List step).
      */
     private fun gridMove(button: NxButton, repeat: Boolean = false): Boolean {
         if (gridColumns <= 0 || currentStyle() != MenuStyle.GRID) return false
         val s = _screen.value
         if (s !is Screen.Systems && s !is Screen.Games) return false
         val sel = _selection.value
-        _gridPresses.value += 1
-        if (s is Screen.Systems && button == NxButton.UP && gridAtTop(sel.index, sel.count, gridColumns, gridRows)) { toTabRow(repeat); return true }
-        val next = gridStep(sel.index, sel.count, gridColumns, button, gridRows)
+        if (s is Screen.Systems && button == NxButton.UP && gridAtTop(sel.index, sel.count, gridColumns)) return true
+        val next = gridStep(sel.index, sel.count, gridColumns, button)
         if (next == null) {
             // A pushed tab has no tab to switch to: its Grid wraps LEFT / RIGHT at its ends instead (a fresh press only).
             if (s is Screen.Systems && s.pushed) {
@@ -6098,7 +6229,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val s = _screen.value
         if (s !is Screen.Systems && s !is Screen.Games) return false
         if (orientationOf(s) == MenuOrientation.VERTICAL) return stackMove(s, button, repeat)
-        if (s is Screen.Systems && button == NxButton.UP) { toTabRow(repeat); return true }   // a row is all top row
         if (button == NxButton.UP || button == NxButton.DOWN) return true
         val sel = _selection.value
         val next = rowStep(sel.index, sel.count, button)
@@ -6126,8 +6256,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             }
             NxButton.UP, NxButton.DOWN -> {
                 val sel = _selection.value
-                val next = stackStep(sel.index, sel.count, button, fresh = !repeat)   // only an empty stack's UP is null: the tab row
-                if (next == null) { if (s is Screen.Systems) toTabRow(repeat); return true }
+                val next = stackStep(sel.index, sel.count, button, fresh = !repeat)   // only an empty stack's UP is null: it stays
+                if (next == null) return true
                 if (next != sel.index) {
                     _selection.value = sel.copy(index = next)
                     refreshResume()
@@ -6138,64 +6268,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
     }
 
-    /**
-     * UP from the top of a main menu tab's content: the tab row takes the d-pad, on a fresh press only (a held UP stops at
-     * the top). Hidden (Layouts → Page title, in effect: [launcherChrome]) it never does: the press stays put.
-     */
-    private fun toTabRow(repeat: Boolean) {
-        val tabs = (_screen.value as? Screen.Systems)?.tabs?.size ?: 0
-        if (!repeat && launcherChrome().tabRow && tabs > 1) _tabFocus.value = true
-    }
-
-    /**
-     * A button while the main menu's tab row has the d-pad ([tabFocus]). LEFT / RIGHT switch tabs (a fresh press only, as
-     * [switchTab] past a content edge), L1 / R1 too; DOWN, A and B return to the content where it was; UP lands on its
-     * bottom ([toContentBottom], a fresh press only); SELECT opens the switcher as from the content; START the search prompt
-     * ([openSearch], dropping the flag); MENU, X, Y and the rest do nothing. False (the flag dropped) when the main menu is
-     * not showing with no menu open.
-     */
-    private fun onTabRowButton(button: NxButton, repeat: Boolean): Boolean {
-        val s = _screen.value as? Screen.Systems
-        if (s == null || s.menu != null) { _tabFocus.value = false; return false }
-        when (button) {
-            NxButton.LEFT, NxButton.RIGHT -> if (!repeat) switchTab(if (button == NxButton.RIGHT) 1 else -1)
-            NxButton.L1 -> switchTab(-1)
-            NxButton.R1 -> switchTab(1)
-            NxButton.DOWN, NxButton.A, NxButton.B -> _tabFocus.value = false
-            NxButton.UP -> if (!repeat) { _tabFocus.value = false; toContentBottom(s) }
-            NxButton.SELECT -> openSwitcher()
-            NxButton.START -> openSearch()
-            else -> Unit
-        }
-        return true
-    }
-
-    /**
-     * UP on the tab row: the focus wraps to the bottom of [s]'s content. Home: its bottom-most item ([homeBottom]); a laid-out
-     * Grid: the bottom row in the same column, else the last tile ([gridBottom]); a Carousel row is one row:
-     * the item it was on, but a Vertical one (a stack) its last item, as a List; a List: the last row.
-     */
-    private fun toContentBottom(s: Screen.Systems) {
-        val sel = _selection.value
-        if (sel.count <= 0) return
-        val at = when {
-            s.category == MenuCategory.HOME -> homeTab.bottom(sel, s.rows)
-            else -> when (currentStyle()) {
-                MenuStyle.GRID -> if (gridColumns > 0) { _gridPresses.value += 1; gridBottom(sel.index, sel.count, gridColumns, gridRows) } else sel.count - 1
-                MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> if (currentOrientation() == MenuOrientation.VERTICAL) sel.count - 1 else sel.index
-                MenuStyle.LIST, MenuStyle.MINIMAL -> sel.count - 1
-            }
-        }.coerceIn(0, sel.count - 1)
-        if (at == sel.index) return
-        _selection.value = sel.copy(index = at)
-        if (s.category == MenuCategory.HOME) homeTab.noteHomeFocus(at, s.rows)
-        refreshResume()
-    }
-
     /** A pad press. [repeat]: an auto-repeat of a held direction (the router's), not a fresh press; taps are fresh. */
     fun onButton(button: NxButton, repeat: Boolean = false) {
-        if (minimalPending) return   // a Minimal open's band is growing: the row opens in a moment
-        _minimalOpening.value?.let { minimalJob?.cancel(); _minimalOpening.value = null }   // opened: the next press clears its band
+        if (minimalPending) return   // a Minimal open is under way: the row opens in a moment
+        _minimalOpening.value?.let { minimalJob?.cancel(); _minimalOpening.value = null }   // opened: the next press clears it
         _chooser.value?.let { onChooserButton(it, button); return }   // a touch chooser takes the pad while open
         _settingInfo.value?.let { onSettingInfoButton(it, button); return }   // a Settings row's info popup too
         // Press to bind waits on the controller's raw keys ([captureKey]): a touch hint's or the on-screen pad's B cancels, the rest wait.
@@ -6273,16 +6349,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             ra.onRaSettingsButton(it, button); return
         }
         _screen.value.takeIf { it is Screen.RaGames || it is Screen.RaGame || it is Screen.RaAchievement }?.let { ra.onRaBrowserButton(it, button); return }
-        dropHiddenTabFocus()   // a tab row hidden while it had the d-pad (a setting or footer change it missed) gives it back
-        if (_tabFocus.value && onTabRowButton(button, repeat)) return
         if (button.isDirection && homeTab.homeMove(button, repeat)) return   // Home first: its own two-dimensional moves
         when (button) {
-            // A List: UP on the first row wraps to the last, DOWN on the last to the first, on the main menu too (only an
-            // empty tab's UP reaches the tab row). On the launcher's lists (the main menu's and the game lists) a held
+            // A List: UP on the first row wraps to the last, DOWN on the last to the first, on the main menu too (an
+            // empty tab's UP does nothing). On the launcher's lists (the main menu's and the game lists) a held
             // key's repeat stops at the end instead of wrapping.
             NxButton.UP -> if (!rowMove(button, repeat) && !gridMove(button, repeat)) {
-                if (_screen.value is Screen.Systems && _selection.value.count == 0) toTabRow(repeat)
-                else { _selection.value = _selection.value.up(wrap = !repeat || !launcherList()); refreshResume() }
+                if (_screen.value !is Screen.Systems || _selection.value.count > 0) { _selection.value = _selection.value.up(wrap = !repeat || !launcherList()); refreshResume() }
             }
             NxButton.DOWN -> if (!rowMove(button, repeat) && !gridMove(button)) { _selection.value = _selection.value.down(wrap = !repeat || !launcherList()); refreshResume() }
             // The main menu: LEFT / RIGHT are L1 / R1 (a Grid or row switches only past its ends), on a fresh press only: a held
@@ -6367,10 +6440,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             }
             is Screen.Systems -> if (s.search != null) { _screen.value = s.copy(search = null); true }
                 else if (s.menu != null) { if (!s.menu.busy) closeContextMenu(); true }
-                else if (_tabFocus.value) { _tabFocus.value = false; true }   // the tab row: back to the content, as B
                 else if (s.pushed) { popHiddenTab(); true }
                 else false
-            is Screen.Settings -> {
+            is Screen.Settings -> if (s.confirmReset) { _screen.value = s.copy(confirmReset = false); true } else {   // Back keeps the settings
                 sectionSelections[s.section] = _selection.value
                 // A sub-page goes back to its section. Library or Emulators: after a change ([libraryDirty]), or an extra set
                 // or default tag changed behind the page's back (it fails the fit), it reloads (rescanning if needed); either

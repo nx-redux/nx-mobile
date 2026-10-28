@@ -1,10 +1,7 @@
 package com.nxredux.mobile.ui.nx
 
-import com.nxredux.mobile.ui.mainMenuListEdges
 import androidx.compose.foundation.gestures.detectTapGestures
 import kotlin.math.max
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -18,56 +15,50 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.ui.HomeStrip
 import com.nxredux.mobile.ui.InfoLine
-import com.nxredux.mobile.ui.gameListInfoInBarRow
 import com.nxredux.mobile.ui.MainRow
-import com.nxredux.mobile.ui.mainMenuListTopEdge
 
-/** List Home's Continue row tag, drawn before the game's name (the handheld's `home_list_layout.c`). */
+/** List Home's Continue row tag, drawn after the game's name ([MainListBody]), as a shelf game's New or Not started. */
 private const val CONTINUE_TAG = "Continue"
 
 /**
  * List Home's rows for Home's [rows] (built in the List order: Continue or Pick a game, the pinned games, the shelves'
- * games, the pinned tools): Continue wears its [NxRow.tag] before the game's name, a shelf game wears its shelf's name as
- * its tag, a pinned game or tool its name alone. List Home has no "+N".
+ * games, the pinned tools): a game wears why it is on Home as its [NxRow.tag], Continue, New or Not started (a game on
+ * Pick up again, a pinned game or a tool, its name alone). List Home has no "+N".
  */
 internal fun homeListRows(rows: List<MainRow>): List<NxRow> = rows.mapNotNull { r ->
     when (r) {
         is MainRow.Continue -> NxRow(r.entry.game.shownName, tag = CONTINUE_TAG)
         MainRow.PickAGame -> NxRow(PICK_A_GAME)
         is MainRow.Pin -> NxRow(r.entry.game.shownName)
-        is MainRow.Shelf -> NxRow(r.entry.game.shownName, tag = r.shelf.label)
+        is MainRow.Shelf -> NxRow(r.entry.game.shownName, tag = r.shelf.label.takeIf { r.shelf != HomeShelf.PICK_UP })
         is MainRow.PinnedTool -> NxRow(r.row.label)
         is MainRow.MoreTools, is MainRow.System, is MainRow.Collection, is MainRow.Tool -> null
     }
 }
 
-/** List Home's band with the hints shown: no info ([HomeListScreen]). */
-private val NoInfo: () -> List<InfoLine> = { emptyList() }
-
 /**
- * Home in the List style (Layouts → Home layout: List), as the handheld's List Home: the stats strip ([HomeStripLines]
- * at the List gutter, while Home stats shows it, its text centred between the tab underline and the first row's pill,
- * [homeListStripInkTop]) over a main menu List of Home's [rows] ([homeListRows]). With the tab row hidden the strip
- * moves into a header in its place ([homeStatsHeader]). The rows fade where more scrolls in and run down to the hint
- * bar's row (no band under them); the selected game's [info] shows only in that row, with Button hints hidden or touch
- * only ([gameListInfoInBarRow]). App draws the selected game's picture behind ([com.nxredux.mobile.ui.menuBackground]). A
- * fresh install's only row, Pick a game, is its card filling the body instead.
+ * Home in the List style (Layouts → Home layout: List): the stats strip ([HomeStripLines] at the gutter, while Home
+ * stats shows it; with the tab row hidden, in a header in its place, [homeStatsHeader]), the selected game's [info]
+ * on a line under it ([HomeFactsLine], Extra info; in the stats' place with them off), over Home's [rows]
+ * ([MainListBody], right under the header, or under the icon row ([iconsRoom]) with neither). App draws the selected game's picture behind ([com.nxredux.mobile.ui.menuBackground]).
+ * A fresh install's only row, Pick a game, is its card filling the body instead.
  * Navigation lives in AppState: this only draws [selection], and taps go to [onSelect] / [onOpen] as a main menu List's
  * do. A long press on any row calls [onLongPress], on the Pick a game card only when [tabMenu] (a hidden tab to offer
- * from MENU). [bodyAlpha]: the tab focus dim of everything but the hint bar.
+ * from MENU).
  */
 @Composable
 internal fun HomeListScreen(
-    rows: List<MainRow>, selection: () -> Int, strip: HomeStrip?, info: () -> List<InfoLine>, hints: List<Hint>,
+    rows: List<MainRow>, selection: () -> Int, strip: HomeStrip?, info: () -> List<InfoLine>,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, onHint: ((NxButton) -> Unit)?,
-    bodyAlpha: () -> Float, modifier: Modifier = Modifier, tabMenu: Boolean = false,
+    modifier: Modifier = Modifier, tabMenu: Boolean = false, iconsRoom: Dp = 0.dp,
 ) {
     val chrome = LocalLauncherChrome.current
     val portrait = LocalPortrait.current
@@ -80,14 +71,20 @@ internal fun HomeListScreen(
     val stripLines = if (shownStrip?.most != null) 2 else 1
     // With the tab row hidden the strip moves into its room as a header ([homeStatsHeader]), as on Grid and Carousel
     // Home; with no strip the rows run up beside the Recent and Search icons ([homeListTopRoom]).
-    val header = if (!chrome.tabRow && shownStrip != null) homeStatsHeader(frame.copy(titleHidden = true), stripLines) else null
-    val topRoom = homeListTopRoom(chrome.tabRow, header?.height?.dp, pickAGame = rows == listOf(MainRow.PickAGame))
+    // Extra info: the selected game's facts on a line of their own under the stats, in the header with them (in the first
+    // line's place with Home stats off).
+    val facts = chrome.extraInfo && rows != listOf(MainRow.PickAGame)
+    val statLines = if (shownStrip != null) stripLines else 0
+    val headerLines = statLines + (if (facts) 1 else 0)
+    val header = if (!chrome.tabRow && headerLines > 0) homeStatsHeader(frame.copy(titleHidden = true), headerLines) else null
+    // The facts line a little apart from the stats above it ([HOME_FACTS_GAP]); the header grows by as much.
+    val factsGap = if (facts && statLines > 0) HOME_FACTS_GAP else 0f
+    val topRoom = homeListTopRoom(chrome.tabRow, header?.height?.plus(factsGap)?.dp, pickAGame = rows == listOf(MainRow.PickAGame))
     val pageStrip = shownStrip?.takeIf { header == null }   // the strip in the page, under the tab row
     val (capTop, inkH) = homeStripInk(frame, stripLines)
     val above = homeUnderlineAbove(frame)
-    // The strip's text centred between the tab underline and the first row's pill ([homeListStripInkTop]); until the
-    // list reports where that pill lands, the least gap under the underline.
-    var firstPill by remember { mutableStateOf<Float?>(null) }
+    // The strip's text the least gap under the tab underline ([homeListStripInkTop]).
+    val inkTop = if (pageStrip != null) homeListStripInkTop(above, inkH, null) else 0f
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             if (topRoom > 0.dp) Spacer(Modifier.height(topRoom))
@@ -96,64 +93,50 @@ internal fun HomeListScreen(
             if (rows == listOf(MainRow.PickAGame)) {
                 // Nothing played yet: the Pick a game card fills the body (the selection is always on it).
                 NxScreenScaffold(
-                    rows = emptyList(), selectedIndex = 0, hints = hints, onSelect = onSelect, onOpen = onOpen,
-                    modifier = Modifier.weight(1f), onHint = onHint, bodyAlpha = bodyAlpha, hideHints = chrome.emptyBarRoom || chrome.noBar,
+                    rows = emptyList(), selectedIndex = 0, hints = emptyList(), onSelect = onSelect, onOpen = onOpen,
+                    modifier = Modifier.weight(1f), onHint = onHint, hideHints = chrome.emptyBarRoom || chrome.noBar,
                     grid = { m -> HomePickCard(selection, onSelect, onOpen, onLongPress?.takeIf { tabMenu }, portrait, m.padding(horizontal = gutter, vertical = 12.dp).fillMaxSize()) },
                 )
                 return@Column
             }
-            val listRows = remember(rows) { homeListRows(rows) }
-            // No band: the rows fade where more scrolls in, down to the bar. The selected game's info shows only in the bar's row, shaded
-            // under it (as a List game list's, [BandGround.SHADE_WITH_INFO]): with the
-            // hints hidden, or touch only, where the row is kept for it ([gameListInfoInBarRow]).
-            // Extra info off leaves nothing for that row, so its room goes too.
-            val barHidden = gameListInfoInBarRow(chrome.emptyBarRoom, touchOnly())
-            val inRow = barHidden && chrome.extraInfo
-            GameInfoPlacement(
-                if (inRow) info else NoInfo, Modifier.weight(1f), textStart = gutter,
-                ground = if (inRow) BandGround.SHADE_WITH_INFO else BandGround.BAR, shade = false,
-            ) { scaffoldModifier, infoBand ->
-                // The band's room goes to the rows; only its line in the bar's row ([NxHintsBand.barInfo]) stays.
-                val band = NxHintsBand(reserve = 0.dp, overlap = 0.dp, barInfo = infoBand.barInfo) {}
-                NxScreenScaffold(
-                    rows = listRows,
-                    selectedIndex = 0, selection = selection, showArt = false,   // App draws the game's picture behind; the rows read the selection
-                    hints = hints, onSelect = onSelect, onOpen = onOpen,
-                    modifier = scaffoldModifier, onHint = onHint, onLongPress = onLongPress, band = band,
-                    labelStart = gutter,
-                    // The edge the rows are spaced from ([nxListFitUnder]): with the strip in the page, its text's bottom at
-                    // its least gap under the underline (the strip then centres, [homeListStripInkTop]); under the stats
-                    // header, its bottom; under the tab row, its underline ([mainMenuListTopEdge]). With neither, none: the
-                    // first row a fixed gap under the page's top, as a main menu List's.
-                    listTopEdge = if (pageStrip != null) (above - HOME_LIST_STRIP_MIN_GAP - inkH).dp
-                        else if (header != null) 0.dp
-                        else mainMenuListTopEdge(chrome.tabRow),
-                    listTopGap = if (portrait) 10.dp else 12.dp,
-                    bodyAlpha = bodyAlpha, hideHints = barHidden, hintShade = inRow, keepBarRoom = inRow || !barHidden,
-                    // The main menu Lists' row height and bottom gap (their edges here; the info row counts as a bar), so
-                    // Home's text and its gap over the bottom match theirs.
-                    scrollFade = true, rowsLike = mainMenuListEdges(chrome.tabRow, barShown = !barHidden || inRow),
-                    onFirstPill = if (pageStrip != null) { y -> firstPill = y } else null,
-                )
+            val names = remember(rows) { homeListRows(rows) }
+            // The rows right under the header (the stats and the facts), else under the icon row; the fade parts them.
+            val listTop = when {
+                header != null -> 0.dp
+                pageStrip != null -> (inkTop + inkH).coerceAtLeast(0f).dp
+                else -> iconsRoom
             }
+            // A row's room between the stats and the first game, so Home's top does not crowd its list.
+            MainListBody(names, selection, listTop, gutter, onSelect, onOpen, onLongPress, Modifier.weight(1f), gapRows = if (header != null) 1 else 0)
         }
-        val inkTop = if (pageStrip != null) homeListStripInkTop(above, inkH, firstPill) else 0f
-        HomeStripOverlay(shownStrip, pageStrip, header, stripLines, inkTop, capTop, frame, gutter, bodyAlpha)
+        // The stats and the facts in line with the names ([listTextInset]).
+        val textStart = gutter + com.nxredux.mobile.ui.listTextInset(MenuStyle.LIST)
+        HomeStripOverlay(shownStrip, pageStrip, header?.takeIf { shownStrip != null }, statLines, inkTop, capTop, frame, textStart)
+        if (facts && header != null) {
+            // The next line of the header's rhythm under the stats, short of the icons while level with them.
+            val y = header.stripTop + statLines * homeStripPitch(frame) + factsGap
+            val iconsRoom = if (y < MENU_TAB_ROW_HEIGHT.value) HOME_HEADER_ICONS_ROOM.dp else 0.dp
+            HomeFactsLine(
+                info(), (HOME_STRIP_TYPE.sp * nxTextScale()).sp,
+                Modifier.pageFixed().fillMaxWidth().padding(top = y.dp, start = textStart, end = textStart + iconsRoom).height(homeStripLineH(frame).dp),
+            )
+        }
     }
 }
 
 /**
- * List and Minimal Home's strip over their body (faded with [bodyAlpha]), at the [gutter]: [pageStrip] in the page under
+ * List and Minimal Home's strip over their body, at the [gutter]: [pageStrip] in the page under
  * the tab row, its text's top at [inkTop] ([capTop] under its lines' top), or [strip] in the stats [header] (the tab row
  * hidden), short of the Recent and Search icons MainMenuScreen draws at its right.
  */
 @Composable
 internal fun HomeStripOverlay(
     strip: HomeStrip?, pageStrip: HomeStrip?, header: HomeStatsHeader?, stripLines: Int, inkTop: Float, capTop: Float,
-    frame: HomeFrame, gutter: Dp, bodyAlpha: () -> Float,
+    frame: HomeFrame, gutter: Dp,
 ) {
+    // Still while the page slides between tabs, as the tab row and the icons are ([pageFixed]).
     if (pageStrip != null) {
-        BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = bodyAlpha() }) {
+        BoxWithConstraints(Modifier.fillMaxWidth().pageFixed()) {
             HomeStripLines(
                 pageStrip, stripLines, gutter.value, inkTop - capTop,
                 width = maxWidth.value - 2 * gutter.value, lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
@@ -161,14 +144,17 @@ internal fun HomeStripOverlay(
         }
     }
     if (header != null && strip != null) {
-        BoxWithConstraints(Modifier.fillMaxWidth().graphicsLayer { alpha = bodyAlpha() }) {
+        BoxWithConstraints(Modifier.fillMaxWidth().pageFixed()) {
             HomeStripLines(
-                strip, header.lines, gutter.value, header.stripTop,
+                strip, stripLines, gutter.value, header.stripTop,
                 width = maxWidth.value - 2 * gutter.value - HOME_HEADER_ICONS_ROOM, lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
             )
         }
     }
 }
+
+/** List Home's gap, dp, between the stats' last line and the facts line under it. */
+private const val HOME_FACTS_GAP = 6f
 
 /** List Home's least gap from the tab underline to the strip's text and from the text to the first row's pill. */
 private const val HOME_LIST_STRIP_MIN_GAP = 12f

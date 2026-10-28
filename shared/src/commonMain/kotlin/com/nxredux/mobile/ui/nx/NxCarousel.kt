@@ -76,6 +76,7 @@ fun NxCarousel(
     // A game list: the neighbours on the screen's centre line, and the selected card holds the game's stats
     // ([captionInfo]) over a shade, its name alone under it.
     gameList: Boolean = false,
+    drained: Boolean = false,   // Home's: no ring, the selected card in colour and the rest grey ([NxMenuTile]'s drained)
 ) {
     val colors = LocalNxColors.current
     val portrait = LocalPortrait.current
@@ -114,10 +115,14 @@ fun NxCarousel(
         val nbTop = (if (gameList) screenCentreLineTop(screenCentreY, boxTopY, density, g.itemH) else null)
             ?.coerceIn(0f, (area - g.itemH).coerceAtLeast(0f)) ?: rowNeighbourTop(area, g.itemH)
         val glide = remember(pos) { CaptionGlide() }
-        val selTop = remember(glide, area, g.itemH) { { rowSelectedTop(area, g.itemH, CAPTION_GAP, glide.value()) } }
+        // A game list's selection, with its name under it, centred on the screen's centre line too, not the box's.
+        val centreLine = if (gameList) screenCentreLineTop(screenCentreY, boxTopY, density, 0f) else null
+        fun selectedTop(drawn: Float) =
+            if (centreLine != null) rowSelectedTopOn(centreLine, area, g.itemH, CAPTION_GAP, drawn) else rowSelectedTop(area, g.itemH, CAPTION_GAP, drawn)
+        val selTop = remember(glide, area, g.itemH, centreLine) { { selectedTop(glide.value()) } }
         // The swipe band: from the highest a selected tile goes (its name's two lines, the info and every spare line)
         // down to the neighbours' bottom, so it covers every drawn tile.
-        val bandTop = min(nbTop, rowSelectedTop(area, g.itemH, CAPTION_GAP, room - CAPTION_GAP + spare))
+        val bandTop = min(nbTop, selectedTop(room - CAPTION_GAP + spare))
         val bandH = nbTop + g.itemH - bandTop
 
         val hasLongPress = onLongPress != null
@@ -127,12 +132,12 @@ fun NxCarousel(
 
         // The window spans the target too, and the selection is lit while [lit] says so.
         NxRow(count, selectedIndex, pos, g, bandTop, bandH, onSelect, onOpen, onLongPress, litSelection = lit) { i, isLit, at, taps ->
-            CarouselItem(tiles[i], i, isLit, at, g, nbTop, bandTop, selTop, logoInset, toolSize, portrait, taps, hasLongPress, badge(i), cardInfo, stats)
+            CarouselItem(tiles[i], i, isLit, at, g, nbTop, bandTop, selTop, logoInset, toolSize, portrait, taps, hasLongPress, badge(i), cardInfo, stats, drained)
         }
 
         if (cardInfo == null) RowCaption(
             captionTitle, if (gameList) NoTileInfo else captionInfo, glide, nameStyle, 2, infoStyle, gutter, avail, availPx, spare,
-            selTop, g.itemH + CAPTION_GAP, colors.listText,
+            selTop, g.itemH + CAPTION_GAP, colors.accent,   // the selected game's name in the accent, as Home's cards
         )
     }
 }
@@ -141,7 +146,7 @@ fun NxCarousel(
 private fun BoxScope.CarouselItem(
     tile: GridTile, i: Int, lit: Boolean, at: () -> Float, g: RowGeometry, nbTop: Float, bandTop: Float, selTop: () -> Float,
     logoInset: Pair<Float, Float>, toolSize: ToolTileSize, portrait: Boolean, taps: ItemTaps, hasLongPress: Boolean,
-    badge: String?, cardInfo: ((Int) -> List<InfoLine>)?, stats: (() -> List<InfoLine>)?,
+    badge: String?, cardInfo: ((Int) -> List<InfoLine>)?, stats: (() -> List<InfoLine>)?, drained: Boolean,
 ) {
     val colors = LocalNxColors.current
     val geometry by rememberUpdatedState(g)
@@ -165,11 +170,12 @@ private fun BoxScope.CarouselItem(
             info = remember(cardInfo, stats, i) { cardInfo?.let { ci -> { ci(i) } } ?: stats ?: NoTileInfo }, logoInset = logoInset, portrait = portrait,
             modifier = Modifier.fillMaxSize(), toolSize = toolSize, homeCaption = cardInfo != null,
             gameFade = stats != null, statsOnly = stats != null,
-            statsSize = if (stats != null) nxCardStatsSize() else 13.sp,
+            statsSize = if (stats != null) nxCardStatsSize() else 13.sp, drained = drained, heroName = drained && cardInfo != null,
         )
-        badge?.let { HomeBadge(it, portrait, Modifier.align(Alignment.TopStart)) }
-        // The neighbour's black layer, on the tile's own rounded shape (the ring outside stays bright).
-        Box(
+        badge?.let { HomeBadge(it, portrait, Modifier.align(Alignment.TopStart), lit = lit || !drained) }
+        // The neighbour's black layer, on the tile's own rounded shape (the ring outside stays bright). Drained, the
+        // greyscale dims the neighbours already.
+        if (!drained) Box(
             Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp))
                 .graphicsLayer { alpha = rowItem(RowStyle.CAROUSEL, i - at(), g).dim }
                 .background(colors.background),

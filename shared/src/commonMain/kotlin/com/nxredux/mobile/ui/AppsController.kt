@@ -59,21 +59,25 @@ internal class AppsController(
 
     /**
      * An Android game: the platform starts its app; nothing is recorded (no recent, no game time). A failed start (the
-     * app gone meanwhile) says so and re-lists the apps, so the console drops it.
+     * app gone meanwhile) says so and re-lists the apps, so the console drops it. True when it started.
      */
-    fun launchApp(entry: Listed) {
-        if (launcher?.launch(entry.game.fileName) == true) return
+    fun launchApp(entry: Listed): Boolean {
+        if (launcher?.launch(entry.game.fileName) == true) return true
         host.showNotice("Could not open ${entry.shown}")
         host.refreshInstalled()
+        return false
     }
 
-    /** A Tools row for an Android app ([ToolKind.APP]): the platform starts it; a failed start says so and rebuilds the rows. */
-    fun openApp(row: ToolRow) {
-        row.appId?.let { id ->
-            if (launcher?.launch(id) == true) return
-            host.showNotice("Could not open ${row.label}")
-            scope.launch { host.rebuildMainRows(); host.swapMainRows() }   // likely gone since the menu was built
-        }
+    /**
+     * A Tools row for an Android app ([ToolKind.APP]): the platform starts it; a failed start says so and rebuilds the
+     * rows. True when it started.
+     */
+    fun openApp(row: ToolRow): Boolean {
+        val id = row.appId ?: return false
+        if (launcher?.launch(id) == true) return true
+        host.showNotice("Could not open ${row.label}")
+        scope.launch { host.rebuildMainRows(); host.swapMainRows() }   // likely gone since the menu was built
+        return false
     }
 
     /**
@@ -105,7 +109,7 @@ internal class AppsController(
     fun onToolAppsLayout(columns: Int) { toolAppsColumns = columns.coerceAtLeast(0) }
 
     /**
-     * The grid ([gridStep], every row still): the d-pad moves by tiles, UP/DOWN wrapping in the column and LEFT/RIGHT
+     * The grid ([gridStep]): the d-pad moves by tiles, UP/DOWN wrapping in the column and LEFT/RIGHT
      * stopping at the first and last tile. The drawer: A opens the selected app, MENU its menu, B back to Tools. The
      * games picker: A puts the app in the console or takes it out, B back to Library on its row.
      */
@@ -113,7 +117,7 @@ internal class AppsController(
         when (button) {
             NxButton.UP, NxButton.DOWN, NxButton.LEFT, NxButton.RIGHT -> {
                 val sel = selection.value
-                gridStep(sel.index, sel.count, toolAppsColumns.coerceAtLeast(1), button, rows = sel.count)?.let { selection.value = sel.copy(index = it) }
+                gridStep(sel.index, sel.count, toolAppsColumns.coerceAtLeast(1), button, rowEnds = false)?.let { selection.value = sel.copy(index = it) }
             }
             NxButton.A -> host.openSelected()
             NxButton.B -> host.back()

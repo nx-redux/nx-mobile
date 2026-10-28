@@ -240,9 +240,9 @@ internal fun nxInfoBandGeometry(lineDp: Float, inkTopDp: Float, touch: Boolean =
  * over the bottom [hold] (the stop follows the measured height), then fading linearly to nothing at the top edge.
  */
 internal fun Modifier.nxVerticalFade(ground: Color, edgeAlpha: Float, hold: Dp): Modifier = drawWithCache {
-    val edge = ground.copy(alpha = edgeAlpha)
+    val edge = ground.copy(alpha = edgeAlpha)   // role: a fade gradient's stops
     val solid = if (size.height > 0f) (hold.toPx() / size.height).coerceIn(0f, 1f) else 0f
-    val brush = Brush.verticalGradient(0f to ground.copy(alpha = 0f), 1f - solid to edge, 1f to edge)
+    val brush = Brush.verticalGradient(0f to ground.copy(alpha = 0f), 1f - solid to edge, 1f to edge)   // role: a fade gradient's stops
     onDrawBehind { drawRect(brush) }
 }
 
@@ -257,7 +257,7 @@ internal fun Modifier.nxEasedFade(ground: Color, edgeAlpha: Float, fromTop: Bool
     Brush.verticalGradient(*Array(EASE_STOPS) { i ->
         val y = i / (EASE_STOPS - 1f)          // 0 at the top
         val t = if (fromTop) y else 1f - y      // 0 at the edge
-        y to ground.copy(alpha = easedFadeAlpha(edgeAlpha, t, power))
+        y to ground.copy(alpha = easedFadeAlpha(edgeAlpha, t, power))   // role: a fade gradient's stops
     }),
 )
 
@@ -358,14 +358,12 @@ internal enum class BandGround { BAR, NONE, SHADE_WITH_INFO }
 
 /**
  * Button hints hidden, a List game list: the selected game's [lines] in the hint bar's empty row (its shade under it),
- * vertically centred, right-aligned at the screen gutter and free to use the width back to [start] (the band's arrows'
- * x), as NX Redux's info line on its own row (infoband.c info_top).
+ * vertically centred, [start] in from either side (the list's names' edge, so it lines up with them and the hint bar).
  */
 @Composable
 private fun BarInfoLine(lines: List<InfoLine>, start: Dp) {
-    val gutter = if (LocalPortrait.current) 16.dp else 24.dp
-    Box(Modifier.fillMaxSize().padding(start = start, end = gutter), contentAlignment = Alignment.CenterEnd) {
-        GameInfoBlock(lines, alignEnd = true, Modifier.captionTap(), scale = nxTextScale())   // Appearance → Text size
+    Box(Modifier.fillMaxSize().padding(horizontal = start), contentAlignment = Alignment.CenterStart) {
+        GameInfoBlock(lines, alignEnd = false, Modifier.captionTap(), scale = nxTextScale())   // Appearance → Text size
     }
 }
 

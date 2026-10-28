@@ -33,22 +33,22 @@ class MenuBackgroundTest {
         }
     }
 
-    // List Home: the selected game's picture behind the rows, a pinned tool's logo, as the handheld's.
-    @Test fun list_home_shows_the_game_picture_and_a_tool_logo() {
-        assertIs<MenuBackground.Picture>(menuBackground(MenuStyle.LIST, MenuCategory.HOME, MainRow.Pin(Listed(md, game)), portrait = false))
-        assertIs<MenuBackground.Logo>(menuBackground(MenuStyle.LIST, MenuCategory.HOME, tool, portrait = false))
+    // List Home: the selected game, drawn as a game list's List shows it; a pinned tool, plain.
+    @Test fun list_home_shows_the_game_picture_and_nothing_for_a_tool() {
+        assertEquals(MenuBackground.Game(Listed(md, game)), menuBackground(MenuStyle.LIST, MenuCategory.HOME, MainRow.Pin(Listed(md, game)), portrait = false))
+        assertEquals(MenuBackground.Plain, menuBackground(MenuStyle.LIST, MenuCategory.HOME, tool, portrait = false))
         assertEquals(MenuBackground.Plain, menuBackground(MenuStyle.GRID, MenuCategory.HOME, MainRow.Pin(Listed(md, game)), portrait = false))
         assertEquals(MenuBackground.Plain, menuBackground(MenuStyle.CAROUSEL, MenuCategory.HOME, MainRow.Pin(Listed(md, game)), portrait = false))
     }
 
-    @Test fun list_home_pictures_are_continues_frame_and_the_games_background() {
+    @Test fun list_home_pictures_are_the_selected_games() {
         val e = Listed(md, game)
-        assertEquals(MenuBackground.Picture("frame.png"), menuBackground(MenuStyle.LIST, MenuCategory.HOME, cont))
-        assertEquals(MenuBackground.Picture(gameBackground(e, portrait = true)!!), menuBackground(MenuStyle.LIST, MenuCategory.HOME, MainRow.Pin(e), portrait = true))
-        assertEquals(MenuBackground.Picture(gameBackground(e, portrait = false)!!), menuBackground(MenuStyle.LIST, MenuCategory.HOME, MainRow.Shelf(e, HomeShelf.NEW)))
-        assertEquals(MenuBackground.Logo(toolIcon(ToolKind.SETTINGS)), menuBackground(MenuStyle.LIST, MenuCategory.HOME, tool))
+        assertEquals(MenuBackground.Game(cont.entry), menuBackground(MenuStyle.LIST, MenuCategory.HOME, cont))
+        assertEquals(MenuBackground.Game(e), menuBackground(MenuStyle.LIST, MenuCategory.HOME, MainRow.Pin(e), portrait = true))
+        assertEquals(MenuBackground.Game(e), menuBackground(MenuStyle.LIST, MenuCategory.HOME, MainRow.Shelf(e, HomeShelf.NEW)))
+        assertEquals(MenuBackground.Plain, menuBackground(MenuStyle.LIST, MenuCategory.HOME, tool))   // a pinned tool: no icon behind
         // The Home background is not the consoles' controller art: Layouts → Consoles background off keeps it.
-        assertIs<MenuBackground.Picture>(menuBackground(MenuStyle.LIST, MenuCategory.HOME, cont, consoleArt = ConsoleArt.NONE))
+        assertIs<MenuBackground.Game>(menuBackground(MenuStyle.LIST, MenuCategory.HOME, cont, consoleArt = ConsoleArt.NONE))
         assertEquals(MenuBackground.Plain, menuBackground(MenuStyle.LIST, MenuCategory.HOME, MainRow.PickAGame))
         assertEquals(MenuBackground.Plain, menuBackground(MenuStyle.LIST, MenuCategory.HOME, null))
     }

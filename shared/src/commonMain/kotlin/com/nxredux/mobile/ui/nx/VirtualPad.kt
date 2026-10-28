@@ -165,7 +165,7 @@ private val PadColors.lift: Dp get() = if (outline) 0.dp else PadStyle.faceLift
  * the buttons apart without a filled button on the outline pad.
  */
 internal fun PadColors.faceOf(override: PadFace): PadFace =
-    if (!outline) override else override.tint?.let { outlineFace(it, pressedFill = it.copy(alpha = 0.3f), pressedRim = it) } ?: face
+    if (!outline) override else override.tint?.let { outlineFace(it, pressedFill = it.copy(alpha = 0.3f), pressedRim = it) } ?: face   // role: an outline pad button's pressed fill
 
 /** The label colour on a button drawn with [override]'s face and [labelColor]: on an outline pad, the face's tint (a dark letter meant for a filled yellow face would vanish on black). */
 internal fun PadColors.labelOf(override: PadFace?, labelColor: Color?): Color =
@@ -183,30 +183,30 @@ private fun outlineFace(stroke: Color, pressedFill: Color, pressedRim: Color) = 
 private val CharcoalFace = PadFace(
     // Raised: a domed face — bright highlight up top falling off fast to a dark base — with a strong
     // top rim highlight so it pops out of the dark socket.
-    raisedFill = Brush.verticalGradient(listOf(Color(0xFF444B54), Color(0xFF2A2F36), Color(0xFF191D22))),
-    raisedRim = Brush.verticalGradient(listOf(Color(0x40FFFFFF), Color(0x00FFFFFF))),
+    raisedFill = Brush.verticalGradient(listOf(PadPalettes.Charcoal.faceTop, PadPalettes.Charcoal.faceMid, PadPalettes.Charcoal.faceBottom)),
+    raisedRim = Brush.verticalGradient(listOf(PadPalettes.Charcoal.faceRimTop, PadPalettes.whiteClear)),
     // Pressed: the face sinks deeper (a larger inset) and darkens with an inner top shadow — a natural
     // depression rather than a glow.
-    pressedFill = Brush.verticalGradient(listOf(Color(0xFF141719), Color(0xFF23282E))),
-    pressedRim = Brush.verticalGradient(listOf(Color(0x80000000), Color(0x00000000))),
+    pressedFill = Brush.verticalGradient(listOf(PadPalettes.Charcoal.facePressedTop, PadPalettes.Charcoal.facePressedBottom)),
+    pressedRim = Brush.verticalGradient(listOf(PadPalettes.pressedRimTop, PadPalettes.blackClear)),
 )
 
 /** Charcoal: a flat mid-dark charcoal body (never pure black, so the soft shadows read) with dark sockets. The default. */
 internal val CharcoalPadColors = PadColors(
-    surface = Color(0xFF272B30),
+    surface = PadPalettes.Charcoal.surface,
     face = CharcoalFace,
     dpad = CharcoalFace,
     pill = CharcoalFace,
-    socketFill = Color(0xFF0D0F12),
-    socketRim = Brush.verticalGradient(listOf(Color(0x00FFFFFF), Color(0x26FFFFFF))),
-    wellFill = Brush.verticalGradient(listOf(Color(0xFF181B20), Color(0xFF23272D), Color(0xFF2D3239))),
-    wellRim = Brush.verticalGradient(listOf(Color(0x4D000000), Color(0x22FFFFFF))),
+    socketFill = PadPalettes.Charcoal.socketFill,
+    socketRim = Brush.verticalGradient(listOf(PadPalettes.whiteClear, PadPalettes.Charcoal.socketRimBottom)),
+    wellFill = Brush.verticalGradient(listOf(PadPalettes.Charcoal.wellTop, PadPalettes.Charcoal.wellMid, PadPalettes.Charcoal.wellBottom)),
+    wellRim = Brush.verticalGradient(listOf(PadPalettes.Charcoal.wellRimTop, PadPalettes.Charcoal.wellRimBottom)),
     // Kept light so it grounds the knob without swallowing its bottom edge.
-    knobShadow = Brush.radialGradient(0f to Color(0x66000000), 0.8f to Color(0x26000000), 1f to Color(0x00000000)),
-    label = Color(0xFFB4BAC2),      // light grey caps
-    engraveLitLip = Color(0xFF40464E),
-    engraveInnerShadow = Color(0xFF15181B),
-    engraveFloor = Color(0xFF181B1F),
+    knobShadow = Brush.radialGradient(0f to PadPalettes.Charcoal.knobShadowCore, 0.8f to PadPalettes.Charcoal.knobShadowMid, 1f to PadPalettes.blackClear),
+    label = PadPalettes.Charcoal.label,      // light grey caps
+    engraveLitLip = PadPalettes.Charcoal.engraveLitLip,
+    engraveInnerShadow = PadPalettes.Charcoal.engraveInnerShadow,
+    engraveFloor = PadPalettes.Charcoal.engraveFloor,
 )
 
 /**
@@ -215,42 +215,42 @@ internal val CharcoalPadColors = PadColors(
  * shell cut-out), not black, rimmed like the joystick well: a shadowed top lip and a lit lower edge.
  */
 internal val RetroPadColors = PadColors(
-    surface = Color(0xFFC9C5BE),
+    surface = PadPalettes.Retro.surface,
     face = PadFace(
-        raisedFill = Brush.verticalGradient(listOf(Color(0xFFB0426A), Color(0xFF8E2A4E), Color(0xFF6A1C39))),
-        raisedRim = Brush.verticalGradient(listOf(Color(0x4DFFFFFF), Color(0x00FFFFFF))),
-        pressedFill = Brush.verticalGradient(listOf(Color(0xFF4E1229), Color(0xFF6E2040))),
-        pressedRim = Brush.verticalGradient(listOf(Color(0x80000000), Color(0x00000000))),
+        raisedFill = Brush.verticalGradient(listOf(PadPalettes.Retro.faceTop, PadPalettes.Retro.faceMid, PadPalettes.Retro.faceBottom)),
+        raisedRim = Brush.verticalGradient(listOf(PadPalettes.softRimTop, PadPalettes.whiteClear)),
+        pressedFill = Brush.verticalGradient(listOf(PadPalettes.Retro.facePressedTop, PadPalettes.Retro.facePressedBottom)),
+        pressedRim = Brush.verticalGradient(listOf(PadPalettes.pressedRimTop, PadPalettes.blackClear)),
     ),
     dpad = PadFace(
-        raisedFill = Brush.verticalGradient(listOf(Color(0xFF3A3A3E), Color(0xFF1E1E21), Color(0xFF111113))),
-        raisedRim = Brush.verticalGradient(listOf(Color(0x33FFFFFF), Color(0x00FFFFFF))),
-        pressedFill = Brush.verticalGradient(listOf(Color(0xFF08080A), Color(0xFF18181B))),
-        pressedRim = Brush.verticalGradient(listOf(Color(0x99000000), Color(0x00000000))),
+        raisedFill = Brush.verticalGradient(listOf(PadPalettes.Retro.dpadTop, PadPalettes.Retro.dpadMid, PadPalettes.Retro.dpadBottom)),
+        raisedRim = Brush.verticalGradient(listOf(PadPalettes.Retro.dpadRimTop, PadPalettes.whiteClear)),
+        pressedFill = Brush.verticalGradient(listOf(PadPalettes.Retro.dpadPressedTop, PadPalettes.Retro.dpadPressedBottom)),
+        pressedRim = Brush.verticalGradient(listOf(PadPalettes.Retro.dpadPressedRimTop, PadPalettes.blackClear)),
     ),
     pill = CharcoalFace,            // the Charcoal theme's button face, shared so the two stay in sync
-    socketFill = Color(0xFF5A5550),
+    socketFill = PadPalettes.Retro.socketFill,
     // The well's rim treatment (shadowed top lip, lit lower edge). The lit stop is stronger than the well's #80FFFFFF
     // so that over the darker groove it lands on the same tone as the well's lit edge (about #E7E5E1).
-    socketRim = Brush.verticalGradient(listOf(Color(0x40000000), Color(0xD9FFFFFF))),
-    wellFill = Brush.verticalGradient(listOf(Color(0xFFA29E97), Color(0xFFB6B2AB), Color(0xFFCFCBC4))),
-    wellRim = Brush.verticalGradient(listOf(Color(0x40000000), Color(0x80FFFFFF))),
-    knobShadow = Brush.radialGradient(0f to Color(0x59000000), 0.8f to Color(0x1F000000), 1f to Color(0x00000000)),
-    label = Color(0xFFEDE9E3),      // light caps on the dark, magenta and grey buttons
-    engraveLitLip = Color(0xFFE2DED8),
-    engraveInnerShadow = Color(0xFFA6A29C),
-    engraveFloor = Color(0xFFB8B4AE),
+    socketRim = Brush.verticalGradient(listOf(PadPalettes.Retro.socketRimTop, PadPalettes.Retro.socketRimBottom)),
+    wellFill = Brush.verticalGradient(listOf(PadPalettes.Retro.wellTop, PadPalettes.Retro.wellMid, PadPalettes.Retro.wellBottom)),
+    wellRim = Brush.verticalGradient(listOf(PadPalettes.Retro.wellRimTop, PadPalettes.Retro.wellRimBottom)),
+    knobShadow = Brush.radialGradient(0f to PadPalettes.Retro.knobShadowCore, 0.8f to PadPalettes.Retro.knobShadowMid, 1f to PadPalettes.blackClear),
+    label = PadPalettes.Retro.label,      // light caps on the dark, magenta and grey buttons
+    engraveLitLip = PadPalettes.Retro.engraveLitLip,
+    engraveInnerShadow = PadPalettes.Retro.engraveInnerShadow,
+    engraveFloor = PadPalettes.Retro.engraveFloor,
 )
 
 /** Black's body, shared by both button sets. */
-private val BLACK_SURFACE = Color(0xFF000000)
+private val BLACK_SURFACE = PadPalettes.Black.surface
 /** Black's caps: Charcoal's light grey, which reads on black without glaring. */
-private val BLACK_LABEL = Color(0xFFB4BAC2)
+private val BLACK_LABEL = PadPalettes.Black.label
 /** The Outline set's stroke: a mid grey, quiet on black but clear of it. */
-private val BLACK_STROKE = Color(0xFF5A5F66)
+private val BLACK_STROKE = PadPalettes.Black.stroke
 /** The Outline set's held stroke: brighter, with a faint white fill, so a press shows without a glow. */
-private val BLACK_STROKE_PRESSED = Color(0xFF8A9098)
-private val BLACK_PRESSED_FILL = Color(0x1FFFFFFF)
+private val BLACK_STROKE_PRESSED = PadPalettes.Black.strokePressed
+private val BLACK_PRESSED_FILL = PadPalettes.Black.pressedFill
 
 /**
  * Black, Grey buttons: Charcoal's domed grey buttons on a pure black body. Black has no darker tone for a groove, so
@@ -264,13 +264,13 @@ internal val BlackGreyPadColors = PadColors(
     pill = CharcoalFace,
     socketFill = BLACK_SURFACE,
     socketRim = CharcoalPadColors.socketRim,
-    wellFill = Brush.verticalGradient(listOf(Color(0xFF000000), Color(0xFF0B0C0E), Color(0xFF15171A))),
+    wellFill = Brush.verticalGradient(listOf(PadPalettes.Black.wellTop, PadPalettes.Black.wellMid, PadPalettes.Black.wellBottom)),
     wellRim = CharcoalPadColors.wellRim,
     knobShadow = CharcoalPadColors.knobShadow,
     label = BLACK_LABEL,
     engraveLitLip = Color.Transparent,
     engraveInnerShadow = Color.Transparent,
-    engraveFloor = Color(0xFF17191C),
+    engraveFloor = PadPalettes.Black.engraveFloor,
 )
 
 /**
@@ -889,7 +889,7 @@ private fun MicFace(mic: PadMic, size: Dp, modifier: Modifier = Modifier) {
         pressed = pressed || mic.on,
         modifier = modifier
             .size(size)
-            .then(if (mic.on) Modifier else Modifier.alpha(0.45f))
+            .then(if (mic.on) Modifier else Modifier.alpha(0.45f))   // role: the mic pill while off
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
@@ -951,7 +951,7 @@ private fun ToolButton(
         shape = PadStyle.pillShape,
         face = LocalPadColors.current.pill,
         pressed = pressed || latched,
-        modifier = Modifier.width(width).height(height).then(if (alpha != null) Modifier.alpha(alpha) else Modifier).pointerInput(hasLongPress) {
+        modifier = Modifier.width(width).height(height).then(if (alpha != null) Modifier.alpha(alpha) else Modifier).pointerInput(hasLongPress) {   // role: a pad toggle pill while off (MOTION)
             detectTapGestures(
                 onPress = {
                     pressed = true

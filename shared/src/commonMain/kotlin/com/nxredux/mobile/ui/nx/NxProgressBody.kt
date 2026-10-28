@@ -42,7 +42,7 @@ fun NxProgressBody(title: String, line: String, fraction: Float?, hints: List<Hi
             Text(line, color = colors.listText, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = status, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 20.dp))
             if (fraction != null) {
                 Spacer(Modifier.height(status.value.dp))
-                Box(Modifier.fillMaxWidth(0.7f).height(6.dp).background(colors.hint.copy(alpha = 0.35f), RoundedCornerShape(3.dp))) {
+                Box(Modifier.fillMaxWidth(0.7f).height(6.dp).background(colors.hint.copy(alpha = 0.35f), RoundedCornerShape(3.dp))) {   // role: a progress bar's track
                     Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight().background(colors.listText, RoundedCornerShape(3.dp)))
                 }
             }

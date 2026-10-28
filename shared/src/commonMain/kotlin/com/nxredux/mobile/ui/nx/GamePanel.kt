@@ -175,7 +175,7 @@ private fun ShortcutPill(s: ShortcutState, selected: Boolean, modifier: Modifier
             // Drawn outside the pill, in the grid's spacing (so the focus moving never resizes one), and before the dimming
             // (an alpha layer would clip it to the pill and fade it on a disabled one).
             .then(if (selected) Modifier.drawBehind { focusRing(colors.accent) } else Modifier)
-            .alpha(if (s.enabled) 1f else GP_DISABLED_ALPHA)
+            .alpha(if (s.enabled) 1f else NX_DISABLED_ALPHA)   // role: a disabled control
             .clip(shape)
             .then(if (filled) Modifier.background(colors.listText) else Modifier.nxButtonRing(colors))
             .then(if (s.enabled) Modifier.clickable(onClick = onClick) else Modifier)
@@ -227,7 +227,7 @@ private fun AchievementsTab(list: List<RaAchievement>, badges: Map<String, Strin
 internal fun AchievementRow(title: String, a: RaAchievement, badge: String?, selected: Boolean, modifier: Modifier) {
     val colors = LocalNxColors.current
     PanelListRow(selected, modifier) {
-        Box(Modifier.size(GP_BADGE).clip(RoundedCornerShape(3.dp)).background(colors.main.copy(alpha = 0.13f))) {
+        Box(Modifier.size(GP_BADGE).clip(RoundedCornerShape(3.dp)).background(colors.inkFaint)) {
             badge?.let { AsyncImage(model = it, contentDescription = null, modifier = Modifier.fillMaxSize()) }
         }
         Column(Modifier.weight(1f)) {
@@ -404,7 +404,6 @@ private val GP_PILL_HEIGHT = 52.dp
 private val GP_FOCUS_RING = 2.dp     // the controller's ring round a shortcut pill
 private val GP_FOCUS_GAP = 3.dp      // between that ring and the pill
 private val GP_NARROW = 360.dp       // narrower: the shortcut grid goes to 2 columns
-private const val GP_DISABLED_ALPHA = 0.35f
 private val GP_TITLE_SIZE = 17.sp
 private val GP_LABEL_SIZE = 15.sp
 private val GP_SMALL_SIZE = 13.sp

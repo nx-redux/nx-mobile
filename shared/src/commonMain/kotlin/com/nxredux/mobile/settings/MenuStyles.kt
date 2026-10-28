@@ -19,19 +19,19 @@ object MenuStyles {
     /** Layouts → Page title: Show. */
     const val DEFAULT_PAGE_TITLE = true
     /** Layouts → Button hints: Show. */
-    const val DEFAULT_BUTTON_HINTS = true
+    const val DEFAULT_BUTTON_HINTS = false
     /** Layouts → Extra info: Show. */
     const val DEFAULT_EXTRA_INFO = true
     /** Layouts → Home stats: Show. */
     const val DEFAULT_HOME_STATS = true
 
     /**
-     * [category]'s default style: Grid for Home and Tools (NX Redux CFG_DEFAULT_MENUSTYLE_TOOLS, homeStyle 0), Minimal for
+     * [category]'s default style: Grid for Tools (NX Redux CFG_DEFAULT_MENUSTYLE_TOOLS), Minimal for Home and
      * Collections, Carousel for Consoles.
      */
     fun defaultStyleOf(category: MenuCategory): MenuStyle = when (category) {
-        MenuCategory.TOOLS, MenuCategory.HOME -> MenuStyle.GRID
-        MenuCategory.COLLECTIONS -> MenuStyle.MINIMAL
+        MenuCategory.TOOLS -> MenuStyle.GRID
+        MenuCategory.HOME, MenuCategory.COLLECTIONS -> MenuStyle.MINIMAL
         MenuCategory.CONSOLES -> MenuStyle.CAROUSEL
     }
 

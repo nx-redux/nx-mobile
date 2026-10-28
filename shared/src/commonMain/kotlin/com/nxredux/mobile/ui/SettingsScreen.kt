@@ -1,5 +1,10 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.NX_SWATCH_AUTO
+import com.nxredux.mobile.settings.SecondaryAccent
+import com.nxredux.mobile.settings.AccentPreset
+import com.nxredux.mobile.ui.nx.LocalNxHintBarHidden
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -84,6 +89,7 @@ fun SettingsScreen(
             )
         }
         if (dialog && screen.confirmRemove != null) SettingsRemoveDialog(onHint)
+        if (dialog && screen.confirmReset) settingsResetAsk(screen, selectedIndex)?.let { SettingsResetDialog(it, onHint) }
     }
 }
 
@@ -110,20 +116,24 @@ private fun SettingsTouchPage(
             LayoutPreviewPage(
                 screen.section.label, emptyList(), emptyList(), screen.shot?.let(::layoutShotPicture), LAYOUT_PICTURE_AR, selectedIndex,
                 shownHints, onSelect, onOpen, onHint ?: {}, landscapeWidth = 1f, titleAction = false,
-                touchRows = { m -> NxSettingsList(rows, selectedIndex, onSelect, onOpen, events, m, report, preview) },
+                touchRows = { m, footer -> NxSettingsList(rows, selectedIndex, onSelect, onOpen, events, m, report, preview, footer) },
             )
         } else {
-            NxSettingsPage(
-                screen.section.label, rows, selectedIndex, shownHints, onSelect, onOpen, events,
-                onTruncated = report, onHint = onHint, preview = preview,
-                header = when {
-                    screen.banner != null -> ({ NxBanner(screen.banner) })
-                    screen.details.isNotEmpty() -> ({ SettingsDetailLines(screen.details) })
-                    else -> null
-                },
-            )
+            // Shortcuts' binding keeps its bar: A Bind, X Clear and B Cancel are no console menu's, and a wrong press rebinds.
+            CompositionLocalProvider(LocalNxHintBarHidden provides (LocalNxHintBarHidden.current && screen.section != SettingsSection.SHORTCUTS)) {
+                NxSettingsPage(
+                    screen.section.label, rows, selectedIndex, shownHints, onSelect, onOpen, events,
+                    onTruncated = report, onHint = onHint, preview = preview,
+                    header = when {
+                        screen.banner != null -> ({ NxBanner(screen.banner) })
+                        screen.details.isNotEmpty() -> ({ SettingsDetailLines(screen.details) })
+                        else -> null
+                    },
+                )
+            }
         }
         if (dialog && screen.confirmRemove != null) SettingsRemoveDialog(onHint)
+        if (dialog && screen.confirmReset) settingsResetAsk(screen, selectedIndex)?.let { SettingsResetDialog(it, onHint) }
     }
 }
 
@@ -162,6 +172,9 @@ private val OPENER_KINDS = setOf(
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER,
 )
 
+/** Rows whose values are a segmented button however many or long they are (Game lists' layout: its five styles side by side; the Game Switcher's Full screen / List). */
+private val SEGMENTED_KINDS = setOf(SettingsKind.GAME_LIST_STYLE, SettingsKind.SWITCHER_LAYOUT)
+
 /** Rows whose secondary (a path, a state, a count, the last scan) is their description, not a value. */
 private val DESCRIBED_KINDS = setOf(SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.RESCAN, SettingsKind.UNASSIGNED, SettingsKind.HIDDEN)
 
@@ -182,8 +195,60 @@ internal fun settingsTouchRow(row: SettingsRow, choices: SettingChoices?, sectio
         choices = values?.labels.orEmpty(), index = values?.index ?: -1,
         value = if (values == null && !described && row.kind != SettingsKind.LICENSES_LINK) row.secondary else null,   // the link's URL: behind its info icon
         opens = row.kind in OPENER_KINDS, enabled = row.enabled,
+        segmented = row.kind in SEGMENTED_KINDS,
         warning = row.warning,
         button = "Rescan".takeIf { row.kind == SettingsKind.RESCAN },   // Library's counts row: the button on their right
+        action = settingsRowAction(row, section),
+        swatches = when (row.kind) {   // the accents: a circle per colour
+            SettingsKind.ACCENT -> AccentPreset.entries.map { it.argb }
+            SettingsKind.SECONDARY_ACCENT -> SecondaryAccent.entries.map { if (it is SecondaryAccent.Preset) it.preset.argb else NX_SWATCH_AUTO }
+            else -> null
+        }.takeIf { values != null },
+        adds = row.kind == SettingsKind.ADD_EXTRA,   // Library's Add ROM folder: a "+" before its name
+    )
+}
+
+/**
+ * What A does on [row] when it is no console menu's obvious act, shown on the focused row ([NxSettingRow.action]): Copy
+ * device info, the update row's Check or Install, a reset (Shortcuts' Clear all), a ROM folder's Remove. Null elsewhere.
+ */
+internal fun settingsRowAction(row: SettingsRow, section: SettingsSection?): String? = when (row.kind) {
+    SettingsKind.COPY_INFO -> "Copy"
+    SettingsKind.APP_UPDATE -> appUpdateHint(row.label)
+    SettingsKind.RESET_DEFAULTS -> if (section == SettingsSection.SHORTCUTS) "Clear all" else "Reset"
+    SettingsKind.PAD_LAYOUT_RESET -> "Reset"
+    SettingsKind.EXTRA -> "Remove"
+    else -> null
+}
+
+/** A reset's question: its title, the one line saying what it puts back, and its confirm button. */
+internal data class SettingsResetAsk(val title: String, val text: String, val confirm: String)
+
+/**
+ * What [page]'s reset row at [selected] asks before it acts ([Screen.Settings.confirmReset]): Shortcuts' Clear all,
+ * Pad layout's Reset console, every other page's Reset to defaults with that page's scope. Null for any other row.
+ */
+internal fun settingsResetAsk(page: Screen.Settings, selected: Int): SettingsResetAsk? = when (page.rows.getOrNull(selected)?.kind) {
+    SettingsKind.RESET_DEFAULTS -> when (page.section) {
+        SettingsSection.SHORTCUTS -> SettingsResetAsk("Clear all shortcuts?", "Every action goes back to None and both touch buttons come off the pad.", "Clear all")
+        SettingsSection.APPEARANCE -> SettingsResetAsk("Reset to defaults?", "Pad theme, Pad buttons, Accent, Secondary accent and Text size go back to their defaults.", "Reset")
+        SettingsSection.MAIN_MENU -> SettingsResetAsk("Reset to defaults?", "Every Layouts group and Extra info go back to their defaults.", "Reset")
+        SettingsSection.CONTROLS -> SettingsResetAsk("Reset to defaults?", "Vibration, Menu pad and every pad layout go back to their defaults.", "Reset")
+        else -> SettingsResetAsk("Reset to defaults?", "This page's settings go back to their defaults.", "Reset")
+    }
+    SettingsKind.PAD_LAYOUT_RESET -> {
+        val console = page.rows.firstOrNull { it.kind == SettingsKind.PAD_LAYOUT_CONSOLE }?.secondary ?: "This console"
+        SettingsResetAsk("Reset pad layouts?", "$console's pad layouts on this screen go back to their defaults.", "Reset")
+    }
+    else -> null
+}
+
+/** [ask] over the page ([Screen.Settings.confirmReset]): A resets, B (Cancel) keeps everything. */
+@Composable
+internal fun SettingsResetDialog(ask: SettingsResetAsk, onHint: ((NxButton) -> Unit)?) {
+    NxDialog(
+        ask.title, ask.text,
+        onConfirm = { onHint?.invoke(NxButton.A) }, confirmLabel = ask.confirm, onCancel = { onHint?.invoke(NxButton.B) },
     )
 }
 

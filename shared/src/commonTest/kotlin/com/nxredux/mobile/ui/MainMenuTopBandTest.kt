@@ -11,7 +11,7 @@ class MainMenuTopBandTest {
         assertTrue(mainMenuTopBand(home = true, style = MenuStyle.LIST, tabRow = true))      // over the selected game's picture
         assertFalse(mainMenuTopBand(home = true, style = MenuStyle.GRID, tabRow = true))     // HomeScreen draws its own while scrolled
         assertFalse(mainMenuTopBand(home = true, style = MenuStyle.CAROUSEL, tabRow = true))
-        // Minimal's names run on under the tab row, on Home and the other tabs alike.
+        // Minimal's names stop at their band's edges (none under the tab row), on Home and the other tabs alike.
         for (home in listOf(false, true)) assertFalse(mainMenuTopBand(home, MenuStyle.MINIMAL, tabRow = true))
         for (style in MenuStyle.entries) for (home in listOf(false, true)) assertFalse(mainMenuTopBand(home, style, tabRow = false))
     }

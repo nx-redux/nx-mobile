@@ -18,8 +18,8 @@ import com.nxredux.mobile.ui.nx.control
 private val LIST_HINTS = listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Select"))
 
 /**
- * Settings -> Emulation -> Default settings: one row per core, its tags as the secondary text. [split]: the two-pane Settings'
- * right pane, titled "Default settings" (the left pane already shows Emulation); a single page keeps "Emulator Settings".
+ * Settings -> Emulation -> Default settings: one row per core, its tags as the secondary text. [split]: the Settings rows
+ * block (on the wide stage beside Emulation, or narrow after it), titled "Default settings"; a whole page keeps "Emulator Settings".
  */
 @Composable
 fun EmulatorListScreen(

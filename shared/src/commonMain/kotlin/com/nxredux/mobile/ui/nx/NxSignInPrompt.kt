@@ -18,7 +18,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -89,6 +88,6 @@ private fun SignInField(
         visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = keyboardOptions,
         keyboardActions = keyboardActions,
-        modifier = Modifier.fillMaxWidth().focusRequester(focus).background(Color(0xFF2A2A2A), RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().focusRequester(focus).background(LocalNxColors.current.fieldGround, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
     )
 }

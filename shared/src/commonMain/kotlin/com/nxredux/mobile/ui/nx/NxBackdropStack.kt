@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -67,7 +68,8 @@ fun NxBackdropStack(
                 games.size, selectedIndex, g, RowStyle.BACKDROP, edgeFade = false,
                 onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                 layoutKey = layoutKey, dataKey = games,
-                item = { i, _, _ -> BoxArt(games[i]) },
+                // The unselected boxes in greyscale, as the row's ([backdropSaturation]).
+                item = { i, _, distance -> Box(Modifier.matchParentSize().nxSaturation { backdropSaturation(distance()) }) { BoxArt(games[i]) } },
                 overlay = { StackCaption(
                     captionTitle(), captionInfo(), g, bodyW, bodyH, shadow = true, nameSp = 18f * nxTextScale(),   // Appearance → Text size
                     splitNext = stackPortraitFamily(screenW, screenH, portrait), alignment = alignment, infoShare = 0.8f,

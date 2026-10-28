@@ -97,16 +97,11 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "follows Android's own font size setting.",
     )
     SettingsKind.RESET_DEFAULTS -> resetText(section)
-    // Layouts.
-    SettingsKind.LAYOUT_HOME -> quiet("Home tab, its layout, shelves and stats")
-    SettingsKind.LAYOUT_CONSOLES -> quiet("Consoles tab, its layout, orientation and background")
-    SettingsKind.LAYOUT_COLLECTIONS -> quiet("Collections tab, its layout and orientation")
-    SettingsKind.LAYOUT_TOOLS -> quiet("Tools tab, its layout and orientation")
-    SettingsKind.LAYOUT_GAME_LISTS -> quiet("Game lists' layout, art, icons and achievements panel")
-    SettingsKind.LAYOUT_TITLE_HINTS -> quiet("The main menu's page title and button hints")
-    SettingsKind.LAYOUT_SWITCHER -> quiet("How the Game Switcher shows your recent games")
+    // Layouts' group rows: no text on the row (their pages' rows say what each group holds).
+    SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
+    SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER -> SettingText("")
     SettingsKind.EXTRA_INFO -> SettingText(
-        "Play time and achievements in lists",
+        "Play time and achievements for games",
         "Hide removes the game stats (play time, achievements) from the main menu, the game lists and the Game " +
             "Switcher, for a cleaner look. It works in every mode. A console's or collection's game count stays, and the " +
             "in-game menu, the Game Tracker and RetroAchievements keep all their info.",
@@ -119,7 +114,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.MENU_STYLE -> quiet("How the ${row.category?.label ?: "tab"} tab lays out its items")
     SettingsKind.SHELF_SHOWN -> when (row.shelf) {
         HomeShelf.NEW -> SettingText("Games found in the last 30 days", "Home's shelf of games found in the last 30 days")
-        HomeShelf.NOT_STARTED -> quiet("Home's shelf of games you have never played")
+        HomeShelf.NOT_STARTED -> SettingText("Games you have never played")   // the line says it all: no info icon
         else -> SettingText("")
     }
     SettingsKind.HOME_STATS -> SettingText(
@@ -231,7 +226,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     // Library (the home, extras and game rows describe themselves: [settingsTouchRow]).
     SettingsKind.ALL_FILES -> SettingText(row.note.orEmpty(), "Lets cores and saves use your home folder's real path")   // a line only for the warning
     SettingsKind.MIC_ACCESS -> quiet("Lets DS and 3DS games hear the Mic toggle's live mic")
-    SettingsKind.ADD_EXTRA -> quiet("Scan another folder for games too, such as one on an SD card")
+    SettingsKind.ADD_EXTRA -> SettingText("Scan another folder for games too, such as one on an SD card")   // under its name, as an action row reads
     // System's About group: what each read-only value is, and the two actions.
     SettingsKind.INFO -> SettingText("")   // System's About values read alone, compact (no description)
     SettingsKind.COPY_INFO -> quiet("Put the version, build and device on the clipboard, for a bug report")
