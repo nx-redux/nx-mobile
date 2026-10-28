@@ -38,7 +38,7 @@ object Libretro {
         114 to listOf("NEC - PC Engine CD - TurboGrafx-CD"), 105 to listOf("NEC - PC Engine SuperGrafx"), 72 to listOf("NEC - PC-FX"),
         40 to listOf("Atari - 5200"), 41 to listOf("Atari - 7800"), 42 to listOf("Atari - ST"), 43 to listOf("Atari - 8-bit"),
         45 to listOf("Bandai - WonderSwan"), 46 to listOf("Bandai - WonderSwan Color"), 48 to listOf("Coleco - ColecoVision"),
-        52 to listOf("Handheld Electronic Game"), 57 to listOf("Sony - PlayStation"), 61 to listOf("Sony - PlayStation Portable"),
+        52 to listOf("Handheld Electronic Game"), 57 to listOf("Sony - PlayStation"), 58 to listOf("Sony - PlayStation 2"), 61 to listOf("Sony - PlayStation Portable"),
         64 to listOf("Commodore - Amiga"), 65 to listOf("Amstrad - CPC"), 66 to listOf("Commodore - 64"), 70 to listOf("SNK - Neo Geo CD"),
         73 to listOf("Commodore - VIC-20"), 76 to listOf("Sinclair - ZX Spectrum"), 79 to listOf("Sharp - X68000"),
         80 to listOf("Fairchild - Channel F"), 99 to listOf("Commodore - Plus-4"), 102 to listOf("GCE - Vectrex"),

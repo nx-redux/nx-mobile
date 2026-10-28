@@ -138,7 +138,10 @@ object FrontendOptions {
     )
 
     /** Every frontend setting for [tag]: its console's rows, then [table]. Defaults, config reads and saves use this. */
-    fun allFor(tag: String): List<FrontendOption> = ConsoleSettings.tableFor(tag) + table
+    fun allFor(tag: String): List<FrontendOption> = ConsoleSettings.tableFor(tag).let { rows ->
+        // The PS2 BIOS row is hidden until the folder holds a choice, but its stored pick is still read.
+        if (Ps2Options.appliesTo(tag) && rows.none { it.key == Ps2Options.BIOS }) rows + Ps2Options.biosRow(emptyList()) else rows
+    } + table
 
     /**
      * Every frontend key for [tag] with its default (the Overlay default is None, whatever files the console has), except

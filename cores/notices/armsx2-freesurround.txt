@@ -1,0 +1,6 @@
+FreeSurround, vendored in ARMSX2's 3rdparty/freesurround, copied verbatim from the header of
+FreeSurroundDecoder.h. The GPL text it refers to ships with the core as 3rdparty/freesurround/GPL.txt
+(listed in armsx2_LICENSE).
+
+// SPDX-FileCopyrightText: 2007-2010 Christian Kothe, 2024 Connor McLaughlin <stenzek@gmail.com>
+// SPDX-License-Identifier: GPL-2.0+

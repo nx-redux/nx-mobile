@@ -168,4 +168,32 @@ class PadProfileTest {
         for (tag in listOf("SFC", "MD", "SMS", "P8", "PCE", "DC", "N64", "NDS", "")) for (b in NxButton.entries)
             assertNull(PadProfile.forTag(tag).icon(b), "$tag $b")
     }
+
+    @Test fun ps2HasDualSticksNoToggle() {
+        val ps2 = PadProfile.forTag("PS2")
+        assertEquals(PadProfile.Kind.PS2, ps2.kind)
+        assertTrue(ps2.dualSticks)
+        assertFalse(ps2.cStick)
+        assertFalse(ps2.stickByDefault)   // no toggle to start on
+        assertEquals(listOf(PadSystemKey.MENU), padSystemRow(PadSide.LEFT, ps2, motion = false))
+        assertTrue(PadProfile.forLayoutEditor("PS2").dualSticks)
+    }
+
+    @Test fun ps2UsesPsLabels() {
+        val ps2 = PadProfile.forTag("PS2")
+        assertEquals("△", ps2.label(NxButton.X))
+        assertEquals("○", ps2.label(NxButton.A))
+        assertEquals("×", ps2.label(NxButton.B))
+        assertEquals("□", ps2.label(NxButton.Y))
+        assertEquals(PadIcon.PS_CROSS, ps2.icon(NxButton.B))
+        assertEquals(NxButton.A, ps2.menuButton(NxButton.B))   // × confirms, as on PS1
+        assertEquals("L3", ps2.label(NxButton.L3))
+        assertEquals("R3", ps2.label(NxButton.R3))
+        for (b in NxButton.entries) assertFalse(ps2.isHidden(b), b.name)
+    }
+
+    @Test fun otherConsolesHaveNoDualSticks() {
+        for (p in listOf(PadProfile.forTag("PS"), PadProfile.forTag("3DS"), PadProfile.forTag("3DS", n3dsNew = true), PadProfile.forTag("GC"), PadProfile.forTag("N64"), PadProfile.STANDARD))
+            assertFalse(p.dualSticks, p.toString())
+    }
 }

@@ -45,7 +45,7 @@ internal fun busyReason(game: Boolean, sync: Boolean, art: Boolean, ra: Boolean,
     sync -> "Waiting for Device Sync to finish"
     art -> "Waiting for artwork to finish"
     ra -> "Waiting for the achievements download to finish"
-    cheats -> "Waiting for the cheat database to finish"
+    cheats -> "Waiting for Cheats & Patches to finish"
     !foreground -> UpdateController.READY_REASON
     else -> null
 }
@@ -310,7 +310,7 @@ class AndroidUpdatePlatform(private val app: Context, private val scope: Corouti
         get() = pendingUpdate(app)
         set(value) { prefs.edit().putString(PENDING_KEY, value).apply() }
 
-    /** A GET with the cheat database's timeouts; [accept]: the Accept header. */
+    /** A GET with the Cheats & Patches tool's timeouts; [accept]: the Accept header. */
     private fun open(url: String, accept: String): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
         requestMethod = "GET"
         connectTimeout = 15_000

@@ -21,7 +21,7 @@ enum class ConsoleScale {
 }
 
 private val nativeIds = setOf("gb", "gbc", "gba", "sgb", "gg", "ngp", "ngpc", "wsc", "lynx", "pkm", "vb", "p8")
-private val fillIds = setOf("n64", "ps", "dc", "gc", "wii", "psp")
+private val fillIds = setOf("n64", "ps", "dc", "gc", "wii", "psp", "ps2")
 
 /** The [ConsoleScale] of the console [tag] belongs to; an unknown tag or a console not listed is [ConsoleScale.WHOLE_HEIGHT]. */
 fun consoleScale(tag: String): ConsoleScale = when (CoreRegistry.consoleOf(tag)?.id) {

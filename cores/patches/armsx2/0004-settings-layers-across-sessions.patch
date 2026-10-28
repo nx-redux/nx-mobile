@@ -1,0 +1,56 @@
+diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -244,15 +244,37 @@
+ 	const std::string ini_path = Path::Combine(EmuFolders::Settings, "armsx2-libretro.ini");
+ 	const bool ini_exists = FileSystem::FileExists(ini_path.c_str());
+ 
+-	s_base_settings = std::make_unique<INISettingsInterface>(ini_path);
+-	Host::Internal::SetBaseSettingsLayer(s_base_settings.get());
++	// The settings layers can be set once per process (Host asserts it), and the
++	// library can outlive a session: a frontend may keep it loaded, and bionic's
++	// dlclose leaves a library with thread_local destructors mapped anyway. So a
++	// second load_game reuses the interfaces the layers already point at - they
++	// stay alive across retro_unload_game - and only reloads what is in them.
++	if (!s_base_settings)
++	{
++		s_base_settings = std::make_unique<INISettingsInterface>(ini_path);
++		Host::Internal::SetBaseSettingsLayer(s_base_settings.get());
++	}
++	else
++	{
++		if (s_base_settings->GetFileName() != ini_path)
++			Console.WarningFmt("Settings stay at {} for this process (asked for {}).",
++				s_base_settings->GetFileName(), ini_path);
++		s_base_settings->Clear();
++	}
+ 
+ 	if (!ini_exists || !s_base_settings->Load() || !VMManager::Internal::CheckSettingsVersion())
+ 		VMManager::SetDefaultSettings(*s_base_settings, true, true, true, true, true);
+ 
+ 	const std::string secrets_path = Path::Combine(EmuFolders::Settings, "secrets.ini");
+-	s_secrets_settings = std::make_unique<INISettingsInterface>(secrets_path);
+-	Host::Internal::SetSecretsSettingsLayer(s_secrets_settings.get());
++	if (!s_secrets_settings)
++	{
++		s_secrets_settings = std::make_unique<INISettingsInterface>(secrets_path);
++		Host::Internal::SetSecretsSettingsLayer(s_secrets_settings.get());
++	}
++	else
++	{
++		s_secrets_settings->Clear();
++	}
+ 	if (FileSystem::FileExists(secrets_path.c_str()))
+ 		s_secrets_settings->Load();
+ 
+@@ -2249,8 +2271,8 @@
+ 	if (LibretroCore::s_cpu_thread.joinable())
+ 		LibretroCore::s_cpu_thread.join();
+ 
+-	s_base_settings.reset();
+-	s_secrets_settings.reset();
++	// s_base_settings / s_secrets_settings stay: the settings layers point at
++	// them for the rest of the process (see InitializeConfig).
+ 	LibretroCore::s_content_path.clear();
+ 	s_disk_images.clear();
+ 	s_disk_index = 0;

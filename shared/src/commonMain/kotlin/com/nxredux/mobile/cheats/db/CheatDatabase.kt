@@ -1,14 +1,44 @@
 package com.nxredux.mobile.cheats.db
 
 import com.nxredux.mobile.cheats.CheatFolders
+import com.nxredux.mobile.runner.CoreRegistry
+
+/**
+ * One archive the Cheats & Patches tool downloads, and where its files go: libretro's `.cht` cheats into `Cheats/<TAG>/`,
+ * PCSX2's `.pnach` game patches (widescreen, no-interlacing and fixes, read by the PS2 core) into `Cheats/<TAG>/Patches/`.
+ * Both are fetched by the user at runtime, never shipped with the app (the PCSX2 collection has no licence).
+ */
+enum class CheatDbSource(val url: String, val extension: String, private val subfolder: String) {
+    LIBRETRO(CheatDatabase.URL, ".cht", ""),
+    PCSX2(CheatDatabase.PATCHES_URL, ".pnach", "${CheatDatabase.PATCHES_FOLDER}/");
+
+    /** Where archive file [name] for [tag] is written, relative to the sd root. */
+    fun target(tag: String, name: String): String = "Cheats/$tag/$subfolder$name"
+
+    /** Whether [path] (relative to the sd root) is where this source writes its files ([target]): a manifest's lines by source. */
+    fun owns(path: String): Boolean {
+        val parts = path.split('/')
+        val sub = subfolder.trimEnd('/')
+        return parts.size == (if (sub.isEmpty()) 3 else 4) && parts[0] == "Cheats" && (sub.isEmpty() || parts[2] == sub) &&
+            parts.last().endsWith(extension, ignoreCase = true)
+    }
+}
 
 /**
  * libretro's cheat collection as nx-redux's `cheatdb` tool installs it: one buildbot zip whose top-level
  * folders are libretro system names. [FOLDERS] maps NX console tags to those folders (`cheatdb_data.c`).
+ * PCSX2's patches.zip is the second source ([PATCH_FOLDERS]): the PS2 has no folder in libretro's zip.
  */
 object CheatDatabase {
     const val URL = "https://buildbot.libretro.com/assets/frontend/cheats.zip"
-    const val DOWNLOAD_HINT = "about 37 MB"
+    /** GitHub's newest commit under libretro-database's `cht` folder: the cheats changed only when this id did. */
+    const val COMMITS_URL = "https://api.github.com/repos/libretro/libretro-database/commits?path=cht&per_page=1"
+    /** The pcsx2_patches release PCSX2 itself downloads: every game's `.pnach` at the zip's top level. */
+    const val PATCHES_URL = "https://github.com/PCSX2/pcsx2_patches/releases/download/latest/patches.zip"
+    /** `Cheats/PS2/Patches/`: the PS2 core reads game patches there and cheats from `Cheats/PS2/` (cores/patches/armsx2/0005). */
+    const val PATCHES_FOLDER = "Patches"
+    /** cheats.zip (~37 MB) and patches.zip (~2 MB). */
+    const val DOWNLOAD_HINT = "about 39 MB"
     /**
      * Measured: the extracted subset takes ~250 MB on disk because its ~16k small files each round up to whole
      * blocks, plus the 35 MB zip and the temp files written during install.
@@ -56,6 +86,27 @@ object CheatDatabase {
         "FBN" to listOf("FBNeo - Arcade Games"),
         "PRBOOM" to listOf("PrBoom"),
     )
+
+    /** NX console tag → folders in PCSX2's patches.zip ("" = its top level), installed into `Cheats/<TAG>/Patches/`. */
+    val PATCH_FOLDERS: Map<String, List<String>> = linkedMapOf("PS2" to listOf(""))
+
+    /**
+     * The tags the tool installs for: those whose core takes `.cht` cheats ([CoreRegistry.cheatTags]) and those with a
+     * core that reads [PATCH_FOLDERS]' patches (the PS2 core takes no `.cht`, so it is not a cheat tag).
+     */
+    val installTags: Set<String> = CoreRegistry.cheatTags + PATCH_FOLDERS.keys.filter { it in CoreRegistry.tags }
+
+    /** Each source's rows for [tags], in source order; a source with no row is left out (nothing to download). */
+    fun sourcesFor(tags: Collection<String>): Map<CheatDbSource, Map<String, List<String>>> {
+        val wanted = tags.map { CheatFolders.console(it.trim().uppercase()) }.toSet()
+        return linkedMapOf(
+            CheatDbSource.LIBRETRO to foldersFor(tags),
+            CheatDbSource.PCSX2 to PATCH_FOLDERS.filterKeys { it in wanted },
+        ).filterValues { it.isNotEmpty() }
+    }
+
+    /** The tags an install for [tags] writes rows for, every source's, in source order: the manifest's `tags`. */
+    fun rowsFor(tags: Collection<String>): List<String> = sourcesFor(tags).values.flatMap { it.keys }.distinct()
 
     /**
      * The rows for [tags] (case-insensitive) and the folders their games route to ([CheatFolders.targets]), in table

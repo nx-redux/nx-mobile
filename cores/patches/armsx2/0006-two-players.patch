@@ -1,0 +1,56 @@
+diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -288,6 +288,10 @@
+ 		// Audio goes out through retro_run pulling the stream ring; the Null
+ 		// backend keeps SPU2 mixing into the ring with no device thread.
+ 		s_base_settings->SetStringValue("SPU2/Output", "Backend", "Null");
++		// Two players: port 2 holds a DualShock2 too (PCSX2 leaves it unplugged by
++		// default), fed from libretro port 1 in retro_run. No multitap.
++		s_base_settings->SetStringValue(Pad::GetConfigSection(1).c_str(), "Type",
++			PadDualshock2::ControllerInfo.name);
+ 	}
+ 
+ 	Error save_error;
+@@ -2337,11 +2341,16 @@
+ 		ApplyCoreOptions(false);
+ 
+ 	// M3 input: forward the libretro joypad straight into the DualShock2
+-	// bind slots (bypasses InputManager entirely).
++	// bind slots (bypasses InputManager entirely). Libretro port N drives
++	// PS2 port N+1, for the two players the core plugs in (InitializeConfig).
+ 	if (VMManager::HasValidVM())
+ 	{
+-		if (PadBase* pad = Pad::GetPad(0))
++		for (unsigned port = 0; port < 2; port++)
+ 		{
++			PadBase* pad = Pad::GetPad(port);
++			if (!pad)
++				continue;
++
+ 			static constexpr struct
+ 			{
+ 				unsigned retro;
+@@ -2365,17 +2374,17 @@
+ 				{RETRO_DEVICE_ID_JOYPAD_R3, PadDualshock2::Inputs::PAD_R3},
+ 			};
+ 			for (const auto& m : bmap)
+-				pad->Set(m.ds2, input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, m.retro) ? 1.0f : 0.0f);
++				pad->Set(m.ds2, input_state_cb(port, RETRO_DEVICE_JOYPAD, 0, m.retro) ? 1.0f : 0.0f);
+ 
+ 			// Analog sticks: split each axis into the two directional slots.
+ 			const auto axis = [](s16 v, bool positive) {
+ 				const float f = std::clamp(static_cast<float>(v) / 32767.0f, -1.0f, 1.0f);
+ 				return positive ? std::max(f, 0.0f) : std::max(-f, 0.0f);
+ 			};
+-			const s16 lx = input_state_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X);
+-			const s16 ly = input_state_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y);
+-			const s16 rx = input_state_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X);
+-			const s16 ry = input_state_cb(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y);
++			const s16 lx = input_state_cb(port, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X);
++			const s16 ly = input_state_cb(port, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y);
++			const s16 rx = input_state_cb(port, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_X);
++			const s16 ry = input_state_cb(port, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_RIGHT, RETRO_DEVICE_ID_ANALOG_Y);
+ 			pad->Set(PadDualshock2::Inputs::PAD_L_RIGHT, axis(lx, true));
+ 			pad->Set(PadDualshock2::Inputs::PAD_L_LEFT, axis(lx, false));
+ 			pad->Set(PadDualshock2::Inputs::PAD_L_DOWN, axis(ly, true));

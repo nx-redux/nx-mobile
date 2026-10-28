@@ -1,7 +1,11 @@
 package com.nxredux.mobile.runner
 
-/** One required BIOS: any file of [anyOf] in the system dir meets it. [forExtensions] empty = every game of the tag. */
-data class BiosNeed(val anyOf: List<String>, val forExtensions: Set<String> = emptySet())
+/**
+ * One required BIOS: any file of [anyOf] in the system dir meets it. [forExtensions] empty = every game of the tag.
+ * [anySuffix] set: any present name ending with it (case-insensitive) meets it, for a core that scans its BIOS folder
+ * and accepts whatever dump the user brings (ARMSX2: any ".bin").
+ */
+data class BiosNeed(val anyOf: List<String>, val forExtensions: Set<String> = emptySet(), val anySuffix: String? = null)
 
 /**
  * The pre-launch BIOS check, chosen over the cores' own errors (silent or a log line for most). Only required BIOS is
@@ -11,13 +15,15 @@ object BiosCheck {
     /** The needs a game with extension [ext] has that no name in [present] meets. Names compare case-sensitively, as the cores do on Linux. */
     fun missing(needs: List<BiosNeed>, ext: String, present: Set<String>): List<BiosNeed> {
         val e = ext.lowercase()
-        return needs.filter { need -> (need.forExtensions.isEmpty() || e in need.forExtensions) && need.anyOf.none { it in present } }
+        return needs.filter { need -> (need.forExtensions.isEmpty() || e in need.forExtensions) && need.anyOf.none { it in present } &&
+            need.anySuffix?.let { suffix -> present.none { it.endsWith(suffix, ignoreCase = true) } } != false }
     }
 
     /** "Sega CD needs a BIOS: put bios_CD_U.bin (or bios_CD_E.bin, bios_CD_J.bin) in Bios/SEGACD/" for the launched [tag]. */
     fun message(tag: String, need: BiosNeed): String {
         val t = tag.trim().uppercase()
         val console = CoreRegistry.consoleOf(t)?.displayName ?: t
+        if (need.anySuffix != null) return "$console needs a BIOS: put a ${need.anySuffix} file in Bios/${CoreRegistry.consoleTag(t)}/"
         val rest = need.anyOf.drop(1)
         val names = if (rest.isEmpty()) need.anyOf.first() else "${need.anyOf.first()} (or ${rest.joinToString(", ")})"
         return "$console needs a BIOS: put $names in Bios/${CoreRegistry.consoleTag(t)}/"

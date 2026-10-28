@@ -6,7 +6,7 @@ import com.nxredux.mobile.cheats.CheatSet
 import com.swordfish.libretrodroid.NxLog
 import java.io.File
 
-/** Cheat files under [com.nxredux.mobile.tools.CheatsRoot] (RetroArch `.cht` files in `Cheats/<TAG>/`, where the Cheat Database tool unpacks too). */
+/** Cheat files under [com.nxredux.mobile.tools.CheatsRoot] (RetroArch `.cht` files in `Cheats/<TAG>/`, where the Cheats & Patches tool unpacks too). */
 object Cheats {
     /** The folder the Cheats page names for [romFileName] under [tag] ([CheatFolders.primary]). */
     fun folder(tag: String, romFileName: String) = CheatFolders.primary(tag, romFileName)

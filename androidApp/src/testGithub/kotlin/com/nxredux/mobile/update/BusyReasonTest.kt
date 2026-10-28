@@ -12,7 +12,7 @@ class BusyReasonTest {
         assertEquals("Close your game to install", busyReason(game = true, sync = true, art = false, ra = false, cheats = false, foreground = true))
 
     @Test fun cheatsAlone() =
-        assertEquals("Waiting for the cheat database to finish", busyReason(game = false, sync = false, art = false, ra = false, cheats = true, foreground = true))
+        assertEquals("Waiting for Cheats & Patches to finish", busyReason(game = false, sync = false, art = false, ra = false, cheats = true, foreground = true))
 
     @Test fun eachFlagAloneHasItsReason() {
         assertEquals("Close your game to install", busyReason(game = true, sync = false, art = false, ra = false, cheats = false, foreground = true))

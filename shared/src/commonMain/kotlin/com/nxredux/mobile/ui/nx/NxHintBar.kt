@@ -59,11 +59,11 @@ data class Hint(val button: NxButton, val label: String, val touch: HintTouch = 
 /** Hint-bar slot of each button: Options (MENU) always leads, then the pad left to right: d-pad, left shoulders, SELECT / START, face buttons Y X B A, right shoulders. */
 private fun NxButton.padPosition(): Int = when (this) {
     NxButton.MENU -> -1 // Options leads every bar wherever MENU sits on the pad, so it is always found in the same spot
-    NxButton.UP, NxButton.DOWN, NxButton.LEFT, NxButton.RIGHT -> 0
+    NxButton.UP, NxButton.DOWN, NxButton.LEFT, NxButton.RIGHT, NxButton.L3 -> 0
     NxButton.L2 -> 1; NxButton.L1 -> 2
     NxButton.SELECT -> 3; NxButton.HOME -> 4; NxButton.START -> 5
     NxButton.Y -> 6; NxButton.X -> 7; NxButton.B -> 8; NxButton.A -> 9
-    NxButton.C_UP, NxButton.C_DOWN, NxButton.C_LEFT, NxButton.C_RIGHT -> 9
+    NxButton.C_UP, NxButton.C_DOWN, NxButton.C_LEFT, NxButton.C_RIGHT, NxButton.R3 -> 9
     NxButton.R1 -> 10; NxButton.R2 -> 11
 }
 
@@ -75,6 +75,7 @@ fun NxButton.glyph(): String = when (this) {
     NxButton.A -> "A"; NxButton.B -> "B"; NxButton.X -> "X"; NxButton.Y -> "Y"
     NxButton.L1 -> "L1"; NxButton.R1 -> "R1"; NxButton.L2 -> "L2"; NxButton.R2 -> "R2"
     NxButton.START -> "START"; NxButton.SELECT -> "SELECT"; NxButton.MENU -> "MENU"; NxButton.HOME -> "HOME"
+    NxButton.L3 -> "L3"; NxButton.R3 -> "R3"
     NxButton.UP -> "▲"; NxButton.DOWN -> "▼"; NxButton.LEFT -> "◀"; NxButton.RIGHT -> "▶"
     NxButton.C_UP -> "▲"; NxButton.C_DOWN -> "▼"; NxButton.C_LEFT -> "◀"; NxButton.C_RIGHT -> "▶"
 }
@@ -85,7 +86,7 @@ fun NxButton.navDrawable(): DrawableResource = when (this) {
     NxButton.B -> Res.drawable.nav_button_b
     NxButton.X -> Res.drawable.nav_button_x
     NxButton.Y -> Res.drawable.nav_button_y
-    NxButton.MENU, NxButton.HOME -> Res.drawable.nav_button_menu
+    NxButton.MENU, NxButton.HOME, NxButton.L3, NxButton.R3 -> Res.drawable.nav_button_menu   // no stick-click art: never hinted
     NxButton.START -> Res.drawable.nav_button_start
     NxButton.SELECT -> Res.drawable.nav_button_select
     NxButton.L1 -> Res.drawable.nav_trigger_l1

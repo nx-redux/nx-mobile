@@ -29,6 +29,7 @@ internal val consolePadsById: Map<String, ConsolePad> = run {
         "nds" to ConsolePad(Res.drawable.menu_pad_nds, 0.65f), "3ds" to ConsolePad(Res.drawable.menu_pad_3ds, 2.00f),
         "n64" to ConsolePad(Res.drawable.menu_pad_n64, 0.79f),
         "psp" to ConsolePad(Res.drawable.menu_pad_psp, 1.50f), "ps" to ConsolePad(Res.drawable.menu_pad_ps, 1.00f),
+        "ps2" to ConsolePad(Res.drawable.menu_pad_ps2, 2.00f),
         "gb" to ConsolePad(Res.drawable.menu_pad_gb, 0.77f), "gbc" to ConsolePad(Res.drawable.menu_pad_gbc, 1.26f),
         "gba" to ConsolePad(Res.drawable.menu_pad_gba, 1.15f), "fc" to ConsolePad(Res.drawable.menu_pad_fc, 0.80f),
         "sfc" to sfc, "sgb" to sfc, "md" to md, "segacd" to md, "32x" to md,

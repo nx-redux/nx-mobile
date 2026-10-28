@@ -72,4 +72,13 @@ class BiosCheckTest {
     @Test fun the_message_names_the_console_folder() {
         assertTrue(BiosCheck.message("PSX", BiosNeed(listOf("scph5501.bin"))).endsWith("in Bios/PS/"))
     }
+    @Test fun anySuffixNeedIsMetByAnyBinCaseInsensitive() {
+        assertEquals(emptyList(), BiosCheck.missing(listOf(BiosNeed(emptyList(), anySuffix = ".bin")), "iso", setOf("SCPH-70012.BIN")))
+    }
+    @Test fun anySuffixNeedIgnoresNvmAndMec() {
+        assertEquals(1, BiosCheck.missing(listOf(BiosNeed(emptyList(), anySuffix = ".bin")), "iso", setOf("ps2.nvm", "ps2.mec", "readme.txt")).size)
+    }
+    @Test fun anySuffixMessage() {
+        assertEquals("Sony PlayStation 2 needs a BIOS: put a .bin file in Bios/PS2/", BiosCheck.message("PS2", BiosNeed(emptyList(), anySuffix = ".bin")))
+    }
 }

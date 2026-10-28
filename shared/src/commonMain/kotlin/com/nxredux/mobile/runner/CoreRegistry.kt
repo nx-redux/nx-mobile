@@ -165,6 +165,28 @@ object CoreRegistry {
         vulkan = VulkanSwitch(vulkan = mapOf("swanstation_GPU_Renderer" to "Auto"), lock = false),
         name = "SwanStation",
     )
+    // SPIKE: PS2 on ARMSX2 (ARMSX2/ARMSX2 2.9, cores/Makefile). Reads <system>/pcsx2/{bios,resources}. Opens the game
+    // through the runner's libretro VFS (/rom/<name>, need_fullpath), like Dolphin: no cache copy, so Play builds work.
+    private val armsx2 = CoreDescriptor(
+        "armsx2", "libarmsx2_libretro_android.so", setOf("iso", "chd", "cso", "zso", "bin", "elf", "gz", "m3u"),
+        biosSubdir = "pcsx2/bios",
+        // BIOS: Auto lets the core pick from <system>/pcsx2/bios; Console Settings' BIOS row forces one file at launch.
+        // Patches and cheats off until the player turns them on: the core reads the game's .pnach patches from
+        // Cheats/PS2/Patches/ (Tools → Cheats & Patches downloads PCSX2's patches.zip there) and its cheats from Cheats/PS2/
+        // (cores/patches/armsx2/0005), never shipped with the app. Software renderer threads stay hidden: they matter only
+        // to a renderer the app never picks.
+        defaultOptions = mapOf(
+            "armsx2_renderer" to "OpenGL", "armsx2_bios" to "auto", "armsx2_upscale" to "2x",
+            "armsx2_widescreen_patches" to "disabled", "armsx2_no_interlacing_patches" to "disabled", "armsx2_cheats" to "disabled", "armsx2_sw_threads" to "2",
+        ),
+        lockedOptions = setOf("armsx2_renderer", "armsx2_bios", "armsx2_upscale", "armsx2_sw_threads"),
+        vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan")),
+        // The PS2's two controller ports, both DualShock2 (cores/patches/armsx2/0006); no multitap. Saves stay on card 1.
+        players = 2,
+        name = "ARMSX2",
+        cheats = false,
+        rewind = false,
+    )
     private val race = CoreDescriptor(
         "race", "librace_libretro_android.so", setOf("ngp", "ngc", "ngpc", "npc"),
         defaultOptions = mapOf("race_dark_filter_level" to "50"),
@@ -464,6 +486,7 @@ object CoreRegistry {
         "DC" to flycast,
         "3DS" to azahar,
         "WII" to dolphinWii, "GC" to dolphinGc,
+        "PS2" to armsx2,
     )
 
     /** Extensions too generic to name a console on their own (disc images and sheets shared by many systems). */
@@ -478,6 +501,7 @@ object CoreRegistry {
         Console("nds", "Nintendo DS", listOf("NDS"), setOf("nds", "ds", "nintendo ds"), setOf("nds"), rawSram = false),
         Console("n64", "Nintendo 64", listOf("N64"), setOf("n64", "nintendo 64"), setOf("n64", "z64", "v64"), rawSram = false),
         Console("psp", "Sony Playstation Portable", listOf("PSP"), setOf("psp", "ppsspp", "playstation portable", "sony playstation portable"), setOf("iso", "cso", "chd", "pbp", "elf", "prx"), rawSram = false),
+        Console("ps2", "Sony PlayStation 2", listOf("PS2"), setOf("ps2", "playstation 2", "sony playstation 2"), setOf("iso", "chd", "zso"), rawSram = false),
         Console("ps", "Sony PlayStation", listOf("PS", "PSX"), setOf("ps", "ps1", "psx", "playstation", "sony playstation"), setOf("bin", "cue", "img", "mdf", "toc", "cbn", "m3u", "chd", "iso"), rawSram = false),
         Console("gb", "Game Boy", listOf("GB"), setOf("gb", "game boy"), setOf("gb", "dmg"), rawSram = true),
         Console("gbc", "Game Boy Color", listOf("GBC"), setOf("gbc", "game boy color"), setOf("gbc"), rawSram = true),
@@ -648,7 +672,7 @@ object CoreRegistry {
     fun playersFor(tag: String, core: CoreDescriptor?): Int =
         if (baseTag(tag) == "GG") 1 else core?.players ?: 1
 
-    /** The [tags] whose core takes cheats ([CoreDescriptor.cheats]): the cheat database installs folders for these only. */
+    /** The [tags] whose core takes cheats ([CoreDescriptor.cheats]): Cheats & Patches installs folders for these only. */
     val cheatTags: Set<String> = tags.filterTo(LinkedHashSet()) { forTag(it)?.let { d -> d.cheats || d.ramCheats } != false }
 
     /** [fileName] is an archive the launched [tag]'s core loads as is (fbneo's and flycast's arcade sets), not one to unpack (minarch's rule). */
@@ -692,6 +716,7 @@ object CoreRegistry {
         "PCE" to listOf(BiosNeed(listOf("syscard3.pce"), setOf("cue", "ccd", "chd", "toc", "m3u"))),
         "COLECO" to listOf(BiosNeed(listOf("colecovision.rom", "coleco.rom"))),
         "DC" to listOf(BiosNeed(listOf("dc_boot.bin"), setOf("chd", "cdi", "gdi", "cue", "m3u"))),   // arcade sets bring their own BIOS
+        "PS2" to listOf(BiosNeed(emptyList(), anySuffix = ".bin")),   // the core's scan takes ".bin" only: .nvm / .mec do not count
     )
 
     /** The BIOS a launch under [tag] cannot do without (checked before the core starts); empty for most tags. */

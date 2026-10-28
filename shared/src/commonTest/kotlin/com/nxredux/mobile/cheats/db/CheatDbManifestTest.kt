@@ -25,6 +25,14 @@ class CheatDbManifestTest {
         assertNull(CheatDbManifest.parse(manifest.render())!!.tags)
     }
 
+    @Test fun cht_commit_round_trips_and_an_older_manifest_parses_without_it() {
+        val committed = manifest.copy(tags = listOf("GB"), patchesStamp = "p", chtCommit = "0123456789abcdef0123456789abcdef01234567")
+        assertTrue(committed.render().contains("\ncht_commit = 0123456789abcdef0123456789abcdef01234567\n"))
+        assertEquals(committed, CheatDbManifest.parse(committed.render()))
+        assertNull(CheatDbManifest.parse(manifest.render())!!.chtCommit)
+        assertFalse(manifest.render().contains("cht_commit"))
+    }
+
     @Test fun counts_group_by_tag() {
         assertEquals(mapOf("GB" to 2, "GBA" to 1, "MGBA" to 1), manifest.countsByTag)
         assertEquals(3, manifest.systems)
@@ -58,5 +66,25 @@ class CheatDbManifestTest {
     @Test fun a_path_containing_equals_is_still_a_path() {
         val m = CheatDbManifest.parse("# nx-mobile cheatdb 1\nCheats/GB/A = B (USA).cht\n")
         assertEquals(listOf("Cheats/GB/A = B (USA).cht"), m!!.files)
+    }
+
+    @Test fun the_patches_stamp_round_trips_and_defaults_to_null() {
+        val both = manifest.copy(tags = listOf("GB", "PS2"), patchesStamp = "Sat, 24 Oct 2026 22:57:54 GMT")
+        assertTrue(both.render().contains("\ntags = GB,PS2\npatches_stamp = Sat, 24 Oct 2026 22:57:54 GMT\n"))
+        assertEquals(both, CheatDbManifest.parse(both.render()))
+        assertNull(CheatDbManifest.parse(manifest.render())!!.patchesStamp)
+    }
+
+    @Test fun each_source_has_its_stamp() {
+        val m = manifest.copy(patchesStamp = "p")
+        assertEquals("Wed, 21 Aug 2024 10:00:00 GMT", m.stampOf(CheatDbSource.LIBRETRO))
+        assertEquals("p", m.stampOf(CheatDbSource.PCSX2))
+        assertEquals(CheatDbManifest.UNKNOWN_STAMP, manifest.stampOf(CheatDbSource.PCSX2))   // patches never installed
+    }
+
+    @Test fun patch_files_count_under_their_console() {
+        val m = CheatDbManifest("s", 1L, listOf("Cheats/FC/x.cht", "Cheats/PS2/Patches/SLUS-21678_428113C2.pnach", "Cheats/PS2/Patches/6D980D22.pnach"))
+        assertEquals(mapOf("FC" to 1, "PS2" to 2), m.countsByTag)
+        assertEquals(m, CheatDbManifest.parse(m.render()))
     }
 }

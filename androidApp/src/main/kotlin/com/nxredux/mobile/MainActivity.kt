@@ -30,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.window.layout.WindowMetricsCalculator
+import com.nxredux.mobile.runner.BiosImport
 import com.nxredux.mobile.runner.Posture
 import com.nxredux.mobile.storage.LibchdrSectors
 import com.nxredux.mobile.storage.NotificationAccess
@@ -398,6 +399,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 padEditor = { request -> padLayoutEditor.launch(PadLayoutActivity.intent(this, request)) },
                 screenClass = { windowScreenClass },
                 windowPx = { windowPx },
+                ps2BiosFiles = { BiosImport.binFiles(applicationContext, settings.treeRef, "PS2") },
                 saveTransfer = saveTransfer,
                 deviceSync = DeviceSyncs.get(this),
                 updater = AppUpdates.get(this),

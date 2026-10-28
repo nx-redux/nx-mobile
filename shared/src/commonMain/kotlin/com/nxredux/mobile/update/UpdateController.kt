@@ -23,8 +23,8 @@ interface UpdatePlatform {
     suspend fun sha256(file: UpdateFile): String
     fun discard(file: UpdateFile)
     /**
-     * Why the app can't be replaced now (a game as [UpdateController.GAME_REASON], Device Sync, artwork, achievements, the
-     * cheat database), in the Global Constraints order; null when free.
+     * Why the app can't be replaced now (a game as [UpdateController.GAME_REASON], Device Sync, artwork, achievements,
+     * Cheats & Patches), in the Global Constraints order; null when free.
      */
     fun busyReason(): String?
     /** Whether the app may install packages (`canRequestPackageInstalls()`). */

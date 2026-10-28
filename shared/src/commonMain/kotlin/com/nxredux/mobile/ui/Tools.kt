@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.cheats.db.CheatDatabase
+import com.nxredux.mobile.cheats.db.CheatDbSource
 import com.nxredux.mobile.cheats.db.CheatDbState
 
 /** [APPS]: the app drawer (every launchable app); [APP]: one Android app added to Tools or pinned on Home. */
@@ -18,7 +19,7 @@ val ToolKind.toolName: String?
         ToolKind.RETRO_ACHIEVEMENTS -> "RetroAchievements"
         ToolKind.GAME_TIME -> "Game Tracker"
         ToolKind.ARTWORK -> "Artwork"
-        ToolKind.CHEAT_DB -> "Cheat Database"
+        ToolKind.CHEAT_DB -> "Cheats & Patches"
         ToolKind.DEVICE_SYNC -> "Device Sync"
         ToolKind.SETTINGS -> "Settings"
         ToolKind.APPS -> "Apps"
@@ -62,7 +63,7 @@ fun toolPageTitleHead(screen: Screen, split: Boolean = false): String? = when (s
 /** A tile of the app drawer or the Android games picker: [shown] = in the Tools tab (drawer) or the console (games). */
 data class ToolAppRow(val id: String, val label: String, val shown: Boolean)
 
-/** The rows of the Cheat Database page; which ones show depends on the state. */
+/** The rows of the Cheats & Patches page; which ones show depends on the state. */
 enum class CheatDbAction(val label: String) {
     DOWNLOAD("Download (${CheatDatabase.DOWNLOAD_HINT})"), CHECK("Check for updates"), REMOVE("Remove")
 }
@@ -85,17 +86,20 @@ fun cheatDbStatus(state: CheatDbState?): String = when (state) {
     is CheatDbState.Removing -> "Removing…"
 }
 
-/** The details block on the Cheat Database page: first line is the headline, the rest are dim. [systems] = consoles the download covers. */
+/** The details block on the Cheats & Patches page: first line is the headline, the rest are dim. [systems] = consoles the download covers. */
 fun cheatDbDetails(state: CheatDbState, systems: Int): List<String> = when (state) {
     CheatDbState.Unknown -> listOf("…")
-    CheatDbState.NotInstalled -> listOf("Not installed", "${CheatDatabase.DOWNLOAD_HINT.replaceFirstChar { it.uppercase() }} download", "Cheats for $systems systems")
+    CheatDbState.NotInstalled -> listOf("Not installed", "${CheatDatabase.DOWNLOAD_HINT.replaceFirstChar { it.uppercase() }} download", "Cheats and patches for $systems systems")
     is CheatDbState.Installed -> listOf("Installed", "${state.manifest.systems} systems · ${state.manifest.fileCount} files", "Last update: ${formatInstallDate(state.manifest.installedAt)}")
     else -> listOf(cheatDbStatus(state))
 }
 
 /** The progress body's line while busy; null when idle. */
 fun cheatDbProgressLine(state: CheatDbState): String? = when (state) {
-    is CheatDbState.Downloading -> if (state.total > 0) "Downloading… ${mb(state.done)} / ${mb(state.total)} MB" else "Downloading… ${mb(state.done)} MB"
+    is CheatDbState.Downloading -> {
+        val what = if (state.source == CheatDbSource.PCSX2) "patches" else "cheats"
+        if (state.total > 0) "Downloading $what… ${mb(state.done)} / ${mb(state.total)} MB" else "Downloading $what… ${mb(state.done)} MB"
+    }
     is CheatDbState.Installing -> "Installing ${state.tag} (${state.index}/${state.count})"
     is CheatDbState.Checking -> "Checking for updates…"
     is CheatDbState.Removing -> "Removing…"

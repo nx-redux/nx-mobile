@@ -185,7 +185,7 @@ object GamePanelModel {
         rows.getOrNull(index)?.let { GamePanelEvent.SetCheat(index, on = !it.on) }
 
     /**
-     * The Cheats tab without any: [NO_CHEATS] and how to add some, the Cheat Database tool or a RetroArch `.cht` file in
+     * The Cheats tab without any: [NO_CHEATS] and how to add some, the Cheats & Patches tool or a RetroArch `.cht` file in
      * the game's [folder] (`Cheats/<TAG>` in the home folder), named as the first file looked for ([expected]) once the
      * cheats have been resolved.
      */
@@ -194,7 +194,7 @@ object GamePanelModel {
         else "$NO_CHEATS\n$ADD_CHEATS a RetroArch .cht file as $folder/$expected."
 
     const val NO_CHEATS = "No cheats for this game."
-    private const val ADD_CHEATS = "Download them with Tools → Cheat Database, or add"
+    private const val ADD_CHEATS = "Download them with Tools → Cheats & Patches, or add"
 
     /** The disc after [index] (0-based) of [count], wrapping, as each Swap disc tap steps it. */
     fun nextDisc(index: Int, count: Int): Int = if (count <= 0) 0 else (index + 1).mod(count)

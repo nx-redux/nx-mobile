@@ -1,0 +1,43 @@
+diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
+index 24210fb..dead7f7 100644
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -1816,6 +1816,38 @@ RETRO_API bool retro_load_game(const struct retro_game_info* game)
+ 	{
+ 		params.source_type = CDVD_SourceType::NoDisc;
+ 	}
++	// One memory card per game, in the frontend's save directory:
++	// <save dir>/<content file stem>/Mcd001.ps2. Cards are opened when the VM
++	// boots, so this has to be in place before then. Only the file name counts
++	// (content may arrive as /rom/<name>); a playlist uses the .m3u's own name.
++	if (game && game->path)
++	{
++		const char* save_base = nullptr;
++		if (environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &save_base) && save_base && *save_base)
++		{
++			std::string stem(Path::GetFileTitle(LibretroCore::s_content_path));
++			if (stem.empty())
++				stem = "Game";
++			const std::string card_dir = Path::Combine(save_base, stem);
++			FileSystem::EnsureDirectoryExists(card_dir.c_str(), true);
++			const std::string state_dir = Path::Combine(EmuFolders::Cache, "sstates");
++			FileSystem::EnsureDirectoryExists(state_dir.c_str(), true);
++			{
++				auto lock = Host::GetSettingsLock();
++				s_base_settings->SetStringValue("Folders", "MemoryCards", card_dir.c_str());
++				s_base_settings->SetStringValue("Folders", "Savestates", state_dir.c_str());
++				s_base_settings->SetBoolValue("MemoryCards", "Slot1_Enable", true);
++				s_base_settings->SetStringValue("MemoryCards", "Slot1_Filename", "Mcd001.ps2");
++				s_base_settings->SetBoolValue("MemoryCards", "Slot2_Enable", false);
++			}
++			EmuFolders::MemoryCards = card_dir;
++			EmuFolders::Savestates = state_dir;
++		}
++		else
++		{
++			log_cb(RETRO_LOG_WARN, "No save directory from frontend; memory cards stay under the system directory.\n");
++		}
++	}
+ 	params.fast_boot = true;
+ 
+ 	s_shutdown_requested.store(false, std::memory_order_release);

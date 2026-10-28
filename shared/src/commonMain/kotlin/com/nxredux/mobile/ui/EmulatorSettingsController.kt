@@ -10,6 +10,7 @@ import com.nxredux.mobile.options.CoreOptionFilter
 import com.nxredux.mobile.options.CoreOptionSource
 import com.nxredux.mobile.options.EmulatorPage
 import com.nxredux.mobile.options.EmulatorSettings
+import com.nxredux.mobile.options.Ps2Options
 import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.Res3dConsole
@@ -140,6 +141,8 @@ internal class EmulatorSettingsController(
     private val screenClass: () -> ScreenClass? = { null },
     /** The current window's size in px, width to height (null: unknown): the DS and 3DS 3D Resolution scales go up to what it reaches. */
     private val windowPx: () -> Pair<Int, Int>? = { null },
+    /** The ".bin" names in the PS2 BIOS folder (Bios/PS2/), read off the main thread: the PS2 BIOS row's choices. */
+    private val ps2BiosFiles: () -> List<String> = { emptyList() },
 ) {
     private val lock = Mutex()
     private var listRows: List<EmulatorListRow> = emptyList()
@@ -265,6 +268,7 @@ internal class EmulatorSettingsController(
         return EmulatorSettings.page(
             tag, d, coreOptions.table(d.id), defaults(d), files.first, files.second, forGame = game != null, vulkanFailed = vulkanFailed(d.id),
             secondScreen = secondScreen(), screen = screen, displayMax = Res3dConsole.forTag(tag)?.displayMaxOf(windowPx(), screen),
+            biosFiles = if (Ps2Options.appliesTo(tag)) ps2BiosFiles() else emptyList(),
         )
     }
 

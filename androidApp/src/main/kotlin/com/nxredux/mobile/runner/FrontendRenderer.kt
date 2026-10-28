@@ -146,6 +146,7 @@ internal class FrontendRenderer(
     private val menuOpen get() = host.menuOpen
     private val isNds get() = host.isNds
     private val isN3ds get() = host.isN3ds
+    private val isPs2 get() = Res3dConsole.forTag(gameTag) == Res3dConsole.PS2
     private val privateRoot get() = host.privateRoot
     private val dualMode get() = host.dualMode
     private val pictureOn get() = host.pictureOn
@@ -571,6 +572,7 @@ internal class FrontendRenderer(
             reportN3ds3d(w, h, screen, halfFolded = false, g, flat = shown, secondDs)
             host.onN3dsPictureSpace()   // after the report: it read this frame against the proportion it was drawn at
         }
+        if (isPs2) reportPs2Resolution(w, h, screen, shown)
         if (viewport != lastViewport) {
             lastViewport = viewport
             view.viewport = viewport
@@ -598,6 +600,17 @@ internal class FrontendRenderer(
         val second = Nds3dResolution.currentScale(secondNdsRegions) ?: 1
         report3d(w, h, screen, halfFolded, Nds3dResolution.currentScale(ndsRegions + secondNdsRegions), second) {
             Nds3dResolution.displayMax(w, h, screen)
+        }
+    }
+
+    /**
+     * The PS2 3D scale's inputs to the host, as [reportNds3d]: the [shown] picture's height over the 448 px frame, and the
+     * window's display maximum ([Ps2Resolution.displayMax]). Nothing before the first frame (the launch's value stands).
+     */
+    private fun reportPs2Resolution(w: Float, h: Float, screen: ScreenClass, shown: PxRect) {
+        if (!gameReady || shown.height <= 0f) return
+        report3d(w, h, screen, halfFolded = false, Ps2Resolution.currentScale(shown.height.roundToInt()), second = 1) {
+            Ps2Resolution.displayMax(w.roundToInt(), h.roundToInt())
         }
     }
 

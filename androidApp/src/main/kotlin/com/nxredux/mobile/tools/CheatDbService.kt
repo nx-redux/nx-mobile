@@ -1,8 +1,8 @@
 package com.nxredux.mobile.tools
 
 import android.content.Context
+import com.nxredux.mobile.cheats.db.CheatDatabase
 import com.nxredux.mobile.cheats.db.CheatDbController
-import com.nxredux.mobile.runner.CoreRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,7 +13,7 @@ object CheatDbService {
 
     fun controller(context: Context): CheatDbController = instance ?: synchronized(this) {
         instance ?: CheatDbController(
-            AndroidCheatDb(context.applicationContext), CoreRegistry.cheatTags,
+            AndroidCheatDb(context.applicationContext), CheatDatabase.installTags,
             CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate), System::currentTimeMillis,
         ).also { instance = it }
     }
@@ -21,6 +21,6 @@ object CheatDbService {
     /** Re-reads the manifest when a controller exists (after [CheatsRoot] moved it into the home folder). */
     fun refreshIfStarted() { instance?.refresh() }
 
-    /** The cheat database is checking, downloading, installing or removing (the updater's install gate). Main thread only. */
+    /** Cheats & Patches is checking, downloading, installing or removing (the updater's install gate). Main thread only. */
     fun busy(): Boolean = instance?.busy == true
 }

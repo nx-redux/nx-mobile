@@ -95,6 +95,7 @@ import com.nxredux.mobile.options.GraphicsApiOptions
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.Ps2Options
 import com.nxredux.mobile.options.WiiOptions
 import com.nxredux.mobile.options.WiiScreen
 import com.nxredux.mobile.options.NdsOptions
@@ -770,7 +771,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun corePaused(): Boolean = menuOpen || focusPaused
 
-    /** The console whose 3D scale the app sets for this game: a DS on melonDS DS, a 3DS on Azahar; null for any other. */
+    /** The console whose 3D scale the app sets for this game: a DS on melonDS DS, a 3DS on Azahar, a PS2 on ARMSX2; null for any other. */
     private val res3d: Res3dConsole? get() = Res3dConsole.forTag(gameTag)?.takeIf { gameCoreId == it.coreId }
 
     private fun setsRes3d(): Boolean = res3d != null
@@ -826,7 +827,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val console = res3d ?: return
         nds3dValue = value
         NxLog.i(TAG_LOG, "$gameTag 3D resolution ${value}x (${Nds3dMode.parse(frontendValues[console.modeKey]).value})")
-        applyOptions(listOf(Variable(console.coreKey, value.toString())))
+        applyOptions(listOf(Variable(console.coreKey, console.coreValue(value))))
         if (console == Res3dConsole.N3DS) renderer.onN3dsFactorSent(value)
         menu.menuModel?.let { publishNds3d(it); menu.menuState.value = it.state }
     }
@@ -849,7 +850,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         nds3dValue = value
         if (console == Res3dConsole.N3DS) renderer.startN3dsFactor(value)
         NxLog.i(TAG_LOG, "$gameTag 3D resolution ${value}x at launch (${Nds3dMode.parse(frontendValues[console.modeKey]).value})")
-        return mapOf(console.coreKey to value.toString())
+        return mapOf(console.coreKey to console.coreValue(value))
     }
 
     /**
@@ -858,7 +859,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     override fun publishNds3d(model: InGameMenuModel) {
         val console = res3d ?: return
-        // The 3DS has no software renderer to fall back to (Software API hidden): its scale always applies.
+        // The 3DS has no software renderer to fall back to (Software API hidden), nor has the PS2: their scale always applies.
         model.setNds3d(nds3dValue, software = console == Res3dConsole.DS && NdsRenderer.rendersSoftware(ndsRenderMode, ndsFellBack))
     }
 
@@ -1427,6 +1428,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val launchSegaPad = segaPad
         launchedSegaSetting = launchSega
         val nds3dLaunch = nds3dLaunchOption()   // read on the main thread: the window's size
+        // PS2 BIOS row: the pick while its file is still in the folder, else Auto (the core's own choice).
+        val ps2BiosOption = if (Ps2Options.appliesTo(tag)) {
+            Ps2Options.biosOption(frontendValues[Ps2Options.BIOS], biosPresent.filter { it.endsWith(".bin", ignoreCase = true) })
+        } else emptyMap()
         val data = try {
             withContext(Dispatchers.IO) {
                 // The name the core sees: an arcade zip in lowercase (fbneo matches the driver name case-sensitively).
@@ -1446,7 +1451,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     savesDirectory = savesDir.absolutePath
                     // netplay: the handheld pak's pad options (NetplayPads) replace the Controller Type's, and a link
                     // session's (NetplayLinkOptions) the user's, set even when absent.
-                    val forced = netplayPad?.options.orEmpty() + linkOptions + wiiScreenOption() + nds3dLaunch + graphics.forcedOptions
+                    val forced = netplayPad?.options.orEmpty() + linkOptions + wiiScreenOption() + nds3dLaunch + ps2BiosOption + graphics.forcedOptions
                     variables = (options.map { v ->
                         forced[v.key]?.let { Variable(v.key, it) }
                             ?: if (launchSega != null && (v.key == SegaPadType.PICODRIVE_INPUT1 || v.key == SegaPadType.PICODRIVE_INPUT2))

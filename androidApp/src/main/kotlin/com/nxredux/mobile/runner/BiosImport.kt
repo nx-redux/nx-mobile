@@ -35,4 +35,18 @@ object BiosImport {
             }
         }.onFailure { NxLog.w("BiosImport", "Bios import failed", it) }
     }
+
+    /**
+     * The names of the ".bin" files in `Bios/<tag>/` (the ones ARMSX2 accepts), sorted; empty without a home, without access
+     * or when the folder will not list.
+     */
+    fun binFiles(context: Context, home: ContentRef?, tag: String): List<String> {
+        home ?: return emptyList()
+        return runCatching {
+            val tree = ImportTree.of(context.contentResolver, home)
+            val bios = tree.child(home, "Bios")?.takeIf { it.isDirectory } ?: return emptyList()
+            val dir = tree.child(bios.ref, tag)?.takeIf { it.isDirectory } ?: return emptyList()
+            tree.list(dir.ref).filter { !it.isDirectory && it.name.endsWith(".bin", ignoreCase = true) }.map { it.name }.sorted()
+        }.getOrDefault(emptyList())
+    }
 }

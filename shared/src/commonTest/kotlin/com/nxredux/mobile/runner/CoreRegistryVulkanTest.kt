@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.options.GraphicsApiOptions
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -40,6 +41,14 @@ class CoreRegistryVulkanTest {
         assertEquals(VulkanSwitch(gles = mapOf("citra_graphics_api" to "OpenGL"), vulkan = mapOf("citra_graphics_api" to "Vulkan")), d.vulkan)
         assertTrue("citra_graphics_api" in d.lockedOptions)
         assertEquals("OpenGL", d.defaultOptions["citra_graphics_api"])
+    }
+
+    // DBZ BT3 runs on the Fold over the Vulkan bridge (2026-10-28): the Graphics API row picks the core's renderer.
+    @Test fun ps2SwitchesRenderer() {
+        val d = CoreRegistry.forTag("PS2")!!
+        assertEquals(VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan")), d.vulkan)
+        assertTrue("armsx2_renderer" in d.lockedOptions)
+        assertTrue(GraphicsApiOptions.appliesTo("PS2"))
     }
 
     @Test fun n64_follows_graphics_api_and_offers_parallel_rows_out_of_game() {

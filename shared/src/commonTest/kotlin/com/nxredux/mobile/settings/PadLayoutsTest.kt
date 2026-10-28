@@ -240,4 +240,24 @@ class PadLayoutsTest {
         assertEquals(flat, PadShape.offered(listOf("NDS"), PadScreen.NARROW, canHalfFold = true))
         assertEquals(flat, PadShape.offered(null, PadScreen.WIDE, canHalfFold = false))
     }
+
+    @Test fun oldLayoutLineStillDecodes() {
+        // A line stored before the stick groups were appended reads to the same tweaks.
+        val old = "*\tOVERLAY\tDPAD\t0.5\t-1.0\t1.1\nps2\tPORTRAIT\tFACE\t0.0\t0.0\t1.3\nps2\tPORTRAIT\tC_STICK\t1.0\t0.0\t1.0"
+        val all = PadLayouts.decode(old)
+        assertEquals(GroupTweak(0.5f, -1f, 1.1f), PadLayouts.own(all, PadLayouts.SHARED_KEY, OVERLAY)?.tweaks?.get(PadGroup.DPAD))
+        assertEquals(mapOf(PadGroup.FACE to big, PadGroup.C_STICK to GroupTweak(dx = 1f)), PadLayouts.own(all, "ps2", PORTRAIT)?.tweaks)
+        assertEquals(listOf("DPAD", "FACE", "L_SHOULDERS", "R_SHOULDERS", "SYSTEM_LEFT", "SYSTEM_RIGHT", "C_STICK", "SHORTCUT_1", "SHORTCUT_2"),
+            PadGroup.entries.take(9).map { it.name })
+    }
+
+    @Test fun stickGroupsRoundTrip() {
+        val all: PadLayoutMap = mapOf("ps2" to mapOf(
+            OVERLAY to PadLayout(mapOf(PadGroup.L_STICK to GroupTweak(1f, -0.5f, 1.2f), PadGroup.R_STICK to GroupTweak(dx = -1f))),
+            PORTRAIT to PadLayout(mapOf(PadGroup.R_STICK to big)),
+        ))
+        val text = PadLayouts.encode(all)
+        assertTrue("ps2\tOVERLAY\tL_STICK\t1.0\t-0.5\t1.2" in text.lines())
+        assertEquals(all, PadLayouts.decode(text))
+    }
 }

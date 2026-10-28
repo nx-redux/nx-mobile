@@ -134,9 +134,13 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" "cmake;$CMAKE_VERSION" > /dev/null
-          # azahar and dolphin need CMake 3.25+: cores/Makefile pins <core>_CMAKE / <core>_NINJA to the SDK's 3.30.3.
-          if [ "${{ matrix.core }}" = "azahar" ] || [ "${{ matrix.core }}" = "dolphin" ]; then
+          # azahar, dolphin and armsx2 need CMake 3.25+: cores/Makefile pins <core>_CMAKE / <core>_NINJA to the SDK's 3.30.3.
+          if [ "${{ matrix.core }}" = "azahar" ] || [ "${{ matrix.core }}" = "dolphin" ] || [ "${{ matrix.core }}" = "armsx2" ]; then
             "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmake;3.30.3" > /dev/null
+          fi
+          # armsx2 builds with its own NDK (armsx2_NDK_VERSION in cores/Makefile, upstream's r29).
+          if [ "${{ matrix.core }}" = "armsx2" ]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$(make -s -C cores print-armsx2-ndk)" > /dev/null
           fi
 
       - name: Build ${{ matrix.core }} core

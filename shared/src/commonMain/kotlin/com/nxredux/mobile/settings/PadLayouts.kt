@@ -8,9 +8,11 @@ import com.nxredux.mobile.options.NdsOptions
  * the stick share [DPAD]'s spot). [C_STICK] is the New 3DS C-stick of the portrait pad; in the landscape clusters it is
  * part of [FACE]. [SYSTEM_LEFT] is MENU and the d-pad / stick toggle, [SYSTEM_RIGHT] SELECT and START. [SHORTCUT_1] /
  * [SHORTCUT_2] are the touch shortcut buttons, drawn in game only while their slot has an action (the editor always shows
- * them). Layouts store groups by name: new groups go at the end, so a stored line stays valid.
+ * them). [L_STICK] / [R_STICK] are the PS2 pad's sticks with their L3 / R3 pills, beside the d-pad and the face cluster
+ * ([com.nxredux.mobile.ui.nx.PadProfile.dualSticks]). Layouts store groups by name: new groups go at the end, so a stored
+ * line stays valid.
  */
-enum class PadGroup { DPAD, FACE, L_SHOULDERS, R_SHOULDERS, SYSTEM_LEFT, SYSTEM_RIGHT, C_STICK, SHORTCUT_1, SHORTCUT_2 }
+enum class PadGroup { DPAD, FACE, L_SHOULDERS, R_SHOULDERS, SYSTEM_LEFT, SYSTEM_RIGHT, C_STICK, SHORTCUT_1, SHORTCUT_2, L_STICK, R_STICK }
 
 /**
  * The pad's editable arrangements: the portrait band ([PORTRAIT], also flex mode's band and the main menu's pad), the

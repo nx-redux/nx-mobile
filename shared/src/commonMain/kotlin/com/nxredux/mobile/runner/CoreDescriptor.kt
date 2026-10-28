@@ -62,7 +62,7 @@ data class CoreDescriptor(
     val cheats: Boolean = true,
     /**
      * For a core with no [cheats]: its database files hold RetroArch RAM patches (handler 1), which the frontend applies
-     * to the core's system RAM, so its Cheats row lists those and the Cheat Database installs its folder.
+     * to the core's system RAM, so its Cheats row lists those and Cheats & Patches installs its folder.
      */
     val ramCheats: Boolean = false,
     /** The system-dir subfolder the core reads its BIOS from (flycast's `<system>/dc/`); empty = the system dir itself. */

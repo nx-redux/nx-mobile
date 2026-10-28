@@ -17,7 +17,7 @@ SOURCES = {   # console id -> source file name (without .png)
     "lynx": "atari-lynx", "a2600": "atari-2600", "a5200": "atari-5200", "a7800": "atari-7800",
     "pkm": "pokemon-mini", "wsc": "wonderswan-color", "coleco": "colecovision", "dc": "dreamcast",
     "fbn": "competition-pro", "vic20": "commodore-vic-20",   # vic20: the image, shared by Doom and Pico-8
-    "3ds": "nintendo-3ds", "wii": "nintendo-wii", "gc": "nintendo-gamecube",
+    "3ds": "nintendo-3ds", "wii": "nintendo-wii", "gc": "nintendo-gamecube", "ps2": "sony-playstation-2",
     "android": "android-controller",   # the Android games console (not a registry console); from prep_controller.py
 }
 OVERRIDES = {"gba": 1.15, "fc": 0.8, "psp": 1.5,   # set by eye: saturated purple reads bright; the NES box and PSP screen read busy
@@ -30,7 +30,7 @@ ROTATE = {"top": None, "bottom": Image.Transpose.ROTATE_180, "left": Image.Trans
 # Images whose body touches the border (it would read as a cable): first CLEAR (polygons in source pixels; a cable
 # that ends short of the border), then centre on a transparent 1000 px canvas, scaled to fit 960 px.
 CLEAR = {"fbn": [[(0, 875), (247, 895), (250, 900), (350, 985), (500, 1100), (500, 1200), (0, 1200)]]}   # bottom-left cable
-MARGIN = {"fbn", "vic20", "3ds", "wii"}   # 3ds: an 840 x 859 source whose body reaches the right edge; wii: an 800 px Wiimote touching top and bottom
+MARGIN = {"fbn", "vic20", "3ds", "wii", "ps2"}   # 3ds: an 840 x 859 source whose body reaches the right edge; wii: an 800 px Wiimote touching top and bottom; ps2: a 1000 x 595 DualShock 2 touching left, right and bottom
 UNROTATE = {"top": None, "bottom": Image.Transpose.ROTATE_180, "left": Image.Transpose.ROTATE_90, "right": Image.Transpose.ROTATE_270}
 
 def cut_top_cable(im):

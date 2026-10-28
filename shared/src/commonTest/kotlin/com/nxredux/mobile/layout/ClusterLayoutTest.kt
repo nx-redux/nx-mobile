@@ -83,6 +83,19 @@ class ClusterLayoutTest {
         assertEquals(540f + 32f + 257f - p.boxHeightPx, p.topMarginPx, 0.01f)
     }
 
+    @Test fun rows_on_screen_stop_at_the_window_top() {
+        val window = PxRect(0f, 0f, 2100f, 945f)   // 800 x 360 dp at 2.625
+        // Without the tool row the unit is the half-height's / 2.85: the 6-row box starts above the window's top.
+        val unit = landscapeUnitPx(ScreenClass.REGULAR_PHONE, 945f, 945f, 420f, 2.625f, toolRow = false)
+        val p = besidePlacement(window, null, unit, Reach(50f, 4f * unit), 2.625f, secondRow = false)
+        assertTrue(p.topMarginPx + 16f * 2.625f < 0f)
+        assertEquals(2.85f + 2.57f, p.rowsOnScreen(0f, unit, 2.625f), 0.01f)
+        // With it, the whole box is inside: all 7.07 rows.
+        val unit2 = landscapeUnitPx(ScreenClass.REGULAR_PHONE, 945f, 945f, 420f, 2.625f, toolRow = true)
+        val p2 = besidePlacement(window, null, unit2, Reach(50f, 4f * unit2), 2.625f, secondRow = true)
+        assertEquals(6f + 1.07f, p2.rowsOnScreen(0f, unit2, 2.625f), 0.01f)
+    }
+
     @Test fun beside_measures_are_the_unit_and_reach_the_game_reads() {
         // A 20:9 phone in landscape, a 136 px cutout on the left, the second row kept.
         val m = besideMeasures(ScreenClass.REGULAR_PHONE, 2400f, 1080f, 420f, 2.625f, 136f, 0f, secondRow = true, measuredButtonsPx = null, faceUnits = 3f, systemPills = 2)

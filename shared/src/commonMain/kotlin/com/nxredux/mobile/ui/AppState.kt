@@ -251,6 +251,8 @@ class AppDeps(
     val screenClass: () -> com.nxredux.mobile.layout.ScreenClass? = { null },
     /** The menu window's size in px now, width to height (Emulator Settings' DS 3D scales); null: unknown. */
     val windowPx: () -> Pair<Int, Int>? = { null },
+    /** The ".bin" names in Bios/PS2/ (Emulator Settings' PS2 BIOS row); blocking, called off the main thread. */
+    val ps2BiosFiles: () -> List<String> = { emptyList() },
     /** Opens the pad layout editor (Android: its own activity); it saves to the settings and ends with [AppState.onPadLayoutEdited]. Null: no editor. */
     val padEditor: ((PadEditRequest) -> Unit)? = null,
     /** Settings → Library → Saves: Export and Import (null: rows do nothing). */
@@ -396,7 +398,7 @@ sealed interface Screen {
      * and A puts one in or takes it out.
      */
     data class ToolApps(val apps: List<ToolAppRow>, val pick: AppPick = AppPick.TOOLS, val menu: ContextMenu? = null) : Screen
-    /** [confirmRemove]: the "remove cheat database?" dialog is open. */
+    /** [confirmRemove]: the "remove Cheats & Patches?" dialog is open. */
     data class CheatDb(val confirmRemove: Boolean = false) : Screen
     /** Tools → Device Sync: no list selection here; its page (and the link choice) live in [AppDeps.deviceSync]. */
     data object DeviceSync : Screen
@@ -1200,7 +1202,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** The app's settings, exposed for the UI (deps stays private). */
     val settings: AppSettings get() = deps.settings
 
-    /** The Cheat Database tool, for the screen that renders its progress (null on a platform without it). */
+    /** The Cheats & Patches tool, for the screen that renders its progress (null on a platform without it). */
     val cheatDb: CheatDbController? get() = deps.cheatDb
 
     /** The Device Sync tool, for its screen (null on a platform without it). */
@@ -5270,7 +5272,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         deps.achievements?.let { ToolRow(ToolKind.RETRO_ACHIEVEMENTS, "RetroAchievements", null) },
         deps.gameTime?.let { ToolRow(ToolKind.GAME_TIME, "Game Tracker", null) },
         artworkScreens?.let { ToolRow(ToolKind.ARTWORK, "Artwork", null) },
-        ToolRow(ToolKind.CHEAT_DB, "Cheat Database", null),
+        ToolRow(ToolKind.CHEAT_DB, "Cheats & Patches", null),
         deps.deviceSync?.let { ToolRow(ToolKind.DEVICE_SYNC, "Device Sync", null) },
         deps.launcher?.let { ToolRow(ToolKind.APPS, "Apps", null) },
     ) + appToolRows()).sortedBy { it.label.lowercase() } + ToolRow(ToolKind.SETTINGS, "Settings", null)
@@ -5798,6 +5800,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         secondScreen = { secondConnected },
         screenClass = deps.screenClass,
         windowPx = deps.windowPx,
+        ps2BiosFiles = deps.ps2BiosFiles,
     )
 
     // --- Tools -> Artwork: AppState hosts the controller (index writes stay here); the pages live in ArtworkScreenController ---

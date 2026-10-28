@@ -56,7 +56,7 @@ class CoreRegistryTest {
     @Test fun all_lists_each_core_once() {
         val ids = CoreRegistry.all.map { it.id }
         assertEquals(ids.size, ids.toSet().size)
-        assertEquals(29, ids.size)
+        assertEquals(30, ids.size)
     }
     @Test fun the_bricks_pak_defaults_are_carried() {
         assertEquals(mapOf("pcsx_rearmed_dithering" to "enabled"), CoreRegistry.forTag("PS")!!.defaultOptions)
@@ -196,7 +196,7 @@ class CoreRegistryTest {
         assertEquals(listOf("SFC", "SUPA"), CoreRegistry.consoleOf("SUPA")!!.tags)
         assertEquals(
             listOf(
-                "nds", "n64", "psp", "ps", "gb", "gbc", "gba", "fc", "sfc", "md",
+                "nds", "n64", "psp", "ps2", "ps", "gb", "gbc", "gba", "fc", "sfc", "md",
                 "sms", "gg", "sg1000", "segacd", "fds", "sgb", "ngp", "ngpc", "pce", "vb",
                 "lynx", "a2600", "a5200", "a7800", "pkm", "wsc", "p8", "prboom", "32x", "coleco", "fbn", "dc", "3ds", "wii", "gc",
             ),
@@ -218,7 +218,7 @@ class CoreRegistryTest {
     @Test fun display_names_are_the_bricks_skeleton_names() {
         assertEquals(
             listOf(
-                "Nintendo DS", "Nintendo 64", "Sony Playstation Portable", "Sony PlayStation", "Game Boy", "Game Boy Color",
+                "Nintendo DS", "Nintendo 64", "Sony Playstation Portable", "Sony PlayStation 2", "Sony PlayStation", "Game Boy", "Game Boy Color",
                 "Game Boy Advance", "Nintendo ES", "Super Nintendo ES", "Sega Genesis", "Sega Master System", "Sega Game Gear",
                 "Sega SG-1000", "Sega CD", "Famicom Disk System", "Super Game Boy", "Neo Geo Pocket", "Neo Geo Pocket Color",
                 "TurboGrafx-16", "Virtual Boy", "Atari Lynx", "Atari 2600", "Atari 5200", "Atari 7800", "Pokémon mini",
@@ -269,7 +269,7 @@ class CoreRegistryTest {
         assertEquals("gb", CoreRegistry.consoleForFolderName("GB")!!.id)
         assertNull(CoreRegistry.consoleForFolderName("GBA Manuals"))   // "gba" is short: only a whole-name match counts
         assertNull(CoreRegistry.consoleForFolderName("Roms"))
-        assertNull(CoreRegistry.consoleForFolderName("PS2"))
+        assertEquals("ps2", CoreRegistry.consoleForFolderName("PS2")!!.id)
         assertNull(CoreRegistry.consoleForFolderName(""))
     }
     @Test fun short_aliases_match_only_the_whole_folder_name_apart_from_stop_words() {

@@ -82,7 +82,7 @@ class PadMap private constructor(
             "PCE" -> PadMap(labels = mapOf(A to "I", B to "II", Y to "III", X to "IV", L1 to "V", R1 to "VI", L2 to "Mode", START to "RUN"))
             // PPSSPP reads the RetroPad like beetle-psx: B = Cross, A = Circle, X = Triangle, Y = Square.
             // In the menus × (bottom) confirms and ○ (right) goes back, the Western PlayStation convention.
-            "PS", "PSX", "PSP" -> PadMap(labels = mapOf(A to "○", B to "×", X to "△", Y to "□"), menu = mapOf(B to A, A to B))
+            "PS", "PSX", "PS2", "PSP" -> PadMap(labels = mapOf(A to "○", B to "×", X to "△", Y to "□"), menu = mapOf(B to A, A to B))
             "FBN" -> PadMap(labels = mapOf(SELECT to "COIN"))
             "P8" -> PadMap(labels = mapOf(B to "O", A to "X"))
             "A2600" -> PadMap(labels = mapOf(B to "Fire"))

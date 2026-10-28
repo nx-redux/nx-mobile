@@ -2,6 +2,7 @@ package com.nxredux.mobile.options
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ConsoleSettingsTest {
@@ -61,5 +62,14 @@ class ConsoleSettingsTest {
         assertEquals("2", unstored)
         val mode = ConsoleSettings.tableFor("3DS").single { it.key == "nx_3ds_3d_resolution" }
         assertEquals("auto", ConsoleSettings.fitted(mode, "bogus").second)
+    }
+
+    @Test fun ps2HasResolutionRows() {
+        val keys = ConsoleSettings.tableFor("PS2", displayMax = 4).map { it.key }
+        assertTrue("nx_ps2_3d_resolution" in keys)
+        assertTrue("nx_ps2_3d_max_scale" in keys)
+        assertFalse("nx_ps2_3d_scale" in keys)
+        assertTrue(ConsoleSettings.all.any { it.key == "nx_ps2_3d_max_scale" })
+        assertEquals(listOf("1", "2", "3", "4"), ConsoleSettings.tableFor("PS2", displayMax = 6).single { it.key == "nx_ps2_3d_max_scale" }.values)
     }
 }

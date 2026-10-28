@@ -10,7 +10,7 @@ internal val ABOUT_LICENSES: List<String> = listOf(
     "Its text is set in MiSans by Xiaomi, embedded under Xiaomi's MiSans font terms, which let apps embed the font " +
         "and ask them to say so. The font files are not distributed on their own.",
     "Games run on libretro emulator cores, among them mGBA, Snes9x, Genesis Plus GX, PCSX ReARMed, Mupen64Plus-Next, " +
-        "melonDS DS, Azahar, Dolphin, flycast, PPSSPP, SwanStation and FBNeo. Each core keeps its own licence, most of " +
+        "melonDS DS, Azahar, Dolphin, ARMSX2, flycast, PPSSPP, SwanStation and FBNeo. Each core keeps its own licence, most of " +
         "them the GPL; FBNeo's does not allow commercial use.",
     "The game runner is a fork of LibretroDroid (GPL-3.0) with oboe (Apache 2.0), rcheevos for RetroAchievements " +
         "(MIT), libretro-common (MIT), libchdr (BSD-3-Clause) with miniz (MIT), zstd (BSD-3-Clause), LZ4 (BSD-2-Clause) and the LZMA SDK " +

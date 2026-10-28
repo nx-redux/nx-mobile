@@ -83,6 +83,11 @@ class ResolutionTest {
         assertEquals("PS", Resolution.resolve("Tekken 3.pbp", null, listOf("Sony PlayStation (PS)"), null, first))
         assertEquals("PS", Resolution.resolve("Tekken 3.pbp", null, listOf("PSX"), null, first))
     }
+    @Test fun a_cso_with_no_folder_hint_is_psp_and_a_ps2_folder_still_takes_it() {   // PS2's core runs .cso, but only PSP owns it
+        assertEquals("PSP", Resolution.resolve("Crisis Core.cso", null, listOf("ROMs"), null, first))
+        assertEquals("PSP", Resolution.resolve("Crisis Core.zip", null, listOf("ROMs"), "Crisis Core.cso", first))
+        assertEquals("PS2", Resolution.resolve("Okami.cso", null, listOf("PS2"), null, first))
+    }
     @Test fun discs_resolve_by_their_folder_and_stay_unassigned_without_one() {
         assertEquals("SEGACD", Resolution.resolve("Sonic CD.chd", null, listOf("Sega CD"), null, first))
         // A handheld's shared GPGX folder: the name says the console, which runs its default emulator.

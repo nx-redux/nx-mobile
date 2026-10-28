@@ -12,12 +12,13 @@ import com.nxredux.mobile.runner.Res3dConsole
 object ConsoleSettings {
     /**
      * [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows, [displayMax] (null: unknown) the DS and 3DS
-     * 3D Resolution scales.
+     * 3D Resolution scales, [biosFiles] (the ".bin" names in the PS2 BIOS folder) the PS2 BIOS row's choices.
      */
-    fun tableFor(tag: String, screen: ScreenClass? = null, displayMax: Int? = null): List<FrontendOption> = when {
+    fun tableFor(tag: String, screen: ScreenClass? = null, displayMax: Int? = null, biosFiles: List<String> = emptyList()): List<FrontendOption> = when {
         NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen, displayMax = displayMax)
         N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.resolutionRows(displayMax) + N3dsOptions.newControlsRow
         WiiOptions.appliesTo(tag) -> WiiOptions.table
+        Ps2Options.appliesTo(tag) -> Ps2Options.rowsFor(biosFiles) + Ps2Options.resolutionRows(displayMax)
         else -> emptyList()
     } + graphicsRows(tag) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table
 
@@ -42,5 +43,5 @@ object ConsoleSettings {
 
     /** Every console's rows (keys are unique across them); built when read, as [NdsOptions.table]. */
     val all: List<FrontendOption> get() =
-        NdsOptions.table + N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + N3dsOptions.newControlsRow + WiiOptions.table + GraphicsApiOptions.row + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table
+        NdsOptions.table + N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + N3dsOptions.newControlsRow + WiiOptions.table + Ps2Options.biosRow(emptyList()) + Ps2Options.resolutionRows(null) + GraphicsApiOptions.row + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table
 }

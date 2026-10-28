@@ -71,6 +71,13 @@ class PadProfile private constructor(
          * SELECT send nothing and are not drawn.
          */
         GC,
+
+        /**
+         * The PlayStation 2's DualShock 2: the PlayStation labels of its [PadMap] (○ × △ □, × confirms), both sticks
+         * always drawn beside the d-pad and the face cluster ([dualSticks], no d-pad / stick toggle), and L3 / R3 as
+         * their own pills.
+         */
+        PS2,
     }
 
     /**
@@ -78,6 +85,13 @@ class PadProfile private constructor(
      * analog stick in the face cluster's top-left corner in landscape ([cStickLayout]), between the clusters in portrait.
      */
     val cStick: Boolean get() = kind == Kind.N3DS && n3dsNew || wiiPad == WiiPad.CLASSIC || kind == Kind.GC
+
+    /**
+     * The pad draws the d-pad and the left stick together, and the face cluster with the right stick (the core's right
+     * analog), each stick with its click as a pill (L3 / R3): the PS2, whose games switch between d-pad and stick mid-play.
+     * No d-pad / stick toggle then ([padSystemRow]).
+     */
+    val dualSticks: Boolean get() = kind == Kind.PS2
 
     /**
      * The pad shows the MOTION button (tap toggles motion, long-press recentres): every Wii pad but the Classic
@@ -101,7 +115,7 @@ class PadProfile private constructor(
     }
 
     fun label(button: NxButton): String = when (kind) {
-        Kind.TABLE -> map.label(button) ?: button.glyph()
+        Kind.TABLE, Kind.PS2 -> map.label(button) ?: button.glyph()
         Kind.DREAMCAST -> when (button) {
             NxButton.B -> "A"
             NxButton.A -> "B"
@@ -139,17 +153,17 @@ class PadProfile private constructor(
     }
 
     /** The symbol drawn on [button] in place of its [label] text, or null to draw the text. */
-    fun icon(button: NxButton): PadIcon? = if (kind == Kind.TABLE) PadIcon.forLabel(map.label(button)) else null
+    fun icon(button: NxButton): PadIcon? = if (kind == Kind.TABLE || kind == Kind.PS2) PadIcon.forLabel(map.label(button)) else null
 
     /**
      * The button the app's menus act on for an on-screen [button]. Where the drawn "A" and "B" are not on the right and
      * bottom buttons the menus follow the drawn letter: DC and NGP (A bottom, B right) and the Sega pad (A and B the
-     * first two of its bottom row, [PadMap.menuButton]). PS and PSP follow the Western PlayStation convention: × (bottom)
+     * first two of its bottom row, [PadMap.menuButton]). PS, PS2 and PSP follow the Western PlayStation convention: × (bottom)
      * confirms and ○ (right) goes back. Elsewhere they go by position (right confirms, bottom goes back). The game still
      * receives the raw button.
      */
     fun menuButton(button: NxButton): NxButton = when (kind) {
-        Kind.TABLE -> map.menuButton(button)
+        Kind.TABLE, Kind.PS2 -> map.menuButton(button)
         Kind.DREAMCAST -> when (button) {
             NxButton.B -> NxButton.A
             NxButton.A -> NxButton.B
@@ -161,7 +175,7 @@ class PadProfile private constructor(
     }
 
     fun isHidden(button: NxButton): Boolean = when (kind) {
-        Kind.TABLE -> map.isHidden(button)
+        Kind.TABLE, Kind.PS2 -> map.isHidden(button)
         Kind.DREAMCAST -> false
         Kind.N64 -> button == NxButton.SELECT
         Kind.N3DS -> !n3dsNew && (button == NxButton.L2 || button == NxButton.R2)
@@ -186,6 +200,7 @@ class PadProfile private constructor(
         val N3DS = PadProfile(Kind.N3DS, PadMap.IDENTITY)
         val N3DS_NEW = PadProfile(Kind.N3DS, PadMap.IDENTITY, n3dsNew = true)
         val GC = PadProfile(Kind.GC, PadMap.IDENTITY)
+        val PS2 = PadProfile(Kind.PS2, PadMap.forTag("PS2"))
 
         /**
          * The pad the layout editor arranges for [tag]: the console's fullest, so every group it can show is placed (the
@@ -203,6 +218,7 @@ class PadProfile private constructor(
          */
         fun forTag(tag: String, sega: SegaPad? = null, n3dsNew: Boolean = false, wii: WiiPad? = null, gameCube: Boolean = false): PadProfile = when {
             gameCube || tag.trim().uppercase() == "GC" -> GC
+            tag.trim().uppercase() == "PS2" -> PS2
             wii != null && WiiOptions.appliesTo(tag) -> PadProfile(Kind.WII, PadMap.IDENTITY, wiiPad = wii)
             DcInput.appliesTo(tag) -> DREAMCAST
             N64Input.appliesTo(tag) -> N64

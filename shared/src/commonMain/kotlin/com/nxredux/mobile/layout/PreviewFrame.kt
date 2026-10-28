@@ -50,6 +50,7 @@ internal val CONSOLE_FRAMES: Map<String, CoreFrame> = mapOf(
     "dc" to CoreFrame(640f, 480f, FOUR_THREE, false),
     "gc" to CoreFrame(640f, 480f, FOUR_THREE, false),
     "wii" to CoreFrame(640f, 480f, FOUR_THREE, false),
+    "ps2" to CoreFrame(640f, 448f, FOUR_THREE, false),
     "psp" to CoreFrame(480f, 272f, 0f, false),
 )
 
