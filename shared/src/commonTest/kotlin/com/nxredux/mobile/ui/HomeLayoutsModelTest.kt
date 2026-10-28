@@ -21,7 +21,7 @@ class HomeLayoutsModelTest {
     private val cont = MainRow.Continue(listed("Kirby"), ResumeInfo(9, "file:///shot.png"))
     private val a = listed("A"); private val b = listed("B"); private val c = listed("C")
     private val t1 = ToolRow(ToolKind.SETTINGS, "Settings", null)
-    private val t2 = ToolRow(ToolKind.CHEAT_DB, "Cheat Database", null)
+    private val t2 = ToolRow(ToolKind.CHEAT_DB, "Cheats & Patches", null)
     private val t3 = ToolRow(ToolKind.GAME_TIME, "Game Tracker", null)
     private val stats = HomeStats(playedMs = 7_200_000, unlocks = 4, signedIn = true, top = zelda, computed = true)
 

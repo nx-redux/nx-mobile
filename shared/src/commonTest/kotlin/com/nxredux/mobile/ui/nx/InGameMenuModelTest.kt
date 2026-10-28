@@ -726,7 +726,7 @@ class InGameMenuModelTest {
     @Test fun empty_cheats_tab_says_how_to_add_them() {
         val m = cheatsModel()
         assertEquals(
-            "No cheats for this game.\nDownload them with Tools → Cheat Database, or add a RetroArch .cht file as Cheats/GB/Tetris.gb.cht.",
+            "No cheats for this game.\nDownload them with Tools → Cheats & Patches, or add a RetroArch .cht file as Cheats/GB/Tetris.gb.cht.",
             m.panelState().noCheatsText,
         )
         m.press(NxButton.DOWN)                                       // nothing to focus
@@ -738,7 +738,7 @@ class InGameMenuModelTest {
     @Test fun before_resolution_the_empty_tab_names_no_file() {
         val m = cheatsModel(expected = "")
         assertEquals(
-            "No cheats for this game.\nDownload them with Tools → Cheat Database, or add a RetroArch .cht file to the Cheats folder.",
+            "No cheats for this game.\nDownload them with Tools → Cheats & Patches, or add a RetroArch .cht file to the Cheats folder.",
             m.panelState().noCheatsText,
         )
     }

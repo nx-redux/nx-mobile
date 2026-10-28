@@ -15,7 +15,7 @@ class HomeControllerTest {
     private fun listed(name: String) = Listed(gba, GameEntry(ContentRef("r/$name"), "$name.gba", name, folder = ContentRef("f"), sourceId = "home", relativeDir = "Roms/Game Boy Advance (GBA)"))
     private val g1 = listed("G1"); private val g2 = listed("G2")
     private val t1 = ToolRow(ToolKind.SETTINGS, "Settings", null)
-    private val t2 = ToolRow(ToolKind.CHEAT_DB, "Cheat Database", null)
+    private val t2 = ToolRow(ToolKind.CHEAT_DB, "Cheats & Patches", null)
     private val shelf = HomeShelf.entries.first()
 
     @Test fun aRowStillThereIsItself() {

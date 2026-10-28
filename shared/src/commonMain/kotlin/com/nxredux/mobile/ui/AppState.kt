@@ -5272,7 +5272,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         deps.achievements?.let { ToolRow(ToolKind.RETRO_ACHIEVEMENTS, "RetroAchievements", null) },
         deps.gameTime?.let { ToolRow(ToolKind.GAME_TIME, "Game Tracker", null) },
         artworkScreens?.let { ToolRow(ToolKind.ARTWORK, "Artwork", null) },
-        ToolRow(ToolKind.CHEAT_DB, "Cheat Database", null),
+        ToolRow(ToolKind.CHEAT_DB, "Cheats & Patches", null),
         deps.deviceSync?.let { ToolRow(ToolKind.DEVICE_SYNC, "Device Sync", null) },
         deps.launcher?.let { ToolRow(ToolKind.APPS, "Apps", null) },
     ) + appToolRows()).sortedBy { it.label.lowercase() } + ToolRow(ToolKind.SETTINGS, "Settings", null)

@@ -57,7 +57,7 @@ class CheatDbControllerTest {
         assertEquals(CheatDbManifest("stamp-2", 42L, listOf("Cheats/FDS/a.cht", "Cheats/GBA/a.cht"), table), installed.manifest)
         assertEquals(installed.manifest.render(), fake.manifestText)
         assertEquals(listOf("/cache/cheats.zip"), fake.discarded)
-        assertEquals(listOf<CheatDbMessage>(CheatDbMessage.Notice("Cheat database installed: 2 files for 2 systems")), messages)
+        assertEquals(listOf<CheatDbMessage>(CheatDbMessage.Notice("Cheats & Patches installed: 2 files for 2 systems")), messages)
         // Progress reached the UI in order: Downloading(0, unknown), Downloading(100), Downloading(1000), Installing FDS 1/2, Installing GBA 2/2.
         assertEquals(
             listOf(CheatDbState.Downloading(0, -1, null), CheatDbState.Downloading(100, 1000, null), CheatDbState.Downloading(1000, 1000, null), CheatDbState.Installing("FDS", 1, 2, null), CheatDbState.Installing("GBA", 2, 2, null)),
@@ -180,11 +180,11 @@ class CheatDbControllerTest {
         val c = controller(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), ArrayList(), messages)
         c.refresh()
         c.checkForUpdates()
-        assertEquals(listOf<CheatDbMessage>(CheatDbMessage.Notice("Cheat database is up to date")), messages)
+        assertEquals(listOf<CheatDbMessage>(CheatDbMessage.Notice("Cheats & Patches are up to date")), messages)
         assertEquals(CheatDbState.Installed(previous), c.state.value)
         fake.remote = "stamp-3"; fake.downloadStamp = "stamp-3"
         c.checkForUpdates()
-        assertEquals(CheatDbMessage.Notice("Cheat database updated: 2 files for 2 systems"), messages.last())
+        assertEquals(CheatDbMessage.Notice("Cheats & Patches updated: 2 files for 2 systems"), messages.last())
         assertEquals("stamp-3", assertIs<CheatDbState.Installed>(c.state.value).manifest.stamp)
         fake.remote = null
         c.checkForUpdates()
@@ -199,7 +199,7 @@ class CheatDbControllerTest {
             val messages = ArrayList<CheatDbMessage>()
             val c = controller(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), ArrayList(), messages)
             c.refresh(); c.checkForUpdates()
-            assertEquals(CheatDbMessage.Notice("Cheat database updated: 2 files for 2 systems"), messages.last())
+            assertEquals(CheatDbMessage.Notice("Cheats & Patches updated: 2 files for 2 systems"), messages.last())
             assertEquals(table, assertIs<CheatDbState.Installed>(c.state.value).manifest.tags)
             assertEquals(listOf(listOf("Cheats/GPGX/old.cht")), fake.pruned)
         }
@@ -211,7 +211,7 @@ class CheatDbControllerTest {
         val messages = ArrayList<CheatDbMessage>()
         val c = controller(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), ArrayList(), messages)
         c.refresh(); c.checkForUpdates()
-        assertEquals(CheatDbMessage.Notice("Cheat database updated: 2 files for 2 systems"), messages.last())
+        assertEquals(CheatDbMessage.Notice("Cheats & Patches updated: 2 files for 2 systems"), messages.last())
     }
 
     @Test fun remove_deletes_exactly_the_manifest_files() = runTest {
@@ -222,7 +222,7 @@ class CheatDbControllerTest {
         c.refresh(); c.remove()
         assertEquals(listOf(previous.files), fake.deleted)
         assertEquals(CheatDbState.NotInstalled, c.state.value)
-        assertEquals(listOf<CheatDbMessage>(CheatDbMessage.Notice("Cheat database removed")), messages)
+        assertEquals(listOf<CheatDbMessage>(CheatDbMessage.Notice("Cheats & Patches removed")), messages)
     }
 
     @Test fun actions_while_busy_are_ignored() = runTest {
@@ -261,5 +261,82 @@ class CheatDbControllerTest {
         fake.manifestGate!!.complete(Unit)
         assertEquals(CheatDbManifest("stamp-2", 42L, listOf("Cheats/FDS/a.cht", "Cheats/GBA/a.cht"), table).render(), fake.manifestText)
         assertEquals(listOf("/cache/cheats.zip"), fake.discarded)
+    }
+
+    // PS2: its rows come from PCSX2's patches.zip, the second source, installed in the same call as libretro's.
+
+    private fun ps2Controller(fake: FakeCheatDbPlatform, scope: CoroutineScope, states: MutableList<CheatDbState>, messages: MutableList<CheatDbMessage>): CheatDbController {
+        val c = CheatDbController(fake, setOf("FDS", "PS2"), scope, now = { 42L })
+        scope.launch { c.state.collect { states += it } }
+        scope.launch { c.messages.collect { messages += it } }
+        return c
+    }
+
+    @Test fun ps2_downloads_both_archives_and_installs_them_together() = runTest {
+        val fake = FakeCheatDbPlatform()
+        val states = ArrayList<CheatDbState>(); val messages = ArrayList<CheatDbMessage>()
+        val c = ps2Controller(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), states, messages)
+        c.refresh(); c.download()
+        assertEquals(listOf(CheatDbSource.LIBRETRO, CheatDbSource.PCSX2), fake.downloads)
+        assertEquals(listOf(listOf(CheatDbSource.LIBRETRO, CheatDbSource.PCSX2)), fake.installs)   // one call: a failure takes back both
+        val manifest = assertIs<CheatDbState.Installed>(c.state.value).manifest
+        assertEquals(CheatDbManifest("stamp-2", 42L, listOf("Cheats/FDS/a.cht", "Cheats/PS2/Patches/a.pnach"), listOf("FDS", "PS2"), "patches-2"), manifest)
+        assertEquals(listOf("/cache/cheats.zip", "/cache/patches.zip"), fake.discarded)
+        assertEquals(CheatDbMessage.Notice("Cheats & Patches installed: 2 files for 2 systems"), messages.last())
+        assertTrue(states.any { it is CheatDbState.Downloading && it.source == CheatDbSource.PCSX2 })
+        assertTrue(states.any { it == CheatDbState.Installing("PS2", 2, 2, null) })
+    }
+
+    @Test fun ps2_alone_downloads_only_the_patches() = runTest {
+        val fake = FakeCheatDbPlatform()
+        val c = CheatDbController(fake, setOf("PS2"), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), now = { 42L })
+        c.refresh(); c.download()
+        assertEquals(listOf(CheatDbSource.PCSX2), fake.downloads)
+        val manifest = assertIs<CheatDbState.Installed>(c.state.value).manifest
+        assertEquals(CheatDbManifest.UNKNOWN_STAMP, manifest.stamp)
+        assertEquals("patches-2", manifest.patchesStamp)
+    }
+
+    @Test fun a_failed_second_download_discards_the_first_and_keeps_the_previous_install() = runTest {
+        val previous = CheatDbManifest("stamp-1", 1L, listOf("Cheats/FDS/old.cht"), listOf("FDS", "PS2"), "patches-1")
+        val fake = FakeCheatDbPlatform().apply { manifestText = previous.render(); failSource = CheatDbSource.PCSX2 }
+        val messages = ArrayList<CheatDbMessage>()
+        val c = ps2Controller(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), ArrayList(), messages)
+        c.refresh(); c.download()
+        assertEquals(emptyList(), fake.installs)
+        assertEquals(listOf("/cache/cheats.zip"), fake.discarded)
+        assertEquals(CheatDbState.Installed(previous), c.state.value)
+        assertEquals(CheatDbMessage.Failure(CheatDbException.Kind.NETWORK.message), messages.last())
+    }
+
+    @Test fun ps2_update_check_compares_both_stamps() = runTest {
+        val current = CheatDbManifest("stamp-2", 1L, listOf("Cheats/FDS/a.cht", "Cheats/PS2/Patches/a.pnach"), listOf("FDS", "PS2"), "patches-2")
+        val fake = FakeCheatDbPlatform().apply { manifestText = current.render() }
+        val messages = ArrayList<CheatDbMessage>()
+        val c = ps2Controller(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), ArrayList(), messages)
+        c.refresh(); c.checkForUpdates()
+        assertEquals(2, fake.remoteCalls)
+        assertEquals(CheatDbMessage.Notice("Cheats & Patches are up to date"), messages.last())
+        assertEquals(emptyList(), fake.downloads)
+        // Only patches.zip changed: everything is downloaded again.
+        fake.patchesRemote = "patches-3"; fake.patchesDownloadStamp = "patches-3"
+        c.checkForUpdates()
+        assertEquals(listOf(CheatDbSource.LIBRETRO, CheatDbSource.PCSX2), fake.downloads)
+        assertEquals("patches-3", assertIs<CheatDbState.Installed>(c.state.value).manifest.patchesStamp)
+        // patches.zip unreachable: the check fails.
+        fake.patchesRemote = null
+        c.checkForUpdates()
+        assertEquals(CheatDbMessage.Failure("Could not check for updates (Wi-Fi?)"), messages.last())
+    }
+
+    @Test fun a_libretro_only_install_gets_the_patches_on_the_next_update_check() = runTest {
+        // A manifest from before patches.zip was a source: its rows lack PS2 and it has no patches stamp.
+        val previous = CheatDbManifest("stamp-2", 1L, listOf("Cheats/FDS/a.cht"), listOf("FDS"))
+        val fake = FakeCheatDbPlatform().apply { manifestText = previous.render() }
+        val messages = ArrayList<CheatDbMessage>()
+        val c = ps2Controller(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), ArrayList(), messages)
+        c.refresh(); c.checkForUpdates()
+        assertEquals(CheatDbMessage.Notice("Cheats & Patches updated: 2 files for 2 systems"), messages.last())
+        assertEquals(listOf("FDS", "PS2"), assertIs<CheatDbState.Installed>(c.state.value).manifest.tags)
     }
 }

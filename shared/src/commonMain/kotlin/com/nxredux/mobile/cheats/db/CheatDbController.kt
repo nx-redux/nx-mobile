@@ -21,8 +21,8 @@ sealed interface CheatDbState {
     data object Unknown : CheatDbState
     data object NotInstalled : CheatDbState
     data class Installed(val manifest: CheatDbManifest) : CheatDbState
-    /** [previous]: what to show again if this fails or is cancelled (null = nothing was installed). */
-    data class Downloading(val done: Long, val total: Long, val previous: CheatDbManifest?) : CheatDbState
+    /** [previous]: what to show again if this fails or is cancelled (null = nothing was installed). [source]: the archive downloading. */
+    data class Downloading(val done: Long, val total: Long, val previous: CheatDbManifest?, val source: CheatDbSource = CheatDbSource.LIBRETRO) : CheatDbState
     data class Installing(val tag: String, val index: Int, val count: Int, val previous: CheatDbManifest?) : CheatDbState
     data class Checking(val previous: CheatDbManifest) : CheatDbState
     data class Removing(val previous: CheatDbManifest) : CheatDbState
@@ -35,8 +35,8 @@ sealed interface CheatDbMessage {
 }
 
 /**
- * The Cheat Database tool's state machine (nx-redux `cheatdb.c`): download the archive, install the folders
- * for [tags], keep a manifest; check for updates by Last-Modified; remove what the manifest lists. Every
+ * The Cheats & Patches tool's state machine (nx-redux `cheatdb.c`): download each source's archive ([CheatDatabase.sourcesFor]),
+ * install the folders for [tags], keep one manifest; check for updates by Last-Modified; remove what the manifest lists. Every
  * action is ignored while [busy] except [cancel]. Lives in a process-level [scope] so a download outlives
  * the screen that started it.
  */
@@ -58,9 +58,9 @@ class CheatDbController(
         get() = _state.value.let { it is CheatDbState.Downloading || it is CheatDbState.Installing || it is CheatDbState.Checking || it is CheatDbState.Removing }
 
     private val installedManifest: CheatDbManifest? get() = (_state.value as? CheatDbState.Installed)?.manifest
-    /** The table rows an install writes; a manifest listing other rows is reinstalled by the next update check. */
-    private val tableFolders: Map<String, List<String>> = CheatDatabase.foldersFor(tags)
-    private val tableTags: List<String> = tableFolders.keys.toList()
+    /** The table rows an install writes, per source; a manifest listing other rows is reinstalled by the next update check. */
+    private val tableSources: Map<CheatDbSource, Map<String, List<String>>> = CheatDatabase.sourcesFor(tags)
+    private val tableTags: List<String> = CheatDatabase.rowsFor(tags)
 
     /** Reads the manifest into [state]; a missing, unparsable or empty manifest means not installed. */
     fun refresh() {
@@ -74,28 +74,33 @@ class CheatDbController(
     }
 
     /** Downloads and installs the database; over an existing install this replaces it. */
-    fun download() = startDownload(installedManifest, "Cheat database installed")
+    fun download() = startDownload(installedManifest, "$NAME installed")
 
-    /** Compares the server's Last-Modified with the installed stamp, and the installed rows with the table; downloads when either differs. */
+    /**
+     * Compares each source's Last-Modified with its installed stamp, and the installed rows with the table; downloads
+     * (every source) when any differs.
+     */
     fun checkForUpdates() {
         if (busy) return
         val current = installedManifest ?: return
         // Busy before launching, so a second tap can't slip in before the coroutine starts.
         _state.value = CheatDbState.Checking(current)
         job = scope.launch {
-            val remote = try {
-                platform.remoteStamp()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                null   // unreachable either way; never leave the state stuck on Checking
+            val remotes = tableSources.keys.associateWith { source ->
+                try {
+                    platform.remoteStamp(source)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null   // unreachable either way; never leave the state stuck on Checking
+                }
             }
             _state.value = CheatDbState.Installed(current)
+            val same = remotes.all { (source, remote) -> remote == current.stampOf(source) && remote != CheatDbManifest.UNKNOWN_STAMP }
             when {
-                remote == null -> emit(CheatDbMessage.Failure("Could not check for updates (Wi-Fi?)"))
-                remote == current.stamp && current.stamp != CheatDbManifest.UNKNOWN_STAMP && current.tags == tableTags ->
-                    emit(CheatDbMessage.Notice("Cheat database is up to date"))
-                else -> startDownload(current, "Cheat database updated")
+                remotes.values.any { it == null } -> emit(CheatDbMessage.Failure("Could not check for updates (Wi-Fi?)"))
+                same && current.tags == tableTags -> emit(CheatDbMessage.Notice("$NAME are up to date"))
+                else -> startDownload(current, "$NAME updated")
             }
         }
     }
@@ -109,13 +114,13 @@ class CheatDbController(
             try {
                 platform.deleteInstalled(current.files)
                 _state.value = CheatDbState.NotInstalled
-                emit(CheatDbMessage.Notice("Cheat database removed"))
+                emit(CheatDbMessage.Notice("$NAME removed"))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: CheatDbException) {
                 restore(current); emit(CheatDbMessage.Failure(e.kind.message))
             } catch (e: Exception) {
-                restore(current); emit(CheatDbMessage.Failure("Cheat database failed: ${e::class.simpleName}"))
+                restore(current); emit(CheatDbMessage.Failure("$NAME failed: ${e::class.simpleName}"))
             }
         }
     }
@@ -142,13 +147,24 @@ class CheatDbController(
         if (platform.freeBytes() < CheatDatabase.NEEDED_FREE_BYTES) { emit(CheatDbMessage.Failure(CheatDbException.Kind.NO_SPACE.message)); return }
         _state.value = CheatDbState.Downloading(0, -1, previous)
         job = scope.launch {
+            // Each source's archive, once downloaded; all of them are installed in one call, so a failure takes back all.
+            val archives = ArrayList<CheatDbArchive>()
             try {
-                val archive = withProgress { report -> platform.download { done, total -> report(CheatDbState.Downloading(done, total, previous)) } }
                 try {
-                    val files = withProgress { report ->
-                        platform.install(archive, tableFolders) { tag, i, n -> report(CheatDbState.Installing(tag, i, n, previous)) }
+                    for (source in tableSources.keys) {
+                        archives += withProgress { report ->
+                            platform.download(source) { done, total -> report(CheatDbState.Downloading(done, total, previous, source)) }
+                        }
                     }
-                    val manifest = CheatDbManifest(archive.stamp ?: CheatDbManifest.UNKNOWN_STAMP, now(), files, tableTags)
+                    val files = withProgress { report ->
+                        platform.install(archives.map { CheatDbInstall(it, tableSources.getValue(it.source)) }) { tag, i, n ->
+                            report(CheatDbState.Installing(tag, i, n, previous))
+                        }
+                    }
+                    val stamps = archives.associate { it.source to (it.stamp ?: CheatDbManifest.UNKNOWN_STAMP) }
+                    val manifest = CheatDbManifest(
+                        stamps[CheatDbSource.LIBRETRO] ?: CheatDbManifest.UNKNOWN_STAMP, now(), files, tableTags, stamps[CheatDbSource.PCSX2],
+                    )
                     // The platform took back what a cancelled install wrote; from here the files stay, so the manifest
                     // listing them is written whatever happens to the job (else they would be orphans Remove never sees).
                     committing = true
@@ -168,15 +184,15 @@ class CheatDbController(
                     _state.value = CheatDbState.Installed(manifest)
                     emit(CheatDbMessage.Notice("$verb: ${manifest.fileCount} files for ${manifest.systems} systems"))
                 } finally {
-                    // Also on cancellation: the archive must not linger in the cache.
-                    withContext(NonCancellable) { platform.discard(archive) }
+                    // Also on cancellation: the archives must not linger in the cache.
+                    withContext(NonCancellable) { archives.forEach { platform.discard(it) } }
                 }
             } catch (e: CancellationException) {
                 throw e   // cancel() already restored the state
             } catch (e: CheatDbException) {
                 restore(previous); emit(CheatDbMessage.Failure(e.kind.message))
             } catch (e: Exception) {
-                restore(previous); emit(CheatDbMessage.Failure("Cheat database failed: ${e::class.simpleName}"))
+                restore(previous); emit(CheatDbMessage.Failure("$NAME failed: ${e::class.simpleName}"))
             }
         }
     }
@@ -201,4 +217,9 @@ class CheatDbController(
     }
 
     private fun emit(message: CheatDbMessage) { _messages.tryEmit(message) }
+
+    private companion object {
+        /** The tool's name in its messages. */
+        const val NAME = "Cheats & Patches"
+    }
 }

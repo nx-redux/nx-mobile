@@ -54,11 +54,11 @@ class GamePanelModelTest {
 
     @Test fun no_cheats_text_says_where_to_get_them() {
         assertEquals(
-            "No cheats for this game.\nDownload them with Tools → Cheat Database, or add a RetroArch .cht file as Cheats/PS/Crash.cht.",
+            "No cheats for this game.\nDownload them with Tools → Cheats & Patches, or add a RetroArch .cht file as Cheats/PS/Crash.cht.",
             GamePanelModel.noCheatsText("Cheats/PS", "Crash.cht"),
         )
         assertEquals(
-            "No cheats for this game.\nDownload them with Tools → Cheat Database, or add a RetroArch .cht file to the Cheats folder.",
+            "No cheats for this game.\nDownload them with Tools → Cheats & Patches, or add a RetroArch .cht file to the Cheats folder.",
             GamePanelModel.noCheatsText("Cheats/PS", ""),
         )
     }

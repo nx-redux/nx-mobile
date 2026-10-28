@@ -45,7 +45,7 @@ internal fun busyReason(game: Boolean, sync: Boolean, art: Boolean, ra: Boolean,
     sync -> "Waiting for Device Sync to finish"
     art -> "Waiting for artwork to finish"
     ra -> "Waiting for the achievements download to finish"
-    cheats -> "Waiting for the cheat database to finish"
+    cheats -> "Waiting for Cheats & Patches to finish"
     !foreground -> UpdateController.READY_REASON
     else -> null
 }

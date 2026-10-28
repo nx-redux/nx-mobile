@@ -2,6 +2,7 @@ package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.achievements.RaGameView
 import com.nxredux.mobile.cheats.db.CheatDbManifest
+import com.nxredux.mobile.cheats.db.CheatDbSource
 import com.nxredux.mobile.cheats.db.CheatDbState
 import com.nxredux.mobile.scraper.ScrapeState
 import kotlin.test.Test
@@ -16,7 +17,7 @@ class ToolsTest {
         assertEquals(listOf(CheatDbAction.CHECK, CheatDbAction.REMOVE), cheatDbRows(CheatDbState.Installed(manifest)))
         assertEquals(emptyList(), cheatDbRows(CheatDbState.Downloading(1, 2, null)))
         assertEquals(emptyList(), cheatDbRows(CheatDbState.Unknown))
-        assertEquals("Download (about 37 MB)", CheatDbAction.DOWNLOAD.label)
+        assertEquals("Download (about 39 MB)", CheatDbAction.DOWNLOAD.label)
     }
 
     @Test fun retroachievements_is_the_first_tool() {
@@ -26,7 +27,7 @@ class ToolsTest {
     @Test fun sub_pages_name_their_tool() {
         assertEquals("RetroAchievements | Achievements", subPageTitle(ToolKind.RETRO_ACHIEVEMENTS, "Achievements"))
         assertEquals("Artwork | Progress", subPageTitle(ToolKind.ARTWORK, "Progress"))
-        assertEquals("Cheat Database | X", subPageTitle(ToolKind.CHEAT_DB, "X"))
+        assertEquals("Cheats & Patches | X", subPageTitle(ToolKind.CHEAT_DB, "X"))
         assertEquals("Game Tracker | X", subPageTitle(ToolKind.GAME_TIME, "X"))
         assertEquals("X", subPageTitle(ToolKind.APP, "X"))
     }
@@ -90,7 +91,7 @@ class ToolsTest {
     }
 
     @Test fun details_block_follows_the_state() {
-        assertEquals(listOf("Not installed", "About 37 MB download", "Cheats for 9 systems"), cheatDbDetails(CheatDbState.NotInstalled, systems = 9))
+        assertEquals(listOf("Not installed", "About 39 MB download", "Cheats and patches for 9 systems"), cheatDbDetails(CheatDbState.NotInstalled, systems = 9))
         assertEquals(
             listOf("Installed", "2 systems · 3 files", "Last update: ${formatInstallDate(manifest.installedAt)}"),
             cheatDbDetails(CheatDbState.Installed(manifest), systems = 9),
@@ -99,8 +100,9 @@ class ToolsTest {
     }
 
     @Test fun progress_line_and_fraction() {
-        assertEquals("Downloading… 12.3 / 37.0 MB", cheatDbProgressLine(CheatDbState.Downloading(12_897_485, 38_797_312, null)))
-        assertEquals("Downloading… 12.3 MB", cheatDbProgressLine(CheatDbState.Downloading(12_897_485, -1, null)))
+        assertEquals("Downloading cheats… 12.3 / 37.0 MB", cheatDbProgressLine(CheatDbState.Downloading(12_897_485, 38_797_312, null)))
+        assertEquals("Downloading cheats… 12.3 MB", cheatDbProgressLine(CheatDbState.Downloading(12_897_485, -1, null)))
+        assertEquals("Downloading patches… 1.0 / 2.1 MB", cheatDbProgressLine(CheatDbState.Downloading(1L shl 20, 2_179_893, null, CheatDbSource.PCSX2)))
         assertEquals("Installing GB (3/8)", cheatDbProgressLine(CheatDbState.Installing("GB", 3, 8, null)))
         assertEquals("Checking for updates…", cheatDbProgressLine(CheatDbState.Checking(manifest)))
         assertEquals("Removing…", cheatDbProgressLine(CheatDbState.Removing(manifest)))

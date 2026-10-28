@@ -3,6 +3,8 @@ package com.nxredux.mobile.cheats.db
 import com.nxredux.mobile.runner.CoreRegistry
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class CheatDatabaseTest {
     @Test fun the_table_is_the_nx_redux_one() {
@@ -18,6 +20,7 @@ class CheatDatabaseTest {
         assertEquals(listOf("Nintendo - Satellaview"), CheatDatabase.FOLDERS["BS"])
         for (gone in listOf("WS", "GPGX", "MSX", "MGBA", "SUPA", "PSX")) assertEquals(null, CheatDatabase.FOLDERS[gone])
         assertEquals("https://buildbot.libretro.com/assets/frontend/cheats.zip", CheatDatabase.URL)
+        assertEquals("about 39 MB", CheatDatabase.DOWNLOAD_HINT)
         assertEquals(400L shl 20, CheatDatabase.NEEDED_FREE_BYTES)
     }
 
@@ -64,5 +67,36 @@ class CheatDatabaseTest {
                 "32X", "COLECO", "FBN", "DC", "3DS", "WII", "GC", "GPGX_SMS", "GPGX_GG", "GPGX_SEGACD", "GPGX_SG1000"),
             CoreRegistry.tags,
         )
+    }
+
+    @Test fun pcsx2_patches_are_the_second_source() {
+        assertEquals("https://github.com/PCSX2/pcsx2_patches/releases/download/latest/patches.zip", CheatDatabase.PATCHES_URL)
+        assertEquals(CheatDatabase.URL, CheatDbSource.LIBRETRO.url)
+        assertEquals(CheatDatabase.PATCHES_URL, CheatDbSource.PCSX2.url)
+        assertEquals(".cht", CheatDbSource.LIBRETRO.extension)
+        assertEquals(".pnach", CheatDbSource.PCSX2.extension)
+        assertEquals(mapOf("PS2" to listOf("")), CheatDatabase.PATCH_FOLDERS)   // the zip's top level
+    }
+
+    @Test fun each_source_writes_into_the_consoles_cheats_folder() {
+        assertEquals("Cheats/GBA/Advance Wars (USA).cht", CheatDbSource.LIBRETRO.target("GBA", "Advance Wars (USA).cht"))
+        // The PS2 core reads cheats from Cheats/PS2/ and game patches from its Patches/ subfolder (cores/patches/armsx2/0005).
+        assertEquals("Cheats/PS2/Patches/SLUS-21678_428113C2.pnach", CheatDbSource.PCSX2.target("PS2", "SLUS-21678_428113C2.pnach"))
+    }
+
+    @Test fun ps2_is_an_install_tag_though_its_core_takes_no_cht() {
+        assertFalse("PS2" in CoreRegistry.cheatTags)
+        assertTrue("PS2" in CheatDatabase.installTags)
+        assertTrue(CoreRegistry.cheatTags.all { it in CheatDatabase.installTags })
+        assertEquals(null, CheatDatabase.FOLDERS["PS2"])   // libretro's zip has no PS2 folder
+    }
+
+    @Test fun sources_for_tags() {
+        assertEquals(listOf(CheatDbSource.LIBRETRO, CheatDbSource.PCSX2), CheatDatabase.sourcesFor(CheatDatabase.installTags).keys.toList())
+        assertEquals(mapOf(CheatDbSource.PCSX2 to mapOf("PS2" to listOf(""))), CheatDatabase.sourcesFor(listOf("ps2")))
+        assertEquals(listOf(CheatDbSource.LIBRETRO), CheatDatabase.sourcesFor(listOf("GBA")).keys.toList())
+        assertEquals(emptyMap(), CheatDatabase.sourcesFor(listOf("WII")))
+        assertEquals(listOf("GBA", "PS2"), CheatDatabase.rowsFor(listOf("PS2", "MGBA")))
+        assertEquals(CheatDatabase.foldersFor(CoreRegistry.cheatTags).size + 1, CheatDatabase.rowsFor(CheatDatabase.installTags).size)
     }
 }

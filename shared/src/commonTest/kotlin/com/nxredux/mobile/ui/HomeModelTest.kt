@@ -16,7 +16,7 @@ class HomeModelTest {
     private fun listed(name: String) = Listed(gba, GameEntry(ContentRef("r/$name"), "$name.gba", name, folder = ContentRef("f"), sourceId = "home", relativeDir = "Roms/Game Boy Advance (GBA)"))
     private val zelda = GameTotal(1, "Zelda", "GBA", "Roms/Game Boy Advance (GBA)/Zelda.gba", totalMs = 5_400_000, plays = 3, lastPlayedAt = 10)
     private val settings = ToolRow(ToolKind.SETTINGS, "Settings", null)
-    private val cheats = ToolRow(ToolKind.CHEAT_DB, "Cheat Database", null)
+    private val cheats = ToolRow(ToolKind.CHEAT_DB, "Cheats & Patches", null)
     private val last = MainRow.Continue(listed("Kirby"), ResumeInfo(9, "file:///shot.png"))
 
     private val normal = HomeStats(playedMs = 7_200_000, unlocks = 4, signedIn = true, top = zelda, computed = true)
@@ -24,7 +24,7 @@ class HomeModelTest {
     // Fixtures: games, tools, a Continue, the stats.
     private val g1 = listed("G1"); private val g2 = listed("G2"); private val g3 = listed("G3")
     private val t1 = ToolRow(ToolKind.SETTINGS, "Settings", null)
-    private val t2 = ToolRow(ToolKind.CHEAT_DB, "Cheat Database", null)
+    private val t2 = ToolRow(ToolKind.CHEAT_DB, "Cheats & Patches", null)
     private val t3 = ToolRow(ToolKind.GAME_TIME, "Game Tracker", null)
     private val t4 = ToolRow(ToolKind.RETRO_ACHIEVEMENTS, "RetroAchievements", null)
     private val t5 = ToolRow(ToolKind.ARTWORK, "Artwork", null)
