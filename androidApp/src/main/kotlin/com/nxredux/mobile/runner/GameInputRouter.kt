@@ -110,11 +110,11 @@ internal class GameInputRouter(private val host: GameInputHost) {
         const val LAYOUT_SET_BY_FOLD = "Layout is set by the fold"
         private const val PEN_TICK_MS = 16L
         /**
-         * Cores that read the left stick as analog (N64, PSP, PS1 DualShock, Dreamcast, and Dolphin's GameCube stick and
-         * Wii Nunchuk and Classic sticks): a gamepad's stick is analog only there. melonDS DS has its own routing (the NDS
+         * Cores that read the left stick as analog (N64, PSP, PS1 DualShock, PS2, Dreamcast, and Dolphin's GameCube stick
+         * and Wii Nunchuk and Classic sticks): a gamepad's stick is analog only there. melonDS DS has its own routing (the NDS
          * branch of onGenericMotionEvent). Every other core, prboom included, gets the stick folded into the d-pad.
          */
-        private val STICK_CORES = setOf("mupen64plus_next", "ppsspp", "pcsx_rearmed", "swanstation", "flycast", "dolphin")
+        private val STICK_CORES = setOf("mupen64plus_next", "ppsspp", "pcsx_rearmed", "swanstation", "flycast", "dolphin", "armsx2")
     }
 
     private val retroView get() = host.retroView
@@ -342,11 +342,14 @@ internal class GameInputRouter(private val host: GameInputHost) {
         }
     }
 
-    /** The on-screen Classic Controller's (or GameCube C-) right stick: the core's right analog on port 0. */
-    fun onWiiRightStick(x: Float, y: Float) {
+    /** An on-screen right stick (the PS2's): the core's right analog on port 0. */
+    fun onRightStick(x: Float, y: Float) {
         if (menuOpen) return
         retroView?.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, x, y, 0)
     }
+
+    /** The on-screen Classic Controller's (or GameCube C-) right stick: the same right analog ([onRightStick]). */
+    fun onWiiRightStick(x: Float, y: Float) = onRightStick(x, y)
 
     /** NDS hotkeys and stylus for one button event; true when it goes on to the core. A key repeat only asks whether its press did. */
     private fun routeNds(button: NxButton, down: Boolean, repeat: Boolean = false): Boolean {
@@ -952,11 +955,14 @@ internal class GameInputRouter(private val host: GameInputHost) {
         }
         val port = portFor(event.device, claim = true) ?: return true   // no slot: dropped
         // Wii: the left-stick click recentres the phone's motion, the right-stick click is HOME ([pressWiiHome]); neither
-        // reaches the core as itself.
-        if (WiiShortcuts.isRecenter(isWii, keyCode)) { if (first) recenterWiiMotion(); return true }
-        if (WiiShortcuts.isHome(isWii, keyCode)) { if (first) pressWiiHome(); return true }
-        // 3DS split: the left-stick click is SWAP between the displays.
-        if (keyCode == KeyEvent.KEYCODE_BUTTON_THUMBL && onN3dsSwapPressed(down = first)) return true
+        // reaches the core as itself. 3DS split: the left-stick click is SWAP between the displays. Elsewhere (the PS2's
+        // L3 / R3) they go on to the core.
+        when (thumbKeyRoute(keyCode, isWii, isN3ds)) {
+            ThumbKeyRoute.WII_RECENTER -> { if (first) recenterWiiMotion(); return true }
+            ThumbKeyRoute.WII_HOME -> { if (first) pressWiiHome(); return true }
+            ThumbKeyRoute.N3DS_SWAP -> if (onN3dsSwapPressed(down = first)) return true
+            ThumbKeyRoute.CORE -> {}
+        }
         noteRumbleDevice(event.device, port)
         // SELECT + START opens the menu: P1's (port 0's) only. Held state follows every down, repeats too.
         if (button != null && inputs.menuChord(port, button, down = true) && first) { toggleMenu(); return true }
@@ -991,8 +997,11 @@ internal class GameInputRouter(private val host: GameInputHost) {
         // A held-back MENU (a MENU combo is bound): its release opens the menu if no combo fired, from any pad as its press.
         if (PadKeymap.buttonFor(keyCode) == NxButton.MENU) host.shortcutKeys?.takeIf { it.holdsMenu }?.let { shortcut(it.onUp(keyCode)); return true }
         val port = portFor(event.device, claim = false) ?: return true
-        if (WiiShortcuts.isRecenter(isWii, keyCode) || WiiShortcuts.isHome(isWii, keyCode)) return true
-        if (keyCode == KeyEvent.KEYCODE_BUTTON_THUMBL && onN3dsSwapPressed(down = false)) return true
+        when (thumbKeyRoute(keyCode, isWii, isN3ds)) {
+            ThumbKeyRoute.WII_RECENTER, ThumbKeyRoute.WII_HOME -> return true
+            ThumbKeyRoute.N3DS_SWAP -> if (onN3dsSwapPressed(down = false)) return true
+            ThumbKeyRoute.CORE -> {}
+        }
         PadKeymap.buttonFor(keyCode)?.let { inputs.menuChord(port, it, down = false) }
         if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onUp(keyCode), keyCode, port)) return true }
         if (isNds) PadKeymap.buttonFor(positionOf(event, keyCode))?.let { b ->   // as on the down
@@ -1019,10 +1028,26 @@ private val RELEASED_BUTTONS = listOf(
 )
 
 /**
- * The thumbstick clicks (L3, R3) a release also lets go of: no [NxButton] has them. A pad's clicks reach the core as these
- * same keycodes on every console (no pad map or face swap touches them), so the release matches what was sent.
+ * The thumbstick clicks (L3, R3) a release also lets go of, kept out of [RELEASED_BUTTONS]: the on-screen L3 / R3 (and the
+ * Wii's HOME) send these keycodes, and a pad's clicks reach the core as the same keycodes on every console (no pad map or
+ * face swap touches them), so the release matches what was sent.
  */
 private val RELEASED_THUMB_KEYS = listOf(KeyEvent.KEYCODE_BUTTON_THUMBL, KeyEvent.KEYCODE_BUTTON_THUMBR)
+
+/** Where a physical stick click goes ([thumbKeyRoute]). */
+internal enum class ThumbKeyRoute { WII_RECENTER, WII_HOME, N3DS_SWAP, CORE }
+
+/**
+ * Where a physical [keyCode] goes when it is a stick click: on the Wii ([wii]) L3 recentres the motion and R3 is HOME
+ * ([WiiShortcuts]); on the 3DS ([n3ds]) L3 is SWAP, taken only while the displays are split (else it goes on to the core
+ * as Azahar's swap key). Every other key, and both clicks on every other console (the PS2's L3 / R3), go to the core.
+ */
+internal fun thumbKeyRoute(keyCode: Int, wii: Boolean, n3ds: Boolean): ThumbKeyRoute = when {
+    WiiShortcuts.isRecenter(wii, keyCode) -> ThumbKeyRoute.WII_RECENTER
+    WiiShortcuts.isHome(wii, keyCode) -> ThumbKeyRoute.WII_HOME
+    n3ds && keyCode == KeyEvent.KEYCODE_BUTTON_THUMBL -> ThumbKeyRoute.N3DS_SWAP
+    else -> ThumbKeyRoute.CORE
+}
 
 /**
  * One axis of a gamepad's left stick as a d-pad direction (-1, 0, 1), given the direction [held] from the last event:

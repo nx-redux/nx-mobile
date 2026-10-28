@@ -27,10 +27,14 @@ object PadKeymap {
 
     /**
      * Key code for a non-direction button, or null for a direction (routed as a hat instead) or a C button (sent through
-     * [N64Input] on N64). The Wii pads' HOME goes out as R3 (Dolphin's Home) but is left out of [buttonFor], so a
-     * physical R3 still reaches every core as itself.
+     * [N64Input] on N64). The Wii pads' HOME goes out as R3 (Dolphin's Home) and the PS2 pad's L3 / R3 as themselves,
+     * all left out of [buttonFor], so a physical stick click still reaches every core as itself.
      */
-    fun keyCodeFor(button: NxButton): Int? = byButton[button] ?: if (button == NxButton.HOME) KeyEvent.KEYCODE_BUTTON_THUMBR else null
+    fun keyCodeFor(button: NxButton): Int? = byButton[button] ?: when (button) {
+        NxButton.HOME, NxButton.R3 -> KeyEvent.KEYCODE_BUTTON_THUMBR
+        NxButton.L3 -> KeyEvent.KEYCODE_BUTTON_THUMBL
+        else -> null
+    }
 
     /** NxButton for a hardware key code (buttons + DPAD), or null if unmapped. */
     fun buttonFor(keyCode: Int): NxButton? = byKey[keyCode] ?: when (keyCode) {

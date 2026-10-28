@@ -94,7 +94,7 @@ import com.nxredux.mobile.ui.nx.VirtualPad
 import com.nxredux.mobile.ui.nx.VirtualPadLeft
 import com.nxredux.mobile.ui.nx.VirtualPadRight
 import com.nxredux.mobile.ui.nx.besideSecondRow
-import com.nxredux.mobile.ui.nx.faceWidthUnits
+import com.nxredux.mobile.ui.nx.landscapeClusterUnits
 import com.nxredux.mobile.ui.nx.shoulderReach
 import com.nxredux.mobile.ui.nx.systemRowPills
 import com.swordfish.libretrodroid.NxLog
@@ -505,7 +505,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val secondRow = besideSecondRow(padTools(), host.padShortcuts, placeholders = false)
         val m = besideMeasures(
             shape.screenClass, shape.widthPx.toFloat(), shape.heightPx.toFloat(), shape.ydpi, shape.density,
-            shape.cutoutLeft.toFloat(), shape.cutoutRight.toFloat(), secondRow, measured.accepted, faceWidthUnits(padProfile()),
+            shape.cutoutLeft.toFloat(), shape.cutoutRight.toFloat(), secondRow, measured.accepted, landscapeClusterUnits(padProfile()),
             systemRowPills(padProfile(), padMotion() != null),
         )
         return LandscapePad(shape, m.unitPx, m.reach, secondRow, measured.accepted != null)
@@ -521,7 +521,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val drawn = measured.accepted.takeIf { tabletopDsViews != null }
         val r = reach(
             unit, shape.density, shape.cutoutLeft.toFloat(), shape.cutoutRight.toFloat(), measuredButtonsPx = drawn,
-            faceWidthUnits(padProfile()), systemRowPills(padProfile(), padMotion() != null),
+            landscapeClusterUnits(padProfile()), systemRowPills(padProfile(), padMotion() != null),
         )
         return LandscapePad(shape, unit, r, secondRow, measured = drawn != null)
     }
@@ -959,8 +959,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         else -> null
     }
 
-    /** The pad's small right stick: the New 3DS C-stick, or on Wii the Classic Controller's right stick only. */
+    /** The pad's right stick: the PS2's, the New 3DS C-stick, or on Wii the Classic Controller's right stick only. */
     private fun padCStick(): ((Float, Float) -> Unit)? = when {
+        padProfile().dualSticks -> input::onRightStick
         input.gcPad -> input::onWiiRightStick   // the GameCube C-stick is the same right analog on port 0
         !isWii -> input::onCStick
         wiiPad == WiiPad.CLASSIC -> input::onWiiRightStick

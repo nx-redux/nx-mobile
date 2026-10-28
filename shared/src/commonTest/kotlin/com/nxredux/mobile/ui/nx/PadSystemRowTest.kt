@@ -140,4 +140,10 @@ class PadSystemRowTest {
         assertEquals(2, besideShortcutFromEdge(PadSide.RIGHT, padSystemRow(PadSide.RIGHT, wii)))   // SELECT HOME START
         assertEquals(1, besideShortcutFromEdge(PadSide.RIGHT, padSystemRow(PadSide.RIGHT, PadProfile.GC)))   // START alone
     }
+
+    @Test fun thePs2LeftClusterIsMenuAlone() {
+        val ps2 = PadProfile.forTag("PS2")
+        assertEquals(listOf(PadSystemKey.MENU), padSystemRow(PadSide.LEFT, ps2))
+        assertEquals(listOf(PadSystemKey.SELECT, PadSystemKey.START), padSystemRow(PadSide.RIGHT, ps2))
+    }
 }

@@ -71,7 +71,7 @@ import com.nxredux.mobile.ui.nx.VirtualPad
 import com.nxredux.mobile.ui.nx.VirtualPadLeft
 import com.nxredux.mobile.ui.nx.VirtualPadRight
 import com.nxredux.mobile.ui.nx.besideSecondRow
-import com.nxredux.mobile.ui.nx.faceWidthUnits
+import com.nxredux.mobile.ui.nx.landscapeClusterUnits
 import com.nxredux.mobile.ui.nx.systemRowPills
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -109,7 +109,7 @@ fun PadLayoutEditor(
     val colors = LocalNxColors.current
     val noPad: (PadEvent) -> Unit = {}
     val mic = if (padLayoutShowsMic(consoleTag)) PadMic(on = false, onTap = {}) else null
-    val cStick: ((Float, Float) -> Unit)? = if (profile.cStick) { _, _ -> } else null
+    val cStick: ((Float, Float) -> Unit)? = if (profile.cStick || profile.dualSticks) { _, _ -> } else null
     // The Wii's MOTION pill where the game draws it ([PadProfile.motionButton]), so the system rows are as wide.
     val motion = remember(profile) { if (profile.motionButton) PadMotion(on = true, onTap = {}, onLongPress = {}) else null }
     var origin by remember { mutableStateOf(Offset.Zero) }   // the edit layer's root offset (0 in a full-screen host)
@@ -137,7 +137,7 @@ fun PadLayoutEditor(
                 val secondRow = besideSecondRow(padTools, emptyMap(), placeholders = true)
                 val preview = besidePreview(
                     window?.screen ?: screenClass(w.roundToInt(), h.roundToInt(), (min(w, h) / d).toInt()), w, h, ydpi, d,
-                    window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, faceWidthUnits(profile), systemRowPills(profile, motion = motion != null),
+                    window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, landscapeClusterUnits(profile), systemRowPills(profile, motion = motion != null),
                     tag = consoleTag,
                 )
                 gameArea = preview.picture
@@ -150,7 +150,7 @@ fun PadLayoutEditor(
                 val kind = if (N3dsOptions.appliesTo(consoleTag)) DsKind.N3DS else DsKind.DS
                 val preview = halfFoldedPreview(
                     w, h, window?.screen ?: screenClass(w.roundToInt(), h.roundToInt(), (min(w, h) / d).toInt()), window?.cutoutTop ?: 0f,
-                    ydpi, d, window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, faceWidthUnits(profile),
+                    ydpi, d, window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, landscapeClusterUnits(profile),
                     systemRowPills(profile, motion = motion != null), kind,
                 )
                 gameArea = preview?.placement?.top ?: PxRect(0f, 0f, w, h / 2f)

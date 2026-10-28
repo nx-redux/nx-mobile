@@ -120,12 +120,12 @@ class PadEditorState(initial: PadLayout, besidePicture: Boolean = false) : PadGr
 }
 
 /**
- * The portrait pad's groups topmost first, as it draws: the C-stick over the clusters, the clusters over the shoulders,
- * the shoulders over the system rows (the top row over MENU's, which sits under everything with the NX mark, the touch
- * shortcuts beside it).
+ * The portrait pad's groups topmost first, as it draws: the C-stick over the clusters, the clusters (the PS2's sticks with
+ * them, clear of their d-pad / face boxes) over the shoulders, the shoulders over the system rows (the top row over
+ * MENU's, which sits under everything with the NX mark, the touch shortcuts beside it).
  */
 private val HitOrder = listOf(
-    PadGroup.C_STICK, PadGroup.FACE, PadGroup.DPAD, PadGroup.R_SHOULDERS, PadGroup.SYSTEM_RIGHT, PadGroup.L_SHOULDERS, PadGroup.SYSTEM_LEFT,
+    PadGroup.C_STICK, PadGroup.R_STICK, PadGroup.FACE, PadGroup.L_STICK, PadGroup.DPAD, PadGroup.R_SHOULDERS, PadGroup.SYSTEM_RIGHT, PadGroup.L_SHOULDERS, PadGroup.SYSTEM_LEFT,
     PadGroup.SHORTCUT_1, PadGroup.SHORTCUT_2,
 )
 
@@ -137,8 +137,8 @@ private val HitOrder = listOf(
  * group: here it is part of the face cluster.
  */
 private val BesideHitOrder = listOf(
-    PadGroup.SHORTCUT_2, PadGroup.SYSTEM_RIGHT, PadGroup.FACE, PadGroup.R_SHOULDERS,
-    PadGroup.SHORTCUT_1, PadGroup.SYSTEM_LEFT, PadGroup.DPAD, PadGroup.L_SHOULDERS,
+    PadGroup.SHORTCUT_2, PadGroup.SYSTEM_RIGHT, PadGroup.R_STICK, PadGroup.FACE, PadGroup.R_SHOULDERS,
+    PadGroup.SHORTCUT_1, PadGroup.SYSTEM_LEFT, PadGroup.L_STICK, PadGroup.DPAD, PadGroup.L_SHOULDERS,
 )
 
 /**

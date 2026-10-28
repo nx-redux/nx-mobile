@@ -2,7 +2,9 @@ package com.nxredux.mobile.ui.nx
 
 enum class NxButton { UP, DOWN, LEFT, RIGHT, A, B, X, Y, L1, R1, L2, R2, START, SELECT, MENU, C_UP, C_DOWN, C_LEFT, C_RIGHT,
     /** The Wii pads' Home button (the core's R3, Dolphin's Home). */
-    HOME;
+    HOME,
+    /** The PS2 pad's stick clicks, their own small pills (the core's L3 / R3). */
+    L3, R3;
     val isDirection: Boolean get() = this == UP || this == DOWN || this == LEFT || this == RIGHT
 }
 

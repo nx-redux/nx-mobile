@@ -3,6 +3,7 @@ package com.nxredux.mobile.runner
 import android.view.KeyEvent
 import com.nxredux.mobile.shortcuts.ConsoleHotkeys
 import com.nxredux.mobile.shortcuts.KeyCodes
+import com.nxredux.mobile.ui.nx.NxButton
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -47,5 +48,13 @@ class KeyCodesTest {
         // Every Wii-only claim is one of the two: nothing claimed that WiiShortcuts doesn't take.
         val wiiOnly = singles - ConsoleHotkeys.always.map { it.binding.keyCode }.toSet()
         assertTrue(wiiOnly.all { WiiShortcuts.isRecenter(true, it) || WiiShortcuts.isHome(true, it) })
+    }
+
+    @Test fun l3r3MapToThumbKeys() {
+        assertEquals(KeyCodes.BUTTON_THUMBL, PadKeymap.keyCodeFor(NxButton.L3))
+        assertEquals(KeyCodes.BUTTON_THUMBR, PadKeymap.keyCodeFor(NxButton.R3))
+        // A physical stick click stays itself: no NxButton is read back from it.
+        assertEquals(null, PadKeymap.buttonFor(KeyCodes.BUTTON_THUMBL))
+        assertEquals(null, PadKeymap.buttonFor(KeyCodes.BUTTON_THUMBR))
     }
 }

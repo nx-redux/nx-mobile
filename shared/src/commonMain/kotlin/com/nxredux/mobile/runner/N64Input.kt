@@ -36,7 +36,7 @@ object N64Input {
         NxButton.L1 -> BUTTON_SELECT
         NxButton.R1 -> BUTTON_R2
         NxButton.START -> BUTTON_START
-        NxButton.R2, NxButton.SELECT, NxButton.HOME -> null
+        NxButton.R2, NxButton.SELECT, NxButton.HOME, NxButton.L3, NxButton.R3 -> null
         NxButton.UP, NxButton.DOWN, NxButton.LEFT, NxButton.RIGHT, NxButton.MENU -> original
     }
 }
