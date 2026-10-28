@@ -52,6 +52,7 @@ import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.layout.besidePreview
 import com.nxredux.mobile.layout.portraitSplit
+import com.nxredux.mobile.layout.rowsOnScreen
 import com.nxredux.mobile.layout.screenClass
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.settings.PadGroup
@@ -267,16 +268,17 @@ private fun BoxScope.BesidePad(
     val unit = with(density) { preview.measures.unitPx.toDp() }
     val inset = with(density) { p.extraInsetPx.toDp() }
     val box = Modifier.offset { IntOffset(0, p.topMarginPx.roundToInt()) }.sizePx(p.boxWidthPx.roundToInt(), p.boxHeightPx.roundToInt())
+    val rows = p.rowsOnScreen(0f, preview.measures.unitPx, density.density)
     // Left first, as the game adds its views: the right half draws (and takes a touch) on top.
     VirtualPadLeft(
         noPad, { _, _ -> }, Modifier.align(Alignment.TopStart).then(box).padding(start = inset), profile = profile, overGame = true,
         motion = motion, layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
-        besidePicture = true, unitOverride = unit, secondRow = secondRow, mic = mic,
+        besidePicture = true, unitOverride = unit, secondRow = secondRow, rowsOnScreen = rows, mic = mic,
     )
     VirtualPadRight(
         noPad, Modifier.align(Alignment.TopEnd).then(box).padding(end = inset), profile = profile, overGame = true, onCStick = cStick,
         layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
-        besidePicture = true, unitOverride = unit, secondRow = secondRow,
+        besidePicture = true, unitOverride = unit, secondRow = secondRow, rowsOnScreen = rows,
     )
 }
 

@@ -54,6 +54,7 @@ import com.nxredux.mobile.layout.consoleScale
 import com.nxredux.mobile.layout.hideOffered
 import com.nxredux.mobile.layout.overlayHeightPx
 import com.nxredux.mobile.layout.reach
+import com.nxredux.mobile.layout.rowsOnScreen
 import com.nxredux.mobile.layout.tabletopDs
 import com.nxredux.mobile.layout.tabletopDsPadBoxes
 import com.nxredux.mobile.layout.usableTabletop
@@ -264,6 +265,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private val clusterInsetPx = mutableStateOf(0f)
     private val clusterUnitPx = mutableStateOf<Float?>(null)
     private val clusterSecondRow = mutableStateOf(false)
+    /** Beside the picture, the clusters' rows inside the window ([rowsOnScreen]); null: all of them. */
+    private val clusterRowsOnScreen = mutableStateOf<Float?>(null)
     /** The hidden band's overlay misses the picture: drawn solid ([overlayClear]). */
     val overlayClear = mutableStateOf(false)
 
@@ -421,6 +424,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         clustersClear.value = false
         clusterInsetPx.value = 0f
         clusterUnitPx.value = null
+        clusterRowsOnScreen.value = null
         overlayPadShown.value = true
     }
 
@@ -445,13 +449,15 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             VirtualPadLeft(input::onPad, input::onStick, Modifier.fillMaxSize().padding(start = with(density) { clusterInsetPx.value.toDp() }).alpha(clusterAlpha()), profile = padProfile(),
                 useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, overGame = true, motion = padMotion(), latched = input.gcLatched.value, layout = overlayLayout, tools = padTools(),
                 shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, onGroupBounds = leftBounds,
-                besidePicture = true, unitOverride = clusterUnitPx.value?.let { with(density) { it.toDp() } }, secondRow = clusterSecondRow.value, mic = padMic())
+                besidePicture = true, unitOverride = clusterUnitPx.value?.let { with(density) { it.toDp() } }, secondRow = clusterSecondRow.value,
+                rowsOnScreen = clusterRowsOnScreen.value, mic = padMic())
         }
         val right = composePad {
             val density = LocalDensity.current
             VirtualPadRight(input::onPad, Modifier.fillMaxSize().padding(end = with(density) { clusterInsetPx.value.toDp() }).alpha(clusterAlpha()), profile = padProfile(), overGame = true, onCStick = padCStick(), latched = input.gcLatched.value, layout = overlayLayout, tools = padTools(),
                 shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, onGroupBounds = rightBounds,
-                besidePicture = true, unitOverride = clusterUnitPx.value?.let { with(density) { it.toDp() } }, secondRow = clusterSecondRow.value)
+                besidePicture = true, unitOverride = clusterUnitPx.value?.let { with(density) { it.toDp() } }, secondRow = clusterSecondRow.value,
+                rowsOnScreen = clusterRowsOnScreen.value)
         }
         addPad(root, left, leftLp)
         addPad(root, right, rightLp)
@@ -474,6 +480,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val pad = tabletopDsPad(shape)
         clusterUnitPx.value = pad.unitPx
         clusterSecondRow.value = pad.secondRow
+        clusterRowsOnScreen.value = null   // the boxes are kept inside the root ([tabletopDsPadBoxes])
         placeTabletopDs(tabletopDsPlacement(shape, tt, pad))
     }
 
@@ -588,6 +595,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         clusterInsetPx.value = p.extraInsetPx
         clusterUnitPx.value = pad.unitPx
         clusterSecondRow.value = pad.secondRow
+        clusterRowsOnScreen.value = p.rowsOnScreen(window.y, pad.unitPx, pad.shape.density)
         shoulderReachPx.value = shoulderReach(pad.unitPx, LayoutConstants.CLUSTER_PADDING_DP * pad.shape.density + p.extraInsetPx)
         val w = p.boxWidthPx.roundToInt()
         val h = p.boxHeightPx.roundToInt()

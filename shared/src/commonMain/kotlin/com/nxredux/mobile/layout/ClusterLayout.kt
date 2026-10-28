@@ -115,6 +115,16 @@ fun clusterPlacement(
     return ClusterPlacement(boxWidth, boxHeight, topMargin, cutoutExtra + roomy, clear)
 }
 
+/**
+ * How many units ([unitPx]) of the box's rows, inside its padding, are on screen in a window whose top is [windowTop] px:
+ * all of them (6, or 6 + the tool row), or fewer where [ClusterPlacement.topMarginPx] puts the box above the window's top
+ * (a short phone without the tool row: the rows then end at the window's top, 2.85 units above the d-pad row's middle).
+ */
+fun ClusterPlacement.rowsOnScreen(windowTop: Float, unitPx: Float, density: Float): Float {
+    val pad = LayoutConstants.CLUSTER_PADDING_DP * density
+    return (topMarginPx + boxHeightPx - pad - max(windowTop, topMarginPx + pad)) / unitPx
+}
+
 /** The landscape pad halves' button unit and [reach] in one window, px. */
 data class BesideMeasures(val unitPx: Float, val reach: Reach)
 
