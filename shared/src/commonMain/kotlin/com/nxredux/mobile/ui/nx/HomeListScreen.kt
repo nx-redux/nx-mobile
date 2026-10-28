@@ -44,10 +44,13 @@ internal fun homeListRows(rows: List<MainRow>): List<NxRow> = rows.mapNotNull { 
     }
 }
 
+/** The room between List Home's header and its first game, and (the tab row hidden) under its last, in row pitches. */
+private const val HOME_LIST_GAP_ROWS = 0.5f
+
 /**
  * Home in the List style (Layouts → Home layout: List): the stats strip ([HomeStripLines] at the gutter, while Home
  * stats shows it; with the tab row hidden, in a header in its place, [homeStatsHeader]), the selected game's [info]
- * on a line under it ([HomeFactsLine], Extra info; in the stats' place with them off), over Home's [rows]
+ * on a line under it ([GameFactsLines], Extra info; in the stats' place with them off; two lines upright), over Home's [rows]
  * ([MainListBody], right under the header, or under the icon row ([iconsRoom]) with neither). App draws the selected game's picture behind ([com.nxredux.mobile.ui.menuBackground]).
  * A fresh install's only row, Pick a game, is its card filling the body instead.
  * Navigation lives in AppState: this only draws [selection], and taps go to [onSelect] / [onOpen] as a main menu List's
@@ -72,10 +75,11 @@ internal fun HomeListScreen(
     // With the tab row hidden the strip moves into its room as a header ([homeStatsHeader]), as on Grid and Carousel
     // Home; with no strip the rows run up beside the Recent and Search icons ([homeListTopRoom]).
     // Extra info: the selected game's facts on a line of their own under the stats, in the header with them (in the first
-    // line's place with Home stats off).
+    // line's place with Home stats off); upright, on two lines, the next goal on the second ([GameFactsLines]).
     val facts = chrome.extraInfo && rows != listOf(MainRow.PickAGame)
+    val factLines = if (!facts) 0 else if (portrait) 2 else 1
     val statLines = if (shownStrip != null) stripLines else 0
-    val headerLines = statLines + (if (facts) 1 else 0)
+    val headerLines = statLines + factLines
     val header = if (!chrome.tabRow && headerLines > 0) homeStatsHeader(frame.copy(titleHidden = true), headerLines) else null
     // The facts line a little apart from the stats above it ([HOME_FACTS_GAP]); the header grows by as much.
     val factsGap = if (facts && statLines > 0) HOME_FACTS_GAP else 0f
@@ -106,8 +110,10 @@ internal fun HomeListScreen(
                 pageStrip != null -> (inkTop + inkH).coerceAtLeast(0f).dp
                 else -> iconsRoom
             }
-            // A row's room between the stats and the first game, so Home's top does not crowd its list.
-            MainListBody(names, selection, listTop, gutter, onSelect, onOpen, onLongPress, Modifier.weight(1f), gapRows = if (header != null) 1 else 0)
+            // Half a row's room between the stats (or facts) and the first game, so Home's top does not crowd its list.
+            MainListBody(names, selection, listTop, gutter, onSelect, onOpen, onLongPress, Modifier.weight(1f), gapRows = if (header != null) HOME_LIST_GAP_ROWS else 0f,
+                bottomRows = if (header != null) HOME_LIST_GAP_ROWS else 0f,   // the tab row hidden: the other half off the bottom edge
+            )
         }
         // The stats and the facts in line with the names ([listTextInset]).
         val textStart = gutter + com.nxredux.mobile.ui.listTextInset(MenuStyle.LIST)
@@ -116,9 +122,9 @@ internal fun HomeListScreen(
             // The next line of the header's rhythm under the stats, short of the icons while level with them.
             val y = header.stripTop + statLines * homeStripPitch(frame) + factsGap
             val iconsRoom = if (y < MENU_TAB_ROW_HEIGHT.value) HOME_HEADER_ICONS_ROOM.dp else 0.dp
-            HomeFactsLine(
-                info(), (HOME_STRIP_TYPE.sp * nxTextScale()).sp,
-                Modifier.pageFixed().fillMaxWidth().padding(top = y.dp, start = textStart, end = textStart + iconsRoom).height(homeStripLineH(frame).dp),
+            GameFactsLines(
+                info(), (HOME_STRIP_TYPE.sp * nxTextScale()).sp, homeStripPitch(frame).dp, rows = factLines,
+                Modifier.pageFixed().fillMaxWidth().padding(top = y.dp, start = textStart, end = textStart + iconsRoom),
             )
         }
     }

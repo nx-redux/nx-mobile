@@ -122,7 +122,8 @@ internal fun homeListViewport(band: Int, total: Int, pitch: Int): Int =
 
 /**
  * A main menu List's rows ([names]: labels and tags) from [top] (the stats' or the icon row's bottom; the fade parts
- * them) and [gapRows] row pitches of room under it (Home: one, under its stats) down to the box's bottom, the tab row's
+ * them) and [gapRows] row pitches of room under it (Home: half, under its stats; a game list: one) down to the box's bottom less
+ * [bottomRows] row pitches (Home with the tab row hidden: the other half, off the screen's edge), the tab row's
  * top; the first row's text on [gutter] + [nxListInset]. Taps select, a tap on the selected row opens ([nxTap]).
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -130,7 +131,8 @@ internal fun homeListViewport(band: Int, total: Int, pitch: Int): Int =
 internal fun MainListBody(
     names: List<NxRow>, selection: () -> Int, top: Dp, gutter: Dp,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, modifier: Modifier = Modifier,
-    gapRows: Int = 0,
+    gapRows: Float = 0f,
+    bottomRows: Float = 0f,
     endRoom: Dp = 0.dp,   // room kept clear on the right (a game list's boxed List art): the names stop short of it
     onPageRows: ((Int) -> Unit)? = null,   // told the whole rows it shows (a game list pages LEFT / RIGHT by them)
 ) {
@@ -148,7 +150,8 @@ internal fun MainListBody(
     val nameStyle = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = nameSize, lineHeight = nameSize)
     BoxWithConstraints(modifier.fillMaxSize()) {
         val start = top + basePitch * gapRows
-        val band = (constraints.maxHeight - with(density) { start.roundToPx() }).coerceAtLeast(basePx)
+        val bottom = basePitch * bottomRows
+        val band = (constraints.maxHeight - with(density) { (start + bottom).roundToPx() }).coerceAtLeast(basePx)
         // A list longer than the band: its rows a little taller, so whole rows fill it from its top to the tab row.
         val pitchPx = homeListRowPx(band, names.size, basePx)
         val pitch = with(density) { pitchPx.toDp() }
@@ -174,7 +177,7 @@ internal fun MainListBody(
         // A list that fits sits on the band's bottom; a longer one fills it, from right under its top to the tab row.
         val fits = heights.sum() <= band
         LazyColumn(
-            Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart).padding(top = if (fits) 0.dp else start)
+            Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart).padding(top = if (fits) 0.dp else start, bottom = if (fits) bottom else 0.dp)
                 .fillMaxWidth().height(with(density) { viewport.toDp() }).nxRowEdgeMask(state),
             state = state, verticalArrangement = Arrangement.Bottom, flingBehavior = rememberNxRowSnapFling(state),
         ) {

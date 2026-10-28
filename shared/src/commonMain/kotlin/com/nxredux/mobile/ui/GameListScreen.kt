@@ -367,7 +367,7 @@ internal fun GameListFrame(
                                             rows, selectedIndex, if (iconsUp) MENU_TAB_ROW_HEIGHT else 0.dp, listGutter, onSelect, onOpen, onLongPress,
                                             endRoom = if (artBox) listArtLabelEnd(maxWidth.value, LocalPortrait.current).dp else 0.dp, onPageRows = onPageRows,
                                             // A row's room under the stats line (shown under the title), as Home keeps under its stats.
-                                            gapRows = if (chrome.listTitle && chrome.extraInfo && !barHidden) 1 else 0,
+                                            gapRows = if (chrome.listTitle && chrome.extraInfo && !barHidden) 1f else 0f,
                                         )
                                     }
                                 },
