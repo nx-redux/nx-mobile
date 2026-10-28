@@ -172,8 +172,8 @@ private val OPENER_KINDS = setOf(
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER,
 )
 
-/** Rows whose values are a segmented button however many they are (Game lists' layout: its five styles side by side). */
-private val SEGMENTED_KINDS = setOf(SettingsKind.GAME_LIST_STYLE)
+/** Rows whose values are a segmented button however many or long they are (Game lists' layout: its five styles side by side; the Game Switcher's Full screen / List). */
+private val SEGMENTED_KINDS = setOf(SettingsKind.GAME_LIST_STYLE, SettingsKind.SWITCHER_LAYOUT)
 
 /** Rows whose secondary (a path, a state, a count, the last scan) is their description, not a value. */
 private val DESCRIBED_KINDS = setOf(SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.RESCAN, SettingsKind.UNASSIGNED, SettingsKind.HIDDEN)

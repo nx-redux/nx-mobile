@@ -45,6 +45,14 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.EaseOut
 import com.nxredux.mobile.ui.GridTile
 import com.nxredux.mobile.ui.InfoLine
 import com.nxredux.mobile.ui.artLess
@@ -137,11 +145,12 @@ internal fun NxMenuTile(
     statsSize: TextUnit = GAME_STATS_SP,   // the stat lines' size ([gameFade], [statsOnly])
     captionAlways: Boolean = false,        // the caption shows lit or not (Home's pinned games), as with a [subtitle]
     ring: Float = NX_TILE_RING_W,          // a lit game's ring, dp
+    drained: Boolean = false,              // Grid Home's: no ring or edge, the selection in colour, the rest grey ([nxDrain])
 ) {
     val highlight = nxHighlight()
     val logoLook = outlineLit && lit && tile !is GridTile.Game
     // The ring sits behind the clipped tile, drawn on the unclipped outer box inflated by the ring's width.
-    val ringMod = if (lit && tile is GridTile.Game) Modifier.drawBehind {
+    val ringMod = if (drained) Modifier else if (lit && tile is GridTile.Game) Modifier.drawBehind {
         val o = ring.dp.toPx()
         drawRoundRect(
             highlight, topLeft = Offset(-o, -o), size = Size(size.width + 2 * o, size.height + 2 * o),
@@ -157,7 +166,7 @@ internal fun NxMenuTile(
     } else Modifier
     Box(modifier.then(ringMod)) {
         Box(Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp))) {
-            TileContent(tile, lit, logoLook, outlineLit, caption, info, logoInset, portrait, toolSize, titleSize, titleLines, homeCaption, gameFade, subtitle, statsOnly, statsSize, captionAlways)
+            TileContent(tile, lit, logoLook, outlineLit, caption, info, logoInset, portrait, toolSize, titleSize, titleLines, homeCaption, gameFade, subtitle, statsOnly, statsSize, captionAlways, drained)
         }
     }
 }
@@ -167,7 +176,7 @@ private fun TileContent(
     tile: GridTile, lit: Boolean, logoLook: Boolean, outlineLit: Boolean, caption: Boolean,
     info: () -> List<InfoLine>, logoInset: Pair<Float, Float>, portrait: Boolean, toolSize: ToolTileSize,
     titleSize: TextUnit, titleLines: Int, homeCaption: Boolean, gameFade: Boolean, subtitle: String?, statsOnly: Boolean, statsSize: TextUnit,
-    captionAlways: Boolean,
+    captionAlways: Boolean, drained: Boolean,
 ) {
     val colors = LocalNxColors.current
     val highlight = nxHighlight()
@@ -223,7 +232,7 @@ private fun TileContent(
             Spacer(Modifier.height(toolSize.gapDp.dp))
             TileText(tile.lines.joinToString("\n"), content, toolSize.nameSp.sp, maxLines = 2)
         }
-        is GridTile.Game -> GameTile(tile, lit, caption, info, titleSize, titleLines, homeCaption, gameFade, subtitle, statsOnly, statsSize, captionAlways)
+        is GridTile.Game -> GameTile(tile, lit, caption, info, titleSize, titleLines, homeCaption, gameFade, subtitle, statsOnly, statsSize, captionAlways, drained)
     }
 }
 
@@ -274,9 +283,11 @@ internal fun gameTileLayers(
 @Composable
 private fun GameTile(
     tile: GridTile.Game, lit: Boolean, caption: Boolean, info: () -> List<InfoLine>, titleSize: TextUnit, titleLines: Int, homeCaption: Boolean,
-    gameFade: Boolean, subtitle: String?, statsOnly: Boolean, statsSize: TextUnit, captionAlways: Boolean,
+    gameFade: Boolean, subtitle: String?, statsOnly: Boolean, statsSize: TextUnit, captionAlways: Boolean, drained: Boolean,
 ) {
     val colors = LocalNxColors.current
+    // Grid Home ([drained]): how lit the tile is, 0 to 1, eased as the selection comes and goes ([nxDrain]).
+    val litness = nxLitness(lit)
     // An opaque base: the glide's white must show only as the ring, never through a plain, loading or failed tile.
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.background)) {
         // The screenshot, else the SteamGridDB stand-in of the tile's shape, else the generated abstract picture
@@ -292,21 +303,28 @@ private fun GameTile(
         // Stats only: the name is under the tile, so the caption never carries it and a title tile keeps its own.
         val artLess = !statsOnly && (subtitle != null || captionAlways || tile.artLess(maxWidth.value, maxHeight.value))
         val layers = gameTileLayers(url != null || icon != null, lit, caption, homeCaption, gameFade, artLess)
+            .let { l -> if (drained) l - GameTileLayer.EDGE else l }   // Grid Home: no edge, the colour is the selection
         val named = !statsOnly && GameTileLayer.TITLE !in layers   // the caption carries the name unless the centred title does
         // Stats only: the info's rows (time and achievements, then the next goal), each a line of its own.
         val statRows = if (statsOnly && caption && lit) backdropCaptionRows(info()) else emptyList()
         for (layer in layers) when (layer) {
             GameTileLayer.PICTURE -> if (icon != null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Image(icon, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(APP_ICON_SHARE))
-            } else if (art?.fit == TileFit.HERO) AsyncImage(
-                model = url, contentDescription = null, contentScale = ContentScale.FillHeight, alignment = Alignment.CenterEnd,
-                modifier = Modifier.fillMaxSize(),
-            ) else AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                Image(
+                    icon, contentDescription = null, contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(APP_ICON_SHARE).then(if (drained) Modifier.graphicsLayer { alpha = nxDimInk(litness()) } else Modifier),
+                )
+            } else {
+                val drain = if (drained) Modifier.nxDrain(litness) else Modifier
+                if (art?.fit == TileFit.HERO) AsyncImage(
+                    model = url, contentDescription = null, contentScale = ContentScale.FillHeight, alignment = Alignment.CenterEnd,
+                    modifier = Modifier.fillMaxSize().then(drain),
+                ) else AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().then(drain))
+            }
             // No screenshot: a plain title tile, so no hole in the grid; the ring still goes round it. On Home the name
             // takes the lines the tile holds, and lit with its info line it keeps clear of it (the bottom's caption room).
             GameTileLayer.TITLE -> if (!homeCaption) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 TileTitle(tile.title, colors.listText, titleSize, maxLines = titleLines)
-            } else BoxWithConstraints(Modifier.fillMaxSize()) {
+            } else BoxWithConstraints(Modifier.fillMaxSize().then(if (drained) Modifier.graphicsLayer { alpha = nxDimInk(litness()) } else Modifier)) {
                 // The info line's room at its size ([nxCardStatsSize], the 11 sp line's room scaled to it).
                 val scale = LocalDensity.current.fontScale
                 val room = if (lit && caption && info().isNotEmpty()) homeTitleCaptionRoom(scale * nxCardStatsSize().value / INFO_SP.value) else 0f
@@ -353,14 +371,15 @@ private fun GameTile(
                 }
                 val homeRows = if (homeCaption && named && subtitle != null && allHomeRows.isNotEmpty() && linesWith(allHomeRows.size) < 2 && linesWith(0) >= 2)
                     emptyList() else allHomeRows
-                val homeLines = if (homeCaption && named) linesWith(homeRows.size) else 1
+                val homeLines = if (homeCaption && named && !drained) linesWith(homeRows.size) else 1   // Grid Home: one line, an ellipsis
                 Column(
                     Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = CAPTION_BOTTOM.dp),
                     verticalArrangement = Arrangement.spacedBy(if (homeCaption) 2.dp else 0.dp),
                 ) {
                     if (named) {
+                        // Grid Home: the selected tile's name in the accent (the Grid's only accent), the others in the ink.
                         if (homeCaption) TileText(
-                            tile.title, colors.listText, homeName, maxLines = homeLines, align = TextAlign.Start,
+                            tile.title, if (drained && lit) colors.accent else colors.listText, homeName, maxLines = homeLines, align = TextAlign.Start,
                             balanced = homeLines > 1, lineHeight = HOME_CAPTION_LINE, shadow = if (homeLines > 1) titleShadow() else null,
                         )
                         else TileText(tile.title, colors.listText, titleSize, maxLines = 2, align = TextAlign.Start)
@@ -449,3 +468,33 @@ private fun TileText(
         ),
     )
 }
+
+/** Grid Home's selection ([NxMenuTile]'s drained): the tile's picture eases from grey to colour over this as it is selected. */
+internal const val NX_DRAIN_MS = 150
+
+/** An unselected Grid Home picture's opacity (greyscale), and an unselected art-less tile's ink. */
+private const val DRAIN_PICTURE_ALPHA = 0.55f   // role: Grid Home's unselected picture
+private const val DRAIN_INK_ALPHA = 0.42f   // role: Grid Home's unselected icon or name
+
+/** How lit a tile is, 0 (not) to 1 (selected), eased over [NX_DRAIN_MS] (ease-out) as [lit] changes; read at draw time. */
+@Composable
+internal fun nxLitness(lit: Boolean): () -> Float {
+    val t = animateFloatAsState(if (lit) 1f else 0f, tween(NX_DRAIN_MS, easing = EaseOut), label = "lit")
+    return { t.value }
+}
+
+/** A Grid Home picture at [litness]: greyscale at [DRAIN_PICTURE_ALPHA] unlit, full colour and opacity lit, eased between. */
+internal fun Modifier.nxDrain(litness: () -> Float): Modifier = graphicsLayer {
+    alpha = DRAIN_PICTURE_ALPHA + (1f - DRAIN_PICTURE_ALPHA) * litness()
+}.drawWithContent {
+    val t = litness()
+    val paint = Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(t) }) }
+    drawIntoCanvas { c ->
+        c.saveLayer(Rect(0f, 0f, size.width, size.height), paint)
+        drawContent()
+        c.restore()
+    }
+}
+
+/** An art-less tile's ink opacity at [litness]: [DRAIN_INK_ALPHA] unlit, full lit. */
+internal fun nxDimInk(litness: Float): Float = DRAIN_INK_ALPHA + (1f - DRAIN_INK_ALPHA) * litness

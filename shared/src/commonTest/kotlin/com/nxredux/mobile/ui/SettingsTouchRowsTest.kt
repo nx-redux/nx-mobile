@@ -132,6 +132,9 @@ class SettingsTouchRowsTest {
         assertEquals(styles, row.fittedTo { false }.choices)
         val accent = NxSettingRow("Pad vibration", choices = listOf("Off", "Low", "High"), index = 0)
         assertEquals(accent, accent.fittedTo { false })                                       // a row not forced: as it is
+        // The Game Switcher's layout likewise: Full screen and List as segments, not a picker, though "Full screen" is long.
+        val switcher = settingsTouchRow(SettingsRow(SettingsKind.SWITCHER_LAYOUT, "Layout", "List"), SettingChoices(listOf("Full screen", "List"), 1))
+        assertEquals(NxSettingControl.SEGMENTED, switcher.control)
     }
 
     @Test fun aKeptRowShowsItsShortLine() {

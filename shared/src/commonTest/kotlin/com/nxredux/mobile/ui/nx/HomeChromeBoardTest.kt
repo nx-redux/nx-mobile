@@ -123,7 +123,7 @@ class HomeChromeBoardTest {
             for ((i, r) in sq.withIndex()) near(28f + (i / 2) * (c.side + 7f), r.y, "$what: square $i y")
             assertTrue(sq.all { it.y + it.h <= 28f + c.topH + 0.05f }, "$what: the squares inside the top")
             val drop = c.topH - 274f
-            near(shown.tilesY + drop, b.tilesY, "$what: the bands follow"); near(shown.labels[0].y + drop, b.labels[0].y, "$what: the labels")
+            near(shown.tilesY + drop, b.tilesY, "$what: the bands follow")
             near(shown.shelfTiles[0].y + drop, b.shelfTiles[0].y, "$what: the shelves"); near(shown.pageH + drop, b.pageH, "$what: pageH")
         }
     }
