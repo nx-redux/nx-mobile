@@ -1,5 +1,7 @@
 package com.nxredux.mobile.options
 
+import com.nxredux.mobile.runner.Res3dConsole
+
 /**
  * Console Settings for the PS2: which BIOS dump ARMSX2 boots when Bios/PS2/ holds more than one. The core scans its BIOS
  * folder for any ".bin" and takes the first it likes; the row forces one by name (`armsx2_bios`), read when the game starts.
@@ -25,6 +27,9 @@ object Ps2Options {
     /** The core option for the stored pick: that file while it is still in [files], else Auto (a deleted dump). */
     fun biosOption(stored: String?, files: List<String>): Map<String, String> =
         mapOf(CORE_KEY to (stored?.takeIf { it in files } ?: AUTO))
+
+    /** The 3D Resolution rows (mode and Max Scale; Performance is native, so no Scale), as the DS and 3DS ones. */
+    fun resolutionRows(displayMax: Int?): List<FrontendOption> = resolutionRows(Res3dConsole.PS2, displayMax)
 
     fun appliesTo(tag: String): Boolean = tag.trim().uppercase() == "PS2"
 }

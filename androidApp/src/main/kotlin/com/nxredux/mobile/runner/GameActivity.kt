@@ -762,7 +762,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun corePaused(): Boolean = menuOpen || focusPaused
 
-    /** The console whose 3D scale the app sets for this game: a DS on melonDS DS, a 3DS on Azahar; null for any other. */
+    /** The console whose 3D scale the app sets for this game: a DS on melonDS DS, a 3DS on Azahar, a PS2 on ARMSX2; null for any other. */
     private val res3d: Res3dConsole? get() = Res3dConsole.forTag(gameTag)?.takeIf { gameCoreId == it.coreId }
 
     private fun setsRes3d(): Boolean = res3d != null
@@ -818,7 +818,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val console = res3d ?: return
         nds3dValue = value
         NxLog.i(TAG_LOG, "$gameTag 3D resolution ${value}x (${Nds3dMode.parse(frontendValues[console.modeKey]).value})")
-        applyOptions(listOf(Variable(console.coreKey, value.toString())))
+        applyOptions(listOf(Variable(console.coreKey, console.coreValue(value))))
         if (console == Res3dConsole.N3DS) renderer.onN3dsFactorSent(value)
         menu.menuModel?.let { publishNds3d(it); menu.menuState.value = it.state }
     }
@@ -841,7 +841,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         nds3dValue = value
         if (console == Res3dConsole.N3DS) renderer.startN3dsFactor(value)
         NxLog.i(TAG_LOG, "$gameTag 3D resolution ${value}x at launch (${Nds3dMode.parse(frontendValues[console.modeKey]).value})")
-        return mapOf(console.coreKey to value.toString())
+        return mapOf(console.coreKey to console.coreValue(value))
     }
 
     /**
@@ -850,7 +850,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     override fun publishNds3d(model: InGameMenuModel) {
         val console = res3d ?: return
-        // The 3DS has no software renderer to fall back to (Software API hidden): its scale always applies.
+        // The 3DS and PS2 have no software renderer to fall back to (Software API hidden): their scale always applies.
         model.setNds3d(nds3dValue, software = console == Res3dConsole.DS && NdsRenderer.rendersSoftware(ndsRenderMode, ndsFellBack))
     }
 

@@ -171,8 +171,8 @@ object CoreRegistry {
         "armsx2", "libarmsx2_libretro_android.so", setOf("iso", "chd", "cso", "zso", "bin", "elf", "gz", "m3u"),
         biosSubdir = "pcsx2/bios",
         // BIOS: Auto lets the core pick from <system>/pcsx2/bios; Console Settings' BIOS row forces one file at launch.
-        defaultOptions = mapOf("armsx2_renderer" to "OpenGL", "armsx2_bios" to "auto"),
-        lockedOptions = setOf("armsx2_renderer", "armsx2_bios"),
+        defaultOptions = mapOf("armsx2_renderer" to "OpenGL", "armsx2_bios" to "auto", "armsx2_upscale" to "2x"),
+        lockedOptions = setOf("armsx2_renderer", "armsx2_bios", "armsx2_upscale"),
         vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan")),
         name = "ARMSX2",
         cheats = false,

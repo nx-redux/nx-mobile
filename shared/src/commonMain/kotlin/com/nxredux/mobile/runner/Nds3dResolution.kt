@@ -36,7 +36,8 @@ enum class Res3dConsole(
     val scaleKey: String,
 ) {
     DS(NdsRenderer.CORE_ID_MELONDSDS, "melonds_opengl_resolution", 8, 4, NdsOptions.MODE_3D, NdsOptions.MAX_SCALE_3D, NdsOptions.SCALE_3D),
-    N3DS("azahar", "citra_resolution_factor", 10, 3, "nx_3ds_3d_resolution", "nx_3ds_3d_max_scale", "nx_3ds_3d_scale");
+    N3DS("azahar", "citra_resolution_factor", 10, 3, "nx_3ds_3d_resolution", "nx_3ds_3d_max_scale", "nx_3ds_3d_scale"),
+    PS2("armsx2", "armsx2_upscale", 4, 2, "nx_ps2_3d_resolution", "nx_ps2_3d_max_scale", "nx_ps2_3d_scale");
 
     /** The three stored rows. */
     val keys: Set<String> get() = setOf(modeKey, maxScaleKey, scaleKey)
@@ -45,13 +46,18 @@ enum class Res3dConsole(
     fun displayMaxOf(window: Pair<Int, Int>?, screen: ScreenClass?): Int? = when (this) {
         DS -> Nds3dResolution.displayMaxOf(window, screen)
         N3DS -> N3ds3dResolution.displayMaxOf(window, screen)
+        PS2 -> window?.let { Ps2Resolution.displayMax(it.first, it.second) }
     }
+
+    /** The core option's value for scale [n]: ARMSX2 reads "2x", the DS and 3DS cores a bare number. */
+    fun coreValue(n: Int): String = if (this == PS2) "${n}x" else "$n"
 
     companion object {
         /** The console for a system [tag]; null when it has no 3D Resolution. */
         fun forTag(tag: String): Res3dConsole? = when (tag.trim().uppercase()) {
             "NDS" -> DS
             "3DS" -> N3DS
+            "PS2" -> PS2
             else -> null
         }
     }
@@ -95,9 +101,9 @@ object Nds3dResolution {
         return displayMax(window.first.toFloat(), window.second.toFloat(), screen)
     }
 
-    /** Performance never goes above half the [displayMax], rounded up. */
+    /** Performance never goes above half the [displayMax], rounded up (the PS2: native, 1x). */
     fun performanceCeiling(displayMax: Int, console: Res3dConsole = Res3dConsole.DS): Int =
-        ceil(displayMax / 2.0).toInt().coerceIn(1, console.coreMax)
+        if (console == Res3dConsole.PS2) 1 else ceil(displayMax / 2.0).toInt().coerceIn(1, console.coreMax)
 
     /**
      * The scale to send for [mode]: [current] is the shown scale (null: no screens placed yet, so [displayMax] stands in),
@@ -126,6 +132,28 @@ object Nds3dResolution {
         displayMax = displayMax,
         console = console,
     )
+}
+
+/**
+ * The PS2 (ARMSX2) 3D Resolution maths: the core draws the whole picture at a whole multiple of its 640 x 448 frame (1x to 4x),
+ * so scales come from the picture's height. Performance is native (1x): there is no Scale row.
+ */
+object Ps2Resolution {
+    const val NATIVE_W = 640
+    const val NATIVE_H = 448
+
+    /** The core's most. */
+    private const val MAX = 4
+
+    /**
+     * The biggest whole scale the window's height holds (at least 1, at most the core's 4). The width is left out on
+     * purpose: the picture is 4:3 and fits the window's smaller side, so the Fold's 2176 x 1812 still reaches 4x.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    fun displayMax(w: Int, h: Int): Int = (h / NATIVE_H).coerceIn(1, MAX)
+
+    /** The scale a picture [pictureHeightPx] px tall shows at (nearest whole, 1 to 4). */
+    fun currentScale(pictureHeightPx: Int): Int = (pictureHeightPx / NATIVE_H.toDouble()).roundToInt().coerceIn(1, MAX)
 }
 
 /** The 3DS (Azahar) 3D Resolution maths: the core draws both screens at a factor of their native size, so scales come from frame widths. */

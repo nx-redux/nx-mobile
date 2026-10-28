@@ -301,8 +301,12 @@ private fun scales(console: Res3dConsole, max: Int): List<String> = (1..max.coer
 fun resolutionRows(console: Res3dConsole, displayMax: Int?): List<FrontendOption> {
     val maxScales = scales(console, displayMax ?: console.coreMax)
     val perfScales = scales(console, displayMax?.let { Nds3dResolution.performanceCeiling(it, console) } ?: console.coreMax)
-    val screen = if (console == Res3dConsole.DS) "DS" else "3DS"
-    return listOf(
+    val screen = when (console) {
+        Res3dConsole.DS -> "DS"
+        Res3dConsole.N3DS -> "3DS"
+        Res3dConsole.PS2 -> "PS2"
+    }
+    return listOfNotNull(
         FrontendOption(
             console.modeKey, "3D Resolution", Nds3dMode.entries.map { it.value }, Nds3dMode.AUTO.value,
             "How sharply 3D models are drawn. 2D art, text and the screen's size don't change.",
@@ -313,7 +317,8 @@ fun resolutionRows(console: Res3dConsole, displayMax: Int?): List<FrontendOption
             "The most Auto draws 3D at, as a multiple of the $screen screen.",
             visual = false, valueLabels = maxScales.map { "${it}x" }, shownWhen = console.modeKey to setOf(Nds3dMode.AUTO.value),
         ),
-        FrontendOption(
+        // The PS2's Performance is native: no scale to pick.
+        if (console == Res3dConsole.PS2) null else FrontendOption(
             console.scaleKey, "Scale", perfScales, Nds3dResolution.DEFAULT_PERFORMANCE_SCALE.toString(),
             "The fixed resolution Performance draws 3D at, as a multiple of the $screen screen.",
             visual = false, valueLabels = perfScales.map { "${it}x" }, shownWhen = console.modeKey to setOf(Nds3dMode.PERFORMANCE.value),

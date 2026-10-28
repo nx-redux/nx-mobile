@@ -23,4 +23,10 @@ class CoreRegistryPs2Test {
         assertEquals("auto", core.defaultOptions["armsx2_bios"])
         assertTrue("armsx2_bios" in core.lockedOptions)
     }
+
+    @Test fun upscaleLocked() {
+        val core = CoreRegistry.forTag("PS2")!!
+        assertEquals("2x", core.defaultOptions["armsx2_upscale"])
+        assertTrue("armsx2_upscale" in core.lockedOptions)
+    }
 }
