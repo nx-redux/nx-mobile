@@ -85,6 +85,10 @@ internal object PadPalettes {
         val wellMid = Color(0xFF0B0C0E)
         val wellBottom = Color(0xFF15171A)
         val engraveFloor = Color(0xFF17191C)
+        /** The hairline along the body's top edge, so a black pad still parts from a black screen. */
+        val topEdge = Color(0x2EFFFFFF)
+        /** The shadow the body casts up onto the screen, at the edge; clear at its top. */
+        val topShadow = Color(0x99000000)
     }
 
     /** A letter on a yellow face (N64 C arrows, Dreamcast X), dark so it reads. */
