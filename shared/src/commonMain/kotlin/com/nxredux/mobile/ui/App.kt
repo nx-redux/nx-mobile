@@ -746,7 +746,9 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
             val category = s.category ?: MenuCategory.HOME
             val consoleArt = state.settings.consoleArt
             val portrait = LocalPortrait.current   // List Home's game picture: the screen's shape picks its art
-            val bg by remember(s, style, consoleArt, portrait) {
+            // Keyed on [selection] too: a page laid out beside the one showing reads a still copy of its row, and swaps
+            // to the live one when it starts showing, which the picture must then follow.
+            val bg by remember(s, style, consoleArt, portrait, selection) {
                 derivedStateOf(structuralEqualityPolicy()) { menuBackground(style, category, s.rows.getOrNull(selection.value.index), consoleArt, portrait) }
             }
             // Grid and Carousel: plain, as menuBackground gives every non-List style (a Carousel Consoles tab on Background aside).
@@ -766,7 +768,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val portrait = maxHeight > maxWidth
                 if (style == MenuStyle.BACKDROP) {
-                    val url by remember(s, portrait) {
+                    val url by remember(s, portrait, selection) {
                         derivedStateOf(structuralEqualityPolicy()) { s.entries.getOrNull(selection.value.index)?.let { gameBackground(it, portrait) } }
                     }
                     // In from black on opening; out to black while the page slides away (B back to the tab, the switcher).
@@ -774,7 +776,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
                 } else {
                     // List: Layouts → List art ([listArtShown]).
                     val art = state.settings.gameListArt
-                    val shown by remember(s, portrait, art) {
+                    val shown by remember(s, portrait, art, selection) {
                         derivedStateOf(structuralEqualityPolicy()) { listArtShown(s.entries.getOrNull(selection.value.index), art, portrait) }
                     }
                     ListArtBackground(shown, maxWidth, LocalPortrait.current)

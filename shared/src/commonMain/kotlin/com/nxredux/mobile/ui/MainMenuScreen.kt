@@ -278,6 +278,7 @@ fun MainMenuScreen(
                         MainListBody(
                             listRows, selection, topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad, gutter,
                             onSelect, onOpen, onLongPress, Modifier.weight(1f),
+                            bottomRows = if (shown.tabRow) 0f else MENU_LIST_BOTTOM_ROWS,   // the tab row hidden: half a row off the bottom edge
                         )
                     }
                 }
@@ -337,6 +338,9 @@ internal fun mainMenuListEdges(tabRow: Boolean, barShown: Boolean): Pair<Float, 
     val top = if (tabRow) 0.25f else 0.5f
     return top to if (barShown) 0.25f else 1f - top
 }
+
+/** The room a main menu tab's List keeps under its last row while the tab row is hidden, in row pitches (as List Home's). */
+private const val MENU_LIST_BOTTOM_ROWS = 0.5f
 
 /** How far a main menu Carousel's row moves down so it centres on the screen: half a hint bar, less half a tab row. */
 internal fun mainMenuCarouselShift(tabRow: Boolean, barShown: Boolean): Dp =
