@@ -42,4 +42,24 @@ class ConsoleSettingsTest {
         val keys = listOf(SpeedOptions.MAX_FF, SpeedOptions.FF_AUDIO, SpeedOptions.REWIND, SpeedOptions.REWIND_AUDIO)
         for (tag in listOf("GBA", "NDS", "PS")) assertTrue(ConsoleSettings.tableFor(tag).map { it.key }.containsAll(keys), tag)
     }
+
+    @Test fun threeDs_puts_the_3d_rows_after_the_layout_rows_and_before_new_controls() {
+        val keys = ConsoleSettings.tableFor("3DS").map { it.key }
+        val layout = N3dsOptions.layoutRows.map { it.key }
+        val res = N3dsOptions.resolutionRows(null).map { it.key }
+        assertEquals(layout + res + N3dsOptions.NEW_CONTROLS, keys.take(layout.size + res.size + 1))
+    }
+
+    @Test fun threeDs_fitted_keeps_a_stored_scale_the_display_no_longer_reaches() {
+        val max = ConsoleSettings.tableFor("3DS", displayMax = 6).single { it.key == "nx_3ds_3d_max_scale" }
+        val (option, shown) = ConsoleSettings.fitted(max, "8")
+        assertEquals("8", shown)
+        assertEquals("8x", option.labelOf("8"))
+        val small = ConsoleSettings.tableFor("3DS", displayMax = 2).single { it.key == "nx_3ds_3d_max_scale" }
+        val (listed, unstored) = ConsoleSettings.fitted(small, small.default)
+        assertEquals(small.values, listed.values)
+        assertEquals("2", unstored)
+        val mode = ConsoleSettings.tableFor("3DS").single { it.key == "nx_3ds_3d_resolution" }
+        assertEquals("auto", ConsoleSettings.fitted(mode, "bogus").second)
+    }
 }

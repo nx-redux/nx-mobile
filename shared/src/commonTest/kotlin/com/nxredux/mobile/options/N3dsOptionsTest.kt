@@ -8,6 +8,12 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class N3dsOptionsTest {
+    @Test fun touch_main_only_is_always_sent_disabled() = assertEquals("disabled", N3dsOptions.TOUCH_MAIN_ONLY_OFF)
+    @Test fun large_screen_help_says_at_least_half_and_portrait_fills() {
+        val info = N3dsOptions.layoutRows.first().info.replace("\n", " ")
+        assertTrue("the bottom one under it at least half its size" in info)
+        assertTrue("in portrait it fills the height left" in info)
+    }
     @Test fun applies_to_the_3ds_tag_only() {
         assertTrue(N3dsOptions.appliesTo("3DS"))
         assertTrue(N3dsOptions.appliesTo(" 3ds "))
@@ -121,6 +127,49 @@ class N3dsOptionsTest {
         assertEquals(N3dsOptions.LAYOUT_PORTRAIT_CONTROLLER to "single_screen", N3dsOptions.cycleLayout(values, false, true, 1, phone))
     }
 
+    @Test fun layoutRowsAreNotVisual() {
+        // Azahar composes the 3DS layout itself, so the paused frame never shows a change: no Adjust strip.
+        assertTrue(N3dsOptions.layoutRowsFor(null).all { it.visual == false })
+        // The DS layout rows are drawn by the app, so their strip works.
+        assertTrue(NdsOptions.layoutRows(null).all { it.visual })
+    }
+
+    @Test fun fill_proportion_fills_the_height_left_under_the_top() {
+        // The unfolded Fold, portrait, band hidden: the top 4.62x fills the width, the bottom takes the 650 px left.
+        assertEquals(1.71f, N3dsOptions.fillProportion(1848f, 1759f))
+        // Too short for the top and a half-size bottom: today's half size (the picture shrinks to fit).
+        assertEquals(2f, N3dsOptions.fillProportion(1400f, 1080f))
+        assertEquals(2f, N3dsOptions.fillProportion(1080f, 900f))
+        // Room for both at the top's scale: the bottom as big as the top, never bigger.
+        assertEquals(1f, N3dsOptions.fillProportion(1848f, 3000f))
+        assertEquals(1f, N3dsOptions.fillProportion(1080f, 1400f))
+        // Rounded up to hundredths: near-equal spaces give the same value, and 1.7043 is 1.71, not 1.70.
+        assertEquals(N3dsOptions.fillProportion(1848f, 1759f), N3dsOptions.fillProportion(1848f, 1758.9f))
+        assertEquals(1.71f, N3dsOptions.fillProportion(1848f, 1759.4f))
+        assertEquals(1.5f, N3dsOptions.fillProportion(1200f, 1200f))   // exactly 1.5 stays 1.5
+        // Never taller than the space: the top fills the width, the bottom at the rounded proportion fits under it.
+        for ((w, h) in listOf(1848f to 1759f, 1848f to 1759.4f, 1080f to 1000f, 1200f to 1100f, 2000f to 1999f)) {
+            val p = N3dsOptions.fillProportion(w, h)
+            val top = w / 400f
+            assertTrue(240f * top + 240f * top / p <= h + 0.01f, "$w x $h at $p")
+        }
+        assertEquals(2f, N3dsOptions.fillProportion(0f, 0f))
+    }
+
+    @Test fun portrait_large_sends_the_fill_proportion() {
+        val large = v(N3dsOptions.LAYOUT_PORTRAIT to "large", N3dsOptions.LAYOUT_PORTRAIT_CONTROLLER to "large", N3dsOptions.LAYOUT_LANDSCAPE to "large")
+        val fold = PxRect(0f, 0f, 1848f, 1759f)
+        assertEquals("1.71", N3dsOptions.stackedSmallProportion(large, false, false, phone, false, fold))
+        assertEquals("1.71", N3dsOptions.stackedSmallProportion(large, false, true, phone, false, fold))   // the controller row
+        assertEquals("2", N3dsOptions.stackedSmallProportion(large, false, false, phone, false, PxRect(0f, 0f, 1400f, 1080f)))
+        assertEquals("1", N3dsOptions.stackedSmallProportion(large, false, false, phone, false, PxRect(0f, 0f, 1848f, 3000f)))
+        assertEquals("2", N3dsOptions.stackedSmallProportion(large, false, false, phone, false, null))   // no space yet
+        assertEquals("2", N3dsOptions.stackedSmallProportion(large, true, false, phone, false, fold))    // landscape
+        assertEquals("1", N3dsOptions.stackedSmallProportion(large, false, false, phone, true, fold))    // half-folded
+        assertEquals("1", N3dsOptions.stackedSmallProportion(v(N3dsOptions.LAYOUT_PORTRAIT to "stacked"), false, false, phone, false, fold))
+        assertEquals("1", N3dsOptions.stackedSmallProportion(v(N3dsOptions.LAYOUT_PORTRAIT to "single_screen"), false, false, phone, false, fold))
+    }
+
     @Test fun deadzone_reads_the_core_percentage() {
         assertEquals(0.15f, N3dsOptions.deadzone(null))
         assertEquals(0.15f, N3dsOptions.deadzone("x"))
@@ -131,5 +180,24 @@ class N3dsOptionsTest {
     @Test fun layout_rows_say_the_fold_sets_the_layout_half_folded() {
         assertTrue(N3dsOptions.layoutRowsFor(ScreenClass.NEAR_SQUARE_TABLET, canHalfFold = true).all { NdsOptions.FOLD_NOTE in it.info })
         assertTrue(N3dsOptions.layoutRowsFor(ScreenClass.NEAR_SQUARE_TABLET, canHalfFold = false).none { NdsOptions.FOLD_NOTE in it.info })
+    }
+
+    @Test fun resolutionRows() {
+        val (mode, max, scale) = N3dsOptions.resolutionRows(null)
+        assertEquals(listOf("3D Resolution", "Max Scale", "Scale"), listOf(mode, max, scale).map { it.label })
+        assertEquals(listOf("nx_3ds_3d_resolution", "nx_3ds_3d_max_scale", "nx_3ds_3d_scale"), listOf(mode, max, scale).map { it.key })
+        assertEquals(listOf("auto", "3", "2"), listOf(mode, max, scale).map { it.default })
+        assertEquals("nx_3ds_3d_resolution" to setOf("auto"), max.shownWhen)
+        assertEquals("nx_3ds_3d_resolution" to setOf("performance"), scale.shownWhen)
+        assertTrue(N3dsOptions.resolutionRows(null).none { it.visual })
+        assertEquals((1..10).map { it.toString() }, max.values)
+        assertEquals((1..10).map { "${it}x" }, max.valueLabels)
+        assertTrue("3DS screen" in max.info && "3DS screen" in scale.info)
+    }
+
+    @Test fun resolutionRowsFollowTheDisplay() {
+        val (_, max, scale) = N3dsOptions.resolutionRows(6)
+        assertEquals((1..6).map { it.toString() }, max.values)
+        assertEquals((1..3).map { it.toString() }, scale.values)
     }
 }
