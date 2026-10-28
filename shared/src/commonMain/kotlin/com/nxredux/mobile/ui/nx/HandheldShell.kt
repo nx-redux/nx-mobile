@@ -46,8 +46,9 @@ val LocalPortrait = compositionLocalOf { false }
 val LocalPadBelow = compositionLocalOf { false }
 
 /**
- * The screen area's vertical centre in window px (above the pad band, or the whole area without one), for content
- * centred on the screen rather than its own box ([NxCarousel]'s game-list neighbours). Null until measured.
+ * The screen's vertical centre in window px: the app's area under the status bar, down to the pad band or the bottom
+ * without one, for content centred on the screen rather than its own box ([NxCarousel]'s game list, the Carousel Home
+ * sideways). Null until measured.
  */
 val LocalScreenCentreY = compositionLocalOf<Float?> { null }
 

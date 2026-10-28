@@ -170,7 +170,7 @@ internal fun previewChrome(chrome: LauncherChrome): LauncherChrome = if (chrome.
 private fun Backdrop() {
     Box(Modifier.fillMaxSize()) {
         NxScreenBackground(url = null, fallback = Res.drawable.background, fade = false, modifier = Modifier.fillMaxSize(), centred = true)
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = BACKDROP_DIM)))
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = BACKDROP_DIM)))   // role: the other pages' app backdrop dim, lighter than a game's scrimBackdrop
         Image(
             painterResource(Res.drawable.nx_logo), contentDescription = null, colorFilter = ColorFilter.tint(LocalNxColors.current.listText),
             modifier = Modifier.align(Alignment.Center).size(width = 96.dp, height = 92.dp),   // the mark's 80:77

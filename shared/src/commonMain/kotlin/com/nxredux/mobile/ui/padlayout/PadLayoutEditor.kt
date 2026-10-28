@@ -76,9 +76,6 @@ import com.nxredux.mobile.ui.nx.systemRowPills
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-private val GameBlock = Color(0xFF3A3A3A)
-private val OverlapRed = Color(0xFFE5484D)
-private val HingeLine = Color(0xFF6A6A6A)
 private val HandleRadius = 11.dp
 private val HandleHit = 28.dp   // a touch this near the handle resizes rather than moves
 
@@ -127,7 +124,7 @@ fun PadLayoutEditor(
             PadShape.PORTRAIT -> {
                 val split = portraitSplit(w, h, window?.cutoutTop ?: 0f, ydpi, d)
                 gameArea = PxRect(0f, split.gameTop, w, split.bandTop - split.gameTop)
-                Box(Modifier.placedPx(gameArea).background(GameBlock))
+                Box(Modifier.placedPx(gameArea).background(colors.editorGameBlock))
                 Box(Modifier.placedPx(PxRect(0f, split.bandTop, w, split.bandPx))) {
                     VirtualPad(noPad, Modifier.fillMaxSize(), profile = profile, onCStick = cStick, motion = motion, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true, mic = mic)
                 }
@@ -141,7 +138,7 @@ fun PadLayoutEditor(
                     tag = consoleTag,
                 )
                 gameArea = preview.picture
-                Box(Modifier.placedPx(gameArea).background(GameBlock))
+                Box(Modifier.placedPx(gameArea).background(colors.editorGameBlock))
                 BesidePad(profile, state, cStick, motion, padTools, secondRow, preview, mic)
             }
             PadShape.HALF_FOLDED -> {
@@ -155,9 +152,9 @@ fun PadLayoutEditor(
                 )
                 gameArea = preview?.placement?.top ?: PxRect(0f, 0f, w, h / 2f)
                 if (preview != null) {
-                    Box(Modifier.placedPx(preview.placement.top).background(GameBlock))
-                    Box(Modifier.placedPx(preview.placement.bottom).background(GameBlock))
-                    Box(Modifier.placedPx(PxRect(0f, preview.hingeY - d, w, 2f * d)).background(HingeLine))
+                    Box(Modifier.placedPx(preview.placement.top).background(colors.editorGameBlock))
+                    Box(Modifier.placedPx(preview.placement.bottom).background(colors.editorGameBlock))
+                    Box(Modifier.placedPx(PxRect(0f, preview.hingeY - d, w, 2f * d)).background(colors.editorHinge))
                     HalfFoldedPad(profile, state, cStick, motion, padTools, secondRow, preview, mic)
                 }
             }
@@ -216,7 +213,7 @@ fun PadLayoutEditor(
                 val r = state.rectOf(g) ?: continue
                 val color = when {
                     g == state.selected -> colors.accent
-                    g in overlap -> OverlapRed
+                    g in overlap -> colors.editorOverlap
                     else -> null
                 } ?: continue
                 drawRect(color, topLeft = r.topLeft - origin, size = r.size, style = Stroke(width = 3.dp.toPx()))
@@ -235,6 +232,17 @@ fun PadLayoutEditor(
                 title, shape, state, screenSize, onSave = { onSave(state.layout) }, onCancel = { if (state.requestCancel()) onClose() },
                 Modifier.align(if (shape == PadShape.PORTRAIT) Alignment.BottomCenter else Alignment.Center),
             )
+        }
+        state.confirmReset?.let { reset ->
+            NxModal(
+                caption = if (reset == PadReset.ALL) "Reset all?" else "Reset this group?", kind = ModalKind.CONFIRM,
+                onButton = { b -> if (b == NxButton.A) state.confirmResetNow() else state.keepLayout() }, confirmLabel = "Reset", cancelLabel = "Cancel",
+            ) {
+                Text(
+                    if (reset == PadReset.ALL) "Every group goes back to its default place and size." else "This group goes back to its default place and size.",
+                    color = colors.listText, fontFamily = LocalNxFont.current, fontSize = 18.sp,
+                )
+            }
         }
         if (state.confirmDiscard) {
             NxModal(caption = null, kind = ModalKind.CONFIRM, onButton = { b -> if (b == NxButton.A) onClose() else state.keepEditing() }, confirmLabel = "Discard", cancelLabel = "Keep editing") {
@@ -333,18 +341,19 @@ private fun EditorToolbar(title: String, shape: PadShape, state: PadEditorState,
                     moved += Offset(dx, dy)
                 }
             }
-            .background(Color(0xE6121212), RoundedCornerShape(14.dp))
+            .background(colors.editorPanel, RoundedCornerShape(14.dp))
             .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        // role: the toolbar's drag handle, faint white
         Box(Modifier.align(Alignment.CenterHorizontally).size(width = 28.dp, height = 4.dp).background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(50)))
         Text(
             if (sel == null) "${shape.label} · $title" else "Size ${(state.scaleOf(sel) * 100).roundToInt()}% · drag the corner",
             color = colors.hint, fontFamily = font, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            ToolbarButton("Reset", enabled = sel != null) { state.resetGroup() }
-            ToolbarButton("Reset all") { state.resetAll() }
+            ToolbarButton("Reset", enabled = sel != null) { state.askReset(PadReset.GROUP) }   // both ask first
+            ToolbarButton("Reset all") { state.askReset(PadReset.ALL) }
             ToolbarButton("Cancel", onClick = onCancel)
             ToolbarButton("Save", primary = true, onClick = onSave)
         }
@@ -354,10 +363,10 @@ private fun EditorToolbar(title: String, shape: PadShape, state: PadEditorState,
 @Composable
 private fun ToolbarButton(label: String, enabled: Boolean = true, primary: Boolean = false, onClick: () -> Unit) {
     val colors = LocalNxColors.current
-    val bg = if (primary) colors.accent else Color(0xFF2A2A2A)
+    val bg = if (primary) colors.accent else colors.editorButton
     val fg = if (primary) colors.onAccent else colors.listText
     Box(
-        Modifier.background(bg.copy(alpha = if (enabled) 1f else 0.4f), RoundedCornerShape(50))
+        Modifier.background(bg.copy(alpha = if (enabled) 1f else 0.4f), RoundedCornerShape(50))   // role: a disabled toolbar button
             .pointerInput(enabled) { detectTapGestures { if (enabled) onClick() } }
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) { Text(label, color = fg, fontFamily = LocalNxFont.current, fontSize = 13.sp) }

@@ -133,16 +133,16 @@ data class HomeTopTile(val kind: HomeTopKind, val rect: HomeRect)
 /**
  * Every rectangle on Home's page ([homeBoard]). [top] is in focus order: Continue, the inline games, then the squares in
  * reading order (MORE last). [inlineGames]: the pinned games drawn in the top section rather than the rows (up to 2, on
- * every landscape face but UNDER). [labelH]: a shelf label's line box ([homeLabelLineH]). [shelfCols]: each shelf's tiles a
- * row, matching [shelfSizes] (the pins' [perRow]: 4 on the large face).
+ * every landscape face but UNDER). [shelfCols]: each shelf's tiles a row, matching [shelfSizes] (the pins' [perRow]: 4 on
+ * the large face). The shelves have no headers: their games wear their reason on the tile.
  */
 data class HomeBoard(
     val mode: HomeToolMode, val wide: Boolean, val stripLines: Int, val topY: Float, val topH: Float,
     val top: List<HomeTopTile>, val slots: Int, val more: Int,
     val gutter: Float, val gap: Float, val perRow: Int, val pinW: Float, val pinH: Float,
     val tilesY: Float, val rowGames: Int, val pageH: Float, val square: Float, val stripY: Float = HOME_STRIP_TOP,
-    val labels: List<HomeLabel> = emptyList(), val shelfTiles: List<HomeRect> = emptyList(), val shelfSizes: List<Int> = emptyList(),
-    val inlineGames: Int = 0, val labelH: Float = HOME_LABEL_H, val shelfCols: List<Int> = emptyList(),
+    val shelfTiles: List<HomeRect> = emptyList(), val shelfSizes: List<Int> = emptyList(),
+    val inlineGames: Int = 0, val shelfCols: List<Int> = emptyList(),
 )
 
 private const val HOME_STRIP_TOP = 2f        // the strip's room under the tab row in topY (its own offset is [homeStripTop])
@@ -183,6 +183,14 @@ private fun homePortraitTopCap(): Float = HOME_FOLD_COVER.h - homeTopY(HOME_FOLD
 
 /** [f]'s cap: [homePortraitTopCap], plus the tab row's room while it is hidden (279 dp). */
 private fun homePortraitTopCap(f: HomeFrame): Float = homePortraitTopCap() + homeTitleRoom(f)
+
+/**
+ * The portrait top section in a [body] that tall: the body up to [cap]; past it, the pin rows follow, unless what is
+ * left under the cap is less than half a pin row ([pinH]), which would only show a sliver of one: the top section takes
+ * it all then.
+ */
+internal fun homePortraitTop(body: Float, cap: Float, pinH: Float): Float =
+    if (body - cap < pinH / 2) body else cap
 
 /**
  * The bundled MiSans Latin SemiBold, per em: its line metrics (hhea ascent 1044, descent 282: a natural line is 1.326 em, the
@@ -259,19 +267,6 @@ private const val HOME_LARGE_MIN_W = 840f
 /** The large face's pin columns (every pinned game one tile) and shelf columns. */
 private const val HOME_LARGE_PIN_COLS = 4
 internal const val HOME_SHELF_COLS = 4   // a board's shelf columns when it names none
-/** A band's label: an 18 dp line ([homeLabelLineH] on a frame), 6 dp above its tiles, in the gap above the band. */
-private const val HOME_LABEL_H = 18f
-private const val HOME_LABEL_GAP = 6f
-
-/**
- * A band label's line box on [f]: [HOME_LABEL_H] times its text scale, never under it, as the strip's ([homeStripLineH]).
- * HomeScreen draws the label at 13 sp on 18 sp lines times that scale, so a large font does not run into the tiles.
- */
-internal fun homeLabelLineH(f: HomeFrame): Float = HOME_LABEL_H * max(1f, f.textScale)
-
-/** A band's label: its [text] and its line box's top, in page dp. */
-data class HomeLabel(val text: String, val y: Float)
-
 /** The large face's body is at least this tall too: an 846 × 324 21:9 landscape is wide enough, but too short. */
 private const val HOME_LARGE_MIN_H = 480f
 
@@ -323,9 +318,12 @@ private fun homeSlots(mode: HomeToolMode, tools: Int, portrait: Boolean, rows: I
  * its 5 ([HOME_TOOL_ROWS]) and the squares grow, UNDER keeps its 5 in a row, and the pin rows keep the shape they have
  * with the tab row shown. With Home stats off ([HomeFrame.statsHidden]), [stripLines] are the lines the strip would
  * take; the board's lines are 0 and their room ([homeStatsRoom]) goes to the top section the same way: Continue grows,
- * the caps rise by it (so the portrait type's pins start where they did), and the squares grow.
+ * the caps rise by it (so the portrait type's pins start where they did), and the squares grow. [fillSliver]: a portrait
+ * body only a sliver past its cap goes to the top section ([homePortraitTop]); false keeps the cap (the Carousel dock's size).
  */
-internal fun homeBoard(f: HomeFrame, stripLines: Int, tools: Int, games: Int, shelves: List<Pair<HomeShelf, Int>> = emptyList()): HomeBoard {
+internal fun homeBoard(
+    f: HomeFrame, stripLines: Int, tools: Int, games: Int, shelves: List<Pair<HomeShelf, Int>> = emptyList(), fillSliver: Boolean = true,
+): HomeBoard {
     val freed = homeStatsRoom(f, stripLines)
     val lines = homeStripLinesShown(f, stripLines)
     if (homeIsLarge(f)) return homeBoardLarge(f, lines, freed, tools, games, shelves)
@@ -350,12 +348,12 @@ internal fun homeBoard(f: HomeFrame, stripLines: Int, tools: Int, games: Int, sh
     val under = max(0f, (w - 4 * gap) / 5)
     // Every face's top section is the body (to its cap): row games start below it, on the next screen.
     val cap = (if (mode == HomeToolMode.UNDER) w / 1.5f + gap + under else (w - gap) / 2 / HOME_HALF_SHAPE) + homeTitleRoom(f) + freed
+    val pinFull = if (f.portrait) shapeH * HOME_PORTRAIT_PIN_TALL else shapeH
     val topFull = when {
-        f.portrait -> max(homeMinTop(true), min(body, homePortraitTopCap(f) + freed))
+        f.portrait -> max(homeMinTop(true), homePortraitTopCap(f).plus(freed).let { c -> if (fillSliver) homePortraitTop(body, c, pinFull) else min(body, c) })
         halves -> max(homeMinTop(false), min(body, cap))
         else -> max(0f, body)
     }
-    val pinFull = if (f.portrait) shapeH * HOME_PORTRAIT_PIN_TALL else shapeH
     val rowsN = HOME_TOOL_ROWS   // UNDER's row is 5 too
     val slots = homeSlots(mode, tools, f.portrait, rowsN)
     val shown = min(tools, slots)
@@ -402,38 +400,34 @@ internal fun homeBoard(f: HomeFrame, stripLines: Int, tools: Int, games: Int, sh
         sq.forEachIndexed { i, r -> add(HomeTopTile(if (more > 0 && i == shown - 1) HomeTopKind.MORE else HomeTopKind.TOOL, page(r))) }
     }
     // The shelves under the pin rows ([homeBands]), each in the pins' grid: perRow a row at the pins' size.
-    val labelled = shelves.any { it.second > 0 }
-    val bands = homeBands(topY + topH, gutter, gap, homeLabelLineH(f), rowGames, perRow, pinH, shelves) { shelf ->
+    val bands = homeBands(topY + topH, gutter, gap, rowGames, perRow, pinH, shelves) { shelf ->
         HomeShelfShape(perRow, pinW, pinH, min(homeShelfMax(shelf), homeShelfCap(f.portrait, perRow)))
     }
     return HomeBoard(
         mode, false, lines, topY, topH, top, slots, more, gutter, gap, perRow, pinW, pinH, bands.tilesY, rowGames, bands.pageH, s,
-        homeStripTop(f, lines), bands.labels, bands.tiles, bands.sizes, inlineGames = inline,
-        labelH = if (labelled) homeLabelLineH(f) else HOME_LABEL_H, shelfCols = bands.cols,
+        homeStripTop(f, lines), bands.tiles, bands.sizes, inlineGames = inline, shelfCols = bands.cols,
     )
 }
 
 /** One shelf's tiles in [homeBands]: [cols] a row, each [w] × [h], at most [max] of them. */
 private class HomeShelfShape(val cols: Int, val w: Float, val h: Float, val max: Int)
 
-/** The bands under Home's top section ([homeBands]): their labels, the pins' top, the shelves' tiles, sizes and columns, the page's end. */
+/** The bands under Home's top section ([homeBands]): the pins' top, the shelves' tiles, sizes and columns, the page's end. */
 private class HomeBands(
-    val labels: List<HomeLabel>, val tilesY: Float, val tiles: List<HomeRect>, val sizes: List<Int>, val cols: List<Int>, val pageH: Float,
+    val tilesY: Float, val tiles: List<HomeRect>, val sizes: List<Int>, val cols: List<Int>, val pageH: Float,
 )
 
 /**
- * The bands under a top section ending at [above]: the [rowGames] pins ([perRow] a row, [pinH] tall, a gap apart, with
- * no label), then each of [shelves] under its label, in its [shape] (an empty shelf is dropped). A label sits a gap
- * under what is above it, its line [labelH] tall, [HOME_LABEL_GAP] above its tiles. The page ends under the last tile
- * (its ring room and the margin), else under the top section.
+ * The bands under a top section ending at [above]: the [rowGames] pins ([perRow] a row, [pinH] tall, a gap apart), then
+ * each of [shelves] a gap under them, in its [shape] (an empty shelf is dropped); no headers. The page ends under the
+ * last tile (its ring room and the margin), else under the top section.
  */
 private fun homeBands(
-    above: Float, gutter: Float, gap: Float, labelH: Float, rowGames: Int, perRow: Int, pinH: Float,
+    above: Float, gutter: Float, gap: Float, rowGames: Int, perRow: Int, pinH: Float,
     shelves: List<Pair<HomeShelf, Int>>, shape: (HomeShelf) -> HomeShelfShape,
 ): HomeBands {
-    val labels = ArrayList<HomeLabel>()
     var y = above   // the bottom of what is above
-    fun band(text: String): Float { labels += HomeLabel(text, y + gap); return y + gap + labelH + HOME_LABEL_GAP }
+    fun band(): Float = y + gap   // a shelf a gap under what is above it (no header: its games wear their reason, [HomeBadge])
     var tilesY = y + gap
     var any = false
     if (rowGames > 0) {
@@ -448,7 +442,7 @@ private fun homeBands(
         val sh = shape(shelf)
         val count = min(n, sh.max)
         if (count <= 0) continue
-        val ty = band(shelf.label)
+        val ty = band()
         repeat(count) { tiles += HomeRect(gutter + (it % sh.cols) * (sh.w + gap), ty + (it / sh.cols) * (sh.h + gap), sh.w, sh.h) }
         sizes += count
         cols += sh.cols
@@ -457,7 +451,7 @@ private fun homeBands(
         any = true
     }
     val pageH = if (any) y + RING_ROOM + HOME_PAGE_MARGIN else above + HOME_PAGE_MARGIN
-    return HomeBands(labels, tilesY, tiles, sizes, cols, pageH)
+    return HomeBands(tilesY, tiles, sizes, cols, pageH)
 }
 
 /**
@@ -526,14 +520,12 @@ private fun homeBoardWide(f: HomeFrame, stripLines: Int, freed: Float, tools: In
     val col = homeInlineColumn(inline, topH, w, right, shown > 0, gap)
     val top = homeTopTiles(gutter, topY, topH, col, shown, more, cols, right, s, gap)
     // The shelves under the row games, in their grid, as [homeBoard]'s.
-    val labelled = shelves.any { it.second > 0 }
-    val labelH = if (labelled) homeLabelLineH(f) else HOME_LABEL_H
-    val bands = homeBands(topY + topH, gutter, gap, labelH, rowGames, perRow, pinH, shelves) { shelf ->
+    val bands = homeBands(topY + topH, gutter, gap, rowGames, perRow, pinH, shelves) { shelf ->
         HomeShelfShape(perRow, pinW, pinH, min(homeShelfMax(shelf), homeShelfCap(false, perRow)))
     }
     return HomeBoard(
         HomeToolMode.WIDE, true, stripLines, topY, topH, top, slots, more, gutter, gap, perRow, pinW, pinH, bands.tilesY, rowGames,
-        bands.pageH, s, homeStripTop(f, stripLines), bands.labels, bands.tiles, bands.sizes, inline, labelH, bands.cols,
+        bands.pageH, s, homeStripTop(f, stripLines), bands.tiles, bands.sizes, inline, bands.cols,
     )
 }
 
@@ -597,17 +589,16 @@ private fun homeBoardLarge(f: HomeFrame, stripLines: Int, freed: Float, tools: I
     val inline = min(games.coerceAtLeast(0), HOME_INLINE_MAX)   // the first 2 inline, the rest row games
     val col = homeInlineColumn(inline, topH, w, right, shown > 0, gap)
     val top = homeTopTiles(gutter, topY, topH, col, shown, more, cols, right, s, gap)
-    val labelH = homeLabelLineH(f)
     val pinW = (w - (HOME_LARGE_PIN_COLS - 1) * gap) / HOME_LARGE_PIN_COLS
     val pinH = pinW * 9 / 16
     val rowGames = games.coerceAtLeast(0) - inline
     // Each shelf up to 4 tiles ([homeShelfCap]) at the pins' size, 4 to a row: one row.
-    val bands = homeBands(topY + topH, gutter, gap, labelH, rowGames, HOME_LARGE_PIN_COLS, pinH, shelves) { shelf ->
+    val bands = homeBands(topY + topH, gutter, gap, rowGames, HOME_LARGE_PIN_COLS, pinH, shelves) { shelf ->
         HomeShelfShape(HOME_LARGE_PIN_COLS, pinW, pinH, min(homeShelfMax(shelf), homeShelfCap(false, HOME_LARGE_PIN_COLS)))
     }
     return HomeBoard(
         HomeToolMode.LARGE, false, stripLines, topY, topH, top, slots, more, gutter, gap, HOME_LARGE_PIN_COLS, pinW, pinH,
-        bands.tilesY, rowGames, bands.pageH, s, homeStripTop(f, stripLines), bands.labels, bands.tiles, bands.sizes, inline, labelH, bands.cols,
+        bands.tilesY, rowGames, bands.pageH, s, homeStripTop(f, stripLines), bands.tiles, bands.sizes, inline, bands.cols,
     )
 }
 
@@ -615,23 +606,6 @@ private fun homeBoardLarge(f: HomeFrame, stripLines: Int, freed: Float, tools: I
 internal fun homeBoardTile(b: HomeBoard, k: Int): HomeRect =
     if (k < b.rowGames) homeBoardPin(b, k) else b.shelfTiles[k - b.rowGames]
 
-/**
- * Row tile [k]'s rect for the scroll ([homeScrollTo]): a tile in a shelf's first row reaches up over the shelf's label
- * ([HomeBoard.labelH] + [HOME_LABEL_GAP]), so the label stays in view. The pins have no label.
- */
-internal fun homeScrollRect(b: HomeBoard, k: Int): HomeRect {
-    val r = homeBoardTile(b, k)
-    if (b.labels.isEmpty() || k < b.rowGames) return r
-    var at = b.rowGames
-    var firstRow = false
-    for ((i, n) in b.shelfSizes.withIndex()) {
-        if (k < at + n) { firstRow = k - at < b.shelfCols.getOrElse(i) { HOME_SHELF_COLS }; break }
-        at += n
-    }
-    if (!firstRow) return r
-    val room = b.labelH + HOME_LABEL_GAP
-    return HomeRect(r.x, r.y - room, r.w, r.h + room)
-}
 
 /**
  * The arrangement for a body [w] × [h] dp: [HomeArrangement.WIDE] when the menu area is at least [WIDE_RATIO] times as

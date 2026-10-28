@@ -187,11 +187,11 @@ private fun ToolAppTile(app: ToolAppRow, lit: Boolean, tileW: Float, dim: Boolea
     val iconDp = min(tileW * TOOL_APPS_ICON_SHARE, TOOL_APPS_ICON_MAX)
     Box(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(NX_TILE_CORNER.dp))
-            .then(if (lit) Modifier.background(nxHighlight()) else Modifier.tilePlate(colors.background, colors.main))
+            .then(if (lit) Modifier.background(nxHighlight()) else Modifier.tilePlate(colors.background, colors.inkEdge))
             .combinedClickable(remember { MutableInteractionSource() }, indication = null, onLongClick = onLongPress, onClick = onTap),
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 10.dp).alpha(if (dim) TOOL_APPS_HIDDEN_ALPHA else 1f),
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 10.dp).alpha(if (dim) TOOL_APPS_HIDDEN_ALPHA else 1f),   // role: a hidden app, dimmed
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             ToolIcon(toolIcon(ToolKind.APP), app.id, content, Modifier.size(iconDp.dp))

@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -15,6 +16,9 @@ import com.nxredux.mobile.settings.VerticalListAlignment
 import com.nxredux.mobile.ui.GridTile
 import com.nxredux.mobile.ui.InfoLine
 
+
+/** A game list's box stack fades over most of a half-shown box, so a box beyond an edge fades out rather than cuts. */
+private val BACKDROP_STACK_EDGE_FADE = 56.dp
 
 /**
  * The Backdrop items stood on end ([NxStack]): Carousel, orientation Vertical. The same arguments as [NxBackdrop], so a
@@ -49,7 +53,8 @@ fun NxBackdropStack(
         val gutter = if (portrait) 16f else 24f
         if (games != null) {
             // A game list: the box art stack left of centre over the caller's picture, the caption to its right (every
-            // family). No edge fade: the picture runs behind the body's edges.
+            // family). The boxes fade out at the top and bottom edges; the fade masks the stack alone, so the picture
+            // behind runs on to the body's edges.
             if (games.isEmpty()) return@BoxWithConstraints
             val bodyW = maxWidth.value
             val bodyH = maxHeight.value
@@ -64,10 +69,11 @@ fun NxBackdropStack(
                 LaunchedEffect(shown) { report(shown) }
             }
             NxStack(
-                games.size, selectedIndex, g, RowStyle.BACKDROP, edgeFade = false,
+                games.size, selectedIndex, g, RowStyle.BACKDROP, edgeFade = true,
                 onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
-                layoutKey = layoutKey, dataKey = games,
-                item = { i, _, _ -> BoxArt(games[i]) },
+                layoutKey = layoutKey, dataKey = games, edgeFadeHeight = BACKDROP_STACK_EDGE_FADE,
+                // The unselected boxes in greyscale, as the row's ([backdropSaturation]).
+                item = { i, _, distance -> Box(Modifier.matchParentSize().nxSaturation { backdropSaturation(distance()) }) { BoxArt(games[i]) } },
                 overlay = { StackCaption(
                     captionTitle(), captionInfo(), g, bodyW, bodyH, shadow = true, nameSp = 18f * nxTextScale(),   // Appearance → Text size
                     splitNext = stackPortraitFamily(screenW, screenH, portrait), alignment = alignment, infoShare = 0.8f,

@@ -12,10 +12,15 @@ import com.nxredux.mobile.ui.nx.NxSettingControl
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.flipped
+import com.nxredux.mobile.ui.nx.fittedTo
 import com.nxredux.mobile.ui.nx.fullInfo
 import com.nxredux.mobile.ui.nx.hasMoreInfo
 import com.nxredux.mobile.ui.nx.nxSettingControl
 import com.nxredux.mobile.ui.nx.nxSwitchOnIndex
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.nxredux.mobile.ui.nx.NxTouchRowSizes
+import com.nxredux.mobile.ui.nx.TOUCH_ROW_AIR
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -72,14 +77,72 @@ class SettingsTouchRowsTest {
         assertEquals("", accent.info)
         assertTrue(accent.detail.startsWith("The selection colour")); assertTrue(accent.hasMoreInfo)
         assertEquals(accent.detail, accent.fullInfo)
-        val addFolder = settingsInfo(SettingsRow(SettingsKind.ADD_EXTRA, "Add ROM folder"))   // no fuller text: the old line moves behind it
-        assertEquals(SettingText("", "Scan another folder for games too, such as one on an SD card"), addFolder)
+    }
+
+    // Library's Add ROM folder reads as an add row: a "+" before its name, its line under it.
+    @Test fun addRomFolderIsAnAddRowWithItsLine() {
+        val add = settingsTouchRow(SettingsRow(SettingsKind.ADD_EXTRA, "Add ROM folder"), null)
+        assertTrue(add.adds)
+        assertEquals("Scan another folder for games too, such as one on an SD card", add.info)
+        assertFalse(settingsTouchRow(SettingsRow(SettingsKind.SAVES, "Saves"), null).adds)
+    }
+
+    // Layouts' group rows say nothing on the row (no line, no info icon, no X Info); each group's page says it under its title.
+    @Test fun layoutsGroupRowsHaveNoDescription() {
+        val groups = SettingsSection.entries.filter { it.layoutGroup }
+        assertEquals(7, groups.size)
+        for (g in groups) {
+            val row = settingsTouchRow(SettingsRow(g.opener!!, g.label, "List"), null, SettingsSection.MAIN_MENU)
+            assertEquals("", row.info, "$g"); assertEquals("", row.detail, "$g")
+            assertFalse(nxShowsInfo(row, null), "$g")
+            assertEquals(listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Select")), settingsHints(listOf(SettingsRow(g.opener!!, g.label)), 0, row, info = false))
+        }
+    }
+
+    // Every touch row: its text (the name, then its description's own lines) with the same air above and below.
+    @Test fun touchRowsKeepTheSameAirWhateverTheirText() {
+        val sizes = NxTouchRowSizes(16.sp, 14.4.sp, 18.sp, 14.sp, row = 100.dp, segments = 30.dp, bare = 64.dp, labelLineDp = 20.dp, descLineDp = 18.dp)
+        val air = TOUCH_ROW_AIR * 2
+        assertEquals(20.dp + air, sizes.height(descLines = 0, segmentsBelow = false))            // the name alone: no list-pitch minimum
+        assertEquals(20.dp + 18.dp + air, sizes.height(descLines = 1, segmentsBelow = false))   // one line: no room for a second
+        assertEquals(20.dp + 36.dp + air, sizes.height(descLines = 2, segmentsBelow = false))
+        assertEquals(sizes.height(2, false), sizes.height(5, false))                              // at most two lines (then an ellipsis)
+        assertEquals(20.dp + 18.dp + air + 30.dp, sizes.height(descLines = 1, segmentsBelow = true))   // segments under the text add their line
+        assertEquals(24.dp + air, sizes.height(descLines = 0, segmentsBelow = false, control = 24.dp))   // a switch taller than the name
+        for (lines in 0..2) assertEquals(air, sizes.height(lines, false) - (20.dp + 18.dp * lines))
+    }
+
+    // Every one-line row is one height: the tallest control's line, whether the row has a picker, segments or plain text.
+    @Test fun oneLineRowsAreOneHeightWhateverTheirControl() {
+        val sizes = NxTouchRowSizes(16.sp, 14.4.sp, 18.sp, 14.sp, row = 100.dp, segments = 30.dp, bare = 64.dp, labelLineDp = 20.dp, descLineDp = 18.dp, controlMin = 29.dp)
+        val air = TOUCH_ROW_AIR * 2
+        assertEquals(29.dp + air, sizes.height(descLines = 0, segmentsBelow = false))                    // a value as text
+        assertEquals(29.dp + air, sizes.height(descLines = 0, segmentsBelow = false, control = 29.dp))   // a picker
+        assertEquals(20.dp + 18.dp + air, sizes.height(descLines = 1, segmentsBelow = false))           // a described row is taller anyway
+        assertEquals(20.dp + air + 30.dp, sizes.height(descLines = 0, segmentsBelow = true))              // a control under the name: the name's line alone
+    }
+
+    // Game lists' layout is segmented while its five styles fit on a line; too narrow even for that, a picker.
+    @Test fun aForcedSegmentedRowFallsBackToAPickerWhenItsLineIsTooNarrow() {
+        val styles = listOf("List", "Grid", "Carousel", "Backdrop", "Minimal")
+        val row = settingsTouchRow(SettingsRow(SettingsKind.GAME_LIST_STYLE, "Layout", "List"), SettingChoices(styles, 0))
+        assertEquals(NxSettingControl.SEGMENTED, row.control)
+        assertEquals(NxSettingControl.SEGMENTED, row.fittedTo { true }.control)
+        assertEquals(NxSettingControl.PICKER, row.fittedTo { false }.control)
+        assertEquals(styles, row.fittedTo { false }.choices)
+        val accent = NxSettingRow("Pad vibration", choices = listOf("Off", "Low", "High"), index = 0)
+        assertEquals(accent, accent.fittedTo { false })                                       // a row not forced: as it is
+        // The Game Switcher's layout likewise: Full screen and List as segments, not a picker, though "Full screen" is long.
+        val switcher = settingsTouchRow(SettingsRow(SettingsKind.SWITCHER_LAYOUT, "Layout", "List"), SettingChoices(listOf("Full screen", "List"), 1))
+        assertEquals(NxSettingControl.SEGMENTED, switcher.control)
     }
 
     @Test fun aKeptRowShowsItsShortLine() {
         val shelf = settingsTouchRow(SettingsRow(SettingsKind.SHELF_SHOWN, "New shelf", shelf = HomeShelf.NEW), null)
         assertEquals("Games found in the last 30 days", shelf.info); assertTrue(shelf.hasMoreInfo)
-        val stats = settingsTouchRow(SettingsRow(SettingsKind.HOME_STATS, "Home stats"), null)
+        val notStarted = settingsTouchRow(SettingsRow(SettingsKind.SHELF_SHOWN, "Not started shelf", shelf = HomeShelf.NOT_STARTED), null)
+        assertEquals("Games you have never played", notStarted.info); assertFalse(notStarted.hasMoreInfo)   // the line alone: no info icon
+        val stats = settingsTouchRow(SettingsRow(SettingsKind.HOME_STATS, "Stats"), null)
         assertEquals("This month and Most played", stats.info); assertTrue("stats strip" in stats.detail)
         // All files access: a line only for the warning.
         assertEquals("", settingsInfo(SettingsRow(SettingsKind.ALL_FILES, "All files access")).line)

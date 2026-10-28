@@ -28,7 +28,7 @@ import kotlin.math.roundToInt
 
 /**
  * How far a release carries on, in seconds of its velocity: a release at v dp/s lands v × this further along. A quick
- * flick (about 2000 dp/s) carries some 500 dp, three or four Grid columns or two to three row items.
+ * flick (about 2000 dp/s) carries some 500 dp, two to three row items.
  */
 internal const val SWIPE_FLING_S = 0.25f
 
@@ -116,42 +116,6 @@ internal fun swipeRubber(value: Float, lo: Float, hi: Float, give: Float): Float
 }
 
 /**
- * Where a sliding Grid scrolled by a swipe rests: the slide x [startX] + [dragDp], carried [SWIPE_FLING_S] of
- * [velocityDp] on, held within the grid's ends and snapped to the nearest column rest (a column on the anchor,
- * [gridAnchorX], or either end: the first column on the gutter, the last on the far gutter). It selects nothing.
- */
-internal fun gridScrollSnap(startX: Float, dragDp: Float, velocityDp: Float, count: Int, g: GridGeometry, widthDp: Float): Float {
-    if (count <= 0) return g.gutter
-    val lo = gridSlideX(count - 1, count, g, widthDp)
-    val hi = gridSlideX(0, count, g, widthDp)
-    val x = (startX + dragDp + velocityDp * SWIPE_FLING_S).coerceIn(lo, hi)
-    val c = ((gridAnchorX(0, g) - x) / (g.tileW + g.gap)).roundToInt()
-    val rests = listOf(lo, hi) + (c - 1..c + 1).map { gridAnchorX(it, g).coerceIn(lo, hi) }
-    return rests.minBy { abs(it - x) }
-}
-
-/**
- * A Grid held at a slide x of its own, apart from its selection: where a swipe scrolled it, or where a tap left it
- * ([rest]), until the next d-pad press ([press]: the d-pad press count it was set at).
- */
-internal data class GridScroll(val press: Int, val rest: Float)
-
-/**
- * The slide x a sliding Grid rests at: the [scroll]'s while no d-pad press has come since ([press], the count now),
- * else the selection [sel]'s own ([gridSlideX]): the first d-pad press after a swipe or a tap (a move or not) brings the
- * selection back to where the d-pad puts it, in that same press. A tap moves nothing.
- */
-internal fun gridShiftTarget(scroll: GridScroll?, press: Int, sel: Int, count: Int, g: GridGeometry, widthDp: Float): Float =
-    if (scroll != null && scroll.press == press) scroll.rest else gridSlideX(sel, count, g, widthDp)
-
-/** The scroll still in force at d-pad press count [press]: none once a press has come. */
-internal fun gridScrollAfter(scroll: GridScroll?, press: Int): GridScroll? = scroll?.takeIf { it.press == press }
-
-/** A tap selecting another tile: the row stays at [shown] (its rest now, scrolled or not) until the next d-pad press. */
-internal fun gridScrollOnTap(scroll: GridScroll?, press: Int, shown: Float): GridScroll =
-    gridScrollAfter(scroll, press)?.copy(rest = shown) ?: GridScroll(press, shown)
-
-/**
  * dp the finger moves for the first step of a Carousel / Backdrop row's position: [rowItem]'s first step, the
  * selection's centre to its neighbour's. Later steps are each pair of side items' ([rowSwipeDelta]).
  */
@@ -199,7 +163,7 @@ internal fun rowSwipeTarget(startPos: Float, dragDp: Float, velocityDp: Float, c
 }
 
 /**
- * A horizontal swipe over [value] (the Grid's slide x, a row's position): while a finger drags, [live] holds the value
+ * A horizontal swipe over [value] (a row's position): while a finger drags, [live] holds the value
  * the row shows (NaN otherwise; the caller draws `live` when set, else [value]), moved [toValue] for the finger's drag
  * (by default [perDp] per dp it moves right), held in [lo]..[hi] with [give] of resistance ([swipeRubber]). On release,
  * [target] (start value, drag in dp, velocity in dp/s) picks the index to select and the value to rest on: [value]

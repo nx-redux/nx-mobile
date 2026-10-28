@@ -28,7 +28,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -37,10 +36,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
-
-internal val NxModalPanelColor = Color(0xFF121212)
-internal val NxModalCardColor = Color(0xFF1E1E1E)
-internal val NxModalScrimColor = Color(0xB3000000)
 
 /**
  * The one modal frame: scrim, a dark panel holding a lighter card (a small caption and [content]), and below the card
@@ -76,18 +71,18 @@ fun NxModal(
     // Portrait: the keyboard lands mostly on the pad band, so no IME padding (the card scrolls if it is ever covered).
     // A tap gesture, not clickable: no full-screen ripple, and the scrim is not focusable or clicked by a hardware Enter.
     Box(
-        Modifier.fillMaxSize().then(if (!padVisible) Modifier.imePadding() else Modifier).background(NxModalScrimColor)
+        Modifier.fillMaxSize().then(if (!padVisible) Modifier.imePadding() else Modifier).background(LocalNxColors.current.scrimModal)
             .pointerInput(scrimDismisses) { detectTapGestures { if (scrimDismisses) onButton(dismiss) } },
         contentAlignment = Alignment.Center,
     ) {
         Column(
             // 24dp from every screen edge: a tall card (long notes in landscape) stops short of the top and bottom too.
-            Modifier.padding(24.dp).widthIn(max = maxWidth).fillMaxWidth().background(NxModalPanelColor, RoundedCornerShape(24.dp))
+            Modifier.padding(24.dp).widthIn(max = maxWidth).fillMaxWidth().background(LocalNxColors.current.modalPanel, RoundedCornerShape(24.dp))
                 .pointerInput(Unit) { detectTapGestures { } }   // taps inside stay inside
                 .padding(start = 8.dp, top = 8.dp, end = 8.dp, bottom = if (footer is ModalFooter.None) 8.dp else 0.dp),
         ) {
             // The card scrolls and the footer stays pinned, so a landscape keyboard leaving ~125dp still shows the buttons.
-            Column(Modifier.weight(1f, fill = false).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(NxModalCardColor).nxScrollFade(scroll).verticalScroll(scroll).padding(16.dp)) {
+            Column(Modifier.weight(1f, fill = false).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(LocalNxColors.current.modalCard).nxScrollFade(scroll).verticalScroll(scroll).padding(16.dp)) {
                 if (caption != null) {
                     Text(caption, color = colors.hint, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxModalSmall(), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(8.dp))
@@ -130,7 +125,7 @@ internal fun NxModalButton(action: FooterAction, onClick: () -> Unit) {
     val colors = LocalNxColors.current
     val shape = RoundedCornerShape(50)
     val base = Modifier.height(36.dp).clip(shape).clickable(onClick = onClick)
-    val styled = if (action.primary) base.background(colors.main, shape) else base.border(1.dp, colors.main.copy(alpha = 0.2f), shape)
+    val styled = if (action.primary) base.background(colors.main, shape) else base.border(1.dp, colors.inkRing, shape)
     Box(styled.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
         Text(action.label, color = if (action.primary) colors.listTextSelected else colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxModalButton(), maxLines = 1)
     }

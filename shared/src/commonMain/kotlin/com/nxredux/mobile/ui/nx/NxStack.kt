@@ -41,7 +41,7 @@ import com.nxredux.mobile.settings.VerticalListAlignment
 import com.nxredux.mobile.ui.InfoLine
 
 private const val STACK_SLIDE_MS = 300   // the stack's slide and scale, as the horizontal row's
-/** The fade to transparent at the top and bottom of the plain-black stacks' bodies. */
+/** The fade to transparent at the top and bottom of a stack's body ([NxStack]'s edgeFade). */
 private val STACK_EDGE_FADE = 20.dp
 
 /**
@@ -52,7 +52,8 @@ private val STACK_EDGE_FADE = 20.dp
  * and, on release, settles on the item nearest where it would rest ([rowSwipeTarget]), the same as the row's on X.
  * A tap on a neighbour selects it, a tap on the selection opens it ([LocalNxTapOpens]), a long press calls [onLongPress].
  * The body is clipped (a hidden page title's room is part of the body, so the stack runs up into it; the caller centres
- * [g] in the whole body); [edgeFade]: its top and bottom fade out over [STACK_EDGE_FADE] (the plain-black stacks).
+ * [g] in the whole body); [edgeFade]: its top and bottom fade out over [edgeFadeHeight] (the items alone: the picture
+ * behind a Backdrop is the caller's, so it stays whole).
  * [item] draws item i in its slot ([StackGeometry.slotW] × [StackGeometry.slotH]; `distance` is i − the animated
  * position, read at draw time); [overlay] draws over the stack in body coordinates (a count, a caption), inside the clip
  * and the fade. [layoutKey] / [dataKey]: a new Screen or a new list snaps the stack to its selection instead of sliding.
@@ -71,6 +72,7 @@ internal fun NxStack(
     marks: Boolean = false,
     reach: ((Int) -> StackReach)? = null,
     sideAlpha: ((distance: Float) -> Float)? = null,
+    edgeFadeHeight: Dp = STACK_EDGE_FADE,   // [edgeFade]'s height
     item: @Composable BoxScope.(i: Int, selected: Boolean, distance: () -> Float) -> Unit,
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
@@ -89,7 +91,7 @@ internal fun NxStack(
 
     Box(
         modifier.fillMaxSize().clipToBounds()
-            .then(if (edgeFade) Modifier.nxStackEdgeFade(STACK_EDGE_FADE) else Modifier)
+            .then(if (edgeFade) Modifier.nxStackEdgeFade(edgeFadeHeight) else Modifier)
             .axisSwipe(
                 vertical = true, key = pos, value = pos, live = dragPos, perDp = -1f / rowSwipeStep(row),
                 lo = 0f, hi = (count - 1).toFloat(), give = 0.5f, ms = STACK_SLIDE_MS,
@@ -202,7 +204,7 @@ internal fun StackCaption(
         verticalArrangement = Arrangement.spacedBy(3.dp),
         horizontalAlignment = if (end) Alignment.End else Alignment.Start,
     ) {
-        Text(title, color = colors.listText, maxLines = 2, overflow = TextOverflow.Ellipsis, style = nameStyle)
+        Text(title, color = colors.accent, maxLines = 2, overflow = TextOverflow.Ellipsis, style = nameStyle)   // the selected game's name in the accent
         // The centred block may grow: "Next: <name>" may take its two lines whatever the body's room.
         CaptionInfoRows(backdropCaptionRows(info), infoStyle, 12.dp, avail = width.dp, spare = bodyH.dp, alwaysSplitNext = splitNext)
     }

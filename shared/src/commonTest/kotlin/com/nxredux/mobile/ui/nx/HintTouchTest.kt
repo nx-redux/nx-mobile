@@ -36,12 +36,12 @@ class HintTouchTest {
         assertEquals(listOf(true), lit.touchIcons {}.map { it.lit })
     }
 
-    @Test fun launcher_icons_follow_the_chrome() {
-        val touch = launcherChromeFor(true, true, FooterMode.BUTTONS)
-        assertEquals(listOf("Recent", "Search"), launcherTopActions(touch, {}, canSearch = true).map { it.description })
-        assertEquals(listOf("Recent"), launcherTopActions(touch, {}, canSearch = false).map { it.description })
-        assertEquals(emptyList(), launcherTopActions(launcherChromeFor(true, true, FooterMode.HINTS), {}, canSearch = true))
-        assertEquals(emptyList(), launcherTopActions(touch, null, canSearch = true))
+    // Recent and Search are always icons, whatever the hint bar; Search only with games to search.
+    @Test fun launcher_icons_are_always_there() {
+        assertEquals(listOf("Recent", "Search"), launcherTopActions({}, canSearch = true).map { it.description })
+        assertEquals(listOf("Recent"), launcherTopActions({}, canSearch = false).map { it.description })
+        assertEquals(listOf("Search"), launcherTopActions({}, canSearch = true, recent = false).map { it.description })
+        assertEquals(emptyList(), launcherTopActions(null, canSearch = true))
     }
 
     // Onboarding and empty pages: every hint but Back becomes a button, A filled (Back is Android's back).

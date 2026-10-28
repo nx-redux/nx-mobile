@@ -22,12 +22,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-private val NotificationBackground = Color(0xCC000000)
 private val NotificationShape = RoundedCornerShape(10.dp)
 
 /**
@@ -75,7 +73,7 @@ fun NxNotifications(
     val pillContent: @Composable () -> Unit = {
         if (pill != null) {
             Row(
-                Modifier.background(NotificationBackground, NotificationShape).then(padding),
+                Modifier.background(colors.scrimNotice, NotificationShape).then(padding),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (pill.badgePath != null) {
@@ -91,7 +89,7 @@ fun NxNotifications(
     val toastsContent: @Composable () -> Unit = {
         toasts.forEach { toast ->
             Row(
-                Modifier.background(NotificationBackground, NotificationShape).then(padding),
+                Modifier.background(colors.scrimNotice, NotificationShape).then(padding),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (toast.badgePath != null) {   // session notices carry no badge: the text starts flush

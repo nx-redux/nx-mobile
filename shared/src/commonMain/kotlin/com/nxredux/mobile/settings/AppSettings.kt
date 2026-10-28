@@ -205,7 +205,7 @@ interface AppSettings {
     var padButtons: PadButtons
     /**
      * Each main menu tab's style (List, Grid or Carousel), Home's too (Layouts → Home layout); a category missing from
-     * the map is its default ([MenuStyles.defaultStyleOf]: Grid for Home and Tools, Minimal for Collections, Carousel for Consoles) and a stored
+     * the map is its default ([MenuStyles.defaultStyleOf]: Grid for Tools, Minimal for Home and Collections, Carousel for Consoles) and a stored
      * Backdrop reads as Carousel ([MenuStyles.styleOf]).
      */
     var menuStyles: Map<MenuCategory, MenuStyle>
@@ -272,13 +272,7 @@ interface AppSettings {
     /** Layouts → New shelf, Not started shelf: Home shows that shelf (true, the default) or not. Pick up again always shows. */
     var showNewShelf: Boolean
     var showNotStartedShelf: Boolean
-    /**
-     * Layouts → Recent hint, Search hint, Netplay hint: the main menu's SELECT Recent and START Search and Y
-     * Netplay show in the hint bar (true, the default) or not; the button still works hidden, and a hidden Netplay hint puts
-     * Netplay in a game's context menu.
-     */
-    var showRecentHint: Boolean
-    var showSearchHint: Boolean
+    /** Layouts → Netplay hint: Y Netplay shows in a game list's hint bar (true, the default) or not; hidden, it leads a game's context menu. */
     var showNetplayHint: Boolean
     /** Layouts → Consoles background ([ConsoleArt.DEFAULT] Controller). */
     var consoleArt: ConsoleArt
@@ -425,7 +419,7 @@ interface AppSettings {
     var gameRumble: GameRumble
     /** Appearance → Accent: the selection colour; unset or unknown is [AccentPreset.DEFAULT] (White). */
     var accent: AccentPreset
-    /** Appearance → Secondary accent: the bar behind a selected option's value; unset or unknown is [SecondaryAccent.DEFAULT] (Teal). */
+    /** Appearance → Secondary accent: the bar behind a selected option's value; unset or unknown is [SecondaryAccent.DEFAULT] (Auto). */
     var secondaryAccent: SecondaryAccent
 }
 

@@ -38,6 +38,7 @@ fun NxCarouselStack(
     alignment: VerticalListAlignment = VerticalListAlignment.LEFT,
     titleRoom: Dp = 0.dp,
     onPageRows: ((Int) -> Unit)? = null,   // the items one screen shows (a game list's LEFT / RIGHT page)
+    drained: Boolean = false,   // as Grid Home: no ring, the selected tile in colour, the rest grey ([NxMenuTile]'s drained)
 ) {
     val colors = LocalNxColors.current
     val portrait = LocalPortrait.current
@@ -69,10 +70,11 @@ fun NxCarouselStack(
                 NxMenuTile(
                     tiles[i], lit = selected, caption = false,
                     info = NoTileInfo, logoInset = logoInset, portrait = portrait,
-                    modifier = Modifier.fillMaxSize(), toolSize = toolSize,
+                    modifier = Modifier.fillMaxSize(), toolSize = toolSize, drained = drained,
                 )
-                // The neighbour's black layer, on the tile's own rounded shape (the ring outside stays bright).
-                Box(
+                // The neighbour's black layer, on the tile's own rounded shape (the ring outside stays bright). Drained, the
+                // greyscale dims the neighbours already.
+                if (!drained) Box(
                     Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp))
                         .graphicsLayer { alpha = stackItem(RowStyle.CAROUSEL, distance(), g).dim }
                         .background(colors.background),

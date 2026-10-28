@@ -1,8 +1,10 @@
 package com.nxredux.mobile.ui.nx
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,18 +33,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.nxredux.mobile.ui.LocalSettingsBlock
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.MutableSharedFlow
 
 /*
  * The touch rows both settings lists draw: the app's Settings rows (NxSettingsRow.kt) and the in-game menu's options
@@ -72,6 +77,8 @@ enum class NxSettingControl {
     PICKER,
     /** No list (or a single value): the value only (in-game, LEFT/RIGHT still step it). */
     VALUE,
+    /** A colour per value (Appearance's accents): a row of circles under the text, a tap picks one; A steps, as RIGHT. */
+    SWATCHES,
 }
 
 /** On/off word pairs a switch stands for (lower case, the "on" word first); Show / Hide too, as Layouts' rows. */
@@ -107,20 +114,42 @@ fun nxSettingControl(choices: List<String>): NxSettingControl = when {
 /** A description's most lines on its row; past them it ends in an ellipsis and the name gets the info icon. */
 internal const val SETTING_DESC_LINES = 2
 
-/** The touch rows' sizes from a list row's pitch: the name, the description and its line, the value, the row, a segmented row's extra line. */
+/**
+ * The touch rows' sizes from a list row's pitch: the name, the description and its line, the value, a two-line row
+ * ([row]: the fades' and keep-in-view's measure), a segmented row's extra line. [labelLineDp] and [descLineDp]: the
+ * name's and a description line's height.
+ */
 internal class NxTouchRowSizes(
     val label: TextUnit, val desc: TextUnit, val descLine: TextUnit, val value: TextUnit, val row: Dp, val segments: Dp,
     /** Whether a segmented row's choices fit on its right ([rememberSegmentsFitRight]); else they go under its text. */
     val segmentsRight: (String, List<String>) -> Boolean = { _, _ -> false },
-    /** A row with no description: its name and the air alone. */
+    /** A list gap's measure (an options gap, a spacer): a bare row at least the list's pitch. */
     val bare: Dp = row,
+    val labelLineDp: Dp = 0.dp, val descLineDp: Dp = 0.dp,
+    /** Whether a segmented row's choices fit on a line of their own ([rememberSegmentsFitLine]). */
+    val segmentsFitLine: (List<String>) -> Boolean = { true },
+    /**
+     * The least a row's line is, whatever it holds: the tallest control's (a picker's value with its tap room, a
+     * segmented track), so a row is never taller for its control and every one-line row is one height.
+     */
+    val controlMin: Dp = 0.dp,
 ) {
-    /** A row's height: [bare] without a description, [row] with one; segments under the text add their line ([segments]). */
-    fun height(described: Boolean, segmentsBelow: Boolean): Dp = (if (described) row else bare) + if (segmentsBelow) segments else 0.dp
+    /**
+     * A touch row's height as it lays out: its text (the name's line and its description's [descLines] lines, 0 to
+     * [SETTING_DESC_LINES]) or a taller [control] beside it, [TOUCH_ROW_AIR] above and below whatever it has; segments
+     * under the text add their line ([segments]). Every row the same air: a bare row is no taller for the list's pitch,
+     * a one-line description no taller for a second line it doesn't have.
+     */
+    fun height(descLines: Int, segmentsBelow: Boolean, control: Dp = 0.dp): Dp =
+        maxOf(labelLineDp + descLineDp * descLines.coerceIn(0, SETTING_DESC_LINES), control, if (segmentsBelow) 0.dp else controlMin) + TOUCH_ROW_AIR * 2 +
+            if (segmentsBelow) segments else 0.dp
 }
 
-/** The room above and below a touch row's text (inside its plate, which keeps a 2 dp gap to its neighbours). */
-private val TOUCH_ROW_AIR = 12.dp
+/** The room above and below a touch row's text, the same on every row (its 2 dp gap to its neighbours, outside its plate, included). */
+internal val TOUCH_ROW_AIR = 12.dp
+
+/** A touch row's gap to its neighbours, outside its plate (part of [TOUCH_ROW_AIR]). */
+private val TOUCH_ROW_GAP = 2.dp
 
 /** The touch rows' sizes for list rows [itemHeight] high and [rowWidth] wide, the description [descOfLabel] of the name. */
 @Composable
@@ -129,61 +158,87 @@ internal fun nxTouchRowSizes(itemHeight: Dp, rowWidth: Dp, descOfLabel: Float): 
     val label = nxOptionsLabelSize(listText)
     val desc = label * descOfLabel
     val descLine = desc * 1.25f
-    // The name, two description lines and [TOUCH_ROW_AIR] above and below them, every described row the same height
-    // (the snap and fades as elsewhere), so a selected row's plate has room.
-    val row = with(LocalDensity.current) { (label * 1.25f).toDp() + (descLine * SETTING_DESC_LINES).toDp() } + TOUCH_ROW_AIR * 2
+    // The name, two description lines and [TOUCH_ROW_AIR] above and below them: the fades' and keep-in-view's measure.
+    val labelLine = with(LocalDensity.current) { (label * 1.25f).toDp() }
+    val descLineDp = with(LocalDensity.current) { descLine.toDp() }
+    val row = labelLine + descLineDp * SETTING_DESC_LINES + TOUCH_ROW_AIR * 2
     val value = nxOptionsValueSize(listText)
     // The segments' line under a segmented row's text: the track (2 dp inset, a choice's 5 dp padding, its text) and a gap.
-    val segments = with(LocalDensity.current) { (value * 0.9f).toDp() } + (2.dp + 5.dp) * 2 + 2.dp + SEGMENTS_GAP
+    val segments = with(LocalDensity.current) { (value * 0.9f).toDp() + (label * LABEL_LEADING).toDp() } + (2.dp + 5.dp) * 2 + 2.dp + SEGMENTS_GAP
     val bare = with(LocalDensity.current) { (label * 1.25f).toDp() } + TOUCH_ROW_AIR * 2
+    // The tallest control: a picker's value ("Value ›", its `›` at 1.2 and 6 dp tap room above and below) or a segmented
+    // track (a choice's 0.9 text, 5 dp padding, the 2 dp inset).
+    val controlMin = with(LocalDensity.current) { maxOf((value * 1.2f).toDp() + PickerTapRoom * 2, (value * 0.9f).toDp() + (2.dp + 5.dp) * 2) }
     return NxTouchRowSizes(
         label, desc, descLine, value, maxOf(row, itemHeight), segments, rememberSegmentsFitRight(value, label, rowWidth - NxOptionsInnerPad * 2),
-        maxOf(bare, itemHeight),
+        maxOf(bare, itemHeight), labelLine, descLineDp, rememberSegmentsFitLine(value, rowWidth - NxOptionsInnerPad * 2), controlMin,
     )
 }
 
+/** The room the name's 1.25 line box leaves above its text (half its leading), as a share of the name's size. */
+private const val LABEL_LEADING = 0.125f
+
 /** The gap between a segmented row's description and its segments. */
 private val SEGMENTS_GAP = 6.dp
+
+/** Whether a touch row draws its info icon: only while [selected], and only when its line is [truncated] or [moreInfo]. */
+internal fun nxInfoIconShown(selected: Boolean, truncated: Boolean, moreInfo: Boolean): Boolean = selected && (truncated || moreInfo)
 
 /** The selected row's plate: the accent, faint, so the row's own colours read on it. */
 private const val SOFT_SELECTION_ALPHA = 0.16f
 
 /**
- * One touch row [height] high: the [label] (bold) with the info icon when the [info] line is cut off or [moreInfo] says
- * there is more, the description under it (at most [SETTING_DESC_LINES], the warning colour when [warning]), and the
- * [control] on the right, or [below] under the text at its start (a segmented row's segments that don't fit on the
- * right). Selected: a soft rounded plate behind it, so the control stays readable; not [enabled]: dimmed. [onInfo] null:
- * the info icon takes no taps. [onTruncated] hears whether the description fits while the row is [selected].
+ * One touch row, as tall as its text ([NxTouchRowSizes.height]: the name's line, the description's own lines, the same
+ * [TOUCH_ROW_AIR] above and below on every row): the [label] (bold) with the info icon while it is [selected] and the [info] line is cut
+ * off or [moreInfo] says there is more ([nxInfoIconShown]), the description under it (at most [SETTING_DESC_LINES], the warning colour when [warning]), and the
+ * [control] on the right, or [below] under the text (a segmented row's segments that don't fit on the right): at its
+ * start, right-aligned in the Settings rows block ([LocalSettingsBlock]). Selected: a soft rounded plate behind it, so the control stays readable; not [enabled]: dimmed. [onInfo] null:
+ * the info icon takes no taps. [onLongPress]: a long press anywhere on the row's own area (its name and description);
+ * null, none (a long press is a tap). [onTruncated] hears whether the description fits while the row is [selected];
+ * [onFits] whether it fits, selected or not. [action]: an unusual A, drawn in the control's place while [selected] with a pad.
  */
 @Composable
 internal fun NxTouchRow(
-    label: String, info: String, moreInfo: Boolean, selected: Boolean, sizes: NxTouchRowSizes, height: Dp,
+    label: String, info: String, moreInfo: Boolean, selected: Boolean, sizes: NxTouchRowSizes,
     onTap: () -> Unit, onInfo: (() -> Unit)?, onTruncated: (String, Boolean) -> Unit,
     enabled: Boolean = true, warning: Boolean = false,
+    onLongPress: (() -> Unit)? = null,
+    onFits: ((Boolean) -> Unit)? = null,
+    action: String? = null,
     below: (@Composable () -> Unit)? = null,
+    leading: (@Composable () -> Unit)? = null,   // before the name and description (an add row's "+")
     control: @Composable () -> Unit,
 ) {
     val colors = LocalNxColors.current
     val shape = RoundedCornerShape(14.dp)
     var truncated by remember(info) { mutableStateOf(false) }
     LaunchedEffect(selected, truncated, info) { if (selected && info.isNotBlank()) onTruncated(info, truncated) }
+    LaunchedEffect(truncated, info) { onFits?.invoke(!truncated) }
     Column(
-        Modifier.fillMaxWidth().height(height).padding(vertical = 2.dp).clip(shape)
-            .then(if (selected) Modifier.background(colors.accent.copy(alpha = SOFT_SELECTION_ALPHA), shape) else Modifier)
-            .clickable(onClick = onTap).padding(horizontal = NxOptionsInnerPad)
-            .alpha(if (enabled) 1f else NX_DISABLED_ALPHA),
+        Modifier.fillMaxWidth().padding(vertical = TOUCH_ROW_GAP)
+            // The selected row's plate, where the help note leaves it lit ([NxSettingInfoPopup]).
+            .then(if (selected) Modifier.onGloballyPositioned { NxHelpAnchor.row = NxHelpRow(label, it.boundsInWindow(), sizes.desc) } else Modifier)
+            .clip(shape)
+            .then(if (selected) Modifier.background(colors.accent.copy(alpha = SOFT_SELECTION_ALPHA), shape) else Modifier)   // role: a touch row's soft selection
+            .nxTapOrHold(onTap, onLongPress).padding(horizontal = NxOptionsInnerPad, vertical = TOUCH_ROW_AIR - TOUCH_ROW_GAP)
+            .alpha(if (enabled) 1f else NX_DISABLED_ALPHA),   // role: a disabled row
         verticalArrangement = Arrangement.Center,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // At least the tallest control's line ([NxTouchRowSizes.controlMin]): every one-line row one height, whatever its
+        // control. Not when the control sits under the text (segments, swatches): the name's line is then just the name's.
+        Row(if (below == null) Modifier.heightIn(min = sizes.controlMin) else Modifier, verticalAlignment = Alignment.CenterVertically) {
+            if (leading != null) { leading(); Spacer(Modifier.width(ADD_GLYPH_GAP)) }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // The name's line exactly (the info icon, a touch taller, overflows it rather than growing the row when it shows).
+                Row(Modifier.height(sizes.labelLineDp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         label, color = colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold,
                         fontSize = sizes.label, lineHeight = sizes.label * 1.25f, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    // Cut off, or a fuller text behind it: the popup shows it.
-                    if (truncated || moreInfo) NxInfoIcon(sizes.desc, onInfo)
+                    // Cut off, or a fuller text behind it: the popup shows it. Only on the selected row, so a page of long
+                    // descriptions isn't a column of icons.
+                    if (nxInfoIconShown(selected, truncated, moreInfo)) NxInfoIcon(sizes.desc, onInfo)
                 }
                 if (info.isNotBlank()) {
                     Text(
@@ -195,14 +250,26 @@ internal fun NxTouchRow(
             }
             if (below == null) {
                 Spacer(Modifier.width(12.dp))
-                control()
+                // An unusual A ([NxSettingRow.action]) on the focused row while a pad is in use: its glyph and word there.
+                if (selected && action != null && LocalFooterMode.current == FooterMode.HINTS) NxRowAction(action, sizes.value)
+                else control()
             }
         }
         if (below != null) {
             Spacer(Modifier.height(SEGMENTS_GAP))
-            below()
+            // In the Settings rows block, right-aligned under the label (the pane never widens for it); elsewhere at the text's start.
+            Box(Modifier.fillMaxWidth(), contentAlignment = if (LocalSettingsBlock.current != null) Alignment.CenterEnd else Alignment.CenterStart) { below() }
+            // The name's line leading above its text, matched under the control: the same room above the name and below it.
+            Spacer(Modifier.height(with(LocalDensity.current) { (sizes.label * LABEL_LEADING).toDp() }))
         }
     }
+}
+
+/** A tap ([onTap], null none) and, when given, a long press ([onLongPress]) on this element. */
+internal fun Modifier.nxTapOrHold(onTap: (() -> Unit)?, onLongPress: (() -> Unit)?): Modifier = when {
+    onLongPress != null -> combinedClickable(onClick = onTap ?: {}, onLongClick = onLongPress)
+    onTap != null -> clickable(onClick = onTap)
+    else -> this
 }
 
 /** A touch row's value text: one line, Semibold. */
@@ -211,12 +278,12 @@ internal fun NxValueText(text: String, size: TextUnit, color: Color, modifier: M
     Text(text, color = color, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = size, lineHeight = size, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
 }
 
-/** A picker row's control: the current value and a `›`; a tap ([onClick], null none) opens the picker. */
+/** A picker row's control: the current value and a `›`; a tap ([onClick], null none) opens the picker, a long press is [onLongPress]. */
 @Composable
-internal fun NxPickerValue(text: String, size: TextUnit, onClick: (() -> Unit)?) {
+internal fun NxPickerValue(text: String, size: TextUnit, onLongPress: (() -> Unit)? = null, onClick: (() -> Unit)?) {
     val colors = LocalNxColors.current
     Row(
-        Modifier.clip(RoundedCornerShape(8.dp)).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(vertical = 6.dp),
+        Modifier.clip(RoundedCornerShape(8.dp)).nxTapOrHold(onClick, onLongPress).padding(vertical = PickerTapRoom),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         NxValueText(text, size, colors.listText, Modifier.widthIn(max = 180.dp))
@@ -231,12 +298,12 @@ internal fun NxPickerValue(text: String, size: TextUnit, onClick: (() -> Unit)?)
  * rows' and the game panel's Cheats rows'.
  */
 @Composable
-internal fun NxSwitch(on: Boolean, onClick: (() -> Unit)?, lit: Boolean = false) {
+internal fun NxSwitch(on: Boolean, onClick: (() -> Unit)?, lit: Boolean = false, onLongPress: (() -> Unit)? = null) {
     val colors = LocalNxColors.current
     Box(
         Modifier.size(SwitchWidth, SwitchHeight).clip(CircleShape)
-            .background(if (on) colors.secondaryAccent else if (lit) colors.background.copy(alpha = 0.35f) else colors.main.copy(alpha = 0.22f))
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(3.dp),
+            .background(if (on) colors.secondaryAccent else if (lit) colors.background.copy(alpha = 0.35f) else colors.main.copy(alpha = 0.22f))   // role: a switch's off track, lit and unlit
+            .nxTapOrHold(onClick, onLongPress).padding(3.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         val knob = SwitchHeight - 6.dp
@@ -247,20 +314,23 @@ internal fun NxSwitch(on: Boolean, onClick: (() -> Unit)?, lit: Boolean = false)
     }
 }
 
+/** A picker value's tap room above and below its text. */
+private val PickerTapRoom = 6.dp
+
 private val SwitchWidth = 44.dp
 private val SwitchHeight = 24.dp
 
-/** A segmented button: one pill per choice in an outlined track, the [selected] one on the accent; a tap picks it ([onPick], null none). */
+/** A segmented button: one pill per choice in an outlined track, the [selected] one on the accent; a tap picks it ([onPick], null none), a long press is [onLongPress]. */
 @Composable
-internal fun NxSegments(choices: List<String>, selected: Int, size: TextUnit, onPick: ((Int) -> Unit)?) {
+internal fun NxSegments(choices: List<String>, selected: Int, size: TextUnit, onLongPress: (() -> Unit)? = null, onPick: ((Int) -> Unit)?) {
     val colors = LocalNxColors.current
     val shape = RoundedCornerShape(50)
-    Row(Modifier.clip(shape).border(1.dp, colors.main.copy(alpha = 0.3f), shape).padding(2.dp)) {
+    Row(Modifier.clip(shape).border(1.dp, colors.inkRing, shape).padding(2.dp)) {
         choices.forEachIndexed { i, label ->
             val lit = i == selected
             Box(
                 Modifier.clip(shape).then(if (lit) Modifier.background(colors.accent, shape) else Modifier)
-                    .then(if (onPick != null) Modifier.clickable { onPick(i) } else Modifier).padding(horizontal = 10.dp, vertical = 5.dp),
+                    .nxTapOrHold(onPick?.let { p -> { p(i) } }, onLongPress).padding(horizontal = 10.dp, vertical = 5.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 NxValueText(label, size * 0.9f, if (lit) colors.onAccent else colors.listText)
@@ -268,6 +338,54 @@ internal fun NxSegments(choices: List<String>, selected: Int, size: TextUnit, on
         }
     }
 }
+
+/** A focused row's unusual A ([NxSettingRow.action]): the A glyph and [word], in inkDim, at the value's size. */
+@Composable
+private fun NxRowAction(word: String, size: TextUnit) {
+    val colors = LocalNxColors.current
+    val glyph = with(LocalDensity.current) { (size * 1.25f).toDp() }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        NxButtonGlyph(NxButton.A, glyph, tint = colors.inkDim)
+        Spacer(Modifier.width(4.dp))
+        NxValueText(word, size, colors.inkDim)
+    }
+}
+
+/** A swatch's most diameter, and the gap between two. */
+private val SwatchMax = 28.dp
+private val SwatchGap = 10.dp
+
+/**
+ * A colour row's control ([NxSettingControl.SWATCHES]): one circle per value in [swatches] (0xAARRGGBB; [NX_SWATCH_AUTO]
+ * draws [auto] with an "A"), the [selected] one ringed in the ink; as large as fits the width, up to [SwatchMax]. A tap
+ * picks one ([onPick], null none), a long press is [onLongPress].
+ */
+@Composable
+internal fun NxSwatches(swatches: List<Int>, selected: Int, auto: Color, onLongPress: (() -> Unit)? = null, onPick: ((Int) -> Unit)?) {
+    val colors = LocalNxColors.current
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val n = swatches.size.coerceAtLeast(1)
+        val d = minOf(SwatchMax, (maxWidth - SwatchGap * (n - 1)) / n)
+        Row(horizontalArrangement = Arrangement.spacedBy(SwatchGap), verticalAlignment = Alignment.CenterVertically) {
+            swatches.forEachIndexed { i, argb ->
+                val fill = if (argb == NX_SWATCH_AUTO) auto else Color(argb)
+                Box(
+                    Modifier.size(d).clip(CircleShape)
+                        .then(if (i == selected) Modifier.border(2.dp, colors.main, CircleShape) else Modifier)
+                        .nxTapOrHold(onPick?.let { p -> { p(i) } }, onLongPress)
+                        .padding(if (i == selected) 4.dp else 0.dp)
+                        .clip(CircleShape).background(fill).border(1.dp, colors.inkEdge, CircleShape),   // the edge: a dark colour on black
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (argb == NX_SWATCH_AUTO) Text("A", color = colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold, fontSize = with(LocalDensity.current) { (d * 0.4f).toSp() })
+                }
+            }
+        }
+    }
+}
+
+/** A swatch that follows another colour (the Secondary accent's Auto): drawn in the colour given as [NxSwatches]' auto. */
+const val NX_SWATCH_AUTO = 0
 
 /** The info icon: a question mark in a circle, sized from the description; a tap ([onClick], null none) shows the full text. */
 @Composable
@@ -282,17 +400,6 @@ private fun NxInfoIcon(textSize: TextUnit, onClick: (() -> Unit)?) {
         Box(Modifier.size(disc).border(1.5.dp, colors.hint, CircleShape), contentAlignment = Alignment.Center) {
             Text("?", color = colors.hint, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold, fontSize = textSize * 0.8f, lineHeight = textSize * 0.8f)
         }
-    }
-}
-
-/** A row's full description over the page ([NxModal] INFO): A, B, X or a tap close it; [scrollSeq] counts UP/DOWN steps ([scrollDir]). */
-@Composable
-fun NxSettingInfoPopup(title: String, text: String, scrollSeq: Int, scrollDir: Int, onClose: () -> Unit) {
-    // Each new scrollSeq is one step for the modal's scroll.
-    val steps = remember { MutableSharedFlow<Int>(extraBufferCapacity = 8) }
-    LaunchedEffect(scrollSeq) { if (scrollSeq > 0) steps.emit(scrollDir) }
-    NxModal(caption = title, kind = ModalKind.INFO, onButton = { onClose() }, scrollSteps = steps) {
-        Text(text, color = LocalNxColors.current.listText, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal, fontSize = nxDialogBody(), lineHeight = nxDialogBody() * 1.35f)   // Regular, as the row's description
     }
 }
 
@@ -313,15 +420,15 @@ fun NxSettingPicker(title: String, choices: List<String>, current: Int, cursor: 
     val list = rememberLazyListState(initialFirstVisibleItemIndex = (cursor - 2).coerceAtLeast(0))
     NxKeepSelectedInView(list, cursor, choices.size, margin = 1)
     Box(
-        Modifier.fillMaxSize().background(NxModalScrimColor).pointerInput(Unit) { detectTapGestures { onDismiss() } },
+        Modifier.fillMaxSize().background(LocalNxColors.current.scrimModal).pointerInput(Unit) { detectTapGestures { onDismiss() } },
         contentAlignment = Alignment.Center,
     ) {
         Column(
-            Modifier.padding(24.dp).widthIn(max = 420.dp).fillMaxWidth().background(NxModalPanelColor, RoundedCornerShape(24.dp))
+            Modifier.padding(24.dp).widthIn(max = 420.dp).fillMaxWidth().background(LocalNxColors.current.modalPanel, RoundedCornerShape(24.dp))
                 .pointerInput(Unit) { detectTapGestures { } }   // taps inside stay inside
                 .padding(8.dp),
         ) {
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(NxModalCardColor).padding(vertical = 12.dp)) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(LocalNxColors.current.modalCard).padding(vertical = 12.dp)) {
                 Text(
                     title, color = colors.hint, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold,
                     fontSize = nxModalSmall(), maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -359,3 +466,15 @@ private fun PickerRowView(label: String, cursor: Boolean, current: Boolean, heig
         if (current) Box(Modifier.size(8.dp).clip(CircleShape).background(text))
     }
 }
+
+/** An add row's "+" ([NxSettingRow.adds]): in the name's ink, a little larger than the name, [ADD_GLYPH_GAP] before it. */
+@Composable
+internal fun NxAddGlyph(label: TextUnit) {
+    Text(
+        "+", color = LocalNxColors.current.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Normal,
+        fontSize = label * 1.4f, lineHeight = label * 1.4f, maxLines = 1,
+    )
+}
+
+/** The room between an add row's "+" and its text. */
+private val ADD_GLYPH_GAP = 16.dp

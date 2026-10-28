@@ -82,20 +82,21 @@ internal const val NX_MENU_GLIDE_MS = 240
 
 
 /**
- * The main menu's category tabs: plain words, the current one white, with a 3 dp pill under it that glides to the next
+ * The main menu's category tabs: plain words in the ink, the current one full and the rest in [NxColors.inkDim], with a 3 dp pill under it that glides to the next
  * tab (L1/R1 and LEFT/RIGHT switch tabs; no shoulder glyphs are drawn). Left-aligned on the gutter in either
  * orientation. Words that do not fit the row scroll, keeping the current tab in view. [overArt] (a Backdrop game tab,
- * over its picture): the inactive words are 62% white instead of 38%, and every word gets a dark shadow
+ * over its picture): the inactive words are the ink at 62% instead, and every word gets a dark shadow
  * ([overArtShadow]). [focused] (the d-pad is on the tab row): the current word sits on the accent pill ([TAB_PLATE_X] ×
  * [TAB_PLATE_Y] round it) in place of the underline. [onLongPress]: a long press anywhere on the row opens the
- * hidden-tab menu. [trailing]: drawn at the row's right end (the touch-only Recent and Search icons,
- * [LauncherTopIcons]); the words keep the rest of the row.
+ * hidden-tab menu. [underline] false: no pill under the current word (the main menu's bottom tabs; the lit word alone
+ * marks it). [trailing]: drawn at the row's right end (the touch-only Recent and Search icons,
+ * [launcherTopActions]); the words keep the rest of the row.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MenuTabRow(
     labels: List<String>, selected: Int, onTab: (Int) -> Unit, modifier: Modifier = Modifier, overArt: Boolean = false, focused: Boolean = false,
-    onLongPress: (() -> Unit)? = null, trailing: (@Composable () -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null, underline: Boolean = true, trailing: (@Composable () -> Unit)? = null,
 ) {
     val colors = LocalNxColors.current
     val portrait = LocalPortrait.current
@@ -148,9 +149,11 @@ fun MenuTabRow(
                 labels.forEachIndexed { i, label ->
                     val lit = focused && i == selected
                     Text(
-                        label, color = if (lit) colors.onAccent else colors.listText, fontFamily = LocalNxFont.current, fontSize = size, maxLines = 1,
+                        label, color = when { lit -> colors.onAccent; i == selected || overArt -> colors.main; else -> colors.inkDim },
+                        fontFamily = LocalNxFont.current, fontSize = size, maxLines = 1,
                         style = if (shadow == null || lit) LocalTextStyle.current else LocalTextStyle.current.copy(shadow = shadow),
-                        modifier = Modifier.alpha(if (i == selected) 1f else if (overArt) 0.62f else 0.38f)
+                        // role: an unselected word over art, brighter than inkDim; the alpha fades its shadow with it
+                        modifier = Modifier.alpha(if (i != selected && overArt) 0.62f else 1f)
                             .onGloballyPositioned { val v = it.positionInParent().x.toInt() to it.size.width; if (bounds[i] != v) bounds[i] = v }
                             .combinedClickable(onClick = { onTab(i) }, onLongClick = onLongPress)
                             .padding(bottom = TAB_WORD_BOTTOM)
@@ -158,7 +161,7 @@ fun MenuTabRow(
                     )
                 }
             }
-            if (placed && !focused) Box(
+            if (placed && !focused && underline) Box(
                 Modifier.align(Alignment.BottomStart).offset { IntOffset(x.value.roundToInt(), 0) }
                     .width(with(density) { w.value.toDp() }).height(3.dp).background(colors.accent, RoundedCornerShape(2.dp)),
             )
@@ -176,13 +179,14 @@ fun MenuTabRow(
  * row's width (from its first letter): a longer title cuts its middle with "…", keeping the tool or list's name before
  * the first " | " ([splitTitleLead]) and the [suffix] (a count, "(3/20)") whole. [overArt] (a Backdrop game list, over
  * its picture): the name gets the tabs' dark shadow ([overArtShadow]). [trailing]: drawn at the row's right end, on the
- * right gutter (the touch-only Recent and Search icons, [LauncherTopIcons]).
+ * right gutter (the touch-only Recent and Search icons, [launcherTopActions]).
  */
 @Composable
 fun MenuTitleRow(
     title: String, modifier: Modifier = Modifier, overArt: Boolean = false, textStart: Dp = nxListInset(), suffix: String? = null,
     textModifier: Modifier = Modifier,   // on the title's text (a Minimal morph finds it, and hides it while it lands)
     trailing: (@Composable () -> Unit)? = null,
+    endInset: Dp = 0.dp,   // the trailing icons this much further in (a List: its names' inset, so both sides match)
 ) {
     val style = menuTitleStyle(overArt)
     val (lead, body) = splitTitleLead(title)
@@ -194,7 +198,7 @@ fun MenuTitleRow(
         }
         if (trailing != null) {
             val gutter = if (LocalPortrait.current) 16.dp else 24.dp
-            Box(Modifier.align(Alignment.CenterEnd).padding(end = gutter - TOP_ICON_INSET)) { trailing() }
+            Box(Modifier.align(Alignment.CenterEnd).padding(end = gutter - TOP_ICON_INSET + endInset)) { trailing() }
         }
     }
 }

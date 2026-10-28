@@ -81,7 +81,7 @@ internal fun GameTimeSplitScreen(state: AppState, s: Screen.GameTimeSessions, se
             parent?.let { p ->
                 GameTimeScreen(
                     p.screen, p.row, state::gameTimeParentTap, state::gameTimeParentTap, onModalSelect = {},
-                    modifier = Modifier.alpha(UNFOCUSED_ALPHA), onHint = {}, focused = false,
+                    modifier = Modifier.alpha(UNFOCUSED_ALPHA), onHint = {}, focused = false,   // role: an unfocused pane, dimmed
                 )
             }
         },

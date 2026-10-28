@@ -14,6 +14,28 @@ import androidx.compose.ui.unit.dp
 internal const val SEGMENTS_TEXT_MIN_SHARE = 0.4f
 
 /**
+ * Whether a segmented control of choices fits on a line of its own [lineWidth] wide (under a touch row's text): its
+ * natural width as [rememberSegmentsFitRight] measures it. A row that must be segmented falls back to a picker when not.
+ */
+@Composable
+internal fun rememberSegmentsFitLine(valueSize: TextUnit, lineWidth: Dp): (List<String>) -> Boolean {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val font = LocalNxFont.current
+    return remember(valueSize, lineWidth, measurer, density, font) {
+        val style = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = valueSize * 0.9f)
+        val cache = HashMap<List<String>, Boolean>()
+        val fits: (List<String>) -> Boolean = { choices ->
+            cache.getOrPut(choices) {
+                val text = with(density) { choices.sumOf { measurer.measure(it, style).size.width }.toDp() }
+                text + 20.dp * choices.size + 6.dp <= lineWidth
+            }
+        }
+        fits
+    }
+}
+
+/**
  * Whether a segmented control of choices fits on the right of a touch row [rowWidth] wide, beside its name: the control's
  * natural width (each label at 0.9 × [valueSize] with its 10 dp sides, the track's 2 dp inset and 1 dp border) plus the
  * 12 dp gap, next to the name in full (bold, [labelSize]) with room for its info icon, and never leaving the text under

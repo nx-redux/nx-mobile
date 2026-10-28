@@ -17,8 +17,6 @@ import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.homeAtTop
 import com.nxredux.mobile.ui.nx.homeBoard
-import com.nxredux.mobile.ui.nx.homeBottom
-import com.nxredux.mobile.ui.nx.homeCarouselBottom
 import com.nxredux.mobile.ui.nx.homeCarouselStep
 import com.nxredux.mobile.ui.nx.homeClamp
 import com.nxredux.mobile.ui.nx.homeRemember
@@ -88,8 +86,6 @@ internal interface HomeHost {
     /** The Home tab rebuilt from what it was last built from (new stats). */
     fun rebuildHomeTab()
     fun refreshResume()
-    /** UP from the top of the content: the tab row takes the d-pad (a fresh press only). */
-    fun toTabRow(repeat: Boolean)
     /** The tab [step] away (past a LEFT / RIGHT edge). */
     fun switchTab(step: Int)
 }
@@ -347,13 +343,6 @@ internal class HomeController(
         return if (old == new) selection.value.index else homeClamp(selection.value.index, old, new)
     }
 
-    /** UP on the tab row over Home: its bottom-most item from [sel] in [rows] ([homeBottom]; a List's last row). */
-    fun bottom(sel: ListSelection, rows: List<MainRow>): Int = when (host.homeStyle()) {
-        MenuStyle.GRID -> { fitHomeMemory(rows); homeBottom(homeShapeOf(rows)) }
-        MenuStyle.LIST, MenuStyle.MINIMAL -> sel.count - 1
-        else -> homeCarouselBottom(sel.index, homeCarouselRowCount(rows), rows.size, homeRowLast, homeDockLast)
-    }
-
     /**
      * [homeMemory], taken in [homeMemoryRows], moved into [rows] when they changed: each remembered tile onto the same
      * row where it still shows in its section (a rotation changes the slots, so the rows' indices shift and a tool may go
@@ -395,7 +384,7 @@ internal class HomeController(
         val shape = homeShapeOf(s.rows)
         fitHomeMemory(s.rows)   // the pins may have changed since the memory was taken
         val sel = selection.value
-        if (button == NxButton.UP && homeAtTop(sel.index, shape, homeMemory)) { host.toTabRow(repeat); return true }
+        if (button == NxButton.UP && homeAtTop(sel.index, shape, homeMemory)) return true   // the top: it stays
         val next = homeStep(sel.index, shape, homeMemory, button)
         if (next == null) { if (!repeat) host.switchTab(if (button == NxButton.RIGHT) 1 else -1); return true }
         if (next != sel.index) {
@@ -430,7 +419,6 @@ internal class HomeController(
         val rowCount = homeCarouselRowCount(s.rows)
         when (val m = homeCarouselStep(sel.index, rowCount, s.rows.size, button, homeRowLast, homeDockLast)) {
             is HomeCarouselMove.To -> if (m.index != sel.index) { selection.value = sel.copy(index = m.index); noteHomeFocus(m.index, s.rows); host.refreshResume() }
-            HomeCarouselMove.TabRow -> host.toTabRow(repeat)
             is HomeCarouselMove.SwitchTab -> if (!repeat) host.switchTab(m.step)
             HomeCarouselMove.Stay -> Unit
         }

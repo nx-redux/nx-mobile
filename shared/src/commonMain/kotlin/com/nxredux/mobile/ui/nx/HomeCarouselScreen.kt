@@ -14,12 +14,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.GridTile
@@ -34,6 +39,7 @@ import com.nxredux.mobile.ui.gridTiles
 import com.nxredux.mobile.ui.homeCarouselRowCount
 import com.nxredux.mobile.ui.homeDockSide
 import com.nxredux.mobile.ui.homeStripLines
+import kotlin.math.max
 import kotlin.math.min
 
 /** The least room above, between and below the Carousel Home's rows (the strip, the carousel, the dock). */
@@ -90,6 +96,22 @@ internal fun homeCarouselPlace(bodyH: Float, above: Float, stripInkH: Float, doc
 }
 
 /**
+ * Sideways, [place] moved so its rows (the strip's text when it is over the card, the card, the dock) are centred on the
+ * screen's middle rather than the body's: the body [bodyTop] dp down the window, the screen's centre [centreY] dp down it ([LocalScreenCentreY]). The rows go no higher
+ * than [minTop] and no lower than [maxBottom] (body dp), or than the body-centred [place] already does.
+ */
+internal fun homeCarouselScreenCentred(
+    place: HomeCarouselPlace, stripInkH: Float, dockH: Float, bodyTop: Float, centreY: Float, minTop: Float, maxBottom: Float,
+): HomeCarouselPlace {
+    val top = if (stripInkH > 0f) place.stripInkTop else place.boxTop
+    val bottom = if (dockH > 0f) place.dockTop + dockH else place.boxTop + place.boxH
+    val want = centreY - bodyTop - (top + bottom) / 2
+    // Never tighter than the body-centred place already is (it may reach into the tab underline's room).
+    val shift = max(min(minTop, top) - top, min(max(maxBottom, bottom) - bottom, want))
+    return place.copy(stripInkTop = place.stripInkTop + shift, boxTop = place.boxTop + shift, dockTop = place.dockTop + shift)
+}
+
+/**
  * The Carousel Home's row items in [rows] as the carousel's tiles (the dock's tools and "+N" are not among them):
  * Continue its first picture ([continuePictures]: the resume frame first) under its name, its abstract picture the
  * fallback; Pick a game the accent's abstract picture ([abstractAccentArtUrl] of [accentRgb]); a pin or a shelf game its
@@ -97,9 +119,12 @@ internal fun homeCarouselPlace(bodyH: Float, above: Float, stripInkH: Float, doc
  */
 internal fun homeCarouselTiles(rows: List<MainRow>, accentRgb: Int): List<GridTile> = rows.mapNotNull { r ->
     when (r) {
-        is MainRow.Continue -> GridTile.Game(
-            continuePictures(r.resume.previewPath, r.entry).firstOrNull(), r.entry.game.shownName, abstractUrl = abstractArtFor(r.entry),
-        )
+        is MainRow.Continue -> continuePictures(r.resume.previewPath, r.entry).firstOrNull().let { picture ->
+            GridTile.Game(
+                picture, r.entry.game.shownName, abstractUrl = abstractArtFor(r.entry),
+                resumeFrame = picture != null && picture == r.resume.previewPath,
+            )
+        }
         MainRow.PickAGame -> GridTile.Game(abstractAccentArtUrl(accentRgb), PICK_A_GAME)
         is MainRow.Pin, is MainRow.Shelf -> gridTiles(listOf(r)).single()
         else -> null
@@ -186,11 +211,18 @@ internal fun HomeCarouselScreen(
         }
         val dockH = if (rows.size > rowCount) side else 0f
         val pick = rowCount == 1 && rows.first() == MainRow.PickAGame
-        val place = homeCarouselPlace(
-            maxHeight.value - headerH, if (header != null) 0f else homeUnderlineAbove(frame), inkH, dockH, fill = pick,
+        val bodyH = maxHeight.value - headerH
+        val centred = homeCarouselPlace(
+            bodyH, if (header != null) 0f else homeUnderlineAbove(frame), inkH, dockH, fill = pick,
             maxBoxH = homeCarouselMaxH(width, portrait),
         )
-        Box(Modifier.fillMaxSize()) {
+        // Sideways, the rows centred on the screen's middle, not the body's (the tab row and the header make it uneven).
+        val density = LocalDensity.current
+        val centreY = LocalScreenCentreY.current?.let { with(density) { it.toDp().value } }
+        var bodyTop by remember { mutableFloatStateOf(Float.NaN) }
+        val place = if (portrait || pick || bodyTop.isNaN() || centreY == null) centred
+            else homeCarouselScreenCentred(centred, inkH, dockH, bodyTop + headerH, centreY, HOME_CAROUSEL_MIN_GAP, bodyH - HOME_CAROUSEL_MIN_GAP)
+        Box(Modifier.fillMaxSize().onGloballyPositioned { bodyTop = with(density) { it.positionInWindow().y.toDp().value } }) {
             // With the tab row hidden, the tab row's eased band in its place (the header's height), under the strip
             // and the Recent and Search icons MainMenuScreen draws over it.
             if (frame.titleHidden) Box(Modifier.fillMaxWidth().height((header?.height ?: MENU_TAB_ROW_HEIGHT.value).dp + NX_TOP_BAND_REACH).nxTopBandFade(colors.background))
@@ -224,6 +256,7 @@ internal fun HomeCarouselScreen(
                     modifier = box, layoutKey = layoutKey,
                     badge = { homeCarouselBadge(rows.getOrNull(it)) },
                     lit = { sel() in 0 until rowCount },
+                    drained = true,   // as Grid Home: no ring, the selected card in colour, the rest grey
                 )
             }
             if (dockH > 0f) HomeDock(rows, rowCount, { sel() }, onSelect, onOpen, longPress, side, tabMenu, Modifier.offset(y = (headerH + place.dockTop).dp))

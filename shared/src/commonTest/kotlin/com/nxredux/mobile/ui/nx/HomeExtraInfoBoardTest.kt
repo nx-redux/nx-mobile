@@ -148,7 +148,7 @@ class HomeExtraInfoBoardTest {
         assertEquals(HomeToolMode.LARGE, b.mode); assertEquals(10, b.slots); assertEquals(0, b.stripLines)
         near(274f, shown.topH, "shown topH"); near(8f, b.topY, "topY"); near(294f, b.topH, "topH"); near(294f, continueOf(b).h, "continue h")
         near(53.2f, b.square, "square")
-        assertEquals(shown.labels, b.labels); assertEquals(shown.shelfTiles, b.shelfTiles); near(shown.tilesY, b.tilesY, "tilesY")
+        assertEquals(shown.shelfTiles, b.shelfTiles); near(shown.tilesY, b.tilesY, "tilesY")
         val t = f.copy(h = 660f, titleHidden = true)
         val tb = homeBoard(hide(t), 1, tools = 5, games = 6, shelves = shelves)
         assertEquals(10, tb.slots); near(338f, tb.topH, "title hidden topH"); near(62f, tb.square, "title hidden square")

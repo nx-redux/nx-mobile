@@ -1,5 +1,9 @@
 package com.nxredux.mobile.ui.nx
 
+import androidx.compose.ui.graphics.Brush
+
+import com.nxredux.mobile.ui.smoothFadeStops
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.rememberSplineBasedDecay
@@ -108,7 +112,7 @@ private const val MOST_PLAYED = "Most played"
  * tab offered from MENU). A vertical drag scrolls the page without selecting and flings on when let go.
  * [continueInfo]: Continue's game info. [pinInfo]: a row game's, by row index, read lazily where the caption shows.
  * Both show their TIME segment only ([timeOnly]); [signedIn] false drops achievement data.
- * Reports its [HomeFrame] through [onLayout] once laid out, and again for each [layoutKey].
+ * Reports its [HomeFrame] through [onLayout] once laid out, and again for each [layoutKey] and each new [onLayout].
  */
 @Composable
 internal fun HomeScreen(
@@ -129,10 +133,12 @@ internal fun HomeScreen(
         // With the tab row hidden the stats strip sits in a fixed header in its place ([homeStatsHeader]); the page is
         // the body under it, laid out as under a tab row with the strip hidden.
         val header = homeStatsHeader(whole, homeStripLines(view.strip))
-        val frame = header?.body ?: whole
-        val h = frame.h
-        val report by rememberUpdatedState(onLayout)
-        LaunchedEffect(frame, layoutKey) { report(frame) }
+        // Laid out above the fixed gap over the tab row ([GRID_TAB_GAP]): the board, Continue's card included, ends there.
+        val frame = (header?.body ?: whole).let { it.copy(h = it.h - GRID_TAB_GAP) }
+        val h = frame.h   // the page shows down to the fixed gap over the tab row
+        // Again for each new [onLayout]: it takes a frame only for the screen showing, and one sent while the screen is
+        // swapped for another (unfolding) is dropped; the new screen's reporter sends it once more.
+        LaunchedEffect(frame, layoutKey, onLayout) { onLayout(frame) }
         // The board the rows were built for: their frame and strip lines. Before the first report the rows were built
         // on a stand-in frame, so nothing is drawn until the view names the real one (the board here is a placeholder).
         val known = view.frame != null
@@ -160,7 +166,7 @@ internal fun HomeScreen(
         }
 
         // The scroll: an offset only (read in the layers below, so a frame of it redraws, not recomposes). A new
-        // selection eases it as little as keeps the selected tile in view (with its shelf's label, [homeScrollRect]),
+        // selection eases it as little as keeps the selected tile in view ([homeBoardTile]),
         // from where it is (a drag included); a new board snaps; a rows swap on the same board (stats, recents) keeps
         // it ([homeScrollStep]).
         val tiles = b.rowGames + b.shelfTiles.size   // the row tiles the board has rects for: pins, then the shelves'
@@ -194,21 +200,11 @@ internal fun HomeScreen(
         }
 
         fun Modifier.at(r: HomeRect): Modifier = offset(r.x.dp, r.y.dp).size(r.w.dp, r.h.dp)
-        Box(Modifier.padding(top = (header?.height ?: 0f).dp).fillMaxSize().clipToBounds().then(drag)) {
+        Box(Modifier.padding(top = (header?.height ?: 0f).dp, bottom = GRID_TAB_GAP.dp).fillMaxSize().clipToBounds().then(drag)) {
             // The page moves with the scroll, the strip with it; a drag that starts on a tile scrolls too.
             if (known) Box(Modifier.fillMaxSize().graphicsLayer { translationY = -scroll.value.dp.toPx() }) {
                 // None while Home stats is off (the board's lines 0, its room the top section's).
                 if (!built.statsHidden) view.strip?.let { HomeStripLines(it, b.stripLines, b.gutter, b.stripY, w - 2 * b.gutter, homeStripLineH(built), homeStripPitch(built)) }
-                // The shelves' labels: 13 sp grey on 18 sp lines, at the gutter (the text scale grows both; the board
-                // leaves room for it, [HomeBoard.labelH]).
-                // A label the body's bottom edge would cut shows only once it is in view whole (no sliver of a word
-                // under the last card); read with the scroll, so a frame of it redraws, not recomposes.
-                b.labels.forEach { l ->
-                    HomeText(
-                        l.text, colors.hint, 13f, 18f, maxLines = 1,
-                        modifier = Modifier.offset(b.gutter.dp, l.y.dp).graphicsLayer { alpha = if (l.y + b.labelH - scroll.value <= h + 0.5f) 1f else 0f },
-                    )
-                }
                 rows.take(topCount).forEachIndexed { i, row ->
                     val at = b.top.getOrNull(i)?.rect ?: return@forEachIndexed
                     when (row) {
@@ -233,18 +229,43 @@ internal fun HomeScreen(
                     val i = topCount + k
                     val lines = if (k >= b.rowGames) 2 else null
                     val console = (row as? MainRow.Shelf)?.takeIf { it.shelf == HomeShelf.NEW || it.shelf == HomeShelf.NOT_STARTED }?.entry?.system?.displayName
+                    // A New or Not started game wears its reason top-left on its picture ([HomeBadge]), as Continue does.
+                    val reason = (row as? MainRow.Shelf)?.shelf?.takeIf { it == HomeShelf.NEW || it == HomeShelf.NOT_STARTED }?.label
                     pinTiles.getOrNull(k)?.let { t ->
                         val m = Modifier.at(homeBoardTile(b, k)).taps(i, menu = true)
-                        HomeLit(i, selection) { lit -> HomePinTile(t, lit, { pinInfo(i) }, signedIn, portrait, m, lines, console, always = row is MainRow.Pin) }
+                        HomeLit(i, selection) { lit ->
+                            Box(m) {
+                                HomePinTile(t, lit, { pinInfo(i) }, signedIn, portrait, Modifier.fillMaxSize(), lines, console, always = row is MainRow.Pin)
+                                reason?.let { HomeBadge(it, portrait, Modifier.align(Alignment.TopStart), lit = lit) }
+                            }
+                        }
                     }
                 }
             }
         }
 
+        // While more is below, the page fades to the ground over its bottom [HOME_BOTTOM_FADE], over the fixed gap above the
+        // tab row ([GRID_TAB_GAP]): no tile ends on a hard edge. At the end, none: the last row shows whole. Where Continue
+        // reaches into that strip at rest (landscape, or upright with the pad: its caption is there), only once scrolled.
+        val contBottom = b.top.firstOrNull { it.kind == HomeTopKind.CONTINUE }?.rect?.let { it.y + it.h } ?: 0f
+        val coversContinue = contBottom > h - HOME_BOTTOM_FADE.value
+        val moreBelow by remember(scroll, coversContinue) { derivedStateOf { scroll.value < maxScroll - 0.5f && (!coversContinue || scrolled) } }
+        val below = remember(layoutKey) { Animatable(if (moreBelow) 1f else 0f) }
+        LaunchedEffect(below, moreBelow) { below.animateTo(if (moreBelow) 1f else 0f, tween(SCROLL_MS, easing = NxMenuEasing)) }
+        Box(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = GRID_TAB_GAP.dp).fillMaxWidth().height(HOME_BOTTOM_FADE)
+                .graphicsLayer { alpha = below.value }.background(Brush.verticalGradient(*smoothFadeStops(colors.background))),
+        )
         // The tab row's eased top band, continued over the body's top, only while the page is scrolled (at rest it
         // would grey the top of a white-filled card: Continue's, Pick a game's). No tab row, the header's the same way.
         val band = remember(layoutKey) { Animatable(if (scrolled) 1f else 0f) }
         LaunchedEffect(band, scrolled) { band.animateTo(if (scrolled) 1f else 0f, tween(SCROLL_MS, easing = NxMenuEasing)) }
+        // Scrolled, the page fades in from the ground over [HOME_BOTTOM_FADE] under its top (the stats), as it fades out
+        // at the bottom: more is above.
+        Box(
+            Modifier.offset(y = (header?.height ?: 0f).dp).fillMaxWidth().height(HOME_BOTTOM_FADE).graphicsLayer { alpha = band.value }
+                .background(Brush.verticalGradient(*smoothFadeStops(colors.background).map { (y, c) -> (1f - y) to c }.reversed().toTypedArray())),
+        )
         if (tabRow) {
             Box(
                 Modifier.offset(y = -MENU_TAB_ROW_HEIGHT).fillMaxWidth().height(MENU_TAB_ROW_HEIGHT + NX_TOP_BAND_REACH)
@@ -263,7 +284,7 @@ internal fun HomeScreen(
 }
 
 /**
- * The scroll's answer to a new selection or board ([homeScrollStep]): the selected row tile's rect ([homeScrollRect]; the
+ * The scroll's answer to a new selection or board ([homeScrollStep]): the selected row tile's rect ([homeBoardTile]; the
  * top section's none), eased or snapped to. Its own scope, as [FollowSelection]: only this reads [selection] for the
  * scroll, so a step recomposes it alone. [last] holds the board and the selected rect the scroll last answered.
  */
@@ -272,7 +293,7 @@ private fun HomeScrollFollow(
     scroll: Animatable<Float, AnimationVector1D>, last: Array<Any?>, b: HomeBoard, selection: () -> Int,
     topCount: Int, pinCount: Int, tiles: Int, pageH: Float, h: Float,
 ) {
-    val selected = (selection() - topCount).takeIf { it in 0 until pinCount && it < tiles }?.let { homeScrollRect(b, it) }
+    val selected = (selection() - topCount).takeIf { it in 0 until pinCount && it < tiles }?.let { homeBoardTile(b, it) }
     LaunchedEffect(scroll, b, selected, pageH) {
         val step = homeScrollStep(scroll.targetValue, last[0] as HomeBoard?, b, last[1] as HomeRect?, selected, pageH, h)
         last[0] = b; last[1] = selected
@@ -330,30 +351,32 @@ private fun HomePinTile(
         tile, lit = lit, caption = true,
         info = { timeOnly(homeInfo(info(), signedIn)) }, logoInset = 0f to 0f, portrait = portrait,
         modifier = modifier, titleSize = 12.sp * nxTextScale(), titleLines = titleLines ?: if (portrait) 4 else 3, homeCaption = true,
-        subtitle = console, captionAlways = always,
+        subtitle = console, captionAlways = always, drained = true,   // no ring: the selection in colour, the rest grey
     )
 
 /**
- * A pinned tool's square: the tile plate with the tool's glyph alone, centred, min(46, 55% of the side) dp, the ink at
- * 82%; lit, the accent plate and the glyph on-accent, no ring. An Android app's own icon shows in full colour, never
- * tinted ([ToolIcon]).
+ * A pinned tool's square: the tool's glyph alone, centred, min(46, 55% of the side) dp, in the ink at full opacity
+ * selected and dimmed ([nxDimInk]) not, eased as the selection moves; no plate, no ring. An Android app's own icon shows
+ * in its colours ([ToolIcon]), dimmed the same.
  */
 @Composable
 internal fun HomeToolSquare(tile: GridTile.Tool, lit: Boolean, side: Float, modifier: Modifier) {
     val colors = LocalNxColors.current
     val icon = max(0f, min(46f, side * 0.55f))
-    Box(modifier.homeCard(lit, fill = true), contentAlignment = Alignment.Center) {
-        ToolIcon(tile.icon, tile.appId, if (lit) colors.onAccent else colors.listText.copy(alpha = 0.82f), Modifier.size(icon.dp))
+    val litness = nxLitness(lit)
+    Box(modifier, contentAlignment = Alignment.Center) {
+        ToolIcon(tile.icon, tile.appId, colors.listText, Modifier.size(icon.dp).graphicsLayer { alpha = nxDimInk(litness()) })
     }
 }
 
-/** "+N": the pinned tools that don't fit, min(20, 36% of the side) sp in the hint grey (lit: on-accent muted). */
+/** "+N": the pinned tools that don't fit, min(20, 36% of the side) sp in the ink, dimmed ([nxDimInk]) unless selected; no plate. */
 @Composable
 internal fun HomeMoreSquare(count: Int, lit: Boolean, side: Float, modifier: Modifier) {
     val colors = LocalNxColors.current
     val sp = max(0f, min(20f, side * 0.36f))
-    Box(modifier.homeCard(lit, fill = true), contentAlignment = Alignment.Center) {
-        if (sp > 0f) HomeText("+$count", if (lit) colors.onAccentMuted else colors.hint, sp, sp * 1.2f, maxLines = 1, align = TextAlign.Center)
+    val litness = nxLitness(lit)
+    Box(modifier.graphicsLayer { alpha = nxDimInk(litness()) }, contentAlignment = Alignment.Center) {
+        if (sp > 0f) HomeText("+$count", colors.listText, sp, sp * 1.2f, maxLines = 1, align = TextAlign.Center)
     }
 }
 
@@ -390,7 +413,7 @@ private fun StripText(text: String, color: Color, modifier: Modifier = Modifier)
 
 @Composable
 private fun StripDot(pad: Float) =
-    StripText("·", LocalNxColors.current.hint.copy(alpha = 0.55f), Modifier.padding(horizontal = pad.dp))
+    StripText("·", LocalNxColors.current.hint.copy(alpha = 0.55f), Modifier.padding(horizontal = pad.dp))   // role: the strip's separator dot, the grey softened
 
 /** "This month ‹played› · ‹n› achievements" (signed out: the played time alone). */
 @Composable
@@ -413,34 +436,13 @@ private fun RowScope.StripMost(m: HomeStripMost) {
     m.time?.let { StripText(it, colors.hint) }
 }
 
-/** A selected card's [NX_TILE_RING_W] ring (a game tile's) in [color] round its rounded card, outside its bounds (the parent must not clip it). */
-private fun Modifier.homeRing(lit: Boolean, color: Color): Modifier = if (!lit) this else drawBehind {
-    val o = NX_TILE_RING_W.dp.toPx()
-    drawRoundRect(color, topLeft = Offset(-o, -o), size = Size(size.width + 2 * o, size.height + 2 * o), cornerRadius = CornerRadius(NX_TILE_CORNER.dp.toPx() + o))
-}
-
-/**
- * A card's ground: unlit, the tile plate (black, 1 dp edge at 8%); lit, the accent highlight ([fill]) or the plain
- * background (a game, whose ring shows).
- */
-@Composable
-private fun Modifier.homeCard(lit: Boolean, fill: Boolean): Modifier {
-    val colors = LocalNxColors.current
-    val shaped = clip(RoundedCornerShape(NX_TILE_CORNER.dp))
-    return when {
-        !lit -> shaped.tilePlate(colors.background, colors.main)
-        fill -> shaped.background(nxHighlight())
-        else -> shaped.background(colors.background)
-    }
-}
-
 /**
  * Continue: the last game's resume frame, else its screenshot, hero, grid, else its abstract picture ([continuePictures],
  * all through the one image loader). The picture is cropped, framed at 40% from the top, then zoomed [HOME_CONTINUE_ZOOM]
  * about that point and clipped to the card. Over it, the pinned games' caption fade ([homeCaptionFade], the bottom 80%)
  * holds the name (up to 2 balanced lines where the card holds them) and the time ([info], TIME only) at the name's size.
  * With no picture at all it is a title card: the name large in the middle, the time at the bottom. A "Continue"
- * [HomeBadge] sits top-left; selected, the ring.
+ * [HomeBadge] sits top-left. No ring or edge: selected, the picture in colour and the name in the accent; not, grey.
  */
 @Composable
 private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLine>, portrait: Boolean, modifier: Modifier) {
@@ -452,7 +454,8 @@ private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLin
     // The info at the game list Carousel card's size, the name a step under its name (Appearance → Text size), each
     // on its own line ratio.
     val k = nxTextScale()
-    val titleSp = NxTextSizes.secondary(nxCardTitleSize()).value; val titleLine = titleSp * HOME_CARD_TITLE_LINE / HOME_CARD_TITLE_SP
+    // The hero's name 4 sp over the tiles' ([NxMenuTile]'s Home caption), on one line.
+    val titleSp = NxTextSizes.secondary(nxCardTitleSize()).value + HOME_HERO_NAME_PLUS; val titleLine = titleSp * HOME_CARD_TITLE_LINE / HOME_CARD_TITLE_SP
     val infoSp = nxCardStatsSize().value; val infoLine = infoSp * HOME_CARD_INFO_LINE / HOME_CARD_INFO_SP
     // The resume frame is a copy of the whole game view: trimmed of its letterbox first ([homeCoverTrim]), off the
     // main thread in the load, so the crop always covers the card.
@@ -462,14 +465,20 @@ private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLin
         else picture
     }
     val rows = backdropCaptionRows(info)   // the time only ([timeOnly]); none without it
-    Box(modifier.homeRing(lit, nxHighlight())) {
-        BoxWithConstraints(Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp)).background(colors.background)) {
+    // No ring: selected, the picture in full colour and the name in the accent; not, the picture grey ([nxDrain]).
+    val litness = nxLitness(lit)
+    val name = if (lit) colors.accent else colors.inkDim   // unselected, its name dims as the tiles' do
+    // Unselected, its time line a step under the tiles' names, as theirs ([NxMenuTile]'s drained).
+    val sub = if (lit) colors.hint else colors.inkDim.copy(alpha = colors.inkDim.alpha * 0.7f)   // role: an unselected Grid tile's under-name lines
+    Box(modifier) {
+        // No ring: the subtle edge, over everything, keeps the card's rounded shape off a dark picture's ground.
+        BoxWithConstraints(Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp)).background(colors.background).border(NX_DRAIN_EDGE, colors.inkEdge, RoundedCornerShape(NX_TILE_CORNER.dp))) {
             if (picture != null) {
                 AsyncImage(
                     model = model, contentDescription = null, contentScale = ContentScale.Crop,
                     alignment = BiasAlignment(0f, PICTURE_BIAS),
                     // Zoomed about its crop point so a black screen border falls outside the card (which clips it).
-                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                    modifier = Modifier.fillMaxSize().nxDrain(litness).graphicsLayer {
                         scaleX = HOME_CONTINUE_ZOOM; scaleY = HOME_CONTINUE_ZOOM
                         transformOrigin = TransformOrigin(HOME_CONTINUE_PIVOT_X, HOME_CONTINUE_PIVOT_Y)
                     },
@@ -484,17 +493,17 @@ private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLin
                 val bottom = if (portrait) 8.5f else 10.2f
                 val scale = LocalDensity.current.fontScale
                 val line = titleLine * scale
-                val lines = homeCaptionTitleLines(maxHeight.value, line, bottom + rows.size * (infoLine * scale + gap))
+                val lines = 1   // one line, an ellipsis, as the tiles' names
                 Column(
                     Modifier.align(Alignment.BottomStart).fillMaxWidth()
                         .padding(horizontal = if (portrait) 10.2.dp else 13.6.dp).padding(bottom = bottom.dp),
                     verticalArrangement = Arrangement.spacedBy(gap.dp),
                 ) {
                     HomeText(
-                        game.shownName, colors.listText, titleSp, titleLine, maxLines = lines, balanced = lines > 1,
+                        game.shownName, name, titleSp, titleLine, maxLines = lines, balanced = lines > 1,
                         shadow = if (lines > 1) titleShadow() else null,
                     )
-                    for (r in rows) InfoRow(r, infoSp, infoLine)
+                    for (r in rows) InfoRow(r, infoSp, infoLine, sub)
                 }
             } else {
                 Column(
@@ -506,17 +515,15 @@ private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLin
                 ) {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         HomeText(
-                            game.shownName, colors.listText, (if (portrait) 19f else 24f) * k * NxTextSizes.STEP, (if (portrait) 23f else 29f) * k * NxTextSizes.STEP,
+                            game.shownName, name, (if (portrait) 19f else 24f) * k * NxTextSizes.STEP, (if (portrait) 23f else 29f) * k * NxTextSizes.STEP,
                             maxLines = 2, align = TextAlign.Center, balanced = true,
                         )
                     }
-                    for (r in rows) InfoRow(r, infoSp, infoLine)
+                    for (r in rows) InfoRow(r, infoSp, infoLine, sub)
                 }
             }
-            // The card's subtle edge over its picture too; selected, the ring takes its place.
-            if (!lit) Box(Modifier.fillMaxSize().border(1.dp, colors.main.copy(alpha = 0.08f), RoundedCornerShape(NX_TILE_CORNER.dp)))
             // The Continue badge, top-left, as on Carousel Home ([HomeBadge]); Pick a game has none.
-            HomeBadge(HOME_CONTINUE_BADGE, portrait, Modifier.align(Alignment.TopStart))
+            HomeBadge(HOME_CONTINUE_BADGE, portrait, Modifier.align(Alignment.TopStart), lit = lit)
         }
     }
 }
@@ -532,16 +539,17 @@ private const val HOME_CARD_INFO_LINE = 14f
 
 
 /**
- * A Home card's badge, top-left ("Continue", and on Carousel Home a shelf game's shelf name; as the handheld's `drawContinueBadge`):
+ * A Home card's badge, top-left ("Continue", and a shelf game's reason, New or Not started; as the handheld's `drawContinueBadge`):
  * black at [HOME_BADGE_ALPHA] in a round pill, the word in the ink at 12 sp on a 16 sp line ([pinned]: never font-scaled),
- * padded 3 x 9 dp, its corner [inset] dp in from the card's.
+ * padded 3 x 9 dp, its corner [inset] dp in from the card's. Not [lit] (an unselected Grid Home tile): dimmed with its tile.
  */
 @Composable
-internal fun HomeBadge(text: String, portrait: Boolean, modifier: Modifier = Modifier) {
+internal fun HomeBadge(text: String, portrait: Boolean, modifier: Modifier = Modifier, lit: Boolean = true) {
     val inset = if (portrait) 8.dp else 10.dp   // three quarters of Continue's caption inset (10.2 / 13.6 dp)
+    val litness = nxLitness(lit)   // Grid Home: an unselected tile's badge dims with it ([nxDimBadge])
     Box(
-        modifier.padding(start = inset, top = inset)
-            .background(Color.Black.copy(alpha = HOME_BADGE_ALPHA), RoundedCornerShape(50))
+        modifier.padding(start = inset, top = inset).graphicsLayer { alpha = nxDimBadge(litness()) }
+            .background(Color.Black.copy(alpha = HOME_BADGE_ALPHA), RoundedCornerShape(50))   // role: a Home badge's pill, the handheld's black
             .padding(horizontal = 9.dp, vertical = 3.dp),
     ) {
         val pin = LocalDensity.current.fontScale   // pinned: the sizes divided by the font scale draw at 12 and 16
@@ -549,39 +557,43 @@ internal fun HomeBadge(text: String, portrait: Boolean, modifier: Modifier = Mod
     }
 }
 
+/** Grid Home's hero name over the tiles' names, sp. */
+internal const val HOME_HERO_NAME_PLUS = 4f
+
+/** Grid Home's bottom fade while more is below, and its top fade while the page is scrolled. */
+private val HOME_BOTTOM_FADE = 48.dp
+
 /** A [HomeBadge]'s black, as the handheld's (158 of 255). */
 private const val HOME_BADGE_ALPHA = 0.62f
 
 /** One of Continue's info rows ([infoText]), grey, on one line. */
 @Composable
-private fun InfoRow(lines: List<InfoLine>, sizeSp: Float, lineSp: Float) {
-    val colors = LocalNxColors.current
-    val info = infoText(lines, colors.hint, icon = if (sizeSp < 14f) 11.dp else 12.dp)
-    HomeText(info.text, colors.hint, sizeSp, lineSp, maxLines = 1, inlineContent = info.inlineContent)
+private fun InfoRow(lines: List<InfoLine>, sizeSp: Float, lineSp: Float, color: Color = LocalNxColors.current.hint) {
+    val info = infoText(lines, color, icon = if (sizeSp < 14f) 11.dp else 12.dp)
+    HomeText(info.text, color, sizeSp, lineSp, maxLines = 1, inlineContent = info.inlineContent)
 }
 
 /**
  * A fresh install's only card: an abstract picture in the accent's palette ([abstractAccentArtUrl]; Crop, through the one
  * image loader), the NX mark in front of it (centred, the drawn mark 60% of the card's [cardH], [homeMarkAlpha] of the
- * ink), then "Pick a game" over grey "Nothing played yet" with a soft shadow so they read on any palette. Selected:
- * Continue's ring, so the picture stays.
+ * ink), then "Pick a game" over grey "Nothing played yet" with a soft shadow so they read on any palette. As Continue,
+ * no ring: selected, the picture in colour; not, grey ([nxDrain]).
  */
 @Composable
 internal fun PickCard(lit: Boolean, portrait: Boolean, cardH: Float, modifier: Modifier) {
     val colors = LocalNxColors.current
     val url = remember(colors.accent) { abstractAccentArtUrl(colors.accent.toArgb() and 0xFFFFFF) }
-    Box(modifier.homeRing(lit, nxHighlight())) {
-        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp)).background(colors.background), contentAlignment = Alignment.Center) {
-            AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+    val litness = nxLitness(lit)
+    Box(modifier) {
+        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp)).background(colors.background).border(NX_DRAIN_EDGE, colors.inkEdge, RoundedCornerShape(NX_TILE_CORNER.dp)), contentAlignment = Alignment.Center) {
+            AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().nxDrain(litness))
             Image(
                 painterResource(homePickMark), contentDescription = null, contentScale = ContentScale.Fit,
-                colorFilter = ColorFilter.tint(colors.listText.copy(alpha = homeMarkAlpha(false))),
+                colorFilter = ColorFilter.tint(colors.listText.copy(alpha = homeMarkAlpha(false))),   // role: the Pick card's watermark mark
                 // Wider than a narrow card is fine: the mark itself is 41% of the box, and the card clips the rest.
                 modifier = Modifier.requiredSize(homeMarkBox(cardH).dp),
             )
             PickText(portrait)
-            // The card's subtle edge over its picture; selected, the ring takes its place.
-            if (!lit) Box(Modifier.fillMaxSize().border(1.dp, colors.main.copy(alpha = 0.08f), RoundedCornerShape(NX_TILE_CORNER.dp)))
         }
     }
 }
@@ -589,7 +601,7 @@ internal fun PickCard(lit: Boolean, portrait: Boolean, cardH: Float, modifier: M
 @Composable
 private fun PickText(portrait: Boolean) {
     val colors = LocalNxColors.current
-    val shadow = Shadow(Color.Black.copy(alpha = PICK_TEXT_SHADOW_ALPHA), Offset(0f, 1f), 8f)
+    val shadow = Shadow(Color.Black.copy(alpha = PICK_TEXT_SHADOW_ALPHA), Offset(0f, 1f), 8f)   // role: a text shadow
     Column(
         Modifier.fillMaxSize().padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally,

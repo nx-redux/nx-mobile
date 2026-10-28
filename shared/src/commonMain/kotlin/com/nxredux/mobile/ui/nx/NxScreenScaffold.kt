@@ -23,7 +23,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.Layout
@@ -34,6 +33,11 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.nxredux.mobile.ui.LocalSettingsBlock
+import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE_ROWS
+import com.nxredux.mobile.ui.SettingsBlockMode
+import com.nxredux.mobile.ui.SettingsRowsBlock
+import com.nxredux.mobile.ui.SettingsWordList
 import com.nxredux.mobile.ui.listArtLabelEnd
 import kotlin.math.roundToInt
 
@@ -68,9 +72,6 @@ class NxHintsBand(
  * at the top. On a titled page a list that fits takes only its rows' height.
  * [grid]: a body in place of the list (Grid, Carousel and Backdrop pages, the tool apps grid), running down to the hint
  * bar; [rows], [title] and [band] are unused.
- * [bodyAlpha]: the body's alpha, read at draw time so it animates with no recomposition (the main menu's dim while its
- * tab row has focus). The list and band are separate layers so the band's reach into the hint bar is not clipped; the
- * hint bar keeps full alpha.
  * [scrollFade]: the rows fade at the edge they scroll on ([nxScrollFade]) in place of the scroll arrows (false only
  * draws the arrows); a band keeps the arrows' room, so nothing moves, a titled page gives it to the rows.
  * [rowEdges]: with a band, gaps above the first row and below the last, in rows (top to bottom); the whole rows that fit
@@ -79,7 +80,7 @@ class NxHintsBand(
  * match those lists', and its bottom gap; the top gap takes what is left ([nxListFitUnder]'s rowPx, bottomRows).
  * [onPageRows]: told the whole rows the list shows, again when that changes (a game list pages LEFT / RIGHT by them).
  * [hideHints]: no hint bar is drawn but its room is kept, so nothing moves. [hintShade] keeps the bar's
- * [NX_HINT_BAR_ALPHA] shade there (with [NxHintsBand.barInfo] drawn on it).
+ * [NxColors.scrimHints] shade there (with [NxHintsBand.barInfo] drawn on it).
  */
 @Composable
 fun NxScreenScaffold(
@@ -95,7 +96,6 @@ fun NxScreenScaffold(
     labelStart: Dp? = null,
     listTopGap: Dp = 0.dp,
     listTopEdge: Dp? = null,
-    bodyAlpha: (() -> Float)? = null,
     hideHints: Boolean = false,
     hintShade: Boolean = false,
     selection: (() -> Int)? = null,   // read by the pill rows in place of selectedIndex, so a selection step recomposes only the rows that changed
@@ -109,8 +109,13 @@ fun NxScreenScaffold(
     onPageRows: ((Int) -> Unit)? = null,   // the whole rows the list shows (a game list's LEFT / RIGHT page)
 ) {
     val listSelection = selection ?: { selectedIndex }
-    val dim = if (bodyAlpha == null) Modifier else Modifier.graphicsLayer { alpha = bodyAlpha() }
     val listState = rememberLazyListState()
+    // The Settings rows block ([LocalSettingsBlock]): a titled list page's rows from the bottom, under its title line.
+    val block = LocalSettingsBlock.current
+    if (block != null && grid == null && band == null) {
+        NxRowsBlockPage(block, title, rows, listSelection, hints, onSelect, onOpen, modifier, onHint, onLongPress, rowKind, header, listState)
+        return
+    }
     // Every list's pitch under Appearance → Text size: the list's at Large, in proportion at Small (the text follows the row).
     val bandPitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)
     // Up and down side by side, 1 dp apart, whichever applies, packed (a lone arrow leaves no gap): the pair a band draws.
@@ -123,7 +128,7 @@ fun NxScreenScaffold(
     BoxWithConstraints(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             // The body ends at the hint bar's top edge. It draws above the bar, so a band can reach into the bar's top.
-            if (grid != null) Box(Modifier.weight(1f).fillMaxWidth().then(dim)) {
+            if (grid != null) Box(Modifier.weight(1f).fillMaxWidth()) {
                 grid(Modifier.fillMaxSize())
             } else BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().zIndex(1f)) {
                 // No band: split the height into N rows, then show the whole rows that fit above a half-row arrow gutter.
@@ -167,7 +172,7 @@ fun NxScreenScaffold(
                 // can leave a part row) is split above and below, so the list sits centred between the title and the hints.
                 // A titled options list sits at the top instead, directly under the title.
                 val centred = title != null && rowKind != NxRowKind.OPTIONS
-                NxTitledBody(title, Modifier.fillMaxSize().then(dim)) { Column(Modifier.fillMaxSize()) {
+                NxTitledBody(title, Modifier.fillMaxSize()) { Column(Modifier.fillMaxSize()) {
                     header?.invoke()
                     BoxWithConstraints(
                         Modifier.weight(1f).nxGrowUp(-topGap).fillMaxSize().padding(top = maxOf(0.dp, topGap), bottom = bottomPad),
@@ -191,7 +196,7 @@ fun NxScreenScaffold(
                     LaunchedEffect(whole) { report(whole) }
                 }
                         // In the rows' own rounded px, so the list rests on whole rows ([nxRowsSlotPx]).
-                        val slot = if (fits) optionsHeight else with(density) { nxRowsSlotPx(itemHeight.roundToPx(), whole, gap.roundToPx()).toDp() }
+                                                val slot = if (fits) optionsHeight else with(density) { nxRowsSlotPx(itemHeight.roundToPx(), whole, gap.roundToPx()).toDp() }
                         val listWidth = maxWidth
                         val listShift = Modifier.padding(start = labelStart?.let { maxOf(0.dp, it - nxListInset()) } ?: 0.dp)
                         Column(Modifier.fillMaxWidth()) {
@@ -228,15 +233,15 @@ fun NxScreenScaffold(
                 // no pointer input, so hint taps still reach the bar. Touch only there is no bar to reach into, so the band
                 // rests on the body's bottom, unless hideHints keeps the bar's row (a List's info line in it).
                 val noBarRow = touchOnly() && !hideHints
-                band?.let { b -> Box(Modifier.align(Alignment.BottomCenter).offset(y = if (noBarRow) 0.dp else b.overlap).fillMaxWidth().then(dim)) { b.content(arrowPair) } }
+                band?.let { b -> Box(Modifier.align(Alignment.BottomCenter).offset(y = if (noBarRow) 0.dp else b.overlap).fillMaxWidth()) { b.content(arrowPair) } }
             }
             if (!hideHints) NxHintBar(hints, onHint = onHint)
             else if (keepBarRoom) Box {
                 // The bar laid out unseen, so its room matches the shown bar's exactly; no taps (no onHint). Touch only
                 // the bar draws nothing, so the room is a plain row of its height ([NX_HINT_BAR_ROW_HEIGHT]).
                 if (touchOnly()) Spacer(Modifier.fillMaxWidth().height(NX_HINT_BAR_ROW_HEIGHT))
-                else NxHintBar(hints, Modifier.alpha(0f), alpha = 0f)
-                if (hintShade) Box(Modifier.matchParentSize().background(LocalNxColors.current.background.copy(alpha = NX_HINT_BAR_ALPHA)))
+                else NxHintBar(hints, Modifier.alpha(0f))   // role: laid out unseen
+                if (hintShade) Box(Modifier.matchParentSize().background(LocalNxColors.current.scrimHints))
                 band?.barInfo?.let { info -> Box(Modifier.matchParentSize()) { info() } }
             }
         }
@@ -381,5 +386,36 @@ internal fun NxTitledBody(title: String?, modifier: Modifier = Modifier, titleSu
             head.place(0, 0)
             body.place(0, head.height + maxOf(0, -shift))
         }
+    }
+}
+
+/**
+ * A list page as the Settings rows block ([SettingsRowsBlock]): [title] its first line, [header] under it, the rows at
+ * the list pitch (Appearance → Text size) taking only their own height, from the bottom; past the room they scroll under
+ * a [SETTINGS_ROWS_FADE_ROWS]-row fade, the selection kept clear of it. Pill-kind rows draw as the section block's words
+ * ([SettingsWordList], no pill), options rows as NX Redux's options row; the hint bar below, as the page's.
+ */
+@Composable
+internal fun NxRowsBlockPage(
+    block: SettingsBlockMode, title: String?, rows: List<NxRow>, selection: () -> Int, hints: List<Hint>,
+    onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier = Modifier, onHint: ((NxButton) -> Unit)? = null,
+    onLongPress: ((Int) -> Unit)? = null, rowKind: NxRowKind = NxRowKind.PILL, header: (@Composable () -> Unit)? = null,
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+) {
+    val pitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)
+    Column(modifier.fillMaxSize()) {
+        SettingsRowsBlock(block, title, Modifier.weight(1f), header) {
+            if (rowKind == NxRowKind.OPTIONS) {
+                NxOptionsList(
+                    rows, selection(), onSelect, onOpen, rowHeight = pitch, listText = NxTextSizes.listLabel(pitch),
+                    modifier = Modifier.fillMaxWidth().height(nxOptionsFitHeight(rows, pitch)), listState = listState,
+                    onLongPress = onLongPress, scrollFade = true,
+                )
+            } else {
+                // The section block's words, no pill: its own height, held to the room (the list then scrolls).
+                SettingsWordList(rows, selection, onSelect, onOpen, Modifier.fillMaxWidth(), listState)
+            }
+        }
+        NxHintBar(hints, onHint = onHint)
     }
 }

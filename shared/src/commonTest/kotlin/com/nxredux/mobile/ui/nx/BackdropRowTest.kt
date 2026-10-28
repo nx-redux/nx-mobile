@@ -157,11 +157,12 @@ class BackdropRowTest {
         assertEquals("u", backdropPictureTarget(true, "u")); assertNull(backdropPictureTarget(false, "u")); assertNull(backdropPictureTarget(true, null))
     }
 
-    // The dim layer (0.65): pinned, and with the shade the picture is at least 60% dark even in the middle.
+    // The dim layer (scrimBackdrop, 0xBF ≈ 0.75: the picture at 25%): pinned, and with the shade the picture is at least 60% dark even in the middle.
     @Test fun dimLayerDarkensEveryShadeStop() {
-        assertEquals(0.65f, BACKDROP_DIM)
+        val dim = NxDefaults.colors.scrimBackdrop.alpha
+        assertEquals(0.75f, dim, 0.002f)
         for ((at, alpha) in BACKDROP_SHADE) {
-            val dark = 1f - (1f - BACKDROP_DIM) * (1f - alpha)
+            val dark = 1f - (1f - dim) * (1f - alpha)
             assertTrue(dark >= 0.60f - 1e-4f, "$at: $dark")
         }
     }

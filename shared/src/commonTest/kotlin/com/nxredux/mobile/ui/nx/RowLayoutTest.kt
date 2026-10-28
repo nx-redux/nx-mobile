@@ -163,7 +163,6 @@ class RowLayoutTest {
         assertEquals(291f, titleRoomSizingBody(291f, 0f), e)        // the title shown: the box itself
         assertEquals(291f, titleRoomSizingBody(291f + 44f, 44f), e)
         assertEquals(0f, titleRoomSizingBody(20f, 44f), e)          // never negative
-        assertEquals(gridSizingBody(335f, 44f), titleRoomSizingBody(335f, 44f), e)   // the Grid's is the same rule
     }
 
     @Test fun aHiddenTitleKeepsTheCarouselRowAndCentresItInTheTallerBox() {
@@ -352,6 +351,13 @@ class RowLayoutTest {
     }
 
     // A game list Carousel's neighbours centre on the screen's centre line, wherever their box starts; unmeasured, none.
+    // A game list's selection and its caption (gap 8 + 40 drawn) centred on the screen's line, 300 dp down its 600 dp box;
+    // kept inside the box when the line is near an edge.
+    @Test fun rowSelectedTopOnCentresTheTileAndCaptionOnTheLine() {
+        assertEquals(300f - (200f + 48f) / 2, rowSelectedTopOn(300f, 600f, 200f, 8f, 40f), 1e-4f)
+        assertEquals(600f - 248f, rowSelectedTopOn(560f, 600f, 200f, 8f, 40f), 1e-4f)
+    }
+
     @Test fun screenCentreLineTopCentresTheTileOnTheScreen() {
         // A screen 1000 px tall from y 100 (centre 600), the box from y 250, 2.5 px per dp: the centre 140 dp down the box,
         // so a 120 dp tile's top at 80. A box starting higher puts the tile lower in it.

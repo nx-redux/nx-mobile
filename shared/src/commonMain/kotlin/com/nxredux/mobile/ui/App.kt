@@ -1,12 +1,18 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.LocalNxHintBarHidden
+import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.compose.AsyncImagePainter
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.request.addLastModifiedToFileCacheKey
 import com.nxredux.mobile.update.AppRelease
+import com.nxredux.mobile.ui.nx.LaunchOverlay
+import com.nxredux.mobile.ui.nx.LaunchTargets
+import com.nxredux.mobile.ui.nx.LocalLaunchTargets
 import com.nxredux.mobile.ui.nx.LocalMinimalPage
+import com.nxredux.mobile.ui.nx.toLaunchName
 import com.nxredux.mobile.ui.nx.MinimalMorph
 import com.nxredux.mobile.ui.nx.MinimalPage
 import com.nxredux.mobile.ui.nx.abstractArtFetcher
@@ -14,6 +20,17 @@ import com.nxredux.mobile.ui.nx.fileRefMapper
 import com.nxredux.mobile.ui.nx.nxColorsFor
 import com.nxredux.mobile.ui.nx.abstractArtKeyer
 import androidx.compose.animation.AnimatedContent
+import com.nxredux.mobile.ui.nx.LocalPageSlide
+import com.nxredux.mobile.ui.nx.LocalTabSwipe
+import com.nxredux.mobile.ui.nx.PageSlide
+import com.nxredux.mobile.ui.nx.TabSwipe
+import kotlinx.coroutines.launch
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.zIndex
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.key
+import com.nxredux.mobile.ui.nx.settleTo
+import com.nxredux.mobile.ui.nx.GatedLaunchTargets
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -42,6 +59,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
@@ -68,6 +86,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.ColorMatrix
 import com.nxredux.mobile.ui.nx.padColorMatrix
 import com.nxredux.mobile.ui.nx.padPainter
@@ -79,6 +98,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.settings.ConsoleArt
+import com.nxredux.mobile.settings.GameListArt
 import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.settings.PadLayouts
@@ -94,7 +114,6 @@ import com.nxredux.mobile.ui.nx.launcherChromeFor
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.restingSystemBars
 import com.nxredux.mobile.ui.nx.LocalAppIcons
-import com.nxredux.mobile.ui.nx.LocalGridPresses
 import com.nxredux.mobile.ui.nx.LocalPadBelow
 import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.LocalWindowSize
@@ -102,6 +121,7 @@ import com.nxredux.mobile.ui.nx.NxDefaults
 import com.nxredux.mobile.ui.nx.NxBackdropPicture
 import com.nxredux.mobile.ui.nx.backdropPictureTarget
 import com.nxredux.mobile.ui.nx.LocalNxOptionText
+import com.nxredux.mobile.ui.nx.NxHelpText
 import com.nxredux.mobile.ui.nx.NxSettingInfoPopup
 import com.nxredux.mobile.ui.nx.NxSettingPicker
 import com.nxredux.mobile.ui.nx.NxDialog
@@ -176,6 +196,16 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     val controllerConnected = rememberControllerConnected()   // once, above the shell: survives rotation and pad/no-pad flips
     LaunchedEffect(controllerConnected) { state.onControllerConnected(controllerConnected) }   // a Shortcuts bind row's line
     val touchscreen = rememberHasTouchscreen()   // for a game list's Recent, Search and Layout icons
+    // A launch: the page showing reports its selected name ([LocalLaunchTargets]); the overlay spreads from it, and the
+    // game carries it (in the accent it ends on) to draw again on the same pixels.
+    val launchSequence by state.launchSequence.collectAsState()
+    val launchTargets = remember { LaunchTargets() }
+    val launchAccent = rememberUpdatedState(look.colors.accent)
+    DisposableEffect(state) {
+        val provider = { launchTargets.current?.toLaunchName(launchAccent.value) }
+        state.launchNameProvider = provider
+        onDispose { if (state.launchNameProvider === provider) state.launchNameProvider = null }
+    }
     // Bars and cutout only, never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
     Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).windowInsetsPadding(restingSystemBars().union(WindowInsets.displayCutout))) {
         HandheldShell(
@@ -202,6 +232,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                     val separate = rememberSeparateController()
                     LaunchedEffect(portrait, separate) { state.onPadContext(portrait, separate) }
                     MenuLocals(state, look, footer, touchscreen) {
+                        CompositionLocalProvider(LocalLaunchTargets provides launchTargets) {
                         Box(m) {
                             // A tool on the top screen ([MenuTopScreen]): this one keeps the menu, still.
                             val toolAbove = DualMenu.bottom(screen, dualMenu, toolOnTop) == BottomContent.Menu
@@ -217,6 +248,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                             // Only a [NavStep] changes the key: every other screen change (a refresh, Settings, a menu) swaps the page in place.
                             val shown = remember { HashMap<Int, Screen>() }   // each page's screen as last shown, so the one sliding out keeps its own
                             val minimalMorph = remember { MinimalMorph() }   // where a Minimal morph to the next page starts
+                            val tabSwipe = remember { TabSwipe() }   // a main menu page dragged between tabs ([tabSwipe])
                             AnimatedContent(
                                 targetState = nav.seq, transitionSpec = { if (still) EnterTransition.None togetherWith ExitTransition.None else pageTransition(nav.motion) },
                                 modifier = Modifier.fillMaxSize().clipToBounds(), label = "page",
@@ -229,8 +261,10 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                                 val pageResume = remember { liveOrLast(isLive, resumeInfo) }
                                 // How this page came in, for a Minimal morph ([NavMotion.MINIMAL_FORWARD], [NavMotion.MINIMAL_BACK]).
                                 val minimalPage = remember { MinimalPage(minimalMorph, isLive, nav.motion) }
-                                CompositionLocalProvider(LocalMinimalPage provides minimalPage) {
-                                    page?.let { PageContent(state, it, pageSelection, pageResume, gameInfo, isLive) }   // the info is the current map for both pages
+                                CompositionLocalProvider(LocalMinimalPage provides minimalPage, LocalTabSwipe provides tabSwipe) {
+                                    // The main menu's tabs side by side for a sideways swipe ([TabPager]); the info is the current map for both pages.
+                                    if (live && page is Screen.Systems && tabPaged(page)) TabPager(state, page, pageSelection, pageResume, gameInfo, isLive, tabSwipe, launchTargets)
+                                    else page?.let { PageContent(state, it, pageSelection, pageResume, gameInfo, isLive) }
                                 }
                                 // The page sliding out takes no taps: they would act on the page sliding in.
                                 if (!live) Box(Modifier.fillMaxSize().pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } })
@@ -239,6 +273,8 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                             // menu on the second display it goes with the game list, to the top screen ([MenuTopScreen]).
                             val bottom = DualMenu.bottom(screen, dualMenu, toolOnTop)
                             if (bottom == BottomContent.Normal) netplayPage?.value?.let { p -> NetplayOverlay(state, p) }
+                            // Over the whole screen (tabs, stats, icons, content), before a tool on the top screen returns.
+                            LaunchOverlay(launchSequence, launchTargets, reducedMotion = state.reducedMotion)
                             if (bottom == BottomContent.Menu) return@Box   // a tool on the top screen: its loading, dialogs and notices are there ([MenuTopScreen])
                             if (loading) NxLoadingOverlay(loadingMessage)
                             // An installed library's Android games question over the menu (first setup asks it as a step). A one-time
@@ -254,6 +290,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                             }
                             PageOverlays(state, chooser, error, notice)
                         }
+                        }
                     }
                 }
             },
@@ -263,12 +300,12 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
 
 /**
  * The settings the launcher screens' look reads: Appearance → Accent and Secondary accent ([colors]; Auto follows the
- * accent), Layouts → Page title, Button hints, Extra info, Home stats and the Recent, Search and Netplay hints (the
- * chrome, [launcherChromeFor]), and Appearance → Text size ([optionText]).
+ * accent), Layouts → Page title, Button hints, Extra info, Home stats and the Netplay hint (the chrome,
+ * [launcherChromeFor]), and Appearance → Text size ([optionText]).
  */
 internal data class MenuLook(
     val colors: NxColors, val pageTitle: Boolean, val buttonHints: Boolean, val extraInfo: Boolean, val homeStats: Boolean,
-    val recentHint: Boolean, val searchHint: Boolean, val netplayHint: Boolean, val optionText: Float,
+    val netplayHint: Boolean, val optionText: Float,
 )
 
 /** [MenuLook] from the settings. They are plain properties: every change republishes the screen, so it is re-read on each [screen]. */
@@ -280,7 +317,7 @@ internal fun rememberMenuLook(state: AppState, screen: Screen): MenuLook {
         val st = state.settings
         MenuLook(
             colors, st.menuPageTitle, st.menuButtonHints, st.menuExtraInfo, st.menuHomeStats,
-            st.showRecentHint, st.showSearchHint, st.showNetplayHint, st.optionTextSize.ofListLabel,
+            st.showNetplayHint, st.optionTextSize.ofListLabel,
         )
     }
 }
@@ -292,7 +329,7 @@ internal fun rememberMenuLook(state: AppState, screen: Screen): MenuLook {
  */
 @Composable
 internal fun MenuLocals(state: AppState, look: MenuLook, footer: FooterMode, touchscreen: Boolean, content: @Composable () -> Unit) {
-    val chrome = launcherChromeFor(look.pageTitle, look.buttonHints, footer, look.extraInfo, look.recentHint, look.searchHint, look.netplayHint, look.homeStats)
+    val chrome = launcherChromeFor(look.pageTitle, look.buttonHints, footer, look.extraInfo, look.netplayHint, look.homeStats)
     CompositionLocalProvider(
         LocalFooterMode provides footer, LocalLauncherChrome provides chrome, LocalHasTouchscreen provides touchscreen,
         LocalAppIcons provides state.appIcons, LocalNxOptionText provides look.optionText,
@@ -354,6 +391,78 @@ private fun pageTransition(motion: NavMotion): ContentTransform {
     }
 }
 
+/** A List's game picture (a game list's, List Home's) under a black of this alpha ([ListArtBackground]), so the names read. */
+private const val LIST_ART_DIM = 0.68f   // role: a List's game art dim: the picture shows at 32%
+
+/** Whether [s] pages between its tabs ([TabPager]): a main menu of two tabs or more, no tab pushed over it. */
+private fun tabPaged(s: Screen.Systems): Boolean = !s.pushed && s.tabs.size > 1
+
+/**
+ * The main menu's tabs side by side: the tab showing ([screen]'s) and the ones either side of it, each tab's page its
+ * own composition (keyed by its tab), so the page a swipe uncovers is the page that stays when it commits: nothing is
+ * built at the start of a drag or at its end. The pages shift together by [swipe]'s drag, the next tab's just right of
+ * the showing one and the previous one's just left; a page beside is drawn only while it is in view, takes no taps and
+ * reports nothing ([GatedLaunchTargets]; the others report only for the screen showing). Its fixed parts ([pageFixed])
+ * show only on the tab showing. A committed swipe ([TabSwipe.pending]) lands here when the new tab shows: the pages
+ * shift by a page so nothing jumps, then settle to rest.
+ */
+@Composable
+private fun TabPager(
+    state: AppState, screen: Screen.Systems, selection: State<ListSelection>, resume: State<ResumeInfo>,
+    gameInfo: Map<String, GameInfo>, live: State<Boolean>, swipe: TabSwipe, targets: LaunchTargets,
+) {
+    val n = screen.tabs.size
+    val scope = rememberCoroutineScope()
+    val lastTab = remember { intArrayOf(screen.tab) }
+    SideEffect {
+        if (screen.tab != lastTab[0]) {
+            lastTab[0] = screen.tab
+            val step = swipe.pending
+            swipe.pending = 0
+            // The new tab was the page beside: it carries on from there (an L1 / R1 or a tap: no swipe, no slide).
+            if (step != 0) { swipe.drag += step * swipe.width; scope.launch { swipe.settleTo(0f) } }
+            else if (swipe.drag != 0f) scope.launch { swipe.settle.stop(); swipe.drag = 0f }
+        }
+    }
+    val notLive = remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize().onSizeChanged { swipe.width = it.width.toFloat() }) {
+        val shown = listOf((screen.tab - 1).mod(n), (screen.tab + 1).mod(n), screen.tab).distinct()
+        for (i in shown) key(screen.tabs[i].category) {
+            val current = i == screen.tab
+            val isCurrent = rememberUpdatedState(current)
+            // Where it sits: the showing page at 0, the next one a page right, the previous a page left (with two tabs,
+            // the other is both: on the side the drag uncovers).
+            val side = rememberUpdatedState(if (current) 0 else if (i == (screen.tab + 1).mod(n)) 1 else -1)
+            val both = rememberUpdatedState(!current && n == 2)
+            val slide = remember(swipe) {
+                PageSlide(
+                    shift = { w -> (if (both.value) (if (swipe.drag > 0f) -1 else 1) else side.value) * w + swipe.drag },
+                    fixedShown = { isCurrent.value },
+                    width = { swipe.width },
+                )
+            }
+            val gated = remember(targets) { GatedLaunchTargets(targets) { isCurrent.value } }
+            // A page beside: as AppState would show that tab, on its remembered row.
+            val beside = if (current) null else remember(screen, i) { state.tabPage(i) }
+            val pageSelection = if (beside == null) selection else remember(beside) { mutableStateOf(beside.second) }
+            CompositionLocalProvider(LocalPageSlide provides slide, LocalLaunchTargets provides gated) {
+                Box(
+                    Modifier.fillMaxSize().zIndex(if (current) 1f else 0f)
+                        .graphicsLayer { translationX = slide.shift(size.width) }
+                        .drawWithContent {
+                            // In view: the showing page, or the one beside on the side the drag (or a settle) uncovers.
+                            val x = slide.shift(size.width)
+                            if (x > -size.width && x < size.width) drawContent()
+                        },
+                ) {
+                    PageContent(state, beside?.first ?: screen, pageSelection, resume, gameInfo, if (current) live else notLive)
+                    if (!current) Box(Modifier.fillMaxSize().pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } })
+                }
+            }
+        }
+    }
+}
+
 /** An update dialog's body: the version line, then the release's first paragraph when it has one. */
 private fun updateText(r: AppRelease): String = "NX Redux ${r.version}" + if (r.notes.isNotBlank()) "\n\n${r.notes}" else ""
 
@@ -366,7 +475,7 @@ internal fun BoxScope.PageOverlays(state: AppState, chooser: ValueChooser?, erro
     // A touch value row's picker (the in-game menu's).
     chooser?.let { c -> NxSettingPicker(c.title, c.labels, c.current, c.selected, onPick = state::chooseValue, onDismiss = state::closeChooser) }
     val settingInfo by state.settingInfo.collectAsState()   // a Settings row's full description
-    settingInfo?.let { p -> NxSettingInfoPopup(p.title, p.text, p.scrollSeq, p.scrollDir, onClose = state::closeSettingInfo) }
+    NxSettingInfoPopup(settingInfo?.let { p -> NxHelpText(p.title, p.text, p.scrollSeq, p.scrollDir) }, onClose = state::closeSettingInfo)
     // About's Update to: here, so it shows on whichever screen Settings is on (the top one in dual screen).
     val updateConfirm by state.updateConfirm.collectAsState()
     updateConfirm?.let { r ->
@@ -377,7 +486,7 @@ internal fun BoxScope.PageOverlays(state: AppState, chooser: ValueChooser?, erro
     notice?.let {
         Text(
             it, color = LocalNxColors.current.main, fontSize = 12.sp,
-            modifier = Modifier.align(Alignment.TopCenter).background(Color(0xCC000000), RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.align(Alignment.TopCenter).background(LocalNxColors.current.scrimNotice, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
         )
     }
 }
@@ -402,7 +511,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             val still = remember(menu, at) { mutableStateOf(at) }
             PageContent(state, menu, still, resume, allInfo, live)
         }
-        Box(Modifier.fillMaxSize().background(Color(0x66000000)).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } })
+        Box(Modifier.fillMaxSize().background(LocalNxColors.current.scrimUnder).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } })
         return
     }
     if (!onTop && page is Screen.Games && DualMenu.bottom(page, dualMenu) == BottomContent.Details) {
@@ -426,17 +535,21 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
         val style = state.styleOf(s)   // this page's own: a page sliding out keeps its style while the next one's may differ
         val orientation = state.orientationOf(s)   // likewise its orientation
         // A Grid reports its columns only while its page is the one showing (a page sliding out never overwrites the count).
-        val onGridLayout: (Int, Int) -> Unit = remember(s) { { columns, rows -> if (state.screen.value === s) state.onGridLayout(columns, rows) } }
-        val onHomeLayout: (HomeFrame) -> Unit = remember(s) { { f -> if (state.screen.value === s) state.onHomeLayout(f) } }   // likewise Home's body frame
+        // Equal, not the same object: a main menu tab's page laid out beside the one showing (its swipe's neighbour) holds an
+        // equal copy of the screen, and keeps it once it shows (an equal screen recomposes nothing), so an identity check
+        // would drop its reports for good (a rotation then left Grid Home on its old width).
+        // New reporters, too, when the page starts showing ([live]): one laid out beside it (a swipe's neighbour) had its
+        // reports dropped, and the page then sends them again ([HomeScreen], [NxTileGrid]).
+        val shows = live.value
+        val onGridLayout: (Int) -> Unit = remember(s, shows) { { columns -> if (state.screen.value == s) state.onGridLayout(columns) } }
+        val onHomeLayout: (HomeFrame) -> Unit = remember(s, shows) { { f -> if (state.screen.value == s) state.onHomeLayout(f) } }   // likewise Home's body frame
         val homeView = state.homeView.collectAsState()   // what Home draws beside its rows
         val homeRowLast = state.homeCarouselRowLast.collectAsState()   // Carousel Home's row item last on (AppState's d-pad memory)
         val index = { selection.value.index }
-        val gridPresses = state.gridPresses.collectAsState()   // read only inside the Grid, so a press recomposes only it
-        val tabFocus = state.tabFocus.collectAsState()   // the main menu's tab row has the d-pad
         val minimalOpening = state.minimalOpening.collectAsState()   // a Minimal page's row being opened (its page draws the band)
         // Full-height background behind everything (list, scroll arrows, hint bar).
         PageBackground(state, s, style, selection, live)
-        CompositionLocalProvider(LocalGridPresses provides gridPresses) { when (s) {
+        when (s) {
             is Screen.PermissionsStep -> WithIndex(selection) { val (t, b) = remember(s) { state.setupChrome() }; PermissionsStepScreen(s, t, b, it, state::select, state::setupStepRow, state::onButton) }
             is Screen.FilePicker -> WithIndex(selection) { FilePickerScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, onDraft = state::filePickerDraft) }
             Screen.PickFolder -> WithIndex(selection) { val (t, b) = remember(s) { state.setupChrome() }; PickFolderScreen(t, b, it, state::select, state::setupStepRow, state::onButton, systemPicker = !state.filePickerOn()) }
@@ -453,7 +566,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                 val listBand = mainMenuListBand(s.category)   // Consoles, Collections and Tools: no List band (no shade, no "N games")
                 MainMenuScreen(
                     s, index, state::tapMainRow, { state.openSelected() }, state::selectTab,
-                    onSwipeSelect = state::select, onHint = state::onButton, onLongPress = { state.openContextMenu(it) },
+                    onSwipeSelect = state::select, onTabSwipe = state::swipeTab, onHint = state::onButton, onLongPress = { state.openContextMenu(it) },
                     info = {
                         if (!listBand.info) emptyList() else when (val row = s.rows.getOrNull(selection.value.index)) {
                             is MainRow.System -> consoleInfoLines(row)
@@ -462,8 +575,6 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                         }
                     },
                     rowInfo = { i -> gameInfoFor(gameInfo, now, s.rows.getOrNull(i).game(), full = true) },   // Carousel Home's caption, any row
-                    canResume = { resume.value.canResume },
-                    canNetplay = { state.canNetplay(s.rows.getOrNull(selection.value.index).listed()) },
                     style = style, orientation = orientation, onGridLayout = onGridLayout,
                     tileInfo = remember(s.rows, gameInfo, now) { rowTileInfo(s.rows, gameInfo, now) }, layoutKey = s.category,
                     onHomeLayout = onHomeLayout, homeView = homeView.value, homeRowLast = { homeRowLast.value },
@@ -471,8 +582,6 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     raSignedIn = state.settings.raToken != null,
                     controllerArt = state.settings.consoleArt == ConsoleArt.CONTROLLER,
                     minimalOpening = minimalOpening.value?.takeIf { s.category != null && it.page == s.category },
-                    // The page sliding out shows none; nor does a hidden tab row (AppState gives the d-pad back to the content).
-                    tabFocus = tabFocus.value && s.menu == null && s.search == null && state.screen.value === s && LocalLauncherChrome.current.tabRow,
                     bandShade = listBand.shade, bandInfo = listBand.info,
                     canSearch = state.canSearch,
                     // Per page (s, not the screen now: a sliding-out page keeps its own): the screen carries its hidden tabs
@@ -495,9 +604,13 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             // Settings: two panes on a wide landscape window (the root on the left, its pages on the right), else one page.
             is Screen.Settings, is Screen.EmulatorList, is Screen.EmulatorConsoles, is Screen.EmulatorOptions, is Screen.SettingsMenu, is Screen.ToolApps ->
                 // A game's own Game Settings: a modal over the game list it came from, the list dimmed and inert behind it.
+                // No hint bar in Settings unless Layouts → Button hints shows it: every button there is a console menu's.
                 if (gameSettingsModal(s)) Unit   // no list to draw under it: the modal alone (below)
-                else if (settingsSplitView(LocalWindowSize.current, s)) SettingsSplitScreen(state, s, selection) { SettingsPage(state, s, selection, titled = true) }
-                else SettingsPage(state, s, selection, titled = false)
+                // Its bars' hints start on the section words' edge, in line with the text above them.
+                else CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
+                    if (settingsSplitView(LocalWindowSize.current, s)) SettingsSplitScreen(state, s, selection) { SettingsPage(state, s, selection, titled = true) }
+                    else NarrowSettingsPage(state, s, selection)
+                }
             is Screen.CheatDb -> state.cheatDb?.let { c -> WithIndex(selection) { CheatDbScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) } } ?: Box(Modifier.fillMaxSize())
             Screen.DeviceSync -> state.deviceSync?.let {
                 val setup by state.syncSetup.collectAsState()
@@ -521,7 +634,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.ArtworkReset ->
                 if (artworkSplitView(LocalWindowSize.current, s)) ArtworkSplitScreen(state, s, selection)
                 else WithIndex(selection) { ArtworkScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton) }
-        } }
+        }
         (page as? Screen.EmulatorOptions)?.takeIf(::gameSettingsModal)?.let { modal ->
             WithIndex(pageSelection) {
                 GameSettingsModal(modal, it, state::select, { state.openSelected() }, onHint = state::onButton, onClose = state::closeGameSettings, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated)
@@ -541,7 +654,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val style = state.styleOf(s)
     val orientation = state.orientationOf(s)
     // A Grid reports its columns only while its page is the one showing (a page sliding out never overwrites the count).
-    val onGridLayout: (Int, Int) -> Unit = remember(s) { { columns, rows -> if (state.screen.value === s) state.onGridLayout(columns, rows) } }
+    val onGridLayout: (Int) -> Unit = remember(s) { { columns -> if (state.screen.value === s) state.onGridLayout(columns) } }
     val onPageRows: (Int) -> Unit = remember(s) { { rows -> if (state.screen.value === s) state.onPageRows(rows) } }   // likewise LEFT / RIGHT's page
     val index = { selection.value.index }
     val minimalOpening = state.minimalOpening.collectAsState()   // a Minimal page's row being opened (its page draws the band)
@@ -579,6 +692,22 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     s.menu?.let { ContextMenuOverlay(it, onButton = state::onButton, onSelect = state::menuSelect, onOpen = state::menuOpen, onDraft = state::menuDraft, onColumns = state::onMenuLayout) }
 }
 
+/**
+ * Settings on a narrow window (a phone held upright, a landscape window too narrow for the stage), one level at a time:
+ * the root is the section block alone; a page below it is the rows block ([settingsNarrowBlock]), "Settings / <title>" its
+ * first line; B (or the back gesture) goes back. A Layouts group and the Android games picker draw whole, as before.
+ */
+@Composable
+private fun NarrowSettingsPage(state: AppState, s: Screen, selection: State<ListSelection>) {
+    // At least the section block's height, so a short page's first line sits where "Settings" does on the root.
+    WithSettingsSectionSize(state.settingsSections()) { size ->
+        val block = remember(size.height) { SettingsBlockMode(SETTINGS_TITLE, minHeight = size.height) }
+        CompositionLocalProvider(LocalSettingsBlock provides block.takeIf { settingsNarrowBlock(s) }) {
+            SettingsPage(state, s, selection, titled = false)
+        }
+    }
+}
+
 /** A Settings screen drawn as one page (or as the two-pane Settings' focused right pane, [titled]: the split draws its dialog). */
 @Composable
 private fun SettingsPage(state: AppState, s: Screen, selection: State<ListSelection>, titled: Boolean) {
@@ -587,10 +716,10 @@ private fun SettingsPage(state: AppState, s: Screen, selection: State<ListSelect
         is Screen.Settings -> WithIndex(selection) {
             SettingsScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, titled = titled, dialog = !titled, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = settingTruncated)
         }
-        is Screen.EmulatorList -> WithIndex(selection) { EmulatorListScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, split = titled) }
+        is Screen.EmulatorList -> WithIndex(selection) { EmulatorListScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, split = titled || LocalSettingsBlock.current != null) }
         is Screen.EmulatorConsoles -> WithIndex(selection) { EmulatorConsolesScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton) }
         is Screen.EmulatorOptions -> WithIndex(selection) { EmulatorOptionsScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = settingTruncated) }
-        is Screen.SettingsMenu -> WithIndex(selection) { SettingsMenuScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton) }
+        is Screen.SettingsMenu -> WithIndex(selection) { SettingsMenuScreen(s, it, state::settingsCategoryTap, hintBar = true, onHint = state::onButton) }
         is Screen.ToolApps -> {
             // Only the picker showing reports its columns (one sliding out never overwrites the count).
             val onColumns: (Int) -> Unit = remember(s) { { columns -> if (state.screen.value === s) state.onToolAppsLayout(columns) } }
@@ -617,11 +746,13 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
             val category = s.category ?: MenuCategory.HOME
             val consoleArt = state.settings.consoleArt
             val portrait = LocalPortrait.current   // List Home's game picture: the screen's shape picks its art
-            val bg by remember(s, style, consoleArt, portrait) {
+            // Keyed on [selection] too: a page laid out beside the one showing reads a still copy of its row, and swaps
+            // to the live one when it starts showing, which the picture must then follow.
+            val bg by remember(s, style, consoleArt, portrait, selection) {
                 derivedStateOf(structuralEqualityPolicy()) { menuBackground(style, category, s.rows.getOrNull(selection.value.index), consoleArt, portrait) }
             }
             // Grid and Carousel: plain, as menuBackground gives every non-List style (a Carousel Consoles tab on Background aside).
-            MainMenuBackground(bg)
+            MainMenuBackground(bg, state.settings.gameListArt)
         }
         is Screen.Games -> {
             // Grid and Carousel: plain black, as their tabs (the tiles carry the art). Minimal: the names alone, no art.
@@ -637,7 +768,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val portrait = maxHeight > maxWidth
                 if (style == MenuStyle.BACKDROP) {
-                    val url by remember(s, portrait) {
+                    val url by remember(s, portrait, selection) {
                         derivedStateOf(structuralEqualityPolicy()) { s.entries.getOrNull(selection.value.index)?.let { gameBackground(it, portrait) } }
                     }
                     // In from black on opening; out to black while the page slides away (B back to the tab, the switcher).
@@ -645,7 +776,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
                 } else {
                     // List: Layouts → List art ([listArtShown]).
                     val art = state.settings.gameListArt
-                    val shown by remember(s, portrait, art) {
+                    val shown by remember(s, portrait, art, selection) {
                         derivedStateOf(structuralEqualityPolicy()) { listArtShown(s.entries.getOrNull(selection.value.index), art, portrait) }
                     }
                     ListArtBackground(shown, maxWidth, LocalPortrait.current)
@@ -655,11 +786,12 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
         is Screen.Switcher -> Box(Modifier.fillMaxSize().background(Color.Black))
         // The welcome carries its own large mark: plain black behind it. Every other setup page has the tool pages' mark.
         is Screen.Onboarding -> if (s.step == OnboardingStep.WELCOME) Box(Modifier.fillMaxSize().background(Color.Black)) else MarkBackground(s)
-        else -> MarkBackground(s)
+        // Settings: the small mark at the top right alone ([SettingsBackground]); the large centred mark is not drawn.
+        else -> if (settingsPane(s) != null) SettingsBackground() else MarkBackground(s)
     }
 }
 
-/** The NX mark; two panes (Settings, the RetroAchievements column browser), centred on the right pane (same size), as the page it sits behind. */
+/** The NX mark; two panes (the RetroAchievements column browser, Game Tracker, Artwork), centred on the right pane (same size), as the page it sits behind. */
 @Composable
 private fun MarkBackground(s: Screen) = NxScreenBackground(
     url = null, fallback = Res.drawable.background, fade = false, modifier = Modifier.fillMaxSize().clipToBounds(), centred = true,
@@ -667,8 +799,9 @@ private fun MarkBackground(s: Screen) = NxScreenBackground(
 )
 
 /**
- * A List game list's background ([ListArtShown]): the full-screen picture (shifted right of centre, the diagonal fade),
- * the NX mark for none; a boxed picture whole on the right over plain black, falling back to the full-screen picture
+ * A List's background ([ListArtShown]; a game list's and List Home's): the full-screen picture (shifted right of
+ * centre, the diagonal fade), the NX mark for none; a boxed picture whole on the right over plain black, the game's
+ * picture either way dimmed by [LIST_ART_DIM], falling back to the full-screen picture
  * when it fails to load; or plain black.
  */
 @Composable
@@ -677,13 +810,16 @@ private fun ListArtBackground(shown: ListArtShown, width: Dp, portrait: Boolean)
         ListArtShown.None -> Box(Modifier.fillMaxSize().background(LocalNxColors.current.background))
         is ListArtShown.Full ->
             if (shown.url == null) NxScreenBackground(url = null, fallback = Res.drawable.background, fade = false, modifier = Modifier.fillMaxSize(), centred = true)
-            else NxScreenBackground(url = shown.url, fallback = null, fade = true, modifier = Modifier.fillMaxSize())
+            else Box(Modifier.fillMaxSize()) {
+                NxScreenBackground(url = shown.url, fallback = null, fade = true, modifier = Modifier.fillMaxSize())
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = LIST_ART_DIM)))   // role: a List's game art dim
+            }
         is ListArtShown.Boxed -> {
             var failed by remember(shown.url) { mutableStateOf(false) }
             if (failed) { ListArtBackground(ListArtShown.Full(shown.fallback), width, portrait); return }
             Box(Modifier.fillMaxSize().background(LocalNxColors.current.background)) {
                 AsyncImage(
-                    model = shown.url, contentDescription = null, contentScale = ContentScale.Fit,
+                    model = shown.url, contentDescription = null, contentScale = ContentScale.Fit, alpha = 1f - LIST_ART_DIM,   // role: a List's game art dim, over black
                     onState = { if (it is AsyncImagePainter.State.Error) failed = true },
                     modifier = Modifier.align(Alignment.CenterEnd).padding(end = listArtGutter(portrait).dp)
                         .width(width * LIST_ART_WIDTH_SHARE).fillMaxHeight(LIST_ART_HEIGHT_SHARE),
@@ -698,10 +834,15 @@ private fun ListArtBackground(shown: ListArtShown, width: Dp, portrait: Boolean)
  * or logo, List Home's game picture or tool logo, else plain (a Grid or Carousel tab: [MenuBackground.Plain]).
  */
 @Composable
-private fun MainMenuBackground(bg: MenuBackground) {
+private fun MainMenuBackground(bg: MenuBackground, listArt: GameListArt) {
     when (bg) {
-        // List Home's game: as a game list's List background (shifted right of centre, the diagonal fade).
+        // List Consoles on Background: as a game list's List background (shifted right of centre, the diagonal fade).
         is MenuBackground.Picture -> NxScreenBackground(url = bg.url, fallback = null, fade = true, modifier = Modifier.fillMaxSize())
+        // List Home's game: as a game list's List shows it, by Layouts → List art ([listArtShown]).
+        is MenuBackground.Game -> BoxWithConstraints(Modifier.fillMaxSize()) {
+            val shown = remember(bg, listArt, maxHeight > maxWidth) { listArtShown(bg.entry, listArt, maxHeight > maxWidth) }
+            ListArtBackground(shown, maxWidth, LocalPortrait.current)
+        }
         // Carousel Consoles on Background: the console's picture under the Backdrop game list's dim and shade.
         is MenuBackground.Backdrop -> NxBackdropPicture(bg.url, Modifier.fillMaxSize())
         is MenuBackground.Logo -> Box(Modifier.fillMaxSize().background(LocalNxColors.current.background)) {
@@ -710,7 +851,7 @@ private fun MainMenuBackground(bg: MenuBackground) {
             val portrait = LocalPortrait.current
             Image(
                 painterResource(bg.res), contentDescription = null,
-                colorFilter = ColorFilter.tint(LocalNxColors.current.main), contentScale = ContentScale.Fit, alpha = 0.16f,
+                colorFilter = ColorFilter.tint(LocalNxColors.current.main), contentScale = ContentScale.Fit, alpha = 0.16f,   // role: the console logo, ink at 16%
                 modifier = Modifier.align(Alignment.CenterEnd).padding(end = if (portrait) 16.dp else 32.dp)
                     .fillMaxWidth(if (portrait) 0.44f else 0.40f).fillMaxHeight(0.6f),
             )

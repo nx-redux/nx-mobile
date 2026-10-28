@@ -179,12 +179,12 @@ fun NxRichList(
                         Modifier.onSizeChanged { glide.sizes[i] = it }
                             .padding(start = gap, end = rowHeight / 2)
                             .fillMaxHeight()
-                            .alpha(if (row.enabled) 1f else NX_DISABLED_ALPHA),
+                            .alpha(if (row.enabled) 1f else NX_DISABLED_ALPHA),   // role: a disabled row
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         val shape = CircleShape
                         Box(
-                            Modifier.size(thumb).clip(shape).background(Color(0xFF1A1A1A), shape),
+                            Modifier.size(thumb).clip(shape).background(LocalNxColors.current.pictureGround, shape),
                             contentAlignment = Alignment.Center,
                         ) {
                             if (row.thumbnail != null) {
@@ -217,7 +217,7 @@ fun NxRichList(
                                 val styled = buildAnnotatedString {
                                     spans.forEach { span ->
                                         val style = if (span.emphasis) SpanStyle(color = toneColor, fontWeight = FontWeight.Bold)
-                                        else SpanStyle(color = toneColor.copy(alpha = toneColor.alpha * NX_SUBTITLE_DIM_ALPHA), fontWeight = FontWeight.Normal)
+                                        else SpanStyle(color = toneColor.copy(alpha = toneColor.alpha * NX_SUBTITLE_DIM_ALPHA), fontWeight = FontWeight.Normal)   // role: a subtitle span's plain text, its tone dimmed
                                         withStyle(style) { append(span.text) }
                                     }
                                 }

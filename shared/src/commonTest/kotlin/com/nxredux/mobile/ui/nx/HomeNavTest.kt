@@ -55,7 +55,7 @@ class HomeNavTest {
         val s = HomeShape(listOf(HomeRect(300f, 0f, 40f, 60f)), listOf(HomeRect(0f, 70f, 100f, 50f), HomeRect(110f, 70f, 100f, 50f)))
         assertEquals(2, homeStep(0, s, m, NxButton.DOWN))
     }
-    @Test fun upFromTheTopIsTheTabRow() {
+    @Test fun upFromTheTopFindsNothingAbove() {
         assertTrue(homeAtTop(0, land, m)); assertTrue(homeAtTop(1, land, m)); assertTrue(homeAtTop(3, land, m)); assertTrue(homeAtTop(4, land, m))
         assertEquals(1, homeStep(2, land, m, NxButton.UP))     // G2: G1 above it
     }

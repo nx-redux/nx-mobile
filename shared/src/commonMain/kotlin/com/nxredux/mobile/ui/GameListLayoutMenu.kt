@@ -31,7 +31,6 @@ import com.nxredux.mobile.ui.nx.LocalNxFont
 import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.MENU_TAB_ROW_HEIGHT
 import com.nxredux.mobile.ui.nx.nxTextScale
-import com.nxredux.mobile.ui.nx.NxModalPanelColor
 import com.nxredux.mobile.ui.nx.NxTextSizes
 import com.nxredux.mobile.ui.nx.TOP_ICON_INSET
 
@@ -71,7 +70,7 @@ fun GameListLayoutMenu(current: Int, highlighted: Int, onPick: (Int) -> Unit, on
             Modifier.align(Alignment.TopEnd)
                 .padding(top = MENU_TAB_ROW_HEIGHT, end = (if (LocalPortrait.current) 16.dp else 24.dp) - TOP_ICON_INSET)
                 .width(200.dp).heightIn(max = (maxHeight - MENU_TAB_ROW_HEIGHT - BOTTOM_ROOM).coerceAtLeast(rowH))
-                .background(NxModalPanelColor, RoundedCornerShape(16.dp))
+                .background(LocalNxColors.current.modalPanel, RoundedCornerShape(16.dp))
                 .pointerInput(Unit) { detectTapGestures { } }
                 .padding(6.dp)
                 .verticalScroll(scroll),

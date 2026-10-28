@@ -31,6 +31,8 @@ class PadEditorState(initial: PadLayout, besidePicture: Boolean = false) : PadGr
     var selected by mutableStateOf<PadGroup?>(null); private set
     /** "Discard changes?" is showing. */
     var confirmDiscard by mutableStateOf(false); private set
+    /** A reset is asking first ("Reset this group?" / "Reset all?"): null while none is. */
+    var confirmReset by mutableStateOf<PadReset?>(null); private set
 
     val dirty: Boolean get() = layout != saved
     /** The groups this pad has (those that reported). */
@@ -94,6 +96,25 @@ class PadEditorState(initial: PadLayout, besidePicture: Boolean = false) : PadGr
 
     fun resetAll() { layout = PadLayout.EMPTY }
 
+    /** The toolbar's Reset / Reset all: asks first ([confirmReset]); nothing changes until [confirmResetNow]. Reset needs a selected group. */
+    fun askReset(reset: PadReset) {
+        if (reset == PadReset.GROUP && selected == null) return
+        confirmReset = reset
+    }
+
+    /** The question's Reset: does the asked reset. */
+    fun confirmResetNow() {
+        when (confirmReset) {
+            PadReset.GROUP -> resetGroup()
+            PadReset.ALL -> resetAll()
+            null -> Unit
+        }
+        confirmReset = null
+    }
+
+    /** The question's Cancel (or B): the layout stays as it is. */
+    fun keepLayout() { confirmReset = null }
+
     /**
      * The groups in a pair that overlaps where at least one of the two has been moved or resized. An untweaked pair is
      * the stock pad (the C-stick may cover a cluster's corner by design), so it is never flagged.
@@ -118,6 +139,9 @@ class PadEditorState(initial: PadLayout, besidePicture: Boolean = false) : PadGr
 
     fun keepEditing() { confirmDiscard = false }
 }
+
+/** The editor's two resets: the selected group, or every group. */
+enum class PadReset { GROUP, ALL }
 
 /**
  * The portrait pad's groups topmost first, as it draws: the C-stick over the clusters, the clusters (the PS2's sticks with

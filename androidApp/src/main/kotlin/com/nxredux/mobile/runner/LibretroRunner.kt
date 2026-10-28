@@ -1,7 +1,9 @@
 package com.nxredux.mobile.runner
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 
 /**
  * Android EmulatorRunner: hands the session to GameActivity. The only class outside GameActivity that names it.
@@ -36,6 +38,7 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
             .apply { session.resumeSlot?.let { putExtra(GameActivity.EXTRA_RESUME_SLOT, it) } }
             .apply { session.gamePath?.let { putExtra(GameActivity.EXTRA_GAME_PATH, it) } }
             .apply { session.artPath?.let { putExtra(GameActivity.EXTRA_ART_PATH, it) } }
+            .apply { session.launchName?.let { putExtras(launchNameExtras(it)) } }   // the hold's name (LaunchNameHold)
             .apply {
                 session.netplay?.let {
                     putExtra(GameActivity.EXTRA_NETPLAY_ROLE, it.role.name)
@@ -48,6 +51,11 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
             .addFlags(gameLaunchFlags(ownTask()))
         try {
             context.startActivity(intent)
+            // The launch sequence's black meets the game screen's black: no open animation. Android 14+ sets it in
+            // GameActivity.onCreate (overrideActivityTransition).
+            if (session.launchName != null && Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                @Suppress("DEPRECATION") (context as? Activity)?.overridePendingTransition(0, 0)
+            }
         } catch (e: Throwable) {
             launchFailed()
             throw e

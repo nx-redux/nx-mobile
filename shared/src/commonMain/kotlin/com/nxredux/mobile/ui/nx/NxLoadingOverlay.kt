@@ -19,8 +19,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-private val LoadingScrim = Color(0xE6000000)   // 90% black: darker than NxModal's, so the message reads over list text
-
 /**
  * A screen load past its grace period (AppState.loading): the current screen dimmed under a spinner and [message]
  * ("Loading…" unless the load names itself). The scrim swallows taps so no row underneath opens. There is no visible
@@ -30,7 +28,7 @@ private val LoadingScrim = Color(0xE6000000)   // 90% black: darker than NxModal
 fun NxLoadingOverlay(message: String = "Loading…", modifier: Modifier = Modifier) {
     val colors = LocalNxColors.current
     BoxWithConstraints(
-        modifier.fillMaxSize().background(LoadingScrim).pointerInput(Unit) { detectTapGestures { } },
+        modifier.fillMaxSize().background(colors.scrimLoading).pointerInput(Unit) { detectTapGestures { } },
         contentAlignment = Alignment.Center,
     ) {
         // The message is a plain list row's label (~20 sp); the spinner follows it.

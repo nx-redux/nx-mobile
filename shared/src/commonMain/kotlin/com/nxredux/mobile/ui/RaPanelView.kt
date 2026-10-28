@@ -46,8 +46,6 @@ import com.nxredux.mobile.ui.nx.AchievementDetail
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxFont
 import com.nxredux.mobile.ui.nx.NxButton
-import com.nxredux.mobile.ui.nx.NxModalPanelColor
-import com.nxredux.mobile.ui.nx.NxModalScrimColor
 import com.nxredux.mobile.ui.nx.NxRichList
 import com.nxredux.mobile.ui.nx.NxTextSizes
 import com.nxredux.mobile.ui.nx.nxListLabelSize
@@ -76,7 +74,7 @@ fun RaPanelOverlay(panel: RaPanel?, onRow: (Int) -> Unit, onButton: (NxButton) -
     if (panel != null) last = panel
     // The modals' scrim over the list behind; a tap on it closes the panel, as on a modal.
     AnimatedVisibility(panel != null, modifier = Modifier.fillMaxSize(), enter = fadeIn(tween(SLIDE_MS)), exit = fadeOut(tween(SLIDE_MS))) {
-        Box(Modifier.fillMaxSize().background(NxModalScrimColor).pointerInput(Unit) { detectTapGestures { onButton(NxButton.X) } })
+        Box(Modifier.fillMaxSize().background(LocalNxColors.current.scrimModal).pointerInput(Unit) { detectTapGestures { onButton(NxButton.X) } })
     }
     AnimatedVisibility(
         panel != null, modifier = Modifier.fillMaxSize(),
@@ -89,7 +87,7 @@ fun RaPanelOverlay(panel: RaPanel?, onRow: (Int) -> Unit, onButton: (NxButton) -
             last?.let { p ->
                 Column(
                     Modifier.align(Alignment.TopEnd).width(maxWidth * share).fillMaxHeight()
-                        .background(NxModalPanelColor, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
+                        .background(LocalNxColors.current.modalPanel, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
                         .pointerInput(Unit) { detectTapGestures { } },   // taps inside stay inside
                 ) { RaPanelBody(p, onRow, onButton) }
             }
