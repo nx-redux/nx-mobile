@@ -58,11 +58,16 @@ class LaunchTarget(
 )
 
 /** The page showing reports its selected name here ([report]; null: none); [current] is the last one. */
-class LaunchTargets {
+open class LaunchTargets {
     var current: LaunchTarget? = null
         private set
 
-    fun report(target: LaunchTarget?) { current = target }
+    open fun report(target: LaunchTarget?) { current = target }
+}
+
+/** [to]'s reports from a page only while [showing] (a main menu tab's page composed beside the one showing: [TabPager]). */
+internal class GatedLaunchTargets(private val to: LaunchTargets, private val showing: () -> Boolean) : LaunchTargets() {
+    override fun report(target: LaunchTarget?) { if (showing()) to.report(target) }
 }
 
 /** App's [LaunchTargets], for the pages to report to. */

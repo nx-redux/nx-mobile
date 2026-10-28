@@ -186,6 +186,7 @@ fun MenuTitleRow(
     title: String, modifier: Modifier = Modifier, overArt: Boolean = false, textStart: Dp = nxListInset(), suffix: String? = null,
     textModifier: Modifier = Modifier,   // on the title's text (a Minimal morph finds it, and hides it while it lands)
     trailing: (@Composable () -> Unit)? = null,
+    endInset: Dp = 0.dp,   // the trailing icons this much further in (a List: its names' inset, so both sides match)
 ) {
     val style = menuTitleStyle(overArt)
     val (lead, body) = splitTitleLead(title)
@@ -197,7 +198,7 @@ fun MenuTitleRow(
         }
         if (trailing != null) {
             val gutter = if (LocalPortrait.current) 16.dp else 24.dp
-            Box(Modifier.align(Alignment.CenterEnd).padding(end = gutter - TOP_ICON_INSET)) { trailing() }
+            Box(Modifier.align(Alignment.CenterEnd).padding(end = gutter - TOP_ICON_INSET + endInset)) { trailing() }
         }
     }
 }

@@ -34,6 +34,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.platform.LocalDensity
 import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.settings.VerticalListAlignment
@@ -85,6 +88,13 @@ import com.nxredux.mobile.ui.nx.menuTitleStyle
 import com.nxredux.mobile.ui.nx.morphPlace
 import com.nxredux.mobile.ui.nx.MinimalScreen
 import com.nxredux.mobile.ui.nx.MinimalSelected
+import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
+import com.nxredux.mobile.ui.nx.MainListBody
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.text.rememberTextMeasurer
+import com.nxredux.mobile.ui.nx.nxTextScale
+import com.nxredux.mobile.ui.nx.HOME_STRIP_TYPE
+import com.nxredux.mobile.ui.nx.GameFactsLines
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.zIndex
@@ -222,7 +232,11 @@ internal fun GameListFrame(
     val titleText = remember { arrayOfNulls<LayoutCoordinates>(1) }
     // No title shown (Page title Off): B has none to drop back, not an older list's.
     if (!LocalLauncherChrome.current.listTitle) SideEffect { if (minimalPage?.live?.value == true) minimalPage.morph.title = null }
-    CompositionLocalProvider(LocalCaptionTap provides onAchievements) {
+    val topStats = gameListTopStats(style, chrome.listTitle, chrome.extraInfo, gameListInfoInBarRow(chrome.emptyBarRoom, touch))
+    // The hint bar in line with the page's title and text, both sides ([LocalNxHintBarStart]): the gutter and the List
+    // pill's inset, in every layout (Carousel and Backdrop: their bars only, their rows keep the gutter).
+    val barInset = (if (LocalPortrait.current) 16.dp else 24.dp) + nxListInset()
+    CompositionLocalProvider(LocalCaptionTap provides onAchievements, LocalNxHintBarStart provides barInset) {
         Box(modifier.fillMaxSize().onGloballyPositioned { pageBox[0] = it }) {
             // The main menu's top band behind the title, so the rows line up with the tabs' and the grey name reads over art.
             // Not over a Backdrop picture: its shade does this job, and the two would stack; nor over Minimal's names, which
@@ -230,9 +244,10 @@ internal fun GameListFrame(
             // the page's icons: they keep the band, as the main menu's List does.
             if (style != MenuStyle.BACKDROP && style != MenuStyle.MINIMAL && chrome.listTitle || style == MenuStyle.LIST && iconsUp) Box(Modifier.fillMaxWidth().height(MENU_TAB_ROW_HEIGHT + NX_TOP_BAND_REACH).nxTopBandFade(LocalNxColors.current.background))
             Column(Modifier.fillMaxSize()) {
-                // The name starts where the body's text does: the list labels' inset in List style, the gutter the Grid's tiles
+                // The name starts where the body's text does: the list labels' (the gutter and the pill's inset) in List style, the gutter the Grid's tiles
                 // and the Carousel's and Backdrop's captions start on otherwise. Backdrop: over the selected game's screenshot.
-                val textStart = if (style == MenuStyle.LIST) nxListInset() else if (LocalPortrait.current) 16.dp else 24.dp
+                val listGutter = if (LocalPortrait.current) 16.dp else 24.dp   // a List's pill edge ([MainListBody])
+                val textStart = listGutter + nxListInset()   // every layout's title and bars; List, Grid and Minimal's content too
                 // The page's icons at the title's right ([gameListTitleIcons]).
                 if (chrome.listTitle) {
                     val titleStyle = menuTitleStyle()
@@ -243,8 +258,22 @@ internal fun GameListFrame(
                             titleText[0] = it
                             if (minimalPage?.live?.value == true) morphPlace(it).let { (at, s) -> minimalPage.morph.title = MorphText(title, at, it.size.width.toFloat(), s, titleStyle) }
                         }.graphicsLayer { alpha = if (flown.value < 1f) 0f else 1f },
-                        trailing = { NxTopIcons(titleIcons) },
+                        trailing = { NxTopIcons(titleIcons) }, endInset = textStart - listGutter,
                     )
+                    // The selected game's info on a line under the title, in line with it, as Home's facts line reads
+                    // ([gameListTopStats]): List with Button hints shown (hidden, it is in the bar's row), Minimal and Grid
+                    // (its selected tile then has none). Carousel and Backdrop keep theirs in their captions.
+                    // Right under the title's text (the row's room below it taken back), on two lines upright (its next goal
+                    // on the second when the width runs out: [GameFactsLines]).
+                    if (topStats) {
+                        val scale = nxTextScale()
+                        val titleH = with(LocalDensity.current) { rememberTextMeasurer().measure("Ag", menuTitleStyle(), maxLines = 1).size.height.toDp() }
+                        val under = ((MENU_TAB_ROW_HEIGHT - titleH) / 2).coerceAtLeast(0.dp)
+                        GameFactsLines(
+                            info(), (HOME_STRIP_TYPE.sp * scale).sp, (HOME_STRIP_TYPE.lineH * scale).dp, rows = if (LocalPortrait.current) 2 else 1,
+                            Modifier.fillMaxWidth().pullUp(under).padding(start = textStart, end = textStart),
+                        )
+                    }
                 }
                 // Hidden: a List runs up into its room; a Grid, Carousel or Backdrop (row or stack) takes it into its box,
                 // sized as with the title, centred in the taller box. A Backdrop's picture stays put. With the page's icons
@@ -269,7 +298,8 @@ internal fun GameListFrame(
                         slot { m ->
                             NxTileGrid(
                                 tiles, selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
-                                onColumns = onGridLayout, tileInfo = tileInfo, modifier = m, layoutKey = layoutKey, games = true,
+                                onColumns = onGridLayout, tileInfo = if (topStats) NoTileInfo else tileInfo,
+                                modifier = m.padding(horizontal = nxListInset()), layoutKey = layoutKey, games = true,   // in line with the title and bars
                                 titleRoom = titleRoom,
                             )
                         }
@@ -312,6 +342,7 @@ internal fun GameListFrame(
                             names, selectedIndex, hints.value, onSelect, onOpen, onLongPress, onHint, minimalSelected,
                             Modifier.weight(1f).zIndex(-1f), hideHints = chrome.emptyBarRoom, toBoxBottom = chrome.emptyBarRoom,
                             layoutKey = layoutKey, leaving = minimalOpening != null, tapOpens = LocalNxTapOpens.current,   // the list's own rule (two taps, but for the preview's)
+                            inset = nxListInset(),   // the names in line with the title and bars
                             onPageRows = onPageRows,
                         )
                     }
@@ -322,18 +353,26 @@ internal fun GameListFrame(
                         // only that row shaded; Extra info off leaves nothing for it, so its room goes too.
                         val barHidden = gameListInfoInBarRow(chrome.emptyBarRoom, touchOnly())
                         val inRow = barHidden && chrome.extraInfo
-                        GameInfoPlacement(if (inRow) info else NoGameInfo, Modifier.weight(1f), ground = if (inRow) BandGround.SHADE_WITH_INFO else BandGround.BAR, shade = false) { scaffoldModifier, infoBand ->
+                        GameInfoPlacement(if (inRow) info else NoGameInfo, Modifier.weight(1f), textStart = textStart, ground = if (inRow) BandGround.SHADE_WITH_INFO else BandGround.BAR, shade = false) { scaffoldModifier, infoBand ->
                             // The band's room goes to the rows; only its line in the bar's row ([NxHintsBand.barInfo]) stays.
                             val band = NxHintsBand(reserve = 0.dp, overlap = 0.dp, barInfo = infoBand.barInfo) {}
-                            CompositionLocalProvider(LocalNxListTopCut provides topCut.takeIf { iconsUp }) { NxScreenScaffold(
-                                rows = rows, selectedIndex = 0, selection = selectedIndex,   // read by the list's rows, not here
-                                hints = hints.value,
-                                onSelect = onSelect, onOpen = onOpen, modifier = scaffoldModifier, onHint = onHint, onLongPress = onLongPress,
-                                band = band, hideHints = barHidden, hintShade = true, artBox = artBox, keepBarRoom = inRow || !barHidden,
-                                // The title row counts as a tab row, the info row as a bar ([mainMenuListEdges]).
-                                scrollFade = true, rowEdges = mainMenuListEdges(chrome.listTitle, barShown = !barHidden || inRow),
-                                onPageRows = onPageRows,
-                            ) }
+                            // The rows as the main menu's List draws them ([MainListBody]): the pill on the gutter, whole-row
+                            // fades, the selection free until the third row from an edge; under the page's icons with no title.
+                            NxScreenScaffold(
+                                rows = emptyList(), selectedIndex = 0, hints = hints.value,
+                                onSelect = onSelect, onOpen = onOpen, modifier = scaffoldModifier, onHint = onHint,
+                                band = band, hideHints = barHidden, hintShade = true, keepBarRoom = inRow || !barHidden,
+                                grid = { m ->
+                                    BoxWithConstraints(m) {
+                                        MainListBody(
+                                            rows, selectedIndex, if (iconsUp) MENU_TAB_ROW_HEIGHT else 0.dp, listGutter, onSelect, onOpen, onLongPress,
+                                            endRoom = if (artBox) listArtLabelEnd(maxWidth.value, LocalPortrait.current).dp else 0.dp, onPageRows = onPageRows,
+                                            // A row's room under the stats line (shown under the title), as Home keeps under its stats.
+                                            gapRows = if (chrome.listTitle && chrome.extraInfo && !barHidden) 1 else 0,
+                                        )
+                                    }
+                                },
+                            )
                         }
                     }
                 }
@@ -343,7 +382,7 @@ internal fun GameListFrame(
             if (iconsUp) NxTopIcons(
                 titleIcons,
                 Modifier.align(Alignment.TopEnd).height(MENU_TAB_ROW_HEIGHT)
-                    .padding(end = (if (LocalPortrait.current) 16.dp else 24.dp) - TOP_ICON_INSET).nxListTopCut(topCut),
+                    .padding(end = (if (LocalPortrait.current) 16.dp else 24.dp) - TOP_ICON_INSET + nxListInset()).nxListTopCut(topCut),
             )
             emptyText?.let {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -382,3 +421,25 @@ internal fun gameListTitleIcons(
     else launcherTopActions(chrome, onHint, canSearch = false, recent = recentIcon)
     return launcher + if (touch) hints.touchIcons(onHint) else emptyList()
 }
+
+/** Laid out [by] higher than it would sit, taking that much less room: drawn into the room above it (the title row's). */
+private fun Modifier.pullUp(by: Dp): Modifier = layout { m, c ->
+    val p = m.measure(c)
+    val up = by.roundToPx().coerceAtMost(p.height)
+    layout(p.width, p.height - up) { p.place(0, -up) }
+}
+
+/**
+ * Whether a game list in [style] shows the selected game's info on a line under its title ([titleShown]; Extra info
+ * [extraInfo] on): a List while its hint bar shows (with [infoInBarRow] the info has the bar's empty row), Minimal and
+ * Grid always. Carousel and Backdrop show theirs in their captions.
+ */
+internal fun gameListTopStats(style: MenuStyle, titleShown: Boolean, extraInfo: Boolean, infoInBarRow: Boolean): Boolean =
+    titleShown && extraInfo && when (style) {
+        MenuStyle.LIST -> !infoInBarRow
+        MenuStyle.MINIMAL, MenuStyle.GRID -> true
+        MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> false
+    }
+
+/** A Grid's tiles with the info on the line under the title ([gameListTopStats]): none in the selected tile. */
+private val NoTileInfo: (Int) -> List<InfoLine> = { emptyList() }

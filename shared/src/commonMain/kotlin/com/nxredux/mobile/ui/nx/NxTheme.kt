@@ -69,6 +69,8 @@ data class NxColors(
 
     /** Unselected tab words and the top-right icons: the [main] ink at 38%. */
     val inkDim: Color = main.copy(alpha = 0.38f)
+    /** List Home's unselected names: the [main] ink at 70%. */
+    val inkName: Color = main.copy(alpha = 0.70f)
     /**
      * Reserved for unselected pictures (grid tiles, cards, carousel items one step out); not yet wired. The carousel
      * uses MENU_FIRST_ALPHA (0.35) in RowLayout.kt. The [main] ink at 55%.

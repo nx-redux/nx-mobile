@@ -104,11 +104,11 @@ private const val MINIMAL_STROKE = 1f
 private const val MINIMAL_SELECTED_SCALE = 1.04f
 
 /**
- * A name's tag (only Home's Continue wears one) after its name, [MINIMAL_TAG_GAP] dp from its end so every name keeps its
+ * A name's tag (only Home's games wear one: Continue, New or Not started) after its name, [MINIMAL_TAG_GAP] dp from its end so every name keeps its
  * left edge; a name too long for both is cut short with an ellipsis before the tag. A round-ended pill
- * of [NxColors.inkFaint], its word in [NxColors.hint] at [MINIMAL_TAG_SP] sp (pinned), padded
+ * of [NxColors.inkFaint], its word in [NxColors.inkDim] at [MINIMAL_TAG_SP] sp (pinned), padded
  * [MINIMAL_TAG_PAD_Y] × [MINIMAL_TAG_PAD_X] dp; never an accent. Centred on the name's x-height ([MINIMAL_X_HEIGHT]), it
- * does not grow with the selected name, and an unselected Continue's tag fades with its row.
+ * does not grow with the selected name, and an unselected name's tag fades with its row.
  */
 private const val MINIMAL_TAG_SP = 13f
 private const val MINIMAL_TAG_LINE_SP = 17f
@@ -258,9 +258,10 @@ internal fun MinimalScreen(
     toBoxBottom: Boolean = false, layoutKey: Any? = null, leaving: Boolean = false, tapOpens: (Int) -> Boolean = NxTapNeverOpens,
     onSwipeSelect: ((Int) -> Unit)? = null,   // a swipe's release: moves the highlight only (default: onSelect)
     onPageRows: ((Int) -> Unit)? = null,   // the names one screen shows under the selection (a game list's LEFT / RIGHT page)
+    inset: Dp = 0.dp,   // the names this much further in than the gutter (a game list's: in line with its title and bars)
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
-    val gutter = if (LocalPortrait.current) 16.dp else 24.dp
+    val gutter = (if (LocalPortrait.current) 16.dp else 24.dp) + inset
     val page = LocalMinimalPage.current
     // How this page came in, read once: the title dropping back (from the list's), or the names rising in.
     val returning = remember { page?.arriving(NavMotion.MINIMAL_BACK, "back") == true }
@@ -409,7 +410,7 @@ private fun MinimalNames(
     // the placeholder's start making up the rest of the [MINIMAL_TAG_GAP]. Its bottom on the baseline: the pill is moved
     // down onto the x-height's middle where it is drawn ([tagDrop]).
     val tagStyle = TextStyle(
-        fontFamily = font, fontWeight = FontWeight.SemiBold, color = colors.hint,
+        fontFamily = font, fontWeight = FontWeight.SemiBold, color = colors.inkDim,
         fontSize = (MINIMAL_TAG_SP / density.fontScale).sp, lineHeight = (MINIMAL_TAG_LINE_SP / density.fontScale).sp,
     )
     val space = remember(solid) { measurer.measure(" ", solid, maxLines = 1).size.width.toFloat() }

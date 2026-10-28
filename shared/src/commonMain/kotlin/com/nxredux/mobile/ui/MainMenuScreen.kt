@@ -58,6 +58,16 @@ import com.nxredux.mobile.ui.nx.NxScreenScaffold
 import com.nxredux.mobile.ui.nx.NxTileGrid
 import com.nxredux.mobile.ui.nx.PrefetchPads
 import com.nxredux.mobile.ui.nx.consolePad
+import com.nxredux.mobile.ui.nx.tabSwipe
+import com.nxredux.mobile.ui.nx.pageFixed
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.background
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableIntStateOf
+import com.nxredux.mobile.ui.nx.nxListInset
+import com.nxredux.mobile.ui.nx.MainListBody
 import com.nxredux.mobile.ui.nx.nxTopBandFade
 import com.nxredux.mobile.ui.nx.menuTabUnderlineBottom
 
@@ -70,6 +80,7 @@ import com.nxredux.mobile.ui.nx.menuTabUnderlineBottom
 fun MainMenuScreen(
     screen: Screen.Systems, selectedIndex: () -> Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onTab: (Int) -> Unit, modifier: Modifier = Modifier,
+    onTabSwipe: (Int) -> Unit = {},                 // a List or Minimal page swiped sideways: the next (1) or previous (−1) tab
     onSwipeSelect: ((Int) -> Unit)? = null,         // Minimal's swipe release: moves the highlight only, never the tap's open (default: onSelect)
     onHint: ((NxButton) -> Unit)? = null, onLongPress: ((Int) -> Unit)? = null,
     info: () -> List<InfoLine> = { emptyList() },   // the selected row's info (a game's gameInfoLines, a console's or collection's game count): List's band
@@ -113,7 +124,12 @@ fun MainMenuScreen(
     // A Minimal tab's selected name as last laid out: where B's morph lands.
     val minimalSelected = remember { MinimalSelected() }
     CompositionLocalProvider(LocalLauncherChrome provides chrome, LocalFooterMode provides FooterMode.BUTTONS) {
-    Box(modifier.fillMaxSize()) {
+    // List and Minimal scroll vertically: a sideways swipe moves between the tabs ([tabSwipe]); a Grid or Carousel keeps
+    // it for its own content.
+    val swipeable = style == MenuStyle.LIST || style == MenuStyle.MINIMAL
+    val textInset = listTextInset(style)   // the tab words and the icons in line with a List's names
+    val tabRowPx = remember { mutableIntStateOf(0) }   // the tab row's height as laid out (0: hidden): List Home's art ends on its top
+    Box(modifier.fillMaxSize().tabSwipe(swipeable && screen.tabs.size > 1 && screen.menu == null && screen.search == null, onTabSwipe)) {
         // Behind the tab row, over the backdrop App draws: the switcher title's eased top band, so the dim labels read over
         // bright art. It reaches [NX_TOP_BAND_REACH] past the row, over the list's top (the rows draw on top of it).
         // List Home draws the selected game's picture behind the page (App's MenuBackground.Picture), as a game list does,
@@ -125,7 +141,18 @@ fun MainMenuScreen(
         val topCut = rememberNxListTopCut()
         val iconBand = topIcons.isNotEmpty() && !(home && style != MenuStyle.LIST)
         if (mainMenuTopBand(home, style, chrome.tabRow) || iconBand && style == MenuStyle.LIST) {
-            Box(Modifier.fillMaxWidth().height(MENU_TAB_ROW_HEIGHT + NX_TOP_BAND_REACH).nxTopBandFade(LocalNxColors.current.background))
+            Box(Modifier.fillMaxWidth().height(MENU_TAB_ROW_HEIGHT + NX_TOP_BAND_REACH).pageFixed().nxTopBandFade(LocalNxColors.current.background))
+        }
+        // List Home's art fades out into the tab row: from clear [NX_TOP_BAND_REACH] above the row's top to the ground at
+        // its middle, on a smoothstep (no edge at either end), the ground under the words. Behind the rows, as the top
+        // band is.
+        if (home && style == MenuStyle.LIST) {
+            val ground = LocalNxColors.current.background
+            val half = with(LocalDensity.current) { (tabRowPx.intValue / 2).toDp() }
+            Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().pageFixed()) {
+                Box(Modifier.fillMaxWidth().height(NX_TOP_BAND_REACH + half).background(Brush.verticalGradient(*smoothFadeStops(ground))))
+                Box(Modifier.fillMaxWidth().height(half).background(ground))
+            }
         }
         Column(Modifier.fillMaxSize()) {
             val labels = remember(screen.tabs) { screen.tabs.map { it.category.label } }
@@ -155,12 +182,10 @@ fun MainMenuScreen(
                 if (home) {
                     when (style) {
                         // Its rows level with Recent and Search (tab row hidden) stop short of them, as a List tab's.
-                        MenuStyle.LIST -> CompositionLocalProvider(LocalNxListTopCut provides topCut.takeIf { topIcons.isNotEmpty() }) {
-                            HomeListScreen(
-                                rows, selection, homeView.strip, info, hints, onSelect, onOpen, onLongPress, onHint,
-                                Modifier.weight(1f), tabMenu = tabMenu,
-                            )
-                        }
+                        MenuStyle.LIST -> HomeListScreen(
+                            rows, selection, homeView.strip, info, hints, onSelect, onOpen, onLongPress, onHint,
+                            Modifier.weight(1f), tabMenu = tabMenu, iconsRoom = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad,
+                        )
                         MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
                             val carousel = @Composable { m: Modifier ->
                                 HomeCarouselScreen(
@@ -243,7 +268,7 @@ fun MainMenuScreen(
                                 when (r) {
                                     is MainRow.Pin -> NxRow(r.entry.game.shownName)
                                     is MainRow.Shelf -> NxRow(r.entry.game.shownName)
-                                    is MainRow.System -> NxRow(r.system.displayName, secondary = if (r.system.displayName in shared) r.system.tag else null)
+                                    is MainRow.System -> NxRow(r.system.displayName, tag = if (r.system.displayName in shared) r.system.tag else null)
                                     is MainRow.Collection -> NxRow(r.name)
                                     is MainRow.Tool -> NxRow(r.row.label)
                                     is MainRow.PinnedTool -> NxRow(r.row.label)
@@ -251,41 +276,27 @@ fun MainMenuScreen(
                                 }
                             }
                         }
-                        // The row labels (and the band's arrows) start on the tab row's gutter, the tab words' edge, as Home,
-                        // Grid and Carousel do; other lists keep the narrower nxListInset.
-                        val portrait = LocalPortrait.current
-                        val gutter = if (portrait) 16.dp else 24.dp
-                        // Hints hidden: no shade where the bar was (the tabs' page has none), the info stays on the band.
-                        // No info to show (Consoles): no band, and with hints hidden no bar room either; the rows fill the
-                        // page between set gaps ([mainMenuListEdges]) and fade where more scrolls in.
-                        val bandless = !bandInfo
-                        GameInfoPlacement(info, Modifier.weight(1f), textStart = gutter, ground = if (!chrome.emptyBarRoom) BandGround.BAR else BandGround.NONE, shade = bandShade) { scaffoldModifier, infoBand ->
-                            val band = if (bandless) NxHintsBand(reserve = 0.dp, overlap = 0.dp) {} else infoBand
-                            // Its rows level with Recent and Search (tab row hidden) stop short of them.
-                            CompositionLocalProvider(LocalNxListTopCut provides topCut.takeIf { topIcons.isNotEmpty() }) { NxScreenScaffold(
-                                rows = listRows,
-                                selectedIndex = 0, selection = selection, showArt = false,   // App draws the tab's background behind; the rows read the selection
-                                hints = hints, onSelect = onSelect, onOpen = onOpen,
-                                modifier = scaffoldModifier, onHint = onHint, onLongPress = onLongPress, band = band,   // the list sits right under the tabs
-                                labelStart = gutter,
-                                listTopGap = if (portrait) 10.dp else 12.dp,   // the tab row hidden: the first row's gap under the page's top
-                                // The tab row shown: the first pill sits as far under the selected tab's underline as the
-                                // last pill sits over the band's arrows, in place of listTopGap ([mainMenuListTopEdge]).
-                                listTopEdge = mainMenuListTopEdge(chrome.tabRow),
-                                hideHints = chrome.emptyBarRoom, keepBarRoom = !bandless,
-                                scrollFade = true,   // the rows fade where more scrolls in, no arrows on the band
-                                rowEdges = if (bandless) mainMenuListEdges(chrome.tabRow, barShown = !chrome.emptyBarRoom && !chrome.noBar) else null,
-                            ) }
-                        }
+                        // As List Home's ([MainListBody]): the pill's edge on the gutter, the list under the icon row and on
+                        // the tab row, the selection free until the third row from an edge.
+                        val gutter = if (LocalPortrait.current) 16.dp else 24.dp
+                        MainListBody(
+                            listRows, selection, topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad, gutter,
+                            onSelect, onOpen, onLongPress, Modifier.weight(1f),
+                        )
                     }
                 }
             }
+            if (!shown.tabRow) SideEffect { tabRowPx.intValue = 0 }
             // The tabs at the bottom, in the hint bar's place: the selected word lit, no underline. A long press offers the
             // hidden tabs. One tab or a pushed tab: its title stands there instead.
             if (shown.tabRow) {
                 val longPress = onTabMenu?.let { f -> Modifier.pointerInput(f) { detectTapGestures(onLongPress = { f() }) } } ?: Modifier
-                if (title == null) MenuTabRow(labels, screen.tab, onTab, onLongPress = onTabMenu, underline = false)
-                else MenuTitleRow(title, modifier = longPress, textStart = if (LocalPortrait.current) 16.dp else 24.dp)
+                // Still while the page slides between tabs; it changes when a swipe commits ([pageFixed]). In a List, in by the
+                // names' inset so its words line up with them ([listTextInset]).
+                Box(Modifier.pageFixed().onSizeChanged { tabRowPx.intValue = it.height }.padding(horizontal = textInset)) {
+                    if (title == null) MenuTabRow(labels, screen.tab, onTab, onLongPress = onTabMenu, underline = false)
+                    else MenuTitleRow(title, modifier = longPress, textStart = if (LocalPortrait.current) 16.dp else 24.dp)
+                }
             }
         }
         // Recent and Search keep their icons at the top right corner. A List has the
@@ -295,13 +306,31 @@ fun MainMenuScreen(
         if (!chrome.tabRow) {
             NxTopIcons(
                 topIcons,
-                Modifier.align(Alignment.TopEnd).height(MENU_TAB_ROW_HEIGHT).padding(end = (if (LocalPortrait.current) 16.dp else 24.dp) - TOP_ICON_INSET)
+                Modifier.align(Alignment.TopEnd)
+                    .pageFixed()   // still while the page slides between tabs, as the tab row is
+                    .height(MENU_TAB_ROW_HEIGHT).padding(end = (if (LocalPortrait.current) 16.dp else 24.dp) - TOP_ICON_INSET + textInset)
                     .nxListTopCut(topCut),
             )
         }
     }
     }
 }
+
+/**
+ * How far in from the gutter the main menu's top and bottom rows (the stats, the facts, the tab words, the icons) sit in
+ * [style]: a List's names start [nxListInset] inside the selected pill's edge on the gutter, so in a List they come in
+ * by that much too and line up with the names; the other styles' content starts on the gutter.
+ */
+@Composable
+internal fun listTextInset(style: MenuStyle): Dp = if (style == MenuStyle.LIST) nxListInset() else 0.dp
+
+/** [ground] from clear at the top to solid at the bottom on a smoothstep (zero slope at both ends): List Home's art fade. */
+internal fun smoothFadeStops(ground: Color): Array<Pair<Float, Color>> = Array(SMOOTH_FADE_STOPS) { i ->
+    val y = i / (SMOOTH_FADE_STOPS - 1f)
+    y to ground.copy(alpha = y * y * (3f - 2f * y))   // role: a fade gradient's stops
+}
+
+private const val SMOOTH_FADE_STOPS = 20
 
 /** The main menu draws no hint bar. */
 private val NoHints = emptyList<Hint>()

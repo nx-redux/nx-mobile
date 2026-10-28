@@ -168,6 +168,13 @@ val NX_HINT_BAR_ALPHA: Float = NxDefaults.colors.scrimHints.alpha
  */
 val LocalNxHintBarHidden = staticCompositionLocalOf { false }
 
+/**
+ * The hint bars below's side padding: the page's text edge (Settings: its section words',
+ * [com.nxredux.mobile.ui.settingsSectionStart]; a List game list: its names'), so the bar lines up with the text above
+ * it, its first glyph's disc on that edge. Null: 16 dp.
+ */
+val LocalNxHintBarStart = staticCompositionLocalOf<Dp?> { null }
+
 /** Hint bars below keep their height when empty ([NxHintBar]'s keepHeight): provided by the two-pane Settings only. */
 val LocalNxHintBarKeepHeight = staticCompositionLocalOf { false }
 
@@ -219,7 +226,8 @@ fun NxHintBar(
                 }
             }
         },
-        modifier = modifier.fillMaxWidth().background(scrim).padding(horizontal = 16.dp, vertical = 6.dp).let { if (keepHeight) it.heightIn(min = glyphSize) else it },
+        modifier = modifier.fillMaxWidth().background(scrim)
+            .padding(horizontal = LocalNxHintBarStart.current ?: 16.dp, vertical = 6.dp).let { if (keepHeight) it.heightIn(min = glyphSize) else it },
     ) { measurables, c ->
         val gap = HINT_GAP.roundToPx()
         val shown = ArrayList<Pair<Placeable, Int>>()

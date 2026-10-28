@@ -6,21 +6,20 @@ import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.ui.nx.ConsolePad
 import com.nxredux.mobile.ui.nx.consoleLogo
 import com.nxredux.mobile.ui.nx.consolePad
-import com.nxredux.mobile.ui.nx.toolIcon
 import org.jetbrains.compose.resources.DrawableResource
 
 /** What the main menu draws behind a tab (List, and a Carousel Consoles tab; Grid and the other Carousels are plain). */
 sealed interface MenuBackground {
     /**
-     * List Home: the selected game's picture; List Consoles on Background: the console's bg.png ([url]), drawn as a
-     * game list's List background.
+     * List Consoles on Background: the console's bg.png ([url]), drawn as a game list's List background.
      */
     data class Picture(val url: String) : MenuBackground
+    /** List Home: the selected game ([entry]), its picture as a game list's List shows it (Layouts → List art). */
+    data class Game(val entry: Listed) : MenuBackground
     /** Carousel Consoles on Background: the console's bg.png ([url]), drawn as the Backdrop game list's picture. */
     data class Backdrop(val url: String) : MenuBackground
     /**
-     * Consoles: the selected console's logo, large and dimmed on the right (a console without controller art). List
-     * Home: the selected pinned tool's icon, the same way.
+     * Consoles: the selected console's logo, large and dimmed on the right (a console without controller art).
      */
     data class Logo(val res: DrawableResource) : MenuBackground
     /** Consoles: the selected console's controller alone, zoomed past the right edge and turned (Layouts → Consoles background). */
@@ -36,9 +35,8 @@ sealed interface MenuBackground {
  * systems'), drawn as a game list's picture, else plain black; NONE, plain black. A Carousel Consoles tab: BACKGROUND,
  * that bg.png as the Backdrop game list's picture ([MenuBackground.Backdrop]); CONTROLLER (the row's tiles carry the
  * controllers) and NONE, plain black.
- * A List Home shows the selected game's picture (Continue's resume frame first, as its card's [continuePictures]; a
- * pinned or shelf game's [gameBackground] for a [portrait] or landscape screen) or a pinned tool's icon, as the
- * handheld's List Home; Pick a game is plain. Grid and Carousel Home are plain whatever is selected (the dashboard
+ * A List Home shows the selected game's picture as a game list's List does ([MenuBackground.Game]: Layouts → List art);
+ * a pinned tool and Pick a game are plain. Grid and Carousel Home are plain whatever is selected (the dashboard
  * carries the art), and everything else is plain black.
  */
 internal fun menuBackground(
@@ -50,7 +48,7 @@ internal fun menuBackground(
         else MenuBackground.Plain
     }
     if (style != MenuStyle.LIST) return MenuBackground.Plain
-    if (category == MenuCategory.HOME) return listHomeBackground(row, portrait)
+    if (category == MenuCategory.HOME) return listHomeBackground(row)
     val system = row as? MainRow.System ?: return MenuBackground.Plain
     return when (consoleArt) {
         ConsoleArt.NONE -> MenuBackground.Plain
@@ -66,13 +64,9 @@ private fun consoleBg(system: MainRow.System): String? =
     (system.backdrop.bgRef ?: system.systems.firstNotNullOfOrNull { it.bgRef })?.value
 
 /** [menuBackground] for a List Home's [row] (Layouts → Consoles background is the consoles' and does not apply). */
-private fun listHomeBackground(row: MainRow?, portrait: Boolean): MenuBackground {
-    val url = when (row) {
-        is MainRow.Continue -> continuePictures(row.resume.previewPath, row.entry).firstOrNull()
-        is MainRow.Pin -> gameBackground(row.entry, portrait)
-        is MainRow.Shelf -> gameBackground(row.entry, portrait)
-        is MainRow.PinnedTool -> return MenuBackground.Logo(toolIcon(row.row.kind))
-        else -> null
-    }
-    return url?.let(MenuBackground::Picture) ?: MenuBackground.Plain
+private fun listHomeBackground(row: MainRow?): MenuBackground = when (row) {
+    is MainRow.Continue -> MenuBackground.Game(row.entry)
+    is MainRow.Pin -> MenuBackground.Game(row.entry)
+    is MainRow.Shelf -> MenuBackground.Game(row.entry)
+    else -> MenuBackground.Plain   // Pick a game, a pinned tool: plain black
 }

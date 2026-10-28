@@ -358,14 +358,12 @@ internal enum class BandGround { BAR, NONE, SHADE_WITH_INFO }
 
 /**
  * Button hints hidden, a List game list: the selected game's [lines] in the hint bar's empty row (its shade under it),
- * vertically centred, right-aligned at the screen gutter and free to use the width back to [start] (the band's arrows'
- * x), as NX Redux's info line on its own row (infoband.c info_top).
+ * vertically centred, [start] in from either side (the list's names' edge, so it lines up with them and the hint bar).
  */
 @Composable
 private fun BarInfoLine(lines: List<InfoLine>, start: Dp) {
-    val gutter = if (LocalPortrait.current) 16.dp else 24.dp
-    Box(Modifier.fillMaxSize().padding(start = start, end = gutter), contentAlignment = Alignment.CenterEnd) {
-        GameInfoBlock(lines, alignEnd = true, Modifier.captionTap(), scale = nxTextScale())   // Appearance → Text size
+    Box(Modifier.fillMaxSize().padding(horizontal = start), contentAlignment = Alignment.CenterStart) {
+        GameInfoBlock(lines, alignEnd = false, Modifier.captionTap(), scale = nxTextScale())   // Appearance → Text size
     }
 }
 

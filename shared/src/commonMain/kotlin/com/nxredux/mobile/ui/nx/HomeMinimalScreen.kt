@@ -10,10 +10,8 @@ import com.nxredux.mobile.ui.HomeStrip
 import com.nxredux.mobile.ui.MainRow
 import kotlin.math.max
 
-/** Minimal Home's names: List Home's rows ([homeListRows]), only Continue keeping its tag (no shelf tags). */
-internal fun homeMinimalRows(rows: List<MainRow>): List<NxRow> = rows.mapNotNull { r ->
-    homeListRows(listOf(r)).firstOrNull()?.let { if (r is MainRow.Continue) it else it.copy(tag = null) }
-}
+/** Minimal Home's names: List Home's rows ([homeListRows]), each game's reason tag too (Continue, New or Not started). */
+internal fun homeMinimalRows(rows: List<MainRow>): List<NxRow> = homeListRows(rows)
 
 /**
  * Home in the Minimal style (Layouts → Home layout: Minimal): the stats strip, then Home's [rows] as big names

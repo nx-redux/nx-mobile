@@ -2683,6 +2683,23 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         selectTab((s.tab + step).mod(s.tabs.size))
     }
 
+    /**
+     * A swipe across a List or Minimal main menu page: the next ([step] 1) or previous (−1) shown tab, wrapping as L1 /
+     * R1 do. App's pager has that tab's page beside the one showing already, and slides it in from where the finger let go.
+     */
+    fun swipeTab(step: Int) = switchTab(step)
+
+    /**
+     * The main menu's tab [index] as it would show beside the one showing (App's pager): its screen (no menu or search
+     * over it) and its remembered row. Nothing changes.
+     */
+    fun tabPage(index: Int): Pair<Screen.Systems, ListSelection>? {
+        val s = _screen.value as? Screen.Systems ?: return null
+        val n = s.copy(tab = index, menu = null, search = null)
+        val category = n.category ?: return null
+        return n to rememberedRow(category, n.rows).clampedTo(n.rows.size)
+    }
+
     /** A tap on a tab, or [switchTab]. Landing on Tools refreshes what its pages show. */
     fun selectTab(index: Int) {
         if (loader.active) return   // a screen is loading: only B (cancel) acts, as for L1 / R1

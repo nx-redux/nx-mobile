@@ -4319,6 +4319,19 @@ class AppStateTest {
         assertEquals(MenuCategory.HOME, assertIs<Screen.Systems>(state.screen.value).category)
     }
 
+    // A sideways swipe steps through the shown tabs as L1 / R1 do, wrapping both ways; the tab beside shows as it will.
+    @Test fun a_tab_swipe_wraps_over_the_shown_tabs_and_slides() = runTest {
+        val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        fun tab() = assertIs<Screen.Systems>(state.screen.value).category
+        state.swipeTab(-1)                                             // before Home: the last shown tab
+        assertEquals(MenuCategory.TOOLS, tab())
+        state.swipeTab(1)                                              // past the last: Home
+        assertEquals(MenuCategory.HOME, tab())
+        assertEquals(MenuCategory.CONSOLES, state.tabPage(1)?.first?.category)   // the page beside, before the swipe lands on it
+        state.swipeTab(1)
+        assertEquals(MenuCategory.CONSOLES, tab())
+    }
+
     @Test fun grid_tab_moves_by_tiles_and_switches_tab_past_the_ends() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings)
