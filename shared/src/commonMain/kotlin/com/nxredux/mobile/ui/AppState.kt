@@ -398,7 +398,7 @@ sealed interface Screen {
      * and A puts one in or takes it out.
      */
     data class ToolApps(val apps: List<ToolAppRow>, val pick: AppPick = AppPick.TOOLS, val menu: ContextMenu? = null) : Screen
-    /** [confirmRemove]: the "remove cheat database?" dialog is open. */
+    /** [confirmRemove]: the "remove Cheats & Patches?" dialog is open. */
     data class CheatDb(val confirmRemove: Boolean = false) : Screen
     /** Tools → Device Sync: no list selection here; its page (and the link choice) live in [AppDeps.deviceSync]. */
     data object DeviceSync : Screen
@@ -1202,7 +1202,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** The app's settings, exposed for the UI (deps stays private). */
     val settings: AppSettings get() = deps.settings
 
-    /** The Cheat Database tool, for the screen that renders its progress (null on a platform without it). */
+    /** The Cheats & Patches tool, for the screen that renders its progress (null on a platform without it). */
     val cheatDb: CheatDbController? get() = deps.cheatDb
 
     /** The Device Sync tool, for its screen (null on a platform without it). */

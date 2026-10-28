@@ -57,7 +57,7 @@ fun DeviceSyncScreen(
                 val lines = listOf(if (p.roms) DeviceSyncText.HEADLINE_ROMS else DeviceSyncText.HEADLINE, DeviceSyncText.hint(p.link))
                 NxDetailListBody(
                     title = title,
-                    // The headline and its dim line as the other tool pages' (Cheat Database's), not a caption.
+                    // The headline and its dim line as the other tool pages' (Cheats & Patches'), not a caption.
                     details = if (chrome.inSetup) listOf("Sync with your handheld") + lines else lines,
                     rows = rows, selectedIndex = syncSetupIndex(p, chrome.focus, skip = chrome.inSetup),
                     hints = listOf(Hint(NxButton.A, if (chrome.focus == SyncFocus.LINK) "Start" else "Choose"), Hint(NxButton.B, "Back")),

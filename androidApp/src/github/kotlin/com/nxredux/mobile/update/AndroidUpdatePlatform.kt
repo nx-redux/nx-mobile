@@ -310,7 +310,7 @@ class AndroidUpdatePlatform(private val app: Context, private val scope: Corouti
         get() = pendingUpdate(app)
         set(value) { prefs.edit().putString(PENDING_KEY, value).apply() }
 
-    /** A GET with the cheat database's timeouts; [accept]: the Accept header. */
+    /** A GET with the Cheats & Patches tool's timeouts; [accept]: the Accept header. */
     private fun open(url: String, accept: String): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
         requestMethod = "GET"
         connectTimeout = 15_000

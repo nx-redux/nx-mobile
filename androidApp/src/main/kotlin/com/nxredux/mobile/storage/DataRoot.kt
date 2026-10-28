@@ -111,7 +111,7 @@ object DataRoot {
 
     /**
      * Sets the marker, so [of] answers the home from now on. The game-time database is closed again (a store opened
-     * while the move ran points at the private file, now gone) and the Cheat Database rereads its manifest at the new root.
+     * while the move ran points at the private file, now gone) and Cheats & Patches rereads its manifest at the new root.
      */
     fun markDone(context: Context) {
         val marker = File(context.noBackupFilesDir, MARKER)

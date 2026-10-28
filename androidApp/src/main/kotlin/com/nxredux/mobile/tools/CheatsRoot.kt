@@ -8,7 +8,7 @@ import java.io.File
 import java.io.IOException
 
 /**
- * Where `Cheats/<TAG>/` and the Cheat Database manifest live: the data root ([DataRoot]), so an uninstall keeps the
+ * Where `Cheats/<TAG>/` and the Cheats & Patches manifest live: the data root ([DataRoot]), so an uninstall keeps the
  * download and the folders match the handheld's card. [moveFromPrivate] is the cheats' rule in [DataRoot]'s move.
  */
 object CheatsRoot {

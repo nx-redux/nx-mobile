@@ -670,7 +670,7 @@ object CoreRegistry {
     fun playersFor(tag: String, core: CoreDescriptor?): Int =
         if (baseTag(tag) == "GG") 1 else core?.players ?: 1
 
-    /** The [tags] whose core takes cheats ([CoreDescriptor.cheats]): the cheat database installs folders for these only. */
+    /** The [tags] whose core takes cheats ([CoreDescriptor.cheats]): Cheats & Patches installs folders for these only. */
     val cheatTags: Set<String> = tags.filterTo(LinkedHashSet()) { forTag(it)?.let { d -> d.cheats || d.ramCheats } != false }
 
     /** [fileName] is an archive the launched [tag]'s core loads as is (fbneo's and flycast's arcade sets), not one to unpack (minarch's rule). */
