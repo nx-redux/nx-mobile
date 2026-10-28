@@ -22,14 +22,17 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.runner.LaunchLine
@@ -43,7 +46,7 @@ import kotlin.math.min
 /*
  * The launch sequence's overlay (AppState's launchSequence), one for every page: black spreads from the selected name
  * over the whole screen, the name (a copy, on top) turning to the accent, and is the last thing left; the game screen then
- * draws the same name on the same pixels ([LaunchName]). Pages own nothing of it: their selected name reports itself
+ * draws the same name on the same pixels ([LaunchName]); a long name wraps onto more lines rather than running off the screen. Pages own nothing of it: their selected name reports itself
  * ([LaunchTargets]), read once as a sequence starts. Minimal reports this round; the other layouts launch as before.
  */
 
@@ -76,20 +79,39 @@ val LocalLaunchTargets = staticCompositionLocalOf { LaunchTargets() }
 /** Inline content's stand-ins in a text (a tag's placeholder): never part of the name. */
 private val PLACEHOLDERS = charArrayOf('\uFFFD', '\uFFFC')
 
+/** One laid-out line of the copy: its [text], start x and baseline in the copy's own px. */
+internal data class CopyLine(val text: String, val left: Float, val baseline: Float)
+
 /**
- * The launch copy's lines in window px: one line (the copy never wraps), [text] (the full name, any tag placeholder
- * dropped) from [lineLeft] on [baseline], both in the Text's own px, drawn at [scale] from its top left at [originInScreen] (its place in the window).
- * None for a blank name.
+ * The launch copy's lines in window px: each of [lines] (any tag placeholder dropped, blank ones skipped) drawn at [scale]
+ * from the copy's top left at [originInScreen] (its place in the window). None for a blank name.
  */
-internal fun launchLines(text: String, lineLeft: Float, baseline: Float, originInScreen: Offset, scale: Float): List<LaunchLine> {
-    val name = text.filterNot { it in PLACEHOLDERS }.trim()
-    if (name.isEmpty()) return emptyList()
-    return listOf(LaunchLine(name, originInScreen.x + lineLeft * scale, originInScreen.y + baseline * scale))
+internal fun launchLines(lines: List<CopyLine>, originInScreen: Offset, scale: Float): List<LaunchLine> = lines.mapNotNull { l ->
+    val text = l.text.filterNot { it in PLACEHOLDERS }.trim()
+    if (text.isEmpty()) null else LaunchLine(text, originInScreen.x + l.left * scale, originInScreen.y + l.baseline * scale)
 }
 
-/** [launchLines] from the on-screen [layout]'s first line (its start x and baseline): the copy starts where the name does. */
-internal fun launchLines(text: String, layout: TextLayoutResult, originInScreen: Offset, scale: Float): List<LaunchLine> =
-    launchLines(text, layout.getLineLeft(0), layout.getLineBaseline(0), originInScreen, scale)
+/**
+ * How wide the copy may run, in its own px, before it wraps: from its start [startX] to as far in from the window's right
+ * edge ([windowWidth]) as it starts from the left, at [scale]. At least a px, so a start past the middle still lays out.
+ */
+internal fun launchWrapWidth(windowWidth: Float, startX: Float, scale: Float): Float =
+    max(1f, (windowWidth - 2f * startX) / scale)
+
+/**
+ * The copy: the full [text] (no tag placeholder) in [style], wrapped at [maxWidthPx] (its own px, [launchWrapWidth]),
+ * so a long name shows whole on more lines rather than running off the screen. Its first line is where the name was.
+ */
+internal fun measureLaunchCopy(measurer: TextMeasurer, text: String, style: TextStyle, maxWidthPx: Float): TextLayoutResult =
+    measurer.measure(
+        AnnotatedString(text.filterNot { it in PLACEHOLDERS }.trim()), style.copy(drawStyle = Fill),
+        softWrap = true, constraints = Constraints(maxWidth = max(1, maxWidthPx.toInt())),
+    )
+
+/** [layout]'s lines as [CopyLine]s. */
+internal fun TextLayoutResult.copyLines(): List<CopyLine> = (0 until lineCount).map { i ->
+    CopyLine(layoutInput.text.text.substring(getLineStart(i), getLineEnd(i, visibleEnd = true)), getLineLeft(i), getLineBaseline(i))
+}
 
 /**
  * The name for the game screen to draw on the same pixels, in the [accent] (it ends on it); null while the name isn't laid
@@ -101,9 +123,15 @@ fun LaunchTarget.toLaunchName(accent: Color): LaunchName? {
     val layout = layout() ?: return null
     val coords = coords()?.takeIf { it.isAttached } ?: return null
     val s = scale()
-    val lines = launchLines(text.text, layout, coords.localToWindow(Offset.Zero), s)
+    val origin = coords.localToWindow(Offset.Zero)
+    // The copy as the overlay draws it: the full name wrapped across the window ([measureLaunchCopy]).
+    val input = layout.layoutInput
+    val measurer = TextMeasurer(input.fontFamilyResolver, input.density, input.layoutDirection, cacheSize = 0)
+    val windowWidth = coords.findRootCoordinates().size.width.toFloat()
+    val copy = measureLaunchCopy(measurer, text.text, style, launchWrapWidth(windowWidth, origin.x, s))
+    val lines = launchLines(copy.copyLines(), origin, s)
     if (lines.isEmpty()) return null
-    val d = layout.layoutInput.density
+    val d = input.density
     val sizePx = with(d) { style.fontSize.toPx() }
     val spacing = style.letterSpacing
     val spacingPx = when (spacing.type) {
@@ -115,7 +143,7 @@ fun LaunchTarget.toLaunchName(accent: Color): LaunchName? {
 }
 
 /**
- * A sequence's start, read once: the copy's [layout] (the full name, one line, unbounded) at [topLeft] drawn at [scale],
+ * A sequence's start, read once: the copy's [layout] (the full name, wrapped across the screen) at [topLeft] drawn at [scale],
  * in the overlay's px; the spread's [centre] (the name's as the player saw it) and [end] radius; the copy's [from] colour
  * and [to] (the accent); [reduced] motion.
  */
@@ -168,7 +196,9 @@ fun LaunchOverlay(sequence: LaunchSequence?, targets: LaunchTargets, modifier: M
         val target = targets.current
         val at = target?.coords()?.takeIf { it.isAttached && b != null }?.let { b!!.localBoundingBoxOf(it, clipBounds = false) }
         val centre = at?.center ?: Offset(w / 2f, h / 2f)
-        val copy = if (target != null && at != null) measurer.measure(AnnotatedString(target.text.text.filterNot { it in PLACEHOLDERS }), target.style.copy(drawStyle = Fill), maxLines = 1, softWrap = false) else null
+        val copy = if (target != null && at != null) {
+            measureLaunchCopy(measurer, target.text.text, target.style, launchWrapWidth(w, at.left, target.scale()))
+        } else null
         LaunchSnap(
             copy, at?.topLeft ?: Offset.Zero, target?.scale() ?: 1f, centre, launchEndRadius(centre.x, centre.y, w, h, featherPx),
             target?.color ?: accent, accent, reducedMotion(),
