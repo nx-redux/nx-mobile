@@ -1603,23 +1603,21 @@ internal data class StickPiece(val stick: Rect, val thumb: Rect) {
     val group: Rect get() = Rect(minOf(stick.left, thumb.left), thumb.top, maxOf(stick.right, thumb.right), stick.bottom)
 }
 
-/** The portrait PS2 stick's well across, units at a middle-row scale of 1 (the user's own layout on the Fold's cover: 1.35). */
-internal const val PS2_PORTRAIT_STICK_UNITS = 1.4f
-/** The portrait PS2 sticks' gap under the d-pad / diamond row, units. */
-private const val PS2_PORTRAIT_STICK_DROP = 0.1f
+/** The portrait PS2 stick's well across, units at a middle-row scale of 1 (as the user sized it on the Fold's cover: about 1). */
+internal const val PS2_PORTRAIT_STICK_UNITS = 1f
 
 /**
  * The portrait PS2 sticks ([StickPiece], left then right) on a pad [widthUnits] x [heightUnits] whose d-pad and diamond
  * are at [stickScale], pad units from the padded pad's top-left: each [PS2_PORTRAIT_STICK_UNITS] x [stickScale] across,
  * its outer edge 0.55 in from the side like the clusters above, under them by the NX mark's room and MENU's row (which
- * stay in the middle). Its pill sits over it, in the cluster's empty lower corner, the group [PS2_PORTRAIT_STICK_DROP]
- * under the row, or higher where the pad's bottom would cut it.
+ * stay in the middle). Its pill sits over it; the group is centred in the room between the row and the pad's bottom, or
+ * reaches up into the cluster's empty lower corner where that room is too short.
  */
 internal fun portraitDualSticks(widthUnits: Float, heightUnits: Float, stickScale: Float): Pair<StickPiece, StickPiece> {
     val d = PS2_PORTRAIT_STICK_UNITS * stickScale
     val rowBottom = 1f + (heightUnits - 3.12f - 3f * stickScale) / 2f + 3f * stickScale   // SpaceBetween, as [portraitCStickBox]
     val groupH = THUMB_PILL_H_UNITS + THUMB_PILL_GAP_UNITS + d
-    val top = minOf(rowBottom + PS2_PORTRAIT_STICK_DROP, heightUnits - groupH)
+    val top = minOf(rowBottom + (heightUnits - rowBottom - groupH) / 2f, heightUnits - groupH)
     fun piece(left: Float): StickPiece {
         val stick = Rect(left, top + THUMB_PILL_H_UNITS + THUMB_PILL_GAP_UNITS, left + d, top + groupH)
         val thumb = Rect(stick.center.x - THUMB_PILL_W_UNITS / 2f, top, stick.center.x + THUMB_PILL_W_UNITS / 2f, top + THUMB_PILL_H_UNITS)
