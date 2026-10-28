@@ -1,0 +1,6 @@
+ccc (Chaos Compiler Collection), vendored in ARMSX2's 3rdparty/ccc. The tree carries no licence file; every
+source file opens with the two lines below, and 3rdparty/ccc/README.md says the code was copied from
+https://github.com/chaoticgd/ccc.
+
+// This file is part of the Chaos Compiler Collection.
+// SPDX-License-Identifier: MIT

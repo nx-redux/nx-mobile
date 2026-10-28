@@ -1,0 +1,3 @@
+rapidyaml (ryml) and its c4core headers, vendored in ARMSX2's 3rdparty/rapidyaml. The vendored tree carries no
+licence file and no licence or copyright line in any header, so there is no text to copy from the source tree.
+Upstream is https://github.com/biojppm/rapidyaml (MIT).

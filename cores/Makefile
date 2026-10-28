@@ -517,15 +517,18 @@ armsx2_LICENSE = COPYING.GPLv3 3rdparty/cpuinfo/LICENSE 3rdparty/cubeb/LICENSE 3
   3rdparty/fast_float/LICENSE-MIT 3rdparty/fmt/LICENSE 3rdparty/imgui/LICENSE.txt 3rdparty/libchdr/LICENSE.txt \
   3rdparty/libzip/LICENSE 3rdparty/lzma/LICENSE.txt 3rdparty/plutosvg/LICENSE 3rdparty/plutovg/LICENSE \
   3rdparty/promptfont/LICENSE.txt 3rdparty/rainterface/LICENSE 3rdparty/rapidjson/license.txt 3rdparty/rcheevos/LICENSE \
-  3rdparty/simpleini/LICENCE.txt 3rdparty/soundtouch/COPYING.TXT 3rdparty/vixl/LICENCE 3rdparty/vulkan/LICENSE.md
+  3rdparty/simpleini/LICENCE.txt 3rdparty/soundtouch/COPYING.TXT 3rdparty/vixl/LICENCE 3rdparty/vulkan/LICENSE.md \
+  3rdparty/demangler/DemanglerLicenseGPL.txt 3rdparty/demangler/DemanglerLicenseLGPL.txt 3rdparty/freesurround/GPL.txt
 # The static dependencies' own licences, from their checkouts under $(ARMSX2_DEPS) (built before the .so, so present).
-# TODO before shipping: ccc, demangler, freesurround, glad, rapidyaml and the libretro headers keep their notices in
-# source headers only; they need notices/armsx2-*.txt like dolphin's KissFFT.
+# ccc, demangler, freesurround, glad, rapidyaml and the libretro headers keep their notices in source headers (or ship
+# none), so notices/armsx2-*.txt carries them like dolphin's KissFFT; the demangler and FreeSurround licence texts are
+# in the tree.
 ARMSX2_DEPS_SRC = $(BUILD_ROOT)/armsx2-deps/deps-build
 armsx2_LICENSE_EXTRA = $(addprefix $(ARMSX2_DEPS_SRC)/,libpng/LICENSE libjpeg-turbo/LICENSE.md libjpeg-turbo/README.ijg \
   zstd/LICENSE lz4/LICENSE libwebp/COPYING sdl3/LICENSE.txt freetype/LICENSE.TXT plutovg/LICENSE plutosvg/LICENSE \
   curl/COPYING libpcap/LICENSE shaderc/LICENSE shaderc/third_party/glslang/LICENSE.txt \
-  shaderc/third_party/spirv-tools/LICENSE shaderc/third_party/spirv-headers/LICENSE)
+  shaderc/third_party/spirv-tools/LICENSE shaderc/third_party/spirv-headers/LICENSE) \
+  $(addprefix notices/armsx2-,ccc.txt demangler.txt freesurround.txt glad.txt rapidyaml.txt libretro.txt)
 armsx2_KIND = cmake
 armsx2_BUILD_PATH = .
 armsx2_CMAKE_TARGET = pcsx2-libretro
