@@ -57,15 +57,18 @@ class PadArrangeTest {
             val w = 9f
             val (l, r) = portraitDualSticks(w, h, scale)
             val rowBottom = 1f + (h - 3.12f - 3f * scale) / 2f + 3f * scale
-            for (p in listOf(l, r)) {
-                assertTrue(p.group.left >= 0f && p.group.right <= w + 1e-4f && p.group.bottom <= h + 1e-4f, "h=$h: ${p.group} outside the pad")
-                assertTrue(p.stick.top >= rowBottom - 1e-4f, "h=$h: the stick reaches into the d-pad row")
-                assertFalse(p.thumb.overlaps(p.stick), "h=$h: the pill over the stick")
+            // The d-pad's down arm (its middle third, the row's bottom third) and the diamond's bottom button.
+            val dpadArm = Rect(PS2_PORTRAIT_CLUSTER_INSET + scale, rowBottom - scale, PS2_PORTRAIT_CLUSTER_INSET + 2f * scale, rowBottom)
+            val faceArm = Rect(w - PS2_PORTRAIT_CLUSTER_INSET - 2f * scale, rowBottom - scale, w - PS2_PORTRAIT_CLUSTER_INSET - scale, rowBottom)
+            for ((p, arm) in listOf(l to dpadArm, r to faceArm)) {
+                assertTrue(p.group.left >= -1e-4f && p.group.right <= w + 1e-4f && p.group.bottom <= h + 1e-4f, "h=$h: ${p.group} outside the pad")
+                assertTrue(p.thumb.top >= p.stick.bottom, "h=$h: the pill is not under the stick")
+                assertFalse(p.group.overlaps(arm), "h=$h: ${p.group} over the cluster's arm $arm")
                 // MENU (1.4 wide) and the NX mark (1.15) stay in the middle, clear of both sticks.
                 assertTrue(p.group.right <= w / 2f - 0.7f || p.group.left >= w / 2f + 0.7f, "h=$h: ${p.group} reaches MENU")
             }
-            assertEquals(0.55f, l.stick.left, 1e-4f)
-            assertEquals(w - 0.55f, r.stick.right, 1e-4f)
+            assertEquals(0f, l.stick.left, 1e-4f)
+            assertEquals(w, r.stick.right, 1e-4f)
             assertEquals(PS2_PORTRAIT_STICK_UNITS * scale, l.stick.width, 1e-4f)
         }
     }
