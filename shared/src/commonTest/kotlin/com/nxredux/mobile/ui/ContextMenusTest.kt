@@ -147,7 +147,7 @@ class ContextMenusTest {
     @Test fun console_menu_offers_consoles_whose_core_runs_the_file_and_that_own_its_extension() {
         val m = ContextMenus.consoleMenu("thing.chd")!!
         assertEquals("Console", m.title)
-        assertEquals(listOf("psp", "ps", "segacd", "pce", "dc"), m.values)   // not md: Sega Genesis does not own .chd
+        assertEquals(listOf("psp", "ps2", "ps", "segacd", "pce", "dc"), m.values)   // not md: Sega Genesis does not own .chd
         assertEquals(m.values.map { id -> CoreRegistry.consoles.first { it.id == id }.displayName }, m.labels)
         assertEquals(0, m.index)
         assertNull(m.current)

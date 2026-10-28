@@ -19,7 +19,7 @@ object ScraperSystems {
         "SMS" to 2, "GG" to 21, "MD" to 1, "GPGX" to 1, "GENESIS" to 1, "GEN" to 1, "SMD" to 1, "32X" to 19,
         "SEGA32X" to 19, "SEGACD" to 20, "SCD" to 20, "MEGACD" to 20, "MDCD" to 20, "SATURN" to 22, "SS" to 22,
         "SAT" to 22, "DC" to 23, "SG1000" to 109, "SG" to 109,
-        "PS" to 57, "PSX" to 57, "PS1" to 57, "PSP" to 61, "PPSSPP" to 61,
+        "PS" to 57, "PSX" to 57, "PS1" to 57, "PS2" to 58, "PSP" to 61, "PPSSPP" to 61,
         "PCE" to 31, "PCECD" to 114, "PCCD" to 114, "TGCD" to 114, "TG16CD" to 114, "TGFXCD" to 114, "TGFX" to 31,
         "TGFX16" to 31, "TG16" to 31, "PCENGINE" to 31, "SGFX" to 105, "SGX" to 105, "PCFX" to 72,
         "A2600" to 26, "ATARI" to 26, "ATARI2600" to 26, "A800" to 43, "ATARI800" to 43, "A5200" to 40, "A7800" to 41,
