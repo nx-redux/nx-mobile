@@ -1,0 +1,50 @@
+---
+name: armsx2 core check (temporary)
+
+# Temporary: builds only the armsx2 core on the release runner, step for step as release.yaml's build-core job, so a
+# Linux-only failure shows before the PS2 branch merges. Removed before the PR.
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches: [spike/armsx2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NDK_VERSION: 26.1.10909125
+  CMAKE_VERSION: 3.22.1
+
+jobs:
+  build-core:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5.0.0
+
+      - name: Install NDK and CMake
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" "cmake;$CMAKE_VERSION" > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmake;3.30.3" > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$(make -s -C cores print-armsx2-ndk)" > /dev/null
+
+      - name: Disk before
+        run: df -h /
+
+      - name: Build armsx2 core
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION"
+          make -C cores armsx2
+
+      - name: Disk after
+        if: always()
+        run: df -h /
+
+      - name: Upload core
+        uses: actions/upload-artifact@v6.0.0
+        with:
+          name: core-armsx2
+          path: cores/output/
+          if-no-files-found: error
