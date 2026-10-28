@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
@@ -62,19 +61,15 @@ internal fun consoleLogoBox(aspect: Float, cellW: Float, cellH: Float): Pair<Flo
     return w to h
 }
 
-/** A [MenuMarkCell] mark's place when raised: halfway between the cell's centre (0) and its top (-1). */
-private const val RAISED_BIAS = -0.5f
-
 /**
  * One main menu tile in the Grid, [cellW] × [cellH] dp, as its mark alone on the ground (no plate, border or ring): a
  * console's logo ([consoleLogoBox]) or, without one, its name; a collection's name; a tool's icon with its name under it.
  * The mark is the ink at [CONSOLE_DIM_ALPHA], easing to the accent as it is selected ([lit]); a console's or collection's
  * game count shows under the selected one only, at the row-info size in inkDim, crossfading with it. The count's line
- * is kept either way, so the mark never moves. [raised]: the mark sits halfway between the cell's centre and its top
- * (a tall cell, the grid's pad case), so the room above the first row halves.
+ * is kept either way, so the mark never moves.
  */
 @Composable
-internal fun MenuMarkCell(tile: GridTile, lit: Boolean, cellW: Float, cellH: Float, modifier: Modifier = Modifier, raised: Boolean = false) {
+internal fun MenuMarkCell(tile: GridTile, lit: Boolean, cellW: Float, cellH: Float, modifier: Modifier = Modifier) {
     val colors = LocalNxColors.current
     val litness = nxLitness(lit)
     val dim = colors.main.copy(alpha = CONSOLE_DIM_ALPHA)   // role: an unselected console logo
@@ -88,7 +83,7 @@ internal fun MenuMarkCell(tile: GridTile, lit: Boolean, cellW: Float, cellH: Flo
     )
     val count = when (tile) { is GridTile.Logo -> tile.count; is GridTile.Collection -> tile.count; else -> null }
     Column(
-        modifier.fillMaxSize().wrapContentHeight(BiasAlignment.Vertical(if (raised) RAISED_BIAS else 0f)),
+        modifier.fillMaxSize().wrapContentHeight(Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         when (tile) {

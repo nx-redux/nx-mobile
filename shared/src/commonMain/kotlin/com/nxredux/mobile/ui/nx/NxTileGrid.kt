@@ -152,7 +152,7 @@ fun NxTileGrid(
                                 logoInset = 0f to 0f, portrait = portrait, modifier = Modifier.fillMaxSize(), titleSize = 14.sp * nxTextScale(),
                                 gameFade = games, statsSize = 14.sp * nxTextScale() * 0.8f, drained = true, captionAlways = true,
                             )
-                            else MenuMarkCell(tile, i == sel, g.tileW, tileH.value, raised = !roomy)   // the pad case: tall cells, half the top room
+                            else MenuMarkCell(tile, i == sel, g.tileW, tileH.value)
                         }
                     }
                 }
