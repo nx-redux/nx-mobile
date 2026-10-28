@@ -45,7 +45,7 @@ private const val HOME_DOCK_MIN_SIDE = 32f
  * and the screen draws it, so the two agree.
  */
 internal fun homeDockSide(f: HomeFrame, stripLines: Int, games: Int): Float =
-    max(HOME_DOCK_MIN_SIDE, homeBoard(if (f.portrait) f else homePortraitTwin(f), stripLines, tools = 1, games = games).square)
+    max(HOME_DOCK_MIN_SIDE, homeBoard(if (f.portrait) f else homePortraitTwin(f), stripLines, tools = 1, games = games, fillSliver = false).square)
 
 /** The Carousel Home's dock squares of [side] dp that fit [widthDp] (its gutters off): at least one. */
 internal fun homeDockFit(widthDp: Float, portrait: Boolean, side: Float): Int {
