@@ -492,7 +492,7 @@ object CoreRegistry {
         Console("nds", "Nintendo DS", listOf("NDS"), setOf("nds", "ds", "nintendo ds"), setOf("nds"), rawSram = false),
         Console("n64", "Nintendo 64", listOf("N64"), setOf("n64", "nintendo 64"), setOf("n64", "z64", "v64"), rawSram = false),
         Console("psp", "Sony Playstation Portable", listOf("PSP"), setOf("psp", "ppsspp", "playstation portable", "sony playstation portable"), setOf("iso", "cso", "chd", "pbp", "elf", "prx"), rawSram = false),
-        Console("ps2", "Sony PlayStation 2", listOf("PS2"), setOf("ps2", "playstation 2", "sony playstation 2"), setOf("iso", "chd", "cso", "zso"), rawSram = false),
+        Console("ps2", "Sony PlayStation 2", listOf("PS2"), setOf("ps2", "playstation 2", "sony playstation 2"), setOf("iso", "chd", "zso"), rawSram = false),
         Console("ps", "Sony PlayStation", listOf("PS", "PSX"), setOf("ps", "ps1", "psx", "playstation", "sony playstation"), setOf("bin", "cue", "img", "mdf", "toc", "cbn", "m3u", "chd", "iso"), rawSram = false),
         Console("gb", "Game Boy", listOf("GB"), setOf("gb", "game boy"), setOf("gb", "dmg"), rawSram = true),
         Console("gbc", "Game Boy Color", listOf("GBC"), setOf("gbc", "game boy color"), setOf("gbc"), rawSram = true),
