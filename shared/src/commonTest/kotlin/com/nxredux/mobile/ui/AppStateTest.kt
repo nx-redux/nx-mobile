@@ -4372,8 +4372,8 @@ class AppStateTest {
         val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings)
         state.onConsoles()
         settings.menuStyles = LIST_TABS + mapOf(MenuCategory.CONSOLES to MenuStyle.GRID)
-        state.onGridLayout(1, rows = 3)                      // 3 consoles, 1 column of 3 rows (a tablet): a still grid
-        state.onButton(NxButton.RIGHT)                       // row order: the next tile, not the next column
+        state.onGridLayout(1)                                // 3 consoles, 1 column: three rows
+        state.onButton(NxButton.DOWN)                        // row 0 -> row 1
         assertEquals(1, state.selection.value.index)
         state.onButton(NxButton.UP)                          // row 1 -> row 0
         assertEquals(0, state.selection.value.index)
@@ -4387,7 +4387,7 @@ class AppStateTest {
         val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings)
         state.onConsoles()
         settings.menuStyles = LIST_TABS + mapOf(MenuCategory.CONSOLES to MenuStyle.GRID)
-        state.onGridLayout(2, 3)
+        state.onGridLayout(2)
         for (next in listOf(2, 0)) {                         // DOWN a row, wrapping in the column
             state.onButton(NxButton.DOWN)
             assertEquals(next, state.selection.value.index)
@@ -4396,22 +4396,6 @@ class AppStateTest {
         assertEquals(1, state.selection.value.index)
         state.onButton(NxButton.UP)                          // the top row: stays
         assertEquals(1, state.selection.value.index)
-    }
-
-    @Test fun every_grid_dpad_press_counts_even_one_that_moves_nothing() = runTest {
-        val settings = MemorySettings(ContentRef("Home"))
-        val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings)
-        state.onConsoles()
-        state.onButton(NxButton.DOWN)                        // a List tab: not a Grid press
-        assertEquals(0, state.gridPresses.value)
-        settings.menuStyles = LIST_TABS + mapOf(MenuCategory.CONSOLES to MenuStyle.GRID)
-        state.onGridLayout(3)                                // 3 consoles, one row of 3: DOWN moves nothing
-        val before = state.selection.value.index
-        state.onButton(NxButton.DOWN)
-        assertEquals(before, state.selection.value.index)
-        assertEquals(1, state.gridPresses.value)             // still a press: the Grid brings its selection back
-        state.onButton(NxButton.RIGHT, repeat = true)
-        assertEquals(2, state.gridPresses.value)
     }
 
     @Test fun held_right_on_a_list_tab_does_not_cycle_tabs() = runTest {
@@ -4425,19 +4409,19 @@ class AppStateTest {
         assertEquals(MenuCategory.TOOLS, assertIs<Screen.Systems>(state.screen.value).category)
     }
 
-    @Test fun held_right_on_a_grid_stops_at_the_last_tile_then_a_fresh_press_switches() = runTest {
+    @Test fun held_right_on_a_grid_stops_at_the_rows_end_then_a_fresh_press_switches() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = stateWithTools(FakeCheatDbPlatform(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), settings)
         state.onConsoles()
         settings.menuStyles = LIST_TABS + mapOf(MenuCategory.CONSOLES to MenuStyle.GRID)
-        state.onGridLayout(1)                                // 3 consoles, 1 column: a sliding grid
-        state.onButton(NxButton.RIGHT)                       // fresh press: next column
-        repeat(5) {                                          // held: stops at the end, never leaves the tab
+        state.onGridLayout(3)                                // 3 consoles in one row of 3
+        state.onButton(NxButton.RIGHT)                       // fresh press: the next tile in the row
+        repeat(5) {                                          // held: stops at the row's end, never leaves the tab
             state.onButton(NxButton.RIGHT, repeat = true)
             assertEquals(MenuCategory.CONSOLES, assertIs<Screen.Systems>(state.screen.value).category)
             assertEquals(2, state.selection.value.index)
         }
-        state.onButton(NxButton.RIGHT)                       // a fresh press past the end: the next tab
+        state.onButton(NxButton.RIGHT)                       // a fresh press from the last column: the next tab
         assertEquals(MenuCategory.TOOLS, assertIs<Screen.Systems>(state.screen.value).category)
     }
 
@@ -8969,7 +8953,7 @@ class AppStateTest {
             state.onButton(NxButton.RIGHT); assertEquals(1, state.selection.value.index, "$style")
         }
         val grid = lettersList(MenuStyle.GRID)
-        grid.onGridLayout(4, 2); grid.onPageRows(3)
+        grid.onGridLayout(4); grid.onPageRows(3)
         grid.onButton(NxButton.RIGHT); assertEquals(1, grid.selection.value.index)
     }
 
@@ -9107,7 +9091,7 @@ class AppStateTest {
         val settings = MemorySettings(ContentRef("Home")).apply { menuStyles = LIST_TABS + (MenuCategory.CONSOLES to MenuStyle.GRID) }
         val state = hiddenTabsState(MenuCategory.CONSOLES, settings = settings)
         state.openHiddenTab(MenuCategory.CONSOLES)
-        state.onGridLayout(3, 2)
+        state.onGridLayout(3)
         val last = state.pushedMenu().rows.lastIndex
         state.select(0); state.onButton(NxButton.LEFT)
         assertEquals(last, state.selection.value.index)

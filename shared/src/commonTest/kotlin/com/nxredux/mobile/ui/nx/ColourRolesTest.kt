@@ -27,6 +27,6 @@ class ColourRolesTest {
         val c = NxColors()
         assertEquals(Color(0xCC000000), c.scrimHints)
         assertEquals(Color(0xE6000000), c.scrimSwitcher)
-        assertEquals(Color(0xA6000000), c.scrimBackdrop)
+        assertEquals(Color(0xBF000000), c.scrimBackdrop)
     }
 }

@@ -490,7 +490,7 @@ fun NxBackdrop(
 
         // The time and the achievements, then the next goal under the name's one line.
         if (captioned) RowCaption(
-            captionTitle, captionInfo, glide, nameStyle, 1, infoStyle, gutter, avail, availPx, spare, selTop, rowH + capGap, colors.listText,
+            captionTitle, captionInfo, glide, nameStyle, 1, infoStyle, gutter, avail, availPx, spare, selTop, rowH + capGap, colors.accent,   // the name in the accent
         )
     }
 }
@@ -528,7 +528,8 @@ private fun BoxScope.BackdropRowItem(
             },
         contentAlignment = Alignment.Center,
     ) {
-        if (game != null) BoxArt(game)
+        // A game list's unselected boxes in greyscale, the colour coming back as one slides into the selection.
+        if (game != null) Box(Modifier.matchParentSize().nxSaturation { backdropSaturation(i - at()) }) { BoxArt(game) }
         else if (tile != null) SlotTile(
             tile, look.k, g.itemW, scale = { rowItem(RowStyle.BACKDROP, i - at(), g).scale }, toolLines = look.toolLines,
             toolNameSp = look.toolNameSp, toolNamePad = look.toolNamePad, toolSplit = look.toolSplit, toolGap = look.toolGap,

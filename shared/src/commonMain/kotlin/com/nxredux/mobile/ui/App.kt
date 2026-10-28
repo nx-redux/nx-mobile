@@ -114,7 +114,6 @@ import com.nxredux.mobile.ui.nx.launcherChromeFor
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.restingSystemBars
 import com.nxredux.mobile.ui.nx.LocalAppIcons
-import com.nxredux.mobile.ui.nx.LocalGridPresses
 import com.nxredux.mobile.ui.nx.LocalPadBelow
 import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.LocalWindowSize
@@ -539,16 +538,18 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
         // Equal, not the same object: a main menu tab's page laid out beside the one showing (its swipe's neighbour) holds an
         // equal copy of the screen, and keeps it once it shows (an equal screen recomposes nothing), so an identity check
         // would drop its reports for good (a rotation then left Grid Home on its old width).
-        val onGridLayout: (Int, Int) -> Unit = remember(s) { { columns, rows -> if (state.screen.value == s) state.onGridLayout(columns, rows) } }
-        val onHomeLayout: (HomeFrame) -> Unit = remember(s) { { f -> if (state.screen.value == s) state.onHomeLayout(f) } }   // likewise Home's body frame
+        // New reporters, too, when the page starts showing ([live]): one laid out beside it (a swipe's neighbour) had its
+        // reports dropped, and the page then sends them again ([HomeScreen], [NxTileGrid]).
+        val shows = live.value
+        val onGridLayout: (Int) -> Unit = remember(s, shows) { { columns -> if (state.screen.value == s) state.onGridLayout(columns) } }
+        val onHomeLayout: (HomeFrame) -> Unit = remember(s, shows) { { f -> if (state.screen.value == s) state.onHomeLayout(f) } }   // likewise Home's body frame
         val homeView = state.homeView.collectAsState()   // what Home draws beside its rows
         val homeRowLast = state.homeCarouselRowLast.collectAsState()   // Carousel Home's row item last on (AppState's d-pad memory)
         val index = { selection.value.index }
-        val gridPresses = state.gridPresses.collectAsState()   // read only inside the Grid, so a press recomposes only it
         val minimalOpening = state.minimalOpening.collectAsState()   // a Minimal page's row being opened (its page draws the band)
         // Full-height background behind everything (list, scroll arrows, hint bar).
         PageBackground(state, s, style, selection, live)
-        CompositionLocalProvider(LocalGridPresses provides gridPresses) { when (s) {
+        when (s) {
             is Screen.PermissionsStep -> WithIndex(selection) { val (t, b) = remember(s) { state.setupChrome() }; PermissionsStepScreen(s, t, b, it, state::select, state::setupStepRow, state::onButton) }
             is Screen.FilePicker -> WithIndex(selection) { FilePickerScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, onDraft = state::filePickerDraft) }
             Screen.PickFolder -> WithIndex(selection) { val (t, b) = remember(s) { state.setupChrome() }; PickFolderScreen(t, b, it, state::select, state::setupStepRow, state::onButton, systemPicker = !state.filePickerOn()) }
@@ -633,7 +634,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.ArtworkReset ->
                 if (artworkSplitView(LocalWindowSize.current, s)) ArtworkSplitScreen(state, s, selection)
                 else WithIndex(selection) { ArtworkScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton) }
-        } }
+        }
         (page as? Screen.EmulatorOptions)?.takeIf(::gameSettingsModal)?.let { modal ->
             WithIndex(pageSelection) {
                 GameSettingsModal(modal, it, state::select, { state.openSelected() }, onHint = state::onButton, onClose = state::closeGameSettings, onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated)
@@ -653,7 +654,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val style = state.styleOf(s)
     val orientation = state.orientationOf(s)
     // A Grid reports its columns only while its page is the one showing (a page sliding out never overwrites the count).
-    val onGridLayout: (Int, Int) -> Unit = remember(s) { { columns, rows -> if (state.screen.value === s) state.onGridLayout(columns, rows) } }
+    val onGridLayout: (Int) -> Unit = remember(s) { { columns -> if (state.screen.value === s) state.onGridLayout(columns) } }
     val onPageRows: (Int) -> Unit = remember(s) { { rows -> if (state.screen.value === s) state.onPageRows(rows) } }   // likewise LEFT / RIGHT's page
     val index = { selection.value.index }
     val minimalOpening = state.minimalOpening.collectAsState()   // a Minimal page's row being opened (its page draws the band)

@@ -202,7 +202,7 @@ internal fun StackCaption(
         verticalArrangement = Arrangement.spacedBy(3.dp),
         horizontalAlignment = if (end) Alignment.End else Alignment.Start,
     ) {
-        Text(title, color = colors.listText, maxLines = 2, overflow = TextOverflow.Ellipsis, style = nameStyle)
+        Text(title, color = colors.accent, maxLines = 2, overflow = TextOverflow.Ellipsis, style = nameStyle)   // the selected game's name in the accent
         // The centred block may grow: "Next: <name>" may take its two lines whatever the body's room.
         CaptionInfoRows(backdropCaptionRows(info), infoStyle, 12.dp, avail = width.dp, spare = bodyH.dp, alwaysSplitNext = splitNext)
     }

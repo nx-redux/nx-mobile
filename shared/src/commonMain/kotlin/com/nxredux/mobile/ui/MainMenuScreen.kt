@@ -86,7 +86,7 @@ fun MainMenuScreen(
     rowInfo: (Int) -> List<InfoLine> = { emptyList() },   // Carousel Home: any row's full info by index (its caption stays on the last row item while the dock has focus)
     style: MenuStyle = MenuStyle.LIST,    // the tab's style
     orientation: MenuOrientation = MenuOrientation.HORIZONTAL,   // the tab's orientation (Carousel only: Vertical is the stack)
-    onGridLayout: (Int, Int) -> Unit = { _, _ -> },   // a Grid reports its column and row counts
+    onGridLayout: (Int) -> Unit = {},   // a Grid reports its column count
     tileInfo: (Int) -> List<InfoLine> = { emptyList() },   // Grid and Home pins: a row's game's count-only info, in its tile (read lazily per tile)
     layoutKey: Any? = null,               // the tab laid out (its category): a Grid re-reports its columns, a Carousel row snaps, for each
     onHomeLayout: (HomeFrame) -> Unit = {},   // Home reports its body's frame here (its size, portrait type, menu area ratio)
@@ -122,9 +122,9 @@ fun MainMenuScreen(
     // A Minimal tab's selected name as last laid out: where B's morph lands.
     val minimalSelected = remember { MinimalSelected() }
     CompositionLocalProvider(LocalLauncherChrome provides chrome, LocalFooterMode provides FooterMode.BUTTONS) {
-    // List and Minimal scroll vertically: a sideways swipe moves between the tabs ([tabSwipe]); a Grid or Carousel keeps
-    // it for its own content.
-    val swipeable = style == MenuStyle.LIST || style == MenuStyle.MINIMAL
+    // List, Minimal and Grid scroll vertically: a sideways swipe moves between the tabs ([tabSwipe]); a Carousel keeps it
+    // for its own row.
+    val swipeable = style == MenuStyle.LIST || style == MenuStyle.MINIMAL || style == MenuStyle.GRID
     val textInset = listTextInset(style)   // the tab words and the icons in line with a List's names
     val tabRowPx = remember { mutableIntStateOf(0) }   // the tab row's height as laid out (0: hidden): List Home's art ends on its top
     Box(modifier.fillMaxSize().tabSwipe(swipeable && screen.tabs.size > 1 && screen.menu == null && screen.search == null, onTabSwipe)) {
@@ -192,12 +192,11 @@ fun MainMenuScreen(
                                     rowLast = homeRowLast, known = homeView.frame != null, tabMenu = tabMenu,
                                 )
                             }
-                            // The bar's room is always kept under the carousel, touch only too (no bar there), so its
-                            // rows sit in the same place whatever Button hints says.
+                            // No hint bar on the main pages and no room kept for one: the body runs down to the tab row.
                             NxScreenScaffold(
                                 rows = emptyList(), selectedIndex = 0,
                                 hints = emptyList(), onSelect = onSelect, onOpen = onOpen, modifier = Modifier.weight(1f), onHint = onHint, grid = carousel,
-                                hideHints = chrome.emptyBarRoom || chrome.noBar,
+                                hideHints = true, keepBarRoom = false,
                             )
                         }
                         MenuStyle.MINIMAL -> HomeMinimalScreen(
@@ -222,8 +221,7 @@ fun MainMenuScreen(
                             NxTileGrid(
                                 tiles, selection, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                                 onColumns = onGridLayout, tileInfo = tileInfo, modifier = m.padding(top = top.pad), layoutKey = layoutKey,
-                                titleRoom = top.titleRoom,
-                                // Consoles' tiles are wide, two across, in a phone's two-row portrait ([gridFor]).
+                                // Consoles' tiles show their logo alone ([GridTileKind.LOGO]).
                                 consoles = screen.category == MenuCategory.CONSOLES,
                             )
                         }

@@ -336,6 +336,16 @@ internal fun rowSelectedTop(areaDp: Float, itemH: Float, captionGap: Float, draw
 }
 
 /**
+ * A game list Carousel's selected tile top (dp, in its box) for the tile and its drawn caption ([rowSelectedTop]'s) to
+ * sit centred on the screen's centre line [centreLine] (dp from the box's top), kept inside the box [areaDp].
+ */
+internal fun rowSelectedTopOn(centreLine: Float, areaDp: Float, itemH: Float, captionGap: Float, drawnCaptionDp: Float): Float {
+    val under = if (drawnCaptionDp > 0f) captionGap + drawnCaptionDp else 0f
+    val lo = min(GRID_RING_ROOM, rowNeighbourTop(areaDp, itemH))
+    return (centreLine - (itemH + under) / 2).coerceAtMost(areaDp - itemH - under).coerceAtLeast(lo)
+}
+
+/**
  * A game list Carousel neighbour's top (dp, in its box) for its centre on the screen's centre line: [screenCentreY] and
  * the box's top [boxTopY] in window px ([density] px per dp), the tile [itemH] dp tall. Null until both are measured.
  */

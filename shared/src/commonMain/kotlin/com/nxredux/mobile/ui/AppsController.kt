@@ -109,7 +109,7 @@ internal class AppsController(
     fun onToolAppsLayout(columns: Int) { toolAppsColumns = columns.coerceAtLeast(0) }
 
     /**
-     * The grid ([gridStep], every row still): the d-pad moves by tiles, UP/DOWN wrapping in the column and LEFT/RIGHT
+     * The grid ([gridStep]): the d-pad moves by tiles, UP/DOWN wrapping in the column and LEFT/RIGHT
      * stopping at the first and last tile. The drawer: A opens the selected app, MENU its menu, B back to Tools. The
      * games picker: A puts the app in the console or takes it out, B back to Library on its row.
      */
@@ -117,7 +117,7 @@ internal class AppsController(
         when (button) {
             NxButton.UP, NxButton.DOWN, NxButton.LEFT, NxButton.RIGHT -> {
                 val sel = selection.value
-                gridStep(sel.index, sel.count, toolAppsColumns.coerceAtLeast(1), button, rows = sel.count)?.let { selection.value = sel.copy(index = it) }
+                gridStep(sel.index, sel.count, toolAppsColumns.coerceAtLeast(1), button, rowEnds = false)?.let { selection.value = sel.copy(index = it) }
             }
             NxButton.A -> host.openSelected()
             NxButton.B -> host.back()

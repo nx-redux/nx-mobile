@@ -112,7 +112,7 @@ private const val MOST_PLAYED = "Most played"
  * tab offered from MENU). A vertical drag scrolls the page without selecting and flings on when let go.
  * [continueInfo]: Continue's game info. [pinInfo]: a row game's, by row index, read lazily where the caption shows.
  * Both show their TIME segment only ([timeOnly]); [signedIn] false drops achievement data.
- * Reports its [HomeFrame] through [onLayout] once laid out, and again for each [layoutKey].
+ * Reports its [HomeFrame] through [onLayout] once laid out, and again for each [layoutKey] and each new [onLayout].
  */
 @Composable
 internal fun HomeScreen(
@@ -133,10 +133,12 @@ internal fun HomeScreen(
         // With the tab row hidden the stats strip sits in a fixed header in its place ([homeStatsHeader]); the page is
         // the body under it, laid out as under a tab row with the strip hidden.
         val header = homeStatsHeader(whole, homeStripLines(view.strip))
-        val frame = header?.body ?: whole
-        val h = frame.h
-        val report by rememberUpdatedState(onLayout)
-        LaunchedEffect(frame, layoutKey) { report(frame) }
+        // Laid out above the fixed gap over the tab row ([GRID_TAB_GAP]): the board, Continue's card included, ends there.
+        val frame = (header?.body ?: whole).let { it.copy(h = it.h - GRID_TAB_GAP) }
+        val h = frame.h   // the page shows down to the fixed gap over the tab row
+        // Again for each new [onLayout]: it takes a frame only for the screen showing, and one sent while the screen is
+        // swapped for another (unfolding) is dropped; the new screen's reporter sends it once more.
+        LaunchedEffect(frame, layoutKey, onLayout) { onLayout(frame) }
         // The board the rows were built for: their frame and strip lines. Before the first report the rows were built
         // on a stand-in frame, so nothing is drawn until the view names the real one (the board here is a placeholder).
         val known = view.frame != null
@@ -198,7 +200,7 @@ internal fun HomeScreen(
         }
 
         fun Modifier.at(r: HomeRect): Modifier = offset(r.x.dp, r.y.dp).size(r.w.dp, r.h.dp)
-        Box(Modifier.padding(top = (header?.height ?: 0f).dp).fillMaxSize().clipToBounds().then(drag)) {
+        Box(Modifier.padding(top = (header?.height ?: 0f).dp, bottom = GRID_TAB_GAP.dp).fillMaxSize().clipToBounds().then(drag)) {
             // The page moves with the scroll, the strip with it; a drag that starts on a tile scrolls too.
             if (known) Box(Modifier.fillMaxSize().graphicsLayer { translationY = -scroll.value.dp.toPx() }) {
                 // None while Home stats is off (the board's lines 0, its room the top section's).
@@ -234,7 +236,7 @@ internal fun HomeScreen(
                         HomeLit(i, selection) { lit ->
                             Box(m) {
                                 HomePinTile(t, lit, { pinInfo(i) }, signedIn, portrait, Modifier.fillMaxSize(), lines, console, always = row is MainRow.Pin)
-                                reason?.let { HomeBadge(it, portrait, Modifier.align(Alignment.TopStart)) }
+                                reason?.let { HomeBadge(it, portrait, Modifier.align(Alignment.TopStart), lit = lit) }
                             }
                         }
                     }
@@ -242,13 +244,28 @@ internal fun HomeScreen(
             }
         }
 
-        // A phone upright: the page fades to the ground over its bottom [HOME_BOTTOM_FADE] above the tab row, so no tile
-        // ends on a hard edge.
-        if (portrait) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(HOME_BOTTOM_FADE).background(Brush.verticalGradient(*smoothFadeStops(colors.background))))
+        // While more is below, the page fades to the ground over its bottom [HOME_BOTTOM_FADE], over the fixed gap above the
+        // tab row ([GRID_TAB_GAP]): no tile ends on a hard edge. At the end, none: the last row shows whole. Where Continue
+        // reaches into that strip at rest (landscape, or upright with the pad: its caption is there), only once scrolled.
+        val contBottom = b.top.firstOrNull { it.kind == HomeTopKind.CONTINUE }?.rect?.let { it.y + it.h } ?: 0f
+        val coversContinue = contBottom > h - HOME_BOTTOM_FADE.value
+        val moreBelow by remember(scroll, coversContinue) { derivedStateOf { scroll.value < maxScroll - 0.5f && (!coversContinue || scrolled) } }
+        val below = remember(layoutKey) { Animatable(if (moreBelow) 1f else 0f) }
+        LaunchedEffect(below, moreBelow) { below.animateTo(if (moreBelow) 1f else 0f, tween(SCROLL_MS, easing = NxMenuEasing)) }
+        Box(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = GRID_TAB_GAP.dp).fillMaxWidth().height(HOME_BOTTOM_FADE)
+                .graphicsLayer { alpha = below.value }.background(Brush.verticalGradient(*smoothFadeStops(colors.background))),
+        )
         // The tab row's eased top band, continued over the body's top, only while the page is scrolled (at rest it
         // would grey the top of a white-filled card: Continue's, Pick a game's). No tab row, the header's the same way.
         val band = remember(layoutKey) { Animatable(if (scrolled) 1f else 0f) }
         LaunchedEffect(band, scrolled) { band.animateTo(if (scrolled) 1f else 0f, tween(SCROLL_MS, easing = NxMenuEasing)) }
+        // Scrolled, the page fades in from the ground over [HOME_BOTTOM_FADE] under its top (the stats), as it fades out
+        // at the bottom: more is above.
+        Box(
+            Modifier.offset(y = (header?.height ?: 0f).dp).fillMaxWidth().height(HOME_BOTTOM_FADE).graphicsLayer { alpha = band.value }
+                .background(Brush.verticalGradient(*smoothFadeStops(colors.background).map { (y, c) -> (1f - y) to c }.reversed().toTypedArray())),
+        )
         if (tabRow) {
             Box(
                 Modifier.offset(y = -MENU_TAB_ROW_HEIGHT).fillMaxWidth().height(MENU_TAB_ROW_HEIGHT + NX_TOP_BAND_REACH)
@@ -450,9 +467,12 @@ private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLin
     val rows = backdropCaptionRows(info)   // the time only ([timeOnly]); none without it
     // No ring: selected, the picture in full colour and the name in the accent; not, the picture grey ([nxDrain]).
     val litness = nxLitness(lit)
-    val name = if (lit) colors.accent else colors.listText
+    val name = if (lit) colors.accent else colors.inkDim   // unselected, its name dims as the tiles' do
+    // Unselected, its time line a step under the tiles' names, as theirs ([NxMenuTile]'s drained).
+    val sub = if (lit) colors.hint else colors.inkDim.copy(alpha = colors.inkDim.alpha * 0.7f)   // role: an unselected Grid tile's under-name lines
     Box(modifier) {
-        BoxWithConstraints(Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp)).background(colors.background)) {
+        // No ring: the subtle edge, over everything, keeps the card's rounded shape off a dark picture's ground.
+        BoxWithConstraints(Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp)).background(colors.background).border(NX_DRAIN_EDGE, colors.inkEdge, RoundedCornerShape(NX_TILE_CORNER.dp))) {
             if (picture != null) {
                 AsyncImage(
                     model = model, contentDescription = null, contentScale = ContentScale.Crop,
@@ -483,7 +503,7 @@ private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLin
                         game.shownName, name, titleSp, titleLine, maxLines = lines, balanced = lines > 1,
                         shadow = if (lines > 1) titleShadow() else null,
                     )
-                    for (r in rows) InfoRow(r, infoSp, infoLine)
+                    for (r in rows) InfoRow(r, infoSp, infoLine, sub)
                 }
             } else {
                 Column(
@@ -499,11 +519,11 @@ private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLin
                             maxLines = 2, align = TextAlign.Center, balanced = true,
                         )
                     }
-                    for (r in rows) InfoRow(r, infoSp, infoLine)
+                    for (r in rows) InfoRow(r, infoSp, infoLine, sub)
                 }
             }
             // The Continue badge, top-left, as on Carousel Home ([HomeBadge]); Pick a game has none.
-            HomeBadge(HOME_CONTINUE_BADGE, portrait, Modifier.align(Alignment.TopStart))
+            HomeBadge(HOME_CONTINUE_BADGE, portrait, Modifier.align(Alignment.TopStart), lit = lit)
         }
     }
 }
@@ -521,13 +541,14 @@ private const val HOME_CARD_INFO_LINE = 14f
 /**
  * A Home card's badge, top-left ("Continue", and a shelf game's reason, New or Not started; as the handheld's `drawContinueBadge`):
  * black at [HOME_BADGE_ALPHA] in a round pill, the word in the ink at 12 sp on a 16 sp line ([pinned]: never font-scaled),
- * padded 3 x 9 dp, its corner [inset] dp in from the card's.
+ * padded 3 x 9 dp, its corner [inset] dp in from the card's. Not [lit] (an unselected Grid Home tile): dimmed with its tile.
  */
 @Composable
-internal fun HomeBadge(text: String, portrait: Boolean, modifier: Modifier = Modifier) {
+internal fun HomeBadge(text: String, portrait: Boolean, modifier: Modifier = Modifier, lit: Boolean = true) {
     val inset = if (portrait) 8.dp else 10.dp   // three quarters of Continue's caption inset (10.2 / 13.6 dp)
+    val litness = nxLitness(lit)   // Grid Home: an unselected tile's badge dims with it ([nxDimBadge])
     Box(
-        modifier.padding(start = inset, top = inset)
+        modifier.padding(start = inset, top = inset).graphicsLayer { alpha = nxDimBadge(litness()) }
             .background(Color.Black.copy(alpha = HOME_BADGE_ALPHA), RoundedCornerShape(50))   // role: a Home badge's pill, the handheld's black
             .padding(horizontal = 9.dp, vertical = 3.dp),
     ) {
@@ -537,9 +558,9 @@ internal fun HomeBadge(text: String, portrait: Boolean, modifier: Modifier = Mod
 }
 
 /** Grid Home's hero name over the tiles' names, sp. */
-private const val HOME_HERO_NAME_PLUS = 4f
+internal const val HOME_HERO_NAME_PLUS = 4f
 
-/** Grid Home's bottom fade, upright, over the tab row. */
+/** Grid Home's bottom fade while more is below, and its top fade while the page is scrolled. */
 private val HOME_BOTTOM_FADE = 48.dp
 
 /** A [HomeBadge]'s black, as the handheld's (158 of 255). */
@@ -547,10 +568,9 @@ private const val HOME_BADGE_ALPHA = 0.62f
 
 /** One of Continue's info rows ([infoText]), grey, on one line. */
 @Composable
-private fun InfoRow(lines: List<InfoLine>, sizeSp: Float, lineSp: Float) {
-    val colors = LocalNxColors.current
-    val info = infoText(lines, colors.hint, icon = if (sizeSp < 14f) 11.dp else 12.dp)
-    HomeText(info.text, colors.hint, sizeSp, lineSp, maxLines = 1, inlineContent = info.inlineContent)
+private fun InfoRow(lines: List<InfoLine>, sizeSp: Float, lineSp: Float, color: Color = LocalNxColors.current.hint) {
+    val info = infoText(lines, color, icon = if (sizeSp < 14f) 11.dp else 12.dp)
+    HomeText(info.text, color, sizeSp, lineSp, maxLines = 1, inlineContent = info.inlineContent)
 }
 
 /**
@@ -565,7 +585,7 @@ internal fun PickCard(lit: Boolean, portrait: Boolean, cardH: Float, modifier: M
     val url = remember(colors.accent) { abstractAccentArtUrl(colors.accent.toArgb() and 0xFFFFFF) }
     val litness = nxLitness(lit)
     Box(modifier) {
-        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp)).background(colors.background), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp)).background(colors.background).border(NX_DRAIN_EDGE, colors.inkEdge, RoundedCornerShape(NX_TILE_CORNER.dp)), contentAlignment = Alignment.Center) {
             AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().nxDrain(litness))
             Image(
                 painterResource(homePickMark), contentDescription = null, contentScale = ContentScale.Fit,

@@ -830,7 +830,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private var pushedTab: MenuCategory? = null   // a hidden tab opened over the menu ([openHiddenTab]); [menuCategory] stays the tab under it
     private val tabSelections = HashMap<MenuCategory, ListSelection>()   // each tab's row, remembered across visits
     private var gridColumns = 0   // the Grid body's column count for the screen showing now; 0 until it lays out
-    private var gridRows = 2      // and its row count: 2 on phones, 3–4 on a tablet-class window
     private var pageRows = 0      // a game list's rows (or stack items) on one screen ([onPageRows]); 0 until it lays out: a page is one row
     private var installedCache: List<InstalledApp>? = null   // the last [AppLauncher.installedApps]; null until the first load
     private var installedJob: Job? = null
@@ -888,9 +887,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private var afterAndroidStep: (() -> Unit)? = null   // what first setup's Android games step goes on to (a load or the extra's scan)
     /** Android apps' icons for the session (Tools tiles, Home pins, the picker); null without a launcher. */
     val appIcons: AppIcons? = deps.launcher?.let { AppIcons(it, scope) }
-    private val _gridPresses = MutableStateFlow(0)
-    /** Counts the d-pad presses a laid-out Grid takes (a move or not): the Grid brings a swipe-scrolled selection back on one. */
-    val gridPresses: StateFlow<Int> = _gridPresses.asStateFlow()
 
     private val _selection = MutableStateFlow(ListSelection(0, 0))
     val selection: StateFlow<ListSelection> = _selection.asStateFlow()
@@ -6135,9 +6131,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         return true
     }
 
-    /** The Grid body reports its column count (it knows the screen size); the d-pad then steps by tiles. */
-    fun onGridLayout(columns: Int, rows: Int = 2) {
-        gridColumns = columns.coerceAtLeast(0); gridRows = rows.coerceAtLeast(1)
+    /** The Grid body reports its column count (it knows the screen size); the d-pad then steps by tiles, a row at a time. */
+    fun onGridLayout(columns: Int) {
+        gridColumns = columns.coerceAtLeast(0)
     }
 
     /** A game list's List, Minimal or vertical stack reports the items one screen shows: LEFT / RIGHT page by them ([pageMove]). */
@@ -6205,9 +6201,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val s = _screen.value
         if (s !is Screen.Systems && s !is Screen.Games) return false
         val sel = _selection.value
-        _gridPresses.value += 1
-        if (s is Screen.Systems && button == NxButton.UP && gridAtTop(sel.index, sel.count, gridColumns, gridRows)) return true
-        val next = gridStep(sel.index, sel.count, gridColumns, button, gridRows)
+        if (s is Screen.Systems && button == NxButton.UP && gridAtTop(sel.index, sel.count, gridColumns)) return true
+        val next = gridStep(sel.index, sel.count, gridColumns, button)
         if (next == null) {
             // A pushed tab has no tab to switch to: its Grid wraps LEFT / RIGHT at its ends instead (a fresh press only).
             if (s is Screen.Systems && s.pushed) {

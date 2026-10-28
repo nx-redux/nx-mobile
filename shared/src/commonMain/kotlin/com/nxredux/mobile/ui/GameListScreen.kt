@@ -125,7 +125,7 @@ fun GameListScreen(
     style: MenuStyle = MenuStyle.LIST,    // the game list style
     orientation: MenuOrientation = MenuOrientation.HORIZONTAL,   // the game list orientation (Carousel / Backdrop: Vertical is the stack)
     alignment: VerticalListAlignment = VerticalListAlignment.LEFT,   // Vertical: the stack's side (Layouts → Vertical alignment)
-    onGridLayout: (Int, Int) -> Unit = { _, _ -> },   // a Grid reports its column and row counts
+    onGridLayout: (Int) -> Unit = {},   // a Grid reports its column count
     onPageRows: ((Int) -> Unit)? = null,   // a List, Minimal or vertical stack reports the items one screen shows (LEFT / RIGHT page)
     tileInfo: (Int) -> List<InfoLine> = { emptyList() },   // Grid: a game's count-only info, in its tile (read lazily per tile)
     layoutKey: Any? = null,               // the list laid out (its source): a Grid re-reports its columns, a Carousel / Backdrop row snaps, for each
@@ -200,7 +200,7 @@ internal fun GameListFrame(
     listRows: () -> List<NxRow>, captionTitle: () -> String?, minimalRows: () -> List<NxRow> = listRows,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier = Modifier,
     onHint: ((NxButton) -> Unit)? = null, onLongPress: ((Int) -> Unit)? = null,
-    info: () -> List<InfoLine> = { emptyList() }, onGridLayout: (Int, Int) -> Unit = { _, _ -> },
+    info: () -> List<InfoLine> = { emptyList() }, onGridLayout: (Int) -> Unit = {},
     onPageRows: ((Int) -> Unit)? = null,
     tileInfo: (Int) -> List<InfoLine> = { emptyList() }, layoutKey: Any? = null,
     orientation: MenuOrientation = MenuOrientation.HORIZONTAL,
@@ -300,7 +300,6 @@ internal fun GameListFrame(
                                 tiles, selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                                 onColumns = onGridLayout, tileInfo = if (topStats) NoTileInfo else tileInfo,
                                 modifier = m.padding(horizontal = nxListInset()), layoutKey = layoutKey, games = true,   // in line with the title and bars
-                                titleRoom = titleRoom,
                             )
                         }
                     }
@@ -312,11 +311,11 @@ internal fun GameListFrame(
                             if (orientation == MenuOrientation.VERTICAL) NxCarouselStack(
                                 tiles, selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                                 captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, alignment = alignment,
-                                titleRoom = titleRoom, onPageRows = onPageRows,
+                                titleRoom = titleRoom, onPageRows = onPageRows, drained = true,
                             ) else NxCarousel(
                                 tiles, selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                                 captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, titleRoom = titleRoom,
-                                gameList = true,
+                                gameList = true, drained = true,
                             )
                         }
                     }

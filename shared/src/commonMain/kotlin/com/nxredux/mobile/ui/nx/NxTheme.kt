@@ -67,14 +67,11 @@ data class NxColors(
     val successOnAccent: Color = successSelected   // [success] on the accent
     val warningOnAccent: Color = warningSelected   // [warning] on the accent
 
-    /** Unselected tab words and the top-right icons: the [main] ink at 38%. */
+    /** Unselected tab words, the top-right icons and an unselected Grid tile's name: the [main] ink at 38%. */
     val inkDim: Color = main.copy(alpha = 0.38f)
     /** List Home's unselected names: the [main] ink at 70%. */
     val inkName: Color = main.copy(alpha = 0.70f)
-    /**
-     * Reserved for unselected pictures (grid tiles, cards, carousel items one step out); not yet wired. The carousel
-     * uses MENU_FIRST_ALPHA (0.35) in RowLayout.kt. The [main] ink at 55%.
-     */
+    /** Reserved for unselected pictures; not yet wired. The [main] ink at 55%. */
     val inkMuted: Color = main.copy(alpha = 0.55f)
     /** An unlit tag pill (Continue) and the unlit plate behind a word: the [main] ink at 14%. */
     val inkFaint: Color = main.copy(alpha = 0.14f)
@@ -106,8 +103,8 @@ data class NxColors(
      * light. Its alpha is [NX_SWITCHER_BAR_ALPHA], where the switcher's info band and the tab row's top band fade from.
      */
     val scrimSwitcher: Color = Color(0xE6000000)
-    /** What dims a Backdrop game list's screenshot (NxBackdropPicture), under its shade. */
-    val scrimBackdrop: Color = Color(0xA6000000)
+    /** What dims a Backdrop game list's screenshot (NxBackdropPicture), under its shade: the picture at 25%. */
+    val scrimBackdrop: Color = Color(0xBF000000)
     /** A notice's backing: App's notice line and NxNotifications' toasts. */
     val scrimNotice: Color = Color(0xCC000000)
     /** Over the menu kept still under a tool that has the focus on the top screen (App's PageContent). */
