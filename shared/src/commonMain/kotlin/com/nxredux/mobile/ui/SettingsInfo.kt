@@ -159,8 +159,6 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "keep theirs. With touch alone there is no hint bar at all.",
     )
     SettingsKind.HINT_SHOWN -> when (row.hint) {
-        NxButton.SELECT -> quiet("SELECT's Recent hint; hidden, Recent becomes an icon")
-        NxButton.START -> quiet("START's Search hint; hidden, Search becomes an icon")
         NxButton.Y -> quiet("Y's Netplay hint; hidden, Netplay leads a game's menu")
         else -> SettingText("")
     }

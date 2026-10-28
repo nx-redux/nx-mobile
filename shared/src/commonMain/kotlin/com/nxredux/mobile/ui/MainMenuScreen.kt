@@ -135,7 +135,7 @@ fun MainMenuScreen(
         // is scrolled ([HomeScreen]); Carousel Home has no picture. With the tab row hidden, the Recent and Search icons
         // still get the band: here, behind a List's rows as the tab row's is, so its reach never dims the first row; over
         // the other styles' pages (below).
-        val topIcons = if (chrome.tabRow) emptyList() else launcherTopActions(chrome, onHint, canSearch)
+        val topIcons = if (chrome.tabRow) emptyList() else launcherTopActions(onHint, canSearch)
         val topCut = rememberNxListTopCut()
         val iconBand = topIcons.isNotEmpty() && !(home && style != MenuStyle.LIST)
         if (mainMenuTopBand(home, style, chrome.tabRow) || iconBand && style == MenuStyle.LIST) {

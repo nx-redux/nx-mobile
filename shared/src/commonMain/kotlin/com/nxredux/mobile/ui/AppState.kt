@@ -1140,7 +1140,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** The launcher screens' chrome in effect: the settings under [footerMode], the rule App draws by. */
     internal fun launcherChrome(): LauncherChrome =
         deps.settings.let { s ->
-            launcherChromeFor(s.menuPageTitle, s.menuButtonHints, footerMode, s.menuExtraInfo, s.showRecentHint, s.showSearchHint, s.showNetplayHint, homeStats = s.menuHomeStats)
+            launcherChromeFor(s.menuPageTitle, s.menuButtonHints, footerMode, s.menuExtraInfo, s.showNetplayHint, homeStats = s.menuHomeStats)
         }
 
     private val _nav = MutableStateFlow(NavStep())
@@ -4212,23 +4212,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                     }
                 }
             }
-            // Recent / Search / Netplay hint: the Show / Hide of SELECT's, START's and Y's hint.
-            SettingsKind.HINT_SHOWN -> row.hint?.let { button ->
-                val shown = when (button) {
-                    NxButton.SELECT -> s.showRecentHint
-                    NxButton.START -> s.showSearchHint
-                    NxButton.Y -> s.showNetplayHint
-                    else -> false
-                }
-                flip(shown, show = true) { on ->
-                    when (button) {
-                        NxButton.SELECT -> s.showRecentHint = on
-                        NxButton.START -> s.showSearchHint = on
-                        NxButton.Y -> s.showNetplayHint = on
-                        else -> Unit
-                    }
-                }
-            }
+            // Netplay hint: the Show / Hide of Y's hint (Recent and Search are always icons).
+            SettingsKind.HINT_SHOWN -> if (row.hint == NxButton.Y) flip(s.showNetplayHint, show = true) { s.showNetplayHint = it } else null
             SettingsKind.PAGE_TITLE -> flip(s.menuPageTitle, show = true, after = { refreshSettings() }) { s.menuPageTitle = it }
             SettingsKind.BUTTON_HINTS -> flip(s.menuButtonHints, show = true) { s.menuButtonHints = it }
             SettingsKind.EXTRA_INFO -> flip(s.menuExtraInfo, show = true) { s.menuExtraInfo = it }
@@ -4349,7 +4334,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             s.showHomeTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showConsolesTab = MenuStyles.DEFAULT_TAB_SHOWN
             s.showCollectionsTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showToolsTab = MenuStyles.DEFAULT_TAB_SHOWN
             s.showNewShelf = true; s.showNotStartedShelf = true
-            s.showRecentHint = true; s.showSearchHint = true; s.showNetplayHint = true
+            s.showNetplayHint = true
             s.consoleArt = ConsoleArt.DEFAULT; s.gameListArt = GameListArt.DEFAULT; s.backdropArt = BackdropArt.DEFAULT
             s.menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE
             s.menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS
@@ -4483,8 +4468,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             SettingsRow(SettingsKind.PAGE_TITLE, "Page title", shown(s.menuPageTitle)),
             SettingsRow(SettingsKind.BUTTON_HINTS, "Button hints", shown(s.menuButtonHints)),
             // Each hint on its own, while the bar shows (hidden: Netplay in the context menu, Recent and Search as icons).
-            SettingsRow(SettingsKind.HINT_SHOWN, "Recent hint", shown(s.showRecentHint), hint = NxButton.SELECT).takeIf { s.menuButtonHints },
-            SettingsRow(SettingsKind.HINT_SHOWN, "Search hint", shown(s.showSearchHint), hint = NxButton.START).takeIf { s.menuButtonHints },
             SettingsRow(SettingsKind.HINT_SHOWN, "Netplay hint", shown(s.showNetplayHint), hint = NxButton.Y).takeIf { s.menuButtonHints && netplay != null },
         )
     }

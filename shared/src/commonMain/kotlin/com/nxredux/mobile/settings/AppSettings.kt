@@ -272,13 +272,7 @@ interface AppSettings {
     /** Layouts → New shelf, Not started shelf: Home shows that shelf (true, the default) or not. Pick up again always shows. */
     var showNewShelf: Boolean
     var showNotStartedShelf: Boolean
-    /**
-     * Layouts → Recent hint, Search hint, Netplay hint: the main menu's SELECT Recent and START Search and Y
-     * Netplay show in the hint bar (true, the default) or not; the button still works hidden, and a hidden Netplay hint puts
-     * Netplay in a game's context menu.
-     */
-    var showRecentHint: Boolean
-    var showSearchHint: Boolean
+    /** Layouts → Netplay hint: Y Netplay shows in a game list's hint bar (true, the default) or not; hidden, it leads a game's context menu. */
     var showNetplayHint: Boolean
     /** Layouts → Consoles background ([ConsoleArt.DEFAULT] Controller). */
     var consoleArt: ConsoleArt

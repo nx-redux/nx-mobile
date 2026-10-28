@@ -300,12 +300,12 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
 
 /**
  * The settings the launcher screens' look reads: Appearance → Accent and Secondary accent ([colors]; Auto follows the
- * accent), Layouts → Page title, Button hints, Extra info, Home stats and the Recent, Search and Netplay hints (the
- * chrome, [launcherChromeFor]), and Appearance → Text size ([optionText]).
+ * accent), Layouts → Page title, Button hints, Extra info, Home stats and the Netplay hint (the chrome,
+ * [launcherChromeFor]), and Appearance → Text size ([optionText]).
  */
 internal data class MenuLook(
     val colors: NxColors, val pageTitle: Boolean, val buttonHints: Boolean, val extraInfo: Boolean, val homeStats: Boolean,
-    val recentHint: Boolean, val searchHint: Boolean, val netplayHint: Boolean, val optionText: Float,
+    val netplayHint: Boolean, val optionText: Float,
 )
 
 /** [MenuLook] from the settings. They are plain properties: every change republishes the screen, so it is re-read on each [screen]. */
@@ -317,7 +317,7 @@ internal fun rememberMenuLook(state: AppState, screen: Screen): MenuLook {
         val st = state.settings
         MenuLook(
             colors, st.menuPageTitle, st.menuButtonHints, st.menuExtraInfo, st.menuHomeStats,
-            st.showRecentHint, st.showSearchHint, st.showNetplayHint, st.optionTextSize.ofListLabel,
+            st.showNetplayHint, st.optionTextSize.ofListLabel,
         )
     }
 }
@@ -329,7 +329,7 @@ internal fun rememberMenuLook(state: AppState, screen: Screen): MenuLook {
  */
 @Composable
 internal fun MenuLocals(state: AppState, look: MenuLook, footer: FooterMode, touchscreen: Boolean, content: @Composable () -> Unit) {
-    val chrome = launcherChromeFor(look.pageTitle, look.buttonHints, footer, look.extraInfo, look.recentHint, look.searchHint, look.netplayHint, look.homeStats)
+    val chrome = launcherChromeFor(look.pageTitle, look.buttonHints, footer, look.extraInfo, look.netplayHint, look.homeStats)
     CompositionLocalProvider(
         LocalFooterMode provides footer, LocalLauncherChrome provides chrome, LocalHasTouchscreen provides touchscreen,
         LocalAppIcons provides state.appIcons, LocalNxOptionText provides look.optionText,
