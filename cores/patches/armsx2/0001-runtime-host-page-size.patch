@@ -1,0 +1,152 @@
+diff --git a/cmake/BuildParameters.cmake b/cmake/BuildParameters.cmake
+index ce8cff1..4294c07 100644
+--- a/cmake/BuildParameters.cmake
++++ b/cmake/BuildParameters.cmake
+@@ -177,16 +177,8 @@ elseif("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64" OR "${CMAKE_SYSTEM_PROCESSOR
+ 		list(APPEND PCSX2_DEFS OVERRIDE_HOST_CACHE_LINE_SIZE=${HOST_CACHE_LINE_SIZE})
+ 	endif()
+ 
+-	# Android is neither LINUX nor WIN32 to CMake, so without this branch it
+-	# falls through to the ARM64 default in Pcsx2Defs.h — 16K pages — while
+-	# every current Android device runs a 4K kernel. The ARM64 memory manager
+-	# needs its compile-time page size to match the kernel's at runtime, and a
+-	# mismatch is a hard failure on the device, not a build warning. Detection
+-	# is not an option here (cross-compile), so it is a knob, defaulted to 4K
+-	# and named the same as in the APK's own copy of this file.
++	# Android reads its page size (4K or 16K kernels) at runtime: see Pcsx2Defs.h.
+ 	if(ANDROID)
+-		set(ARMSX2_ANDROID_HOST_PAGE_SIZE "0x1000" CACHE STRING "Compile-time Android host page size for the PCSX2 core")
+-		list(APPEND PCSX2_DEFS OVERRIDE_HOST_PAGE_SIZE=${ARMSX2_ANDROID_HOST_PAGE_SIZE})
+ 		list(APPEND PCSX2_DEFS OVERRIDE_HOST_CACHE_LINE_SIZE=64)
+ 		# 16K-page compatibility for the ELF itself: a 4K-internal-page build
+ 		# still has to load on a 16K kernel, which requires the segments be
+diff --git a/common/BitUtils.h b/common/BitUtils.h
+index 1255709..4b4f665 100644
+--- a/common/BitUtils.h
++++ b/common/BitUtils.h
+@@ -67,7 +67,6 @@ namespace Common
+ 	template <typename T>
+ 	static constexpr T PageAlign(T size)
+ 	{
+-		static_assert(std::has_single_bit(__pagesize), "Page size is a power of 2");
+ 		return Common::AlignUpPow2(size, __pagesize);
+ 	}
+ 
+diff --git a/common/Linux/LnxHostSys.cpp b/common/Linux/LnxHostSys.cpp
+index 6e3e240..6d01706 100644
+--- a/common/Linux/LnxHostSys.cpp
++++ b/common/Linux/LnxHostSys.cpp
+@@ -176,6 +176,12 @@ void HostSys::DestroySharedMemory(void* ptr)
+ 	close(static_cast<int>(reinterpret_cast<intptr_t>(ptr)));
+ }
+ 
++#ifdef PCSX2_RUNTIME_PAGE_SIZE
++const unsigned int __pagesize = static_cast<unsigned int>(sysconf(_SC_PAGESIZE));
++const unsigned int __pagemask = __pagesize - 1;
++const unsigned int __pageshift = std::bit_width(__pagemask);
++#endif
++
+ #ifndef __APPLE__
+ 
+ size_t HostSys::GetRuntimePageSize()
+diff --git a/common/Pcsx2Defs.h b/common/Pcsx2Defs.h
+index b79ab54..f949079 100644
+--- a/common/Pcsx2Defs.h
++++ b/common/Pcsx2Defs.h
+@@ -32,7 +32,13 @@ static constexpr bool IsDebugBuild = false;
+ #endif
+ 
+ // Defines the memory page size for the target platform at compilation.
+-#if defined(OVERRIDE_HOST_PAGE_SIZE)
++#if defined(__ANDROID__) && defined(ARCH_ARM64)
++	// Android kernels run 4 KB or 16 KB pages: read once at startup (LnxHostSys.cpp).
++	#define PCSX2_RUNTIME_PAGE_SIZE
++	extern const unsigned int __pagesize;
++	extern const unsigned int __pagemask;
++	extern const unsigned int __pageshift;
++#elif defined(OVERRIDE_HOST_PAGE_SIZE)
+ 	static constexpr unsigned int __pagesize = OVERRIDE_HOST_PAGE_SIZE;
+ 	static constexpr unsigned int __pagemask = __pagesize - 1;
+ 	static constexpr unsigned int __pageshift = std::bit_width(__pagemask);
+diff --git a/pcsx2/VMManager.cpp b/pcsx2/VMManager.cpp
+index 5e0443a..d6d11d9 100644
+--- a/pcsx2/VMManager.cpp
++++ b/pcsx2/VMManager.cpp
+@@ -308,7 +308,7 @@ bool VMManager::PerformEarlyHardwareChecks(const char** error)
+ 		return false;
+ 	}
+ #endif
+-#elif defined(ARCH_ARM64)
++#elif defined(ARCH_ARM64) && !defined(PCSX2_RUNTIME_PAGE_SIZE)
+ 	// Check page size. If it doesn't match, it is a fatal error.
+ 	const size_t runtime_host_page_size = HostSys::GetRuntimePageSize();
+ 	if (__pagesize != runtime_host_page_size)
+diff --git a/pcsx2/vtlb.cpp b/pcsx2/vtlb.cpp
+index 7e816f9..e10907f 100644
+--- a/pcsx2/vtlb.cpp
++++ b/pcsx2/vtlb.cpp
+@@ -835,14 +835,14 @@ __fi u32 vtlb_V2P(u32 vaddr)
+ 	return paddr;
+ }
+ 
+-static constexpr bool vtlb_MismatchedHostPageSize()
++static bool vtlb_MismatchedHostPageSize()
+ {
+ 	return (__pagesize != VTLB_PAGE_SIZE);
+ }
+ 
+ static bool vtlb_IsHostAligned(u32 paddr)
+ {
+-	if constexpr (!vtlb_MismatchedHostPageSize())
++	if (!vtlb_MismatchedHostPageSize())
+ 		return true;
+ 
+ 	return ((paddr & __pagemask) == 0);
+@@ -850,7 +850,7 @@ static bool vtlb_IsHostAligned(u32 paddr)
+ 
+ static u32 vtlb_HostPage(u32 page)
+ {
+-	if constexpr (!vtlb_MismatchedHostPageSize())
++	if (!vtlb_MismatchedHostPageSize())
+ 		return page;
+ 
+ 	return page >> (__pageshift - VTLB_PAGE_BITS);
+@@ -858,7 +858,7 @@ static u32 vtlb_HostPage(u32 page)
+ 
+ static u32 vtlb_HostAlignOffset(u32 offset)
+ {
+-	if constexpr (!vtlb_MismatchedHostPageSize())
++	if (!vtlb_MismatchedHostPageSize())
+ 		return offset;
+ 
+ 	return offset & ~__pagemask;
+@@ -866,15 +866,15 @@ static u32 vtlb_HostAlignOffset(u32 offset)
+ 
+ static bool vtlb_IsHostCoalesced(u32 page)
+ {
+-	if constexpr (__pagesize == VTLB_PAGE_SIZE)
++	if (__pagesize == VTLB_PAGE_SIZE)
+ 	{
+ 		return true;
+ 	}
+ 	else
+ 	{
+-		static constexpr u32 shift = __pageshift - VTLB_PAGE_BITS;
+-		static constexpr u32 count = (1u << shift);
+-		static constexpr u32 mask = count - 1;
++		const u32 shift = __pageshift - VTLB_PAGE_BITS;
++		const u32 count = (1u << shift);
++		const u32 mask = count - 1;
+ 
+ 		const u32 base = page & ~mask;
+ 		const u32 base_offset = s_fastmem_virtual_mapping[base];
+@@ -1515,7 +1515,8 @@ struct vtlb_PageProtectionInfo
+ 	vtlb_ProtectionMode Mode;
+ };
+ 
+-alignas(16) static vtlb_PageProtectionInfo m_PageProtectInfo[Ps2MemSize::TotalRam >> __pageshift];
++// Sized for 4 KB host pages, the smallest; larger pages use the front of it.
++alignas(16) static vtlb_PageProtectionInfo m_PageProtectInfo[Ps2MemSize::TotalRam >> 12];
+ 
+ 
+ // returns:
