@@ -79,6 +79,6 @@ class BiosCheckTest {
         assertEquals(1, BiosCheck.missing(listOf(BiosNeed(emptyList(), anySuffix = ".bin")), "iso", setOf("ps2.nvm", "ps2.mec", "readme.txt")).size)
     }
     @Test fun anySuffixMessage() {
-        assertEquals("Sony PlayStation 2 needs a BIOS: put one in Bios/PS2/", BiosCheck.message("PS2", BiosNeed(emptyList(), anySuffix = ".bin")))
+        assertEquals("Sony PlayStation 2 needs a BIOS: put a .bin file in Bios/PS2/", BiosCheck.message("PS2", BiosNeed(emptyList(), anySuffix = ".bin")))
     }
 }

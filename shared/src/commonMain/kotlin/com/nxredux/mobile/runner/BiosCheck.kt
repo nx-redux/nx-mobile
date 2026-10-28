@@ -23,7 +23,7 @@ object BiosCheck {
     fun message(tag: String, need: BiosNeed): String {
         val t = tag.trim().uppercase()
         val console = CoreRegistry.consoleOf(t)?.displayName ?: t
-        if (need.anySuffix != null) return "$console needs a BIOS: put one in Bios/${CoreRegistry.consoleTag(t)}/"
+        if (need.anySuffix != null) return "$console needs a BIOS: put a ${need.anySuffix} file in Bios/${CoreRegistry.consoleTag(t)}/"
         val rest = need.anyOf.drop(1)
         val names = if (rest.isEmpty()) need.anyOf.first() else "${need.anyOf.first()} (or ${rest.joinToString(", ")})"
         return "$console needs a BIOS: put $names in Bios/${CoreRegistry.consoleTag(t)}/"

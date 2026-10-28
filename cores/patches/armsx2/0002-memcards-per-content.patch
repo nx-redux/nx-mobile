@@ -28,7 +28,7 @@ index 24210fb..dead7f7 100644
 +				s_base_settings->SetStringValue("Folders", "Savestates", state_dir.c_str());
 +				s_base_settings->SetBoolValue("MemoryCards", "Slot1_Enable", true);
 +				s_base_settings->SetStringValue("MemoryCards", "Slot1_Filename", "Mcd001.ps2");
-+				s_base_settings->SetStringValue("MemoryCards", "Slot2_Filename", "Mcd002.ps2");
++				s_base_settings->SetBoolValue("MemoryCards", "Slot2_Enable", false);
 +			}
 +			EmuFolders::MemoryCards = card_dir;
 +			EmuFolders::Savestates = state_dir;
