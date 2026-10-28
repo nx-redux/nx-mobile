@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.netplay.NetplayCores
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -13,11 +14,14 @@ class CoreRegistryPs2Test {
     @Test fun ps2RequiresAnyBin() {
         assertEquals(listOf(BiosNeed(emptyList(), anySuffix = ".bin")), CoreRegistry.requiredBios("PS2"))
     }
-    @Test fun noCheatsNoRewindOnePlayer() {
+    @Test fun noCheatsNoRewindTwoPlayers() {
         val core = CoreRegistry.forTag("PS2")!!
         assertEquals(false, core.cheats)
         assertEquals(false, core.rewind)
-        assertEquals(1, CoreRegistry.playersFor("PS2", core))
+        assertEquals(2, CoreRegistry.playersFor("PS2", core))
+    }
+    @Test fun noNetplay() {   // two local players only: PS2 is not in the netplay table
+        assertFalse(NetplayCores.supported("PS2"))
     }
     @Test fun biosOptionLocked() {
         val core = CoreRegistry.forTag("PS2")!!

@@ -181,6 +181,8 @@ object CoreRegistry {
         ),
         lockedOptions = setOf("armsx2_renderer", "armsx2_bios", "armsx2_upscale", "armsx2_sw_threads"),
         vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan")),
+        // The PS2's two controller ports, both DualShock2 (cores/patches/armsx2/0006); no multitap. Saves stay on card 1.
+        players = 2,
         name = "ARMSX2",
         cheats = false,
         rewind = false,
