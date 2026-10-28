@@ -850,7 +850,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     override fun publishNds3d(model: InGameMenuModel) {
         val console = res3d ?: return
-        // The 3DS and PS2 have no software renderer to fall back to (Software API hidden): their scale always applies.
+        // The 3DS has no software renderer to fall back to (Software API hidden), nor has the PS2: their scale always applies.
         model.setNds3d(nds3dValue, software = console == Res3dConsole.DS && NdsRenderer.rendersSoftware(ndsRenderMode, ndsFellBack))
     }
 

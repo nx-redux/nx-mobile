@@ -309,12 +309,14 @@ fun resolutionRows(console: Res3dConsole, displayMax: Int?): List<FrontendOption
     return listOfNotNull(
         FrontendOption(
             console.modeKey, "3D Resolution", Nds3dMode.entries.map { it.value }, Nds3dMode.AUTO.value,
-            "How sharply 3D models are drawn. 2D art, text and the screen's size don't change.",
+            if (console == Res3dConsole.PS2) "How sharply the game is drawn. The screen's size doesn't change."
+            else "How sharply 3D models are drawn. 2D art, text and the screen's size don't change.",
             visual = false, valueLabels = Nds3dMode.entries.map { it.label },
         ),
         FrontendOption(
             console.maxScaleKey, "Max Scale", maxScales, console.defaultCap.toString(),
-            "The most Auto draws 3D at, as a multiple of the $screen screen.",
+            if (console == Res3dConsole.PS2) "The most Auto draws the game at, as a multiple of the PS2's own resolution."
+            else "The most Auto draws 3D at, as a multiple of the $screen screen.",
             visual = false, valueLabels = maxScales.map { "${it}x" }, shownWhen = console.modeKey to setOf(Nds3dMode.AUTO.value),
         ),
         // The PS2's Performance is native: no scale to pick.

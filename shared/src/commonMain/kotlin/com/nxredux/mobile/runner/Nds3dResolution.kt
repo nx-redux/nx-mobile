@@ -145,12 +145,12 @@ object Ps2Resolution {
     /** The core's most. */
     private const val MAX = 4
 
-    /**
-     * The biggest whole scale the window's height holds (at least 1, at most the core's 4). The width is left out on
-     * purpose: the picture is 4:3 and fits the window's smaller side, so the Fold's 2176 x 1812 still reaches 4x.
-     */
-    @Suppress("UNUSED_PARAMETER")
-    fun displayMax(w: Int, h: Int): Int = (h / NATIVE_H).coerceIn(1, MAX)
+    /** The picture is shown 4:3 at [NATIVE_H] lines, so a whole scale n needs 4/3 * 448 * n px across and 448 * n down. */
+    private const val SHOWN_W = NATIVE_H * 4 / 3
+
+    /** The biggest whole scale the shown picture reaches in a [w] x [h] px window, either way up (at least 1, at most the core's 4). */
+    fun displayMax(w: Int, h: Int): Int =
+        maxOf(minOf(w / SHOWN_W, h / NATIVE_H), minOf(h / SHOWN_W, w / NATIVE_H)).coerceIn(1, MAX)
 
     /** The scale a picture [pictureHeightPx] px tall shows at (nearest whole, 1 to 4). */
     fun currentScale(pictureHeightPx: Int): Int = (pictureHeightPx / NATIVE_H.toDouble()).roundToInt().coerceIn(1, MAX)

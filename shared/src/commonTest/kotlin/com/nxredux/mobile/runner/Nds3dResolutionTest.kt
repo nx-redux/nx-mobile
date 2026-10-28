@@ -210,7 +210,9 @@ class Nds3dResolutionTest {
         assertEquals(1, Nds3dResolution.valueFor(mapOf("nx_ps2_3d_resolution" to "performance", "nx_ps2_3d_scale" to "3"), null, displayMax = 4, Res3dConsole.PS2))
     }
 
-    @Test fun ps2DisplayMaxFold() = assertEquals(4, Ps2Resolution.displayMax(2176, 1812))
+    @Test fun ps2DisplayMaxFold() = assertEquals(3, Ps2Resolution.displayMax(2176, 1812))
+
+    @Test fun ps2DisplayMaxPortraitMatchesLandscape() = assertEquals(Ps2Resolution.displayMax(2400, 1080), Ps2Resolution.displayMax(1080, 2400))
 
     @Test fun ps2DisplayMaxPhone() = assertEquals(1, Ps2Resolution.displayMax(1080, 720))
 

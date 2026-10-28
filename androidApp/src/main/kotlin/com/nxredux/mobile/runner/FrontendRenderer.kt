@@ -146,7 +146,7 @@ internal class FrontendRenderer(
     private val menuOpen get() = host.menuOpen
     private val isNds get() = host.isNds
     private val isN3ds get() = host.isN3ds
-    private val isPs2 get() = gameTag.trim().uppercase() == "PS2"
+    private val isPs2 get() = Res3dConsole.forTag(gameTag) == Res3dConsole.PS2
     private val privateRoot get() = host.privateRoot
     private val dualMode get() = host.dualMode
     private val pictureOn get() = host.pictureOn
