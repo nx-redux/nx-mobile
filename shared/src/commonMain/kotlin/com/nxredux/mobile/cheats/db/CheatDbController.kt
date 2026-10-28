@@ -78,7 +78,8 @@ class CheatDbController(
 
     /**
      * Compares each source's Last-Modified with its installed stamp, and the installed rows with the table; downloads
-     * (every source) when any differs.
+     * (every source) when any differs. A best-effort source that does not answer ([bestEffort]) is left out of the
+     * comparison: the check fails only when a source the install needs does not answer.
      */
     fun checkForUpdates() {
         if (busy) return
@@ -96,9 +97,10 @@ class CheatDbController(
                 }
             }
             _state.value = CheatDbState.Installed(current)
-            val same = remotes.all { (source, remote) -> remote == current.stampOf(source) && remote != CheatDbManifest.UNKNOWN_STAMP }
+            val answered = remotes.filterValues { it != null }
+            val same = answered.all { (source, remote) -> remote == current.stampOf(source) && remote != CheatDbManifest.UNKNOWN_STAMP }
             when {
-                remotes.values.any { it == null } -> emit(CheatDbMessage.Failure("Could not check for updates (Wi-Fi?)"))
+                remotes.any { (source, remote) -> remote == null && !bestEffort(source) } -> emit(CheatDbMessage.Failure("Could not check for updates (Wi-Fi?)"))
                 same && current.tags == tableTags -> emit(CheatDbMessage.Notice("$NAME are up to date"))
                 else -> startDownload(current, "$NAME updated")
             }
@@ -147,23 +149,38 @@ class CheatDbController(
         if (platform.freeBytes() < CheatDatabase.NEEDED_FREE_BYTES) { emit(CheatDbMessage.Failure(CheatDbException.Kind.NO_SPACE.message)); return }
         _state.value = CheatDbState.Downloading(0, -1, previous)
         job = scope.launch {
-            // Each source's archive, once downloaded; all of them are installed in one call, so a failure takes back all.
+            // Each source's archive, once downloaded; all of them are installed in one call, so a failure takes back all,
+            // except a best-effort source's ([bestEffort]): it takes back only its own files and the rest installs.
             val archives = ArrayList<CheatDbArchive>()
+            val missed = ArrayList<CheatDbSource>()   // best-effort sources that could not be downloaded or installed
             try {
                 try {
                     for (source in tableSources.keys) {
-                        archives += withProgress { report ->
-                            platform.download(source) { done, total -> report(CheatDbState.Downloading(done, total, previous, source)) }
+                        try {
+                            archives += withProgress { report ->
+                                platform.download(source) { done, total -> report(CheatDbState.Downloading(done, total, previous, source)) }
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            if (!bestEffort(source)) throw e
+                            missed += source
                         }
                     }
-                    val files = withProgress { report ->
-                        platform.install(archives.map { CheatDbInstall(it, tableSources.getValue(it.source)) }) { tag, i, n ->
+                    val result = withProgress { report ->
+                        platform.install(archives.map { CheatDbInstall(it, tableSources.getValue(it.source), bestEffort(it.source)) }) { tag, i, n ->
                             report(CheatDbState.Installing(tag, i, n, previous))
                         }
                     }
-                    val stamps = archives.associate { it.source to (it.stamp ?: CheatDbManifest.UNKNOWN_STAMP) }
+                    missed += result.failed
+                    // A missed source keeps what the previous install wrote from it, and its stamp: Remove still finds
+                    // those files, and the next update check fetches the source again (a fresh install has no stamp for it).
+                    val kept = previous?.files.orEmpty().filter { f -> missed.any { it.owns(f) } && f !in result.files }
+                    val files = result.files + kept
+                    val stamps = archives.filter { it.source !in missed }.associate { it.source to (it.stamp ?: CheatDbManifest.UNKNOWN_STAMP) }
+                    val patchesStamp = if (CheatDbSource.PCSX2 in missed) previous?.patchesStamp else stamps[CheatDbSource.PCSX2]
                     val manifest = CheatDbManifest(
-                        stamps[CheatDbSource.LIBRETRO] ?: CheatDbManifest.UNKNOWN_STAMP, now(), files, tableTags, stamps[CheatDbSource.PCSX2],
+                        stamps[CheatDbSource.LIBRETRO] ?: CheatDbManifest.UNKNOWN_STAMP, now(), files, tableTags, patchesStamp,
                     )
                     // The platform took back what a cancelled install wrote; from here the files stay, so the manifest
                     // listing them is written whatever happens to the job (else they would be orphans Remove never sees).
@@ -182,7 +199,8 @@ class CheatDbController(
                         committing = false
                     }
                     _state.value = CheatDbState.Installed(manifest)
-                    emit(CheatDbMessage.Notice("$verb: ${manifest.fileCount} files for ${manifest.systems} systems"))
+                    val note = if (CheatDbSource.PCSX2 in missed) " ($PATCHES_MISSED)" else ""
+                    emit(CheatDbMessage.Notice("$verb: ${manifest.fileCount} files for ${manifest.systems} systems$note"))
                 } finally {
                     // Also on cancellation: the archives must not linger in the cache.
                     withContext(NonCancellable) { archives.forEach { platform.discard(it) } }
@@ -212,6 +230,12 @@ class CheatDbController(
         }
     }
 
+    /**
+     * PCSX2's patches.zip beside libretro's cheats.zip: a GitHub release, so its failure must not keep every other
+     * console's cheats from installing or updating. Alone (a PS2-only install) it is the install, and required.
+     */
+    private fun bestEffort(source: CheatDbSource): Boolean = source == CheatDbSource.PCSX2 && CheatDbSource.LIBRETRO in tableSources
+
     private fun restore(previous: CheatDbManifest?) {
         _state.value = previous?.let { CheatDbState.Installed(it) } ?: CheatDbState.NotInstalled
     }
@@ -221,5 +245,7 @@ class CheatDbController(
     private companion object {
         /** The tool's name in its messages. */
         const val NAME = "Cheats & Patches"
+        /** Added to the install notice when PCSX2's patches could not be fetched ([bestEffort]). */
+        const val PATCHES_MISSED = "PS2 patches could not be downloaded"
     }
 }

@@ -14,6 +14,14 @@ enum class CheatDbSource(val url: String, val extension: String, private val sub
 
     /** Where archive file [name] for [tag] is written, relative to the sd root. */
     fun target(tag: String, name: String): String = "Cheats/$tag/$subfolder$name"
+
+    /** Whether [path] (relative to the sd root) is where this source writes its files ([target]): a manifest's lines by source. */
+    fun owns(path: String): Boolean {
+        val parts = path.split('/')
+        val sub = subfolder.trimEnd('/')
+        return parts.size == (if (sub.isEmpty()) 3 else 4) && parts[0] == "Cheats" && (sub.isEmpty() || parts[2] == sub) &&
+            parts.last().endsWith(extension, ignoreCase = true)
+    }
 }
 
 /**

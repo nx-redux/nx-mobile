@@ -5,6 +5,7 @@ import android.os.StatFs
 import com.nxredux.mobile.cheats.db.CheatDbArchive
 import com.nxredux.mobile.cheats.db.CheatDbException
 import com.nxredux.mobile.cheats.db.CheatDbInstall
+import com.nxredux.mobile.cheats.db.CheatDbInstallResult
 import com.nxredux.mobile.cheats.db.CheatDbManifest
 import com.nxredux.mobile.cheats.db.CheatDbPlatform
 import com.nxredux.mobile.cheats.db.CheatDbSource
@@ -103,7 +104,7 @@ class AndroidCheatDb(context: Context) : CheatDbPlatform {
         }
     }
 
-    override suspend fun install(installs: List<CheatDbInstall>, onProgress: (String, Int, Int) -> Unit): List<String> = withContext(Dispatchers.IO) {
+    override suspend fun install(installs: List<CheatDbInstall>, onProgress: (String, Int, Int) -> Unit): CheatDbInstallResult = withContext(Dispatchers.IO) {
         CheatDbFiles.install(CheatsRoot.settled(app), installs, onProgress)   // one root for every file: a move must not split the install
     }
 
@@ -152,58 +153,85 @@ internal object CheatDbFiles {
     private const val TAG = "CheatDb"
 
     /** [CheatDbPlatform.install] into [sdRoot]. */
-    suspend fun install(sdRoot: File, installs: List<CheatDbInstall>, onProgress: (String, Int, Int) -> Unit): List<String> {
+    suspend fun install(sdRoot: File, installs: List<CheatDbInstall>, onProgress: (String, Int, Int) -> Unit): CheatDbInstallResult {
         val written = ArrayList<String>()
         // Targets that did not exist before this attempt wrote them: the only files a failure may take back.
         val created = ArrayList<File>()
+        val failed = ArrayList<CheatDbSource>()
         val count = installs.sumOf { it.folders.size }
         var index = 0
         try {
             for (install in installs) {
-                val source = install.archive.source
-                val zip = try { ZipFile(install.archive.path) } catch (e: ZipException) { throw CheatDbException(CheatDbException.Kind.CORRUPT, e) } catch (e: IOException) { throw CheatDbException(CheatDbException.Kind.CORRUPT, e) }
-                zip.use {
-                    val entries = zip.entries().toList().filter { !it.isDirectory }
-                    for ((tag, tagFolders) in install.folders) {
-                        onProgress(tag, ++index, count)
-                        val taken = HashSet<String>()   // a name in two of the tag's folders: the first folder's file stays
-                        for (folder in tagFolders) {
-                            val prefix = if (folder.isEmpty()) "" else "$folder/"   // "": the archive's top level
-                            for (entry in entries) {
-                                currentCoroutineContext().ensureActive()
-                                val name = entry.name
-                                if (!name.startsWith(prefix)) continue
-                                val base = name.removePrefix(prefix)
-                                if (base.contains('/') || !base.endsWith(source.extension, ignoreCase = true)) continue   // flat files only
-                                if (!taken.add(base)) continue
-                                val relative = source.target(tag, base)
-                                val target = File(sdRoot, relative)
-                                val existed = target.exists()
-                                val bytes = try {
-                                    zip.getInputStream(entry).use { it.readBytes() }
-                                } catch (e: ZipException) {
-                                    throw CheatDbException(CheatDbException.Kind.CORRUPT, e)   // before IOException: a ZipException is one
-                                } catch (e: IOException) {
-                                    throw CheatDbException(CheatDbException.Kind.STORAGE, e)
-                                }
-                                try {
-                                    target.writeAtomically(bytes)
-                                } catch (e: IOException) {
-                                    throw CheatDbException(CheatDbException.Kind.STORAGE, e)
-                                }
-                                if (!existed) created += target
-                                written += relative
-                            }
-                        }
-                    }
+                val writtenBefore = written.size
+                val createdBefore = created.size
+                val indexBefore = index
+                try {
+                    installOne(sdRoot, install, written, created, count, index, onProgress)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if (!install.optional) throw e
+                    // Best effort: take back this archive's new files only; the others' stay and the call goes on.
+                    NxLog.w(TAG, "optional ${install.archive.source} install failed", e)
+                    val mine = created.subList(createdBefore, created.size)
+                    rollBack(mine.toList(), sdRoot)
+                    mine.clear()
+                    written.subList(writtenBefore, written.size).clear()
+                    failed += install.archive.source
                 }
+                index = indexBefore + install.folders.size
             }
         } catch (e: Throwable) {
             // Cancellation included. Pre-existing files (a previous install, or same-named user files) stay.
             rollBack(created, sdRoot)
             throw e
         }
-        return written
+        return CheatDbInstallResult(written, failed)
+    }
+
+    /** One archive of [install]: its files into [written] (and the new ones into [created]); progress from [startIndex] of [count]. */
+    private suspend fun installOne(
+        sdRoot: File, install: CheatDbInstall, written: MutableList<String>, created: MutableList<File>, count: Int, startIndex: Int,
+        onProgress: (String, Int, Int) -> Unit,
+    ) {
+        var index = startIndex
+        val source = install.archive.source
+        val zip = try { ZipFile(install.archive.path) } catch (e: ZipException) { throw CheatDbException(CheatDbException.Kind.CORRUPT, e) } catch (e: IOException) { throw CheatDbException(CheatDbException.Kind.CORRUPT, e) }
+        zip.use {
+            val entries = zip.entries().toList().filter { !it.isDirectory }
+            for ((tag, tagFolders) in install.folders) {
+                onProgress(tag, ++index, count)
+                val taken = HashSet<String>()   // a name in two of the tag's folders: the first folder's file stays
+                for (folder in tagFolders) {
+                    val prefix = if (folder.isEmpty()) "" else "$folder/"   // "": the archive's top level
+                    for (entry in entries) {
+                        currentCoroutineContext().ensureActive()
+                        val name = entry.name
+                        if (!name.startsWith(prefix)) continue
+                        val base = name.removePrefix(prefix)
+                        if (base.contains('/') || !base.endsWith(source.extension, ignoreCase = true)) continue   // flat files only
+                        if (!taken.add(base)) continue
+                        val relative = source.target(tag, base)
+                        val target = File(sdRoot, relative)
+                        val existed = target.exists()
+                        val bytes = try {
+                            zip.getInputStream(entry).use { it.readBytes() }
+                        } catch (e: ZipException) {
+                            throw CheatDbException(CheatDbException.Kind.CORRUPT, e)   // before IOException: a ZipException is one
+                        } catch (e: IOException) {
+                            throw CheatDbException(CheatDbException.Kind.STORAGE, e)
+                        }
+                        try {
+                            target.writeAtomically(bytes)
+                        } catch (e: IOException) {
+                            throw CheatDbException(CheatDbException.Kind.STORAGE, e)
+                        }
+                        if (!existed) created += target
+                        written += relative
+                    }
+                }
+            }
+        }
     }
 
     /** Best-effort delete of [files], then the folders under `Cheats/` they emptied. */

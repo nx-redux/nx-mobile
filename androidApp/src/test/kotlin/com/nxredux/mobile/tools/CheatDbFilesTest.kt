@@ -38,14 +38,16 @@ class CheatDbFilesTest {
         "sub/NESTED.pnach" to "skipped: not at the top level",
     ))
 
-    private fun installs(patchesZip: File = patches) = listOf(
-        CheatDbInstall(CheatDbArchive(cheats.path, "s", CheatDbSource.LIBRETRO), mapOf("GBA" to listOf("Nintendo - Game Boy Advance"))),
-        CheatDbInstall(CheatDbArchive(patchesZip.path, "p", CheatDbSource.PCSX2), CheatDatabase.PATCH_FOLDERS),
+    private fun installs(patchesZip: File = patches, cheatsZip: File = cheats, optionalPatches: Boolean = false) = listOf(
+        CheatDbInstall(CheatDbArchive(cheatsZip.path, "s", CheatDbSource.LIBRETRO), mapOf("GBA" to listOf("Nintendo - Game Boy Advance"))),
+        CheatDbInstall(CheatDbArchive(patchesZip.path, "p", CheatDbSource.PCSX2), CheatDatabase.PATCH_FOLDERS, optional = optionalPatches),
     )
 
     @Test fun installsLibretroCheatsAndPcsx2PatchesIntoTheConsolesFolders() = runBlocking {
         val progress = ArrayList<Triple<String, Int, Int>>()
-        val written = CheatDbFiles.install(sd, installs()) { tag, i, n -> progress += Triple(tag, i, n) }
+        val result = CheatDbFiles.install(sd, installs()) { tag, i, n -> progress += Triple(tag, i, n) }
+        assertEquals(emptyList<CheatDbSource>(), result.failed)
+        val written = result.files
         assertEquals(
             listOf("Cheats/GBA/Advance Wars (USA).cht", "Cheats/PS2/Patches/SLUS-21678_428113C2.pnach", "Cheats/PS2/Patches/6D980D22.pnach"),
             written,
@@ -69,6 +71,37 @@ class CheatDbFilesTest {
         assertFalse(File(sd, "Cheats/GBA/Advance Wars (USA).cht").exists())
         assertFalse(File(sd, "Cheats/GBA").exists())
         assertEquals("my cheats", mine.readText())
+    }
+
+    @Test fun aCorruptOptionalPatchesArchiveKeepsTheCheatsAndThePreviousPatches() = runBlocking {
+        val old = File(sd, "Cheats/PS2/Patches/OLD.pnach").apply { parentFile!!.mkdirs(); writeText("previous install") }
+        val corrupt = File(base, "corrupt.zip").apply { writeText("not a zip") }
+        val result = CheatDbFiles.install(sd, installs(corrupt, optionalPatches = true)) { _, _, _ -> }
+        assertEquals(listOf("Cheats/GBA/Advance Wars (USA).cht"), result.files)
+        assertEquals(listOf(CheatDbSource.PCSX2), result.failed)
+        assertTrue(File(sd, "Cheats/GBA/Advance Wars (USA).cht").exists())
+        assertEquals("previous install", old.readText())
+    }
+
+    @Test fun anOptionalArchiveFailingMidwayTakesBackOnlyItsOwnNewFiles() = runBlocking {
+        // The second patch's target is a folder, so writing it fails after the first patch was written.
+        File(sd, "Cheats/PS2/Patches/6D980D22.pnach").mkdirs()
+        val result = CheatDbFiles.install(sd, installs(optionalPatches = true)) { _, _, _ -> }
+        assertEquals(listOf("Cheats/GBA/Advance Wars (USA).cht"), result.files)
+        assertEquals(listOf(CheatDbSource.PCSX2), result.failed)
+        assertTrue(File(sd, "Cheats/GBA/Advance Wars (USA).cht").exists())
+        assertFalse(File(sd, "Cheats/PS2/Patches/SLUS-21678_428113C2.pnach").exists())
+    }
+
+    @Test fun aCorruptCheatsArchiveFailsTheInstallAndWritesNothing() = runBlocking {
+        val corrupt = File(base, "corrupt.zip").apply { writeText("not a zip") }
+        try {
+            CheatDbFiles.install(sd, installs(cheatsZip = corrupt, optionalPatches = true)) { _, _, _ -> }
+            fail("expected CORRUPT")
+        } catch (e: CheatDbException) {
+            assertEquals(CheatDbException.Kind.CORRUPT, e.kind)
+        }
+        assertFalse(File(sd, "Cheats").exists() && File(sd, "Cheats").list()!!.isNotEmpty())
     }
 
     @Test fun pruningRemovesEmptiedPatchAndConsoleFoldersOnly() {
