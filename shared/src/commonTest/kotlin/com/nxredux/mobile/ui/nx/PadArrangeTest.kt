@@ -32,7 +32,8 @@ class PadArrangeTest {
     @Test fun ps2LandscapeDpadIsFullSizeAndTheStickClearsItsButtons() {
         for (side in PadSide.entries) {
             val c = dualStickCluster(side)
-            assertEquals(3f, c.main.width, 1e-4f)   // the other pads' d-pad / diamond
+            assertEquals(3f * PS2_LANDSCAPE_SCALE, c.main.width, 1e-4f)   // the portrait pad's d-pad / diamond
+            assertEquals(PS2_PORTRAIT_STICK_UNITS * PS2_LANDSCAPE_SCALE, c.stick.width, 1e-4f)
             for (r in listOf(c.main, c.stick, c.thumb)) assertTrue(r.left >= -1e-4f && r.top >= -1e-4f && r.right <= c.width + 1e-4f && r.bottom <= c.height + 1e-4f, "$side: $r outside")
             assertTrue(c.thumb.top >= c.stick.bottom, "$side: L3 / R3 not under the stick")
             assertFalse(c.thumb.overlaps(c.main), "$side: the pill over the d-pad / diamond")
@@ -41,24 +42,26 @@ class PadArrangeTest {
             val radius = c.stick.width / 2f
             if (side == PadSide.LEFT) {
                 // The cross's arms: right (middle row, right third) and down (bottom row, middle third).
-                for (arm in listOf(Rect(m.left + 2f, m.top + 1f, m.right, m.top + 2f), Rect(m.left + 1f, m.top + 2f, m.left + 2f, m.bottom))) {
+                val t = m.width / 3f
+                for (arm in listOf(Rect(m.left + 2f * t, m.top + t, m.right, m.top + 2f * t), Rect(m.left + t, m.top + 2f * t, m.left + 2f * t, m.bottom))) {
                     val nx = centre.x.coerceIn(arm.left, arm.right); val ny = centre.y.coerceIn(arm.top, arm.bottom)
                     assertTrue(hypot(centre.x - nx, centre.y - ny) >= radius, "$side: the stick over the arm $arm")
                 }
-                assertTrue(c.stick.left > m.left + 1.5f && c.stick.top > m.top + 1.5f)   // below-right of the d-pad's middle
+                assertTrue(c.stick.left > m.center.x && c.stick.top > m.center.y)   // below-right of the d-pad's middle
             } else {
                 // The diamond's left and bottom buttons (radius 0.5 in their thirds).
-                for (b in listOf(Offset(m.left + 0.5f, m.top + 1.5f), Offset(m.left + 1.5f, m.top + 2.5f))) {
-                    assertTrue((centre - b).getDistance() >= radius + 0.5f, "$side: the stick over the button at $b")
+                val t = m.width / 3f
+                for (b in listOf(Offset(m.left + 0.5f * t, m.top + 1.5f * t), Offset(m.left + 1.5f * t, m.top + 2.5f * t))) {
+                    assertTrue((centre - b).getDistance() >= radius + 0.5f * t, "$side: the stick over the button at $b")
                 }
-                assertTrue(c.stick.right < m.right - 1.5f && c.stick.top > m.top + 1.5f)   // below-left of the diamond's middle
+                assertTrue(c.stick.right < m.center.x && c.stick.top > m.center.y)   // below-left of the diamond's middle
             }
         }
     }
 
     @Test fun ps2LandscapeSidesFitTheHalf() {
         val other = ps2OtherRowsUnits(overGame = true, besidePicture = false, secondRow = false)
-        assertEquals(1f, dualStickFit(boxW = 4.7f, boxH = 13f, otherH = other, nudge = 0.15f))   // a tall half: full size
+        assertEquals(1f, dualStickFit(boxW = 4.9f, boxH = 13f, otherH = other, nudge = 0.15f))   // a tall half: full size
         val phone = dualStickFit(boxW = 4.5f, boxH = 6f, otherH = other, nudge = 0.15f)
         assertTrue(phone < 1f && other + dualStickCluster(PadSide.LEFT).height * phone <= 6f + 1e-4f)   // a phone: shrunk to fit
     }

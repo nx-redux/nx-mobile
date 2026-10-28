@@ -1599,24 +1599,31 @@ internal fun compactDualStickCluster(side: PadSide): DualStickCluster {
     return DualStickCluster(w, h, main, stick, thumb)
 }
 
-/** The landscape PS2 stick's box, units, its reach into the d-pad / diamond's box and its top ([dualStickCluster]). */
-private const val LANDSCAPE_STICK_UNITS = 2.1f
+/**
+ * The landscape PS2 pieces' size against the other pads' landscape d-pad (3 units): the portrait pad's middle row on the
+ * Fold's cover ([midRowScale] about 1.2), so the d-pad, diamond and sticks are the size they are in portrait there.
+ */
+internal const val PS2_LANDSCAPE_SCALE = 1.2f
+/** At a scale of 1: the stick's box (the portrait one, [PS2_PORTRAIT_STICK_UNITS]), its reach into the d-pad / diamond's box and its top. */
 private const val LANDSCAPE_STICK_INTO_MAIN = 0.6f
-private const val LANDSCAPE_STICK_TOP = 1.9f
+private const val LANDSCAPE_STICK_TOP = 2.1f
 
 /**
- * The landscape side, 4.5 x 4.75 at full size: the d-pad / diamond the other pads' 3 units in the top corner by the edge,
- * the stick (2.1) below its middle toward the screen's middle, in the cross's empty lower corner (clear of its arms and
- * the diamond's buttons) and below, its L3 / R3 pill under it. [dualStickFit] scales it down where the half is too short.
+ * The landscape side, at [PS2_LANDSCAPE_SCALE] (4.68 x 5.07 units at full size): the d-pad / diamond in the top corner by
+ * the edge, the stick below its middle toward the screen's middle, in the cross's empty lower corner (clear of its arms
+ * and the diamond's buttons) and below, its L3 / R3 pill (the portrait one) under it. Both the size they are in the
+ * portrait pad. [dualStickFit] scales the side down where the half is too short.
  */
 internal fun dualStickCluster(side: PadSide): DualStickCluster {
-    val m = 3f
-    val d = LANDSCAPE_STICK_UNITS
-    val w = m - LANDSCAPE_STICK_INTO_MAIN + d
-    val h = LANDSCAPE_STICK_TOP + d + THUMB_PILL_GAP_UNITS + THUMB_PILL_H_UNITS
+    val k = PS2_LANDSCAPE_SCALE
+    val m = 3f * k
+    val d = PS2_PORTRAIT_STICK_UNITS * k
+    val w = m - LANDSCAPE_STICK_INTO_MAIN * k + d
+    val top = LANDSCAPE_STICK_TOP * k
+    val h = top + d + THUMB_PILL_GAP_UNITS + THUMB_PILL_H_UNITS
     val main = if (side == PadSide.LEFT) Rect(0f, 0f, m, m) else Rect(w - m, 0f, w, m)
     val stickLeft = if (side == PadSide.LEFT) w - d else 0f
-    val stick = Rect(stickLeft, LANDSCAPE_STICK_TOP, stickLeft + d, LANDSCAPE_STICK_TOP + d)
+    val stick = Rect(stickLeft, top, stickLeft + d, top + d)
     val pillTop = stick.bottom + THUMB_PILL_GAP_UNITS
     val thumb = Rect(stick.center.x - THUMB_PILL_W_UNITS / 2f, pillTop, stick.center.x + THUMB_PILL_W_UNITS / 2f, pillTop + THUMB_PILL_H_UNITS)
     return DualStickCluster(w, h, main, stick, thumb)
