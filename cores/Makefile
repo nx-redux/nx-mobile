@@ -330,10 +330,11 @@ prboom_ARTIFACT = libs/$(ABI)/libretro.so
 # Dynarec cores: both map RWX memory at runtime, so verify.sh's static check is not enough; see the 16 KB smoke
 # test in the cores expansion plan (a 16 KB-page arm64 image: load, 60 s, save state, relaunch, load it, 10 s).
 # patches/gpsp.patch: the recompiler cache (10.5 MB, within +/-128 MB of the core's code) is mapped once and kept
-# across sessions, since the runner keeps gpsp loaded between games (CoreDescriptor.keepLoaded); a failed mapping makes
-# retro_load_game log an error and return false instead of crashing, and retro_init resets the state a reload used to.
+# across sessions, since the runner keeps gpsp loaded between games (CoreDescriptor.keepLoaded); a failed mapping falls
+# back to the interpreter (upstream), and retro_init resets the state a reload used to.
+# Keep the pin on nx-redux's gpsp_HASH (workspace/tg5040/cores/Makefile): patches/gpsp/ is theirs, regenerated per pin.
 gpsp_REPO = https://github.com/libretro/gpsp
-gpsp_HASH = 2db57b11a437c4432ab69823bdcd951181de6213
+gpsp_HASH = 5819380c2ffb0900219d700a382ee68c464ebb99
 gpsp_LICENSE = COPYING
 gpsp_KIND = ndkbuild
 gpsp_BUILD_PATH = .

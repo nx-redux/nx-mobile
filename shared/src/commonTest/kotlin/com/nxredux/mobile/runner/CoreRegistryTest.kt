@@ -133,9 +133,14 @@ class CoreRegistryTest {
         assertTrue(hidden.none { it.startsWith("mupen64plus-parallel-rdp-") })
     }
     @Test fun cores_without_startup_only_options_hide_nothing() {
-        for (id in listOf("gambatte", "fceumm", "genesis_plus_gx", "gpsp", "pcsx_rearmed", "race", "prboom")) {
+        for (id in listOf("gambatte", "fceumm", "genesis_plus_gx", "pcsx_rearmed", "race", "prboom")) {
             assertEquals(emptySet<String>(), CoreRegistry.forId(id)!!.restartOnlyOptions, id)
         }
+    }
+    @Test fun gpsp_keeps_the_real_clock_and_its_sound_rate_for_the_next_game() {
+        val gpsp = CoreRegistry.forTag("GBA")!!
+        assertEquals("system", gpsp.defaultOptions["gpsp_rtc_time_source"])
+        assertEquals(setOf("gpsp_sound_rate"), gpsp.restartOnlyOptions)
     }
     @Test fun every_hidden_value_key_has_a_default_that_is_not_hidden() {
         // A hidden value is only skipped in the menu and ignored in a .cfg: with no default of ours, the core's own
