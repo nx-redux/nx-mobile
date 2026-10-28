@@ -536,8 +536,11 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
         val style = state.styleOf(s)   // this page's own: a page sliding out keeps its style while the next one's may differ
         val orientation = state.orientationOf(s)   // likewise its orientation
         // A Grid reports its columns only while its page is the one showing (a page sliding out never overwrites the count).
-        val onGridLayout: (Int, Int) -> Unit = remember(s) { { columns, rows -> if (state.screen.value === s) state.onGridLayout(columns, rows) } }
-        val onHomeLayout: (HomeFrame) -> Unit = remember(s) { { f -> if (state.screen.value === s) state.onHomeLayout(f) } }   // likewise Home's body frame
+        // Equal, not the same object: a main menu tab's page laid out beside the one showing (its swipe's neighbour) holds an
+        // equal copy of the screen, and keeps it once it shows (an equal screen recomposes nothing), so an identity check
+        // would drop its reports for good (a rotation then left Grid Home on its old width).
+        val onGridLayout: (Int, Int) -> Unit = remember(s) { { columns, rows -> if (state.screen.value == s) state.onGridLayout(columns, rows) } }
+        val onHomeLayout: (HomeFrame) -> Unit = remember(s) { { f -> if (state.screen.value == s) state.onHomeLayout(f) } }   // likewise Home's body frame
         val homeView = state.homeView.collectAsState()   // what Home draws beside its rows
         val homeRowLast = state.homeCarouselRowLast.collectAsState()   // Carousel Home's row item last on (AppState's d-pad memory)
         val index = { selection.value.index }
