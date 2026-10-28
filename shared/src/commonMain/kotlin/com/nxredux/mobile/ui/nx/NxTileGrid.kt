@@ -100,7 +100,7 @@ fun NxTileGrid(
         val fits = rows * pitchPx <= band
         val whole = homeListViewport(band, rows * pitchPx, pitchPx)
         // Fewer than three rows in view (the pad under the page, scrolling): the selected row centred in the whole band,
-        // half a row showing either side, faded over that half where more is that way ([nxEdgeFade]), never on it.
+        // half a row showing either side, its outer quarter faded where more is that way ([nxEdgeFade]), never on it.
         val roomy = fits || whole / maxOf(1, pitchPx) >= GRID_MIN_ROWS
         val viewport = if (roomy) whole else band
         val placed = remember(state) { BooleanArray(1) }
@@ -117,12 +117,13 @@ fun NxTileGrid(
             placed[0] = true
             if (target != current) { if (animate) state.animateScrollToItem(index, offset) else state.scrollToItem(index, offset) }
         }
-        val halfRow = with(density) { (pitchPx / 2).toDp() }
+        // The pad case's edge fade: a quarter row at each edge, so the half rows either side of the selection still read.
+        val edgeFade = with(density) { (pitchPx / 4).toDp() }
         LazyColumn(
             Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart)
                 .padding(top = if (fits) 0.dp else g.gap.dp, bottom = if (fits) with(density) { tabGapPx.toDp() } else 0.dp)
                 .fillMaxWidth().height(with(density) { viewport.toDp() })
-                .then(if (roomy) Modifier.nxRowEdgeMask(state) else Modifier.nxEdgeFade({ state.canScrollBackward }, { state.canScrollForward }, halfRow, strong = true)),
+                .then(if (roomy) Modifier.nxRowEdgeMask(state) else Modifier.nxEdgeFade({ state.canScrollBackward }, { state.canScrollForward }, edgeFade)),
             state = state, verticalArrangement = Arrangement.Bottom,
             flingBehavior = if (roomy) rememberNxRowSnapFling(state) else rememberSnapFlingBehavior(state, SnapPosition.Center),
         ) {
