@@ -97,7 +97,7 @@
      "key": "armsx2_no_interlacing_patches",
      "label": "No-Interlacing Patches (restart)",
      "labelCategorized": "No-Interlacing Patches (restart)",
-     "info": "Patches supported games to render progressive instead of interlaced — sharper than any deinterlacer.",
+     "info": "Patches supported games to render progressive instead of interlaced — sharper than any deinterlacer. The game's patch is read from Cheats/PS2/Patches beside the saves.",
      "values": [
       "disabled",
       "enabled"
@@ -112,7 +112,7 @@
      "key": "armsx2_widescreen_patches",
      "label": "Widescreen Patches (restart)",
      "labelCategorized": "Widescreen Patches (restart)",
-     "info": "Patches supported games to render 16:9. Set Aspect Ratio to 16:9 alongside this.",
+     "info": "Patches supported games to render 16:9. Set Aspect Ratio to 16:9 alongside this. The game's patch is read from Cheats/PS2/Patches beside the saves.",
      "values": [
       "disabled",
       "enabled"
@@ -427,7 +427,7 @@
      "key": "armsx2_cheats",
      "label": "Enable Cheats",
      "labelCategorized": "Enable Cheats",
-     "info": "Loads .pnach cheat files from <system>/pcsx2/cheats for the running game.",
+     "info": "Turns on every cheat in the running game's .pnach files, read from Cheats/PS2 beside the saves.",
      "values": [
       "disabled",
       "enabled"
@@ -441,6 +441,6 @@
    ]
   }
  ],
- "soSha256": "95762f6501fd7777913f701ba7b0b736086c9d0ffa99cabb4fa522103b83fe0b",
+ "soSha256": "b7041adba8ac0d68287b926f43112faa776d110ff594dc2c97503ebab9ee1477",
  "probedAt": "2026-10-28"
 }

@@ -1,0 +1,103 @@
+diff --git a/pcsx2/Patch.cpp b/pcsx2/Patch.cpp
+--- a/pcsx2/Patch.cpp
++++ b/pcsx2/Patch.cpp
+@@ -331,10 +331,9 @@ bool Patch::OpenPatchesZip()
+ 		static bool warning_shown = false;
+ 		if (!warning_shown)
+ 		{
+-			Host::AddIconOSDMessage("PatchesZipOpenWarning", ICON_FA_BANDAGE,
+-				fmt::format(TRANSLATE_FS("Patch", "Failed to open {}. Built-in game patches are not available."),
+-					PATCHES_ZIP_NAME),
+-				Host::OSD_ERROR_DURATION);
++			// The libretro core ships no patches.zip: the frontend extracts one into the
++			// patches folder, read above, so a missing zip is the normal case, not an error.
++			Console.WarningFmt("Patch: no {}; game patches come from {} only.", PATCHES_ZIP_NAME, EmuFolders::Patches);
+ 			warning_shown = true;
+ 		}
+ 
+@@ -646,7 +645,19 @@ void Patch::ReloadEnabledLists()
+ {
+ 	const std::vector<std::string> prev_enabled_cheats = std::move(s_enabled_cheats);
+ 	if (EmuConfig.EnableCheats && !Achievements::IsHardcoreModeActive())
++	{
+ 		s_enabled_cheats = Host::GetStringListSetting(CHEATS_CONFIG_SECTION, PATCH_ENABLE_CONFIG_KEY);
++		// A frontend with no list to tick cheats in (the libretro core) turns on every cheat in the
++		// game's files; unlabelled ones are on anyway.
++		if (Host::GetBoolSettingValue(CHEATS_CONFIG_SECTION, "EnableAll", false))
++		{
++			for (const PatchGroup& group : s_cheat_patches)
++			{
++				if (!group.name.empty() && std::find(s_enabled_cheats.begin(), s_enabled_cheats.end(), group.name) == s_enabled_cheats.end())
++					s_enabled_cheats.push_back(group.name);
++			}
++		}
++	}
+ 	else
+ 		s_enabled_cheats = {};
+ 
+diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -1023,11 +1023,13 @@ static struct retro_core_option_v2_definition kOptionDefinitions[] = {
+ 			{"Bob TFF", nullptr}, {"Bob BFF", nullptr}, {"Blend TFF", nullptr}, {"Blend BFF", nullptr},
+ 			{"Adaptive TFF", nullptr}, {"Adaptive BFF", nullptr}, {nullptr, nullptr}}, "Automatic"},
+ 	{"armsx2_no_interlacing_patches", "No-Interlacing Patches (restart)", "No-Interlacing Patches (restart)",
+-		"Patches supported games to render progressive instead of interlaced — sharper than any deinterlacer.",
++		"Patches supported games to render progressive instead of interlaced — sharper than any deinterlacer. "
++		"The game's patch is read from Cheats/PS2/Patches beside the saves.",
+ 		nullptr, "video",
+ 		{{"disabled", nullptr}, {"enabled", nullptr}, {nullptr, nullptr}}, "disabled"},
+ 	{"armsx2_widescreen_patches", "Widescreen Patches (restart)", "Widescreen Patches (restart)",
+-		"Patches supported games to render 16:9. Set Aspect Ratio to 16:9 alongside this.",
++		"Patches supported games to render 16:9. Set Aspect Ratio to 16:9 alongside this. "
++		"The game's patch is read from Cheats/PS2/Patches beside the saves.",
+ 		nullptr, "video",
+ 		{{"disabled", nullptr}, {"enabled", nullptr}, {nullptr, nullptr}}, "disabled"},
+ 	{"armsx2_blending_accuracy", "Blending Accuracy", "Blending Accuracy",
+@@ -1107,7 +1109,7 @@ static struct retro_core_option_v2_definition kOptionDefinitions[] = {
+ 		nullptr, "system",
+ 		{{"enabled", nullptr}, {"disabled", nullptr}, {nullptr, nullptr}}, "enabled"},
+ 	{"armsx2_cheats", "Enable Cheats", "Enable Cheats",
+-		"Loads .pnach cheat files from <system>/pcsx2/cheats for the running game.",
++		"Turns on every cheat in the running game's .pnach files, read from Cheats/PS2 beside the saves.",
+ 		nullptr, "system",
+ 		{{"disabled", nullptr}, {"enabled", nullptr}, {nullptr, nullptr}}, "disabled"},
+ 	{nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, {{nullptr, nullptr}}, nullptr},
+@@ -1972,6 +1974,37 @@ RETRO_API bool retro_load_game(const struct retro_game_info* game)
+ 			}
+ 			EmuFolders::MemoryCards = card_dir;
+ 			EmuFolders::Savestates = state_dir;
++
++			// Cheats and patches from the user's folder beside the saves: a save
++			// directory <home>/Saves/<console> reads <home>/Cheats/<console> for
++			// .pnach cheats and its Patches/ subfolder for game patches (where the
++			// frontend puts PCSX2's patches.zip, extracted). Two folders, because
++			// the core reads the game's files in each as its own kind: patch files
++			// in the cheats folder would load as cheats too. Any other save
++			// directory keeps the defaults under the system directory.
++			std::string cheat_dir, patch_dir;
++			std::string_view saves(save_base);
++			while (saves.size() > 1 && saves.back() == '/')
++				saves.remove_suffix(1);
++			const std::string_view saves_parent = Path::GetDirectory(saves);
++			if (Path::GetFileName(saves_parent) == "Saves")
++			{
++				cheat_dir = Path::Combine(Path::Combine(Path::GetDirectory(saves_parent), "Cheats"), Path::GetFileName(saves));
++				patch_dir = Path::Combine(cheat_dir, "Patches");
++			}
++			{
++				auto lock = Host::GetSettingsLock();
++				s_base_settings->SetStringValue("Folders", "Cheats", cheat_dir.empty() ? "cheats" : cheat_dir.c_str());
++				s_base_settings->SetStringValue("Folders", "Patches", patch_dir.empty() ? "patches" : patch_dir.c_str());
++				// No per-cheat list to tick here: Enable Cheats turns on every cheat in the game's files.
++				s_base_settings->SetBoolValue("Cheats", "EnableAll", true);
++			}
++			if (!cheat_dir.empty())
++			{
++				EmuFolders::Cheats = cheat_dir;
++				EmuFolders::Patches = patch_dir;
++				log_cb(RETRO_LOG_INFO, "Cheats from %s, patches from %s\n", cheat_dir.c_str(), patch_dir.c_str());
++			}
+ 		}
+ 		else
+ 		{

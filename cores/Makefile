@@ -511,6 +511,9 @@ dolphin_FLAGS = -DLIBRETRO=ON -DENABLE_LTO=ON -DANDROID_STL=c++_static
 # fonts) is staged to system/pcsx2/resources, where the core looks; the BIOS goes in system/pcsx2/bios (Bios/PS2/).
 # patches/armsx2/0001: the host page size is read at runtime on Android (4 KB or 16 KB kernels); upstream fixes it at
 # build time and refuses a mismatched kernel. vtlb fastmem then maps at host-page granularity, as on 16 KB Apple hosts.
+# ARMSX2_EMBED_PATCHES=OFF: upstream fetches a patches.zip at configure time and compiles it in; that collection has no
+# licence, so it stays out of the .so. The app's Cheats & Patches tool downloads PCSX2's patches.zip at runtime and
+# extracts it into Cheats/PS2/Patches/, which patches/armsx2/0005 points the core at (cheats from Cheats/PS2/).
 armsx2_REPO = https://github.com/ARMSX2/ARMSX2
 armsx2_HASH = 023224576867a3846faedc7640911772c7783529
 armsx2_LICENSE = COPYING.GPLv3 3rdparty/cpuinfo/LICENSE 3rdparty/cubeb/LICENSE 3rdparty/discord-rpc/LICENSE \
@@ -542,7 +545,7 @@ ARMSX2_DEPS = $(abspath $(BUILD_ROOT))/armsx2-deps
 armsx2_FLAGS = -DCMAKE_PREFIX_PATH=$(ARMSX2_DEPS)/prefix -DCMAKE_FIND_ROOT_PATH=$(ARMSX2_DEPS)/prefix -DANDROID_STL=c++_static \
   -DENABLE_LIBRETRO=ON -DENABLE_QT_UI=OFF -DENABLE_SDL_FRONTEND=OFF -DENABLE_GSRUNNER=OFF -DENABLE_TESTS=OFF \
   -DENABLE_RECOMPILER_TEST_HOOKS=OFF -DENABLE_SETCAP=OFF -DUSE_BACKTRACE=OFF -DX11_API=OFF -DWAYLAND_API=OFF \
-  -DDISABLE_ADVANCE_SIMD=TRUE -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON
+  -DDISABLE_ADVANCE_SIMD=TRUE -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DARMSX2_EMBED_PATCHES=OFF
 
 # Deviation from the generic pattern: ppsspp reads its data files (flash0, fonts,
 # shaders, ...) from <system>/PPSSPP/ at runtime, so stage the repo's assets/ dir
