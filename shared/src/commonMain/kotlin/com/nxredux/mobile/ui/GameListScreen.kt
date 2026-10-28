@@ -367,7 +367,7 @@ internal fun GameListFrame(
                                             rows, selectedIndex, if (iconsUp) MENU_TAB_ROW_HEIGHT else 0.dp, listGutter, onSelect, onOpen, onLongPress,
                                             endRoom = if (artBox) listArtLabelEnd(maxWidth.value, LocalPortrait.current).dp else 0.dp, onPageRows = onPageRows,
                                             // A row's room under the stats line (shown under the title), as Home keeps under its stats.
-                                            gapRows = if (chrome.listTitle && chrome.extraInfo && !barHidden) 1 else 0,
+                                            gapRows = if (chrome.listTitle && chrome.extraInfo && !barHidden) 1f else 0f,
                                         )
                                     }
                                 },
@@ -400,8 +400,8 @@ internal fun GameListFrame(
  * The icons a game list's page holds, at the title's right or, with Page title Off, the page's top right. None without
  * [onHint]. On a device with a touchscreen ([touchscreen]): Recent (unless [recentIcon] is false, as inside Recent
  * itself), Search ([onSearch]), Layout ([onLayout], lit while its dropdown is open) and the trophy ([onAchievements], lit
- * while its panel is open), whatever the bar shows; without one, the launcher's ([launcherTopActions]: Recent wherever
- * no bar shows it), and Settings → Layouts, START and X stand in for the rest. Then, touch only ([touch]), the [hints]'
+ * while its panel is open), whatever the bar shows; without one, the launcher's ([launcherTopActions]: Recent, always
+ * an icon), and Settings → Layouts, START and X stand in for the rest. Then, touch only ([touch]), the [hints]'
  * own ([HintTouch.Icon], the switcher's trash).
  */
 internal fun gameListTitleIcons(
@@ -416,8 +416,8 @@ internal fun gameListTitleIcons(
         onLayout?.let { add(TopIconAction(Res.drawable.nav_icon_layout, "Layout", lit = layoutOpen, onClick = it)) }
         onAchievements?.let { add(TopIconAction(Res.drawable.menu_icon_achievements, "Achievements", lit = achievementsOpen, onClick = it)) }
     }
-    // Recent wherever no bar shows it ([LauncherChrome.recentIcon]); the page's own icons on touch only (a pad has the button).
-    else launcherTopActions(chrome, onHint, canSearch = false, recent = recentIcon)
+    // Recent, always an icon; the page's own icons on touch only (a pad has the button).
+    else launcherTopActions(onHint, canSearch = false, recent = recentIcon)
     return launcher + if (touch) hints.touchIcons(onHint) else emptyList()
 }
 

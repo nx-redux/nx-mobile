@@ -23,6 +23,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -109,12 +111,6 @@ internal fun homeListAnchor(heights: List<Int>, s: Int): Pair<Int, Int> {
     return 0 to 0
 }
 
-/**
- * A row's px for [count] rows of [base] px in a [band] px tall: [base] while they fit; else stretched so the whole rows
- * that fit fill the band (never by more than a row's share of the less-than-a-row left over).
- */
-internal fun homeListRowPx(band: Int, count: Int, base: Int): Int =
-    if (count * base <= band || base <= 0) base else band / maxOf(1, band / base)
 
 /** The list's px in a [band] px tall: the whole band while the content ([total]) fits it, else whole [pitch] rows, so none is cut at rest. */
 internal fun homeListViewport(band: Int, total: Int, pitch: Int): Int =
@@ -122,7 +118,8 @@ internal fun homeListViewport(band: Int, total: Int, pitch: Int): Int =
 
 /**
  * A main menu List's rows ([names]: labels and tags) from [top] (the stats' or the icon row's bottom; the fade parts
- * them) and [gapRows] row pitches of room under it (Home: one, under its stats) down to the box's bottom, the tab row's
+ * them) and [gapRows] row pitches of room under it (Home: half, under its stats; a game list: one) down to the box's bottom less
+ * [bottomRows] row pitches (Home with the tab row hidden: the other half, off the screen's edge), the tab row's
  * top; the first row's text on [gutter] + [nxListInset]. Taps select, a tap on the selected row opens ([nxTap]).
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -130,7 +127,8 @@ internal fun homeListViewport(band: Int, total: Int, pitch: Int): Int =
 internal fun MainListBody(
     names: List<NxRow>, selection: () -> Int, top: Dp, gutter: Dp,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, modifier: Modifier = Modifier,
-    gapRows: Int = 0,
+    gapRows: Float = 0f,
+    bottomRows: Float = 0f,
     endRoom: Dp = 0.dp,   // room kept clear on the right (a game list's boxed List art): the names stop short of it
     onPageRows: ((Int) -> Unit)? = null,   // told the whole rows it shows (a game list pages LEFT / RIGHT by them)
 ) {
@@ -148,9 +146,10 @@ internal fun MainListBody(
     val nameStyle = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = nameSize, lineHeight = nameSize)
     BoxWithConstraints(modifier.fillMaxSize()) {
         val start = top + basePitch * gapRows
-        val band = (constraints.maxHeight - with(density) { start.roundToPx() }).coerceAtLeast(basePx)
-        // A list longer than the band: its rows a little taller, so whole rows fill it from its top to the tab row.
-        val pitchPx = homeListRowPx(band, names.size, basePx)
+        val bottom = basePitch * bottomRows
+        val band = (constraints.maxHeight - with(density) { (start + bottom).roundToPx() }).coerceAtLeast(basePx)
+        // Every row its own pitch: a list longer than the band shows the whole rows that fit, never stretched apart.
+        val pitchPx = basePx
         val pitch = with(density) { pitchPx.toDp() }
         val heights = List(names.size) { pitchPx }
         val viewport = homeListViewport(band, heights.sum(), pitchPx)
@@ -173,13 +172,20 @@ internal fun MainListBody(
         }
         // A list that fits sits on the band's bottom; a longer one fills it, from right under its top to the tab row.
         val fits = heights.sum() <= band
+        // One pill behind the rows, gliding from row to row as the other lists' does ([nxPillGlide]); a row's text takes
+        // the on-pill colours while the pill covers it the most ([NxPillGlide.litIndex]).
+        val identity = remember(names) { nxPillListIdentity(names) }
+        val glide = rememberNxPillGlide(identity, selection, names.size, maxOf(1, viewport / maxOf(1, pitchPx)))
+        val pillStart = with(density) { gutter.toPx() }
         LazyColumn(
-            Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart).padding(top = if (fits) 0.dp else start)
-                .fillMaxWidth().height(with(density) { viewport.toDp() }).nxRowEdgeMask(state),
+            Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart).padding(top = if (fits) 0.dp else start, bottom = if (fits) bottom else 0.dp)
+                .fillMaxWidth().height(with(density) { viewport.toDp() }).nxRowEdgeMask(state)
+                .nxPillGlide(glide, state, pitchPx, colors.accent, start = pillStart),
             state = state, verticalArrangement = Arrangement.Bottom, flingBehavior = rememberNxRowSnapFling(state),
         ) {
             itemsIndexed(names) { r, name ->
                 val selected = r == sel
+                val lit by remember(glide, r) { derivedStateOf { r == glide.litIndex } }
                 Box(
                     Modifier.fillMaxWidth().height(pitch).nxRowFade(state, r, SETTINGS_ROWS_FADE_STEPS)
                         .combinedClickable(
@@ -190,9 +196,7 @@ internal fun MainListBody(
                         .padding(start = gutter, end = maxOf(gutter, endRoom), top = (pitch - pill) / 2, bottom = (pitch - pill) / 2),
                 ) {
                     Box(
-                        Modifier.fillMaxHeight()
-                            .then(if (selected) Modifier.background(colors.accent, RoundedCornerShape(50)) else Modifier)
-                            .padding(horizontal = nxListInset()),
+                        Modifier.fillMaxHeight().onSizeChanged { glide.sizes[r] = it }.padding(horizontal = nxListInset()),
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         NameAndTag(
@@ -201,16 +205,16 @@ internal fun MainListBody(
                                 val label = name.secondary?.let { sec ->
                                     buildAnnotatedString {
                                         append(name.label); append("  ")
-                                        withStyle(SpanStyle(color = if (selected) colors.onAccentMuted else colors.hint, fontSize = NxTextSizes.secondary(nameSize))) { append(sec) }
+                                        withStyle(SpanStyle(color = if (lit) colors.onAccentMuted else colors.hint, fontSize = NxTextSizes.secondary(nameSize))) { append(sec) }
                                     }
                                 } ?: AnnotatedString(name.label)
                                 Text(
-                                    label, color = if (selected) colors.onAccent else colors.inkName, style = nameStyle,
+                                    label, color = if (lit) colors.onAccent else colors.inkName, style = nameStyle,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis, onTextLayout = it,
                                     modifier = if (selected) Modifier.basicMarquee() else Modifier,
                                 )
                             },
-                            tag = name.tag?.let { t -> { HomeListTag(t, selected, infoSize, font) } },
+                            tag = name.tag?.let { t -> { HomeListTag(t, lit, infoSize, font) } },
                         )
                     }
                 }

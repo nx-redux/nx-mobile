@@ -122,9 +122,10 @@ fun MainMenuScreen(
     // A Minimal tab's selected name as last laid out: where B's morph lands.
     val minimalSelected = remember { MinimalSelected() }
     CompositionLocalProvider(LocalLauncherChrome provides chrome, LocalFooterMode provides FooterMode.BUTTONS) {
-    // List, Minimal and Grid scroll vertically: a sideways swipe moves between the tabs ([tabSwipe]); a Carousel keeps it
-    // for its own row.
-    val swipeable = style == MenuStyle.LIST || style == MenuStyle.MINIMAL || style == MenuStyle.GRID
+    // List, Minimal, Grid and a Carousel stood on end scroll vertically: a sideways swipe moves between the tabs
+    // ([tabSwipe]); a horizontal Carousel (Home's always is) keeps it for its own row.
+    val swipeable = style == MenuStyle.LIST || style == MenuStyle.MINIMAL || style == MenuStyle.GRID ||
+        (style == MenuStyle.CAROUSEL && orientation == MenuOrientation.VERTICAL && !home)
     val textInset = listTextInset(style)   // the tab words and the icons in line with a List's names
     val tabRowPx = remember { mutableIntStateOf(0) }   // the tab row's height as laid out (0: hidden): List Home's art ends on its top
     Box(modifier.fillMaxSize().tabSwipe(swipeable && screen.tabs.size > 1 && screen.menu == null && screen.search == null, onTabSwipe)) {
@@ -135,7 +136,7 @@ fun MainMenuScreen(
         // is scrolled ([HomeScreen]); Carousel Home has no picture. With the tab row hidden, the Recent and Search icons
         // still get the band: here, behind a List's rows as the tab row's is, so its reach never dims the first row; over
         // the other styles' pages (below).
-        val topIcons = if (chrome.tabRow) emptyList() else launcherTopActions(chrome, onHint, canSearch)
+        val topIcons = if (chrome.tabRow) emptyList() else launcherTopActions(onHint, canSearch)
         val topCut = rememberNxListTopCut()
         val iconBand = topIcons.isNotEmpty() && !(home && style != MenuStyle.LIST)
         if (mainMenuTopBand(home, style, chrome.tabRow) || iconBand && style == MenuStyle.LIST) {
@@ -278,6 +279,7 @@ fun MainMenuScreen(
                         MainListBody(
                             listRows, selection, topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad, gutter,
                             onSelect, onOpen, onLongPress, Modifier.weight(1f),
+                            bottomRows = if (shown.tabRow) 0f else MENU_LIST_BOTTOM_ROWS,   // the tab row hidden: half a row off the bottom edge
                         )
                     }
                 }
@@ -337,6 +339,9 @@ internal fun mainMenuListEdges(tabRow: Boolean, barShown: Boolean): Pair<Float, 
     val top = if (tabRow) 0.25f else 0.5f
     return top to if (barShown) 0.25f else 1f - top
 }
+
+/** The room a main menu tab's List keeps under its last row while the tab row is hidden, in row pitches (as List Home's). */
+private const val MENU_LIST_BOTTOM_ROWS = 0.5f
 
 /** How far a main menu Carousel's row moves down so it centres on the screen: half a hint bar, less half a tab row. */
 internal fun mainMenuCarouselShift(tabRow: Boolean, barShown: Boolean): Dp =

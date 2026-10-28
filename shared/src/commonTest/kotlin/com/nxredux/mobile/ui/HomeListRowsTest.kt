@@ -9,7 +9,6 @@ import com.nxredux.mobile.ui.nx.CaptionPart
 import com.nxredux.mobile.ui.nx.homeCaptionParts
 import com.nxredux.mobile.ui.nx.homeListAnchor
 import com.nxredux.mobile.ui.nx.homeListRows
-import com.nxredux.mobile.ui.nx.homeListRowPx
 import com.nxredux.mobile.ui.nx.homeListScroll
 import com.nxredux.mobile.ui.nx.homeListViewport
 import com.nxredux.mobile.ui.nx.homeListTopRoom
@@ -69,9 +68,6 @@ class HomeListRowsTest {
     @Test fun the_viewport_holds_whole_rows() {
         assertEquals(6 * 8, homeListViewport(band = 52, total = 200, pitch = 8))
         assertEquals(50, homeListViewport(band = 50, total = 40, pitch = 8))
-        // A list longer than the band: rows stretched so whole ones fill it (no gap over the tab row); one that fits keeps its pitch.
-        assertEquals(10, homeListRowPx(band = 50, count = 20, base = 9))   // 5 rows of 10 fill 50
-        assertEquals(9, homeListRowPx(band = 50, count = 4, base = 9))
         assertEquals(2 to 5, homeListAnchor(listOf(10, 10, 10, 10), 25))
     }
 

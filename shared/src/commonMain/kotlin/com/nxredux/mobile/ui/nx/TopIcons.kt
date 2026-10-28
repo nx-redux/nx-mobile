@@ -56,20 +56,14 @@ private fun TopIcon(action: TopIconAction) {
 }
 
 /**
- * The launcher's Recent and Search icons for [chrome] (Search only with games to search, [canSearch]); none without
- * [onHint]. [recent] false: no Recent icon whatever the chrome (inside Recent, the switcher).
+ * The launcher's Recent and Search icons (Search only with games to search, [canSearch]); none without [onHint].
+ * [recent] false: no Recent icon (inside Recent, the switcher). They are always icons, never hints in a bar.
  */
-fun launcherTopActions(chrome: LauncherChrome, onHint: ((NxButton) -> Unit)?, canSearch: Boolean, recent: Boolean = true): List<TopIconAction> {
+fun launcherTopActions(onHint: ((NxButton) -> Unit)?, canSearch: Boolean, recent: Boolean = true): List<TopIconAction> {
     val hint = onHint ?: return emptyList()
     return buildList {
-        if (recent && chrome.recentIcon) add(TopIconAction(Res.drawable.nav_icon_recent, "Recent") { hint(NxButton.SELECT) })
-        if (chrome.searchIcon && canSearch) add(TopIconAction(Res.drawable.nav_icon_search, "Search") { hint(NxButton.START) })
+        if (recent) add(TopIconAction(Res.drawable.nav_icon_recent, "Recent") { hint(NxButton.SELECT) })
+        if (canSearch) add(TopIconAction(Res.drawable.nav_icon_search, "Search") { hint(NxButton.START) })
     }
 }
 
-/** [launcherTopActions] then [extra] (a page's own [HintTouch.Icon]s). */
-@Composable
-fun LauncherTopIcons(
-    chrome: LauncherChrome, onHint: ((NxButton) -> Unit)?, canSearch: Boolean, modifier: Modifier = Modifier,
-    extra: List<TopIconAction> = emptyList(),
-) = NxTopIcons(launcherTopActions(chrome, onHint, canSearch) + extra, modifier)

@@ -202,7 +202,7 @@ class AppStateTest {
         override var sgdbApiKey: String? = null
         override var tgdbApiKey: String? = null
         override var artReplaceExisting = false
-        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showRecentHint = true; override var showSearchHint = true; override var showNetplayHint = true; override var menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = AccentPreset.DEFAULT
+        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = AccentPreset.DEFAULT
         override var secondaryAccent: SecondaryAccent = SecondaryAccent.DEFAULT
         override var switcherLayout = com.nxredux.mobile.settings.SwitcherLayout.DEFAULT
         override var optionTextSize = com.nxredux.mobile.settings.OptionTextSize.DEFAULT
@@ -1576,30 +1576,16 @@ class AppStateTest {
             home(configure).also { it.onButton(NxButton.MENU) }.let(::menuKinds)
         assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu {})
         assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu { showNetplayHint = false })
-        assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu { showRecentHint = false })
-        assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), homeMenu { showSearchHint = false })
-        assertTrue(home { showRecentHint = false }.launcherChrome().recentIcon)
-        assertTrue(home { showSearchHint = false }.launcherChrome().searchIcon)
     }
 
-    @Test fun the_hint_rows_show_only_with_the_bar_and_flip() = runTest {
+    // Recent and Search are always icons, so Title and hints has no rows for them; without netplay, no hint rows at all.
+    @Test fun title_and_hints_has_no_recent_or_search_rows() = runTest {
         val settings = MemorySettings(ContentRef("Home")).apply { menuButtonHints = true }
         val state = state(settings)
         state.load()
         state.openSettings(SettingsSection.LAYOUT_TITLE_HINTS)
-        fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(listOf("Recent hint", "Search hint"), rows().filter { it.kind == SettingsKind.HINT_SHOWN }.map { it.label })   // no netplay here: no Netplay hint
-        val i = rows().indexOfFirst { it.hint == NxButton.START }
-        state.select(i); state.onButton(NxButton.RIGHT)
-        assertFalse(settings.showSearchHint); assertEquals("Hide", rows()[i].secondary); assertEquals(i, state.selection.value.index)
-        state.onButton(NxButton.A); assertTrue(settings.showSearchHint)
-        settings.showRecentHint = false
-        state.onButton(NxButton.B)                                           // Reset to defaults is on Layouts itself
-        state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A); state.onButton(NxButton.A)   /* asks, then Reset */
-        assertTrue(settings.showRecentHint)
-        settings.menuButtonHints = false
-        state.openSettings(SettingsSection.LAYOUT_TITLE_HINTS)
-        assertTrue(rows().none { it.kind == SettingsKind.HINT_SHOWN })
+        val rows = assertIs<Screen.Settings>(state.screen.value).rows
+        assertEquals(listOf(SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS), rows.map { it.kind }.filter { it != SettingsKind.RESET_DEFAULTS })
     }
 
     @Test fun a_on_a_game_without_a_save_plays_from_the_start() = runTest {
@@ -5553,7 +5539,7 @@ class AppStateTest {
             listOf("Layout options", "Alignment", "Layout", "Orientation"),   // the layout and its orientation last, over the picture
             page(SettingsSection.LAYOUT_GAME_LISTS),
         )
-        assertEquals(listOf("Page title", "Button hints", "Recent hint", "Search hint"), page(SettingsSection.LAYOUT_TITLE_HINTS))
+        assertEquals(listOf("Page title", "Button hints"), page(SettingsSection.LAYOUT_TITLE_HINTS))
         assertEquals(listOf("Layout"), page(SettingsSection.LAYOUT_SWITCHER))
         settings.gameListStyle = MenuStyle.LIST
         assertEquals(listOf("List art", "Layout options", "Layout"), page(SettingsSection.LAYOUT_GAME_LISTS).filter { it != "Achievements panel" })
@@ -5804,7 +5790,7 @@ class AppStateTest {
         state.load()
         state.openSettings(SettingsSection.LAYOUT_TITLE_HINTS)
         val page = assertIs<Screen.Settings>(state.screen.value)
-        assertEquals(listOf("Page title", "Button hints", "Recent hint", "Search hint"), page.rows.map { it.label })
+        assertEquals(listOf("Page title", "Button hints"), page.rows.map { it.label })
         assertEquals(LayoutShot.Chrome(title = true, hints = true), page.shot)
         state.select(1); state.onButton(NxButton.A)                          // Button hints: Hide, its hint rows go
         val after = assertIs<Screen.Settings>(state.screen.value)
@@ -5848,7 +5834,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.LAYOUT_TITLE_HINTS)
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
         assertEquals(
-            listOf(SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS, SettingsKind.HINT_SHOWN, SettingsKind.HINT_SHOWN),
+            listOf(SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS),
             rows.map { it.kind },
         )
         assertEquals(SettingsRow(SettingsKind.PAGE_TITLE, "Page title", "Show"), rows[0])
@@ -9639,7 +9625,7 @@ class AppStateTest {
         assertTrue(settingsNxRow(rows.single { it.kind == SettingsKind.EXTRA_INFO }).cycleable)
         // The title and hints' page and the Game Switcher's: their value rows all cycle, then Done.
         val chrome = state.openLayoutsPage(SettingsSection.LAYOUT_TITLE_HINTS)
-        assertEquals(listOf(SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS, SettingsKind.HINT_SHOWN, SettingsKind.HINT_SHOWN), chrome.map { it.kind })
+        assertEquals(listOf(SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS), chrome.map { it.kind })
         val switcher = state.openLayoutsPage(SettingsSection.LAYOUT_SWITCHER)
         assertEquals(listOf(SettingsKind.SWITCHER_LAYOUT), switcher.map { it.kind })
         assertTrue((chrome.dropLast(1) + switcher.dropLast(1)).all { settingsNxRow(it).cycleable })

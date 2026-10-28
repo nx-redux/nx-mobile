@@ -300,12 +300,12 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
 
 /**
  * The settings the launcher screens' look reads: Appearance → Accent and Secondary accent ([colors]; Auto follows the
- * accent), Layouts → Page title, Button hints, Extra info, Home stats and the Recent, Search and Netplay hints (the
- * chrome, [launcherChromeFor]), and Appearance → Text size ([optionText]).
+ * accent), Layouts → Page title, Button hints, Extra info, Home stats and the Netplay hint (the chrome,
+ * [launcherChromeFor]), and Appearance → Text size ([optionText]).
  */
 internal data class MenuLook(
     val colors: NxColors, val pageTitle: Boolean, val buttonHints: Boolean, val extraInfo: Boolean, val homeStats: Boolean,
-    val recentHint: Boolean, val searchHint: Boolean, val netplayHint: Boolean, val optionText: Float,
+    val netplayHint: Boolean, val optionText: Float,
 )
 
 /** [MenuLook] from the settings. They are plain properties: every change republishes the screen, so it is re-read on each [screen]. */
@@ -317,7 +317,7 @@ internal fun rememberMenuLook(state: AppState, screen: Screen): MenuLook {
         val st = state.settings
         MenuLook(
             colors, st.menuPageTitle, st.menuButtonHints, st.menuExtraInfo, st.menuHomeStats,
-            st.showRecentHint, st.showSearchHint, st.showNetplayHint, st.optionTextSize.ofListLabel,
+            st.showNetplayHint, st.optionTextSize.ofListLabel,
         )
     }
 }
@@ -329,7 +329,7 @@ internal fun rememberMenuLook(state: AppState, screen: Screen): MenuLook {
  */
 @Composable
 internal fun MenuLocals(state: AppState, look: MenuLook, footer: FooterMode, touchscreen: Boolean, content: @Composable () -> Unit) {
-    val chrome = launcherChromeFor(look.pageTitle, look.buttonHints, footer, look.extraInfo, look.recentHint, look.searchHint, look.netplayHint, look.homeStats)
+    val chrome = launcherChromeFor(look.pageTitle, look.buttonHints, footer, look.extraInfo, look.netplayHint, look.homeStats)
     CompositionLocalProvider(
         LocalFooterMode provides footer, LocalLauncherChrome provides chrome, LocalHasTouchscreen provides touchscreen,
         LocalAppIcons provides state.appIcons, LocalNxOptionText provides look.optionText,
@@ -746,7 +746,9 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
             val category = s.category ?: MenuCategory.HOME
             val consoleArt = state.settings.consoleArt
             val portrait = LocalPortrait.current   // List Home's game picture: the screen's shape picks its art
-            val bg by remember(s, style, consoleArt, portrait) {
+            // Keyed on [selection] too: a page laid out beside the one showing reads a still copy of its row, and swaps
+            // to the live one when it starts showing, which the picture must then follow.
+            val bg by remember(s, style, consoleArt, portrait, selection) {
                 derivedStateOf(structuralEqualityPolicy()) { menuBackground(style, category, s.rows.getOrNull(selection.value.index), consoleArt, portrait) }
             }
             // Grid and Carousel: plain, as menuBackground gives every non-List style (a Carousel Consoles tab on Background aside).
@@ -766,7 +768,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val portrait = maxHeight > maxWidth
                 if (style == MenuStyle.BACKDROP) {
-                    val url by remember(s, portrait) {
+                    val url by remember(s, portrait, selection) {
                         derivedStateOf(structuralEqualityPolicy()) { s.entries.getOrNull(selection.value.index)?.let { gameBackground(it, portrait) } }
                     }
                     // In from black on opening; out to black while the page slides away (B back to the tab, the switcher).
@@ -774,7 +776,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
                 } else {
                     // List: Layouts → List art ([listArtShown]).
                     val art = state.settings.gameListArt
-                    val shown by remember(s, portrait, art) {
+                    val shown by remember(s, portrait, art, selection) {
                         derivedStateOf(structuralEqualityPolicy()) { listArtShown(s.entries.getOrNull(selection.value.index), art, portrait) }
                     }
                     ListArtBackground(shown, maxWidth, LocalPortrait.current)

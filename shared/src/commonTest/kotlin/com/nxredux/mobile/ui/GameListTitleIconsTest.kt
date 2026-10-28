@@ -43,7 +43,7 @@ class GameListTitleIconsTest {
         assertEquals(1, searched); assertEquals(1, layout)
         // Inside Recent: no Recent icon; a list that cannot be searched: no Search.
         assertEquals(listOf("Layout"), gameListTitleIcons(withBar, emptyList(), {}, recentIcon = false, touch = false, touchscreen = true, onLayout = {}).map { it.description })
-        // No touchscreen: as before (none with the bar shown).
-        assertTrue(gameListTitleIcons(withBar, emptyList(), {}, recentIcon = true, touch = false, touchscreen = false, onSearch = {}, onLayout = {}).isEmpty())
+        // No touchscreen: Recent alone, an icon even with the bar shown (START and Layouts stand in for the rest).
+        assertEquals(listOf("Recent"), gameListTitleIcons(withBar, emptyList(), {}, recentIcon = true, touch = false, touchscreen = false, onSearch = {}, onLayout = {}).map { it.description })
     }
 }

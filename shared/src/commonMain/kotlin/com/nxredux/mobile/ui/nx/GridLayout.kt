@@ -107,12 +107,14 @@ internal fun gridMatched(bodyW: Float, bodyH: Float, windowW: Float, windowH: Fl
     )
     val own = gridVertical(bodyW, bodyH, kind, landscape = false, gutter = GRID_GUTTER_UPRIGHT)
     // The page keeping more than the window turned can spare (the on-screen pad under it upright): no sideways twin to
-    // match, and too short for three rows to read. Its tiles keep their own shape at their width, a fixed height, held
-    // to two rows' room (one alone would be the faded edge row), as many whole rows as fit; the rest scrolls.
+    // match. Its tiles keep their own shape at their width, a fixed height: a game's screenshot held to two rows' room
+    // (three would be too short to read; one alone would be the faded edge row), a logo or icon to three, as every Grid
+    // shows; as many whole rows as fit, the rest scrolls.
     if (side.tileH < GRID_TILE_MIN_DP) {
         val band = bodyH - GRID_GAP
-        val tileH = min(own.tileW / kind.aspect, band / GRID_PAD_MIN_ROWS - GRID_GAP)
-        return own.copy(tileH = tileH, rows = max(GRID_PAD_MIN_ROWS, floor(band / (tileH + GRID_GAP)).toInt()))
+        val least = gridPadMinRows(kind)
+        val tileH = min(own.tileW / kind.aspect, band / least - GRID_GAP)
+        return own.copy(tileH = tileH, rows = max(least, floor(band / (tileH + GRID_GAP)).toInt()))
     }
     val band = bodyH - GRID_GAP
     val rows = max(GRID_MIN_ROWS, (band / (side.tileH + side.gap)).roundToInt())
@@ -126,5 +128,8 @@ internal const val GRID_GUTTER_SIDEWAYS = 24f
 /** Every Grid's fixed room over the tab row (or the page's bottom), dp, on any screen: the tabs stand apart from the tiles. */
 internal const val GRID_TAB_GAP = 15f
 
-/** The fewest rows a Grid shows with the pad under it upright ([gridMatched]'s fixed-height tiles). */
+/** The fewest rows a Grid of game screenshots shows with the pad under it upright ([gridMatched]'s fixed-height tiles). */
 internal const val GRID_PAD_MIN_ROWS = 2
+
+/** [kind]'s fewest rows with the pad under it upright: screenshots [GRID_PAD_MIN_ROWS], logos and icons [GRID_MIN_ROWS]. */
+internal fun gridPadMinRows(kind: GridTileKind): Int = if (kind == GridTileKind.SCREENSHOT) GRID_PAD_MIN_ROWS else GRID_MIN_ROWS

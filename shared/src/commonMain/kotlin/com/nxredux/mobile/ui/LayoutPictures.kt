@@ -122,8 +122,8 @@ import org.jetbrains.compose.resources.painterResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.background
 
-/** A layout picture's width over height: the menu's area of a Fold cover-screen capture above the pad (624 × 442). */
-internal const val LAYOUT_PICTURE_AR = 624f / 442f
+/** A layout picture's width over height: the menu's area of a Fold cover-screen capture above the pad (624 × 472). */
+internal const val LAYOUT_PICTURE_AR = 624f / 472f
 /** A preview picture's widest: a landscape page keeps it at a phone page's width. */
 private val PREVIEW_MAX_WIDTH = 420.dp
 /** Between a Layouts group's last row and its picture in the Settings rows block. */
@@ -216,8 +216,8 @@ internal fun gamesPicture(style: MenuStyle, vertical: Boolean = false, right: Bo
 }
 
 /**
- * The page title and button hints page's picture: Home on the Fold's cover screen with the tab row ([title]) and the hint
- * bar ([hints]) shown or hidden, the app's area above the pad (624 × 442).
+ * The page title and button hints page's picture: a game list on the Fold's cover screen with its title ([title]) and the
+ * hint bar ([hints]) shown or hidden (the main menu has no hint bar), the app's area above the pad (624 × 472).
  */
 internal fun chromePicture(title: Boolean, hints: Boolean): DrawableResource = when {
     title && hints -> Res.drawable.onboarding_chrome_title_hints
@@ -227,7 +227,7 @@ internal fun chromePicture(title: Boolean, hints: Boolean): DrawableResource = w
 }
 
 /** The page title and button hints picture's width over height. */
-internal const val CHROME_PICTURE_AR = 624f / 442f
+internal const val CHROME_PICTURE_AR = 624f / 472f
 
 
 /**

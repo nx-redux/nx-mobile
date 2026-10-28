@@ -163,12 +163,6 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var showNotStartedShelf: Boolean
         get() = prefs.getBoolean(KEY_SHOW_NOT_STARTED_SHELF, true)
         set(value) = prefs.edit { putBoolean(KEY_SHOW_NOT_STARTED_SHELF, value) }
-    override var showRecentHint: Boolean
-        get() = prefs.getBoolean(KEY_SHOW_RECENT_HINT, true)
-        set(value) = prefs.edit { putBoolean(KEY_SHOW_RECENT_HINT, value) }
-    override var showSearchHint: Boolean
-        get() = prefs.getBoolean(KEY_SHOW_SEARCH_HINT, true)
-        set(value) = prefs.edit { putBoolean(KEY_SHOW_SEARCH_HINT, value) }
     override var showNetplayHint: Boolean
         get() = prefs.getBoolean(KEY_SHOW_NETPLAY_HINT, true)
         set(value) = prefs.edit { putBoolean(KEY_SHOW_NETPLAY_HINT, value) }
@@ -332,8 +326,6 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_SHOW_TOOLS_TAB = "show_tools_tab"
         private const val KEY_SHOW_NEW_SHELF = "show_new_shelf"
         private const val KEY_SHOW_NOT_STARTED_SHELF = "show_not_started_shelf"
-        private const val KEY_SHOW_RECENT_HINT = "show_recent_hint"
-        private const val KEY_SHOW_SEARCH_HINT = "show_search_hint"
         private const val KEY_SHOW_NETPLAY_HINT = "show_netplay_hint"
         private const val KEY_CONSOLE_ART = "console_art"
         private const val KEY_GAME_LIST_ART = "game_list_art"

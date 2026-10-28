@@ -26,18 +26,6 @@ class LauncherChromeTest {
         assertEquals(LauncherChrome(netplayHint = false, topIcons = true, noBar = true), launcherChromeFor(true, true, touch))
     }
 
-    // Recent and Search always have a control: the bar's hint while the bar shows and their row is on, else
-    // an icon at the tab row's right (touch only, Button hints hidden, or their own Layouts row hidden).
-    @Test fun recent_and_search_are_always_in_the_bar_or_an_icon() {
-        fun where(c: LauncherChrome) = listOf(c.recentInBar, c.searchInBar, c.recentIcon, c.searchIcon)
-        assertEquals(listOf(true, true, false, false), where(launcherChromeFor(true, true, pad)))                  // the bar shows them
-        assertEquals(listOf(false, false, true, true), where(launcherChromeFor(true, true, touch)))                // touch: no bar
-        assertEquals(listOf(false, false, true, true), where(launcherChromeFor(true, false, pad)))                 // Button hints hidden (portrait too)
-        assertEquals(listOf(false, false, true, true), where(launcherChromeFor(true, false, touch)))
-        assertEquals(listOf(false, true, true, false), where(launcherChromeFor(true, true, pad, recentHint = false)))   // Recent's row hidden
-        assertEquals(listOf(true, false, false, true), where(launcherChromeFor(true, true, pad, searchHint = false)))   // Search's row hidden
-    }
-
     // Layouts → Netplay hint hides its hint alone; the bar stays.
     @Test fun the_netplay_row_hides_its_hint_alone() {
         assertEquals(LauncherChrome(netplayHint = false), launcherChromeFor(true, true, pad, netplayHint = false))

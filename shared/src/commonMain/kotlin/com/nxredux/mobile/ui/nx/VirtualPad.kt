@@ -43,6 +43,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
@@ -151,6 +153,11 @@ internal class PadColors(
      * fill, with no socket, and sit centred (no [PadStyle.faceLift], which only evens out a groove).
      */
     val outline: Boolean = false,
+    /**
+     * A body as dark as the screen (Black): a hairline in this colour along its top edge, under a soft shadow it casts
+     * up onto the screen ([padTopEdge]); null, the body's own tone parts it.
+     */
+    val topEdge: Color? = null,
 )
 
 /** The width of a face's, the d-pad cross's and the well's rim. */
@@ -271,6 +278,7 @@ internal val BlackGreyPadColors = PadColors(
     engraveLitLip = Color.Transparent,
     engraveInnerShadow = Color.Transparent,
     engraveFloor = PadPalettes.Black.engraveFloor,
+    topEdge = PadPalettes.Black.topEdge,
 )
 
 /**
@@ -293,7 +301,25 @@ internal val BlackOutlinePadColors = PadColors(
     engraveInnerShadow = BlackGreyPadColors.engraveInnerShadow,
     engraveFloor = BlackGreyPadColors.engraveFloor,
     outline = true,
+    topEdge = PadPalettes.Black.topEdge,
 )
+
+/** How far up the screen a black body's shadow reaches ([PadColors.topEdge]). */
+private val PAD_TOP_SHADOW = 16.dp
+
+/**
+ * [edge] (a black body's): the hairline along the top edge over the body, and the shadow the body casts up onto the
+ * screen above it ([PAD_TOP_SHADOW], drawn outside the pad's bounds); null draws nothing.
+ */
+private fun Modifier.padTopEdge(edge: Color?): Modifier = if (edge == null) this else drawWithContent {
+    drawContent()
+    val reach = PAD_TOP_SHADOW.toPx()
+    drawRect(
+        Brush.verticalGradient(listOf(Color.Transparent, PadPalettes.Black.topShadow), startY = -reach, endY = 0f),
+        topLeft = Offset(0f, -reach), size = Size(size.width, reach),
+    )
+    drawRect(edge, size = Size(size.width, 1.dp.toPx()))
+}
 
 /** The pad colours in effect; Charcoal unless a [PadThemeProvider] says otherwise (so [NxEmblem] elsewhere stays Charcoal). */
 internal val LocalPadColors = staticCompositionLocalOf { CharcoalPadColors }
@@ -1096,7 +1122,7 @@ fun VirtualPad(
     // block) is harmless: the router ignores an Up for a button it is not holding.
     val emit = rememberEmit(onEvent)
     val stick = rememberStickChoice(useJoystick, onUseJoystickChange)
-    BoxWithConstraints(modifier.fillMaxSize().background(LocalPadColors.current.surface).padding(16.dp)) {
+    BoxWithConstraints(modifier.fillMaxSize().padTopEdge(LocalPadColors.current.topEdge).background(LocalPadColors.current.surface).padding(16.dp)) {
         // Button size unit. The column stacks 6.12 units at a middle-row scale of 1 (shoulders 1 + cluster 3 +
         // NX mark 1.1 + gap 0.3 + MENU row 0.72), so divide the height by 6.2 to keep it inside a short band without clipping.
         val unit = minOf(maxWidth / 9f, maxHeight / 6.2f)

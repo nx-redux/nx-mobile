@@ -151,15 +151,16 @@ private fun PillGlideFollow(glide: NxPillGlide, selectedIndex: () -> Int, count:
 }
 
 /**
- * Draws [glide]'s pill in [color] behind a lazy list of [pitch]-px rows: a capsule at the row's start edge, centred in
- * its row. Clipped to the list, so a pill entering from beyond an edge is revealed only through the edge row.
+ * Draws [glide]'s pill in [color] behind a lazy list of [pitch]-px rows: a capsule at the row's start edge ([start] px
+ * in, a list whose rows have a gutter), centred in its row. Clipped to the list, so a pill entering from beyond an edge
+ * is revealed only through the edge row.
  */
-internal fun Modifier.nxPillGlide(glide: NxPillGlide, state: LazyListState, pitch: Int, color: Color): Modifier =
+internal fun Modifier.nxPillGlide(glide: NxPillGlide, state: LazyListState, pitch: Int, color: Color, start: Float = 0f): Modifier =
     clipToBounds().drawBehind {
         val size = glide.size() ?: return@drawBehind
         val top = nxPillRowTop(glide.position, state.firstVisibleItemIndex, state.firstVisibleItemScrollOffset, pitch) +
             (pitch - size.height) / 2f
-        val left = if (layoutDirection == LayoutDirection.Rtl) this.size.width - size.width else 0f
+        val left = if (layoutDirection == LayoutDirection.Rtl) this.size.width - size.width - start else start
         val radius = minOf(size.width, size.height) / 2f
         drawRoundRect(color, Offset(left, top), size, CornerRadius(radius))
     }

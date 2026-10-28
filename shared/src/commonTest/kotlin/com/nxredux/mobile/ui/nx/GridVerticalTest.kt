@@ -57,6 +57,15 @@ class GridVerticalTest {
         assertEquals(260f - GRID_GAP, g.rows * (g.tileH + g.gap), e)
     }
 
+    // Logos and icons with the pad: three rows' room, as every Grid shows, so their whole rows fit and fade as usual.
+    @Test fun uprightWithThePadShowsThreeRowsOfMarks() {
+        for (kind in listOf(GridTileKind.LOGO, GridTileKind.ICON)) {
+            val g = gridMatched(475f, 260f, 475f, 640f, kind, portrait = true)
+            assertEquals(GRID_MIN_ROWS, g.rows, "$kind")
+            assertEquals(260f - GRID_GAP, g.rows * (g.tileH + g.gap), e)
+        }
+    }
+
     // Two rows' room (the pad case): the selected row centred, half a row either side; the ends rest on the list's ends.
     @Test fun aShortGridCentresTheSelectedRow() {
         assertEquals(0, gridCentredScroll(0, 6, 100, 200))           // the first row rests at the top

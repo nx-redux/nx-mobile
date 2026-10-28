@@ -185,6 +185,14 @@ private fun homePortraitTopCap(): Float = HOME_FOLD_COVER.h - homeTopY(HOME_FOLD
 private fun homePortraitTopCap(f: HomeFrame): Float = homePortraitTopCap() + homeTitleRoom(f)
 
 /**
+ * The portrait top section in a [body] that tall: the body up to [cap]; past it, the pin rows follow, unless what is
+ * left under the cap is less than half a pin row ([pinH]), which would only show a sliver of one: the top section takes
+ * it all then.
+ */
+internal fun homePortraitTop(body: Float, cap: Float, pinH: Float): Float =
+    if (body - cap < pinH / 2) body else cap
+
+/**
  * The bundled MiSans Latin SemiBold, per em: its line metrics (hhea ascent 1044, descent 282: a natural line is 1.326 em, the
  * baseline (ascent − descent) / 2 below a line box's centre) and its visible text: the cap-top (digits 769/1000,
  * capitals 755) above the baseline and the descent (g 239, y and p 225) below it.
@@ -310,9 +318,12 @@ private fun homeSlots(mode: HomeToolMode, tools: Int, portrait: Boolean, rows: I
  * its 5 ([HOME_TOOL_ROWS]) and the squares grow, UNDER keeps its 5 in a row, and the pin rows keep the shape they have
  * with the tab row shown. With Home stats off ([HomeFrame.statsHidden]), [stripLines] are the lines the strip would
  * take; the board's lines are 0 and their room ([homeStatsRoom]) goes to the top section the same way: Continue grows,
- * the caps rise by it (so the portrait type's pins start where they did), and the squares grow.
+ * the caps rise by it (so the portrait type's pins start where they did), and the squares grow. [fillSliver]: a portrait
+ * body only a sliver past its cap goes to the top section ([homePortraitTop]); false keeps the cap (the Carousel dock's size).
  */
-internal fun homeBoard(f: HomeFrame, stripLines: Int, tools: Int, games: Int, shelves: List<Pair<HomeShelf, Int>> = emptyList()): HomeBoard {
+internal fun homeBoard(
+    f: HomeFrame, stripLines: Int, tools: Int, games: Int, shelves: List<Pair<HomeShelf, Int>> = emptyList(), fillSliver: Boolean = true,
+): HomeBoard {
     val freed = homeStatsRoom(f, stripLines)
     val lines = homeStripLinesShown(f, stripLines)
     if (homeIsLarge(f)) return homeBoardLarge(f, lines, freed, tools, games, shelves)
@@ -337,12 +348,12 @@ internal fun homeBoard(f: HomeFrame, stripLines: Int, tools: Int, games: Int, sh
     val under = max(0f, (w - 4 * gap) / 5)
     // Every face's top section is the body (to its cap): row games start below it, on the next screen.
     val cap = (if (mode == HomeToolMode.UNDER) w / 1.5f + gap + under else (w - gap) / 2 / HOME_HALF_SHAPE) + homeTitleRoom(f) + freed
+    val pinFull = if (f.portrait) shapeH * HOME_PORTRAIT_PIN_TALL else shapeH
     val topFull = when {
-        f.portrait -> max(homeMinTop(true), min(body, homePortraitTopCap(f) + freed))
+        f.portrait -> max(homeMinTop(true), homePortraitTopCap(f).plus(freed).let { c -> if (fillSliver) homePortraitTop(body, c, pinFull) else min(body, c) })
         halves -> max(homeMinTop(false), min(body, cap))
         else -> max(0f, body)
     }
-    val pinFull = if (f.portrait) shapeH * HOME_PORTRAIT_PIN_TALL else shapeH
     val rowsN = HOME_TOOL_ROWS   // UNDER's row is 5 too
     val slots = homeSlots(mode, tools, f.portrait, rowsN)
     val shown = min(tools, slots)

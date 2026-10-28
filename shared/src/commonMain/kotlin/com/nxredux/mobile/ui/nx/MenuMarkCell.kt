@@ -1,7 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
@@ -82,7 +82,10 @@ internal fun MenuMarkCell(tile: GridTile, lit: Boolean, cellW: Float, cellH: Flo
         modifier = Modifier.padding(horizontal = 8.dp),
     )
     val count = when (tile) { is GridTile.Logo -> tile.count; is GridTile.Collection -> tile.count; else -> null }
-    Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier.fillMaxSize().wrapContentHeight(Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         when (tile) {
             is GridTile.Logo -> tile.res?.let { res ->
                 val (w, h) = consoleLogoBox(logoAspect(res) ?: 0.3f, cellW, cellH)
@@ -92,9 +95,11 @@ internal fun MenuMarkCell(tile: GridTile, lit: Boolean, cellW: Float, cellH: Flo
             is GridTile.Tool -> {
                 ToolIcon(tile.icon, tile.appId, ink, Modifier.size((min(cellW, cellH) * TOOL_ICON_SHARE).dp))
                 Spacer(Modifier.height(CONSOLE_COUNT_GAP))
+                // One line where it fits, else it wraps between its words onto a second ("Retro Achievements").
                 Text(
                     tile.lines.joinToString(" "), color = ink, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Medium,
-                    fontSize = small, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp),
+                    fontSize = small, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                    lineHeight = small * 1.3f, modifier = Modifier.padding(horizontal = 6.dp),
                 )
             }
             is GridTile.Game -> Unit

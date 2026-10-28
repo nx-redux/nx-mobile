@@ -90,7 +90,7 @@ internal const val NX_MENU_GLIDE_MS = 240
  * [TAB_PLATE_Y] round it) in place of the underline. [onLongPress]: a long press anywhere on the row opens the
  * hidden-tab menu. [underline] false: no pill under the current word (the main menu's bottom tabs; the lit word alone
  * marks it). [trailing]: drawn at the row's right end (the touch-only Recent and Search icons,
- * [LauncherTopIcons]); the words keep the rest of the row.
+ * [launcherTopActions]); the words keep the rest of the row.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -179,7 +179,7 @@ fun MenuTabRow(
  * row's width (from its first letter): a longer title cuts its middle with "…", keeping the tool or list's name before
  * the first " | " ([splitTitleLead]) and the [suffix] (a count, "(3/20)") whole. [overArt] (a Backdrop game list, over
  * its picture): the name gets the tabs' dark shadow ([overArtShadow]). [trailing]: drawn at the row's right end, on the
- * right gutter (the touch-only Recent and Search icons, [LauncherTopIcons]).
+ * right gutter (the touch-only Recent and Search icons, [launcherTopActions]).
  */
 @Composable
 fun MenuTitleRow(
