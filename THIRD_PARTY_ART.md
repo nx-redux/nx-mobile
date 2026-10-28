@@ -7,7 +7,8 @@ https://archive.org/details/console-logos-professionally-redrawn-plus-official-v
 
 His terms: "I don't own the rights to the logos"; they are "NEVER to be sold in any way"; credit is appreciated. These
 files are not under the project's GPL-3.0. Changes: converted to Android vector drawables, single white fill,
-transforms baked (`tools/console-logos/`, which holds the source SVGs and the converter). Console names and logos are
+transforms baked (`tools/console-logos/`, which holds the source SVGs and the converter). The PS2 logo (`Sony Playstation 2-13.svg`, user-supplied) came
+with black fills, recoloured white, and its viewBox trimmed to the logo. Console names and logos are
 trademarks of their owners.
 
 The Doom logo (`menu_logo_prboom.xml`) is the project's own drawing, traced from the earlier PNG. Doom is a trademark of its owner.
