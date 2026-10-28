@@ -269,7 +269,7 @@ class CoreRegistryTest {
         assertEquals("gb", CoreRegistry.consoleForFolderName("GB")!!.id)
         assertNull(CoreRegistry.consoleForFolderName("GBA Manuals"))   // "gba" is short: only a whole-name match counts
         assertNull(CoreRegistry.consoleForFolderName("Roms"))
-        assertNull(CoreRegistry.consoleForFolderName("PS2"))
+        assertEquals("ps2", CoreRegistry.consoleForFolderName("PS2")!!.id)
         assertNull(CoreRegistry.consoleForFolderName(""))
     }
     @Test fun short_aliases_match_only_the_whole_folder_name_apart_from_stop_words() {

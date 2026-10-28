@@ -117,4 +117,8 @@ class PadMapTest {
         for (t in listOf("MD", "GPGX", "SEGACD", "32X", " 32x ")) assertTrue(PadMap.isSegaPadTag(t), t)
         for (t in listOf("SMS", "GG", "SG1000", "DC", "")) assertFalse(PadMap.isSegaPadTag(t), t)
     }
+
+    @Test fun ps2UsesPsLabels() {
+        assertEquals(listOf("○", "×", "△", "□"), listOf(A, B, X, Y).map { PadMap.forTag("PS2").label(it) })
+    }
 }

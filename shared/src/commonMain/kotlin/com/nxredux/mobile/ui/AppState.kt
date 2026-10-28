@@ -251,6 +251,8 @@ class AppDeps(
     val screenClass: () -> com.nxredux.mobile.layout.ScreenClass? = { null },
     /** The menu window's size in px now, width to height (Emulator Settings' DS 3D scales); null: unknown. */
     val windowPx: () -> Pair<Int, Int>? = { null },
+    /** The ".bin" names in Bios/PS2/ (Emulator Settings' PS2 BIOS row); blocking, called off the main thread. */
+    val ps2BiosFiles: () -> List<String> = { emptyList() },
     /** Opens the pad layout editor (Android: its own activity); it saves to the settings and ends with [AppState.onPadLayoutEdited]. Null: no editor. */
     val padEditor: ((PadEditRequest) -> Unit)? = null,
     /** Settings → Library → Saves: Export and Import (null: rows do nothing). */
@@ -5682,6 +5684,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         secondScreen = { secondConnected },
         screenClass = deps.screenClass,
         windowPx = deps.windowPx,
+        ps2BiosFiles = deps.ps2BiosFiles,
     )
 
     // --- Tools -> Artwork: AppState hosts the controller (index writes stay here); the pages live in ArtworkScreenController ---

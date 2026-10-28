@@ -170,10 +170,12 @@ object CoreRegistry {
     private val armsx2 = CoreDescriptor(
         "armsx2", "libarmsx2_libretro_android.so", setOf("iso", "chd", "cso", "zso", "bin", "elf", "gz", "m3u"),
         biosSubdir = "pcsx2/bios",
-        defaultOptions = mapOf("armsx2_renderer" to "OpenGL"),
-        lockedOptions = setOf("armsx2_renderer"),
+        // BIOS: Auto lets the core pick from <system>/pcsx2/bios; Console Settings' BIOS row forces one file at launch.
+        defaultOptions = mapOf("armsx2_renderer" to "OpenGL", "armsx2_bios" to "auto"),
+        lockedOptions = setOf("armsx2_renderer", "armsx2_bios"),
         vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan")),
         name = "ARMSX2",
+        cheats = false,
         rewind = false,
     )
     private val race = CoreDescriptor(
@@ -705,6 +707,7 @@ object CoreRegistry {
         "PCE" to listOf(BiosNeed(listOf("syscard3.pce"), setOf("cue", "ccd", "chd", "toc", "m3u"))),
         "COLECO" to listOf(BiosNeed(listOf("colecovision.rom", "coleco.rom"))),
         "DC" to listOf(BiosNeed(listOf("dc_boot.bin"), setOf("chd", "cdi", "gdi", "cue", "m3u"))),   // arcade sets bring their own BIOS
+        "PS2" to listOf(BiosNeed(emptyList(), anySuffix = ".bin")),   // the core's scan takes ".bin" only: .nvm / .mec do not count
     )
 
     /** The BIOS a launch under [tag] cannot do without (checked before the core starts); empty for most tags. */

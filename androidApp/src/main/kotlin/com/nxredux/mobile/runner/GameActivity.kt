@@ -95,6 +95,7 @@ import com.nxredux.mobile.options.GraphicsApiOptions
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.Ps2Options
 import com.nxredux.mobile.options.WiiOptions
 import com.nxredux.mobile.options.WiiScreen
 import com.nxredux.mobile.options.NdsOptions
@@ -1417,6 +1418,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val launchSegaPad = segaPad
         launchedSegaSetting = launchSega
         val nds3dLaunch = nds3dLaunchOption()   // read on the main thread: the window's size
+        // PS2 BIOS row: the pick while its file is still in the folder, else Auto (the core's own choice).
+        val ps2BiosOption = if (Ps2Options.appliesTo(tag)) {
+            Ps2Options.biosOption(frontendValues[Ps2Options.BIOS], biosPresent.filter { it.endsWith(".bin", ignoreCase = true) })
+        } else emptyMap()
         val data = try {
             withContext(Dispatchers.IO) {
                 // The name the core sees: an arcade zip in lowercase (fbneo matches the driver name case-sensitively).
@@ -1436,7 +1441,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     savesDirectory = savesDir.absolutePath
                     // netplay: the handheld pak's pad options (NetplayPads) replace the Controller Type's, and a link
                     // session's (NetplayLinkOptions) the user's, set even when absent.
-                    val forced = netplayPad?.options.orEmpty() + linkOptions + wiiScreenOption() + nds3dLaunch + graphics.forcedOptions
+                    val forced = netplayPad?.options.orEmpty() + linkOptions + wiiScreenOption() + nds3dLaunch + ps2BiosOption + graphics.forcedOptions
                     variables = (options.map { v ->
                         forced[v.key]?.let { Variable(v.key, it) }
                             ?: if (launchSega != null && (v.key == SegaPadType.PICODRIVE_INPUT1 || v.key == SegaPadType.PICODRIVE_INPUT2))

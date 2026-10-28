@@ -25,12 +25,13 @@ object EmulatorSettings {
      * rows locked in the cfg are hidden, as on the in-game Console Settings page. [secondScreen] false (none connected) hides Bottom screen, its value kept. [vulkanFailed]: Vulkan failed for the
      * core on this phone ([VulkanFallback]), noted on the Graphics API row. [screen]: the window's [ScreenClass] (null:
      * unknown), which shapes the DS and 3DS layout rows ([ConsoleSettings.tableFor]). [displayMax]: the biggest DS or 3DS 3D scale the display reaches (null:
-     * unknown), which shapes the 3D Resolution scales.
+     * unknown), which shapes the 3D Resolution scales. [biosFiles]: the ".bin" names in the PS2 BIOS folder, the PS2 BIOS row's choices.
      */
     fun page(
         tag: String, descriptor: CoreDescriptor, table: CoreOptionTable?, defaults: Map<String, String>,
         console: ConfigFile?, game: ConfigFile?, forGame: Boolean, vulkanFailed: Boolean = false,
         secondScreen: Boolean = true, screen: ScreenClass? = null, displayMax: Int? = null,
+        biosFiles: List<String> = emptyList(),
     ): EmulatorPage {
         val tableDefaults = table?.options.orEmpty().associate { it.key to it.defaultValue }
         val frontendDefaults = FrontendOptions.defaults(tag)
@@ -39,7 +40,7 @@ object EmulatorSettings {
             forced = descriptor.lockedOptions, hidden = descriptor.hiddenValues,
         )
         val software = resolved.values[NdsRenderer.RENDER_MODE] == NdsRenderer.SOFTWARE
-        val consoleRows = ConsoleSettings.tableFor(tag, screen, displayMax).filter { it.key !in resolved.locked && (descriptor.rewind || it.key !in SpeedOptions.REWIND_KEYS) && (secondScreen || it.key != BottomScreenOptions.KEY) }
+        val consoleRows = ConsoleSettings.tableFor(tag, screen, displayMax, biosFiles).filter { it.key !in resolved.locked && (descriptor.rewind || it.key !in SpeedOptions.REWIND_KEYS) && (secondScreen || it.key != BottomScreenOptions.KEY) }
             .shownFor(resolved.values)
             .map {
                 // The DS and 3DS layout rows read their old keys too, as the game does (no pick: the row default).
