@@ -206,6 +206,7 @@ internal fun NxTouchRow(
     onFits: ((Boolean) -> Unit)? = null,
     action: String? = null,
     below: (@Composable () -> Unit)? = null,
+    leading: (@Composable () -> Unit)? = null,   // before the name and description (an add row's "+")
     control: @Composable () -> Unit,
 ) {
     val colors = LocalNxColors.current
@@ -226,6 +227,7 @@ internal fun NxTouchRow(
         // At least the tallest control's line ([NxTouchRowSizes.controlMin]): every one-line row one height, whatever its
         // control. Not when the control sits under the text (segments, swatches): the name's line is then just the name's.
         Row(if (below == null) Modifier.heightIn(min = sizes.controlMin) else Modifier, verticalAlignment = Alignment.CenterVertically) {
+            if (leading != null) { leading(); Spacer(Modifier.width(ADD_GLYPH_GAP)) }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
                 // The name's line exactly (the info icon, a touch taller, overflows it rather than growing the row when it shows).
                 Row(Modifier.height(sizes.labelLineDp), verticalAlignment = Alignment.CenterVertically) {
@@ -464,3 +466,15 @@ private fun PickerRowView(label: String, cursor: Boolean, current: Boolean, heig
         if (current) Box(Modifier.size(8.dp).clip(CircleShape).background(text))
     }
 }
+
+/** An add row's "+" ([NxSettingRow.adds]): in the name's ink, a little larger than the name, [ADD_GLYPH_GAP] before it. */
+@Composable
+internal fun NxAddGlyph(label: TextUnit) {
+    Text(
+        "+", color = LocalNxColors.current.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Normal,
+        fontSize = label * 1.4f, lineHeight = label * 1.4f, maxLines = 1,
+    )
+}
+
+/** The room between an add row's "+" and its text. */
+private val ADD_GLYPH_GAP = 16.dp

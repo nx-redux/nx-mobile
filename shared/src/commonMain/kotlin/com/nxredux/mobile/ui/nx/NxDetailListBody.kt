@@ -42,7 +42,8 @@ fun NxDetailListBody(
     rowKind: NxRowKind = NxRowKind.PILL,   // OPTIONS: NX Redux's options rows at 0.75 of the pitch
     rowText: ((TextUnit) -> TextUnit)? = null,   // pill rows: the row label's size from the list label (a row's secondary follows one step below); same pitch
     rowsAtTop: Boolean = false,   // a page without details: rows directly under the title instead of centred in the space
-    pinnedRows: Int = 0,   // pill rows: the first this many stay above the scrolling rest, half a row apart (a picker's actions)
+    pinnedRows: Int = 0,   // pill rows: the first this many stay above the scrolling rest, half a row apart
+    pinnedBottom: Int = 0,   // pill rows: the last this many stay under the scrolling rest, half a row apart (a picker's actions)
     actionRows: Int = 0,   // options rows: the last this many are pill rows at the list pitch under the options, half a row apart (Continue)
     actionsAtTop: Boolean = false,   // the action rows at the title's right instead ([NxTitleActions]): a landscape setup page
     titleActions: Int = 0,   // the last this many rows at the title's right, the action rows (if any) the ones before them; not with actionsAtTop
@@ -104,9 +105,10 @@ fun NxDetailListBody(
         val body = rows.dropLast(atTitle)
         val pinned = if (rowKind == NxRowKind.PILL) pinnedRows.coerceIn(0, body.size) else 0
         val head = body.take(pinned)
-        val rest = if (pinned > 0) body.drop(pinned) else body
-        // Action rows (options pages only): drawn as pill rows under the options, which scroll in what they leave.
-        val actions = if (rowKind == NxRowKind.OPTIONS) actionRows.coerceIn(0, body.size) else 0
+        // Action rows (options pages), or a pill list's bottom-pinned rows: drawn as pill rows under the rest, which
+        // scrolls in what they leave.
+        val actions = (if (rowKind == NxRowKind.OPTIONS) actionRows else if (rowKind == NxRowKind.PILL) pinnedBottom else 0).coerceIn(0, body.size - pinned)
+        val rest = body.drop(pinned).dropLast(if (rowKind == NxRowKind.PILL) actions else 0)
         val options = if (actions > 0) body.dropLast(actions) else body
         val tail = if (actionsAtTop) emptyList() else body.takeLast(actions)
         // The list's selection: none while a title action is selected (an index past the list would draw an empty pill).
@@ -150,7 +152,7 @@ fun NxDetailListBody(
                     )
                 } else {
                     NxList(
-                        rest, if (listSelected < 0) -1 else listSelected - pinned, { onSelect(it + pinned) }, { onOpen(it + pinned) },
+                        rest, (listSelected - pinned).takeIf { listSelected >= 0 && it in rest.indices } ?: -1, { onSelect(it + pinned) }, { onOpen(it + pinned) },
                         Modifier.fillMaxWidth().height(rowsSlot).nxScrollFade(listState, height = rowHeight / 2, strong = true),
                         listState = listState, rowHeightOverride = rowHeight, textSizeOverride = rowText?.invoke(label) ?: label, edgeMargin = 1,
                     )
@@ -158,8 +160,9 @@ fun NxDetailListBody(
                 if (tail.isNotEmpty()) {
                     // The pill enters the action rows from above as the options' selection leaves them (and back).
                     Spacer(Modifier.height(tailGap))
+                    val tailStart = body.size - tail.size
                     NxList(
-                        tail, if (listSelected < 0) -1 else listSelected - options.size, { onSelect(it + options.size) }, { onOpen(it + options.size) },
+                        tail, if (listSelected < 0) -1 else listSelected - tailStart, { onSelect(it + tailStart) }, { onOpen(it + tailStart) },
                         Modifier.fillMaxWidth().height(tailHeight), rowHeightOverride = listPitch, textSizeOverride = label, outlined = actionsOutlined,
                     )
                 }

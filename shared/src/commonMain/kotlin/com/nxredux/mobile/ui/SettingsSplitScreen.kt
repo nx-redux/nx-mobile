@@ -22,6 +22,9 @@ import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxHintBarKeepHeight
 import com.nxredux.mobile.ui.nx.NxHintBar
+import com.nxredux.mobile.ui.nx.NxOptionsInnerPad
+import com.nxredux.mobile.ui.nx.LocalNxHintBarEnd
+import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
 
 /** An unfocused pane's opacity. */
 internal const val UNFOCUSED_ALPHA = 0.6f
@@ -71,7 +74,12 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
                         NxHintBar(if (s is Screen.SettingsMenu) SETTINGS_ROOT_HINTS else emptyList(), onHint = state::onButton)
                     }
                     Box(Modifier.padding(start = left).fillMaxSize()) {
-                        CompositionLocalProvider(LocalSettingsBlock provides wideBlock.takeIf { blockPage }) {
+                        // A page's own hint bar on the right: from its rows' text edge (the left column already keeps the
+                        // room between the panes, so no section-words inset on this side), the gutter on the screen's side.
+                        CompositionLocalProvider(
+                            LocalSettingsBlock provides wideBlock.takeIf { blockPage },
+                            LocalNxHintBarStart provides NxOptionsInnerPad, LocalNxHintBarEnd provides gutter,
+                        ) {
                             if (s is Screen.SettingsMenu) {
                                 WithIndex(selection) { i ->
                                     s.sections.getOrNull(i)?.let { section ->

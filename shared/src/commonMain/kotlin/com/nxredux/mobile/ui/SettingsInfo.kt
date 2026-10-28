@@ -226,7 +226,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     // Library (the home, extras and game rows describe themselves: [settingsTouchRow]).
     SettingsKind.ALL_FILES -> SettingText(row.note.orEmpty(), "Lets cores and saves use your home folder's real path")   // a line only for the warning
     SettingsKind.MIC_ACCESS -> quiet("Lets DS and 3DS games hear the Mic toggle's live mic")
-    SettingsKind.ADD_EXTRA -> quiet("Scan another folder for games too, such as one on an SD card")
+    SettingsKind.ADD_EXTRA -> SettingText("Scan another folder for games too, such as one on an SD card")   // under its name, as an action row reads
     // System's About group: what each read-only value is, and the two actions.
     SettingsKind.INFO -> SettingText("")   // System's About values read alone, compact (no description)
     SettingsKind.COPY_INFO -> quiet("Put the version, build and device on the clipboard, for a bug report")

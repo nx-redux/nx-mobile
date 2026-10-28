@@ -80,6 +80,8 @@ data class NxSettingRow(
     val action: String? = null,
     /** A colour per value (0xAARRGGBB, [NX_SWATCH_AUTO] for one that follows the accent): circles under the text ([NxSwatches]). */
     val swatches: List<Int>? = null,
+    /** An add row (Library's Add ROM folder): a "+" before its name and description, no value. */
+    val adds: Boolean = false,
 ) : NxDescribedRow
 
 val NxSettingRow.control: NxSettingControl get() = when {
@@ -159,17 +161,18 @@ internal fun NxTouchRowSizes.segmentsBelow(r: NxSettingRow): Boolean =
     r.enabled && (r.control == NxSettingControl.SWATCHES || r.control == NxSettingControl.SEGMENTED && !segmentsRight(r.label, r.choices))
 
 /**
- * Row [r]'s height: a spacer half a bare row, a group label half a row. A touch row lays out as tall as its text
+ * Row [r]'s height: a spacer half a bare row, a group label half a row and [SECTION_GAP]. A touch row lays out as tall as its text
  * ([NxTouchRowSizes.height]); here, before it has, the most it can take (a description's two lines).
  */
 internal fun NxTouchRowSizes.heightOf(r: NxSettingRow): Dp = when {
     r.spacer -> bare * NX_OPTIONS_GAP
-    r.section -> row * SECTION_OF_ROW
+    r.section -> row * SECTION_OF_ROW + SECTION_GAP
     else -> height(descLines = if (r.info.isBlank()) 0 else SETTING_DESC_LINES, segmentsBelow = segmentsBelow(r))
 }
 
-/** A group label's row as a share of a row. */
+/** A group label's row as a share of a row, and the room between its label and the first row under it. */
 private const val SECTION_OF_ROW = 0.5f
+private val SECTION_GAP = 8.dp
 
 /**
  * A titled settings page of touch rows: the [title], an optional [header] under it (a banner, a page's lines), the rows
@@ -362,8 +365,9 @@ private fun NxSettingTouchRow(
     val colors = LocalNxColors.current
     if (row.spacer) { Spacer(Modifier.fillMaxWidth().height(sizes.heightOf(row))); return }
     if (row.section) {
-        Box(Modifier.fillMaxWidth().height(sizes.heightOf(row)).padding(horizontal = NxOptionsInnerPad), contentAlignment = Alignment.BottomStart) {
-            Text(row.label, color = colors.hint, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = sizes.desc, lineHeight = sizes.desc, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // A group's label ("Console settings") in the accent, [SECTION_GAP] over its first row.
+        Box(Modifier.fillMaxWidth().height(sizes.heightOf(row)).padding(start = NxOptionsInnerPad, end = NxOptionsInnerPad, bottom = SECTION_GAP), contentAlignment = Alignment.BottomStart) {
+            Text(row.label, color = colors.accent, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = sizes.desc, lineHeight = sizes.desc, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         return
     }
@@ -384,6 +388,7 @@ private fun NxSettingTouchRow(
         row.label, row.info, row.hasMoreInfo, selected, sizes,
         onTap = onTap, onInfo = info, onTruncated = onTruncated,
         enabled = row.enabled, warning = row.warning, onLongPress = hold, onFits = { cut = !it }, action = row.action,
+        leading = if (row.adds) { { NxAddGlyph(sizes.label) } } else null,
         below = when {
             !sizes.segmentsBelow(row) -> null
             row.control == NxSettingControl.SWATCHES -> { { NxSwatches(row.swatches.orEmpty(), row.index, nxAutoSecondary(), hold, choose) } }

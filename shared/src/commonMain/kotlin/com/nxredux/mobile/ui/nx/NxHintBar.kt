@@ -175,6 +175,9 @@ val LocalNxHintBarHidden = staticCompositionLocalOf { false }
  */
 val LocalNxHintBarStart = staticCompositionLocalOf<Dp?> { null }
 
+/** The hint bars below's right padding when it differs from their left ([LocalNxHintBarStart]): a two-pane right pane's. */
+val LocalNxHintBarEnd = staticCompositionLocalOf<Dp?> { null }
+
 /** Hint bars below keep their height when empty ([NxHintBar]'s keepHeight): provided by the two-pane Settings only. */
 val LocalNxHintBarKeepHeight = staticCompositionLocalOf { false }
 
@@ -204,12 +207,13 @@ fun NxHintBar(
     val scale = nxTextScale()
     val labelSize = NxTextSizes.hint.pinned() * scale
     val glyphSize = HINT_GLYPH_SIZE * scale
-    // The hints in pad order, each whole or not at all: those that would run past the bar's right edge (a
-    // phone's portrait width with five hints; A and B come last) are left out, rightmost first. The bar's height is a
-    // glyph's whatever is left out.
+    // The hints in pad order, each whole or not at all. Too many for the bar (a phone's portrait width with five hints):
+    // A Select and B Back go first ([plainHint]), then those that would still run past the right edge, rightmost first.
+    // The bar's height is a glyph's whatever is left out.
+    val ordered = hints.inPadOrder()
     Layout(
         content = {
-            hints.inPadOrder().map { it to glyphs.glyphFor(it.button) }.forEachIndexed { i, (hint, glyph) ->
+            ordered.map { it to glyphs.glyphFor(it.button) }.forEachIndexed { i, (hint, glyph) ->
                 val clickable = if (onHint != null) Modifier.clickable { onHint(hint.button) } else Modifier
                 // The first glyph is pulled back by the art's transparent margin, so its disc sits on the text edge above.
                 val item = if (i == 0 && glyph != HintGlyph.TextOnly) Modifier.offset(x = -(glyphSize * NAV_ART_MARGIN)).then(clickable) else clickable
@@ -227,13 +231,20 @@ fun NxHintBar(
             }
         },
         modifier = modifier.fillMaxWidth().background(scrim)
-            .padding(horizontal = LocalNxHintBarStart.current ?: 16.dp, vertical = 6.dp).let { if (keepHeight) it.heightIn(min = glyphSize) else it },
+            .padding(
+                start = LocalNxHintBarStart.current ?: 16.dp, end = LocalNxHintBarEnd.current ?: LocalNxHintBarStart.current ?: 16.dp,
+                top = 6.dp, bottom = 6.dp,
+            ).let { if (keepHeight) it.heightIn(min = glyphSize) else it },
     ) { measurables, c ->
         val gap = HINT_GAP.roundToPx()
+        val all = measurables.map { it.measure(Constraints(maxHeight = c.maxHeight)) }
+        // Too many to fit: A Select and B Back go first (every list's A selects and B goes back); the rest as they fit.
+        val whole = all.sumOf { it.width } + gap * (all.size - 1).coerceAtLeast(0)
+        val kept = if (whole <= c.maxWidth) all.indices.toList() else all.indices.filterNot { plainHint(ordered[it]) }
         val shown = ArrayList<Pair<Placeable, Int>>()
         var end = 0
-        for (m in measurables) {
-            val p = m.measure(Constraints(maxHeight = c.maxHeight))
+        for (k in kept) {
+            val p = all[k]
             val x = if (shown.isEmpty()) 0 else end + gap
             if (x + p.width > c.maxWidth) break   // this one and every one after it left out
             shown += p to x
@@ -243,6 +254,10 @@ fun NxHintBar(
         layout(hintBarWidth(c.hasBoundedWidth, c.maxWidth, end), h) { shown.forEach { (p, x) -> p.place(x, (h - p.height) / 2) } }
     }
 }
+
+/** A hint every list has, the first to go when a bar's hints don't fit ([NxHintBar]): A "Select" and B "Back". */
+internal fun plainHint(h: Hint): Boolean =
+    h.button == NxButton.A && h.label.equals("Select", true) || h.button == NxButton.B && h.label.equals("Back", true)
 
 /**
  * The hint bar's width: the [maxWidth] it is given, or, asked [bounded] false (an intrinsic width: NxEmptyState sizes

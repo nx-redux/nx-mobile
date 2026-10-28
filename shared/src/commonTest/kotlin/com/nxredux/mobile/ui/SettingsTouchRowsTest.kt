@@ -77,8 +77,14 @@ class SettingsTouchRowsTest {
         assertEquals("", accent.info)
         assertTrue(accent.detail.startsWith("The selection colour")); assertTrue(accent.hasMoreInfo)
         assertEquals(accent.detail, accent.fullInfo)
-        val addFolder = settingsInfo(SettingsRow(SettingsKind.ADD_EXTRA, "Add ROM folder"))   // no fuller text: the old line moves behind it
-        assertEquals(SettingText("", "Scan another folder for games too, such as one on an SD card"), addFolder)
+    }
+
+    // Library's Add ROM folder reads as an add row: a "+" before its name, its line under it.
+    @Test fun addRomFolderIsAnAddRowWithItsLine() {
+        val add = settingsTouchRow(SettingsRow(SettingsKind.ADD_EXTRA, "Add ROM folder"), null)
+        assertTrue(add.adds)
+        assertEquals("Scan another folder for games too, such as one on an SD card", add.info)
+        assertFalse(settingsTouchRow(SettingsRow(SettingsKind.SAVES, "Saves"), null).adds)
     }
 
     // Layouts' group rows say nothing on the row (no line, no info icon, no X Info); each group's page says it under its title.

@@ -204,6 +204,7 @@ internal fun settingsTouchRow(row: SettingsRow, choices: SettingChoices?, sectio
             SettingsKind.SECONDARY_ACCENT -> SecondaryAccent.entries.map { if (it is SecondaryAccent.Preset) it.preset.argb else NX_SWATCH_AUTO }
             else -> null
         }.takeIf { values != null },
+        adds = row.kind == SettingsKind.ADD_EXTRA,   // Library's Add ROM folder: a "+" before its name
     )
 }
 

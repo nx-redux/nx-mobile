@@ -88,7 +88,8 @@ internal fun pickerRows(mode: FilePickMode, entries: List<LocalEntry>, canPick: 
     } else shown.filter { !it.isDir }.map { it.name }.sortedWith(byName).map { PickerRow.File(it) }
     val listed: List<PickerRow> = folders + files
     val newFolder = if (action != null) PickerRow.NewFolder else null
-    return listOfNotNull(action?.takeIf { canPick }, newFolder, PickerRow.Up) + listed.ifEmpty { listOf(PickerRow.Empty) }
+    // The folder's entries first, the actions (Use this folder / Save here, Create new folder) last: pinned at the bottom.
+    return listOf(PickerRow.Up) + listed.ifEmpty { listOf(PickerRow.Empty) } + listOfNotNull(action?.takeIf { canPick }, newFolder)
 }
 
 /**
@@ -149,6 +150,7 @@ internal class FilePickerController(
             else -> when (button) {
                 NxButton.UP -> step(p, -1)
                 NxButton.DOWN -> step(p, 1)
+                NxButton.LEFT, NxButton.RIGHT -> switchSide(p)   // either way, wrapping: entries ↔ actions
                 NxButton.A -> activate(p, p.rows.getOrNull(selection.value.index))
                 NxButton.B -> up(p)
                 NxButton.X -> { if (p.dir != null && p.mode != FilePickMode.ImportZip) screen.value = p.copy(prompt = "") }
@@ -188,7 +190,9 @@ internal class FilePickerController(
         val status = if (mode == FilePickMode.Home && dir != null) (if (isInternalRoot(dir)) INTERNAL_ROOT_STATUS else homeFolderStatus(entries)) else null
         screen.value = Screen.FilePicker(mode, dir, dir?.let(::titleOf) ?: STORAGE_TITLE, rows, status = status)
         val at = rows.indexOfFirst { r -> focus != null && ((r is PickerRow.Folder && r.label == focus) || (r is PickerRow.Volume && r.volume.path == focus)) }
-        selection.value = ListSelection(at.coerceAtLeast(0), rows.size)
+        // Else the first entry to walk into (not "..", whose A would leave), else the top.
+        val first = rows.indexOfFirst { it is PickerRow.Folder || it is PickerRow.Zip || it is PickerRow.Volume }
+        selection.value = ListSelection((if (at >= 0) at else first).coerceAtLeast(0), rows.size)
     }
 
     private fun activate(p: Screen.FilePicker, row: PickerRow?) {
@@ -230,6 +234,24 @@ internal class FilePickerController(
     }
 
     /** B: up one level; at a volume's root the volume list; at the volume list, cancel. */
+    /** The entry the highlight left for the actions ([switchSide]), where the next sideways press takes it back. */
+    private var entryBeforeActions = -1
+
+    /**
+     * LEFT or RIGHT: from the folder's entries to the actions pinned under them (Use this folder / Save here, else Create
+     * new folder), and from the actions back to the entry the highlight left (else the first entry), wrapping either way.
+     */
+    private fun switchSide(p: Screen.FilePicker) {
+        val first = p.rows.indexOfFirst { it is PickerRow.Action || it == PickerRow.NewFolder }
+        if (first < 0) return
+        val at = selection.value.index
+        val index = if (at < first) { entryBeforeActions = at; first } else {
+            entryBeforeActions.takeIf { it in 0 until first }
+                ?: p.rows.indexOfFirst { it is PickerRow.Folder || it is PickerRow.Zip }.takeIf { it >= 0 } ?: 0
+        }
+        selection.value = selection.value.copy(index = index)
+    }
+
     /** UP ([by] -1) or DOWN (+1), wrapping, over the rows that take the selection: a file is passed over. */
     private fun step(p: Screen.FilePicker, by: Int) {
         val n = p.rows.size
