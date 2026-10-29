@@ -91,10 +91,15 @@ class SystemButtonsPageTest {
         val start = key(KeyCodes.BUTTON_START)
         p.onKey(start, true, false)
         p.onKey(start, true, true)   // the hold: into BIND for MENU
-        p.onKey(start, false, false)
-        p.onKey(start, true, true)
+        p.onKey(start, true, true)   // still held: neither binds nor skips MENU
         assertEquals(SystemButtonsPage.Phase.BIND, p.phase)
+        assertEquals(SystemRole.MENU, p.binding)
+        p.onKey(start, false, false)
         assertEquals(SystemButtonMap(), p.map)
+        // A new hold, started in BIND, does skip MENU.
+        p.onKey(start, true, false)
+        p.onKey(start, true, true)
+        assertEquals(SystemButtonsPage.Phase.DONE, p.phase)
     }
 
     @Test fun aFoundRolesButtonIsNotTakenForAnother() {
@@ -142,5 +147,20 @@ class SystemButtonsPageTest {
         p.tap(key(KeyCodes.BUTTON_THUMBL))   // MENU bound to L3
         assertEquals(SystemButtonsPage.Phase.DONE, p.phase)
         assertEquals(110, SystemButtons.translate(p.map, model.key, KeyCodes.BUTTON_THUMBL, 0))
+    }
+
+    @Test fun holdStartWhileBindingMenuSkipsIt() {
+        val p = page()
+        p.tap(key(KeyCodes.BUTTON_SELECT))
+        val start = key(KeyCodes.BUTTON_START)
+        p.tap(start)
+        p.pressedAll()
+        assertEquals(SystemRole.MENU, p.binding)
+        assertTrue(p.onKey(start, true, false))   // a tap: START is taken, nothing binds
+        assertEquals(SystemRole.START, p.lastTaken)
+        assertTrue(p.onKey(start, true, true))    // held: skip MENU
+        assertEquals(SystemButtonsPage.Phase.DONE, p.phase)
+        assertTrue(p.menuSkipped)
+        assertEquals(SystemButtonMap(), p.map)
     }
 }

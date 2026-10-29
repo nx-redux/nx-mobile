@@ -6,7 +6,7 @@ package com.nxredux.mobile.shortcuts
  * stay the page's (its rows). All three found: DONE. Otherwise "I've pressed them all" ([pressedAll], or holding a found
  * START) goes to BIND, which takes the next fresh press as each missing role in turn ([binding]), never B or Back
  * (they cancel back to PRESS), never a button another role already has ([lastTaken]). MENU can be skipped
- * ([skipMenu]): SELECT+START opens the menu instead.
+ * ([skipMenu], or holding START): SELECT+START opens the menu instead.
  */
 class SystemButtonsPage(val model: PadModel, map: SystemButtonMap) {
     enum class Phase { PRESS, BIND, DONE }
@@ -29,13 +29,20 @@ class SystemButtonsPage(val model: PadModel, map: SystemButtonMap) {
 
     // Keys whose press the page used: their repeats and release are the page's too.
     private val taken = HashSet<PhysicalKey>()
+    // Keys down when BIND started (START held to get there): their repeats do nothing until released.
+    private val heldIntoBind = HashSet<PhysicalKey>()
 
     /** A key from the pad; [repeat]: an auto-repeat. True when the page used it (the menu must not see it). */
     fun onKey(key: PhysicalKey, down: Boolean, repeat: Boolean): Boolean {
-        if (!down) return taken.remove(key)
+        if (!down) { heldIntoBind.remove(key); return taken.remove(key) }
         if (repeat) {
+            if (key in heldIntoBind) return true
             val role = SystemButtons.roleOf(map, model.key, key)
-            if (phase == Phase.PRESS && role == SystemRole.START && SystemRole.START in found) { pressedAll(); return true }
+            if (role == SystemRole.START && SystemRole.START in found) {
+                // Holding START moves on: "I've pressed them all" in PRESS, Skip while BIND waits for MENU.
+                if (phase == Phase.PRESS) { pressedAll(); return true }
+                if (binding == SystemRole.MENU) { skipMenu(); return true }
+            }
             return key in taken
         }
         val used = when (phase) {
@@ -97,6 +104,7 @@ class SystemButtonsPage(val model: PadModel, map: SystemButtonMap) {
     private fun next() {
         val missing = SystemRole.entries.firstOrNull { it !in found }
         if (missing == null) return finish()
+        if (phase == Phase.PRESS) heldIntoBind += taken
         phase = Phase.BIND
         binding = missing
     }
