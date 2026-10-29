@@ -253,6 +253,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
         /** Game screens created in this process and not yet destroyed (main thread): the last one's teardown ends a game process. */
         private var screens = 0
+        /** The last screen's teardown is ending this process ([endProcess]): an END_GAME then has nothing left to do. */
+        @Volatile internal var ending = false
         /** The latest game screen, for [endForHandoff]. Main thread. */
         private var latest: java.lang.ref.WeakReference<GameActivity>? = null
 
@@ -1077,6 +1079,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         usingData = false
         val app = applicationContext
         // After the core's last write (destroyed above); a Binder call to the menu process, so not on this thread.
+        if (endsProcess) ending = true
         if (endUse || endsProcess) thread(name = if (endsProcess) "game-process-end" else "data-use-end") {
             if (endUse) runCatching { DataRoot.useEnd(app) }.onFailure { NxLog.w(TAG_LOG, "could not end the data use", it) }
             if (endsProcess) endProcess()
@@ -1087,10 +1090,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /**
      * The game is over: its process goes, and with it everything the core used or leaked. Off the main thread, after the
-     * writes still queued (a Home auto state, the netplay shutdown and session copy) and the data use's end (the caller's).
+     * writes still queued (a Home auto state, play time's last session, the netplay shutdown and session copy) and the
+     * data use's end (the caller's).
      */
     private fun endProcess() {
         awaitAutoWrites()
+        GameTimeService.flush()
         runCatching { NetplayEngine.executor.submit {}.get(PROCESS_END_WAIT_S, java.util.concurrent.TimeUnit.SECONDS) }
         NxLog.i(TAG_LOG, "the game has ended: ending its process")
         Process.killProcess(Process.myPid())

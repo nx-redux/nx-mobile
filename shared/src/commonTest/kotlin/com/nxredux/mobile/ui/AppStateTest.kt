@@ -213,7 +213,7 @@ class AppStateTest {
         val started = ArrayList<Recent>()
         /** What the menu does with a started record (its LaunchRecords drain): record it; null when the test wires none. */
         var menu: RecentsRecorder? = null
-        override fun launch(session: GameSession, recent: Recent) {
+        override suspend fun launch(session: GameSession, recent: Recent) {
             launched += session
             if (starts) { started += recent; menu?.record(recent) }
         }

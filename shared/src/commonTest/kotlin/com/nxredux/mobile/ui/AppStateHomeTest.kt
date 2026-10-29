@@ -91,7 +91,7 @@ class AppStateHomeTest {
         override var optionTextSize = com.nxredux.mobile.settings.OptionTextSize.DEFAULT
     }
     private class Runner : EmulatorRunner {
-        override fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) {}
+        override suspend fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) {}
     }
     private class Picker : FolderPicker {
         var picks = 0

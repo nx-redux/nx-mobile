@@ -14,6 +14,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.UUID
 
@@ -75,6 +78,14 @@ object GameTimeService {
                 GameTimeRecorder(s, serial) { NxLog.e(TAG, "game time write failed", it) }.also { if (s != null) recorder = it }
             }
         }
+
+    /**
+     * Blocks until the writes queued so far (a game's last [GameTimeRecorder.end]) have run, at most [timeoutMs]: the game
+     * process ends right after. Off the main thread.
+     */
+    fun flush(timeoutMs: Long = 2_000L) {
+        runBlocking { withTimeoutOrNull(timeoutMs) { serial.launch {}.join() } }
+    }
 
     fun data(context: Context): GameTimeData? = store(context)?.let { StoreGameTimeData(it, Dispatchers.IO) }
 

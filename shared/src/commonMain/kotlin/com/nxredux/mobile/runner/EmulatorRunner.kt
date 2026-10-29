@@ -8,6 +8,8 @@ interface EmulatorRunner {
      * Starts [session]. [recent] is what the menu records as Recently Played, but only once the core has actually loaded
      * the game, never when the runner refuses it (a bad archive, a missing BIOS, a core load error) or the process dies
      * first. The runner keeps it as a launch record the game screen marks started; the menu does the recording.
+     * Suspends until the game is started or brought back (a previous game may have to end first), so a launch in
+     * flight still refuses a second pick.
      */
-    fun launch(session: GameSession, recent: Recent)
+    suspend fun launch(session: GameSession, recent: Recent)
 }
