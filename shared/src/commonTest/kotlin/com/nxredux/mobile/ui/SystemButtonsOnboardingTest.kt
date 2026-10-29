@@ -194,4 +194,56 @@ class SystemButtonsOnboardingTest {
         assertFalse(s.screen.value is Screen.Onboarding)
         assertTrue(aya.key in SystemButtons.decode(settings.systemButtons).asked)
     }
+
+    // Review fix 1: closing the page over the menu brings back the menu's own selection.
+    @Test fun standaloneRestoresTheMenuSelection() = runTest {
+        val s = state()
+        s.select(1)
+        val before = s.selection.value
+        pads = listOf(aya)
+        s.padsChanged()
+        s.tap(KeyCodes.BUTTON_SELECT); s.tap(KeyCodes.BUTTON_START); s.tap(KeyCodes.BUTTON_MODE)
+        assertIs<Screen.Systems>(s.screen.value)
+        assertEquals(before, s.selection.value)
+    }
+
+    // Review fix 1: never over Settings (it would drop a Shortcuts draft or a wait); the menu asks instead.
+    @Test fun notOpenedOverSettings() = runTest {
+        val s = state()
+        s.openSettings(SettingsSection.CONTROLS)
+        pads = listOf(aya)
+        s.padsChanged()
+        assertIs<Screen.Settings>(s.screen.value)
+    }
+
+    // Review fix 1: a page another screen replaced is abandoned, so the model is still asked later.
+    @Test fun aReplacedPageIsAskedAgain() = runTest {
+        val s = state()
+        pads = listOf(aya)
+        s.padsChanged()
+        s.page()
+        s.openSettings(SettingsSection.CONTROLS)   // something else took the screen
+        while (s.screen.value !is Screen.Systems) s.onButton(NxButton.B)
+        s.padsChanged()
+        s.page()
+    }
+
+    // Review fix 3: a pad already connected at launch (a handheld's own) is asked when the menu first shows.
+    @Test fun coldStartAsksTheBuiltInPad() = runTest {
+        pads = listOf(aya)
+        val s = state()
+        s.page()
+    }
+
+    // Review fix 4: the pad's B on the page on its own skips it.
+    @Test fun padBSkipsTheStandalonePage() = runTest {
+        val settings = Settings()
+        val s = state(settings)
+        pads = listOf(aya)
+        s.padsChanged()
+        assertFalse(s.systemButtonKey(aya, KeyCodes.BUTTON_B, 0, true, false))   // the page leaves B to the menu
+        s.onButton(NxButton.B)
+        assertIs<Screen.Systems>(s.screen.value)
+        assertTrue(aya.key in SystemButtons.decode(settings.systemButtons).asked)
+    }
 }

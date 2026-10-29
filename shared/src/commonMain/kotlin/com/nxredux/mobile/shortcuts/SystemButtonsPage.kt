@@ -5,7 +5,7 @@ package com.nxredux.mobile.shortcuts
  * ([found]) as it's recognised; any other button is "not one of the three" ([lastOther]), A, B, Back and the d-pad
  * stay the page's (its rows). All three found: DONE. Otherwise "I've pressed them all" ([pressedAll], or holding a found
  * START) goes to BIND, which takes the next fresh press as each missing role in turn ([binding]), never B or Back
- * (they cancel back to PRESS), never a button another role already has ([lastTaken]). MENU can be skipped
+ * (they cancel back to PRESS), never A or the d-pad (the page's rows), never a button another role already has ([lastTaken]). MENU can be skipped
  * ([skipMenu], or holding START): SELECT+START opens the menu instead.
  */
 class SystemButtonsPage(val model: PadModel, map: SystemButtonMap) {
@@ -70,6 +70,8 @@ class SystemButtonsPage(val model: PadModel, map: SystemButtonMap) {
     private fun bind(key: PhysicalKey): Boolean {
         val role = binding ?: return false
         if (key.keyCode == KeyCodes.BUTTON_B || key.keyCode == KeyCodes.BACK) { cancelBind(); return true }
+        // A and the d-pad choose the page's rows (Skip, Cancel): a highlighted row's A must not become MENU.
+        if (key.keyCode in PAGE_KEYS) return false
         val holder = SystemButtons.roleOf(map, model.key, key)
         if (holder != null && holder != role) { lastTaken = holder; return true }
         lastTaken = null

@@ -163,4 +163,16 @@ class SystemButtonsPageTest {
         assertTrue(p.menuSkipped)
         assertEquals(SystemButtonMap(), p.map)
     }
+
+    // Review fix 2: in BIND, A and the d-pad choose the page's rows (Skip / Cancel); they never bind.
+    @Test fun aAndDpadDontBindInBind() {
+        val p = page()
+        p.tap(key(KeyCodes.BUTTON_SELECT)); p.tap(key(KeyCodes.BUTTON_START))
+        p.pressedAll()
+        for (code in listOf(KeyCodes.BUTTON_A, KeyCodes.DPAD_DOWN, KeyCodes.DPAD_UP)) {
+            assertFalse(p.tap(key(code)))
+            assertEquals(SystemRole.MENU, p.binding)
+        }
+        assertEquals(SystemButtonMap(), p.map)
+    }
 }

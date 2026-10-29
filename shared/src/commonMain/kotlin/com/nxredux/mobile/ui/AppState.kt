@@ -1797,6 +1797,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         // The menu came up (not rebuilt in place, which a count landing does while the install-permission screen is up):
         // the daily check, or a held install's retry. A foreground over it does the same ([onForeground]).
         if (prev !is Screen.Systems && screen.menu == null && !firstSetup) updaterOnMainMenu()
+        // The first menu after a load: a pad connected from the start (a handheld's own) is asked here, once.
+        if (prev is Screen.Loading) padsChanged()
     }
 
     /** The main menu showed: this instance becomes the updater's host again (another may have taken it, or let it go), then tells it. */
@@ -2384,6 +2386,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private var systemButtons: SystemButtonsPage? = null
     /** The screen the page opened over on its own (a new pad model after onboarding); null in onboarding. */
     private var systemButtonsReturn: Screen? = null
+    /** That screen's selection, put back with it. */
+    private var systemButtonsReturnSelection: ListSelection? = null
     /** The pad that pressed a key last: the page and Controls → System buttons act on it. */
     private var lastPad: PadModel? = null
 
@@ -2417,12 +2421,19 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * its own, once, over the menu or Settings.
      */
     fun padsChanged() {
-        if (deps.settings.onboardingDone != true || onboarding.step != null || systemButtons != null) return
+        if (deps.settings.onboardingDone != true || onboarding.step != null) return
         val current = _screen.value
-        if (current !is Screen.Systems && current !is Screen.Games && current !is Screen.Settings) return
+        if (systemButtons != null) {
+            if ((current as? Screen.Onboarding)?.step == OnboardingStep.SYSTEM_BUTTONS) return
+            // Another screen took over the page (a load landing, a game's return): it's abandoned, the model unasked.
+            systemButtons = null; systemButtonsReturn = null
+        }
+        // Over the menu and game lists only: over Settings it would drop a Shortcuts draft or a wait.
+        if (current !is Screen.Systems && current !is Screen.Games) return
         val asked = systemButtonMap().asked
         val pad = deps.connectedPads().firstOrNull { it.key !in asked } ?: return
         systemButtonsReturn = current
+        systemButtonsReturnSelection = _selection.value
         systemButtons = SystemButtonsPage(pad, systemButtonMap())
         showSystemButtons()
     }
@@ -2497,7 +2508,12 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         if (page.menuSkipped) showNotice(MENU_SKIPPED_NOTE)
         val back = systemButtonsReturn
         systemButtonsReturn = null
-        if (back != null) { _screen.value = back; return }
+        if (back != null) {
+            _screen.value = back
+            systemButtonsReturnSelection?.let { _selection.value = it }
+            systemButtonsReturnSelection = null
+            return
+        }
         afterSystemButtons()
     }
 
@@ -2808,7 +2824,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 else -> Unit
             }
             NxButton.A -> onboardingRow(_selection.value.index)
-            NxButton.B -> onboardingBack()
+            NxButton.B -> if (s.step == OnboardingStep.SYSTEM_BUTTONS) systemButtonsBack() else onboardingBack()
             else -> Unit
         }
     }
