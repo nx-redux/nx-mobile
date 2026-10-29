@@ -133,9 +133,11 @@ internal fun HomeScreen(
         // With the tab row hidden the stats strip sits in a fixed header in its place ([homeStatsHeader]); the page is
         // the body under it, laid out as under a tab row with the strip hidden.
         val header = homeStatsHeader(whole, homeStripLines(view.strip))
-        // Laid out above the fixed gap over the tab row ([GRID_TAB_GAP]): the board, Continue's card included, ends there.
-        val frame = (header?.body ?: whole).let { it.copy(h = it.h - GRID_TAB_GAP) }
-        val h = frame.h   // the page shows down to the fixed gap over the tab row
+        // Laid out above the fixed gap over the tab row ([GRID_TAB_GAP]): the board, Continue's card included, ends there,
+        // where a Grid tab's last row does. The board keeps its own [HOME_PAGE_MARGIN] under its top section, so its frame
+        // reaches that much past the gap and the margin lands on it.
+        val frame = (header?.body ?: whole).let { it.copy(h = it.h - GRID_TAB_GAP + HOME_PAGE_MARGIN) }
+        val h = frame.h - HOME_PAGE_MARGIN   // the page shows down to the fixed gap over the tab row
         // Again for each new [onLayout]: it takes a frame only for the screen showing, and one sent while the screen is
         // swapped for another (unfolding) is dropped; the new screen's reporter sends it once more.
         LaunchedEffect(frame, layoutKey, onLayout) { onLayout(frame) }
@@ -402,6 +404,23 @@ internal fun HomeStripLines(strip: HomeStrip, lines: Int, gutter: Float, top: Fl
         } else {
             Row(line, across, Alignment.CenterVertically) { StripMonth(strip) }
             if (most != null && lines >= 2) Row(line.offset(y = pitch.dp), across, Alignment.CenterVertically) { StripMost(most) }
+        }
+    }
+}
+
+/**
+ * A main menu Grid's title in Home's stats header ([HomeStripLines]' places and type): the selected console's or
+ * collection's [name] on the first line, its game [count] on the second as Home's "5 achievements" (the number bright,
+ * the word grey); the count's line empty while unknown.
+ */
+@Composable
+internal fun GridTitleLines(name: String, count: Int?, gutter: Float, top: Float, width: Float, lh: Float, pitch: Float) {
+    val colors = LocalNxColors.current
+    val line = Modifier.fillMaxWidth().height(lh.dp)
+    Box(Modifier.offset(gutter.dp, top.dp).width(width.coerceAtLeast(0f).dp)) {
+        Row(line, Arrangement.Start, Alignment.CenterVertically) { StripText(name, colors.listText) }
+        if (count != null) Row(line.offset(y = pitch.dp), Arrangement.Start, Alignment.CenterVertically) {
+            StripText("$count", colors.listText); StripText(gamesWord(count), colors.hint)
         }
     }
 }

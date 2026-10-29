@@ -6,9 +6,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import com.nxredux.mobile.ui.nx.rememberNxRowSnapFling
 import com.nxredux.mobile.ui.nx.nxRowEdgeMask
 import com.nxredux.mobile.ui.nx.nxRowFade
-import com.nxredux.mobile.ui.nx.SETTING_DESC_OF_LABEL
-import com.nxredux.mobile.ui.nx.nxListLabel
-import com.nxredux.mobile.ui.nx.nxOptionsLabelSize
 import com.nxredux.mobile.ui.nx.LocalNxFontWeights
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.Image
@@ -63,6 +60,7 @@ import com.nxredux.mobile.ui.nx.nxListInset
 import com.nxredux.mobile.ui.nx.nxTextScale
 import com.nxredux.mobile.ui.nx.pinned
 import org.jetbrains.compose.resources.painterResource
+import com.nxredux.mobile.ui.nx.nxDescSize
 
 /** The window classes the Settings block's geometry follows. */
 enum class SettingsSizeClass { PHONE_UPRIGHT, PHONE_LANDSCAPE, TABLET }
@@ -385,7 +383,7 @@ internal fun SettingsWordList(
     val colors = LocalNxColors.current
     val style = settingsWordStyle()
     val tapOpens = LocalNxTapOpens.current
-    val tagSize = nxOptionsLabelSize(nxListLabel()) * SETTING_DESC_OF_LABEL   // a Settings row's description size
+    val tagSize = nxDescSize()   // a Settings row's description size
     val tagFont = LocalNxFontWeights.current
     NxKeepSelectedInView(listState, selection, rows.size, SETTINGS_ROWS_FADE_ROWS)   // the selection clear of the fade
     val pitchPx = with(LocalDensity.current) { settingsWordPitch(style).roundToPx() }

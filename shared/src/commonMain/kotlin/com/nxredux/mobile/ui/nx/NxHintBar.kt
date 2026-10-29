@@ -53,6 +53,7 @@ import com.nxredux.mobile.shared.res.nav_trigger_r1
 import com.nxredux.mobile.shared.res.nav_trigger_r2
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
+import androidx.compose.ui.unit.TextUnit
 
 data class Hint(val button: NxButton, val label: String, val touch: HintTouch = HintTouch.None)
 
@@ -179,6 +180,12 @@ val LocalNxHintBarStart = staticCompositionLocalOf<Dp?> { null }
 /** The hint bars below's right padding when it differs from their left ([LocalNxHintBarStart]): a two-pane right pane's. */
 val LocalNxHintBarEnd = staticCompositionLocalOf<Dp?> { null }
 
+/**
+ * The hint bars below's least height, their hints centred in it: a game list's, the main menu's tab row's
+ * ([MENU_TAB_ROW_HEIGHT]), so its words sit where the tab words do. Null: as tall as a glyph and its padding.
+ */
+val LocalNxHintBarHeight = staticCompositionLocalOf<Dp?> { null }
+
 /** Hint bars below keep their height when empty ([NxHintBar]'s keepHeight): provided by the two-pane Settings only. */
 val LocalNxHintBarKeepHeight = staticCompositionLocalOf { false }
 
@@ -206,7 +213,7 @@ fun NxHintBar(
     val glyphs = LocalHintGlyphs.current
     // ~60% of the glyph height; fixed, not screen- or font-scaled, but scaled by Appearance → Text size with the glyph.
     val scale = nxTextScale()
-    val labelSize = NxTextSizes.hint.pinned() * scale
+    val labelSize = nxHintLabelSize()
     val glyphSize = HINT_GLYPH_SIZE * scale
     // The hints in pad order, each whole or not at all. Too many for the bar (a phone's portrait width with five hints):
     // A Select and B Back go first ([plainHint]), then those that would still run past the right edge, rightmost first.
@@ -232,6 +239,7 @@ fun NxHintBar(
             }
         },
         modifier = modifier.fillMaxWidth().background(scrim)
+            .then(LocalNxHintBarHeight.current?.let { Modifier.heightIn(min = it) } ?: Modifier)
             .padding(
                 start = LocalNxHintBarStart.current ?: 16.dp, end = LocalNxHintBarEnd.current ?: LocalNxHintBarStart.current ?: 16.dp,
                 top = 6.dp, bottom = 6.dp,
@@ -255,6 +263,10 @@ fun NxHintBar(
         layout(hintBarWidth(c.hasBoundedWidth, c.maxWidth, end), h) { shown.forEach { (p, x) -> p.place(x, (h - p.height) / 2) } }
     }
 }
+
+/** A hint's label size: [NxTextSizes.hint], scaled by Appearance → Text size; the main menu's tab words share it. */
+@Composable
+internal fun nxHintLabelSize(): TextUnit = NxTextSizes.hint.pinned() * nxTextScale()
 
 /** A hint every list has, the first to go when a bar's hints don't fit ([NxHintBar]): A "Select" and B "Back". */
 internal fun plainHint(h: Hint): Boolean =

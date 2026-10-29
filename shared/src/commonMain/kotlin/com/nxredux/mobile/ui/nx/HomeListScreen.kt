@@ -66,7 +66,7 @@ internal fun HomeListScreen(
     val chrome = LocalLauncherChrome.current
     val portrait = LocalPortrait.current
     // The rows (and the band's arrows, the strip) start on the tab row's gutter, as a main menu List's.
-    val gutter = if (portrait) 16.dp else 24.dp
+    val gutter = pageGutter(portrait).dp
     val shownStrip = strip?.takeIf { chrome.homeStats }   // Layouts → Home stats hides it
     val fontScale = LocalDensity.current.fontScale
     // Only the text scale and the orientation (the underline) shape the strip; the frame's size is not read.

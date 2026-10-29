@@ -70,6 +70,10 @@ private const val HOME_LIST_CAPTION_MS = 120
 /** List Home's row pitch at Large text (Appearance → Text size scales it). */
 private val HOME_LIST_PITCH = 36.dp
 
+/** List Home's row pitch at the text size in use. */
+@Composable
+internal fun homeListPitch(): Dp = nxOptionsRowHeight(HOME_LIST_PITCH, LocalNxOptionText.current)
+
 /** The tag's gap after its name. */
 private val HOME_LIST_TAG_GAP = 12.dp
 
@@ -137,8 +141,8 @@ internal fun MainListBody(
     val density = LocalDensity.current
     val tapOpens = LocalNxTapOpens.current
     val nameSize = nxListLabel()
-    val infoSize = nxOptionsLabelSize(nameSize) * SETTING_DESC_OF_LABEL   // a Settings row's description size
-    val basePitch = nxOptionsRowHeight(HOME_LIST_PITCH, LocalNxOptionText.current)
+    val infoSize = nxDescSize()   // a Settings row's description size
+    val basePitch = homeListPitch()
     val pill = basePitch * (1 - 2 * NX_PILL_PAD)   // the pill's height, whatever the rows stretch to
     val basePx = with(density) { basePitch.roundToPx() }
     val sel = selection()

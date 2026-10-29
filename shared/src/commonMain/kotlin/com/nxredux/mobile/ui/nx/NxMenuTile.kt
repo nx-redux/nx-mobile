@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -444,24 +445,30 @@ internal fun nxLitness(lit: Boolean): () -> Float {
 /**
  * A Grid Home picture at [litness]: greyscale at [DRAIN_PICTURE_ALPHA] unlit, full colour and opacity lit, eased between.
  * The picture fills its card, so the layer clips itself to the card's rounded shape: a parent's rounded clip misses a
- * child layer drawn with alpha (the corners came out square).
+ * child layer drawn with alpha (the corners came out square). The opacity rides on the greying's own layer
+ * ([nxSaturation]), so an unlit tile takes one GPU surface, not two.
  */
 internal fun Modifier.nxDrain(litness: () -> Float): Modifier = graphicsLayer {
-    alpha = DRAIN_PICTURE_ALPHA + (1f - DRAIN_PICTURE_ALPHA) * litness()
     shape = RoundedCornerShape(NX_TILE_CORNER.dp)
     clip = true
-}.nxSaturation(litness)
+}.nxSaturation(alpha = { DRAIN_PICTURE_ALPHA + (1f - DRAIN_PICTURE_ALPHA) * litness() }, saturation = litness)   // clipped to the card: no reach past it
 
 /**
- * Content at [saturation], 0 (greyscale) to 1 (full colour), read at draw time; 1 draws it as is. The layer reaches a
- * size past each edge, so what draws outside the bounds (a Backdrop box's drop shadow) is greyed, not cut.
+ * Content at [saturation], 0 (greyscale) to 1 (full colour), and [alpha], read at draw time; both 1 draw it as is. The
+ * layer reaches [reach] past each edge, so what draws outside the bounds (a Backdrop box's drop shadow,
+ * [BOX_SHADOW_REACH]) is greyed, not cut; no further, as each unlit item's layer is a GPU surface of that size.
  */
-internal fun Modifier.nxSaturation(saturation: () -> Float): Modifier = drawWithContent {
+internal fun Modifier.nxSaturation(reach: Dp = 0.dp, alpha: () -> Float = { 1f }, saturation: () -> Float): Modifier = drawWithContent {
     val t = saturation()
-    if (t >= 1f) { drawContent(); return@drawWithContent }
-    val paint = Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(t) }) }
+    val a = alpha()
+    if (t >= 1f && a >= 1f) { drawContent(); return@drawWithContent }
+    val paint = Paint().apply {
+        if (t < 1f) colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(t) })
+        this.alpha = a.coerceIn(0f, 1f)
+    }
+    val r = reach.toPx()
     drawIntoCanvas { c ->
-        c.saveLayer(Rect(-size.width, -size.height, 2 * size.width, 2 * size.height), paint)
+        c.saveLayer(Rect(-r, -r, size.width + r, size.height + r), paint)
         drawContent()
         c.restore()
     }

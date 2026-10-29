@@ -57,11 +57,14 @@ class GridVerticalTest {
         assertEquals(260f - GRID_GAP, g.rows * (g.tileH + g.gap), e)
     }
 
-    // Logos and icons with the pad: three rows' room, as every Grid shows, so their whole rows fit and fade as usual.
-    @Test fun uprightWithThePadShowsThreeRowsOfMarks() {
-        for (kind in listOf(GridTileKind.LOGO, GridTileKind.ICON)) {
+    // Marks with the pad: two rows, as screenshots, so a small screen's marks aren't squeezed to three; logos
+    // and collections' names two across, tools' icons three.
+    @Test fun uprightWithThePadShowsTwoRowsOfMarks() {
+        for ((kind, across) in listOf(GridTileKind.LOGO to 2, GridTileKind.NAME to 2, GridTileKind.ICON to 3)) {
             val g = gridMatched(475f, 260f, 475f, 640f, kind, portrait = true)
-            assertEquals(GRID_MIN_ROWS, g.rows, "$kind")
+            assertEquals(GRID_PAD_MIN_ROWS, g.rows, "$kind")
+            assertEquals(across, g.columns, "$kind")
+            assertEquals(475f - 2 * g.gutter, g.columns * g.tileW + (g.columns - 1) * g.gap, e)   // they fill the width
             assertEquals(260f - GRID_GAP, g.rows * (g.tileH + g.gap), e)
         }
     }

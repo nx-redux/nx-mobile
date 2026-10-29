@@ -57,7 +57,7 @@ private const val HOME_BARS = 88f
  */
 private const val WIDE_RATIO = 2.15f
 
-internal fun homeGutter(portrait: Boolean): Float = if (portrait) 16f else 24f
+internal fun homeGutter(portrait: Boolean): Float = pageGutter(portrait)
 
 /**
  * How Home's top section holds the pinned tools' squares ([homeBoard]).

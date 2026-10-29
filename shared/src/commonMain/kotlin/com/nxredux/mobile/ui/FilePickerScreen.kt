@@ -10,9 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.ui.nx.nxListInset
-import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
-import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.CompositionLocalProvider
 import com.nxredux.mobile.ui.nx.Hint
@@ -21,6 +19,7 @@ import com.nxredux.mobile.ui.nx.NxDetailListBody
 import com.nxredux.mobile.ui.nx.NxDialog
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxTextPrompt
+import com.nxredux.mobile.ui.nx.nxPageGutter
 
 /** The list-style picker's hints for the [selected] row: New folder only inside a folder and never when picking a zip. */
 internal fun filePickerHints(s: Screen.FilePicker, selected: Int = -1): List<Hint> = buildList {
@@ -58,7 +57,7 @@ fun FilePickerScreen(
     onHint: (NxButton) -> Unit, onDraft: (String) -> Unit, modifier: Modifier = Modifier,
 ) {
     // The page's gutter, as the other pages': the pills on it, the title, rows and hint bar's text the pill's inset in.
-    val gutter = if (LocalPortrait.current) 16.dp else 24.dp
+    val gutter = nxPageGutter()
     Box(modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalNxHintBarStart provides nxListInset()) { NxDetailListBody(
             title = screen.title, details = listOfNotNull(screen.status), headline = false,   // a quiet line under the title

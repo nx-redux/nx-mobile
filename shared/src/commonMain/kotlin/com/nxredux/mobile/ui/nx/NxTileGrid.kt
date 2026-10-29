@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.ui.GridTile
 import com.nxredux.mobile.ui.InfoLine
+import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE_ROWS
 
 /** Below this tile height (dp) the grid neither draws nor reports its columns: a layout pass not yet at its size. */
 internal const val GRID_TILE_MIN_DP = 40f
@@ -37,13 +38,11 @@ internal const val GRID_TILE_MIN_DP = 40f
 internal fun gridDrawable(widthDp: Float, heightDp: Float, g: GridGeometry): Boolean =
     widthDp > 0f && heightDp > 0f && g.tileW > 0f && g.tileH >= GRID_TILE_MIN_DP && g.columns > 0
 
-/** A Grid's edge rows while more is beyond them: drawn at this, on their own look. */
-private val GRID_EDGE_STEPS = listOf(0.4f)
-
 /**
  * The Grid style (main menu tabs, game lists), held either way: [tiles] row by row, scrolling up and down only
  * ([gridVertical]: columns from the width and the tiles' least width, at least 3 rows filling the box, a gap under its top). It rests on a
- * row; while more rows are beyond an edge the row at it is drawn at [GRID_EDGE_STEPS]; the selection stops on the second
+ * row; while more rows are beyond an edge it fades over List's fade ([SETTINGS_ROWS_FADE_ROWS] List rows, [homeListPitch]),
+ * not by whole rows, a Grid row being several List rows tall; the selection stops on the second
  * row from an edge so it is never in it ([homeListScroll]). A grid that fits sits on the box's bottom, its last row a gap
  * over what is under it. Sideways swipes are the main menu's (they switch tabs); Carousels alone scroll sideways.
  * Reports its columns through [onColumns], so the d-pad steps by whole rows ([gridStep]).
@@ -70,7 +69,12 @@ fun NxTileGrid(
         val width = maxWidth.value
         val height = maxHeight.value
         // Columns from the width and the tiles' least width; rows the height they have held sideways ([gridMatched]).
-        val kind = when { games -> GridTileKind.SCREENSHOT; consoles -> GridTileKind.LOGO; else -> GridTileKind.ICON }
+        val kind = when {
+            games -> GridTileKind.SCREENSHOT
+            consoles -> GridTileKind.LOGO
+            tiles.all { it is GridTile.Tool } -> GridTileKind.ICON
+            else -> GridTileKind.NAME
+        }
         // Sized above the fixed gap over the tab row ([GRID_TAB_GAP], the last row's own gap part of it).
         val g = gridMatched(width, height - (GRID_TAB_GAP - GRID_GAP), window.width.value, window.height.value, kind, portrait)
         if (!gridDrawable(width, height, g)) return@BoxWithConstraints
@@ -119,18 +123,20 @@ fun NxTileGrid(
         }
         // The pad case's edge fade: a quarter row at each edge, so the half rows either side of the selection still read.
         val edgeFade = with(density) { (pitchPx / 4).toDp() }
+        // Roomy: as deep as List's two faded rows, not a whole Grid row; eased, so the dim tiles at the edge read faded.
+        val listFade = homeListPitch() * SETTINGS_ROWS_FADE_ROWS
         LazyColumn(
             Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart)
                 .padding(top = if (fits) 0.dp else g.gap.dp, bottom = if (fits) with(density) { tabGapPx.toDp() } else 0.dp)
                 .fillMaxWidth().height(with(density) { viewport.toDp() })
-                .then(if (roomy) Modifier.nxRowEdgeMask(state) else Modifier.nxEdgeFade({ state.canScrollBackward }, { state.canScrollForward }, edgeFade)),
+                .nxEdgeFade({ state.canScrollBackward }, { state.canScrollForward }, if (roomy) listFade else edgeFade, strong = roomy),
             state = state, verticalArrangement = Arrangement.Bottom,
             flingBehavior = if (roomy) rememberNxRowSnapFling(state) else rememberSnapFlingBehavior(state, SnapPosition.Center),
         ) {
             items(rows) { r ->
                 // Each row its cells and the gap under them (the last row's: its gap over what is under the grid).
                 Row(
-                    Modifier.fillMaxWidth().height(with(density) { pitchPx.toDp() }).then(if (roomy) Modifier.nxRowFade(state, r, GRID_EDGE_STEPS) else Modifier)
+                    Modifier.fillMaxWidth().height(with(density) { pitchPx.toDp() })
                         .padding(start = g.gutter.dp, end = g.gutter.dp, bottom = g.gap.dp),
                     horizontalArrangement = Arrangement.spacedBy(g.gap.dp),
                 ) {
@@ -146,7 +152,7 @@ fun NxTileGrid(
                             },
                         ) {
                             // A game: its picture, grey unless selected ([NxMenuTile]'s drained); a console, collection
-                            // or tool: its mark alone ([MenuMarkCell]).
+                            // or tool: its mark in a faint edge ([MenuMarkCell]).
                             if (tile is GridTile.Game) NxMenuTile(
                                 // Every tile's name, as Home's (dimmed unless selected); the stats only under the selected one.
                                 tile, lit = i == sel, caption = true, info = remember(i) { { if (i == selection.value()) info.value(i) else emptyList() } },

@@ -28,7 +28,7 @@ internal fun HomeMinimalScreen(
 ) {
     val chrome = LocalLauncherChrome.current
     val portrait = LocalPortrait.current
-    val gutter = if (portrait) 16.dp else 24.dp
+    val gutter = pageGutter(portrait).dp
     val shownStrip = strip?.takeIf { chrome.homeStats }   // Layouts → Home stats hides it
     val frame = HomeFrame(0f, 0f, portrait = portrait, textScale = LocalDensity.current.fontScale, titleHidden = false, stripScale = nxTextScale())
     val stripLines = if (shownStrip?.most != null) 2 else 1

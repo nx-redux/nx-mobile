@@ -330,7 +330,7 @@ fun GameInfoBand(lines: List<InfoLine>, modifier: Modifier = Modifier, edgeAlpha
 @Composable
 private fun ListInfoBand(lines: List<InfoLine>, band: InfoBand, arrows: @Composable () -> Unit, arrowStart: Dp, ground: BandGround, shade: Boolean) {
     val colors = LocalNxColors.current
-    val gutter = if (LocalPortrait.current) 16.dp else 24.dp
+    val gutter = nxPageGutter()
     Box(Modifier.fillMaxWidth().height(band.height.dp)) {
         // With no bar under it ([BandGround.NONE]) the fill runs to the band's bottom, held solid from the text's top
         // down, or the text's lower half would sit on the bare page (as NX Redux's infoband.c).

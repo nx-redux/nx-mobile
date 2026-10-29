@@ -184,7 +184,7 @@ internal fun HomeCarouselScreen(
 ) {
     val colors = LocalNxColors.current
     val portrait = LocalPortrait.current
-    val gutter = if (portrait) 16.dp else 24.dp
+    val gutter = pageGutter(portrait).dp
     BoxWithConstraints(modifier.fillMaxSize()) {
         val frame = homeFrameHere() ?: return@BoxWithConstraints
         val report by rememberUpdatedState(onLayout)

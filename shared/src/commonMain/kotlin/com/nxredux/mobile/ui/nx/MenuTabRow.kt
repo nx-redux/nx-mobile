@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import androidx.compose.ui.unit.TextUnit
 
 /** The tab row's height (the main menu's top band fades from its top edge past it). */
 internal val MENU_TAB_ROW_HEIGHT = 44.dp
@@ -97,6 +98,7 @@ internal const val NX_MENU_GLIDE_MS = 240
 fun MenuTabRow(
     labels: List<String>, selected: Int, onTab: (Int) -> Unit, modifier: Modifier = Modifier, overArt: Boolean = false, focused: Boolean = false,
     onLongPress: (() -> Unit)? = null, underline: Boolean = true, trailing: (@Composable () -> Unit)? = null,
+    labelSize: TextUnit = NxTextSizes.pageTitle.pinned() * nxTextScale(),   // the words' size: the page title's, or (the bottom tabs) a hint's
 ) {
     val colors = LocalNxColors.current
     val portrait = LocalPortrait.current
@@ -130,13 +132,13 @@ fun MenuTabRow(
         scroll.animateScrollTo(to, tween(NX_MENU_GLIDE_MS, easing = NxMenuEasing))
     }
     val gap = if (portrait) 14.dp else 20.dp
-    val size = NxTextSizes.pageTitle.pinned() * nxTextScale()   // Appearance → Text size
+    val size = labelSize   // Appearance → Text size
     Row(
         // The gutter less the pill's side room, which the words' box takes back inside (so the pill is never clipped).
         // The long press before the padding, so the side gutters take it too.
         modifier.fillMaxWidth().height(MENU_TAB_ROW_HEIGHT)
             .then(if (onLongPress == null) Modifier else Modifier.pointerInput(onLongPress) { detectTapGestures(onLongPress = { onLongPress() }) })
-            .padding(horizontal = (if (portrait) 16.dp else 24.dp) - TAB_PLATE_X),
+            .padding(horizontal = pageGutter(portrait).dp - TAB_PLATE_X),
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -197,7 +199,7 @@ fun MenuTitleRow(
             if (!suffix.isNullOrEmpty()) Text(" $suffix", style = style, maxLines = 1, softWrap = false)
         }
         if (trailing != null) {
-            val gutter = if (LocalPortrait.current) 16.dp else 24.dp
+            val gutter = nxPageGutter()
             Box(Modifier.align(Alignment.CenterEnd).padding(end = gutter - TOP_ICON_INSET + endInset)) { trailing() }
         }
     }

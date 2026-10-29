@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.settings.GameListArt
+import com.nxredux.mobile.ui.nx.pageGutter
 
 /** What a List-style game list draws behind or beside its names (Layouts → List art). */
 sealed interface ListArtShown {
@@ -38,7 +39,7 @@ internal const val LIST_ART_WIDTH_SHARE = 0.38f
 internal const val LIST_ART_HEIGHT_SHARE = 0.7f
 
 /** The box's end gutter in dp: the page's (16 with the portrait pad, 24 otherwise). */
-internal fun listArtGutter(portrait: Boolean): Float = if (portrait) 16f else 24f
+internal fun listArtGutter(portrait: Boolean): Float = pageGutter(portrait)
 
 /**
  * Where a List's names stop with a boxed List art, in dp from the list's end on a [widthDp] page: the box, its gutter

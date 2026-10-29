@@ -41,6 +41,14 @@ import com.nxredux.mobile.ui.nx.MinimalScreen
 import com.nxredux.mobile.ui.nx.MinimalSelected
 import androidx.compose.ui.zIndex
 import com.nxredux.mobile.ui.nx.LocalNxColors
+import com.nxredux.mobile.ui.nx.HOME_HEADER_ICONS_ROOM
+import com.nxredux.mobile.ui.nx.GridTitleLines
+import com.nxredux.mobile.ui.nx.homeStripPitch
+import com.nxredux.mobile.ui.nx.homeStripLineH
+import com.nxredux.mobile.ui.nx.homeStatsHeader
+import com.nxredux.mobile.ui.nx.homeFrameHere
+import androidx.compose.foundation.layout.BoxWithConstraints
+import com.nxredux.mobile.ui.nx.gridTitle
 import com.nxredux.mobile.ui.nx.LocalNxTapOpens
 import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.MENU_TAB_ROW_HEIGHT
@@ -69,6 +77,9 @@ import com.nxredux.mobile.ui.nx.nxListInset
 import com.nxredux.mobile.ui.nx.MainListBody
 import com.nxredux.mobile.ui.nx.nxTopBandFade
 import com.nxredux.mobile.ui.nx.menuTabUnderlineBottom
+import com.nxredux.mobile.ui.nx.nxPageGutter
+import com.nxredux.mobile.ui.nx.pageGutter
+import com.nxredux.mobile.ui.nx.nxHintLabelSize
 
 /**
  * The main menu: the tab row and the current tab in its [style]. The selection-dependent inputs ([selectedIndex],
@@ -154,7 +165,7 @@ fun MainMenuScreen(
             }
         }
         Column(Modifier.fillMaxSize()) {
-            val labels = remember(screen.tabs) { screen.tabs.map { it.category.label } }
+            val labels = remember(screen.tabs) { screen.tabs.map { it.category.label.uppercase() } }   // the bottom tabs in capitals
             // Hidden: L1 / R1 still switch tabs, and the page takes the row's room (a Grid or Carousel through
             // [titleRoom]).
             // One tab: no tab to switch to, so NX Redux's title stands in the row's place (same height: the page below keeps its place).
@@ -219,12 +230,28 @@ fun MainMenuScreen(
                         val tiles = remember(rows) { gridTiles(rows) }
                         val top = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty())
                         slot { m ->
-                            NxTileGrid(
-                                tiles, selection, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
-                                onColumns = onGridLayout, tileInfo = tileInfo, modifier = m.padding(top = top.pad), layoutKey = layoutKey,
-                                // Consoles' tiles show their logo alone ([GridTileKind.LOGO]).
-                                consoles = screen.category == MenuCategory.CONSOLES,
-                            )
+                            BoxWithConstraints(m) {
+                                // Home's stats header in the room left of Recent and Search ([homeStatsHeader], two
+                                // lines): Consoles and Collections show the selected one's name and count there
+                                // ([GridTitleLines]), Tools nothing; every tab's tiles start under it, as Home's page does.
+                                val whole = homeFrameHere()
+                                val header = whole?.let { homeStatsHeader(it, GRID_TITLE_LINES) }
+                                val title = gridTitle(tiles.getOrNull(selection()))
+                                if (whole != null && header != null && title != null) {
+                                    val gutter = pageGutter(LocalPortrait.current)
+                                    GridTitleLines(
+                                        title.first, title.second, gutter, header.stripTop, maxWidth.value - 2 * gutter - HOME_HEADER_ICONS_ROOM,
+                                        homeStripLineH(whole), homeStripPitch(whole),
+                                    )
+                                }
+                                NxTileGrid(
+                                    tiles, selection, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
+                                    onColumns = onGridLayout, tileInfo = tileInfo, layoutKey = layoutKey,
+                                    modifier = Modifier.padding(top = header?.height?.dp ?: top.pad),
+                                    // Consoles' tiles show their logo alone ([GridTileKind.LOGO]).
+                                    consoles = screen.category == MenuCategory.CONSOLES,
+                                )
+                            }
                         }
                     }
                     // Carousel: Backdrop's frameless row on black (no picture), centred alone with no caption block (a console's
@@ -275,7 +302,7 @@ fun MainMenuScreen(
                         }
                         // As List Home's ([MainListBody]): the pill's edge on the gutter, the list under the icon row and on
                         // the tab row, the selection free until the third row from an edge.
-                        val gutter = if (LocalPortrait.current) 16.dp else 24.dp
+                        val gutter = nxPageGutter()
                         MainListBody(
                             listRows, selection, topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad, gutter,
                             onSelect, onOpen, onLongPress, Modifier.weight(1f),
@@ -290,10 +317,11 @@ fun MainMenuScreen(
             if (shown.tabRow) {
                 val longPress = onTabMenu?.let { f -> Modifier.pointerInput(f) { detectTapGestures(onLongPress = { f() }) } } ?: Modifier
                 // Still while the page slides between tabs; it changes when a swipe commits ([pageFixed]). In a List, in by the
-                // names' inset so its words line up with them ([listTextInset]).
-                Box(Modifier.pageFixed().onSizeChanged { tabRowPx.intValue = it.height }.padding(horizontal = textInset)) {
-                    if (title == null) MenuTabRow(labels, screen.tab, onTab, onLongPress = onTabMenu, underline = false)
-                    else MenuTitleRow(title, modifier = longPress, textStart = if (LocalPortrait.current) 16.dp else 24.dp)
+                // names' inset so its words line up with them ([listTextInset]). Its top [TAB_ROW_PULL] is given to the page
+                // above ([pullUp]): the words stay put, every layout's content ends that much nearer them.
+                Box(Modifier.pullUp(TAB_ROW_PULL).pageFixed().onSizeChanged { tabRowPx.intValue = it.height }.padding(horizontal = textInset)) {
+                    if (title == null) MenuTabRow(labels, screen.tab, onTab, onLongPress = onTabMenu, underline = false, labelSize = nxHintLabelSize())   // a hint's size, as the game lists' bar in its place
+                    else MenuTitleRow(title, modifier = longPress, textStart = nxPageGutter())
                 }
             }
         }
@@ -306,7 +334,7 @@ fun MainMenuScreen(
                 topIcons,
                 Modifier.align(Alignment.TopEnd)
                     .pageFixed()   // still while the page slides between tabs, as the tab row is
-                    .height(MENU_TAB_ROW_HEIGHT).padding(end = (if (LocalPortrait.current) 16.dp else 24.dp) - TOP_ICON_INSET + textInset)
+                    .height(MENU_TAB_ROW_HEIGHT).padding(end = nxPageGutter() - TOP_ICON_INSET + textInset)
                     .nxListTopCut(topCut),
             )
         }
@@ -428,3 +456,8 @@ internal fun mainMenuListBand(category: MenuCategory?): MainMenuListBand = when 
     MenuCategory.HOME, null -> MainMenuListBand(shade = true, info = true)
 }
 
+/** The lines of Home's stats header a main menu Grid's title takes: the name, then the count. */
+private const val GRID_TITLE_LINES = 2
+
+/** How much of the bottom tab row's empty top the page above takes: the gap over the tab words, less this. */
+private val TAB_ROW_PULL = 8.dp

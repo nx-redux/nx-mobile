@@ -50,7 +50,7 @@ fun NxBackdropStack(
     val portrait = LocalPortrait.current
     val window = LocalWindowSize.current
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val gutter = if (portrait) 16f else 24f
+        val gutter = pageGutter(portrait)
         if (games != null) {
             // A game list: the box art stack left of centre over the caller's picture, the caption to its right (every
             // family). The boxes fade out at the top and bottom edges; the fade masks the stack alone, so the picture
@@ -73,7 +73,7 @@ fun NxBackdropStack(
                 onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                 layoutKey = layoutKey, dataKey = games, edgeFadeHeight = BACKDROP_STACK_EDGE_FADE,
                 // The unselected boxes in greyscale, as the row's ([backdropSaturation]).
-                item = { i, _, distance -> Box(Modifier.matchParentSize().nxSaturation { backdropSaturation(distance()) }) { BoxArt(games[i]) } },
+                item = { i, _, distance -> Box(Modifier.matchParentSize().nxSaturation(BOX_SHADOW_REACH) { backdropSaturation(distance()) }) { BoxArt(games[i]) } },
                 overlay = { StackCaption(
                     captionTitle(), captionInfo(), g, bodyW, bodyH, shadow = true, nameSp = 18f * nxTextScale(),   // Appearance → Text size
                     splitNext = stackPortraitFamily(screenW, screenH, portrait), alignment = alignment, infoShare = 0.8f,

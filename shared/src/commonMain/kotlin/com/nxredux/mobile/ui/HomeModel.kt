@@ -9,6 +9,7 @@ import com.nxredux.mobile.ui.nx.homeBoard
 import com.nxredux.mobile.ui.nx.homePortraitTwin
 import kotlin.math.max
 import kotlin.random.Random
+import com.nxredux.mobile.ui.nx.pageGutter
 
 /**
  * What Home's stats strip ([homeStrip]) shows. [playedMs], [unlocks] and [top] cover the calendar month so far;
@@ -49,7 +50,7 @@ internal fun homeDockSide(f: HomeFrame, stripLines: Int, games: Int): Float =
 
 /** The Carousel Home's dock squares of [side] dp that fit [widthDp] (its gutters off): at least one. */
 internal fun homeDockFit(widthDp: Float, portrait: Boolean, side: Float): Int {
-    val gutter = if (portrait) 16f else 24f
+    val gutter = pageGutter(portrait)
     return ((widthDp - 2 * gutter + HOME_DOCK_GAP) / (side + HOME_DOCK_GAP)).toInt().coerceAtLeast(1)
 }
 

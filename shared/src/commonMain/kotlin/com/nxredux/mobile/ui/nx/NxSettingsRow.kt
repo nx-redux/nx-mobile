@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.LocalSettingsBlock
 import com.nxredux.mobile.ui.SettingsRowsBlock
 import com.nxredux.mobile.ui.settingsRowsFade
+import androidx.compose.ui.unit.TextUnit
 
 /*
  * The app's touch settings rows (Settings' value pages, Emulator Settings, Game Settings), drawn as the in-game menu's
@@ -155,6 +156,10 @@ internal fun nxFooterKeep(
 
 /** A description as a share of its name. */
 internal const val SETTING_DESC_OF_LABEL = 0.9f   // one text-size step ([NxTextSizes.STEP]) over 0.72
+
+/** A Settings row's description size ([SETTING_DESC_OF_LABEL] of its name's), for small text set beside a list's. */
+@Composable
+internal fun nxDescSize(): TextUnit = nxOptionsLabelSize(nxListLabel()) * SETTING_DESC_OF_LABEL
 
 /** Row [r]'s segments go under its text: an enabled segmented row whose choices don't fit on its right. */
 internal fun NxTouchRowSizes.segmentsBelow(r: NxSettingRow): Boolean =
