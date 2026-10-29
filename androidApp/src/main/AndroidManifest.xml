@@ -42,6 +42,12 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.NxMobile">
+        <!-- The settings, served to the :game process: the main process owns every SharedPreferences file. No process
+             attribute, so it always runs there. -->
+        <provider
+            android:name=".settings.PrefsProvider"
+            android:authorities="${applicationId}.prefs"
+            android:exported="false" />
         <!-- The app icon (and the artwork notification): brings the menu's task forward as it is, so a game open over
              the menu stays (MainActivity is singleTask: a launch of it would clear the game). Its own throwaway task. -->
         <activity

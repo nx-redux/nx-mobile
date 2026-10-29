@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.settings.Prefs
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -21,7 +22,7 @@ class AndroidMicAccess(private val activity: Activity, private val askedInGame: 
     override fun granted() = activity.checkSelfPermission(PERMISSION) == PackageManager.PERMISSION_GRANTED
 
     override fun request() {
-        val prefs = activity.getSharedPreferences(PREFS, Activity.MODE_PRIVATE)
+        val prefs = Prefs.open(activity, PREFS)
         val asked = prefs.getBoolean(ASKED, false) || askedInGame()
         if (!asked || activity.shouldShowRequestPermissionRationale(PERMISSION)) {
             prefs.edit().putBoolean(ASKED, true).apply()

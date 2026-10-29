@@ -1,5 +1,6 @@
 package com.nxredux.mobile.netplay
 
+import com.nxredux.mobile.settings.Prefs
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
@@ -58,7 +59,7 @@ import kotlin.coroutines.resumeWithException
 class AndroidNetplay(context: Context, private val sdRoot: () -> File) : NetplayPlatform {
     private val context = context.applicationContext
     private val connectivity = this.context.getSystemService(ConnectivityManager::class.java)
-    private val prefs = this.context.getSharedPreferences("netplay", Context.MODE_PRIVATE)
+    private val prefs = Prefs.open(this.context, "netplay")
 
     override var lastLink: NetplayLink
         get() = if (prefs.getString(KEY_LINK, null) == NetplayLink.USB.name) NetplayLink.USB else NetplayLink.WIFI

@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.settings.Prefs
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.os.Handler
@@ -87,7 +88,7 @@ class SecondScreens(context: Context, private val debug: Boolean = BuildConfig.D
      * [DEBUG_INTERNAL_KEY] = true (set with run-as).
      */
     fun builtInNow(): Display? {
-        val debugInternal = debug && app.getSharedPreferences(AndroidAppSettings.PREFS_NAME, Context.MODE_PRIVATE).getBoolean(DEBUG_INTERNAL_KEY, false)
+        val debugInternal = debug && Prefs.open(app, AndroidAppSettings.PREFS_NAME).getBoolean(DEBUG_INTERNAL_KEY, false)
         return manager.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
             .firstOrNull { it.displayId != Display.DEFAULT_DISPLAY && SecondScreenRule.builtIn(facts(it), debugInternal) }
     }
