@@ -2,13 +2,14 @@ package com.nxredux.mobile.ui
 
 /**
  * The onboarding steps AppState draws as [Screen.Onboarding]. WELCOME opens a first launch, then TEXT_SIZE (asked first:
- * every page after it reads at the size picked), then BOTTOM_SCREEN on a device with a built-in second screen; the folder
+ * every page after it reads at the size picked), then SYSTEM_BUTTONS with a controller connected (its SELECT, START and
+ * MENU; also shown on its own for a new controller model later), then BOTTOM_SCREEN on a device with a built-in second screen; the folder
  * steps (All files access, the home folder, an extra folder, Android games) are AppState's own screens between those and
  * the first of the rest ([onboardingSteps], from HANDHELD), DONE last. In step order: the menu pad stays hidden before PAD
  * ([AppState.menuPadShown] compares by it), and a step off the list is placed by it.
  */
 enum class OnboardingStep {
-    WELCOME, TEXT_SIZE, BOTTOM_SCREEN, HANDHELD, SAVE_FORMATS, IMPORT_SAVES, SYNC_OFFER, ARTWORK, RA_SIGN_IN, RA_DOWNLOAD,
+    WELCOME, TEXT_SIZE, SYSTEM_BUTTONS, BOTTOM_SCREEN, HANDHELD, SAVE_FORMATS, IMPORT_SAVES, SYNC_OFFER, ARTWORK, RA_SIGN_IN, RA_DOWNLOAD,
     CUSTOMISE, PAD, TITLE, TAB_HOME, TAB_CONSOLES, TAB_COLLECTIONS, TAB_TOOLS, GAME_LISTS,
     ACCENT, DONE,
 }
@@ -58,6 +59,9 @@ class OnboardingController {
     /** The text size question, right after the welcome (before the folder steps). */
     fun startTextSize() { step = OnboardingStep.TEXT_SIZE }
 
+    /** The controller's SELECT / START / MENU page, right after the text size (with a controller connected). */
+    fun startSystemButtons() { step = OnboardingStep.SYSTEM_BUTTONS }
+
     /** The bottom screen question, right after the text size on a device with a built-in second screen (before the folder steps). */
     fun startBottomScreen() { step = OnboardingStep.BOTTOM_SCREEN }
 
@@ -83,13 +87,15 @@ class OnboardingController {
 
     /**
      * The step before this one; WELCOME and the first post-folder step ([isFirstMain]: the folder steps are not undone)
-     * stay where they are, TEXT_SIZE goes to WELCOME and BOTTOM_SCREEN to TEXT_SIZE.
+     * stay where they are, TEXT_SIZE goes to WELCOME, SYSTEM_BUTTONS to TEXT_SIZE, and BOTTOM_SCREEN to SYSTEM_BUTTONS
+     * with a [controller] connected (it was asked), else to TEXT_SIZE.
      */
-    fun back(): OnboardingStep? {
+    fun back(controller: Boolean = false): OnboardingStep? {
         val s = step ?: return null
         if (s == OnboardingStep.WELCOME) return s
         if (s == OnboardingStep.TEXT_SIZE) { step = OnboardingStep.WELCOME; return step }
-        if (s == OnboardingStep.BOTTOM_SCREEN) { step = OnboardingStep.TEXT_SIZE; return step }
+        if (s == OnboardingStep.SYSTEM_BUTTONS) { step = OnboardingStep.TEXT_SIZE; return step }
+        if (s == OnboardingStep.BOTTOM_SCREEN) { step = if (controller) OnboardingStep.SYSTEM_BUTTONS else OnboardingStep.TEXT_SIZE; return step }
         val steps = onboardingSteps(context)
         step = steps.lastOrNull { it < s } ?: s
         return step
@@ -103,7 +109,7 @@ class OnboardingController {
 
     fun finish() { step = null }
 
-    /** "Step n of m" over [onboardingSteps]; (0, 0) on WELCOME, TEXT_SIZE, BOTTOM_SCREEN or when not running. */
+    /** "Step n of m" over [onboardingSteps]; (0, 0) on WELCOME, TEXT_SIZE, SYSTEM_BUTTONS, BOTTOM_SCREEN or when not running. */
     fun position(): Pair<Int, Int> {
         val s = step ?: return 0 to 0
         if (s <= OnboardingStep.BOTTOM_SCREEN) return 0 to 0

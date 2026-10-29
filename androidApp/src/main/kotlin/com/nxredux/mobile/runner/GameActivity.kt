@@ -3173,7 +3173,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * While the launch name's hold is up keys wait for the game ([holdSwallows]): a swallowed press's repeats and release
      * are swallowed too, even after the hold went; a release whose press went through goes through.
      */
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
+        val event = SystemButtonKeys.translate(this, raw)   // a bound SELECT / START / MENU button as its role, first
         val code = event.keyCode
         when (event.action) {
             KeyEvent.ACTION_UP -> if (heldDowns.remove(code)) return true

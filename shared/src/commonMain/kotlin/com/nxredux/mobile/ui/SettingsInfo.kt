@@ -16,6 +16,7 @@ private fun resetText(section: SettingsSection?): SettingText = when (section) {
     SettingsSection.MAIN_MENU -> SettingText("Resets every setting on this page", "Put every Layouts group and Extra info back to their defaults")
     SettingsSection.CONTROLS -> SettingText("Resets this page, pad layouts included", "Put vibration, Menu pad and every pad layout back to defaults")
     SettingsSection.SHORTCUTS -> SettingText("Sets every shortcut to None", "Unbind every action and take both touch buttons off the pad")
+    SettingsSection.SYSTEM_BUTTONS -> SettingText("Back to this controller's own buttons", "SELECT, START and MENU go back to the buttons that send them; other controllers keep theirs")
     else -> SettingText("Put this page back to its defaults")
 }
 
@@ -200,7 +201,8 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.SHORTCUTS -> quiet(
         "Controller buttons and touch buttons for fast forward, rewind and reset",
         "Bind a controller button or combo to fast forward, rewind or reset, and give the on-screen pad up to two touch " +
-            "buttons. Every console and game uses these unless its in-game Shortcuts page overrides them.",
+            "buttons. Every console and game uses these unless its in-game Shortcuts page overrides them. If your MENU " +
+            "button does nothing, set it in Controls → System buttons.",
     )
     // While it waits for a press, its line says how to bind.
     SettingsKind.SHORTCUT_BIND -> SettingText(
@@ -208,6 +210,17 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
         "Press A, then the button to use. For a combo, hold MENU and press another button. B cancels, X sets it back " +
             "to None. A button another action had moves to this one. MENU alone and SELECT+START open the menu, and " +
             "SELECT and START stay the game's, so MENU alone, SELECT and START can't be bound.",
+    )
+    SettingsKind.SYSTEM_BUTTONS -> quiet(
+        "Which buttons are SELECT, START and MENU on your controller",
+        "Some controllers send no MENU, or another code for SELECT or START. Pick the button to use for each; it then " +
+            "acts only as that, in the menu and in games. Each controller model keeps its own.",
+    )
+    // While it waits for a press, its line says how to cancel.
+    SettingsKind.SYSTEM_BUTTON_BIND -> SettingText(
+        row.note.orEmpty(),
+        "Press A, then the button to use. B or Back cancel. A button another role had swaps with this one. Without a " +
+            "MENU button, SELECT+START opens the menu.",
     )
     SettingsKind.SHORTCUT_TOUCH -> quiet(
         "What this on-screen touch button does; None hides it",
