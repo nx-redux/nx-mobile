@@ -250,6 +250,7 @@ fun MainMenuScreen(
                                     modifier = Modifier.padding(top = header?.height?.dp ?: top.pad),
                                     // Consoles' tiles show their logo alone ([GridTileKind.LOGO]).
                                     consoles = screen.category == MenuCategory.CONSOLES,
+                                    topGap = screen.category != MenuCategory.TOOLS,   // nothing above Tools' tiles but the icons' row
                                 )
                             }
                         }

@@ -286,13 +286,14 @@ internal fun GameListFrame(
                 if (top.pad > 0.dp && style != MenuStyle.LIST) Spacer(Modifier.height(top.pad))
                 val titleRoom = top.titleRoom
                 // A Grid, Carousel or Backdrop body in the scaffold's slot: no info band (a Grid's game info is in its tile, a
-                // row's under its centre item), so it runs from the title down to the hint bar. The scaffold draws no list
+                // row's under its centre item), so it runs from the title down to the hint bar, or with Button hints hidden
+                // down to the bottom: nothing goes in the bar's row, so no room is kept for it. The scaffold draws no list
                 // here, so its index is unused.
                 val slot = @Composable { body: @Composable (Modifier) -> Unit ->
                     NxScreenScaffold(
                         rows = emptyList(), selectedIndex = 0,
                         hints = hints.value, onSelect = onSelect, onOpen = onOpen, modifier = Modifier.weight(1f), onHint = onHint, grid = body,
-                        hideHints = chrome.emptyBarRoom,
+                        hideHints = chrome.emptyBarRoom, keepBarRoom = !chrome.emptyBarRoom,
                     )
                 }
                 when (style) {

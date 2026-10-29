@@ -49,7 +49,8 @@ internal fun gridDrawable(widthDp: Float, heightDp: Float, g: GridGeometry): Boo
  * A game is drawn in colour while selected, the rest grey ([NxMenuTile]'s drained); a console, collection or tool as its
  * mark ([MenuMarkCell]), a console's logo alone on the Consoles tab ([consoles]). A tap selects, a tap on the selected one opens it, a long press calls
  * [onLongPress]. [games]: a game list's wide tiles, the bottom shade on the lit game with art.
- * [layoutKey]: the owner of this grid; a new key re-reports the columns.
+ * [layoutKey]: the owner of this grid; a new key re-reports the columns. [topGap] false: no gap under the box's top (Tools,
+ * whose tiles start right under the top icons' row, nothing of their own above them).
  */
 @Composable
 fun NxTileGrid(
@@ -61,6 +62,7 @@ fun NxTileGrid(
     layoutKey: Any? = null,
     games: Boolean = false,
     consoles: Boolean = false,
+    topGap: Boolean = true,
 ) {
     val portrait = LocalPortrait.current
     val window = LocalWindowSize.current
@@ -94,9 +96,10 @@ fun NxTileGrid(
         // Whole px, from the band itself: [gridVertical]'s rows fill it exactly, so a row a fraction of a px too tall
         // (rounding its dp) would drop the last one from view.
         val gapPx = with(density) { g.gap.dp.roundToPx() }
+        val topPx = if (topGap) gapPx else 0
         // A gap under the box's top; at its bottom the fixed [GRID_TAB_GAP], the last row's own gap part of it.
         val tabGapPx = with(density) { (GRID_TAB_GAP - g.gap).dp.roundToPx() }
-        val band = (constraints.maxHeight - gapPx - tabGapPx).coerceAtLeast(g.rows)
+        val band = (constraints.maxHeight - topPx - tabGapPx).coerceAtLeast(g.rows)
         // A row's px: the band's share (the rows fill it), or a fixed-height tile's own when that is less (the pad case).
         val pitchPx = minOf(band / g.rows, with(density) { (g.tileH + g.gap).dp.roundToPx() })
         val tileH = with(density) { (pitchPx - gapPx).toDp() }
@@ -127,7 +130,7 @@ fun NxTileGrid(
         val listFade = homeListPitch() * SETTINGS_ROWS_FADE_ROWS
         LazyColumn(
             Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart)
-                .padding(top = if (fits) 0.dp else g.gap.dp, bottom = if (fits) with(density) { tabGapPx.toDp() } else 0.dp)
+                .padding(top = if (fits) 0.dp else with(density) { topPx.toDp() }, bottom = if (fits) with(density) { tabGapPx.toDp() } else 0.dp)
                 .fillMaxWidth().height(with(density) { viewport.toDp() })
                 .nxEdgeFade({ state.canScrollBackward }, { state.canScrollForward }, if (roomy) listFade else edgeFade, strong = roomy),
             state = state, verticalArrangement = Arrangement.Bottom,
