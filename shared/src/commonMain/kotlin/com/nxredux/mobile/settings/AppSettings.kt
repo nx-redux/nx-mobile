@@ -331,6 +331,13 @@ interface AppSettings {
         get() = ""
         set(@Suppress("UNUSED_PARAMETER") value) {}
     /**
+     * Controls → System buttons: each pad model's SELECT / START / MENU bindings and the models already asked about, as
+     * [com.nxredux.mobile.shortcuts.SystemButtons.encode] writes them. Empty: none. Defaulted, like [shortcuts].
+     */
+    var systemButtons: String
+        get() = ""
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /**
      * Settings → Controls → Menu pad (default on): off, portrait's main menu drops its bottom on-screen pad and the screen
      * runs to the bottom (the menu is touch-driven). Games keep their own pad. Defaulted so a platform or fake without it
      * stores nothing.
