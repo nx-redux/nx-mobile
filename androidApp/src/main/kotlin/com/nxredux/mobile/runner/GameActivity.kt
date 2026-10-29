@@ -207,6 +207,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_USB = "netplay_usb"              // Boolean: the session runs over the USB cable
         /** The Dolphin core's descriptor id (Wii and GameCube tags). */
         private const val DOLPHIN_ID = "dolphin"
+        private const val MUPEN64PLUS_NEXT_ID = "mupen64plus_next"
         // Instance-state key: the slot to resume from when the system recreates this activity after a process kill.
         private const val KEY_RESUME_SLOT = "nx_resume_slot"
         private const val KEY_NETPLAY_LOCAL = "nx_netplay_local"   // netplay link: the session had ended ([netplayLocal])
@@ -1451,7 +1452,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     savesDirectory = savesDir.absolutePath
                     // netplay: the handheld pak's pad options (NetplayPads) replace the Controller Type's, and a link
                     // session's (NetplayLinkOptions) the user's, set even when absent.
-                    val forced = netplayPad?.options.orEmpty() + linkOptions + wiiScreenOption() + nds3dLaunch + ps2BiosOption + graphics.forcedOptions
+                    // N64: Max High-Res VRAM Limit's Auto becomes a number for this device's memory (N64HiresPack.vramLimit).
+                    val n64Vram = if (descriptor?.id == MUPEN64PLUS_NEXT_ID) {
+                        val total = ActivityManager.MemoryInfo().also { getSystemService(ActivityManager::class.java).getMemoryInfo(it) }.totalMem
+                        val limit = N64HiresPack.vramLimit(options.firstOrNull { it.key == N64HiresPack.VRAM_KEY }?.value, total)
+                        NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
+                        mapOf(N64HiresPack.VRAM_KEY to limit)
+                    } else emptyMap()
+                    val forced = netplayPad?.options.orEmpty() + linkOptions + wiiScreenOption() + nds3dLaunch + ps2BiosOption + n64Vram + graphics.forcedOptions
                     variables = (options.map { v ->
                         forced[v.key]?.let { Variable(v.key, it) }
                             ?: if (launchSega != null && (v.key == SegaPadType.PICODRIVE_INPUT1 || v.key == SegaPadType.PICODRIVE_INPUT2))
@@ -1505,6 +1513,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                             VirtualFile("/rom/$name", refs.openFd(ref, "r") ?: throw IOException("Cannot open $name"))
                         }
                         gameVirtualFiles = listOf(VirtualFile("/rom/$fileName", pfd)) + extra
+                    }
+                    if (descriptor?.id == MUPEN64PLUS_NEXT_ID) {
+                        val values = variables.mapNotNull { v -> v.key?.let { k -> v.value?.let { k to it } } }.toMap()
+                        extraVirtualFiles = n64HiresPack(values, graphics.preferVulkan, content, inner, home)
                     }
                 }
             }
@@ -2826,6 +2838,42 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * Before the view exists: an RA console, signed in and enabled, gets a bridge and a background hash. An archive's
      * unpacked [inner] ROM is what is hashed, and its name refines the console.
      */
+    /**
+     * The N64 game's hi-res texture pack when Use High-Res textures is on (GLideN64 only): `<NAME>_HIRESTEXTURES.hts`, named
+     * by the ROM header, in [home]'s `Textures/N64/` or else in `.cache/` in the game's folder, served to the core as a
+     * read-only virtual file ([N64HiresPack]). Empty when there is none; a pack that cannot be found or opened only leaves
+     * the original textures.
+     */
+    private suspend fun n64HiresPack(values: Map<String, String>, onVulkan: Boolean, content: ContentRef, inner: File?, home: ContentRef?): List<VirtualFile> {
+        if (!N64HiresPack.wanted(values, onVulkan)) return emptyList()
+        val head = runCatching { (inner?.inputStream() ?: refs.openInput(content))?.use { readUpTo(it, N64HiresPack.HEADER_BYTES) } }.getOrNull()
+        val name = head?.let(N64HiresPack::headerName)
+            ?: return emptyList<VirtualFile>().also { NxLog.w(TAG_LOG, "N64 hi-res pack: no ROM header name") }
+        val source = AndroidRomsSources.of(this)
+        val fileName = N64HiresPack.fileName(name)
+        suspend fun under(root: ContentRef?, path: List<String>) = runCatching {
+            var dir = root ?: return@runCatching null
+            for (part in path) dir = source.child(dir, part)?.takeIf { it.isDirectory }?.ref ?: return@runCatching null
+            source.child(dir, fileName)?.takeIf { !it.isDirectory }
+        }.getOrNull()
+        val folder = intent.getStringExtra(EXTRA_FOLDER_URI)?.takeIf { it.isNotEmpty() }?.let(::ContentRef)
+        val pack = under(home, N64HiresPack.HOME_PATH) ?: under(folder, listOf(N64HiresPack.FOLDER))
+            ?: return emptyList<VirtualFile>().also {
+                NxLog.i(TAG_LOG, "N64 hi-res pack: no $fileName in ${N64HiresPack.HOME_PATH.joinToString("/")}/ or ${N64HiresPack.FOLDER}/")
+            }
+        val pfd = runCatching { refs.openFd(pack.ref, "r") }.getOrNull()
+            ?: return emptyList<VirtualFile>().also { NxLog.w(TAG_LOG, "N64 hi-res pack: cannot open $fileName") }
+        NxLog.i(TAG_LOG, "N64 hi-res pack: ${pack.ref.value}")
+        return listOf(VirtualFile("${N64HiresPack.VIRTUAL_DIR}/$fileName", pfd))
+    }
+
+    private fun readUpTo(input: java.io.InputStream, max: Int): ByteArray {
+        val buf = ByteArray(max)
+        var n = 0
+        while (n < max) { val r = input.read(buf, n, max - n); if (r < 0) break; n += r }
+        return buf.copyOf(n)
+    }
+
     private fun prepareAchievements(tag: String, romFileName: String, content: ContentRef, inner: File?) {
         val settings = AndroidAppSettings(this)
         if (!settings.raEnabled || settings.raToken == null) return

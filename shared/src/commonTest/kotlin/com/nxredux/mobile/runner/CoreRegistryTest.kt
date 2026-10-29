@@ -162,8 +162,9 @@ class CoreRegistryTest {
         assertTrue("genesis_plus_gx_system_bram" in CoreRegistry.forTag("GPGX")!!.offlineHiddenOptions)
         assertEquals(mapOf("ppsspp_backend" to setOf("vulkan", "none")), CoreRegistry.forTag("PSP")!!.hiddenValues)
         assertEquals(mapOf("swanstation_GPU_Renderer" to setOf("Vulkan")), CoreRegistry.forTag("PSX")!!.hiddenValues)
-        // N64's plugins follow Graphics API (locked, nothing hidden); CoreRegistryVulkanTest pins them.
-        assertEquals(emptyMap(), CoreRegistry.forTag("N64")!!.hiddenValues)
+        // N64's plugins follow Graphics API (locked); CoreRegistryVulkanTest pins them. Only the VRAM limit's stale "0" is
+        // hidden: every saved config holds it from before packs loaded, so it reads as Auto (N64HiresPack.VRAM_NONE).
+        assertEquals(mapOf("mupen64plus-MaxHiResTxVramLimit" to setOf("0")), CoreRegistry.forTag("N64")!!.hiddenValues)
     }
     @Test fun forId_finds_cores_by_id() {
         val psp = CoreRegistry.forId("ppsspp")

@@ -58,7 +58,9 @@ public:
     void operator=(VFS const&) = delete;
 
     static retro_vfs_interface* getInterface();
-    void initialize(std::vector<VFSFile> files);
+    // Adds [files] to the session's virtual files (deinitialize drops them all): a game's own files and extra ones a
+    // core opens by name (a hi-res texture pack), in any order.
+    void add(std::vector<VFSFile> files);
     void deinitialize();
 
 private:

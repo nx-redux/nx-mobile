@@ -103,6 +103,8 @@ public class LibretroDroid {
     public static native void loadGameFromPath(String gameFilePath);
     public static native void loadGameFromBytes(byte[] gameFileBytes);
     public static native void loadGameFromVirtualFiles(List<DetachedVirtualFile> virtualFiles);
+    /** Extra files the core opens by name through the VFS, served from their descriptors; before the game loads. */
+    public static native void addVirtualFiles(List<DetachedVirtualFile> virtualFiles);
     public static native void resume();
 
     public static native void onSurfaceCreated();
