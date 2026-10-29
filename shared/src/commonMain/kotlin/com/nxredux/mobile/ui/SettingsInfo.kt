@@ -116,6 +116,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.SHELF_SHOWN -> when (row.shelf) {
         HomeShelf.NEW -> SettingText("Games found in the last 30 days", "Home's shelf of games found in the last 30 days")
         HomeShelf.NOT_STARTED -> SettingText("Games you have never played")   // the line says it all: no info icon
+        HomeShelf.MOST_PLAYED -> SettingText("Games you have played the longest")
         else -> SettingText("")
     }
     SettingsKind.HOME_STATS -> SettingText(

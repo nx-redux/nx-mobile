@@ -1,6 +1,8 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.sync.SyncLink
+import com.nxredux.mobile.scraper.SignInResult
+import com.nxredux.mobile.scraper.KeyResult
 import com.nxredux.mobile.shortcuts.CaptureResult
 import com.nxredux.mobile.shortcuts.KeyCodes
 import com.nxredux.mobile.shortcuts.KeyLabels
@@ -333,6 +335,9 @@ sealed interface Screen {
         val prompt: Boolean = false, val draftUser: String = "", val draftPassword: String = "",
         val accent: AccentPreset? = null, val padTheme: PadTheme? = null, val canGoBack: Boolean = true,
         val shot: LayoutShot? = null,   // a layout page's picture of the layout in use
+        val touchRows: List<NxSettingRow>? = null,   // its rows as Settings' touch rows, drawn as the Settings rows block (null: WELCOME)
+        // The artwork step's prompts over it: ScreenScraper's sign-in (its drafts [draftUser] / [draftPassword]) or a source's key.
+        val artSignIn: Boolean = false, val artKey: ArtKeyFor? = null, val draftKey: String = "",
     ) : Screen
     /** First setup only: offer an existing ROMs folder as an extra source. */
     data object AddFirstExtra : Screen
@@ -621,6 +626,13 @@ internal val ONBOARDING_TAB_STEPS = mapOf(
     OnboardingStep.TAB_HOME to MenuCategory.HOME, OnboardingStep.TAB_CONSOLES to MenuCategory.CONSOLES,
     OnboardingStep.TAB_COLLECTIONS to MenuCategory.COLLECTIONS, OnboardingStep.TAB_TOOLS to MenuCategory.TOOLS,
 )
+/** The artwork step's rows: the sources' accounts, then its two buttons. */
+private const val ART_SCREENSCRAPER = "ScreenScraper"
+private const val ART_SGDB_KEY = "SteamGridDB key"
+private const val ART_TGDB_KEY = "TheGamesDB key"
+private const val ART_FETCH_NOW = "Fetch now"
+private const val ART_SKIP = "Skip"
+
 /** Onboarding's value pages and the Settings value each row steps, top to bottom (Continue below them). */
 private val ONBOARDING_VALUE_KINDS = mapOf(
     OnboardingStep.TEXT_SIZE to listOf(SettingsKind.TEXT_SIZE),
@@ -920,6 +932,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             override fun raSignedIn(): Boolean = this@AppState.raSignedIn()
             override fun resolveOne(path: String): Listed? = this@AppState.resolveOne(path)
             override fun shelvesFor(inputs: HomeInputs): List<Pair<HomeShelf, List<Listed>>> = this@AppState.shelvesFor(inputs)
+            // Most played wears its game's play time ("12h 30m"), as the shelf orders them.
+            override fun shelfTag(shelf: HomeShelf, game: Listed): String? =
+                if (shelf != HomeShelf.MOST_PLAYED) null else _gameInfo.value[game.game.path]?.totalMs?.let(com.nxredux.mobile.gametime.GameTimeFormat::duration)
             override fun rebuildHomeTab() = this@AppState.rebuildHomeTab()
             override fun refreshResume() = this@AppState.refreshResume()
             override fun switchTab(step: Int) = this@AppState.switchTab(step)
@@ -1590,7 +1605,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         // Continue's game and every pinned one are on Home already.
         val exclude = (inputs.games.map { it.game.path } + listOfNotNull(inputs.last?.entry?.game?.path)).toSet()
         // A shelf Layouts hides drops after the pick, so its games never move to another shelf.
-        return shelvesCache.shelves(systemsCache, _gameInfo.value, inputs.recent, exclude, now, deps.calendar.dayStart(now)).filter { shelfShown(it.first) }
+        val hidden = HomeShelf.entries.filterTo(HashSet()) { !shelfShown(it) }   // a hidden shelf takes no game: the others may show them
+        return shelvesCache.shelves(systemsCache, _gameInfo.value, inputs.recent, exclude, now, deps.calendar.dayStart(now), hidden)
     }
 
 
@@ -1921,7 +1937,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
         val pageTitle = onboardingPageTitle()
         val canGoBack = step != OnboardingStep.WELCOME
-        _screen.value = Screen.Onboarding(step, pageTitle, listOf(title) + details, rows, accent = deps.settings.accent, padTheme = deps.settings.padTheme, canGoBack = canGoBack, shot = onboardingShot(step))
+        _screen.value = Screen.Onboarding(
+            step, pageTitle, listOf(title) + details, rows, accent = deps.settings.accent, padTheme = deps.settings.padTheme,
+            canGoBack = canGoBack, shot = onboardingShot(step), touchRows = onboardingTouchRows(step, rows),
+        )
         _selection.value = ListSelection(selected.coerceIn(0, (rows.size - 1).coerceAtLeast(0)), rows.size)
     }
 
@@ -1953,15 +1972,35 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         else -> false
     }
 
-    /** The page title onboarding's current step shows: "Setup · Step n of m" (counting first setup's folder steps). */
+    /**
+     * The page title onboarding's current step shows: its place in first setup's one count ([setupCounter]): Text size,
+     * System buttons with a controller, Bottom screen where asked, the folder steps, then the rest. "Welcome" on the welcome (before setup).
+     */
     private fun onboardingPageTitle(): String {
-        val (n, m) = onboarding.position()
-        val folder = setupFolderSteps()
-        return when {
-            m > 0 -> "Setup · Step ${n + folder} of ${m + folder}"
-            onboarding.step == OnboardingStep.TEXT_SIZE || onboarding.step == OnboardingStep.SYSTEM_BUTTONS || onboarding.step == OnboardingStep.BOTTOM_SCREEN -> "Setup"
-            else -> "Welcome"
+        val pre = setupPreSteps()
+        return when (onboarding.step) {
+            null, OnboardingStep.WELCOME -> "Welcome"
+            OnboardingStep.TEXT_SIZE -> setupCounter(1)
+            OnboardingStep.SYSTEM_BUTTONS -> setupCounter(2)
+            OnboardingStep.BOTTOM_SCREEN -> setupCounter(2 + (if (deps.connectedPads().isNotEmpty()) 1 else 0))
+            else -> setupCounter(onboarding.position().first + pre + setupFolderSteps())
         }
+    }
+
+    /**
+     * First setup's steps before the folder steps: Text size, System buttons with a controller connected, and Bottom
+     * screen on a device with a built-in second screen.
+     */
+    private fun setupPreSteps(): Int =
+        if (!inFirstSetup()) 0 else 1 + (if (deps.connectedPads().isNotEmpty()) 1 else 0) + (if (deps.builtInSecondScreen()) 1 else 0)
+
+    /**
+     * "Setup · Step [at]/m": m the steps as the answers so far make them (Text size, Bottom screen where asked, the folder
+     * steps, then the rest); a yes still to come (a handheld, customising) adds its pages and m grows.
+     */
+    private fun setupCounter(at: Int): String {
+        val main = onboarding.position().second.takeIf { it > 0 } ?: onboardingSteps(onboarding.context).size
+        return "Setup · Step $at/${setupPreSteps() + setupFolderSteps() + main}"
     }
 
     private val _syncSetup = MutableStateFlow<SyncSetup?>(null)
@@ -1989,7 +2028,43 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     /** The row a step opens on: the first (a layout page's layout row, a value page's first value). */
-    private fun onboardingCurrentRow(): Int = 0
+    private fun onboardingCurrentRow(): Int =
+        // The artwork step opens on Fetch now (else Skip), past its accounts' rows.
+        if (onboarding.step == OnboardingStep.ARTWORK) onboardingArtRows().size else 0
+
+    /** The artwork step's account rows: ScreenScraper's sign-in, the SteamGridDB and TheGamesDB keys, those this build offers. */
+    private fun onboardingArtRows(): List<NxRow> {
+        val art = artworkScreens ?: return emptyList()
+        return listOfNotNull(
+            NxRow(ART_SCREENSCRAPER, secondary = art.ssUser ?: "Sign in").takeIf { art.ssOffered },
+            NxRow(ART_SGDB_KEY, secondary = if (art.sgdbKeySet) "Set" else "Not set").takeIf { art.sgdbOffered },
+            NxRow(ART_TGDB_KEY, secondary = if (art.tgdbKeySet) "Set" else "Not set").takeIf { art.tgdbOffered },
+        )
+    }
+
+    /** The artwork step's prompt confirmed: the sign-in or key checked with its source (kept only when it answers OK), the step again on its row. */
+    private fun submitOnboardingArt(s: Screen.Onboarding) {
+        val art = artworkScreens ?: return
+        val key = s.artKey
+        val row = s.rows.indexOfFirst { it.label == if (key == null) ART_SCREENSCRAPER else if (key == ArtKeyFor.SGDB) ART_SGDB_KEY else ART_TGDB_KEY }
+        if (key == null && (s.draftUser.isBlank() || s.draftPassword.isBlank())) { _error.value = "Enter a username and password"; return }
+        if (key != null && s.draftKey.isBlank()) { _error.value = "Enter a ${key.label} API key"; return }
+        _screen.value = s.copy(artSignIn = false, artKey = null, draftPassword = "", draftKey = "")
+        loader.start(message = if (key == null) "Signing in…" else "Checking key…", cancellable = false) {
+            guardArtwork(_error) {
+                if (key == null) {
+                    val r = art.signIn(s.draftUser.trim(), s.draftPassword)
+                    if (r == SignInResult.OK) showNotice(signInText(r)) else _error.value = signInText(r)
+                } else {
+                    val r = art.setKey(key, s.draftKey.trim())
+                    if (r == KeyResult.OK) showNotice(keyResultText(r, key)) else _error.value = keyResultText(r, key)
+                }
+            }
+            if ((_screen.value as? Screen.Onboarding)?.step == OnboardingStep.ARTWORK) showOnboarding(row.coerceAtLeast(0))
+        }
+    }
+
+    fun onboardingDraftKey(text: String) { (_screen.value as? Screen.Onboarding)?.takeIf { it.artKey != null }?.let { _screen.value = it.copy(draftKey = text) } }
 
     /**
      * A value page's row [row] stepped by [by] (-1: the one before; A steps forward), in place: SAVE_FORMATS' save
@@ -1999,6 +2074,53 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * (or the preview picture, or the colours, or the text size) changes and the step count follows ([App] reads them
      * per screen). A row past the page's values, or another [step], does nothing.
      */
+    /**
+     * [rows] of a step as Settings' touch rows: a value row as its Settings row (name, one-line description, control; no
+     * fuller text, as setup has no info popup), a choice as a plain row. WELCOME draws its own page: null.
+     */
+    private fun onboardingTouchRows(step: OnboardingStep, rows: List<NxRow>): List<NxSettingRow>? {
+        if (step == OnboardingStep.WELCOME) return null
+        val kinds = onboardingValueKinds(step)
+        return rows.mapIndexed { i, row ->
+            val kind = kinds.getOrNull(i)?.takeIf { row.cycleable }
+            val value = kind?.let { settingValue(SettingsRow(it, "", category = ONBOARDING_TAB_STEPS[step])) }
+            val labels = value?.labels
+            if (kind == null || labels == null) NxSettingRow(row.label, value = row.secondary, enabled = row.enabled)   // a status (System buttons' Found) on the right
+            else settingsTouchRow(SettingsRow(kind, row.label, row.secondary, category = ONBOARDING_TAB_STEPS[step]), SettingChoices(labels, value.index))
+                .copy(detail = "")
+        }
+    }
+
+    /** The Settings value each of [step]'s rows steps, top to bottom: a value page's, or a layout page's ([onboardingLayoutKinds]). */
+    private fun onboardingValueKinds(step: OnboardingStep): List<SettingsKind> =
+        if (step in ONBOARDING_LAYOUT_STEPS) onboardingLayoutKinds(step) else ONBOARDING_VALUE_KINDS[step].orEmpty()
+
+    /**
+     * A touch on an onboarding page's row ([Screen.Onboarding.touchRows]): a segment or a swatch sets that value in place
+     * (a layout through [stepOnboardingLayout], resetting its options), a picker value opens its picker.
+     */
+    fun onboardingSettingEvent(event: NxSettingEvent) {
+        val s = _screen.value as? Screen.Onboarding ?: return
+        val row = when (event) {
+            is NxSettingEvent.Choose -> event.row
+            is NxSettingEvent.OpenPicker -> event.row
+            is NxSettingEvent.Info -> return
+        }
+        val kind = onboardingValueKinds(s.step).getOrNull(row)?.takeIf { s.rows.getOrNull(row)?.cycleable == true } ?: return
+        val value = settingValue(SettingsRow(kind, "", category = ONBOARDING_TAB_STEPS[s.step])) ?: return
+        val choose = { i: Int ->
+            when {
+                kind == SettingsKind.MENU_STYLE || kind == SettingsKind.GAME_LIST_STYLE -> if (i != value.index) stepOnboardingLayout(i - value.index) else select(row)
+                value.setTo(i) -> showOnboarding(row)
+                else -> select(row)
+            }
+        }
+        when (event) {
+            is NxSettingEvent.Choose -> choose(event.index)
+            else -> { select(row); openPicker(s.rows[row].label, value.labels.orEmpty(), value.index, choose) }
+        }
+    }
+
     private fun stepOnboardingValue(step: OnboardingStep?, row: Int, by: Int) {
         val kind = ONBOARDING_VALUE_KINDS[step]?.getOrNull(row) ?: return
         settingValue(SettingsRow(kind, ""))?.step(by)   // a bare row: none of these needs a tab, console or hint
@@ -2048,7 +2170,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /** A step's title, details and rows. */
     private fun onboardingPage(step: OnboardingStep, error: String?): Triple<String, List<String>, List<NxRow>> = when (step) {
-        OnboardingStep.WELCOME -> Triple("NX Redux", listOf("Pick up. Select a game. Play."), listOf(NxRow("Get started")))
+        OnboardingStep.WELCOME -> Triple("NX Redux", listOf("Ready when you are."), listOf(NxRow("Get started")))
         OnboardingStep.SYSTEM_BUTTONS -> systemButtonsContent()
         OnboardingStep.BOTTOM_SCREEN -> Triple(
             "Which is the bottom screen?",
@@ -2082,7 +2204,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         // The three imports, then (in place) a running one's progress with the rows waiting, or its summary and skipped files.
         OnboardingStep.IMPORT_SAVES -> when (val r = onboardingImported) {
             is ImportResult.Done -> Triple(
-                "Bring your saves", r.summary.lines() + r.summary.statesNote(), r.summary.skipped.map { NxRow(it.text()) } + NxRow("Continue"),
+                "Bring your saves", r.summary.lines() + r.summary.statesNote(), r.summary.skipped.map { NxRow(it.text(), enabled = false) } + NxRow("Continue"),   // a skipped file: a line to read, never an action
             )
             else -> Triple(
                 "Bring your saves",
@@ -2090,11 +2212,17 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 listOf("From a folder", "From a zip file", "From RetroArch", "Skip").map { NxRow(it, enabled = onboardingImporting == null) },
             )
         }
-        OnboardingStep.ARTWORK -> if (artworkScreens?.available == true) Triple(
-            "Fetch artwork", listOf("Box art and screenshots for your ${gamesLabel(onboardingGameCount())}, fetched in the background."),
-            listOf(NxRow("Fetch now"), NxRow("Skip")),
-        ) else Triple(
-            "Fetch artwork", listOf("No artwork source is set up yet; add one later in Tools → Artwork."), listOf(NxRow("Continue")),
+        // The sources' accounts as rows (each opens its prompt), then Fetch now and Skip; Skip alone with nothing to fetch from.
+        OnboardingStep.ARTWORK -> Triple(
+            "Fetch artwork",
+            listOfNotNull(
+                if (artworkScreens?.available == true) "Box art and screenshots for your ${gamesLabel(onboardingGameCount())}, fetched in the background."
+                else "Sign in or add a key to fetch box art and screenshots for your ${gamesLabel(onboardingGameCount())}; or later in Tools → Artwork.",
+                // Not signed in, ScreenScraper's anonymous quota still fetches, more slowly: signing in is optional.
+                "Signing in is optional: without an account art still downloads, just more slowly. You can sign in or add a key later in Tools → Artwork."
+                    .takeIf { artworkScreens?.let { it.ssOffered && it.ssUser == null } == true },
+            ),
+            onboardingArtRows() + listOfNotNull(NxRow(ART_FETCH_NOW).takeIf { artworkScreens?.available == true }, NxRow(ART_SKIP)),
         )
         OnboardingStep.RA_SIGN_IN -> Triple(
             "RetroAchievements",
@@ -2112,8 +2240,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         // Asked first, after the welcome: the lists', titles' and hints' text (setup's own pages too), a value row that flips
         // in place (the page reads at the new size), then Continue.
         OnboardingStep.TEXT_SIZE -> Triple(
-            "Text size", listOf("How big the text reads in setup and the app: lists, page titles and button hints. Change it later in Settings → Appearance."),
-            listOf(NxRow("Text size", secondary = deps.settings.optionTextSize.label, cycleable = true), NxRow("Continue")),
+            "Text size", listOf("How big the text reads in setup and the app. Change it later in Settings → Appearance."),
+            listOf(NxRow("Size", secondary = deps.settings.optionTextSize.label, cycleable = true), NxRow("Continue")),   // the title says Text size
         )
         // The pad and its theme (only while the pad shows): value rows that flip in place (the real pad follows, to
         // compare), then Continue.
@@ -2196,7 +2324,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             OnboardingStep.TITLE, OnboardingStep.ACCENT -> if (index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, index, 1) else onboardingNext()
             OnboardingStep.TAB_HOME, OnboardingStep.TAB_CONSOLES, OnboardingStep.TAB_COLLECTIONS, OnboardingStep.TAB_TOOLS,
             OnboardingStep.GAME_LISTS -> if (index < s.rows.lastIndex) stepOnboardingLayoutRow(index, 1) else onboardingNext()
-            OnboardingStep.ARTWORK -> { if (index == 0) artworkScreens?.fetchInBackground(); onboardingNext() }
+            OnboardingStep.ARTWORK -> when (s.rows.getOrNull(index)?.label) {
+                ART_SCREENSCRAPER -> _screen.value = s.copy(artSignIn = true, draftUser = deps.settings.ssUsername, draftPassword = "")
+                ART_SGDB_KEY -> _screen.value = s.copy(artKey = ArtKeyFor.SGDB, draftKey = "")
+                ART_TGDB_KEY -> _screen.value = s.copy(artKey = ArtKeyFor.TGDB, draftKey = "")
+                ART_FETCH_NOW -> { artworkScreens?.fetchInBackground(); onboardingNext() }
+                else -> onboardingNext()   // Skip
+            }
             OnboardingStep.RA_SIGN_IN -> when {
                 s.prompt -> submitOnboardingSignIn(s)
                 index == 0 && deps.achievements != null && !onboardingSigningIn ->
@@ -2235,18 +2369,17 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         )
     }
 
-    /** A layout page's rows: its value rows ([onboardingLayoutKinds]), then Continue. */
+    /** A layout page's rows: its value rows ([onboardingLayoutKinds]), named without the tab (the page's title says it), then Continue. */
     private fun onboardingLayoutRows(step: OnboardingStep): List<NxRow> {
         val s = deps.settings
         val category = ONBOARDING_TAB_STEPS[step]
-        val name = category?.label ?: "Game lists"
         return onboardingLayoutKinds(step).map { kind ->
             when (kind) {
-                SettingsKind.HOME_STATS -> NxRow("Home stats", secondary = if (s.menuHomeStats) "Show" else "Hide", cycleable = true)
-                SettingsKind.MENU_ORIENTATION -> NxRow("$name orientation", secondary = orientationLabel(MenuStyles.orientationOf(s.menuOrientations, category!!)), cycleable = true)
-                SettingsKind.GAME_LIST_ORIENTATION -> NxRow("Game lists orientation", secondary = orientationLabel(s.gameListOrientation), cycleable = true)
-                SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT -> NxRow("Game lists alignment", secondary = verticalAlignmentLabel(s.gameListVerticalAlignment), cycleable = true)
-                else -> NxRow("$name layout", secondary = menuStyleLabel(onboardingLayout(step)), cycleable = true)
+                SettingsKind.HOME_STATS -> NxRow("Stats", secondary = if (s.menuHomeStats) "Show" else "Hide", cycleable = true)
+                SettingsKind.MENU_ORIENTATION -> NxRow("Orientation", secondary = orientationLabel(MenuStyles.orientationOf(s.menuOrientations, category!!)), cycleable = true)
+                SettingsKind.GAME_LIST_ORIENTATION -> NxRow("Orientation", secondary = orientationLabel(s.gameListOrientation), cycleable = true)
+                SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT -> NxRow("Alignment", secondary = verticalAlignmentLabel(s.gameListVerticalAlignment), cycleable = true)
+                else -> NxRow("Layout", secondary = menuStyleLabel(onboardingLayout(step)), cycleable = true)
             }
         } + NxRow("Continue")
     }
@@ -2295,8 +2428,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private fun onboardingGameCount(): Int = systemsCache.sumOf { it.gameCount }
 
     /** The sign-in prompt's typing (as the RetroAchievements settings' prompt). */
-    fun onboardingDraftUser(text: String) { (_screen.value as? Screen.Onboarding)?.takeIf { it.prompt }?.let { _screen.value = it.copy(draftUser = text) } }
-    fun onboardingDraftPassword(text: String) { (_screen.value as? Screen.Onboarding)?.takeIf { it.prompt }?.let { _screen.value = it.copy(draftPassword = text) } }
+    fun onboardingDraftUser(text: String) { (_screen.value as? Screen.Onboarding)?.takeIf { it.prompt || it.artSignIn }?.let { _screen.value = it.copy(draftUser = text) } }
+    fun onboardingDraftPassword(text: String) { (_screen.value as? Screen.Onboarding)?.takeIf { it.prompt || it.artSignIn }?.let { _screen.value = it.copy(draftPassword = text) } }
 
     /** The prompt's confirm: both filled, the sign-in runs ([onRaIdleOnboarding] takes its end); else it stays. */
     private fun submitOnboardingSignIn(s: Screen.Onboarding) {
@@ -2481,7 +2614,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
         // On its own the page is required: B (and its hint) only while a bind waits, to cancel it.
         val canGoBack = systemButtonsReturn == null || page.phase == SystemButtonsPage.Phase.BIND
-        _screen.value = Screen.Onboarding(OnboardingStep.SYSTEM_BUTTONS, pageTitle, listOf(title) + details, rows, accent = deps.settings.accent, padTheme = deps.settings.padTheme, canGoBack = canGoBack)
+        _screen.value = Screen.Onboarding(
+            OnboardingStep.SYSTEM_BUTTONS, pageTitle, listOf(title) + details, rows, accent = deps.settings.accent, padTheme = deps.settings.padTheme,
+            canGoBack = canGoBack, touchRows = onboardingTouchRows(OnboardingStep.SYSTEM_BUTTONS, rows),
+        )
         _selection.value = ListSelection(selected.coerceIn(0, (rows.size - 1).coerceAtLeast(0)), rows.size)
     }
 
@@ -2741,7 +2877,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     /**
-     * A folder step's page title and whether B goes back from it: "Setup · Step n of m" (and back) in first setup; after
+     * A folder step's page title and whether B goes back from it: "Setup · Step n/m" (and back) in first setup; after
      * it (a lost home's pick) just the page's name, and B has nowhere to go.
      */
     fun setupChrome(): Pair<String, Boolean> {
@@ -2751,15 +2887,23 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val allFiles = allFilesStepShown || (access != null && access.declared && !access.granted() && !deps.settings.allFilesAsked)
         val home = if (homePage != null) 1 else 0   // the home page, between the pick and the ROMs folder offer
         val pick = if (mediaHomeTaken || !homePickShown()) 0 else 1   // no home pick on the media home
-        val at = (if (allFiles) 1 else 0) + when (screen) {
+        val at = setupPreSteps() + (if (allFiles) 1 else 0) + when (screen) {
             is Screen.PermissionsStep -> 0
             Screen.PickFolder -> 1
             Screen.AddFirstExtra -> 1 + pick + home
             is Screen.FolderSummary -> if (screen.extraId == Recents.HOME) 1 + pick else 2 + pick + home
             else -> 2 + pick + home + (if (addedExtraId != null) 1 else 0)
         }
-        val total = setupFolderSteps() + onboardingSteps(onboarding.context).size
-        return "Setup · Step $at of $total" to true
+        return setupCounter(at) to true
+    }
+
+    /** The first of the page's two buttons side by side ([setupButtons]), its row index; null when the page has no pair. */
+    private fun setupButtonPair(): Int? = when (val s = _screen.value) {
+        is Screen.Onboarding -> s.touchRows?.takeIf { !s.prompt && !s.artSignIn && s.artKey == null && setupButtons(it, button = true) == 2 }?.let { it.size - 2 }
+        Screen.AddFirstExtra, is Screen.AndroidGamesStep -> 0
+        is Screen.StorageUpgrade -> 0.takeIf { storageUpgradeRows(s).size == 2 }
+        is Screen.CopySaves -> 0.takeIf { !s.busy && copySavesRows(s).size == 2 }
+        else -> null
     }
 
     /** A or a tap on a folder step's row [index]: that step's choice. */
@@ -2809,6 +2953,14 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /** A pad press on an onboarding step: UP / DOWN move (wrapping), A chooses, B goes back. */
     private fun onOnboardingButton(s: Screen.Onboarding, button: NxButton) {
+        if (s.artSignIn || s.artKey != null) {   // the artwork step's prompt: A checks it, B closes it
+            when (button) {
+                NxButton.A -> submitOnboardingArt(s)
+                NxButton.B -> _screen.value = s.copy(artSignIn = false, artKey = null, draftPassword = "", draftKey = "")
+                else -> Unit
+            }
+            return
+        }
         if (s.prompt) {   // the sign-in prompt: A signs in, B closes it
             when (button) {
                 NxButton.A -> submitOnboardingSignIn(s)
@@ -4430,6 +4582,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                     when (shelf) {
                         HomeShelf.NEW -> s.showNewShelf = on
                         HomeShelf.NOT_STARTED -> s.showNotStartedShelf = on
+                        HomeShelf.MOST_PLAYED -> s.showMostPlayedShelf = on
                         HomeShelf.PICK_UP -> Unit
                     }
                 }
@@ -4557,7 +4710,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             s.gameListVerticalAlignment = VerticalListAlignment.DEFAULT
             s.showHomeTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showConsolesTab = MenuStyles.DEFAULT_TAB_SHOWN
             s.showCollectionsTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showToolsTab = MenuStyles.DEFAULT_TAB_SHOWN
-            s.showNewShelf = true; s.showNotStartedShelf = true
+            s.showNewShelf = true; s.showNotStartedShelf = true; s.showMostPlayedShelf = true
             s.showNetplayHint = true
             s.consoleArt = ConsoleArt.DEFAULT; s.gameListArt = GameListArt.DEFAULT; s.backdropArt = BackdropArt.DEFAULT
             s.menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE
@@ -4652,6 +4805,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             // Home's New and Not started shelves, Show / Hide, while the Home tab shows.
             SettingsRow(SettingsKind.SHELF_SHOWN, "New shelf", shown(s.showNewShelf), shelf = HomeShelf.NEW).takeIf { on && c == MenuCategory.HOME },
             SettingsRow(SettingsKind.SHELF_SHOWN, "Not started shelf", shown(s.showNotStartedShelf), shelf = HomeShelf.NOT_STARTED).takeIf { on && c == MenuCategory.HOME },
+            SettingsRow(SettingsKind.SHELF_SHOWN, "Most played shelf", shown(s.showMostPlayedShelf), shelf = HomeShelf.MOST_PLAYED).takeIf { on && c == MenuCategory.HOME },
             // Home's stats strip (its cards' info follows Extra info).
             SettingsRow(SettingsKind.HOME_STATS, "Stats", shown(s.menuHomeStats)).takeIf { on && c == MenuCategory.HOME },
             SettingsRow(SettingsKind.MENU_ORIENTATION, "Orientation", orientationLabel(MenuStyles.orientationOf(s.menuOrientations, c)), category = c)
@@ -4748,6 +4902,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private fun shelfShown(shelf: HomeShelf): Boolean = when (shelf) {
         HomeShelf.NEW -> deps.settings.showNewShelf
         HomeShelf.NOT_STARTED -> deps.settings.showNotStartedShelf
+        HomeShelf.MOST_PLAYED -> deps.settings.showMostPlayedShelf
         HomeShelf.PICK_UP -> true
     }
 
@@ -6509,6 +6664,11 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 NxButton.DOWN -> _updateScroll.tryEmit(1)
                 else -> Unit
             }
+            return
+        }
+        // Setup's two buttons side by side ([setupButtons]), the selection on one: LEFT takes the first, RIGHT the second.
+        if (button == NxButton.LEFT || button == NxButton.RIGHT) setupButtonPair()?.takeIf { _selection.value.index >= it }?.let { first ->
+            _selection.value = _selection.value.copy(index = if (button == NxButton.LEFT) first else first + 1)
             return
         }
         if (_screen.value is Screen.AndroidGamesStep) {   // setup's step: the d-pad moves between Yes and Not now, A chooses, B goes back

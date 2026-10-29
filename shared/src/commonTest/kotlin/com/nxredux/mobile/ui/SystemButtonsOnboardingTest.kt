@@ -27,6 +27,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /** The SELECT / START / MENU page in a real [AppState]: in onboarding after the text size, and once per new pad model. */
@@ -105,7 +106,17 @@ class SystemButtonsOnboardingTest {
             listOf("Your controller's buttons", "Press SELECT, START and MENU on your controller (AYANEO Controller). One wasn't found? Choose I've pressed them all, and we will configure it next."),
             s.page().details,
         )
-        assertEquals("Setup", s.page().title)
+        assertEquals("Setup · Step 2/11", s.page().title)   // after Text size, counted with the rest
+    }
+
+    // In setup's layout the three are rows with their status on the right, I've pressed them all the button under them.
+    @Test fun stepRowsShowTheirStatusAndOneButton() = runTest {
+        pads = listOf(aya)
+        val s = state(Settings(treeRef = null, onboardingDone = null))
+        s.toTextSizeContinue()
+        val rows = assertNotNull(s.page().touchRows)
+        assertEquals(listOf("Not found yet", "Not found yet", "Not found yet", null), rows.map { it.value })
+        assertEquals(1, setupButtons(rows, button = true))
     }
 
     @Test fun noControllerSkipsStepAndAsksLater() = runTest {

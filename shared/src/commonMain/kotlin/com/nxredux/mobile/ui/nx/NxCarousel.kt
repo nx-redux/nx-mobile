@@ -96,7 +96,7 @@ fun NxCarousel(
         val (g, top) = carouselRowPlace(maxHeight.value, titleRoom.value, room, portraitW = maxWidth.value.takeIf { portrait })   // portrait: the neighbours show
         if (g.itemW <= 1f || g.itemH <= 1f || tiles.isEmpty()) return@BoxWithConstraints
 
-        val gutter = if (portrait) 16.dp else 24.dp
+        val gutter = pageGutter(portrait).dp
         val avail = maxWidth - gutter * 2
         val availPx = constraints.maxWidth - 2 * with(LocalDensity.current) { gutter.roundToPx() }
         val spare = (maxHeight.value - (top + g.itemH + room) - CAPTION_SPARE_MARGIN).coerceAtLeast(0f)

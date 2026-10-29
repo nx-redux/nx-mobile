@@ -6,9 +6,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import com.nxredux.mobile.ui.nx.rememberNxRowSnapFling
 import com.nxredux.mobile.ui.nx.nxRowEdgeMask
 import com.nxredux.mobile.ui.nx.nxRowFade
-import com.nxredux.mobile.ui.nx.SETTING_DESC_OF_LABEL
-import com.nxredux.mobile.ui.nx.nxListLabel
-import com.nxredux.mobile.ui.nx.nxOptionsLabelSize
 import com.nxredux.mobile.ui.nx.LocalNxFontWeights
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.Image
@@ -63,6 +60,7 @@ import com.nxredux.mobile.ui.nx.nxListInset
 import com.nxredux.mobile.ui.nx.nxTextScale
 import com.nxredux.mobile.ui.nx.pinned
 import org.jetbrains.compose.resources.painterResource
+import com.nxredux.mobile.ui.nx.nxDescSize
 
 /** The window classes the Settings block's geometry follows. */
 enum class SettingsSizeClass { PHONE_UPRIGHT, PHONE_LANDSCAPE, TABLET }
@@ -126,7 +124,7 @@ fun settingsFrameLeft(stageWidth: Dp, sectionRight: Dp, gutter: Dp): Dp =
  * The blocks' bottom inset inside the screen slot. App already pads the shell by the system bars (the gesture bar
  * included) and HandheldShell puts the slot above the on-screen pad, so this is all that is added here.
  */
-val SETTINGS_BLOCK_BOTTOM = 24.dp
+val SETTINGS_BLOCK_BOTTOM = 32.dp
 
 
 /** The label line ("Settings") above the first section: [NxTextSizes.menuInfo], this far above it. */
@@ -234,6 +232,27 @@ internal fun SettingsBackground() {
  * short page's first line sits where "Settings" does); a longer page grows up from the bottom past it.
  */
 data class SettingsBlockMode(val crumb: String?, val pictureWidth: Dp? = null, val minHeight: Dp = 0.dp)
+
+/** A setup page's title (its step's question), bold in ink, up to two lines, under Appearance → Text size. */
+internal val SETUP_TITLE_SIZE = 30.sp
+/** From a setup page's step counter down to its title: none, as the title's own line box leaves ~8 dp between the glyphs. */
+private val SETUP_TITLE_GAP = 0.dp
+
+/** A setup page's head: the step [counter] small in inkDim, then the step's question, [title], as the page's title. */
+@Composable
+internal fun SetupHeader(counter: String, title: String) {
+    val colors = LocalNxColors.current
+    val scale = nxTextScale()
+    Text(
+        counter, color = colors.inkDim, fontFamily = LocalNxFont.current, fontSize = NxTextSizes.menuInfo.pinned() * scale,
+        maxLines = 1, softWrap = false, modifier = Modifier.fillMaxWidth().padding(horizontal = nxListInset()),
+    )
+    if (title.isNotEmpty()) Text(
+        title, color = colors.listText, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Bold,
+        fontSize = SETUP_TITLE_SIZE.pinned() * scale, lineHeight = SETUP_TITLE_SIZE.pinned() * scale * 1.15f, maxLines = 2,
+        modifier = Modifier.fillMaxWidth().padding(start = nxListInset(), end = nxListInset(), top = SETUP_TITLE_GAP),
+    )
+}
 
 /**
  * Whether [screen] draws as the rows block on a narrow window (one level at a time): a block page ([settingsBlockPage])
@@ -385,7 +404,7 @@ internal fun SettingsWordList(
     val colors = LocalNxColors.current
     val style = settingsWordStyle()
     val tapOpens = LocalNxTapOpens.current
-    val tagSize = nxOptionsLabelSize(nxListLabel()) * SETTING_DESC_OF_LABEL   // a Settings row's description size
+    val tagSize = nxDescSize()   // a Settings row's description size
     val tagFont = LocalNxFontWeights.current
     NxKeepSelectedInView(listState, selection, rows.size, SETTINGS_ROWS_FADE_ROWS)   // the selection clear of the fade
     val pitchPx = with(LocalDensity.current) { settingsWordPitch(style).roundToPx() }

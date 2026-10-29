@@ -261,7 +261,7 @@ internal fun MinimalScreen(
     inset: Dp = 0.dp,   // the names this much further in than the gutter (a game list's: in line with its title and bars)
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
-    val gutter = (if (LocalPortrait.current) 16.dp else 24.dp) + inset
+    val gutter = nxPageGutter() + inset
     val page = LocalMinimalPage.current
     // How this page came in, read once: the title dropping back (from the list's), or the names rising in.
     val returning = remember { page?.arriving(NavMotion.MINIMAL_BACK, "back") == true }

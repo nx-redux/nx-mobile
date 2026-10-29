@@ -129,6 +129,8 @@ private const val FADE_MS = 350         // the picture's crossfade
 private const val SHADOW_ALPHA = 0.5f   // the box art's shadow: a black copy
 private val SHADOW_DROP = 4.dp          // the copy's offset down
 private val SHADOW_BLUR = 8.dp          // the copy's blur (a no-op below Android 12: a hard offset shadow there)
+/** How far a box's drop shadow draws past the box: its drop and the blur's tail (about twice its radius). */
+internal val BOX_SHADOW_REACH = SHADOW_DROP + SHADOW_BLUR * 2
 
 /**
  * The factor a Backdrop slot's content (the 60 dp tool icon, the 17 / 24 / 30 sp names) scales by: the slot's width
@@ -444,7 +446,7 @@ fun NxBackdrop(
         if (g.itemW <= 1f || g.itemH <= 1f || count == 0) return@BoxWithConstraints
         val top = place.rowTop + centreShift.value
 
-        val gutter = if (portrait) 16.dp else 24.dp
+        val gutter = pageGutter(portrait).dp
         val avail = maxWidth - gutter * 2
         val availPx = constraints.maxWidth - 2 * with(LocalDensity.current) { gutter.roundToPx() }
         val spare = (maxHeight.value - place.captionBottom - CAPTION_SPARE_MARGIN).coerceAtLeast(0f)
@@ -529,7 +531,7 @@ private fun BoxScope.BackdropRowItem(
         contentAlignment = Alignment.Center,
     ) {
         // A game list's unselected boxes in greyscale, the colour coming back as one slides into the selection.
-        if (game != null) Box(Modifier.matchParentSize().nxSaturation { backdropSaturation(i - at()) }) { BoxArt(game) }
+        if (game != null) Box(Modifier.matchParentSize().nxSaturation(BOX_SHADOW_REACH) { backdropSaturation(i - at()) }) { BoxArt(game) }
         else if (tile != null) SlotTile(
             tile, look.k, g.itemW, scale = { rowItem(RowStyle.BACKDROP, i - at(), g).scale }, toolLines = look.toolLines,
             toolNameSp = look.toolNameSp, toolNamePad = look.toolNamePad, toolSplit = look.toolSplit, toolGap = look.toolGap,

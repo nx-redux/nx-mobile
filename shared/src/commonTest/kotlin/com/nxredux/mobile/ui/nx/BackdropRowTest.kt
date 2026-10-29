@@ -184,20 +184,15 @@ class BackdropRowTest {
         assertEquals("[trophy]0 of 35 · Next: That Was Easy", infoAnnotatedString(listOf(ach, next)).text)
     }
 
-    @Test fun nextGoalIsASpanInWhiteAndNothingElseIs() {
+    // The next goal is no brighter than the line it is on: no span, the whole line in the Text's own colour (the title
+    // above stays the brightest text in the caption).
+    @Test fun nextGoalTakesTheLinesOwnColour() {
         val time = InfoLine(InfoKind.TIME, "Today - 1m")
         val ach = InfoLine(InfoKind.ACHIEVEMENTS, "0 of 35")
         val next = InfoLine(InfoKind.NEXT, "Next: That Was Easy")
-        val white = Color.White
-        val text = infoAnnotatedString(listOf(time, ach, next), next = white)
-        val spans = text.spanStyles
-        assertEquals(1, spans.size)
-        val span = spans.single()
-        assertEquals(white, span.item.color)
-        assertEquals("Next: That Was Easy", text.text.substring(span.start, span.end))   // not the separator before it
-        assertTrue(text.text.substring(0, span.start).endsWith(" · "))
-        assertEquals(emptyList(), infoAnnotatedString(listOf(time, ach), next = white).spanStyles)   // no next goal: no span
-        assertEquals(emptyList(), infoAnnotatedString(listOf(time, ach, next)).spanStyles)           // no colour: no span
+        val text = infoAnnotatedString(listOf(time, ach, next))
+        assertEquals("Today - 1m · [trophy]0 of 35 · Next: That Was Easy", text.text)
+        assertEquals(emptyList(), text.spanStyles)
     }
 
     @Test fun placeholderIsAPortraitCaseTheSlotsHeight() {

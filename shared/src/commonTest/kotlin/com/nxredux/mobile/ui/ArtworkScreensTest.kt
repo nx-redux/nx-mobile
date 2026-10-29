@@ -213,9 +213,12 @@ class ArtworkScreensTest {
     @Test fun onboarding_fetch_now_starts_the_artwork_job_and_moves_on() = runTest {
         val r = rig(onboardingAt = OnboardingStep.ARTWORK)
         val s = assertIs<Screen.Onboarding>(r.state.screen.value)
-        assertEquals(listOf("Fetch now", "Skip"), s.rows.map { it.label })
+        // The source's account above the two buttons; the page opens on Fetch now.
+        assertEquals(listOf("ScreenScraper" to "Sign in", "Fetch now" to null, "Skip" to null), s.rows.map { it.label to it.secondary })
+        assertEquals(1, r.state.selection.value.index)
         assertTrue(s.details.any { "4 games" in it }, "${s.details}")
-        r.state.select(0); r.state.onButton(NxButton.A)
+        assertTrue(s.details.any { "Signing in is optional" in it }, "${s.details}")   // anonymous fetches still run
+        r.state.onButton(NxButton.A)
         assertEquals(OnboardingStep.RA_SIGN_IN, assertIs<Screen.Onboarding>(r.state.screen.value).step)
         advanceUntilIdle()
         assertTrue(r.http.calls.isNotEmpty())                           // the fetch ran
@@ -224,10 +227,23 @@ class ArtworkScreensTest {
     @Test fun onboarding_artwork_without_a_source_only_continues() = runTest {
         val r = rig(available = false, onboardingAt = OnboardingStep.ARTWORK)
         val s = assertIs<Screen.Onboarding>(r.state.screen.value)
-        assertEquals(listOf("Continue"), s.rows.map { it.label })
+        assertEquals(listOf("Skip"), s.rows.map { it.label })   // nothing to fetch from, no account to set here: Skip alone
         r.state.onButton(NxButton.A)
         assertEquals(OnboardingStep.RA_SIGN_IN, assertIs<Screen.Onboarding>(r.state.screen.value).step)
         assertTrue(r.http.calls.isEmpty())
+    }
+
+    // The ScreenScraper row opens its sign-in over the step (the name typed in, the password kept out of the row); B closes it.
+    @Test fun onboarding_artwork_screenscraper_row_opens_its_sign_in() = runTest {
+        val r = rig(onboardingAt = OnboardingStep.ARTWORK)
+        r.state.select(0); r.state.onButton(NxButton.A)
+        assertTrue(assertIs<Screen.Onboarding>(r.state.screen.value).artSignIn)
+        r.state.onboardingDraftUser("player")
+        assertEquals("player", assertIs<Screen.Onboarding>(r.state.screen.value).draftUser)
+        r.state.onButton(NxButton.B)
+        val s = assertIs<Screen.Onboarding>(r.state.screen.value)
+        assertEquals(false, s.artSignIn)
+        assertEquals(OnboardingStep.ARTWORK, s.step)
     }
 
     @Test fun tools_shows_artwork_only_with_a_controller_and_opens_with_the_counts() = runTest {

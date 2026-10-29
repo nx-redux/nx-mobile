@@ -38,7 +38,7 @@ internal fun homeListRows(rows: List<MainRow>): List<NxRow> = rows.mapNotNull { 
         is MainRow.Continue -> NxRow(r.entry.game.shownName, tag = CONTINUE_TAG)
         MainRow.PickAGame -> NxRow(PICK_A_GAME)
         is MainRow.Pin -> NxRow(r.entry.game.shownName)
-        is MainRow.Shelf -> NxRow(r.entry.game.shownName, tag = r.shelf.label.takeIf { r.shelf != HomeShelf.PICK_UP })
+        is MainRow.Shelf -> NxRow(r.entry.game.shownName, tag = r.tag ?: r.shelf.label.takeIf { r.shelf != HomeShelf.PICK_UP })
         is MainRow.PinnedTool -> NxRow(r.row.label)
         is MainRow.MoreTools, is MainRow.System, is MainRow.Collection, is MainRow.Tool -> null
     }
@@ -66,7 +66,7 @@ internal fun HomeListScreen(
     val chrome = LocalLauncherChrome.current
     val portrait = LocalPortrait.current
     // The rows (and the band's arrows, the strip) start on the tab row's gutter, as a main menu List's.
-    val gutter = if (portrait) 16.dp else 24.dp
+    val gutter = pageGutter(portrait).dp
     val shownStrip = strip?.takeIf { chrome.homeStats }   // Layouts → Home stats hides it
     val fontScale = LocalDensity.current.fontScale
     // Only the text scale and the orientation (the underline) shape the strip; the frame's size is not read.

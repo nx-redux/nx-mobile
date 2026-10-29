@@ -129,6 +129,24 @@ class RaPrefetchTest {
         assertTrue(hasher.calls.isEmpty()); assertTrue(http.posts.isEmpty())
         assertEquals(RaPrefetchResult(cached = 0, unknown = 0, skipped = 0, failed = false), r)
     }
+    // A cached game whose pointer names a path the library no longer lists (it moved to an extra folder) is repointed
+    // where the walk found it, so the menu finds its progress; a pointer to a listed path is kept.
+    @Test fun a_cached_game_with_a_stale_pointer_is_repointed_where_the_walk_found_it() = runTest {
+        val (p, store, _) = setup()
+        p.run(index, "me", "tok") { _, _, _ -> }
+        val stale = RaGamePointer("GBA", "home", "Roms/Gone (GBA)", "Zelda.gba", "Zelda")
+        RaGamePointers.write(store, h1, stale)
+        p.run(index, "me", "tok") { _, _, _ -> }
+        assertEquals(RaGamePointer("GBA", "home", "Roms/x (GBA)", "Zelda.gba", "Zelda"), RaJson.parse(RaGamePointer.serializer(), store.text(RaPaths.game(h1))!!))
+        // The same game listed twice: the pointer to either listed copy stays.
+        val twice = LibraryIndex(2, "home", emptyList(), emptyMap(), listOf(IndexedSystem("GBA", "Game Boy Advance", games = listOf(
+            game("Zelda.gba"), IndexedGame("extra", "GBA", "Zelda.gba", "ref:extra", "folder", "Zelda"),
+        ))))
+        val other = RaGamePointer("GBA", "extra", "GBA", "Zelda.gba", "Zelda")
+        RaGamePointers.write(store, h1, other)
+        p.run(twice, "me", "tok") { _, _, _ -> }
+        assertEquals(other, RaJson.parse(RaGamePointer.serializer(), store.text(RaPaths.game(h1))!!))
+    }
     @Test fun cached_games_only_get_missing_badges() = runTest {
         val (p, store, http) = setup()
         p.run(index, "me", "tok") { _, _, _ -> }

@@ -50,7 +50,7 @@ fun NxCarouselStack(
         // The family is the screen's (the whole window), not the body's; a window not yet measured falls back to the body.
         val screenW = if (window.width.value > 0f) window.width.value else bodyW
         val screenH = if (window.height.value > 0f) window.height.value else bodyH
-        val g = carouselStackGeometry(bodyW, titleRoomSizingBody(bodyH, titleRoom.value), screenW, screenH, portrait, gutter = if (portrait) 16f else 24f, alignment = alignment)
+        val g = carouselStackGeometry(bodyW, titleRoomSizingBody(bodyH, titleRoom.value), screenW, screenH, portrait, gutter = pageGutter(portrait), alignment = alignment)
             .centredIn(bodyH)
         if (g.slotW <= 1f || g.slotH <= 1f) return@BoxWithConstraints
         if (onPageRows != null) {

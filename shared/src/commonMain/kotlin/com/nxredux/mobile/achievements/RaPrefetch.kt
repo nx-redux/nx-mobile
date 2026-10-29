@@ -4,6 +4,8 @@ import com.nxredux.mobile.library.IndexedGame
 import com.nxredux.mobile.library.LibraryIndex
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.storage.GamePath
+import com.nxredux.mobile.storage.GameRef
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.ensureActive
@@ -112,6 +114,17 @@ class RaPrefetch(
         pending.getOrPut(key.consoleFolder) { ArrayList() } += change
     }
 
+    /**
+     * A cached game whose pointer names a path the library no longer lists (it moved to another folder, or the pointer
+     * is a handheld's rom.txt for a home this phone keeps elsewhere) points at [game], where this walk found it: the menu
+     * finds its progress by that path. A pointer to a listed path (the same game twice) is left as it is.
+     */
+    private suspend fun repointStale(hash: String, tag: String, game: IndexedGame, listed: Set<String>) {
+        val known = RaGamePointers.read(store, hash)
+        if (known != null && GamePath.of(GameRef(known.source, known.dir, known.file)) in listed) return
+        RaGamePointers.write(store, hash, RaGamePointer(tag, game.source, game.dir, game.file, game.name))
+    }
+
     private suspend fun walk(
         candidates: List<Pair<String, IndexedGame>>, snapshots: MutableMap<String, RaFingerprintFile>,
         pending: MutableMap<String, MutableList<(RaFingerprintFile) -> Unit>>, pacer: RaPacer, user: String, token: String,
@@ -119,6 +132,8 @@ class RaPrefetch(
         onProgress: (done: Int, total: Int, title: String) -> Unit,
     ): RaPrefetchResult {
         var cached = 0; var unknown = 0; var skipped = 0
+        // Every path this walk lists: a cached game's pointer elsewhere is stale (the game moved, or a handheld's rom.txt).
+        val listed = candidates.mapTo(HashSet()) { (_, g) -> GamePath.of(GameRef(g.source, g.dir, g.file)) }
         for ((i, c) in candidates.withIndex()) {
             val (tag, game) = c
             currentCoroutineContext().ensureActive()
@@ -133,6 +148,7 @@ class RaPrefetch(
                 val sets = readSets(hash)
                 // A hit is never restamped. A handheld-fetched sets.json has no (mobile-only) gameid.json: its own GameId answers.
                 if (k.cached == null) (cachedGameId(hash) ?: sets?.gameId?.takeIf { it != 0 })?.let { answer(k, it, pending) }
+                repointStale(hash, tag, game, listed)
                 repairBadges(hash, sets); skipped++; onItem(i, RaItemStatus.ALREADY_CACHED, null); continue
             }
             onItem(i, RaItemStatus.DOWNLOADING, null)

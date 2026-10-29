@@ -69,10 +69,10 @@ internal const val GRID_GAP = 12f
 
 /**
  * What a Grid's tiles show, setting their least width (dp) and shape ([aspect], width over height): a game's screenshot,
- * a console's logo, or an icon (a tool, a collection's name).
+ * a console's logo, a tool's icon, or a collection's name (sized as an icon).
  */
 enum class GridTileKind(val minW: Float, val aspect: Float) {
-    SCREENSHOT(200f, GRID_GAME_TILE_AR), LOGO(136f, 1.2f), ICON(110f, 1f),
+    SCREENSHOT(200f, GRID_GAME_TILE_AR), LOGO(136f, 1.2f), ICON(110f, 1f), NAME(110f, 1f),
 }
 
 /**
@@ -107,29 +107,33 @@ internal fun gridMatched(bodyW: Float, bodyH: Float, windowW: Float, windowH: Fl
     )
     val own = gridVertical(bodyW, bodyH, kind, landscape = false, gutter = GRID_GUTTER_UPRIGHT)
     // The page keeping more than the window turned can spare (the on-screen pad under it upright): no sideways twin to
-    // match. Its tiles keep their own shape at their width, a fixed height: a game's screenshot held to two rows' room
-    // (three would be too short to read; one alone would be the faded edge row), a logo or icon to three, as every Grid
-    // shows; as many whole rows as fit, the rest scrolls.
+    // match. At most [gridPadMaxColumns] across, its tiles keep their own shape at their width, a fixed height, held
+    // to two rows' room (three would be too short to read; one alone would be the faded edge row); as many whole rows as
+    // fit, the rest scrolls.
     if (side.tileH < GRID_TILE_MIN_DP) {
+        val columns = min(own.columns, gridPadMaxColumns(kind))
+        val tileW = (bodyW - 2 * own.gutter - (columns - 1) * GRID_GAP) / columns
         val band = bodyH - GRID_GAP
-        val least = gridPadMinRows(kind)
-        val tileH = min(own.tileW / kind.aspect, band / least - GRID_GAP)
-        return own.copy(tileH = tileH, rows = max(least, floor(band / (tileH + GRID_GAP)).toInt()))
+        val tileH = min(tileW / kind.aspect, band / GRID_PAD_MIN_ROWS - GRID_GAP)
+        return own.copy(tileW = tileW, tileH = tileH, columns = columns, rows = max(GRID_PAD_MIN_ROWS, floor(band / (tileH + GRID_GAP)).toInt()))
     }
     val band = bodyH - GRID_GAP
     val rows = max(GRID_MIN_ROWS, (band / (side.tileH + side.gap)).roundToInt())
     return own.copy(tileH = band / rows - GRID_GAP, rows = rows)
 }
 
-/** A Grid's side gutters, upright and sideways. */
-internal const val GRID_GUTTER_UPRIGHT = 16f
-internal const val GRID_GUTTER_SIDEWAYS = 24f
+/** A Grid's side gutters, upright and sideways: the page's ([PAGE_GUTTER_UPRIGHT], [PAGE_GUTTER_SIDEWAYS]). */
+internal const val GRID_GUTTER_UPRIGHT = PAGE_GUTTER_UPRIGHT
+internal const val GRID_GUTTER_SIDEWAYS = PAGE_GUTTER_SIDEWAYS
 
 /** Every Grid's fixed room over the tab row (or the page's bottom), dp, on any screen: the tabs stand apart from the tiles. */
 internal const val GRID_TAB_GAP = 15f
 
-/** The fewest rows a Grid of game screenshots shows with the pad under it upright ([gridMatched]'s fixed-height tiles). */
+/** The fewest rows a Grid shows with the pad under it upright ([gridMatched]'s fixed-height tiles). */
 internal const val GRID_PAD_MIN_ROWS = 2
 
-/** [kind]'s fewest rows with the pad under it upright: screenshots [GRID_PAD_MIN_ROWS], logos and icons [GRID_MIN_ROWS]. */
-internal fun gridPadMinRows(kind: GridTileKind): Int = if (kind == GridTileKind.SCREENSHOT) GRID_PAD_MIN_ROWS else GRID_MIN_ROWS
+/**
+ * The most columns a Grid of [kind] shows with the pad under it upright: a small screen's screenshots, logos
+ * and names two across, its tools' icons (an icon and a short name) three.
+ */
+internal fun gridPadMaxColumns(kind: GridTileKind): Int = if (kind == GridTileKind.ICON) 3 else 2

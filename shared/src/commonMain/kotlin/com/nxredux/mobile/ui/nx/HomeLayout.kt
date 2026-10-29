@@ -14,7 +14,7 @@ import kotlin.math.min
 enum class HomeArrangement { SPLIT, WIDE }
 
 /** Home's discovery shelves, in page order, with their labels. */
-enum class HomeShelf(val label: String) { NEW("New"), NOT_STARTED("Not started"), PICK_UP("Pick up again") }
+enum class HomeShelf(val label: String) { NEW("New"), NOT_STARTED("Not started"), PICK_UP("Pick up again"), MOST_PLAYED("Most played") }
 
 /** A rectangle on Home's page, in dp from the body's top left. */
 data class HomeRect(val x: Float, val y: Float, val w: Float, val h: Float)
@@ -57,7 +57,7 @@ private const val HOME_BARS = 88f
  */
 private const val WIDE_RATIO = 2.15f
 
-internal fun homeGutter(portrait: Boolean): Float = if (portrait) 16f else 24f
+internal fun homeGutter(portrait: Boolean): Float = pageGutter(portrait)
 
 /**
  * How Home's top section holds the pinned tools' squares ([homeBoard]).
@@ -281,10 +281,12 @@ internal fun homeIsLarge(f: HomeFrame): Boolean =
 private const val HOME_TOOL_ROWS = 5
 
 /**
- * The most games a Grid Home shelf shows on a board [perRow] games a row: 4 in [portrait] (two rows of 2) and on a
- * landscape grid of 4 or more a row (the large face's one row), else 3 (a narrow landscape's row of 3).
+ * The most games a Grid Home shelf shows on a board [perRow] games a row: 4 in [portrait] (two rows of 2); in landscape
+ * the most whole rows within 4 (a row of 4 or more: 4; two rows of 2: 4, a 4:3 handheld's; one row of 3: 3), so a
+ * shelf never leaves its last row half empty.
  */
-internal fun homeShelfCap(portrait: Boolean, perRow: Int): Int = if (portrait || perRow >= 4) HOME_SHELF_MAX else HOME_SHELF_MAX - 1
+internal fun homeShelfCap(portrait: Boolean, perRow: Int): Int =
+    if (portrait || perRow >= HOME_SHELF_MAX) HOME_SHELF_MAX else HOME_SHELF_MAX - HOME_SHELF_MAX % perRow.coerceAtLeast(1)
 
 /**
  * The top section's squares for [tools] pinned tools on [mode] with [rows] squares a column ([HOME_TOOL_ROWS]): UNDER

@@ -2,7 +2,6 @@ package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.shared.res.nav_icon_file
 import com.nxredux.mobile.shared.res.nav_icon_folder
-import com.nxredux.mobile.shared.res.nav_icon_new_folder
 import com.nxredux.mobile.shared.res.nav_icon_up
 import com.nxredux.mobile.shared.res.Res
 import androidx.compose.foundation.layout.Box
@@ -10,9 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.ui.nx.nxListInset
-import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
-import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.CompositionLocalProvider
 import com.nxredux.mobile.ui.nx.Hint
@@ -21,22 +18,29 @@ import com.nxredux.mobile.ui.nx.NxDetailListBody
 import com.nxredux.mobile.ui.nx.NxDialog
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxTextPrompt
+import com.nxredux.mobile.ui.nx.nxPageGutter
 
 /** The list-style picker's hints for the [selected] row: New folder only inside a folder and never when picking a zip. */
 internal fun filePickerHints(s: Screen.FilePicker, selected: Int = -1): List<Hint> = buildList {
     // The d-pad's sideways jump between the folder's entries and the actions under them: the way it goes from here.
     val actions = s.rows.indexOfFirst { it is PickerRow.Action || it == PickerRow.NewFolder }
     if (actions >= 0) add(if (selected >= actions) Hint(NxButton.LEFT, "Folders") else Hint(NxButton.RIGHT, "Actions"))
-    add(Hint(NxButton.A, "Select"))
+    // A says what it does on the selected row.
+    when (val row = s.rows.getOrNull(selected)) {
+        is PickerRow.Folder, is PickerRow.Volume, PickerRow.Up -> add(Hint(NxButton.A, "Open"))
+        is PickerRow.Zip -> add(Hint(NxButton.A, "Use file"))
+        is PickerRow.Action -> add(Hint(NxButton.A, if (s.mode is FilePickMode.Export) "Save" else "Use folder"))
+        PickerRow.NewFolder -> add(Hint(NxButton.A, "Create"))
+        else -> if (row == null) add(Hint(NxButton.A, "Open"))   // a file or Nothing here: no A
+    }
     add(Hint(NxButton.B, "Back"))
     // Touch has the Create new folder row; X stays for a pad.
     if (s.dir != null && s.mode != FilePickMode.ImportZip) add(Hint(NxButton.X, "New folder"))
 }
 
-/** The picker's rows as list rows: ".." with the up arrow, folders and volumes (they open like folders) with the folder icon, files with the file icon and dimmed, "Nothing here" dimmed. */
+/** The picker's rows as list rows: ".." with the up arrow, folders and volumes (they open like folders) with the folder icon, files with the file icon and dimmed, "Nothing here" dimmed; the actions words alone. */
 internal fun pickerListRows(rows: List<PickerRow>): List<NxRow> = rows.map {
     val icon = when (it) {
-        PickerRow.NewFolder -> Res.drawable.nav_icon_new_folder
         PickerRow.Up -> Res.drawable.nav_icon_up
         is PickerRow.Folder, is PickerRow.Volume -> Res.drawable.nav_icon_folder
         is PickerRow.File -> Res.drawable.nav_icon_file
@@ -58,7 +62,7 @@ fun FilePickerScreen(
     onHint: (NxButton) -> Unit, onDraft: (String) -> Unit, modifier: Modifier = Modifier,
 ) {
     // The page's gutter, as the other pages': the pills on it, the title, rows and hint bar's text the pill's inset in.
-    val gutter = if (LocalPortrait.current) 16.dp else 24.dp
+    val gutter = nxPageGutter()
     Box(modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalNxHintBarStart provides nxListInset()) { NxDetailListBody(
             title = screen.title, details = listOfNotNull(screen.status), headline = false,   // a quiet line under the title
@@ -68,6 +72,8 @@ fun FilePickerScreen(
             onSelect = { if (screen.rows.getOrNull(it) !is PickerRow.File) onSelect(it) },
             onOpen = { if (screen.rows.getOrNull(it) !is PickerRow.File) onOpen(it) }, onHint = onHint, rowsAtTop = true, pinnedBottom = pickerPinnedRows(screen.rows),
             actionsOutlined = false,   // the actions as plain rows, no ring; one column in either orientation
+            quietRows = true,   // unlit folders in inkName, the actions the word alone in inkDim
+            fromLine = 0.5f,   // from half the body down, as setup's pages; its actions stay at the bottom
             modifier = Modifier.padding(horizontal = gutter),
         ) }
         screen.prompt?.let { NxTextPrompt("New folder", it, onDraft, onConfirm = { onHint(NxButton.A) }, onCancel = { onHint(NxButton.B) }) }

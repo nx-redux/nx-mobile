@@ -553,7 +553,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.PermissionsStep -> WithIndex(selection) { val (t, b) = remember(s) { state.setupChrome() }; PermissionsStepScreen(s, t, b, it, state::select, state::setupStepRow, state::onButton) }
             is Screen.FilePicker -> WithIndex(selection) { FilePickerScreen(s, it, state::select, { state.openSelected() }, onHint = state::onButton, onDraft = state::filePickerDraft) }
             Screen.PickFolder -> WithIndex(selection) { val (t, b) = remember(s) { state.setupChrome() }; PickFolderScreen(t, b, it, state::select, state::setupStepRow, state::onButton, systemPicker = !state.filePickerOn()) }
-            is Screen.Onboarding -> WithIndex(selection) { OnboardingScreen(s, it, state::select, state::onboardingRow, onHint = state::onButton, onDraftUser = state::onboardingDraftUser, onDraftPassword = state::onboardingDraftPassword) }
+            is Screen.Onboarding -> WithIndex(selection) { OnboardingScreen(s, it, state::select, state::onboardingRow, onHint = state::onButton, onSetting = state::onboardingSettingEvent, onDraftKey = state::onboardingDraftKey, onDraftUser = state::onboardingDraftUser, onDraftPassword = state::onboardingDraftPassword) }
             is Screen.StorageUpgrade -> WithIndex(selection) { StorageUpgradeScreen(s, it, state::select, state::storageUpgradeRow, state::onButton) }
             is Screen.CopySaves -> WithIndex(selection) { CopySavesScreen(s, it, state::select, state::copySavesRow, state::onButton) }
             Screen.AddFirstExtra -> WithIndex(selection) { val (t, b) = remember(s) { state.setupChrome() }; AddFirstExtraScreen(t, b, it, state::select, state::setupStepRow, state::onButton, note = remember(s) { state.setupNote() }) }
@@ -579,6 +579,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     tileInfo = remember(s.rows, gameInfo, now) { rowTileInfo(s.rows, gameInfo, now) }, layoutKey = s.category,
                     onHomeLayout = onHomeLayout, homeView = homeView.value, homeRowLast = { homeRowLast.value },
                     continueInfo = { gameInfoFor(gameInfo, now, (s.rows.firstOrNull() as? MainRow.Continue)?.entry?.game, full = true) },
+                    canNetplay = { state.canNetplay(s.rows.getOrNull(selection.value.index).listed()) },
                     raSignedIn = state.settings.raToken != null,
                     controllerArt = state.settings.consoleArt == ConsoleArt.CONTROLLER,
                     minimalOpening = minimalOpening.value?.takeIf { s.category != null && it.page == s.category },
@@ -784,8 +785,16 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
             }
         }
         is Screen.Switcher -> Box(Modifier.fillMaxSize().background(Color.Black))
-        // The welcome carries its own large mark: plain black behind it. Every other setup page has the tool pages' mark.
-        is Screen.Onboarding -> if (s.step == OnboardingStep.WELCOME) Box(Modifier.fillMaxSize().background(Color.Black)) else MarkBackground(s)
+        // The welcome carries its own large mark: plain black behind it. Every other setup page, the folder steps too, is
+        // Settings' rows block ([SetupBlockPage]): the Settings background.
+        is Screen.Onboarding -> when {
+            s.step == OnboardingStep.WELCOME -> Box(Modifier.fillMaxSize().background(Color.Black))
+            else -> SettingsBackground()
+        }
+        is Screen.PermissionsStep, Screen.PickFolder, Screen.AddFirstExtra, is Screen.FolderSummary, is Screen.AndroidGamesStep,
+        is Screen.StorageUpgrade, is Screen.CopySaves -> SettingsBackground()
+        // The folder picker: the small mark only, so the large one never sits behind its names.
+        is Screen.FilePicker -> SettingsBackground()
         // Settings: the small mark at the top right alone ([SettingsBackground]); the large centred mark is not drawn.
         else -> if (settingsPane(s) != null) SettingsBackground() else MarkBackground(s)
     }

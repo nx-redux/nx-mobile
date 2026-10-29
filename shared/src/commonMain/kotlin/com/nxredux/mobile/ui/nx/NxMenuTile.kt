@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -317,12 +319,17 @@ private fun GameTile(
             )
             GameTileLayer.CAPTION -> {
                 // The lines under the name: their grey, or on an unselected Grid tile ([drained]) a step under its name.
-                val sub = if (drained && !lit) colors.inkDim.copy(alpha = colors.inkDim.alpha * DRAIN_SUB_OF_NAME) else colors.hint   // role: an unselected Grid tile's under-name lines
+                // Unselected, ink at [DRAIN_SUB_ALPHA], easing to the hint grey with the picture ([litness]), as the name does.
+                val sub = if (!drained) colors.hint else lerp(colors.listText.copy(alpha = DRAIN_SUB_ALPHA), colors.hint, litness())   // role: an unselected Grid tile's under-name lines
+                // An unselected Grid tile's name in ink at [DRAIN_NAME_ALPHA], easing to the accent with its picture ([litness]).
+                val name = if (!drained) colors.listText else lerp(colors.listText.copy(alpha = DRAIN_NAME_ALPHA), colors.accent, litness())   // role: an unselected Grid tile's name
                 // The info line with the List's inline trophy ([infoText]), the icon fitted to the 11 sp line (12 dp where
                 // it fits); on Home the info lines are a step under the title's 13 sp, at 11 sp on 14 dp lines.
-                // Home's cards: the info at the game list Carousel card's size, the name a step under its name, under Text size.
+                // Home's cards: the info at the game list Carousel card's size, under Text size.
+                // A tile's name at [HOME_TILE_NAME] (half a step under the Carousel card's name, still over its info); the hero
+                // card's a step under the card's plus [HOME_HERO_NAME_PLUS], as before.
+                val homeName = if (heroName) (NxTextSizes.secondary(nxCardTitleSize()).value + HOME_HERO_NAME_PLUS).sp else HOME_TILE_NAME * nxTextScale()
                 val statsSp = if (homeCaption) nxCardStatsSize() else INFO_SP
-                val homeName = NxTextSizes.secondary(nxCardTitleSize()).let { if (heroName) (it.value + HOME_HERO_NAME_PLUS).sp else it }
                 val statsLine = if (homeCaption) HOME_INFO_LINE else LINE_HEIGHT
                 val lineDp = with(LocalDensity.current) { (statsSp * statsLine).toDp() }
                 val info = if (statsOnly) emptyList() else info()
@@ -352,10 +359,10 @@ private fun GameTile(
                     if (named) {
                         // Grid Home: the selected tile's name in the accent (the Grid's only accent), the others in the ink.
                         if (homeCaption) TileText(
-                            tile.title, if (!drained) colors.listText else if (lit) colors.accent else colors.inkDim, homeName, maxLines = homeLines, align = TextAlign.Start,
+                            tile.title, name, homeName, maxLines = homeLines, align = TextAlign.Start,
                             balanced = homeLines > 1, lineHeight = HOME_CAPTION_LINE, shadow = if (homeLines > 1) titleShadow() else null,
                         )
-                        else TileText(tile.title, if (!drained) colors.listText else if (lit) colors.accent else colors.inkDim, titleSize, maxLines = 2, align = TextAlign.Start)
+                        else TileText(tile.title, name, titleSize, maxLines = 2, align = TextAlign.Start)
                     }
                     if (subtitle != null) TileText(subtitle, sub, statsSp, maxLines = 1, align = TextAlign.Start, lineHeight = HOME_INFO_LINE)
                     if (homeCaption) for (row in homeRows) {
@@ -427,8 +434,12 @@ private fun TileText(
 /** Grid Home's selection ([NxMenuTile]'s drained): the tile's picture eases from grey to colour over this as it is selected. */
 internal const val NX_DRAIN_MS = 150
 
-/** An unselected Grid picture's opacity (greyscale; its name then in [NxColors.inkDim]), and an unselected art-less tile's ink. */
-private const val DRAIN_PICTURE_ALPHA = 0.25f   // role: Grid Home's unselected picture
+/**
+ * An unselected Grid picture's opacity (greyscale, enough left to read what it shows; its name then in ink at
+ * [DRAIN_NAME_ALPHA]), and an unselected art-less tile's ink.
+ */
+private const val DRAIN_PICTURE_ALPHA = 0.45f   // role: Grid Home's unselected picture
+private const val DRAIN_NAME_ALPHA = 0.6f   // role: an unselected Grid tile's name, 4.5:1 or better on its picture
 private const val DRAIN_INK_ALPHA = 0.42f   // role: Grid Home's unselected icon or name
 
 /** A drained card's edge (no ring there): wide enough to show its rounded shape on a dark picture. */
@@ -444,24 +455,30 @@ internal fun nxLitness(lit: Boolean): () -> Float {
 /**
  * A Grid Home picture at [litness]: greyscale at [DRAIN_PICTURE_ALPHA] unlit, full colour and opacity lit, eased between.
  * The picture fills its card, so the layer clips itself to the card's rounded shape: a parent's rounded clip misses a
- * child layer drawn with alpha (the corners came out square).
+ * child layer drawn with alpha (the corners came out square). The opacity rides on the greying's own layer
+ * ([nxSaturation]), so an unlit tile takes one GPU surface, not two.
  */
 internal fun Modifier.nxDrain(litness: () -> Float): Modifier = graphicsLayer {
-    alpha = DRAIN_PICTURE_ALPHA + (1f - DRAIN_PICTURE_ALPHA) * litness()
     shape = RoundedCornerShape(NX_TILE_CORNER.dp)
     clip = true
-}.nxSaturation(litness)
+}.nxSaturation(alpha = { DRAIN_PICTURE_ALPHA + (1f - DRAIN_PICTURE_ALPHA) * litness() }, saturation = litness)   // clipped to the card: no reach past it
 
 /**
- * Content at [saturation], 0 (greyscale) to 1 (full colour), read at draw time; 1 draws it as is. The layer reaches a
- * size past each edge, so what draws outside the bounds (a Backdrop box's drop shadow) is greyed, not cut.
+ * Content at [saturation], 0 (greyscale) to 1 (full colour), and [alpha], read at draw time; both 1 draw it as is. The
+ * layer reaches [reach] past each edge, so what draws outside the bounds (a Backdrop box's drop shadow,
+ * [BOX_SHADOW_REACH]) is greyed, not cut; no further, as each unlit item's layer is a GPU surface of that size.
  */
-internal fun Modifier.nxSaturation(saturation: () -> Float): Modifier = drawWithContent {
+internal fun Modifier.nxSaturation(reach: Dp = 0.dp, alpha: () -> Float = { 1f }, saturation: () -> Float): Modifier = drawWithContent {
     val t = saturation()
-    if (t >= 1f) { drawContent(); return@drawWithContent }
-    val paint = Paint().apply { colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(t) }) }
+    val a = alpha()
+    if (t >= 1f && a >= 1f) { drawContent(); return@drawWithContent }
+    val paint = Paint().apply {
+        if (t < 1f) colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(t) })
+        this.alpha = a.coerceIn(0f, 1f)
+    }
+    val r = reach.toPx()
     drawIntoCanvas { c ->
-        c.saveLayer(Rect(-size.width, -size.height, 2 * size.width, 2 * size.height), paint)
+        c.saveLayer(Rect(-r, -r, size.width + r, size.height + r), paint)
         drawContent()
         c.restore()
     }
@@ -478,5 +495,8 @@ private const val DRAIN_BADGE_ALPHA = 0.3f   // role: an unselected Grid Home ti
 
 internal fun nxDimBadge(litness: Float): Float = DRAIN_BADGE_ALPHA + (1f - DRAIN_BADGE_ALPHA) * litness
 
-/** An unselected Grid tile's lines under its name, as a share of its name's ink ([NxColors.inkDim]). */
-private const val DRAIN_SUB_OF_NAME = 0.7f
+/** A Grid Home tile's name at Large, under Text size: between its info line (14.4 sp) and the Carousel card's name (18 sp). */
+private val HOME_TILE_NAME = 16.sp
+
+/** An unselected Grid tile's lines under its name: ink at this, about 4.5:1 on its tile. */
+private const val DRAIN_SUB_ALPHA = 0.5f   // role: an unselected Grid tile's under-name lines

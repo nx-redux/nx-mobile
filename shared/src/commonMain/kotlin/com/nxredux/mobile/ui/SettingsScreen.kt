@@ -35,6 +35,8 @@ import com.nxredux.mobile.ui.nx.hasMoreInfo
 import com.nxredux.mobile.ui.nx.nxDialogBody
 import com.nxredux.mobile.ui.nx.LocalNxFontWeights
 import com.nxredux.mobile.ui.nx.nxListInset
+import com.nxredux.mobile.ui.nx.nxListLabel
+import com.nxredux.mobile.ui.nx.nxOptionsLabelSize
 
 /**
  * One Settings page. Rows come from AppState; A acts on the highlighted row, B goes back to the section menu (from Library
@@ -146,11 +148,12 @@ internal fun nxShowsInfo(row: NxSettingRow, truncated: String?): Boolean =
 
 /** A touch page's lines under its title (Default emulators' caption), in the hint grey. */
 @Composable
-private fun SettingsDetailLines(lines: List<String>) {
+internal fun SettingsDetailLines(lines: List<String>, separator: String = " ") {
+    val body = nxOptionsLabelSize(nxListLabel())
     Text(
-        lines.joinToString(" "), color = LocalNxColors.current.hint, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal,   // Regular, as a row's description
-        // A step under a popup's body, under Appearance → Text size as the rows.
-        fontSize = nxDialogBody() * 0.9f, lineHeight = nxDialogBody() * 0.9f * 1.35f,
+        lines.joinToString(separator), color = LocalNxColors.current.hint, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal,   // Regular, as a row's description
+        // The body size: an options row's label (16 sp at Large, under Appearance → Text size), the help note's line height.
+        fontSize = body, lineHeight = body * 1.45f,
         modifier = Modifier.fillMaxWidth().padding(horizontal = nxListInset(), vertical = 4.dp),
     )
 }

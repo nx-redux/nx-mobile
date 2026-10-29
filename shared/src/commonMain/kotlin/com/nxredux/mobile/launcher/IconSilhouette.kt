@@ -30,6 +30,30 @@ object IconSilhouette {
         else -> (a - FAINT) * 255 / (FIRM - FAINT)
     }
 
+    private const val LIGHT_FROM = 176   // [layerAlpha]: a pixel's least channel from here on starts to read as white
+    private const val LIGHT = 224        // [layerAlpha]: from here on it is white, a hole in a coloured logo
+    private const val MIN_LIGHT = 0.03f  // [layerAlpha]: less of the shape white than this: specks, not detail
+    private const val MAX_LIGHT = 0.6f   // [layerAlpha]: more than this: a white logo (its colour only an accent)
+
+    /**
+     * A foreground layer's [argb] pixels as its shape's alpha ([shapeAlpha]), the white inside a coloured logo cut
+     * out: a full-colour logo's white is its detail (Chrome's ring, a play triangle), which a themed icon draws as
+     * holes, and the logo alone in alpha would be a plain disc. A logo mostly white, or with barely any, keeps it.
+     */
+    fun layerAlpha(argb: IntArray): IntArray {
+        val alpha = IntArray(argb.size) { shapeAlpha(argb[it] ushr 24) }
+        var firm = 0; var light = 0
+        for (i in argb.indices) if (alpha[i] == 255) { firm++; if (leastChannel(argb[i]) >= LIGHT) light++ }
+        if (firm == 0 || light < MIN_LIGHT * firm || light > MAX_LIGHT * firm) return alpha
+        for (i in argb.indices) {
+            val l = leastChannel(argb[i])
+            if (l > LIGHT_FROM) alpha[i] = if (l >= LIGHT) 0 else alpha[i] * (LIGHT - l) / (LIGHT - LIGHT_FROM)
+        }
+        return alpha
+    }
+
+    private fun leastChannel(c: Int) = minOf(c shr 16 and 0xFF, c shr 8 and 0xFF, c and 0xFF)
+
     private const val KEY_SHARE = 0.6f // the outer ring's share one colour needs to be the icon's plate ([contrastAlpha])
     private const val NEAR = 24        // [contrastAlpha]: a colour this close to the plate's (largest channel gap) is plate
     private const val FAR = 96         // [contrastAlpha]: one this far is wholly logo

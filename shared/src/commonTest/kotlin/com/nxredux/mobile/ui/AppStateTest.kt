@@ -394,36 +394,37 @@ class AppStateTest {
         assertEquals(OnboardingStep.HANDHELD, assertIs<Screen.Onboarding>(state.screen.value).step)
     }
 
-    // The folder steps are setup pages too: numbered with the rest ("Setup · Step n of m"), choices as rows.
+    // The folder steps are setup pages too: numbered with the rest, after Text size ("Setup · Step n/m", m the steps the
+    // answers so far make: the home's page joins it once the scan found games), choices as rows.
     @Test fun the_folder_steps_are_numbered_with_the_rest_of_setup() = runTest {
         val settings = freshInstall()
         val state = state(settings, allFiles = FakeAllFilesAccess(declared = true, isGranted = false))
         state.load(); state.getStarted()
         assertIs<Screen.PermissionsStep>(state.screen.value)
-        assertEquals("Setup · Step 1 of 10" to true, state.setupChrome())
+        assertEquals("Setup · Step 2/11" to true, state.setupChrome())
         state.select(1); state.onButton(NxButton.A)                        // Skip
         assertIs<Screen.PickFolder>(state.screen.value)
-        assertEquals("Setup · Step 2 of 10" to true, state.setupChrome())
+        assertEquals("Setup · Step 3/11" to true, state.setupChrome())
         state.setHome(ContentRef("Home"))
         assertIs<Screen.FolderSummary>(state.screen.value)                 // the home's games: its page
-        assertEquals("Setup · Step 3 of 11" to true, state.setupChrome())
+        assertEquals("Setup · Step 4/12" to true, state.setupChrome())
         state.onButton(NxButton.A)                                         // Continue
         assertIs<Screen.AddFirstExtra>(state.screen.value)
-        assertEquals("Setup · Step 4 of 11" to true, state.setupChrome())
+        assertEquals("Setup · Step 5/12" to true, state.setupChrome())
         assertEquals(ListSelection(0, 2), state.selection.value)
         state.select(1); state.onButton(NxButton.A)                        // Skip
-        assertEquals("Setup · Step 5 of 11", assertIs<Screen.Onboarding>(state.screen.value).title)
+        assertEquals("Setup · Step 6/12", assertIs<Screen.Onboarding>(state.screen.value).title)
         state.onButton(NxButton.B); state.onButton(NxButton.B); state.onButton(NxButton.B)
         assertIs<Screen.PickFolder>(state.screen.value)
         state.onButton(NxButton.B)
         assertIs<Screen.PermissionsStep>(state.screen.value)                  // still not granted: its step again
     }
 
-    // Without an All files step (access granted, or not declared) setup starts at the home folder pick.
+    // Without an All files step (access granted, or not declared) the home folder pick follows Text size.
     @Test fun without_the_all_files_step_the_home_pick_is_step_one() = runTest {
         val state = state(freshInstall())
         state.load(); state.getStarted()
-        assertEquals("Setup · Step 1 of 9" to true, state.setupChrome())
+        assertEquals("Setup · Step 2/10" to true, state.setupChrome())
         state.onButton(NxButton.B)
         assertEquals(OnboardingStep.TEXT_SIZE, assertIs<Screen.Onboarding>(state.screen.value).step)
     }
@@ -450,7 +451,7 @@ class AppStateTest {
         val state = state(freshInstall())
         state.load()
         val s = assertIs<Screen.Onboarding>(state.screen.value)
-        assertEquals(listOf("NX Redux", "Pick up. Select a game. Play."), s.details)
+        assertEquals(listOf("NX Redux", "Ready when you are."), s.details)
         assertEquals(listOf("Get started"), s.rows.map { it.label })
         assertEquals(false, s.canGoBack)
     }
@@ -463,9 +464,9 @@ class AppStateTest {
         state.load(); state.onButton(NxButton.A)                           // Get started
         val s = assertIs<Screen.Onboarding>(state.screen.value)
         assertEquals(OnboardingStep.TEXT_SIZE, s.step)
-        assertEquals("Setup", s.title)
+        assertEquals("Setup · Step 1/10", s.title)                            // the count starts here
         assertEquals(true, s.canGoBack)
-        assertEquals(listOf("Text size" to "Large", "Continue" to null), s.rows.map { it.label to it.secondary })
+        assertEquals(listOf("Size" to "Large", "Continue" to null), s.rows.map { it.label to it.secondary })
         state.select(0); state.onButton(NxButton.A)
         assertEquals(com.nxredux.mobile.settings.OptionTextSize.SMALL, settings.optionTextSize)
         assertEquals("Small", assertIs<Screen.Onboarding>(state.screen.value).rows[0].secondary)
@@ -480,7 +481,37 @@ class AppStateTest {
         assertEquals(OnboardingStep.WELCOME, assertIs<Screen.Onboarding>(state.screen.value).step)
     }
 
+    // Text size draws as the Settings rows block: its value row as Settings' (Large | Small, the current one picked),
+    // Continue a plain row (drawn as the button under them); a tap on a segment sets the size in place.
+    @Test fun the_text_size_page_is_settings_touch_rows() = runTest {
+        val settings = freshInstall()
+        val state = state(settings)
+        state.load(); state.onButton(NxButton.A)                           // Get started
+        val rows = assertNotNull(assertIs<Screen.Onboarding>(state.screen.value).touchRows)
+        assertEquals(listOf("Large", "Small"), rows[0].choices)
+        assertEquals(0, rows[0].index)
+        assertEquals("", rows[0].detail)                                   // no info popup in setup
+        assertEquals("Continue", rows[1].label)
+        assertTrue(rows[1].choices.isEmpty())
+        state.onboardingSettingEvent(com.nxredux.mobile.ui.nx.NxSettingEvent.Choose(0, 1))
+        assertEquals(com.nxredux.mobile.settings.OptionTextSize.SMALL, settings.optionTextSize)
+        assertEquals(1, assertNotNull(assertIs<Screen.Onboarding>(state.screen.value).touchRows)[0].index)
+    }
+
     // The customise question no longer asks the text size (setup asked it first).
+    // Two buttons side by side (the customise question's answers): LEFT takes the first, RIGHT the second, as UP / DOWN.
+    @Test fun left_and_right_move_between_two_buttons_side_by_side() = runTest {
+        val (state, _) = atOnboardingStep(OnboardingStep.CUSTOMISE)
+        assertEquals(2, setupButtons(assertNotNull(assertIs<Screen.Onboarding>(state.screen.value).touchRows), button = true))
+        assertEquals(0, state.selection.value.index)
+        state.onButton(NxButton.RIGHT)
+        assertEquals(1, state.selection.value.index)
+        state.onButton(NxButton.RIGHT)
+        assertEquals(1, state.selection.value.index)                        // no wrap past the second
+        state.onButton(NxButton.LEFT)
+        assertEquals(0, state.selection.value.index)
+    }
+
     @Test fun the_customise_question_leaves_text_size_out() = runTest {
         val (state, _) = atCustomise(yes = false)
         assertTrue(assertIs<Screen.Onboarding>(state.screen.value).details.none { "text size" in it.lowercase() })
@@ -531,14 +562,14 @@ class AppStateTest {
         assertEquals(Recents.HOME, s.extraId)
         assertEquals(listOf("Found 2 games in M", "Game Boy (1)", "Game Boy Advance (1)", "", "1 of them is outside Roms."), folderSummaryDetails(s))
         assertEquals(SummaryRowKind.MOVE to "On", folderSummaryRows(s).first().let { it.kind to it.row.secondary })
-        assertEquals("Setup · Step 2 of 10", state.setupChrome().first)
+        assertEquals("Setup · Step 3/11", state.setupChrome().first)
         state.select(state.selection.value.count - 1); state.onButton(NxButton.A); advanceUntilIdle()   // Continue: the move
         assertTrue("Kirby.gba" in src.listChildren(ContentRef("M/Roms/Game Boy Advance (GBA)")).map { it.name })
         assertEquals(listOf("notes.txt"), src.listChildren(ContentRef("M/Games")).map { it.name })   // unrecognised: stays
         assertTrue("Moved 1 into M/Roms" in folderSummaryDetails(assertIs<Screen.FolderSummary>(state.screen.value)))
         state.select(state.selection.value.count - 1); state.onButton(NxButton.A)
         assertIs<Screen.AddFirstExtra>(state.screen.value)
-        assertEquals("Setup · Step 3 of 10", state.setupChrome().first)
+        assertEquals("Setup · Step 4/11", state.setupChrome().first)
     }
 
     @Test fun a_home_whose_games_are_all_in_roms_has_no_move_row() = runTest {
@@ -556,7 +587,7 @@ class AppStateTest {
         state.load(); state.getStarted()
         state.setHome(ContentRef("E")); advanceUntilIdle()
         assertIs<Screen.AddFirstExtra>(state.screen.value)
-        assertEquals("Setup · Step 2 of 9", state.setupChrome().first)
+        assertEquals("Setup · Step 3/10", state.setupChrome().first)
     }
 
     @Test fun b_walks_from_the_home_page_to_the_pick_and_from_the_extra_offer_back_to_it() = runTest {
@@ -637,7 +668,7 @@ class AppStateTest {
         assertEquals(2, s.summary.unassigned)                              // thing.chd and v.img: nothing recognised
         assertEquals(listOf("Game Boy Advance" to 1), s.summary.byConsole)
         assertTrue("2 games need a console. Find them in Settings → Library → Unassigned games." in folderSummaryDetails(s))
-        assertEquals("Setup · Step 4 of 11" to true, state.setupChrome())
+        assertEquals("Setup · Step 5/12" to true, state.setupChrome())
         assertEquals(   // a line per console, then a blank line before what follows
             listOf("Found 3 games in ${s.name}", "Game Boy Advance (1)", "", "2 games need a console. Find them in Settings → Library → Unassigned games."),
             folderSummaryDetails(s),
@@ -651,7 +682,7 @@ class AppStateTest {
         val (state, settings) = atFolderSummary()
         state.select(state.selection.value.count - 1); state.onButton(NxButton.A)                                         // Continue
         assertEquals(OnboardingStep.HANDHELD, assertIs<Screen.Onboarding>(state.screen.value).step)
-        assertEquals("Setup · Step 5 of 11", assertIs<Screen.Onboarding>(state.screen.value).title)
+        assertEquals("Setup · Step 6/12", assertIs<Screen.Onboarding>(state.screen.value).title)
         assertEquals(listOf(ContentRef("sd/Loose")), settings.extraFolders.map { it.ref })
         assertTrue("Kirby.gba" in source.listChildren(ContentRef("sd/Loose")).map { it.name })
     }
@@ -728,6 +759,36 @@ class AppStateTest {
         val state = state(settings)
         state.load()
         return state to settings
+    }
+
+    // The count always shows its total, as the answers so far make it: a yes to customising adds the layout pages.
+    @Test fun the_step_total_grows_with_a_yes_to_customising() = runTest {
+        fun total(st: AppState) = assertIs<Screen.Onboarding>(st.screen.value).title.substringAfter("/").toInt()
+        val (defaults, _) = atOnboardingStep(OnboardingStep.CUSTOMISE)
+        val before = total(defaults)
+        defaults.select(1); defaults.onButton(NxButton.A)                  // Use the defaults
+        assertEquals(OnboardingStep.ACCENT, assertIs<Screen.Onboarding>(defaults.screen.value).step)
+        assertEquals(before, total(defaults))
+        val (custom, _) = atOnboardingStep(OnboardingStep.CUSTOMISE)
+        custom.select(0); custom.onButton(NxButton.A)                      // Yes, customise
+        assertTrue(total(custom) > before)                                 // the layout pages counted now
+    }
+
+    // Every page past the welcome is Settings' touch rows: a layout page's layout row as Settings' (a tap on a choice
+    // sets the layout in place); a question's answers plain rows.
+    @Test fun every_onboarding_page_is_settings_touch_rows() = runTest {
+        val (state, settings) = atOnboardingStep(OnboardingStep.TAB_CONSOLES)
+        val rows = assertNotNull(assertIs<Screen.Onboarding>(state.screen.value).touchRows)
+        val styles = com.nxredux.mobile.settings.MenuStyles.MAIN_MENU_STYLES
+        assertEquals(styles.map(::menuStyleLabel), rows[0].choices)
+        val other = styles.indices.first { it != rows[0].index }
+        state.onboardingSettingEvent(com.nxredux.mobile.ui.nx.NxSettingEvent.Choose(0, other))
+        assertEquals(styles[other], com.nxredux.mobile.settings.MenuStyles.styleOf(settings.menuStyles, MenuCategory.CONSOLES))
+        assertEquals(other, assertNotNull(assertIs<Screen.Onboarding>(state.screen.value).touchRows)[0].index)
+        val (customise, _) = atOnboardingStep(OnboardingStep.CUSTOMISE)
+        val answers = assertNotNull(assertIs<Screen.Onboarding>(customise.screen.value).touchRows)
+        assertEquals(listOf("Yes, customise", "Use the defaults"), answers.map { it.label })
+        assertTrue(answers.all { it.choices.isEmpty() })
     }
 
     // RetroAchievements comes right after artwork (its download runs while the layout is picked): no menu pad there yet.
@@ -954,7 +1015,7 @@ class AppStateTest {
         state.select(2); state.onButton(NxButton.A)                         // past the page title page
         assertEquals(OnboardingStep.TAB_HOME, step(state))
         val page = assertIs<Screen.Onboarding>(state.screen.value)
-        assertEquals(listOf("Home layout" to "Grid", "Home stats" to "Show", "Continue" to null), page.rows.map { it.label to it.secondary })
+        assertEquals(listOf("Layout" to "Grid", "Stats" to "Show", "Continue" to null), page.rows.map { it.label to it.secondary })   // named without the tab: the title says it
         assertEquals(LayoutShot.Tab(MenuCategory.HOME, MenuStyle.GRID), page.shot)
         state.onButton(NxButton.RIGHT)                                      // Grid -> Carousel
         assertEquals(MenuStyle.CAROUSEL, settings.menuStyles[MenuCategory.HOME])
@@ -977,9 +1038,9 @@ class AppStateTest {
         while (step(state) != OnboardingStep.TAB_CONSOLES) { state.select(state.selection.value.count - 1); state.onButton(NxButton.A) }
         state.select(0)
         while (MenuStyles.styleOf(settings.menuStyles, MenuCategory.CONSOLES) != MenuStyle.LIST) state.onButton(NxButton.RIGHT)
-        assertEquals(listOf("Consoles layout", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })   // List: no orientation
+        assertEquals(listOf("Layout", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })   // List: no orientation
         while (MenuStyles.styleOf(settings.menuStyles, MenuCategory.CONSOLES) != MenuStyle.CAROUSEL) state.onButton(NxButton.RIGHT)
-        assertEquals(listOf("Consoles layout" to "Carousel", "Consoles orientation" to "Horizontal", "Continue" to null), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label to it.secondary })
+        assertEquals(listOf("Layout" to "Carousel", "Orientation" to "Horizontal", "Continue" to null), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label to it.secondary })
         state.select(1); state.onButton(NxButton.RIGHT)
         assertEquals(MenuOrientation.VERTICAL, settings.menuOrientations[MenuCategory.CONSOLES])
         assertEquals(LayoutShot.Tab(MenuCategory.CONSOLES, MenuStyle.CAROUSEL, vertical = true), assertIs<Screen.Onboarding>(state.screen.value).shot)
@@ -992,9 +1053,9 @@ class AppStateTest {
         while (step(state) != OnboardingStep.GAME_LISTS) { state.select(state.selection.value.count - 1); state.onButton(NxButton.A) }
         state.select(0)
         while (settings.gameListStyle != MenuStyle.BACKDROP) state.onButton(NxButton.RIGHT)
-        assertEquals(listOf("Game lists layout", "Game lists orientation", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })
+        assertEquals(listOf("Layout", "Orientation", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })
         state.select(1); state.onButton(NxButton.RIGHT)                    // Vertical: the alignment row comes
-        assertEquals(listOf("Game lists layout", "Game lists orientation", "Game lists alignment", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })
+        assertEquals(listOf("Layout", "Orientation", "Alignment", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })
         state.select(2); state.onButton(NxButton.RIGHT)                    // Right
         assertEquals(VerticalListAlignment.RIGHT, settings.gameListVerticalAlignment)
         assertEquals(LayoutShot.Games(MenuStyle.BACKDROP, vertical = true, right = true), assertIs<Screen.Onboarding>(state.screen.value).shot)
@@ -1004,7 +1065,7 @@ class AppStateTest {
         val (state, settings) = atCustomise(controller = true)
         while (step(state) != OnboardingStep.GAME_LISTS) { state.select(state.selection.value.count - 1); state.onButton(NxButton.A) }
         val page = assertIs<Screen.Onboarding>(state.screen.value)
-        assertEquals("Game lists layout", page.rows[0].label)
+        assertEquals("Layout", page.rows[0].label)
         val seen = mutableSetOf<MenuStyle>()
         state.select(0)
         repeat(MenuStyles.GAME_LIST_STYLES.size) { state.onButton(NxButton.RIGHT); seen += settings.gameListStyle }
@@ -2431,7 +2492,7 @@ class AppStateTest {
         assertIs<Screen.PickFolder>(st.screen.value)
         st.onButton(NxButton.A)                                   // Pick folder
         assertEquals(0, picker.picks)                             // not Android's picker
-        pickRow(st, "Internal storage"); pickRow(st, "NXRedux"); pickRow(st, "Use this folder")
+        pickRow(st, "NXRedux"); pickRow(st, "Use this folder")          // one storage: the picker opens in it
         assertEquals(fileHome, settings.treeRef)
         assertIs<Screen.FolderSummary>(st.screen.value)           // setHome saw first setup: its next step (the home holds games)
     }
@@ -2468,7 +2529,7 @@ class AppStateTest {
         st.onButton(NxButton.A)                                   // Pick folder
         assertIs<Screen.FilePicker>(st.screen.value)
         assertEquals(false, st.menuPadShown())
-        pickRow(st, "Internal storage"); pickRow(st, "NXRedux")
+        pickRow(st, "NXRedux")                                    // one storage: the picker opens in it
         assertEquals(false, st.menuPadShown())
     }
 
@@ -5531,7 +5592,7 @@ class AppStateTest {
             listOf("Home", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", "Reset to defaults"),
             page(SettingsSection.MAIN_MENU),
         )
-        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Stats", "Layout"), page(SettingsSection.LAYOUT_HOME))   // Home never has an orientation row
+        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout"), page(SettingsSection.LAYOUT_HOME))   // Home never has an orientation row
         assertEquals(listOf("Visible", "Layout", "Orientation", "Background"), page(SettingsSection.LAYOUT_CONSOLES))
         assertEquals(listOf("Visible", "Layout", "Orientation"), page(SettingsSection.LAYOUT_COLLECTIONS))
         assertEquals(listOf("Visible", "Layout", "Orientation"), page(SettingsSection.LAYOUT_TOOLS))
@@ -5685,7 +5746,7 @@ class AppStateTest {
         state.select(0); state.onButton(NxButton.A)
         val page = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.LAYOUT_HOME, page.section)
-        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Stats", "Layout"), page.rows.map { it.label })
+        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout"), page.rows.map { it.label })
         assertEquals(LayoutShot.Tab(MenuCategory.HOME, MenuStyle.GRID), page.shot)
         state.select(page.rows.lastIndex); state.onButton(NxButton.RIGHT)    // Home layout, Grid -> Carousel: the picture follows
         assertEquals(LayoutShot.Tab(MenuCategory.HOME, MenuStyle.CAROUSEL), assertIs<Screen.Settings>(state.screen.value).shot)
@@ -5885,7 +5946,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.LAYOUT_HOME)
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
         val home = rows.indexOfFirst { it.kind == SettingsKind.HOME_STATS }
-        assertEquals(rows.indexOfFirst { it.label == "Not started shelf" } + 1, home)
+        assertEquals(rows.indexOfFirst { it.label == "Most played shelf" } + 1, home)
         assertEquals(SettingsRow(SettingsKind.HOME_STATS, "Stats", "Show"), rows[home])
         assertTrue(settingsNxRow(rows[home]).cycleable)
         state.select(home); state.onButton(NxButton.A)
@@ -5932,7 +5993,7 @@ class AppStateTest {
             page.rows.map { it.label to it.secondary },
         )
         fun group(section: SettingsSection) = state.openLayoutsPage(section).map { it.label to it.secondary }
-        assertEquals(listOf("Visible" to "Show", "New shelf" to "Show", "Not started shelf" to "Show", "Stats" to "Show", "Layout" to "Grid"), group(SettingsSection.LAYOUT_HOME))
+        assertEquals(listOf("Visible" to "Show", "New shelf" to "Show", "Not started shelf" to "Show", "Most played shelf" to "Show", "Stats" to "Show", "Layout" to "Grid"), group(SettingsSection.LAYOUT_HOME))
         assertEquals(listOf("Visible" to "Show", "Layout" to "List", "Background" to settings.consoleArt.label), group(SettingsSection.LAYOUT_CONSOLES))
         assertEquals(listOf("Visible" to "Show", "Layout" to "List"), group(SettingsSection.LAYOUT_COLLECTIONS))
         assertEquals(listOf("Visible" to "Show", "Layout" to "List"), group(SettingsSection.LAYOUT_TOOLS))
@@ -9554,12 +9615,12 @@ class AppStateTest {
         val groups = listOf(SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS,
             SettingsSection.LAYOUT_GAME_LISTS, SettingsSection.LAYOUT_TITLE_HINTS, SettingsSection.LAYOUT_SWITCHER)
         val rows = groups.flatMap { g -> state.openLayoutsPage(g) }
-        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Stats", "Layout", "Visible", "Layout", "Visible", "Layout", "Visible", "Layout", "List art", "Layout options", "Layout", "Page title", "Button hints", "Layout"), rows.map { it.label })
+        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout", "Visible", "Layout", "Visible", "Layout", "Visible", "Layout", "List art", "Layout options", "Layout", "Page title", "Button hints", "Layout"), rows.map { it.label })
         val styles = rows.filter { it.kind == SettingsKind.MENU_STYLE }
         assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), styles.map { it.category })
         assertTrue(styles.all { it.enabled })
         assertEquals(1, rows.count { it.kind == SettingsKind.GAME_LIST_STYLE })
-        assertEquals(listOf("Show", "Show", "Show", "Show", "Minimal", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "Screenshot", "Show", "List", "Show", "Hide", "Full screen"), rows.map { it.secondary })
+        assertEquals(listOf("Show", "Show", "Show", "Show", "Show", "Minimal", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "Screenshot", "Show", "List", "Show", "Hide", "Full screen"), rows.map { it.secondary })
     }
 
     @Test fun layouts_page_defaults_to_carousel_tools_grid_and_cycles_four_main_menu_styles() = runTest {
@@ -9567,7 +9628,7 @@ class AppStateTest {
         val state = state(settings)
         state.load()
         fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Stats", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_HOME).map { it.label })
+        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_HOME).map { it.label })
         assertEquals(listOf("Visible", "Layout", "Orientation", "Background"), state.openLayoutsPage(SettingsSection.LAYOUT_CONSOLES).map { it.label })
         assertEquals(listOf("Visible", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_COLLECTIONS).map { it.label })
         assertEquals(listOf("Visible", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_TOOLS).map { it.label })
@@ -9595,7 +9656,7 @@ class AppStateTest {
         state.load()
         val home = state.openLayoutsPage(SettingsSection.LAYOUT_HOME)
         assertEquals(
-            listOf(SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HOME_STATS, SettingsKind.MENU_STYLE),
+            listOf(SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HOME_STATS, SettingsKind.MENU_STYLE),
             home.map { it.kind },
         )
         val consoles = state.openLayoutsPage(SettingsSection.LAYOUT_CONSOLES)
@@ -9854,7 +9915,7 @@ class AppStateTest {
             page(SettingsSection.MAIN_MENU),
         )
         assertEquals(
-            listOf("Visible" to "Show", "New shelf" to "Show", "Not started shelf" to "Show", "Stats" to "Show", "Layout" to "Minimal"),
+            listOf("Visible" to "Show", "New shelf" to "Show", "Not started shelf" to "Show", "Most played shelf" to "Show", "Stats" to "Show", "Layout" to "Minimal"),
             page(SettingsSection.LAYOUT_HOME),
         )
         assertEquals(listOf("Visible" to "Show", "Layout" to "Carousel", "Orientation" to "Horizontal", "Background" to "Controller"), page(SettingsSection.LAYOUT_CONSOLES))
@@ -11256,7 +11317,7 @@ class AppStateTest {
         assertEquals(listOf(HomeShelf.NOT_STARTED to 3), state.homeView.value.shelves)
         state.openSettings(SettingsSection.LAYOUT_HOME)
         fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(listOf("New shelf", "Not started shelf"), rows().filter { it.kind == SettingsKind.SHELF_SHOWN }.map { it.label })
+        assertEquals(listOf("New shelf", "Not started shelf", "Most played shelf"), rows().filter { it.kind == SettingsKind.SHELF_SHOWN }.map { it.label })
         val i = rows().indexOfFirst { it.shelf == HomeShelf.NOT_STARTED }
         state.select(i); state.onButton(NxButton.RIGHT); advanceUntilIdle()
         assertFalse(settings.showNotStartedShelf)
@@ -11336,7 +11397,7 @@ class AppStateTest {
         gate.complete(Unit); advanceUntilIdle()
         val notStarted = state.shelfRows.filter { it.shelf == HomeShelf.NOT_STARTED }.map { it.entry.game.path }.toSet()
         assertEquals(setOf(mario, mk), notStarted)
-        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.PICK_UP }.map { it.entry.game.path })
+        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.MOST_PLAYED }.map { it.entry.game.path })   // played: Most played (first) has it
     }
 
     // A failed play time read is not a read: no shelves (every game would show as Not started) until one succeeds.
@@ -11354,7 +11415,7 @@ class AppStateTest {
         assertTrue(state.homeView.value.shelves.isEmpty())
         fail = false
         state.onForeground(); advanceUntilIdle()                         // the next read works
-        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.PICK_UP }.map { it.entry.game.path })
+        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.MOST_PLAYED }.map { it.entry.game.path })   // played: Most played (first) has it
     }
 
     // A play time read that fails after one that worked keeps the last good times: Tetris stays in Pick up again
@@ -11371,7 +11432,7 @@ class AppStateTest {
         clock = 100 * 86_400_000L
         fail = true
         state.onForeground(); advanceUntilIdle()                         // this read fails
-        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.PICK_UP }.map { it.entry.game.path })
+        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.MOST_PLAYED }.map { it.entry.game.path })   // played: Most played (first) has it
         assertEquals(60_000L, state.gameInfo.value[tetris]?.totalMs)
     }
 
@@ -11391,7 +11452,7 @@ class AppStateTest {
         state.load(); advanceUntilIdle()
         clock = 100 * 86_400_000L
         state.onForeground(); advanceUntilIdle()
-        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.PICK_UP }.map { it.entry.game.path })
+        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.MOST_PLAYED }.map { it.entry.game.path })   // played: Most played (first) has it
         assertEquals(setOf(mario, mk), state.shelfRows.filter { it.shelf == HomeShelf.NOT_STARTED }.map { it.entry.game.path }.toSet())
     }
 

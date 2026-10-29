@@ -65,7 +65,8 @@ sealed interface MainRow {
     /** A pinned game (Home's Pinned rows): A launches it. */
     data class Pin(val entry: Listed) : MainRow
     /** Home on the large face: a game on a discovery shelf ([HomeShelf]); A launches it, as a pin. */
-    data class Shelf(val entry: Listed, val shelf: HomeShelf) : MainRow
+    /** A shelf's game; [tag] its own badge (Most played: its play time), else the shelf's reason where it has one ([homeShelfBadge]). */
+    data class Shelf(val entry: Listed, val shelf: HomeShelf, val tag: String? = null) : MainRow
     /** One console row: the systems of one display name, in library order (see [ListSource.Console]). */
     data class System(val systems: List<SystemFolder>) : MainRow {
         constructor(system: SystemFolder) : this(listOf(system))
