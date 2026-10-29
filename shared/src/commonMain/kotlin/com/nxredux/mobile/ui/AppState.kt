@@ -2,6 +2,7 @@ package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.sync.SyncLink
 import com.nxredux.mobile.shortcuts.CaptureResult
+import com.nxredux.mobile.shortcuts.KeyCodes
 import com.nxredux.mobile.shortcuts.KeyLabels
 import com.nxredux.mobile.shortcuts.PadModel
 import com.nxredux.mobile.shortcuts.ShortcutAction
@@ -480,6 +481,8 @@ sealed interface Screen {
 enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_THEME, PAD_BUTTONS, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, MENU_PAD, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
+    // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
+    SYSTEM_BUTTONS, SYSTEM_BUTTON_BIND,
     LAYOUT_HOME, LAYOUT_CONSOLES, LAYOUT_COLLECTIONS, LAYOUT_TOOLS, LAYOUT_GAME_LISTS, LAYOUT_TITLE_HINTS, LAYOUT_SWITCHER, TEXT_SIZE,
     // A group's label and the space before it (System's General, Launcher, Developer, About, Licenses): never selected.
     SECTION, GAP,
@@ -500,6 +503,7 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
     DEFAULT_EMULATORS("Default emulators", EMULATORS, SettingsKind.DEFAULTS),
     PAD_LAYOUT("Pad layout", CONTROLS, SettingsKind.PAD_LAYOUT), SAVES("Saves", LIBRARY, SettingsKind.SAVES),
     SHORTCUTS("Shortcuts", CONTROLS, SettingsKind.SHORTCUTS),
+    SYSTEM_BUTTONS("System buttons", CONTROLS, SettingsKind.SYSTEM_BUTTONS),
     IMPORT_SAVES("Import saves", SAVES, SettingsKind.IMPORT_SAVES),
     // An import's results; Done and B go back to Saves ([AppState.leaveSubPage]), past Import saves.
     IMPORT_RESULT("Import results", IMPORT_SAVES),
@@ -552,6 +556,10 @@ internal const val MIC_ROW_NOTE = "DS / 3DS only"
 internal const val SHORTCUT_PROMPT = "Press a button…"
 
 /** Both Shortcuts pages' line in place of the bind rows while no controller is connected (the on-screen pad binds nothing). */
+/** Controls → System buttons without a pad connected. */
+internal const val SYSTEM_BUTTONS_NO_CONTROLLER = "Connect a controller to set its SELECT, START and MENU buttons."
+/** A System buttons row waiting for its press. */
+internal const val SYSTEM_BUTTON_PROMPT = "Press a button…"
 /** The page's MENU skipped: SELECT+START is the menu on this pad. */
 internal const val MENU_SKIPPED_NOTE = "No MENU button? Press SELECT+START together to open the menu."
 internal const val SHORTCUTS_NO_CONTROLLER = "Connect a controller to bind buttons. On the on-screen pad, use Touch button 1 and 2 instead."
@@ -736,7 +744,7 @@ data class SettingInfoPopup(val title: String, val text: String, val scrollSeq: 
  * [warning]: its secondary is a problem (a folder not available), drawn in the warning colour. [shortcut] / [touchSlot]:
  * the action or touch button of a Shortcuts row; [note] on a bind row: it is waiting for a press, and what to do.
  */
-data class SettingsRow(val kind: SettingsKind, val label: String, val secondary: String? = null, val extra: ExtraFolder? = null, val consoleId: String? = null, val enabled: Boolean = true, val category: MenuCategory? = null, val shelf: HomeShelf? = null, val hint: NxButton? = null, val padShape: PadShape? = null, val warning: Boolean = false, val note: String? = null, val shortcut: ShortcutAction? = null, val touchSlot: TouchSlot? = null)
+data class SettingsRow(val kind: SettingsKind, val label: String, val secondary: String? = null, val extra: ExtraFolder? = null, val consoleId: String? = null, val enabled: Boolean = true, val category: MenuCategory? = null, val shelf: HomeShelf? = null, val hint: NxButton? = null, val padShape: PadShape? = null, val warning: Boolean = false, val note: String? = null, val shortcut: ShortcutAction? = null, val touchSlot: TouchSlot? = null, val systemRole: SystemRole? = null)
 
 /** A row the selection lands on: not a group label, the space before one, or a paragraph. */
 val SettingsRow.selectable: Boolean get() = kind != SettingsKind.SECTION && kind != SettingsKind.GAP && kind != SettingsKind.TEXT
@@ -801,6 +809,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      */
     private val _screen: MutableStateFlow<Screen> = WatchedStateFlow(MutableStateFlow(Screen.Loading)) { s ->
         if ((s as? Screen.Settings)?.section != SettingsSection.SHORTCUTS && (shortcutDraft != null || _capturingShortcut.value != null)) closeShortcuts()
+        if ((s as? Screen.Settings)?.section != SettingsSection.SYSTEM_BUTTONS) systemButtonWaiting = null
     }
     val screen: StateFlow<Screen> = _screen.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
@@ -2391,6 +2400,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * while the page shows a press of its pad goes to it; true when the page used the key (the menu must not see it).
      */
     fun systemButtonKey(model: PadModel?, keyCode: Int, scanCode: Int, down: Boolean, repeat: Boolean): Boolean {
+        // A wait in System buttons keeps its pad: another pad's press neither binds nor moves the page to it.
+        if (systemButtonWaiting != null || model?.key in systemButtonsHeld) return systemButtonSettingsKey(model, keyCode, scanCode, down, repeat)
         if (model != null && down) lastPad = model
         val page = systemButtons ?: return false
         if (model == null || model.key != page.model.key || (_screen.value as? Screen.Onboarding)?.step != OnboardingStep.SYSTEM_BUTTONS) return false
@@ -2488,6 +2499,48 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         systemButtonsReturn = null
         if (back != null) { _screen.value = back; return }
         afterSystemButtons()
+    }
+
+    /** Controls → System buttons: the role waiting for a press (its row says so), or null. */
+    private var systemButtonWaiting: SystemRole? = null
+    /** The pad whose press bound or cancelled a wait, until its release (swallowed with it). */
+    private var systemButtonsHeld: Set<String?> = emptySet()
+
+    /**
+     * Controls → System buttons: the pad it acts on ([currentPad], by name), then SELECT, START and MENU with their
+     * buttons (Standard: the pad's own), then Reset. No pad: [SYSTEM_BUTTONS_NO_CONTROLLER]; the bindings stay.
+     */
+    private fun systemButtonRows(): List<SettingsRow> {
+        val pad = currentPad() ?: return listOf(SettingsRow(SettingsKind.TEXT, SYSTEM_BUTTONS_NO_CONTROLLER))
+        val map = systemButtonMap()
+        return listOf(SettingsRow(SettingsKind.TEXT, pad.name)) + SystemRole.entries.map { role ->
+            val value = if (role == systemButtonWaiting) SYSTEM_BUTTON_PROMPT
+                else map.bound[pad.key]?.get(role)?.let(::physicalKeyLabel) ?: "Standard"
+            SettingsRow(SettingsKind.SYSTEM_BUTTON_BIND, role.label, value, note = if (role == systemButtonWaiting) "B cancels" else null, systemRole = role)
+        } + SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL)
+    }
+
+    /** A bound key's name: a key code's ([KeyLabels]), or "Button 2F1" for a scan code Android has no key for. */
+    private fun physicalKeyLabel(k: PhysicalKey): String =
+        if (k.keyCode == 0) "Button ${k.scanCode.toString(16).uppercase()}" else KeyLabels.label(ShortcutBinding(null, k.keyCode))
+
+    /**
+     * A key while System buttons waits: the next fresh press from its pad binds the role (B or Back cancel), swapping
+     * with a role that had that button; another pad's keys pass. The press's release is swallowed with it.
+     */
+    private fun systemButtonSettingsKey(model: PadModel?, keyCode: Int, scanCode: Int, down: Boolean, repeat: Boolean): Boolean {
+        if (!down) { val held = model?.key in systemButtonsHeld; systemButtonsHeld = systemButtonsHeld - model?.key; return held }
+        val role = systemButtonWaiting ?: return false
+        val pad = currentPad()
+        if (model == null || pad == null || model.key != pad.key) return false
+        if (repeat) return true
+        systemButtonsHeld = systemButtonsHeld + model.key
+        systemButtonWaiting = null
+        if (keyCode != KeyCodes.BUTTON_B && keyCode != KeyCodes.BACK) {
+            deps.settings.systemButtons = SystemButtons.encode(SystemButtons.bind(systemButtonMap(), pad.key, role, PhysicalKey.of(keyCode, scanCode)))
+        }
+        refreshSettings()
+        return true
     }
 
     /**
@@ -4151,6 +4204,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         SettingsSection.DEFAULT_EMULATORS -> defaultEmulatorRows()
         SettingsSection.PAD_LAYOUT -> padLayoutRows()
         SettingsSection.SHORTCUTS -> shortcutRows()
+        SettingsSection.SYSTEM_BUTTONS -> systemButtonRows()
         SettingsSection.APPEARANCE -> listOf<SettingsRow?>(
             SettingsRow(SettingsKind.PAD_THEME, "Pad theme", padThemeLabel(deps.settings.padTheme)),
             // The Black theme's button set: only Black has one, so the row shows only while it is the theme.
@@ -4177,6 +4231,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             SettingsRow(SettingsKind.PAD_LAYOUT, "Pad layout", if (PadLayouts.isCustom(deps.settings.padLayouts)) "Custom" else "Default"),
             // Fast forward, rewind and reset buttons, its own page (Shortcuts).
             SettingsRow(SettingsKind.SHORTCUTS, "Shortcuts"),
+            // Which of the pad's buttons are SELECT, START and MENU, its own page (System buttons).
+            SettingsRow(SettingsKind.SYSTEM_BUTTONS, "System buttons"),
             SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
         )
         SettingsSection.SYSTEM -> systemRows()
@@ -4464,6 +4520,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val s = deps.settings
         if (section == SettingsSection.SHORTCUTS) {
             shortcutDraft = ShortcutSet.EMPTY   // Clear all: written with the rest when the page closes
+        } else if (section == SettingsSection.SYSTEM_BUTTONS) {
+            currentPad()?.let { pad -> s.systemButtons = SystemButtons.encode(SystemButtons.reset(systemButtonMap(), pad.key)) }
         } else if (section == SettingsSection.APPEARANCE) {
             s.padTheme = PadTheme.DEFAULT
             s.padButtons = PadButtons.DEFAULT
@@ -4689,7 +4747,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** Whether [a] and [b] are the same Settings row across a refresh: its kind and what it is for, not its value or label. */
     private fun sameSettingsRow(a: SettingsRow, b: SettingsRow): Boolean =
         a.kind == b.kind && a.category == b.category && a.shelf == b.shelf && a.hint == b.hint && a.consoleId == b.consoleId &&
-            a.shortcut == b.shortcut && a.touchSlot == b.touchSlot && a.padShape == b.padShape && a.extra?.id == b.extra?.id
+            a.shortcut == b.shortcut && a.touchSlot == b.touchSlot && a.systemRole == b.systemRole && a.padShape == b.padShape && a.extra?.id == b.extra?.id
 
     /**
      * B on a sub-page: its section on the row that opened it. Leaving Default emulators (under Emulators) with a changed
@@ -5866,8 +5924,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                     SettingsKind.PAD_LAYOUT_SHAPE -> row.padShape?.let { openPadEditor(it) }
                     SettingsKind.PAD_LAYOUT_RESET -> _screen.value = s.copy(confirmReset = true)   // asks first
                     SettingsKind.SHORTCUTS -> { sectionSelections[s.section] = _selection.value; openSettings(SettingsSection.SHORTCUTS) }
+                    SettingsKind.SYSTEM_BUTTONS -> { sectionSelections[s.section] = _selection.value; openSettings(SettingsSection.SYSTEM_BUTTONS) }
                     // Without a controller too: one plugged in next answers it (the row says to connect one).
                     SettingsKind.SHORTCUT_BIND -> row.shortcut?.let(::startCapture)
+                    SettingsKind.SYSTEM_BUTTON_BIND -> row.systemRole?.let { systemButtonWaiting = it; refreshSettings() }
                     SettingsKind.HIDDEN -> openList(ListSource.Hidden)
                     SettingsKind.UNASSIGNED -> unassignedSystem()?.let { sectionSelections[s.section] = _selection.value; openSystem(it) }
                     SettingsKind.EMULATORS -> { sectionSelections[s.section] = _selection.value; emulatorSettings.openList(systemsCache) }
@@ -6548,6 +6608,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         if (_chooser.value != null) { closeChooser(); return true }   // a touch chooser: Back closes it
         if (_settingInfo.value != null) { closeSettingInfo(); return true }   // and a Settings row's info popup
         if (_capturingShortcut.value != null) { cancelCapture(); return true }   // press to bind: Back cancels it, the page stays
+        if (systemButtonWaiting != null) { systemButtonWaiting = null; refreshSettings(); return true }   // likewise System buttons' wait
         if (_androidGamesAsk.value != null) { answerAndroidGames(false); return true }   // the dialog's B: Not now
         if (_updateConfirm.value != null) { answerUpdateConfirm(false); return true }   // About's confirm: Cancel
         if (updatePopupShows()) { answerUpdate(false); return true }   // the update dialog's B: Not now
