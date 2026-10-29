@@ -20,6 +20,7 @@ import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.WiiOptions
 import com.nxredux.mobile.runner.MotionSensors
+import com.nxredux.mobile.runner.SystemButtonKeys
 import com.nxredux.mobile.runner.goImmersive
 import com.nxredux.mobile.runner.windowShape
 import com.nxredux.mobile.settings.AndroidAppSettings
@@ -111,6 +112,9 @@ class PadLayoutActivity : ComponentActivity() {
 
     /** While the "Discard changes?" prompt shows, Back / B keep editing; only the prompt's Discard leaves. */
     private fun back() { if (editor.confirmDiscard) editor.keepEditing() else if (editor.requestCancel()) finish() }
+
+    /** A bound SELECT / START / MENU button as its role ([SystemButtonKeys]), as in the menu and games. */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean = super.dispatchKeyEvent(SystemButtonKeys.translate(this, event))
 
     /** A controller's B is Back here (the editor itself is touch-driven); MainActivity maps the same key code to B. */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {

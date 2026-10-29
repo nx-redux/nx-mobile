@@ -217,6 +217,10 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = prefs.getString(KEY_SHORTCUTS, null).orEmpty()
         set(value) = prefs.edit { if (value.isEmpty()) remove(KEY_SHORTCUTS) else putString(KEY_SHORTCUTS, value) }
 
+    override var systemButtons: String
+        get() = prefs.getString(KEY_SYSTEM_BUTTONS, null).orEmpty()
+        set(value) = prefs.edit { if (value.isEmpty()) remove(KEY_SYSTEM_BUTTONS) else putString(KEY_SYSTEM_BUTTONS, value) }
+
     override var gameRumble: GameRumble
         get() = GameRumble.fromStored(prefs.getString(KEY_GAME_RUMBLE, null))
         set(value) = prefs.edit { putString(KEY_GAME_RUMBLE, value.name) }
@@ -346,6 +350,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_PAD_LAYOUTS_V1 = "pad_layouts"
         private const val KEY_PAD_LAYOUTS_V2 = "pad_layouts_v2"
         private const val KEY_SHORTCUTS = "shortcuts"
+        private const val KEY_SYSTEM_BUTTONS = "system_buttons"
         private const val KEY_GAME_RUMBLE = "game_rumble"
         private const val KEY_DEBUG_LOG = "debug_log"
         private const val KEY_SECOND_SCREEN = "second_screen"

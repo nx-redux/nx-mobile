@@ -54,7 +54,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | pokemini | libretro/PokeMini | 78656d4615691c393e65e48672ce5fff5b1f97d3 | ndk-build (patched) | 0:04 |
 | fake08 | jtothebell/fake-08 | f6bab5a7ba521ce440e45d1aeef6122674be6ee9 | ndk-build (`platform/libretro`, `libfake08.so`) | 0:09 |
 | prboom | libretro/libretro-prboom | 93c8e7a2074e4fd8410398e3d571c6d9afec1d84 | ndk-build (+ `prboom.wad`) | 0:05 |
-| gpsp | libretro/gpsp | 2db57b11a437c4432ab69823bdcd951181de6213 | ndk-build (dynarec, patched; link) | 0:12 |
+| gpsp | libretro/gpsp | 5819380c2ffb0900219d700a382ee68c464ebb99 | ndk-build (dynarec, patched; link) | 0:12 |
 | pcsx_rearmed | libretro/pcsx_rearmed | 6eb679d064a1efe92af79fe9970c0591c8da02d4 | ndk-build (dynarec, `USE_LIBRETRO_VFS=1`, patched) | 0:05 |
 | swanstation | libretro/swanstation | dd4805619bbbfc6e0d1776372cb16377088b448e (the Brick's PSX.pak pin) | cmake (GLES HW renderer) | 0:12 |
 | picodrive | irixxxx/picodrive | b0be121b7d58d6ee1ee2809974e62893c80a8264 | ndk-build (SH2 dynarec, patched; 1.6 MB stripped) | 0:24 |
@@ -93,10 +93,18 @@ excludes the clone, which was already cached; the other times include it.
 must be mapped within +/-128 MB of the core's code; after the runner dlclosed the core, the next dlopen could land
 where no such gap was free, `map_jit_block` returned NULL unchecked and `retro_load_game` crashed writing to it. The
 patch maps the block once and keeps it (retro_deinit no longer unmaps it; a destructor does if the library is ever
-unloaded), `retro_load_game` logs `gpsp: couldn't reserve its 10.5 MB recompiler cache near the core` and returns false
-when there is none, and `retro_init` resets the state a fresh load used to give (cheats, RTC and input edge state,
+unloaded), and `retro_init` resets the state a fresh load used to give (cheats, RTC and input edge state,
 serial IRQ, converted palette, option globals). The app keeps gpsp loaded between games (`CoreDescriptor.keepLoaded`,
 RTLD_NODELETE in the runner), so the block is reused. No emulation source is touched; states are unchanged.
+Rebased on `5819380c` (2026-10-28, nx-redux #287's pin): upstream now checks the mapping itself and runs on the
+interpreter without one, so our load refusal is gone; the reset also clears `check_variables`' sound-rate flag, or a
+later game would apply `gpsp_sound_rate` as a mid-session change during its load. That pin adds `gpsp_rtc_time_source`;
+the app defaults it to `system` (`CoreRegistry`), as the Brick's GBA.pak does.
+On an AYANEO Pocket Air Mini (Android 11, Mali, 2 GB) no gap was left within +/-128 MB of the core at all, even on a
+fresh start (the Mali driver and ART fill it), so every GBA game ran on the interpreter. Since 2026-10-29 the patch's
+`memmap.c` part gives Android arm64 a 16 KB-aligned 10.5 MB block in the core's own `.bss`, made RWX with `mprotect`
+on first use: always next to the code, no W+E segment in the ELF, untouched pages cost no RAM. The mmap search (then the
+interpreter) is the fallback if `mprotect` is refused.
 
 `patches/fceumm.patch` adds one `path_vfs_init` call next to its `filestream_vfs_init`, so the content check
 (`path_is_valid`) uses the runner's VFS v3 `stat` and a SAF file-descriptor ROM (`/rom/<name>`) loads without a cache

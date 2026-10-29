@@ -1,10 +1,8 @@
-# licence: modifies gpSP (https://github.com/libretro/gpsp), GPL-2.0 (its COPYING file); this patch is distributed
-# under the same licence.
 diff --git a/gba_memory.c b/gba_memory.c
-index 5dff1b5..850a740 100644
+index 1e304ee..088446b 100644
 --- a/gba_memory.c
 +++ b/gba_memory.c
-@@ -2393,6 +2393,23 @@ void memory_term(void)
+@@ -2651,6 +2651,23 @@ void memory_term(void)
    gamepak_mini_materialized = false;
  }
  
@@ -29,11 +27,11 @@ index 5dff1b5..850a740 100644
  {
    static const char *vars32[] = {
 diff --git a/gba_memory.h b/gba_memory.h
-index 50472a3..3903419 100644
+index bc4a648..7cc8f28 100644
 --- a/gba_memory.h
 +++ b/gba_memory.h
-@@ -254,6 +254,8 @@ void init_memory(void);
- void init_gamepak_buffer(void);
+@@ -332,6 +332,8 @@ void init_gamepak_buffer(void);
+ void rtc_set_time_source(rtc_time_source_type source);
  bool gamepak_must_swap(void);
  void memory_term(void);
 +/* nx-mobile: resets what only a fresh library load used to reset. */
@@ -73,10 +71,10 @@ index b8b11e8..f9d7d72 100644
  
  bool input_check_savestate(const u8 *src);
 diff --git a/libretro/libretro.c b/libretro/libretro.c
-index 5f02c09..55b3d1b 100644
+index ed2a7d2..1849443 100644
 --- a/libretro/libretro.c
 +++ b/libretro/libretro.c
-@@ -108,6 +108,47 @@ static void (*video_post_process)(void) = NULL;
+@@ -135,6 +135,51 @@ static void (*video_post_process)(void) = NULL;
  static bool post_process_cc  = false;
  static bool post_process_mix = false;
  
@@ -100,6 +98,8 @@ index 5f02c09..55b3d1b 100644
 + * freshly loaded one does. Resets the state that nothing else in the init,
 + * load or reset path sets again (it was only reset by the frontend unloading
 + * the library between games). */
++static int sound_rate_configured = 0;
++
 +static void nx_reset_session_state(void)
 +{
 +   cheat_clear();
@@ -119,60 +119,107 @@ index 5f02c09..55b3d1b 100644
 +   serial_setting    = SERIAL_MODE_AUTO;
 +   rumble_cb         = NULL;
 +   main_path[0]      = '\0';
++   /* the next load applies gpsp_sound_rate as a load-time pick again */
++   sound_rate_configured = 0;
 +}
 +
  static void error_msg(const char* text)
  {
     if (log_cb)
-@@ -575,6 +616,7 @@ void retro_get_system_av_info(struct retro_system_av_info* info)
+@@ -602,6 +647,7 @@ void retro_get_system_av_info(struct retro_system_av_info* info)
  void retro_init(void)
  {
     u32 audio_sample_buffer_size;
 +   nx_reset_session_state();
-    audio_samples_per_frame   = (float)(GBA_SOUND_FREQUENCY) / (float)(GBA_FPS);
+    audio_samples_per_frame   = (float)sound_frequency / (float)(GBA_FPS);
     audio_samples_accumulator = 0.0f;
-    audio_sample_buffer_size  = ((u32)audio_samples_per_frame + 1) * 2;
-@@ -593,8 +635,12 @@ void retro_init(void)
+    audio_sample_buffer_size  = (((u32)((float)(GBA_SOUND_FREQUENCY) / (float)(GBA_FPS))) + 1) * 2;
+@@ -620,7 +666,10 @@ void retro_init(void)
  
  #if defined(HAVE_DYNAREC)
    #if defined(MMAP_JIT_CACHE)
 -   rom_translation_cache = map_jit_block(ROM_TRANSLATION_CACHE_SIZE + RAM_TRANSLATION_CACHE_SIZE);
--   ram_translation_cache = &rom_translation_cache[ROM_TRANSLATION_CACHE_SIZE];
-+   /* nx-mobile: map once and keep it (see nx_jit_block). A failed mapping
-+    * leaves both caches NULL, and retro_load_game refuses the game. */
++   /* nx-mobile: map once and keep it (see nx_jit_block). */
 +   if (!nx_jit_block)
 +      nx_jit_block = (u8*)map_jit_block(ROM_TRANSLATION_CACHE_SIZE + RAM_TRANSLATION_CACHE_SIZE);
 +   rom_translation_cache = nx_jit_block;
-+   ram_translation_cache = nx_jit_block ? &nx_jit_block[ROM_TRANSLATION_CACHE_SIZE] : NULL;
-   #elif defined(_3DS)
-    if (__ctr_svchax && !translation_caches_inited)
-    {
-@@ -695,7 +741,9 @@ void retro_deinit(void)
+    if (rom_translation_cache)
+       ram_translation_cache = &rom_translation_cache[ROM_TRANSLATION_CACHE_SIZE];
+    else if (log_cb)
+@@ -731,8 +780,9 @@ void retro_deinit(void)
     memory_term();
  
  #if defined(MMAP_JIT_CACHE) && defined(HAVE_DYNAREC)
--   unmap_jit_block(rom_translation_cache, ROM_TRANSLATION_CACHE_SIZE + RAM_TRANSLATION_CACHE_SIZE);
+-   if (rom_translation_cache)
+-      unmap_jit_block(rom_translation_cache, ROM_TRANSLATION_CACHE_SIZE + RAM_TRANSLATION_CACHE_SIZE);
 +   /* nx-mobile: the block stays mapped for the next session (nx_jit_block). */
 +   rom_translation_cache = NULL;
 +   ram_translation_cache = NULL;
  #endif
  #if defined(_3DS) && defined(HAVE_DYNAREC)
  
-@@ -1149,6 +1197,17 @@ bool retro_load_game(const struct retro_game_info* info)
-    if (!gba_screen_pixels)
-       return false;
+@@ -1052,7 +1102,6 @@ static void check_variables(bool started_from_load)
+          sprite_limit = 0;
+    }
+    {
+-      static int sound_rate_configured = 0;
+       struct retro_variable svar = { "gpsp_sound_rate", NULL };
+       environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &svar);
+       gpsp_apply_sound_rate(svar.value, sound_rate_configured ? environ_cb : NULL);
+diff --git a/memmap.c b/memmap.c
+index b7b287d..e5a7245 100644
+--- a/memmap.c
++++ b/memmap.c
+@@ -100,9 +100,40 @@ bool validate_addr_section_mips(void *ptr, unsigned size, unsigned max_offset_mb
  
-+#if defined(HAVE_DYNAREC) && defined(MMAP_JIT_CACHE)
-+   /* nx-mobile: the emitter writes into this cache even with the dynarec
-+    * option off, so without it the game cannot start. */
-+   if (!rom_translation_cache)
-+   {
-+      if (log_cb)
-+         log_cb(RETRO_LOG_ERROR, "gpsp: couldn't reserve its 10.5 MB recompiler cache near the core\n");
-+      return false;
-+   }
-+#endif
+ 	#include <sys/mman.h>
+ 
++	#if defined(__ANDROID__) && defined(ARM64_ARCH)
++	#include <unistd.h>
++	#include "gpsp_config.h"
 +
-    check_variables(true);
-    set_input_descriptors();
++	/* nx-mobile: the frontend's own mappings (the GPU driver, ART, other
++	 * cores) can fill every gap within +/-128 MB of this library, so the
++	 * mmap search below finds nothing. The cache lives in the library's
++	 * .bss instead, always next to its code, and is made executable at
++	 * runtime: the ELF itself has no W+E segment, which Android refuses.
++	 * Aligned to 16 KB so the block's pages sit in the anonymous part of
++	 * .bss on 4 KB and 16 KB page kernels alike; untouched pages cost no RAM. */
++	#define NX_JIT_AREA_SIZE (ROM_TRANSLATION_CACHE_SIZE + RAM_TRANSLATION_CACHE_SIZE)
++	static uint8_t nx_jit_area[NX_JIT_AREA_SIZE] __attribute__((aligned(16384)));
++
++	static void *nx_map_jit_area(unsigned size) {
++		uintptr_t page = (uintptr_t)sysconf(_SC_PAGESIZE);
++		uintptr_t start = (uintptr_t)nx_jit_area;
++		uintptr_t len = (size + page - 1) & ~(page - 1);
++		if (start & (page - 1) || size > NX_JIT_AREA_SIZE || len > NX_JIT_AREA_SIZE)
++			return 0;
++		if (mprotect((void*)start, len, PROT_READ|PROT_WRITE|PROT_EXEC))
++			return 0;
++		return (void*)start;
++	}
++	#endif
++
+ 	// Posix implementation
+ 	void *map_jit_block(unsigned size) {
+ 		unsigned i;
++		#if defined(__ANDROID__) && defined(ARM64_ARCH)
++		void *area = nx_map_jit_area(size);
++		if (area)
++			return area;
++		#endif
+ 		uintptr_t base = (uintptr_t)(map_jit_block) & (~(_MAP_STEP - 1ULL));
+ 		int flags = MAP_ANON | MAP_PRIVATE;
+ 		#ifdef __APPLE__
+@@ -131,6 +162,11 @@ bool validate_addr_section_mips(void *ptr, unsigned size, unsigned max_offset_mb
+ 	}
+ 
+ 	void unmap_jit_block(void *bufptr, unsigned size) {
++		#if defined(__ANDROID__) && defined(ARM64_ARCH)
++		/* nx-mobile: the .bss block belongs to the library; it goes when the library does. */
++		if ((uint8_t*)bufptr == nx_jit_area)
++			return;
++		#endif
+ 		munmap(bufptr, size);
+ 	}
  

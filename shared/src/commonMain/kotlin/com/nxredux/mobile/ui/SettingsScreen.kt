@@ -167,7 +167,7 @@ internal fun settingsTouchPage(screen: Screen.Settings): Boolean =
 /** The Settings rows that open a page or an editor: their touch row ends in `›`. */
 private val OPENER_KINDS = setOf(
     SettingsKind.HOME, SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVES, SettingsKind.IMPORT_SAVES,
-    SettingsKind.PAD_LAYOUT, SettingsKind.PAD_LAYOUT_SHAPE, SettingsKind.SHORTCUTS, SettingsKind.ANDROID_GAMES, SettingsKind.HIDDEN, SettingsKind.UNASSIGNED,
+    SettingsKind.PAD_LAYOUT, SettingsKind.PAD_LAYOUT_SHAPE, SettingsKind.SHORTCUTS, SettingsKind.SYSTEM_BUTTONS, SettingsKind.ANDROID_GAMES, SettingsKind.HIDDEN, SettingsKind.UNASSIGNED,
     SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER,
 )
@@ -231,6 +231,7 @@ internal data class SettingsResetAsk(val title: String, val text: String, val co
 internal fun settingsResetAsk(page: Screen.Settings, selected: Int): SettingsResetAsk? = when (page.rows.getOrNull(selected)?.kind) {
     SettingsKind.RESET_DEFAULTS -> when (page.section) {
         SettingsSection.SHORTCUTS -> SettingsResetAsk("Clear all shortcuts?", "Every action goes back to None and both touch buttons come off the pad.", "Clear all")
+        SettingsSection.SYSTEM_BUTTONS -> SettingsResetAsk("Reset this controller's buttons?", "SELECT, START and MENU go back to the controller's own buttons.", "Reset")
         SettingsSection.APPEARANCE -> SettingsResetAsk("Reset to defaults?", "Pad theme, Pad buttons, Accent, Secondary accent and Text size go back to their defaults.", "Reset")
         SettingsSection.MAIN_MENU -> SettingsResetAsk("Reset to defaults?", "Every Layouts group and Extra info go back to their defaults.", "Reset")
         SettingsSection.CONTROLS -> SettingsResetAsk("Reset to defaults?", "Vibration, Menu pad and every pad layout go back to their defaults.", "Reset")
@@ -277,6 +278,8 @@ internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSett
         // Press to bind: B cancels a wait ([SettingsRow.note] set), else A binds and X clears.
         kind == SettingsKind.SHORTCUT_BIND -> if (rows[selected].note.let { it != null && it != MIC_ROW_NOTE }) listOf(Hint(NxButton.B, "Cancel"))
             else listOf(back, Hint(NxButton.A, "Bind"), Hint(NxButton.X, "Clear"))
+        // System buttons' press to bind: B cancels a wait ([SettingsRow.note] set), else A binds.
+        kind == SettingsKind.SYSTEM_BUTTON_BIND -> if (rows[selected].note != null) listOf(Hint(NxButton.B, "Cancel")) else listOf(back, Hint(NxButton.A, "Bind"))
         // A touch value row (the in-game menu's): LEFT / RIGHT change it, A toggles a switch or opens a picker. Use as
         // home screen and All files access are Android's to change: A alone (it opens Android's screen).
         touch != null && touch.choices.size >= 2 -> listOf(back) +

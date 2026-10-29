@@ -87,6 +87,21 @@
      "default": "auto"
     },
     {
+     "key": "gpsp_rtc_time_source",
+     "label": "RTC Time Source",
+     "labelCategorized": "",
+     "info": "Selects the clock used by RTC-enabled cartridges. Deterministic advances with emulated frames and is preserved in save states. System Clock follows the host clock, including time elapsed while content is not running.",
+     "values": [
+      "deterministic",
+      "system"
+     ],
+     "labels": [
+      "Deterministic",
+      "System Clock"
+     ],
+     "default": "deterministic"
+    },
+    {
      "key": "gpsp_serial",
      "label": "Link Cable Connectivity",
      "labelCategorized": "",
@@ -127,6 +142,21 @@
       ""
      ],
      "default": "auto"
+    },
+    {
+     "key": "gpsp_sound_rate",
+     "label": "Sound Output Rate (Hz)",
+     "labelCategorized": "",
+     "info": "Internal audio rendering rate. Both values keep audio timing exact. 65536 renders the full mixer bandwidth; 32768 matches the bandwidth of real hardware's default PWM output and halves audio mixing work.",
+     "values": [
+      "65536",
+      "32768"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "32768"
     },
     {
      "key": "gpsp_frameskip",
@@ -501,6 +531,6 @@
    ]
   }
  ],
- "soSha256": "9535577e3d2f465edb47e932192d255b565e695a5c5316e6f007382965c5ba0d",
- "probedAt": "2026-10-10"
+ "soSha256": "67266227f74367b8658a763f745e4745c9e4f27e26f435ab900d365d2e108289",
+ "probedAt": "2026-10-30"
 }
