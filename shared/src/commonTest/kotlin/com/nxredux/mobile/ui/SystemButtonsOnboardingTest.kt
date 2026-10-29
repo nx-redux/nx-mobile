@@ -246,4 +246,15 @@ class SystemButtonsOnboardingTest {
         assertIs<Screen.Systems>(s.screen.value)
         assertTrue(aya.key in SystemButtons.decode(settings.systemButtons).asked)
     }
+
+    // "I've pressed them all" and Skip are rows only: no page line mentions holding START.
+    @Test fun pageTextHasNoHoldStart() = runTest {
+        val s = state()
+        pads = listOf(aya)
+        s.padsChanged()
+        assertTrue(s.page().details.none { "hold" in it.lowercase() })
+        s.tap(KeyCodes.BUTTON_SELECT); s.tap(KeyCodes.BUTTON_START)
+        s.row("I've pressed them all")
+        assertTrue(s.page().details.none { "hold" in it.lowercase() })
+    }
 }

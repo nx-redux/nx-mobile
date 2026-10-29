@@ -3,10 +3,9 @@ package com.nxredux.mobile.shortcuts
 /**
  * The SELECT / START / MENU page's state, for one pad [model]. PRESS: the user presses the three, each ticks off
  * ([found]) as it's recognised; any other button is "not one of the three" ([lastOther]), A, B, Back and the d-pad
- * stay the page's (its rows). All three found: DONE. Otherwise "I've pressed them all" ([pressedAll], or holding a found
- * START) goes to BIND, which takes the next fresh press as each missing role in turn ([binding]), never B or Back
+ * stay the page's (its rows). All three found: DONE. Otherwise the "I've pressed them all" row ([pressedAll]) goes to BIND, which takes the next fresh press as each missing role in turn ([binding]), never B or Back
  * (they cancel back to PRESS), never A or the d-pad (the page's rows), never a button another role already has ([lastTaken]). MENU can be skipped
- * ([skipMenu], or holding START): SELECT+START opens the menu instead.
+ * (the Skip row, [skipMenu]): SELECT+START opens the menu instead.
  */
 class SystemButtonsPage(val model: PadModel, map: SystemButtonMap) {
     enum class Phase { PRESS, BIND, DONE }
@@ -35,16 +34,7 @@ class SystemButtonsPage(val model: PadModel, map: SystemButtonMap) {
     /** A key from the pad; [repeat]: an auto-repeat. True when the page used it (the menu must not see it). */
     fun onKey(key: PhysicalKey, down: Boolean, repeat: Boolean): Boolean {
         if (!down) { heldIntoBind.remove(key); return taken.remove(key) }
-        if (repeat) {
-            if (key in heldIntoBind) return true
-            val role = SystemButtons.roleOf(map, model.key, key)
-            if (role == SystemRole.START && SystemRole.START in found) {
-                // Holding START moves on: "I've pressed them all" in PRESS, Skip while BIND waits for MENU.
-                if (phase == Phase.PRESS) { pressedAll(); return true }
-                if (binding == SystemRole.MENU) { skipMenu(); return true }
-            }
-            return key in taken
-        }
+        if (repeat) return key in heldIntoBind || key in taken
         val used = when (phase) {
             Phase.PRESS -> press(key)
             Phase.BIND -> bind(key)

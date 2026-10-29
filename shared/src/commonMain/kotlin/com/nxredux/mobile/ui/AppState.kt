@@ -2447,7 +2447,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         if (page.phase == SystemButtonsPage.Phase.BIND && role != null) {
             val lines = listOfNotNull(
                 "Press the button you want as ${role.label}.",
-                if (role == SystemRole.MENU) "No MENU button? Hold START to skip: SELECT+START opens the menu." else null,
+                if (role == SystemRole.MENU) "No MENU button? Choose Skip: SELECT+START opens the menu." else null,
                 taken,
             )
             val rows = if (role == SystemRole.MENU) listOf(NxRow("Skip"), NxRow("Cancel")) else listOf(NxRow("Cancel"))
@@ -2456,7 +2456,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val lines = listOfNotNull(
             "Press SELECT, START and MENU on your controller (${page.model.name}).",
             if (page.lastOther) "That's not one of the three." else null,
-            "One wasn't found? Choose I've pressed them all, or hold START, to pick its button.",
+            "One wasn't found? Choose I've pressed them all, then press the button to use for it.",
         )
         val rows = SystemRole.entries.map { NxRow(it.label, secondary = if (it in page.found) "Found" else "Not found yet") } +
             listOf(NxRow("I've pressed them all"), NxRow("Skip"))

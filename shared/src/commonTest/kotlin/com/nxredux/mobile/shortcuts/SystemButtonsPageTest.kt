@@ -43,13 +43,13 @@ class SystemButtonsPageTest {
         assertFalse(p.lastOther)
     }
 
-    @Test fun holdStartConfirms() {
+    @Test fun holdingStartDoesNothing() {
+        // "I've pressed them all" is the row only: a held START is a press like any other.
         val p = page()
         p.tap(key(KeyCodes.BUTTON_SELECT))
         assertTrue(p.onKey(key(KeyCodes.BUTTON_START), true, false))
         assertTrue(p.onKey(key(KeyCodes.BUTTON_START), true, true))
-        assertEquals(SystemButtonsPage.Phase.BIND, p.phase)
-        assertEquals(SystemRole.MENU, p.binding)
+        assertEquals(SystemButtonsPage.Phase.PRESS, p.phase)
     }
 
     @Test fun startRepeatBeforeStartIsKnownDoesNothing() {
@@ -90,16 +90,12 @@ class SystemButtonsPageTest {
         p.tap(key(KeyCodes.BUTTON_SELECT))
         val start = key(KeyCodes.BUTTON_START)
         p.onKey(start, true, false)
-        p.onKey(start, true, true)   // the hold: into BIND for MENU
+        p.pressedAll()               // the row chosen by touch while START is still held: into BIND for MENU
         p.onKey(start, true, true)   // still held: neither binds nor skips MENU
         assertEquals(SystemButtonsPage.Phase.BIND, p.phase)
         assertEquals(SystemRole.MENU, p.binding)
         p.onKey(start, false, false)
         assertEquals(SystemButtonMap(), p.map)
-        // A new hold, started in BIND, does skip MENU.
-        p.onKey(start, true, false)
-        p.onKey(start, true, true)
-        assertEquals(SystemButtonsPage.Phase.DONE, p.phase)
     }
 
     @Test fun aFoundRolesButtonIsNotTakenForAnother() {
@@ -149,18 +145,16 @@ class SystemButtonsPageTest {
         assertEquals(110, SystemButtons.translate(p.map, model.key, KeyCodes.BUTTON_THUMBL, 0))
     }
 
-    @Test fun holdStartWhileBindingMenuSkipsIt() {
+    @Test fun holdingStartWhileBindingMenuDoesNotSkip() {
         val p = page()
         p.tap(key(KeyCodes.BUTTON_SELECT))
         val start = key(KeyCodes.BUTTON_START)
         p.tap(start)
         p.pressedAll()
-        assertEquals(SystemRole.MENU, p.binding)
-        assertTrue(p.onKey(start, true, false))   // a tap: START is taken, nothing binds
+        assertTrue(p.onKey(start, true, false))   // START is taken: nothing binds
         assertEquals(SystemRole.START, p.lastTaken)
-        assertTrue(p.onKey(start, true, true))    // held: skip MENU
-        assertEquals(SystemButtonsPage.Phase.DONE, p.phase)
-        assertTrue(p.menuSkipped)
+        assertTrue(p.onKey(start, true, true))    // held: still waiting (Skip is the row's)
+        assertEquals(SystemButtonsPage.Phase.BIND, p.phase)
         assertEquals(SystemButtonMap(), p.map)
     }
 
