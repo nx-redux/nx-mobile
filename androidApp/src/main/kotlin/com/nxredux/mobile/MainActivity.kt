@@ -72,6 +72,7 @@ import com.nxredux.mobile.runner.NdsRenderer
 import com.nxredux.mobile.runner.NxStorage
 import com.nxredux.mobile.runner.Overlays
 import com.nxredux.mobile.runner.PadKeymap
+import com.nxredux.mobile.runner.SystemButtonKeys
 import com.nxredux.mobile.runner.playRumblePreview
 import com.nxredux.mobile.runner.RomCache
 import com.nxredux.mobile.runner.Shaders
@@ -141,7 +142,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
 
     private val inputManager: InputManager? by lazy { getSystemService(InputManager::class.java) }
     private val inputDeviceListener = object : InputManager.InputDeviceListener {
-        override fun onInputDeviceAdded(deviceId: Int) {}
+        // A new pad model is asked for its SELECT / START / MENU once ([AppState.padsChanged]).
+        override fun onInputDeviceAdded(deviceId: Int) { if (::state.isInitialized) state.padsChanged() }
         override fun onInputDeviceChanged(deviceId: Int) {}
         // A controller unplugged mid-hold can never send its own Up, so release the hat.
         override fun onInputDeviceRemoved(deviceId: Int) { releaseHat() }
@@ -410,6 +412,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 localFiles = AndroidLocalFiles(AndroidLocalFiles.deviceVolumes(applicationContext)),
                 archiveHead = { ref, name, exts, max -> withContext(Dispatchers.IO) { Archives.head(applicationContext, ref, name, exts, max) } },
                 builtInSecondScreen = { secondScreens.builtInNow() != null },
+                connectedPads = { SystemButtonKeys.connected(this) },
                 homes = AndroidHomeLocator(this),
                 storageUpgrade = AndroidStorageUpgrade(this),
                 // Settings → Developer options → Remove animations (animator scale 0); read per call, so a change applies next launch.
@@ -690,6 +693,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         TopScreenHost.recheck(this)   // an app on the top screen whose host is gone without a word
         // Back from Android's All files access page (or a revoke meanwhile): setup moves on, the row and the refs follow.
         if (::state.isInitialized) state.onAllFilesAccessChanged()
+        if (::state.isInitialized) state.padsChanged()   // a pad plugged in while away
     }
 
     /**
@@ -783,9 +787,12 @@ class MainActivity : ComponentActivity(), FolderPicker {
      * Mapped pad keys reach the router before the view hierarchy: Compose's focus navigation would otherwise take a
      * keyboard-source DPAD (a BT keyboard, a pad in keyboard mode) and move its own focus instead of the NX selection.
      * While a text field is up the hierarchy sees them first, so LEFT/RIGHT move its cursor. Press to bind
-     * ([captureKey]) sees every key before either.
+     * ([captureKey]) sees every key before either. Before all of them, the SELECT / START / MENU page sees the pad's raw
+     * key ([AppState.systemButtonKey]), then a bound button becomes its role's code ([SystemButtonKeys]).
      */
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
+        if (::state.isInitialized && systemButtonKey(raw)) return true
+        val event = SystemButtonKeys.translate(this, raw)
         if (::state.isInitialized && captureKey(event)) return true
         if (::state.isInitialized && !state.textEntryOpen && keyToButton(event.keyCode) != null) {
             when (event.action) {
@@ -794,6 +801,18 @@ class MainActivity : ComponentActivity(), FolderPicker {
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    /** A press or release for the SELECT / START / MENU page or Controls → System buttons' wait; true when it used it. */
+    private fun systemButtonKey(event: KeyEvent): Boolean {
+        val down = when (event.action) {
+            KeyEvent.ACTION_DOWN -> true
+            KeyEvent.ACTION_UP -> false
+            else -> return false
+        }
+        if (!state.systemButtonKey(SystemButtonKeys.model(event.device), event.keyCode, event.scanCode, down, event.repeatCount > 0)) return false
+        onUserInteraction()
+        return true
     }
 
     /**
