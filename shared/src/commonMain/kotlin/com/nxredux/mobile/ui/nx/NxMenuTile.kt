@@ -319,14 +319,17 @@ private fun GameTile(
             )
             GameTileLayer.CAPTION -> {
                 // The lines under the name: their grey, or on an unselected Grid tile ([drained]) a step under its name.
-                val sub = if (drained && !lit) colors.listText.copy(alpha = DRAIN_NAME_ALPHA * DRAIN_SUB_OF_NAME) else colors.hint   // role: an unselected Grid tile's under-name lines
+                // Unselected, ink at [DRAIN_SUB_ALPHA], easing to the hint grey with the picture ([litness]), as the name does.
+                val sub = if (!drained) colors.hint else lerp(colors.listText.copy(alpha = DRAIN_SUB_ALPHA), colors.hint, litness())   // role: an unselected Grid tile's under-name lines
                 // An unselected Grid tile's name in ink at [DRAIN_NAME_ALPHA], easing to the accent with its picture ([litness]).
                 val name = if (!drained) colors.listText else lerp(colors.listText.copy(alpha = DRAIN_NAME_ALPHA), colors.accent, litness())   // role: an unselected Grid tile's name
                 // The info line with the List's inline trophy ([infoText]), the icon fitted to the 11 sp line (12 dp where
                 // it fits); on Home the info lines are a step under the title's 13 sp, at 11 sp on 14 dp lines.
-                // Home's cards: the info at the game list Carousel card's size, the name a step under its name, under Text size.
+                // Home's cards: the info at the game list Carousel card's size, under Text size.
+                // A tile's name at the Carousel card's name size, a step over its info; the hero card's a step under it plus
+                // [HOME_HERO_NAME_PLUS], as before.
+                val homeName = if (heroName) (NxTextSizes.secondary(nxCardTitleSize()).value + HOME_HERO_NAME_PLUS).sp else nxCardTitleSize()
                 val statsSp = if (homeCaption) nxCardStatsSize() else INFO_SP
-                val homeName = NxTextSizes.secondary(nxCardTitleSize()).let { if (heroName) (it.value + HOME_HERO_NAME_PLUS).sp else it }
                 val statsLine = if (homeCaption) HOME_INFO_LINE else LINE_HEIGHT
                 val lineDp = with(LocalDensity.current) { (statsSp * statsLine).toDp() }
                 val info = if (statsOnly) emptyList() else info()
@@ -492,5 +495,5 @@ private const val DRAIN_BADGE_ALPHA = 0.3f   // role: an unselected Grid Home ti
 
 internal fun nxDimBadge(litness: Float): Float = DRAIN_BADGE_ALPHA + (1f - DRAIN_BADGE_ALPHA) * litness
 
-/** An unselected Grid tile's lines under its name, as a share of its name's ink ([DRAIN_NAME_ALPHA]). */
-private const val DRAIN_SUB_OF_NAME = 0.7f
+/** An unselected Grid tile's lines under its name: ink at this, about 4.5:1 on its tile. */
+private const val DRAIN_SUB_ALPHA = 0.5f   // role: an unselected Grid tile's under-name lines
