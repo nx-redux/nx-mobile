@@ -39,11 +39,8 @@ object LaunchTimeline {
     /** Fade used instead of the spread when reduced motion is on. */
     const val REDUCED_FADE_MS = 150L
 
-    /**
-     * Stop waiting for the game's first frame after this long and reveal anyway. Above the launch's wait for a previous
-     * game's process to end (10 s, then 1 s after a kill).
-     */
-    const val GIVE_UP_MS = 15_000L
+    /** Stop waiting for the game's first frame after this long and reveal anyway. */
+    const val GIVE_UP_MS = 10_000L
 }
 
 private val ColorEase = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
