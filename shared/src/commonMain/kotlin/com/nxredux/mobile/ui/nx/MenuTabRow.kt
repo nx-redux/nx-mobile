@@ -26,6 +26,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,6 +101,7 @@ fun MenuTabRow(
     labels: List<String>, selected: Int, onTab: (Int) -> Unit, modifier: Modifier = Modifier, overArt: Boolean = false, focused: Boolean = false,
     onLongPress: (() -> Unit)? = null, underline: Boolean = true, trailing: (@Composable () -> Unit)? = null,
     labelSize: TextUnit = NxTextSizes.pageTitle.pinned() * nxTextScale(),   // the words' size: the page title's, or (the bottom tabs) a hint's
+    hints: (@Composable (room: Dp) -> Unit)? = null,   // at the row's right end, given the room the words leave ([TAB_HINTS_GAP] clear of them)
 ) {
     val colors = LocalNxColors.current
     val portrait = LocalPortrait.current
@@ -133,12 +136,13 @@ fun MenuTabRow(
     }
     val gap = if (portrait) 14.dp else 20.dp
     val size = labelSize   // Appearance → Text size
+    var rowPx by remember { mutableIntStateOf(0) }   // the row's width inside its padding, for [hints]' room
     Row(
         // The gutter less the pill's side room, which the words' box takes back inside (so the pill is never clipped).
         // The long press before the padding, so the side gutters take it too.
         modifier.fillMaxWidth().height(MENU_TAB_ROW_HEIGHT)
             .then(if (onLongPress == null) Modifier else Modifier.pointerInput(onLongPress) { detectTapGestures(onLongPress = { onLongPress() }) })
-            .padding(horizontal = pageGutter(portrait).dp - TAB_PLATE_X),
+            .padding(horizontal = pageGutter(portrait).dp - TAB_PLATE_X).onSizeChanged { rowPx = it.width },
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -170,6 +174,14 @@ fun MenuTabRow(
         } }
         // The row's end padding is the gutter less [TAB_PLATE_X]; the icons' own inset takes the rest, so they end near the gutter.
         trailing?.invoke()
+        // The words' own width as laid out (their box's plate room each side): what is left beside them is the hints'.
+        hints?.let { h ->
+            val plate = with(density) { TAB_PLATE_X.roundToPx() }
+            val wordsPx = (bounds.values.maxOfOrNull { it.first + it.second } ?: 0) + plate * 2
+            val room = with(density) { (rowPx - wordsPx - TAB_HINTS_GAP.roundToPx() - plate).coerceAtLeast(0).toDp() }
+            // The words' own room under them ([TAB_WORD_BOTTOM]), so the hints sit level with them.
+            Box(Modifier.padding(end = TAB_PLATE_X, bottom = TAB_WORD_BOTTOM)) { h(room) }
+        }
     }
 }
 
@@ -272,3 +284,6 @@ internal fun tabScrollTarget(tx: Int, tw: Int, scroll: Int, view: Int, max: Int,
 private fun overArtShadow(ground: Color) = Shadow(ground, blurRadius = OVER_ART_BLUR_PX)
 
 private const val OVER_ART_BLUR_PX = 6f
+
+/** The least room between the last tab word and the hints beside the tabs ([MenuTabRow]'s hints). */
+private val TAB_HINTS_GAP = 24.dp

@@ -1,5 +1,9 @@
 package com.nxredux.mobile.ui
 
+import androidx.compose.runtime.getValue
+import com.nxredux.mobile.ui.nx.NxFittedHints
+import com.nxredux.mobile.ui.nx.Hint
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -109,6 +113,7 @@ fun MainMenuScreen(
     bandShade: Boolean = true,            // List: the info band's shade ([mainMenuListBand]: none on Consoles, Collections and Tools)
     bandInfo: Boolean = true,             // List: the band shows the row's info ([mainMenuListBand]: none on Consoles, Collections and Tools)
     canSearch: Boolean = false,           // the library has games: the Search icon
+    canNetplay: () -> Boolean = { false },   // Home: the selected game has Netplay here (Y opens its sheet): its hint beside the tabs
     onTabMenu: (() -> Unit)? = null,      // a long press on the tab row or the single-tab title: the hidden-tab menu
     tabMenu: Boolean = false,             // a hidden tab can be opened from MENU: every row's MENU offers Options, every Home row takes a long press
     minimalOpening: MinimalOpening? = null,   // Minimal: this tab's selected folder being opened: the others fade (a launch runs App's [LaunchOverlay])
@@ -321,7 +326,24 @@ fun MainMenuScreen(
                 // names' inset so its words line up with them ([listTextInset]). Its top [TAB_ROW_PULL] is given to the page
                 // above ([pullUp]): the words stay put, every layout's content ends that much nearer them.
                 Box(Modifier.pullUp(TAB_ROW_PULL).pageFixed().onSizeChanged { tabRowPx.intValue = it.height }.padding(horizontal = textInset)) {
-                    if (title == null) MenuTabRow(labels, screen.tab, onTab, onLongPress = onTabMenu, underline = false, labelSize = nxHintLabelSize())   // a hint's size, as the game lists' bar in its place
+                    // With Button hints on and buttons to press, a few hints at the row's right (the main menu has no bar):
+                    // Netplay first on Home's netplay game (its Layouts row), then Recent, then Search; one upright, two
+                    // sideways, and only as many as the words leave room for.
+                    val barHints = if (!shown.buttonHints || shown.noBar) null else {
+                        val netplayNow by remember(canNetplay) { derivedStateOf { canNetplay() } }
+                        val portrait = LocalPortrait.current
+                        remember(home, shown.netplayHint, netplayNow, canSearch, portrait) {
+                            listOfNotNull(
+                                Hint(NxButton.Y, "Netplay").takeIf { home && shown.netplayHint && netplayNow },
+                                Hint(NxButton.SELECT, "Recent"),
+                                Hint(NxButton.START, "Search").takeIf { canSearch },
+                            ).take(if (portrait) 1 else 2)
+                        }
+                    }
+                    if (title == null) MenuTabRow(
+                        labels, screen.tab, onTab, onLongPress = onTabMenu, underline = false, labelSize = nxHintLabelSize(),   // a hint's size, as the game lists' bar in its place
+                        hints = barHints?.let { h -> { room -> NxFittedHints(h, room, onHint) } },
+                    )
                     else MenuTitleRow(title, modifier = longPress, textStart = nxPageGutter())
                 }
             }

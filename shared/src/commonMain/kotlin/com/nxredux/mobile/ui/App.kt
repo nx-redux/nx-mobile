@@ -579,6 +579,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     tileInfo = remember(s.rows, gameInfo, now) { rowTileInfo(s.rows, gameInfo, now) }, layoutKey = s.category,
                     onHomeLayout = onHomeLayout, homeView = homeView.value, homeRowLast = { homeRowLast.value },
                     continueInfo = { gameInfoFor(gameInfo, now, (s.rows.firstOrNull() as? MainRow.Continue)?.entry?.game, full = true) },
+                    canNetplay = { state.canNetplay(s.rows.getOrNull(selection.value.index).listed()) },
                     raSignedIn = state.settings.raToken != null,
                     controllerArt = state.settings.consoleArt == ConsoleArt.CONTROLLER,
                     minimalOpening = minimalOpening.value?.takeIf { s.category != null && it.page == s.category },

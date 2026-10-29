@@ -19,6 +19,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.BlendMode
@@ -113,8 +118,35 @@ val HINT_GLYPH_SIZE: Dp = 18.dp
 internal const val NAV_ART_MARGIN = 16f / 128f
 
 @Composable
-fun NxButtonGlyph(button: NxButton, size: Dp, modifier: Modifier = Modifier, tint: Color = LocalNxColors.current.main) =
-    NxArtGlyph(button.navDrawable(), button.name, size, modifier, tint)
+fun NxButtonGlyph(button: NxButton, size: Dp, modifier: Modifier = Modifier, tint: Color = LocalNxColors.current.main) {
+    if (button == NxButton.SELECT || button == NxButton.START) NxShapeGlyph(button == NxButton.START, size, modifier, tint)
+    else NxArtGlyph(button.navDrawable(), button.name, size, modifier, tint)
+}
+
+/**
+ * SELECT's and START's glyph: the other buttons' disc (the middle 3/4 of a [size] box, as the 128 px art's 96 px disc)
+ * with a shape cut in the bar's dark where their art had the word, too small to read at a hint's size: START a play
+ * triangle ([start]), SELECT a rounded rectangle.
+ */
+@Composable
+private fun NxShapeGlyph(start: Boolean, size: Dp, modifier: Modifier, tint: Color) {
+    val cut = LocalNxColors.current.badgeText
+    Canvas(modifier.size(size)) {
+        val r = this.size.minDimension * 0.75f / 2
+        val c = center
+        drawCircle(tint, r, c)
+        if (start) {
+            // The triangle's centroid on the disc's centre, its point to the right.
+            val h = r * 0.95f; val w = h * 0.87f
+            drawPath(Path().apply {
+                moveTo(c.x - w / 3, c.y - h / 2); lineTo(c.x + w * 2 / 3, c.y); lineTo(c.x - w / 3, c.y + h / 2); close()
+            }, cut)
+        } else {
+            val w = r * 1.1f; val h = r * 0.62f
+            drawRoundRect(cut, Offset(c.x - w / 2, c.y - h / 2), Size(w, h), CornerRadius(h * 0.25f))
+        }
+    }
+}
 
 @Composable
 private fun NxArtGlyph(art: DrawableResource, description: String, size: Dp, modifier: Modifier = Modifier, tint: Color = LocalNxColors.current.main) {
@@ -225,17 +257,7 @@ fun NxHintBar(
                 val clickable = if (onHint != null) Modifier.clickable { onHint(hint.button) } else Modifier
                 // The first glyph is pulled back by the art's transparent margin, so its disc sits on the text edge above.
                 val item = if (i == 0 && glyph != HintGlyph.TextOnly) Modifier.offset(x = -(glyphSize * NAV_ART_MARGIN)).then(clickable) else clickable
-                // At least a glyph's height, so a text-only hint's tap target is as tall as the others.
-                Row(item.heightIn(min = glyphSize), verticalAlignment = Alignment.CenterVertically) {
-                    when (glyph) {
-                        is HintGlyph.Art -> NxButtonGlyph(glyph.button, size = glyphSize)
-                        is HintGlyph.Badge -> NxBadgeGlyph(glyph.text, size = glyphSize)
-                        is HintGlyph.Icon -> NxArtGlyph(glyph.icon.navDrawable(), glyph.icon.label, size = glyphSize)
-                        HintGlyph.TextOnly -> Unit
-                    }
-                    if (glyph != HintGlyph.TextOnly) Spacer(Modifier.width(3.dp))
-                    Text(hint.label.uppercase(), color = colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = labelSize, lineHeight = labelSize, maxLines = 1, softWrap = false)
-                }
+                NxHintItem(hint, glyph, glyphSize, labelSize, item)
             }
         },
         modifier = modifier.fillMaxWidth().background(scrim)
@@ -261,6 +283,56 @@ fun NxHintBar(
         }
         val h = maxOf(shown.maxOfOrNull { it.first.height } ?: 0, c.minHeight)
         layout(hintBarWidth(c.hasBoundedWidth, c.maxWidth, end), h) { shown.forEach { (p, x) -> p.place(x, (h - p.height) / 2) } }
+    }
+}
+
+/** One hint as a bar draws it: its [glyph] at [glyphSize] (none text-only), then its label in capitals at [labelSize]. */
+@Composable
+internal fun NxHintItem(hint: Hint, glyph: HintGlyph, glyphSize: Dp, labelSize: TextUnit, modifier: Modifier = Modifier) {
+    // At least a glyph's height, so a text-only hint's tap target is as tall as the others.
+    Row(modifier.heightIn(min = glyphSize), verticalAlignment = Alignment.CenterVertically) {
+        when (glyph) {
+            is HintGlyph.Art -> NxButtonGlyph(glyph.button, size = glyphSize)
+            is HintGlyph.Badge -> NxBadgeGlyph(glyph.text, size = glyphSize)
+            is HintGlyph.Icon -> NxArtGlyph(glyph.icon.navDrawable(), glyph.icon.label, size = glyphSize)
+            HintGlyph.TextOnly -> Unit
+        }
+        if (glyph != HintGlyph.TextOnly) Spacer(Modifier.width(3.dp))
+        Text(hint.label.uppercase(), color = LocalNxColors.current.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = labelSize, lineHeight = labelSize, maxLines = 1, softWrap = false)
+    }
+}
+
+/**
+ * A few [hints] in a row, in the given order (most wanted first): as many as fit [room] with [HINT_GAP] between,
+ * always the first. The main menu's, beside its bottom tabs (it has no hint bar). A tap sends its button to [onHint].
+ */
+@Composable
+internal fun NxFittedHints(hints: List<Hint>, room: Dp, onHint: ((NxButton) -> Unit)?, modifier: Modifier = Modifier) {
+    if (hints.isEmpty()) return
+    val glyphs = LocalHintGlyphs.current
+    val glyphSize = HINT_GLYPH_SIZE * nxTextScale()
+    val labelSize = nxHintLabelSize()
+    Layout(
+        content = {
+            hints.forEach { hint ->
+                NxHintItem(hint, glyphs.glyphFor(hint.button), glyphSize, labelSize, if (onHint != null) Modifier.clickable { onHint(hint.button) } else Modifier)
+            }
+        },
+        modifier = modifier,
+    ) { measurables, c ->
+        val gap = HINT_GAP.roundToPx()
+        val roomPx = room.roundToPx()
+        val all = measurables.map { it.measure(Constraints(maxHeight = c.maxHeight)) }
+        val shown = ArrayList<Pair<Placeable, Int>>()
+        var end = 0
+        for (p in all) {
+            val x = if (shown.isEmpty()) 0 else end + gap
+            if (shown.isNotEmpty() && x + p.width > roomPx) break
+            shown += p to x
+            end = x + p.width
+        }
+        val h = shown.maxOfOrNull { it.first.height } ?: 0
+        layout(end, h) { shown.forEach { (p, x) -> p.place(x, (h - p.height) / 2) } }
     }
 }
 
