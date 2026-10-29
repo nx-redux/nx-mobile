@@ -51,11 +51,18 @@ class RaTransport(
      */
     private suspend fun onlineAward(url: String, post: String, kind: RaRequestKind): RaResponse {
         val entry = unlock(kind) ?: return RaResponse(200, OFFLINE_BODY)
-        journal.append(entry)   // RaStoreException propagates to the bridge (hard failure)
+        // An unwritable journal (a full disk) must not keep the award from the server: it is only a failure unanswered.
+        var unwritten: RaStoreException? = null
+        val added = try { journal.append(entry) } catch (e: RaStoreException) { unwritten = e; false }
         val response = try { http.post(url, post, RaRequests.CONTENT_TYPE) } catch (e: RaHttpException) { null }
-        if (response == null || !definitive(response)) return journaled(entry)
-        journal.remove(listOf(entry))
-        return response
+        if (response != null && definitive(response)) {
+            // Only this call's entry: an equal older one (an offline unlock) stays for the sync. A failed rewrite only
+            // costs a harmless second submission.
+            if (added) runCatching { journal.remove(listOf(entry)) }
+            return response
+        }
+        unwritten?.let { throw it }   // neither answered nor kept: the bridge's hard failure
+        return journaled(entry)
     }
 
     /** A game lookup's cached body; startsession only from a real cached session, merged like offline. */

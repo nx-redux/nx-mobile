@@ -74,6 +74,27 @@ class RaTransportTest {
         assertEquals(listOf(RaUnlock("me", 7, hash, 5L)), duringPost)
         assertTrue(RaJournal(store, RaPaths.JOURNAL).entries().isEmpty())
     }
+    @Test fun online_award_still_goes_out_when_the_journal_cannot_be_written() = runTest {
+        val (t, store, http) = setup()
+        store.failAppend = true
+        val ok = """{"Success":true,"AchievementID":7,"Score":10,"SoftcoreScore":5}"""
+        http.on("awardachievement", body = ok)
+        assertEquals(RaResponse(200, ok), t.call(RaRequests.URL, "r=awardachievement&u=me&t=tok&a=7&h=0&m=$hash&v=x"))
+        assertEquals(1, http.posts.size)
+    }
+    @Test fun online_award_neither_journaled_nor_answered_is_a_hard_failure() = runTest {
+        val (t, store, http) = setup()
+        store.failAppend = true; http.offline = true
+        kotlin.test.assertFailsWith<RaStoreException> { t.call(RaRequests.URL, "r=awardachievement&u=me&t=tok&a=7&h=0&m=$hash&v=x") }
+    }
+    @Test fun online_award_answer_keeps_an_older_equal_journal_entry() = runTest {
+        val (t, store, http) = setup()
+        val offline = RaUnlock("me", 7, hash, 1L)   // an offline unlock still waiting for the sync
+        RaJournal(store, RaPaths.JOURNAL).append(offline)
+        http.on("awardachievement", body = """{"Success":true,"AchievementID":7,"Score":10,"SoftcoreScore":5}""")
+        t.call(RaRequests.URL, "r=awardachievement&u=me&t=tok&a=7&h=0&m=$hash&v=x")
+        assertEquals(listOf(offline), RaJournal(store, RaPaths.JOURNAL).entries())
+    }
     @Test fun online_award_whose_post_never_returns_stays_journaled() = runTest {
         val (t, store, http) = setup()
         http.responders["awardachievement"] = { kotlinx.coroutines.awaitCancellation() }   // the process ends mid-POST
