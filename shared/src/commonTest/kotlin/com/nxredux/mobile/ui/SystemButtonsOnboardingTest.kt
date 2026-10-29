@@ -142,7 +142,10 @@ class SystemButtonsOnboardingTest {
         s.padsChanged()
         s.tap(KeyCodes.BUTTON_SELECT); s.tap(KeyCodes.BUTTON_START)
         s.row("I've pressed them all")
-        assertTrue(s.page().details.any { "MENU" in it })
+        assertEquals(
+            listOf("Your controller's buttons", "Press the button you want as MENU.", "No MENU button? Choose Skip.", "SELECT+START will open the menu."),
+            s.page().details,
+        )
         assertEquals(listOf("Skip"), s.page().rows.map { it.label })   // MENU's bind: Skip only, no Cancel
         s.row("Skip")
         assertEquals("No MENU button? Press SELECT+START together to open the menu.", s.notice.value)
