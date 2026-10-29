@@ -9,7 +9,8 @@ import org.junit.Test
 class ProviderPreferencesTest {
     /** Stands in for the provider: the owner's entries in a map, the same call protocol. */
     private class FakeOwner(val data: MutableMap<String, Any?> = HashMap()) : PrefsChannel {
-        override fun call(method: String, name: String, args: Map<String, Any?>): Map<String, Any?> = when (method) {
+        var calls = 0
+        override fun call(method: String, name: String, args: Map<String, Any?>): Map<String, Any?> = also { calls++ }.run { when (method) {
             PrefsProvider.METHOD_GET_ALL -> HashMap(data)
             PrefsProvider.METHOD_APPLY -> {
                 if (args[PrefsProvider.ARG_CLEAR] == true) data.clear()
@@ -20,7 +21,7 @@ class ProviderPreferencesTest {
                 mapOf(PrefsProvider.RESULT_OK to true)
             }
             else -> error(method)
-        }
+        } }
     }
 
     @Test fun writeIsSeenByOwner() {
@@ -68,5 +69,24 @@ class ProviderPreferencesTest {
         prefs.edit().clear().putString("d", "4").commit()
         assertEquals(mapOf<String, Any?>("d" to "4"), owner.data)
         assertEquals(mapOf<String, Any?>("d" to "4"), prefs.all)
+    }
+
+    @Test fun staleSnapshotIsRefetched() {
+        val owner = FakeOwner(hashMapOf("k" to "old"))
+        var clock = 0L
+        val prefs = ProviderPreferences("p", owner) { clock }
+        owner.data["k"] = "new"
+        clock = 1001
+        assertEquals("new", prefs.getString("k", null))
+    }
+
+    @Test fun freshSnapshotIsNotRefetched() {
+        val owner = FakeOwner(hashMapOf("k" to "old"))
+        var clock = 0L
+        val prefs = ProviderPreferences("p", owner) { clock }
+        owner.data["k"] = "new"
+        clock = 1000
+        assertEquals("old", prefs.getString("k", null))
+        assertEquals(1, owner.calls)
     }
 }

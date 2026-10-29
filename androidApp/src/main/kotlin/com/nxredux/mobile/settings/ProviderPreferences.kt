@@ -1,6 +1,7 @@
 package com.nxredux.mobile.settings
 
 import android.content.SharedPreferences
+import com.swordfish.libretrodroid.NxLog
 
 /**
  * The call into the main process's [PrefsProvider], in plain Kotlin types (the provider converts to and from a Bundle
@@ -12,23 +13,38 @@ fun interface PrefsChannel {
 
 /**
  * A [SharedPreferences] for the game process: the main process owns the file, so a copy kept here would go stale in both
- * directions. Read from a snapshot taken on construction; a write goes to the owner at once (apply and commit alike) and
- * updates the snapshot. Change listeners are not supported: nothing in the game process uses them.
+ * directions. Read from a snapshot, fetched again when it is older than [MAX_AGE_MS] (the menu may change settings while a game
+ * plays); a write goes to the owner at once (apply and commit alike) and updates the snapshot. Change listeners are not supported: nothing in the game process uses them.
  */
-class ProviderPreferences(private val name: String, private val channel: PrefsChannel) : SharedPreferences {
-    private val snapshot = HashMap<String, Any?>(channel.call(PrefsProvider.METHOD_GET_ALL, name, emptyMap()))
+class ProviderPreferences(
+    private val name: String,
+    private val channel: PrefsChannel,
+    private val now: () -> Long = { System.nanoTime() / 1_000_000 },
+) : SharedPreferences {
+    private var snapshot = HashMap<String, Any?>(channel.call(PrefsProvider.METHOD_GET_ALL, name, emptyMap()))
+    private var fetchedAt = now()
 
-    @Synchronized override fun getAll(): MutableMap<String, *> = HashMap(snapshot)
-    @Synchronized override fun contains(key: String) = snapshot.containsKey(key)
-    @Synchronized override fun getString(key: String, defValue: String?) = snapshot[key] as? String ?: defValue
-    @Synchronized override fun getInt(key: String, defValue: Int) = snapshot[key] as? Int ?: defValue
-    @Synchronized override fun getLong(key: String, defValue: Long) = snapshot[key] as? Long ?: defValue
-    @Synchronized override fun getFloat(key: String, defValue: Float) = snapshot[key] as? Float ?: defValue
-    @Synchronized override fun getBoolean(key: String, defValue: Boolean) = snapshot[key] as? Boolean ?: defValue
+    /** Call under the lock before a read. A failed fetch keeps the old snapshot. */
+    private fun fresh(): HashMap<String, Any?> {
+        if (now() - fetchedAt > MAX_AGE_MS) {
+            runCatching { HashMap(channel.call(PrefsProvider.METHOD_GET_ALL, name, emptyMap())) }
+                .onSuccess { snapshot = it; fetchedAt = now() }
+                .onFailure { NxLog.w("NXAPP", "settings refresh ($name): ${it.message}"); fetchedAt = now() }
+        }
+        return snapshot
+    }
+
+    @Synchronized override fun getAll(): MutableMap<String, *> = HashMap(fresh())
+    @Synchronized override fun contains(key: String) = fresh().containsKey(key)
+    @Synchronized override fun getString(key: String, defValue: String?) = fresh()[key] as? String ?: defValue
+    @Synchronized override fun getInt(key: String, defValue: Int) = fresh()[key] as? Int ?: defValue
+    @Synchronized override fun getLong(key: String, defValue: Long) = fresh()[key] as? Long ?: defValue
+    @Synchronized override fun getFloat(key: String, defValue: Float) = fresh()[key] as? Float ?: defValue
+    @Synchronized override fun getBoolean(key: String, defValue: Boolean) = fresh()[key] as? Boolean ?: defValue
 
     @Suppress("UNCHECKED_CAST")
     @Synchronized override fun getStringSet(key: String, defValues: MutableSet<String>?): MutableSet<String>? =
-        (snapshot[key] as? Set<String>)?.let { HashSet(it) } ?: defValues
+        (fresh()[key] as? Set<String>)?.let { HashSet(it) } ?: defValues
 
     override fun edit(): SharedPreferences.Editor = Editor()
 
@@ -55,16 +71,21 @@ class ProviderPreferences(private val name: String, private val channel: PrefsCh
 
         override fun commit(): Boolean {
             val args = mapOf(PrefsProvider.ARG_PUT to HashMap(put), PrefsProvider.ARG_REMOVE to remove.toList(), PrefsProvider.ARG_CLEAR to clear)
-            val ok = runCatching { channel.call(PrefsProvider.METHOD_APPLY, name, args)[PrefsProvider.RESULT_OK] == true }.getOrDefault(false)
+            val ok = runCatching { channel.call(PrefsProvider.METHOD_APPLY, name, args)[PrefsProvider.RESULT_OK] == true }.onFailure { NxLog.w("NXAPP", "settings write ($name): ${it.message}") }.getOrDefault(false)
             if (ok) synchronized(this@ProviderPreferences) {
                 if (clear) snapshot.clear()
                 remove.forEach(snapshot::remove)
                 snapshot.putAll(put)
+                fetchedAt = now()
             }
             return ok
         }
 
         /** Synchronous too: the game process can be killed any moment, and a write must not be lost with it. */
         override fun apply() { commit() }
+    }
+
+    private companion object {
+        const val MAX_AGE_MS = 1000L
     }
 }
