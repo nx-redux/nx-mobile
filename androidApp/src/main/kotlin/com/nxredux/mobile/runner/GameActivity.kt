@@ -175,6 +175,7 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 
 /** The process-wide log tag of the game screen and its controllers. */
 internal const val TAG_LOG = "NXAPP"
@@ -1044,7 +1045,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         sessionClaim?.let { sessions.release(it.token) }
         sessionClaim = null
         liveGameStore.clear(Process.myPid(), launchId)
-        if (usingData) { usingData = false; DataRoot.useEnd(this) }   // after the core's last write (destroyed above)
+        if (usingData) {   // after the core's last write (destroyed above); a Binder call to the menu process, so not on this thread
+            usingData = false
+            val app = applicationContext
+            thread(name = "data-use-end") { runCatching { DataRoot.useEnd(app) }.onFailure { NxLog.w(TAG_LOG, "could not end the data use", it) } }
+        }
         coreWatchdog?.stop()   // last: a hung core also hangs the native destroy above, which it must still catch
         coreWatchdog = null
     }
@@ -1105,8 +1110,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val content = ContentRef(intent.getStringExtra(EXTRA_CONTENT_URI) ?: return fail("No content given"))
         val romFileName = intent.getStringExtra(EXTRA_FILE_NAME)
             ?: withContext(Dispatchers.IO) { runCatching { refs.displayName(content) }.getOrNull() } ?: title
-        if (!usingData) { DataRoot.useBegin(this); usingData = true }   // no move starts under the session
-        dataRoot = withContext(Dispatchers.IO) { DataRoot.settled(this@GameActivity) }   // waits for a move still running
+        // Binder calls to the menu process, so off the main thread; a menu process that cannot answer fails the launch, not the app.
+        dataRoot = withContext(Dispatchers.IO) {
+            runCatching {
+                if (!usingData) { DataRoot.useBegin(this@GameActivity); usingData = true }   // no move starts under the session
+                DataRoot.settled(this@GameActivity)   // waits for a move still running
+            }.onFailure { NxLog.w(TAG_LOG, "data root unavailable", it) }.getOrNull()
+        } ?: return fail("The game's storage could not be reached. Try again.")
         privateRoot = DataRoot.private(this)
         cheatsFolder = Cheats.folder(tag, romFileName)
         // The battery-save, clock and state names follow the handheld's save settings. The save setup waits

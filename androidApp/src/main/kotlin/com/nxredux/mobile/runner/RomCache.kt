@@ -1,6 +1,7 @@
 package com.nxredux.mobile.runner
 
 import android.content.Context
+import com.nxredux.mobile.AppProcess
 import com.nxredux.mobile.storage.CacheEntry
 import com.nxredux.mobile.storage.CacheSweep
 import com.swordfish.libretrodroid.NxLog
@@ -44,17 +45,18 @@ object RomCache {
     fun release(context: Context, name: String) = releaseIn(root(context), name, android.os.Process.myPid())
 
     internal fun holdIn(root: File, name: String, pid: Int) {
-        val first = synchronized(holds) { holds.merge(name, 1, Int::plus) == 1 }
-        if (first) runCatching { File(root, "$HOLDS/$name@$pid").also { it.parentFile?.mkdirs() }.createNewFile() }
-            .onFailure { NxLog.w(TAG, "could not mark the hold on $name", it) }   // still held here; only another process's sweep may miss it
+        // The marker changes under the same lock as the count: a release and a hold of one name never interleave.
+        synchronized(holds) {
+            if (holds.merge(name, 1, Int::plus) == 1) runCatching { File(root, "$HOLDS/$name@$pid").also { it.parentFile?.mkdirs() }.createNewFile() }
+                .onFailure { NxLog.w(TAG, "could not mark the hold on $name", it) }   // still held here; only another process's sweep may miss it
+        }
     }
 
     internal fun releaseIn(root: File, name: String, pid: Int) {
-        val last = synchronized(holds) {
+        synchronized(holds) {
             val n = holds[name] ?: return
-            if (n > 1) { holds[name] = n - 1; false } else { holds.remove(name); true }
+            if (n > 1) holds[name] = n - 1 else { holds.remove(name); File(root, "$HOLDS/$name@$pid").delete() }
         }
-        if (last) File(root, "$HOLDS/$name@$pid").delete()
     }
 
     private fun isHeld(name: String) = holds.containsKey(name)
@@ -71,20 +73,6 @@ object RomCache {
             else marker.delete()
         }
         return keep
-    }
-
-    /** This process, or a process of this app (the menu's or the game's) by pid; a recycled pid is another app's. */
-    private fun appProcessAlive(context: Context): (Int) -> Boolean {
-        val mine = android.os.Process.myPid()
-        val pkg = context.packageName
-        return { pid ->
-            pid == mine || try {
-                val proc = File("/proc/$pid/cmdline").readBytes().toString(Charsets.UTF_8).substringBefore('\u0000')
-                proc == pkg || proc.startsWith("$pkg:")
-            } catch (e: java.io.IOException) {
-                false
-            }
-        }
     }
 
     /** Records a use of top-level [entry] (and of [inner], the ROM inside an extraction): their mtimes become now. */
@@ -104,7 +92,7 @@ object RomCache {
         runCatching {
             val root = root(context)
             val children = (root.listFiles() ?: return).filter { it.name != HOLDS }
-            val alive = appProcessAlive(context)
+            val alive = AppProcess.aliveCheck(context)
             val held = sweepKeep(root, alive)
             val listed = children.mapNotNull { f -> runCatching { CacheEntry(f.name, sizeOf(f), f.lastModified()) }.getOrNull() }
             val unpacking = children.filter { f -> f.isDirectory && parts(f).any { now - it.lastModified() <= PART_MAX_AGE_MILLIS } }.map { it.name }

@@ -5,6 +5,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
+import android.os.Binder
 import android.os.Bundle
 import com.nxredux.mobile.storage.DataRoot
 
@@ -20,7 +21,9 @@ class PrefsProvider : ContentProvider() {
         when (method) {
             METHOD_DATA_ROOT_SETTLED -> return encode(mapOf(RESULT_PATH to DataRoot.settled(context).path))   // blocks while a move runs: a binder thread
             METHOD_DATA_ROOT_USE -> {
-                if (decode(extras ?: Bundle())[ARG_BEGIN] == true) DataRoot.useBegin(context) else DataRoot.useEnd(context)
+                // Recorded per calling pid: a game process killed before its end stops counting (DataRoot.gameUseBegin).
+                if (decode(extras ?: Bundle())[ARG_BEGIN] == true) DataRoot.gameUseBegin(context, Binder.getCallingPid())
+                else DataRoot.gameUseEnd(context, Binder.getCallingPid())
                 return encode(mapOf(RESULT_OK to true))
             }
         }

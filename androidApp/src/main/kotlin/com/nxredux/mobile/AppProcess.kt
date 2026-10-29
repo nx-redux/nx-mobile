@@ -34,4 +34,18 @@ object AppProcess {
             ""
         }
     }
+
+    /** A process of this app (the menu's or the game's) by pid, or this very one; a recycled pid is another app's. */
+    fun aliveCheck(context: Context): (Int) -> Boolean {
+        val mine = android.os.Process.myPid()
+        val pkg = context.packageName
+        return { pid ->
+            pid == mine || try {
+                val proc = File("/proc/$pid/cmdline").readBytes().toString(Charsets.UTF_8).substringBefore('\u0000')
+                proc == pkg || proc.startsWith("$pkg:")
+            } catch (e: java.io.IOException) {
+                false
+            }
+        }
+    }
 }

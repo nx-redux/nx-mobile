@@ -692,6 +692,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
     override fun onResume() {
         super.onResume()
         if (handOverToHome()) return
+        val app = applicationContext
+        thread(name = "data-move-start") { DataRoot.startIfDue(app) }   // a move held off by a game since killed (cheap once done)
         recordStartedLaunches()   // games that started while the menu was gone (or its process was)
         applyKeepScreenOn()
         resumed = true
