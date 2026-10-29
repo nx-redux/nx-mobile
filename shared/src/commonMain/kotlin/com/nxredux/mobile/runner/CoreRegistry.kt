@@ -132,6 +132,11 @@ object CoreRegistry {
     // inner file (Names.ARCHIVE_EXTENSIONS). Defaults are the Brick paks' default.cfg values.
     private val gpsp = CoreDescriptor(
         "gpsp", "libgpsp_libretro_android.so", setOf("gba", "bin", "agb", "gbz", "u1"),
+        // The cartridge clock follows the device clock, so a resumed state keeps the real time (the core's
+        // "deterministic" counts it from the state's save time).
+        defaultOptions = mapOf("gpsp_rtc_time_source" to "system"),
+        // A live change sends SET_SYSTEM_AV_INFO with a new sample rate, which the runner's audio doesn't follow.
+        restartOnlyOptions = setOf("gpsp_sound_rate"),
         biosFiles = listOf("gba_bios.bin"),   // optional: an open BIOS is built in
         keepLoaded = true,   // its recompiler cache is mapped once near the core and kept (cores/patches/gpsp.patch)
         name = "gpSP",
