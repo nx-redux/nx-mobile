@@ -932,6 +932,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             override fun raSignedIn(): Boolean = this@AppState.raSignedIn()
             override fun resolveOne(path: String): Listed? = this@AppState.resolveOne(path)
             override fun shelvesFor(inputs: HomeInputs): List<Pair<HomeShelf, List<Listed>>> = this@AppState.shelvesFor(inputs)
+            // Most played wears its game's play time ("12h 30m"), as the shelf orders them.
+            override fun shelfTag(shelf: HomeShelf, game: Listed): String? =
+                if (shelf != HomeShelf.MOST_PLAYED) null else _gameInfo.value[game.game.path]?.totalMs?.let(com.nxredux.mobile.gametime.GameTimeFormat::duration)
             override fun rebuildHomeTab() = this@AppState.rebuildHomeTab()
             override fun refreshResume() = this@AppState.refreshResume()
             override fun switchTab(step: Int) = this@AppState.switchTab(step)
@@ -1602,7 +1605,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         // Continue's game and every pinned one are on Home already.
         val exclude = (inputs.games.map { it.game.path } + listOfNotNull(inputs.last?.entry?.game?.path)).toSet()
         // A shelf Layouts hides drops after the pick, so its games never move to another shelf.
-        return shelvesCache.shelves(systemsCache, _gameInfo.value, inputs.recent, exclude, now, deps.calendar.dayStart(now)).filter { shelfShown(it.first) }
+        val hidden = HomeShelf.entries.filterTo(HashSet()) { !shelfShown(it) }   // a hidden shelf takes no game: the others may show them
+        return shelvesCache.shelves(systemsCache, _gameInfo.value, inputs.recent, exclude, now, deps.calendar.dayStart(now), hidden)
     }
 
 
@@ -4578,6 +4582,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                     when (shelf) {
                         HomeShelf.NEW -> s.showNewShelf = on
                         HomeShelf.NOT_STARTED -> s.showNotStartedShelf = on
+                        HomeShelf.MOST_PLAYED -> s.showMostPlayedShelf = on
                         HomeShelf.PICK_UP -> Unit
                     }
                 }
@@ -4705,7 +4710,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             s.gameListVerticalAlignment = VerticalListAlignment.DEFAULT
             s.showHomeTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showConsolesTab = MenuStyles.DEFAULT_TAB_SHOWN
             s.showCollectionsTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showToolsTab = MenuStyles.DEFAULT_TAB_SHOWN
-            s.showNewShelf = true; s.showNotStartedShelf = true
+            s.showNewShelf = true; s.showNotStartedShelf = true; s.showMostPlayedShelf = true
             s.showNetplayHint = true
             s.consoleArt = ConsoleArt.DEFAULT; s.gameListArt = GameListArt.DEFAULT; s.backdropArt = BackdropArt.DEFAULT
             s.menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE
@@ -4800,6 +4805,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             // Home's New and Not started shelves, Show / Hide, while the Home tab shows.
             SettingsRow(SettingsKind.SHELF_SHOWN, "New shelf", shown(s.showNewShelf), shelf = HomeShelf.NEW).takeIf { on && c == MenuCategory.HOME },
             SettingsRow(SettingsKind.SHELF_SHOWN, "Not started shelf", shown(s.showNotStartedShelf), shelf = HomeShelf.NOT_STARTED).takeIf { on && c == MenuCategory.HOME },
+            SettingsRow(SettingsKind.SHELF_SHOWN, "Most played shelf", shown(s.showMostPlayedShelf), shelf = HomeShelf.MOST_PLAYED).takeIf { on && c == MenuCategory.HOME },
             // Home's stats strip (its cards' info follows Extra info).
             SettingsRow(SettingsKind.HOME_STATS, "Stats", shown(s.menuHomeStats)).takeIf { on && c == MenuCategory.HOME },
             SettingsRow(SettingsKind.MENU_ORIENTATION, "Orientation", orientationLabel(MenuStyles.orientationOf(s.menuOrientations, c)), category = c)
@@ -4896,6 +4902,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private fun shelfShown(shelf: HomeShelf): Boolean = when (shelf) {
         HomeShelf.NEW -> deps.settings.showNewShelf
         HomeShelf.NOT_STARTED -> deps.settings.showNotStartedShelf
+        HomeShelf.MOST_PLAYED -> deps.settings.showMostPlayedShelf
         HomeShelf.PICK_UP -> true
     }
 

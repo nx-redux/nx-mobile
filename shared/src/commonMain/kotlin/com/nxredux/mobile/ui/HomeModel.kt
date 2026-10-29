@@ -71,8 +71,9 @@ internal const val STAT_PENDING = "\u2026"         // a stats value not computed
 internal fun buildHome(
     last: MainRow.Continue?, pinnedGames: List<Listed>, pinnedTools: List<ToolRow>, stats: HomeStats, slots: Int,
     shelves: List<Pair<HomeShelf, List<Listed>>> = emptyList(), inline: Int = 0,
+    tag: (HomeShelf, Listed) -> String? = { _, _ -> null },
 ): Home {
-    val rows = shelves.flatMap { (k, games) -> games.map { MainRow.Shelf(it, k) } }
+    val rows = shelves.flatMap { (k, games) -> games.map { MainRow.Shelf(it, k, tag(k, it)) } }
     if (last == null && pinnedGames.isEmpty() && pinnedTools.isEmpty()) return Home(listOf(MainRow.PickAGame), emptyList(), strip = null, freshInstall = true, shelves = rows)
     val games = pinnedGames.filterNot { it.game.path == last?.entry?.game?.path }.map { MainRow.Pin(it) }
     // MoreTools carries the tools it hides: every tool past the first slots − 1 (5 tools, 4 slots: +2).
@@ -105,24 +106,31 @@ internal fun homeShelfMax(shelf: HomeShelf): Int = if (shelf == HomeShelf.NOT_ST
 
 /**
  * Home's shelves from [library] (every listed game), in page order, empties dropped, each at most [homeShelfMax], no
- * game on two: New (first seen within [HOME_NEW_DAYS] before [now], never after it; newest first, then by name), Not
+ * game on two: Most played (the most play time first, of those played at all), New (first seen within [HOME_NEW_DAYS] before [now], never after it; newest first, then by name), Not
  * started (no [info] play and not in [recent]: shuffled by [day], the local day's start, so it holds for the day), Pick
- * up again (last played more than [HOME_PICK_UP_DAYS] ago, most played first). [exclude] (Continue's and the pinned
- * games' paths), Unassigned and Android games never show.
+ * up again (last played more than [HOME_PICK_UP_DAYS] ago, most played first). [exclude] (Continue's and the pinned games' paths), Unassigned and
+ * Android games never show, so the next most played take their places. A [hidden] shelf (Layouts) takes no game, so
+ * the ones after it can show its games.
  */
 internal fun homeShelves(
     library: List<Listed>, info: Map<String, GameInfo>, recent: Set<String>, exclude: Set<String>, now: Long, day: Long,
+    hidden: Set<HomeShelf> = emptySet(),
 ): List<Pair<HomeShelf, List<Listed>>> {
     val pool = library.filter { !it.system.unassigned && !it.system.android && it.game.path !in exclude }.distinctBy { it.game.path }
     val taken = HashSet<String>()
-    fun pick(shelf: HomeShelf, games: List<Listed>) = games.filter { it.game.path !in taken }.take(homeShelfMax(shelf)).onEach { taken += it.game.path }
+    fun pick(shelf: HomeShelf, games: List<Listed>) =
+        if (shelf in hidden) emptyList() else games.filter { it.game.path !in taken }.take(homeShelfMax(shelf)).onEach { taken += it.game.path }
+    // Most played first, right under the pins: the games played longest are on it before any later shelf takes them.
+    val mostPlayed = pick(HomeShelf.MOST_PLAYED, pool.filter { (info[it.game.path]?.totalMs ?: 0L) > 0L }
+        .sortedWith(compareByDescending<Listed> { info[it.game.path]?.totalMs ?: 0L }.thenBy { it.shown.lowercase() }))
     val new = pick(HomeShelf.NEW, pool.filter { g -> g.game.firstSeen?.let { (now - it) in 0..HOME_NEW_DAYS * SHELF_DAY_MS } == true }
         .sortedWith(compareByDescending<Listed> { it.game.firstSeen }.thenBy { it.shown.lowercase() }))
     val notStarted = pick(HomeShelf.NOT_STARTED, pool.filter { info[it.game.path]?.lastPlayedAt == null && it.game.path !in recent && it.game.path !in taken }
         .sortedBy { it.game.path }.shuffled(Random(day)))
     val pickUp = pick(HomeShelf.PICK_UP, pool.filter { g -> info[g.game.path]?.lastPlayedAt?.let { now - it > HOME_PICK_UP_DAYS * SHELF_DAY_MS } == true }
         .sortedByDescending { info[it.game.path]?.totalMs ?: 0L })
-    return listOf(HomeShelf.NEW to new, HomeShelf.NOT_STARTED to notStarted, HomeShelf.PICK_UP to pickUp).filter { it.second.isNotEmpty() }
+    return listOf(HomeShelf.MOST_PLAYED to mostPlayed, HomeShelf.NEW to new, HomeShelf.NOT_STARTED to notStarted, HomeShelf.PICK_UP to pickUp)
+        .filter { it.second.isNotEmpty() }
 }
 
 /**
@@ -132,20 +140,24 @@ internal fun homeShelves(
  * the rest, so New's 30-day window moves by the day.
  */
 internal class HomeShelvesCache(
-    private val compute: (List<Listed>, Map<String, GameInfo>, Set<String>, Set<String>, Long, Long) -> List<Pair<HomeShelf, List<Listed>>> = ::homeShelves,
+    private val compute: (List<Listed>, Map<String, GameInfo>, Set<String>, Set<String>, Long, Long, Set<HomeShelf>) -> List<Pair<HomeShelf, List<Listed>>> = ::homeShelves,
 ) {
     private var systems: List<SystemFolder>? = null
     private var info: Map<String, GameInfo>? = null
     private var recent: Set<String>? = null
     private var exclude: Set<String>? = null
     private var day: Long? = null
+    private var hidden: Set<HomeShelf>? = null
     private var kept: List<Pair<HomeShelf, List<Listed>>> = emptyList()
 
-    /** The shelves for [systems] (every listed game), [info], [recent], [exclude] at [now] on [day] ([homeShelves]). */
-    fun shelves(systems: List<SystemFolder>, info: Map<String, GameInfo>, recent: Set<String>, exclude: Set<String>, now: Long, day: Long): List<Pair<HomeShelf, List<Listed>>> {
-        if (systems === this.systems && info === this.info && recent == this.recent && exclude == this.exclude && day == this.day) return kept
-        kept = compute(systems.flatMap { s -> s.games.map { Listed(s, it) } }, info, recent, exclude, now, day)
-        this.systems = systems; this.info = info; this.recent = recent; this.exclude = exclude; this.day = day
+    /** The shelves for [systems] (every listed game), [info], [recent], [exclude] at [now] on [day], none of [hidden] ([homeShelves]). */
+    fun shelves(
+        systems: List<SystemFolder>, info: Map<String, GameInfo>, recent: Set<String>, exclude: Set<String>, now: Long, day: Long,
+        hidden: Set<HomeShelf> = emptySet(),
+    ): List<Pair<HomeShelf, List<Listed>>> {
+        if (systems === this.systems && info === this.info && recent == this.recent && exclude == this.exclude && day == this.day && hidden == this.hidden) return kept
+        kept = compute(systems.flatMap { s -> s.games.map { Listed(s, it) } }, info, recent, exclude, now, day, hidden)
+        this.systems = systems; this.info = info; this.recent = recent; this.exclude = exclude; this.day = day; this.hidden = hidden
         return kept
     }
 }
@@ -162,3 +174,14 @@ internal fun shelfBands(rows: List<MainRow>): List<Pair<HomeShelf, Int>> {
 /** The pinned tools' rows in [pins] order (their [pinKey]s), skipping any this platform does not have (not in [available], the Tools tab's rows) and any uninstalled app. */
 internal fun pinnedToolRows(pins: List<String>, available: List<ToolRow>): List<ToolRow> =
     pins.mapNotNull { k -> available.firstOrNull { it.pinKey == k } }
+
+/**
+ * A shelf game's badge on its picture: its own [MainRow.Shelf.tag] (Most played: its play time), else New's and Not
+ * started's reason; Pick up again has none.
+ */
+internal fun homeShelfBadge(row: MainRow.Shelf): String? =
+    row.tag ?: row.shelf.label.takeIf { row.shelf == HomeShelf.NEW || row.shelf == HomeShelf.NOT_STARTED }
+
+/** A shelf whose games always show their name and console under the picture (they are not the games you just played). */
+internal fun homeShelfCaptioned(shelf: HomeShelf): Boolean =
+    shelf == HomeShelf.NEW || shelf == HomeShelf.NOT_STARTED || shelf == HomeShelf.MOST_PLAYED

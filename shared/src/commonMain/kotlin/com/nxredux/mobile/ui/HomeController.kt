@@ -83,6 +83,8 @@ internal interface HomeHost {
     fun resolveOne(path: String): Listed?
     /** Home's shelves for [inputs] now ([AppState]'s shelvesFor). */
     fun shelvesFor(inputs: HomeInputs): List<Pair<HomeShelf, List<Listed>>>
+    /** A shelf game's own badge ([MainRow.Shelf.tag]): Most played's play time; null for the rest. */
+    fun shelfTag(shelf: HomeShelf, game: Listed): String? = null
     /** The Home tab rebuilt from what it was last built from (new stats). */
     fun rebuildHomeTab()
     fun refreshResume()
@@ -159,12 +161,12 @@ internal class HomeController(
         val shelves = picked.map { (shelf, games) -> shelf to games.take(HOME_SHELF_LIST_MAX) }
         when (host.homeStyle()) {
             // List and Minimal: every tool is a row. Carousel: the dock's squares, "+N" for the rest.
-            MenuStyle.LIST, MenuStyle.MINIMAL -> return buildHome(last, games, tools, homeStats, Int.MAX_VALUE, shelves)
+            MenuStyle.LIST, MenuStyle.MINIMAL -> return buildHome(last, games, tools, homeStats, Int.MAX_VALUE, shelves, tag = host::shelfTag)
             MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
                 // The dock's squares are Grid Home's pinned tool squares on this frame ([homeDockSide]).
                 val f = homeFrameNow()
                 val side = homeDockSide(f, homeLinesFor(strip), games.count { it.game.path != last?.entry?.game?.path })
-                return buildHome(last, games, tools, homeStats, homeDockFit(f.w, f.portrait, side), shelves)
+                return buildHome(last, games, tools, homeStats, homeDockFit(f.w, f.portrait, side), shelves, tag = host::shelfTag)
             }
             MenuStyle.GRID -> Unit
         }
@@ -174,7 +176,7 @@ internal class HomeController(
         val b = homeBoardFor(lines, tools.size, gamesLeft, shelves = picked.map { (shelf, games) -> shelf to games.size })
         var k = 0
         val gridShelves = picked.map { (shelf, games) -> shelf to if (games.isEmpty()) games else games.take(b.shelfSizes.getOrElse(k++) { 0 }) }
-        return buildHome(last, games, tools, homeStats, b.slots, gridShelves, b.inlineGames)
+        return buildHome(last, games, tools, homeStats, b.slots, gridShelves, b.inlineGames, tag = host::shelfTag)
     }
 
     /** [built] is the Home tab now: its view shows once the screen shows its rows ([publishHomeView]). */

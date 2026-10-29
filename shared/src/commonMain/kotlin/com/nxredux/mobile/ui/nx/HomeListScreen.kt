@@ -38,7 +38,7 @@ internal fun homeListRows(rows: List<MainRow>): List<NxRow> = rows.mapNotNull { 
         is MainRow.Continue -> NxRow(r.entry.game.shownName, tag = CONTINUE_TAG)
         MainRow.PickAGame -> NxRow(PICK_A_GAME)
         is MainRow.Pin -> NxRow(r.entry.game.shownName)
-        is MainRow.Shelf -> NxRow(r.entry.game.shownName, tag = r.shelf.label.takeIf { r.shelf != HomeShelf.PICK_UP })
+        is MainRow.Shelf -> NxRow(r.entry.game.shownName, tag = r.tag ?: r.shelf.label.takeIf { r.shelf != HomeShelf.PICK_UP })
         is MainRow.PinnedTool -> NxRow(r.row.label)
         is MainRow.MoreTools, is MainRow.System, is MainRow.Collection, is MainRow.Tool -> null
     }

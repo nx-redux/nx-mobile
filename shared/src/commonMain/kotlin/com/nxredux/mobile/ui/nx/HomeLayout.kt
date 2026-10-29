@@ -14,7 +14,7 @@ import kotlin.math.min
 enum class HomeArrangement { SPLIT, WIDE }
 
 /** Home's discovery shelves, in page order, with their labels. */
-enum class HomeShelf(val label: String) { NEW("New"), NOT_STARTED("Not started"), PICK_UP("Pick up again") }
+enum class HomeShelf(val label: String) { NEW("New"), NOT_STARTED("Not started"), PICK_UP("Pick up again"), MOST_PLAYED("Most played") }
 
 /** A rectangle on Home's page, in dp from the body's top left. */
 data class HomeRect(val x: Float, val y: Float, val w: Float, val h: Float)

@@ -1,5 +1,7 @@
 package com.nxredux.mobile.ui.nx
 
+import com.nxredux.mobile.ui.homeShelfCaptioned
+import com.nxredux.mobile.ui.homeShelfBadge
 import androidx.compose.ui.graphics.Brush
 
 import com.nxredux.mobile.ui.smoothFadeStops
@@ -225,14 +227,15 @@ internal fun HomeScreen(
                     }
                 }
                 // The row tiles under the top section: the pins, then the shelves' games (a shelf's title on 2 lines; a
-                // New or Not started game's caption always shows, its console under its name; a pinned game's too).
+                // New, Not started or Most played game's caption always shows, its console under its name; a pinned game's too).
                 pins.forEachIndexed { k, row ->
                     if (k >= tiles) return@forEachIndexed
                     val i = topCount + k
                     val lines = if (k >= b.rowGames) 2 else null
-                    val console = (row as? MainRow.Shelf)?.takeIf { it.shelf == HomeShelf.NEW || it.shelf == HomeShelf.NOT_STARTED }?.entry?.system?.displayName
-                    // A New or Not started game wears its reason top-left on its picture ([HomeBadge]), as Continue does.
-                    val reason = (row as? MainRow.Shelf)?.shelf?.takeIf { it == HomeShelf.NEW || it == HomeShelf.NOT_STARTED }?.label
+                    val console = (row as? MainRow.Shelf)?.takeIf { homeShelfCaptioned(it.shelf) }?.entry?.system?.displayName
+                    // A shelf game wears its badge top-left on its picture ([HomeBadge], [homeShelfBadge]), as Continue does:
+                    // New's and Not started's reason, Most played's play time.
+                    val reason = (row as? MainRow.Shelf)?.let(::homeShelfBadge)
                     pinTiles.getOrNull(k)?.let { t ->
                         val m = Modifier.at(homeBoardTile(b, k)).taps(i, menu = true)
                         HomeLit(i, selection) { lit ->

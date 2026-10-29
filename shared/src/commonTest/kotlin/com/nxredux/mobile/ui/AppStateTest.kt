@@ -5592,7 +5592,7 @@ class AppStateTest {
             listOf("Home", "Consoles", "Collections", "Tools", "Game lists", "Title and hints", "Game Switcher", "Extra info", "Reset to defaults"),
             page(SettingsSection.MAIN_MENU),
         )
-        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Stats", "Layout"), page(SettingsSection.LAYOUT_HOME))   // Home never has an orientation row
+        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout"), page(SettingsSection.LAYOUT_HOME))   // Home never has an orientation row
         assertEquals(listOf("Visible", "Layout", "Orientation", "Background"), page(SettingsSection.LAYOUT_CONSOLES))
         assertEquals(listOf("Visible", "Layout", "Orientation"), page(SettingsSection.LAYOUT_COLLECTIONS))
         assertEquals(listOf("Visible", "Layout", "Orientation"), page(SettingsSection.LAYOUT_TOOLS))
@@ -5746,7 +5746,7 @@ class AppStateTest {
         state.select(0); state.onButton(NxButton.A)
         val page = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.LAYOUT_HOME, page.section)
-        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Stats", "Layout"), page.rows.map { it.label })
+        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout"), page.rows.map { it.label })
         assertEquals(LayoutShot.Tab(MenuCategory.HOME, MenuStyle.GRID), page.shot)
         state.select(page.rows.lastIndex); state.onButton(NxButton.RIGHT)    // Home layout, Grid -> Carousel: the picture follows
         assertEquals(LayoutShot.Tab(MenuCategory.HOME, MenuStyle.CAROUSEL), assertIs<Screen.Settings>(state.screen.value).shot)
@@ -5946,7 +5946,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.LAYOUT_HOME)
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
         val home = rows.indexOfFirst { it.kind == SettingsKind.HOME_STATS }
-        assertEquals(rows.indexOfFirst { it.label == "Not started shelf" } + 1, home)
+        assertEquals(rows.indexOfFirst { it.label == "Most played shelf" } + 1, home)
         assertEquals(SettingsRow(SettingsKind.HOME_STATS, "Stats", "Show"), rows[home])
         assertTrue(settingsNxRow(rows[home]).cycleable)
         state.select(home); state.onButton(NxButton.A)
@@ -5993,7 +5993,7 @@ class AppStateTest {
             page.rows.map { it.label to it.secondary },
         )
         fun group(section: SettingsSection) = state.openLayoutsPage(section).map { it.label to it.secondary }
-        assertEquals(listOf("Visible" to "Show", "New shelf" to "Show", "Not started shelf" to "Show", "Stats" to "Show", "Layout" to "Grid"), group(SettingsSection.LAYOUT_HOME))
+        assertEquals(listOf("Visible" to "Show", "New shelf" to "Show", "Not started shelf" to "Show", "Most played shelf" to "Show", "Stats" to "Show", "Layout" to "Grid"), group(SettingsSection.LAYOUT_HOME))
         assertEquals(listOf("Visible" to "Show", "Layout" to "List", "Background" to settings.consoleArt.label), group(SettingsSection.LAYOUT_CONSOLES))
         assertEquals(listOf("Visible" to "Show", "Layout" to "List"), group(SettingsSection.LAYOUT_COLLECTIONS))
         assertEquals(listOf("Visible" to "Show", "Layout" to "List"), group(SettingsSection.LAYOUT_TOOLS))
@@ -9615,12 +9615,12 @@ class AppStateTest {
         val groups = listOf(SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS,
             SettingsSection.LAYOUT_GAME_LISTS, SettingsSection.LAYOUT_TITLE_HINTS, SettingsSection.LAYOUT_SWITCHER)
         val rows = groups.flatMap { g -> state.openLayoutsPage(g) }
-        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Stats", "Layout", "Visible", "Layout", "Visible", "Layout", "Visible", "Layout", "List art", "Layout options", "Layout", "Page title", "Button hints", "Layout"), rows.map { it.label })
+        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout", "Visible", "Layout", "Visible", "Layout", "Visible", "Layout", "List art", "Layout options", "Layout", "Page title", "Button hints", "Layout"), rows.map { it.label })
         val styles = rows.filter { it.kind == SettingsKind.MENU_STYLE }
         assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), styles.map { it.category })
         assertTrue(styles.all { it.enabled })
         assertEquals(1, rows.count { it.kind == SettingsKind.GAME_LIST_STYLE })
-        assertEquals(listOf("Show", "Show", "Show", "Show", "Minimal", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "Screenshot", "Show", "List", "Show", "Hide", "Full screen"), rows.map { it.secondary })
+        assertEquals(listOf("Show", "Show", "Show", "Show", "Show", "Minimal", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "Screenshot", "Show", "List", "Show", "Hide", "Full screen"), rows.map { it.secondary })
     }
 
     @Test fun layouts_page_defaults_to_carousel_tools_grid_and_cycles_four_main_menu_styles() = runTest {
@@ -9628,7 +9628,7 @@ class AppStateTest {
         val state = state(settings)
         state.load()
         fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Stats", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_HOME).map { it.label })
+        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_HOME).map { it.label })
         assertEquals(listOf("Visible", "Layout", "Orientation", "Background"), state.openLayoutsPage(SettingsSection.LAYOUT_CONSOLES).map { it.label })
         assertEquals(listOf("Visible", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_COLLECTIONS).map { it.label })
         assertEquals(listOf("Visible", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_TOOLS).map { it.label })
@@ -9656,7 +9656,7 @@ class AppStateTest {
         state.load()
         val home = state.openLayoutsPage(SettingsSection.LAYOUT_HOME)
         assertEquals(
-            listOf(SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HOME_STATS, SettingsKind.MENU_STYLE),
+            listOf(SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HOME_STATS, SettingsKind.MENU_STYLE),
             home.map { it.kind },
         )
         val consoles = state.openLayoutsPage(SettingsSection.LAYOUT_CONSOLES)
@@ -9915,7 +9915,7 @@ class AppStateTest {
             page(SettingsSection.MAIN_MENU),
         )
         assertEquals(
-            listOf("Visible" to "Show", "New shelf" to "Show", "Not started shelf" to "Show", "Stats" to "Show", "Layout" to "Minimal"),
+            listOf("Visible" to "Show", "New shelf" to "Show", "Not started shelf" to "Show", "Most played shelf" to "Show", "Stats" to "Show", "Layout" to "Minimal"),
             page(SettingsSection.LAYOUT_HOME),
         )
         assertEquals(listOf("Visible" to "Show", "Layout" to "Carousel", "Orientation" to "Horizontal", "Background" to "Controller"), page(SettingsSection.LAYOUT_CONSOLES))
@@ -11317,7 +11317,7 @@ class AppStateTest {
         assertEquals(listOf(HomeShelf.NOT_STARTED to 3), state.homeView.value.shelves)
         state.openSettings(SettingsSection.LAYOUT_HOME)
         fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(listOf("New shelf", "Not started shelf"), rows().filter { it.kind == SettingsKind.SHELF_SHOWN }.map { it.label })
+        assertEquals(listOf("New shelf", "Not started shelf", "Most played shelf"), rows().filter { it.kind == SettingsKind.SHELF_SHOWN }.map { it.label })
         val i = rows().indexOfFirst { it.shelf == HomeShelf.NOT_STARTED }
         state.select(i); state.onButton(NxButton.RIGHT); advanceUntilIdle()
         assertFalse(settings.showNotStartedShelf)
@@ -11397,7 +11397,7 @@ class AppStateTest {
         gate.complete(Unit); advanceUntilIdle()
         val notStarted = state.shelfRows.filter { it.shelf == HomeShelf.NOT_STARTED }.map { it.entry.game.path }.toSet()
         assertEquals(setOf(mario, mk), notStarted)
-        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.PICK_UP }.map { it.entry.game.path })
+        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.MOST_PLAYED }.map { it.entry.game.path })   // played: Most played (first) has it
     }
 
     // A failed play time read is not a read: no shelves (every game would show as Not started) until one succeeds.
@@ -11415,7 +11415,7 @@ class AppStateTest {
         assertTrue(state.homeView.value.shelves.isEmpty())
         fail = false
         state.onForeground(); advanceUntilIdle()                         // the next read works
-        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.PICK_UP }.map { it.entry.game.path })
+        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.MOST_PLAYED }.map { it.entry.game.path })   // played: Most played (first) has it
     }
 
     // A play time read that fails after one that worked keeps the last good times: Tetris stays in Pick up again
@@ -11432,7 +11432,7 @@ class AppStateTest {
         clock = 100 * 86_400_000L
         fail = true
         state.onForeground(); advanceUntilIdle()                         // this read fails
-        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.PICK_UP }.map { it.entry.game.path })
+        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.MOST_PLAYED }.map { it.entry.game.path })   // played: Most played (first) has it
         assertEquals(60_000L, state.gameInfo.value[tetris]?.totalMs)
     }
 
@@ -11452,7 +11452,7 @@ class AppStateTest {
         state.load(); advanceUntilIdle()
         clock = 100 * 86_400_000L
         state.onForeground(); advanceUntilIdle()
-        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.PICK_UP }.map { it.entry.game.path })
+        assertEquals(listOf(tetris), state.shelfRows.filter { it.shelf == HomeShelf.MOST_PLAYED }.map { it.entry.game.path })   // played: Most played (first) has it
         assertEquals(setOf(mario, mk), state.shelfRows.filter { it.shelf == HomeShelf.NOT_STARTED }.map { it.entry.game.path }.toSet())
     }
 

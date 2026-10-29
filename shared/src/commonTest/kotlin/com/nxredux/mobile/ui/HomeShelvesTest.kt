@@ -33,7 +33,8 @@ class HomeShelvesTest {
     @Test fun pickUpIsPlayedOver14DaysAgoMostTimeFirst() {
         val a = g("A"); val b = g("B"); val c = g("Recent")
         val info = mapOf(a.game.path to played(now - 20 * day, 1_000), b.game.path to played(now - 15 * day, 9_000), c.game.path to played(now - 3 * day, 99_000))
-        assertEquals(listOf("B", "A"), names(homeShelves(listOf(a, b, c), info, emptySet(), emptySet(), now, 100), HomeShelf.PICK_UP))
+        // Most played (first) would take them: hidden, Pick up again's own order shows.
+        assertEquals(listOf("B", "A"), names(homeShelves(listOf(a, b, c), info, emptySet(), emptySet(), now, 100, hidden = setOf(HomeShelf.MOST_PLAYED)), HomeShelf.PICK_UP))
     }
     @Test fun notStartedSkipsPlayedAndRecents() {
         val a = g("A"); val b = g("B"); val c = g("C")
@@ -101,9 +102,44 @@ class HomeShelvesTest {
         assertEquals(listOf(HomeShelf.NEW to 2, HomeShelf.PICK_UP to 1), shelfBands(rows))
     }
     // The shelves are computed once while the library, game info, recents, exclusions and day hold.
+    // Most played: the most play time first, played games only; Continue's and the pinned games skipped, the next ones in their places.
+    @Test fun mostPlayedIsByPlayTimeAndSkipsContinueAndPins() {
+        val lib = listOf("A", "B", "C", "D", "E", "F", "Never").map { g(it) }
+        val info = mapOf("A" to 10L, "B" to 60L, "C" to 30L, "D" to 50L, "E" to 20L, "F" to 40L).mapKeys { g(it.key).game.path }
+            .mapValues { played(now - 1, it.value) }   // all played today: none is Pick up again's
+        assertEquals(listOf("B", "D", "F", "C"), names(homeShelves(lib, info, emptySet(), emptySet(), now, 100), HomeShelf.MOST_PLAYED))
+        val pinned = setOf(g("B").game.path, g("F").game.path)   // Continue's and a pin
+        assertEquals(listOf("D", "C", "E", "A"), names(homeShelves(lib, info, emptySet(), pinned, now, 100), HomeShelf.MOST_PLAYED))
+    }
+
+    // Most played is first, under the pins: a played game is on it, not on a later shelf (no game on two); hidden in
+    // Layouts it takes none, so the later shelves show them.
+    @Test fun mostPlayedComesFirstAndHiddenLeavesItsGamesToTheOthers() {
+        val fresh = g("Fresh", seen = now - day)
+        val info = mapOf(fresh.game.path to played(now - 1, 100))
+        val s = homeShelves(listOf(fresh), info, emptySet(), emptySet(), now, 100)
+        assertEquals(HomeShelf.MOST_PLAYED, s.first().first)
+        assertEquals(listOf("Fresh"), names(s, HomeShelf.MOST_PLAYED))
+        assertEquals(emptyList(), names(s, HomeShelf.NEW))
+        val hidden = homeShelves(listOf(fresh), info, emptySet(), emptySet(), now, 100, hidden = setOf(HomeShelf.MOST_PLAYED))
+        assertEquals(listOf("Fresh"), names(hidden, HomeShelf.NEW))
+    }
+
+    // Most played wears its game's play time; New and Not started their reason; Pick up again nothing. Its games, as New's
+    // and Not started's, always show their name and console.
+    @Test fun shelfBadgesAndCaptions() {
+        assertEquals("12h 30m", homeShelfBadge(MainRow.Shelf(g("A"), HomeShelf.MOST_PLAYED, tag = "12h 30m")))
+        assertEquals("New", homeShelfBadge(MainRow.Shelf(g("A"), HomeShelf.NEW)))
+        assertEquals("Not started", homeShelfBadge(MainRow.Shelf(g("A"), HomeShelf.NOT_STARTED)))
+        assertEquals(null, homeShelfBadge(MainRow.Shelf(g("A"), HomeShelf.PICK_UP)))
+        assertEquals(listOf(HomeShelf.NEW, HomeShelf.NOT_STARTED, HomeShelf.MOST_PLAYED), HomeShelf.entries.filter(::homeShelfCaptioned))
+        val home = buildHome(null, emptyList(), emptyList(), HomeStats(null, null, false, null, false), 4, listOf(HomeShelf.MOST_PLAYED to listOf(g("A"))), tag = { _, _ -> "1h" })
+        assertEquals("1h", (home.shelves.single() as MainRow.Shelf).tag)
+    }
+
     @Test fun theShelfCacheComputesOncePerInputs() {
         var calls = 0
-        val cache = HomeShelvesCache { lib, info, recent, exclude, at, d -> calls++; homeShelves(lib, info, recent, exclude, at, d) }
+        val cache = HomeShelvesCache { lib, info, recent, exclude, at, d, hidden -> calls++; homeShelves(lib, info, recent, exclude, at, d, hidden) }
         val systems = listOf(gb.copy(games = listOf(g("A").game, g("B").game)))
         val info = mapOf<String, GameInfo>()
         val first = cache.shelves(systems, info, setOf("x"), setOf("y"), now, 100)

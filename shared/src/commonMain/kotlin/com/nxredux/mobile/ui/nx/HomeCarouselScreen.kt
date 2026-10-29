@@ -134,7 +134,7 @@ internal fun homeCarouselTiles(rows: List<MainRow>, accentRgb: Int): List<GridTi
 /** A Carousel Home item's badge ([HomeBadge]): Continue's "Continue", a shelf game's shelf name; none on the others. */
 internal fun homeCarouselBadge(row: MainRow?): String? = when (row) {
     is MainRow.Continue -> "Continue"
-    is MainRow.Shelf -> row.shelf.label
+    is MainRow.Shelf -> row.tag ?: row.shelf.label
     else -> null
 }
 

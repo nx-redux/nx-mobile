@@ -326,9 +326,9 @@ private fun GameTile(
                 // The info line with the List's inline trophy ([infoText]), the icon fitted to the 11 sp line (12 dp where
                 // it fits); on Home the info lines are a step under the title's 13 sp, at 11 sp on 14 dp lines.
                 // Home's cards: the info at the game list Carousel card's size, under Text size.
-                // A tile's name at the Carousel card's name size, a step over its info; the hero card's a step under it plus
-                // [HOME_HERO_NAME_PLUS], as before.
-                val homeName = if (heroName) (NxTextSizes.secondary(nxCardTitleSize()).value + HOME_HERO_NAME_PLUS).sp else nxCardTitleSize()
+                // A tile's name at [HOME_TILE_NAME] (half a step under the Carousel card's name, still over its info); the hero
+                // card's a step under the card's plus [HOME_HERO_NAME_PLUS], as before.
+                val homeName = if (heroName) (NxTextSizes.secondary(nxCardTitleSize()).value + HOME_HERO_NAME_PLUS).sp else HOME_TILE_NAME * nxTextScale()
                 val statsSp = if (homeCaption) nxCardStatsSize() else INFO_SP
                 val statsLine = if (homeCaption) HOME_INFO_LINE else LINE_HEIGHT
                 val lineDp = with(LocalDensity.current) { (statsSp * statsLine).toDp() }
@@ -494,6 +494,9 @@ internal fun nxDimInk(litness: Float): Float = DRAIN_INK_ALPHA + (1f - DRAIN_INK
 private const val DRAIN_BADGE_ALPHA = 0.3f   // role: an unselected Grid Home tile's badge
 
 internal fun nxDimBadge(litness: Float): Float = DRAIN_BADGE_ALPHA + (1f - DRAIN_BADGE_ALPHA) * litness
+
+/** A Grid Home tile's name at Large, under Text size: between its info line (14.4 sp) and the Carousel card's name (18 sp). */
+private val HOME_TILE_NAME = 16.sp
 
 /** An unselected Grid tile's lines under its name: ink at this, about 4.5:1 on its tile. */
 private const val DRAIN_SUB_ALPHA = 0.5f   // role: an unselected Grid tile's under-name lines
