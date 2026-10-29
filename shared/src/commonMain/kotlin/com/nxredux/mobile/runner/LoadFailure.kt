@@ -16,8 +16,6 @@ object LoadFailure {
     private val biosFileMissing = Regex("""^(\S+): Cannot open (\S+)$""")
     private val romMissing = Regex("""^Cannot find (\S+)$""")
     private val romTruncated = Regex("""^Invalid ROM: truncated (\S+)$""")
-    // gpsp (cores/patches/gpsp.patch) when no room for its recompiler cache is left near the core's code.
-    private val gpspNoJitCache = Regex("""^gpsp: couldn't reserve its .*recompiler cache.*$""")
 
     private const val MAX_FILES = 3
     private const val MAX_LINE = 200
@@ -66,10 +64,6 @@ object LoadFailure {
         }
         arcade.asReversed().firstNotNullOfOrNull { romTruncated.matchEntire(it.text) }?.let { m ->
             return "$title can't start: ${m.groupValues[1]} in ${setFile ?: "the set"} is truncated, the set is damaged or from another MAME version"
-        }
-
-        if (errors.any { gpspNoJitCache.matches(it.text) }) {
-            return "$title couldn't start: GBA couldn't reserve memory for its recompiler. Swipe the app away from recents, then reopen it"
         }
 
         return "The core couldn't load $title: ${oneLine(last.text)}"

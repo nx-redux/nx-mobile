@@ -130,15 +130,4 @@ class LoadFailureTest {
         assertNull(LoadFailure.message("Foo", listOf("W [NAOMI] Parent not found: bar")))
         assertNull(LoadFailure.message("Foo", listOf("garbage without a level", "E ")))
     }
-
-    @Test fun gpsp_without_room_for_its_recompiler_says_to_reopen_the_app() {
-        // As gpsp.patch logs it through the runner (RETRO_LOG_ERROR, trailing newline).
-        val lines = listOf("W [gpSP]: some warning", "E gpsp: couldn't reserve its 10.5 MB recompiler cache near the core\n")
-        assertEquals(
-            "Pokemon Emerald couldn't start: GBA couldn't reserve memory for its recompiler. Swipe the app away from recents, then reopen it",
-            LoadFailure.message("Pokemon Emerald", lines),
-        )
-        // Only as an error line: a warning with the same text keeps the generic path (here: nothing to say).
-        assertNull(LoadFailure.message("Pokemon Emerald", listOf("W gpsp: couldn't reserve its 10.5 MB recompiler cache near the core")))
-    }
 }

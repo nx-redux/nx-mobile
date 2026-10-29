@@ -100,6 +100,11 @@ Rebased on `5819380c` (2026-10-28, nx-redux #287's pin): upstream now checks the
 interpreter without one, so our load refusal is gone; the reset also clears `check_variables`' sound-rate flag, or a
 later game would apply `gpsp_sound_rate` as a mid-session change during its load. That pin adds `gpsp_rtc_time_source`;
 the app defaults it to `system` (`CoreRegistry`), as the Brick's GBA.pak does.
+On an AYANEO Pocket Air Mini (Android 11, Mali, 2 GB) no gap was left within +/-128 MB of the core at all, even on a
+fresh start (the Mali driver and ART fill it), so every GBA game ran on the interpreter. Since 2026-10-29 the patch's
+`memmap.c` part gives Android arm64 a 16 KB-aligned 10.5 MB block in the core's own `.bss`, made RWX with `mprotect`
+on first use: always next to the code, no W+E segment in the ELF, untouched pages cost no RAM. The mmap search (then the
+interpreter) is the fallback if `mprotect` is refused.
 
 `patches/fceumm.patch` adds one `path_vfs_init` call next to its `filestream_vfs_init`, so the content check
 (`path_is_valid`) uses the runner's VFS v3 `stat` and a SAF file-descriptor ROM (`/rom/<name>`) loads without a cache

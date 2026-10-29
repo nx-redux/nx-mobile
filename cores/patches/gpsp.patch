@@ -1,5 +1,3 @@
-# licence: modifies gpSP (https://github.com/libretro/gpsp), GPL-2.0 (its COPYING file); this patch is distributed
-# under the same licence.
 diff --git a/gba_memory.c b/gba_memory.c
 index 1e304ee..088446b 100644
 --- a/gba_memory.c
@@ -168,3 +166,60 @@ index ed2a7d2..1849443 100644
        struct retro_variable svar = { "gpsp_sound_rate", NULL };
        environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &svar);
        gpsp_apply_sound_rate(svar.value, sound_rate_configured ? environ_cb : NULL);
+diff --git a/memmap.c b/memmap.c
+index b7b287d..e5a7245 100644
+--- a/memmap.c
++++ b/memmap.c
+@@ -100,9 +100,40 @@ bool validate_addr_section_mips(void *ptr, unsigned size, unsigned max_offset_mb
+ 
+ 	#include <sys/mman.h>
+ 
++	#if defined(__ANDROID__) && defined(ARM64_ARCH)
++	#include <unistd.h>
++	#include "gpsp_config.h"
++
++	/* nx-mobile: the frontend's own mappings (the GPU driver, ART, other
++	 * cores) can fill every gap within +/-128 MB of this library, so the
++	 * mmap search below finds nothing. The cache lives in the library's
++	 * .bss instead, always next to its code, and is made executable at
++	 * runtime: the ELF itself has no W+E segment, which Android refuses.
++	 * Aligned to 16 KB so the block's pages sit in the anonymous part of
++	 * .bss on 4 KB and 16 KB page kernels alike; untouched pages cost no RAM. */
++	#define NX_JIT_AREA_SIZE (ROM_TRANSLATION_CACHE_SIZE + RAM_TRANSLATION_CACHE_SIZE)
++	static uint8_t nx_jit_area[NX_JIT_AREA_SIZE] __attribute__((aligned(16384)));
++
++	static void *nx_map_jit_area(unsigned size) {
++		uintptr_t page = (uintptr_t)sysconf(_SC_PAGESIZE);
++		uintptr_t start = (uintptr_t)nx_jit_area;
++		uintptr_t len = (size + page - 1) & ~(page - 1);
++		if (start & (page - 1) || size > NX_JIT_AREA_SIZE || len > NX_JIT_AREA_SIZE)
++			return 0;
++		if (mprotect((void*)start, len, PROT_READ|PROT_WRITE|PROT_EXEC))
++			return 0;
++		return (void*)start;
++	}
++	#endif
++
+ 	// Posix implementation
+ 	void *map_jit_block(unsigned size) {
+ 		unsigned i;
++		#if defined(__ANDROID__) && defined(ARM64_ARCH)
++		void *area = nx_map_jit_area(size);
++		if (area)
++			return area;
++		#endif
+ 		uintptr_t base = (uintptr_t)(map_jit_block) & (~(_MAP_STEP - 1ULL));
+ 		int flags = MAP_ANON | MAP_PRIVATE;
+ 		#ifdef __APPLE__
+@@ -131,6 +162,11 @@ bool validate_addr_section_mips(void *ptr, unsigned size, unsigned max_offset_mb
+ 	}
+ 
+ 	void unmap_jit_block(void *bufptr, unsigned size) {
++		#if defined(__ANDROID__) && defined(ARM64_ARCH)
++		/* nx-mobile: the .bss block belongs to the library; it goes when the library does. */
++		if ((uint8_t*)bufptr == nx_jit_area)
++			return;
++		#endif
+ 		munmap(bufptr, size);
+ 	}
+ 
