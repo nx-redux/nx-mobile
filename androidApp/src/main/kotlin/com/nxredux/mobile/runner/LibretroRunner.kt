@@ -20,10 +20,13 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
     /** The launch threw after [beforeLaunch] (the activity could not start); the error is rethrown after it. */
     var launchFailed: () -> Unit = {}
 
+    /** False: launches leave no launch record, so they never reach Recently Played (the debug test hook). */
+    var recordLaunches = true
+
     override fun launch(session: GameSession, recent: Recent) {
         beforeLaunch()
         val intent = Intent(context, GameActivity::class.java)
-            .putExtra(GameActivity.EXTRA_LAUNCH_ID, LaunchRecords.of(context).pending(recent))
+            .putExtra(GameActivity.EXTRA_LAUNCH_ID, if (recordLaunches) LaunchRecords.of(context).pending(recent) else LaunchRecords.NONE)
             .putExtra(GameActivity.EXTRA_CORE_FILE, session.core.libraryFileName)
             .putExtra(GameActivity.EXTRA_CORE_ID, session.core.id)
             .putExtra(GameActivity.EXTRA_TAG, session.systemTag)

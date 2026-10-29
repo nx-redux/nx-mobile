@@ -40,6 +40,15 @@ class LaunchRecordsTest {
         assertEquals(emptyList<Recent>(), r.drainStarted())
     }
 
+    @Test fun startedThenDroppedIsStillDrained() {
+        val r = records()
+        val id = r.pending(Recent("/roms/q.gba", "Q"))
+        r.started(id)
+        r.drop(id)   // the game quit or failed before the menu drained it
+        assertEquals(listOf(Recent("/roms/q.gba", "Q")), r.drainStarted())
+        assertEquals(emptyList<Recent>(), r.drainStarted())
+    }
+
     @Test fun startedRecordSurvivesMenuRestart() {
         val id = records().let { r -> r.pending(Recent("/roms/b.nes", null)).also { r.started(it) } }
         assertEquals(listOf(Recent("/roms/b.nes", null)), records().drainStarted())

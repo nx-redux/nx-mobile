@@ -27,11 +27,10 @@ class LaunchRecords(private val dir: File, private val now: () -> Long = System:
     /** Marks [id] started; false when there is no such pending record (dropped, swept, or never written). */
     fun started(id: Long): Boolean = id >= 0 && File(dir, "$id.pending").renameTo(File(dir, "$id.started"))
 
-    /** The launch never started: nothing will record it. */
+    /** The launch never started: nothing will record it. Only a pending record: a started one is the menu's to drain, however the game ends. */
     fun drop(id: Long) {
         if (id < 0) return
         File(dir, "$id.pending").delete()
-        File(dir, "$id.started").delete()
     }
 
     /** Takes every started record (each is read once, then deleted) and sweeps pending ones a day old: no start will come for them. */

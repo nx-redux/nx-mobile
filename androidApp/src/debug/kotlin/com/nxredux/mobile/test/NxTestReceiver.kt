@@ -150,7 +150,7 @@ class NxTestReceiver : BroadcastReceiver() {
                 val session = GameSession(tag.uppercase(), file.nameWithoutExtension, core, FileRefs.of(path), folder, file.name,
                     resumeSlot = slot, companions = companions)
                 NxTestResults.markShowWhenLocked(app)
-                LibretroRunner(app) { true }.launch(session, com.nxredux.mobile.storage.Recent(path))
+                LibretroRunner(app) { true }.apply { recordLaunches = false }.launch(session, com.nxredux.mobile.storage.Recent(path))
             }
         }
     }
