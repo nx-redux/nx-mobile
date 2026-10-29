@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 
 class RaTransportTest {
@@ -61,6 +62,26 @@ class RaTransportTest {
             assertEquals(RaResponse(status, body), t.call(RaRequests.URL, award))
             assertTrue(RaJournal(store, RaPaths.JOURNAL).entries().isEmpty())
         }
+    }
+    @Test fun online_award_is_journaled_before_its_post_and_cleared_on_a_definitive_answer() = runTest {
+        val (t, store, http) = setup()
+        var duringPost: List<RaUnlock>? = null
+        http.responders["awardachievement"] = {
+            duringPost = RaJournal(store, RaPaths.JOURNAL).entries()
+            RaResponse(200, """{"Success":true,"AchievementID":7,"Score":10,"SoftcoreScore":5}""")
+        }
+        t.call(RaRequests.URL, "r=awardachievement&u=me&t=tok&a=7&h=0&m=$hash&v=x")
+        assertEquals(listOf(RaUnlock("me", 7, hash, 5L)), duringPost)
+        assertTrue(RaJournal(store, RaPaths.JOURNAL).entries().isEmpty())
+    }
+    @Test fun online_award_whose_post_never_returns_stays_journaled() = runTest {
+        val (t, store, http) = setup()
+        http.responders["awardachievement"] = { kotlinx.coroutines.awaitCancellation() }   // the process ends mid-POST
+        val job = launch { t.call(RaRequests.URL, "r=awardachievement&u=me&t=tok&a=7&h=0&m=$hash&v=x") }
+        testScheduler.advanceUntilIdle()
+        assertEquals(listOf(RaUnlock("me", 7, hash, 5L)), RaJournal(store, RaPaths.JOURNAL).entries())
+        job.cancel()
+        assertEquals(listOf(RaUnlock("me", 7, hash, 5L)), RaJournal(store, RaPaths.JOURNAL).entries())
     }
     @Test fun online_game_lookups_fall_back_to_the_cache_without_a_definitive_answer() = runTest {
         val (t, store, http) = setup()

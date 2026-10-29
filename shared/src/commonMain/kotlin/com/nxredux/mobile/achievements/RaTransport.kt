@@ -13,8 +13,9 @@ private const val OFFLINE_BODY = """{"Success":false,"Error":"Offline mode"}"""
 /**
  * The server-call shim (nx-redux `ra_offline.c`): online, requests go out and successful bodies are cached by kind;
  * offline, they are answered from the cache, `startsession` gets the journal and confirmed unlocks merged in, and
- * `awardachievement` is journaled. Online, an answer that is not [definitive] (no connection, a 5xx or 429, an HTML
- * error page) journals an award too, and a game lookup falls back to its cached body when there is one.
+ * `awardachievement` is journaled. Online, an award is journaled before its POST and taken off on a [definitive] answer,
+ * so one whose answer never comes (no connection, a 5xx or 429, an HTML error page, or the process killed mid-POST)
+ * stays for the sync; a game lookup without one falls back to its cached body when there is one.
  */
 class RaTransport(
     private val store: RaStore, private val http: RaHttp,
@@ -33,16 +34,28 @@ class RaTransport(
     }
 
     private suspend fun online(url: String, post: String, kind: RaRequestKind): RaResponse {
+        if (kind.r == "awardachievement") return onlineAward(url, post, kind)
         val response = try { http.post(url, post, RaRequests.CONTENT_TYPE) } catch (e: RaHttpException) { null }
         if (response != null && definitive(response)) {
             if (response.status == 200 && RaJson.isSuccess(response.body)) cache(kind, response.body)
             return response
         }
-        // rc_client retries an award only in memory, so it is lost when the game unloads: the journal keeps it (a
-        // double submission is harmless, the sync takes "already has" as done).
-        if (kind.r == "awardachievement") return journalAward(kind)
         cachedLookup(kind)?.let { return it }
         return response ?: RaResponse(0, "")   // 0 = retryable for rc_client
+    }
+
+    /**
+     * rc_client retries an award only in memory, so it is lost when the game unloads, and the game process may end (or be
+     * killed) mid-POST: the journal holds it from before the POST until the server's own answer (a double submission is
+     * harmless, the sync takes "already has" as done).
+     */
+    private suspend fun onlineAward(url: String, post: String, kind: RaRequestKind): RaResponse {
+        val entry = unlock(kind) ?: return RaResponse(200, OFFLINE_BODY)
+        journal.append(entry)   // RaStoreException propagates to the bridge (hard failure)
+        val response = try { http.post(url, post, RaRequests.CONTENT_TYPE) } catch (e: RaHttpException) { null }
+        if (response == null || !definitive(response)) return journaled(entry)
+        journal.remove(listOf(entry))
+        return response
     }
 
     /** A game lookup's cached body; startsession only from a real cached session, merged like offline. */
@@ -98,10 +111,14 @@ class RaTransport(
     }
 
     private suspend fun journalAward(kind: RaRequestKind): RaResponse {
-        val id = kind.a ?: return RaResponse(200, OFFLINE_BODY)
-        journal.append(RaUnlock(kind.u ?: "", id, kind.m ?: "", now() / 1000))   // RaStoreException propagates to the bridge (hard failure)
-        return RaResponse(200, """{"Success":true,"AchievementID":$id}""")
+        val entry = unlock(kind) ?: return RaResponse(200, OFFLINE_BODY)
+        journal.append(entry)   // RaStoreException propagates to the bridge (hard failure)
+        return journaled(entry)
     }
+
+    private fun unlock(kind: RaRequestKind): RaUnlock? = kind.a?.let { RaUnlock(kind.u ?: "", it, kind.m ?: "", now() / 1000) }
+
+    private fun journaled(entry: RaUnlock) = RaResponse(200, """{"Success":true,"AchievementID":${entry.a}}""")
 }
 
 /**

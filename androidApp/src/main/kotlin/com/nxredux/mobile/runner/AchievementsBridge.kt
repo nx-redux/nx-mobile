@@ -102,8 +102,9 @@ class AchievementsBridge(private val controller: RaController, private val setti
                 launch(Dispatchers.IO) {
                     val award = RaRequestKind.of(call.postData).r == "awardachievement"
                     val r = try {
-                        // An award must survive stop(): finish the POST (or its journal fallback) even after the scope is
-                        // cancelled; only the answer to the native client below stays gated on the session being alive.
+                        // An award is journaled before its POST (RaTransport), so a process end mid-POST loses nothing; it
+                        // still finishes the POST after stop() cancels the scope. Only the answer to the native client below
+                        // stays gated on the session being alive.
                         if (award) withContext(NonCancellable) { transport.call(call.url, call.postData) }
                         else transport.call(call.url, call.postData)
                     } catch (e: CancellationException) {
