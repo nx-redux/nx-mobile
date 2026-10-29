@@ -2450,8 +2450,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 if (role == SystemRole.MENU) "No MENU button? Choose Skip: SELECT+START opens the menu." else null,
                 taken,
             )
-            // MENU's bind: Skip only (B still goes back to the three); SELECT's and START's, which can't be skipped: Cancel.
-            val rows = if (role == SystemRole.MENU) listOf(NxRow("Skip")) else listOf(NxRow("Cancel"))
+            // MENU's bind: Skip only. SELECT's and START's are required: no row at all. B goes back to the three on either.
+            val rows = if (role == SystemRole.MENU) listOf(NxRow("Skip")) else emptyList()
             return Triple(title, lines, rows)
         }
         val lines = listOfNotNull(

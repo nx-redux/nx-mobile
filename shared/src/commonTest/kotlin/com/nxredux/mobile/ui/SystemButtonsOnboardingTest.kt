@@ -264,4 +264,18 @@ class SystemButtonsOnboardingTest {
         s.row("I've pressed them all")
         assertTrue(s.page().details.none { "hold" in it.lowercase() })
     }
+
+    // SELECT and START are required: their bind steps have no row (no Skip, no Cancel); B goes back to the three.
+    @Test fun selectAndStartBindHaveNoRows() = runTest {
+        val s = state()
+        pads = listOf(aya)
+        s.padsChanged()
+        s.tap(KeyCodes.BUTTON_START); s.tap(KeyCodes.BUTTON_MODE)
+        s.row("I've pressed them all")
+        assertTrue(s.page().details.any { "SELECT" in it })
+        assertEquals(emptyList(), s.page().rows)
+        assertTrue(s.page().canGoBack)
+        s.onButton(NxButton.B)
+        assertEquals("I've pressed them all", s.page().rows.last().label)   // back on the three
+    }
 }
