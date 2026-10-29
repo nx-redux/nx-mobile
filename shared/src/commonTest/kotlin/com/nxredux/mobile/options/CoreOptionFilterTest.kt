@@ -138,9 +138,10 @@ class CoreOptionFilterTest {
         val shown = CoreOptionFilter.withHiddenValues(listOf(sorting), hidden).single()
         assertEquals(listOf("per-strip (fast, least accurate)", "per-triangle (normal)"), CoreOptionFilter.visibleValues(shown))
         assertEquals("per-strip (fast, least accurate)", CoreOptionFilter.cycle(shown.copy(value = "per-triangle (normal)"), 1))
-        // The others: renderers the runner can't serve (Vulkan is reached only through Graphics API) (EmulatorSettingsTest pins them).
+        // The others: renderers the runner can't serve (Vulkan is reached only through Graphics API) (EmulatorSettingsTest pins them),
+        // and N64's stale VRAM limit "0" (N64HiresPack.VRAM_NONE).
         assertEquals(
-            setOf("ppsspp_backend", "swanstation_GPU_Renderer", "citra_graphics_api", "dolphin_renderer"),
+            setOf("ppsspp_backend", "swanstation_GPU_Renderer", "citra_graphics_api", "dolphin_renderer", "mupen64plus-MaxHiResTxVramLimit"),
             com.nxredux.mobile.runner.CoreRegistry.all.filter { it.id != "flycast" }.flatMap { it.hiddenValues.keys }.toSet(),
         )
     }

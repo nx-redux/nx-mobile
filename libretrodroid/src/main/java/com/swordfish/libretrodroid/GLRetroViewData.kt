@@ -24,6 +24,9 @@ class GLRetroViewData(context: Context) {
     var gameFilePath: String? = null
     var gameFileBytes: ByteArray? = null
     var gameVirtualFiles: List<VirtualFile> = listOf()
+
+    /** Files the core opens by name through the VFS beside the game (an N64 hi-res pack), however the game loads. */
+    var extraVirtualFiles: List<VirtualFile> = listOf()
     var systemDirectory: String = context.filesDir.absolutePath
     var savesDirectory: String = context.filesDir.absolutePath
     var variables: Array<Variable> = arrayOf()

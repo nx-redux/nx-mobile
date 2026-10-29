@@ -40,7 +40,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | genesis_plus_gx | libretro/Genesis-Plus-GX | c2838c7dc4236fc2fe94e5dbd08b41486067918e | ndk-build | 0:07 |
 | mgba | libretro/mgba | 7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6 | cmake (patched: real link cable) | 0:09 |
 | melondsds | JesseTG/melonds-ds | bc4e4b67d2d470d7c682810a1e892cafd6f9082b (v1.3.1) | cmake (JIT, GLES3 GL renderer, patched; 11 FetchContent deps pinned offline; 7.1 MB stripped) | 0:50 |
-| mupen64plus_next | libretro/mupen64plus-libretro-nx | 6752836de8b224febfd5708444755b77712ac939 | ndk-build (GLES3) | 0:20 |
+| mupen64plus_next | libretro/mupen64plus-libretro-nx | 6752836de8b224febfd5708444755b77712ac939 | ndk-build (GLES3, patched: cheat code parts; hi-res packs read through the VFS) | 0:20 |
 | ppsspp | hrydgard/ppsspp | 2a1700a7ee495310c52c85f9436652cc8f26e45e | cmake | 16:24 |
 | race | libretro/race | 171950ea64c96ead503340ed60fa7ba18f56325c | ndk-build | 0:04 |
 | mednafen_pce_fast | libretro/beetle-pce-fast-libretro | 52675734da114a19b3705f03906b1455f3d76644 | ndk-build | 0:05 |

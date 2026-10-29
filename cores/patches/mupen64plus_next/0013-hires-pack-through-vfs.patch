@@ -1,0 +1,115 @@
+# NX Redux: read a ready-made GLideN64 hi-res pack (<ident>_HIRESTEXTURES.hts) through the frontend's VFS. The core
+# takes the frontend's VFS interface, GLideN64 looks for the pack in the virtual folder /nx-vfs/hires (the app serves
+# the user's file there from an open descriptor, so it works without All files access), and TxFileStorage reads it
+# through libretro file streams instead of std::ifstream. Nothing exists at that path on disk, so GLideN64's
+# clear-on-failed-load can never truncate the user's pack.
+diff --git a/GLideN64/src/GLideNHQ/TxCache.cpp b/GLideN64/src/GLideNHQ/TxCache.cpp
+index 8bea697..7c4b35a 100644
+--- a/GLideN64/src/GLideNHQ/TxCache.cpp
++++ b/GLideN64/src/GLideNHQ/TxCache.cpp
+@@ -37,6 +37,50 @@
+ #include "TxCache.h"
+ #include "TxDbg.h"
+ 
++#ifdef __LIBRETRO__
++#include <streams/file_stream.h>
++
++/* NX Redux: hi-res storage files are read through the frontend's VFS, so a pack the app hands over as a virtual file
++ * (an open descriptor from the user's ROMs folder) opens like one on disk. The std::ifstream calls TxFileStorage makes,
++ * on an RFILE. Writing is unchanged. */
++class TxInFile
++{
++public:
++	~TxInFile() { close(); }
++	void open(const std::string &path, std::ios_base::openmode)
++	{
++		close();
++		_file = filestream_open(path.c_str(), RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_NONE);
++		_good = _file != nullptr;
++	}
++	bool is_open() const { return _file != nullptr; }
++	void close()
++	{
++		if (_file != nullptr)
++			filestream_close(_file);
++		_file = nullptr;
++		_good = false;
++	}
++	bool good() const { return _good; }
++	TxInFile &read(char *s, int64 n)
++	{
++		if (!_good || filestream_read(_file, s, n) != n)
++			_good = false;
++		return *this;
++	}
++	TxInFile &seekg(int64 offset, std::ios_base::seekdir)
++	{
++		if (!_good || filestream_seek(_file, offset, RETRO_VFS_SEEK_POSITION_START) < 0)
++			_good = false;
++		return *this;
++	}
++
++private:
++	RFILE *_file = nullptr;
++	bool _good = false;
++};
++#endif
++
+ #define TXCACHE_FORMAT_VERSION UNDEFINED_1
+ 
+ class TxCacheImpl
+@@ -563,7 +607,11 @@ private:
+ 	uint8 *_gzdest1 = nullptr;
+ 	uint32 _gzdestLen = 0;
+ 
++#ifdef __LIBRETRO__
++	TxInFile _infile;
++#else
+ 	std::ifstream _infile;
++#endif
+ 	std::ofstream _outfile;
+ 	int64 _storagePos = 0;
+ 	bool _dirty = false;
+diff --git a/GLideN64/src/GLideNHQ/TxFilter.cpp b/GLideN64/src/GLideNHQ/TxFilter.cpp
+index de70b17..e490f0c 100644
+--- a/GLideN64/src/GLideNHQ/TxFilter.cpp
++++ b/GLideN64/src/GLideNHQ/TxFilter.cpp
+@@ -152,7 +152,13 @@ TxFilter::TxFilter(int maxwidth,
+ 		wcscat(fullTexPackPath, _ident.c_str());
+ 		_txHiResLoader = new TxHiResNoCache(_maxwidth, _maxheight, _maxbpp, _options, texCachePath, texPackPath, fullTexPackPath, _ident.c_str(), callback);
+ 	} else {
++#ifdef __LIBRETRO__
++		/* NX Redux: a ready-made <ident>_HIRESTEXTURES.hts is served by the app as a virtual file in this folder, read
++		 * through the frontend's VFS. Nothing exists there on disk, so a failed load can never truncate a user's pack. */
++		_txHiResLoader = new TxHiResCache(_maxwidth, _maxheight, _maxbpp, _options, wst("/nx-vfs/hires"), texPackPath, _ident.c_str(), callback);
++#else
+ 		_txHiResLoader = new TxHiResCache(_maxwidth, _maxheight, _maxbpp, _options, texCachePath, texPackPath, _ident.c_str(), callback);
++#endif
+ 	}
+ 
+ 	if (_txHiResLoader->empty())
+diff --git a/libretro/libretro.c b/libretro/libretro.c
+index 136ea79..711cd17 100644
+--- a/libretro/libretro.c
++++ b/libretro/libretro.c
+@@ -22,6 +22,7 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <compat/strl.h>
++#include <streams/file_stream.h>
+ 
+ #include "libretro.h"
+ #include "libretro_private.h"
+@@ -614,6 +615,12 @@ void retro_set_environment(retro_environment_t cb)
+ {
+     environ_cb = cb;
+ 
++    /* NX Redux: the frontend's VFS, so GLideN64 can read a hi-res pack the app serves as a virtual file. */
++    struct retro_vfs_interface_info vfs_iface_info = { FILESTREAM_REQUIRED_VFS_VERSION, NULL };
++    if (!cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_iface_info))
++        vfs_iface_info.iface = NULL;
++    filestream_vfs_init(&vfs_iface_info);
++
+     static const struct retro_subsystem_memory_info memory_info_dd[] = {
+         { "srm", RETRO_MEMORY_DD },
+         {}

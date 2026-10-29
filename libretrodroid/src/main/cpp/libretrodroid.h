@@ -128,6 +128,8 @@ public:
     // Takes the buffer: it lives until retro_unload_game, as the core may keep pointing into it.
     void loadGameFromBytes(std::unique_ptr<int8_t[]> data, size_t size);
     void loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles);
+    // Files the core opens by name through the VFS beside the game, however the game itself loads. Before the load.
+    void addVirtualFiles(std::vector<VFSFile> virtualFiles);
 
     // GL thread (queued): the input state is the GL thread's, read by the core inside retro_run.
     void onKeyEvent(unsigned int port, int action, int keyCode);

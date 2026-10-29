@@ -60,11 +60,18 @@ object CoreRegistry {
         // Independent C-button Controls: every N64 input on its own RetroPad id, so N64Input can map by name (NX Redux).
         // The plugins follow Graphics API: GLideN64 on HLE for OpenGL ES, ParaLLEl-RDP with its ParaLLEl-RSP for Vulkan (the
         // RDP cannot run on HLE). The GLES pair is the default, so a locked key always has a value.
+        // Hi-res packs are ready-made .hts files only (N64HiresPack): enhanced Hi-Res Storage is what reads one, so it is fixed on.
         defaultOptions = mapOf(
             "mupen64plus-alt-map" to "True",
             "mupen64plus-rdp-plugin" to "gliden64", "mupen64plus-rsp-plugin" to "hle",
+            "mupen64plus-EnableEnhancedHighResStorage" to "True",
+            N64HiresPack.VRAM_KEY to N64HiresPack.VRAM_AUTO,   // resolved by device memory at launch (GameActivity)
         ),
-        lockedOptions = setOf("mupen64plus-alt-map", "mupen64plus-rdp-plugin", "mupen64plus-rsp-plugin"),
+        lockedOptions = setOf(
+            "mupen64plus-alt-map", "mupen64plus-rdp-plugin", "mupen64plus-rsp-plugin", "mupen64plus-EnableEnhancedHighResStorage",
+        ),
+        // A stored "0" is the old default every saved config holds: it reads as Auto; No limit is "none" (N64HiresPack).
+        hiddenValues = mapOf(N64HiresPack.VRAM_KEY to setOf("0")),
         restartOnlyOptions = RestartOnlyOptions.mupen64plusNext,
         vulkan = VulkanSwitch(
             gles = mapOf("mupen64plus-rdp-plugin" to "gliden64", "mupen64plus-rsp-plugin" to "hle"),

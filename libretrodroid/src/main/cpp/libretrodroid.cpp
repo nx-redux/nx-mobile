@@ -563,7 +563,7 @@ void LibretroDroid::loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles) 
     game_info.meta = nullptr;
 
     if (loadUsingVFS) {
-        VFS::getInstance().initialize(std::move(virtualFiles));
+        VFS::getInstance().add(std::move(virtualFiles));
     }
 
     if (loadUsingVFS) {
@@ -586,6 +586,10 @@ void LibretroDroid::loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles) 
     }
 
     afterGameLoad();
+}
+
+void LibretroDroid::addVirtualFiles(std::vector<VFSFile> virtualFiles) {
+    VFS::getInstance().add(std::move(virtualFiles));
 }
 
 void LibretroDroid::releaseCore() {

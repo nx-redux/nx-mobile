@@ -337,7 +337,7 @@ class GLRetroView(
             buildShader(shader),
             getDefaultRefreshRate(),
             data.preferLowLatencyAudio,
-            data.gameVirtualFiles.isNotEmpty(),
+            data.gameVirtualFiles.isNotEmpty() || data.extraVirtualFiles.isNotEmpty(),
             data.enableMicrophone,
             data.skipDuplicateFrames,
             data.immersiveMode,
@@ -800,6 +800,9 @@ class GLRetroView(
             // is gone, so native rebuilds its Video and resets a GL core's context.
             LibretroDroid.onSurfaceCreated()
             return@catchExceptions
+        }
+        if (data.extraVirtualFiles.isNotEmpty()) {
+            LibretroDroid.addVirtualFiles(data.extraVirtualFiles.map { DetachedVirtualFile(it.virtualPath, it.fileDescriptor.detachFd()) })
         }
         when {
             data.gameFilePath != null -> loadGameFromPath(data.gameFilePath!!)

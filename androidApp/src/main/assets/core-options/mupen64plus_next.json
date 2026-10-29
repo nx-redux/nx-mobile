@@ -1420,9 +1420,13 @@
      "key": "mupen64plus-MaxHiResTxVramLimit",
      "label": "Max High-Res VRAM Limit",
      "labelCategorized": "",
-     "info": "(GLN64) Limit High-Res textures size in VRAM (in MB, 0 = no limit).",
+     "info": "(GLN64) Limit High-Res textures size in VRAM (in MB, 0 = no limit). Auto picks one by the device's memory: 200 MB up to 3 GB, 500 MB up to 6 GB, no limit above.",
      "values": [
-      "0",
+      "auto",
+      "none",
+      "100",
+      "200",
+      "300",
       "500",
       "1000",
       "1500",
@@ -1433,17 +1437,21 @@
       "4000"
      ],
      "labels": [
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      ""
+      "Auto",
+      "No limit",
+      "100 MB",
+      "200 MB",
+      "300 MB",
+      "500 MB",
+      "1000 MB",
+      "1500 MB",
+      "2000 MB",
+      "2500 MB",
+      "3000 MB",
+      "3500 MB",
+      "4000 MB"
      ],
-     "default": "0"
+     "default": "auto"
     },
     {
      "key": "mupen64plus-MaxTxCacheSize",
