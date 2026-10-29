@@ -43,7 +43,7 @@ sealed interface PickerRow {
     data class Action(override val label: String) : PickerRow
     data class Volume(val volume: LocalVolume) : PickerRow { override val label: String get() = volume.name }
     /** Opens the New folder prompt, as X: below the action row, so a d-pad reaches it. */
-    data object NewFolder : PickerRow { override val label: String get() = "Create new folder" }
+    data object NewFolder : PickerRow { override val label: String get() = "New folder" }   // as the X hint and the prompt
     /** "..": the folder above (a volume's root: the volume list), as B. */
     data object Up : PickerRow { override val label: String get() = ".." }
     data class Folder(override val label: String) : PickerRow
@@ -57,7 +57,7 @@ sealed interface PickerRow {
 private val byName: Comparator<String> = compareBy<String> { it.lowercase() }.thenBy { it }
 
 /**
- * A folder's rows for [mode]: the action row and Create new folder (neither in [FilePickMode.ImportZip]), "..", the folders
+ * A folder's rows for [mode]: the action row and New folder (neither in [FilePickMode.ImportZip]), "..", the folders
  * A–Z ignoring case, then the files A–Z (in ImportZip only the `.zip` files, which pick; elsewhere every file, shown but
  * not picked); dot entries hidden; "Nothing here" when no folder or file is left.
  */
@@ -88,7 +88,7 @@ internal fun pickerRows(mode: FilePickMode, entries: List<LocalEntry>, canPick: 
     } else shown.filter { !it.isDir }.map { it.name }.sortedWith(byName).map { PickerRow.File(it) }
     val listed: List<PickerRow> = folders + files
     val newFolder = if (action != null) PickerRow.NewFolder else null
-    // The folder's entries first, the actions (Use this folder / Save here, Create new folder) last: pinned at the bottom.
+    // The folder's entries first, the actions (Use this folder / Save here, New folder) last: pinned at the bottom.
     return listOf(PickerRow.Up) + listed.ifEmpty { listOf(PickerRow.Empty) } + listOfNotNull(action?.takeIf { canPick }, newFolder)
 }
 
@@ -178,7 +178,8 @@ internal class FilePickerController(
             FilePickMode.Home, FilePickMode.Extra -> homePath?.let(::parentOf)
             else -> homePath
         }
-        show(mode, start?.takeIf { volumeOf(it) != null })
+        // One storage: straight into it; the storage list only when there is a choice (a card).
+        show(mode, start?.takeIf { volumeOf(it) != null } ?: volumes.singleOrNull()?.path)
     }
 
     /** Shows [dir] (null: the volume list), the highlight on [focus] (a folder name or a volume path) when it is listed. */
@@ -233,7 +234,7 @@ internal class FilePickerController(
         finish(FileRefs.of(target))
     }
 
-    /** B: up one level; at a volume's root the volume list; at the volume list, cancel. */
+    /** B: up one level; at a volume's root the volume list (with one storage, cancel); at the volume list, cancel. */
     /** The entry the highlight left for the actions ([switchSide]), where the next sideways press takes it back. */
     private var entryBeforeActions = -1
 
@@ -266,6 +267,7 @@ internal class FilePickerController(
     private fun up(p: Screen.FilePicker) {
         val dir = p.dir ?: return finish(null)
         val volume = volumeOf(dir)
+        if ((volume == null || dir == volume.path) && volumes.size <= 1) return finish(null)   // no storage list to go back to
         if (volume == null || dir == volume.path) launchWork { show(p.mode, null, focus = volume?.path) }
         else launchWork { show(p.mode, parentOf(dir), focus = dir.substringAfterLast('/')) }
     }

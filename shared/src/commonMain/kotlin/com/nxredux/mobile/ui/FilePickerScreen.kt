@@ -2,7 +2,6 @@ package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.shared.res.nav_icon_file
 import com.nxredux.mobile.shared.res.nav_icon_folder
-import com.nxredux.mobile.shared.res.nav_icon_new_folder
 import com.nxredux.mobile.shared.res.nav_icon_up
 import com.nxredux.mobile.shared.res.Res
 import androidx.compose.foundation.layout.Box
@@ -26,16 +25,22 @@ internal fun filePickerHints(s: Screen.FilePicker, selected: Int = -1): List<Hin
     // The d-pad's sideways jump between the folder's entries and the actions under them: the way it goes from here.
     val actions = s.rows.indexOfFirst { it is PickerRow.Action || it == PickerRow.NewFolder }
     if (actions >= 0) add(if (selected >= actions) Hint(NxButton.LEFT, "Folders") else Hint(NxButton.RIGHT, "Actions"))
-    add(Hint(NxButton.A, "Select"))
+    // A says what it does on the selected row.
+    when (val row = s.rows.getOrNull(selected)) {
+        is PickerRow.Folder, is PickerRow.Volume, PickerRow.Up -> add(Hint(NxButton.A, "Open"))
+        is PickerRow.Zip -> add(Hint(NxButton.A, "Use file"))
+        is PickerRow.Action -> add(Hint(NxButton.A, if (s.mode is FilePickMode.Export) "Save" else "Use folder"))
+        PickerRow.NewFolder -> add(Hint(NxButton.A, "Create"))
+        else -> if (row == null) add(Hint(NxButton.A, "Open"))   // a file or Nothing here: no A
+    }
     add(Hint(NxButton.B, "Back"))
     // Touch has the Create new folder row; X stays for a pad.
     if (s.dir != null && s.mode != FilePickMode.ImportZip) add(Hint(NxButton.X, "New folder"))
 }
 
-/** The picker's rows as list rows: ".." with the up arrow, folders and volumes (they open like folders) with the folder icon, files with the file icon and dimmed, "Nothing here" dimmed. */
+/** The picker's rows as list rows: ".." with the up arrow, folders and volumes (they open like folders) with the folder icon, files with the file icon and dimmed, "Nothing here" dimmed; the actions words alone. */
 internal fun pickerListRows(rows: List<PickerRow>): List<NxRow> = rows.map {
     val icon = when (it) {
-        PickerRow.NewFolder -> Res.drawable.nav_icon_new_folder
         PickerRow.Up -> Res.drawable.nav_icon_up
         is PickerRow.Folder, is PickerRow.Volume -> Res.drawable.nav_icon_folder
         is PickerRow.File -> Res.drawable.nav_icon_file
@@ -67,6 +72,8 @@ fun FilePickerScreen(
             onSelect = { if (screen.rows.getOrNull(it) !is PickerRow.File) onSelect(it) },
             onOpen = { if (screen.rows.getOrNull(it) !is PickerRow.File) onOpen(it) }, onHint = onHint, rowsAtTop = true, pinnedBottom = pickerPinnedRows(screen.rows),
             actionsOutlined = false,   // the actions as plain rows, no ring; one column in either orientation
+            quietRows = true,   // unlit folders in inkName, the actions the word alone in inkDim
+            fromLine = 0.5f,   // from half the body down, as setup's pages; its actions stay at the bottom
             modifier = Modifier.padding(horizontal = gutter),
         ) }
         screen.prompt?.let { NxTextPrompt("New folder", it, onDraft, onConfirm = { onHint(NxButton.A) }, onCancel = { onHint(NxButton.B) }) }

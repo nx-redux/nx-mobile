@@ -259,9 +259,9 @@ class AppStateHomeTest {
         val home = assertIs<Screen.FolderSummary>(st.screen.value)
         st.select(folderSummaryRows(home).lastIndex); st.onButton(NxButton.A)
         val (offer, _) = st.setupChrome()
-        val total = homePage.substringAfter(" of ").toInt()
-        // No pick between Permissions and the home page; the home page itself joins the count once the scan found games, as after a pick.
-        assertEquals(listOf("Setup · Step 1 of ${total - 1}", "Setup · Step 2 of $total", "Setup · Step 3 of $total"), listOf(permissions, homePage, offer))
+        // After Text size; no pick between Permissions and the home page, which counts once the scan found games, as after a pick.
+        // The total grows by the home's page once the scan found games.
+        assertEquals(listOf("Setup · Step 2/10", "Setup · Step 3/11", "Setup · Step 4/11"), listOf(permissions, homePage, offer))
         // Permissions, the home page, the ROMs folder offer, then onboarding's own steps: no pick among them.
         st.skipFirstExtra()
         assertEquals(OnboardingStep.HANDHELD, assertIs<Screen.Onboarding>(st.screen.value).step)

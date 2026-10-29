@@ -5,6 +5,8 @@ import com.nxredux.mobile.scraper.ArtHave
 import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.scraper.ArtworkController
 import com.nxredux.mobile.scraper.JobPhase
+import com.nxredux.mobile.scraper.KeyResult
+import com.nxredux.mobile.scraper.SignInResult
 import com.nxredux.mobile.scraper.LibraryGameRef
 import com.nxredux.mobile.scraper.ScrapeState
 import com.nxredux.mobile.settings.AppSettings
@@ -167,6 +169,24 @@ internal class ArtworkScreenController(
 
     /** Whether any artwork source is set up to fetch from. */
     val available: Boolean get() = controller.available
+
+    /**
+     * Setup's artwork step: the sources' accounts it offers, as Settings' Accounts group ([ArtworkAccountSettings]):
+     * ScreenScraper's sign-in (a build with its credentials), the SteamGridDB and TheGamesDB keys.
+     */
+    val ssOffered: Boolean get() = controller.ssAvailable
+    val ssUser: String? get() = settings.ssUsername.takeIf { it.isNotEmpty() && settings.ssPassword != null }
+    val sgdbOffered: Boolean get() = controller.sgdbAvailable
+    val sgdbKeySet: Boolean get() = controller.sgdbKeySet
+    val tgdbOffered: Boolean get() = controller.tgdbSupported
+    val tgdbKeySet: Boolean get() = controller.tgdbKeySet
+
+    /** ScreenScraper's sign-in, checked with it ([ArtworkController.signIn]); kept only when it answers OK. */
+    suspend fun signIn(user: String, password: String): SignInResult = controller.signIn(user, password)
+
+    /** [key] for [source], checked with it and kept only when it answers OK. */
+    suspend fun setKey(source: ArtKeyFor, key: String): KeyResult =
+        if (source == ArtKeyFor.TGDB) controller.setTgdbKey(key) else controller.setSgdbKey(key)
 
     /**
      * Onboarding's Fetch now: the library's art fetched as the Artwork page's Fetch would (every game with Replace

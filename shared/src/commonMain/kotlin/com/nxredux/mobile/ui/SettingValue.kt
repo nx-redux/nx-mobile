@@ -38,9 +38,14 @@ internal class SettingValue<T>(
 
     /** A touch pick: sets value [i] of [values], then [after]; nothing when [i] is out of range or already the one. */
     fun changeTo(i: Int) {
-        val next = values.getOrNull(i) ?: return
-        if (i == index) return
+        if (setTo(i)) after(values[i])
+    }
+
+    /** Sets value [i] of [values] only (no [after]); false when [i] is out of range or already the one. */
+    fun setTo(i: Int): Boolean {
+        val next = values.getOrNull(i) ?: return false
+        if (i == index) return false
         set(next)
-        after(next)
+        return true
     }
 }

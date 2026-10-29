@@ -109,9 +109,10 @@ fun NxList(
     endPadOverride: Dp? = null,   // the row's right margin; the scaffold sets it so labels reach 90% of the screen
     outlined: Boolean = false,    // a button row (Continue): a grey ring round the pill's place while unlit ([nxButtonRing])
     edgeMargin: Int = 0,          // rows kept in view past the selection: 1 under a scroll fade
+    restInk: Color? = null,       // the unlit rows' label and icon ink (the folder picker's: inkName, its actions inkDim); null the list text
 ) = NxList(
     rows, { selectedIndex }, onSelect, onOpen, modifier, listState, rowHeightOverride, pillPaddingOverride, textSizeOverride,
-    onLongPress, endPadOverride, outlined, edgeMargin = edgeMargin,
+    onLongPress, endPadOverride, outlined, edgeMargin = edgeMargin, restInk = restInk,
 )
 
 /**
@@ -135,6 +136,7 @@ internal fun NxList(
     endPadOverride: Dp? = null,
     outlined: Boolean = false,
     edgeMargin: Int = 0,   // rows kept in view past the selection ([NxKeepSelectedInView]): 1 under a scroll fade
+    restInk: Color? = null,
 ) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
@@ -159,7 +161,7 @@ internal fun NxList(
         // The rows read the selection through this State, each in its own scope ([NxListRow]): a step recomposes the rows
         // whose selected or lit state changed, not every row on screen.
         val selection = rememberUpdatedState(selectedIndex)
-        val style = NxListRowStyle(rowHeight, listFont, sidePad, pillPad, font, colors, outlined)
+        val style = NxListRowStyle(rowHeight, listFont, sidePad, pillPad, font, colors, outlined, restInk ?: colors.listText)
         LazyColumn(
             state = state,
             modifier = pill,
@@ -187,6 +189,7 @@ internal fun NxList(
 internal data class NxListRowStyle(
     val rowHeight: Dp, val listFont: TextUnit, val sidePad: Dp, val pillPad: Dp, val font: FontFamily, val colors: NxColors,
     val outlined: Boolean = false,
+    val rest: Color = colors.listText,   // an unlit row's label and icon
 )
 
 /** One [NxList] row: its tag ([NxRow.tag]), label (and muted secondary), on-pill colours while [lit], scrolling (marquee) while [selected]. */
@@ -247,7 +250,7 @@ private fun NxRowIcon(icon: DrawableResource, lit: Boolean, style: NxListRowStyl
     val size = with(LocalDensity.current) { style.listFont.toDp() }
     Image(
         painterResource(icon), contentDescription = null, modifier = Modifier.padding(end = 8.dp).size(size),
-        colorFilter = ColorFilter.tint(if (lit) style.colors.onAccent else style.colors.listText),
+        colorFilter = ColorFilter.tint(if (lit) style.colors.onAccent else style.rest),
     )
 }
 
@@ -270,7 +273,7 @@ private fun NxListRowLabel(row: NxRow, selected: Boolean, lit: Boolean, style: N
                 withStyle(SpanStyle(color = muted, fontSize = NxTextSizes.secondary(listFont))) { append(it) }
             }
         },
-        color = if (lit) colors.onAccent else colors.listText,
+        color = if (lit) colors.onAccent else style.rest,
         fontFamily = style.font, fontWeight = FontWeight.SemiBold, fontSize = listFont, lineHeight = listFont,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

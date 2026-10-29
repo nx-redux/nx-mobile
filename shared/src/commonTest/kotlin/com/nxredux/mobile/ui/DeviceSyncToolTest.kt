@@ -161,7 +161,7 @@ class DeviceSyncToolTest {
     // The sync step is Device Sync itself, under the setup's page title: Skip goes on, B goes back a step.
     @Test fun onboarding_sync_step_is_device_sync_in_place() = runTest {
         val r = atSyncOffer()
-        assertEquals(SyncSetup("Setup · Step 6 of 11", synced = false, focus = SyncFocus.LINK), r.state.syncSetup.value)
+        assertEquals(SyncSetup("Setup · Step 7/12", synced = false, focus = SyncFocus.LINK), r.state.syncSetup.value)
         r.state.onButton(NxButton.B)                                     // B on Ready: the step before
         assertEquals(OnboardingStep.IMPORT_SAVES, assertIs<Screen.Onboarding>(r.state.screen.value).step)
         r.state.select(3); r.state.onButton(NxButton.A)                 // its Skip

@@ -230,6 +230,30 @@ internal fun chromePicture(title: Boolean, hints: Boolean): DrawableResource = w
 internal const val CHROME_PICTURE_AR = 624f / 472f
 
 
+/** [picture] ([aspect] its width over height) [width] wide in its black mat and grey ring. */
+@Composable
+private fun FramedPicture(picture: DrawableResource, aspect: Float, width: Dp) {
+    val shape = RoundedCornerShape(12.dp)
+    Box(Modifier.width(width).background(Color.Black, shape).border(PICTURE_BORDER, LocalNxColors.current.hint.copy(alpha = 0.6f), shape).padding(PICTURE_MAT)) {   // role: the picture's frame ring, the pictures' grey softened
+        Image(
+            painterResource(picture), contentDescription = null, contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxWidth().aspectRatio(aspect).clip(RoundedCornerShape(PICTURE_INNER_CORNER)),
+        )
+    }
+}
+
+/** [picture] framed as large as fits [maxWidth] × [maxHeight], its aspect kept; none narrower than [PREVIEW_MIN_WIDTH]. */
+@Composable
+internal fun FramedPictureFit(picture: DrawableResource, aspect: Float, maxWidth: Dp, maxHeight: Dp) {
+    val width = minOf(maxWidth, (maxHeight - PICTURE_MAT * 2) * aspect + PICTURE_MAT * 2)
+    if (width >= PREVIEW_MIN_WIDTH) FramedPicture(picture, aspect, width)
+}
+
+/** [picture] framed under a list's last row, scrolling with the rows, as a Layouts group's; none narrower than [PREVIEW_MIN_WIDTH]. */
+internal fun layoutPictureFooter(picture: DrawableResource, aspect: Float): NxListFooter = NxListFooter(
+    height = { w -> if (w >= PREVIEW_MIN_WIDTH) LAYOUT_PICTURE_ROWS_GAP + framedPictureHeight(w, aspect, PICTURE_MAT) else 0.dp },
+) { w -> if (w >= PREVIEW_MIN_WIDTH) Box(Modifier.padding(top = LAYOUT_PICTURE_ROWS_GAP)) { FramedPicture(picture, aspect, w) } }
+
 /**
  * A page of value rows with one picture of their current values (onboarding's layout and page title steps, a Settings →
  * Layouts group): the page [title] and [details] lines, the value rows right under them, the [picture] ([aspect] its
@@ -272,15 +296,7 @@ internal fun LayoutPreviewPage(
         )
     } }
     // Too little room left (a short page of many rows): no picture rather than a thumbnail.
-    val framed: @Composable (Dp) -> Unit = { w -> if (picture != null && w >= PREVIEW_MIN_WIDTH) {
-        val shape = RoundedCornerShape(12.dp)
-        Box(Modifier.width(w).background(Color.Black, shape).border(PICTURE_BORDER, colors.hint.copy(alpha = 0.6f), shape).padding(PICTURE_MAT)) {   // role: the picture's frame ring, the pictures' grey softened
-            Image(
-                painterResource(picture), contentDescription = null, contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth().aspectRatio(aspect).clip(RoundedCornerShape(PICTURE_INNER_CORNER)),
-            )
-        }
-    } }
+    val framed: @Composable (Dp) -> Unit = { w -> if (picture != null && w >= PREVIEW_MIN_WIDTH) FramedPicture(picture, aspect, w) }
     // The picture under the touch rows, scrolling with them, [bleed] past the list's edges each side (start, end);
     // none when the picture is narrower than [PREVIEW_MIN_WIDTH].
     val footerOf: (Pair<Dp, Dp>) -> NxListFooter? = { bleed ->

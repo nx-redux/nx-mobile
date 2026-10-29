@@ -52,6 +52,8 @@ fun NxDetailListBody(
     landscapeColumnCount: Int = 2,
     landscapeWidth: Float = 1f,   // a landscape body's details and rows at most this share of its width (setup: long lines wrap)
     landscapeSplit: Boolean = false,   // pill rows on a landscape body: details and pinned rows at the left, the rest a full-height list at the right
+    quietRows: Boolean = false,   // pill rows: the unlit rows in inkName and the bottom-pinned actions in inkDim: the folder picker
+    fromLine: Float? = null,   // the title starts this share of the body down and the rows grow under it, the bottom-pinned rows staying at the bottom; a longer page moves up (the folder picker)
 ) {
     require(!(actionsAtTop && titleActions > 0)) { "actionsAtTop and titleActions do not combine" }
     val colors = LocalNxColors.current
@@ -155,15 +157,19 @@ fun NxDetailListBody(
                         rest, (listSelected - pinned).takeIf { listSelected >= 0 && it in rest.indices } ?: -1, { onSelect(it + pinned) }, { onOpen(it + pinned) },
                         Modifier.fillMaxWidth().height(rowsSlot).nxScrollFade(listState, height = rowHeight / 2, strong = true),
                         listState = listState, rowHeightOverride = rowHeight, textSizeOverride = rowText?.invoke(label) ?: label, edgeMargin = 1,
+                        restInk = if (quietRows) colors.inkName else null,
                     )
                 }
                 if (tail.isNotEmpty()) {
                     // The pill enters the action rows from above as the options' selection leaves them (and back).
                     Spacer(Modifier.height(tailGap))
                     val tailStart = body.size - tail.size
+                    // Quiet actions: the word alone while unlit, the selected one on the pill (touch too).
+                    val tailLit = if (listSelected < 0) -1 else listSelected - tailStart
                     NxList(
-                        tail, if (listSelected < 0) -1 else listSelected - tailStart, { onSelect(it + tailStart) }, { onOpen(it + tailStart) },
+                        tail, tailLit, { onSelect(it + tailStart) }, { onOpen(it + tailStart) },
                         Modifier.fillMaxWidth().height(tailHeight), rowHeightOverride = listPitch, textSizeOverride = label, outlined = actionsOutlined,
+                        restInk = if (quietRows) colors.inkDim else null,
                     )
                 }
             }
@@ -174,7 +180,9 @@ fun NxDetailListBody(
         Column(Modifier.fillMaxSize()) {
             if (balanced) NxTitledBody(title, Modifier.weight(1f).fillMaxWidth(), trailing = trailing) { listArea(Modifier.fillMaxSize()) }
             else {
-                NxPageTitle(title, bottom = if (headline) 8.dp else 0.dp, trailing = trailing)   // a caption sits right under the title
+                val titleView: @Composable () -> Unit = { NxPageTitle(title, bottom = if (headline) 8.dp else 0.dp, trailing = trailing) }   // a caption sits right under the title
+                val lined = fromLine != null && !split && landscapeColumns == null
+                if (!lined) titleView()
                 // A landscape body lays [landscapeColumns] out in [landscapeColumnCount] columns, filled down then across.
                 // Only when the lines in one column would leave the rows too little room (measured below).
                 val columnable = landscapeColumns?.takeIf { landscape && it.first > 0 && it.last < details.size && it.count() > 1 }
@@ -223,7 +231,27 @@ fun NxDetailListBody(
                     val buttons = hints.touchButtons()
                     if (touch && onHint != null && buttons.isNotEmpty()) NxTouchButtons(buttons, onHint, Modifier.padding(start = inset, top = 12.dp, bottom = NxTouchButtonsGap), Alignment.Start)
                 }
-                if (split) Row(Modifier.weight(1f).fillMaxWidth()) {
+                if (lined) {
+                    // The title and details from the line, the rows under them; as high as the rows (and the pinned
+                    // ones at the bottom) need when they would not fit below it, at the top at most.
+                    val density = LocalDensity.current
+                    val listNeed = with(density) {
+                        val tailNeed = if (tail.isNotEmpty()) listPitch * tail.size + listPitch * NX_OPTIONS_GAP else 0.dp
+                        ((if (underDetails) NxDetailListGap else 0.dp) + rowHeight * rest.size + tailNeed).roundToPx()
+                    }
+                    SubcomposeLayout(Modifier.weight(1f).fillMaxWidth()) { c ->
+                        val head = subcompose("head") { Column { titleView(); left(null) } }.map { it.measure(c.copy(minHeight = 0)) }
+                        val headH = head.sumOf { it.height }
+                        val y = minOf((c.maxHeight * fromLine!!).toInt(), c.maxHeight - headH - listNeed).coerceAtLeast(0)
+                        val listH = (c.maxHeight - y - headH).coerceAtLeast(0)
+                        val list = subcompose("list") { listArea(Modifier.fillMaxWidth().height(with(density) { listH.toDp() })) }
+                            .map { it.measure(c.copy(minHeight = 0, maxHeight = listH)) }
+                        layout(c.maxWidth, c.maxHeight) {
+                            head.forEach { it.place(0, y) }
+                            list.forEach { it.place(0, y + headH) }
+                        }
+                    }
+                } else if (split) Row(Modifier.weight(1f).fillMaxWidth()) {
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         left(null)
                         if (pinned > 0) {
