@@ -2456,7 +2456,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val lines = listOfNotNull(
             "Press SELECT, START and MENU on your controller (${page.model.name}).",
             if (page.lastOther) "That's not one of the three." else null,
-            "One wasn't found? Choose I've pressed them all, then press the button to use for it.",
+            "One wasn't found? Choose I've pressed them all, and we will configure it next.",
         )
         val rows = SystemRole.entries.map { NxRow(it.label, secondary = if (it in page.found) "Found" else "Not found yet") } +
             listOf(NxRow("I've pressed them all"), NxRow("Skip"))
