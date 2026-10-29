@@ -5,19 +5,23 @@ import kotlin.math.roundToInt
 /**
  * The selection colour (Appearance -> Accent): every selection mark (list pills, lit tiles, lit tool squares,
  * game rings, the tab-focus plate) draws in it. Every preset is light, so the text on it is always black
- * ([com.nxredux.mobile.ui.nx.NxColors.onAccent]). Tailwind CSS palette colours (zinc-200, the rest -400), in the picker's
- * order; [WHITE] is the default. [id] is what is stored; [rgb] is 0xRRGGBB.
+ * ([com.nxredux.mobile.ui.nx.NxColors.onAccent]). Tailwind CSS palette colours (zinc-200; Orange, Violet, Pink -300,
+ * the rest -400), in the picker's order; [WHITE] is the default. Every preset but Red has a relative luminance of 0.43
+ * or more, so a selected name stays clearly brighter than an unselected one (ink 60%) and the hint grey. Red stays
+ * red-400, since a brighter red reads as pink; each layout still marks the selection by more than the name's
+ * brightness. [id] is what is
+ * stored (a shade change keeps it, so a stored accent takes the new shade); [rgb] is 0xRRGGBB.
  */
 enum class AccentPreset(val id: String, val label: String, val rgb: Int) {
     WHITE("white", "White", 0xE4E4E7),     // zinc-200, black text 16.6:1
-    RED("red", "Red", 0xF87171),           // red-400, 7.6:1
-    ORANGE("orange", "Orange", 0xFB923C),  // orange-400, 9.3:1
+    RED("red", "Red", 0xF87171),           // red-400, 7.6:1. The one exception to the luminance floor (0.33): a red bright enough turns pink
+    ORANGE("orange", "Orange", 0xFDBA74),  // orange-300, 12.5:1
     AMBER("amber", "Amber", 0xFBBF24),     // amber-400, 12.6:1
     LIME("lime", "Lime", 0xA3E635),        // lime-400, 13.9:1
     TEAL("teal", "Teal", 0x2DD4BF),        // teal-400, 11.3:1
     SKY("sky", "Sky", 0x38BDF8),           // sky-400, 9.8:1
-    VIOLET("violet", "Violet", 0xA78BFA),  // violet-400, 7.7:1
-    PINK("pink", "Pink", 0xF472B6);        // pink-400, 7.9:1
+    VIOLET("violet", "Violet", 0xC4B5FD),  // violet-300, 11.4:1
+    PINK("pink", "Pink", 0xF9A8D4);        // pink-300, 11.6:1
 
     /** 0xFFRRGGBB. */
     val argb: Int get() = (0xFF shl 24) or rgb

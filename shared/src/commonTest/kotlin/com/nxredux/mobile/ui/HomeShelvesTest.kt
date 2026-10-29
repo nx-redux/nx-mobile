@@ -78,7 +78,7 @@ class HomeShelvesTest {
     @Test fun gridShelfCapFollowsTheBoardsRow() {
         assertEquals(4, homeShelfCap(portrait = true, perRow = 2))
         assertEquals(3, homeShelfCap(portrait = false, perRow = 3))
-        assertEquals(3, homeShelfCap(portrait = false, perRow = 2))
+        assertEquals(4, homeShelfCap(portrait = false, perRow = 2))   // two whole rows of 2 (a 4:3 handheld), no half-empty row
         assertEquals(4, homeShelfCap(portrait = false, perRow = 4))
         assertEquals(3, HOME_SHELF_LIST_MAX)
     }

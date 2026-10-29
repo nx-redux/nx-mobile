@@ -30,12 +30,10 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -83,15 +81,13 @@ internal const val TROPHY = "trophy"   // the inline content id of the achieveme
 
 /**
  * [infoText]'s text: the segments joined by [INFO_SEPARATOR], the trophy's inline content ([TROPHY]) before the
- * achievements. [next]: the next goal's colour (the white ink), a span on that segment only; the rest (and the separator
- * before it) keep the Text's own colour. Null: no span.
+ * achievements; every segment in the Text's own colour.
  */
-internal fun infoAnnotatedString(lines: List<InfoLine>, next: Color? = null): AnnotatedString = buildAnnotatedString {
+internal fun infoAnnotatedString(lines: List<InfoLine>): AnnotatedString = buildAnnotatedString {
     lines.forEachIndexed { i, line ->
         if (i > 0) append(INFO_SEPARATOR)
         if (line.kind == InfoKind.ACHIEVEMENTS) appendInlineContent(TROPHY, "[trophy]")
-        if (line.kind == InfoKind.NEXT && next != null) withStyle(SpanStyle(color = next)) { append(line.text) }
-        else append(line.text)
+        append(line.text)
     }
 }
 
@@ -100,12 +96,12 @@ internal class InfoText(val text: AnnotatedString, val inlineContent: Map<String
 
 /**
  * The info [lines] (gameInfoLines' segments in order) joined by [INFO_SEPARATOR], the achievement segment led by the
- * trophy ([icon], [tint]) and the 6 dp after it, inline, the next goal in white ([infoAnnotatedString]). One builder for
- * the List's band, the switcher's, the Grid's selected tile and the Carousel and Backdrop captions.
+ * trophy ([icon], [tint]) and the 6 dp after it, inline, the next goal in the line's own colour, as the rest: the title
+ * above stays the brightest text ([infoAnnotatedString]). One builder for the List's band, the switcher's, the Grid's
+ * selected tile and the Carousel and Backdrop captions.
  */
 @Composable
 internal fun infoText(lines: List<InfoLine>, tint: Color, icon: Dp = ICON): InfoText {
-    val next = LocalNxColors.current.listText
     val density = LocalDensity.current
     // Kept while the colours and sizes are the same (smooth scrolling at 120 Hz): the trophy's inline content is one
     // instance, so a new line re-lays the text out without recomposing the icon.
@@ -117,7 +113,7 @@ internal fun infoText(lines: List<InfoLine>, tint: Color, icon: Dp = ICON): Info
         }
         mapOf(TROPHY to trophy)
     }
-    return remember(lines, next, inline) { InfoText(infoAnnotatedString(lines, next = next), inline) }
+    return remember(lines, inline) { InfoText(infoAnnotatedString(lines), inline) }
 }
 
 /** A game caption's info row as drawn: its segments, and the most lines it may wrap to before it ellipsizes. */
