@@ -60,14 +60,14 @@ object Archives {
         pfd.use { descriptor ->
             val dir = File(RomCache.root(context), "$archiveName.${descriptor.statSize}")
             synchronized(RomCache.lockFor(dir.name)) {
-                RomCache.hold(dir.name)
+                RomCache.hold(context, dir.name)
                 try {
                     FileInputStream(descriptor.fileDescriptor).channel.use { channel ->
                         return if (ext == "zip") fromZip(channel, archiveName, dir, romExtensions, namedAfterArchive)
                         else from7z(channel, archiveName, dir, romExtensions, namedAfterArchive)
                     }
                 } catch (e: Throwable) {
-                    RomCache.release(dir.name)
+                    RomCache.release(context, dir.name)
                     throw e
                 }
             }

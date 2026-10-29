@@ -4,6 +4,8 @@ import android.content.Context
 import com.swordfish.libretrodroid.NxLog
 import java.io.File
 import java.io.InputStream
+import java.nio.channels.FileChannel
+import java.nio.file.StandardOpenOption
 
 /**
  * Cores read BIOS/asset files from an app-owned system directory. On the target phone the app cannot read
@@ -11,7 +13,7 @@ import java.io.InputStream
  * assets/system/, once per app update (stamped with lastUpdateTime).
  *
  * MainActivity pre-warms it on a background thread (as it does the overlays and shaders) and every caller goes
- * through one lock, so a game started meanwhile waits for that copy instead of running a second one.
+ * through one lock (in-process, and a file lock for the game process), so a game started meanwhile waits for that copy instead of running a second one.
  * Not [BundledAssets.sync]'s whole-tree swap: this dir is not the APK's alone. BiosImport copies the user's
  * `Bios/<TAG>/` files into it (by path, over bundled ones) and cores write their own files here (flycast's
  * `dc/` nvmem and flash, PPSSPP's), and a swap would drop all of that. So each bundled file is built beside its
@@ -21,6 +23,8 @@ import java.io.InputStream
 object SystemFiles {
     private const val TAG = "SystemFiles"
     private const val STAMP = ".stamp"
+    /** In filesDir beside the system dir: the cross-process lock on [sync]. */
+    private const val LOCK_FILE = "system.lock"
     private val lock = Any()
 
     /** Read side of the bundled tree; the APK's assets in the app, a fake in tests. */
@@ -57,12 +61,20 @@ object SystemFiles {
      */
     internal fun sync(dir: File, current: String, source: Source): Boolean = synchronized(lock) {
         dir.mkdirs()
-        val stamp = File(dir, STAMP)
-        if (stamp.isFile && stamp.readText() == current) return false
-        if (source.list("system").isEmpty()) return false   // nothing staged in this build (cores pipeline not run)
-        copyTree(source, "system", dir)
-        stamp.writeAtomically(current.encodeToByteArray())   // last: an unstamped dir is never trusted
-        true
+        // The in-process lock does not span the menu and the game process, which both run this: a file lock beside the dir does.
+        val lockFile = dir.parentFile?.let { File(it, LOCK_FILE) }
+        val channel = lockFile?.let { runCatching { FileChannel.open(it.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE) }.getOrNull() }
+        try {
+            channel?.lock()
+            val stamp = File(dir, STAMP)
+            if (stamp.isFile && stamp.readText() == current) return false
+            if (source.list("system").isEmpty()) return false   // nothing staged in this build (cores pipeline not run)
+            copyTree(source, "system", dir)
+            stamp.writeAtomically(current.encodeToByteArray())   // last: an unstamped dir is never trusted
+            true
+        } finally {
+            runCatching { channel?.close() }   // closing releases the lock
+        }
     }
 
     private fun copyTree(source: Source, assetPath: String, target: File) {

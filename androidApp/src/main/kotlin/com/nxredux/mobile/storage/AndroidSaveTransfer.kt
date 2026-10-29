@@ -131,7 +131,7 @@ class AndroidSaveTransfer(
         importsRunning.incrementAndGet()
         main.post { progress("Working…") }
         executor.execute {
-            DataRoot.useBegin()   // an import writes saves: no data move starts under it (begun in the task, so always ended)
+            DataRoot.useBegin(app)   // an import writes saves: no data move starts under it (begun in the task, so always ended)
             val result = try {
                 block()
             } catch (e: Throwable) {

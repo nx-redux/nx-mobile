@@ -13,7 +13,8 @@ import java.util.concurrent.ConcurrentHashMap
  * [Archives]) or real-path copy (`<file name>`, GameActivity.copyToCache). An entry's mtime is its last use (touched on
  * creation and on every reuse), and [sweep] trims the cache by [CacheSweep]'s policy. Each entry has one lock
  * (unpack/copy and delete of one entry never overlap) and a hold count: a held entry (the running game's, one being
- * hashed) is never deleted. Both are per process, and the app runs in one.
+ * hashed) is never deleted. The lock is per process; a hold is also a marker file `.holds/<name>@<pid>` under the root, so
+ * the menu's sweep sees what the game process holds (and the reverse). A marker whose process is gone is dropped by the sweep.
  */
 object RomCache {
     private const val TAG = "RomCache"
@@ -23,6 +24,8 @@ object RomCache {
      */
     private const val PART_MAX_AGE_MILLIS = 60L * 60 * 1000
     private const val PART = ".part"
+    /** Holds' markers, `<name>@<pid>`; not a cache entry, so the sweep never lists it as one. */
+    private const val HOLDS = ".holds"
 
     private val locks = ConcurrentHashMap<String, Any>()
     private val holds = ConcurrentHashMap<String, Int>()
@@ -32,12 +35,57 @@ object RomCache {
     /** The lock of top-level entry [name]; held while it is unpacked, copied, reused or deleted. */
     fun lockFor(name: String): Any = locks.getOrPut(name) { Any() }
 
-    /** Marks entry [name] in use until the matching [release]; counted, so a game and a hash may hold one entry at once. */
-    fun hold(name: String) { holds.merge(name, 1, Int::plus) }
+    /**
+     * Marks entry [name] in use until the matching [release]; counted, so a game and a hash may hold one entry at once
+     * (one marker file per process and name, dropped with the last release).
+     */
+    fun hold(context: Context, name: String) = holdIn(root(context), name, android.os.Process.myPid())
 
-    fun release(name: String) { holds.computeIfPresent(name) { _, n -> (n - 1).takeIf { it > 0 } } }
+    fun release(context: Context, name: String) = releaseIn(root(context), name, android.os.Process.myPid())
+
+    internal fun holdIn(root: File, name: String, pid: Int) {
+        val first = synchronized(holds) { holds.merge(name, 1, Int::plus) == 1 }
+        if (first) runCatching { File(root, "$HOLDS/$name@$pid").also { it.parentFile?.mkdirs() }.createNewFile() }
+            .onFailure { NxLog.w(TAG, "could not mark the hold on $name", it) }   // still held here; only another process's sweep may miss it
+    }
+
+    internal fun releaseIn(root: File, name: String, pid: Int) {
+        val last = synchronized(holds) {
+            val n = holds[name] ?: return
+            if (n > 1) { holds[name] = n - 1; false } else { holds.remove(name); true }
+        }
+        if (last) File(root, "$HOLDS/$name@$pid").delete()
+    }
 
     private fun isHeld(name: String) = holds.containsKey(name)
+
+    /**
+     * The names with a live hold in any process of the app ([isAlive] by pid); markers of dead processes are deleted.
+     */
+    internal fun sweepKeep(root: File, isAlive: (Int) -> Boolean): Set<String> {
+        val keep = HashSet<String>()
+        for (marker in File(root, HOLDS).listFiles().orEmpty()) {
+            val at = marker.name.lastIndexOf('@')
+            val pid = if (at > 0) marker.name.substring(at + 1).toIntOrNull() else null
+            if (pid != null && isAlive(pid)) keep += marker.name.substring(0, at)
+            else marker.delete()
+        }
+        return keep
+    }
+
+    /** This process, or a process of this app (the menu's or the game's) by pid; a recycled pid is another app's. */
+    private fun appProcessAlive(context: Context): (Int) -> Boolean {
+        val mine = android.os.Process.myPid()
+        val pkg = context.packageName
+        return { pid ->
+            pid == mine || try {
+                val proc = File("/proc/$pid/cmdline").readBytes().toString(Charsets.UTF_8).substringBefore('\u0000')
+                proc == pkg || proc.startsWith("$pkg:")
+            } catch (e: java.io.IOException) {
+                false
+            }
+        }
+    }
 
     /** Records a use of top-level [entry] (and of [inner], the ROM inside an extraction): their mtimes become now. */
     fun touch(entry: File, inner: File? = null) {
@@ -55,30 +103,32 @@ object RomCache {
     fun sweep(context: Context, now: Long = System.currentTimeMillis()) {
         runCatching {
             val root = root(context)
-            val children = root.listFiles() ?: return
+            val children = (root.listFiles() ?: return).filter { it.name != HOLDS }
+            val alive = appProcessAlive(context)
+            val held = sweepKeep(root, alive)
             val listed = children.mapNotNull { f -> runCatching { CacheEntry(f.name, sizeOf(f), f.lastModified()) }.getOrNull() }
             val unpacking = children.filter { f -> f.isDirectory && parts(f).any { now - it.lastModified() <= PART_MAX_AGE_MILLIS } }.map { it.name }
-            val victims = CacheSweep.victims(listed, now, keep = holds.keys + unpacking)
+            val victims = CacheSweep.victims(listed, now, keep = holds.keys + held + unpacking)
             val usedAt = listed.associate { it.name to it.lastUsedMillis }
             var freed = 0L
             for (name in victims) runCatching {
                 val entry = File(root, name)
                 synchronized(lockFor(name)) {
-                    // Held or reused while we waited for its lock: it is the running game's or was just unpacked again.
-                    if (isHeld(name) || entry.lastModified() != usedAt[name]) return@synchronized
+                    // Held (here or by the other process) or reused while we waited for its lock: it is the running game's or was just unpacked again.
+                    if (isHeld(name) || name in sweepKeep(root, alive) || entry.lastModified() != usedAt[name]) return@synchronized
                     val bytes = sizeOf(entry)
                     if (deleteTree(entry)) freed += bytes else NxLog.w(TAG, "could not delete ${entry.path}")
                 }
             }.onFailure { NxLog.w(TAG, "sweep of $name failed", it) }
-            for (dir in root.listFiles().orEmpty()) if (dir.isDirectory && !isLink(dir)) runCatching { dropStaleParts(dir, now) }
+            for (dir in root.listFiles().orEmpty()) if (dir.isDirectory && !isLink(dir) && dir.name != HOLDS) runCatching { dropStaleParts(dir, now, held) }
                 .onFailure { NxLog.w(TAG, "part sweep of ${dir.name} failed", it) }
             if (victims.isNotEmpty()) NxLog.i(TAG, "swept ${victims.size} of ${listed.size} entries, ${freed shr 20} MiB")
         }.onFailure { NxLog.w(TAG, "sweep failed", it) }
     }
 
     /** A stale `.part` is removed without bumping the entry's mtime (the removal is not a use). */
-    private fun dropStaleParts(dir: File, now: Long) = synchronized(lockFor(dir.name)) {
-        if (isHeld(dir.name)) return@synchronized
+    private fun dropStaleParts(dir: File, now: Long, held: Set<String>) = synchronized(lockFor(dir.name)) {
+        if (isHeld(dir.name) || dir.name in held) return@synchronized
         val stale = parts(dir).filter { now - it.lastModified() > PART_MAX_AGE_MILLIS }
         if (stale.isEmpty()) return@synchronized
         val usedAt = dir.lastModified()

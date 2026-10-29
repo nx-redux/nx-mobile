@@ -60,7 +60,7 @@ class AndroidRaHasher(private val context: Context, private val source: RomsSour
                     // The launch refuses a lone entry its core does not run (GameActivity's mismatch check); so does the hash.
                     if (core != null && Names.extensionOf(inner.name) !in core.extensions) null else hashUnpacked(tag, inner)
                 } finally {
-                    inner.parentFile?.let { RomCache.release(it.name) }
+                    inner.parentFile?.let { RomCache.release(context, it.name) }
                 }
             }
         }

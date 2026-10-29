@@ -1,10 +1,12 @@
 package com.nxredux.mobile.storage
 
 import android.content.Context
+import com.nxredux.mobile.AppProcess
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.NxStorage
 import com.nxredux.mobile.settings.AndroidAppSettings
+import com.nxredux.mobile.settings.PrefsProvider
 import com.nxredux.mobile.tools.CheatDbService
 import com.nxredux.mobile.tools.CheatsRoot
 import com.swordfish.libretrodroid.NxLog
@@ -76,6 +78,7 @@ object DataRoot {
 
     /** [of] once a move it needs has finished: one root for a whole session. Blocks, so never on the main thread. */
     fun settled(context: Context): File {
+        if (AppProcess.isGame(context)) return File(ownerCall(context, PrefsProvider.METHOD_DATA_ROOT_SETTLED, emptyMap())[PrefsProvider.RESULT_PATH] as String)
         of(context)
         move?.await()
         return of(context)
@@ -96,13 +99,21 @@ object DataRoot {
     }
 
     /** A game session or a Device Sync run starts on the data root: no move starts until [useEnd]. Call before [settled]. */
-    fun useBegin() = synchronized(lock) { gate.begin() }
+    fun useBegin(context: Context) {
+        if (AppProcess.isGame(context)) { ownerCall(context, PrefsProvider.METHOD_DATA_ROOT_USE, mapOf(PrefsProvider.ARG_BEGIN to true)); return }
+        synchronized(lock) { gate.begin() }
+    }
 
     /** The use [useBegin] began ended; the last one starts a move it held off. */
     fun useEnd(context: Context) {
         val app = context.applicationContext
+        if (AppProcess.isGame(app)) { ownerCall(app, PrefsProvider.METHOD_DATA_ROOT_USE, mapOf(PrefsProvider.ARG_BEGIN to false)); return }
         if (synchronized(lock) { gate.end() }) Thread({ startIfDue(app) }, "data-move-start").start()
     }
+
+    /** The game process has no say over the data move: the main process owns the root and the gate, so it is asked. */
+    private fun ownerCall(context: Context, method: String, args: Map<String, Any?>): Map<String, Any?> =
+        PrefsProvider.channel(context).call(method, "data-root", args)
 
     /** App-private storage: caches, credentials, art, and the data until it moves. */
     fun private(context: Context): File = NxStorage.root(context)

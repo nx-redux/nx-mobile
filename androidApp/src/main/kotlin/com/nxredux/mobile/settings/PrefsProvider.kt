@@ -6,6 +6,7 @@ import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
+import com.nxredux.mobile.storage.DataRoot
 
 /**
  * The main process's settings, served to the game process (see [ProviderPreferences]). The provider has no `process`
@@ -16,6 +17,13 @@ class PrefsProvider : ContentProvider() {
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
         val context = context ?: return null
+        when (method) {
+            METHOD_DATA_ROOT_SETTLED -> return encode(mapOf(RESULT_PATH to DataRoot.settled(context).path))   // blocks while a move runs: a binder thread
+            METHOD_DATA_ROOT_USE -> {
+                if (decode(extras ?: Bundle())[ARG_BEGIN] == true) DataRoot.useBegin(context) else DataRoot.useEnd(context)
+                return encode(mapOf(RESULT_OK to true))
+            }
+        }
         val prefs = context.getSharedPreferences(arg ?: return null, Context.MODE_PRIVATE)
         return when (method) {
             METHOD_GET_ALL -> encode(prefs.all)
@@ -57,6 +65,12 @@ class PrefsProvider : ContentProvider() {
         const val ARG_REMOVE = "remove"
         const val ARG_CLEAR = "clear"
         const val RESULT_OK = "ok"
+        /** The data root as [DataRoot.settled] answers in the main process; result [RESULT_PATH]. The `arg` name is unused. */
+        const val METHOD_DATA_ROOT_SETTLED = "dataRootSettled"
+        /** [ARG_BEGIN] true: [DataRoot.useBegin], false: [DataRoot.useEnd]; the game process holds off the data move through it. */
+        const val METHOD_DATA_ROOT_USE = "dataRootUse"
+        const val ARG_BEGIN = "begin"
+        const val RESULT_PATH = "path"
 
         fun authority(context: Context) = context.packageName + ".prefs"
 

@@ -1105,7 +1105,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val content = ContentRef(intent.getStringExtra(EXTRA_CONTENT_URI) ?: return fail("No content given"))
         val romFileName = intent.getStringExtra(EXTRA_FILE_NAME)
             ?: withContext(Dispatchers.IO) { runCatching { refs.displayName(content) }.getOrNull() } ?: title
-        if (!usingData) { DataRoot.useBegin(); usingData = true }   // no move starts under the session
+        if (!usingData) { DataRoot.useBegin(this); usingData = true }   // no move starts under the session
         dataRoot = withContext(Dispatchers.IO) { DataRoot.settled(this@GameActivity) }   // waits for a move still running
         privateRoot = DataRoot.private(this)
         cheatsFolder = Cheats.folder(tag, romFileName)
@@ -1911,7 +1911,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     private fun releaseCacheHolds() {
-        while (true) RomCache.release(cacheHolds.poll() ?: break)
+        while (true) RomCache.release(this, cacheHolds.poll() ?: break)
     }
 
     /** Opens the game's content and companions, SAF documents or file refs. */
@@ -1929,8 +1929,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val stampFile = File(root, cacheSiblingName(fileName, REAL_PATH_STAMP))
         val part = File(root, cacheSiblingName(fileName, ".part"))
         synchronized(RomCache.lockFor(target.name)) {
-            RomCache.hold(target.name); keepCacheHold(target.name)
-            RomCache.hold(stampFile.name); keepCacheHold(stampFile.name)   // a swept stamp would only cost a recopy, but keep it
+            RomCache.hold(this, target.name); keepCacheHold(target.name)
+            RomCache.hold(this, stampFile.name); keepCacheHold(stampFile.name)   // a swept stamp would only cost a recopy, but keep it
             val size = refs.size(ref) ?: -1L
             val stamp = realPathCopyStamp(size, refs.lastModified(ref))
             val stored = runCatching { stampFile.takeIf { it.isFile }?.readText() }.getOrNull()
@@ -1939,7 +1939,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 return target.also { RomCache.touch(it) }
             }
             // The .part is its own top-level name to the sweep: held while it grows, so a big ISO's is never trimmed mid-copy.
-            RomCache.hold(part.name)
+            RomCache.hold(this, part.name)
             try {
                 val input = refs.openInput(ref) ?: throw IOException("Cannot open input stream")
                 input.use { source -> part.outputStream().use { source.copyTo(it, 1 shl 20) } }
@@ -1950,7 +1950,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     .onFailure { NxLog.w("GameActivity", "could not stamp the cache copy of $fileName", it) }
             } finally {
                 part.delete()
-                RomCache.release(part.name)
+                RomCache.release(this, part.name)
             }
             return target
         }
