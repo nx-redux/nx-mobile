@@ -425,8 +425,6 @@ class MainActivity : ComponentActivity(), FolderPicker {
             ),
             scope,
         )
-        // A game whose core hung was closed with the process; this is the menu that process restarted.
-        CoreHangNotice.take(this)?.let(state::showError)
         // Settings shows the dual-screen rows only with a second screen. Only while started: stop() clears `current`, which is not a removal.
         scope.launch {
             secondScreens.current.collect {
@@ -675,6 +673,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         // API 26-28: back from Android's home settings without picking this app, the HOME alias goes off again.
         if (::launcher.isInitialized && launcher.dropAliasIfNotHome() && ::state.isInitialized) state.onLauncherChanged()
         if (::state.isInitialized) {
+            CoreHangNotice.take(this)?.let(state::showError)   // a game whose core hung was closed with its process
             state.refreshResume()
             state.onForeground()   // a card inserted while in the background: its games come back
         }

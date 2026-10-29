@@ -6,9 +6,9 @@ import android.content.Intent
 import com.nxredux.mobile.library.CompanionLookup
 import com.nxredux.mobile.library.DiscSheet
 import com.nxredux.mobile.runner.CoreRegistry
-import com.nxredux.mobile.runner.GameActivity
 import com.nxredux.mobile.runner.GameSession
 import com.nxredux.mobile.runner.LibretroRunner
+import com.nxredux.mobile.runner.LiveGameStore
 import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.FileRomsSource
 import com.nxredux.mobile.sync.DeviceSyncPage
@@ -34,11 +34,12 @@ import java.io.File
  * - RESET: deletes the result files.
  * - SYNC (`--es link wifi|cable --ez roms true|false`): starts a Device Sync as the screen would; sync.json.
  * - SYNC_STOP: stops (or backs out of) that sync; sync.json state "stopped".
- * - GAME (`--es path <rom> --es tag <TAG> [--ei slot n]`): launches the ROM as the launcher does; GameActivity writes
+ * - GAME (`--es path <rom> --es tag <TAG> [--ei slot n] [--es game_path <library path>]`): launches the ROM as the
+ *   launcher does (game_path: the game's identity, so a paused one is brought back, not started again); GameActivity writes
  *   game.json, battery.json and resume.json. Send it with `am broadcast --allow-background-activity-starts`: a receiver
  *   may not start an activity from the background otherwise (Android 10+). The game shows over the lock screen and
  *   turns the screen on ([NxTestResults.markShowWhenLocked]).
- * - GAME_STOP: the live game quits as the menu's Quit does (battery save and auto state written).
+ * - GAME_STOP: the live game quits as the menu's Quit does (battery save and auto state written); its process ends.
  */
 class NxTestReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -56,9 +57,11 @@ class NxTestReceiver : BroadcastReceiver() {
                 val tag = intent.getStringExtra("tag")
                 val slot = if (intent.hasExtra("slot")) intent.getIntExtra("slot", -1) else null
                 if (path == null || tag == null) NxTestResults.write(app, "game", "state" to "refused", "reason" to "path and tag are required")
-                else launchGame(app, path, tag, slot)
+                else launchGame(app, path, tag, slot, intent.getStringExtra("game_path"))
             }
-            ACTION_GAME_STOP -> if (!GameActivity.debugQuit()) NxLog.w(TAG, "GAME_STOP: no live game")
+            // The game runs in the game process: handed on to its receiver there ([NxGameStopReceiver]).
+            ACTION_GAME_STOP -> if (LiveGameStore.alive(app)) app.sendBroadcast(Intent(app, NxGameStopReceiver::class.java))
+                else NxLog.w(TAG, "GAME_STOP: no live game")
         }
     }
 
@@ -127,9 +130,9 @@ class NxTestReceiver : BroadcastReceiver() {
         /**
          * The launcher's path (AppState.launch → LibretroRunner) for a ROM read by path (a file ref): the tag's core,
          * a disc sheet's companions from its folder, [slot] as the resume slot, in its own task (the receiver has no
-         * activity). Not recorded in Recently Played or game time (no game path).
+         * activity). Never in Recently Played; in game time only with a [gamePath].
          */
-        fun launchGame(app: Context, path: String, tag: String, slot: Int?) {
+        fun launchGame(app: Context, path: String, tag: String, slot: Int?, gamePath: String?) {
             val core = CoreRegistry.forTag(tag)
             val file = File(path)
             if (core == null || !file.isFile) {
@@ -148,7 +151,7 @@ class NxTestReceiver : BroadcastReceiver() {
                     }
                 }
                 val session = GameSession(tag.uppercase(), file.nameWithoutExtension, core, FileRefs.of(path), folder, file.name,
-                    resumeSlot = slot, companions = companions)
+                    resumeSlot = slot, companions = companions, gamePath = gamePath)
                 NxTestResults.markShowWhenLocked(app)
                 LibretroRunner(app) { true }.apply { recordLaunches = false }.launch(session, com.nxredux.mobile.storage.Recent(path))
             }

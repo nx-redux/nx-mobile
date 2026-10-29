@@ -39,20 +39,22 @@ class LiveGameStore(private val file: File, private val isAlive: (Int) -> Boolea
     }
 
     companion object {
-        fun of(context: Context): LiveGameStore =
-            LiveGameStore(File(context.applicationContext.filesDir, "game-process/live"), ::processAlive)
-
-        /** This very process, or a `:game` process by pid (a recycled pid is another app's process, not ours). */
-        private fun processAlive(pid: Int): Boolean {
-            if (pid == android.os.Process.myPid()) return true
-            return try {
-                File("/proc/$pid/cmdline").readBytes().toString(Charsets.UTF_8).substringBefore('\u0000').endsWith(AppProcess.GAME_SUFFIX)
-            } catch (e: java.io.IOException) {
-                false
-            }
+        fun of(context: Context): LiveGameStore {
+            val app = context.applicationContext
+            val gameName = app.packageName + AppProcess.GAME_SUFFIX
+            // Only the game process may take its own pid as live: the menu's pid in a record is never a game.
+            val own = if (AppProcess.isGame(app)) android.os.Process.myPid() else -1
+            return LiveGameStore(File(app.filesDir, "game-process/live")) { pid -> pid == own || processNamed(pid, gameName) }
         }
 
-        /** A game screen is alive (playing, suspended in its own task, or closing): the record spans claim to final release. */
+        /** [pid] runs as [name] (this app's `:game`): a recycled pid is another app's process, a gone or zombie one has no name. */
+        private fun processNamed(pid: Int, name: String): Boolean = try {
+            File("/proc/$pid/cmdline").readBytes().toString(Charsets.UTF_8).substringBefore('\u0000') == name
+        } catch (e: java.io.IOException) {
+            false
+        }
+
+        /** A game screen is alive (playing, suspended in its own task, or closing): the record spans claim to final release, or to the end of the game process. */
         fun alive(context: Context): Boolean = of(context).current() != null
     }
 }

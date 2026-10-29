@@ -4,8 +4,8 @@ import android.content.Context
 import com.nxredux.mobile.settings.Prefs
 
 /**
- * The game a hung core ended ([CoreWatchdog]): written just before the process goes, so the menu, started again in a
- * new process, can say why the game closed. Read once.
+ * The game a hung core ended ([CoreWatchdog]): written (through the menu process's settings) just before the game
+ * process goes, so the menu, back in front or started again, can say why the game closed. Read once.
  */
 object CoreHangNotice {
     private const val PREFS = "core-hang"

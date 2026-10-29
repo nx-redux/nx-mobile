@@ -59,6 +59,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.nxredux.mobile.AppProcess
 import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.R
 import com.nxredux.mobile.achievements.AchievementsService
@@ -225,6 +226,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val WII_HOME_PRESS_MS = 150L
         /** [onCoreHung]: between the hung game's finish and the process kill. */
         private const val HUNG_FINISH_GRACE_MS = 500L
+        /** [endProcess]: at most this long for the netplay engine's shutdown before the process goes anyway. */
+        private const val PROCESS_END_WAIT_S = 5L
 
         /** Blocks until every queued Home write has finished. Call off the main thread before touching slot 9. */
         private fun awaitAutoWrites() { runCatching { autoWriter.submit {}.get() } }
@@ -247,6 +250,22 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // created while another is alive (a second launcher stacked over a stopped game) makes that one quit and waits for
         // its teardown, native destroy included, before it starts its own emulator.
         private val sessions = SessionHandoff()
+
+        /** Game screens created in this process and not yet destroyed (main thread): the last one's teardown ends a game process. */
+        private var screens = 0
+        /** The latest game screen, for [endForHandoff]. Main thread. */
+        private var latest: java.lang.ref.WeakReference<GameActivity>? = null
+
+        /**
+         * [EndGameReceiver]: the menu starts another game, so this process's game quits as a handoff does (battery save,
+         * auto state, then finish; its teardown ends the process). True while a screen is alive here (one already
+         * closing included); false: none, nothing will end the process. Main thread.
+         */
+        internal fun endForHandoff(): Boolean {
+            if (screens == 0) return false
+            latest?.get()?.takeIf { !it.isFinishing }?.onSessionHandedOff()
+            return true
+        }
     }
 
     private var sessionClaim: SessionHandoff.Claim? = null
@@ -558,6 +577,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        screens++
+        latest = java.lang.ref.WeakReference(this)
         if (BuildConfig.DEBUG) { debugGame = java.lang.ref.WeakReference(this); debugStartedAt = System.currentTimeMillis() }
         // Debug only: a GAME test hook's game runs on a locked test device (NxTestResults.markShowWhenLocked).
         if (BuildConfig.DEBUG && com.nxredux.mobile.test.NxTestResults.takeShowWhenLocked(this)) {
@@ -668,13 +689,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /**
-     * A newer game screen claimed the native session: leave through the normal quit (battery save, auto state, RA stop,
-     * then finish; onDestroy's native destroy releases the session). Usually stopped here: the auto state is serialized
+     * A newer game screen claimed the native session, or the menu starts another game ([endForHandoff]): leave through
+     * the normal quit (battery save, auto state, RA stop, then finish; onDestroy's native destroy releases the session,
+     * and in the game process ends it). Usually stopped here: the auto state is serialized
      * off the GL thread as onStop does, and the thumbnail is skipped when the stopped surface cannot be copied.
      */
     private fun onSessionHandedOff() {
         if (isDestroyed) return
-        NxLog.i(TAG_LOG, "a newer game screen takes the session: quitting ${intent.getStringExtra(EXTRA_TITLE)}")
+        NxLog.i(TAG_LOG, "another game takes over: quitting ${intent.getStringExtra(EXTRA_TITLE)}")
         quitWithAutoState(chosen = false)
     }
 
@@ -1044,14 +1066,34 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         sessionClaim?.let { sessions.release(it.token) }
         sessionClaim = null
-        liveGameStore.clear(Process.myPid(), launchId)
-        if (usingData) {   // after the core's last write (destroyed above); a Binder call to the menu process, so not on this thread
-            usingData = false
-            val app = applicationContext
-            thread(name = "data-use-end") { runCatching { DataRoot.useEnd(app) }.onFailure { NxLog.w(TAG_LOG, "could not end the data use", it) } }
+        screens--
+        if (latest?.get() === this) latest = null
+        // The game process ends with its last screen's finish (not a recreation: the GLES relaunch, a config change).
+        val endsProcess = isFinishing && screens == 0 && AppProcess.isGame(this)
+        // Ending the process, the record stays until the process is gone: the menu waits for that before it starts another
+        // game, which must never land in this dying process. It reads as stale then (its pid is gone).
+        if (!endsProcess) liveGameStore.clear(Process.myPid(), launchId)
+        val endUse = usingData
+        usingData = false
+        val app = applicationContext
+        // After the core's last write (destroyed above); a Binder call to the menu process, so not on this thread.
+        if (endUse || endsProcess) thread(name = if (endsProcess) "game-process-end" else "data-use-end") {
+            if (endUse) runCatching { DataRoot.useEnd(app) }.onFailure { NxLog.w(TAG_LOG, "could not end the data use", it) }
+            if (endsProcess) endProcess()
         }
         coreWatchdog?.stop()   // last: a hung core also hangs the native destroy above, which it must still catch
         coreWatchdog = null
+    }
+
+    /**
+     * The game is over: its process goes, and with it everything the core used or leaked. Off the main thread, after the
+     * writes still queued (a Home auto state, the netplay shutdown and session copy) and the data use's end (the caller's).
+     */
+    private fun endProcess() {
+        awaitAutoWrites()
+        runCatching { NetplayEngine.executor.submit {}.get(PROCESS_END_WAIT_S, java.util.concurrent.TimeUnit.SECONDS) }
+        NxLog.i(TAG_LOG, "the game has ended: ending its process")
+        Process.killProcess(Process.myPid())
     }
 
     /**

@@ -4,7 +4,11 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import com.nxredux.mobile.storage.Recent
+import com.swordfish.libretrodroid.NxLog
+import java.util.concurrent.Executors
 
 /**
  * Android EmulatorRunner: hands the session to GameActivity. The only class outside GameActivity that names it.
@@ -17,16 +21,32 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
     /** Runs first in every [launch], on the main thread: the menu clears the second display for the game. */
     var beforeLaunch: () -> Unit = {}
 
-    /** The launch threw after [beforeLaunch] (the activity could not start); the error is rethrown after it. */
+    /** The game screen could not be started after [beforeLaunch] (the error is logged). Main thread. */
     var launchFailed: () -> Unit = {}
 
     /** False: launches leave no launch record, so they never reach Recently Played (the debug test hook). */
     var recordLaunches = true
 
+    /**
+     * The game process comes first ([GameProcessControl], off the main thread): the paused game picked again comes back
+     * as it was (already recorded when it started), any other is ended. Then, on the main thread, the game screen starts
+     * in a fresh game process with a pending launch record.
+     */
     override fun launch(session: GameSession, recent: Recent) {
         beforeLaunch()
+        val app = context.applicationContext
+        prepares.execute {
+            val decision = runCatching { GameProcessControl.of(app).prepare(session) }
+                .onFailure { NxLog.e(TAG, "could not check the game process", it) }
+                .getOrDefault(GameProcessControl.Decision.START)
+            main.post { if (decision == GameProcessControl.Decision.START) start(session, recent) }
+        }
+    }
+
+    private fun start(session: GameSession, recent: Recent) {
+        val launchId = if (recordLaunches) LaunchRecords.of(context).pending(recent) else LaunchRecords.NONE
         val intent = Intent(context, GameActivity::class.java)
-            .putExtra(GameActivity.EXTRA_LAUNCH_ID, if (recordLaunches) LaunchRecords.of(context).pending(recent) else LaunchRecords.NONE)
+            .putExtra(GameActivity.EXTRA_LAUNCH_ID, launchId)
             .putExtra(GameActivity.EXTRA_CORE_FILE, session.core.libraryFileName)
             .putExtra(GameActivity.EXTRA_CORE_ID, session.core.id)
             .putExtra(GameActivity.EXTRA_TAG, session.systemTag)
@@ -60,10 +80,19 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
             if (session.launchName != null && Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 @Suppress("DEPRECATION") (context as? Activity)?.overridePendingTransition(0, 0)
             }
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
+            // Posted, so nothing up the stack would catch a rethrow: it would only crash the menu.
+            NxLog.e(TAG, "could not start the game screen", e)
+            LaunchRecords.of(context).drop(launchId)
             launchFailed()
-            throw e
         }
+    }
+
+    private companion object {
+        const val TAG = "NXAPP"
+        private val main = Handler(Looper.getMainLooper())
+        /** One at a time, in order: a second pick waits for the first's game process to be dealt with. */
+        private val prepares = Executors.newSingleThreadExecutor { Thread(it, "nx-game-process") }
     }
 }
 
