@@ -94,4 +94,38 @@ class IconSilhouetteTest {
         val argb = IntArray(size * size) { i -> 0xFF000000.toInt() or ((i % size) * 255 / size shl 16) or ((i / size) * 255 / size) }
         assertNull(IconSilhouette.contrastAlpha(argb, size))
     }
+
+    private val red = 0xFFD03020.toInt()
+    private val white = 0xFFFFFFFF.toInt()
+
+    // A red disc with a white triangle in it (a play logo): the triangle is a hole, as its themed icon draws it.
+    @Test fun whiteInsideAColouredLogoIsAHole() {
+        val logo = disc(50f, 50f, 30f)
+        val argb = IntArray(size * size) { i ->
+            val x = i % size; val y = i / size
+            when { !logo(x, y) -> 0; x in 42..60 && y in 40..60 -> white; else -> red }
+        }
+        val alpha = IconSilhouette.layerAlpha(argb)
+        assertEquals(0, alpha[50 * size + 50])
+        assertEquals(255, alpha[50 * size + 25])
+        assertEquals(0, alpha[0])
+    }
+
+    // A white logo with a small coloured accent stays whole: its white is the logo.
+    @Test fun aWhiteLogoKeepsItsWhite() {
+        val logo = disc(50f, 50f, 30f)
+        val argb = IntArray(size * size) { i ->
+            val x = i % size; val y = i / size
+            when { !logo(x, y) -> 0; x in 45..55 && y in 45..55 -> red; else -> white }
+        }
+        val alpha = IconSilhouette.layerAlpha(argb)
+        assertEquals(255, alpha[50 * size + 25])
+        assertEquals(255, alpha[50 * size + 50])
+    }
+
+    // A one-colour logo: alpha alone, as before.
+    @Test fun aOneColourLogoIsItsAlpha() {
+        val argb = IntArray(size * size) { i -> if (disc(50f, 50f, 30f)(i % size, i / size)) red else 0 }
+        assertEquals(255, IconSilhouette.layerAlpha(argb)[50 * size + 50])
+    }
 }

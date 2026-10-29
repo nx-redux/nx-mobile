@@ -68,7 +68,8 @@ class AndroidAppLauncher(private val activity: ComponentActivity, private val re
 
     /**
      * The shape in [id]'s icon as its package ships it ([packagedIcon]), as [ICON_PX] of alpha (drawn tinted) framed by
-     * [IconSilhouette]: its themed-icon layer (API 33+), else its foreground's own outline, else what stands out from
+     * [IconSilhouette]: its themed-icon layer (API 33+), else its foreground's own outline (white inside a coloured logo
+     * cut out, [IconSilhouette.layerAlpha]), else what stands out from
      * the plate the icon is painted on. Null for a legacy icon, or one with no shape any of these finds.
      */
     override suspend fun silhouette(id: String): ImageBitmap? = withContext(Dispatchers.IO) {
@@ -78,7 +79,7 @@ class AndroidAppLauncher(private val activity: ComponentActivity, private val re
             // Each tried only when the one before has no shape: drawing a layer is the cost here.
             val shapes = sequence {
                 if (Build.VERSION.SDK_INT >= 33) icon.monochrome?.let { yield(alphaOf(layerPixels(it))) }
-                icon.foreground?.let { yield(alphaOf(layerPixels(it))) }
+                icon.foreground?.let { yield(IconSilhouette.layerAlpha(layerPixels(it))) }
                 IconSilhouette.contrastAlpha(layerPixels(icon.background, icon.foreground), SHAPE_PX)?.let { yield(it) }
             }
             val (alpha, frame) = shapes.firstNotNullOfOrNull { a -> IconSilhouette.frame(a, SHAPE_PX)?.let { a to it } } ?: return@runCatching null
