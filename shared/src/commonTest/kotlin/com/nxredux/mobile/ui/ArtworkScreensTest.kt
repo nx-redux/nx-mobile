@@ -113,7 +113,7 @@ class ArtworkScreensTest {
     }
 
     private object Picker : FolderPicker { override fun pickHome() {}; override fun pickExtra() {}; override fun forget(ref: ContentRef) {} }
-    private object Runner : EmulatorRunner { override fun launch(session: GameSession, onStarted: () -> Unit) {} }
+    private object Runner : EmulatorRunner { override fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) {} }
 
     /** The installed [apps] (no icons, nothing starts). */
     private class Launcher(private val apps: List<InstalledApp>) : AppLauncher {

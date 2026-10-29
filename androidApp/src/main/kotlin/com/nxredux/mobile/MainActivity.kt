@@ -1,7 +1,9 @@
 package com.nxredux.mobile
 
 import android.app.ActivityManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.IntentFilter
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -24,6 +26,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -90,6 +93,7 @@ import com.nxredux.mobile.storage.AndroidPrivateFiles
 import com.nxredux.mobile.storage.AndroidSaveTransfer
 import com.nxredux.mobile.storage.DataRoot
 import com.nxredux.mobile.storage.AndroidSidecarStore
+import com.nxredux.mobile.runner.LaunchRecords
 import com.nxredux.mobile.storage.RecentsRecorder
 import com.nxredux.mobile.storage.AndroidRomsSources
 import com.nxredux.mobile.storage.SafTree
@@ -339,6 +343,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         asHome = intent.hasCategory(Intent.CATEGORY_HOME)
         launcher = AndroidAppLauncher(this) { requestHomeRole.launch(it) }
         if (handOverToHome()) return   // nothing built: onStart/onStop never run for an activity finished in onCreate
+        ContextCompat.registerReceiver(this, launchStarted, IntentFilter(LaunchRecords.action(this)), ContextCompat.RECEIVER_NOT_EXPORTED)
         readWindow()
         if (asHome) closeOtherInstances()
         thread(name = "nx-temp-sweep") {
@@ -687,6 +692,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
     override fun onResume() {
         super.onResume()
         if (handOverToHome()) return
+        recordStartedLaunches()   // games that started while the menu was gone (or its process was)
         applyKeepScreenOn()
         resumed = true
         if (launching) { launching = false; syncMenuScreen() }   // back from the game (or a launch that never left)
@@ -743,7 +749,19 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (DeviceSyncs.onNeedNotificationPermission === syncNotifications) DeviceSyncs.onNeedNotificationPermission = null
         UsbCables.get(this).let { c -> if (c.askConsent === usbConsent) c.askConsent = {} }
         if (::state.isInitialized) state.releaseUpdater()   // the updater outlives this activity; a newer instance's hook stays
+        runCatching { unregisterReceiver(launchStarted) }   // never registered when finished in onCreate
         scope.cancel(); super.onDestroy()
+    }
+
+    /** The game screen's "started" broadcast (no extras): the launch records say which games. */
+    private val launchStarted = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = recordStartedLaunches()
+    }
+
+    /** Started launch records become Recents; the recorder serialises the write and its flow refreshes the Recently Played row. */
+    private fun recordStartedLaunches() {
+        val recorder = processRecents()
+        LaunchRecords.of(this).drainStarted().forEach { recorder.record(it) }
     }
 
     /** The process's one recorder (created on the main thread, the only thread that asks). */

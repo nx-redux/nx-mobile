@@ -28,7 +28,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class SystemButtonsSettingsTest {
     private object Picker : FolderPicker { override fun pickHome() {}; override fun pickExtra() {}; override fun forget(ref: ContentRef) {} }
-    private class Runner : EmulatorRunner { override fun launch(session: GameSession, onStarted: () -> Unit) { onStarted() } }
+    private class Runner : EmulatorRunner { override fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) {} }
 
     private val source = FakeRomsSource(dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to emptyList()))
     private val aya = PadModel(0x4001, 0x0428, "AYANEO Controller")

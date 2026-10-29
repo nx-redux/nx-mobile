@@ -207,13 +207,15 @@ class AppStateTest {
         override var switcherLayout = com.nxredux.mobile.settings.SwitcherLayout.DEFAULT
         override var optionTextSize = com.nxredux.mobile.settings.OptionTextSize.DEFAULT
     }
-    /** [starts] false: the runner refuses every game (never reports a start); [started] then holds the callbacks to fire by hand. */
+    /** [starts] false: the runner refuses every game (never reports a start); [started] holds the recents of games that did. */
     private class RecordingRunner(private val starts: Boolean = true) : EmulatorRunner {
         val launched = ArrayList<GameSession>()
-        val started = ArrayList<() -> Unit>()
-        override fun launch(session: GameSession, onStarted: () -> Unit) {
+        val started = ArrayList<Recent>()
+        /** What the menu does with a started record (its LaunchRecords drain): record it; null when the test wires none. */
+        var menu: RecentsRecorder? = null
+        override fun launch(session: GameSession, recent: Recent) {
             launched += session
-            if (starts) onStarted() else started += onStarted
+            if (starts) { started += recent; menu?.record(recent) }
         }
     }
     private class NoopPicker : FolderPicker {
@@ -1525,7 +1527,7 @@ class AppStateTest {
     }
 
     private fun stateWith(userData: FakeUserData, runner: RecordingRunner, scope: CoroutineScope) =
-        AppState(AppDeps(MemorySettings(ContentRef("Home")), source, runner, NoopPicker(), userData, compute = scope.coroutineContext[ContinuationInterceptor]!!), scope)
+        AppState(AppDeps(MemorySettings(ContentRef("Home")), source, runner, NoopPicker(), userData, recents = RecentsRecorder(userData, scope).also { runner.menu = it }, compute = scope.coroutineContext[ContinuationInterceptor]!!), scope)
 
     // A in a game list resumes the game's save state (Play from start is in its menu); X does nothing there.
     @Test fun launching_adds_to_recents_and_a_resumes_from_the_slot() = runTest {
@@ -1990,7 +1992,7 @@ class AppStateTest {
     }
 
     private fun slowState(data: SlowUserData, runner: RecordingRunner, scope: CoroutineScope) =
-        AppState(AppDeps(MemorySettings(ContentRef("Home")), source, runner, NoopPicker(), data, compute = scope.coroutineContext[ContinuationInterceptor]!!), scope)
+        AppState(AppDeps(MemorySettings(ContentRef("Home")), source, runner, NoopPicker(), data, recents = RecentsRecorder(data, scope).also { runner.menu = it }, compute = scope.coroutineContext[ContinuationInterceptor]!!), scope)
 
     private val tetrisResumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9))
 
@@ -2040,7 +2042,7 @@ class AppStateTest {
     }
 
     private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, padEditor: ((PadEditRequest) -> Unit)? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }) =
-        AppState(AppDeps(settings, src, runner, picker, data, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, padEditor = padEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        AppState(AppDeps(settings, src, runner, picker, data, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, padEditor = padEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
 
     /** What a scan of [src] for [settings] stores, built without an AppState (so without the skeleton). */
     private suspend fun scannedIndex(settings: MemorySettings, src: RomsSource = source): LibraryIndex =
@@ -7808,19 +7810,14 @@ class AppStateTest {
         assertEquals(listOf(MainRow.PickAGame), state.screen.value.homeRows.filterNot { it is MainRow.Shelf })   // no Continue
     }
 
-    @Test fun a_launch_writes_the_recent_only_once_the_runner_reports_the_start() = runTest {
-        val runner = RecordingRunner(starts = false)
+    @Test fun a_launch_hands_the_recent_to_the_runner() = runTest {
+        val runner = RecordingRunner()
         val data = FakeUserData()
         val state = state(MemorySettings(ContentRef("Home")), data = data, runner = runner)
         state.load()
         state.onConsoles()
         state.onButton(NxButton.A); state.onButton(NxButton.A)           // GB -> Tetris
-        assertTrue(state.back())                                         // back on the main menu before the game reports in
-        assertTrue(data.recents.isEmpty())
-        state.onButton(NxButton.L1)                                      // on Home
-        runner.started.single()()                                        // the game loaded
-        assertEquals(listOf(Recent(tetris, "Tetris")), data.recents)
-        assertEquals(tetris, assertIs<MainRow.Continue>(state.screen.value.homeRows[0]).entry.game.path)   // swapped in on the open main menu
+        assertEquals(listOf(Recent(tetris, "Tetris")), runner.started)   // the menu records it once the game screen reports the start
     }
 
     @Test fun a_launch_records_the_shown_name_as_the_recent_alias_replacing_a_stale_one() = runTest {
@@ -7832,20 +7829,6 @@ class AppStateTest {
         state.onButton(NxButton.A); state.onButton(NxButton.A)           // GB -> Tetris
         assertEquals("Tetris.gb", runner.launched.single().fileName)
         assertEquals(listOf(Recent(tetris, "Tetris")), data.recents)   // as the Brick: Recents_setAlias(entry name) on every open
-    }
-
-    @Test fun a_start_reported_after_the_menu_scope_died_still_writes_the_recent() = runTest {
-        val runner = RecordingRunner(starts = false)
-        val data = FakeUserData()
-        val uiScope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
-        val recorder = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))   // process-lifetime
-        val state = AppState(AppDeps(MemorySettings(ContentRef("Home")), source, runner, NoopPicker(), data, recents = recorder, compute = UnconfinedTestDispatcher(testScheduler)), uiScope)
-        state.load()
-        state.onConsoles()
-        state.onButton(NxButton.A); state.onButton(NxButton.A)           // GB -> Tetris
-        uiScope.cancel()                                                 // the menu activity is destroyed while the game loads
-        runner.started.single()()                                        // then the game loads
-        assertEquals(listOf(Recent(tetris, "Tetris")), data.recents)
     }
 
     @Test fun game_info_joins_game_time_by_path_and_refreshes_when_a_game_is_recorded() = runTest {
@@ -11636,7 +11619,7 @@ class AppStateTest {
         val data = FakeUserData(recents = listOfNotNull(recent?.let { Recent(b2Path(it)) }), pins = (1..games).map { Shortcut(b2Path(it), "G$it") })
         val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
         return AppState(AppDeps(settings, b2Source, runner, NoopPicker(), data, launcher = FakeLauncher(apps),
-            privateFiles = files, compute = UnconfinedTestDispatcher(testScheduler)), scope)
+            recents = RecentsRecorder(data, scope).also { runner.menu = it }, privateFiles = files, compute = UnconfinedTestDispatcher(testScheduler)), scope)
     }
 
     private fun AppState.homeFocus(): MainRow = screen.value.homeRows[selection.value.index]

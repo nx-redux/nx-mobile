@@ -71,7 +71,7 @@ class ShortcutsSettingsTest {
     }
 
     private object Picker : FolderPicker { override fun pickHome() {}; override fun pickExtra() {}; override fun forget(ref: ContentRef) {} }
-    private class Runner : EmulatorRunner { override fun launch(session: GameSession, onStarted: () -> Unit) { onStarted() } }
+    private class Runner : EmulatorRunner { override fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) {} }
 
     private val source = FakeRomsSource(
         dirs = mapOf(

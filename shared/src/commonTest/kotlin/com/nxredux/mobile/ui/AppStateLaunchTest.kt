@@ -91,7 +91,7 @@ class AppStateLaunchTest {
     }
     private class RecordingRunner : EmulatorRunner {
         val launched = ArrayList<GameSession>()
-        override fun launch(session: GameSession, onStarted: () -> Unit) { launched += session; onStarted() }
+        override fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) { launched += session }
     }
     private class NoopPicker : FolderPicker {
         override fun pickHome() = Unit

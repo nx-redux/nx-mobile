@@ -194,7 +194,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_COMPANION_NAMES = "companion_names"  // String[]: files a disc sheet loads, as the sheet spells them, or an arcade set's parent/BIOS sets beside it (<set>.zip|7z, lowercase)
         const val EXTRA_COMPANION_URIS = "companion_uris"    // String[]: their content URIs, same order
         const val EXTRA_SYSTEM_SETS = "system_sets"          // String[]: arcade BIOS sets not beside the game, looked for in the system dir
-        const val EXTRA_LAUNCH_ID = "launch_id"      // Long: the launcher's PendingLaunches entry, told once the game runs
+        const val EXTRA_LAUNCH_ID = "launch_id"      // Long: the launcher's launch record (LaunchRecords), marked started once the game runs
         const val EXTRA_GAME_PATH = "game_path"      // the library path (GamePath): game time's identity; absent = not recorded
         const val EXTRA_ART_PATH = "art_path"        // the game's box art (GameSession.artPath): the game panel's header; absent = the console logo
         const val EXTRA_FORCE_GLES = "force_gles"    // Boolean: the relaunch after Vulkan could not start (VulkanFallback)
@@ -365,8 +365,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private set
     @Volatile override var gameReady = false   // set on the first rendered frame; SRAM is only valid after load
         private set
-    // This launch's PendingLaunches entry: run on the first frame (the game is recent), dropped on a refusal or finish.
-    private val launchId by lazy { intent.getLongExtra(EXTRA_LAUNCH_ID, PendingLaunches.NONE) }
+    // This launch's record: marked started on the first frame (the game is recent), dropped on a refusal or finish.
+    private val launchRecords by lazy { LaunchRecords.of(this) }
+    private val launchId by lazy { intent.getLongExtra(EXTRA_LAUNCH_ID, LaunchRecords.NONE) }
     private var failShown = false   // the could-not-start dialog is up (it only leaves by finishing)
     private var resumeSlot: Int? = null   // disk slot to load once the game runs (EXTRA_RESUME_SLOT); null = fresh
     override var quitting = false   // set by quitWithAutoState: quit is single-shot, the menu freezes, onStop skips its auto state
@@ -678,12 +679,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /**
      * singleTop. In launcher mode launches clear the game task (CLEAR_TASK); sharing the menu's task, the menu (the
      * only launcher) sits under this screen. So this only guards a launch that does reach this running game: it is
-     * ignored, and its PendingLaunches entry is dropped, not leaked.
+     * ignored, and its launch record is dropped, not leaked.
      */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        val id = intent.getLongExtra(EXTRA_LAUNCH_ID, PendingLaunches.NONE)
-        if (id != launchId) PendingLaunches.take(id)
+        val id = intent.getLongExtra(EXTRA_LAUNCH_ID, LaunchRecords.NONE)
+        if (id != launchId) launchRecords.drop(id)
     }
 
     override fun onPause() {
@@ -1020,7 +1021,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         motionSensors?.stop()
         if (isWii) LibretroDroid.setSensorEnabled(0, false)   // a next Wii game sets its own on its first frame
         if (isFinishing || relaunching) endGameTime()   // Back/finish without Quit (quit already ended it), or the GLES relaunch
-        if (isFinishing) PendingLaunches.take(launchId)   // quit before the first frame: the launch never started
+        if (isFinishing) launchRecords.drop(launchId)   // quit before the first frame: the launch never started
         if (BuildConfig.DEBUG && isFinishing) debugReportStopped()
         input.gcClearTriggers()   // a latched soft press never outlives the game
         stopAchievements()
@@ -1674,7 +1675,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             // The launch name's hold fades now (or once its minimum is up); the resume cover under it goes on its own frames.
             nameHold?.release { nameHold = null }
             // A frame means the core loaded the game (a load error aborts the view before any): the launcher may record it.
-            PendingLaunches.take(launchId)?.invoke()
+            if (launchRecords.started(launchId)) {
+                sendBroadcast(Intent(LaunchRecords.action(this@GameActivity)).setPackage(packageName))   // the menu records it
+            }
             // netplay: the engine starts once the core has loaded and can serialize, so a handheld's 10 s state
             // waits begin only now. The host listens (its 45 s CONNECTING limit counts from here); the client connects
             // with its 60 × 500 ms retries. A menu or background already in place pauses it at once.
@@ -1861,10 +1864,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun fail(message: String, title: String = "Could not start the game") {
         NxLog.e(TAG_LOG, message)
         if (relaunching) return   // a late error from the Vulkan attempt: the recreated screen owns the launch now
-        // Destroyed without finishing: a recreation, whose new screen owns the launch (and its PendingLaunches entry), and
+        // Destroyed without finishing: a recreation, whose new screen owns the launch (and its launch record), and
         // a dialog on this dead window would throw BadTokenException.
         if (isDestroyed && !isFinishing) return
-        PendingLaunches.take(launchId)   // refused: the launcher must not record it
+        launchRecords.drop(launchId)   // refused: the launcher must not record it
         if (isFinishing || isDestroyed || failShown) return   // observeErrors can report more than once: one dialog, never a stack
         failShown = true
         rumbles.forEach { it.release() }

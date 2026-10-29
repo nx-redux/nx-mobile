@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import com.nxredux.mobile.storage.Recent
 
 /**
  * Android EmulatorRunner: hands the session to GameActivity. The only class outside GameActivity that names it.
@@ -19,10 +20,10 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
     /** The launch threw after [beforeLaunch] (the activity could not start); the error is rethrown after it. */
     var launchFailed: () -> Unit = {}
 
-    override fun launch(session: GameSession, onStarted: () -> Unit) {
+    override fun launch(session: GameSession, recent: Recent) {
         beforeLaunch()
         val intent = Intent(context, GameActivity::class.java)
-            .putExtra(GameActivity.EXTRA_LAUNCH_ID, PendingLaunches.put(onStarted))
+            .putExtra(GameActivity.EXTRA_LAUNCH_ID, LaunchRecords.of(context).pending(recent))
             .putExtra(GameActivity.EXTRA_CORE_FILE, session.core.libraryFileName)
             .putExtra(GameActivity.EXTRA_CORE_ID, session.core.id)
             .putExtra(GameActivity.EXTRA_TAG, session.systemTag)
@@ -72,20 +73,3 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
  */
 internal fun gameLaunchFlags(ownTask: Boolean): Int =
     if (ownTask) Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK else 0
-
-/**
- * The onStarted callbacks of launches GameActivity has not settled yet, keyed by the id in its intent. Process-wide and
- * in memory only: a process that dies between launch and start loses the callback (the game then goes unrecorded).
- * GameActivity [take]s its entry exactly once: on the first frame to run it, or on a refusal / finish to drop it.
- */
-internal object PendingLaunches {
-    const val NONE = -1L   // an intent without an id (a restore from recents in a fresh process)
-    private val callbacks = HashMap<Long, () -> Unit>()
-    // Seeded per process: an id restarting at 0 would let a restored GameActivity from an earlier process drop a new launch's entry.
-    private var nextId = kotlin.random.Random.nextLong(0, Long.MAX_VALUE / 2)
-
-    @Synchronized fun put(onStarted: () -> Unit): Long = nextId++.also { callbacks[it] = onStarted }
-
-    /** Removes and returns [id]'s callback; null when it was already taken or never registered in this process. */
-    @Synchronized fun take(id: Long): (() -> Unit)? = callbacks.remove(id)
-}

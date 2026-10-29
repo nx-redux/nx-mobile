@@ -5402,9 +5402,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             } else companions
             // The Brick records the shown name on every open (launcher.c Recents_setAlias(self->name)), replacing a stale one.
             val recent = Recent(game.path, game.shownName)
-            // Only a game the core actually loaded is recent: the runner can still refuse it (bad archive, BIOS, load error).
-            // The callback captures the recorder alone (not this state), so a pending start retains nothing of the UI.
-            val recorder = recents
+            // Only a game the core actually loaded is recent: the runner can still refuse it (bad archive, BIOS, load error),
+            // so it keeps a launch record the game marks started, and the menu records it then.
             // Checked last, right before the runner: a game started during an import or a Device Sync could later write over
             // a save that just arrived.
             SaveTransferRules.launchRefusal(deps.saveTransfer?.importing == true, deps.deviceSync?.running == true)?.let { showNotice(it); return@launch }
@@ -5414,9 +5413,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             val launchName = if (_launchSequence.value?.phase == LaunchPhase.SPREAD) launchNameProvider?.invoke() else null
             launchHandedOff = true
             deps.runner.launch(GameSession(sys.tag, game.shownName, core, game.ref, game.folder, game.fileName, resumeSlot, all, systemSets = systemSets, gamePath = game.path,
-                artPath = panelArt(game.boxartRef?.value, game.box2dRef?.value, game.gridRef?.value, game.screenshotRef?.value), netplay = netplay, launchName = launchName)) {
-                recorder.record(recent)
-            }
+                artPath = panelArt(game.boxartRef?.value, game.box2dRef?.value, game.gridRef?.value, game.screenshotRef?.value), netplay = netplay, launchName = launchName), recent)
         }
         launchJob = job
         job.invokeOnCompletion { if (launchJob === job) launchJob = null }
