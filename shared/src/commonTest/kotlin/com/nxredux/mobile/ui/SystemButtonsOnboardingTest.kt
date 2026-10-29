@@ -143,6 +143,7 @@ class SystemButtonsOnboardingTest {
         s.tap(KeyCodes.BUTTON_SELECT); s.tap(KeyCodes.BUTTON_START)
         s.row("I've pressed them all")
         assertTrue(s.page().details.any { "MENU" in it })
+        assertEquals(listOf("Skip"), s.page().rows.map { it.label })   // MENU's bind: Skip only, no Cancel
         s.row("Skip")
         assertEquals("No MENU button? Press SELECT+START together to open the menu.", s.notice.value)
         assertIs<Screen.Systems>(s.screen.value)
