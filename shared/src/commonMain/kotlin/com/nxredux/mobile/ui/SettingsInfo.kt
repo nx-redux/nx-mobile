@@ -201,7 +201,8 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.SHORTCUTS -> quiet(
         "Controller buttons and touch buttons for fast forward, rewind and reset",
         "Bind a controller button or combo to fast forward, rewind or reset, and give the on-screen pad up to two touch " +
-            "buttons. Every console and game uses these unless its in-game Shortcuts page overrides them.",
+            "buttons. Every console and game uses these unless its in-game Shortcuts page overrides them. If your MENU " +
+            "button does nothing, set it in Controls → System buttons.",
     )
     // While it waits for a press, its line says how to bind.
     SettingsKind.SHORTCUT_BIND -> SettingText(
