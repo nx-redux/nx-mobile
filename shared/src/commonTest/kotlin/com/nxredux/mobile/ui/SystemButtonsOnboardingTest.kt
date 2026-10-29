@@ -100,7 +100,11 @@ class SystemButtonsOnboardingTest {
         pads = listOf(aya)
         val s = state(Settings(treeRef = null, onboardingDone = null))
         s.toTextSizeContinue()
-        assertEquals(listOf("SELECT", "START", "MENU", "I've pressed them all", "Skip"), s.page().rows.map { it.label })
+        assertEquals(listOf("SELECT", "START", "MENU", "I've pressed them all"), s.page().rows.map { it.label })   // no Skip: the step is required
+        assertEquals(
+            listOf("Your controller's buttons", "Press SELECT, START and MENU on your controller (AYANEO Controller). One wasn't found? Choose I've pressed them all, and we will configure it next."),
+            s.page().details,
+        )
         assertEquals("Setup", s.page().title)
     }
 
@@ -124,7 +128,7 @@ class SystemButtonsOnboardingTest {
         val s = state(settings)
         pads = listOf(aya)
         s.padsChanged()
-        s.row("Skip")
+        s.tap(KeyCodes.BUTTON_SELECT); s.tap(KeyCodes.BUTTON_START); s.tap(KeyCodes.BUTTON_MODE)
         assertIs<Screen.Systems>(s.screen.value)
         assertTrue(aya.key in SystemButtons.decode(settings.systemButtons).asked)
         s.padsChanged()
@@ -235,16 +239,18 @@ class SystemButtonsOnboardingTest {
         s.page()
     }
 
-    // Review fix 4: the pad's B on the page on its own skips it.
-    @Test fun padBSkipsTheStandalonePage() = runTest {
+    // The step is required: B on the page on its own (pad or touch) leaves it up and asks nothing.
+    @Test fun bDoesNotSkipTheStandalonePage() = runTest {
         val settings = Settings()
         val s = state(settings)
         pads = listOf(aya)
         s.padsChanged()
+        assertFalse(s.page().canGoBack)                                           // no B hint
         assertFalse(s.systemButtonKey(aya, KeyCodes.BUTTON_B, 0, true, false))   // the page leaves B to the menu
         s.onButton(NxButton.B)
-        assertIs<Screen.Systems>(s.screen.value)
-        assertTrue(aya.key in SystemButtons.decode(settings.systemButtons).asked)
+        s.back()
+        s.page()
+        assertEquals("", settings.systemButtons)
     }
 
     // "I've pressed them all" and Skip are rows only: no page line mentions holding START.

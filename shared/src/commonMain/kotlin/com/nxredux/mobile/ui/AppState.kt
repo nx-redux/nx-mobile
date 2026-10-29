@@ -2454,12 +2454,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             return Triple(title, lines, rows)
         }
         val lines = listOfNotNull(
-            "Press SELECT, START and MENU on your controller (${page.model.name}).",
+            "Press SELECT, START and MENU on your controller (${page.model.name}). One wasn't found? Choose I've pressed them " +
+                "all, and we will configure it next.",
             if (page.lastOther) "That's not one of the three." else null,
-            "One wasn't found? Choose I've pressed them all, and we will configure it next.",
         )
+        // No Skip: SELECT and START are required (MENU alone can be skipped, on its bind step).
         val rows = SystemRole.entries.map { NxRow(it.label, secondary = if (it in page.found) "Found" else "Not found yet") } +
-            listOf(NxRow("I've pressed them all"), NxRow("Skip"))
+            NxRow("I've pressed them all")
         return Triple(title, lines, rows)
     }
 
@@ -2476,7 +2477,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             page.phase == SystemButtonsPage.Phase.BIND -> 0
             else -> rows.indexOfFirst { it.label == "I've pressed them all" }
         }
-        _screen.value = Screen.Onboarding(OnboardingStep.SYSTEM_BUTTONS, pageTitle, listOf(title) + details, rows, accent = deps.settings.accent, padTheme = deps.settings.padTheme)
+        // On its own the page is required: B (and its hint) only while a bind waits, to cancel it.
+        val canGoBack = systemButtonsReturn == null || page.phase == SystemButtonsPage.Phase.BIND
+        _screen.value = Screen.Onboarding(OnboardingStep.SYSTEM_BUTTONS, pageTitle, listOf(title) + details, rows, accent = deps.settings.accent, padTheme = deps.settings.padTheme, canGoBack = canGoBack)
         _selection.value = ListSelection(selected.coerceIn(0, (rows.size - 1).coerceAtLeast(0)), rows.size)
     }
 
@@ -2487,17 +2490,17 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         when (label) {
             "I've pressed them all" -> page.pressedAll()
             "Cancel" -> page.cancelBind()
-            "Skip" -> if (page.phase == SystemButtonsPage.Phase.BIND && page.binding == SystemRole.MENU) page.skipMenu() else return finishSystemButtons(page)
+            "Skip" -> page.skipMenu()   // only BIND for MENU has it
             else -> return   // a SELECT / START / MENU status row
         }
         if (page.phase == SystemButtonsPage.Phase.DONE) finishSystemButtons(page) else showSystemButtons()
     }
 
-    /** B on the page: BIND back to PRESS; else onboarding's step before, or the page on its own skipped. */
+    /** B on the page: BIND back to PRESS; else onboarding's step before. The page on its own is required: B stays. */
     private fun systemButtonsBack() {
         val page = systemButtons
         if (page != null && page.phase == SystemButtonsPage.Phase.BIND) { page.cancelBind(); return showSystemButtons() }
-        if (systemButtonsReturn != null && page != null) return finishSystemButtons(page)
+        if (systemButtonsReturn != null) return
         onboardingBack()
     }
 
