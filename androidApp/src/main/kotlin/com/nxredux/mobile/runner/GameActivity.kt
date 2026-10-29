@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.os.SystemClock
 import android.view.Display
 import android.view.KeyEvent
@@ -245,15 +246,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // created while another is alive (a second launcher stacked over a stopped game) makes that one quit and waits for
         // its teardown, native destroy included, before it starts its own emulator.
         private val sessions = SessionHandoff()
-
-        /**
-         * Some game screen holds (or waits for) the session, from its claim in onCreate to the end of its teardown: in
-         * launcher mode a suspended game counts, its battery save still in memory. Main thread only, as [sessions].
-         */
-        internal val gameScreenAlive: Boolean get() = sessions.liveCount > 0
     }
 
     private var sessionClaim: SessionHandoff.Claim? = null
+    private val liveGameStore by lazy { LiveGameStore.of(this) }
 
     override var retroView: GLRetroView? = null
         private set
@@ -639,6 +635,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         resumePending = resumeSlot != null
         lastResumePoint = resumeSlot
         val claim = sessions.claim(::onSessionHandedOff).also { sessionClaim = it }
+        // From the claim to the final release: the menu reads this as "a game screen is alive" (playing, suspended, closing).
+        liveGameStore.write(LiveGame(
+            Process.myPid(), launchId, intent.getStringExtra(EXTRA_GAME_PATH), intent.getStringExtra(EXTRA_CORE_ID) ?: "",
+            intent.getStringExtra(EXTRA_TAG) ?: "UNKNOWN", resumeSlot, netplay != null,
+        ))
         lifecycleScope.launch {
             if (claim.mustWait) {
                 // Also before the battery load and the RA prepare: the old game's quit writes the same saves and stops its client.
@@ -1042,6 +1043,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         sessionClaim?.let { sessions.release(it.token) }
         sessionClaim = null
+        liveGameStore.clear(Process.myPid(), launchId)
         if (usingData) { usingData = false; DataRoot.useEnd(this) }   // after the core's last write (destroyed above)
         coreWatchdog?.stop()   // last: a hung core also hangs the native destroy above, which it must still catch
         coreWatchdog = null

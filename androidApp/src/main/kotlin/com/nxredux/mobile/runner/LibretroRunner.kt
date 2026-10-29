@@ -12,7 +12,7 @@ import com.nxredux.mobile.storage.Recent
  */
 class LibretroRunner(private val context: Context, private val ownTask: () -> Boolean) : EmulatorRunner {
     /** A game screen is alive (playing, suspended in its own task, or closing); main thread only. Import saves waits for it. */
-    val gameScreenAlive: Boolean get() = GameActivity.gameScreenAlive
+    val gameScreenAlive: Boolean get() = LiveGameStore.alive(context)
 
     /** Runs first in every [launch], on the main thread: the menu clears the second display for the game. */
     var beforeLaunch: () -> Unit = {}

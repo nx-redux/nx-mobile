@@ -18,7 +18,7 @@ import com.nxredux.mobile.LaunchActivity
 import com.nxredux.mobile.NotificationIds
 import com.nxredux.mobile.NxApplication
 import com.nxredux.mobile.achievements.RaDownloadService
-import com.nxredux.mobile.runner.GameActivity
+import com.nxredux.mobile.runner.LiveGameStore
 import com.nxredux.mobile.scraper.ScrapeService
 import com.nxredux.mobile.sync.DeviceSyncService
 import com.nxredux.mobile.tools.CheatDbService
@@ -131,9 +131,9 @@ class AndroidUpdatePlatform(private val app: Context, private val scope: Corouti
 
     override fun discard(file: UpdateFile) { File(file.path).delete() }
 
-    /** Main thread only: reads GameActivity's sessions, the keep-alive services' state and the started activities. */
+    /** Main thread only: reads the live game record, the keep-alive services' state and the started activities. */
     override fun busyReason(): String? = busyReason(
-        game = GameActivity.gameScreenAlive,
+        game = LiveGameStore.alive(app),
         sync = DeviceSyncService.active,
         art = ScrapeService.active,
         ra = RaDownloadService.active,
