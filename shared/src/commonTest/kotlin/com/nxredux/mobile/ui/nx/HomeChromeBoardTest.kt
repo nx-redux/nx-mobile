@@ -34,7 +34,7 @@ class HomeChromeBoardTest {
                 assertEquals(if (tools > 2 * c.rows) tools - 2 * c.rows + 1 else 0, b.more, "$what: more")
                 val sq = b.top.filter { it.kind != HomeTopKind.CONTINUE }
                 for ((i, t) in sq.withIndex()) {
-                    near(16f + 443f - c.side - (i / c.rows) * (c.side + 12f), t.rect.x, "$what: square $i x")
+                    near(30f + 415f - c.side - (i / c.rows) * (c.side + 12f), t.rect.x, "$what: square $i x")
                     near(48f + (i % c.rows) * (c.side + 6f), t.rect.y, "$what: square $i y, top-aligned")
                 }
                 near(c.contH, continueOf(b).h, "$what: continue h"); near(48f + c.contH + 12f, b.tilesY, "$what: the rows under Continue")
@@ -66,7 +66,7 @@ class HomeChromeBoardTest {
 
     // SPS3 (a 16:9 phone in landscape, 800 × 340): the top section takes the 44 dp, still 5 rows:
     // the top the whole body 384 − 28 − 8 = 348 (304 with the tab row), squares (348 − 4 · 7) / 5 = 64 (55.2), half gaps
-    // apart, filling it; 10 slots past 5 tools. The pin row keeps its shape (113.67, from the bars-shown height).
+    // apart, filling it; 10 slots past 5 tools. The pin row keeps its shape (109, from the bars-shown height).
     @Test fun sps3KeepsFiveAColumnAndGrowsThem() {
         val land = HomeFrame(800f, 340f, false, 800f / 428f)
         val shown = homeBoard(land, 1, tools = 7, games = 4)
@@ -74,7 +74,7 @@ class HomeChromeBoardTest {
         val b = homeBoard(chrome(land, title = false), 1, tools = 7, games = 4)
         assertEquals(HomeToolMode.SPS3, b.mode); assertEquals(10, b.slots); assertEquals(0, b.more)
         near(64f, b.square, "square"); near(348f, b.topH, "topH: the block, the whole body")
-        near(113.67f, b.pinH, "pinH")
+        near(109f, b.pinH, "pinH")
         val sq = tiles(b, HomeTopKind.TOOL)
         near(28f + 3 * (64f + 7f), sq[6].y, "the 7th square: the 4th row"); near(sq[0].x, sq[6].x, "its column")
         assertEquals(5, homeBoard(chrome(land, title = false), 1, tools = 5, games = 4).slots, "5 tools: one column")
@@ -106,13 +106,13 @@ class HomeChromeBoardTest {
         near(48.2f, rowsHidden.square, "row games square"); near(rowsShown.pinH, rowsHidden.pinH, "the pin row keeps its shape")
     }
 
-    // The unfolded Fold (933 × 572, the large face): topH 2 · 133.5 + 7 = 274, 5 squares a column of (274 − 4 · 7) / 5 =
-    // 49.2 → 318 and still 5, of min(66.75, (318 − 28) / 5) = 58; 10 slots either way.
+    // The unfolded Fold (933 × 572, the large face): topH 2 · 128.83 + 7 = 264.67, 5 squares a column of (264.67 − 4 · 7) / 5 =
+    // 47.33 → 308.67 and still 5, of min(64.42, (308.67 − 28) / 5) = 56.13; 10 slots either way.
     @Test fun foldUnfoldedWithAndWithoutTheTabRow() {
         val fold = HomeFrame(933f, 572f, false, 933f / 660f)
         data class Case(val title: Boolean, val topH: Float, val side: Float, val contH: Float)
         val shown = homeBoard(fold, 1, tools = 9, games = 6, shelves = listOf(HomeShelf.NEW to 6))
-        for (c in listOf(Case(true, 274f, 49.2f, 274f), Case(false, 318f, 58f, 318f))) {
+        for (c in listOf(Case(true, 264.67f, 47.33f, 264.67f), Case(false, 308.67f, 56.13f, 308.67f))) {
             val f = chrome(fold, c.title)
             val what = "title ${c.title}"
             val b = homeBoard(f, 1, tools = 9, games = 6, shelves = listOf(HomeShelf.NEW to 6))
@@ -122,18 +122,18 @@ class HomeChromeBoardTest {
             val sq = b.top.filter { it.kind == HomeTopKind.TOOL || it.kind == HomeTopKind.MORE }.map { it.rect }
             for ((i, r) in sq.withIndex()) near(28f + (i / 2) * (c.side + 7f), r.y, "$what: square $i y")
             assertTrue(sq.all { it.y + it.h <= 28f + c.topH + 0.05f }, "$what: the squares inside the top")
-            val drop = c.topH - 274f
+            val drop = c.topH - 264.67f
             near(shown.tilesY + drop, b.tilesY, "$what: the bands follow")
             near(shown.shelfTiles[0].y + drop, b.shelfTiles[0].y, "$what: the shelves"); near(shown.pageH + drop, b.pageH, "$what: pageH")
         }
     }
 
-    // A tall narrow window without the pad (UNDER) keeps its 5 squares and takes the 44 dp: the cap 273.2 + 44, Continue 208 → 252.
+    // A tall narrow window without the pad (UNDER) keeps its 5 squares and takes the 44 dp: the cap 248.93 + 44, Continue 189.33 → 233.33.
     @Test fun underTakesTheHeightOnly() {
         val tall = HomeFrame(360f, 423f, false)
         val b = homeBoard(chrome(tall, title = false), 2, tools = 7, games = 4)
-        assertEquals(HomeToolMode.UNDER, b.mode); assertEquals(5, b.slots); near(51.2f, b.square, "square")
-        near(317.2f, b.topH, "topH"); near(252f, continueOf(b).h, "continue h")
+        assertEquals(HomeToolMode.UNDER, b.mode); assertEquals(5, b.slots); near(45.6f, b.square, "square")
+        near(292.93f, b.topH, "topH"); near(233.33f, continueOf(b).h, "continue h")
     }
 
     // The face is read from the body as it would be with the tab row: its freed room never changes it.

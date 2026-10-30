@@ -12,9 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -213,13 +211,13 @@ fun NxScreenScaffold(
                                 } else {
                                     // The list spans the width over the art App draws behind (NX Redux draws titles over it), its
                                     // labels reaching [NX_LABEL_REACH] of the screen.
-                                    val insets = restingSystemBars().union(WindowInsets.displayCutout)   // the insets App pads the screens by
+                                    val insets = nxScreenInsets()   // the insets App pads the screens by
                                     val dir = LocalLayoutDirection.current
                                     val endPad = with(density) {
                                         nxLabelEndPad(listWidth, insets.getLeft(this, dir).toDp(), insets.getRight(this, dir).toDp(), nxListInset())
                                     }
                                     NxList(rows, listSelection, onSelect, onOpen, Modifier.fillMaxSize().then(listShift), listState = listState, rowHeightOverride = rowHeight, onLongPress = onLongPress, edgeMargin = if (scrollFade) 1 else 0,
-                                        endPadOverride = if (artBox) maxOf(endPad, listArtLabelEnd(listWidth.value, LocalPortrait.current).dp) else endPad)
+                                        endPadOverride = if (artBox) maxOf(endPad, listArtLabelEnd(listWidth.value, nxPageInset().end.value).dp) else endPad)
                                 }
                             }
                             // Up and down side by side under the rows, at the labels' start, whichever applies (the main menu's pair).

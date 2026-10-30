@@ -9,13 +9,13 @@ class HomePortraitShelvesBoardTest {
     private val cover = HomeFrame(475f, 291f, true)
     private val three = listOf(HomeShelf.NEW to 3, HomeShelf.NOT_STARTED to 3, HomeShelf.PICK_UP to 2)
 
-    // The board's text before shelves came to the portrait type (HEAD a509aed4), the new shelfCols field left out:
-    // without shelves it must not move by a hair.
+    // The board's text before shelves came to the portrait type (HEAD a509aed4), the new shelfCols field left out, its
+    // x and widths since taken on the page inset (30 dp a side upright): without shelves it must not move by a hair.
     private val goldens = listOf(
-        Triple(HomeFrame(475f, 291f, true), 2, 4 to 5) to "HomeBoard(mode=COLUMN, wide=false, stripLines=2, topY=48.0, topH=235.0, top=[HomeTopTile(kind=CONTINUE, rect=HomeRect(x=16.0, y=48.0, w=388.8, h=235.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=416.8, y=48.0, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=416.8, y=96.2, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=416.8, y=144.4, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=416.8, y=192.6, w=42.2, h=42.2))], slots=5, more=0, gutter=16.0, gap=12.0, perRow=2, pinW=215.5, pinH=114.46875, tilesY=295.0, rowGames=5, pageH=673.40625, square=42.2, stripY=-1.4750009, shelfTiles=[], shelfSizes=[], inlineGames=0)",
-        Triple(HomeFrame(400f, 700f, true), 2, 3 to 3) to "HomeBoard(mode=COLUMN, wide=false, stripLines=2, topY=48.0, topH=235.0, top=[HomeTopTile(kind=CONTINUE, rect=HomeRect(x=16.0, y=48.0, w=313.8, h=235.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=341.8, y=48.0, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=341.8, y=96.2, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=341.8, y=144.4, w=42.2, h=42.2))], slots=5, more=0, gutter=16.0, gap=12.0, perRow=2, pinW=178.0, pinH=129.0, tilesY=295.0, rowGames=3, pageH=576.0, square=42.2, stripY=-1.4750009, shelfTiles=[], shelfSizes=[], inlineGames=0)",
-        Triple(HomeFrame(704f, 801f, true, textScale = 1.3f), 2, 8 to 0) to "HomeBoard(mode=COLUMN, wide=false, stripLines=2, topY=58.8, topH=235.0, top=[HomeTopTile(kind=CONTINUE, rect=HomeRect(x=16.0, y=58.8, w=563.6, h=235.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=645.8, y=58.8, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=645.8, y=107.0, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=645.8, y=155.2, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=645.8, y=203.40001, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=645.8, y=251.6, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=591.6, y=58.8, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=591.6, y=107.0, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=591.6, y=155.2, w=42.2, h=42.2))], slots=10, more=0, gutter=16.0, gap=12.0, perRow=2, pinW=330.0, pinH=178.875, tilesY=305.8, rowGames=0, pageH=301.8, square=42.2, stripY=-1.6148, shelfTiles=[], shelfSizes=[], inlineGames=0)",
-        Triple(HomeFrame(475f, 335f, true, titleHidden = true, statsHidden = true), 2, 12 to 7) to "HomeBoard(mode=COLUMN, wide=false, stripLines=0, topY=8.0, topH=319.0, top=[HomeTopTile(kind=CONTINUE, rect=HomeRect(x=16.0, y=8.0, w=301.0, h=319.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=400.0, y=8.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=400.0, y=73.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=400.0, y=138.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=400.0, y=203.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=400.0, y=268.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=329.0, y=8.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=329.0, y=73.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=329.0, y=138.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=329.0, y=203.0, w=59.0, h=59.0)), HomeTopTile(kind=MORE, rect=HomeRect(x=329.0, y=268.0, w=59.0, h=59.0))], slots=10, more=3, gutter=16.0, gap=12.0, perRow=2, pinW=215.5, pinH=114.46875, tilesY=339.0, rowGames=7, pageH=843.875, square=59.0, stripY=1.8759999, shelfTiles=[], shelfSizes=[], inlineGames=0)",
+        Triple(HomeFrame(475f, 291f, true), 2, 4 to 5) to "HomeBoard(mode=COLUMN, wide=false, stripLines=2, topY=48.0, topH=235.0, top=[HomeTopTile(kind=CONTINUE, rect=HomeRect(x=30.0, y=48.0, w=360.8, h=235.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=402.8, y=48.0, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=402.8, y=96.2, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=402.8, y=144.4, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=402.8, y=192.6, w=42.2, h=42.2))], slots=5, more=0, gutter=30.0, gap=12.0, perRow=2, pinW=201.5, pinH=106.59375, tilesY=295.0, rowGames=5, pageH=649.78125, square=42.2, stripY=-1.4750009, shelfTiles=[], shelfSizes=[], inlineGames=0)",
+        Triple(HomeFrame(400f, 700f, true), 2, 3 to 3) to "HomeBoard(mode=COLUMN, wide=false, stripLines=2, topY=48.0, topH=235.0, top=[HomeTopTile(kind=CONTINUE, rect=HomeRect(x=30.0, y=48.0, w=285.8, h=235.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=327.8, y=48.0, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=327.8, y=96.2, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=327.8, y=144.4, w=42.2, h=42.2))], slots=5, more=0, gutter=30.0, gap=12.0, perRow=2, pinW=164.0, pinH=118.5, tilesY=295.0, rowGames=3, pageH=555.0, square=42.2, stripY=-1.4750009, shelfTiles=[], shelfSizes=[], inlineGames=0)",
+        Triple(HomeFrame(704f, 801f, true, textScale = 1.3f), 2, 8 to 0) to "HomeBoard(mode=COLUMN, wide=false, stripLines=2, topY=58.8, topH=235.0, top=[HomeTopTile(kind=CONTINUE, rect=HomeRect(x=30.0, y=58.8, w=535.6, h=235.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=631.8, y=58.8, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=631.8, y=107.0, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=631.8, y=155.2, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=631.8, y=203.40001, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=631.8, y=251.6, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=577.6, y=58.8, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=577.6, y=107.0, w=42.2, h=42.2)), HomeTopTile(kind=TOOL, rect=HomeRect(x=577.6, y=155.2, w=42.2, h=42.2))], slots=10, more=0, gutter=30.0, gap=12.0, perRow=2, pinW=316.0, pinH=171.0, tilesY=305.8, rowGames=0, pageH=301.8, square=42.2, stripY=-1.6148, shelfTiles=[], shelfSizes=[], inlineGames=0)",
+        Triple(HomeFrame(475f, 335f, true, titleHidden = true, statsHidden = true), 2, 12 to 7) to "HomeBoard(mode=COLUMN, wide=false, stripLines=0, topY=8.0, topH=319.0, top=[HomeTopTile(kind=CONTINUE, rect=HomeRect(x=30.0, y=8.0, w=273.0, h=319.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=386.0, y=8.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=386.0, y=73.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=386.0, y=138.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=386.0, y=203.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=386.0, y=268.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=315.0, y=8.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=315.0, y=73.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=315.0, y=138.0, w=59.0, h=59.0)), HomeTopTile(kind=TOOL, rect=HomeRect(x=315.0, y=203.0, w=59.0, h=59.0)), HomeTopTile(kind=MORE, rect=HomeRect(x=315.0, y=268.0, w=59.0, h=59.0))], slots=10, more=3, gutter=30.0, gap=12.0, perRow=2, pinW=201.5, pinH=106.59375, tilesY=339.0, rowGames=7, pageH=812.375, square=59.0, stripY=1.8759999, shelfTiles=[], shelfSizes=[], inlineGames=0)",
     )
 
     @Test fun withoutShelvesTheBoardIsAsBefore() {
@@ -29,49 +29,49 @@ class HomePortraitShelvesBoardTest {
     }
 
     // The Fold cover (475 × 291, 2 lines): the top 48 … 283. The pins a gap under it at 295,
-    // 2 a row, 215.5 × 114.47; 3 rows end at 295 + 3 · 114.47 + 24 = 662.41.
+    // 2 a row, 201.5 × 106.59; 3 rows end at 295 + 3 · 106.59 + 24 = 638.78.
     @Test fun pinsGoUnderTheTop() {
         val b = homeBoard(cover, 2, tools = 4, games = 5, shelves = three)
         assertEquals(HomeToolMode.COLUMN, b.mode)
         assertEquals(3, b.shelfSizes.size)
         near(295f, b.tilesY, "tilesY")
-        assertEquals(2, b.perRow); near(215.5f, b.pinW, "pinW"); near(114.47f, b.pinH, "pinH")
+        assertEquals(2, b.perRow); near(201.5f, b.pinW, "pinW"); near(106.59f, b.pinH, "pinH")
     }
 
-    // New: tiles a gap (12) under the pins' end at 662.41, so 674.41, 2 a row at the pins' size; the third on a second row
-    // (126.47 lower). Not started: a gap under that, from 927.35, 2 a row like the rest (its third on a second row at
-    // 1053.82). Pick up again: from 1180.29, its 2 tiles one row. pageH: the last tile's bottom 1294.76 + 3 + 8.
+    // New: tiles a gap (12) under the pins' end at 638.78, so 650.78, 2 a row at the pins' size; the third on a second row
+    // (118.59 lower). Not started: a gap under that, from 887.97, 2 a row like the rest (its third on a second row at
+    // 1006.56). Pick up again: from 1125.16, its 2 tiles one row. pageH: the last tile's bottom 1231.75 + 3 + 8.
     @Test fun shelvesFollowThePinsInThePortraitGrid() {
         val b = homeBoard(cover, 2, tools = 4, games = 5, shelves = three)
         assertEquals(listOf(3, 3, 2), b.shelfSizes); assertEquals(8, b.shelfTiles.size)
         val n = (5..7).map { homeBoardTile(b, it) }
-        assertEquals(listOf(16f, 243.5f, 16f), n.map { it.x }); near(674.41f, n[0].y, "New 0 y"); near(674.41f, n[1].y, "New 1 y")
-        near(800.88f, n[2].y, "New 2 y")
-        for (r in n) { near(215.5f, r.w, "New w"); near(114.47f, r.h, "New h") }
+        assertEquals(listOf(30f, 243.5f, 30f), n.map { it.x }); near(650.78f, n[0].y, "New 0 y"); near(650.78f, n[1].y, "New 1 y")
+        near(769.38f, n[2].y, "New 2 y")
+        for (r in n) { near(201.5f, r.w, "New w"); near(106.59f, r.h, "New h") }
         for (k in 0..2) {
             val t = homeBoardTile(b, 8 + k)
-            near(if (k == 1) 243.5f else 16f, t.x, "Not started $k x"); near(215.5f, t.w, "Not started $k w"); near(114.47f, t.h, "Not started $k h")
-            near(927.35f + (k / 2) * 126.47f, t.y, "Not started $k y")
+            near(if (k == 1) 243.5f else 30f, t.x, "Not started $k x"); near(201.5f, t.w, "Not started $k w"); near(106.59f, t.h, "Not started $k h")
+            near(887.97f + (k / 2) * 118.59f, t.y, "Not started $k y")
         }
         val p = (11..12).map { homeBoardTile(b, it) }
-        assertEquals(listOf(16f, 243.5f), p.map { it.x }); for (r in p) near(1180.29f, r.y, "Pick up y")
-        near(1180.29f + 114.47f + 3f + 8f, b.pageH, "pageH")
+        assertEquals(listOf(30f, 243.5f), p.map { it.x }); for (r in p) near(1125.16f, r.y, "Pick up y")
+        near(1125.16f + 106.59f + 3f + 8f, b.pageH, "pageH")
     }
 
     // No pins: the first shelf's tiles sit a gap under the top.
     @Test fun noPinsFirstShelfStartsAGapUnderTheTop() {
         val b = homeBoard(cover, 2, tools = 4, games = 0, shelves = listOf(HomeShelf.NOT_STARTED to 2))
-        near(295f, homeBoardTile(b, 0).y, "first shelf tile y"); near(215.5f, homeBoardTile(b, 0).w, "the pins' width")
+        near(295f, homeBoardTile(b, 0).y, "first shelf tile y"); near(201.5f, homeBoardTile(b, 0).w, "the pins' width")
     }
 
-    // A shelf offered more holds 4 in portrait ([homeShelfCap]): two rows of 2 from 295, the second 114.47 + 12 lower; a
+    // A shelf offered more holds 4 in portrait ([homeShelfCap]): two rows of 2 from 295, the second 106.59 + 12 lower; a
     // landscape phone's row of 3 holds 3.
     @Test fun portraitShelvesHoldFourInTwoRows() {
         val b = homeBoard(cover, 2, tools = 4, games = 0, shelves = listOf(HomeShelf.NEW to 6, HomeShelf.NOT_STARTED to 4))
         assertEquals(listOf(4, 4), b.shelfSizes); assertEquals(listOf(2, 2), b.shelfCols)
         val n = (0..3).map { homeBoardTile(b, it) }
-        assertEquals(listOf(16f, 243.5f, 16f, 243.5f), n.map { it.x })
-        for (k in 0..3) near(295f + (k / 2) * 126.47f, n[k].y, "New $k y")
+        assertEquals(listOf(30f, 243.5f, 30f, 243.5f), n.map { it.x })
+        for (k in 0..3) near(295f + (k / 2) * 118.59f, n[k].y, "New $k y")
         val wide = homeBoard(HomeFrame(960f, 344f, false, 960f / 432f), 1, 4, 5, shelves = listOf(HomeShelf.NEW to 6))
         assertEquals(3, wide.perRow); assertEquals(listOf(3), wide.shelfSizes)
     }

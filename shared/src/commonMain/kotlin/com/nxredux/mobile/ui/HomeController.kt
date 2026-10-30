@@ -41,8 +41,14 @@ private const val HOME_BUILDS_KEPT = 8
 /** One Home build: its [rows], their [view], and the [frame] and strip [lines] its board was made on. */
 private data class HomeBuild(val rows: List<MainRow>, val view: HomeView, val frame: HomeFrame, val lines: Int)
 
-/** What [Home] was built from (to rebuild it with new stats or a new frame, no I/O): [recent] are recent.txt's paths, for Not started. */
-internal data class HomeInputs(val last: MainRow.Continue?, val games: List<Listed>, val tools: List<ToolRow>, val recent: Set<String>)
+/**
+ * What [Home] was built from (to rebuild it with new stats or a new frame, no I/O): [recent] are recent.txt's paths, for
+ * Not started; [shots] the hidden save states' frames by game path ([HomeShot]), for the pins and the shelves.
+ */
+internal data class HomeInputs(
+    val last: MainRow.Continue?, val games: List<Listed>, val tools: List<ToolRow>, val recent: Set<String>,
+    val shots: Map<String, String> = emptyMap(),
+)
 
 /**
  * [row], a Home row, in the new Home [rows]: itself; else "+N" for "+N" (its count follows the slots), "+N" for a
@@ -161,12 +167,12 @@ internal class HomeController(
         val shelves = picked.map { (shelf, games) -> shelf to games.take(HOME_SHELF_LIST_MAX) }
         when (host.homeStyle()) {
             // List and Minimal: every tool is a row. Carousel: the dock's squares, "+N" for the rest.
-            MenuStyle.LIST, MenuStyle.MINIMAL -> return buildHome(last, games, tools, homeStats, Int.MAX_VALUE, shelves, tag = host::shelfTag)
+            MenuStyle.LIST, MenuStyle.MINIMAL -> return buildHome(last, games, tools, homeStats, Int.MAX_VALUE, shelves, tag = host::shelfTag, shot = { inputs.shots[it.game.path] })
             MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
                 // The dock's squares are Grid Home's pinned tool squares on this frame ([homeDockSide]).
                 val f = homeFrameNow()
                 val side = homeDockSide(f, homeLinesFor(strip), games.count { it.game.path != last?.entry?.game?.path })
-                return buildHome(last, games, tools, homeStats, homeDockFit(f.w, f.portrait, side), shelves, tag = host::shelfTag)
+                return buildHome(last, games, tools, homeStats, homeDockFit(f, side), shelves, tag = host::shelfTag, shot = { inputs.shots[it.game.path] })
             }
             MenuStyle.GRID -> Unit
         }
@@ -176,7 +182,7 @@ internal class HomeController(
         val b = homeBoardFor(lines, tools.size, gamesLeft, shelves = picked.map { (shelf, games) -> shelf to games.size })
         var k = 0
         val gridShelves = picked.map { (shelf, games) -> shelf to if (games.isEmpty()) games else games.take(b.shelfSizes.getOrElse(k++) { 0 }) }
-        return buildHome(last, games, tools, homeStats, b.slots, gridShelves, b.inlineGames, tag = host::shelfTag)
+        return buildHome(last, games, tools, homeStats, b.slots, gridShelves, b.inlineGames, tag = host::shelfTag, shot = { inputs.shots[it.game.path] })
     }
 
     /** [built] is the Home tab now: its view shows once the screen shows its rows ([publishHomeView]). */

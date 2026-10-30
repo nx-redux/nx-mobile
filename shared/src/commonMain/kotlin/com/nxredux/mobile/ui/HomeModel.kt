@@ -9,7 +9,8 @@ import com.nxredux.mobile.ui.nx.homeBoard
 import com.nxredux.mobile.ui.nx.homePortraitTwin
 import kotlin.math.max
 import kotlin.random.Random
-import com.nxredux.mobile.ui.nx.pageGutter
+import com.nxredux.mobile.ui.nx.homeInsetEnd
+import com.nxredux.mobile.ui.nx.homeInsetStart
 
 /**
  * What Home's stats strip ([homeStrip]) shows. [playedMs], [unlocks] and [top] cover the calendar month so far;
@@ -48,11 +49,9 @@ private const val HOME_DOCK_MIN_SIDE = 32f
 internal fun homeDockSide(f: HomeFrame, stripLines: Int, games: Int): Float =
     max(HOME_DOCK_MIN_SIDE, homeBoard(if (f.portrait) f else homePortraitTwin(f), stripLines, tools = 1, games = games, fillSliver = false).square)
 
-/** The Carousel Home's dock squares of [side] dp that fit [widthDp] (its gutters off): at least one. */
-internal fun homeDockFit(widthDp: Float, portrait: Boolean, side: Float): Int {
-    val gutter = pageGutter(portrait)
-    return ((widthDp - 2 * gutter + HOME_DOCK_GAP) / (side + HOME_DOCK_GAP)).toInt().coerceAtLeast(1)
-}
+/** The Carousel Home's dock squares of [side] dp that fit [f]'s width inside its page insets: at least one. */
+internal fun homeDockFit(f: HomeFrame, side: Float): Int =
+    ((f.w - homeInsetStart(f) - homeInsetEnd(f) + HOME_DOCK_GAP) / (side + HOME_DOCK_GAP)).toInt().coerceAtLeast(1)
 
 /** The Carousel Home's row items in [rows] ([homeTabRows]): every row but the pinned tools and "+N", which make the dock. */
 internal fun homeCarouselRowCount(rows: List<MainRow>): Int = rows.count { it !is MainRow.PinnedTool && it !is MainRow.MoreTools }
@@ -72,10 +71,11 @@ internal fun buildHome(
     last: MainRow.Continue?, pinnedGames: List<Listed>, pinnedTools: List<ToolRow>, stats: HomeStats, slots: Int,
     shelves: List<Pair<HomeShelf, List<Listed>>> = emptyList(), inline: Int = 0,
     tag: (HomeShelf, Listed) -> String? = { _, _ -> null },
+    shot: (Listed) -> String? = { null },   // a game's hidden save state's frame ([HomeShot])
 ): Home {
-    val rows = shelves.flatMap { (k, games) -> games.map { MainRow.Shelf(it, k, tag(k, it)) } }
+    val rows = shelves.flatMap { (k, games) -> games.map { MainRow.Shelf(it, k, tag(k, it), shot(it)) } }
     if (last == null && pinnedGames.isEmpty() && pinnedTools.isEmpty()) return Home(listOf(MainRow.PickAGame), emptyList(), strip = null, freshInstall = true, shelves = rows)
-    val games = pinnedGames.filterNot { it.game.path == last?.entry?.game?.path }.map { MainRow.Pin(it) }
+    val games = pinnedGames.filterNot { it.game.path == last?.entry?.game?.path }.map { MainRow.Pin(it, shot(it)) }
     // MoreTools carries the tools it hides: every tool past the first slots − 1 (5 tools, 4 slots: +2).
     val tools = if (pinnedTools.size > slots) pinnedTools.take(slots - 1).map { MainRow.PinnedTool(it) } + MainRow.MoreTools(pinnedTools.size - (slots - 1))
         else pinnedTools.map { MainRow.PinnedTool(it) }

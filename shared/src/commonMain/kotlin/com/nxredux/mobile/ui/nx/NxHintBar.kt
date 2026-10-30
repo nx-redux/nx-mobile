@@ -205,7 +205,7 @@ val LocalNxHintBarHidden = staticCompositionLocalOf { false }
 /**
  * The hint bars below's side padding: the page's text edge (Settings: its section words',
  * [com.nxredux.mobile.ui.settingsSectionStart]; a List game list: its names'), so the bar lines up with the text above
- * it, its first glyph's disc on that edge. Null: 16 dp.
+ * it, its first glyph's disc on that edge. Null: the page inset ([nxPageInset]).
  */
 val LocalNxHintBarStart = staticCompositionLocalOf<Dp?> { null }
 
@@ -239,6 +239,7 @@ fun NxHintBar(
     always: Boolean = false,
 ) {
     val colors = LocalNxColors.current
+    val pageInset = nxPageInset()
     // A touch-only screen has no hint bar: its hints are reached by touch ([Hint.touch], taps, long press, back).
     if (LocalFooterMode.current == FooterMode.BUTTONS) return
     if (LocalNxHintBarHidden.current && !always) return   // Settings: no bar unless Button hints shows it
@@ -263,7 +264,7 @@ fun NxHintBar(
         modifier = modifier.fillMaxWidth().background(scrim)
             .then(LocalNxHintBarHeight.current?.let { Modifier.heightIn(min = it) } ?: Modifier)
             .padding(
-                start = LocalNxHintBarStart.current ?: 16.dp, end = LocalNxHintBarEnd.current ?: LocalNxHintBarStart.current ?: 16.dp,
+                start = LocalNxHintBarStart.current ?: pageInset.start, end = LocalNxHintBarEnd.current ?: LocalNxHintBarStart.current ?: pageInset.end,
                 top = 6.dp, bottom = 6.dp,
             ).let { if (keepHeight) it.heightIn(min = glyphSize) else it },
     ) { measurables, c ->

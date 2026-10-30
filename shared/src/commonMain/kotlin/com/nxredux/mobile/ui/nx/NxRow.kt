@@ -131,7 +131,7 @@ internal fun Modifier.shownItemTaps(i: Int, taps: ItemTaps, hasLongPress: Boolea
 @Composable
 internal fun RowCaption(
     captionTitle: () -> String?, captionInfo: () -> List<InfoLine>, glide: CaptionGlide,
-    nameStyle: TextStyle, nameLines: Int, infoStyle: TextStyle, gutter: Dp, avail: Dp, availPx: Int, spare: Float,
+    nameStyle: TextStyle, nameLines: Int, infoStyle: TextStyle, inset: PageInset, avail: Dp, availPx: Int, spare: Float,
     selTop: () -> Float, below: Float, textColor: Color,
 ) {
     val title = captionTitle()
@@ -142,7 +142,7 @@ internal fun RowCaption(
     if (title != null) {
         Column(
             Modifier.fillMaxWidth().offset { IntOffset(0, (selTop() + below).dp.roundToPx()) }
-                .padding(horizontal = gutter).wrapContentWidth().captionTap(),   // the tap target is the text, not the strip
+                .padding(start = inset.start, end = inset.end).wrapContentWidth().captionTap(),   // the tap target is the text, not the strip
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(title, color = textColor, maxLines = nameLines, overflow = TextOverflow.Ellipsis, style = nameStyle)

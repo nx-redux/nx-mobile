@@ -43,7 +43,7 @@ class GridVerticalTest {
         val side = gridMatched(640f, 395f, 640f, 475f, GridTileKind.LOGO, portrait = false)
         val up = gridMatched(475f, 560f, 475f, 640f, GridTileKind.LOGO, portrait = true)
         assertTrue(kotlin.math.abs(up.tileH + up.gap - (side.tileH + side.gap)) / (side.tileH + side.gap) < 0.15f)
-        assertEquals(3, up.columns)                                 // its columns still its own width's
+        assertEquals(2, up.columns)                                 // its columns still its own width's (415 between the insets)
         assertEquals(560f - GRID_GAP, up.rows * (up.tileH + up.gap), e)
     }
 

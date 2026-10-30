@@ -60,13 +60,26 @@ data class Listed(val system: SystemFolder, val game: GameEntry, val label: Stri
     val shown: String get() = label ?: game.shownName
 }
 
+/**
+ * A Home game row's picture: its hidden save state's frame, the one Save & Quit (or a quit's auto save) writes
+ * ([com.nxredux.mobile.storage.UserDataStore.hiddenStateShot]); null without one. Not part of the row's equality: Home
+ * finds a remembered row by it, and a new save must not make the same game a different row.
+ */
+interface HomeShot { val shot: String? }
+
 /** One item of a main menu tab ([MenuTab]). */
 sealed interface MainRow {
-    /** A pinned game (Home's Pinned rows): A launches it. */
-    data class Pin(val entry: Listed) : MainRow
+    /** A pinned game (Home's Pinned rows): A launches it. Its picture: [shot] ([HomeShot]). */
+    data class Pin(val entry: Listed) : MainRow, HomeShot {
+        override var shot: String? = null; private set
+        constructor(entry: Listed, shot: String?) : this(entry) { this.shot = shot }
+    }
     /** Home on the large face: a game on a discovery shelf ([HomeShelf]); A launches it, as a pin. */
     /** A shelf's game; [tag] its own badge (Most played: its play time), else the shelf's reason where it has one ([homeShelfBadge]). */
-    data class Shelf(val entry: Listed, val shelf: HomeShelf, val tag: String? = null) : MainRow
+    data class Shelf(val entry: Listed, val shelf: HomeShelf, val tag: String? = null) : MainRow, HomeShot {
+        override var shot: String? = null; private set
+        constructor(entry: Listed, shelf: HomeShelf, tag: String?, shot: String?) : this(entry, shelf, tag) { this.shot = shot }
+    }
     /** One console row: the systems of one display name, in library order (see [ListSource.Console]). */
     data class System(val systems: List<SystemFolder>) : MainRow {
         constructor(system: SystemFolder) : this(listOf(system))
@@ -77,7 +90,10 @@ sealed interface MainRow {
     /** A tool (Tools tab): A opens it. */
     data class Tool(val row: ToolRow) : MainRow
     /** Home: the last played game (resumable or not). */
-    data class Continue(val entry: Listed, val resume: ResumeInfo) : MainRow
+    data class Continue(val entry: Listed, val resume: ResumeInfo) : MainRow, HomeShot {
+        override var shot: String? = null; private set
+        constructor(entry: Listed, resume: ResumeInfo, shot: String?) : this(entry, resume) { this.shot = shot }
+    }
     /** Home: a pinned tool. */
     data class PinnedTool(val row: ToolRow) : MainRow
     /** Home's "+N" square: [count] pinned tools that don't fit the top section; A opens the Tools tab. */

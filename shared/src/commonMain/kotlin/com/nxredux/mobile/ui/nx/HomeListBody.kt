@@ -124,12 +124,13 @@ internal fun homeListViewport(band: Int, total: Int, pitch: Int): Int =
  * A main menu List's rows ([names]: labels and tags) from [top] (the stats' or the icon row's bottom; the fade parts
  * them) and [gapRows] row pitches of room under it (Home: half, under its stats; a game list: one) down to the box's bottom less
  * [bottomRows] row pitches (Home with the tab row hidden: the other half, off the screen's edge), the tab row's
- * top; the first row's text on [gutter] + [nxListInset]. Taps select, a tap on the selected row opens ([nxTap]).
+ * top; the rows' text on the page inset ([nxPageInset]), the pill [nxListInset] outside it. Taps select, a tap on the
+ * selected row opens ([nxTap]).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun MainListBody(
-    names: List<NxRow>, selection: () -> Int, top: Dp, gutter: Dp,
+    names: List<NxRow>, selection: () -> Int, top: Dp,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, modifier: Modifier = Modifier,
     gapRows: Float = 0f,
     bottomRows: Float = 0f,
@@ -146,6 +147,7 @@ internal fun MainListBody(
     val pill = basePitch * (1 - 2 * NX_PILL_PAD)   // the pill's height, whatever the rows stretch to
     val basePx = with(density) { basePitch.roundToPx() }
     val sel = selection()
+    val inset = nxPageInset()   // the names on it, the pill's edges outside it
     val state = rememberLazyListState()
     val nameStyle = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = nameSize, lineHeight = nameSize)
     BoxWithConstraints(modifier.fillMaxSize()) {
@@ -181,7 +183,7 @@ internal fun MainListBody(
         // the on-pill colours while the pill covers it the most ([NxPillGlide.litIndex]).
         val identity = remember(names) { nxPillListIdentity(names) }
         val glide = rememberNxPillGlide(identity, selection, names.size, maxOf(1, viewport / maxOf(1, pitchPx)))
-        val pillStart = with(density) { gutter.toPx() }
+        val pillStart = with(density) { inset.pillStart.toPx() }
         LazyColumn(
             Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart).padding(top = if (fits) 0.dp else start, bottom = if (fits) bottom else 0.dp)
                 .fillMaxWidth().height(with(density) { (if (fits) heights.sum() else viewport).toDp() }).nxRowEdgeMask(state)
@@ -198,7 +200,7 @@ internal fun MainListBody(
                             onClick = { nxTap(r, selected, tapOpens(r), onSelect, onOpen) },
                             onLongClick = onLongPress?.let { lp -> { lp(r) } },
                         )
-                        .padding(start = gutter, end = maxOf(gutter, endRoom), top = (pitch - pill) / 2, bottom = (pitch - pill) / 2),
+                        .padding(start = inset.pillStart, end = maxOf(inset.pillEnd, endRoom), top = (pitch - pill) / 2, bottom = (pitch - pill) / 2),
                 ) {
                     Box(
                         Modifier.fillMaxHeight().onSizeChanged { glide.sizes[r] = it }.padding(horizontal = nxListInset()),

@@ -44,8 +44,11 @@ internal fun homeListRows(rows: List<MainRow>): List<NxRow> = rows.mapNotNull { 
     }
 }
 
-/** The room between List Home's header and its first game, and (the tab row hidden) under its last, in row pitches. */
-private const val HOME_LIST_GAP_ROWS = 0.5f
+/**
+ * The room between List Home's header and its first game, and (the tab row hidden) under its last, in row pitches; a
+ * List game list keeps it under its stats line too.
+ */
+internal const val HOME_LIST_GAP_ROWS = 0.5f
 
 /**
  * Home in the List style (Layouts → Home layout: List): the stats strip ([HomeStripLines] at the gutter, while Home
@@ -65,8 +68,8 @@ internal fun HomeListScreen(
 ) {
     val chrome = LocalLauncherChrome.current
     val portrait = LocalPortrait.current
-    // The rows (and the band's arrows, the strip) start on the tab row's gutter, as a main menu List's.
-    val gutter = pageGutter(portrait).dp
+    // The names, the strip and the facts on the page inset, as the tab words.
+    val inset = nxPageInset()
     val shownStrip = strip?.takeIf { chrome.homeStats }   // Layouts → Home stats hides it
     val fontScale = LocalDensity.current.fontScale
     // Only the text scale and the orientation (the underline) shape the strip; the frame's size is not read.
@@ -99,7 +102,7 @@ internal fun HomeListScreen(
                 NxScreenScaffold(
                     rows = emptyList(), selectedIndex = 0, hints = emptyList(), onSelect = onSelect, onOpen = onOpen,
                     modifier = Modifier.weight(1f), onHint = onHint, hideHints = chrome.emptyBarRoom || chrome.noBar,
-                    grid = { m -> HomePickCard(selection, onSelect, onOpen, onLongPress?.takeIf { tabMenu }, portrait, m.padding(horizontal = gutter, vertical = 12.dp).fillMaxSize()) },
+                    grid = { m -> HomePickCard(selection, onSelect, onOpen, onLongPress?.takeIf { tabMenu }, portrait, m.padding(start = inset.start, end = inset.end, top = 12.dp, bottom = 12.dp).fillMaxSize()) },
                 )
                 return@Column
             }
@@ -111,49 +114,47 @@ internal fun HomeListScreen(
                 else -> iconsRoom
             }
             // Half a row's room between the stats (or facts) and the first game, so Home's top does not crowd its list.
-            MainListBody(names, selection, listTop, gutter, onSelect, onOpen, onLongPress, Modifier.weight(1f), gapRows = if (header != null) HOME_LIST_GAP_ROWS else 0f,
+            MainListBody(names, selection, listTop, onSelect, onOpen, onLongPress, Modifier.weight(1f), gapRows = if (header != null) HOME_LIST_GAP_ROWS else 0f,
                 bottomRows = if (header != null) HOME_LIST_GAP_ROWS else 0f,   // the tab row hidden: the other half off the bottom edge
             )
         }
-        // The stats and the facts in line with the names ([listTextInset]).
-        val textStart = gutter + com.nxredux.mobile.ui.listTextInset(MenuStyle.LIST)
-        HomeStripOverlay(shownStrip, pageStrip, header?.takeIf { shownStrip != null }, statLines, inkTop, capTop, frame, textStart)
+        HomeStripOverlay(shownStrip, pageStrip, header?.takeIf { shownStrip != null }, statLines, inkTop, capTop, frame, inset)
         if (facts && header != null) {
             // The next line of the header's rhythm under the stats, short of the icons while level with them.
             val y = header.stripTop + statLines * homeStripPitch(frame) + factsGap
             val iconsRoom = if (y < MENU_TAB_ROW_HEIGHT.value) HOME_HEADER_ICONS_ROOM.dp else 0.dp
             GameFactsLines(
                 info(), (HOME_STRIP_TYPE.sp * nxTextScale()).sp, homeStripPitch(frame).dp, rows = factLines,
-                Modifier.pageFixed().fillMaxWidth().padding(top = y.dp, start = textStart, end = textStart + iconsRoom),
+                Modifier.pageFixed().fillMaxWidth().padding(top = y.dp, start = inset.start, end = inset.end + iconsRoom),
             )
         }
     }
 }
 
 /**
- * List and Minimal Home's strip over their body, at the [gutter]: [pageStrip] in the page under
+ * List and Minimal Home's strip over their body, on the page [inset]: [pageStrip] in the page under
  * the tab row, its text's top at [inkTop] ([capTop] under its lines' top), or [strip] in the stats [header] (the tab row
  * hidden), short of the Recent and Search icons MainMenuScreen draws at its right.
  */
 @Composable
 internal fun HomeStripOverlay(
     strip: HomeStrip?, pageStrip: HomeStrip?, header: HomeStatsHeader?, stripLines: Int, inkTop: Float, capTop: Float,
-    frame: HomeFrame, gutter: Dp,
+    frame: HomeFrame, inset: PageInset,
 ) {
     // Still while the page slides between tabs, as the tab row and the icons are ([pageFixed]).
     if (pageStrip != null) {
         BoxWithConstraints(Modifier.fillMaxWidth().pageFixed()) {
             HomeStripLines(
-                pageStrip, stripLines, gutter.value, inkTop - capTop,
-                width = maxWidth.value - 2 * gutter.value, lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
+                pageStrip, stripLines, inset.start.value, inkTop - capTop,
+                width = (maxWidth - inset.start - inset.end).value, lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
             )
         }
     }
     if (header != null && strip != null) {
         BoxWithConstraints(Modifier.fillMaxWidth().pageFixed()) {
             HomeStripLines(
-                strip, stripLines, gutter.value, header.stripTop,
-                width = maxWidth.value - 2 * gutter.value - HOME_HEADER_ICONS_ROOM, lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
+                strip, stripLines, inset.start.value, header.stripTop,
+                width = (maxWidth - inset.start - inset.end).value - HOME_HEADER_ICONS_ROOM, lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
             )
         }
     }

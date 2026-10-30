@@ -52,9 +52,9 @@ class HomeLayoutsModelTest {
         assertEquals(MainRow.PickAGame, rows[0]); assertEquals(1, homeCarouselRowCount(rows))
     }
     @Test fun dock_fit_follows_the_width() {
-        assertEquals(5, homeDockFit(16f * 2 + 5 * 56f + 4 * 12f, portrait = true, side = 56f))
-        assertEquals(4, homeDockFit(16f * 2 + 5 * 56f + 4 * 12f - 1f, portrait = true, side = 56f))
-        assertEquals(1, homeDockFit(10f, portrait = false, side = 64f))
+        assertEquals(5, homeDockFit(HomeFrame(30f * 2 + 5 * 56f + 4 * 12f, 600f, portrait = true), side = 56f))
+        assertEquals(4, homeDockFit(HomeFrame(30f * 2 + 5 * 56f + 4 * 12f - 1f, 600f, portrait = true), side = 56f))
+        assertEquals(1, homeDockFit(HomeFrame(10f, 300f, portrait = false), side = 64f))
     }
     // The dock's squares are Grid Home's portrait ones, in landscape too: the same size either way.
     @Test fun dock_side_is_grid_homes_portrait_tool_square() {

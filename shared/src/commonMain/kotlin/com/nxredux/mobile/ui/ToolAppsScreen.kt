@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nxredux.mobile.ui.nx.nxPageInset
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.NxColors
@@ -68,17 +69,16 @@ import kotlin.math.min
 /** The grid's page title: the app drawer's tool name, or what the games picker picks. */
 internal fun toolAppsTitle(pick: AppPick): String = if (pick == AppPick.GAMES) "Android games" else checkNotNull(ToolKind.APPS.toolName)
 
-/** The picker's side margin and the gap between its tiles, dp. */
-internal const val TOOL_APPS_GUTTER = 16f
+/** The gap between the picker's tiles, dp (its sides are the page inset, [nxPageInset]). */
 internal const val TOOL_APPS_GAP = 8f
 private const val TOOL_APPS_MIN_TILE = 80f      // a tile's narrowest width, dp
 private const val TOOL_APPS_ICON_SHARE = 0.6f   // an app icon's side, of its tile's width
 private const val TOOL_APPS_ICON_MAX = 64f      // dp
 private const val TOOL_APPS_HIDDEN_ALPHA = 0.5f // a hidden app's icon and name: dimmed
 
-/** How many picker tiles of at least [TOOL_APPS_MIN_TILE] fit a body [widthDp] wide between the gutters; one at least. */
-internal fun toolAppsColumns(widthDp: Float): Int =
-    max(1, floor((widthDp - 2 * TOOL_APPS_GUTTER + TOOL_APPS_GAP) / (TOOL_APPS_MIN_TILE + TOOL_APPS_GAP)).toInt())
+/** How many picker tiles of at least [TOOL_APPS_MIN_TILE] fit a body [widthDp] wide less its side insets ([sides], both together); one at least. */
+internal fun toolAppsColumns(widthDp: Float, sides: Float): Int =
+    max(1, floor((widthDp - sides + TOOL_APPS_GAP) / (TOOL_APPS_MIN_TILE + TOOL_APPS_GAP)).toInt())
 
 /**
  * How far to scroll (px, + down) so the selected row [selRow] shows whole: the rows are all [rowH] tall, [gap] apart, and
@@ -94,9 +94,9 @@ internal fun toolAppsScrollDelta(selRow: Int, firstRow: Int, firstTop: Float, ro
     }
 }
 
-/** A picker tile's width: [columns] tiles and their gaps fill a body [widthDp] wide between the gutters exactly. */
-internal fun toolAppsTileWidth(widthDp: Float, columns: Int): Float =
-    (widthDp - 2 * TOOL_APPS_GUTTER - (columns - 1) * TOOL_APPS_GAP) / columns
+/** A picker tile's width: [columns] tiles and their gaps fill a body [widthDp] wide less its side insets ([sides]) exactly. */
+internal fun toolAppsTileWidth(widthDp: Float, columns: Int, sides: Float): Float =
+    (widthDp - sides - (columns - 1) * TOOL_APPS_GAP) / columns
 
 /**
  * Every launchable app as a tile, its own icon over its name. The app drawer (Tools → Apps): an app in Tools carries a
@@ -141,9 +141,11 @@ private fun ToolAppsGrid(
     onLongPress: ((Int) -> Unit)?, title: String?, dimHidden: Boolean, modifier: Modifier,
 ) {
     val tapOpens = LocalNxTapOpens.current
+    val inset = nxPageInset()   // the title and the first column on it, the last column's end too
     BoxWithConstraints(modifier) {
-        val columns = toolAppsColumns(maxWidth.value)
-        val tileW = toolAppsTileWidth(maxWidth.value, columns)
+        val sides = (inset.start + inset.end).value
+        val columns = toolAppsColumns(maxWidth.value, sides)
+        val tileW = toolAppsTileWidth(maxWidth.value, columns, sides)
         // The scaffold's titled band: half a list row of this body tall (at least), the title at its start.
         val band = maxHeight / maxOf(2, nxRowCountFor(maxHeight)) / 2
         LaunchedEffect(columns) { onColumns(columns) }
@@ -161,11 +163,11 @@ private fun ToolAppsGrid(
         }
         Column(Modifier.fillMaxSize()) {
             if (title != null) {
-                Box(Modifier.fillMaxWidth().heightIn(min = band), contentAlignment = Alignment.CenterStart) { NxPageTitle(title, textStart = TOOL_APPS_GUTTER.dp) }   // on the tiles' gutter
+                Box(Modifier.fillMaxWidth().heightIn(min = band), contentAlignment = Alignment.CenterStart) { NxPageTitle(title, textStart = inset.start) }   // on the tiles' inset
             }
             LazyVerticalGrid(
                 GridCells.Fixed(columns), Modifier.weight(1f).fillMaxWidth(), state = grid,
-                contentPadding = PaddingValues(horizontal = TOOL_APPS_GUTTER.dp, vertical = TOOL_APPS_GAP.dp),
+                contentPadding = PaddingValues(start = inset.start, end = inset.end, top = TOOL_APPS_GAP.dp, bottom = TOOL_APPS_GAP.dp),
                 horizontalArrangement = Arrangement.spacedBy(TOOL_APPS_GAP.dp), verticalArrangement = Arrangement.spacedBy(TOOL_APPS_GAP.dp),
             ) {
                 itemsIndexed(apps, key = { _, app -> app.id }) { i, app ->

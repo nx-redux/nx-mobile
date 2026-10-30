@@ -20,12 +20,6 @@ class SettingsBlockTest {
         assertEquals(SettingsSizeClass.TABLET, settingsSizeClass(841f, 673f))
     }
 
-    @Test fun gutters() {
-        assertEquals(16.dp, settingsGutter(SettingsSizeClass.PHONE_UPRIGHT))
-        assertEquals(24.dp, settingsGutter(SettingsSizeClass.PHONE_LANDSCAPE))
-        assertEquals(48.dp, settingsGutter(SettingsSizeClass.TABLET))
-    }
-
     // One size on every screen, a phone held upright too.
     @Test fun sectionSize() {
         assertEquals(26.sp, SETTINGS_SECTION_SIZE)

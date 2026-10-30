@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui
 
 import androidx.compose.runtime.getValue
+import com.nxredux.mobile.ui.nx.nxPageInset
 import com.nxredux.mobile.ui.nx.NxFittedHints
 import com.nxredux.mobile.ui.nx.Hint
 import androidx.compose.runtime.derivedStateOf
@@ -81,8 +82,6 @@ import com.nxredux.mobile.ui.nx.nxListInset
 import com.nxredux.mobile.ui.nx.MainListBody
 import com.nxredux.mobile.ui.nx.nxTopBandFade
 import com.nxredux.mobile.ui.nx.menuTabUnderlineBottom
-import com.nxredux.mobile.ui.nx.nxPageGutter
-import com.nxredux.mobile.ui.nx.pageGutter
 import com.nxredux.mobile.ui.nx.nxHintLabelSize
 
 /**
@@ -142,7 +141,6 @@ fun MainMenuScreen(
     // ([tabSwipe]); a horizontal Carousel (Home's always is) keeps it for its own row.
     val swipeable = style == MenuStyle.LIST || style == MenuStyle.MINIMAL || style == MenuStyle.GRID ||
         (style == MenuStyle.CAROUSEL && orientation == MenuOrientation.VERTICAL && !home)
-    val textInset = listTextInset(style)   // the tab words and the icons in line with a List's names
     val tabRowPx = remember { mutableIntStateOf(0) }   // the tab row's height as laid out (0: hidden): List Home's art ends on its top
     Box(modifier.fillMaxSize().tabSwipe(swipeable && screen.tabs.size > 1 && screen.menu == null && screen.search == null, onTabSwipe)) {
         // Behind the tab row, over the backdrop App draws: the switcher title's eased top band, so the dim labels read over
@@ -243,9 +241,9 @@ fun MainMenuScreen(
                                 val header = whole?.let { homeStatsHeader(it, GRID_TITLE_LINES) }
                                 val title = gridTitle(tiles.getOrNull(selection()))
                                 if (whole != null && header != null && title != null) {
-                                    val gutter = pageGutter(LocalPortrait.current)
+                                    val inset = nxPageInset()
                                     GridTitleLines(
-                                        title.first, title.second, gutter, header.stripTop, maxWidth.value - 2 * gutter - HOME_HEADER_ICONS_ROOM,
+                                        title.first, title.second, inset.start.value, header.stripTop, (maxWidth - inset.start - inset.end).value - HOME_HEADER_ICONS_ROOM,
                                         homeStripLineH(whole), homeStripPitch(whole),
                                     )
                                 }
@@ -306,11 +304,10 @@ fun MainMenuScreen(
                                 }
                             }
                         }
-                        // As List Home's ([MainListBody]): the pill's edge on the gutter, the list under the icon row and on
+                        // As List Home's ([MainListBody]): the names on the page inset, the list under the icon row and on
                         // the tab row, the selection free until the third row from an edge.
-                        val gutter = nxPageGutter()
                         MainListBody(
-                            listRows, selection, topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad, gutter,
+                            listRows, selection, topIconsRoom(chrome.tabRow, topIcons.isNotEmpty()).pad,
                             onSelect, onOpen, onLongPress, Modifier.weight(1f),
                             bottomRows = if (shown.tabRow) 0f else MENU_LIST_BOTTOM_ROWS,   // the tab row hidden: half a row off the bottom edge
                         )
@@ -322,10 +319,10 @@ fun MainMenuScreen(
             // hidden tabs. One tab or a pushed tab: its title stands there instead.
             if (shown.tabRow) {
                 val longPress = onTabMenu?.let { f -> Modifier.pointerInput(f) { detectTapGestures(onLongPress = { f() }) } } ?: Modifier
-                // Still while the page slides between tabs; it changes when a swipe commits ([pageFixed]). In a List, in by the
-                // names' inset so its words line up with them ([listTextInset]). Its top [TAB_ROW_PULL] is given to the page
+                // Still while the page slides between tabs; it changes when a swipe commits ([pageFixed]). Its words on the page
+                // inset in every layout, as the names and tiles ([nxPageInset]). Its top [TAB_ROW_PULL] is given to the page
                 // above ([pullUp]): the words stay put, every layout's content ends that much nearer them.
-                Box(Modifier.pullUp(TAB_ROW_PULL).pageFixed().onSizeChanged { tabRowPx.intValue = it.height }.padding(horizontal = textInset)) {
+                Box(Modifier.pullUp(TAB_ROW_PULL).pageFixed().onSizeChanged { tabRowPx.intValue = it.height }) {
                     // With Button hints on and buttons to press, a few hints at the row's right (the main menu has no bar):
                     // Netplay first on Home's netplay game (its Layouts row), then Recent, then Search; one upright, two
                     // sideways, and only as many as the words leave room for.
@@ -344,7 +341,7 @@ fun MainMenuScreen(
                         labels, screen.tab, onTab, onLongPress = onTabMenu, underline = false, labelSize = nxHintLabelSize(),   // a hint's size, as the game lists' bar in its place
                         hints = barHints?.let { h -> { room -> NxFittedHints(h, room, onHint) } },
                     )
-                    else MenuTitleRow(title, modifier = longPress, textStart = nxPageGutter())
+                    else MenuTitleRow(title, modifier = longPress, textStart = nxPageInset().start)
                 }
             }
         }
@@ -357,7 +354,7 @@ fun MainMenuScreen(
                 topIcons,
                 Modifier.align(Alignment.TopEnd)
                     .pageFixed()   // still while the page slides between tabs, as the tab row is
-                    .height(MENU_TAB_ROW_HEIGHT).padding(end = nxPageGutter() - TOP_ICON_INSET + textInset)
+                    .height(MENU_TAB_ROW_HEIGHT).padding(end = nxPageInset().end - TOP_ICON_INSET)
                     .nxListTopCut(topCut),
             )
         }
@@ -365,13 +362,6 @@ fun MainMenuScreen(
     }
 }
 
-/**
- * How far in from the gutter the main menu's top and bottom rows (the stats, the facts, the tab words, the icons) sit in
- * [style]: a List's names start [nxListInset] inside the selected pill's edge on the gutter, so in a List they come in
- * by that much too and line up with the names; the other styles' content starts on the gutter.
- */
-@Composable
-internal fun listTextInset(style: MenuStyle): Dp = if (style == MenuStyle.LIST) nxListInset() else 0.dp
 
 /** [ground] from clear at the top to solid at the bottom on a smoothstep (zero slope at both ends): List Home's art fade. */
 internal fun smoothFadeStops(ground: Color): Array<Pair<Float, Color>> = Array(SMOOTH_FADE_STOPS) { i ->

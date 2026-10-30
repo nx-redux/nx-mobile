@@ -46,7 +46,7 @@ class ListArtTest {
     }
 
     @Test fun the_names_stop_short_of_the_box() {
-        assertEquals(800f * LIST_ART_WIDTH_SHARE + 24f + 8f, listArtLabelEnd(800f, portrait = false))
-        assertEquals(400f * LIST_ART_WIDTH_SHARE + 16f + 8f, listArtLabelEnd(400f, portrait = true))
+        assertEquals(800f * LIST_ART_WIDTH_SHARE + 24f + 8f, listArtLabelEnd(800f, insetEnd = 24f))
+        assertEquals(400f * LIST_ART_WIDTH_SHARE + 16f + 8f, listArtLabelEnd(400f, insetEnd = 16f))
     }
 }

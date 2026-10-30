@@ -1572,19 +1572,28 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         fillCollectionCounts()
     }
 
+    /** [games]' hidden save state frames by path ([UserDataStore.hiddenStateShot]); an Android game has none. */
+    private suspend fun homeShots(games: List<Listed>): Map<String, String> =
+        games.distinctBy { it.game.path }.filter { !it.system.android && !it.system.unassigned }
+            .mapNotNull { e -> deps.userData.hiddenStateShot(e.system.tag, e.game.fileName)?.let { e.game.path to it } }.toMap()
+
     private suspend fun buildMainRows() {
         pins = deps.userData.readPins()
         val recents = deps.userData.readRecents()
         // Continue: the first recent that resolves, whether or not it can resume.
-        val last = recents.firstNotNullOfOrNull { resolveOne(it.path) }
-            ?.let { e -> MainRow.Continue(e, deps.userData.resumeInfo(e.system.tag, e.game.fileName)) }
+        val lastGame = recents.firstNotNullOfOrNull { resolveOne(it.path) }
         val tools = toolRows()
         // The Android pins after the ROM pins, resolved against the console (one that left it is skipped, and kept).
         // Each game once (a hidden copy's line opens its home game, [resolveDistinct]); the recent set also holds the
         // resolved games' own paths, so a home game played as its hidden copy is not "not started".
         val lookup = playable()
         val played = recents.map { it.path }.toSet() + resolveDistinct(lookup, recents.map { it.path }).map { it.game.path }
-        val inputs = HomeInputs(last, resolveDistinct(lookup, pins.map { it.path }) + androidPinned(), pinnedToolRows(toolPins, tools + homeOnlyAppRows(tools)), played)
+        val pinned = resolveDistinct(lookup, pins.map { it.path }) + androidPinned()
+        // Each game's hidden save state's frame (Save & Quit's), for Continue, the pins and the shelves' played games: only
+        // a played game has one, so the recents and the pins are every candidate.
+        val shots = homeShots(listOfNotNull(lastGame) + pinned + resolveDistinct(lookup, recents.map { it.path }))
+        val last = lastGame?.let { e -> MainRow.Continue(e, deps.userData.resumeInfo(e.system.tag, e.game.fileName), shots[e.game.path]) }
+        val inputs = HomeInputs(last, pinned, pinnedToolRows(toolPins, tools + homeOnlyAppRows(tools)), played, shots)
         val built = homeTab.homeFor(inputs)   // the stats as they are now, after the reads
         homeTab.homeInputs = inputs
         allMenuTabs = buildMenuTabs(

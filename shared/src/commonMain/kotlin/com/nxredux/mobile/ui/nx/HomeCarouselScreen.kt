@@ -34,6 +34,7 @@ import com.nxredux.mobile.ui.InfoLine
 import com.nxredux.mobile.ui.MainRow
 import com.nxredux.mobile.ui.abstractAccentArtUrl
 import com.nxredux.mobile.ui.abstractArtFor
+import com.nxredux.mobile.ui.continueFrame
 import com.nxredux.mobile.ui.continuePictures
 import com.nxredux.mobile.ui.gridTiles
 import com.nxredux.mobile.ui.homeCarouselRowCount
@@ -119,10 +120,10 @@ internal fun homeCarouselScreenCentred(
  */
 internal fun homeCarouselTiles(rows: List<MainRow>, accentRgb: Int): List<GridTile> = rows.mapNotNull { r ->
     when (r) {
-        is MainRow.Continue -> continuePictures(r.resume.previewPath, r.entry).firstOrNull().let { picture ->
+        is MainRow.Continue -> continuePictures(continueFrame(r), r.entry).firstOrNull().let { picture ->
             GridTile.Game(
                 picture, r.entry.game.shownName, abstractUrl = abstractArtFor(r.entry),
-                resumeFrame = picture != null && picture == r.resume.previewPath,
+                resumeFrame = picture != null && picture == continueFrame(r),
             )
         }
         MainRow.PickAGame -> GridTile.Game(abstractAccentArtUrl(accentRgb), PICK_A_GAME)
@@ -184,7 +185,7 @@ internal fun HomeCarouselScreen(
 ) {
     val colors = LocalNxColors.current
     val portrait = LocalPortrait.current
-    val gutter = pageGutter(portrait).dp
+    val inset = nxPageInset()   // the strip and the Pick a game card on it
     BoxWithConstraints(modifier.fillMaxSize()) {
         val frame = homeFrameHere() ?: return@BoxWithConstraints
         val report by rememberUpdatedState(onLayout)
@@ -229,19 +230,19 @@ internal fun HomeCarouselScreen(
             // In the header with the tab row hidden, else centred over the centred carousel, in either orientation.
             if (header != null) shownStrip?.let {
                 HomeStripLines(
-                    it, header.lines, gutter.value, header.stripTop, width = width - 2 * gutter.value - HOME_HEADER_ICONS_ROOM,
+                    it, header.lines, inset.start.value, header.stripTop, width = width - (inset.start + inset.end).value - HOME_HEADER_ICONS_ROOM,
                     lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
                 )
             } else shownStrip?.let {
                 HomeStripLines(
-                    it, stripLines, gutter.value, place.stripInkTop - capTop,
-                    width = width - 2 * gutter.value, lh = homeStripLineH(frame), pitch = homeStripPitch(frame), centred = true,
+                    it, stripLines, inset.start.value, place.stripInkTop - capTop,
+                    width = width - (inset.start + inset.end).value, lh = homeStripLineH(frame), pitch = homeStripPitch(frame), centred = true,
                 )
             }
             val box = Modifier.offset(y = (headerH + place.boxTop).dp).height(place.boxH.dp).fillMaxWidth()
             if (pick) {
                 // Nothing played and no pins: the Pick a game card fills the room between the strip and the dock.
-                HomePickCard({ sel() }, onSelect, onOpen, longPress?.takeIf { tabMenu }, portrait, box.padding(horizontal = gutter))
+                HomePickCard({ sel() }, onSelect, onOpen, longPress?.takeIf { tabMenu }, portrait, box.padding(start = inset.start, end = inset.end))
             } else if (rowCount > 0) {
                 val accent = colors.accent.toArgb() and 0xFFFFFF
                 val tiles = remember(rows, rowCount, accent) { homeCarouselTiles(rows.take(rowCount), accent) }

@@ -4,17 +4,17 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class ToolAppsGridTest {
-    // As many tiles of at least the minimum width as fit between the gutters, never fewer than one.
+    // As many tiles of at least the minimum width as fit inside the page insets, never fewer than one.
     @Test fun columnsFitTheWidth() {
-        assertEquals(4, toolAppsColumns(412f))    // a phone in portrait
-        assertEquals(1, toolAppsColumns(60f))     // narrower than a tile: still one
-        assertEquals(5, toolAppsColumns(520f))
-        assertEquals(9, toolAppsColumns(870f))    // a phone in landscape, full screen
+        assertEquals(4, toolAppsColumns(412f, sides = 60f))    // a phone in portrait, 30 dp a side
+        assertEquals(1, toolAppsColumns(60f, sides = 60f))     // narrower than a tile: still one
+        assertEquals(5, toolAppsColumns(520f, sides = 60f))
+        assertEquals(9, toolAppsColumns(870f, sides = 78f))    // a phone in landscape, the camera's 40 and 38
     }
 
     @Test fun tilesShareTheRowExactly() {
-        val w = toolAppsTileWidth(412f, 4)
-        assertEquals(412f, 4 * w + 3 * TOOL_APPS_GAP + 2 * TOOL_APPS_GUTTER, 0.001f)
+        val w = toolAppsTileWidth(412f, 4, sides = 60f)
+        assertEquals(412f, 4 * w + 3 * TOOL_APPS_GAP + 60f, 0.001f)
     }
 
     // Rows 100 px tall, 10 apart; the viewport's whole rows end at 400; row 2 is laid out first, at -30 (partly above).

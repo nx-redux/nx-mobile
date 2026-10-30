@@ -214,9 +214,15 @@ private fun InGameMenuContent(
             .fillMaxSize()
             .background(if (opaque) LocalNxColors.current.background else LocalNxColors.current.scrimMenuWash)
             .pointerInput(Unit) { detectTapGestures { /* swallow */ } }
-            // The wash covers the camera cutout; the content stays clear of it on whichever side it is.
-            .windowInsetsPadding(WindowInsets.displayCutout),
+            // The wash covers the camera cutout; the cutout above and below pads the content, the side one is in the
+            // page inset ([nxPageInset]).
+            .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Vertical)),
     ) {
+        // The title and the body's words on the page inset, as every screen's: the body laid out [nxListInset] in from
+        // the highlights' edge ([PageInset.pillStart]), where its labels and title always started. The hint bar below
+        // spans the width, its glyphs on the inset.
+        val inset = nxPageInset()
+        Column(Modifier.weight(1f).fillMaxWidth().padding(start = inset.pillStart, end = inset.pillEnd)) {
         // The game header on every page, where the dual-screen panel draws it; without a panel the standard page title.
         if (panel != null) GamePanelHeaderBar(panel.state.header) else NxPageTitle(page.title)
         if (split?.wide == true) {
@@ -230,6 +236,7 @@ private fun InGameMenuContent(
             else -> key(page.kind) {
                 OptionsBody(page, rowHeight, onSelect, onActivate, onOption, onInfoTruncated, Modifier.weight(1f))
             }
+        }
         }
         // In landscape the menu covers the pad, so each hint is a tap target that sends its button (see
         // [menuHintButton]); off the root page a tap on the bar's empty space is Back.
@@ -272,7 +279,7 @@ private fun RootBody(
     val listShare = rootListShare(LocalPortrait.current)
     // The labels start [MenuPillPadding] into their pills, where the page title's first letter sits ([nxListInset]).
     // No top room: the panel's tab row sits right under the header, as in the dual-screen panel, the list's first row beside it.
-    Row(modifier.fillMaxWidth().padding(start = nxListInset() - MenuPillPadding, end = 20.dp, bottom = 8.dp)) {
+    Row(modifier.fillMaxWidth().padding(start = nxListInset() - MenuPillPadding, end = nxListInset(), bottom = 8.dp)) {
         if (panes.focusLeft) {
             Box(Modifier.weight(listShare).fillMaxHeight().alpha(rootListAlpha(state)), contentAlignment = Alignment.TopStart) {   // role: an unfocused pane, dimmed
                 RootList(panes.left, rowHeight, onSelect, onActivate, onChange)
@@ -422,7 +429,7 @@ private fun SplitBody(
                     MenuPaneContent.Slots -> SlotPreview(
                         slot = slots.getOrNull(state.slotIndex), slotIndex = state.slotIndex, slotCount = slots.size,
                         textSize = slotTextSize, onTap = { onActivate(state.page.selected) }, onChange = onChange,
-                        modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = 20.dp, top = 8.dp, bottom = 8.dp),   // level with the panel's gutter
+                        modifier = Modifier.fillMaxSize().padding(start = 16.dp, end = nxListInset(), top = 8.dp, bottom = 8.dp),   // its end on the page inset
                     )
                     // The focused page: touch rows (the dimmed parent on the left keeps its pills); or the root's preview.
                     is MenuPaneContent.Page ->
@@ -539,7 +546,7 @@ private fun MessageBody(page: MenuPage, onDismiss: () -> Unit, modifier: Modifie
     LaunchedEffect(page.scrollSeq) { if (page.scrollSeq > 0) scroll.animateScrollBy(page.scrollDir * stepPx) }
     // Message pages have no rows, so a tap anywhere on the message dismisses it (touch equivalent of B).
     Box(
-        modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures { dismiss() } }.padding(horizontal = 28.dp),
+        modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures { dismiss() } }.padding(horizontal = nxListInset()),   // on the page inset
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -615,17 +622,18 @@ private fun AdjustContent(
     val pillHeight = rowHeight * 0.84f
     val dismiss by rememberUpdatedState(onDismiss)
     val background = LocalNxColors.current.background
-    Column(Modifier.fillMaxSize().then(if (header != null) Modifier.background(background).windowInsetsPadding(WindowInsets.displayCutout) else Modifier)) {
-        header?.let { GamePanelHeaderBar(it) }
+    val inset = nxPageInset()
+    Column(Modifier.fillMaxSize().then(if (header != null) Modifier.background(background).windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Vertical)) else Modifier)) {
+        header?.let { Box(Modifier.padding(start = inset.pillStart, end = inset.pillEnd)) { GamePanelHeaderBar(it) } }   // as the menu's, on the page inset
         Box(Modifier.weight(1f).fillMaxWidth().pointerInput(Unit) { detectTapGestures { dismiss() } })
         Column(
             Modifier.fillMaxWidth()
                 .background(LocalNxColors.current.scrimAdjust)
-                .pointerInput(Unit) { detectTapGestures { /* swallow */ } }
-                .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)),
+                .pointerInput(Unit) { detectTapGestures { /* swallow */ } },
         ) {
+            // The label on the page inset ([nxPageInset]), its pill [MenuPillPadding] outside it; the bar ends as far in.
             Box(
-                Modifier.fillMaxWidth().height(rowHeight).padding(horizontal = 20.dp),
+                Modifier.fillMaxWidth().height(rowHeight).padding(start = inset.start - MenuPillPadding, end = inset.end - MenuPillPadding),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 Row(

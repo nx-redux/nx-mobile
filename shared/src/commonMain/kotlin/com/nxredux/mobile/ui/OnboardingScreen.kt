@@ -132,7 +132,8 @@ internal fun SetupBlockPage(
             SetupButtons(rows.takeLast(shown).map { it.label }, list.size, selected, word, onSelect, onRow)
         }
     }
-    val gutter = settingsGutter(settingsSizeClass())
+    val plateStart = settingsPlateStart()
+    val gutter = settingsPlateEnd()   // the right side's plate edge
     // The rows block's list (its fades, its row pitch) and the hints on the rows' text edge, as Settings' ([settingsSectionStart]).
     CompositionLocalProvider(LocalSettingsBlock provides SettingsBlockMode(crumb = counter), LocalNxHintBarStart provides settingsSectionStart()) {
         Column(modifier.fillMaxSize()) {
@@ -145,7 +146,7 @@ internal fun SetupBlockPage(
                     // At most the Settings rows block's width ([SETTINGS_FRAME_MAX]), from the start gutter: the lines wrap in it and a
                     // row's control stays near its label; the button on the rows' left edge under it.
                     Column(
-                        Modifier.fillMaxHeight().padding(start = gutter, end = gutter, top = SETTINGS_ROWS_TOP, bottom = SETTINGS_BLOCK_BOTTOM)
+                        Modifier.fillMaxHeight().padding(start = plateStart, end = gutter, top = SETTINGS_ROWS_TOP, bottom = SETTINGS_BLOCK_BOTTOM)
                             .widthIn(max = SETTINGS_FRAME_MAX).fillMaxWidth(),
                     ) {
                         SetupGroupRoom(line, if (shown > 0) (-gap).coerceAtLeast(0.dp) else 0.dp, Modifier.weight(1f).fillMaxWidth()) {

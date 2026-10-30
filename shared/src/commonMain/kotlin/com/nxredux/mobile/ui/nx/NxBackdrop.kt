@@ -446,9 +446,9 @@ fun NxBackdrop(
         if (g.itemW <= 1f || g.itemH <= 1f || count == 0) return@BoxWithConstraints
         val top = place.rowTop + centreShift.value
 
-        val gutter = pageGutter(portrait).dp
-        val avail = maxWidth - gutter * 2
-        val availPx = constraints.maxWidth - 2 * with(LocalDensity.current) { gutter.roundToPx() }
+        val inset = nxPageInset()   // the caption's text inside it
+        val avail = maxWidth - inset.start - inset.end
+        val availPx = constraints.maxWidth - with(LocalDensity.current) { inset.start.roundToPx() + inset.end.roundToPx() }
         val spare = (maxHeight.value - place.captionBottom - CAPTION_SPARE_MARGIN).coerceAtLeast(0f)
 
         // The animated position, in items ([rememberRowPosition]: a new screen or a new list snaps). The selection
@@ -492,7 +492,7 @@ fun NxBackdrop(
 
         // The time and the achievements, then the next goal under the name's one line.
         if (captioned) RowCaption(
-            captionTitle, captionInfo, glide, nameStyle, 1, infoStyle, gutter, avail, availPx, spare, selTop, rowH + capGap, colors.accent,   // the name in the accent
+            captionTitle, captionInfo, glide, nameStyle, 1, infoStyle, inset, avail, availPx, spare, selTop, rowH + capGap, colors.accent,   // the name in the accent
         )
     }
 }
