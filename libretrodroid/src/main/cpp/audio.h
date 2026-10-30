@@ -26,7 +26,7 @@
 #include <oboe/Oboe.h>
 #include <oboe/FifoBuffer.h>
 
-#include "resamplers/linearresampler.h"
+#include <samplerate.h>
 
 namespace libretrodroid {
 
@@ -81,6 +81,11 @@ public:
     void setFastForward(bool active, bool audible);
     // nx-mobile 2026-10-24: rewind without its audio mutes the output like muted FF, refilled the same way after.
     void setRewind(bool active, bool audible);
+    // nx-mobile 2026-10-30: libsamplerate converter levels, as the handheld's Audio Resampling Quality.
+    enum Quality { LOW = 0, MEDIUM = 1, HIGH = 2, MAX = 3, QUALITY_COUNT = 4 };
+    // The resampler for what plays from now; audible fast forward plays at MEDIUM at most. An unknown value is HIGH.
+    // GL thread: a level's converter is made here the first time, never on the realtime callback.
+    void setResamplingQuality(int quality);
 
 private:
     static int32_t roundToEven(int32_t x);
@@ -91,6 +96,11 @@ private:
     void tuneLatency();
     std::unique_ptr<Audio::AudioLatencySettings> findBestLatencySettings(bool preferLowLatencyAudio);
     double computeMaximumLatency() const;
+    // libsamplerate's input callback: the next INPUT_CHUNK_FRAMES from the FIFO (zeros past what it holds).
+    static long readInput(void *self, float **data);
+    // Audio callback thread: the converter for this callback (the level, capped during audible FF), reset when the
+    // level changes or output resumes after silence, so no stale history plays.
+    SRC_STATE *converterFor(bool audibleFastForward);
 
 private:
     const double kp = 0.006;
@@ -98,12 +108,23 @@ private:
     const double maxp = 0.003;
     const double maxi = 0.02;
 
-    LinearResampler resampler;
-
     // Live for the whole Audio: the GL thread writes and the audio callback reads them across stream reopens.
     std::unique_ptr<oboe::FifoBuffer> fifoBuffer = nullptr;
-    std::unique_ptr<int16_t[]> temporaryAudioBuffer = nullptr;
-    int32_t temporaryAudioBufferFrames = 0;
+    int32_t audioBufferFrames = 0;
+
+    // nx-mobile 2026-10-30: streaming libsamplerate converters, one per level, made on first use (setResamplingQuality)
+    // and kept until ~Audio. Each keeps its position and filter history across callbacks, unlike the per-callback
+    // linear resampler it replaces, which restarted at every buffer edge.
+    static constexpr int32_t INPUT_CHUNK_FRAMES = 64;
+    static constexpr int32_t OUTPUT_CHUNK_FRAMES = 1024;
+    std::array<std::atomic<SRC_STATE *>, QUALITY_COUNT> converters {};
+    std::atomic<int> quality { HIGH };
+    std::unique_ptr<int16_t[]> inputShorts;
+    std::unique_ptr<float[]> inputFloats;
+    std::unique_ptr<float[]> outputFloats;
+    // Audio callback thread only.
+    int playingQuality = -1;
+    bool converterResetPending = true;
 
     // Guards stream, latencyTuner, startRequested and closed. start/stop, the error thread's reopen and ~Audio
     // take it; the realtime callback only try_locks it.
@@ -120,7 +141,6 @@ private:
     std::atomic<double> baseConversionFactor { 1.0 };
 
     // Audio callback thread only.
-    double framesToSubmit = 0.0;
     double errorIntegral = 0.0;
 
     std::atomic<double> playbackSpeed { 1.0 };

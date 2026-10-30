@@ -84,6 +84,19 @@ class GLRetroView(
     }
 
     /**
+     * Audio resampling quality: 0 Low (zero-order hold), 1 Medium (linear), 2 High (fast sinc), 3 Max (best sinc).
+     * Audible fast forward plays at Medium at most. Main thread; pushed straight to native, kept across games and
+     * re-applied after create().
+     */
+    var resamplingQuality: Int by Delegates.observable(2) { _, old, value ->
+        if (old != value) pushResamplingQuality()
+    }
+
+    private fun pushResamplingQuality() {
+        LibretroDroid.setResamplingQuality(resamplingQuality)
+    }
+
+    /**
      * What the core's mic hears: 0 silence, 1 the phone mic (noise if it can't open), 2 noise. Main thread; pushed
      * straight to native, not queued on the GL thread, so turning live off closes the mic while paused too. Re-applied
      * after create().
@@ -350,6 +363,7 @@ class GLRetroView(
         pushFastForward()
         pushRewind()
         pushMicrophoneSource()
+        pushResamplingQuality()
     }
 
     /**

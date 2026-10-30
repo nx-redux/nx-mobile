@@ -14,6 +14,7 @@ class FrontendOptionsTest {
                 FrontendOptions.OFFSET_X to "0", FrontendOptions.OFFSET_Y to "0", FrontendOptions.PAD_LANDSCAPE_OPACITY to "40",
                 FrontendOptions.DEBUG_HUD to "Off", BottomScreenOptions.KEY to "default", PadOptions.LAYOUT to "auto",
                 SpeedOptions.MAX_FF to "4", SpeedOptions.FF_AUDIO to "Off", SpeedOptions.REWIND to "Off", SpeedOptions.REWIND_AUDIO to "Off",
+                AudioOptions.RESAMPLING to "High",
             ),
             FrontendOptions.defaults("GBA"),   // GBA: Bottom screen, Controller Layout and the speed rows (as every console)
         )

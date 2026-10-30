@@ -1113,6 +1113,14 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setMicroph
     MicrophoneInterface::setSource(source);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setResamplingQuality(
+    JNIEnv* env,
+    jclass obj,
+    jint quality
+) {
+    LibretroDroid::getInstance().setResamplingQuality(quality);
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setRewindEnabled(
     JNIEnv* env,
     jclass obj,

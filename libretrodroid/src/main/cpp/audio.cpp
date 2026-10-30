@@ -33,8 +33,14 @@ Audio::Audio(int32_t sampleRate, double refreshRate, bool preferLowLatencyAudio)
 
     int32_t audioBufferSize = computeAudioBufferSize();
     fifoBuffer = std::make_unique<oboe::FifoBuffer>(2, audioBufferSize);
-    temporaryAudioBuffer = std::unique_ptr<int16_t[]>(new int16_t[audioBufferSize]);
-    temporaryAudioBufferFrames = audioBufferSize / 2;
+    audioBufferFrames = audioBufferSize / 2;
+
+    inputShorts = std::unique_ptr<int16_t[]>(new int16_t[INPUT_CHUNK_FRAMES * 2]);
+    inputFloats = std::unique_ptr<float[]>(new float[INPUT_CHUNK_FRAMES * 2]);
+    outputFloats = std::unique_ptr<float[]>(new float[OUTPUT_CHUNK_FRAMES * 2]);
+    // MEDIUM always exists (audible FF's cap), HIGH is the default; the others are made when picked.
+    setResamplingQuality(MEDIUM);
+    setResamplingQuality(HIGH);
 
     errorHandler = std::make_shared<StreamErrorHandler>(this);
 
@@ -55,6 +61,10 @@ Audio::~Audio() {
     }
     latencyTuner = nullptr;
     stream = nullptr;
+
+    for (auto &converter : converters) {
+        if (SRC_STATE *state = converter.load()) src_delete(state);
+    }
 }
 
 // Call with streamMutex held. Only the stream and its tuner change; the FIFO and buffers stay.
@@ -74,7 +84,7 @@ bool Audio::openStreamLocked() {
     if (audioLatencySettings->useLowLatencyStream) {
         builder.setPerformanceMode(oboe::PerformanceMode::LowLatency);
     } else {
-        builder.setFramesPerCallback(temporaryAudioBufferFrames * 2 / 10);
+        builder.setFramesPerCallback(audioBufferFrames * 2 / 10);
     }
 
     std::shared_ptr<oboe::AudioStream> newStream;
@@ -197,7 +207,7 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
     // otherwise wind up against the empty FIFO and skew the rate once the game resumes. Refilling after FF likewise.
     if (speed <= 0.0 || muted || refilling) {
         std::fill_n(outputArray, numFrames * 2, (int16_t) 0);
-        framesToSubmit = 0.0;
+        converterResetPending = true;
         tuneLatency();
         return oboe::DataCallbackResult::Continue;
     }
@@ -205,25 +215,65 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
     double dynamicBufferFactor = computeDynamicBufferConversionFactor(0.001 * numFrames);
     double finalConversionFactor = baseConversionFactor.load() * dynamicBufferFactor * speed;
 
-    // When using low-latency stream, numFrames is very low (~100) and the dynamic buffer scaling doesn't work with rounding.
-    // By keeping track of the "fractional" frames we can keep the error smaller.
-    framesToSubmit += numFrames * finalConversionFactor;
-    int32_t currentFramesToSubmit = std::round(framesToSubmit);
-    framesToSubmit -= currentFramesToSubmit;
-
-    // A high fast-forward speed can ask for more than the scratch buffer holds; the excess is dropped.
-    currentFramesToSubmit = std::clamp(currentFramesToSubmit, 0, temporaryAudioBufferFrames);
-
-    if (currentFramesToSubmit > 0) {
-        fifoBuffer->readNow(temporaryAudioBuffer.get(), currentFramesToSubmit * 2);
-        resampler.resample(temporaryAudioBuffer.get(), currentFramesToSubmit, outputArray, numFrames);
-    } else {
-        std::fill_n(outputArray, numFrames * 2, (int16_t) 0);
+    // The converter pulls the input frames this ratio needs from the FIFO (readInput), keeping the fraction of a frame
+    // it is between from one callback to the next.
+    SRC_STATE *converter = converterFor(fastForward > 0.0);
+    constexpr double MAX_RATIO = 256.0;   // libsamplerate's limit either way
+    const double ratio = std::clamp(1.0 / finalConversionFactor, 1.0 / MAX_RATIO, MAX_RATIO);
+    int32_t framesDone = 0;
+    while (converter != nullptr && framesDone < numFrames) {
+        const long frames = std::min(numFrames - framesDone, OUTPUT_CHUNK_FRAMES);
+        const long produced = src_callback_read(converter, ratio, frames, outputFloats.get());
+        if (produced <= 0) break;
+        src_float_to_short_array(outputFloats.get(), outputArray + framesDone * 2, (int) produced * 2);
+        framesDone += (int32_t) produced;
     }
+    std::fill(outputArray + framesDone * 2, outputArray + numFrames * 2, (int16_t) 0);
 
     tuneLatency();
 
     return oboe::DataCallbackResult::Continue;
+}
+
+void Audio::setResamplingQuality(int newQuality) {
+    if (newQuality < LOW || newQuality > MAX) newQuality = HIGH;
+    if (converters[newQuality].load() == nullptr) {
+        static constexpr int TYPES[QUALITY_COUNT] = {
+            SRC_ZERO_ORDER_HOLD, SRC_LINEAR, SRC_SINC_FASTEST, SRC_SINC_BEST_QUALITY
+        };
+        int error = 0;
+        SRC_STATE *state = src_callback_new(readInput, TYPES[newQuality], 2, &error, this);
+        if (state == nullptr) {
+            LOGE("Resampler %d unavailable: %s", newQuality, src_strerror(error));
+            return;   // the level in use stays
+        }
+        converters[newQuality].store(state);
+    }
+    quality.store(newQuality);
+}
+
+long Audio::readInput(void *self, float **data) {
+    auto audio = static_cast<Audio *>(self);
+    audio->fifoBuffer->readNow(audio->inputShorts.get(), INPUT_CHUNK_FRAMES * 2);
+    src_short_to_float_array(audio->inputShorts.get(), audio->inputFloats.get(), INPUT_CHUNK_FRAMES * 2);
+    *data = audio->inputFloats.get();
+    return INPUT_CHUNK_FRAMES;
+}
+
+SRC_STATE *Audio::converterFor(bool audibleFastForward) {
+    int level = quality.load();
+    if (audibleFastForward) level = std::min(level, (int) MEDIUM);
+    SRC_STATE *converter = converters[level].load();
+    if (converter == nullptr) {
+        level = MEDIUM;
+        converter = converters[MEDIUM].load();
+    }
+    if (converter != nullptr && (level != playingQuality || converterResetPending)) {
+        src_reset(converter);
+        playingQuality = level;
+        converterResetPending = false;
+    }
+    return converter;
 }
 
 // Realtime thread: never wait for streamMutex. A reopen or start/stop holding it just skips one tune.

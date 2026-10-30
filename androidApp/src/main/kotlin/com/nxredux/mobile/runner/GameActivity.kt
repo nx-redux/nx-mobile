@@ -90,6 +90,7 @@ import com.nxredux.mobile.netplay.NetplaySaves
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.NetplayText
+import com.nxredux.mobile.options.AudioOptions
 import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.CoreConfig
@@ -2161,6 +2162,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val s = FrontendSettings.parse(values)
         padLayout.padLandscapeAlpha.value = s.padLandscapeAlpha
         val view = retroView ?: return
+        view.resamplingQuality = AudioOptions.qualityOf(values)
         view.scaleMode = when (s.scaling) {
             ScreenScaling.NATIVE -> ScaleMode.INTEGER
             // Auto: the viewport is the picture (or its overlay box) as the renderer placed it; the game fits it.

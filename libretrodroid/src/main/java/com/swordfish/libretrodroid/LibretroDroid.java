@@ -146,6 +146,8 @@ public class LibretroDroid {
      * leaving 1 closes the phone mic at once, even while the game is paused.
      */
     public static native void setMicrophoneSource(int source);
+    /** Audio resampling quality, 0 Low to 3 Max (the Audio Resampling Quality row). Any thread, not queued. */
+    public static native void setResamplingQuality(int quality);
     /** Rewind snapshots (once the core can serialize); off frees them. Never in netplay or a GBA link session. */
     public static native void setRewindEnabled(boolean enabled);
     /** Steps back through the snapshots instead of playing; wins over fast forward. */

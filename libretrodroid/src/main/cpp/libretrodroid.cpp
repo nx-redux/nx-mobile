@@ -705,6 +705,7 @@ void LibretroDroid::step() {
     if (!rewindHeld) rewindEmptyLatched = false;
     applyRewinding(rewinding);
     applyFastForward((np || lk || rewindHeld) ? 0 : fastForwardSpeed.load(), fastForwardAudible.load());
+    if (audio) audio->setResamplingQuality(resamplingQuality.load());
     // Paused during FF (speed 0) takes the normal paused path below; FF picks up again on resume, its clock resynced.
     const bool fastForward = fastForwardPacer.active() && speed > 0;
 
@@ -1229,6 +1230,7 @@ void LibretroDroid::afterGameLoad() {
         system_av_info.timing.fps,
         preferLowLatencyAudio
     );
+    audio->setResamplingQuality(resamplingQuality.load());
 
     updateAudioSampleRateMultiplier();
 
