@@ -17,8 +17,7 @@ internal fun Activity.ownAppTask(): ActivityManager.AppTask? {
 
 /**
  * Launcher mode: keeps this activity's task out of Recents. Recents (Launcher3's) lists a third-party home's task as an
- * ordinary card, and swiping it away leaves another launcher's home in front, out of reach of the home gesture; the
- * paused game's own task goes too, as picking the game in the menu brings it back.
+ * ordinary card, and swiping it away leaves another launcher's home in front, out of reach of the home gesture.
  */
 internal fun Activity.hideTaskFromRecents() {
     runCatching { ownAppTask()?.setExcludeFromRecents(true) }.onFailure { NxLog.w("NXAPP", "hide task from Recents: ${it.message}") }
