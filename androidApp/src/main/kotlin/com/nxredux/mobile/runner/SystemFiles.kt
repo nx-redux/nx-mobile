@@ -4,8 +4,6 @@ import android.content.Context
 import com.swordfish.libretrodroid.NxLog
 import java.io.File
 import java.io.InputStream
-import java.nio.channels.FileChannel
-import java.nio.file.StandardOpenOption
 
 /**
  * Cores read BIOS/asset files from an app-owned system directory. On the target phone the app cannot read
@@ -62,18 +60,13 @@ object SystemFiles {
     internal fun sync(dir: File, current: String, source: Source): Boolean = synchronized(lock) {
         dir.mkdirs()
         // The in-process lock does not span the menu and the game process, which both run this: a file lock beside the dir does.
-        val lockFile = dir.parentFile?.let { File(it, LOCK_FILE) }
-        val channel = lockFile?.let { runCatching { FileChannel.open(it.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE) }.getOrNull() }
-        try {
-            channel?.lock()
+        withFileLock(File(dir.parentFile ?: dir, LOCK_FILE)) {
             val stamp = File(dir, STAMP)
             if (stamp.isFile && stamp.readText() == current) return false
             if (source.list("system").isEmpty()) return false   // nothing staged in this build (cores pipeline not run)
             copyTree(source, "system", dir)
             stamp.writeAtomically(current.encodeToByteArray())   // last: an unstamped dir is never trusted
             true
-        } finally {
-            runCatching { channel?.close() }   // closing releases the lock
         }
     }
 

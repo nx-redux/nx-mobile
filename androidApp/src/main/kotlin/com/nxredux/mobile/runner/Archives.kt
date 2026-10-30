@@ -59,7 +59,7 @@ object Archives {
         } ?: throw cannotOpen(archiveName, null, null)
         pfd.use { descriptor ->
             val dir = File(RomCache.root(context), "$archiveName.${descriptor.statSize}")
-            synchronized(RomCache.lockFor(dir.name)) {
+            RomCache.withEntryLock(dir.parentFile!!, dir.name) {
                 RomCache.hold(context, dir.name)
                 try {
                     FileInputStream(descriptor.fileDescriptor).channel.use { channel ->

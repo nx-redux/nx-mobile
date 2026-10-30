@@ -14,27 +14,37 @@ import java.util.concurrent.ConcurrentHashMap
  * [Archives]) or real-path copy (`<file name>`, GameActivity.copyToCache). An entry's mtime is its last use (touched on
  * creation and on every reuse), and [sweep] trims the cache by [CacheSweep]'s policy. Each entry has one lock
  * (unpack/copy and delete of one entry never overlap) and a hold count: a held entry (the running game's, one being
- * hashed) is never deleted. The lock is per process; a hold is also a marker file `.holds/<name>@<pid>` under the root, so
- * the menu's sweep sees what the game process holds (and the reverse). A marker whose process is gone is dropped by the sweep.
+ * hashed) is never deleted. The lock spans both processes ([withEntryLock]: the menu's RA hashing and a game launch may
+ * unpack one archive at once); a hold is also a marker file `.holds/<name>@<pid>` under the root, so the menu's sweep sees
+ * what the game process holds (and the reverse). A marker whose process is gone is dropped by the sweep.
  */
 object RomCache {
     private const val TAG = "RomCache"
     /**
-     * A `.part` older than this is a killed process's leftover. In this process an unpack in flight holds its entry's
-     * lock (the sweep waits for it), so the age rule only guards a `.part` a dying process may have written moments ago.
+     * A `.part` older than this is a killed process's leftover. An unpack in flight holds its entry's lock (the sweep
+     * waits for it), so the age rule only guards a `.part` a dying process may have written moments ago.
      */
     private const val PART_MAX_AGE_MILLIS = 60L * 60 * 1000
     private const val PART = ".part"
     /** Holds' markers, `<name>@<pid>`; not a cache entry, so the sweep never lists it as one. */
     private const val HOLDS = ".holds"
+    /** Entries' cross-process lock files, `<name>`; never deleted (a process may be waiting on one). Not a cache entry. */
+    private const val LOCKS = ".locks"
 
     private val locks = ConcurrentHashMap<String, Any>()
     private val holds = ConcurrentHashMap<String, Int>()
 
     fun root(context: Context): File = File(context.cacheDir, "roms")
 
-    /** The lock of top-level entry [name]; held while it is unpacked, copied, reused or deleted. */
+    /** The in-process lock of top-level entry [name]; [withEntryLock] takes it with the cross-process one. */
     fun lockFor(name: String): Any = locks.getOrPut(name) { Any() }
+
+    /** Entry [name]'s cross-process lock file under [root]. */
+    fun lockFileOf(root: File, name: String) = File(root, "$LOCKS/$name")
+
+    /** Runs [block] holding entry [name]'s lock in this process and across processes: while it is unpacked, copied, reused or deleted. */
+    inline fun <T> withEntryLock(root: File, name: String, block: () -> T): T =
+        synchronized(lockFor(name)) { withFileLock(lockFileOf(root, name), block) }
 
     /**
      * Marks entry [name] in use until the matching [release]; counted, so a game and a hash may hold one entry at once
@@ -91,7 +101,7 @@ object RomCache {
     fun sweep(context: Context, now: Long = System.currentTimeMillis()) {
         runCatching {
             val root = root(context)
-            val children = (root.listFiles() ?: return).filter { it.name != HOLDS }
+            val children = (root.listFiles() ?: return).filter { it.name != HOLDS && it.name != LOCKS }
             val alive = AppProcess.aliveCheck(context)
             val held = sweepKeep(root, alive)
             val listed = children.mapNotNull { f -> runCatching { CacheEntry(f.name, sizeOf(f), f.lastModified()) }.getOrNull() }
@@ -101,9 +111,9 @@ object RomCache {
             var freed = 0L
             for (name in victims) runCatching {
                 val entry = File(root, name)
-                synchronized(lockFor(name)) {
+                withEntryLock(root, name) {
                     // Held (here or by the other process) or reused while we waited for its lock: it is the running game's or was just unpacked again.
-                    if (isHeld(name) || name in sweepKeep(root, alive) || entry.lastModified() != usedAt[name]) return@synchronized
+                    if (isHeld(name) || name in sweepKeep(root, alive) || entry.lastModified() != usedAt[name]) return@withEntryLock
                     val bytes = sizeOf(entry)
                     if (deleteTree(entry)) freed += bytes else NxLog.w(TAG, "could not delete ${entry.path}")
                 }
@@ -115,10 +125,10 @@ object RomCache {
     }
 
     /** A stale `.part` is removed without bumping the entry's mtime (the removal is not a use). */
-    private fun dropStaleParts(dir: File, now: Long, held: Set<String>) = synchronized(lockFor(dir.name)) {
-        if (isHeld(dir.name) || dir.name in held) return@synchronized
+    private fun dropStaleParts(dir: File, now: Long, held: Set<String>) = withEntryLock(dir.parentFile!!, dir.name) {
+        if (isHeld(dir.name) || dir.name in held) return@withEntryLock
         val stale = parts(dir).filter { now - it.lastModified() > PART_MAX_AGE_MILLIS }
-        if (stale.isEmpty()) return@synchronized
+        if (stale.isEmpty()) return@withEntryLock
         val usedAt = dir.lastModified()
         stale.forEach { if (!it.delete()) NxLog.w(TAG, "could not delete ${it.path}") }
         dir.setLastModified(usedAt)

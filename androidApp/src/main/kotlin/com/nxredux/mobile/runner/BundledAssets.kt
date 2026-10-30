@@ -18,16 +18,21 @@ object BundledAssets {
      * Makes `sd/<dir>` an exact copy of `assets/<assetDir>` if the installed APK changed since the last sync.
      * The fresh tree is built beside the live one and swapped in by renames, so the live tree is never
      * half-written; on any failure the current tree stays and the next start retries. Blocking I/O: call off
-     * the main thread. Locked per [dir], so concurrent callers of one tree (MainActivity and GameActivity) never
-     * build it twice at once, while different trees sync in parallel. Returns true when a refresh ran and
-     * swapped in a new tree.
+     * the main thread. Locked per [dir], in this process and across processes (MainActivity in the menu's,
+     * GameActivity in the game's), so callers of one tree never build or swap it twice at once, while different
+     * trees sync in parallel. The lock file sits in private storage, not beside the tree in the home folder, where a
+     * file lock may not hold. Returns true when a refresh ran and swapped in a new tree.
      */
     fun sync(context: Context, assetDir: String, dir: String): Boolean = synchronized(locks.getOrPut(dir) { Any() }) {
+        withFileLock(File(context.filesDir, "bundled-${dir.replace('/', '_')}.lock")) { syncLocked(context, assetDir, dir) }
+    }
+
+    private fun syncLocked(context: Context, assetDir: String, dir: String): Boolean {
         val sd = NxStorage.root(context)
         val target = File(sd, dir)
         val fresh = File(sd, "$dir.new")
         val old = File(sd, "$dir.old")
-        runCatching {
+        return runCatching {
             // lastUpdateTime changes on every install, dev builds included, unlike versionCode.
             val current = context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime.toString()
             val stamp = File(target, STAMP)

@@ -1993,7 +1993,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val target = File(root, fileName)
         val stampFile = File(root, cacheSiblingName(fileName, REAL_PATH_STAMP))
         val part = File(root, cacheSiblingName(fileName, ".part"))
-        synchronized(RomCache.lockFor(target.name)) {
+        RomCache.withEntryLock(root, target.name) {
             RomCache.hold(this, target.name); keepCacheHold(target.name)
             RomCache.hold(this, stampFile.name); keepCacheHold(stampFile.name)   // a swept stamp would only cost a recopy, but keep it
             val size = refs.size(ref) ?: -1L
