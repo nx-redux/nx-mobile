@@ -52,8 +52,11 @@ void FPSSync::reset() {
     lastFrame = MIN_TIME;
 }
 
+// nx-mobile 2026-10-31: vsync runs one core frame per screen refresh, so the core's audio comes screen / content times
+// faster than its sample rate. Upstream had it inverted (content / screen), which on a 60 Hz screen asked the FIFO for
+// about 0.9% less than a 59.73 fps GBA wrote: it overfilled and dropped frames until the PI integral caught up.
 double FPSSync::getTimeStretchFactor() {
-    return useVSync ? contentRefreshRate / screenRefreshRate : 1.0;
+    return useVSync ? screenRefreshRate / contentRefreshRate : 1.0;
 }
 
 void FPSSync::wait() {
