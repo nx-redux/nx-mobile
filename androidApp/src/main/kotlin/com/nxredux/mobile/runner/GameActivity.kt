@@ -76,6 +76,7 @@ import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.cheats.DolphinCheats
 import com.nxredux.mobile.gametime.GameTimeRecorder
 import com.nxredux.mobile.gametime.GameTimeService
+import com.nxredux.mobile.launcher.bringHomeTaskToFront
 import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.NaomiSets
 import com.nxredux.mobile.layout.ScreenClass
@@ -201,6 +202,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_LAUNCH_ID = "launch_id"      // Long: the launcher's launch record (LaunchRecords), marked started once the game runs
         const val EXTRA_GAME_PATH = "game_path"      // the library path (GamePath): game time's identity; absent = not recorded
         const val EXTRA_ART_PATH = "art_path"        // the game's box art (GameSession.artPath): the game panel's header; absent = the console logo
+        const val EXTRA_OWN_TASK = "own_task"        // Boolean: launcher mode, the game runs in its own task
         const val EXTRA_FORCE_GLES = "force_gles"    // Boolean: the relaunch after Vulkan could not start (VulkanFallback)
         private const val SIMULATE_VULKAN_FAIL = "simulate_vulkan_fail"   // debug builds only: see startEmulator
         // netplay: a Wi-Fi netplay launch (GameSession.netplay); all absent for every other launch. The run core is EXTRA_CORE_ID.
@@ -1040,6 +1042,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /** Back to the menu the game fades to black over 150 ms: below Android 14 (no close override set in onCreate) set here. */
     override fun finish() {
+        // Launcher mode, quit on screen (not a handoff behind the menu, not the GLES relaunch): back to NX Redux's home.
+        if (intent.getBooleanExtra(EXTRA_OWN_TASK, false) && !relaunching && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) bringHomeTaskToFront()
         super.finish()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) @Suppress("DEPRECATION") overridePendingTransition(0, R.anim.launch_return_out)
     }

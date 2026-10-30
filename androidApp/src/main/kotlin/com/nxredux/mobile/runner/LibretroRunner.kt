@@ -83,6 +83,7 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
                 }
             }
             .addFlags(gameLaunchFlags(ownTask()))
+            .putExtra(GameActivity.EXTRA_OWN_TASK, ownTask())
         try {
             context.startActivity(intent)
             // The launch sequence's black meets the game screen's black: no open animation. Android 14+ sets it in
