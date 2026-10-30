@@ -2,8 +2,6 @@ package com.nxredux.mobile.settings
 
 import android.content.SharedPreferences
 import com.swordfish.libretrodroid.NxLog
-import java.util.concurrent.Executor
-import java.util.concurrent.Executors
 
 /**
  * The call into the main process's [PrefsProvider], in plain Kotlin types (the provider converts to and from a Bundle
@@ -14,82 +12,56 @@ fun interface PrefsChannel {
 }
 
 /**
- * A [SharedPreferences] for the game process: the main process owns the file, so a copy kept here would go stale in both
- * directions. Reads are served from a snapshot and never wait on the provider once one exists (they run on key events,
- * and a dead menu process would be cold-started by the call); the snapshot is fetched again on [background] when the
- * owner reports a change ([changed]) or, as a fallback, when a read finds it older than [MAX_AGE_MS]. Only a read before
- * the first snapshot fetches on the reading thread. A failed fetch keeps the old snapshot (an empty one at first), and the
- * next stale read retries. A write goes to the owner at once (apply and commit alike) and updates the snapshot. Change
- * listeners are not supported: nothing in the game process uses them.
+ * A [SharedPreferences] for the game process. Reads come from [local], this process's own instance of the file: the
+ * game process is new for every game, so it reads the file as it stood at launch (a setting changed in the menu meanwhile
+ * reaches the next game), never calling the menu process, so a key event never waits on it. Writes go to the owner, the
+ * main process ([PrefsProvider]), so its cached copy never writes over them later; once applied there they are kept in
+ * memory here ([written]) and read back at once. They are never written to the file from this process: [local]'s copy
+ * may be older than the owner's, and saving it would undo the menu's changes. Change listeners are not supported:
+ * nothing in the game process uses them.
  */
 class ProviderPreferences(
     val name: String,
     private val channel: PrefsChannel,
-    private val background: Executor = BACKGROUND,
-    private val now: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val local: SharedPreferences,
 ) : SharedPreferences {
     private val lock = Any()
-    /** Null until the first fetch answers or fails. */
-    private var snapshot: HashMap<String, Any?>? = null
-    private var fetchedAt = 0L
-    /** Bumped by every write and change notice: a fetch that saw an older generation may predate it, so it is dropped. */
-    private var generation = 0
-    private var refreshing = false
+    /** This process's applied writes: a value, or [REMOVED]. */
+    private val written = HashMap<String, Any>()
+    /** A clear was applied: [local]'s entries are gone. */
+    private var cleared = false
 
-    init { refresh() }
-
-    /** The owner changed this file: fetch it again off the calling thread. */
-    fun changed() = refresh()
-
-    private fun refresh() {
-        synchronized(lock) { generation++; if (refreshing) return; refreshing = true }
-        background.execute(::refetch)
-    }
-
-    private fun fetch(): HashMap<String, Any?> = HashMap(channel.call(PrefsProvider.METHOD_GET_ALL, name, emptyMap()))
-
-    private fun refetch() {
-        while (true) {
-            val seen = synchronized(lock) { generation }
-            val result = runCatching(::fetch)
-            synchronized(lock) {
-                result.onFailure {
-                    NxLog.w("NXAPP", "settings refresh ($name): ${it.message}")
-                    if (snapshot == null) snapshot = HashMap()
-                    fetchedAt = now(); refreshing = false
-                    return
-                }
-                if (seen == generation) { snapshot = result.getOrThrow(); fetchedAt = now(); refreshing = false; return }
-            }
+    /** [key] as this process sees it: its own write, else nothing after a clear, else [local]'s (a lookup, no copy). */
+    @Suppress("UNCHECKED_CAST")
+    private inline fun <T> read(key: String, def: T, fromLocal: () -> T): T = synchronized(lock) {
+        val mine = written[key]
+        when {
+            mine === REMOVED -> def
+            mine != null -> mine as T
+            cleared -> def
+            else -> fromLocal()
         }
     }
 
-    /** The snapshot to read: stale ones are served and refreshed in the background; only a missing one is fetched here. */
-    private fun current(): Map<String, Any?> {
-        synchronized(lock) {
-            snapshot?.let {
-                if (now() - fetchedAt > MAX_AGE_MS) refresh()
-                return it
-            }
-        }
-        val first = runCatching(::fetch).onFailure { NxLog.w("NXAPP", "settings read ($name): ${it.message}") }.getOrNull()
-        synchronized(lock) {
-            if (snapshot == null) { snapshot = first ?: HashMap(); fetchedAt = now() }
-            return snapshot!!
-        }
+    override fun getAll(): MutableMap<String, *> = synchronized(lock) {
+        val out = HashMap<String, Any?>(if (cleared) emptyMap() else local.all)
+        for ((k, v) in written) if (v === REMOVED) out.remove(k) else out[k] = v
+        out
     }
 
-    override fun getAll(): MutableMap<String, *> = synchronized(lock) { HashMap(current()) }
-    override fun contains(key: String) = current().containsKey(key)
-    override fun getString(key: String, defValue: String?) = current()[key] as? String ?: defValue
-    override fun getInt(key: String, defValue: Int) = current()[key] as? Int ?: defValue
-    override fun getLong(key: String, defValue: Long) = current()[key] as? Long ?: defValue
-    override fun getFloat(key: String, defValue: Float) = current()[key] as? Float ?: defValue
-    override fun getBoolean(key: String, defValue: Boolean) = current()[key] as? Boolean ?: defValue
+    override fun contains(key: String) = synchronized(lock) {
+        val mine = written[key]
+        if (mine != null) mine !== REMOVED else !cleared && local.contains(key)
+    }
+    override fun getString(key: String, defValue: String?) = read(key, defValue) { local.getString(key, defValue) }
+    override fun getInt(key: String, defValue: Int) = read(key, defValue) { local.getInt(key, defValue) }
+    override fun getLong(key: String, defValue: Long) = read(key, defValue) { local.getLong(key, defValue) }
+    override fun getFloat(key: String, defValue: Float) = read(key, defValue) { local.getFloat(key, defValue) }
+    override fun getBoolean(key: String, defValue: Boolean) = read(key, defValue) { local.getBoolean(key, defValue) }
 
     @Suppress("UNCHECKED_CAST")
     override fun getStringSet(key: String, defValues: MutableSet<String>?): MutableSet<String>? =
-        (current()[key] as? Set<String>)?.let { HashSet(it) } ?: defValues
+        read<Set<String>?>(key, defValues) { local.getStringSet(key, defValues) }?.let { HashSet(it) }
 
     override fun edit(): SharedPreferences.Editor = Editor()
 
@@ -118,30 +90,21 @@ class ProviderPreferences(
             val args = mapOf(PrefsProvider.ARG_PUT to HashMap(put), PrefsProvider.ARG_REMOVE to remove.toList(), PrefsProvider.ARG_CLEAR to clear)
             val ok = runCatching { channel.call(PrefsProvider.METHOD_APPLY, name, args)[PrefsProvider.RESULT_OK] == true }.onFailure { NxLog.w("NXAPP", "settings write ($name): ${it.message}") }.getOrDefault(false)
             if (ok) synchronized(lock) {
-                // A fresh map: a reader may hold the old one outside the lock. Before the first snapshot there is nothing
-                // to patch (a partial one would hide the owner's other entries); the pending fetch brings the write too.
-                val base = if (clear) HashMap() else snapshot?.let(::HashMap)
-                if (base != null) {
-                    remove.forEach(base::remove)
-                    base.putAll(put)
-                    snapshot = base
-                }
-                generation++
+                if (clear) { cleared = true; written.clear() }
+                remove.forEach { written[it] = REMOVED }
+                put.forEach { (k, v) -> if (v != null) written[k] = v }
             }
             return ok
         }
 
         /**
          * Synchronous too, on the caller's thread: the game process can be killed any moment, and a write must not be lost
-         * with it. Callers read their own write back at once, so it stays on their thread rather than going [background].
+         * with it; callers read their own write back at once.
          */
         override fun apply() { commit() }
     }
 
     private companion object {
-        const val MAX_AGE_MS = 1000L
-
-        /** One thread for every file's fetches: they are small and rare, and none may run on the main thread. */
-        val BACKGROUND: Executor = Executors.newSingleThreadExecutor { Thread(it, "nx-settings").apply { isDaemon = true } }
+        val REMOVED = Any()
     }
 }
