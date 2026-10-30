@@ -12,7 +12,7 @@ import com.nxredux.mobile.storage.StateFormat
 import com.swordfish.libretrodroid.NxLog
 
 class AndroidAppSettings(context: Context) : AppSettings {
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = Prefs.open(context, PREFS_NAME)
 
     override var treeRef: ContentRef?
         get() = prefs.getString(KEY_TREE, null)?.let(::ContentRef)

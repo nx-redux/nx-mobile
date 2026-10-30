@@ -19,6 +19,7 @@ import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.NaomiSetsAsset
 import com.nxredux.mobile.settings.AndroidAppSettings
+import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.storage.NxPaths
 import com.nxredux.mobile.storage.findSave
 import com.nxredux.mobile.storage.readSaveDecoded
@@ -58,7 +59,7 @@ import kotlin.coroutines.resumeWithException
 class AndroidNetplay(context: Context, private val sdRoot: () -> File) : NetplayPlatform {
     private val context = context.applicationContext
     private val connectivity = this.context.getSystemService(ConnectivityManager::class.java)
-    private val prefs = this.context.getSharedPreferences("netplay", Context.MODE_PRIVATE)
+    private val prefs = Prefs.open(this.context, "netplay")
 
     override var lastLink: NetplayLink
         get() = if (prefs.getString(KEY_LINK, null) == NetplayLink.USB.name) NetplayLink.USB else NetplayLink.WIFI

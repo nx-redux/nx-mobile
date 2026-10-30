@@ -75,7 +75,7 @@ class AndroidDeviceSync(
     @Volatile private var usingData = false
     override fun keepAlive(active: Boolean, text: String?) {
         synchronized(this) {
-            if (active && !usingData) { usingData = true; DataRoot.useBegin() }
+            if (active && !usingData) { usingData = true; DataRoot.useBegin(app) }
             else if (!active && usingData) { usingData = false; DataRoot.useEnd(app) }
         }
         alive(active, text)

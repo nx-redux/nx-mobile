@@ -6,5 +6,10 @@
         <receiver
             android:name="com.nxredux.mobile.test.NxTestReceiver"
             android:exported="true" />
+        <!-- GAME_STOP's second half: the game runs in the game process. -->
+        <receiver
+            android:name="com.nxredux.mobile.test.NxGameStopReceiver"
+            android:process=":game"
+            android:exported="false" />
     </application>
 </manifest>

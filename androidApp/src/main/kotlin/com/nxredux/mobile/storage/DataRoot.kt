@@ -1,10 +1,13 @@
 package com.nxredux.mobile.storage
 
 import android.content.Context
+import com.nxredux.mobile.AppProcess
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.runner.ContentRef
+import com.nxredux.mobile.runner.LiveGameStore
 import com.nxredux.mobile.runner.NxStorage
 import com.nxredux.mobile.settings.AndroidAppSettings
+import com.nxredux.mobile.settings.PrefsProvider
 import com.nxredux.mobile.tools.CheatDbService
 import com.nxredux.mobile.tools.CheatsRoot
 import com.swordfish.libretrodroid.NxLog
@@ -49,7 +52,9 @@ object DataRoot {
     /** Held while files move: one move at a time, [of] never waits on it. */
     private val moving = Any()
     /** Game sessions and Device Sync runs on the data root, and the move they hold off. Changed under [lock] only. */
-    private val gate = MoveGate()
+    private val gate = MoveGate { pid -> pidAlive(pid) }
+    /** Set from any entry that has a context; only read for game pids, which only arrive through [gameUseBegin]. */
+    @Volatile private var pidAlive: (Int) -> Boolean = { true }
     @Volatile private var move: CountDownLatch? = null
     @Volatile private var moveFailed = false
     /** The marker seen (it is never removed while the process lives): [of] then checks nothing else. */
@@ -76,6 +81,7 @@ object DataRoot {
 
     /** [of] once a move it needs has finished: one root for a whole session. Blocks, so never on the main thread. */
     fun settled(context: Context): File {
+        if (AppProcess.isGame()) return File(ownerCall(context, PrefsProvider.METHOD_DATA_ROOT_SETTLED, emptyMap())[PrefsProvider.RESULT_PATH] as String)
         of(context)
         move?.await()
         return of(context)
@@ -90,19 +96,40 @@ object DataRoot {
     fun startIfDue(context: Context) {
         val app = context.applicationContext
         if (isDone(app) || moveFailed) return
+        pidAlive = AppProcess.aliveCheck(app)
         val decision = decide(app)
         if (decision.mark) markDone(app)
         if (decision.move != null) startMove(app)
     }
 
     /** A game session or a Device Sync run starts on the data root: no move starts until [useEnd]. Call before [settled]. */
-    fun useBegin() = synchronized(lock) { gate.begin() }
+    fun useBegin(context: Context) {
+        if (AppProcess.isGame()) { ownerCall(context, PrefsProvider.METHOD_DATA_ROOT_USE, mapOf(PrefsProvider.ARG_BEGIN to true)); return }
+        synchronized(lock) { gate.begin() }
+    }
+
+    /** The game process [pid] (a provider call) starts using the data root; it counts only while that process lives. */
+    internal fun gameUseBegin(context: Context, pid: Int) {
+        pidAlive = AppProcess.aliveCheck(context)
+        synchronized(lock) { gate.beginFor(pid) }
+    }
+
+    internal fun gameUseEnd(context: Context, pid: Int) {
+        val app = context.applicationContext
+        pidAlive = AppProcess.aliveCheck(app)
+        if (synchronized(lock) { gate.endFor(pid) }) Thread({ startIfDue(app) }, "data-move-start").start()
+    }
 
     /** The use [useBegin] began ended; the last one starts a move it held off. */
     fun useEnd(context: Context) {
         val app = context.applicationContext
+        if (AppProcess.isGame()) { ownerCall(app, PrefsProvider.METHOD_DATA_ROOT_USE, mapOf(PrefsProvider.ARG_BEGIN to false)); return }
         if (synchronized(lock) { gate.end() }) Thread({ startIfDue(app) }, "data-move-start").start()
     }
+
+    /** The game process has no say over the data move: the main process owns the root and the gate, so it is asked. */
+    private fun ownerCall(context: Context, method: String, args: Map<String, Any?>): Map<String, Any?> =
+        PrefsProvider.channel(context).call(method, "data-root", args)
 
     /** App-private storage: caches, credentials, art, and the data until it moves. */
     fun private(context: Context): File = NxStorage.root(context)
@@ -147,13 +174,15 @@ object DataRoot {
      */
     fun moveNow(context: Context, target: File): Int {
         val app = context.applicationContext
+        pidAlive = AppProcess.aliveCheck(app)
         while (true) {
             move?.await()
+            val gameLive = LiveGameStore.alive(app)   // a game process this process has no use for (it restarted mid-game)
             val latch = synchronized(lock) {
                 when {
                     move != null -> null   // a background move began meanwhile: wait for it too
-                    gate.tryStart(postpone = false) -> CountDownLatch(1).also { move = it }
-                    !gate.idle -> throw IOException("a game or Device Sync is using the data")
+                    gate.tryStart(postpone = false, gameLive = gameLive) -> CountDownLatch(1).also { move = it }
+                    !gate.idle || gameLive -> throw IOException("a game or Device Sync is using the data")
                     else -> null
                 }
             } ?: continue
@@ -212,7 +241,7 @@ object DataRoot {
     private fun startMove(app: Context) {
         val latch = synchronized(lock) {
             if (move != null || done) return
-            if (!gate.tryStart(postpone = true)) return   // in use: the last useEnd asks again
+            if (!gate.tryStart(postpone = true, gameLive = LiveGameStore.alive(app))) return   // in use: the last useEnd asks again, or the menu's next resume
             CountDownLatch(1).also { move = it }
         }
         Thread({

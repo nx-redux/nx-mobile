@@ -106,11 +106,17 @@ class SessionDirTest {
     @Test fun startup_sweep_runs_once_per_process() {
         val gate = java.util.concurrent.atomic.AtomicBoolean(false)
         NetplaySessionDir.claim(tmp.root, "stale")
-        NetplaySessionDir.sweepOnce(tmp.root, gate)
+        NetplaySessionDir.sweepOnce(tmp.root, gate) { false }
         assertFalse(NetplaySessionDir.dir(tmp.root).exists())
         NetplaySessionDir.claim(tmp.root, "live")
-        NetplaySessionDir.sweepOnce(tmp.root, gate)
+        NetplaySessionDir.sweepOnce(tmp.root, gate) { false }
         assertEquals("live", NetplaySessionDir.ownerOf(tmp.root))
+    }
+
+    @Test fun sweep_once_skips_a_copy_under_a_live_game_process() {
+        NetplaySessionDir.claim(tmp.root, "game-process")   // a menu restarted mid-game: the copy is the running game's
+        NetplaySessionDir.sweepOnce(tmp.root, java.util.concurrent.atomic.AtomicBoolean(false)) { true }
+        assertEquals("game-process", NetplaySessionDir.ownerOf(tmp.root))
     }
 
     @Test fun claim_release_and_the_sink_share_one_lock() {

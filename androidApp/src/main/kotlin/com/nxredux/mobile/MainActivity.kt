@@ -1,8 +1,10 @@
 package com.nxredux.mobile
 
 import android.app.ActivityManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.hardware.input.InputManager
@@ -24,6 +26,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -31,6 +34,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.window.layout.WindowMetricsCalculator
 import com.nxredux.mobile.runner.BiosImport
+import com.nxredux.mobile.runner.LaunchRecords
+import com.nxredux.mobile.runner.LiveGameStore
 import com.nxredux.mobile.runner.Posture
 import com.nxredux.mobile.storage.LibchdrSectors
 import com.nxredux.mobile.storage.NotificationAccess
@@ -59,6 +64,7 @@ import com.nxredux.mobile.padlayout.PadLayoutActivity
 import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
 import com.nxredux.mobile.runner.AndroidMicAccess
 import com.nxredux.mobile.runner.CoreHangNotice
+import com.nxredux.mobile.runner.GameExitCheck
 import com.nxredux.mobile.runner.AndroidUserDataStore
 import com.nxredux.mobile.runner.ArcadeSetsAsset
 import com.nxredux.mobile.runner.Archives
@@ -339,11 +345,13 @@ class MainActivity : ComponentActivity(), FolderPicker {
         asHome = intent.hasCategory(Intent.CATEGORY_HOME)
         launcher = AndroidAppLauncher(this) { requestHomeRole.launch(it) }
         if (handOverToHome()) return   // nothing built: onStart/onStop never run for an activity finished in onCreate
+        ContextCompat.registerReceiver(this, launchStarted, IntentFilter(LaunchRecords.action(this)), ContextCompat.RECEIVER_NOT_EXPORTED)
         readWindow()
         if (asHome) closeOtherInstances()
         thread(name = "nx-temp-sweep") {
             NxStorage.sweepTemps(this)
-            NetplaySessionDir.sweepOnce(filesDir)   // a netplay session copy left by a killed game (a process's first start only)
+            // A netplay session copy left by a killed game (a process's first start only; never under a live game process).
+            NetplaySessionDir.sweepOnce(filesDir) { LiveGameStore.alive(this) }
         }
         if (savedInstanceState == null) {   // once per launch, not per rotation; archive extractions and real-path copies
             val app = applicationContext
@@ -417,11 +425,10 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 storageUpgrade = AndroidStorageUpgrade(this),
                 // Settings → Developer options → Remove animations (animator scale 0); read per call, so a change applies next launch.
                 reducedMotion = { Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f },
+                switcherReturns = LaunchRecords.of(this),
             ),
             scope,
         )
-        // A game whose core hung was closed with the process; this is the menu that process restarted.
-        CoreHangNotice.take(this)?.let(state::showError)
         // Settings shows the dual-screen rows only with a second screen. Only while started: stop() clears `current`, which is not a removal.
         scope.launch {
             secondScreens.current.collect {
@@ -670,6 +677,12 @@ class MainActivity : ComponentActivity(), FolderPicker {
         // API 26-28: back from Android's home settings without picking this app, the HOME alias goes off again.
         if (::launcher.isInitialized && launcher.dropAliasIfNotHome() && ::state.isInitialized) state.onLauncherChanged()
         if (::state.isInitialized) {
+            val hang = CoreHangNotice.take(this)   // a game whose core hung was closed with its process
+            hang?.let(state::showError)
+            scope.launch {   // the game process ending on its own (a crash); a hang already said it, so it wins
+                val exit = withContext(Dispatchers.IO) { GameExitCheck.check(applicationContext, hangShown = hang != null) }
+                GameExitCheck.notice(exit)?.let(state::showError)
+            }
             state.refreshResume()
             state.onForeground()   // a card inserted while in the background: its games come back
         }
@@ -687,6 +700,9 @@ class MainActivity : ComponentActivity(), FolderPicker {
     override fun onResume() {
         super.onResume()
         if (handOverToHome()) return
+        val app = applicationContext
+        thread(name = "data-move-start") { DataRoot.startIfDue(app) }   // a move held off by a game since killed (cheap once done)
+        recordStartedLaunches()   // games that started while the menu was gone (or its process was)
         applyKeepScreenOn()
         resumed = true
         if (launching) { launching = false; syncMenuScreen() }   // back from the game (or a launch that never left)
@@ -743,7 +759,19 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (DeviceSyncs.onNeedNotificationPermission === syncNotifications) DeviceSyncs.onNeedNotificationPermission = null
         UsbCables.get(this).let { c -> if (c.askConsent === usbConsent) c.askConsent = {} }
         if (::state.isInitialized) state.releaseUpdater()   // the updater outlives this activity; a newer instance's hook stays
+        runCatching { unregisterReceiver(launchStarted) }   // never registered when finished in onCreate
         scope.cancel(); super.onDestroy()
+    }
+
+    /** The game screen's "started" broadcast (no extras): the launch records say which games. */
+    private val launchStarted = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = recordStartedLaunches()
+    }
+
+    /** Started launch records become Recents; the recorder serialises the write and its flow refreshes the Recently Played row. */
+    private fun recordStartedLaunches() {
+        val recorder = processRecents()
+        LaunchRecords.of(this).drainStarted().forEach { recorder.record(it) }
     }
 
     /** The process's one recorder (created on the main thread, the only thread that asks). */

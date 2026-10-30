@@ -56,4 +56,29 @@ class MoveGateTest {
         g.finish()
         assertFalse(g.end())                        // the move already ran; nothing postponed
     }
+
+    @Test fun aDeadGameProcessCountsAsNoUse() {
+        val alive = mutableSetOf(500)
+        val g = MoveGate { it in alive }
+        g.beginFor(500)
+        assertFalse(g.tryStart(postpone = true))
+        alive.clear()                               // killed without its end
+        assertTrue(g.idle)
+        assertTrue(g.tryStart(postpone = true))
+    }
+
+    @Test fun gameUsesAreCountedPerPid() {
+        val g = MoveGate { true }
+        g.beginFor(500); g.beginFor(500); g.beginFor(600)
+        assertFalse(g.endFor(500))
+        assertFalse(g.endFor(500))
+        assertFalse(g.tryStart(postpone = true))    // 600 still uses it
+        assertTrue(g.endFor(600))                   // the last: the postponed move starts
+    }
+
+    @Test fun aLiveGameProcessPostponesTheStart() {
+        val g = MoveGate()
+        assertFalse(g.tryStart(postpone = true, gameLive = true))   // the menu restarted mid-game: nothing in the map
+        assertTrue(g.tryStart(postpone = true))
+    }
 }

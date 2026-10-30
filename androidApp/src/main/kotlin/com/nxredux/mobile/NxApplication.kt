@@ -10,6 +10,7 @@ import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.storage.DataRoot
 import com.nxredux.mobile.ui.NxImages
+import com.nxredux.mobile.ui.initComposeResources
 import com.swordfish.libretrodroid.NxLog
 import java.io.File
 
@@ -44,16 +45,23 @@ class NxApplication : Application() {
         })
         // Off the main thread, as both touch storage: drops an earlier run's update download (its .part, or an APK the
         // installer already took or the user cancelled), then starts moving older private data into the home folder.
-        Thread({
-            File(cacheDir, "update").deleteRecursively()
-            DataRoot.startIfDue(this)
-        }, "data-root").start()
+        // Not in the game process: the menu process owns this, and a second run would race it.
+        val game = AppProcess.isGame()
+        if (!game) {
+            Thread({
+                File(cacheDir, "update").deleteRecursively()
+                DataRoot.startIfDue(this)
+            }, "data-root").start()
+        }
+        // Compose resources find their context through a provider, and providers start only in the main process: the game
+        // process's in-game menu (its console logos) would throw on its first resource.
+        if (game) initComposeResources(this)
         NxImages.install()   // before any screen: a game started from another launcher never composes App
         // A hinge to half-fold at: the half-folded texts and the Half-folded pad layout show only on such a device.
         DeviceTraits.canHalfFold = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_SENSOR_HINGE_ANGLE)
         // A dead process's install wait notice: that wait ended with it.
-        getSystemService(NotificationManager::class.java)?.cancel(NotificationIds.APP_UPDATE_WAIT)
+        if (!game) getSystemService(NotificationManager::class.java)?.cancel(NotificationIds.APP_UPDATE_WAIT)
         // Off is both flags' default: only On needs setting, so a launcher-only start never loads the native library.
         if (!AndroidAppSettings(this).debugLog) return
         try {

@@ -42,6 +42,12 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.NxMobile">
+        <!-- The :game process's calls into the main process (settings writes, the data root, the USB cable): the main
+             process owns every SharedPreferences file. No process attribute, so it always runs there. -->
+        <provider
+            android:name=".settings.PrefsProvider"
+            android:authorities="${applicationId}.prefs"
+            android:exported="false" />
         <!-- The app icon (and the artwork notification): brings the menu's task forward as it is, so a game open over
              the menu stays (MainActivity is singleTask: a launch of it would clear the game). Its own throwaway task. -->
         <activity
@@ -91,9 +97,11 @@
         </activity-alias>
         <!-- GameActivity absorbs every change a display move (DeX, a desktop window to another density), a settings change
              (display size, font size, bold text, language) or a SIM swap can fire: a recreation is a full core reload and
-             ends a netplay session, and onConfigurationChanged already re-lays out the pad, overlays and menu. -->
+             ends a netplay session, and onConfigurationChanged already re-lays out the pad, overlays and menu.
+             Its own process, ended with the game: Android gets back everything the core used or leaked. -->
         <activity
             android:name=".runner.GameActivity"
+            android:process=":game"
             android:exported="false"
             android:screenOrientation="fullUser"
             android:launchMode="singleTop"
@@ -101,6 +109,15 @@
             android:autoRemoveFromRecents="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|locale|layoutDirection|colorMode|fontWeightAdjustment|grammaticalGender|touchscreen|mcc|mnc"
             android:theme="@style/Theme.NxMobile" />
+        <!-- The menu asks the game process's game to quit (auto state, saves) before it starts another (GameProcessControl). -->
+        <receiver
+            android:name=".runner.EndGameReceiver"
+            android:process=":game"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="${applicationId}.END_GAME" />
+            </intent-filter>
+        </receiver>
 
         <!-- Dual mode: an app opened on the top screen's display starts from this invisible stand-in, which waits behind
              it there and tells the menu when the app has gone (TopScreenHost). Its own task; never in Recents. -->

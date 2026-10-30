@@ -84,7 +84,7 @@ class AppUpdateUiTest {
     private object Picker : FolderPicker { override fun pickHome() {}; override fun pickExtra() {}; override fun forget(ref: ContentRef) {} }
 
     private class Runner : EmulatorRunner {
-        override fun launch(session: GameSession, onStarted: () -> Unit) { onStarted() }
+        override suspend fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) {}
     }
 
     private class Launcher(private val apps: List<InstalledApp>) : AppLauncher {

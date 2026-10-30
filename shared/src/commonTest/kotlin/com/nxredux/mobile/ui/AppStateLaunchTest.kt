@@ -91,7 +91,9 @@ class AppStateLaunchTest {
     }
     private class RecordingRunner : EmulatorRunner {
         val launched = ArrayList<GameSession>()
-        override fun launch(session: GameSession, onStarted: () -> Unit) { launched += session; onStarted() }
+        /** Set: each launch suspends until it completes (the runner waiting for a previous game's process to end). */
+        var gate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+        override suspend fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) { launched += session; gate?.await() }
     }
     private class NoopPicker : FolderPicker {
         override fun pickHome() = Unit
@@ -177,6 +179,28 @@ class AppStateLaunchTest {
         r.state.onButton(NxButton.A)   // handed off: the menu is behind the game
         advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
         assertEquals(1, r.runner.launched.size)
+    }
+
+    @Test fun a_second_pick_is_refused_while_the_runner_still_waits() = runTest {
+        val r = rig()
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>().also { r.runner.gate = it }
+        r.state.selectRow { it is MainRow.Continue }
+        r.state.onButton(NxButton.A)
+        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
+        assertEquals(1, r.runner.launched.size)
+        r.state.onForeground()   // the menu is in front again while the runner still waits
+        advanceTimeBy(LaunchTimeline.RETURN_FADE_MS + 1)
+        r.state.selectRow { it is MainRow.Continue }
+        r.state.onButton(NxButton.A)
+        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
+        assertEquals(1, r.runner.launched.size)   // still in flight: no second launch
+        gate.complete(Unit)
+        r.state.onForeground()
+        advanceTimeBy(LaunchTimeline.RETURN_FADE_MS + 1)
+        r.state.selectRow { it is MainRow.Continue }
+        r.state.onButton(NxButton.A)
+        advanceTimeBy(LaunchTimeline.SPREAD_MS + 1)
+        assertEquals(2, r.runner.launched.size)
     }
 
     @Test fun back_from_the_game_fades_the_overlay_out() = runTest {

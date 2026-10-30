@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.os.SystemClock
 import android.view.Display
 import android.view.KeyEvent
@@ -58,6 +59,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.nxredux.mobile.AppProcess
 import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.R
 import com.nxredux.mobile.achievements.AchievementsService
@@ -87,7 +89,6 @@ import com.nxredux.mobile.netplay.NetplaySaves
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.NetplayText
-import com.nxredux.mobile.netplay.usb.UsbCables
 import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.CoreConfig
@@ -109,6 +110,7 @@ import com.nxredux.mobile.options.SpeedSettings
 import com.nxredux.mobile.options.VulkanFallback
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.GameRumble
+import com.nxredux.mobile.settings.PrefsProvider
 import com.nxredux.mobile.shortcuts.ClaimedInput
 import com.nxredux.mobile.shortcuts.ConsoleHotkeys
 import com.nxredux.mobile.shortcuts.EffectiveShortcuts
@@ -173,7 +175,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 
 /** The process-wide log tag of the game screen and its controllers. */
 internal const val TAG_LOG = "NXAPP"
@@ -194,7 +198,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_COMPANION_NAMES = "companion_names"  // String[]: files a disc sheet loads, as the sheet spells them, or an arcade set's parent/BIOS sets beside it (<set>.zip|7z, lowercase)
         const val EXTRA_COMPANION_URIS = "companion_uris"    // String[]: their content URIs, same order
         const val EXTRA_SYSTEM_SETS = "system_sets"          // String[]: arcade BIOS sets not beside the game, looked for in the system dir
-        const val EXTRA_LAUNCH_ID = "launch_id"      // Long: the launcher's PendingLaunches entry, told once the game runs
+        const val EXTRA_LAUNCH_ID = "launch_id"      // Long: the launcher's launch record (LaunchRecords), marked started once the game runs
         const val EXTRA_GAME_PATH = "game_path"      // the library path (GamePath): game time's identity; absent = not recorded
         const val EXTRA_ART_PATH = "art_path"        // the game's box art (GameSession.artPath): the game panel's header; absent = the console logo
         const val EXTRA_FORCE_GLES = "force_gles"    // Boolean: the relaunch after Vulkan could not start (VulkanFallback)
@@ -205,6 +209,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_FOLDER_CORE = "netplay_folder_core"  // the game folder's own core id (saves belong to it)
         const val EXTRA_NETPLAY_EMPTY_SAVES = "netplay_empty_saves"   // Boolean: no save copy happened although one was due
         const val EXTRA_NETPLAY_USB = "netplay_usb"              // Boolean: the session runs over the USB cable
+        const val EXTRA_NETPLAY_USB_TOKEN = "netplay_usb_token"  // Long: the menu's cable start this session runs on (UsbCables.token)
         /** The Dolphin core's descriptor id (Wii and GameCube tags). */
         private const val DOLPHIN_ID = "dolphin"
         private const val MUPEN64PLUS_NEXT_ID = "mupen64plus_next"
@@ -223,6 +228,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val WII_HOME_PRESS_MS = 150L
         /** [onCoreHung]: between the hung game's finish and the process kill. */
         private const val HUNG_FINISH_GRACE_MS = 500L
+        /** [endProcess]: at most this long for the netplay engine's shutdown before the process goes anyway. */
+        private const val PROCESS_END_WAIT_S = 5L
 
         /** Blocks until every queued Home write has finished. Call off the main thread before touching slot 9. */
         private fun awaitAutoWrites() { runCatching { autoWriter.submit {}.get() } }
@@ -231,7 +238,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private var debugGame: java.lang.ref.WeakReference<GameActivity>? = null
 
         /**
-         * Debug builds only (the adb GAME_STOP hook, NxTestReceiver): the live game quits as the menu's Quit does, so
+         * Debug builds only (the adb GAME_STOP hook, NxGameStopReceiver): the live game quits as the menu's Quit does, so
          * its battery save and auto state are written. False when there is none (or in release). Main thread.
          */
         internal fun debugQuit(): Boolean {
@@ -246,14 +253,27 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // its teardown, native destroy included, before it starts its own emulator.
         private val sessions = SessionHandoff()
 
+        /** Game screens created in this process and not yet destroyed (main thread): the last one's teardown ends a game process. */
+        private var screens = 0
+        /** The last screen's teardown is ending this process ([endProcess]): an END_GAME then has nothing left to do. */
+        @Volatile internal var ending = false
+        /** The latest game screen, for [endForHandoff]. Main thread. */
+        private var latest: java.lang.ref.WeakReference<GameActivity>? = null
+
         /**
-         * Some game screen holds (or waits for) the session, from its claim in onCreate to the end of its teardown: in
-         * launcher mode a suspended game counts, its battery save still in memory. Main thread only, as [sessions].
+         * [EndGameReceiver]: the menu starts another game, so this process's game quits as a handoff does (battery save,
+         * auto state, then finish; its teardown ends the process). True while a screen is alive here (one already
+         * closing included); false: none, nothing will end the process. Main thread.
          */
-        internal val gameScreenAlive: Boolean get() = sessions.liveCount > 0
+        internal fun endForHandoff(): Boolean {
+            if (screens == 0) return false
+            latest?.get()?.takeIf { !it.isFinishing }?.onSessionHandedOff()
+            return true
+        }
     }
 
     private var sessionClaim: SessionHandoff.Claim? = null
+    private val liveGameStore by lazy { LiveGameStore.of(this) }
 
     override var retroView: GLRetroView? = null
         private set
@@ -365,8 +385,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private set
     @Volatile override var gameReady = false   // set on the first rendered frame; SRAM is only valid after load
         private set
-    // This launch's PendingLaunches entry: run on the first frame (the game is recent), dropped on a refusal or finish.
-    private val launchId by lazy { intent.getLongExtra(EXTRA_LAUNCH_ID, PendingLaunches.NONE) }
+    // This launch's record: marked started on the first frame (the game is recent), dropped on a refusal or finish.
+    private val launchRecords by lazy { LaunchRecords.of(this) }
+    private val launchId by lazy { intent.getLongExtra(EXTRA_LAUNCH_ID, LaunchRecords.NONE) }
     private var failShown = false   // the could-not-start dialog is up (it only leaves by finishing)
     private var resumeSlot: Int? = null   // disk slot to load once the game runs (EXTRA_RESUME_SLOT); null = fresh
     override var quitting = false   // set by quitWithAutoState: quit is single-shot, the menu freezes, onStop skips its auto state
@@ -560,6 +581,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        screens++
+        latest = java.lang.ref.WeakReference(this)
         if (BuildConfig.DEBUG) { debugGame = java.lang.ref.WeakReference(this); debugStartedAt = System.currentTimeMillis() }
         // Debug only: a GAME test hook's game runs on a locked test device (NxTestResults.markShowWhenLocked).
         if (BuildConfig.DEBUG && com.nxredux.mobile.test.NxTestResults.takeShowWhenLocked(this)) {
@@ -630,7 +653,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         netplayLocal = launchSession?.endsAsLocalGame == true && savedInstanceState?.getBoolean(KEY_NETPLAY_LOCAL) == true
         netplay = launchSession.takeUnless { netplayLocal }
         netplayRestored = netplay != null && savedInstanceState != null
-        if (netplay?.overUsb == true) netplayUsbToken = UsbCables.get(this).token()
+        // The cable is the menu process's: never instantiated here (a fresh, unstarted one would stop the menu's VPN).
+        if (netplay?.overUsb == true) netplayUsbToken = intent.getLongExtra(EXTRA_NETPLAY_USB_TOKEN, -1L).takeIf { it >= 0 }
         // Decided here, not after startEmulator's async setup, so a stop in between still records the slot.
         // A saved slot (recreated after a process kill) wins over the launch intent's.
         val savedSlot = savedInstanceState?.getInt(KEY_RESUME_SLOT, -1)?.takeIf { it in 0..NxPaths.AUTO_SLOT }
@@ -638,6 +662,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         resumePending = resumeSlot != null
         lastResumePoint = resumeSlot
         val claim = sessions.claim(::onSessionHandedOff).also { sessionClaim = it }
+        // From the claim to the final release: the menu reads this as "a game screen is alive" (playing, suspended, closing).
+        liveGameStore.write(LiveGame(
+            Process.myPid(), launchId, intent.getStringExtra(EXTRA_GAME_PATH), intent.getStringExtra(EXTRA_CORE_ID) ?: "",
+            intent.getStringExtra(EXTRA_TAG) ?: "UNKNOWN", resumeSlot, netplay != null,
+        ))
+        launchRecords.keepSwitcherReturnFor(launchId)   // a switcher mark of another launch is not this game's to end on
         lifecycleScope.launch {
             if (claim.mustWait) {
                 // Also before the battery load and the RA prepare: the old game's quit writes the same saves and stops its client.
@@ -665,25 +695,26 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /**
-     * A newer game screen claimed the native session: leave through the normal quit (battery save, auto state, RA stop,
-     * then finish; onDestroy's native destroy releases the session). Usually stopped here: the auto state is serialized
-     * off the GL thread as onStop does, and the thumbnail is skipped when the stopped surface cannot be copied.
+     * A newer game screen claimed the native session, or the menu starts another game ([endForHandoff]): leave through
+     * the normal quit (battery save, auto state, RA stop, then finish; onDestroy's native destroy releases the session,
+     * and in the game process ends it). Usually stopped here: the auto state is serialized off the GL thread as onStop
+     * does, and the thumbnail is skipped when the stopped surface cannot be copied.
      */
     private fun onSessionHandedOff() {
         if (isDestroyed) return
-        NxLog.i(TAG_LOG, "a newer game screen takes the session: quitting ${intent.getStringExtra(EXTRA_TITLE)}")
+        NxLog.i(TAG_LOG, "another game takes over: quitting ${intent.getStringExtra(EXTRA_TITLE)}")
         quitWithAutoState(chosen = false)
     }
 
     /**
      * singleTop. In launcher mode launches clear the game task (CLEAR_TASK); sharing the menu's task, the menu (the
      * only launcher) sits under this screen. So this only guards a launch that does reach this running game: it is
-     * ignored, and its PendingLaunches entry is dropped, not leaked.
+     * ignored, and its launch record is dropped, not leaked.
      */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        val id = intent.getLongExtra(EXTRA_LAUNCH_ID, PendingLaunches.NONE)
-        if (id != launchId) PendingLaunches.take(id)
+        val id = intent.getLongExtra(EXTRA_LAUNCH_ID, LaunchRecords.NONE)
+        if (id != launchId) launchRecords.drop(id)
     }
 
     override fun onPause() {
@@ -1020,7 +1051,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         motionSensors?.stop()
         if (isWii) LibretroDroid.setSensorEnabled(0, false)   // a next Wii game sets its own on its first frame
         if (isFinishing || relaunching) endGameTime()   // Back/finish without Quit (quit already ended it), or the GLES relaunch
-        if (isFinishing) PendingLaunches.take(launchId)   // quit before the first frame: the launch never started
+        if (isFinishing) launchRecords.drop(launchId)   // quit before the first frame: the launch never started
         if (BuildConfig.DEBUG && isFinishing) debugReportStopped()
         input.gcClearTriggers()   // a latched soft press never outlives the game
         stopAchievements()
@@ -1037,21 +1068,56 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             val owner = netplayOwner
             NetplayGame.release(netplayGame, if (np.onCopy) ({ NetplaySessionDir.release(filesDir, owner) }) else null)
             // The cable carried this session (the sheet handed it over at launch), unless a newer launch's start took it over.
-            netplayUsbToken?.takeIf { np.overUsb }?.let { UsbCables.get(this).stopIf(it) }
+            // Stopped in the menu process, which owns it: a Binder call, so off the main thread.
+            netplayUsbToken?.takeIf { np.overUsb }?.let { token ->
+                val app = applicationContext
+                thread(name = "usb-cable-stop") {
+                    runCatching { PrefsProvider.usbCableStopIf(app, token) }.onFailure { NxLog.w(TAG_LOG, "could not stop the USB cable", it) }
+                }
+            }
         }
         sessionClaim?.let { sessions.release(it.token) }
         sessionClaim = null
-        if (usingData) { usingData = false; DataRoot.useEnd(this) }   // after the core's last write (destroyed above)
+        screens--
+        if (latest?.get() === this) latest = null
+        // The game process ends with its last screen's finish (not a recreation: the GLES relaunch, a config change).
+        val endsProcess = isFinishing && screens == 0 && AppProcess.isGame()
+        // Ending the process, the record stays until the process is gone: the menu waits for that before it starts another
+        // game, which must never land in this dying process. It reads as stale then (its pid is gone).
+        if (!endsProcess) liveGameStore.clear(Process.myPid(), launchId)
+        val endUse = usingData
+        usingData = false
+        val app = applicationContext
+        if (endsProcess) { ending = true; GameHeartbeat.start(app) }   // a finish without Quit (Back) beats from here
+        // After the core's last write (destroyed above); a Binder call to the menu process, so not on this thread.
+        if (endUse || endsProcess) thread(name = if (endsProcess) "game-process-end" else "data-use-end") {
+            if (endUse) runCatching { DataRoot.useEnd(app) }.onFailure { NxLog.w(TAG_LOG, "could not end the data use", it) }
+            if (endsProcess) endProcess()
+        }
         coreWatchdog?.stop()   // last: a hung core also hangs the native destroy above, which it must still catch
         coreWatchdog = null
+    }
+
+    /**
+     * The game is over: its process goes, and with it everything the core used or leaked. Off the main thread, after the
+     * writes still queued (a Home auto state, play time's last session, the netplay shutdown and session copy) and the
+     * data use's end (the caller's).
+     */
+    private fun endProcess() {
+        awaitAutoWrites()
+        GameTimeService.flush()
+        runCatching { NetplayEngine.executor.submit {}.get(PROCESS_END_WAIT_S, TimeUnit.SECONDS) }
+        NxLog.i(TAG_LOG, "the game has ended: ending its process")
+        Process.killProcess(Process.myPid())
     }
 
     /**
      * The core has been stuck in one frame past [CoreWatchdog.LIMIT_MILLIS]; on the watchdog's thread, since the main
      * thread may be blocked on the core's lock. Nothing in this process can stop the core or take that lock, so the game
      * goes with the process: finished first (a binder call, whatever the main thread is doing) so Android does not
-     * recreate it, then the process ends; the menu restarts and tells the user ([CoreHangNotice]). The battery save was
-     * written when the menu last opened and with the last auto state; play time keeps its last minute ([startGameTimeTicker]).
+     * recreate it, then the game process ends; the menu (in its own process) comes back to the front and tells the user
+     * ([CoreHangNotice]). The battery save was written when the menu last opened and with the last auto state; play time
+     * keeps its last minute ([startGameTimeTicker]).
      */
     private fun onCoreHung(stalledMillis: Long) {
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "The game"
@@ -1102,8 +1168,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val content = ContentRef(intent.getStringExtra(EXTRA_CONTENT_URI) ?: return fail("No content given"))
         val romFileName = intent.getStringExtra(EXTRA_FILE_NAME)
             ?: withContext(Dispatchers.IO) { runCatching { refs.displayName(content) }.getOrNull() } ?: title
-        if (!usingData) { DataRoot.useBegin(); usingData = true }   // no move starts under the session
-        dataRoot = withContext(Dispatchers.IO) { DataRoot.settled(this@GameActivity) }   // waits for a move still running
+        // Binder calls to the menu process, so off the main thread; a menu process that cannot answer fails the launch, not the app.
+        dataRoot = withContext(Dispatchers.IO) {
+            runCatching {
+                if (!usingData) { DataRoot.useBegin(this@GameActivity); usingData = true }   // no move starts under the session
+                DataRoot.settled(this@GameActivity)   // waits for a move still running
+            }.onFailure { NxLog.w(TAG_LOG, "data root unavailable", it) }.getOrNull()
+        } ?: return fail("The game's storage could not be reached. Try again.")
         privateRoot = DataRoot.private(this)
         cheatsFolder = Cheats.folder(tag, romFileName)
         // The battery-save, clock and state names follow the handheld's save settings. The save setup waits
@@ -1117,9 +1188,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         gameTag = tag
         gameCoreId = coreId
         padLayout.onGameTagKnown()
-        // Normally done by MainActivity; here too for a restore from recents in a fresh process. Not awaited:
-        // it is synchronized, and a first-run or post-update copy (~10 MB) must not hold up the game. Re-read
-        // once it is done.
+        // MainActivity does it too, in the menu process; here for a game started before that copy is in place. Not
+        // awaited: it is locked across both processes, and a first-run or post-update copy (~10 MB) must not hold up the
+        // game. Re-read once it is done.
         val extraction = lifecycleScope.async(Dispatchers.IO) { Overlays.extractBundled(this@GameActivity) }
         val shaderExtraction = lifecycleScope.launch(Dispatchers.IO) { Shaders.extractBundled(this@GameActivity) }
         restartOnlyOptions = descriptor?.restartOnlyOptions ?: emptySet()
@@ -1674,7 +1745,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             // The launch name's hold fades now (or once its minimum is up); the resume cover under it goes on its own frames.
             nameHold?.release { nameHold = null }
             // A frame means the core loaded the game (a load error aborts the view before any): the launcher may record it.
-            PendingLaunches.take(launchId)?.invoke()
+            if (launchRecords.started(launchId)) {
+                sendBroadcast(Intent(LaunchRecords.action(this@GameActivity)).setPackage(packageName))   // the menu records it
+            }
             // netplay: the engine starts once the core has loaded and can serialize, so a handheld's 10 s state
             // waits begin only now. The host listens (its 45 s CONNECTING limit counts from here); the client connects
             // with its 60 × 500 ms retries. A menu or background already in place pauses it at once.
@@ -1861,10 +1934,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun fail(message: String, title: String = "Could not start the game") {
         NxLog.e(TAG_LOG, message)
         if (relaunching) return   // a late error from the Vulkan attempt: the recreated screen owns the launch now
-        // Destroyed without finishing: a recreation, whose new screen owns the launch (and its PendingLaunches entry), and
+        // Destroyed without finishing: a recreation, whose new screen owns the launch (and its launch record), and
         // a dialog on this dead window would throw BadTokenException.
         if (isDestroyed && !isFinishing) return
-        PendingLaunches.take(launchId)   // refused: the launcher must not record it
+        launchRecords.drop(launchId)   // refused: the launcher must not record it
         if (isFinishing || isDestroyed || failShown) return   // observeErrors can report more than once: one dialog, never a stack
         failShown = true
         rumbles.forEach { it.release() }
@@ -1906,7 +1979,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     private fun releaseCacheHolds() {
-        while (true) RomCache.release(cacheHolds.poll() ?: break)
+        while (true) RomCache.release(this, cacheHolds.poll() ?: break)
     }
 
     /** Opens the game's content and companions, SAF documents or file refs. */
@@ -1923,9 +1996,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val target = File(root, fileName)
         val stampFile = File(root, cacheSiblingName(fileName, REAL_PATH_STAMP))
         val part = File(root, cacheSiblingName(fileName, ".part"))
-        synchronized(RomCache.lockFor(target.name)) {
-            RomCache.hold(target.name); keepCacheHold(target.name)
-            RomCache.hold(stampFile.name); keepCacheHold(stampFile.name)   // a swept stamp would only cost a recopy, but keep it
+        RomCache.withEntryLock(root, target.name) {
+            RomCache.hold(this, target.name); keepCacheHold(target.name)
+            RomCache.hold(this, stampFile.name); keepCacheHold(stampFile.name)   // a swept stamp would only cost a recopy, but keep it
             val size = refs.size(ref) ?: -1L
             val stamp = realPathCopyStamp(size, refs.lastModified(ref))
             val stored = runCatching { stampFile.takeIf { it.isFile }?.readText() }.getOrNull()
@@ -1934,7 +2007,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 return target.also { RomCache.touch(it) }
             }
             // The .part is its own top-level name to the sweep: held while it grows, so a big ISO's is never trimmed mid-copy.
-            RomCache.hold(part.name)
+            RomCache.hold(this, part.name)
             try {
                 val input = refs.openInput(ref) ?: throw IOException("Cannot open input stream")
                 input.use { source -> part.outputStream().use { source.copyTo(it, 1 shl 20) } }
@@ -1945,7 +2018,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     .onFailure { NxLog.w("GameActivity", "could not stamp the cache copy of $fileName", it) }
             } finally {
                 part.delete()
-                RomCache.release(part.name)
+                RomCache.release(this, part.name)
             }
             return target
         }
@@ -2456,6 +2529,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun quitWithAutoState(chosen: Boolean, autoState: Boolean = true) {
         if (quitting) return   // single-shot: a second job could serialize after the core is destroyed
         quitting = true
+        GameHeartbeat.start(this)   // the menu may be waiting for this process to end: its saves can take a while
         rumbles.forEach { it.release() }
         pushMicSource()   // silence now, so the phone's mic closes before the save, not at the pause
         endGameTime()

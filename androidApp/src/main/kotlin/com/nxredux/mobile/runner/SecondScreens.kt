@@ -7,6 +7,7 @@ import android.os.Looper
 import android.view.Display
 import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.settings.AndroidAppSettings
+import com.nxredux.mobile.settings.Prefs
 import com.swordfish.libretrodroid.NxLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -87,7 +88,7 @@ class SecondScreens(context: Context, private val debug: Boolean = BuildConfig.D
      * [DEBUG_INTERNAL_KEY] = true (set with run-as).
      */
     fun builtInNow(): Display? {
-        val debugInternal = debug && app.getSharedPreferences(AndroidAppSettings.PREFS_NAME, Context.MODE_PRIVATE).getBoolean(DEBUG_INTERNAL_KEY, false)
+        val debugInternal = debug && Prefs.open(app, AndroidAppSettings.PREFS_NAME).getBoolean(DEBUG_INTERNAL_KEY, false)
         return manager.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
             .firstOrNull { it.displayId != Display.DEFAULT_DISPLAY && SecondScreenRule.builtIn(facts(it), debugInternal) }
     }

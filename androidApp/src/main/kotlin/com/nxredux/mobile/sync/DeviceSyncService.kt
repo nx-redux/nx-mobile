@@ -6,7 +6,7 @@ import androidx.core.app.NotificationCompat
 import com.nxredux.mobile.KeepAlive
 import com.nxredux.mobile.KeepAliveService
 import com.nxredux.mobile.NotificationIds
-import com.nxredux.mobile.runner.GameActivity
+import com.nxredux.mobile.runner.LiveGameStore
 import com.nxredux.mobile.storage.AndroidSaveTransfer
 import com.swordfish.libretrodroid.NxLog
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -17,7 +17,7 @@ import kotlinx.coroutines.SupervisorJob
 /**
  * The process's one Device Sync controller (a sync outlives the screen, as an art fetch does). Its scope runs on
  * [Dispatchers.Main.immediate]: button handling and the controller's [DeviceSyncPlatform.gameScreenAlive] check (which
- * reads GameActivity's main-thread state) run on the main thread; the platform moves its I/O to IO itself.
+ * reads the live game record) run on the main thread; the platform moves its I/O to IO itself.
  */
 object DeviceSyncs {
     private const val TAG = "NxSync"
@@ -27,12 +27,7 @@ object DeviceSyncs {
      * posts to the UI thread).
      */
     @Volatile var screenOn: (Boolean) -> Unit = {}
-    /**
-     * Main thread only: some GameActivity holds the session (what LibretroRunner.gameScreenAlive reads; process state,
-     * so no activity has to set it or let go of it).
-     */
-    @Volatile var gameScreenAlive: () -> Boolean = { GameActivity.gameScreenAlive }
-    /** An Import (from any MainActivity's AndroidSaveTransfer) is writing saves; process state, like [gameScreenAlive]. */
+    /** An Import (from any MainActivity's AndroidSaveTransfer) is writing saves; process state. */
     @Volatile var importing: () -> Boolean = { AndroidSaveTransfer.anyImporting }
     /** MainActivity's POST_NOTIFICATIONS request, asked once when the first sync starts (the sync runs either way). */
     @Volatile var onNeedNotificationPermission: (() -> Unit)? = null
@@ -43,7 +38,7 @@ object DeviceSyncs {
     fun get(context: Context): DeviceSyncController = controller ?: synchronized(this) {
         controller ?: run {
             val app = context.applicationContext
-            val platform = AndroidDeviceSync(app, { gameScreenAlive() }, { importing() }) { active, text ->
+            val platform = AndroidDeviceSync(app, { LiveGameStore.alive(app) }, { importing() }) { active, text ->
                 if (active && !askedPermission) onNeedNotificationPermission?.let { ask -> askedPermission = true; ask() }
                 DeviceSyncService.update(app, active, text)
                 screenOn(active)

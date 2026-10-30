@@ -4,14 +4,19 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import com.nxredux.mobile.netplay.usb.UsbCables
+import com.nxredux.mobile.storage.Recent
+import com.swordfish.libretrodroid.NxLog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Android EmulatorRunner: hands the session to GameActivity. The only class outside GameActivity that names it.
  * [ownTask] is read per launch: true while the menu runs as the home screen (launcher mode), see [gameLaunchFlags].
  */
 class LibretroRunner(private val context: Context, private val ownTask: () -> Boolean) : EmulatorRunner {
-    /** A game screen is alive (playing, suspended in its own task, or closing); main thread only. Import saves waits for it. */
-    val gameScreenAlive: Boolean get() = GameActivity.gameScreenAlive
+    /** A game screen is alive (playing, suspended in its own task, or closing): the live-game record. Import saves waits for it. */
+    val gameScreenAlive: Boolean get() = LiveGameStore.alive(context)
 
     /** Runs first in every [launch], on the main thread: the menu clears the second display for the game. */
     var beforeLaunch: () -> Unit = {}
@@ -19,10 +24,37 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
     /** The launch threw after [beforeLaunch] (the activity could not start); the error is rethrown after it. */
     var launchFailed: () -> Unit = {}
 
-    override fun launch(session: GameSession, onStarted: () -> Unit) {
+    /** False: launches leave no launch record, so they never reach Recently Played (the debug test hook). */
+    internal var recordLaunches = true
+
+    /**
+     * The game process comes first ([GameProcessControl], off the main thread): the paused game picked again comes back
+     * as it was (already recorded when it started), any other is ended. Then, on the main thread, the game screen starts
+     * in a fresh game process with a pending launch record. Called on the main thread.
+     */
+    override suspend fun launch(session: GameSession, recent: Recent) {
         beforeLaunch()
+        val app = context.applicationContext
+        val decision = withContext(Dispatchers.IO) {
+            runCatching { GameProcessControl.of(app).prepare(session) }
+                .onFailure { NxLog.e(TAG, "could not check the game process", it) }
+                .getOrDefault(GameProcessControl.Decision.START)
+                .also { d ->
+                    // Brought back: the running game's launch now ends on the switcher, or not, as this pick says.
+                    if (d == GameProcessControl.Decision.BROUGHT_BACK) LiveGameStore.of(app).current()?.let {
+                        LaunchRecords.of(app).markSwitcherReturn(it.launchId, session.fromSwitcher)
+                    }
+                }
+        }
+        if (decision == GameProcessControl.Decision.START) withContext(Dispatchers.Main.immediate) { start(session, recent) }
+    }
+
+    private fun start(session: GameSession, recent: Recent) {
+        val records = LaunchRecords.of(context)
+        val launchId = if (recordLaunches) records.pending(recent) else LaunchRecords.NONE
+        records.markSwitcherReturn(launchId, session.fromSwitcher)   // on disk: this menu process may not see the game end
         val intent = Intent(context, GameActivity::class.java)
-            .putExtra(GameActivity.EXTRA_LAUNCH_ID, PendingLaunches.put(onStarted))
+            .putExtra(GameActivity.EXTRA_LAUNCH_ID, launchId)
             .putExtra(GameActivity.EXTRA_CORE_FILE, session.core.libraryFileName)
             .putExtra(GameActivity.EXTRA_CORE_ID, session.core.id)
             .putExtra(GameActivity.EXTRA_TAG, session.systemTag)
@@ -46,6 +78,8 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
                     putExtra(GameActivity.EXTRA_NETPLAY_FOLDER_CORE, it.folderCoreId)
                     putExtra(GameActivity.EXTRA_NETPLAY_EMPTY_SAVES, it.emptySaves)
                     putExtra(GameActivity.EXTRA_NETPLAY_USB, it.overUsb)
+                    // The cable lives in this process: the game's stop names this start, sent back here (PrefsProvider).
+                    if (it.overUsb) putExtra(GameActivity.EXTRA_NETPLAY_USB_TOKEN, UsbCables.get(context).token())
                 }
             }
             .addFlags(gameLaunchFlags(ownTask()))
@@ -57,9 +91,14 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
                 @Suppress("DEPRECATION") (context as? Activity)?.overridePendingTransition(0, 0)
             }
         } catch (e: Throwable) {
+            LaunchRecords.of(context).drop(launchId)
             launchFailed()
             throw e
         }
+    }
+
+    private companion object {
+        const val TAG = "NXAPP"
     }
 }
 
@@ -72,20 +111,3 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
  */
 internal fun gameLaunchFlags(ownTask: Boolean): Int =
     if (ownTask) Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK else 0
-
-/**
- * The onStarted callbacks of launches GameActivity has not settled yet, keyed by the id in its intent. Process-wide and
- * in memory only: a process that dies between launch and start loses the callback (the game then goes unrecorded).
- * GameActivity [take]s its entry exactly once: on the first frame to run it, or on a refusal / finish to drop it.
- */
-internal object PendingLaunches {
-    const val NONE = -1L   // an intent without an id (a restore from recents in a fresh process)
-    private val callbacks = HashMap<Long, () -> Unit>()
-    // Seeded per process: an id restarting at 0 would let a restored GameActivity from an earlier process drop a new launch's entry.
-    private var nextId = kotlin.random.Random.nextLong(0, Long.MAX_VALUE / 2)
-
-    @Synchronized fun put(onStarted: () -> Unit): Long = nextId++.also { callbacks[it] = onStarted }
-
-    /** Removes and returns [id]'s callback; null when it was already taken or never registered in this process. */
-    @Synchronized fun take(id: Long): (() -> Unit)? = callbacks.remove(id)
-}

@@ -83,7 +83,7 @@ class DeviceSyncToolTest {
 
     private class RecordingRunner : EmulatorRunner {
         val launched = ArrayList<GameSession>()
-        override fun launch(session: GameSession, onStarted: () -> Unit) { launched += session; onStarted() }
+        override suspend fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) { launched += session }
     }
 
     /** Tetris was played last, so Home has a Continue row; [resumeReads] counts the main-row rebuilds that re-read it. */
