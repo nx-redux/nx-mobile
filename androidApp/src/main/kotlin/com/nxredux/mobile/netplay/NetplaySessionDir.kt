@@ -18,7 +18,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * only while the marker still holds that screen's id, so an old screen torn down after a new launch never deletes the
  * new session's copy. The app-start sweep ([sweepOnce]) runs once per process: at a process's first start no session of
  * that process exists yet, and a later MainActivity (recreated mid-session, or between a commit and its launch) never
- * touches a live or just-committed copy.
+ * touches a live or just-committed copy. Games play in their own process, so a menu process restarted mid-game skips it
+ * while a game process lives: the copy may be that game's.
  *
  * One JVM lock (this object's monitor) covers [claim], [release], the sweep, a sink's setup and its begin / commit /
  * abort, and a host's delete + claim + copy ([prepareHost], called from GameActivity), so a screen's release or a new
@@ -73,9 +74,9 @@ object NetplaySessionDir {
         return false
     }
 
-    /** [sweep], at most once per process (per [gate]). */
-    fun sweepOnce(files: File, gate: AtomicBoolean = sweptThisProcess) {
-        if (gate.compareAndSet(false, true)) sweep(files)
+    /** [sweep], at most once per process (per [gate]), and not while [gameLive] (the game process may be playing on the copy). */
+    fun sweepOnce(files: File, gate: AtomicBoolean = sweptThisProcess, gameLive: () -> Boolean) {
+        if (gate.compareAndSet(false, true) && !gameLive()) sweep(files)
     }
 
     /** Drops a stale session copy and any half-received staging. */

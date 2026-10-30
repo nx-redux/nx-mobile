@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.window.layout.WindowMetricsCalculator
 import com.nxredux.mobile.runner.BiosImport
+import com.nxredux.mobile.runner.LiveGameStore
 import com.nxredux.mobile.runner.Posture
 import com.nxredux.mobile.storage.LibchdrSectors
 import com.nxredux.mobile.storage.NotificationAccess
@@ -349,7 +350,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (asHome) closeOtherInstances()
         thread(name = "nx-temp-sweep") {
             NxStorage.sweepTemps(this)
-            NetplaySessionDir.sweepOnce(filesDir)   // a netplay session copy left by a killed game (a process's first start only)
+            // A netplay session copy left by a killed game (a process's first start only; never under a live game process).
+            NetplaySessionDir.sweepOnce(filesDir) { LiveGameStore.alive(this) }
         }
         if (savedInstanceState == null) {   // once per launch, not per rotation; archive extractions and real-path copies
             val app = applicationContext

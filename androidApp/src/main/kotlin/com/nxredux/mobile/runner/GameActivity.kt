@@ -1113,7 +1113,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * The core has been stuck in one frame past [CoreWatchdog.LIMIT_MILLIS]; on the watchdog's thread, since the main
      * thread may be blocked on the core's lock. Nothing in this process can stop the core or take that lock, so the game
      * goes with the process: finished first (a binder call, whatever the main thread is doing) so Android does not
-     * recreate it, then the process ends; the menu restarts and tells the user ([CoreHangNotice]). The battery save was
+     * recreate it, then the game process ends; the menu (in its own process) comes back to the front and tells the user
+     * ([CoreHangNotice]). The battery save was
      * written when the menu last opened and with the last auto state; play time keeps its last minute ([startGameTimeTicker]).
      */
     private fun onCoreHung(stalledMillis: Long) {
