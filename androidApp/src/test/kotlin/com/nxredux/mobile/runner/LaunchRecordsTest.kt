@@ -80,4 +80,36 @@ class LaunchRecordsTest {
         assertFalse(r.started(old))
         assertTrue(r.started(fresh))
     }
+
+    @Test fun switcherReturnSurvivesANewInstance() {
+        val id = records().pending(Recent("/roms/a.gba", "A"))
+        records().markSwitcherReturn(id, fromSwitcher = true)
+        assertTrue(records().switcherReturn())   // a menu process started again reads it
+        records().clearSwitcherReturn()
+        assertFalse(records().switcherReturn())
+    }
+
+    @Test fun launchNotFromTheSwitcherClearsTheMark() {
+        val r = records()
+        r.markSwitcherReturn(r.pending(Recent("/roms/a.gba", "A")), fromSwitcher = true)
+        r.markSwitcherReturn(r.pending(Recent("/roms/b.gba", "B")), fromSwitcher = false)
+        assertFalse(r.switcherReturn())
+    }
+
+    @Test fun gameOfAnotherLaunchVoidsTheMark() {
+        val r = records()
+        val id = r.pending(Recent("/roms/a.gba", "A"))
+        r.markSwitcherReturn(id, fromSwitcher = true)
+        r.keepSwitcherReturnFor(id)   // that launch's own game screen
+        assertTrue(r.switcherReturn())
+        r.keepSwitcherReturnFor(LaunchRecords.NONE)   // a game started some other way (another launcher)
+        assertFalse(r.switcherReturn())
+    }
+
+    @Test fun markIsNotDrainedAsARecord() {
+        val r = records()
+        r.markSwitcherReturn(r.pending(Recent("/roms/a.gba", "A")), fromSwitcher = true)
+        assertEquals(emptyList<Recent>(), r.drainStarted())
+        assertTrue(r.switcherReturn())
+    }
 }

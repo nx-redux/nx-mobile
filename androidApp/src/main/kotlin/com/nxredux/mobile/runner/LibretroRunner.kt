@@ -39,12 +39,18 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
             runCatching { GameProcessControl.of(app).prepare(session) }
                 .onFailure { NxLog.e(TAG, "could not check the game process", it) }
                 .getOrDefault(GameProcessControl.Decision.START)
+                .also { d ->
+                    // Brought back: the running game's launch now ends on the switcher, or not, as this pick says.
+                    if (d == GameProcessControl.Decision.BROUGHT_BACK) LiveGameStore.of(app).current()?.let { LaunchRecords.of(app).markSwitcherReturn(it.launchId, session.fromSwitcher) }
+                }
         }
         if (decision == GameProcessControl.Decision.START) withContext(Dispatchers.Main.immediate) { start(session, recent) }
     }
 
     private fun start(session: GameSession, recent: Recent) {
-        val launchId = if (recordLaunches) LaunchRecords.of(context).pending(recent) else LaunchRecords.NONE
+        val records = LaunchRecords.of(context)
+        val launchId = if (recordLaunches) records.pending(recent) else LaunchRecords.NONE
+        records.markSwitcherReturn(launchId, session.fromSwitcher)   // on disk: this menu process may not see the game end
         val intent = Intent(context, GameActivity::class.java)
             .putExtra(GameActivity.EXTRA_LAUNCH_ID, launchId)
             .putExtra(GameActivity.EXTRA_CORE_FILE, session.core.libraryFileName)

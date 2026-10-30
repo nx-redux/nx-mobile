@@ -1774,6 +1774,46 @@ class AppStateTest {
         assertIs<Screen.Systems>(state.screen.value)
     }
 
+    /** The switcher return as the runner keeps it on disk: set by a switcher launch, read by a menu started afresh. */
+    private class MemorySwitcherMark(var set: Boolean = false) : com.nxredux.mobile.runner.SwitcherReturnMark {
+        override fun switcherReturn() = set
+        override fun clearSwitcherReturn() { set = false }
+    }
+
+    private fun stateWithMark(userData: FakeUserData, runner: RecordingRunner, scope: CoroutineScope, mark: MemorySwitcherMark) =
+        AppState(AppDeps(MemorySettings(ContentRef("Home")), source, runner, NoopPicker(), userData, recents = RecentsRecorder(userData, scope).also { runner.menu = it },
+            compute = scope.coroutineContext[ContinuationInterceptor]!!, switcherReturns = mark), scope)
+
+    // The menu process ended while a game resumed from the switcher ran: the menu started again opens the switcher once
+    // its first screen has loaded, and only once.
+    @Test fun a_menu_started_afresh_after_a_switcher_game_opens_the_switcher() = runTest {
+        val data = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))
+        val mark = MemorySwitcherMark(set = true)
+        val state = stateWithMark(data, RecordingRunner(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), mark)
+        state.onForeground(); advanceUntilIdle()   // the menu's start, before its load: the return waits
+        state.load(); advanceUntilIdle()
+        assertIs<Screen.Switcher>(state.screen.value)
+        assertFalse(mark.set)
+        state.onButton(NxButton.B); advanceUntilIdle()
+        state.onForeground(); advanceUntilIdle()
+        assertIs<Screen.Systems>(state.screen.value)
+    }
+
+    // The runner keeps the mark for a switcher launch; Home over that game drops it on disk too.
+    @Test fun a_switcher_launch_is_marked_and_home_clears_the_mark() = runTest {
+        val data = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))
+        val runner = RecordingRunner()
+        val mark = MemorySwitcherMark()
+        val state = stateWithMark(data, runner, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), mark)
+        state.load(); advanceUntilIdle()
+        state.onButton(NxButton.SELECT); advanceUntilIdle()
+        state.onButton(NxButton.A); advanceUntilIdle()
+        assertTrue(runner.launched.single().fromSwitcher)
+        mark.set = true   // as the runner writes it
+        state.goHome(); advanceUntilIdle()
+        assertFalse(mark.set)
+    }
+
     // A game started from a list (not the switcher) ends on that list.
     @Test fun a_list_launch_does_not_open_the_switcher_on_return() = runTest {
         val data = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")), resumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9)))

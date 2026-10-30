@@ -34,4 +34,6 @@ data class GameSession(
     val netplay: NetplaySession? = null,
     /** The name a Minimal launch spread its black from, for the game screen to hold on the same pixels; null: none (no sequence). */
     val launchName: LaunchName? = null,
+    /** Picked in the Game Switcher: the runner keeps a [SwitcherReturnMark] for this launch, so its end reopens the switcher. */
+    val fromSwitcher: Boolean = false,
 )

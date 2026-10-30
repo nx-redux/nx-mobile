@@ -666,6 +666,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             Process.myPid(), launchId, intent.getStringExtra(EXTRA_GAME_PATH), intent.getStringExtra(EXTRA_CORE_ID) ?: "",
             intent.getStringExtra(EXTRA_TAG) ?: "UNKNOWN", resumeSlot, netplay != null,
         ))
+        launchRecords.keepSwitcherReturnFor(launchId)   // a switcher mark of another launch is not this game's to end on
         lifecycleScope.launch {
             if (claim.mustWait) {
                 // Also before the battery load and the RA prepare: the old game's quit writes the same saves and stops its client.

@@ -425,6 +425,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 storageUpgrade = AndroidStorageUpgrade(this),
                 // Settings → Developer options → Remove animations (animator scale 0); read per call, so a change applies next launch.
                 reducedMotion = { Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f },
+                switcherReturns = LaunchRecords.of(this),
             ),
             scope,
         )

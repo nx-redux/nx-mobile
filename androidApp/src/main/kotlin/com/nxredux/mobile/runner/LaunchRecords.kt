@@ -7,9 +7,11 @@ import java.io.File
  * Launches on disk, shared by the menu and the game screen (they may be different processes): the menu writes
  * `<id>.pending` per launch, the game renames it to `<id>.started` on its first frame, and the menu (alive or
  * restarted) turns started records into Recents. A refused or abandoned launch is [drop]ped; a rename is atomic,
- * so a record is never half-started. Content is `path\tname`.
+ * so a record is never half-started. Content is `path\tname`. Beside them, [SWITCHER_FILE] holds the id of the launch
+ * made from the Game Switcher ([SwitcherReturnMark]): each launch rewrites or drops it, and a game screen of any other
+ * launch drops it, so a later unrelated game never inherits it.
  */
-class LaunchRecords(private val dir: File, private val now: () -> Long = System::currentTimeMillis) {
+class LaunchRecords(private val dir: File, private val now: () -> Long = System::currentTimeMillis) : SwitcherReturnMark {
     // Seeded per instance: two processes writing here must not meet on one id.
     private var nextId = kotlin.random.Random.nextLong(0, Long.MAX_VALUE / 2)
 
@@ -49,6 +51,24 @@ class LaunchRecords(private val dir: File, private val now: () -> Long = System:
         return out
     }
 
+    private val switcherFile get() = File(dir, SWITCHER_FILE)
+
+    /** Launch [id] was made from the Game Switcher ([fromSwitcher]) or not: the mark names it, or is dropped. */
+    @Synchronized fun markSwitcherReturn(id: Long, fromSwitcher: Boolean) {
+        if (!fromSwitcher) { switcherFile.delete(); return }
+        runCatching { dir.mkdirs(); switcherFile.writeText(id.toString()) }
+    }
+
+    /** A game screen of launch [id] starts: a mark naming any other launch is void. */
+    @Synchronized fun keepSwitcherReturnFor(id: Long) {
+        val marked = runCatching { switcherFile.readText().trim().toLong() }.getOrNull() ?: return
+        if (marked != id) switcherFile.delete()
+    }
+
+    @Synchronized override fun switcherReturn(): Boolean = runCatching { switcherFile.readText().trim().toLong() }.isSuccess
+
+    @Synchronized override fun clearSwitcherReturn() { switcherFile.delete() }
+
     private fun parse(text: String): Recent? {
         val tab = text.indexOf('\t')
         if (tab < 0) return null
@@ -74,6 +94,8 @@ class LaunchRecords(private val dir: File, private val now: () -> Long = System:
     companion object {
         const val NONE = -1L   // an intent without an id (a restore from recents in a fresh process)
         private const val DAY_MS = 24L * 60 * 60 * 1000
+        /** Not a record: its extension is neither `pending` nor `started`, so [drainStarted] passes it by. */
+        private const val SWITCHER_FILE = "switcher.return"
 
         fun of(context: android.content.Context) = LaunchRecords(File(context.filesDir, "launches"))
 
