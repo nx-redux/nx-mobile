@@ -62,6 +62,7 @@ import com.nxredux.mobile.padlayout.PadLayoutActivity
 import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
 import com.nxredux.mobile.runner.AndroidMicAccess
 import com.nxredux.mobile.runner.CoreHangNotice
+import com.nxredux.mobile.runner.GameExitCheck
 import com.nxredux.mobile.runner.AndroidUserDataStore
 import com.nxredux.mobile.runner.ArcadeSetsAsset
 import com.nxredux.mobile.runner.Archives
@@ -673,7 +674,12 @@ class MainActivity : ComponentActivity(), FolderPicker {
         // API 26-28: back from Android's home settings without picking this app, the HOME alias goes off again.
         if (::launcher.isInitialized && launcher.dropAliasIfNotHome() && ::state.isInitialized) state.onLauncherChanged()
         if (::state.isInitialized) {
-            CoreHangNotice.take(this)?.let(state::showError)   // a game whose core hung was closed with its process
+            val hang = CoreHangNotice.take(this)   // a game whose core hung was closed with its process
+            hang?.let(state::showError)
+            scope.launch {   // the game process ending on its own (a crash); a hang already said it, so it wins
+                val exit = withContext(Dispatchers.IO) { GameExitCheck.check(applicationContext, hangShown = hang != null) }
+                GameExitCheck.notice(exit)?.let(state::showError)
+            }
             state.refreshResume()
             state.onForeground()   // a card inserted while in the background: its games come back
         }
