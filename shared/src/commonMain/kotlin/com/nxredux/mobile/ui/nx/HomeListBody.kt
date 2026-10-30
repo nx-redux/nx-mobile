@@ -174,7 +174,8 @@ internal fun MainListBody(
             placed[0] = true
             if (target != current) { if (animate) state.animateScrollToItem(index, offset) else state.scrollToItem(index, offset) }
         }
-        // A list that fits sits on the band's bottom; a longer one fills it, from right under its top to the tab row.
+        // A list that fits sits on the band's bottom, the list just its rows tall (the pill counts rows from the list's
+        // top, so no empty room above them); a longer one fills it, from right under its top to the tab row.
         val fits = heights.sum() <= band
         // One pill behind the rows, gliding from row to row as the other lists' does ([nxPillGlide]); a row's text takes
         // the on-pill colours while the pill covers it the most ([NxPillGlide.litIndex]).
@@ -183,7 +184,7 @@ internal fun MainListBody(
         val pillStart = with(density) { gutter.toPx() }
         LazyColumn(
             Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart).padding(top = if (fits) 0.dp else start, bottom = if (fits) bottom else 0.dp)
-                .fillMaxWidth().height(with(density) { viewport.toDp() }).nxRowEdgeMask(state)
+                .fillMaxWidth().height(with(density) { (if (fits) heights.sum() else viewport).toDp() }).nxRowEdgeMask(state)
                 .nxPillGlide(glide, state, pitchPx, colors.accent, start = pillStart),
             state = state, verticalArrangement = Arrangement.Bottom, flingBehavior = rememberNxRowSnapFling(state),
         ) {

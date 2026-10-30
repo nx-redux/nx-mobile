@@ -180,9 +180,9 @@ fun GameListScreen(
 }
 
 /**
- * A List game list (and the switcher's List, [Home's List][com.nxredux.mobile.ui.nx.HomeListScreen]) shows
- * the selected game's stats only in the hint bar's row: with Button hints hidden ([emptyBarRoom]), or on a touch-only
- * screen ([touch]), where there is no bar and the row is kept for them. With the bar shown, no stats.
+ * Whether a List has no hint bar: Button hints hidden ([emptyBarRoom]), or a touch-only screen ([touch]). A game list
+ * with Page title Off then shows the selected game's stats in the bar's row (with the title, under it:
+ * [gameListTopStats]); the switcher's List and [Home's List][com.nxredux.mobile.ui.nx.HomeListScreen] always do.
  */
 internal fun gameListInfoInBarRow(emptyBarRoom: Boolean, touch: Boolean): Boolean = emptyBarRoom || touch
 
@@ -234,7 +234,7 @@ internal fun GameListFrame(
     val titleText = remember { arrayOfNulls<LayoutCoordinates>(1) }
     // No title shown (Page title Off): B has none to drop back, not an older list's.
     if (!LocalLauncherChrome.current.listTitle) SideEffect { if (minimalPage?.live?.value == true) minimalPage.morph.title = null }
-    val topStats = gameListTopStats(style, chrome.listTitle, chrome.extraInfo, gameListInfoInBarRow(chrome.emptyBarRoom, touch))
+    val topStats = gameListTopStats(style, chrome.listTitle, chrome.extraInfo)
     // The hint bar as the main menu's tab row, in its place: on the gutter both sides ([LocalNxHintBarStart]), as the
     // title, and the tab row's height ([LocalNxHintBarHeight]), its hints where the tab words sit.
     val barInset = nxPageGutter()
@@ -352,10 +352,11 @@ internal fun GameListFrame(
                     // List: the rows fade where more scrolls in (no band, no arrows), between a main menu List's gaps.
                     MenuStyle.LIST -> {
                         val rows = remember(dataKey) { listRows() }
-                        // The selected game's info shows only in the hint bar's row (hints hidden, or touch only with no bar),
-                        // only that row shaded; Extra info off leaves nothing for it, so its room goes too.
+                        // The selected game's info shows under the title ([topStats]); with Page title Off, in the hint bar's
+                        // row when there is no bar (hints hidden, or touch only), only that row shaded. Extra info off leaves
+                        // nothing for it, so its room goes too.
                         val barHidden = gameListInfoInBarRow(chrome.emptyBarRoom, touchOnly())
-                        val inRow = barHidden && chrome.extraInfo
+                        val inRow = barHidden && chrome.extraInfo && !topStats
                         GameInfoPlacement(if (inRow) info else NoGameInfo, Modifier.weight(1f), textStart = textStart, ground = if (inRow) BandGround.SHADE_WITH_INFO else BandGround.BAR, shade = false) { scaffoldModifier, infoBand ->
                             // The band's room goes to the rows; only its line in the bar's row ([NxHintsBand.barInfo]) stays.
                             val band = NxHintsBand(reserve = 0.dp, overlap = 0.dp, barInfo = infoBand.barInfo) {}
@@ -364,14 +365,14 @@ internal fun GameListFrame(
                             NxScreenScaffold(
                                 rows = emptyList(), selectedIndex = 0, hints = hints.value,
                                 onSelect = onSelect, onOpen = onOpen, modifier = scaffoldModifier, onHint = onHint,
-                                band = band, hideHints = barHidden, hintShade = true, keepBarRoom = inRow || !barHidden,
+                                band = band, hideHints = barHidden, hintShade = inRow, keepBarRoom = true,   // hidden hints keep the bar's row, empty unless the info is in it
                                 grid = { m ->
                                     BoxWithConstraints(m) {
                                         MainListBody(
                                             rows, selectedIndex, if (iconsUp) MENU_TAB_ROW_HEIGHT else 0.dp, listGutter, onSelect, onOpen, onLongPress,
                                             endRoom = if (artBox) listArtLabelEnd(maxWidth.value, LocalPortrait.current).dp else 0.dp, onPageRows = onPageRows,
                                             // A row's room under the stats line (shown under the title), as Home keeps under its stats.
-                                            gapRows = if (chrome.listTitle && chrome.extraInfo && !barHidden) 1f else 0f,
+                                            gapRows = if (topStats) 1f else 0f,
                                         )
                                     }
                                 },
@@ -434,13 +435,11 @@ internal fun Modifier.pullUp(by: Dp): Modifier = layout { m, c ->
 
 /**
  * Whether a game list in [style] shows the selected game's info on a line under its title ([titleShown]; Extra info
- * [extraInfo] on): a List while its hint bar shows (with [infoInBarRow] the info has the bar's empty row), Minimal and
- * Grid always. Carousel and Backdrop show theirs in their captions.
+ * [extraInfo] on): List, Minimal and Grid, hint bar shown or not. Carousel and Backdrop show theirs in their captions.
  */
-internal fun gameListTopStats(style: MenuStyle, titleShown: Boolean, extraInfo: Boolean, infoInBarRow: Boolean): Boolean =
+internal fun gameListTopStats(style: MenuStyle, titleShown: Boolean, extraInfo: Boolean): Boolean =
     titleShown && extraInfo && when (style) {
-        MenuStyle.LIST -> !infoInBarRow
-        MenuStyle.MINIMAL, MenuStyle.GRID -> true
+        MenuStyle.LIST, MenuStyle.MINIMAL, MenuStyle.GRID -> true
         MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> false
     }
 
