@@ -38,7 +38,6 @@ import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -46,7 +45,6 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -544,7 +542,7 @@ private fun BoxScope.BackdropRowItem(
             tile, look.k, g.itemW, scale = { rowItem(RowStyle.BACKDROP, i - at(), g).scale }, toolLines = look.toolLines,
             toolNameSp = look.toolNameSp, toolNamePad = look.toolNamePad, toolSplit = look.toolSplit, toolGap = look.toolGap,
             pad = if (look.marks) PadFrame(rowPadBox(g.itemH)) { padAlpha(i - at()) } else null,
-            lit = if (look.marks) ({ slotLitness(i - at()) }) else null,   // the main menu's: the centred console in the accent
+            lit = if (look.marks) ({ slotLitness(i - at()) }) else null,   // the main menu's: the centred item in the accent
         )
         // The touch target: the item's own width (a content-sized item's, so a neighbour's edge never takes its taps).
         Box(
@@ -730,14 +728,14 @@ internal fun BoxPlaceholder(game: BackdropGame) {
  * name's colour (the ink), dimmed with the item; left out while unknown. [scale]: the item's own scale now (read while
  * drawing), so a side item's count is grown back to at least [MIN_COUNT_SP] as drawn ([countGrowth]). A tool's name:
  * [toolLines] lines at [toolNameSp] between [toolNamePad]s; [toolSplit]: its pre-split lines. [pad]: how to draw the
- * tile's controller (only a Carousel passes it; Grid never does). [lit]: how far a console is into the selection (read
- * while drawing, 0 to 1, [slotLitness]): its logo, or its name without one, eases from the ink to the accent; its count
- * stays in the ink. Null: the ink.
+ * tile's controller (only a Carousel passes it; Grid never does). [lit]: how far the item is into the selection (read
+ * while drawing, 0 to 1, [slotLitness]): a console's logo (or its name without one), a collection's name, a tool's icon
+ * and name ease from the ink to the accent; a count stays in the ink. Null: the ink.
  */
 @Composable
 internal fun SlotTile(tile: GridTile, k: Float, slotW: Float, scale: () -> Float = { 1f }, toolLines: Int = 1, toolNameSp: Float = TOOL_NAME * k, toolNamePad: Float = SLOT_TEXT_PAD, toolSplit: Boolean = false, toolGap: Float = TOOL_GAP, pad: PadFrame? = null, lit: (() -> Float)? = null) {
     val colors = LocalNxColors.current
-    // The console's mark's colour now: the ink, easing to the accent as it slides into the selection.
+    // The item's mark's colour now: the ink, easing to the accent as it slides into the selection.
     val markColor = { if (lit == null) colors.listText else lerp(colors.listText, colors.accent, lit().coerceIn(0f, 1f)) }
     when (tile) {
         is GridTile.Logo -> {
@@ -757,15 +755,7 @@ internal fun SlotTile(tile: GridTile, k: Float, slotW: Float, scale: () -> Float
                 }
                 // Fit in the slot, centred, tinted while drawing ([markColor]), so a step redraws the logo, never recomposes it.
                 val logo = painterResource(res)
-                Box(Modifier.fillMaxSize().semantics { contentDescription = tile.name }.drawBehind {
-                    val src = logo.intrinsicSize
-                    if (src.width <= 0f || src.height <= 0f) return@drawBehind
-                    val fit = min(size.width / src.width, size.height / src.height)
-                    val drawn = Size(src.width * fit, src.height * fit)
-                    translate((size.width - drawn.width) / 2, (size.height - drawn.height) / 2) {
-                        with(logo) { draw(drawn, colorFilter = ColorFilter.tint(markColor())) }
-                    }
-                })
+                Box(Modifier.fillMaxSize().semantics { contentDescription = tile.name }.drawFitTinted(logo, markColor))
                 val count = tile.count
                 if (count != null) {
                     val top = underLogoTop(0f, maxHeight.value, logoDrawnHeight(maxWidth.value, maxHeight.value, logoAspect(res)), 8f)
@@ -796,7 +786,7 @@ internal fun SlotTile(tile: GridTile, k: Float, slotW: Float, scale: () -> Float
                 val wordW = if (word.isEmpty()) 0f else with(density) { measurer.measure(word, style, softWrap = false, maxLines = 1).size.width.toDp().value }
                 backdropCollectionNameSp(wordW, slotW - 2 * BACKDROP_COLLECTION_PAD, k)
             }
-            SlotText(tile.name, size.sp, maxLines = BACKDROP_COLLECTION_LINES, pad = BACKDROP_COLLECTION_PAD)
+            SlotText(tile.name, size.sp, maxLines = BACKDROP_COLLECTION_LINES, pad = BACKDROP_COLLECTION_PAD, color = markColor)
             val count = tile.count
             if (count != null) {
                 Spacer(Modifier.height(6.dp))
@@ -813,9 +803,9 @@ internal fun SlotTile(tile: GridTile, k: Float, slotW: Float, scale: () -> Float
         is GridTile.Tool -> Column(
             Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            ToolIcon(tile.icon, tile.appId, colors.listText, Modifier.size(TOOL_ICON.dp * k))
+            ToolIcon(tile.icon, tile.appId, markColor, Modifier.size(TOOL_ICON.dp * k))
             Spacer(Modifier.height(toolGap.dp * k))
-            SlotText(tile.lines.joinToString(if (toolSplit) "\n" else " "), toolNameSp.sp, maxLines = toolLines, pad = toolNamePad)   // the tool slot: pre-split, "Retro" / "Achievements"
+            SlotText(tile.lines.joinToString(if (toolSplit) "\n" else " "), toolNameSp.sp, maxLines = toolLines, pad = toolNamePad, color = markColor)   // the tool slot: pre-split, "Retro" / "Achievements"
         }
         // A plain row carries no games; the games row draws them from BackdropGame.
         is GridTile.Game -> SlotText(tile.title, 17.sp * k, maxLines = 3)
