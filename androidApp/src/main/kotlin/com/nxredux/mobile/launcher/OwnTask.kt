@@ -2,6 +2,7 @@ package com.nxredux.mobile.launcher
 
 import android.app.Activity
 import android.app.ActivityManager
+import android.content.Intent
 import android.os.Build
 import com.swordfish.libretrodroid.NxLog
 
@@ -21,4 +22,16 @@ internal fun Activity.ownAppTask(): ActivityManager.AppTask? {
  */
 internal fun Activity.hideTaskFromRecents() {
     runCatching { ownAppTask()?.setExcludeFromRecents(true) }.onFailure { NxLog.w("NXAPP", "hide task from Recents: ${it.message}") }
+}
+
+/**
+ * Launcher mode, a game quitting on screen: NX Redux's home task to the front first. Opening Recents (Launcher3 draws it
+ * in its own home activity) leaves Launcher3's home above it, and that is where a finished game would land otherwise.
+ */
+internal fun Activity.bringHomeTaskToFront() {
+    runCatching {
+        getSystemService(ActivityManager::class.java)?.appTasks
+            ?.firstOrNull { t -> runCatching { t.taskInfo?.baseIntent?.hasCategory(Intent.CATEGORY_HOME) }.getOrNull() == true }
+            ?.moveToFront()
+    }.onFailure { NxLog.w("NXAPP", "home task to front: ${it.message}") }
 }

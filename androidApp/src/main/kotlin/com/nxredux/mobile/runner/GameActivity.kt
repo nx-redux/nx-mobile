@@ -76,6 +76,7 @@ import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.cheats.DolphinCheats
 import com.nxredux.mobile.gametime.GameTimeRecorder
 import com.nxredux.mobile.gametime.GameTimeService
+import com.nxredux.mobile.launcher.bringHomeTaskToFront
 import com.nxredux.mobile.launcher.hideTaskFromRecents
 import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.NaomiSets
@@ -1043,6 +1044,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /** Back to the menu the game fades to black over 150 ms: below Android 14 (no close override set in onCreate) set here. */
     override fun finish() {
+        // Launcher mode, quit on screen (not a handoff behind the menu, not the GLES relaunch): back to NX Redux's home.
+        if (intent.getBooleanExtra(EXTRA_OWN_TASK, false) && !relaunching && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) bringHomeTaskToFront()
         super.finish()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) @Suppress("DEPRECATION") overridePendingTransition(0, R.anim.launch_return_out)
     }
