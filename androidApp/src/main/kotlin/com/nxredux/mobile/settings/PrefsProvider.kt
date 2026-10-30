@@ -3,11 +3,13 @@ package com.nxredux.mobile.settings
 import android.content.ContentProvider
 import android.content.ContentValues
 import android.content.Context
+import android.content.SharedPreferences
 import android.database.Cursor
 import android.net.Uri
 import android.os.Binder
 import android.os.Bundle
 import com.nxredux.mobile.storage.DataRoot
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The main process's settings, served to the game process (see [ProviderPreferences]). The provider has no `process`
@@ -27,7 +29,8 @@ class PrefsProvider : ContentProvider() {
                 return encode(mapOf(RESULT_OK to true))
             }
         }
-        val prefs = context.getSharedPreferences(arg ?: return null, Context.MODE_PRIVATE)
+        val name = arg ?: return null
+        val prefs = context.getSharedPreferences(name, Context.MODE_PRIVATE).also { watch(context, name, it) }
         return when (method) {
             METHOD_GET_ALL -> encode(prefs.all)
             METHOD_APPLY -> {
@@ -76,6 +79,23 @@ class PrefsProvider : ContentProvider() {
         const val RESULT_PATH = "path"
 
         fun authority(context: Context) = context.packageName + ".prefs"
+
+        /** Notified on every change to the file [name]; the game process's [ProviderPreferences] refetches on it. */
+        fun changeUri(context: Context, name: String): Uri = Uri.parse("content://" + authority(context) + "/prefs/" + Uri.encode(name))
+
+        /** Held strongly: [SharedPreferences] keeps its listeners only weakly. One per file. */
+        private val watchers = ConcurrentHashMap<String, SharedPreferences.OnSharedPreferenceChangeListener>()
+
+        /**
+         * In the main process: every change to [prefs] (the file [name]) notifies [changeUri], so a game process's
+         * snapshot follows the menu's settings without asking. Called wherever the main process opens or serves a file.
+         */
+        fun watch(context: Context, name: String, prefs: SharedPreferences) {
+            if (watchers.containsKey(name)) return
+            val app = context.applicationContext
+            val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> app.contentResolver.notifyChange(changeUri(app, name), null) }
+            if (watchers.putIfAbsent(name, listener) == null) prefs.registerOnSharedPreferenceChangeListener(listener)
+        }
 
         /** The calls from the game process, over the content resolver. */
         fun channel(context: Context): PrefsChannel {
