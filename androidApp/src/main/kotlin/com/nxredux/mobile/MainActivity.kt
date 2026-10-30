@@ -55,6 +55,8 @@ import com.nxredux.mobile.gametime.LazyGameTimeData
 import com.nxredux.mobile.launcher.AndroidAppLauncher
 import com.nxredux.mobile.launcher.TopScreenHost
 import com.nxredux.mobile.launcher.currentDisplayId
+import com.nxredux.mobile.launcher.hideTaskFromRecents
+import com.nxredux.mobile.launcher.ownAppTask
 import com.nxredux.mobile.launcher.topScreenDisplay
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.AndroidNetplay
@@ -279,7 +281,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (asHome || isFinishing || !launcher.isHome()) return false
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (runCatching { startActivity(home) }.isFailure) return false
-        finish()
+        finishAndRemoveTask()   // its task held only this instance: no empty NX Redux card stays in Recents
         return true
     }
 
@@ -347,7 +349,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (handOverToHome()) return   // nothing built: onStart/onStop never run for an activity finished in onCreate
         ContextCompat.registerReceiver(this, launchStarted, IntentFilter(LaunchRecords.action(this)), ContextCompat.RECEIVER_NOT_EXPORTED)
         readWindow()
-        if (asHome) closeOtherInstances()
+        if (asHome) { closeOtherInstances(); hideTaskFromRecents() }
         thread(name = "nx-temp-sweep") {
             NxStorage.sweepTemps(this)
             // A netplay session copy left by a killed game (a process's first start only; never under a live game process).
@@ -564,12 +566,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
      */
     private fun reclaimKeyFocus() {
         if (!resumed) return   // split screen or freeform with another app in front: leave it there
-        val tasks = getSystemService(ActivityManager::class.java)?.appTasks ?: return
-        val own = tasks.firstOrNull { t ->
-            runCatching { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) t.taskInfo?.taskId else @Suppress("DEPRECATION") t.taskInfo?.persistentId }
-                .getOrNull() == taskId
-        }
-        runCatching { own?.moveToFront() }.onFailure { NxLog.w("NXAPP", "menu key focus: ${it.message}") }
+        runCatching { ownAppTask()?.moveToFront() }.onFailure { NxLog.w("NXAPP", "menu key focus: ${it.message}") }
     }
 
     /** Whether the menu goes on [display] (the second): the main window as landscape against its real size, no core turning. */
@@ -646,6 +643,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (!intent.hasCategory(Intent.CATEGORY_HOME)) return
         asHome = true
         closeOtherInstances()
+        hideTaskFromRecents()
         if (::state.isInitialized) state.goHome()
     }
 
