@@ -24,4 +24,37 @@ class GameExitCheckTest {
         assertEquals(GameExit.NONE, classify(ApplicationExitInfo.REASON_USER_REQUESTED))
         assertEquals(GameExit.NONE, classify(-1))
     }
+
+    private val crash = GameExit.CRASH
+    private val quit = GameExit.NONE
+
+    @Test fun firstRunWithNoHistoryStillCatchesTheNextCrash() {
+        val (first, mark) = GameExitCheck.decide(emptyList(), null, hangShown = false, now = 1000)
+        assertEquals(GameExit.NONE, first)
+        assertEquals(1000L, mark)
+        assertEquals(GameExit.CRASH, GameExitCheck.decide(listOf(1500L to crash), mark, false, 2000).first)
+    }
+
+    @Test fun firstRunSkipsOldDeaths() {
+        val (exit, mark) = GameExitCheck.decide(listOf(500L to crash), null, false, 1000)
+        assertEquals(GameExit.NONE, exit)
+        assertEquals(1000L, mark)
+    }
+
+    @Test fun crashThenNormalQuitStillShowsCrash() {
+        val (exit, mark) = GameExitCheck.decide(listOf(1500L to crash, 1800L to quit), 1000L, false, 2000)
+        assertEquals(GameExit.CRASH, exit)
+        assertEquals(1800L, mark)
+    }
+
+    @Test fun sameCrashIsNotShownTwice() {
+        val (_, mark) = GameExitCheck.decide(listOf(1500L to crash), 1000L, false, 2000)
+        assertEquals(GameExit.NONE, GameExitCheck.decide(listOf(1500L to crash), mark, false, 2100).first)
+    }
+
+    @Test fun hangWinsAndAdvancesTheMark() {
+        val (exit, mark) = GameExitCheck.decide(listOf(1500L to crash), 1000L, true, 2000)
+        assertEquals(GameExit.HANG, exit)
+        assertEquals(1500L, mark)
+    }
 }

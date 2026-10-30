@@ -29,22 +29,34 @@ object GameExitCheck {
     }
 
     /**
-     * The newest `:game` ending since the last check. [hangShown]: the menu already told of a hung core for this
-     * death, so it wins and the exit reason is not looked at. The first run only records the time (older deaths
-     * from before this existed stay unmentioned). Does I/O: not on the main thread.
+     * What to say and the new last-seen mark, from the `:game` endings ([entries]: time and class) and the mark
+     * kept from the last check ([lastSeen], null on the first run). The first run only sets a baseline (deaths from
+     * before this existed stay unmentioned, but the next one counts, history or not). A hang already shown wins.
+     * Any new crash counts, even if a normal quit followed it before the menu looked.
+     */
+    internal fun decide(entries: List<Pair<Long, GameExit>>, lastSeen: Long?, hangShown: Boolean, now: Long): Pair<GameExit, Long> {
+        val newest = entries.maxOfOrNull { it.first }
+        if (lastSeen == null) return GameExit.NONE to maxOf(newest ?: now, now)
+        val mark = maxOf(lastSeen, newest ?: lastSeen)
+        if (hangShown) return GameExit.HANG to mark
+        val crashed = entries.any { it.first > lastSeen && it.second == GameExit.CRASH }
+        return (if (crashed) GameExit.CRASH else GameExit.NONE) to mark
+    }
+
+    /**
+     * Whether the `:game` process died on its own since the last check. [hangShown]: the menu already told of a hung
+     * core for this death, so it wins. Does I/O: not on the main thread.
      */
     fun check(context: Context, hangShown: Boolean = false): GameExit {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return GameExit.NONE
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        val games = am.getHistoricalProcessExitReasons(context.packageName, 0, 5)
+        val entries = am.getHistoricalProcessExitReasons(context.packageName, 0, 5)
             .filter { AppProcess.isGameName(it.processName) }
-        val newest = games.maxOfOrNull { it.timestamp } ?: return if (hangShown) GameExit.HANG else GameExit.NONE
+            .map { it.timestamp to classify(it.reason, it.description) }
         val prefs = Prefs.open(context, PREFS)
-        val seen = prefs.getLong(KEY_SEEN, -1L)
-        if (newest > seen) prefs.edit().putLong(KEY_SEEN, newest).apply()
-        if (hangShown) return GameExit.HANG
-        if (seen < 0) return GameExit.NONE
-        val latest = games.filter { it.timestamp > seen }.maxByOrNull { it.timestamp } ?: return GameExit.NONE
-        return classify(latest.reason, latest.description)
+        val seen = if (prefs.contains(KEY_SEEN)) prefs.getLong(KEY_SEEN, 0L) else null
+        val (exit, mark) = decide(entries, seen, hangShown, System.currentTimeMillis())
+        if (mark != seen) prefs.edit().putLong(KEY_SEEN, mark).apply()
+        return exit
     }
 }
