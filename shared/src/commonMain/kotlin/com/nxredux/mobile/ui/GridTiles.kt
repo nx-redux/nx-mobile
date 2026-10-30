@@ -31,9 +31,15 @@ sealed interface GridTile {
 internal fun GridTile.Game.artLess(width: Float, height: Float): Boolean =
     tileArt(width, height, screenshotUrl, heroUrl, gridUrl) == null
 
-/** A tool's name as a tile shows it: "RetroAchievements" breaks as "Retro / Achievements"; the row keeps one word. */
-internal fun toolDisplayLines(label: String): List<String> =
-    if (label == "RetroAchievements") listOf("Retro", "Achievements") else listOf(label)
+/**
+ * A tool's name as a tile shows it: "RetroAchievements" breaks as "Retro / Achievements" and "Cheats & Patches" as
+ * "Cheats & / Patches", so neither runs to the tile's edges; the row keeps one line.
+ */
+internal fun toolDisplayLines(label: String): List<String> = when (label) {
+    "RetroAchievements" -> listOf("Retro", "Achievements")
+    "Cheats & Patches" -> listOf("Cheats &", "Patches")
+    else -> listOf(label)
+}
 
 /** An Android game's app id (its file name), which its tile's icon is looked up by; null for a ROM. */
 internal val Listed.appId: String? get() = game.fileName.takeIf { system.android }

@@ -78,10 +78,11 @@ internal fun HomeListScreen(
     // With the tab row hidden the strip moves into its room as a header ([homeStatsHeader]), as on Grid and Carousel
     // Home; with no strip the rows run up beside the Recent and Search icons ([homeListTopRoom]).
     // Extra info: the selected game's facts on a line of their own under the stats, in the header with them (in the first
-    // line's place with Home stats off); upright, on two lines, the next goal on the second ([GameFactsLines]).
+    // line's place with Home stats off); upright with Home stats off, on two lines, the next goal on the second
+    // ([GameFactsLines], [homeFactLines]).
     val facts = chrome.extraInfo && rows != listOf(MainRow.PickAGame)
-    val factLines = if (!facts) 0 else if (portrait) 2 else 1
     val statLines = if (shownStrip != null) stripLines else 0
+    val factLines = homeFactLines(facts, portrait, statLines)
     val headerLines = statLines + factLines
     val header = if (!chrome.tabRow && headerLines > 0) homeStatsHeader(frame.copy(titleHidden = true), headerLines) else null
     // The facts line a little apart from the stats above it ([HOME_FACTS_GAP]); the header grows by as much.
@@ -199,6 +200,17 @@ internal fun HomePickCard(
             },
         )
     }
+}
+
+/**
+ * List Home's lines for the selected game's facts ([GameFactsLines]): none without [facts]; one under the stats
+ * ([statLines] above them), so the header stays short; with no stats, upright (the Recent and Search icons beside the
+ * line leave it little room), two, the next goal on the second; sideways one.
+ */
+internal fun homeFactLines(facts: Boolean, portrait: Boolean, statLines: Int): Int = when {
+    !facts -> 0
+    portrait && statLines == 0 -> 2
+    else -> 1
 }
 
 /**

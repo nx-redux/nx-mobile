@@ -3,7 +3,9 @@ package com.nxredux.mobile.ui.nx
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -13,13 +15,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,6 +55,9 @@ private const val CONSOLE_LOGO_MAX_H = 0.5f
 /** A tool's name's gap under its icon. */
 private val TOOL_NAME_GAP = 6.dp
 
+/** A name's room from the tile's left and right edges (a tool's, a collection's), so a long line wraps clear of them. */
+private val MARK_NAME_INSET = 12.dp
+
 /**
  * The box a logo [aspect] (height over width) is drawn in, dp, in a cell [cellW] × [cellH]: the same area for every logo
  * ([CONSOLE_LOGO_AREA] of the cell's), so a thin wordmark grows and a tall two-line logo shrinks, held within
@@ -78,11 +86,18 @@ internal fun MenuMarkCell(tile: GridTile, lit: Boolean, cellW: Float, cellH: Flo
     val ink = lerp(dim, colors.accent, litness())
     val edge = colors.main.copy(alpha = MARK_EDGE_ALPHA)   // role: a Grid mark tile's edge
     val small = nxDescSize()   // a Settings row's description size
-    @Composable fun name(text: String) = Text(
-        text, color = ink, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold,
-        fontSize = nxListLabel(), maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-        modifier = Modifier.padding(horizontal = 8.dp),
-    )
+    // A name broken only between words ([markNameLines]), each line on its own: one wider than the tile ends in "…".
+    val nameStyle = TextStyle(fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxListLabel(), textAlign = TextAlign.Center)
+    val measurer = rememberTextMeasurer()
+    @Composable fun name(text: String) = BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = MARK_NAME_INSET)) {
+        val width = constraints.maxWidth
+        val lines = remember(text, width, nameStyle) {
+            markNameLines(text, MARK_NAME_LINES) { measurer.measure(it, nameStyle, softWrap = false, maxLines = 1).size.width <= width }
+        }
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            lines.forEach { Text(it, color = ink, style = nameStyle, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) }
+        }
+    }
     Column(
         modifier.fillMaxSize().border(1.dp, edge, RoundedCornerShape(NX_TILE_CORNER.dp)).wrapContentHeight(Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -107,12 +122,31 @@ internal fun MenuMarkCell(tile: GridTile, lit: Boolean, cellW: Float, cellH: Flo
                 Text(
                     tile.lines.joinToString("\n"), color = ink, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Medium,
                     fontSize = small, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                    lineHeight = small * 1.3f, modifier = Modifier.padding(horizontal = 6.dp),
+                    lineHeight = small * 1.3f, modifier = Modifier.padding(horizontal = MARK_NAME_INSET),
                 )
             }
             is GridTile.Game -> Unit
         }
     }
+}
+
+/** The most lines a collection's or console's name takes in its tile. */
+private const val MARK_NAME_LINES = 2
+
+/**
+ * A tile's name in at most [max] lines, broken only between words: each line takes the words that [fits] on it, the
+ * last any left over. A word wider than the line stays whole on a line of its own, and the line ends in "…" when drawn.
+ */
+internal fun markNameLines(name: String, max: Int, fits: (String) -> Boolean): List<String> {
+    val lines = mutableListOf<String>()
+    var line = ""
+    for (word in name.split(' ').filter { it.isNotEmpty() }) {
+        val next = if (line.isEmpty()) word else "$line $word"
+        if (line.isEmpty() || lines.size == max - 1 || fits(next)) line = next
+        else { lines += line; line = word }
+    }
+    if (line.isNotEmpty()) lines += line
+    return lines
 }
 
 /** A tool's icon, as a share of its cell's shorter side. */

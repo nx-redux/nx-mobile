@@ -330,8 +330,8 @@ internal fun HomeFactsLine(lines: List<InfoLine>, size: TextUnit, modifier: Modi
 
 /**
  * The selected game's facts under a game list's title ([HomeFactsLine]'s look) in [rows] lines of [line] dp each: one
- * line, or with two (a phone upright, where the title's icons leave the line little room) its next goal ("Next: …") on
- * the second. The room never changes with the selection, so the list under it never moves.
+ * line, or with two (a phone upright with no stats above, where the icons leave the line little room: [homeFactLines])
+ * its next goal ("Next: …") on the second. The room never changes with the selection, so the list under it never moves.
  */
 @Composable
 internal fun GameFactsLines(lines: List<InfoLine>, size: TextUnit, line: Dp, rows: Int, modifier: Modifier) {
