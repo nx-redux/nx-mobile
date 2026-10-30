@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import com.nxredux.mobile.netplay.usb.UsbCables
 import com.nxredux.mobile.storage.Recent
 import com.swordfish.libretrodroid.NxLog
 import kotlinx.coroutines.Dispatchers
@@ -69,6 +70,8 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
                     putExtra(GameActivity.EXTRA_NETPLAY_FOLDER_CORE, it.folderCoreId)
                     putExtra(GameActivity.EXTRA_NETPLAY_EMPTY_SAVES, it.emptySaves)
                     putExtra(GameActivity.EXTRA_NETPLAY_USB, it.overUsb)
+                    // The cable lives in this process: the game's stop names this start, sent back here (PrefsProvider).
+                    if (it.overUsb) putExtra(GameActivity.EXTRA_NETPLAY_USB_TOKEN, UsbCables.get(context).token())
                 }
             }
             .addFlags(gameLaunchFlags(ownTask()))

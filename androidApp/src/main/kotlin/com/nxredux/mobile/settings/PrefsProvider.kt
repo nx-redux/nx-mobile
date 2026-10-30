@@ -8,6 +8,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Binder
 import android.os.Bundle
+import com.nxredux.mobile.netplay.usb.UsbCables
 import com.nxredux.mobile.storage.DataRoot
 import java.util.concurrent.ConcurrentHashMap
 
@@ -26,6 +27,10 @@ class PrefsProvider : ContentProvider() {
                 // Recorded per calling pid: a game process killed before its end stops counting (DataRoot.gameUseBegin).
                 if (decode(extras ?: Bundle())[ARG_BEGIN] == true) DataRoot.gameUseBegin(context, Binder.getCallingPid())
                 else DataRoot.gameUseEnd(context, Binder.getCallingPid())
+                return encode(mapOf(RESULT_OK to true))
+            }
+            METHOD_USB_CABLE_STOP_IF -> {
+                (decode(extras ?: Bundle())[ARG_TOKEN] as? Long)?.let { UsbCables.get(context).stopIf(it) }
                 return encode(mapOf(RESULT_OK to true))
             }
         }
@@ -77,6 +82,9 @@ class PrefsProvider : ContentProvider() {
         const val METHOD_DATA_ROOT_USE = "dataRootUse"
         const val ARG_BEGIN = "begin"
         const val RESULT_PATH = "path"
+        /** [ARG_TOKEN]: the game's netplay session over USB has ended; the menu's cable stops unless a newer start took it. */
+        const val METHOD_USB_CABLE_STOP_IF = "usbCableStopIf"
+        const val ARG_TOKEN = "token"
 
         fun authority(context: Context) = context.packageName + ".prefs"
 
@@ -95,6 +103,11 @@ class PrefsProvider : ContentProvider() {
             val app = context.applicationContext
             val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> app.contentResolver.notifyChange(changeUri(app, name), null) }
             if (watchers.putIfAbsent(name, listener) == null) prefs.registerOnSharedPreferenceChangeListener(listener)
+        }
+
+        /** From the game process: [UsbCables]'s `stopIf(token)` in the main process, where the cable runs. Blocking. */
+        fun usbCableStopIf(context: Context, token: Long) {
+            channel(context).call(METHOD_USB_CABLE_STOP_IF, "", mapOf(ARG_TOKEN to token))
         }
 
         /** The calls from the game process, over the content resolver. */

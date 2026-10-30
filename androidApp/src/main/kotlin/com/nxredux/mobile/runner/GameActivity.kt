@@ -89,7 +89,6 @@ import com.nxredux.mobile.netplay.NetplaySaves
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.NetplayText
-import com.nxredux.mobile.netplay.usb.UsbCables
 import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.CoreConfig
@@ -111,6 +110,7 @@ import com.nxredux.mobile.options.SpeedSettings
 import com.nxredux.mobile.options.VulkanFallback
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.GameRumble
+import com.nxredux.mobile.settings.PrefsProvider
 import com.nxredux.mobile.shortcuts.ClaimedInput
 import com.nxredux.mobile.shortcuts.ConsoleHotkeys
 import com.nxredux.mobile.shortcuts.EffectiveShortcuts
@@ -208,6 +208,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_FOLDER_CORE = "netplay_folder_core"  // the game folder's own core id (saves belong to it)
         const val EXTRA_NETPLAY_EMPTY_SAVES = "netplay_empty_saves"   // Boolean: no save copy happened although one was due
         const val EXTRA_NETPLAY_USB = "netplay_usb"              // Boolean: the session runs over the USB cable
+        const val EXTRA_NETPLAY_USB_TOKEN = "netplay_usb_token"  // Long: the menu's cable start this session runs on (UsbCables.token)
         /** The Dolphin core's descriptor id (Wii and GameCube tags). */
         private const val DOLPHIN_ID = "dolphin"
         private const val MUPEN64PLUS_NEXT_ID = "mupen64plus_next"
@@ -651,7 +652,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         netplayLocal = launchSession?.endsAsLocalGame == true && savedInstanceState?.getBoolean(KEY_NETPLAY_LOCAL) == true
         netplay = launchSession.takeUnless { netplayLocal }
         netplayRestored = netplay != null && savedInstanceState != null
-        if (netplay?.overUsb == true) netplayUsbToken = UsbCables.get(this).token()
+        // The cable is the menu process's: never instantiated here (a fresh, unstarted one would stop the menu's VPN).
+        if (netplay?.overUsb == true) netplayUsbToken = intent.getLongExtra(EXTRA_NETPLAY_USB_TOKEN, -1L).takeIf { it >= 0 }
         // Decided here, not after startEmulator's async setup, so a stop in between still records the slot.
         // A saved slot (recreated after a process kill) wins over the launch intent's.
         val savedSlot = savedInstanceState?.getInt(KEY_RESUME_SLOT, -1)?.takeIf { it in 0..NxPaths.AUTO_SLOT }
@@ -1064,7 +1066,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             val owner = netplayOwner
             NetplayGame.release(netplayGame, if (np.onCopy) ({ NetplaySessionDir.release(filesDir, owner) }) else null)
             // The cable carried this session (the sheet handed it over at launch), unless a newer launch's start took it over.
-            netplayUsbToken?.takeIf { np.overUsb }?.let { UsbCables.get(this).stopIf(it) }
+            // Stopped in the menu process, which owns it: a Binder call, so off the main thread.
+            netplayUsbToken?.takeIf { np.overUsb }?.let { token ->
+                val app = applicationContext
+                thread(name = "usb-cable-stop") {
+                    runCatching { PrefsProvider.usbCableStopIf(app, token) }.onFailure { NxLog.w(TAG_LOG, "could not stop the USB cable", it) }
+                }
+            }
         }
         sessionClaim?.let { sessions.release(it.token) }
         sessionClaim = null
