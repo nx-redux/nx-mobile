@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class AndroidSaveTransfer(
     context: Context,
     private val pickers: Pickers,
-    /** Main thread only: some GameActivity holds the session ([com.nxredux.mobile.runner.LibretroRunner.gameScreenAlive]). */
+    /** Main thread only: the game process has a game screen alive ([com.nxredux.mobile.runner.LibretroRunner.gameScreenAlive]). */
     private val gameScreenAlive: () -> Boolean,
     /** A Device Sync is running: it writes the same saves, so an import waits for it. */
     private val syncing: () -> Boolean = { false },

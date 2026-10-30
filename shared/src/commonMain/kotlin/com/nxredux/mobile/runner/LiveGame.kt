@@ -4,7 +4,7 @@ import com.nxredux.mobile.storage.NxPaths
 
 /**
  * The game the game process holds, as the menu can read it: [pid] is the process, [launchId] its launch's record
- * ([LaunchRecords]). Lets the menu bring a running game back instead of starting a second one.
+ * (the Android runner's LaunchRecords). Lets the menu bring a running game back instead of starting a second one.
  */
 data class LiveGame(
     val pid: Int,

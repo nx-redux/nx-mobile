@@ -11,7 +11,8 @@ import java.io.InputStream
  * assets/system/, once per app update (stamped with lastUpdateTime).
  *
  * MainActivity pre-warms it on a background thread (as it does the overlays and shaders) and every caller goes
- * through one lock (in-process, and a file lock for the game process), so a game started meanwhile waits for that copy instead of running a second one.
+ * through one lock (in this process, and a file lock across the menu and the game process), so a game started
+ * meanwhile waits for that copy instead of running a second one.
  * Not [BundledAssets.sync]'s whole-tree swap: this dir is not the APK's alone. BiosImport copies the user's
  * `Bios/<TAG>/` files into it (by path, over bundled ones) and cores write their own files here (flycast's
  * `dc/` nvmem and flash, PPSSPP's), and a swap would drop all of that. So each bundled file is built beside its

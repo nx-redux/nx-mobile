@@ -11,8 +11,9 @@ import com.nxredux.mobile.netplay.usb.UsbCables
 import com.nxredux.mobile.storage.DataRoot
 
 /**
- * The main process's settings, served to the game process (see [ProviderPreferences]). The provider has no `process`
- * attribute, so it always runs where the real [android.content.SharedPreferences] live. Not exported.
+ * The game process's calls into the main process: its settings writes ([ProviderPreferences]; reads come from its own
+ * copy of the file), and the data root and USB cable the main process owns ([DataRoot], [UsbCables]). The provider has
+ * no `process` attribute, so it always runs where the real [android.content.SharedPreferences] live. Not exported.
  */
 class PrefsProvider : ContentProvider() {
     override fun onCreate() = true

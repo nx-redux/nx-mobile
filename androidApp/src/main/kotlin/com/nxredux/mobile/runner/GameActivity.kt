@@ -175,6 +175,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
@@ -237,7 +238,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private var debugGame: java.lang.ref.WeakReference<GameActivity>? = null
 
         /**
-         * Debug builds only (the adb GAME_STOP hook, NxTestReceiver): the live game quits as the menu's Quit does, so
+         * Debug builds only (the adb GAME_STOP hook, NxGameStopReceiver): the live game quits as the menu's Quit does, so
          * its battery save and auto state are written. False when there is none (or in release). Main thread.
          */
         internal fun debugQuit(): Boolean {
@@ -696,8 +697,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /**
      * A newer game screen claimed the native session, or the menu starts another game ([endForHandoff]): leave through
      * the normal quit (battery save, auto state, RA stop, then finish; onDestroy's native destroy releases the session,
-     * and in the game process ends it). Usually stopped here: the auto state is serialized
-     * off the GL thread as onStop does, and the thumbnail is skipped when the stopped surface cannot be copied.
+     * and in the game process ends it). Usually stopped here: the auto state is serialized off the GL thread as onStop
+     * does, and the thumbnail is skipped when the stopped surface cannot be copied.
      */
     private fun onSessionHandedOff() {
         if (isDestroyed) return
@@ -1087,8 +1088,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val endUse = usingData
         usingData = false
         val app = applicationContext
-        // After the core's last write (destroyed above); a Binder call to the menu process, so not on this thread.
         if (endsProcess) { ending = true; GameHeartbeat.start(app) }   // a finish without Quit (Back) beats from here
+        // After the core's last write (destroyed above); a Binder call to the menu process, so not on this thread.
         if (endUse || endsProcess) thread(name = if (endsProcess) "game-process-end" else "data-use-end") {
             if (endUse) runCatching { DataRoot.useEnd(app) }.onFailure { NxLog.w(TAG_LOG, "could not end the data use", it) }
             if (endsProcess) endProcess()
@@ -1105,7 +1106,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun endProcess() {
         awaitAutoWrites()
         GameTimeService.flush()
-        runCatching { NetplayEngine.executor.submit {}.get(PROCESS_END_WAIT_S, java.util.concurrent.TimeUnit.SECONDS) }
+        runCatching { NetplayEngine.executor.submit {}.get(PROCESS_END_WAIT_S, TimeUnit.SECONDS) }
         NxLog.i(TAG_LOG, "the game has ended: ending its process")
         Process.killProcess(Process.myPid())
     }
@@ -1115,8 +1116,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * thread may be blocked on the core's lock. Nothing in this process can stop the core or take that lock, so the game
      * goes with the process: finished first (a binder call, whatever the main thread is doing) so Android does not
      * recreate it, then the game process ends; the menu (in its own process) comes back to the front and tells the user
-     * ([CoreHangNotice]). The battery save was
-     * written when the menu last opened and with the last auto state; play time keeps its last minute ([startGameTimeTicker]).
+     * ([CoreHangNotice]). The battery save was written when the menu last opened and with the last auto state; play time
+     * keeps its last minute ([startGameTimeTicker]).
      */
     private fun onCoreHung(stalledMillis: Long) {
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "The game"
@@ -1187,9 +1188,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         gameTag = tag
         gameCoreId = coreId
         padLayout.onGameTagKnown()
-        // Normally done by MainActivity; here too for a restore from recents in a fresh process. Not awaited:
-        // it is synchronized, and a first-run or post-update copy (~10 MB) must not hold up the game. Re-read
-        // once it is done.
+        // MainActivity does it too, in the menu process; here for a game started before that copy is in place. Not
+        // awaited: it is locked across both processes, and a first-run or post-update copy (~10 MB) must not hold up the
+        // game. Re-read once it is done.
         val extraction = lifecycleScope.async(Dispatchers.IO) { Overlays.extractBundled(this@GameActivity) }
         val shaderExtraction = lifecycleScope.launch(Dispatchers.IO) { Shaders.extractBundled(this@GameActivity) }
         restartOnlyOptions = descriptor?.restartOnlyOptions ?: emptySet()

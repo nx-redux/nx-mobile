@@ -42,8 +42,8 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.NxMobile">
-        <!-- The settings, served to the :game process: the main process owns every SharedPreferences file. No process
-             attribute, so it always runs there. -->
+        <!-- The :game process's calls into the main process (settings writes, the data root, the USB cable): the main
+             process owns every SharedPreferences file. No process attribute, so it always runs there. -->
         <provider
             android:name=".settings.PrefsProvider"
             android:authorities="${applicationId}.prefs"
