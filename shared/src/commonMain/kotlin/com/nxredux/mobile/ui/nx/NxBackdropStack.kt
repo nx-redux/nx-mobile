@@ -114,6 +114,7 @@ fun NxBackdropStack(
                     tiles[i], k, g.slotW, scale = { stackItem(RowStyle.BACKDROP, distance(), g).scale }, toolLines = backdropToolNameLines(slot), toolNameSp = toolNameSp,
                     toolNamePad = backdropToolNamePad(slot), toolSplit = slot == BackdropSlot.TOOL, toolGap = backdropToolGap(slot),
                     pad = reaches?.get(i)?.let { r -> PadFrame(stackPadBox(g.slotW, g.slotH, r)) { padAlpha(distance()) } },
+                    lit = { slotLitness(distance()) },   // the selected console in the accent
                 )
             },
         )
