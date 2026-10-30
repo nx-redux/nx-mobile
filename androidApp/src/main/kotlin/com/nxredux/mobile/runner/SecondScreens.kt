@@ -1,6 +1,5 @@
 package com.nxredux.mobile.runner
 
-import com.nxredux.mobile.settings.Prefs
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.os.Handler
@@ -8,6 +7,7 @@ import android.os.Looper
 import android.view.Display
 import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.settings.AndroidAppSettings
+import com.nxredux.mobile.settings.Prefs
 import com.swordfish.libretrodroid.NxLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

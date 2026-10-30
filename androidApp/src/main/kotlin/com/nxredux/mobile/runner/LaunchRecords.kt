@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import android.content.Context
 import com.nxredux.mobile.storage.Recent
 import java.io.File
 
@@ -97,9 +98,9 @@ class LaunchRecords(private val dir: File, private val now: () -> Long = System:
         /** Not a record: its extension is neither `pending` nor `started`, so [drainStarted] passes it by. */
         private const val SWITCHER_FILE = "switcher.return"
 
-        fun of(context: android.content.Context) = LaunchRecords(File(context.filesDir, "launches"))
+        fun of(context: Context) = LaunchRecords(File(context.filesDir, "launches"))
 
         /** The explicit-package broadcast a game sends once it has started; the menu drains on it. No extras. */
-        fun action(context: android.content.Context) = context.packageName + ".LAUNCH_STARTED"
+        fun action(context: Context) = context.packageName + ".LAUNCH_STARTED"
     }
 }

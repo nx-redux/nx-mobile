@@ -15,7 +15,7 @@ import kotlinx.coroutines.withContext
  * [ownTask] is read per launch: true while the menu runs as the home screen (launcher mode), see [gameLaunchFlags].
  */
 class LibretroRunner(private val context: Context, private val ownTask: () -> Boolean) : EmulatorRunner {
-    /** A game screen is alive (playing, suspended in its own task, or closing); main thread only. Import saves waits for it. */
+    /** A game screen is alive (playing, suspended in its own task, or closing): the live-game record. Import saves waits for it. */
     val gameScreenAlive: Boolean get() = LiveGameStore.alive(context)
 
     /** Runs first in every [launch], on the main thread: the menu clears the second display for the game. */
@@ -25,7 +25,7 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
     var launchFailed: () -> Unit = {}
 
     /** False: launches leave no launch record, so they never reach Recently Played (the debug test hook). */
-    var recordLaunches = true
+    internal var recordLaunches = true
 
     /**
      * The game process comes first ([GameProcessControl], off the main thread): the paused game picked again comes back
@@ -41,7 +41,9 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
                 .getOrDefault(GameProcessControl.Decision.START)
                 .also { d ->
                     // Brought back: the running game's launch now ends on the switcher, or not, as this pick says.
-                    if (d == GameProcessControl.Decision.BROUGHT_BACK) LiveGameStore.of(app).current()?.let { LaunchRecords.of(app).markSwitcherReturn(it.launchId, session.fromSwitcher) }
+                    if (d == GameProcessControl.Decision.BROUGHT_BACK) LiveGameStore.of(app).current()?.let {
+                        LaunchRecords.of(app).markSwitcherReturn(it.launchId, session.fromSwitcher)
+                    }
                 }
         }
         if (decision == GameProcessControl.Decision.START) withContext(Dispatchers.Main.immediate) { start(session, recent) }

@@ -3,8 +3,8 @@ package com.nxredux.mobile
 import android.app.ActivityManager
 import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.IntentFilter
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.hardware.input.InputManager
@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.window.layout.WindowMetricsCalculator
 import com.nxredux.mobile.runner.BiosImport
+import com.nxredux.mobile.runner.LaunchRecords
 import com.nxredux.mobile.runner.LiveGameStore
 import com.nxredux.mobile.runner.Posture
 import com.nxredux.mobile.storage.LibchdrSectors
@@ -95,7 +96,6 @@ import com.nxredux.mobile.storage.AndroidPrivateFiles
 import com.nxredux.mobile.storage.AndroidSaveTransfer
 import com.nxredux.mobile.storage.DataRoot
 import com.nxredux.mobile.storage.AndroidSidecarStore
-import com.nxredux.mobile.runner.LaunchRecords
 import com.nxredux.mobile.storage.RecentsRecorder
 import com.nxredux.mobile.storage.AndroidRomsSources
 import com.nxredux.mobile.storage.SafTree

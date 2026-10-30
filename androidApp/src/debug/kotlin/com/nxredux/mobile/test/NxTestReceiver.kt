@@ -11,6 +11,7 @@ import com.nxredux.mobile.runner.LibretroRunner
 import com.nxredux.mobile.runner.LiveGameStore
 import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.FileRomsSource
+import com.nxredux.mobile.storage.Recent
 import com.nxredux.mobile.sync.DeviceSyncPage
 import com.nxredux.mobile.sync.DeviceSyncs
 import com.nxredux.mobile.sync.SyncLink
@@ -153,7 +154,7 @@ class NxTestReceiver : BroadcastReceiver() {
                 val session = GameSession(tag.uppercase(), file.nameWithoutExtension, core, FileRefs.of(path), folder, file.name,
                     resumeSlot = slot, companions = companions, gamePath = gamePath)
                 NxTestResults.markShowWhenLocked(app)
-                LibretroRunner(app) { true }.apply { recordLaunches = false }.launch(session, com.nxredux.mobile.storage.Recent(path))
+                LibretroRunner(app) { true }.apply { recordLaunches = false }.launch(session, Recent(path))
             }
         }
     }

@@ -1,6 +1,5 @@
 package com.nxredux.mobile.netplay
 
-import com.nxredux.mobile.settings.Prefs
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
@@ -20,6 +19,7 @@ import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.NaomiSetsAsset
 import com.nxredux.mobile.settings.AndroidAppSettings
+import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.storage.NxPaths
 import com.nxredux.mobile.storage.findSave
 import com.nxredux.mobile.storage.readSaveDecoded

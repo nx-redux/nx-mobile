@@ -21,7 +21,7 @@ fun interface PrefsChannel {
  * nothing in the game process uses them.
  */
 class ProviderPreferences(
-    val name: String,
+    private val name: String,
     private val channel: PrefsChannel,
     private val local: SharedPreferences,
 ) : SharedPreferences {
@@ -59,7 +59,6 @@ class ProviderPreferences(
     override fun getFloat(key: String, defValue: Float) = read(key, defValue) { local.getFloat(key, defValue) }
     override fun getBoolean(key: String, defValue: Boolean) = read(key, defValue) { local.getBoolean(key, defValue) }
 
-    @Suppress("UNCHECKED_CAST")
     override fun getStringSet(key: String, defValues: MutableSet<String>?): MutableSet<String>? =
         read<Set<String>?>(key, defValues) { local.getStringSet(key, defValues) }?.let { HashSet(it) }
 
@@ -88,7 +87,9 @@ class ProviderPreferences(
 
         override fun commit(): Boolean {
             val args = mapOf(PrefsProvider.ARG_PUT to HashMap(put), PrefsProvider.ARG_REMOVE to remove.toList(), PrefsProvider.ARG_CLEAR to clear)
-            val ok = runCatching { channel.call(PrefsProvider.METHOD_APPLY, name, args)[PrefsProvider.RESULT_OK] == true }.onFailure { NxLog.w("NXAPP", "settings write ($name): ${it.message}") }.getOrDefault(false)
+            val ok = runCatching { channel.call(PrefsProvider.METHOD_APPLY, name, args)[PrefsProvider.RESULT_OK] == true }
+                .onFailure { NxLog.w("NXAPP", "settings write ($name): ${it.message}") }
+                .getOrDefault(false)
             if (ok) synchronized(lock) {
                 if (clear) { cleared = true; written.clear() }
                 remove.forEach { written[it] = REMOVED }

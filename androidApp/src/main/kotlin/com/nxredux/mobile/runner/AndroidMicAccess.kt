@@ -1,11 +1,11 @@
 package com.nxredux.mobile.runner
 
-import com.nxredux.mobile.settings.Prefs
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
+import com.nxredux.mobile.settings.Prefs
 
 /**
  * [MicAccess] on Android. [prompt] launches the RECORD_AUDIO request. A tap asks when Android would still show the
