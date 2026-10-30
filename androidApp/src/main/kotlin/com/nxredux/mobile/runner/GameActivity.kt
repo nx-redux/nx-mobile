@@ -1080,7 +1080,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         screens--
         if (latest?.get() === this) latest = null
         // The game process ends with its last screen's finish (not a recreation: the GLES relaunch, a config change).
-        val endsProcess = isFinishing && screens == 0 && AppProcess.isGame(this)
+        val endsProcess = isFinishing && screens == 0 && AppProcess.isGame()
         // Ending the process, the record stays until the process is gone: the menu waits for that before it starts another
         // game, which must never land in this dying process. It reads as stale then (its pid is gone).
         if (!endsProcess) liveGameStore.clear(Process.myPid(), launchId)

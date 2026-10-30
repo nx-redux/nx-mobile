@@ -5,7 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class GameExitCheckTest {
-    private fun classify(reason: Int) = GameExitCheck.classify(reason, null)
+    private fun classify(reason: Int) = GameExitCheck.classify(reason)
 
     @Test fun crashesAreReported() {
         assertEquals(GameExit.CRASH, classify(ApplicationExitInfo.REASON_CRASH))

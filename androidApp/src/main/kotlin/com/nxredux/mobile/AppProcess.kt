@@ -18,7 +18,7 @@ object AppProcess {
     fun isGameName(processName: String): Boolean = processName.endsWith(GAME_SUFFIX)
 
     /** This process is the game process. Cached: the name never changes while the process lives. */
-    fun isGame(context: Context): Boolean {
+    fun isGame(): Boolean {
         game?.let { return it }
         val result = isGameName(processName())
         game = result
@@ -27,25 +27,23 @@ object AppProcess {
 
     private fun processName(): String {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) return Application.getProcessName() ?: ""
-        return try {
-            // NUL-terminated: the name is followed by padding zeros.
-            File("/proc/self/cmdline").readBytes().toString(Charsets.UTF_8).substringBefore('\u0000')
-        } catch (e: java.io.IOException) {
-            ""
-        }
+        return nameOf("self") ?: ""
+    }
+
+    /**
+     * The process name of `/proc/<[proc]>` (a pid, or `self`); null when it cannot be read (gone). NUL-terminated: the
+     * name is followed by padding zeros. A zombie's is empty.
+     */
+    fun nameOf(proc: String): String? = try {
+        File("/proc/$proc/cmdline").readBytes().toString(Charsets.UTF_8).substringBefore('\u0000')
+    } catch (e: java.io.IOException) {
+        null
     }
 
     /** A process of this app (the menu's or the game's) by pid, or this very one; a recycled pid is another app's. */
     fun aliveCheck(context: Context): (Int) -> Boolean {
         val mine = android.os.Process.myPid()
         val pkg = context.packageName
-        return { pid ->
-            pid == mine || try {
-                val proc = File("/proc/$pid/cmdline").readBytes().toString(Charsets.UTF_8).substringBefore('\u0000')
-                proc == pkg || proc.startsWith("$pkg:")
-            } catch (e: java.io.IOException) {
-                false
-            }
-        }
+        return { pid -> pid == mine || nameOf("$pid")?.let { it == pkg || it.startsWith("$pkg:") } == true }
     }
 }

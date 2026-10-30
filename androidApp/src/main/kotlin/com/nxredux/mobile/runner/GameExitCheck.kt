@@ -22,8 +22,7 @@ object GameExitCheck {
     /** The notice for [exit], null when there is nothing to say (a hang is worded by [CoreHangNotice]). */
     fun notice(exit: GameExit): String? = if (exit == GameExit.CRASH) CRASH_NOTICE else null
 
-    @Suppress("UNUSED_PARAMETER")
-    fun classify(reason: Int, description: String?): GameExit = when (reason) {
+    fun classify(reason: Int): GameExit = when (reason) {
         ApplicationExitInfo.REASON_CRASH, ApplicationExitInfo.REASON_CRASH_NATIVE, ApplicationExitInfo.REASON_ANR -> GameExit.CRASH
         else -> GameExit.NONE   // low memory, exit-self, the self-kill signal of a normal quit, the user's own stop
     }
@@ -52,7 +51,7 @@ object GameExitCheck {
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val entries = am.getHistoricalProcessExitReasons(context.packageName, 0, 5)
             .filter { AppProcess.isGameName(it.processName) }
-            .map { it.timestamp to classify(it.reason, it.description) }
+            .map { it.timestamp to classify(it.reason) }
         val prefs = Prefs.open(context, PREFS)
         val seen = if (prefs.contains(KEY_SEEN)) prefs.getLong(KEY_SEEN, 0L) else null
         val (exit, mark) = decide(entries, seen, hangShown, System.currentTimeMillis())

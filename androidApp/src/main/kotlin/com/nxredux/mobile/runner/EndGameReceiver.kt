@@ -18,7 +18,7 @@ class EndGameReceiver : BroadcastReceiver() {
         GameHeartbeat.start(context)   // the menu waits on this process's end while the beat moves
         if (GameActivity.ending) return   // the last screen's teardown is ending the process: the menu sees it go
         if (GameActivity.endForHandoff()) return
-        if (!AppProcess.isGame(context)) return
+        if (!AppProcess.isGame()) return
         NxLog.i("NXAPP", "no game screen in the game process: ending it")
         android.os.Process.killProcess(android.os.Process.myPid())
     }

@@ -46,7 +46,7 @@ class NxApplication : Application() {
         // Off the main thread, as both touch storage: drops an earlier run's update download (its .part, or an APK the
         // installer already took or the user cancelled), then starts moving older private data into the home folder.
         // Not in the game process: the menu process owns this, and a second run would race it.
-        val game = AppProcess.isGame(this)
+        val game = AppProcess.isGame()
         if (!game) {
             Thread({
                 File(cacheDir, "update").deleteRecursively()

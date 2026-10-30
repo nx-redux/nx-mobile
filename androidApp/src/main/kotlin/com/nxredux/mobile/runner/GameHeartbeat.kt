@@ -18,7 +18,7 @@ object GameHeartbeat {
 
     /** Starts beating (once; the beat lasts until the process ends). Only in the game process. */
     fun start(context: Context) {
-        if (!AppProcess.isGame(context)) return
+        if (!AppProcess.isGame()) return
         synchronized(this) { if (started) return; started = true }
         val file = file(context.applicationContext)
         val pid = android.os.Process.myPid()

@@ -18,7 +18,7 @@ object Prefs {
     @Volatile private var appContext: Context? = null
 
     fun open(context: Context, name: String): SharedPreferences {
-        if (!AppProcess.isGame(context)) return context.getSharedPreferences(name, Context.MODE_PRIVATE)
+        if (!AppProcess.isGame()) return context.getSharedPreferences(name, Context.MODE_PRIVATE)
         if (appContext == null) appContext = context.applicationContext
         return game[name]
     }
