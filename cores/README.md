@@ -105,6 +105,9 @@ fresh start (the Mali driver and ART fill it), so every GBA game ran on the inte
 `memmap.c` part gives Android arm64 a 16 KB-aligned 10.5 MB block in the core's own `.bss`, made RWX with `mprotect`
 on first use: always next to the code, no W+E segment in the ELF, untouched pages cost no RAM. The mmap search (then the
 interpreter) is the fallback if `mprotect` is refused.
+Since 2026-10-30 its `sound.c` part derives the PSG clock (length, envelope and sweep, 256 Hz) from `gpsp_sound_rate`:
+upstream fixes the per-sample step at the 65536 Hz value, so at 32768 Hz (the option's default) those units ran at half
+speed, and GB-style notes held twice as long (Pokémon FireRed sounded off; 65536 was fine). Emulation-only; states load.
 
 `patches/fceumm.patch` adds one `path_vfs_init` call next to its `filestream_vfs_init`, so the content check
 (`path_is_valid`) uses the runner's VFS v3 `stat` and a SAF file-descriptor ROM (`/rom/<name>`) loads without a cache

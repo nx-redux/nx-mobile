@@ -140,8 +140,9 @@ object CoreRegistry {
     private val gpsp = CoreDescriptor(
         "gpsp", "libgpsp_libretro_android.so", setOf("gba", "bin", "agb", "gbz", "u1"),
         // The cartridge clock follows the device clock, so a resumed state keeps the real time (the core's
-        // "deterministic" counts it from the state's save time).
-        defaultOptions = mapOf("gpsp_rtc_time_source" to "system"),
+        // "deterministic" counts it from the state's save time). Sound at 65536 Hz, as before the core's 32768 default
+        // (gpsp #288, for low-end devices' speed): 32768 is coarser, and its PSG ran at half speed before gpsp.patch.
+        defaultOptions = mapOf("gpsp_rtc_time_source" to "system", "gpsp_sound_rate" to "65536"),
         // A live change sends SET_SYSTEM_AV_INFO with a new sample rate, which the runner's audio doesn't follow.
         restartOnlyOptions = setOf("gpsp_sound_rate"),
         biosFiles = listOf("gba_bios.bin"),   // optional: an open BIOS is built in
