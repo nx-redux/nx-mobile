@@ -47,6 +47,18 @@ set (INSTALL_STATIC_LIBS OFF CACHE BOOL "" FORCE)
 add_subdirectory (libchdr EXCLUDE_FROM_ALL)
 include_directories (libchdr/include)
 
+# libsamplerate 0.2.2 (BSD-2-Clause): the audio resampler, its four converters (Audio Resampling Quality). Static, from
+# its sources: upstream's CMake also builds tests and examples.
+add_library (samplerate STATIC
+        libsamplerate/src/samplerate.c
+        libsamplerate/src/src_linear.c
+        libsamplerate/src/src_sinc.c
+        libsamplerate/src/src_zoh.c
+)
+target_include_directories (samplerate PUBLIC libsamplerate/include)
+target_compile_definitions (samplerate PRIVATE HAVE_STDBOOL_H=1 ENABLE_SINC_FAST_CONVERTER ENABLE_SINC_BEST_CONVERTER
+        CPU_CLIPS_POSITIVE=0 CPU_CLIPS_NEGATIVE=0 PACKAGE="libsamplerate" VERSION="0.2.2")
+
 set (LIBRETRO_COMMON
         libretro/libretro-common/vfs/vfs_implementation.c
         libretro/libretro-common/string/stdstring.c
@@ -115,11 +127,6 @@ add_library(libretrodroid SHARED
         renderers/es3/imagerendereres3.cpp
         audio.h
         audio.cpp
-        resamplers/resampler.h
-        resamplers/linearresampler.h
-        resamplers/linearresampler.cpp
-        resamplers/sincresampler.h
-        resamplers/sincresampler.cpp
         fpssync.h
         fpssync.cpp
         fastforward.h
@@ -203,6 +210,7 @@ target_link_libraries(libretrodroid
                       log 
                       EGL
                       oboe
+                      samplerate
                       chdr-static
                       GLESv3
                       vulkan

@@ -81,7 +81,7 @@ class EmulatorSettingsTest {
 
     @Test fun console_rows_follow_the_tag_and_read_the_cfg() {
         val p = EmulatorSettings.page("MD", descriptor, table, descriptor.defaultOptions, cfg("nx_sega_pad_type = 6\n"), null, forGame = false)
-        assertEquals(listOf(BottomScreenOptions.KEY, PadOptions.SEGA_PAD, PadOptions.LAYOUT) + SpeedOptions.table.map { it.key }, p.console.map { it.option.key })
+        assertEquals(listOf(BottomScreenOptions.KEY, PadOptions.SEGA_PAD, PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.row).map { it.key }, p.console.map { it.option.key })
         assertEquals("6", p.console[1].value); assertEquals(PadOptions.AUTO, p.console[2].value)
     }
 
@@ -178,7 +178,7 @@ class EmulatorSettingsTest {
 
     @Test fun no_table_gives_null_core_and_keeps_console_rows() {
         val p = EmulatorSettings.page("MD", descriptor, null, descriptor.defaultOptions, null, null, forGame = false)
-        assertNull(p.core); assertEquals(3 + SpeedOptions.table.size, p.console.size)
+        assertNull(p.core); assertEquals(3 + (SpeedOptions.table + AudioOptions.row).size, p.console.size)
     }
 
     @Test fun offline_hidden_options_never_reach_the_page() {
@@ -258,7 +258,7 @@ class EmulatorSettingsTest {
 
     @Test fun a_console_row_locked_in_the_cfg_is_hidden() {
         val p = EmulatorSettings.page("MD", descriptor, table, descriptor.defaultOptions, cfg("-${PadOptions.LAYOUT} = xbox\n"), null, forGame = false)
-        assertEquals(listOf(BottomScreenOptions.KEY, PadOptions.SEGA_PAD) + SpeedOptions.table.map { it.key }, p.console.map { it.option.key })
+        assertEquals(listOf(BottomScreenOptions.KEY, PadOptions.SEGA_PAD) + (SpeedOptions.table + AudioOptions.row).map { it.key }, p.console.map { it.option.key })
     }
 
     @Test fun a_legacy_minarch_key_is_renamed_in_place_on_a_one_key_write() {

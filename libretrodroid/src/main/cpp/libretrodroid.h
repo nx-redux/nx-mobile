@@ -172,6 +172,10 @@ public:
     // netplay or a GBA link session. Any thread; step() picks it up.
     void setFastForward(unsigned maxSpeed, bool audible);
 
+    // nx-mobile 2026-10-30: the Audio Resampling Quality row, 0 Low to 3 Max (Audio::Quality). Any thread; step()
+    // hands it to the audio, as afterGameLoad does a new one.
+    void setResamplingQuality(int quality) { resamplingQuality.store(quality); }
+
     // nx-mobile 2026-10-24: rewind. Enabled, step() snapshots the game after each frame (once the core can serialize);
     // rewinding, it steps back through those snapshots instead of playing, one per capture interval, and wins over
     // fast forward. Rewind audio off mutes the rewound frames. Never in netplay or a GBA link session. Any thread;
@@ -346,6 +350,7 @@ private:
     // Fast forward as asked (setFastForward, any thread) and as applied by step() (GL thread).
     std::atomic<unsigned> fastForwardSpeed { 0 };
     std::atomic<bool> fastForwardAudible { false };
+    std::atomic<int> resamplingQuality { 2 };
     FastForwardPacer fastForwardPacer;
     unsigned appliedFastForwardSpeed = 0;
     bool appliedFastForwardAudible = false;

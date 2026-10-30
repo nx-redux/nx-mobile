@@ -13,13 +13,13 @@ class WiiOptionsTest {
             listOf(
                 WiiOptions.CONTROLLER, WiiOptions.MOTION, WiiOptions.SCREEN, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT,
                 WiiOptions.POINTER_OFFSET, GraphicsApiOptions.KEY, BottomScreenOptions.KEY, PadOptions.LAYOUT,
-            ) + SpeedOptions.table.map { it.key },
+            ) + (SpeedOptions.table + AudioOptions.row).map { it.key },
             ConsoleSettings.tableFor("WII").map { it.key },
         )
     }
 
     @Test fun gameCubeGetsNeither() {
-        assertEquals(listOf(GraphicsApiOptions.KEY, BottomScreenOptions.KEY, PadOptions.LAYOUT) + SpeedOptions.table.map { it.key }, ConsoleSettings.tableFor("GC").map { it.key })
+        assertEquals(listOf(GraphicsApiOptions.KEY, BottomScreenOptions.KEY, PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.row).map { it.key }, ConsoleSettings.tableFor("GC").map { it.key })
         assertFalse(WiiOptions.appliesTo("GC"))
         assertTrue(WiiOptions.appliesTo(" wii "))
     }

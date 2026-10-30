@@ -13,6 +13,7 @@ import com.nxredux.mobile.options.CoreOptionSource
 import com.nxredux.mobile.options.CoreOptionTable
 import com.nxredux.mobile.options.EmulatorPage
 import com.nxredux.mobile.options.PadOptions
+import com.nxredux.mobile.options.AudioOptions
 import com.nxredux.mobile.options.SpeedOptions
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
@@ -380,7 +381,7 @@ class EmulatorSettingsControllerTest {
     @Test fun a_page_left_empty_when_the_second_screen_goes_closes() = runTest {
         val noOptions = object : CoreOptionSource { override fun table(coreId: String) = CoreOptionTable(coreId, "gpSP", emptyList()) }
         val state = TestState(MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "-${PadOptions.LAYOUT} = ${PadOptions.AUTO}\n" +
-            SpeedOptions.table.joinToString("") { "-${it.key} = ${it.default}\n" })), tables = noOptions)
+            (SpeedOptions.table + AudioOptions.row).joinToString("") { "-${it.key} = ${it.default}\n" })), tables = noOptions)
         state.onSecondScreenChanged(true)
         openCore(state, "gpsp")
         await { state.screen.value is Screen.EmulatorOptions }

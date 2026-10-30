@@ -24,7 +24,7 @@ class PadOptionsTest {
     }
 
     @Test fun nds_keeps_its_rows_and_gains_the_portrait_pad_and_layout_rows() {
-        assertEquals(NdsOptions.table + BottomScreenOptions.row + PadOptions.portraitPadRow + PadOptions.layoutRow + SpeedOptions.table, ConsoleSettings.tableFor("NDS"))
+        assertEquals(NdsOptions.table + BottomScreenOptions.row + PadOptions.portraitPadRow + PadOptions.layoutRow + (SpeedOptions.table + AudioOptions.row), ConsoleSettings.tableFor("NDS"))
     }
 
     @Test fun portrait_pad_row_only_for_ds_and_3ds() {

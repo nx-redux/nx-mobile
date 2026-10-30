@@ -12,6 +12,7 @@ import com.nxredux.mobile.options.CoreOption
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.ShaderOptions
+import com.nxredux.mobile.options.AudioOptions
 import com.nxredux.mobile.options.SpeedOptions
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
@@ -37,7 +38,7 @@ class InGameMenuModelTest {
      * are locked here (a locked row is hidden, and a page with none left is not offered).
      */
     private val plainTag = "GBA"   // a console with the Controller Layout row only (N64 has Graphics API too)
-    private val plainLocked = setOf(PadOptions.LAYOUT) + SpeedOptions.table.map { it.key }
+    private val plainLocked = setOf(PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.row).map { it.key }
 
     private fun plain(m: InGameMenuModel) = m.apply { setFrontend(FrontendOptions.defaults(plainTag), emptyList(), plainLocked, plainTag) }
 
@@ -1291,15 +1292,15 @@ class InGameMenuModelTest {
     }
 
     @Test fun a_plain_console_has_the_controller_layout_and_speed_rows() {
-        assertEquals(listOf("Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio"), inGameConsoleRows("GBA"))
+        assertEquals(listOf("Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio", "Audio Resampling Quality"), inGameConsoleRows("GBA"))
     }
 
     // A row read only when the game starts (FrontendOption.atLaunch) is set in Game Settings or Emulator
     // Settings, not in the running game's menu.
     @Test fun rows_read_only_at_launch_stay_out_of_the_in_game_console_settings() {
-        assertEquals(listOf("Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio"), inGameConsoleRows("N64"))   // no Graphics API
-        assertEquals(listOf("Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio"), inGameConsoleRows("GC"))
-        assertEquals(listOf("Wii Controller", "Motion Controls", "Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio"), inGameConsoleRows("WII"))
+        assertEquals(listOf("Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio", "Audio Resampling Quality"), inGameConsoleRows("N64"))   // no Graphics API
+        assertEquals(listOf("Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio", "Audio Resampling Quality"), inGameConsoleRows("GC"))
+        assertEquals(listOf("Wii Controller", "Motion Controls", "Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio", "Audio Resampling Quality"), inGameConsoleRows("WII"))
     }
 
     // Bottom screen (every console) shows in the running game's Console Settings only while a second display is
@@ -1309,15 +1310,15 @@ class InGameMenuModelTest {
         m.setFrontend(FrontendOptions.defaults("GBA"), emptyList(), emptySet(), "GBA")
         m.select(3); m.activate(3)                                         // Options
         assertNull(m.activate(0))                                          // Console Settings
-        assertEquals(listOf("Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio", "Audio Resampling Quality"), m.state.page.rows.map { it.label })
         m.setSecondScreen(connected = true, on = true)
-        assertEquals(listOf("Bottom screen", "Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Bottom screen", "Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio", "Audio Resampling Quality"), m.state.page.rows.map { it.label })
         m.select(0)
         assertEquals("System default", m.optionRow(0).valueLabel)
         assertEquals(MenuEffect.SetFrontend(BottomScreenOptions.KEY, "main"), m.press(NxButton.RIGHT))
         assertEquals("Main screen", m.optionRow(0).valueLabel)
         m.setSecondScreen(connected = false, on = true)
-        assertEquals(listOf("Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio", "Audio Resampling Quality"), m.state.page.rows.map { it.label })
     }
 
     @Test fun a_second_display_offers_console_settings_where_every_other_row_is_locked() {
@@ -1369,6 +1370,7 @@ class InGameMenuModelTest {
             listOf(
                 "Layout (portrait)", "Layout (portrait, controller)", "Layout (landscape)", "3D Resolution", "Max Scale", "Big Screen", "Inset Corner", "Inset Size",
                 "Inset Opacity", "Portrait Pad", "Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio",
+                "Audio Resampling Quality",
             ),
             m.state.page.rows.map { it.label },
         )
@@ -1432,7 +1434,7 @@ class InGameMenuModelTest {
     @Test fun a_locked_console_row_is_hidden() {
         val m = model().openConsoleSettings(locked = setOf(NdsOptions.BIG_SCREEN))
         assertTrue(m.state.page.rows.none { it.label == "Big Screen" })
-        assertEquals(14, m.state.page.rows.size)
+        assertEquals(15, m.state.page.rows.size)
     }
 
     @Test fun other_consoles_keep_the_plain_frontend_page() {

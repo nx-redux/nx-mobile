@@ -11,3 +11,6 @@
 [submodule "libretrodroid/src/main/cpp/libchdr"]
 	path = libretrodroid/src/main/cpp/libchdr
 	url = https://github.com/rtissera/libchdr.git
+[submodule "libretrodroid/src/main/cpp/libsamplerate"]
+	path = libretrodroid/src/main/cpp/libsamplerate
+	url = https://github.com/libsndfile/libsamplerate
