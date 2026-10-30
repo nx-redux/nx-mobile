@@ -1079,7 +1079,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         usingData = false
         val app = applicationContext
         // After the core's last write (destroyed above); a Binder call to the menu process, so not on this thread.
-        if (endsProcess) ending = true
+        if (endsProcess) { ending = true; GameHeartbeat.start(app) }   // a finish without Quit (Back) beats from here
         if (endUse || endsProcess) thread(name = if (endsProcess) "game-process-end" else "data-use-end") {
             if (endUse) runCatching { DataRoot.useEnd(app) }.onFailure { NxLog.w(TAG_LOG, "could not end the data use", it) }
             if (endsProcess) endProcess()
@@ -2518,6 +2518,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun quitWithAutoState(chosen: Boolean, autoState: Boolean = true) {
         if (quitting) return   // single-shot: a second job could serialize after the core is destroyed
         quitting = true
+        GameHeartbeat.start(this)   // the menu may be waiting for this process to end: its saves can take a while
         rumbles.forEach { it.release() }
         pushMicSource()   // silence now, so the phone's mic closes before the save, not at the pause
         endGameTime()

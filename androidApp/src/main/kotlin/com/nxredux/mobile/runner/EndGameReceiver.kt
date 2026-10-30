@@ -15,6 +15,7 @@ import com.swordfish.libretrodroid.NxLog
 class EndGameReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != endGameAction(context)) return
+        GameHeartbeat.start(context)   // the menu waits on this process's end while the beat moves
         if (GameActivity.ending) return   // the last screen's teardown is ending the process: the menu sees it go
         if (GameActivity.endForHandoff()) return
         if (!AppProcess.isGame(context)) return
