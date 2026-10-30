@@ -223,3 +223,28 @@ index b7b287d..e5a7245 100644
  		munmap(bufptr, size);
  	}
  
+diff --git a/sound.c b/sound.c
+--- a/sound.c
++++ b/sound.c
+@@ -36,7 +36,10 @@
+ static s32 sound_buffer[BUFFER_SIZE];
+ static u32 sound_buffer_base;
+ 
+-static fixed16_16 gbc_sound_tick_step;
++/* nx-mobile: the PSG length/envelope/sweep clock (256 Hz) in output samples,
++ * 256 / sound_frequency in 16.16. Upstream sets it once to 256 (the 65536 Hz
++ * value), so at 32768 Hz those units ran at half speed. */
++#define gbc_sound_tick_step ((fixed16_16)(1u << (24 - sound_freq_bits)))
+ 
+ /* Queue 4 samples to the top of the DS FIFO, wrap around circularly */
+ 
+@@ -600,9 +603,6 @@
+ 
+ void init_sound()
+ {
+-  /* 256 / sound_frequency in 16.16 == 256 (sound_frequency == 2^16). */
+-  gbc_sound_tick_step = (fixed16_16)256u;
+-
+   init_noise_table(noise_table15, 32767, 14);
+   init_noise_table(noise_table7, 127, 6);
+ 

@@ -140,6 +140,7 @@ class CoreRegistryTest {
     @Test fun gpsp_keeps_the_real_clock_and_its_sound_rate_for_the_next_game() {
         val gpsp = CoreRegistry.forTag("GBA")!!
         assertEquals("system", gpsp.defaultOptions["gpsp_rtc_time_source"])
+        assertEquals("65536", gpsp.defaultOptions["gpsp_sound_rate"])
         assertEquals(setOf("gpsp_sound_rate"), gpsp.restartOnlyOptions)
     }
     @Test fun every_hidden_value_key_has_a_default_that_is_not_hidden() {
