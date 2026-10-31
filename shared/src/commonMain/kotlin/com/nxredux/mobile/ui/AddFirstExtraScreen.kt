@@ -1,9 +1,12 @@
 package com.nxredux.mobile.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.NxButton
+import com.nxredux.mobile.ui.nx.NxDialog
 import com.nxredux.mobile.ui.nx.NxSettingRow
 
 /**
@@ -129,7 +132,7 @@ fun AndroidGamesStepScreen(
 /**
  * First setup's summary of the ROMs folder just added ([Screen.FolderSummary]): what was found, a line per console, and
  * where the unassigned games are; the Move choice as a row (its On / Off on the right) and Continue the button under it.
- * B stops a running move.
+ * B stops a running move. Continue with Move on asks first ([folderMoveAsk]): A moves, B goes back.
  */
 @Composable
 fun FolderSummaryScreen(
@@ -139,8 +142,13 @@ fun FolderSummaryScreen(
     val rows = folderSummaryRows(screen)
     val hints = if (screen.progress != null) listOf(Hint(NxButton.B, "Stop")) else listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Choose"))
     val details = folderSummaryDetails(screen) + listOfNotNull(note)
-    SetupBlockPage(
-        title, details.first(), details.drop(1), rows.map { NxSettingRow(it.row.label, value = it.row.secondary) },
-        buttons = if (rows.lastOrNull()?.kind == SummaryRowKind.CONTINUE) 1 else 0, selected, hints, onSelect, onRow, onHint, lineBreaks = true,
-    )
+    Box(Modifier.fillMaxSize()) {
+        SetupBlockPage(
+            title, details.first(), details.drop(1), rows.map { NxSettingRow(it.row.label, value = it.row.secondary) },
+            buttons = if (rows.lastOrNull()?.kind == SummaryRowKind.CONTINUE) 1 else 0, selected, hints, onSelect, onRow, onHint, lineBreaks = true,
+        )
+        if (screen.confirmMove) folderMoveAsk(screen)?.let { (ask, text) ->
+            NxDialog(ask, text, onConfirm = { onHint(NxButton.A) }, confirmLabel = "Move", onCancel = { onHint(NxButton.B) })
+        }
+    }
 }

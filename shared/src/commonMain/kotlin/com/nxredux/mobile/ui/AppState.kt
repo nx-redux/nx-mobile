@@ -363,11 +363,13 @@ sealed interface Screen {
     /**
      * First setup, after a ROMs folder was added: what its scan found ([summary]), whether to [move] its placed games into
      * the home's Roms (off until chosen), the move's [progress] (done, total) while it runs and its [result] after.
+     * [confirmMove]: Continue with Move on asks first ([folderMoveAsk]); A moves, B goes back to the page.
      */
     data class FolderSummary(
         val extraId: String, val name: String, val home: String,
         val summary: com.nxredux.mobile.library.FolderSummary,
         val move: Boolean = false, val progress: Pair<Int, Int>? = null, val result: MoveResult? = null,
+        val confirmMove: Boolean = false,
     ) : Screen
     data object Loading : Screen
     /**
@@ -2844,19 +2846,37 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         _selection.value = ListSelection(0, rows.size)   // on the first row: the Move option where it is offered, else Continue
     }
 
-    /** A or a tap on the summary's row [index]: Move toggles; Continue moves first when it is on, else goes on. */
+    /**
+     * A or a tap on the summary's row [index]: Move toggles; Continue with Move on asks first ([Screen.FolderSummary.confirmMove]),
+     * else goes on.
+     */
     private fun folderSummaryRow(s: Screen.FolderSummary, index: Int) {
         if (s.progress != null) return
         when (folderSummaryRows(s).getOrNull(index)?.kind) {
             SummaryRowKind.MOVE -> { _screen.value = s.copy(move = !s.move); return }
             SummaryRowKind.CONTINUE, null -> Unit
         }
+        if (folderMoveAsk(s) != null) { _screen.value = s.copy(confirmMove = true); return }
+        folderSummaryContinue(s)
+    }
+
+    /** The summary's Continue: the move when it is on (and confirmed), else on to the next step. */
+    private fun folderSummaryContinue(s: Screen.FolderSummary) {
         if (s.extraId == Recents.HOME) {
             if (s.move && s.result == null && homeTidy(s.summary)) moveHomeOutside(s) else showAddFirstExtra()
             return
         }
         if (s.move && s.result == null && s.summary.games > s.summary.unassigned) return moveSummaryGames(s)
         afterFolderSteps { load() }
+    }
+
+    /** The move's confirmation over the summary: A moves, B goes back to the page (Move stays on). */
+    private fun onFolderMoveConfirm(s: Screen.FolderSummary, button: NxButton) {
+        when (button) {
+            NxButton.A -> folderSummaryContinue(s.copy(confirmMove = false))
+            NxButton.B -> _screen.value = s.copy(confirmMove = false)
+            else -> Unit
+        }
     }
 
     /** The summary's move: [s]'s placed games into the home's Roms, its progress on the page, then a rescan and the result. */
@@ -6733,8 +6753,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
         if (artworkScreens?.onButton(_screen.value, button) == true) return
         (_screen.value as? Screen.Switcher)?.let { onSwitcherButton(it, button, repeat); return }
-        // The summary: LEFT and RIGHT flip the Move row as A does.
+        // The summary: its move's confirmation takes every button first; LEFT and RIGHT flip the Move row as A does.
         (_screen.value as? Screen.FolderSummary)?.let { fs ->
+            if (fs.confirmMove) { onFolderMoveConfirm(fs, button); return }
             val rows = folderSummaryRows(fs)
             if ((button == NxButton.LEFT || button == NxButton.RIGHT) && rows.getOrNull(_selection.value.index)?.kind == SummaryRowKind.MOVE) {
                 _screen.value = fs.copy(move = !fs.move); return
@@ -6889,6 +6910,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             // The home page: back to the pick (a new pick shows its page again).
             is Screen.FolderSummary -> {
                 when {
+                    s.confirmMove -> _screen.value = s.copy(confirmMove = false)   // the move's confirmation closes first
                     s.progress != null -> moveCancelled = true
                     s.extraId == Recents.HOME && mediaHomeTaken -> backPastMediaHome()
                     s.extraId == Recents.HOME -> { homePage = null; _screen.value = Screen.PickFolder; _selection.value = ListSelection(0, 1) }
@@ -7150,6 +7172,28 @@ internal fun folderSummaryRows(s: Screen.FolderSummary): List<SummaryRow> = buil
         add(SummaryRow(SummaryRowKind.MOVE, NxRow("Move them into ${s.home}/Roms", secondary = if (s.move) "On" else "Off", cycleable = true)))
     }
     add(SummaryRow(SummaryRowKind.CONTINUE, NxRow("Continue")))
+}
+
+/**
+ * The move's confirmation for [s] (title, text), or null when Continue moves nothing: Move off, already run, or nothing
+ * to move. An extra folder's placed games leave it for the home's Roms; the home's games outside Roms move in and a
+ * console's extra folders merge into one.
+ */
+internal fun folderMoveAsk(s: Screen.FolderSummary): Pair<String, String>? {
+    if (!s.move || s.result != null || s.progress != null) return null
+    val sum = s.summary
+    fun games(n: Int) = if (n == 1) "1 game" else "$n games"
+    if (s.extraId == Recents.HOME) {
+        if (sum.outside == 0 && sum.split == 0) return null
+        val parts = listOfNotNull(
+            if (sum.outside > 0) "${games(sum.outside)} outside Roms will be moved into ${s.home}/Roms" else null,
+            if (sum.split > 0) (if (sum.split == 1) "1 console's folders will be merged into one" else "${sum.split} consoles' folders will be merged into one") else null,
+        )
+        return "Move games?" to (parts.joinToString(", and ") + ". Folders left empty are removed.")
+    }
+    val placed = sum.games - sum.unassigned
+    if (placed <= 0) return null
+    return "Move games?" to "${games(placed)} will be moved from ${s.name} into ${s.home}/Roms. ${if (placed == 1) "It is" else "They are"} moved, not copied."
 }
 
 /** The summary page's headline and lines: what was found, per console, where the unassigned are; the move's progress or result. */

@@ -565,7 +565,8 @@ class AppStateTest {
         assertEquals(listOf("Found 2 games in M", "Game Boy (1)", "Game Boy Advance (1)", "", "1 of them is outside Roms."), folderSummaryDetails(s))
         assertEquals(SummaryRowKind.MOVE to "On", folderSummaryRows(s).first().let { it.kind to it.row.secondary })
         assertEquals("Setup · Step 3/11", state.setupChrome().first)
-        state.select(state.selection.value.count - 1); state.onButton(NxButton.A); advanceUntilIdle()   // Continue: the move
+        state.select(state.selection.value.count - 1); state.onButton(NxButton.A)   // Continue: the move
+        state.onButton(NxButton.A); advanceUntilIdle()   // the move's confirmation: Move
         assertTrue("Kirby.gba" in src.listChildren(ContentRef("M/Roms/Game Boy Advance (GBA)")).map { it.name })
         assertEquals(listOf("notes.txt"), src.listChildren(ContentRef("M/Games")).map { it.name })   // unrecognised: stays
         assertTrue("Moved 1 into M/Roms" in folderSummaryDetails(assertIs<Screen.FolderSummary>(state.screen.value)))
@@ -626,7 +627,8 @@ class AppStateTest {
         val s = assertIs<Screen.FolderSummary>(state.screen.value)
         assertTrue("1 console has more than one folder; they are merged into one." in folderSummaryDetails(s))
         assertEquals(SummaryRowKind.MOVE to "On", folderSummaryRows(s).first().let { it.kind to it.row.secondary })
-        state.select(folderSummaryRows(s).lastIndex); state.onButton(NxButton.A); advanceUntilIdle()
+        state.select(folderSummaryRows(s).lastIndex); state.onButton(NxButton.A)
+        state.onButton(NxButton.A); advanceUntilIdle()   // the move's confirmation: Move
         assertEquals(setOf("A.gba", "K.gba"), src.listChildren(ContentRef(gba)).map { it.name }.toSet())
         assertTrue("Game Boy Advance (MGBA)" !in src.listChildren(ContentRef("S/Roms")).map { it.name })   // emptied: gone
         assertEquals(listOf(Recent(new)), data.recents)
@@ -658,6 +660,7 @@ class AppStateTest {
         state.setHome(ContentRef("S")); advanceUntilIdle()
         val s = assertIs<Screen.FolderSummary>(state.screen.value)
         state.select(folderSummaryRows(s).lastIndex); state.onButton(NxButton.A)
+        state.onButton(NxButton.A)   // the move's confirmation: Move
         advanceTimeBy(6_000); runCurrent()
         assertEquals(listOf(Recent("/Roms/Game Boy Advance (GBA)/K.gba")), data.recents)
         stuck.complete(Unit); advanceUntilIdle()
@@ -716,6 +719,7 @@ class AppStateTest {
         val (state, settings) = atFolderSummary()
         state.select(summaryRow(state, SummaryRowKind.MOVE)); state.onButton(NxButton.A)                        // Move: on
         state.select(summaryRow(state, SummaryRowKind.CONTINUE)); state.onButton(NxButton.A)                        // Continue
+        state.onButton(NxButton.A)   // the move's confirmation: Move
         advanceUntilIdle()
         assertTrue("Kirby.gba" in source.listChildren(ContentRef("Home/Roms/Game Boy Advance (GBA)")).map { it.name })
         assertEquals(listOf("thing.chd", "v.img"), source.listChildren(ContentRef("sd/Loose")).map { it.name })
@@ -727,6 +731,21 @@ class AppStateTest {
         assertEquals(OnboardingStep.HANDHELD, assertIs<Screen.Onboarding>(state.screen.value).step)
     }
 
+    // Continue with Move on asks first; B closes the question and moves nothing, Move still on.
+    @Test fun the_move_asks_first_and_b_moves_nothing() = runTest {
+        val (state, _) = atFolderSummary()
+        state.select(summaryRow(state, SummaryRowKind.MOVE)); state.onButton(NxButton.A)                        // Move: on
+        state.select(summaryRow(state, SummaryRowKind.CONTINUE)); state.onButton(NxButton.A)                        // Continue
+        assertTrue(assertIs<Screen.FolderSummary>(state.screen.value).confirmMove)
+        state.onButton(NxButton.B)
+        advanceUntilIdle()
+        val back = assertIs<Screen.FolderSummary>(state.screen.value)
+        assertEquals(false, back.confirmMove)
+        assertEquals(true, back.move)
+        assertNull(back.result)
+        assertTrue("Kirby.gba" in source.listChildren(ContentRef("sd/Loose")).map { it.name })   // still where it was
+    }
+
     // A provider error during the move is a result, not a crash: the page says what could not move.
     @Test fun a_failing_move_shows_its_failures() = runTest {
         val src = FakeRomsSource(source.snapshotDirs(), bytes = mapOf("sd/Loose/Kirby.gba" to ByteArray(4))).apply { moveThrows = true }
@@ -735,6 +754,7 @@ class AppStateTest {
         state.load(); state.getStarted(); state.setHomePast(ContentRef("Home")); state.addExtra(ContentRef("sd/Loose"))
         state.select(summaryRow(state, SummaryRowKind.MOVE)); state.onButton(NxButton.A)
         state.select(summaryRow(state, SummaryRowKind.CONTINUE)); state.onButton(NxButton.A)
+        state.onButton(NxButton.A)   // the move's confirmation: Move
         advanceUntilIdle()
         val done = assertIs<Screen.FolderSummary>(state.screen.value)
         assertEquals(MoveResult(failed = 1), done.result)
