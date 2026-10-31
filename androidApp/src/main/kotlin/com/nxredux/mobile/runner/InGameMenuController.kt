@@ -73,6 +73,8 @@ internal interface InGameMenuHost : LifecycleOwner {
     val isN3ds: Boolean
     /** Overlays and shaders: app-private ([com.nxredux.mobile.storage.DataRoot.private]). */
     val privateRoot: File
+    /** Where shader presets are listed from: the bundled set and the home's own ([Shaders.Roots]). */
+    val shaderRoots: Shaders.Roots
     val frontendValues: Map<String, String>
     val rumbles: Array<RumbleMotor>
     val padProfileRevision: State<Int>
@@ -273,13 +275,14 @@ internal class InGameMenuController(
             }
         }
         if (retroView != null) {
-            // Re-listed on every open so a bundled tree swapped in since launch is picked up; on IO, the
-            // menu showing the cached lists until then (unchanged, as they almost always are, nothing redraws).
+            // Re-listed on every open so a bundled tree swapped in since launch, or a shader added to the home, is
+            // picked up; on IO, the menu showing the cached lists until then (unchanged, as they almost always are,
+            // nothing redraws).
             val tag = gameTag
             menuListingJob?.cancel()
             menuListingJob = lifecycleScope.launch {
                 val (found, presets) = withContext(Dispatchers.IO) {
-                    runCatching { Overlays.sets(privateRoot, tag) }.getOrNull() to runCatching { Shaders.presets(privateRoot) }.getOrNull()
+                    runCatching { Overlays.sets(privateRoot, tag) }.getOrNull() to runCatching { Shaders.presets(host.shaderRoots) }.getOrNull()
                 }
                 if (found != null && found != renderer.overlaySets) {
                     // The shown overlay may have been added/removed on disk: re-resolve it against the new list.
@@ -291,7 +294,7 @@ internal class InGameMenuController(
                     }
                 }
                 if (presets != null && presets != renderer.presetNames) {
-                    renderer.presetNames = presets   // same for the bundled presets
+                    renderer.presetNames = presets   // same for the presets, bundled and the user's
                     menuModel?.takeIf { it === model }?.let { it.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams); menuState.value = it.state }
                 }
             }

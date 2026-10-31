@@ -13,6 +13,8 @@ object ShaderOptions {
     const val NONE = "None"
     const val LINE_PRESET = "nx/line.glslp"
     const val GRID_PRESET = "nx/grid.glslp"
+    /** A preset from the home's own `Shaders/` folder, not the bundled set: "User/" and its path there. */
+    const val USER_PREFIX = "User/"
     /** Keys read once for migration and dropped on the next Save. */
     val MIGRATED_KEYS: Set<String> = setOf(FrontendOptions.EFFECT)
     private const val MAX_STEPS = 1024
@@ -34,6 +36,9 @@ object ShaderOptions {
         val a = abs(n)
         return (if (n < 0) "-" else "") + (a / 100) + "." + (a % 100).toString().padStart(2, '0')
     }
+
+    /** [path]'s place in the home's `Shaders/` folder, or null for a bundled preset. */
+    fun userPath(path: String): String? = path.takeIf { it.startsWith(USER_PREFIX) }?.removePrefix(USER_PREFIX)
 
     fun presetChoices(presets: List<String>): List<String> = listOf(NONE) + presets.filter { it != NONE }
 
