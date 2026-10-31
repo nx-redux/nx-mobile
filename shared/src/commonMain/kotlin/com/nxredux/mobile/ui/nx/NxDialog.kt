@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.SetupButtons
@@ -12,17 +13,23 @@ import kotlinx.coroutines.flow.Flow
 /**
  * A confirm (with [onCancel]: B cancels, A confirms) or an info dialog (A or a scrim tap dismisses), in the shared modal
  * frame. [scrimDismisses] false: a scrim tap does nothing (an answer the user must choose). [scrollSteps]: the host's
- * d-pad up / down for a text taller than the room ([NxModal]).
+ * d-pad up / down for a text taller than the room ([NxModal]). [buttonFocus]: the button the caller's pad focus is on, lit; null: the host's ([DialogFocus]: LEFT and RIGHT move it,
+ * A on Cancel cancels), else the first (the confirm, A's).
  */
 @Composable
 fun NxDialog(
     title: String, text: String, onConfirm: () -> Unit, confirmLabel: String = "OK", onCancel: (() -> Unit)? = null, cancelLabel: String = "Cancel",
-    scrimDismisses: Boolean = true, scrollSteps: Flow<Int>? = null,
+    scrimDismisses: Boolean = true, scrollSteps: Flow<Int>? = null, buttonFocus: Int? = null,
 ) {
     val colors = LocalNxColors.current
+    // The dialog registers with the host's pad focus ([LocalDialogFocus]) while it shows, unless the caller lights its own.
+    val host = LocalDialogFocus.current?.takeIf { buttonFocus == null }
+    val scrolls = scrollSteps != null
+    val count = if (onCancel != null) 2 else 1
+    if (host != null) DisposableEffect(host, scrolls, count) { host.opened(scrolls, count); onDispose { host.closed(scrolls) } }
     NxModal(
         caption = title, kind = if (onCancel != null) ModalKind.CONFIRM else ModalKind.INFO, confirmLabel = confirmLabel, cancelLabel = cancelLabel, scrimDismisses = scrimDismisses,
-        scrollSteps = scrollSteps,
+        scrollSteps = scrollSteps, buttonFocus = buttonFocus ?: host?.index ?: 0,
         onButton = { if (it == NxButton.B) onCancel?.invoke() else onConfirm() },
     ) {
         Text(text, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = nxDialogBody())
@@ -46,6 +53,6 @@ fun NxChoiceDialog(title: String, text: String, choices: List<String>, selected:
             Text(text, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = nxDialogBody())
             Spacer(Modifier.height(16.dp))
         }
-        SetupButtons(choices, 0, selected, NxTextSizes.listLabel(NxListPitch) * nxTextScale(), onSelect = {}, onOpen = onChoose)
+        SetupButtons(choices, 0, selected, NxTextSizes.listLabel(NxListPitch) * nxTextScale(), onSelect = {}, onOpen = onChoose, rest = LocalNxColors.current.listText)
     }
 }

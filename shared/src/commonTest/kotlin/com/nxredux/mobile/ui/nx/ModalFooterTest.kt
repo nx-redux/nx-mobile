@@ -36,6 +36,22 @@ class ModalFooterTest {
         assertEquals(ModalFooter.Buttons(listOf(FooterAction(NxButton.B, "Cancel", primary = false))), modalFooter(ModalKind.WAIT, FooterMode.BUTTONS))
     }
 
+    // The footer as words, the confirm first, no key glyphs (A presses the lit one).
+    @Test fun the_footer_reads_as_words_naming_their_keys() {
+        assertEquals(
+            listOf(FooterWord("OK", NxButton.A), FooterWord("Cancel", NxButton.B)),
+            footerWords(modalFooter(ModalKind.CONFIRM, FooterMode.HINTS)),
+        )
+        assertEquals(
+            listOf(FooterWord("OK", NxButton.A), FooterWord("Cancel", NxButton.B)),
+            footerWords(modalFooter(ModalKind.CONFIRM, FooterMode.BUTTONS)),
+        )
+        val scroll = ModalFooter.Hints(listOf(Hint(NxButton.DOWN, "Scroll"), Hint(NxButton.B, "Cancel"), Hint(NxButton.A, "OK")))
+        assertEquals(listOf("OK", "Cancel", "Scroll"), footerWords(scroll).map { it.label })
+        assertEquals(listOf(NxButton.A, NxButton.B, NxButton.DOWN), footerWords(scroll).map { it.button })
+        assertEquals(emptyList(), footerWords(ModalFooter.None))
+    }
+
     @Test fun busy_shows_no_footer() {
         assertEquals(ModalFooter.None, modalFooter(ModalKind.BUSY, FooterMode.HINTS))
         assertEquals(ModalFooter.None, modalFooter(ModalKind.BUSY, FooterMode.BUTTONS))

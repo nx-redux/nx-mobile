@@ -5,18 +5,15 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -34,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.nxredux.mobile.ui.SetupButtons
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
@@ -51,6 +49,7 @@ fun NxModal(
     confirmLabel: String = "OK", cancelLabel: String = "Cancel", scrimDismisses: Boolean = true,
     maxWidth: Dp = 420.dp,
     scrollSteps: Flow<Int>? = null,
+    buttonFocus: Int = -1,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalNxColors.current
@@ -79,17 +78,20 @@ fun NxModal(
             // 24dp from every screen edge: a tall card (long notes in landscape) stops short of the top and bottom too.
             Modifier.padding(24.dp).widthIn(max = maxWidth).fillMaxWidth().background(LocalNxColors.current.modalPanel, RoundedCornerShape(24.dp))
                 .pointerInput(Unit) { detectTapGestures { } }   // taps inside stay inside
-                .padding(start = 8.dp, top = 8.dp, end = 8.dp, bottom = if (footer is ModalFooter.None) 8.dp else 0.dp),
+                .padding(8.dp),
         ) {
-            // The card scrolls and the footer stays pinned, so a landscape keyboard leaving ~125dp still shows the buttons.
-            Column(Modifier.weight(1f, fill = false).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(LocalNxColors.current.modalCard).nxScrollFade(scroll).verticalScroll(scroll).padding(16.dp)) {
-                if (caption != null) {
-                    Text(caption, color = colors.hint, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxModalSmall(), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(8.dp))
+            // The card: its text scrolls, its buttons (as the in-game Quit dialog's, inside the card under the text) stay
+            // pinned, so a landscape keyboard leaving ~125dp still shows them.
+            Column(Modifier.weight(1f, fill = false).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(LocalNxColors.current.modalCard).padding(16.dp)) {
+                Column(Modifier.weight(1f, fill = false).fillMaxWidth().nxScrollFade(scroll).verticalScroll(scroll)) {
+                    if (caption != null) {
+                        Text(caption, color = colors.hint, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxModalSmall(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    content()
                 }
-                content()
+                NxModalFooter(footer, onFooter, buttonFocus)
             }
-            NxModalFooter(footer, onFooter)
         }
     }
 }
@@ -97,26 +99,21 @@ fun NxModal(
 /** How far one d-pad press scrolls a modal's card: about three lines of dialog text. */
 private val SCROLL_STEP = 72.dp
 
-/** The footer strip on the panel below the card: bare key hints (start-aligned) or pill buttons (end-aligned); nothing for [ModalFooter.None]. */
+/**
+ * The card's buttons under its text, as the in-game Quit dialog's ([NxChoiceDialog]): its words side by side as setup's
+ * buttons ([footerWords], [SetupButtons]), in the list text; only the one the host's pad focus is on ([focus], its
+ * place among them) on the accent pill, none while the focus is the card's content (a prompt's field, the text). A tap
+ * sends its key. Nothing for [ModalFooter.None].
+ */
 @Composable
-private fun NxModalFooter(footer: ModalFooter, onButton: (NxButton) -> Unit) {
-    val colors = LocalNxColors.current
-    when (footer) {
-        // The vertical padding sits inside each hint's clickable: a 40dp tap target in a 44dp strip.
-        is ModalFooter.Hints -> Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            footer.hints.inPadOrder().forEach { hint ->
-                Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable { onButton(hint.button) }.padding(horizontal = 4.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    NxButtonGlyph(hint.button, 16.dp)
-                    Spacer(Modifier.width(6.dp))
-                    Text(hint.label, color = colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxModalSmall(), maxLines = 1)
-                }
-            }
-        }
-        is ModalFooter.Buttons -> Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-            footer.actions.forEach { action -> NxModalButton(action) { onButton(action.button) } }
-        }
-        ModalFooter.None -> Unit
-    }
+private fun NxModalFooter(footer: ModalFooter, onButton: (NxButton) -> Unit, focus: Int) {
+    val words = footerWords(footer)
+    if (words.isEmpty()) return
+    Spacer(Modifier.height(16.dp))
+    SetupButtons(
+        words.map { it.label }, 0, focus, NxTextSizes.listLabel(NxListPitch) * nxTextScale(),
+        onSelect = {}, onOpen = { onButton(words[it].button) }, rest = LocalNxColors.current.listText,
+    )
 }
 
 /** A 36dp pill: primary is the list pill's white on black text; secondary is outlined. */

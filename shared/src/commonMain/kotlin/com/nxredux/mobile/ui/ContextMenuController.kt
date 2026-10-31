@@ -316,6 +316,12 @@ internal class ContextMenuController(
     }
 
     private fun onPromptButton(m: ContextMenu, p: MenuPrompt, button: NxButton) {
+        // A text prompt: the d-pad moves between the field and the buttons ([promptFocusStep]); A on Cancel cancels. A
+        // confirm (Delete) is lit by the host's dialog focus ([DialogFocus]) instead.
+        if (p.isTextEntry) {
+            promptFocusStep(m.promptFocus, button)?.let { setMenu(m.copy(promptFocus = it)); return }
+            if (button == NxButton.A && m.promptFocus == 1) { closeContextMenu(); return }
+        }
         when (p) {
             is MenuPrompt.Rename -> when (button) {
                 NxButton.A -> confirmRename(m, p.draft)
@@ -346,8 +352,9 @@ internal class ContextMenuController(
             ContextKind.PIN_TOOL -> { m.tool?.let { setToolPinned(m, it.pinKey, true) } ?: closeContextMenu(); return }
             ContextKind.UNPIN_TOOL -> { m.tool?.let { setToolPinned(m, it.pinKey, false) } ?: closeContextMenu(); return }
             ContextKind.ADD_TO_TOOLS, ContextKind.REMOVE_FROM_TOOLS -> { m.tool?.appId?.let { setInTools(m, it, kind == ContextKind.ADD_TO_TOOLS) } ?: closeContextMenu(); return }
-            ContextKind.RENAME_COLLECTION -> { m.collection?.let { setMenu(m.copy(prompt = MenuPrompt.RenameCollection(it))) } ?: closeContextMenu(); return }
-            ContextKind.DELETE_COLLECTION -> { m.collection?.let { setMenu(m.copy(prompt = MenuPrompt.DeleteCollection(it))) } ?: closeContextMenu(); return }
+            ContextKind.RENAME_COLLECTION -> { m.collection?.let { setMenu(m.copy(prompt = MenuPrompt.RenameCollection(it), promptFocus = -1)) } ?: closeContextMenu(); return }
+            // A confirm has no field: its focus starts on Delete.
+            ContextKind.DELETE_COLLECTION -> { m.collection?.let { setMenu(m.copy(prompt = MenuPrompt.DeleteCollection(it), promptFocus = -1)) } ?: closeContextMenu(); return }
             ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS -> {
                 closeContextMenu()
                 ContextMenus.tabOf(kind)?.let(host::openHiddenTab)
@@ -370,7 +377,7 @@ internal class ContextMenuController(
             ContextKind.UNHIDE -> setHidden(m, false)
             ContextKind.REMOVE_RECENT -> removeRecent(m)
             ContextKind.REMOVE_FROM_COLLECTION -> ((_screen.value as? Screen.Games)?.source?.base as? ListSource.Collection)?.let { removeFromCollection(m, it.name) } ?: closeContextMenu()
-            ContextKind.RENAME -> setMenu(m.copy(prompt = MenuPrompt.Rename(m.game.game.shownName)))
+            ContextKind.RENAME -> setMenu(m.copy(prompt = MenuPrompt.Rename(m.game.game.shownName), promptFocus = -1))
             ContextKind.ADD_TO_COLLECTION -> openCollectionPicker(m)
             ContextKind.GAME_SETTINGS -> { closeContextMenu(); host.openGameSettings(m.game) }
             ContextKind.FETCH_ART -> { closeContextMenu(); host.fetchArt(m.game) }
@@ -524,7 +531,7 @@ internal class ContextMenuController(
         when (m.items[m.index].kind) {
             ContextKind.EMULATOR -> { val from = consoleOf(m) ?: return closeContextMenu(); if (value == from.tag) closeContextMenu() else applyTag(m, value) }
             ContextKind.CONSOLE -> CoreRegistry.consoles.firstOrNull { it.id == value }?.let { c -> applyTag(m, c.defaultTagFor(settings.defaultTags[c.id])) }
-            ContextKind.ADD_TO_COLLECTION -> if (value.isEmpty()) setMenu(m.copy(sub = null, prompt = MenuPrompt.NewCollection())) else addToCollection(m, value)
+            ContextKind.ADD_TO_COLLECTION -> if (value.isEmpty()) setMenu(m.copy(sub = null, prompt = MenuPrompt.NewCollection(), promptFocus = -1)) else addToCollection(m, value)
             ContextKind.PIN, ContextKind.UNPIN, ContextKind.HIDE, ContextKind.UNHIDE, ContextKind.RENAME,
             ContextKind.REMOVE_FROM_COLLECTION, ContextKind.REMOVE_RECENT, ContextKind.GAME_SETTINGS, ContextKind.FETCH_ART,
             ContextKind.PIN_TOOL, ContextKind.UNPIN_TOOL, ContextKind.ADD_TO_TOOLS, ContextKind.REMOVE_FROM_TOOLS,

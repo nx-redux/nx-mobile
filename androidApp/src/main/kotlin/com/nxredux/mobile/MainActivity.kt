@@ -883,11 +883,11 @@ class MainActivity : ComponentActivity(), FolderPicker {
             event.action == MotionEvent.ACTION_MOVE
         ) {
             // The hat, else the left stick (as the in-game menu reads them): held directions repeat like the d-pad's.
-            // Behind a text box (sign-in, Rename, New collection) the stick is ignored; the hat still reads.
-            val stick = !(::state.isInitialized && state.textEntryOpen)
+            // Behind a text box too (sign-in, Rename, New collection): it moves between the field and the buttons as
+            // the d-pad does, and never types.
             axes.update(
                 event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y),
-                if (stick) event.getAxisValue(MotionEvent.AXIS_X) else 0f, if (stick) event.getAxisValue(MotionEvent.AXIS_Y) else 0f,
+                event.getAxisValue(MotionEvent.AXIS_X), event.getAxisValue(MotionEvent.AXIS_Y),
             )
             return true
         }

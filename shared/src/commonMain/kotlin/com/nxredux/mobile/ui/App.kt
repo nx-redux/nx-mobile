@@ -113,6 +113,7 @@ import com.nxredux.mobile.ui.nx.launcherChromeFor
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.nxScreenInsets
 import com.nxredux.mobile.ui.nx.LocalAppIcons
+import com.nxredux.mobile.ui.nx.LocalDialogFocus
 import com.nxredux.mobile.ui.nx.LocalPadBelow
 import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.LocalWindowSize
@@ -331,7 +332,7 @@ internal fun MenuLocals(state: AppState, look: MenuLook, footer: FooterMode, tou
     val chrome = launcherChromeFor(look.pageTitle, look.buttonHints, footer, look.extraInfo, look.netplayHint, look.homeStats)
     CompositionLocalProvider(
         LocalFooterMode provides footer, LocalLauncherChrome provides chrome, LocalHasTouchscreen provides touchscreen,
-        LocalAppIcons provides state.appIcons, LocalNxOptionText provides look.optionText,
+        LocalAppIcons provides state.appIcons, LocalNxOptionText provides look.optionText, LocalDialogFocus provides state.dialogFocus,
         content = content,
     )
 }

@@ -170,6 +170,7 @@ import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.fullInfo
 import com.nxredux.mobile.ui.nx.launcherChromeFor
+import com.nxredux.mobile.ui.nx.DialogFocus
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.gridAtTop
 import com.nxredux.mobile.ui.nx.gridStep
@@ -926,6 +927,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     val appIcons: AppIcons? = deps.launcher?.let { AppIcons(it, scope) }
 
     private val _selection = MutableStateFlow(ListSelection(0, 0))
+    /** The pad's place in an open confirm dialog's buttons ([DialogFocus]); every press runs through it first ([onButton]). */
+    val dialogFocus = DialogFocus()
+
     val selection: StateFlow<ListSelection> = _selection.asStateFlow()
 
     /** Home's builds, stats strip and d-pad memory; it reaches back into this state only through [HomeHost]. */
@@ -6684,7 +6688,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     /** A pad press. [repeat]: an auto-repeat of a held direction (the router's), not a fresh press; taps are fresh. */
-    fun onButton(button: NxButton, repeat: Boolean = false) {
+    fun onButton(pressed: NxButton, repeat: Boolean = false) {
+        // An open confirm dialog takes LEFT and RIGHT for its buttons and turns A on Cancel into B ([DialogFocus]).
+        val button = dialogFocus.press(pressed) ?: return
         if (minimalPending) return   // a Minimal open is under way: the row opens in a moment
         _minimalOpening.value?.let { minimalJob?.cancel(); _minimalOpening.value = null }   // opened: the next press clears it
         _chooser.value?.let { onChooserButton(it, button); return }   // a touch chooser takes the pad while open
