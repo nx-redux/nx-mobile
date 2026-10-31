@@ -1,6 +1,8 @@
 package com.nxredux.mobile.ui.nx
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 
 /** An options row's description as a share of its name. */
 private const val DESC_OF_LABEL = 0.72f
@@ -107,8 +110,9 @@ private fun optionRowTap(row: MenuRow, index: Int, onSelect: (Int) -> Unit, onOp
 /**
  * One touch options row ([NxTouchRow]): the name with the info icon when the description is cut off or has a fuller
  * detail ([hasMoreInfo]), the description under it, and on the right the option's control ([NxSettingControl]) or a
- * submenu's `›`; a segmented option's segments that don't fit there sit under the text at its start. [onTruncated]
- * hears whether the description fits.
+ * submenu's `›`; a segmented option's segments that don't fit there sit under the text at its start. An action
+ * ([MenuRow.Action]) is its word alone, as setup's buttons ([ActionWordRow]). [onTruncated] hears whether the
+ * description fits.
  */
 @Composable
 private fun OptionTouchRow(
@@ -116,6 +120,7 @@ private fun OptionTouchRow(
     onTap: () -> Unit, onOption: (OptionEvent) -> Unit, index: Int,
     onTruncated: (String, Boolean) -> Unit,
 ) {
+    if (row is MenuRow.Action) return ActionWordRow(row.label, selected, onTap)
     NxTouchRow(
         row.label, row.info, row.hasMoreInfo, selected, sizes,
         onTap = onTap, onInfo = { onOption(OptionEvent.Info(index)) }, onTruncated = onTruncated,
@@ -125,11 +130,40 @@ private fun OptionTouchRow(
     ) {
         when (row) {
             is MenuRow.Option -> OptionControlView(row, index, sizes.value, onOption)
-            is MenuRow.Submenu, is MenuRow.Action -> NxValueText("›", sizes.label, LocalNxColors.current.listText)
+            is MenuRow.Submenu -> NxValueText("›", sizes.label, LocalNxColors.current.listText)
+            is MenuRow.Action -> Unit   // drawn as a word ([ActionWordRow])
             is MenuRow.Slot -> Unit
         }
     }
 }
+
+/**
+ * An action in the options list (Reset Parameters, Save Changes' saves) as setup's buttons draw one: the word alone in
+ * inkDim, or on the accent pill in its on-accent ink while [selected], in the Options page's words' size and weight
+ * ([menuWordSize], regular); no plate, no `›`. The word stays on the rows'
+ * text edge ([NxOptionsInnerPad]), the pill from the list's edge as a row's plate; the row the pill and
+ * [ACTION_ROW_AIR] above and below, so actions in a run (Save Changes') sit close, a pill's height apart.
+ */
+@Composable
+private fun ActionWordRow(label: String, selected: Boolean, onTap: () -> Unit) {
+    val colors = LocalNxColors.current
+    val size = menuWordSize(inner = true)
+    Box(
+        Modifier.fillMaxWidth().nxTapOrHold(onTap, null).padding(vertical = ACTION_ROW_AIR),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Box(Modifier.then(if (selected) Modifier.background(nxHighlight(), RoundedCornerShape(50)) else Modifier).padding(horizontal = NxOptionsInnerPad, vertical = 4.dp)) {
+            Text(
+                label, color = if (selected) colors.onAccent else colors.inkDim, fontFamily = LocalNxFont.current, fontWeight = FontWeight.Normal,
+                letterSpacing = (-0.01).em,   // as the Options page's words beside it
+                fontSize = size, lineHeight = size * 1.25f, maxLines = 1,
+            )
+        }
+    }
+}
+
+/** The room above and below an action row's pill ([ActionWordRow]). */
+private val ACTION_ROW_AIR = 2.dp
 
 /** The control on an options row's right, by its [NxSettingControl]. */
 @Composable

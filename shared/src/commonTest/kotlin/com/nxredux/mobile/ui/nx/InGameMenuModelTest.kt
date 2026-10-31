@@ -104,6 +104,18 @@ class InGameMenuModelTest {
         )
     }
 
+    // Quit Game's choices sit side by side: LEFT and RIGHT step between them as UP and DOWN do.
+    @Test fun left_and_right_step_the_quit_dialogs_choices() {
+        val m = model()
+        m.select(4)
+        m.activate(4)
+        m.press(NxButton.RIGHT)
+        assertEquals(PageKind.QuitGame, m.state.page.kind)
+        assertEquals(1, m.state.page.selected)
+        m.press(NxButton.LEFT)
+        assertEquals(0, m.state.page.selected)
+    }
+
     @Test fun a_tap_on_quit_asks_how_to_quit() {
         val m = model()
         m.select(4)

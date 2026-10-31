@@ -53,11 +53,14 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.first
 
@@ -110,9 +113,10 @@ fun NxList(
     outlined: Boolean = false,    // a button row (Continue): a grey ring round the pill's place while unlit ([nxButtonRing])
     edgeMargin: Int = 0,          // rows kept in view past the selection: 1 under a scroll fade
     restInk: Color? = null,       // the unlit rows' label and icon ink (the folder picker's: inkName, its actions inkDim); null the list text
+    wordInk: Color? = null,       // a word list (Settings' sections): no pill, regular weight, the selected row's label in this ink
 ) = NxList(
     rows, { selectedIndex }, onSelect, onOpen, modifier, listState, rowHeightOverride, pillPaddingOverride, textSizeOverride,
-    onLongPress, endPadOverride, outlined, edgeMargin = edgeMargin, restInk = restInk,
+    onLongPress, endPadOverride, outlined, edgeMargin = edgeMargin, restInk = restInk, wordInk = wordInk,
 )
 
 /**
@@ -137,6 +141,7 @@ internal fun NxList(
     outlined: Boolean = false,
     edgeMargin: Int = 0,   // rows kept in view past the selection ([NxKeepSelectedInView]): 1 under a scroll fade
     restInk: Color? = null,
+    wordInk: Color? = null,
 ) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
@@ -157,11 +162,12 @@ internal fun NxList(
         val glide = rememberNxPillGlide(identity, selectedIndex, rows.size, nxWholeRows(maxHeight, rowHeight, pxSlack = 1f / density.density))
         val pitch = with(density) { rowHeight.roundToPx() }
         val highlight = nxHighlight()
-        val pill = remember(glide, state, pitch, highlight) { Modifier.fillMaxSize().nxPillGlide(glide, state, pitch, highlight) }
+        // A word list ([wordInk]) draws no pill: the selected row's ink alone marks it.
+        val pill = remember(glide, state, pitch, highlight, wordInk) { if (wordInk != null) Modifier.fillMaxSize() else Modifier.fillMaxSize().nxPillGlide(glide, state, pitch, highlight) }
         // The rows read the selection through this State, each in its own scope ([NxListRow]): a step recomposes the rows
         // whose selected or lit state changed, not every row on screen.
         val selection = rememberUpdatedState(selectedIndex)
-        val style = NxListRowStyle(rowHeight, listFont, sidePad, pillPad, font, colors, outlined, restInk ?: colors.listText)
+        val style = NxListRowStyle(rowHeight, listFont, sidePad, pillPad, font, colors, outlined, restInk ?: colors.listText, wordInk)
         LazyColumn(
             state = state,
             modifier = pill,
@@ -169,7 +175,7 @@ internal fun NxList(
         ) {
             itemsIndexed(rows) { i, row ->
                 val selected by remember(i) { derivedStateOf { i == selection.value() } }
-                val lit by remember(glide, i) { derivedStateOf { i == glide.litIndex } }   // on-pill colours follow the gliding pill
+                val lit by remember(glide, i, wordInk) { derivedStateOf { wordInk == null && i == glide.litIndex } }   // on-pill colours follow the gliding pill (none without one)
                 val cutPx by remember(i, topCut, pitch) {
                     derivedStateOf {
                         if (topCut == null) 0f else nxRowTopCutPx(
@@ -185,11 +191,15 @@ internal fun NxList(
     }
 }
 
+/** A word list's line box as a share of its size, as Settings' section words. */
+internal const val NX_WORD_LINE = 1.2f
+
 /** What every row of one [NxList] shares: its pitch, label size, margins, font and colours. */
 internal data class NxListRowStyle(
     val rowHeight: Dp, val listFont: TextUnit, val sidePad: Dp, val pillPad: Dp, val font: FontFamily, val colors: NxColors,
     val outlined: Boolean = false,
     val rest: Color = colors.listText,   // an unlit row's label and icon
+    val word: Color? = null,             // a word list's selected label ([NxList]'s wordInk): Settings' section words; null: the pill marks it
 )
 
 /** One [NxList] row: its tag ([NxRow.tag]), label (and muted secondary), on-pill colours while [lit], scrolling (marquee) while [selected]. */
@@ -273,8 +283,17 @@ private fun NxListRowLabel(row: NxRow, selected: Boolean, lit: Boolean, style: N
                 withStyle(SpanStyle(color = muted, fontSize = NxTextSizes.secondary(listFont))) { append(it) }
             }
         },
-        color = if (lit) colors.onAccent else style.rest,
-        fontFamily = style.font, fontWeight = FontWeight.SemiBold, fontSize = listFont, lineHeight = listFont,
+        color = when {
+            lit -> colors.onAccent
+            selected && style.word != null -> style.word
+            else -> style.rest
+        },
+        // A word list as Settings' section words: regular weight, a touch tight, on a 1.2 line box with the word centred
+        // in it (a box only as tall as the font cuts its descenders).
+        fontFamily = style.font, fontWeight = if (style.word != null) FontWeight.Normal else FontWeight.SemiBold, fontSize = listFont,
+        lineHeight = if (style.word != null) listFont * NX_WORD_LINE else listFont,
+        style = if (style.word != null) TextStyle(lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)) else TextStyle.Default,
+        letterSpacing = if (style.word != null) (-0.01).em else TextUnit.Unspecified,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = textModifier.alpha(if (row.enabled) 1f else NX_DISABLED_ALPHA).let { if (selected) it.basicMarquee() else it },   // role: a disabled row

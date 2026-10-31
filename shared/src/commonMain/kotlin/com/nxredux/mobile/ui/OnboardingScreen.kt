@@ -194,7 +194,7 @@ internal fun SetupBlockPage(
  * keep their places and spacing whichever is lit; a tap target [SETUP_BUTTON_TAP] tall. A tap selects and opens it.
  */
 @Composable
-private fun SetupButtons(labels: List<String>, first: Int, selected: Int, size: TextUnit, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit) {
+internal fun SetupButtons(labels: List<String>, first: Int, selected: Int, size: TextUnit, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit) {
     val colors = LocalNxColors.current
     val inset = nxListInset()
     val pill = nxHighlight()

@@ -1,22 +1,12 @@
 package com.nxredux.mobile.ui.nx
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.nxredux.mobile.ui.SetupButtons
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -40,10 +30,10 @@ fun NxDialog(
 }
 
 /**
- * A choice among [choices], each a full-width button in the shared modal frame, for touch first: a tap on a
- * button calls [onChoose] with its index, a tap on the scrim (or B) [onCancel]. [selected] is the highlighted button,
- * held by the caller so a pad-driven host moves it with its own input (UP/DOWN, A [onChoose]); a menu, it has no hints.
- * [text], when not blank, sits above the buttons.
+ * A choice among [choices], side by side as setup's buttons ([SetupButtons]: the words, the highlighted one on the
+ * accent pill) in the shared modal frame: a tap on one calls [onChoose] with its index, a tap on the scrim (or B)
+ * [onCancel]. [selected] is the highlighted button, held by the caller so a pad-driven host moves it with its own input
+ * (LEFT/RIGHT or UP/DOWN, A [onChoose]); a menu, it has no hints. [text], when not blank, sits above the buttons.
  */
 @Composable
 fun NxChoiceDialog(title: String, text: String, choices: List<String>, selected: Int, onChoose: (Int) -> Unit, onCancel: () -> Unit) {
@@ -56,20 +46,6 @@ fun NxChoiceDialog(title: String, text: String, choices: List<String>, selected:
             Text(text, color = colors.listText, fontFamily = LocalNxFont.current, fontSize = nxDialogBody())
             Spacer(Modifier.height(16.dp))
         }
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            choices.forEachIndexed { i, label -> NxChoiceButton(label, i == selected) { onChoose(i) } }
-        }
-    }
-}
-
-/** One [NxChoiceDialog] button, 48dp tall: the highlighted one filled as the list pill, the others outlined. */
-@Composable
-private fun NxChoiceButton(label: String, highlighted: Boolean, onClick: () -> Unit) {
-    val colors = LocalNxColors.current
-    val shape = RoundedCornerShape(50)
-    val base = Modifier.fillMaxWidth().height(48.dp).clip(shape).clickable(onClick = onClick)
-    val styled = if (highlighted) base.background(colors.main, shape) else base.border(1.dp, colors.inkRing, shape)
-    Box(styled, contentAlignment = Alignment.Center) {
-        Text(label, color = if (highlighted) colors.listTextSelected else colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = nxModalButton(), maxLines = 1)
+        SetupButtons(choices, 0, selected, NxTextSizes.listLabel(NxListPitch) * nxTextScale(), onSelect = {}, onOpen = onChoose)
     }
 }

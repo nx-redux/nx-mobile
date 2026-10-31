@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.nxredux.mobile.achievements.RaAchievement
+import com.nxredux.mobile.ui.SETTINGS_SECTION_SIZE
 import com.nxredux.mobile.ui.SETTINGS_SPLIT_LEFT
 import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 import com.nxredux.mobile.ui.SplitPanes
@@ -280,14 +281,16 @@ private fun RootBody(
     // The labels start [MenuPillPadding] into their pills, where the page title's first letter sits ([nxListInset]).
     // No top room: the panel's tab row sits right under the header, as in the dual-screen panel, the list's first row beside it.
     Row(modifier.fillMaxWidth().padding(start = nxListInset() - MenuPillPadding, end = nxListInset(), bottom = 8.dp)) {
+        // Words as Settings' sections: the selected one in the accent while the list has the focus, the main ink while
+        // the panel or the page beside it does.
         if (panes.focusLeft) {
-            Box(Modifier.weight(listShare).fillMaxHeight().alpha(rootListAlpha(state)), contentAlignment = Alignment.TopStart) {   // role: an unfocused pane, dimmed
-                RootList(panes.left, rowHeight, onSelect, onActivate, onChange)
+            Box(Modifier.weight(listShare).fillMaxHeight(), contentAlignment = Alignment.TopStart) {
+                RootList(panes.left, rowHeight, onSelect, onActivate, onChange, focused = state.panelFocus == null)
             }
         } else {
             val tap: (Int) -> Unit = { i -> split.onParentTap(panes.left.kind, i) }
-            Box(Modifier.weight(listShare).fillMaxHeight().alpha(UNFOCUSED_ALPHA), contentAlignment = Alignment.TopStart) {   // role: an unfocused pane, dimmed
-                RootList(panes.left, rowHeight, tap, tap, {})
+            Box(Modifier.weight(listShare).fillMaxHeight(), contentAlignment = Alignment.TopStart) {
+                RootList(panes.left, rowHeight, tap, tap, {}, focused = false)
             }
         }
         // Always reserve the right column so the list keeps a fixed width and doesn't shift
@@ -328,6 +331,12 @@ private fun PagePane(
     modifier: Modifier,
 ) {
     when {
+        // The Options page (its rows the setting pages) as Settings' section words ([RowsBody]); beside the root, its
+        // preview with none selected, every word in inkDim.
+        page.kind == PageKind.Options -> key(page.kind) {
+            if (focused) RowsBody(page, rowHeight, onSelect, onActivate, {}, modifier, focused = true)
+            else RowsBody(page.copy(selected = -1), rowHeight, split.onPreviewTap, split.onPreviewTap, {}, modifier)
+        }
         !focused -> key(page.kind) {
             OptionsBody(page.copy(selected = -1), rowHeight, split.onPreviewTap, {}, {}, { _, _ -> }, modifier.alpha(UNFOCUSED_ALPHA))   // role: an unfocused pane, dimmed
         }
@@ -358,18 +367,17 @@ internal fun rootListShare(portrait: Boolean): Float = if (portrait) 0.32f else 
  */
 internal fun rootListTopPad(rowHeight: Dp): Dp = (menuTabWordCentre() - rowHeight / 2).coerceAtLeast(0.dp)
 
-/** The root list dims ([UNFOCUSED_ALPHA]) while the controller is in the panel; a tap on it still brings the focus back. */
-private fun rootListAlpha(state: MenuState): Float = if (state.panelFocus != null) UNFOCUSED_ALPHA else 1f
-
 /**
  * The root page's list: its rows at [rowHeight], an Option row (Disc N/M) with its value, the change arrows while selected.
- * Save, Load and the plain Quit take two taps ([inGameRowTakesTwoTaps]); while Save or Load is highlighted a sideways
- * swipe on the list steps the slot, as on the slot card ([slotSwipe]).
+ * Words as Settings' sections, no pill ([menuWordInk]): the rest in inkDim, the selected one in the accent while
+ * [focused], else the main ink (the controller in the panel, or a page beside it has the focus; a tap still brings it
+ * back). Save, Load and the plain Quit take two taps ([inGameRowTakesTwoTaps]); while Save or Load is highlighted a
+ * sideways swipe on the list steps the slot, as on the slot card ([slotSwipe]).
  */
 @Composable
-private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit, onActivate: (Int) -> Unit, onChange: (Int) -> Unit) {
+private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit, onActivate: (Int) -> Unit, onChange: (Int) -> Unit, focused: Boolean = true) {
     val onSlot = page.rows.getOrNull(page.selected) is MenuRow.Slot
-    val rowHeight = nxOptionsRowHeight(pageRowHeight, LocalNxOptionText.current)   // Appearance → Text size, as the option pages
+    val rowHeight = menuWordPitch(nxOptionsRowHeight(pageRowHeight, LocalNxOptionText.current))   // Appearance → Text size, as the option pages
     CompositionLocalProvider(LocalNxTapOpens provides { i -> !inGameRowTakesTwoTaps(page.rows.getOrNull(i)) }) { NxList(
         rows = page.rows.mapIndexed { i, row ->
             val value = (row as? MenuRow.Option)?.valueLabel
@@ -383,8 +391,30 @@ private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit,
             .then(if (onSlot) Modifier.slotSwipe(onChange) else Modifier),
         rowHeightOverride = rowHeight,
         pillPaddingOverride = MenuPillPadding,
+        textSizeOverride = menuWordSize(), restInk = LocalNxColors.current.inkDim, wordInk = menuWordInk(focused),
     ) }
 }
+
+/** The in-game menu's word lists' selected word: the accent while the list has the focus, else the main ink (Settings' sections). */
+@Composable
+private fun menuWordInk(focused: Boolean): Color = if (focused) LocalNxColors.current.accent else LocalNxColors.current.main
+
+/** A word list's row pitch: the menu's [base] pitch, or [MENU_WORD_PITCH] × the word size where that is more, so words keep air between them. */
+@Composable
+private fun menuWordPitch(base: Dp, inner: Boolean = false): Dp = maxOf(base, with(LocalDensity.current) { (menuWordSize(inner) * MENU_WORD_PITCH).toDp() })
+
+/** A word list row's least pitch as a share of its word size. */
+private const val MENU_WORD_PITCH = 1.4f
+
+/**
+ * The in-game menu's words at Settings' section size ([SETTINGS_SECTION_SIZE], under Appearance → Text size only); an
+ * [inner] list (the Options page's) a step smaller ([MENU_INNER_WORD_SIZE]).
+ */
+@Composable
+internal fun menuWordSize(inner: Boolean = false): TextUnit = (if (inner) MENU_INNER_WORD_SIZE else SETTINGS_SECTION_SIZE).pinned() * nxTextScale()
+
+/** An inner word list's size (the Options page's), a step under the root list's [SETTINGS_SECTION_SIZE]. */
+private val MENU_INNER_WORD_SIZE = 22.sp
 
 /**
  * The two panes between the title and the hint bar ([SplitPanes], the Settings frame): the focused one takes the
@@ -415,10 +445,10 @@ private fun SplitBody(
             divider = false,
             left = {
                 if (panes.focusLeft) {
-                    PaneBody(panes.left, rowHeight, onSelect, onActivate, onChange, detail, Modifier.alpha(rootListAlpha(state)))   // role: an unfocused pane, dimmed
+                    PaneBody(panes.left, rowHeight, onSelect, onActivate, onChange, detail, focused = state.panelFocus == null)
                 } else {
                     val tap: (Int) -> Unit = { i -> split.onParentTap(panes.left.kind, i) }
-                    PaneBody(panes.left, rowHeight, tap, tap, {}, detail, Modifier.alpha(UNFOCUSED_ALPHA))   // role: an unfocused pane, dimmed
+                    PaneBody(panes.left, rowHeight, tap, tap, {}, detail, focused = false)
                 }
             },
             right = {
@@ -440,7 +470,11 @@ private fun SplitBody(
     }
 }
 
-/** The left pane's page: the root list, the Achievements page, or a page of pill rows (the parent of the page on the right). */
+/**
+ * The left pane's page: the root list, the Achievements page, or a page of word rows (the parent of the page on the
+ * right). The word lists mark [focused] by their selected word's ink ([menuWordInk]); the Achievements page dims
+ * ([UNFOCUSED_ALPHA]) without it.
+ */
 @Composable
 private fun PaneBody(
     page: MenuPage,
@@ -449,16 +483,16 @@ private fun PaneBody(
     onActivate: (Int) -> Unit,
     onChange: (Int) -> Unit,
     detail: AchievementsUi,
-    modifier: Modifier,
+    focused: Boolean,
 ) {
     when (page.kind) {
         // At the top, its first row beside the panel's tab row.
         PageKind.Root -> Box(
-            modifier.fillMaxSize().padding(start = nxListInset() - MenuPillPadding, end = 12.dp, bottom = 8.dp),
+            Modifier.fillMaxSize().padding(start = nxListInset() - MenuPillPadding, end = 12.dp, bottom = 8.dp),
             contentAlignment = Alignment.TopStart,
-        ) { RootList(page, rowHeight, onSelect, onActivate, onChange) }
-        PageKind.Achievements -> AchievementsBody(page, detail, onSelect, modifier.fillMaxSize())
-        else -> key(page.kind) { RowsBody(page, rowHeight, onSelect, onActivate, onChange, modifier.fillMaxSize()) }
+        ) { RootList(page, rowHeight, onSelect, onActivate, onChange, focused) }
+        PageKind.Achievements -> AchievementsBody(page, detail, onSelect, Modifier.fillMaxSize().alpha(if (focused) 1f else UNFOCUSED_ALPHA))   // role: an unfocused pane, dimmed
+        else -> key(page.kind) { RowsBody(page, rowHeight, onSelect, onActivate, onChange, Modifier.fillMaxSize(), focused) }
     }
 }
 
@@ -467,9 +501,9 @@ private val MenuPillPadding = 10.dp
 
 
 /**
- * The split menu's dimmed parent page ([PaneBody]): its rows as plain pills (the labels alone, as the root list and the
- * Settings category list beside a page), from the top level with the root list. A tap goes to [onSelect] / [onActivate]
- * (the parent tap).
+ * A page of words: the split menu's parent page ([PaneBody]), and the Options page itself ([PagePane]). Its rows as
+ * Settings' section words (the labels alone at [menuWordSize]; the selected one's ink by [focused], [menuWordInk]), from
+ * the top level with the root list. A tap goes to [onSelect] / [onActivate] (the parent tap).
  */
 @Composable
 private fun RowsBody(
@@ -479,8 +513,9 @@ private fun RowsBody(
     onActivate: (Int) -> Unit,
     onChange: (Int) -> Unit,
     modifier: Modifier,
+    focused: Boolean = false,
 ) {
-    val itemHeight = nxOptionsRowHeight(rowHeight, LocalNxOptionText.current)   // Appearance → Text size
+    val itemHeight = menuWordPitch(nxOptionsRowHeight(rowHeight, LocalNxOptionText.current), inner = true)   // Appearance → Text size
     BoxWithConstraints(
         modifier.fillMaxWidth().padding(start = nxListInset() - MenuPillPadding, end = 12.dp, top = rootListTopPad(itemHeight)),
         contentAlignment = Alignment.TopStart,
@@ -491,6 +526,7 @@ private fun RowsBody(
             selectedIndex = page.selected, onSelect = onSelect, onOpen = onActivate,
             modifier = Modifier.fillMaxWidth().height(itemHeight * shown.coerceAtLeast(1)),
             rowHeightOverride = itemHeight, pillPaddingOverride = MenuPillPadding,
+            textSizeOverride = menuWordSize(inner = true), restInk = LocalNxColors.current.inkDim, wordInk = menuWordInk(focused),
         )
     }
 }
