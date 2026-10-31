@@ -174,11 +174,11 @@ private class SplitUi(val panes: MenuPanes, val wide: Boolean, val onParentTap: 
 /** The root's game panel ([GamePanel]): what it draws, its taps, and the shortcut columns it drew. */
 private class PanelUi(val state: GamePanelState, val onEvent: (GamePanelEvent) -> Unit, val onColumns: (Int) -> Unit)
 
-/** The panel (its header drawn across the menu's top instead) in [modifier]'s box, reporting the shortcut grid's columns at that width ([gamePanelColumns]) for the model's UP/DOWN. */
+/** The panel (its header drawn across the menu's top instead) in [modifier]'s box, reporting the shortcut grid's columns at that width ([rememberGamePanelColumns]) for the model's UP/DOWN. */
 @Composable
 private fun MenuGamePanel(panel: PanelUi, modifier: Modifier) {
     BoxWithConstraints(modifier) {
-        val columns = gamePanelColumns(maxWidth)
+        val columns = rememberGamePanelColumns(maxWidth, panel.state.shortcuts)
         SideEffect { panel.onColumns(columns) }
         // The header is the menu's, across its top; the body sits on the menu's surface with the list.
         GamePanel(panel.state, panel.onEvent, Modifier.fillMaxSize(), showHeader = false, opaque = false)
