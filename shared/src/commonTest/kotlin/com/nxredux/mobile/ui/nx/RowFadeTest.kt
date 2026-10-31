@@ -25,6 +25,18 @@ class RowFadeTest {
         assertEquals(1f, alpha(rows, 6, 10, back = true, forward = false))
     }
 
+    // A Layouts picture under the rows (item 3, 400 px, cut by the bottom edge) is no row: it is never faded, and the
+    // rows above it keep full ink, as nothing row-like lies beyond them.
+    @Test fun aPictureUnderTheRowsIsNotARow() {
+        val rows = listOf(RowSpan(0, 0, 100), RowSpan(1, 100, 100), RowSpan(2, 200, 100), RowSpan(3, 300, 400))
+        val notPicture = { i: Int -> i != 3 }
+        assertEquals(1f, alpha(rows, 3, 4, back = false, forward = true, isRow = notPicture))
+        assertEquals(1f, alpha(rows, 2, 4, back = false, forward = true, isRow = notPicture))
+        // Scrolled so the picture fills the view and rows lie above: still whole.
+        val down = listOf(RowSpan(2, -100, 100), RowSpan(3, 0, 400))
+        assertEquals(1f, alpha(down, 3, 4, back = true, forward = false, isRow = notPicture))
+    }
+
     @Test fun aListThatFitsShowsNoFade() {
         val rows = view(0)
         for (i in 0..5) assertEquals(1f, alpha(rows, i, 6, back = false, forward = false))

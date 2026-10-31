@@ -250,7 +250,8 @@ fun NxSettingsList(
         // Rows differ in height (a bare row, a group label, segments under the text): kept clear of the fade in px.
         val fade = settingsRowsFade(sizes.bare, sizes.row / 2)   // the Settings rows block's: two one-line rows
         val block = LocalSettingsBlock.current != null
-        val isRow: (Int) -> Boolean = { it >= rows.size || !rows[it].spacer }   // a spacer is no row; the footer is
+        // A spacer is no row, nor is the footer: a picture faded whole as the outermost row would be hidden by it.
+        val isRow: (Int) -> Boolean = { it < rows.size && !rows[it].spacer }
         val edgePx = with(density) { fade.roundToPx() }
         // The selected row's and the list's laid-out heights (before the first layout, the most the row can take and the room).
         val footerPx = with(density) { footerHeight.roundToPx() }
@@ -300,10 +301,11 @@ fun NxSettingsList(
                     )
                 }
             }
-            // Under the last row, scrolling with them (a Layouts group's picture); never selected.
+            // Under the last row, scrolling with them (a Layouts group's picture); never selected, never row-faded:
+            // only the edge mask softens it where an edge cuts it.
             if (footer != null) item(key = NX_LIST_FOOTER_KEY) {
                 // From the lazy list's left: the list's own left ([outStart]) less the footer's start bleed.
-                Box(Modifier.fillMaxWidth().height(footerHeight).then(if (block) Modifier.nxRowFade(listState, rows.size, SETTINGS_ROWS_FADE_STEPS, isRow) else Modifier).padding(start = outStart - footer.bleedStart)) {
+                Box(Modifier.fillMaxWidth().height(footerHeight).padding(start = outStart - footer.bleedStart)) {
                     footer.content(footerWidth)
                 }
             }
