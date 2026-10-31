@@ -1,27 +1,50 @@
 package com.nxredux.mobile.runner
 
 import android.content.Context
+import com.nxredux.mobile.options.ShaderOptions
 import java.io.File
 
 /**
- * The bundled shader presets on the SD root (`Shaders/`, RetroArch `.glslp` + `.glsl` layout). The tree is
- * app-owned and replaced whole on APK update, so it is not a place for user files.
+ * The shader presets (RetroArch `.glslp` + `.glsl` layout): the bundled set on the private SD root (`Shaders/`),
+ * app-owned and replaced whole on APK update, so no place for user files; and the user's own in the home's `Shaders/`,
+ * never touched by the app. A user preset's path carries [ShaderOptions.USER_PREFIX] ("User/glsl/x.glsl"), so the two
+ * never collide and a stored choice says which folder it reads from.
  */
 object Shaders {
     const val DIR = "Shaders"
 
-    fun file(sdRoot: File, relPath: String): File = File(File(sdRoot, DIR), relPath)
-
-    /** The text of a shader file by path relative to `Shaders/`, or null when missing/unreadable. */
-    fun read(sdRoot: File, relPath: String): String? = runCatching { file(sdRoot, relPath).takeIf { it.isFile }?.readText() }.getOrNull()
+    /** Where presets are read from: the [bundled] private root, and the home ([user]); null while the data is private. */
+    data class Roots(val bundled: File, val user: File?) {
+        companion object {
+            /** The home is the user's folder only once it is not the private root (before the storage move it is). */
+            fun of(privateRoot: File, dataRoot: File): Roots = Roots(privateRoot, dataRoot.takeIf { it.absoluteFile != privateRoot.absoluteFile })
+        }
+    }
 
     /**
-     * Every preset offered: `*.glslp` anywhere under `Shaders/`, and bare `*.glsl` directly in `Shaders/` or in
-     * `Shaders/glsl/` (the nx-redux layout). Relative paths, sorted case-insensitively. Only the bundled set:
-     * files added to the tree by hand are dropped on the next APK update. Blocking I/O.
+     * The file for [path]: under the home's `Shaders/` with the user prefix (null with no home), else the bundled
+     * one. A path a user preset resolves past its prefix ("User/../crt/x") is a bundled one, as it reads.
      */
-    fun presets(sdRoot: File): List<String> {
-        val root = File(sdRoot, DIR)
+    fun file(roots: Roots, path: String): File? {
+        val user = ShaderOptions.userPath(path)
+        return if (user != null) roots.user?.let { File(File(it, DIR), user) } else File(File(roots.bundled, DIR), path)
+    }
+
+    /** The text of a shader file by its path ([file]), or null when missing/unreadable. */
+    fun read(roots: Roots, path: String): String? = runCatching { file(roots, path)?.takeIf { it.isFile }?.readText() }.getOrNull()
+
+    /**
+     * Every preset offered: the bundled ones, then the user's (prefixed), each sorted case-insensitively. Blocking I/O.
+     */
+    fun presets(roots: Roots): List<String> =
+        presetsIn(File(roots.bundled, DIR)) + (roots.user?.let { presetsIn(File(it, DIR)) }.orEmpty()).map { ShaderOptions.USER_PREFIX + it }
+
+    /**
+     * The presets in [root]: `*.glslp` anywhere under it, and bare `*.glsl` directly in it or in `glsl/` (the nx-redux
+     * layout). Relative paths, sorted case-insensitively; none for a missing folder.
+     */
+    internal fun presetsIn(root: File): List<String> {
+        if (!root.isDirectory) return emptyList()
         val out = mutableListOf<String>()
         root.walkTopDown().filter { it.isFile && !it.name.startsWith("._") && it.name != ".DS_Store" }.forEach { f ->
             val rel = f.relativeTo(root).path.replace('\\', '/')

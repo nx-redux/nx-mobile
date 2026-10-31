@@ -367,6 +367,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var usingData = false
     /** Overlays and shaders: app-private for good ([DataRoot.private]). */
     override lateinit var privateRoot: File
+    override lateinit var shaderRoots: Shaders.Roots
         private set
     private lateinit var paths: NxPaths
     private var batterySaves: BatterySaves? = null
@@ -1181,6 +1182,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }.onFailure { NxLog.w(TAG_LOG, "data root unavailable", it) }.getOrNull()
         } ?: return fail("The game's storage could not be reached. Try again.")
         privateRoot = DataRoot.private(this)
+        shaderRoots = Shaders.Roots.of(privateRoot, dataRoot)
         cheatsFolder = Cheats.folder(tag, romFileName)
         // The battery-save, clock and state names follow the handheld's save settings. The save setup waits
         // for the unpack (after the inner-file check below), since Use extracted file name names them after the
@@ -1292,7 +1294,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         refreshTouchShortcuts()
         val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id) else null
         renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
-        renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(privateRoot) }
+        renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(shaderRoots) }
         // 3DS with a second display: Azahar starts in the split's fixed layout, which replaces the rows' values below; launched
         // half-folded, its swap is pinned likewise ([DualScreen.n3dsForcedOptions]). The core never runs the user's swap
         // values then, so leaving split (or unfolding) puts back the stored ones. Not under netplay: a session changes no
@@ -1679,7 +1681,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         lifecycleScope.launch {
             shaderExtraction.join()
-            renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(privateRoot) }
+            renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(shaderRoots) }
             menu.menuModel?.let { it.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams); menu.menuState.value = it.state }
         }
         lifecycleScope.launch {

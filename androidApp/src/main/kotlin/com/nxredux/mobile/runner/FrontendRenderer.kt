@@ -86,6 +86,8 @@ internal interface FrontendHost : LifecycleOwner {
     val isN3ds: Boolean
     /** Overlays and shaders: app-private for good ([com.nxredux.mobile.storage.DataRoot.private]); set at launch, before any of this runs. */
     val privateRoot: File
+    /** Where shader presets are read from: the bundled set and the home's own ([Shaders.Roots]); set at launch. */
+    val shaderRoots: Shaders.Roots
     val dualMode: DualMode
     val pictureOn: PictureOn
     val n3dsPicture: com.nxredux.mobile.options.NdsScreen
@@ -238,9 +240,9 @@ internal class FrontendRenderer(
             lifecycleScope.launch {
                 val result = withContext(Dispatchers.IO) {
                     runCatching {
-                        val chain = GlslPreset.parse(preset) { Shaders.read(privateRoot, it) }
+                        val chain = GlslPreset.parse(preset) { Shaders.read(host.shaderRoots, it) }
                         chain.warnings.forEach { NxLog.i(TAG_LOG, "shader $preset: $it") }
-                        val luts = chain.luts.mapNotNull { lut -> decodeLut(Shaders.file(privateRoot, lut.path), lut) }
+                        val luts = chain.luts.mapNotNull { lut -> Shaders.file(host.shaderRoots, lut.path)?.let { decodeLut(it, lut) } }
                         chain to luts
                     }
                 }
