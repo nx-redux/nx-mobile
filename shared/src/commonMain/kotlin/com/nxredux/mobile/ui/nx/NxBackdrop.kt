@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,14 +39,18 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
@@ -69,6 +74,7 @@ import com.nxredux.mobile.ui.InfoLine
 import com.nxredux.mobile.ui.backdropBoxShown
 import com.nxredux.mobile.ui.gamesLabel
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -446,9 +452,9 @@ fun NxBackdrop(
         if (g.itemW <= 1f || g.itemH <= 1f || count == 0) return@BoxWithConstraints
         val top = place.rowTop + centreShift.value
 
-        val gutter = pageGutter(portrait).dp
-        val avail = maxWidth - gutter * 2
-        val availPx = constraints.maxWidth - 2 * with(LocalDensity.current) { gutter.roundToPx() }
+        val inset = nxPageInset()   // the caption's text inside it
+        val avail = maxWidth - inset.start - inset.end
+        val availPx = constraints.maxWidth - with(LocalDensity.current) { inset.start.roundToPx() + inset.end.roundToPx() }
         val spare = (maxHeight.value - place.captionBottom - CAPTION_SPARE_MARGIN).coerceAtLeast(0f)
 
         // The animated position, in items ([rememberRowPosition]: a new screen or a new list snaps). The selection
@@ -492,7 +498,7 @@ fun NxBackdrop(
 
         // The time and the achievements, then the next goal under the name's one line.
         if (captioned) RowCaption(
-            captionTitle, captionInfo, glide, nameStyle, 1, infoStyle, gutter, avail, availPx, spare, selTop, rowH + capGap, colors.accent,   // the name in the accent
+            captionTitle, captionInfo, glide, nameStyle, 1, infoStyle, inset, avail, availPx, spare, selTop, rowH + capGap, colors.accent,   // the name in the accent
         )
     }
 }
@@ -536,6 +542,7 @@ private fun BoxScope.BackdropRowItem(
             tile, look.k, g.itemW, scale = { rowItem(RowStyle.BACKDROP, i - at(), g).scale }, toolLines = look.toolLines,
             toolNameSp = look.toolNameSp, toolNamePad = look.toolNamePad, toolSplit = look.toolSplit, toolGap = look.toolGap,
             pad = if (look.marks) PadFrame(rowPadBox(g.itemH)) { padAlpha(i - at()) } else null,
+            lit = if (look.marks) ({ slotLitness(i - at()) }) else null,   // the main menu's: the centred item in the accent
         )
         // The touch target: the item's own width (a content-sized item's, so a neighbour's edge never takes its taps).
         Box(
@@ -721,15 +728,19 @@ internal fun BoxPlaceholder(game: BackdropGame) {
  * name's colour (the ink), dimmed with the item; left out while unknown. [scale]: the item's own scale now (read while
  * drawing), so a side item's count is grown back to at least [MIN_COUNT_SP] as drawn ([countGrowth]). A tool's name:
  * [toolLines] lines at [toolNameSp] between [toolNamePad]s; [toolSplit]: its pre-split lines. [pad]: how to draw the
- * tile's controller (only a Carousel passes it; Grid never does).
+ * tile's controller (only a Carousel passes it; Grid never does). [lit]: how far the item is into the selection (read
+ * while drawing, 0 to 1, [slotLitness]): a console's logo (or its name without one), a collection's name, a tool's icon
+ * and name ease from the ink to the accent; a count stays in the ink. Null: the ink.
  */
 @Composable
-internal fun SlotTile(tile: GridTile, k: Float, slotW: Float, scale: () -> Float = { 1f }, toolLines: Int = 1, toolNameSp: Float = TOOL_NAME * k, toolNamePad: Float = SLOT_TEXT_PAD, toolSplit: Boolean = false, toolGap: Float = TOOL_GAP, pad: PadFrame? = null) {
+internal fun SlotTile(tile: GridTile, k: Float, slotW: Float, scale: () -> Float = { 1f }, toolLines: Int = 1, toolNameSp: Float = TOOL_NAME * k, toolNamePad: Float = SLOT_TEXT_PAD, toolSplit: Boolean = false, toolGap: Float = TOOL_GAP, pad: PadFrame? = null, lit: (() -> Float)? = null) {
     val colors = LocalNxColors.current
+    // The item's mark's colour now: the ink, easing to the accent as it slides into the selection.
+    val markColor = { if (lit == null) colors.listText else lerp(colors.listText, colors.accent, lit().coerceIn(0f, 1f)) }
     when (tile) {
         is GridTile.Logo -> {
             val res = tile.res
-            if (res == null) SlotText(tile.name, 24.sp * k, maxLines = 2)
+            if (res == null) SlotText(tile.name, 24.sp * k, maxLines = 2, color = markColor)
             else BoxWithConstraints(Modifier.fillMaxSize()) {
                 val p = tile.pad
                 if (p != null && pad != null) {
@@ -742,10 +753,9 @@ internal fun SlotTile(tile: GridTile, k: Float, slotW: Float, scale: () -> Float
                         colorFilter = ColorFilter.colorMatrix(ColorMatrix(padColorMatrix(CAROUSEL_PAD_BRIGHTNESS * p.brightness, PAD_SATURATION))),
                     )
                 }
-                Image(
-                    painterResource(res), contentDescription = tile.name, modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit, colorFilter = ColorFilter.tint(colors.listText),
-                )
+                // Fit in the slot, centred, tinted while drawing ([markColor]), so a step redraws the logo, never recomposes it.
+                val logo = painterResource(res)
+                Box(Modifier.fillMaxSize().semantics { contentDescription = tile.name }.drawFitTinted(logo, markColor))
                 val count = tile.count
                 if (count != null) {
                     val top = underLogoTop(0f, maxHeight.value, logoDrawnHeight(maxWidth.value, maxHeight.value, logoAspect(res)), 8f)
@@ -776,7 +786,7 @@ internal fun SlotTile(tile: GridTile, k: Float, slotW: Float, scale: () -> Float
                 val wordW = if (word.isEmpty()) 0f else with(density) { measurer.measure(word, style, softWrap = false, maxLines = 1).size.width.toDp().value }
                 backdropCollectionNameSp(wordW, slotW - 2 * BACKDROP_COLLECTION_PAD, k)
             }
-            SlotText(tile.name, size.sp, maxLines = BACKDROP_COLLECTION_LINES, pad = BACKDROP_COLLECTION_PAD)
+            SlotText(tile.name, size.sp, maxLines = BACKDROP_COLLECTION_LINES, pad = BACKDROP_COLLECTION_PAD, color = markColor)
             val count = tile.count
             if (count != null) {
                 Spacer(Modifier.height(6.dp))
@@ -793,23 +803,30 @@ internal fun SlotTile(tile: GridTile, k: Float, slotW: Float, scale: () -> Float
         is GridTile.Tool -> Column(
             Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            ToolIcon(tile.icon, tile.appId, colors.listText, Modifier.size(TOOL_ICON.dp * k))
+            ToolIcon(tile.icon, tile.appId, markColor, Modifier.size(TOOL_ICON.dp * k))
             Spacer(Modifier.height(toolGap.dp * k))
-            SlotText(tile.lines.joinToString(if (toolSplit) "\n" else " "), toolNameSp.sp, maxLines = toolLines, pad = toolNamePad)   // the tool slot: pre-split, "Retro" / "Achievements"
+            SlotText(tile.lines.joinToString(if (toolSplit) "\n" else " "), toolNameSp.sp, maxLines = toolLines, pad = toolNamePad, color = markColor)   // the tool slot: pre-split, "Retro" / "Achievements"
         }
         // A plain row carries no games; the games row draws them from BackdropGame.
         is GridTile.Game -> SlotText(tile.title, 17.sp * k, maxLines = 3)
     }
 }
 
-/** A name in a slot: white, centred, balanced lines; drawn at [size]. */
+/** A name in a slot: white (or [color], read while drawing), centred, balanced lines; drawn at [size]. */
 @Composable
-internal fun SlotText(text: String, size: TextUnit, maxLines: Int, modifier: Modifier = Modifier, pad: Float = SLOT_TEXT_PAD) {
-    Text(
+internal fun SlotText(text: String, size: TextUnit, maxLines: Int, modifier: Modifier = Modifier, pad: Float = SLOT_TEXT_PAD, color: (() -> Color)? = null) {
+    if (color == null) Text(
         text, modifier.padding(horizontal = pad.dp), color = LocalNxColors.current.listText,
         maxLines = maxLines, overflow = TextOverflow.Ellipsis, style = slotTextStyle(LocalNxFont.current, size),
     )
+    else BasicText(
+        text, modifier.padding(horizontal = pad.dp), style = slotTextStyle(LocalNxFont.current, size),
+        overflow = TextOverflow.Ellipsis, maxLines = maxLines, color = { color() },
+    )
 }
+
+/** How far an item [distance] items from the selection is into it: 1 at the centre, 0 a whole item or more away. */
+internal fun slotLitness(distance: Float): Float = (1f - abs(distance)).coerceIn(0f, 1f)
 
 /** [SlotText]'s style at [scaled]. */
 private fun slotTextStyle(font: FontFamily, scaled: TextUnit) = TextStyle(

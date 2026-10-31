@@ -21,6 +21,21 @@ enum class ModalKind { MENU, PROMPT, CONFIRM, INFO, WAIT, BUSY }
 /** One on-screen button in BUTTONS mode; a tap sends [button] as if pressed. */
 data class FooterAction(val button: NxButton, val label: String, val primary: Boolean)
 
+/** One footer word ([NxModal]): its [label] and the [button] a tap (or A while it is lit) sends. */
+data class FooterWord(val label: String, val button: NxButton)
+
+/**
+ * [footer] as side-by-side words, as setup's buttons and the in-game Quit dialog: the confirm (A) first, then the rest,
+ * the words alone, no key glyphs: the pad lights one ([DialogFocus]) and A presses the lit one, so a key on a word would
+ * contradict it; a tap presses it directly.
+ */
+fun footerWords(footer: ModalFooter): List<FooterWord> = when (footer) {
+    ModalFooter.None -> emptyList()
+    is ModalFooter.Hints -> footer.hints.sortedBy { if (it.button == NxButton.A) 0 else if (it.button == NxButton.B) 1 else 2 }
+        .map { FooterWord(it.label, it.button) }
+    is ModalFooter.Buttons -> footer.actions.sortedBy { if (it.primary) 0 else 1 }.map { FooterWord(it.label, it.button) }
+}
+
 sealed interface ModalFooter {
     data object None : ModalFooter
     data class Hints(val hints: List<Hint>) : ModalFooter

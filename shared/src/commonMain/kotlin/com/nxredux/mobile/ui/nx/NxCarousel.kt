@@ -96,9 +96,9 @@ fun NxCarousel(
         val (g, top) = carouselRowPlace(maxHeight.value, titleRoom.value, room, portraitW = maxWidth.value.takeIf { portrait })   // portrait: the neighbours show
         if (g.itemW <= 1f || g.itemH <= 1f || tiles.isEmpty()) return@BoxWithConstraints
 
-        val gutter = pageGutter(portrait).dp
-        val avail = maxWidth - gutter * 2
-        val availPx = constraints.maxWidth - 2 * with(LocalDensity.current) { gutter.roundToPx() }
+        val inset = nxPageInset()   // the caption's text inside it
+        val avail = maxWidth - inset.start - inset.end
+        val availPx = constraints.maxWidth - with(LocalDensity.current) { inset.start.roundToPx() + inset.end.roundToPx() }
         val spare = (maxHeight.value - (top + g.itemH + room) - CAPTION_SPARE_MARGIN).coerceAtLeast(0f)
 
         val count = tiles.size
@@ -136,7 +136,7 @@ fun NxCarousel(
         }
 
         if (cardInfo == null) RowCaption(
-            captionTitle, if (gameList) NoTileInfo else captionInfo, glide, nameStyle, 2, infoStyle, gutter, avail, availPx, spare,
+            captionTitle, if (gameList) NoTileInfo else captionInfo, glide, nameStyle, 2, infoStyle, inset, avail, availPx, spare,
             selTop, g.itemH + CAPTION_GAP, colors.accent,   // the selected game's name in the accent, as Home's cards
         )
     }

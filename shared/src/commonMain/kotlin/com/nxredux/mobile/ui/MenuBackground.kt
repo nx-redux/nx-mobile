@@ -14,8 +14,11 @@ sealed interface MenuBackground {
      * List Consoles on Background: the console's bg.png ([url]), drawn as a game list's List background.
      */
     data class Picture(val url: String) : MenuBackground
-    /** List Home: the selected game ([entry]), its picture as a game list's List shows it (Layouts → List art). */
-    data class Game(val entry: Listed) : MenuBackground
+    /**
+     * List Home: the selected game ([entry]), its picture as a game list's List shows it (Layouts → List art); [shot], its
+     * hidden save state's frame ([HomeShot]), in place of its screenshot.
+     */
+    data class Game(val entry: Listed, val shot: String? = null) : MenuBackground
     /** Carousel Consoles on Background: the console's bg.png ([url]), drawn as the Backdrop game list's picture. */
     data class Backdrop(val url: String) : MenuBackground
     /**
@@ -65,8 +68,8 @@ private fun consoleBg(system: MainRow.System): String? =
 
 /** [menuBackground] for a List Home's [row] (Layouts → Consoles background is the consoles' and does not apply). */
 private fun listHomeBackground(row: MainRow?): MenuBackground = when (row) {
-    is MainRow.Continue -> MenuBackground.Game(row.entry)
-    is MainRow.Pin -> MenuBackground.Game(row.entry)
-    is MainRow.Shelf -> MenuBackground.Game(row.entry)
+    is MainRow.Continue -> MenuBackground.Game(row.entry, continueFrame(row))
+    is MainRow.Pin -> MenuBackground.Game(row.entry, row.shot)
+    is MainRow.Shelf -> MenuBackground.Game(row.entry, row.shot)
     else -> MenuBackground.Plain   // Pick a game, a pinned tool: plain black
 }

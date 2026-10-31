@@ -44,7 +44,7 @@ internal const val UNFOCUSED_ALPHA = 0.6f
 internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<ListSelection>, page: @Composable () -> Unit) {
     val categories = state.settingsSections()   // not remembered: a second screen coming or going changes it
     val blockPage = settingsWideBlockPage(s)
-    val gutter = settingsGutter(settingsSizeClass())
+    val gutter = settingsPlateEnd()   // the right side's plate edge: the frame's and the picture's right edge
     WithSettingsSectionSize(categories) { block ->
         val sectionRight = settingsSectionStart() + block.width
         Box(Modifier.fillMaxSize()) {

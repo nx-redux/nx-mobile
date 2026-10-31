@@ -67,6 +67,7 @@ fun NxTileGrid(
     val portrait = LocalPortrait.current
     val window = LocalWindowSize.current
     val density = LocalDensity.current
+    val inset = nxPageInset()   // the first column's left edge and the last's right on it
     BoxWithConstraints(modifier.fillMaxSize()) {
         val width = maxWidth.value
         val height = maxHeight.value
@@ -78,7 +79,7 @@ fun NxTileGrid(
             else -> GridTileKind.NAME
         }
         // Sized above the fixed gap over the tab row ([GRID_TAB_GAP], the last row's own gap part of it).
-        val g = gridMatched(width, height - (GRID_TAB_GAP - GRID_GAP), window.width.value, window.height.value, kind, portrait)
+        val g = gridMatched(width, height - (GRID_TAB_GAP - GRID_GAP), window.width.value, window.height.value, kind, portrait, inset.start.value, inset.end.value)
         if (!gridDrawable(width, height, g)) return@BoxWithConstraints
         val columns = g.columns
         val rows = (tiles.size + columns - 1) / columns
@@ -140,7 +141,7 @@ fun NxTileGrid(
                 // Each row its cells and the gap under them (the last row's: its gap over what is under the grid).
                 Row(
                     Modifier.fillMaxWidth().height(with(density) { pitchPx.toDp() })
-                        .padding(start = g.gutter.dp, end = g.gutter.dp, bottom = g.gap.dp),
+                        .padding(start = g.gutter.dp, end = g.gutterEnd.dp, bottom = g.gap.dp),
                     horizontalArrangement = Arrangement.spacedBy(g.gap.dp),
                 ) {
                     for (c in 0 until columns) {

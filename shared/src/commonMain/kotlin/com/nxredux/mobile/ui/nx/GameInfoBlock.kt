@@ -299,15 +299,16 @@ private fun infoLineHeight(): Dp {
  * The selected game's [lines] on the switcher's band, the full width of the screen, sitting directly on its hint bar: an
  * eased fade ([nxEasedFade]) from [edgeAlpha] (the bar's alpha, so it reads as the bar continuing) at the bottom edge
  * to nothing at the top, with no solid stretch, over the text and [fadeReach] above it. One line tall, the text
- * left-aligned 16 dp in.
+ * left-aligned on the page inset ([nxPageInset]).
  */
 @Composable
 fun GameInfoBand(lines: List<InfoLine>, modifier: Modifier = Modifier, edgeAlpha: Float = NX_HINT_BAR_ALPHA, fadeReach: Dp = NX_EASED_FADE_REACH) {
     if (lines.isEmpty()) return
     val colors = LocalNxColors.current
+    val inset = nxPageInset()
     Box(
         modifier.fillMaxWidth().nxEasedFade(colors.background, edgeAlpha).padding(top = fadeReach, bottom = 2.dp)
-            .padding(horizontal = 16.dp).height(infoLineHeight()),
+            .padding(start = inset.start, end = inset.end).height(infoLineHeight()),
         contentAlignment = Alignment.CenterStart,
     ) { GameInfoBlock(lines, alignEnd = false) }
 }
@@ -326,7 +327,7 @@ fun GameInfoBand(lines: List<InfoLine>, modifier: Modifier = Modifier, edgeAlpha
 @Composable
 private fun ListInfoBand(lines: List<InfoLine>, band: InfoBand, arrows: @Composable () -> Unit, arrowStart: Dp, ground: BandGround, shade: Boolean) {
     val colors = LocalNxColors.current
-    val gutter = nxPageGutter()
+    val inset = nxPageInset()
     Box(Modifier.fillMaxWidth().height(band.height.dp)) {
         // With no bar under it ([BandGround.NONE]) the fill runs to the band's bottom, held solid from the text's top
         // down, or the text's lower half would sit on the bare page (as NX Redux's infoband.c).
@@ -334,7 +335,7 @@ private fun ListInfoBand(lines: List<InfoLine>, band: InfoBand, arrows: @Composa
         else if (ground == BandGround.NONE) Box(Modifier.fillMaxSize().nxVerticalFade(colors.background, NX_HINT_BAR_ALPHA, hold = band.height.dp - BAND_PAD))
         else Box(Modifier.fillMaxWidth().height((band.height - band.overlap).dp).nxVerticalFade(colors.background, NX_HINT_BAR_ALPHA, hold = BAND_SOLID))
         Row(
-            Modifier.fillMaxSize().padding(start = arrowStart, end = gutter, top = BAND_PAD, bottom = BAND_PAD),
+            Modifier.fillMaxSize().padding(start = arrowStart, end = inset.end, top = BAND_PAD, bottom = BAND_PAD),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.width(ARROW_SLOT), contentAlignment = Alignment.CenterStart) { arrows() }   // a lone arrow takes the first place
@@ -358,18 +359,19 @@ internal enum class BandGround { BAR, NONE, SHADE_WITH_INFO }
  */
 @Composable
 private fun BarInfoLine(lines: List<InfoLine>, start: Dp) {
-    Box(Modifier.fillMaxSize().padding(horizontal = start), contentAlignment = Alignment.CenterStart) {
+    Box(Modifier.fillMaxSize().padding(start = start, end = nxPageInset().end), contentAlignment = Alignment.CenterStart) {
         GameInfoBlock(lines, alignEnd = false, Modifier.captionTap(), scale = nxTextScale())   // Appearance → Text size
     }
 }
 
 /**
  * Button hints hidden, the Game Switcher's Full screen: the selected game's [lines] in the hint bar's empty row (its
- * scrim laid by the caller), left-aligned at the screen gutter and vertically centred (NX Redux PR #218's drawInfo).
+ * scrim laid by the caller), left-aligned on the page inset ([nxPageInset]) and vertically centred (NX Redux PR #218's drawInfo).
  */
 @Composable
 internal fun SwitcherBarInfoLine(lines: List<InfoLine>, modifier: Modifier) {
-    Box(modifier.padding(horizontal = 16.dp), contentAlignment = Alignment.CenterStart) { GameInfoBlock(lines, alignEnd = false) }
+    val inset = nxPageInset()
+    Box(modifier.padding(start = inset.start, end = inset.end), contentAlignment = Alignment.CenterStart) { GameInfoBlock(lines, alignEnd = false) }
 }
 
 /**

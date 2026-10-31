@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.nxredux.mobile.ui.nx.nxPageInset
 import com.nxredux.mobile.ui.nx.nxListInset
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
 import androidx.compose.foundation.layout.padding
@@ -18,7 +19,6 @@ import com.nxredux.mobile.ui.nx.NxDetailListBody
 import com.nxredux.mobile.ui.nx.NxDialog
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxTextPrompt
-import com.nxredux.mobile.ui.nx.nxPageGutter
 
 /** The list-style picker's hints for the [selected] row: New folder only inside a folder and never when picking a zip. */
 internal fun filePickerHints(s: Screen.FilePicker, selected: Int = -1): List<Hint> = buildList {
@@ -61,8 +61,8 @@ fun FilePickerScreen(
     screen: Screen.FilePicker, selectedIndex: Int, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit,
     onHint: (NxButton) -> Unit, onDraft: (String) -> Unit, modifier: Modifier = Modifier,
 ) {
-    // The page's gutter, as the other pages': the pills on it, the title, rows and hint bar's text the pill's inset in.
-    val gutter = nxPageGutter()
+    // The page inset, as the other pages': the title, rows and hint bar's text on it, the pills [nxListInset] outside it.
+    val inset = nxPageInset()
     Box(modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalNxHintBarStart provides nxListInset()) { NxDetailListBody(
             title = screen.title, details = listOfNotNull(screen.status), headline = false,   // a quiet line under the title
@@ -74,7 +74,7 @@ fun FilePickerScreen(
             actionsOutlined = false,   // the actions as plain rows, no ring; one column in either orientation
             quietRows = true,   // unlit folders in inkName, the actions the word alone in inkDim
             fromLine = 0.5f,   // from half the body down, as setup's pages; its actions stay at the bottom
-            modifier = Modifier.padding(horizontal = gutter),
+            modifier = Modifier.padding(start = inset.pillStart, end = inset.pillEnd),
         ) }
         screen.prompt?.let { NxTextPrompt("New folder", it, onDraft, onConfirm = { onHint(NxButton.A) }, onCancel = { onHint(NxButton.B) }) }
         screen.replace?.let { target ->

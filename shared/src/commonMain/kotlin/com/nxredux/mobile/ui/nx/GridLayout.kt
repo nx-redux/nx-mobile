@@ -44,6 +44,7 @@ internal fun gridAtTop(index: Int, count: Int, columns: Int): Boolean =
 /** A grid's measures in dp: tile size, gap, the screen gutter, how many columns fit, and the rows in view. */
 internal data class GridGeometry(
     val tileW: Float, val tileH: Float, val gap: Float, val gutter: Float, val columns: Int, val rows: Int = 2,
+    val gutterEnd: Float = gutter,   // the end side's, when the camera cutout makes it differ ([nxPageInset])
 )
 
 /**
@@ -77,20 +78,20 @@ enum class GridTileKind(val minW: Float, val aspect: Float) {
 
 /**
  * The Grid for a box [bodyW] × [bodyH] dp of [kind] tiles: its columns from the width alone, as many as fit at
- * [GridTileKind.minW] with [GRID_GAP] between and [gutter] each side, held sideways ([landscape]) at least
+ * [GridTileKind.minW] with [GRID_GAP] between, [gutter] at the start and [gutterEnd] at the end, held sideways ([landscape]) at least
  * [GRID_MIN_COLUMNS_SIDEWAYS] (the cells shrinking rather than dropping one), each stretched to fill the row; then as many
  * rows of that width's shape as fill the box under a gap at its top, at least [GRID_MIN_ROWS], each stretched so whole
  * rows fill it exactly. [GridGeometry.rows] is the rows in view.
  */
-internal fun gridVertical(bodyW: Float, bodyH: Float, kind: GridTileKind, landscape: Boolean, gutter: Float): GridGeometry {
-    val room = bodyW - 2 * gutter
+internal fun gridVertical(bodyW: Float, bodyH: Float, kind: GridTileKind, landscape: Boolean, gutter: Float, gutterEnd: Float = gutter): GridGeometry {
+    val room = bodyW - gutter - gutterEnd
     val fit = floor((room + GRID_GAP) / (kind.minW + GRID_GAP)).toInt()
     val columns = max(if (landscape) GRID_MIN_COLUMNS_SIDEWAYS else 1, fit)
     val tileW = (room - (columns - 1) * GRID_GAP) / columns
     val band = bodyH - GRID_GAP
     val rows = max(GRID_MIN_ROWS, floor(band / (tileW / kind.aspect + GRID_GAP)).toInt())
     val tileH = band / rows - GRID_GAP
-    return GridGeometry(tileW = tileW, tileH = tileH, gap = GRID_GAP, gutter = gutter, columns = columns, rows = rows)
+    return GridGeometry(tileW = tileW, tileH = tileH, gap = GRID_GAP, gutter = gutter, columns = columns, rows = rows, gutterEnd = gutterEnd)
 }
 
 /**
@@ -99,20 +100,25 @@ internal fun gridVertical(bodyW: Float, bodyH: Float, kind: GridTileKind, landsc
  * sideways (the window turned, less what the page keeps around the box now), as many of them as the box holds to the
  * nearest whole row, so a tile is one height either way round. With no real sideways twin (the pad under the page
  * upright takes more than the window turned has), tiles of their own shape at their width, as many rows as fit.
+ * The side insets are the page's ([insetStart], [insetEnd]: [nxPageInset], the camera cutout counted); the sideways twin
+ * upright takes the plain sideways inset.
  */
-internal fun gridMatched(bodyW: Float, bodyH: Float, windowW: Float, windowH: Float, kind: GridTileKind, portrait: Boolean): GridGeometry {
-    if (!portrait) return gridVertical(bodyW, bodyH, kind, landscape = true, gutter = GRID_GUTTER_SIDEWAYS)
+internal fun gridMatched(
+    bodyW: Float, bodyH: Float, windowW: Float, windowH: Float, kind: GridTileKind, portrait: Boolean,
+    insetStart: Float = pageInset(portrait), insetEnd: Float = insetStart,
+): GridGeometry {
+    if (!portrait) return gridVertical(bodyW, bodyH, kind, landscape = true, gutter = insetStart, gutterEnd = insetEnd)
     val side = gridVertical(
-        max(windowW, windowH) - (windowW - bodyW), min(windowW, windowH) - (windowH - bodyH), kind, landscape = true, gutter = GRID_GUTTER_SIDEWAYS,
+        max(windowW, windowH) - (windowW - bodyW), min(windowW, windowH) - (windowH - bodyH), kind, landscape = true, gutter = pageInset(false),
     )
-    val own = gridVertical(bodyW, bodyH, kind, landscape = false, gutter = GRID_GUTTER_UPRIGHT)
+    val own = gridVertical(bodyW, bodyH, kind, landscape = false, gutter = insetStart, gutterEnd = insetEnd)
     // The page keeping more than the window turned can spare (the on-screen pad under it upright): no sideways twin to
     // match. At most [gridPadMaxColumns] across, its tiles keep their own shape at their width, a fixed height, held
     // to two rows' room (three would be too short to read; one alone would be the faded edge row); as many whole rows as
     // fit, the rest scrolls.
     if (side.tileH < GRID_TILE_MIN_DP) {
         val columns = min(own.columns, gridPadMaxColumns(kind))
-        val tileW = (bodyW - 2 * own.gutter - (columns - 1) * GRID_GAP) / columns
+        val tileW = (bodyW - own.gutter - own.gutterEnd - (columns - 1) * GRID_GAP) / columns
         val band = bodyH - GRID_GAP
         val tileH = min(tileW / kind.aspect, band / GRID_PAD_MIN_ROWS - GRID_GAP)
         return own.copy(tileW = tileW, tileH = tileH, columns = columns, rows = max(GRID_PAD_MIN_ROWS, floor(band / (tileH + GRID_GAP)).toInt()))
@@ -121,10 +127,6 @@ internal fun gridMatched(bodyW: Float, bodyH: Float, windowW: Float, windowH: Fl
     val rows = max(GRID_MIN_ROWS, (band / (side.tileH + side.gap)).roundToInt())
     return own.copy(tileH = band / rows - GRID_GAP, rows = rows)
 }
-
-/** A Grid's side gutters, upright and sideways: the page's ([PAGE_GUTTER_UPRIGHT], [PAGE_GUTTER_SIDEWAYS]). */
-internal const val GRID_GUTTER_UPRIGHT = PAGE_GUTTER_UPRIGHT
-internal const val GRID_GUTTER_SIDEWAYS = PAGE_GUTTER_SIDEWAYS
 
 /** Every Grid's fixed room over the tab row (or the page's bottom), dp, on any screen: the tabs stand apart from the tiles. */
 internal const val GRID_TAB_GAP = 15f

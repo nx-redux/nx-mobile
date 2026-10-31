@@ -62,4 +62,9 @@ class AndroidUserDataStore(context: Context) : UserDataStore {
         val bmp = slot.takeIf { it != 8 }?.let { File(root, paths.thumb(it)) }?.takeIf { it.exists() }
         ResumeInfo(slot, bmp?.let { FileRefs.versioned(it.absolutePath, it.lastModified()) })
     }
+
+    override suspend fun hiddenStateShot(tag: String, fileName: String): String? = withContext(Dispatchers.IO) {
+        val bmp = File(root, NxPaths(tag, "", fileName).thumb(NxPaths.AUTO_SLOT)).takeIf { it.exists() }
+        bmp?.let { FileRefs.versioned(it.absolutePath, it.lastModified()) }
+    }
 }

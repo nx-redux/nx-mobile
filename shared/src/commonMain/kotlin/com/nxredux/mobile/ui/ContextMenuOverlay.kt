@@ -31,8 +31,9 @@ import com.nxredux.mobile.ui.nx.NxTextPrompt
 @Composable
 fun ContextMenuOverlay(menu: ContextMenu, onButton: (NxButton) -> Unit, onSelect: (Int) -> Unit, onOpen: () -> Unit, onDraft: (String) -> Unit, onColumns: (Int) -> Unit = {}) {
     when (val p = menu.prompt) {
-        is MenuPrompt.Rename -> { NxTextPrompt("Rename", p.draft, onDraft, onConfirm = { onButton(NxButton.A) }, onCancel = { onButton(NxButton.B) }); return }
-        is MenuPrompt.RenameCollection -> { NxTextPrompt("Rename collection", p.draft, onDraft, onConfirm = { onButton(NxButton.A) }, onCancel = { onButton(NxButton.B) }); return }
+        // The pad's focus ([ContextMenu.promptFocus]) lights the button it is on; a tap still answers by the button's own key.
+        is MenuPrompt.Rename -> { NxTextPrompt("Rename", p.draft, onDraft, onConfirm = { onButton(NxButton.A) }, onCancel = { onButton(NxButton.B) }, buttonFocus = menu.promptFocus); return }
+        is MenuPrompt.RenameCollection -> { NxTextPrompt("Rename collection", p.draft, onDraft, onConfirm = { onButton(NxButton.A) }, onCancel = { onButton(NxButton.B) }, buttonFocus = menu.promptFocus); return }
         is MenuPrompt.DeleteCollection -> {
             NxDialog(
                 "Delete collection", "Delete '${p.name}'? The games stay in your library.",
@@ -40,7 +41,7 @@ fun ContextMenuOverlay(menu: ContextMenu, onButton: (NxButton) -> Unit, onSelect
             )
             return
         }
-        is MenuPrompt.NewCollection -> { NxTextPrompt("New collection name", p.draft, onDraft, onConfirm = { onButton(NxButton.A) }, onCancel = { onButton(NxButton.B) }); return }
+        is MenuPrompt.NewCollection -> { NxTextPrompt("New collection name", p.draft, onDraft, onConfirm = { onButton(NxButton.A) }, onCancel = { onButton(NxButton.B) }, buttonFocus = menu.promptFocus); return }
         null -> Unit
     }
     val sub = menu.sub

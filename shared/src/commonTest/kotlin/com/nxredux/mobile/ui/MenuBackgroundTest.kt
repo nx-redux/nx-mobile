@@ -43,9 +43,13 @@ class MenuBackgroundTest {
 
     @Test fun list_home_pictures_are_the_selected_games() {
         val e = Listed(md, game)
-        assertEquals(MenuBackground.Game(cont.entry), menuBackground(MenuStyle.LIST, MenuCategory.HOME, cont))
+        assertEquals(MenuBackground.Game(cont.entry, cont.resume.previewPath), menuBackground(MenuStyle.LIST, MenuCategory.HOME, cont))
         assertEquals(MenuBackground.Game(e), menuBackground(MenuStyle.LIST, MenuCategory.HOME, MainRow.Pin(e), portrait = true))
         assertEquals(MenuBackground.Game(e), menuBackground(MenuStyle.LIST, MenuCategory.HOME, MainRow.Shelf(e, HomeShelf.NEW)))
+        // A game saved and quit: its hidden save state's frame, Continue's over its resume slot's.
+        assertEquals(MenuBackground.Game(e, "auto.png"), menuBackground(MenuStyle.LIST, MenuCategory.HOME, MainRow.Pin(e, "auto.png")))
+        assertEquals(MenuBackground.Game(e, "auto.png"), menuBackground(MenuStyle.LIST, MenuCategory.HOME, MainRow.Shelf(e, HomeShelf.MOST_PLAYED, null, "auto.png")))
+        assertEquals(MenuBackground.Game(cont.entry, "auto.png"), menuBackground(MenuStyle.LIST, MenuCategory.HOME, MainRow.Continue(cont.entry, cont.resume, "auto.png")))
         assertEquals(MenuBackground.Plain, menuBackground(MenuStyle.LIST, MenuCategory.HOME, tool))   // a pinned tool: no icon behind
         // The Home background is not the consoles' controller art: Layouts → Consoles background off keeps it.
         assertIs<MenuBackground.Game>(menuBackground(MenuStyle.LIST, MenuCategory.HOME, cont, consoleArt = ConsoleArt.NONE))

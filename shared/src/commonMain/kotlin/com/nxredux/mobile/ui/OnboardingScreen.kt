@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import org.jetbrains.compose.resources.DrawableResource
 import com.nxredux.mobile.ui.nx.Hint
@@ -132,7 +133,8 @@ internal fun SetupBlockPage(
             SetupButtons(rows.takeLast(shown).map { it.label }, list.size, selected, word, onSelect, onRow)
         }
     }
-    val gutter = settingsGutter(settingsSizeClass())
+    val plateStart = settingsPlateStart()
+    val gutter = settingsPlateEnd()   // the right side's plate edge
     // The rows block's list (its fades, its row pitch) and the hints on the rows' text edge, as Settings' ([settingsSectionStart]).
     CompositionLocalProvider(LocalSettingsBlock provides SettingsBlockMode(crumb = counter), LocalNxHintBarStart provides settingsSectionStart()) {
         Column(modifier.fillMaxSize()) {
@@ -145,7 +147,7 @@ internal fun SetupBlockPage(
                     // At most the Settings rows block's width ([SETTINGS_FRAME_MAX]), from the start gutter: the lines wrap in it and a
                     // row's control stays near its label; the button on the rows' left edge under it.
                     Column(
-                        Modifier.fillMaxHeight().padding(start = gutter, end = gutter, top = SETTINGS_ROWS_TOP, bottom = SETTINGS_BLOCK_BOTTOM)
+                        Modifier.fillMaxHeight().padding(start = plateStart, end = gutter, top = SETTINGS_ROWS_TOP, bottom = SETTINGS_BLOCK_BOTTOM)
                             .widthIn(max = SETTINGS_FRAME_MAX).fillMaxWidth(),
                     ) {
                         SetupGroupRoom(line, if (shown > 0) (-gap).coerceAtLeast(0.dp) else 0.dp, Modifier.weight(1f).fillMaxWidth()) {
@@ -191,9 +193,13 @@ internal fun SetupBlockPage(
  * ([nxHighlight], its on-pill text), the others the word alone in inkDim, with a pad or touch alike (the page opens on
  * its first action, lit). Each word stays on its text edge, the pill reaching [nxListInset] past it either side, so the words
  * keep their places and spacing whichever is lit; a tap target [SETUP_BUTTON_TAP] tall. A tap selects and opens it.
+ * [rest]: the unlit words' ink, inkDim on a setup page; a modal's are the list text ([NxModal], [NxChoiceDialog]).
  */
 @Composable
-private fun SetupButtons(labels: List<String>, first: Int, selected: Int, size: TextUnit, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit) {
+internal fun SetupButtons(
+    labels: List<String>, first: Int, selected: Int, size: TextUnit, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit,
+    rest: Color = LocalNxColors.current.inkDim,
+) {
     val colors = LocalNxColors.current
     val inset = nxListInset()
     val pill = nxHighlight()
@@ -205,9 +211,10 @@ private fun SetupButtons(labels: List<String>, first: Int, selected: Int, size: 
                 Modifier.heightIn(min = SETUP_BUTTON_TAP).clickable { onSelect(index); onOpen(index) },
                 contentAlignment = Alignment.CenterStart,
             ) {
+                val ink = if (lit) colors.onAccent else rest
                 Box(Modifier.then(if (lit) Modifier.background(pill, RoundedCornerShape(50)) else Modifier).padding(horizontal = inset, vertical = 4.dp)) {
                     Text(
-                        text, color = if (lit) colors.onAccent else colors.inkDim,
+                        text, color = ink,
                         fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold, fontSize = size, lineHeight = size * SETUP_WORD_LINE, maxLines = 1,
                     )
                 }

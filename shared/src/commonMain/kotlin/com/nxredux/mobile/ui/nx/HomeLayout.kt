@@ -57,7 +57,11 @@ private const val HOME_BARS = 88f
  */
 private const val WIDE_RATIO = 2.15f
 
-internal fun homeGutter(portrait: Boolean): Float = pageGutter(portrait)
+/** Home's tiles' start, dp from the body's left: the page inset on that side ([HomeFrame.insetStart]). */
+internal fun homeInsetStart(f: HomeFrame): Float = f.insetStart ?: pageInset(f.portrait)
+
+/** Home's tiles' end, dp from the body's right ([HomeFrame.insetEnd]). */
+internal fun homeInsetEnd(f: HomeFrame): Float = f.insetEnd ?: pageInset(f.portrait)
 
 /**
  * How Home's top section holds the pinned tools' squares ([homeBoard]).
@@ -79,10 +83,12 @@ enum class HomeToolMode { COLUMN, SPS3, UNDER, LARGE, WIDE }
  * and the top section gains it; the face is still read as with the tab row shown ([homeShownH]).
  * [statsHidden]: Layouts → Home stats is off, so the stats strip is not drawn and its room goes to the top section
  * ([homeStatsRoom]). It is in the frame so AppState's board and HomeScreen's agree.
+ * [insetStart] / [insetEnd]: the page's side insets, dp ([nxPageInset], the camera cutout counted); null: [pageInset].
  */
 data class HomeFrame(
     val w: Float, val h: Float, val portrait: Boolean, val menuRatio: Float? = null, val textScale: Float = 1f,
     val titleHidden: Boolean = false, val statsHidden: Boolean = false, val stripScale: Float = 1f,
+    val insetStart: Float? = null, val insetEnd: Float? = null,
 )
 
 /** The tab row's room Home's body takes while it is hidden ([HomeFrame.titleHidden]). */
@@ -106,7 +112,7 @@ internal fun homeStatsHeader(f: HomeFrame, stripLines: Int): HomeStatsHeader? {
 }
 
 /** The least room above and below the header's strip. */
-private const val HOME_GRID_HEADER_PAD = 4f
+internal const val HOME_GRID_HEADER_PAD = 4f
 
 /** [f]'s body height as it would be with the tab row shown: what decides the face. */
 internal fun homeShownH(f: HomeFrame): Float = f.h - (if (f.titleHidden) HOME_TITLE_ROOM else 0f)
@@ -330,9 +336,9 @@ internal fun homeBoard(
     val lines = homeStripLinesShown(f, stripLines)
     if (homeIsLarge(f)) return homeBoardLarge(f, lines, freed, tools, games, shelves)
     if (homeIsWide(f)) return homeBoardWide(f, lines, freed, tools, games, shelves)
-    val gutter = homeGutter(f.portrait)
+    val gutter = homeInsetStart(f)
     val gap = if (f.portrait) 12f else 14f
-    val w = f.w - 2 * gutter
+    val w = f.w - gutter - homeInsetEnd(f)
     val shownH = homeShownH(f)   // the pin row's shape and the face as with the tab row shown
     val halves = f.portrait || shownH > f.w
     val (tw, perRow, pinW) = homeColumnGrid(w, gap, if (halves) 4 else 6)
@@ -500,9 +506,9 @@ private fun homeInlineColumn(inline: Int, topH: Float, w: Float, right: Float, s
  * ([homeStatsRoom]): the top section starts at the margin and takes it, the squares growing (to 58) as with the tab row hidden.
  */
 private fun homeBoardWide(f: HomeFrame, stripLines: Int, freed: Float, tools: Int, games: Int, shelves: List<Pair<HomeShelf, Int>>): HomeBoard {
-    val gutter = homeGutter(false)
+    val gutter = homeInsetStart(f)
     val gap = 14f
-    val w = f.w - 2 * gutter
+    val w = f.w - gutter - homeInsetEnd(f)
     val topY = homeTopY(f, stripLines)
     val inline = min(games.coerceAtLeast(0), HOME_INLINE_MAX)   // the first 2 inline, the rest row games
     val rowGames = games.coerceAtLeast(0) - inline
@@ -575,9 +581,9 @@ internal fun homeBoardPin(b: HomeBoard, i: Int): HomeRect =
  * it that much taller again from the margin, so the bands below stay put; a column keeps its 5 and they grow (to S / 2).
  */
 private fun homeBoardLarge(f: HomeFrame, stripLines: Int, freed: Float, tools: Int, games: Int, shelves: List<Pair<HomeShelf, Int>>): HomeBoard {
-    val gutter = homeGutter(false)
+    val gutter = homeInsetStart(f)
     val gap = 14f
-    val w = f.w - 2 * gutter
+    val w = f.w - gutter - homeInsetEnd(f)
     val topY = homeTopY(f, stripLines)
     val big = max(0f, (w / 2 - 3 * gap) / 3)
     val topH = 2 * big + gap / 2 + homeTitleRoom(f) + freed

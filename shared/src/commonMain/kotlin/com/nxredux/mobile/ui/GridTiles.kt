@@ -31,17 +31,26 @@ sealed interface GridTile {
 internal fun GridTile.Game.artLess(width: Float, height: Float): Boolean =
     tileArt(width, height, screenshotUrl, heroUrl, gridUrl) == null
 
-/** A tool's name as a tile shows it: "RetroAchievements" breaks as "Retro / Achievements"; the row keeps one word. */
-internal fun toolDisplayLines(label: String): List<String> =
-    if (label == "RetroAchievements") listOf("Retro", "Achievements") else listOf(label)
+/**
+ * A tool's name as a tile shows it: "RetroAchievements" breaks as "Retro / Achievements" and "Cheats & Patches" as
+ * "Cheats & / Patches", so neither runs to the tile's edges; the row keeps one line.
+ */
+internal fun toolDisplayLines(label: String): List<String> = when (label) {
+    "RetroAchievements" -> listOf("Retro", "Achievements")
+    "Cheats & Patches" -> listOf("Cheats &", "Patches")
+    else -> listOf(label)
+}
 
 /** An Android game's app id (its file name), which its tile's icon is looked up by; null for a ROM. */
 internal val Listed.appId: String? get() = game.fileName.takeIf { system.android }
 
 internal fun gameGridTiles(entries: List<Listed>): List<GridTile.Game> = entries.map { gameTile(it, it.shown) }
 
-private fun gameTile(e: Listed, title: String) =
-    GridTile.Game(e.game.screenshotRef?.value, title, e.appId, heroUrl = e.game.heroRef?.value, gridUrl = e.game.gridRef?.value, abstractUrl = abstractArtFor(e))
+private fun gameTile(e: Listed, title: String, shot: String? = null) =
+    GridTile.Game(
+        shot ?: e.game.screenshotRef?.value, title, e.appId, heroUrl = e.game.heroRef?.value, gridUrl = e.game.gridRef?.value, abstractUrl = abstractArtFor(e),
+        resumeFrame = shot != null,   // a hidden save state's frame: trimmed and zoomed, as Continue's
+    )
 
 /**
  * A game's generated abstract picture ([abstractArtUrl], by its system's tag and its file name): every slot's last
@@ -55,10 +64,14 @@ internal fun abstractArtFor(e: Listed): String? =
     e.appId?.let(::abstractAppArtUrl) ?: abstractArtUrl(e.system.tag, e.game.fileName)
 
 /**
- * Home's Continue card pictures, in fallback order (the next shows when one fails to load): the [resumeFrame], the
+ * Home's Continue card pictures, in fallback order (the next shows when one fails to load): the [resumeFrame] (its
+ * hidden save state's frame, else the resume slot's: [continueFrame]), the
  * screenshot, the SteamGridDB hero, the grid (the tiles' stand-ins), and last the game's abstract picture
  * ([abstractArtFor]); empty only for a game with none, which the card draws as a title card.
  */
+/** Continue's resume frame: the hidden save state's (Save & Quit's, [HomeShot]), else the resume slot's screenshot. */
+internal fun continueFrame(row: MainRow.Continue): String? = row.shot ?: row.resume.previewPath
+
 internal fun continuePictures(resumeFrame: String?, e: Listed): List<String> =
     listOfNotNull(resumeFrame, e.game.screenshotRef?.value, e.game.heroRef?.value, e.game.gridRef?.value, abstractArtFor(e)).distinct()
 
@@ -91,8 +104,9 @@ internal fun gridTiles(rows: List<MainRow>, controllerArt: Boolean = false): Lis
             r.systems.firstNotNullOfOrNull { consoleLogo(it.tag) }, r.system.displayName, r.systems.sumOf { it.gameCount },
             pad = if (controllerArt) r.systems.firstNotNullOfOrNull { consolePad(it.tag) } else null,
         )
-        is MainRow.Pin -> gameTile(r.entry, r.entry.game.shownName)
-        is MainRow.Shelf -> gameTile(r.entry, r.entry.game.shownName)
+        // Home's pinned and shelf games: their hidden save state's frame (Save & Quit's) first, else their screenshot.
+        is MainRow.Pin -> gameTile(r.entry, r.entry.game.shownName, r.shot)
+        is MainRow.Shelf -> gameTile(r.entry, r.entry.game.shownName, r.shot)
         is MainRow.Collection -> GridTile.Collection(r.name, r.count)
         is MainRow.Tool -> GridTile.Tool(toolIcon(r.row.kind), toolDisplayLines(r.row.label), r.row.appId)
         is MainRow.PinnedTool -> GridTile.Tool(toolIcon(r.row.kind), toolDisplayLines(r.row.label), r.row.appId)

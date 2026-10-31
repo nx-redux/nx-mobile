@@ -33,7 +33,7 @@ fun SettingsMenuScreen(
             SettingsSectionBlock(
                 screen.sections, selectedIndex, rowsFocused, onTap,
                 Modifier.align(Alignment.BottomStart)
-                    .padding(start = settingsSectionStart(), end = settingsGutter(settingsSizeClass()), bottom = SETTINGS_BLOCK_BOTTOM),
+                    .padding(start = settingsSectionStart(), end = settingsPlateEnd(), bottom = SETTINGS_BLOCK_BOTTOM),
             )
         }
         if (hintBar) NxHintBar(SETTINGS_ROOT_HINTS, onHint = onHint)

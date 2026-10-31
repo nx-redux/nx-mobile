@@ -342,10 +342,12 @@ internal fun LayoutPreviewPage(
         val pageH = maxHeight
         val pageW = maxWidth
         val phoneUpright = settingsSizeClass() == SettingsSizeClass.PHONE_UPRIGHT
-        // The Settings gutter on both sides, as every Settings page: the rows' plates at it, their labels a row inset in.
-        val gutter = settingsGutter(settingsSizeClass())
+        // The plates' edge on both sides, as every Settings page: the rows' labels a row inset in, on the page inset.
+        // Upright (the picture's maths below), no cutout on either side: one edge.
+        val gutter = settingsPlateStart()
+        val gutterEnd = settingsPlateEnd()
         Column(Modifier.fillMaxSize()) {
-            Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = gutter)) {
+            Column(Modifier.weight(1f).fillMaxWidth().padding(start = gutter, end = gutterEnd)) {
                 NxPageTitle(title, bottom = 8.dp, trailing = if (titleAction) ({ NxTitleActions(listOf(rows[last].label), last, selected, onSelect, onRow) }) else null)
                 if (wide) {
                     // Text and rows at the left, the picture at the right, each half the width.

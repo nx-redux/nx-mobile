@@ -30,6 +30,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,7 +60,7 @@ import org.jetbrains.compose.resources.painterResource
 /**
  * The game panel, in the in-game menu's look: the header (art or console logo, title, play time, achievement count,
  * clock and battery), the tab words with the underline ([MenuTabRow]), then the current tab: Shortcuts as hollow pill
- * buttons in a grid (4 columns, 2 when narrow; disabled ones dimmed and inert), Achievements as badge rows, Cheats as
+ * buttons in a grid (4 columns, 2 or 1 where a label would not fit, [gamePanelColumns]; disabled ones dimmed and inert), Achievements as badge rows, Cheats as
  * rows with a switch, Players as the Players page's rows. The controller's [GamePanelState.focus] sits on the accent pill (the tab row's capsule on
  * Tabs). The Game pill (DS/3DS panel-up) sits bottom-right. The dual-screen panel and the in-game menu share it; the
  * menu draws the header itself across its top ([GamePanelHeaderBar]) and the panel with [showHeader] off, on its own
@@ -128,11 +131,11 @@ fun GamePanelHeaderBar(h: GamePanelHeader) {
     }
 }
 
-/** The shortcut pills, 4 to a row (2 under [GP_NARROW]); a short last row keeps the cell width. */
+/** The shortcut pills, 4 to a row, or 2 or 1 where a label would not fit ([rememberGamePanelColumns]); a short last row keeps the cell width. */
 @Composable
 private fun ShortcutsTab(shortcuts: List<ShortcutState>, focused: Int?, bottom: Dp, onEvent: (GamePanelEvent) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val columns = gamePanelColumns(maxWidth)
+        val columns = rememberGamePanelColumns(maxWidth, shortcuts)
         val scroll = rememberScrollState()
         Column(
             Modifier.fillMaxSize().nxScrollFade(scroll, height = 56.dp, strong = true).verticalScroll(scroll)
@@ -140,7 +143,7 @@ private fun ShortcutsTab(shortcuts: List<ShortcutState>, focused: Int?, bottom: 
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             shortcuts.chunked(columns).forEachIndexed { r, row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(GP_CELL_GAP)) {
                     row.forEachIndexed { c, s ->
                         val i = r * columns + c
                         ShortcutPill(s, selected = focused == i, Modifier.weight(1f)) { GamePanelModel.eventFor(s)?.let(onEvent) }
@@ -152,8 +155,32 @@ private fun ShortcutsTab(shortcuts: List<ShortcutState>, focused: Int?, bottom: 
     }
 }
 
-/** The shortcut grid's columns in a panel [width] wide: 4, or 2 under [GP_NARROW] (the in-game menu steps by them). */
-internal fun gamePanelColumns(width: Dp): Int = if (width < GP_NARROW) 2 else 4
+/**
+ * The shortcut grid's columns in a panel [width] wide (the in-game menu steps by them): the most of 4, 2 and 1 whose
+ * cell holds a pill as wide as the widest label or value ([widest]), so none is cut; 2 under [GP_NARROW] at most.
+ */
+internal fun gamePanelColumns(width: Dp, widest: Dp): Int {
+    val most = if (width < GP_NARROW) 2 else 4
+    val inner = width - GP_GUTTER * 2
+    return listOf(4, 2).filter { it <= most }.firstOrNull { n -> (inner - GP_CELL_GAP * (n - 1)) / n >= widest + GP_PILL_PAD * 2 } ?: 1
+}
+
+/** [gamePanelColumns] for [shortcuts] in [width]: their labels and values measured as the pills draw them. */
+@Composable
+internal fun rememberGamePanelColumns(width: Dp, shortcuts: List<ShortcutState>): Int {
+    val measurer = rememberTextMeasurer()
+    val font = LocalNxFont.current
+    val density = LocalDensity.current
+    val widest = remember(shortcuts.map { it.label to it.value }, font, density) {
+        val label = TextStyle(fontFamily = font, fontSize = GP_LABEL_SIZE)
+        val value = TextStyle(fontFamily = font, fontSize = GP_SMALL_SIZE)
+        val px = shortcuts.maxOfOrNull { s ->
+            maxOf(measurer.measure(s.label, label, maxLines = 1).size.width, s.value?.let { measurer.measure(it, value, maxLines = 1).size.width } ?: 0)
+        } ?: 0
+        with(density) { px.toDp() }
+    }
+    return gamePanelColumns(width, widest)
+}
 
 /**
  * A hollow pill ([nxButtonRing]): the label, its value under it; at 0.35 alpha and not clickable while disabled. A toggle
@@ -179,7 +206,7 @@ private fun ShortcutPill(s: ShortcutState, selected: Boolean, modifier: Modifier
             .clip(shape)
             .then(if (filled) Modifier.background(colors.listText) else Modifier.nxButtonRing(colors))
             .then(if (s.enabled) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = GP_PILL_PAD, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -403,7 +430,9 @@ private val GP_ROW_HEIGHT = 44.dp
 private val GP_PILL_HEIGHT = 52.dp
 private val GP_FOCUS_RING = 2.dp     // the controller's ring round a shortcut pill
 private val GP_FOCUS_GAP = 3.dp      // between that ring and the pill
-private val GP_NARROW = 360.dp       // narrower: the shortcut grid goes to 2 columns
+private val GP_NARROW = 360.dp       // narrower: the shortcut grid goes to 2 columns (or 1)
+private val GP_CELL_GAP = 10.dp      // between shortcut pills
+private val GP_PILL_PAD = 10.dp      // a shortcut pill's label from its sides
 private val GP_TITLE_SIZE = 17.sp
 private val GP_LABEL_SIZE = 15.sp
 private val GP_SMALL_SIZE = 13.sp

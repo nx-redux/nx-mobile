@@ -135,6 +135,7 @@ fun MenuTabRow(
         scroll.animateScrollTo(to, tween(NX_MENU_GLIDE_MS, easing = NxMenuEasing))
     }
     val gap = if (portrait) 14.dp else 20.dp
+    val inset = nxPageInset()   // the first word on it, the row's end too
     val size = labelSize   // Appearance → Text size
     var rowPx by remember { mutableIntStateOf(0) }   // the row's width inside its padding, for [hints]' room
     Row(
@@ -142,7 +143,7 @@ fun MenuTabRow(
         // The long press before the padding, so the side gutters take it too.
         modifier.fillMaxWidth().height(MENU_TAB_ROW_HEIGHT)
             .then(if (onLongPress == null) Modifier else Modifier.pointerInput(onLongPress) { detectTapGestures(onLongPress = { onLongPress() }) })
-            .padding(horizontal = pageGutter(portrait).dp - TAB_PLATE_X).onSizeChanged { rowPx = it.width },
+            .padding(start = inset.start - TAB_PLATE_X, end = inset.end - TAB_PLATE_X).onSizeChanged { rowPx = it.width },
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -211,8 +212,7 @@ fun MenuTitleRow(
             if (!suffix.isNullOrEmpty()) Text(" $suffix", style = style, maxLines = 1, softWrap = false)
         }
         if (trailing != null) {
-            val gutter = nxPageGutter()
-            Box(Modifier.align(Alignment.CenterEnd).padding(end = gutter - TOP_ICON_INSET + endInset)) { trailing() }
+            Box(Modifier.align(Alignment.CenterEnd).padding(end = nxPageInset().end - TOP_ICON_INSET + endInset)) { trailing() }
         }
     }
 }

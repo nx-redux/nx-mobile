@@ -13,6 +13,8 @@ interface UserDataStore {
     suspend fun writeHidden(list: List<String>): Boolean
     /** From `<rom.ext>.txt` / `<rom.ext>.<slot>.bmp` (PNG data; older files BMP) under `.userdata/shared/.minui/<tag>/`. */
     suspend fun resumeInfo(tag: String, fileName: String): ResumeInfo
+    /** The hidden (auto) save state's frame, `<rom.ext>.9.bmp`, as a coil-loadable URI: what Save & Quit leaves; null when none. */
+    suspend fun hiddenStateShot(tag: String, fileName: String): String? = null
 }
 
 /** No persistence (tests / previews). */

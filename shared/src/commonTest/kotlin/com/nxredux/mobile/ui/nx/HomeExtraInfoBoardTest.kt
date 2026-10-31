@@ -27,8 +27,8 @@ class HomeExtraInfoBoardTest {
     }
 
     // The Fold cover (475 × 291, two strip lines): shown, topY 48, the top 235 (the cap), 5 squares of (235 − 24) / 5 =
-    // 42.2, Continue 443 − 42.2 − 12 = 388.8 wide; hidden, topY 8, the top 275 (the cap 235 + 40), still 5 squares, of
-    // (275 − 24) / 5 = 50.2, Continue 380.8 × 275. The pins start at 295 either way.
+    // 42.2, Continue 415 − 42.2 − 12 = 360.8 wide; hidden, topY 8, the top 275 (the cap 235 + 40), still 5 squares, of
+    // (275 − 24) / 5 = 50.2, Continue 352.8 × 275. The pins start at 295 either way.
     @Test fun foldCoverContinueAndSquaresGrowThePinsStay() {
         for (tools in listOf(0, 3, 5, 8, 12)) {
             val shown = homeBoard(cover, 2, tools = tools, games = 4)
@@ -44,10 +44,10 @@ class HomeExtraInfoBoardTest {
             if (tools > 0) {
                 near(42.2f, shown.square, "$what: shown square"); near(50.2f, b.square, "$what: square")
                 val cols = if (tools > 5) 2 else 1
-                near(443f - cols * 50.2f - (cols - 1) * 12f - 12f, continueOf(b).w, "$what: continue w")
+                near(415f - cols * 50.2f - (cols - 1) * 12f - 12f, continueOf(b).w, "$what: continue w")
                 for ((i, r) in b.top.filter { it.kind != HomeTopKind.CONTINUE }.withIndex())
                     near(8f + (i % 5) * (50.2f + 6f), r.rect.y, "$what: square $i y")
-            } else near(443f, continueOf(b).w, "$what: continue the full width")
+            } else near(415f, continueOf(b).w, "$what: continue the full width")
         }
     }
 
@@ -137,21 +137,21 @@ class HomeExtraInfoBoardTest {
         assertEquals(15, b.slots); assertEquals(0, b.more); near(3.2f, b.square, "square"); near(44f, b.topH, "topH")
     }
 
-    // The large face (933 × 616, one line): the top 274 + 20 from 8, still 5 squares a column, of min(66.75,
-    // (294 − 4 · 7) / 5) = 53.2, the bands (Pinned, the shelves) where they are with the strip. With the tab row hidden
-    // too: the top 318 + 20, squares (338 − 28) / 5 = 62.
+    // The large face (933 × 616, one line): the top 264.67 + 20 from 8, still 5 squares a column, of min(64.42,
+    // (284.67 − 4 · 7) / 5) = 51.33, the bands (Pinned, the shelves) where they are with the strip. With the tab row hidden
+    // too: the top 308.67 + 20, squares (328.67 − 28) / 5 = 60.13.
     @Test fun largeFace() {
         val f = HomeFrame(933f, 616f, false, 933f / 704f)
         val shelves = listOf(HomeShelf.NEW to 6, HomeShelf.NOT_STARTED to 3)
         val shown = homeBoard(f, 1, tools = 5, games = 6, shelves = shelves)
         val b = homeBoard(hide(f), 1, tools = 5, games = 6, shelves = shelves)
         assertEquals(HomeToolMode.LARGE, b.mode); assertEquals(10, b.slots); assertEquals(0, b.stripLines)
-        near(274f, shown.topH, "shown topH"); near(8f, b.topY, "topY"); near(294f, b.topH, "topH"); near(294f, continueOf(b).h, "continue h")
-        near(53.2f, b.square, "square")
+        near(264.67f, shown.topH, "shown topH"); near(8f, b.topY, "topY"); near(284.67f, b.topH, "topH"); near(284.67f, continueOf(b).h, "continue h")
+        near(51.33f, b.square, "square")
         assertEquals(shown.shelfTiles, b.shelfTiles); near(shown.tilesY, b.tilesY, "tilesY")
         val t = f.copy(h = 660f, titleHidden = true)
         val tb = homeBoard(hide(t), 1, tools = 5, games = 6, shelves = shelves)
-        assertEquals(10, tb.slots); near(338f, tb.topH, "title hidden topH"); near(62f, tb.square, "title hidden square")
+        assertEquals(10, tb.slots); near(328.67f, tb.topH, "title hidden topH"); near(60.13f, tb.square, "title hidden square")
     }
 
     // A face without a strip (nothing on Home: the Pick card, 0 lines) frees nothing: the board is the shown one's.

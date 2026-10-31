@@ -12,6 +12,7 @@ import com.nxredux.mobile.ui.nx.homeListRows
 import com.nxredux.mobile.ui.nx.homeListScroll
 import com.nxredux.mobile.ui.nx.homeListViewport
 import com.nxredux.mobile.ui.nx.homeListTopRoom
+import com.nxredux.mobile.ui.nx.homeFactLines
 import com.nxredux.mobile.ui.nx.MENU_TAB_ROW_HEIGHT
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
@@ -49,6 +50,15 @@ class HomeListRowsTest {
         assertEquals(MENU_TAB_ROW_HEIGHT, homeListTopRoom(tabRow = false, header = null, pickAGame = true))
         assertEquals(40.dp, homeListTopRoom(tabRow = false, header = 40.dp, pickAGame = false))   // the stats header's own height
         assertEquals(0.dp, homeListTopRoom(tabRow = true, header = null, pickAGame = false))
+    }
+
+    // The selected game's facts: one line under Home stats; upright with the stats off, two (the next goal on the second).
+    @Test fun list_home_facts_take_one_line_under_the_stats_and_two_upright_without() {
+        assertEquals(1, homeFactLines(facts = true, portrait = true, statLines = 2))
+        assertEquals(1, homeFactLines(facts = true, portrait = true, statLines = 1))
+        assertEquals(2, homeFactLines(facts = true, portrait = true, statLines = 0))
+        assertEquals(1, homeFactLines(facts = true, portrait = false, statLines = 0))
+        assertEquals(0, homeFactLines(facts = false, portrait = true, statLines = 0))
     }
 
     // The selection moves freely; the list scrolls only when it reaches the third row from an edge.

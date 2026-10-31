@@ -124,12 +124,13 @@ internal fun homeListViewport(band: Int, total: Int, pitch: Int): Int =
  * A main menu List's rows ([names]: labels and tags) from [top] (the stats' or the icon row's bottom; the fade parts
  * them) and [gapRows] row pitches of room under it (Home: half, under its stats; a game list: one) down to the box's bottom less
  * [bottomRows] row pitches (Home with the tab row hidden: the other half, off the screen's edge), the tab row's
- * top; the first row's text on [gutter] + [nxListInset]. Taps select, a tap on the selected row opens ([nxTap]).
+ * top; the rows' text on the page inset ([nxPageInset]), the pill [nxListInset] outside it. Taps select, a tap on the
+ * selected row opens ([nxTap]).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun MainListBody(
-    names: List<NxRow>, selection: () -> Int, top: Dp, gutter: Dp,
+    names: List<NxRow>, selection: () -> Int, top: Dp,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, modifier: Modifier = Modifier,
     gapRows: Float = 0f,
     bottomRows: Float = 0f,
@@ -146,6 +147,7 @@ internal fun MainListBody(
     val pill = basePitch * (1 - 2 * NX_PILL_PAD)   // the pill's height, whatever the rows stretch to
     val basePx = with(density) { basePitch.roundToPx() }
     val sel = selection()
+    val inset = nxPageInset()   // the names on it, the pill's edges outside it
     val state = rememberLazyListState()
     val nameStyle = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = nameSize, lineHeight = nameSize)
     BoxWithConstraints(modifier.fillMaxSize()) {
@@ -174,16 +176,17 @@ internal fun MainListBody(
             placed[0] = true
             if (target != current) { if (animate) state.animateScrollToItem(index, offset) else state.scrollToItem(index, offset) }
         }
-        // A list that fits sits on the band's bottom; a longer one fills it, from right under its top to the tab row.
+        // A list that fits sits on the band's bottom, the list just its rows tall (the pill counts rows from the list's
+        // top, so no empty room above them); a longer one fills it, from right under its top to the tab row.
         val fits = heights.sum() <= band
         // One pill behind the rows, gliding from row to row as the other lists' does ([nxPillGlide]); a row's text takes
         // the on-pill colours while the pill covers it the most ([NxPillGlide.litIndex]).
         val identity = remember(names) { nxPillListIdentity(names) }
         val glide = rememberNxPillGlide(identity, selection, names.size, maxOf(1, viewport / maxOf(1, pitchPx)))
-        val pillStart = with(density) { gutter.toPx() }
+        val pillStart = with(density) { inset.pillStart.toPx() }
         LazyColumn(
             Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart).padding(top = if (fits) 0.dp else start, bottom = if (fits) bottom else 0.dp)
-                .fillMaxWidth().height(with(density) { viewport.toDp() }).nxRowEdgeMask(state)
+                .fillMaxWidth().height(with(density) { (if (fits) heights.sum() else viewport).toDp() }).nxRowEdgeMask(state)
                 .nxPillGlide(glide, state, pitchPx, colors.accent, start = pillStart),
             state = state, verticalArrangement = Arrangement.Bottom, flingBehavior = rememberNxRowSnapFling(state),
         ) {
@@ -197,7 +200,7 @@ internal fun MainListBody(
                             onClick = { nxTap(r, selected, tapOpens(r), onSelect, onOpen) },
                             onLongClick = onLongPress?.let { lp -> { lp(r) } },
                         )
-                        .padding(start = gutter, end = maxOf(gutter, endRoom), top = (pitch - pill) / 2, bottom = (pitch - pill) / 2),
+                        .padding(start = inset.pillStart, end = maxOf(inset.pillEnd, endRoom), top = (pitch - pill) / 2, bottom = (pitch - pill) / 2),
                 ) {
                     Box(
                         Modifier.fillMaxHeight().onSizeChanged { glide.sizes[r] = it }.padding(horizontal = nxListInset()),
@@ -327,8 +330,8 @@ internal fun HomeFactsLine(lines: List<InfoLine>, size: TextUnit, modifier: Modi
 
 /**
  * The selected game's facts under a game list's title ([HomeFactsLine]'s look) in [rows] lines of [line] dp each: one
- * line, or with two (a phone upright, where the title's icons leave the line little room) its next goal ("Next: …") on
- * the second. The room never changes with the selection, so the list under it never moves.
+ * line, or with two (a phone upright with no stats above, where the icons leave the line little room: [homeFactLines])
+ * its next goal ("Next: …") on the second. The room never changes with the selection, so the list under it never moves.
  */
 @Composable
 internal fun GameFactsLines(lines: List<InfoLine>, size: TextUnit, line: Dp, rows: Int, modifier: Modifier) {

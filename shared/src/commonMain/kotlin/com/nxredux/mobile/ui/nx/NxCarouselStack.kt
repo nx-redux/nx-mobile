@@ -43,6 +43,8 @@ fun NxCarouselStack(
     val colors = LocalNxColors.current
     val portrait = LocalPortrait.current
     val window = LocalWindowSize.current
+    // The geometry is laid out for the left and mirrored for the right: the deeper side's inset, so it clears the camera either way.
+    val inset = nxPageInset().let { maxOf(it.start, it.end).value }
     BoxWithConstraints(modifier.fillMaxSize()) {
         if (tiles.isEmpty()) return@BoxWithConstraints
         val bodyW = maxWidth.value
@@ -50,7 +52,7 @@ fun NxCarouselStack(
         // The family is the screen's (the whole window), not the body's; a window not yet measured falls back to the body.
         val screenW = if (window.width.value > 0f) window.width.value else bodyW
         val screenH = if (window.height.value > 0f) window.height.value else bodyH
-        val g = carouselStackGeometry(bodyW, titleRoomSizingBody(bodyH, titleRoom.value), screenW, screenH, portrait, gutter = pageGutter(portrait), alignment = alignment)
+        val g = carouselStackGeometry(bodyW, titleRoomSizingBody(bodyH, titleRoom.value), screenW, screenH, portrait, gutter = inset, alignment = alignment)
             .centredIn(bodyH)
         if (g.slotW <= 1f || g.slotH <= 1f) return@BoxWithConstraints
         if (onPageRows != null) {

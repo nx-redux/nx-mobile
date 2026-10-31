@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.nxPageInset
 import com.nxredux.mobile.ui.nx.nxModalButton
 import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalDensity
@@ -32,7 +33,6 @@ import com.nxredux.mobile.ui.nx.MENU_TAB_ROW_HEIGHT
 import com.nxredux.mobile.ui.nx.nxTextScale
 import com.nxredux.mobile.ui.nx.NxTextSizes
 import com.nxredux.mobile.ui.nx.TOP_ICON_INSET
-import com.nxredux.mobile.ui.nx.nxPageGutter
 
 /** A dropdown row's height: a List pill's, slim, so all eight fit a phone's landscape height or scroll ([GameListLayoutMenu]). */
 private val ROW_H = 32.dp
@@ -68,7 +68,7 @@ fun GameListLayoutMenu(current: Int, highlighted: Int, onPick: (Int) -> Unit, on
     BoxWithConstraints(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { onDismiss() } }) {
         Column(
             Modifier.align(Alignment.TopEnd)
-                .padding(top = MENU_TAB_ROW_HEIGHT, end = nxPageGutter() - TOP_ICON_INSET)
+                .padding(top = MENU_TAB_ROW_HEIGHT, end = nxPageInset().end - TOP_ICON_INSET)
                 .width(200.dp).heightIn(max = (maxHeight - MENU_TAB_ROW_HEIGHT - BOTTOM_ROOM).coerceAtLeast(rowH))
                 .background(LocalNxColors.current.modalPanel, RoundedCornerShape(16.dp))
                 .pointerInput(Unit) { detectTapGestures { } }

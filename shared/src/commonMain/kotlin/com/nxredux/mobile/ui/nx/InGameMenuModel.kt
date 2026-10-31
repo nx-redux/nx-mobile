@@ -485,6 +485,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             if (state.selectedShowsInfo) showInfo(state.page.selected)
             return null
         }
+        // Quit Game and Reset game? draw their choices side by side ([NxChoiceDialog]): LEFT and RIGHT move between them too.
+        if (state.page.kind == PageKind.QuitGame || state.page.kind == PageKind.ResetGame) {
+            if (button == NxButton.LEFT) { move(-1); return null }
+            if (button == NxButton.RIGHT) { move(1); return null }
+        }
         return when (button) {
             NxButton.UP -> { move(-1); null }
             NxButton.DOWN -> { move(1); null }

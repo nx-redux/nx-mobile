@@ -49,8 +49,9 @@ fun NxBackdropStack(
 ) {
     val portrait = LocalPortrait.current
     val window = LocalWindowSize.current
+    // The geometry is laid out for the left and mirrored for the right: the deeper side's inset, so it clears the camera either way.
+    val gutter = nxPageInset().let { maxOf(it.start, it.end).value }
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val gutter = pageGutter(portrait)
         if (games != null) {
             // A game list: the box art stack left of centre over the caller's picture, the caption to its right (every
             // family). The boxes fade out at the top and bottom edges; the fade masks the stack alone, so the picture
@@ -113,6 +114,7 @@ fun NxBackdropStack(
                     tiles[i], k, g.slotW, scale = { stackItem(RowStyle.BACKDROP, distance(), g).scale }, toolLines = backdropToolNameLines(slot), toolNameSp = toolNameSp,
                     toolNamePad = backdropToolNamePad(slot), toolSplit = slot == BackdropSlot.TOOL, toolGap = backdropToolGap(slot),
                     pad = reaches?.get(i)?.let { r -> PadFrame(stackPadBox(g.slotW, g.slotH, r)) { padAlpha(distance()) } },
+                    lit = { slotLitness(distance()) },   // the selected item in the accent
                 )
             },
         )

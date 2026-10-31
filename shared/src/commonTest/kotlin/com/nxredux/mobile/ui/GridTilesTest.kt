@@ -88,8 +88,9 @@ class GridTilesTest {
         assertEquals(consolePad(ANDROID_TAG), (gridTiles(listOf(MainRow.System(android)), controllerArt = true).single() as GridTile.Logo).pad)
     }
 
-    @Test fun toolLinesBreakOnlyRetroAchievements() {
+    @Test fun toolLinesBreakRetroAchievementsAndCheatsAndPatches() {
         assertEquals(listOf("Retro", "Achievements"), toolDisplayLines("RetroAchievements"))
+        assertEquals(listOf("Cheats &", "Patches"), toolDisplayLines("Cheats & Patches"))
         assertEquals(listOf("Game Tracker"), toolDisplayLines("Game Tracker"))
     }
 

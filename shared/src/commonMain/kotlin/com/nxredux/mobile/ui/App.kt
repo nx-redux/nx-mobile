@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.nxPageInset
 import com.nxredux.mobile.ui.nx.LocalNxHintBarHidden
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
 import coil3.ImageLoader
@@ -51,8 +52,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -112,8 +111,9 @@ import com.nxredux.mobile.ui.nx.LocalFooterMode
 import com.nxredux.mobile.ui.nx.LocalLauncherChrome
 import com.nxredux.mobile.ui.nx.launcherChromeFor
 import com.nxredux.mobile.ui.nx.LocalNxColors
-import com.nxredux.mobile.ui.nx.restingSystemBars
+import com.nxredux.mobile.ui.nx.nxScreenInsets
 import com.nxredux.mobile.ui.nx.LocalAppIcons
+import com.nxredux.mobile.ui.nx.LocalDialogFocus
 import com.nxredux.mobile.ui.nx.LocalPadBelow
 import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.LocalWindowSize
@@ -206,8 +206,8 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
         state.launchNameProvider = provider
         onDispose { if (state.launchNameProvider === provider) state.launchNameProvider = null }
     }
-    // Bars and cutout only, never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
-    Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).windowInsetsPadding(restingSystemBars().union(WindowInsets.displayCutout))) {
+    // Bars and the cutout above and below only (the side cutout is in each page's inset: [nxPageInset]), never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
+    Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).windowInsetsPadding(nxScreenInsets())) {
         HandheldShell(
             pad = { m -> NxTheme { PadVibrationProvider(padVibration) { PadThemeProvider(padTheme, padButtons) { VirtualPad(onPadEvent, m, layout = menuPortraitLayout) } } } },
             controllerConnected = controllerConnected,
@@ -332,7 +332,7 @@ internal fun MenuLocals(state: AppState, look: MenuLook, footer: FooterMode, tou
     val chrome = launcherChromeFor(look.pageTitle, look.buttonHints, footer, look.extraInfo, look.netplayHint, look.homeStats)
     CompositionLocalProvider(
         LocalFooterMode provides footer, LocalLauncherChrome provides chrome, LocalHasTouchscreen provides touchscreen,
-        LocalAppIcons provides state.appIcons, LocalNxOptionText provides look.optionText,
+        LocalAppIcons provides state.appIcons, LocalNxOptionText provides look.optionText, LocalDialogFocus provides state.dialogFocus,
         content = content,
     )
 }
@@ -830,7 +830,7 @@ private fun ListArtBackground(shown: ListArtShown, width: Dp, portrait: Boolean)
                 AsyncImage(
                     model = shown.url, contentDescription = null, contentScale = ContentScale.Fit, alpha = 1f - LIST_ART_DIM,   // role: a List's game art dim, over black
                     onState = { if (it is AsyncImagePainter.State.Error) failed = true },
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = listArtGutter(portrait).dp)
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = nxPageInset().end)   // on the page's end inset
                         .width(width * LIST_ART_WIDTH_SHARE).fillMaxHeight(LIST_ART_HEIGHT_SHARE),
                 )
             }
@@ -849,7 +849,7 @@ private fun MainMenuBackground(bg: MenuBackground, listArt: GameListArt) {
         is MenuBackground.Picture -> NxScreenBackground(url = bg.url, fallback = null, fade = true, modifier = Modifier.fillMaxSize())
         // List Home's game: as a game list's List shows it, by Layouts → List art ([listArtShown]).
         is MenuBackground.Game -> BoxWithConstraints(Modifier.fillMaxSize()) {
-            val shown = remember(bg, listArt, maxHeight > maxWidth) { listArtShown(bg.entry, listArt, maxHeight > maxWidth) }
+            val shown = remember(bg, listArt, maxHeight > maxWidth) { listArtShown(bg.entry, listArt, maxHeight > maxWidth, bg.shot) }
             ListArtBackground(shown, maxWidth, LocalPortrait.current)
         }
         // Carousel Consoles on Background: the console's picture under the Backdrop game list's dim and shade.

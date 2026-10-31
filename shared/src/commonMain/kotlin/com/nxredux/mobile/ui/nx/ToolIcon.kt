@@ -1,14 +1,21 @@
 package com.nxredux.mobile.ui.nx
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import com.nxredux.mobile.launcher.AppIcons
 import org.jetbrains.compose.resources.DrawableResource
@@ -38,4 +45,24 @@ internal fun ToolIcon(icon: DrawableResource, appId: String?, tint: Color, modif
     val app = rememberAppIcon(appId, mono = true)
     if (app != null) Image(app, contentDescription = null, modifier = modifier, contentScale = contentScale, colorFilter = ColorFilter.tint(tint))
     else Image(painterResource(icon), contentDescription = null, modifier = modifier, contentScale = contentScale, colorFilter = ColorFilter.tint(tint))
+}
+
+/** [ToolIcon] tinted [tint] read while drawing, so a changing colour redraws the icon, never recomposes it. */
+@Composable
+internal fun ToolIcon(icon: DrawableResource, appId: String?, tint: () -> Color, modifier: Modifier = Modifier) {
+    val app = rememberAppIcon(appId, mono = true)
+    val glyph = painterResource(icon)
+    val painter = remember(app, glyph) { app?.let { BitmapPainter(it) } ?: glyph }
+    Box(modifier.drawFitTinted(painter, tint))
+}
+
+/** [painter] Fit in this box, centred, tinted [tint] (read while drawing). */
+internal fun Modifier.drawFitTinted(painter: Painter, tint: () -> Color): Modifier = drawBehind {
+    val src = painter.intrinsicSize
+    if (src.width <= 0f || src.height <= 0f) return@drawBehind
+    val fit = minOf(size.width / src.width, size.height / src.height)
+    val drawn = Size(src.width * fit, src.height * fit)
+    translate((size.width - drawn.width) / 2, (size.height - drawn.height) / 2) {
+        with(painter) { draw(drawn, colorFilter = ColorFilter.tint(tint())) }
+    }
 }

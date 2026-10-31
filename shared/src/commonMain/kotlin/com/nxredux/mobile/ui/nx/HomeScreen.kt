@@ -81,6 +81,7 @@ import com.nxredux.mobile.ui.HomeView
 import com.nxredux.mobile.ui.InfoLine
 import com.nxredux.mobile.ui.MainRow
 import com.nxredux.mobile.ui.abstractAccentArtUrl
+import com.nxredux.mobile.ui.continueFrame
 import com.nxredux.mobile.ui.continuePictures
 import com.nxredux.mobile.ui.gridTiles
 import com.nxredux.mobile.ui.homeStripLines
@@ -208,7 +209,7 @@ internal fun HomeScreen(
             // The page moves with the scroll, the strip with it; a drag that starts on a tile scrolls too.
             if (known) Box(Modifier.fillMaxSize().graphicsLayer { translationY = -scroll.value.dp.toPx() }) {
                 // None while Home stats is off (the board's lines 0, its room the top section's).
-                if (!built.statsHidden) view.strip?.let { HomeStripLines(it, b.stripLines, b.gutter, b.stripY, w - 2 * b.gutter, homeStripLineH(built), homeStripPitch(built)) }
+                if (!built.statsHidden) view.strip?.let { HomeStripLines(it, b.stripLines, b.gutter, b.stripY, w - b.gutter - homeInsetEnd(built), homeStripLineH(built), homeStripPitch(built)) }
                 rows.take(topCount).forEachIndexed { i, row ->
                     val at = b.top.getOrNull(i)?.rect ?: return@forEachIndexed
                     when (row) {
@@ -282,7 +283,7 @@ internal fun HomeScreen(
         header?.let { hd ->
             Box(Modifier.fillMaxWidth().height(hd.height.dp + NX_TOP_BAND_REACH).graphicsLayer { alpha = band.value }.nxTopBandFade(colors.background))
             if (hd.lines > 0) view.strip?.let {
-                HomeStripLines(it, hd.lines, b.gutter, hd.stripTop, w - 2 * b.gutter - HOME_HEADER_ICONS_ROOM, homeStripLineH(whole), homeStripPitch(whole))
+                HomeStripLines(it, hd.lines, b.gutter, hd.stripTop, w - b.gutter - homeInsetEnd(whole) - HOME_HEADER_ICONS_ROOM, homeStripLineH(whole), homeStripPitch(whole))
             }
         }
     }
@@ -338,7 +339,11 @@ internal fun BoxWithConstraintsScope.homeFrameHere(): HomeFrame? {
     val window = LocalWindowSize.current
     val menuRatio = if (!portrait && window.height.value > 0f) window.width.value / window.height.value else null
     val fontScale = LocalDensity.current.fontScale
-    return HomeFrame(w, h, portrait, menuRatio, fontScale, titleHidden = !chrome.tabRow, statsHidden = !chrome.homeStats, stripScale = nxTextScale())
+    val inset = nxPageInset()
+    return HomeFrame(
+        w, h, portrait, menuRatio, fontScale, titleHidden = !chrome.tabRow, statsHidden = !chrome.homeStats, stripScale = nxTextScale(),
+        insetStart = inset.start.value, insetEnd = inset.end.value,
+    )
 }
 
 /**
@@ -470,7 +475,8 @@ private fun RowScope.StripMost(m: HomeStripMost) {
 private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLine>, portrait: Boolean, modifier: Modifier) {
     val colors = LocalNxColors.current
     val game = row.entry.game
-    val pictures = remember(row) { continuePictures(row.resume.previewPath, row.entry) }
+    val frame = remember(row) { continueFrame(row) }   // its hidden save state's, else its resume slot's
+    val pictures = remember(row) { continuePictures(frame, row.entry) }
     val failed = remember(row) { mutableIntStateOf(0) }   // pictures that would not load, in order: the next one shows
     val picture = pictures.getOrNull(failed.intValue)
     // The info at the game list Carousel card's size, the name a step under its name (Appearance → Text size), each
@@ -483,7 +489,7 @@ private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLin
     // main thread in the load, so the crop always covers the card.
     val context = LocalPlatformContext.current
     val model: Any? = remember(picture, context) {
-        if (picture != null && picture == row.resume.previewPath) ImageRequest.Builder(context).data(picture).transformations(homeCoverTrim()).build()
+        if (picture != null && picture == frame) ImageRequest.Builder(context).data(picture).transformations(homeCoverTrim()).build()
         else picture
     }
     val rows = backdropCaptionRows(info)   // the time only ([timeOnly]); none without it

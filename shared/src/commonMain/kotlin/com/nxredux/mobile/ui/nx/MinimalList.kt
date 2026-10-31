@@ -258,10 +258,9 @@ internal fun MinimalScreen(
     toBoxBottom: Boolean = false, layoutKey: Any? = null, leaving: Boolean = false, tapOpens: (Int) -> Boolean = NxTapNeverOpens,
     onSwipeSelect: ((Int) -> Unit)? = null,   // a swipe's release: moves the highlight only (default: onSelect)
     onPageRows: ((Int) -> Unit)? = null,   // the names one screen shows under the selection (a game list's LEFT / RIGHT page)
-    inset: Dp = 0.dp,   // the names this much further in than the gutter (a game list's: in line with its title and bars)
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
-    val gutter = nxPageGutter() + inset
+    val inset = nxPageInset()   // the names on it, as every page's words
     val page = LocalMinimalPage.current
     // How this page came in, read once: the title dropping back (from the list's), or the names rising in.
     val returning = remember { page?.arriving(NavMotion.MINIMAL_BACK, "back") == true }
@@ -293,7 +292,7 @@ internal fun MinimalScreen(
     Box(modifier.fillMaxSize().onGloballyPositioned { box[0] = it; boxH = it.size.height.toFloat() }) {
         band?.let { a ->
             CompositionLocalProvider(LocalNxTapOpens provides tapOpens) {
-                MinimalNames(names, a, boxH, size, selection, onSelect, onOpen, onLongPress, selected, gutter, layoutKey, motion, page, onSwipeSelect, onPageRows)
+                MinimalNames(names, a, boxH, size, selection, onSelect, onOpen, onLongPress, selected, inset, layoutKey, motion, page, onSwipeSelect, onPageRows)
             }
         }
         // B from a Minimal list: its title flies down into the selected row.
@@ -366,7 +365,7 @@ internal fun minimalAnchor(bandTop: Float, bandBottom: Float): Float = bandTop +
 @Composable
 private fun MinimalNames(
     names: List<NxRow>, area: Rect, boxH: Float, size: Float, selection: () -> Int, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit,
-    onLongPress: ((Int) -> Unit)?, selected: MinimalSelected, gutter: Dp, layoutKey: Any?,
+    onLongPress: ((Int) -> Unit)?, selected: MinimalSelected, inset: PageInset, layoutKey: Any?,
     motion: MinimalMotion, page: MinimalPage?, onSwipeSelect: ((Int) -> Unit)?, onPageRows: ((Int) -> Unit)?,
 ) {
     val count = names.size
@@ -404,8 +403,8 @@ private fun MinimalNames(
     val solid = minimalNameStyle(size)
     val outline = solid.copy(color = colors.main, drawStyle = Stroke(width = with(density) { MINIMAL_STROKE.dp.toPx() }))
     val measurer = rememberTextMeasurer()
-    // Each name's one line at the row's width (a little narrower for the selection's grow), an ellipsis at the gutter.
-    val rowW = ((area.width - 2 * with(density) { gutter.toPx() }) / MINIMAL_SELECTED_SCALE).toInt().coerceAtLeast(1)
+    // Each name's one line at the row's width (a little narrower for the selection's grow), an ellipsis at the inset.
+    val rowW = ((area.width - with(density) { (inset.start + inset.end).toPx() }) / MINIMAL_SELECTED_SCALE).toInt().coerceAtLeast(1)
     // Each tag's pill (its text padded [MINIMAL_TAG_PAD_X] a side) as an inline placeholder after the name and a space,
     // the placeholder's start making up the rest of the [MINIMAL_TAG_GAP]. Its bottom on the baseline: the pill is moved
     // down onto the x-height's middle where it is drawn ([tagDrop]).
@@ -481,7 +480,7 @@ private fun MinimalNames(
             Box(
                 Modifier
                     .offset { IntOffset(0, y(i).roundToInt()) }
-                    .fillMaxWidth().height(pitch.dp).padding(horizontal = gutter)
+                    .fillMaxWidth().height(pitch.dp).padding(start = inset.start, end = inset.end)
                     .graphicsLayer {
                         // Its outline's place on the ladder from its centre's distance to the line this frame (mid-scroll
                         // too), toward the edge it is moving to; solid as it becomes the shown position ([fill]).

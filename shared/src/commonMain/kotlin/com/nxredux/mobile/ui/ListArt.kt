@@ -1,7 +1,6 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.settings.GameListArt
-import com.nxredux.mobile.ui.nx.pageGutter
 
 /** What a List-style game list draws behind or beside its names (Layouts → List art). */
 sealed interface ListArtShown {
@@ -16,12 +15,13 @@ sealed interface ListArtShown {
 /**
  * The List art for the highlighted [e] by Layouts → List art ([art]): Screenshot, the full-screen picture; Mix, 3D
  * box art, 2D box art or Wheel, that picture in a box on the right, a game without it showing its full-screen picture
- * (the handheld's ROM_findListArt); None, nothing at all, whatever is highlighted.
+ * (the handheld's ROM_findListArt); None, nothing at all, whatever is highlighted. [shot]: List Home's game's hidden
+ * save state's frame ([HomeShot]), its full-screen picture in place of the screenshot.
  */
-internal fun listArtShown(e: Listed?, art: GameListArt, portrait: Boolean): ListArtShown {
+internal fun listArtShown(e: Listed?, art: GameListArt, portrait: Boolean, shot: String? = null): ListArtShown {
     if (art == GameListArt.NONE) return ListArtShown.None
     if (e == null) return ListArtShown.Full(null)
-    val full = gameBackground(e, portrait)
+    val full = shot ?: gameBackground(e, portrait)
     val boxed = when (art) {
         GameListArt.MIX -> e.game.mixRef
         GameListArt.BOX3D -> e.game.boxartRef
@@ -38,11 +38,8 @@ internal const val LIST_ART_WIDTH_SHARE = 0.38f
 /** The List art box's share of the page's height, centred. */
 internal const val LIST_ART_HEIGHT_SHARE = 0.7f
 
-/** The box's end gutter in dp: the page's (16 with the portrait pad, 24 otherwise). */
-internal fun listArtGutter(portrait: Boolean): Float = pageGutter(portrait)
-
 /**
- * Where a List's names stop with a boxed List art, in dp from the list's end on a [widthDp] page: the box, its gutter
- * and an 8 dp gap. Applied whenever List art is a boxed value, so the names never jump as a game falls back to its screenshot.
+ * Where a List's names stop with a boxed List art, in dp from the list's end on a [widthDp] page: the box, the page's
+ * end inset it ends on ([insetEnd], [nxPageInset]) and an 8 dp gap. Applied whenever List art is a boxed value, so the names never jump as a game falls back to its screenshot.
  */
-internal fun listArtLabelEnd(widthDp: Float, portrait: Boolean): Float = widthDp * LIST_ART_WIDTH_SHARE + listArtGutter(portrait) + 8f
+internal fun listArtLabelEnd(widthDp: Float, insetEnd: Float): Float = widthDp * LIST_ART_WIDTH_SHARE + insetEnd + 8f

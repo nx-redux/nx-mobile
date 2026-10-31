@@ -3,6 +3,8 @@ package com.nxredux.mobile.ui
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.BoxWithConstraints
+import com.nxredux.mobile.ui.nx.PageInset
+import com.nxredux.mobile.ui.nx.nxPageInset
 import com.nxredux.mobile.ui.nx.rememberNxRowSnapFling
 import com.nxredux.mobile.ui.nx.nxRowEdgeMask
 import com.nxredux.mobile.ui.nx.nxRowFade
@@ -72,17 +74,20 @@ fun settingsSizeClass(widthDp: Float, heightDp: Float): SettingsSizeClass = when
     else -> SettingsSizeClass.PHONE_LANDSCAPE
 }
 
-/** The side inset of the Settings blocks and the mark: 16 dp upright, 24 dp phone landscape, 48 dp tablet-class. */
-fun settingsGutter(c: SettingsSizeClass): Dp = when (c) {
-    SettingsSizeClass.PHONE_UPRIGHT -> 16.dp
-    SettingsSizeClass.PHONE_LANDSCAPE -> 24.dp
-    SettingsSizeClass.TABLET -> 48.dp
-}
+/**
+ * The Settings blocks' edges on the start and end sides: the focus plates' (a highlight's edge, [PageInset.pillStart] /
+ * [PageInset.pillEnd]), [nxListInset] outside the page inset the words sit on. Never a word's or a row label's x.
+ */
+@Composable
+internal fun settingsPlateStart(): Dp = nxPageInset().pillStart
+
+@Composable
+internal fun settingsPlateEnd(): Dp = nxPageInset().pillEnd
 
 /** A section word's size on every screen, upright or not (before Appearance → Text size). */
 val SETTINGS_SECTION_SIZE: TextUnit = 26.sp
 
-/** The NX mark at the top right: its size and its inset from the top. Its right inset is the gutter. */
+/** The NX mark at the top right: its size and its inset from the top. Its right inset is the plates' edge ([settingsPlateEnd]). */
 val SETTINGS_MARK = 48.dp
 val SETTINGS_MARK_TOP = 16.dp
 
@@ -134,11 +139,11 @@ private val SETTINGS_LABEL_GAP = 6.dp
 private const val SETTINGS_SECTION_LINE = 1.2f
 
 /**
- * Where the section words start: the gutter plus a list row's inset ([nxListInset]), so they line up with the row labels
- * of a Settings page (whose plates sit at the gutter) and every Settings screen keeps the same side room.
+ * Where the section words start: the page inset ([nxPageInset]), so they line up with the row labels of a Settings page
+ * (whose plates reach [nxListInset] outside it) and with every other screen's words.
  */
 @Composable
-internal fun settingsSectionStart(): Dp = settingsGutter(settingsSizeClass()) + nxListInset()
+internal fun settingsSectionStart(): Dp = nxPageInset().start
 
 /** The size class of the window the screen is in ([LocalWindowSize]). */
 @Composable
@@ -218,7 +223,7 @@ fun SettingsMark(modifier: Modifier = Modifier) {
 @Composable
 internal fun SettingsBackground() {
     Box(Modifier.fillMaxSize().background(LocalNxColors.current.background)) {
-        SettingsMark(Modifier.align(Alignment.TopEnd).padding(top = SETTINGS_MARK_TOP, end = settingsGutter(settingsSizeClass())))
+        SettingsMark(Modifier.align(Alignment.TopEnd).padding(top = SETTINGS_MARK_TOP, end = settingsPlateEnd()))
     }
 }
 
@@ -353,11 +358,10 @@ fun SettingsRowsBlock(
 ) {
     val colors = LocalNxColors.current
     val scale = nxTextScale()
-    val gutter = settingsGutter(settingsSizeClass())
     Column(
         modifier.fillMaxSize().padding(
-            start = if (mode.crumb != null) gutter else 0.dp,   // narrow: the gutter on both sides; wide: from the frame's left edge
-            top = SETTINGS_ROWS_TOP, end = gutter, bottom = SETTINGS_BLOCK_BOTTOM,
+            start = if (mode.crumb != null) settingsPlateStart() else 0.dp,   // narrow: the plates' edge on both sides; wide: from the frame's left edge
+            top = SETTINGS_ROWS_TOP, end = settingsPlateEnd(), bottom = SETTINGS_BLOCK_BOTTOM,
         ),
         verticalArrangement = Arrangement.Bottom,
     ) {

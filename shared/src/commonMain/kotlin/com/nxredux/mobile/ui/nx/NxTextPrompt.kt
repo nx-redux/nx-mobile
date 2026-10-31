@@ -28,15 +28,16 @@ import androidx.compose.ui.unit.dp
 /**
  * NX-styled one-line text prompt (Rename Rom, New Collection): a text field in the shared modal frame that takes focus
  * and the soft keyboard on open. Done on the keyboard or A confirms [value] as the host holds it; B or the scrim cancels.
+ * [buttonFocus]: the button the host's pad focus is on (0 OK, 1 Cancel), lit; -1 the field, none lit.
  */
 @Composable
-fun NxTextPrompt(title: String, value: String, onValueChange: (String) -> Unit, onConfirm: () -> Unit, onCancel: () -> Unit) {
+fun NxTextPrompt(title: String, value: String, onValueChange: (String) -> Unit, onConfirm: () -> Unit, onCancel: () -> Unit, buttonFocus: Int = -1) {
     val colors = LocalNxColors.current
     val focus = remember { FocusRequester() }
     // The field keeps its own cursor, starting at the end; a [value] the host changed itself (not an echo of our edit) re-seeds it.
     var field by rememberNxPromptField(value)
     LaunchedEffect(Unit) { focus.requestFocus() }
-    NxModal(caption = title, kind = ModalKind.PROMPT, onButton = { if (it == NxButton.B) onCancel() else onConfirm() }) {
+    NxModal(caption = title, kind = ModalKind.PROMPT, onButton = { if (it == NxButton.B) onCancel() else onConfirm() }, buttonFocus = buttonFocus) {
         BasicTextField(
             value = field,
             onValueChange = { new ->

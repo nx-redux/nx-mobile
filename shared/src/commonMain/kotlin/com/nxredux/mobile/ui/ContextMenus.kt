@@ -1,5 +1,7 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.NxButton
+
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.netplay.NetplayCores
@@ -23,6 +25,18 @@ sealed interface MenuPrompt {
     data class DeleteCollection(val name: String) : MenuPrompt
 }
 
+/**
+ * A text prompt's pad focus after [button] from [focus] (-1 the field, 0 the confirm, 1 the cancel, as its buttons
+ * sit): DOWN from the field to the confirm, UP back, LEFT and RIGHT between the buttons; null for any other button.
+ */
+fun promptFocusStep(focus: Int, button: NxButton): Int? = when (button) {
+    NxButton.DOWN -> if (focus < 0) 0 else focus
+    NxButton.UP -> -1
+    NxButton.LEFT -> if (focus < 0) focus else 0
+    NxButton.RIGHT -> if (focus < 0) focus else 1
+    else -> null
+}
+
 /** The prompt is a text field (a rename or a new collection's draft), so the keyboard is in use. */
 val MenuPrompt?.isTextEntry: Boolean
     get() = this is MenuPrompt.Rename || this is MenuPrompt.NewCollection || this is MenuPrompt.RenameCollection
@@ -31,7 +45,8 @@ val MenuPrompt?.isTextEntry: Boolean
  * nx-redux's context menu, opened with MENU (or a long press) over [entry] in a game list, on Home's Continue card, a
  * pinned game or a shelf game, over [tool] on a tool or pinned tool row, or over the [collection] (its name) on a Collections-tab row.
  * One target is set: with [tool] or [collection], [entry] is null and only that target's items are offered.
- * [busy]: a choice is being applied; every input is swallowed until the screen is rebuilt.
+ * [busy]: a choice is being applied; every input is swallowed until the screen is rebuilt. [promptFocus]: where the pad
+ * is in a text [prompt] ([promptFocusStep]): -1 its field, 0 its confirm, 1 its cancel.
  */
 data class ContextMenu(
     val entry: Listed?,
@@ -44,6 +59,7 @@ data class ContextMenu(
     val collection: String? = null,
     /** The caption of a menu with no target: the hidden-tab items alone. */
     val title: String? = null,
+    val promptFocus: Int = -1,
 ) {
     /** The modal's caption: the game's shown name, the tool's label, the collection's name, or [title]. */
     val caption: String get() = entry?.shown ?: tool?.label ?: collection ?: title.orEmpty()
