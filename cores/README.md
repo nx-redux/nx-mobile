@@ -108,6 +108,9 @@ interpreter) is the fallback if `mprotect` is refused.
 Since 2026-10-30 its `sound.c` part derives the PSG clock (length, envelope and sweep, 256 Hz) from `gpsp_sound_rate`:
 upstream fixes the per-sample step at the 65536 Hz value, so at 32768 Hz (the option's default) those units ran at half
 speed, and GB-style notes held twice as long (Pokémon FireRed sounded off; 65536 was fine). Emulation-only; states load.
+Since 2026-11-03 it also holds each DirectSound FIFO sample until the next (zero-order hold, as the hardware and mGBA
+do; upstream's linear interpolation cut 7-22 dB above 8 kHz and sounded dull), and reads the mix out x3/4, on mGBA's
+scale (the hardware's 10-bit output x48; upstream was 4/3 of it, 2.5 dB louder). States load.
 
 `patches/fceumm.patch` adds one `path_vfs_init` call next to its `filestream_vfs_init`, so the content check
 (`path_is_valid`) uses the runner's VFS v3 `stat` and a SAF file-descriptor ROM (`/rom/<name>`) loads without a cache
