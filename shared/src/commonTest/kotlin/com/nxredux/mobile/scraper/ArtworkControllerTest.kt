@@ -860,6 +860,22 @@ class ArtworkControllerTest {
         assertTrue(sg.asked.size > afterWide)
     }
 
+    @Test fun fetch_art_cut_short_searches_once() = runTest {
+        // SteamGridDB stops in the wide pass: the list is not marked wide, and the read right after the fetch asks no one.
+        val sg = sgdb("Tetris.gb").apply { fail = { SourceStop("Key refused") } }
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb"), sg))
+        rig.http.on("https://", OK_PNG)
+        rig.controller.fetchGame(tetris.gamePath, wide = true)
+        assertFalse(assertNotNull(ArtOptionStore(rig.host).get(tetris.gamePath)).wide)
+        val asked = sg.asked.size
+        val result = rig.controller.artOptions(tetris.gamePath, replaceExisting = false, autoSearch = false)
+        assertEquals(asked, sg.asked.size)
+        assertTrue(result.options.any { it.url == "https://o/Tetris-ss" }, "${result.options}")
+        // Change art later (autoSearch on): the cut-short list is searched again.
+        rig.controller.artOptions(tetris.gamePath, replaceExisting = false)
+        assertTrue(sg.asked.size > asked)
+    }
+
     private suspend fun listed(rig: Rig): ArtOptionsResult = rig.controller.artOptions(tetris.gamePath, replaceExisting = false)
 
     @Test fun option_image_offline_keeps_option() = runTest {

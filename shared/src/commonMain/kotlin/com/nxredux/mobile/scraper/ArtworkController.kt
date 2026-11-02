@@ -313,11 +313,12 @@ class ArtworkController(
     /**
      * A game's Change art list. The saved list when the wide search ran for it; otherwise (none saved, only a fetch's
      * links, or [searchAgain]) the game is fetched with the wide search first ([fetchGame], [replaceExisting] as set).
+     * [autoSearch] false: only [searchAgain] searches (the caller has just run the wide fetch itself).
      */
-    override suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean): ArtOptionsResult = withContext(work) {
+    override suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean, autoSearch: Boolean): ArtOptionsResult = withContext(work) {
         var saved = store.get(gamePath)
         var note: String? = null
-        if (saved == null || !saved.wide || searchAgain) {
+        if (searchAgain || (autoSearch && (saved == null || !saved.wide))) {
             val (r, notes) = fetchOne(gamePath, replaceExisting, wide = true)
             note = notes.values.joinToString(" · ").ifEmpty { null }
                 ?: r.reason.takeIf { r.status == ItemStatus.ERROR || r.status == ItemStatus.SKIPPED }

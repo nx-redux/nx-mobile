@@ -193,7 +193,8 @@ class ArtPanelController(
                     if (r.status == ItemStatus.ERROR) fetchNote = fetchResultText(r)
                     _panel.update { it?.takeIf { p -> p.gamePath == path }?.copy(phase = ArtPanelPhase.LOADING) ?: it }
                 }
-                port.artOptions(path, replace, searchAgain).let { if (it.note == null && fetchNote != null) it.copy(note = fetchNote) else it }
+                // After its own Fetch art, the list as that fetch left it: a wide pass cut short is not run again here.
+                port.artOptions(path, replace, searchAgain, autoSearch = !fetchFirst).let { if (it.note == null && fetchNote != null) it.copy(note = fetchNote) else it }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Throwable) {

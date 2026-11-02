@@ -64,8 +64,11 @@ data class ArtOptionsResult(val options: List<ArtOption>, val currentKey: String
 interface ArtOptionsPort {
     /** One game's fetch; [wide]: also every source's screenshot, grid and hero candidates. */
     suspend fun fetchGame(gamePath: String, replaceExisting: Boolean = false, wide: Boolean = false): FetchResult
-    /** The game's Change art list; [searchAgain]: the wide search runs again first. */
-    suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean = false): ArtOptionsResult
+    /**
+     * The game's Change art list; [searchAgain]: the wide search runs again first. [autoSearch] false: the saved list
+     * as it is, never searched for (the read right after the panel's own Fetch art).
+     */
+    suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean = false, autoSearch: Boolean = true): ArtOptionsResult
     /** [option]'s preview; null when there is none to show. */
     suspend fun optionImage(gamePath: String, option: ArtOption): ContentRef?
     /** Writes [option] as the game's screenshot; false when it could not. */

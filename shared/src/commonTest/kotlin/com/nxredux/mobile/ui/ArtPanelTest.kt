@@ -81,8 +81,8 @@ class ArtPanelTest {
             fetchGate?.await()
             return FetchResult(ItemStatus.DONE)
         }
-        override suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean): ArtOptionsResult {
-            calls += "options searchAgain=$searchAgain"
+        override suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean, autoSearch: Boolean): ArtOptionsResult {
+            calls += "options searchAgain=$searchAgain" + (if (autoSearch) "" else " autoSearch=false")
             return ArtOptionsResult(options, currentKey)
         }
         override suspend fun optionImage(gamePath: String, option: ArtOption): ContentRef? =
@@ -121,7 +121,7 @@ class ArtPanelTest {
         advanceUntilIdle()
         val p = assertNotNull(c.panel.value)
         assertEquals(ArtPanelPhase.READY, p.phase)
-        assertEquals(listOf("fetch wide=true", "options searchAgain=false"), port.calls)
+        assertEquals(listOf("fetch wide=true", "options searchAgain=false autoSearch=false"), port.calls)   // no second search
         assertEquals(listOf("s1", "s2", "s3", "g1", "h1"), p.tiles.map { it.option.assetId })
         assertEquals(listOf("ScreenScraper · us", "TheGamesDB", "libretro", "SteamGridDB · Grid", "SteamGridDB · Hero"), p.tiles.map { it.label })
         assertEquals(ContentRef("file:///cache/s1"), p.tiles[0].image)   // the previews loaded
