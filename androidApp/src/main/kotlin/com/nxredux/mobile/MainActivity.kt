@@ -33,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.window.layout.WindowMetricsCalculator
+import com.nxredux.mobile.runner.goImmersive
 import com.nxredux.mobile.runner.BiosImport
 import com.nxredux.mobile.runner.LaunchRecords
 import com.nxredux.mobile.runner.LiveGameStore
@@ -459,6 +460,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
+        window.goImmersive()   // full screen like a game: the bars hidden, a swipe from the edge shows them for a moment
         setContent {
             // As the home screen, Back on the main menu stays: there is nothing under a launcher. Another instance (the
             // drawer's, in its own task) still closes.
@@ -657,7 +659,10 @@ class MainActivity : ComponentActivity(), FolderPicker {
     /** The menu's window has focus again: [TopScreenHost.recheck], as on resume (no resume when only the focus moved). */
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) TopScreenHost.recheck(this)
+        if (hasFocus) {
+            window.goImmersive()   // the bars hidden again after a dialog, a swipe or another app showed them
+            TopScreenHost.recheck(this)
+        }
     }
 
     /** [windowScreenClass] and [windowPx] from one window reading. */

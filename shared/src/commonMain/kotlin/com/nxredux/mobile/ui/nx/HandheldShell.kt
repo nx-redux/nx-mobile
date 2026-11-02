@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui.nx
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -114,12 +115,13 @@ fun HandheldShell(
             // The skin's menu layout for this area (flat, portrait or landscape, with the pad shown only), its picture and its pieces' picture.
             val skinPlaced = if (skin != null && showPad && tt == null && posture !is Posture.Tabletop) {
                 val w = constraints.maxWidth
-                // the skin runs up under the status bar and the cutout (the shell starts below them); its screen frame clears them
+                // the skin runs up under the cutout (the shell starts below it), its screen too: the frame keeps its own top
+                // margin and the glass reaches under the camera; the page inside clears it ([cutoutPad] below)
                 val above = topInWindow ?: 0
                 val h = constraints.maxHeight + above
                 val dpi = (density.density * 160f).roundToInt()
-                remember(skin, w, h, dpi, above) {
-                    SkinChoice.placeMenu(skin.manifest, w, h, dpi, topInset = above)?.let { p ->
+                remember(skin, w, h, dpi) {
+                    SkinChoice.placeMenu(skin.manifest, w, h, dpi)?.let { p ->
                         val parts = p.spec.parts?.let { skin.picture(it) ?: return@let null }
                         skin.picture(p.spec.image)?.takeIf { p.spec.parts == null || parts != null }?.let { Triple(p, it, parts) }
                     }
@@ -173,7 +175,11 @@ fun HandheldShell(
                     },
                 ) {
                     // the pages lay out for the glass's own shape (landscape: a wide glass between the side columns)
-                    CompositionLocalProvider(LocalPortrait provides (gh > gw), LocalPadBelow provides true, LocalWindowSize provides window, LocalInSkin provides true) { movableScreen(screenSlot) }
+                    // the glass reaches under the camera cutout: the page starts below it (the shell's own top, [above])
+                    val cutoutPad = with(density) { (above - g.y).coerceAtLeast(0f).toDp() }
+                    CompositionLocalProvider(LocalPortrait provides (gh > gw), LocalPadBelow provides true, LocalWindowSize provides window, LocalInSkin provides true) {
+                        Box(Modifier.fillMaxSize().padding(top = cutoutPad)) { movableScreen(screenSlot) }
+                    }
                 }
             } else if (!portrait || !showPad) {
                 // Menu pad Off keeps the portrait layout, the screen filling the area.

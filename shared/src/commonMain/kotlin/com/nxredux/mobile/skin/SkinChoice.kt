@@ -39,10 +39,15 @@ object SkinChoice {
         if (windowW <= 0 || windowH <= 0 || windowW == windowH || densityDpi <= 0) return null
         val k = scaleFor(pack, densityDpi)
         val family = if (windowW > windowH) SkinFamily.GRIP else SkinFamily.STACKED
-        val spec = pack.layouts.firstOrNull { it.family == family && it.variant == SkinVariant.MENU && it.frame != null } ?: return null
-        val p = SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, topInset = topInset.toFloat()) ?: return null
-        val g = p.glasses.single().rect
-        return p.takeIf { g.width / k >= MENU_MIN_GLASS && g.height / k >= MENU_MIN_GLASS }
+        // the tallest background that fits (a pack may render more than one, so a tall window stretches little)
+        return pack.layouts.filter { it.family == family && it.variant == SkinVariant.MENU && it.frame != null }
+            .sortedByDescending { it.height }
+            .firstNotNullOfOrNull { spec ->
+                SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, topInset = topInset.toFloat())?.takeIf { p ->
+                    val g = p.glasses.single().rect
+                    g.width / k >= MENU_MIN_GLASS && g.height / k >= MENU_MIN_GLASS
+                }
+            }
     }
 
     /** Window px per picture px: [densityDpi] over the pack's, 1 within [SNAP] of it (drawn 1:1, crisp). */

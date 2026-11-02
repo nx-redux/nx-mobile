@@ -850,8 +850,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val tablet = activity.windowShape().screenClass.isTablet
         val hinge = (posture as? Posture.Tabletop)?.let { (it.hingeTop + it.hingeBottom) / 2f }
         val aspect = if (ds) null else frame?.aspect?.takeIf { it > 0f } ?: (4f / 3f)
-        // the skin runs under the top camera cutout; its screen frame keeps clear of it (portrait: a landscape one is a side's)
-        val top = if (h > w) cutoutTop else 0
+        // the skin and its screen run under the top camera cutout too (the frame keeps its own margin; the picture is centred
+        // in the glass, so it reaches the camera only when it fills the glass's height)
+        val top = 0
         val key = SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, top)
         val placed = skinCache?.takeIf { it.first == key }?.second ?: SkinChoice.place(
             pack.manifest, w, h, key.dpi, tablet, ds, aspect?.let { (it * 240f) to 240f }, hinge, top,
