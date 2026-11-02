@@ -187,6 +187,13 @@ internal const val TAG_LOG = "NXAPP"
 internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost, FrontendHost, DualScreenHost, InGameMenuHost {
 
     companion object {
+        /** The frontend rows a pad skin leaves out ([menuLocked]): it places the screens itself. */
+        private val SKIN_HIDDEN_OPTIONS = setOf(
+            com.nxredux.mobile.options.FrontendOptions.SCALING, com.nxredux.mobile.options.FrontendOptions.OVERLAY,
+            com.nxredux.mobile.options.FrontendOptions.OFFSET_X, com.nxredux.mobile.options.FrontendOptions.OFFSET_Y,
+            com.nxredux.mobile.options.FrontendOptions.PAD_LANDSCAPE_OPACITY,
+            NdsOptions.LAYOUT_PORTRAIT, NdsOptions.LAYOUT_LANDSCAPE, NdsOptions.PIP_CORNER, NdsOptions.PIP_SIZE, NdsOptions.PIP_OPACITY,
+        )
         const val EXTRA_CORE_FILE = "core_file"
         const val EXTRA_CORE_ID = "core_id"
         const val EXTRA_TAG = "tag"
@@ -2396,7 +2403,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     override fun menuLocked(): Set<String> {
         val noRewind = if (!canRewind) SpeedOptions.REWIND_KEYS else emptySet()
-        return noRewind + when {
+        // A pad skin sets the screens' size and place: its scaling, offsets, overlay and screen layouts are not offered.
+        val skinned = if (padLayout.skinShown) SKIN_HIDDEN_OPTIONS else emptySet()
+        return noRewind + skinned + when {
             wiiGameCube -> lockedOptions + WiiOptions.table.map { it.key }
             isWii && motionSensors?.hasSensors != true -> lockedOptions + WiiOptions.MOTION
             else -> lockedOptions
@@ -3079,8 +3088,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     val sides = if (band) WindowInsetsSides.Horizontal + WindowInsetsSides.Top
                         else WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical
                     // Over the landscape overlay pad, top-centre (its system row holds the top corners, its d-pad
-                    // the bottom-left); elsewhere the corners.
-                    val placement = nxNotificationPlacement(padLayout.overlayPadShown.value)
+                    // the bottom-left), and over a pad skin (its shell holds the corners), below any cutout; elsewhere
+                    // the corners.
+                    val placement = nxNotificationPlacement(padLayout.overlayPadShown.value || padLayout.skinShownState.value)
                     // Between the clusters' system rows: the same screen, cutout inset and unit the clusters are laid out with.
                     val density = LocalDensity.current
                     val dir = LocalLayoutDirection.current
@@ -3162,6 +3172,21 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun releaseShortcutHolds() = speed.releaseHolds()
 
     override val padShortcuts: Map<TouchSlot, TouchShortcut> get() = touchShortcuts.value
+
+    /** A pad skin's SAVE / LOAD (the last-used slot), REWIND (held) or FAST (toggled), as the touch shortcuts go. */
+    override fun onSkinShortcut(action: SkinAction, down: Boolean) {
+        if (down && menuOpen) return   // a release always goes through: a held REWIND must not stick
+        when (action) {
+            SkinAction.SAVE, SkinAction.LOAD -> if (down) {
+                if (saveStates == null) { toast("Save states are off here"); return }
+                val slot = lastSlotCache ?: saveStates?.lastSlot() ?: 1
+                if (action == SkinAction.SAVE) saveToSlot(slot) else loadFromSlot(slot)
+            }
+            SkinAction.REWIND -> onShortcut(ShortcutAction.HOLD_REWIND, down)
+            SkinAction.FAST -> onShortcut(ShortcutAction.TOGGLE_FF, down)
+            SkinAction.MIC, SkinAction.SWAP -> Unit   // the pad layout's own
+        }
+    }
 
     /**
      * A touch shortcut button goes through [onShortcut] as a bound button does: hold while down, toggle on the press.

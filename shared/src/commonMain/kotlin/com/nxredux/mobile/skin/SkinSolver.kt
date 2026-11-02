@@ -1,0 +1,305 @@
+package com.nxredux.mobile.skin
+
+import com.nxredux.mobile.options.PxRect
+import kotlin.math.abs
+
+/** One slice of a skin picture: [src] in the picture's px drawn at [dst]; [tileX] / [tileY]: repeated along that axis. */
+data class SkinCell(val src: PxRect, val dst: PxRect, val tileX: Boolean, val tileY: Boolean)
+
+/** A piece of a layout built from pieces: [src] in its parts picture drawn at [dst] (scaled when the sizes differ). */
+data class SkinPiece(val src: PxRect, val dst: PxRect)
+
+/** A control's hit area placed in the window: its [spec] (id, shape, sizes scaled) at [x], [y]. */
+data class PlacedControl(val spec: ControlSpec, val x: Float, val y: Float)
+
+/** A glass placed in the window: [rect] showing [screen] at [scale] window px per game px. */
+data class PlacedGlass(val id: String, val screen: GlassScreen, val rect: PxRect, val scale: Float)
+
+/**
+ * A skin layout assembled for one window: the [cells] to draw, the [glasses] where the game's screens go and the
+ * [controls] to hit-test, all in window px. [k] is window px per picture px. A layout built from pieces also draws its
+ * [pieces] (the screen frame first, then the buttons) from its parts picture over the cells.
+ */
+data class SkinPlacement(
+    val spec: SkinLayoutSpec,
+    val k: Float,
+    val cells: List<SkinCell>,
+    val glasses: List<PlacedGlass>,
+    val controls: List<PlacedControl>,
+    val pieces: List<SkinPiece> = emptyList(),
+) {
+    fun glass(screen: GlassScreen): PlacedGlass? = glasses.firstOrNull { it.screen == screen }
+}
+
+/**
+ * Assembles a [SkinLayoutSpec] to a window: the screens get their size first (the first [SkinLayoutSpec.scales] entry
+ * that fits; a 0 entry is solved for the biggest size that fits), then every split shares out the difference between the
+ * picture and the window: glass slices take their glass's growth, repeat slices the rest, fixed slices nothing. A layout
+ * that would need a slice shorter than nothing does not fit (null).
+ */
+object SkinSolver {
+    /** DS screen size, game px. */
+    const val DS_W = 256f
+    const val DS_H = 192f
+
+    /**
+     * [spec] in a [windowW] x [windowH] window at [k] window px per picture px. [picture]: a one-screen console's picture
+     * size in game px (its aspect sizes a [GlassScreen.PICTURE] glass). [hingeY]: the fold's middle in window px while
+     * half-folded (a `hinge` slice lands on it), else null.
+     */
+    fun place(spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, picture: Pair<Float, Float>? = null, hingeY: Float? = null): SkinPlacement? {
+        if (k <= 0f || windowW <= 0f || windowH <= 0f) return null
+        val game = spec.glasses.associate { g -> g.id to gameSize(g.screen, picture) }
+        if (game.values.any { it == null }) return null
+        for (tuple in spec.scales) {
+            if (tuple.size != spec.glasses.size) continue
+            val fillAt = tuple.indices.filter { tuple[it] <= 0f }
+            fun attempt(fill: Float): Solved {
+                val scales = tuple.mapIndexed { i, s -> if (i in fillAt) fill else s }
+                return solve(spec, windowW, windowH, k, scales, game.mapValues { it.value!! }, hingeY)
+            }
+            if (fillAt.isEmpty()) { attempt(0f).placement?.let { return it }; continue }
+            // the fill glass: the biggest scale with no slice short of nothing. A smaller glass may leave room no slice
+            // can take (a glass row with no repeat), so that one is the answer only if it then fits exactly.
+            var lo = 0.25f
+            var hi = 64f
+            if (attempt(lo).tooBig) continue
+            repeat(30) {
+                val mid = (lo + hi) / 2f
+                if (!attempt(mid).tooBig) lo = mid else hi = mid
+            }
+            attempt(lo).placement?.let { return it }
+        }
+        return null
+    }
+
+    /**
+     * A layout built from pieces ([SkinLayoutSpec.frame]) in a [windowW] x [windowH] window at [k]: the background's
+     * strips stretched to the window, the buttons at their own size kept to the bottom and their side (or the middle),
+     * and the screen as big as fits above them in its shape (the DS screens', [picture]'s, else the frame glass's own), the frame
+     * round it at its own border, centred across and kept down against the pieces under it (any height to spare goes above
+     * it); or, for a filling frame, the frame over all that room and the screen all of it
+     * inside the border (its scale: the picture's as big as fits in it). Null when the window is smaller than the background or leaves no room.
+     * [topInset]: window px at the top the screen keeps clear of (a camera cutout, the status bar); the background still
+     * runs under it, and the frame starts right below it (the inset is its top margin, in place of the render's own).
+     */
+    fun placePieces(spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, picture: Pair<Float, Float>? = null, topInset: Float = 0f): SkinPlacement? {
+        val frame = spec.frame ?: return null
+        if (k <= 0f || spec.refW <= 0 || spec.refH <= 0) return null
+        val bg = place(spec.copy(glasses = emptyList(), scales = listOf(emptyList()), controls = emptyList()), windowW, windowH, k) ?: return null
+        val w = windowW / k
+        val h = windowH / k
+        val dx = w - spec.refW
+        val dy = h - spec.refH
+        fun across(a: PieceAnchor, inward: Int) = when (a) {
+            PieceAnchor.LEFT -> inwardShare(inward, dx)
+            PieceAnchor.CENTRE -> dx / 2f
+            PieceAnchor.RIGHT -> dx - inwardShare(inward, dx)
+        }
+        fun win(x: Float, y: Float, pw: Float, ph: Float) = PxRect(x * k, y * k, pw * k, ph * k)
+        val g = frame.glass
+        // the frame's border round the glass, and the room the full render gives the frame, grown or shrunk with the window
+        val bl = g.x.toFloat(); val bt = g.y.toFloat(); val br = (frame.w - g.x - g.w).toFloat(); val bb = (frame.h - g.y - g.h).toFloat()
+        val left = if (frame.side >= 0) frame.side.toFloat() else frame.x.toFloat()
+        val right = if (frame.side >= 0) frame.side.toFloat() else (spec.refW - frame.x - frame.w).toFloat()
+        val ownTop = if (frame.top >= 0) frame.top.toFloat() else frame.y.toFloat()
+        val roomTop = if (topInset > 0f) topInset / k else ownTop   // the inset is the frame's top margin
+        val roomW = w - left - right
+        val roomH = h - roomTop - (spec.refH - frame.y - frame.h)
+        val (aw, ah) = gameSize(g.screen, picture) ?: (g.w.toFloat() to g.h.toFloat())   // the menu's: the glass's own
+        val fit = minOf((roomW - bl - br) / aw, (roomH - bt - bb) / ah)
+        if (fit <= 0f) return null
+        // a filling frame takes the whole room; its screen is all of it inside the border
+        val gw = if (frame.fill) roomW - bl - br else aw * fit
+        val gh = if (frame.fill) roomH - bt - bb else ah * fit
+        val fw = gw + bl + br
+        val fh = gh + bt + bb
+        val fx = left + (roomW - fw) / 2f
+        val fy = roomTop + (roomH - fh)   // down against what is under it: the spare height goes above
+        val pieces = ArrayList<SkinPiece>()
+        // the frame: corners as drawn, straight edges stretched from the 2 px slice at their middle (the glass, a hole, skipped)
+        val cl = maxOf(bl, frame.corner.toFloat()); val ct = maxOf(bt, frame.corner.toFloat())
+        val cr = maxOf(br, frame.corner.toFloat()); val cb = maxOf(bb, frame.corner.toFloat())
+        val sx0 = frame.sx.toFloat(); val sy0 = frame.sy.toFloat()
+        val midX = sx0 + frame.w / 2f - 1f; val midY = sy0 + frame.h / 2f - 1f
+        val colsSrc = listOf(sx0 to cl, midX to 2f, sx0 + frame.w - cr to cr)
+        val rowsSrc = listOf(sy0 to ct, midY to 2f, sy0 + frame.h - cb to cb)
+        val colsDst = listOf(fx to cl, fx + cl to fw - cl - cr, fx + fw - cr to cr)
+        val rowsDst = listOf(fy to ct, fy + ct to fh - ct - cb, fy + fh - cb to cb)
+        for (j in 0..2) for (i in 0..2) {
+            if (i == 1 && j == 1) continue
+            val (dX, dW) = colsDst[i]; val (dY, dH) = rowsDst[j]
+            if (dW <= 0f || dH <= 0f) continue
+            pieces += SkinPiece(PxRect(colsSrc[i].first, rowsSrc[j].first, colsSrc[i].second, rowsSrc[j].second), win(dX, dY, dW, dH))
+        }
+        val controls = ArrayList<PlacedControl>()
+        frame.strip?.let { st ->
+            val share = gw / st.labels.size
+            st.labels.forEachIndexed { i, l ->
+                val cx = fx + bl + share * (i + 0.5f)
+                val cy = fy + fh - st.y
+                pieces += SkinPiece(PxRect(l.sx.toFloat(), l.sy.toFloat(), l.w.toFloat(), l.h.toFloat()), win(cx - l.w / 2f, cy - l.h / 2f, l.w.toFloat(), l.h.toFloat()))
+                controls += PlacedControl(ControlSpec(l.id, ControlShape.RECT, cx, cy, hw = share / 2f * k, hh = st.hh * k), cx * k, cy * k)
+            }
+        }
+        val glasses = arrayListOf(PlacedGlass(g.id, g.screen, win(fx + bl, fy + bt, gw, gh), fit * k))
+        for (p in spec.pieces) {
+            val px = p.x + across(p.anchor, p.inward)
+            val py = p.y + dy
+            pieces += SkinPiece(PxRect(p.sx.toFloat(), p.sy.toFloat(), p.w.toFloat(), p.h.toFloat()), win(px, py, p.w.toFloat(), p.h.toFloat()))
+            p.glass?.let { pg ->
+                val gameW = gameSize(pg.screen, picture)?.first ?: pg.w.toFloat()
+                glasses += PlacedGlass(pg.id, pg.screen, win(px + pg.x, py + pg.y, pg.w.toFloat(), pg.h.toFloat()), pg.w * k / gameW)
+            }
+        }
+        controls += spec.controls.map { c ->
+            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelH = c.labelH * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward)) * k, (c.y + dy) * k)
+        }
+        return SkinPlacement(spec, k, bg.cells, glasses, controls, pieces)
+    }
+
+    /**
+     * How much of a piece's [inward] shift it gets in a window [dx] picture px wider (or narrower) than the full render:
+     * all of it from the render's width up, none [inward] px each side narrower, in between in proportion.
+     */
+    fun inwardShare(inward: Int, dx: Float): Float = (dx / 2f + inward).coerceIn(0f, inward.toFloat())
+
+    private fun gameSize(screen: GlassScreen, picture: Pair<Float, Float>?): Pair<Float, Float>? = when (screen) {
+        GlassScreen.TOP, GlassScreen.TOUCH -> DS_W to DS_H
+        GlassScreen.STACK -> DS_W to 2f * DS_H
+        GlassScreen.PICTURE -> picture?.takeIf { it.first > 0f && it.second > 0f }
+    }
+
+    /** A [solve]: the [placement], or null; [tooBig]: a slice came out shorter than nothing (the glasses are too big). */
+    private class Solved(val placement: SkinPlacement?, val tooBig: Boolean)
+
+    private fun solve(
+        spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, scales: List<Float>,
+        game: Map<String, Pair<Float, Float>>, hingeY: Float?,
+    ): Solved {
+        val ctx = Ctx(emptyMap(), null, ArrayList())
+        val placement = solveInto(spec, windowW, windowH, k, scales, game, hingeY) { ctx.tooBig = ctx.tooBig || it }
+        return Solved(placement, ctx.tooBig)
+    }
+
+    private fun solveInto(
+        spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, scales: List<Float>,
+        game: Map<String, Pair<Float, Float>>, hingeY: Float?, onTooBig: (Boolean) -> Unit,
+    ): SkinPlacement? {
+        // glass sizes in picture px, and how much each grows over the picture's own
+        val size = spec.glasses.mapIndexed { i, g -> g.id to (game.getValue(g.id).first * scales[i] / k to game.getValue(g.id).second * scales[i] / k) }.toMap()
+        val grow = spec.glasses.associate { g -> g.id to (size.getValue(g.id).first - g.w to size.getValue(g.id).second - g.h) }
+        val cells = ArrayList<SkinCell>()
+        val ctx = Ctx(grow, hingeY?.let { it / k }, cells)
+        val root = PxRect(0f, 0f, spec.width.toFloat(), spec.height.toFloat())
+        val laid = ctx.lay(spec.tree, root, PxRect(0f, 0f, windowW / k, windowH / k), tiledX = false, tiledY = false)
+        onTooBig(ctx.tooBig)
+        if (!laid) return null
+        val glasses = spec.glasses.mapIndexed { i, g ->
+            val (x, y) = ctx.map(g.x + 0.5f, g.y + 0.5f) ?: return null
+            val (w, h) = size.getValue(g.id)
+            PlacedGlass(g.id, g.screen, PxRect((x - 0.5f) * k, (y - 0.5f) * k, w * k, h * k), scales[i])
+        }
+        val controls = spec.controls.map { c ->
+            val (x, y) = ctx.map(c.x, c.y) ?: return null
+            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelH = c.labelH * k), x * k, y * k)
+        }
+        val windowCells = cells.map { it.copy(dst = PxRect(it.dst.x * k, it.dst.y * k, it.dst.width * k, it.dst.height * k)) }
+        return SkinPlacement(spec, k, windowCells, glasses, controls)
+    }
+
+    private class Ctx(val grow: Map<String, Pair<Float, Float>>, val hingeY: Float?, val cells: MutableList<SkinCell>) {
+        var tooBig = false
+
+        fun lay(node: SliceNode, src: PxRect, dst: PxRect, tiledX: Boolean, tiledY: Boolean): Boolean {
+            val split = node.split
+            if (split == null || node.parts.isEmpty()) {
+                cells += SkinCell(src, dst, tiledX || abs(src.width - dst.width) > 0.01f, tiledY || abs(src.height - dst.height) > 0.01f)
+                return true
+            }
+            val cols = split == SliceSplit.COLS
+            val srcStart = if (cols) src.x else src.y
+            val dstStart = if (cols) dst.x else dst.y
+            val dstLen = if (cols) dst.width else dst.height
+            val lens = allocate(node.parts, dstStart, dstLen, cols) ?: return false
+            var s = srcStart
+            var d = dstStart
+            node.parts.forEachIndexed { i, p ->
+                val l = lens[i]
+                val partSrc = if (cols) PxRect(s, src.y, p.len.toFloat(), src.height) else PxRect(src.x, s, src.width, p.len.toFloat())
+                val partDst = if (cols) PxRect(d, dst.y, l, dst.height) else PxRect(dst.x, d, dst.width, l)
+                val tx = tiledX || (cols && p.mode != SlicePart.FIXED && p.mode != SlicePart.HINGE)
+                val ty = tiledY || (!cols && p.mode != SlicePart.FIXED && p.mode != SlicePart.HINGE)
+                if (l > 0.01f || p.node != null) {
+                    if (!lay(p.node ?: SliceNode(), partSrc, partDst, tx, ty)) return false
+                }
+                s += p.len
+                d += l
+            }
+            return true
+        }
+
+        /** Each part's length in [total] window-side px, or null when one would be negative. */
+        private fun allocate(parts: List<SlicePart>, start: Float, total: Float, cols: Boolean): FloatArray? {
+            val hinge = parts.indexOfFirst { it.isHinge }
+            if (hinge >= 0 && !cols && hingeY != null) {
+                val before = parts.subList(0, hinge)
+                val after = parts.subList(hinge + 1, parts.size)
+                val hingeStart = hingeY - parts[hinge].len / 2f - start
+                val a = share(before, hingeStart, cols) ?: return null
+                val b = share(after, total - hingeStart - parts[hinge].len, cols) ?: return null
+                return a + floatArrayOf(parts[hinge].len.toFloat()) + b
+            }
+            return share(parts, total, cols)
+        }
+
+        private fun share(parts: List<SlicePart>, total: Float, cols: Boolean): FloatArray? {
+            if (parts.isEmpty()) return if (total in -0.01f..0.5f) FloatArray(0) else { if (total < 0f) tooBig = true; null }
+            val counts = parts.mapNotNull { it.glass }.groupingBy { it }.eachCount()
+            val out = FloatArray(parts.size) { parts[it].len.toFloat() }
+            var used = 0f
+            parts.forEachIndexed { i, p ->
+                val g = p.glass ?: return@forEachIndexed
+                val d = grow[g]?.let { if (cols) it.first else it.second } ?: 0f
+                out[i] += d / counts.getValue(g)
+                used += d / counts.getValue(g)
+            }
+            val rest = total - parts.sumOf { it.len } - used
+            val repeats = parts.indices.filter { parts[it].isRepeat }
+            if (repeats.isEmpty()) {
+                if (rest < -0.01f) { tooBig = true; return null }
+                if (rest > 0.5f) return null   // room no slice here can take
+            } else {
+                spread(parts, repeats, out, rest)
+            }
+            // a glass shorter than its own fixed edges is too small (a bigger one may fit); anything else short, too big
+            if (out.indices.any { out[it] < -0.01f && parts[it].glass == null }) { tooBig = true; return null }
+            if (out.any { it < -0.01f }) return null
+            return FloatArray(out.size) { maxOf(0f, out[it]) }
+        }
+
+        /**
+         * Shares [rest] among the [repeats] by weight (all alike when the weights add up to nothing). Taking away, a slice
+         * that runs out stops at nothing and the others take the rest of the cut.
+         */
+        private fun spread(parts: List<SlicePart>, repeats: List<Int>, out: FloatArray, rest: Float) {
+            var left = rest
+            var active = if (rest < 0f) repeats.filter { parts[it].shrink } else repeats
+            while (active.isNotEmpty() && abs(left) > 0.001f) {
+                val weights = active.sumOf { parts[it].weight.toDouble() }.toFloat()
+                fun share(i: Int) = if (weights > 0f) left * parts[i].weight / weights else left / active.size
+                val short = if (left < 0f) active.filter { out[it] + share(it) < 0f } else emptyList()
+                if (short.isEmpty()) { active.forEach { out[it] += share(it) }; return }
+                short.forEach { left += out[it]; out[it] = 0f }
+                active = active - short.toSet()
+            }
+            if (active.isEmpty() && left < -0.01f) out[repeats.first()] = -1f   // more than they all had: reads as too big
+        }
+
+        /** A picture point's place in the window (picture px): its offset kept within the leaf that holds it. */
+        fun map(x: Float, y: Float): Pair<Float, Float>? {
+            val c = cells.firstOrNull { x >= it.src.x && x < it.src.x + it.src.width && y >= it.src.y && y < it.src.y + it.src.height } ?: return null
+            return c.dst.x + (x - c.src.x) to c.dst.y + (y - c.src.y)
+        }
+    }
+}

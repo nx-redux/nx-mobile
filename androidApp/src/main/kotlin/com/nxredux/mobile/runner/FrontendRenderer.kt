@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.skin.GlassScreen
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -215,8 +216,26 @@ internal class FrontendRenderer(
     /** The overlay file names offered for this console (the Overlay setting's list). */
     fun overlayNames(): List<String> = OverlayResolver.names(overlaySets)
 
-    /** The Default shader with the chosen sharpness; a preset ([applyShader]) replaces it through [GLRetroView.shaderChain]. */
-    fun shaderFor(s: FrontendSettings): ShaderConfig = ShaderConfig.Default(linear = s.linear)
+    /**
+     * The built-in shader for sharpness [s]: SHARP, or NEAREST while a pad skin fills its screen at a fractional size
+     * ([skinFill]: nearest would make pixels uneven there), takes sharp bilinear; else the Default with the chosen
+     * sampling. A preset ([applyShader]) replaces it through [GLRetroView.shaderChain].
+     */
+    fun shaderFor(s: FrontendSettings): ShaderConfig =
+        if (s.sharp || (skinFill && !s.linear)) ShaderConfig.Sharp else ShaderConfig.Default(linear = s.linear)
+
+    /** A pad skin is shown and its screen is filled at the picture's shape (Auto / Aspect): see [shaderFor]. */
+    private var skinFill = false
+
+    /** [skinFill] for this layout, the view's shader following it when it changes. */
+    private fun syncSkinFill(view: GLRetroView, s: FrontendSettings) {
+        val fill = padLayout.skinShown && padLayout.skinPlacement() != null &&
+            (s.scaling == ScreenScaling.AUTO || s.scaling == ScreenScaling.ASPECT)
+        if (fill == skinFill) return
+        skinFill = fill
+        val shader = shaderFor(s)
+        if (view.shader != shader) view.shader = shader
+    }
 
     /**
      * Applies shader [values]: a changed preset is parsed and its LUTs decoded off the main thread, then handed to
@@ -480,6 +499,7 @@ internal class FrontendRenderer(
         if (w <= 0f || h <= 0f) return
         val g = geometry ?: view.getGameGeometry()
         val origin = IntArray(2).also { game.getLocationInWindow(it) }
+        syncSkinFill(view, FrontendSettings.parse(frontendValues))
         val frame = coreFrame(g)   // null before the first frame (0x0)
         frame?.let(padLayout::onFrame)
         val room = padLayout.padRoom()
@@ -490,7 +510,7 @@ internal class FrontendRenderer(
         val setAside = pad?.let { setAsidePx(screen, it.reach) } ?: 0f
         // The DS / 3DS may reach a third into the hidden band's overlay (the Fold's 6x + 3x), the rest a quarter.
         val space = pictureSpace(room, w, h, setAside, overlayH, hiddenBandReach(NdsOptions.appliesTo(gameTag) || N3dsOptions.appliesTo(gameTag)))
-        val tabletop = tabletopDsLayout(shape, g)
+        val tabletop = tabletopDsLayout(shape, g) ?: skinDsLayout(shape, g)
         val nds = tabletop?.regions ?: ndsLayout(w, h, g, space, room, overlayH, screen) ?: n3dsSplitLayout(w, h)
         // An area too small for one DS screen pixel (NdsLayout returns no regions) is only ever a transient mid-resize
         // size. Keep whatever is drawn now rather than letting an empty list flip a split game to the whole 256x384
@@ -543,11 +563,22 @@ internal class FrontendRenderer(
         val shown: PxRect
         val offset: PointF
         val foldTop = halfFoldedTopArea(shape, g, w)
+        val skinGlass = if (padLayout.skinShown) padLayout.skinPlacement()?.glass(GlassScreen.PICTURE)?.rect else null
         if (isN3ds) {
             val auto = foldTop == null && s.scaling == ScreenScaling.AUTO && frame != null
             n3dsPictureSpace = space.takeIf { auto && (dualMode == DualMode.OFF || pictureOn == PictureOn.MAIN) }
         }
-        if (foldTop != null) {
+        if (skinGlass != null) {
+            // A pad skin: the picture fills its glass at its shape (Auto, Aspect; drawn sharp bilinear, [shaderFor]),
+            // at the biggest whole multiple that fits (Native), or stretched over it (Fullscreen).
+            box = when (s.scaling) {
+                ScreenScaling.NATIVE -> wholeMultiple(skinGlass, fitAspect(skinGlass, g[2]), g)
+                ScreenScaling.FULLSCREEN -> skinGlass
+                else -> fitAspect(skinGlass, g[2])
+            }
+            offset = PointF(0f, 0f)
+            shown = box
+        } else if (foldTop != null) {
             // Half-folded with a DS frame that is not the plain stack: drawn whole above the hinge, not across it.
             val fit = DualScreen.fullFrame(foldTop.width, foldTop.height, g[2])
             box = fit.copy(y = fit.y + foldTop.y)
@@ -741,6 +772,40 @@ internal class FrontendRenderer(
         val shown = regions.shownRect()
         val dy = (placedFor(room, shown, h, overlayH).y - shown.y).roundToInt().toFloat()
         return regions.map { it.copy(dst = it.dst.copy(y = it.dst.y + dy)) }
+    }
+
+    /**
+     * A DS under a pad skin: its screens in the skin's glass (the top and touch glasses, or the halves of one tall glass),
+     * laid out as the half-folded split is. Null without a skin, or for a DS frame that is not the plain stack.
+     */
+    private fun skinDsLayout(shape: WindowShape, g: FloatArray): HalfFolded? {
+        if (!padLayout.skinShown || dualMode != DualMode.OFF) return null
+        if (!NdsOptions.appliesTo(gameTag) || !NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt())) return null
+        val p = padLayout.skinPlacement() ?: return null
+        val stack = p.glass(GlassScreen.STACK)?.rect?.let { fitAspect(it, 256f / 384f) }   // the two screens' stack, centred in the glass
+        val top = stack?.copy(height = stack.height / 2f) ?: p.glass(GlassScreen.TOP)?.rect?.let { fitAspect(it, 256f / 192f) } ?: return null   // the top screen, centred in its glass
+        val bottom = stack?.copy(y = stack.y + stack.height / 2f, height = stack.height / 2f) ?: p.glass(GlassScreen.TOUCH)?.rect ?: return null
+        val placement = TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, null, null)
+        val big = NdsSettings.parse(frontendValues).big
+        return HalfFolded(placement, tabletopRegions(placement, DsKind.DS, big), padLayout.tabletopDsPad(shape))
+    }
+
+    /** The biggest [aspect] (width / height) rect centred in [r]; [r] itself for an unknown aspect. */
+    /** [fit] (the picture at its shape in [glass]) cut to the biggest whole multiple of the frame's height, centred. */
+    private fun wholeMultiple(glass: PxRect, fit: PxRect, g: FloatArray): PxRect {
+        val frameH = g[1]
+        if (frameH <= 0f) return fit
+        val n = kotlin.math.floor(fit.height / frameH).coerceAtLeast(1f)
+        val ph = frameH * n
+        val pw = fit.width * (ph / fit.height)
+        return PxRect(glass.x + (glass.width - pw) / 2f, glass.y + (glass.height - ph) / 2f, pw, ph)
+    }
+
+    private fun fitAspect(r: PxRect, aspect: Float): PxRect {
+        if (aspect <= 0f || r.width <= 0f || r.height <= 0f) return r
+        val w = minOf(r.width, r.height * aspect)
+        val h = w / aspect
+        return PxRect(r.x + (r.width - w) / 2f, r.y + (r.height - h) / 2f, w, h)
     }
 
     /** The half-folded DS / 3DS layout: the [placement] (game-area px), its screens as [regions], and the [pad] measures it used. */

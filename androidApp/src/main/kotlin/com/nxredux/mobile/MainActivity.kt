@@ -48,6 +48,9 @@ import com.nxredux.mobile.ui.HOME_NOT_WRITABLE
 import com.nxredux.mobile.runner.PostureTracker
 import com.nxredux.mobile.runner.windowShape
 import com.nxredux.mobile.ui.nx.LocalPosture
+import com.nxredux.mobile.ui.nx.LocalSkinPacks
+import com.nxredux.mobile.ui.nx.SkinPackSource
+import com.nxredux.mobile.runner.PadSkinPack
 import com.nxredux.mobile.ui.nx.LocalRestingBars
 import com.nxredux.mobile.achievements.AchievementsService
 import com.nxredux.mobile.gametime.GameTimeService
@@ -141,6 +144,10 @@ class MainActivity : ComponentActivity(), FolderPicker {
 
     // The top refresh rate while buttons (or, on Android 11-14, a finger) drive the menu; FrameRateBoost has the why.
     private val frameRateBoost by lazy { FrameRateBoost(this) }
+
+    /** The pad skin packs the menu draws (Pad theme NX Carbon), read from the assets once each. */
+    private val menuSkinPacks = HashMap<String, SkinPackSource?>()
+    private fun menuSkinPack(id: String): SkinPackSource? = menuSkinPacks.getOrPut(id) { PadSkinPack.builtIn(this, id)?.toSource() }
 
     /** Every pad event (keys, the hat and stick, the on-screen pad) on its way to the router. */
     private fun pad(event: PadEvent) {
@@ -462,7 +469,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
             LaunchedEffect(padScreen) { state.onPadScreen(padScreen) }
             // One App at a time: with the menu on the second display ([syncMenuScreen]) this window has the top screen.
             // This window's root gets the insets unconsumed: the pages may pad for the bars at rest ([LocalRestingBars]).
-            CompositionLocalProvider(LocalPosture provides posture.value, LocalRestingBars provides true) { if (menuOnSecond.value) MenuTopScreen(state) else App(state, ::pad) }
+            CompositionLocalProvider(LocalPosture provides posture.value, LocalRestingBars provides true, LocalSkinPacks provides ::menuSkinPack) { if (menuOnSecond.value) MenuTopScreen(state) else App(state, ::pad) }
         }
         collectPosture()
         // Dual mode: apps open on the top screen; one there takes our window on that display down until it leaves.
@@ -548,7 +555,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (onSecond != menuOnSecond.value) {
             // The activity drops its App before the presentation composes one (and back): one App at a time.
             menuOnSecond.value = onSecond
-            shown.showPanel(if (onSecond) ({ App(state, ::pad) }) else ({ MenuTopScreen(state) }))
+            shown.showPanel(if (onSecond) ({ CompositionLocalProvider(LocalSkinPacks provides ::menuSkinPack) { App(state, ::pad) } }) else ({ MenuTopScreen(state) }))
         }
         // The focused screen: the top screen's list on a game list, the menu everywhere else.
         val screen = state.screen.value

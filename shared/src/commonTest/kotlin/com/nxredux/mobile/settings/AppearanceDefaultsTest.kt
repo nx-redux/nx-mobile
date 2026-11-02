@@ -23,7 +23,7 @@ class AppearanceDefaultsTest {
     @Test fun theOtherAppearanceDefaults() {
         assertEquals(VerticalListAlignment.LEFT, VerticalListAlignment.DEFAULT)
         assertEquals(ConsoleArt.CONTROLLER, ConsoleArt.DEFAULT)
-        assertEquals(PadTheme.CHARCOAL, PadTheme.DEFAULT)
+        assertEquals(PadTheme.NX_CARBON, PadTheme.DEFAULT)
         assertEquals(AccentPreset.WHITE, AccentPreset.DEFAULT)
     }
 }

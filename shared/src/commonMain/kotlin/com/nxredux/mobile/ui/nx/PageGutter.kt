@@ -46,13 +46,15 @@ internal data class PageInset(val start: Dp, val end: Dp) {
  * Every screen's side insets (the in-game menu's too, not the game screen's), from the screen's edge: [pageInset] on
  * each side, or the camera cutout on that side when deeper ([pageInsetSide]; the Fold cover held sideways: 40 dp on the
  * camera's side, 38 dp on the other; upright the hole is in the status bar, 30 dp both). The page roots pad only the
- * vertical cutout ([nxScreenInsets]), so the side cutout counts here, once. A 3-button navigation bar on a side is a
+ * vertical cutout ([nxScreenInsets]), so the side cutout counts here, once. Inside a pad skin's frame ([LocalInSkin]):
+ * [PAGE_INSET_UPRIGHT], the frame being a margin already. A 3-button navigation bar on a side is a
  * visible edge the roots pad by: the inset is measured from it, and the cutout counts past it.
  */
 @Composable
 internal fun nxPageInset(): PageInset {
     val window = LocalWindowSize.current
-    val inset = pageInset(LocalPortrait.current, tablet = minOf(window.width, window.height) >= 600.dp)
+    // inside a pad skin the frame is already a margin: the phone's upright inset, whatever the window's size
+    val inset = if (LocalInSkin.current) PAGE_INSET_UPRIGHT else pageInset(LocalPortrait.current, tablet = minOf(window.width, window.height) >= 600.dp)
     val density = LocalDensity.current
     val dir = LocalLayoutDirection.current
     val cutout = WindowInsets.displayCutout

@@ -51,6 +51,8 @@ data class FrontendSettings(
     val debugHud: Boolean = false,
     /** The landscape pad clusters' opacity in percent: one of [FrontendOptions.PAD_OPACITIES]. */
     val padLandscapeOpacity: Int = FrontendOptions.PAD_OPACITY_DEFAULT,
+    /** Sharpness SHARP: sharp bilinear (whole pixels kept crisp, the fractional rest smoothed), whatever the scale. */
+    val sharp: Boolean = false,
 ) {
     /** [padLandscapeOpacity] as an alpha (40 -> 0.4): the landscape pad clusters and anything drawn over the landscape game with them. */
     val padLandscapeAlpha: Float get() = padLandscapeOpacity / 100f
@@ -65,6 +67,7 @@ data class FrontendSettings(
                 else -> ScreenScaling.AUTO
             },
             linear = values[FrontendOptions.SHARPNESS] == "LINEAR",
+            sharp = values[FrontendOptions.SHARPNESS] == "SHARP",
             overlay = values[FrontendOptions.OVERLAY]?.takeIf { it.isNotEmpty() && it != FrontendOptions.NONE },
             offsetX = offset(values[FrontendOptions.OFFSET_X]),
             offsetY = offset(values[FrontendOptions.OFFSET_Y]),
@@ -114,9 +117,10 @@ object FrontendOptions {
             visual = true,
         ),
         FrontendOption(
-            SHARPNESS, "Screen Sharpness", listOf("NEAREST", "LINEAR"), "NEAREST",
+            SHARPNESS, "Screen Sharpness", listOf("NEAREST", "LINEAR", "SHARP"), "NEAREST",
             "LINEAR smooths lines, but works better when final image is at higher resolution, " +
-                "so either core that outputs higher resolution or upscaling with shaders",
+                "so either core that outputs higher resolution or upscaling with shaders.\n" +
+                "SHARP keeps pixels crisp and even when the picture is not a whole multiple.",
             visual = true,
         ),
         // None for every console, whatever overlay files it has: an overlay shows only when the user picks one.

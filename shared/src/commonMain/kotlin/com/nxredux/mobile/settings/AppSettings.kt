@@ -13,13 +13,15 @@ import com.nxredux.mobile.storage.StateFormat
 fun <T> List<T>.stepFrom(current: T, by: Int): T = this[(indexOf(current) + by).mod(size)]
 
 /**
- * The portrait virtual pad's palette: CHARCOAL (the dark default), RETRO (light-grey body, magenta face buttons) or BLACK
- * (a pure black body, its buttons the [PadButtons] set).
+ * The portrait virtual pad's look: CHARCOAL (dark), RETRO (light-grey body, magenta face buttons) or BLACK (a pure black
+ * body, its buttons the [PadButtons] set), all drawn by the app; or NX_CARBON, the default, a pad skin ([skin]: its pack
+ * in the app's skins): in game and on the main menu it draws the whole device around the screen wherever the skin has a
+ * layout for the window, and the pad is Charcoal everywhere else (a console or window the skin has no layout for).
  */
-enum class PadTheme {
-    CHARCOAL, RETRO, BLACK;
+enum class PadTheme(val skin: String? = null) {
+    NX_CARBON("nx-carbon"), CHARCOAL, RETRO, BLACK;
 
-    companion object { val DEFAULT = CHARCOAL }
+    companion object { val DEFAULT = NX_CARBON }
 }
 
 /**

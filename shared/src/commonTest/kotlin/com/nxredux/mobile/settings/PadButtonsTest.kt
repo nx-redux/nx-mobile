@@ -19,8 +19,10 @@ class PadButtonsTest {
         assertEquals(listOf("Grey", "Outline"), PadButtons.entries.map { it.label })
     }
 
-    @Test fun charcoalStaysTheDefaultThemeWithBlackAdded() {
-        assertEquals(PadTheme.CHARCOAL, PadTheme.DEFAULT)
-        assertEquals(listOf(PadTheme.CHARCOAL, PadTheme.RETRO, PadTheme.BLACK), PadTheme.entries)
+    @Test fun nxCarbonIsTheDefaultThemeAndFirst() {
+        assertEquals(PadTheme.NX_CARBON, PadTheme.DEFAULT)
+        assertEquals(listOf(PadTheme.NX_CARBON, PadTheme.CHARCOAL, PadTheme.RETRO, PadTheme.BLACK), PadTheme.entries)
+        assertEquals("nx-carbon", PadTheme.NX_CARBON.skin)
+        assertEquals(null, PadTheme.BLACK.skin)
     }
 }

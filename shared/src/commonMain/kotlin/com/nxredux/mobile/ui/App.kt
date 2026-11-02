@@ -1,5 +1,7 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.LocalSkinPacks
+import com.nxredux.mobile.ui.nx.SkinPad
 import com.nxredux.mobile.ui.nx.nxPageInset
 import com.nxredux.mobile.ui.nx.LocalNxHintBarHidden
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
@@ -186,6 +188,9 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     val padTheme = remember(screen) { state.settings.padTheme }
     val padButtons = remember(screen) { state.settings.padButtons }   // Appearance → Pad buttons (Black's set), likewise
     val padVibration = remember(screen) { state.settings.padVibration }   // Controls → Pad vibration, likewise
+    // A pad skin theme (NX Carbon): its pack, for the menu's skin layout (the drawn pad where the skin has none).
+    val skinPacks = LocalSkinPacks.current
+    val skin = remember(padTheme, skinPacks) { padTheme.skin?.let(skinPacks) }
     // Controls → Menu pad, likewise; hidden while first setup and onboarding have not asked yet, previewed on its step.
     val menuPad = remember(screen, selection.value.index) { state.menuPadShown() }
     // Controls → Pad layout: the main menu's pads draw the Shared layouts, live (a console's layout shows in its editor only).
@@ -212,6 +217,8 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
             pad = { m -> NxTheme { PadVibrationProvider(padVibration) { PadThemeProvider(padTheme, padButtons) { VirtualPad(onPadEvent, m, layout = menuPortraitLayout) } } } },
             controllerConnected = controllerConnected,
             showPad = menuPad,
+            skin = skin,
+            skinPad = { m, placement, picture, parts -> PadVibrationProvider(padVibration) { SkinPad(placement, picture, parts, onPadEvent, m) } },
             // Flex mode on a wide window: the two clusters below the hinge (the main app has no analog stick use).
             clusters = { l, r ->
                 NxTheme {

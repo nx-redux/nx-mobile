@@ -21,16 +21,21 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import com.nxredux.mobile.layout.portraitBandPx
 import com.nxredux.mobile.runner.Posture
 import com.nxredux.mobile.runner.TabletopPad
 import com.nxredux.mobile.runner.tabletopInArea
+import com.nxredux.mobile.skin.SkinChoice
+import com.nxredux.mobile.skin.SkinPlacement
 import kotlin.math.roundToInt
 
 /** The portrait pad area is sized to this many centimetres so a clamp-on controller fits over it. */
@@ -44,6 +49,9 @@ val LocalPortrait = compositionLocalOf { false }
 
 /** True while the on-screen pad is drawn below the screen (portrait with its band, or tabletop controls). */
 val LocalPadBelow = compositionLocalOf { false }
+
+/** True while the screen is inside a pad skin's frame: the frame is already a margin, so pages take the phone inset ([nxPageInset]). */
+val LocalInSkin = compositionLocalOf { false }
 
 /**
  * The screen's vertical centre in window px: the app's area under the status bar, down to the pad band or the bottom
@@ -66,7 +74,9 @@ val LocalPosture = compositionLocalOf<Posture> { Posture.Flat }
  * ([padBandPx]: the density bucket when the dpi is unknown, at most 60% of the height). Landscape: the screen fills the
  * display, no pad. Tabletop (Flex mode): the screen above the hinge, the pad or [clusters] below. [showPad] false
  * (Controls → Menu pad Off) drops the portrait band, the screen filling the area; tabletop keeps its controls below the
- * hinge. The caller wraps this in the safe-drawing insets.
+ * hinge. [skin] (a pad skin's pack, NX Carbon): in that portrait case the skin's menu layout instead, the whole device
+ * drawn round the screen, which fills its glass ([skinPad] draws it and takes its buttons); the drawn band where the
+ * skin has no menu layout or it does not fit. The caller wraps this in the safe-drawing insets.
  */
 @Composable
 fun HandheldShell(
@@ -75,6 +85,8 @@ fun HandheldShell(
     controllerConnected: Boolean = false,
     showPad: Boolean = true,
     clusters: @Composable (left: Modifier, right: Modifier) -> Unit = { _, _ -> },
+    skin: SkinPackSource? = null,
+    skinPad: @Composable (Modifier, SkinPlacement, ImageBitmap, ImageBitmap?) -> Unit = { _, _, _, _ -> },
 ) {
     val colors = LocalNxColors.current
     val density = LocalDensity.current
@@ -99,6 +111,20 @@ fun HandheldShell(
             val tt = topInWindow?.let { top ->
                 with(density) { tabletopInArea(posture, top, maxWidth.roundToPx(), maxHeight.roundToPx(), controllerConnected) }
             }
+            // The skin's menu layout for this area (flat portrait with the pad shown only), its picture and its pieces' picture.
+            val skinPlaced = if (skin != null && portrait && showPad && tt == null && posture !is Posture.Tabletop) {
+                val w = constraints.maxWidth
+                // the skin runs up under the status bar and the cutout (the shell starts below them); its screen frame clears them
+                val above = topInWindow ?: 0
+                val h = constraints.maxHeight + above
+                val dpi = (density.density * 160f).roundToInt()
+                remember(skin, w, h, dpi, above) {
+                    SkinChoice.placeMenu(skin.manifest, w, h, dpi, topInset = above)?.let { p ->
+                        val parts = p.spec.parts?.let { skin.picture(it) ?: return@let null }
+                        skin.picture(p.spec.image)?.takeIf { p.spec.parts == null || parts != null }?.let { Triple(p, it, parts) }
+                    }
+                }
+            } else null
             if (posture is Posture.Tabletop && topInWindow == null) {
                 // The first frame in tabletop: the hinge split needs the shell's position, so compose nothing rather than a
                 // branch that is swapped out a frame later.
@@ -120,6 +146,33 @@ fun HandheldShell(
                         )
                     }
                     TabletopPad.NONE, TabletopPad.DS -> Unit
+                }
+            } else if (skinPlaced != null) {
+                // The skin round the screen: the screen exactly over the glass's hole.
+                // Placed for the window from its top: drawn that far up, over the bars' strip.
+                val (placement, picture, parts) = skinPlaced
+                val above = topInWindow ?: 0
+                val g = placement.glasses.first().rect
+                val gx = g.x.roundToInt()
+                val gy = g.y.roundToInt()
+                val gw = (g.x + g.width).roundToInt() - gx
+                val gh = (g.y + g.height).roundToInt() - gy
+                val skinW = constraints.maxWidth
+                val skinH = constraints.maxHeight + above
+                skinPad(
+                    Modifier.layout { m, c ->
+                        val p = m.measure(Constraints.fixed(skinW, skinH))
+                        layout(c.maxWidth, c.maxHeight) { p.place(0, -above) }
+                    },
+                    placement, picture, parts,
+                )
+                Box(
+                    Modifier.layout { m, _ ->
+                        val p = m.measure(Constraints.fixed(gw, gh))
+                        layout(gw, gh) { p.place(gx, gy - above) }
+                    },
+                ) {
+                    CompositionLocalProvider(LocalPortrait provides true, LocalPadBelow provides true, LocalWindowSize provides window, LocalInSkin provides true) { movableScreen(screenSlot) }
                 }
             } else if (!portrait || !showPad) {
                 // Menu pad Off keeps the portrait layout, the screen filling the area.

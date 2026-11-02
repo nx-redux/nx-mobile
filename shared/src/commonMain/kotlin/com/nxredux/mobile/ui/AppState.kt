@@ -4516,6 +4516,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         PadTheme.CHARCOAL -> "Charcoal"
         PadTheme.RETRO -> "Retro"
         PadTheme.BLACK -> "Black"
+        PadTheme.NX_CARBON -> "NX Carbon"
     }
 
 

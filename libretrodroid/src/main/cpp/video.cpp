@@ -21,6 +21,8 @@
 #include <cstdlib>
 #include <string>
 #include <cmath>
+#include <limits>
+#include <algorithm>
 #include <utility>
 #include <sstream>
 #include <stdexcept>
@@ -402,7 +404,9 @@ void Video::drawBuiltInChain(const std::array<float, 12>& vertices, const std::a
 
         glUniform2f(shader.gTextureSizeHandle, getTextureStorageWidth(), getTextureStorageHeight());
 
-        glUniform1f(shader.gScreenDensityHandle, getScreenDensity((float) screenWidth, (float) screenHeight));
+        // Screen px per frame px of the picture this draws (its own box, not the whole surface): what the sharp
+        // shader's blend band is sized by.
+        glUniform1f(shader.gScreenDensityHandle, pictureDensity(vertices, coordinates, screenWidth, screenHeight));
 
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -536,6 +540,21 @@ void Video::renderSecondary(unsigned width, unsigned height) {
 
 void Video::renderPausedFrame() {
     renderFrame(true);
+}
+
+float Video::pictureDensity(const std::array<float, 12>& vertices, const std::array<float, 12>& coordinates,
+                           unsigned screenWidth, unsigned screenHeight) {
+    auto box = foregroundRect(vertices, (int) screenWidth, (int) screenHeight);
+    float minU = std::numeric_limits<float>::max(), maxU = std::numeric_limits<float>::lowest();
+    float minV = std::numeric_limits<float>::max(), maxV = std::numeric_limits<float>::lowest();
+    for (int i = 0; i < 12; i += 2) {
+        minU = std::min(minU, coordinates[i]); maxU = std::max(maxU, coordinates[i]);
+        minV = std::min(minV, coordinates[i + 1]); maxV = std::max(maxV, coordinates[i + 1]);
+    }
+    float texelsX = (maxU - minU) * getTextureStorageWidth();
+    float texelsY = (maxV - minV) * getTextureStorageHeight();
+    if (texelsX <= 0.0F || texelsY <= 0.0F) return getScreenDensity((float) screenWidth, (float) screenHeight);
+    return std::min((float) box[2] / texelsX, (float) box[3] / texelsY);
 }
 
 float Video::getScreenDensity(float screenWidth, float screenHeight) {

@@ -58,6 +58,8 @@ class FrontendOptionsTest {
         }
         assertEquals(ScreenScaling.NATIVE, FrontendSettings.parse(mapOf(FrontendOptions.SCALING to "Native")).scaling)
         assertEquals(ScreenScaling.FULLSCREEN, FrontendSettings.parse(mapOf(FrontendOptions.SCALING to "Fullscreen")).scaling)
+        val sharp = FrontendSettings.parse(mapOf(FrontendOptions.SHARPNESS to "SHARP"))
+        assertTrue(sharp.sharp && !sharp.linear)
     }
 
     @Test fun table_order_labels_and_visual_flags() {

@@ -432,7 +432,7 @@ class InGameMenuModelTest {
         assertEquals(
             MenuRow.Option(
                 "Screen Sharpness", FrontendOptions.SHARPNESS, "NEAREST", o.brief, visual = true,
-                choices = listOf("NEAREST", "LINEAR"), index = 0, detail = o.info,
+                choices = listOf("NEAREST", "LINEAR", "SHARP"), index = 0, detail = o.info,
             ),
             m.state.page.rows.single(),
         )

@@ -913,7 +913,7 @@ class AppStateTest {
     @Test fun customise_walks_its_pages_and_writes_each() = runTest {
         val (state, settings) = atCustomise()
         assertEquals(OnboardingStep.PAD, step(state))
-        state.select(1); state.onButton(NxButton.RIGHT)                     // the theme row: Charcoal → Retro
+        state.select(1); state.onButton(NxButton.RIGHT); state.onButton(NxButton.RIGHT)   // the theme row: NX Carbon → Charcoal → Retro
         state.select(2); state.onButton(NxButton.A)                         // Continue (the pad Show, as it is)
         assertEquals(OnboardingStep.TITLE, step(state))
         state.select(0); state.onButton(NxButton.A)                         // the page title: Hide (flips in place)
@@ -941,7 +941,7 @@ class AppStateTest {
     // The pad row flips in place (A, a tap, LEFT/RIGHT) so the pad can be compared; only Continue goes on.
     @Test fun the_pad_page_flips_in_place_and_off_skips_theme_title_and_hints() = runTest {
         val (state, settings) = atCustomise()
-        assertEquals(listOf("On-screen pad" to "Show", "Pad theme" to "Charcoal", "Continue" to null), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label to it.secondary })
+        assertEquals(listOf("On-screen pad" to "Show", "Pad theme" to "NX Carbon", "Continue" to null), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label to it.secondary })
         assertEquals(true, state.menuPadShown())
         val total = assertIs<Screen.Onboarding>(state.screen.value).title
         state.select(0); state.onButton(NxButton.A)                         // Hide: the pad goes at once, the page stays
@@ -961,19 +961,19 @@ class AppStateTest {
     @Test fun the_pad_theme_row_flips_in_place() = runTest {
         val (state, settings) = atCustomise()
         val before = state.screen.value
-        state.select(1); state.onButton(NxButton.A)                         // Charcoal → Retro, the page stays
-        assertEquals(PadTheme.RETRO, settings.padTheme)
+        state.select(1); state.onButton(NxButton.A)                         // NX Carbon → Charcoal, the page stays
+        assertEquals(PadTheme.CHARCOAL, settings.padTheme)
         assertEquals(OnboardingStep.PAD, step(state))
         assertNotEquals(before, state.screen.value)                        // republished: App re-reads the theme
         state.onButton(NxButton.LEFT)
-        assertEquals(PadTheme.CHARCOAL, settings.padTheme)
+        assertEquals(PadTheme.NX_CARBON, settings.padTheme)
     }
 
     // On Black the pad page adds Pad buttons under the theme, stepping the same setting in place; off Black it goes.
     @Test fun the_pad_page_shows_pad_buttons_only_on_black() = runTest {
         val (state, settings) = atCustomise()
         fun rows() = assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label to it.secondary }
-        state.select(1); state.onButton(NxButton.LEFT)                      // Charcoal → Black (wraps)
+        state.select(1); state.onButton(NxButton.LEFT)                      // NX Carbon → Black (wraps)
         assertEquals(PadTheme.BLACK, settings.padTheme)
         assertEquals(listOf("On-screen pad" to "Show", "Pad theme" to "Black", "Pad buttons" to "Grey", "Continue" to null), rows())
         state.select(2); state.onButton(NxButton.A)                         // Grey → Outline, the page stays
@@ -982,7 +982,8 @@ class AppStateTest {
         assertEquals("Outline", rows()[2].second)
         state.onButton(NxButton.RIGHT)
         assertEquals(PadButtons.GREY, settings.padButtons)
-        state.select(1); state.onButton(NxButton.RIGHT)                     // Black → Charcoal: the row goes
+        state.select(1); state.onButton(NxButton.RIGHT)                     // Black → NX Carbon: the row goes
+        assertEquals(PadTheme.NX_CARBON, settings.padTheme)
         assertEquals(listOf("On-screen pad", "Pad theme", "Continue"), rows().map { it.first })
         state.select(0); state.onButton(NxButton.A)                         // pad hidden on Black: no theme or buttons rows
         settings.padTheme = PadTheme.BLACK; state.onButton(NxButton.RIGHT); state.onButton(NxButton.LEFT)
@@ -5564,7 +5565,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.APPEARANCE)
         assertEquals(
             listOf(
-                SettingsRow(SettingsKind.PAD_THEME, "Pad theme", "Charcoal"),
+                SettingsRow(SettingsKind.PAD_THEME, "Pad theme", "NX Carbon"),
                 SettingsRow(SettingsKind.ACCENT, "Accent", "White"),
                 SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", "Auto"),
                 SettingsRow(SettingsKind.TEXT_SIZE, "Text size", "Large"),
@@ -5579,18 +5580,23 @@ class AppStateTest {
         val state = state(settings)
         state.load()
         state.openSettings(SettingsSection.APPEARANCE)
-        assertEquals(SettingsRow(SettingsKind.PAD_THEME, "Pad theme", "Charcoal"), assertIs<Screen.Settings>(state.screen.value).rows[0])
-        state.select(0); state.onButton(NxButton.A)
+        assertEquals(SettingsRow(SettingsKind.PAD_THEME, "Pad theme", "NX Carbon"), assertIs<Screen.Settings>(state.screen.value).rows[0])
+        state.select(0); state.onButton(NxButton.RIGHT)
+        assertEquals(PadTheme.CHARCOAL, settings.padTheme)
+        assertEquals("Charcoal", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
+        assertEquals(ListSelection(0, 5), state.selection.value)   // the row stays highlighted
+        state.onButton(NxButton.RIGHT)
         assertEquals(PadTheme.RETRO, settings.padTheme)
         assertEquals("Retro", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
         assertEquals(ListSelection(0, 5), state.selection.value)   // the row stays highlighted
-        state.onButton(NxButton.A)
+        state.onButton(NxButton.RIGHT)
         assertEquals(PadTheme.BLACK, settings.padTheme)
         assertEquals("Black", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
         assertEquals(ListSelection(0, 6), state.selection.value)   // Pad buttons came in below
-        state.onButton(NxButton.A)
-        assertEquals(PadTheme.CHARCOAL, settings.padTheme)
-        assertEquals("Charcoal", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
+        state.onButton(NxButton.RIGHT)
+        assertEquals(PadTheme.NX_CARBON, settings.padTheme)
+        assertEquals("NX Carbon", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
+        assertEquals(ListSelection(0, 5), state.selection.value)   // and went again
     }
 
     // Pad buttons is Black's own: the row shows only while Black is the theme, steps Grey / Outline in place, and the
@@ -5616,7 +5622,7 @@ class AppStateTest {
         state.onButton(NxButton.LEFT)
         assertEquals(PadButtons.OUTLINE, settings.padButtons)
         state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A); state.onButton(NxButton.A)   /* asks, then Reset */
-        assertEquals(PadTheme.CHARCOAL, settings.padTheme)
+        assertEquals(PadTheme.NX_CARBON, settings.padTheme)
         assertEquals(PadButtons.GREY, settings.padButtons)
         assertEquals(null, rows().firstOrNull { it.kind == SettingsKind.PAD_BUTTONS })   // gone with Black
     }
@@ -5629,7 +5635,7 @@ class AppStateTest {
         state.openSettings(SettingsSection.APPEARANCE)
         state.select(0)
         state.onButton(NxButton.LEFT); assertEquals(PadTheme.BLACK, settings.padTheme)
-        state.onButton(NxButton.RIGHT); assertEquals(PadTheme.CHARCOAL, settings.padTheme)
+        state.onButton(NxButton.RIGHT); assertEquals(PadTheme.NX_CARBON, settings.padTheme)
         assertEquals(ListSelection(0, 5), state.selection.value)   // the row stays highlighted
     }
 
@@ -6099,11 +6105,10 @@ class AppStateTest {
         state.openSettingsMenu()
         tap(state, 2)                                                   // Appearance, opened at once
         assertEquals(SettingsSection.APPEARANCE, assertIs<Screen.Settings>(state.screen.value).section)
-        val theme = settings.padTheme
-        state.onButton(NxButton.DOWN)                                   // off the pad theme row
-        tap(state, 0)                                                   // Pad theme: highlighted and stepped, as A does
-        assertEquals(0, state.selection.value.index)
-        assertNotEquals(theme, settings.padTheme)
+        val size = settings.optionTextSize
+        tap(state, 3)                                                   // Text size: highlighted and stepped, as A does
+        assertEquals(3, state.selection.value.index)
+        assertNotEquals(size, settings.optionTextSize)
     }
 
     @Test fun one_tap_opens_a_retroachievements_row() = runTest {
@@ -9918,7 +9923,7 @@ class AppStateTest {
     }
 
     private fun assertAppearanceAtDefaults(settings: AppSettings) {
-        assertEquals(PadTheme.CHARCOAL, settings.padTheme)
+        assertEquals(PadTheme.NX_CARBON, settings.padTheme)
         assertEquals(AccentPreset.WHITE, settings.accent)
         assertEquals(SecondaryAccent.Auto, settings.secondaryAccent)
     }
@@ -9948,7 +9953,7 @@ class AppStateTest {
         val state = state(settings)
         state.load()
         state.openSettings(SettingsSection.APPEARANCE)
-        assertEquals(listOf("Charcoal", "White"), assertIs<Screen.Settings>(state.screen.value).rows.take(2).map { it.secondary })
+        assertEquals(listOf("NX Carbon", "White"), assertIs<Screen.Settings>(state.screen.value).rows.take(2).map { it.secondary })
         fun page(section: SettingsSection) = state.openLayoutsPage(section).map { it.label to it.secondary }
         assertEquals(
             listOf(
@@ -10010,7 +10015,7 @@ class AppStateTest {
         assertEquals(false, settings.menuExtraInfo)
         val page = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.APPEARANCE, page.section); assertFalse(page.confirmReset)   // the question gone, no page change
-        assertEquals(listOf("Charcoal", "White"), page.rows.take(2).map { it.secondary })   // the rows re-read
+        assertEquals(listOf("NX Carbon", "White"), page.rows.take(2).map { it.secondary })   // the rows re-read
         assertEquals(ListSelection(reset, page.rows.size), state.selection.value)       // still on the reset row
     }
 
@@ -10655,7 +10660,7 @@ class AppStateTest {
             assertEquals(s.rows.size, s.choices.size)
             return s.choices[s.rows.indexOfFirst { it.kind == kind }]
         }
-        assertEquals(SettingChoices(listOf("Charcoal", "Retro", "Black"), 0), choices(SettingsSection.APPEARANCE, SettingsKind.PAD_THEME))
+        assertEquals(SettingChoices(listOf("NX Carbon", "Charcoal", "Retro", "Black"), 0), choices(SettingsSection.APPEARANCE, SettingsKind.PAD_THEME))
         assertEquals(SettingChoices(AccentPreset.entries.map { it.label }, 0), choices(SettingsSection.APPEARANCE, SettingsKind.ACCENT))
         assertEquals(SettingChoices(listOf("Large", "Small"), 0), choices(SettingsSection.APPEARANCE, SettingsKind.TEXT_SIZE))
         assertNull(choices(SettingsSection.APPEARANCE, SettingsKind.RESET_DEFAULTS))
