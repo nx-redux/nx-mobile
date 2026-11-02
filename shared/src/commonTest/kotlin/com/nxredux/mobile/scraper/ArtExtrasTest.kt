@@ -111,6 +111,25 @@ class ArtExtrasTest {
         assertNotNull(fs.bytesAt("$media/wheel/Tetris.png"))
     }
 
+    @Test fun aWideRunAsksScreenScraperOnceForAGameLackingOnlyItsWheel() = runTest {
+        val fs = Scrape.homeTree()
+        val http = FakeHttp()
+        val options = mutableListOf<ArtOption>()
+        val ss = ScreenScraperSource(http, FakeHasher(), { ScraperAuth("DEV", "DEVPW") }, { 0L }) {}
+        val engine = ScrapeEngine(
+            http, FakeFitter(), fs, Scrape.home, listOf(ss), { _, _ -> }, { }, extras = { ArtExtras(wheel = true) },
+            onOptions = { _, o, _ -> options += o },
+        )
+        http.on("romnom=Tetris.gb", Scrape.found("ss" to "https://m/ss.png", "box-3D" to "https://m/3d.png", "wheel" to "https://m/w.png"))
+        http.on("https://m/", png(1))
+        val game = tetris.copy(have = Scrape.HAS_ART)
+        engine.run(ScrapeState(items = listOf(Scrape.item(game))), { game }, wide = true) {}
+        assertEquals(1, http.count("jeuInfos"))   // the wide pass's slots rode on the wheel's lookup
+        assertTrue(options.any { it.slot == ArtSlot.SCREENSHOT && it.source == SourceId.SS }, "$options")
+        assertNotNull(fs.bytesAt("$media/wheel/Tetris.png"))
+        assertNull(fs.bytesAt("$media/screenshot/Tetris.png"))   // the screenshot hit is only recorded
+    }
+
     @Test fun screenScraperFallsBackToThePlainWheelWhenWheelHdFails() = runTest {
         val fs = Scrape.homeTree()
         val http = FakeHttp()

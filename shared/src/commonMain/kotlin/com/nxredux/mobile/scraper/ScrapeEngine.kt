@@ -150,8 +150,8 @@ class ScrapeEngine(
      * named in [ScrapeState.notes] of [start] stay stopped (a chained run of the same job); a new job or Resume clears
      * them. [startSources] false: the sources' [ArtSource.startJob] is not called (a single-game fetch while a job runs
      * on the same sources must not reset that job's per-run state). [wide] (a single-game Change art fetch): the has-art
-     * skips are bypassed and, after the usual flow, every known source is also asked for the screenshot, grid and hero
-     * slots it was not asked for, only to report the options ([onOptions], with wide = true only when that pass finished:
+     * skips are bypassed and every known source is also asked for its screenshot, grid and hero slots (in the usual
+     * flow's call to it, or after the usual flow for a source it did not ask), only to report the options ([onOptions], with wide = true only when that pass finished:
      * a pause, a storage failure or a stopped source leaves it false, the hits so far still reported). The usual flow
      * still writes the slots the game lacks; the wide pass writes nothing, and a source stopping there never changes
      * the game's status.
@@ -398,22 +398,29 @@ class ScrapeEngine(
                 // a hero (the landscape background) only when there is no screenshot and no hero.
                 val wantGrid = ArtSlot.GRID in src.slots && (needBox || (needShot && !haveGrid))
                 val wantHero = ArtSlot.HERO in src.slots && needShot && !haveHero
-                val wanted = buildSet {
+                val usual = buildSet {
                     if (needBox) addAll(src.slots intersect BOX_SLOTS)
                     if (want2d && ArtSlot.BOX_2D in src.slots) add(ArtSlot.BOX_2D)
                     if (wantGrid) add(ArtSlot.GRID)
                     if (needShot && ArtSlot.SCREENSHOT in src.slots) add(ArtSlot.SCREENSHOT)
                     if (wantHero) add(ArtSlot.HERO)
-                    // A wheel-last source: never asked in turn for the wheel alone (it would spend calls before the others).
-                    if (wantWheel && ArtSlot.WHEEL in src.slots && (!src.wheelLast || isNotEmpty())) add(ArtSlot.WHEEL)
+                    // A wheel-last source: never asked in turn for the wheel alone (it would spend calls before the
+                    // others), unless the wide pass asks it now anyway.
+                    if (wantWheel && ArtSlot.WHEEL in src.slots && (!src.wheelLast || isNotEmpty() || wide)) add(ArtSlot.WHEEL)
                 }
+                // The wide pass's slots ride on this call (a second lookup could cost another request): their hits are
+                // only recorded, the writes below stay gated by what the game lacks, and a source asked only for them
+                // never counts toward the game's status.
+                val wanted = if (wide) usual + (src.slots intersect OPTION_SLOTS) else usual
                 if (wanted.isEmpty()) continue
-                if (src.id in stopped) { stoppedBefore++; continue }
-                asked++
-                askedSlots[src.id] = wanted
-                val hits = try { src.find(ref, wanted) } catch (e: SourceStop) { stop(src, e); stoppedHere++; continue }
+                val counts = usual.isNotEmpty()
+                if (src.id in stopped) { if (counts) stoppedBefore++; continue }
+                if (counts) asked++
+                val hits = try { src.find(ref, wanted) } catch (e: SourceStop) { stop(src, e); if (counts) stoppedHere++; continue }
+                askedSlots[src.id] = wanted   // only once answered: a stop here leaves the wide pass to find it stopped
                 if (hits.isEmpty()) continue
                 recordOptions(hits, options)
+                if (hits.none { it.slot in usual }) continue
                 offered = true
                 if (!notified) { notified = true; downloading() }
                 // With the 2D box as its own download, the box here is the 3D one (or a grid); the 2D one follows.
@@ -460,7 +467,7 @@ class ScrapeEngine(
                 if (wheels.isNotEmpty() && !notified) { notified = true; downloading() }
                 if (firstWritten(wheels) != null) { wantWheel = false; writers += src.shortLabel }
             }
-            // The wide pass: the option slots not asked yet, hits recorded only.
+            // The wide pass: the option slots not asked yet (a source the usual flow skipped or stopped at), hits recorded only.
             if (wide && !storageFailed) {
                 var complete = true
                 for (src in known) {
