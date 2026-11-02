@@ -691,10 +691,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         syncMenuScreen()
     }
 
-    /**
-     * The menu stays awake for pad browsing, but not as the home screen: there it would keep the phone from ever
-     * sleeping. Read on every resume, after the role dialog or Android's home settings may have changed it.
-     */
+    /** Back in front: the screen-on rule ([applyKeepScreenOn]) is set again, the netplay pages or a sync may have changed meanwhile. */
     override fun onResume() {
         super.onResume()
         if (handOverToHome()) return
@@ -711,9 +708,10 @@ class MainActivity : ComponentActivity(), FolderPicker {
     }
 
     /**
-     * Netplay's host/join pages ([netplayAwake], set through [AndroidNetplay.screenOn]) and a running Device Sync
-     * ([syncAwake], set for every live instance through [DeviceSyncs.screenOn]) hold the screen on even as the home
-     * screen. [syncAwake] null: no report since this instance was created (the server role reports keepAlive once, maybe
+     * The menu lets the screen sleep, as an app or the home screen: a pad press resets Android's timeout as a touch does,
+     * so browsing never needs it held. Only waits nobody presses through hold it on: netplay's host/join pages
+     * ([netplayAwake], set through [AndroidNetplay.screenOn]) and a running Device Sync ([syncAwake], set for every live
+     * instance through [DeviceSyncs.screenOn]). [syncAwake] null: no report since this instance was created (the server role reports keepAlive once, maybe
      * before), so the controller's `running` decides. A report wins over `running`, which still reads true while the
      * sync's final keepAlive(false) runs.
      */
@@ -727,8 +725,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
 
     private fun applyKeepScreenOn() {
         val syncing = syncAwake ?: (DeviceSyncs.current()?.running == true)
-        if (!netplayAwake && !syncing && ::launcher.isInitialized && launcher.isHome()) window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        else window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (netplayAwake || syncing) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     override fun onPause() {

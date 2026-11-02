@@ -331,7 +331,8 @@ class GLRetroView(
         preserveEGLContextOnPause = true
         setEGLContextClientVersion(openGLESVersion)
         setRenderer(Renderer())
-        keepScreenOn = true
+        // No keepScreenOn here: the host's window decides (nx-mobile's GameActivity holds the screen on while the game
+        // runs, not under its in-game menu). A view's own flag would hold it whatever the window says.
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_CREATE)

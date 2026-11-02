@@ -591,7 +591,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Debug only: a GAME test hook's game runs on a locked test device (NxTestResults.markShowWhenLocked).
         if (BuildConfig.DEBUG && com.nxredux.mobile.test.NxTestResults.takeShowWhenLocked(this)) {
             setShowWhenLocked(true); setTurnScreenOn(true)
-            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            testAwake = true
         }
         // Cross-fade in from the menu instead of the default slide-from-right: the bottom pad is
         // identical and in the same position in both screens, so a fade keeps it visually steady while
@@ -615,7 +615,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         showNameHold(savedInstanceState)
         dual.readPlayTotal()   // before this launch's own slices land: the header's total stays as it was
         volumeControlStream = AudioManager.STREAM_MUSIC   // volume keys set the game's (media) volume, even between sounds
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        syncKeepScreenOn()
         window.goImmersive()
         // Portrait: start the game below a top camera cutout. Returned unconsumed so children still get it.
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root)) { _, insets ->
@@ -780,8 +780,21 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         pushMicSource()
     }
 
+    // Debug only: a GAME test hook's locked test device stays awake whatever the menu does.
+    private var testAwake = false
+
+    /**
+     * The screen stays on while the game runs (cutscenes and attract screens get no input), not under the in-game menu:
+     * a paused game sleeps on Android's timeout. A live netplay session runs on under the menu, so it holds the screen too.
+     */
+    private fun syncKeepScreenOn() {
+        if (testAwake || !menuOpen || netplayGame?.live == true) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
     /** The opening menu holds the game ([InGameMenuController.openMenu]), as [focusPause] does. */
     override fun pauseForMenu() {
+        syncKeepScreenOn()
         syncMotionSensors()   // no motion while paused
         // netplay: native runs a session at speed 1 whatever frameSpeed says; a local pause stops this device's input instead.
         netplayGame?.takeIf { it.live }?.pause() ?: run { retroView?.frameSpeed = 0 }
@@ -793,6 +806,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /** The menu closed ([InGameMenuController.closeMenu]): the game plays on, unless the focus pause still holds it. */
     override fun resumeAfterMenu() {
+        syncKeepScreenOn()
         if (focusPaused) { syncMotionSensors(); pushMicSource(); return }   // another app has the focus: focusResume plays on later
         netplayGame?.takeIf { it.live }?.resume()   // netplay: input goes out again (see openMenu)
         if (!netplayStartFailed) {   // netplay: a failed start keeps the game paused behind its dialog
