@@ -46,9 +46,9 @@ class InGameMenuModelTest {
     private fun model() = plain(InGameMenuModel("Tetris", slotCount = 8, initialSlot = 2))
 
     /** The Options page of [plain]'s console: its Gameplay and Audio rows locked, so only Display and Controls (Pad Opacity). */
-    private val PLAIN_OPTIONS = listOf("Display", "Controls", "Shortcuts", "Shaders", "Core Options", "Save Changes")
+    private val PLAIN_OPTIONS = listOf("Display", "Controls", "Shortcuts", "Shaders", "Emulator", "Save Changes")
     /** The Options page with every group. */
-    private val FULL_OPTIONS = listOf("Display", "Controls", "Gameplay", "Audio", "Shortcuts", "Shaders", "Core Options", "Save Changes")
+    private val FULL_OPTIONS = listOf("Display", "Controls", "Gameplay", "Audio", "Shortcuts", "Shaders", "Emulator", "Save Changes")
     private val DISPLAY = PageKind.Settings(OptionGroup.DISPLAY)
 
     private val palette = CoreOption("pal", "a", label = "Palette", info = "Colors.", category = "video",
@@ -63,7 +63,7 @@ class InGameMenuModelTest {
     private fun InGameMenuModel.openCoreOptions(): InGameMenuModel {
         press(NxButton.DOWN); press(NxButton.DOWN); press(NxButton.DOWN)   // Options
         press(NxButton.A)                                                  // -> Options page
-        select(optionsRow("Core Options"))
+        select(optionsRow("Emulator"))
         assertEquals(MenuEffect.OpenCoreOptions, press(NxButton.A))        // Core Options (host loads)
         showCoreOptions(listOf(palette, speed, hidden), locked = emptySet())
         return this
@@ -210,7 +210,7 @@ class InGameMenuModelTest {
         val m = model().openCoreOptions()
         val page = m.state.page
         assertEquals(PageKind.CoreOptions, page.kind)
-        assertEquals("Core Options", page.title)
+        assertEquals("Emulator", page.title)
         // Only the live options: the line says where the ones read at start are.
         assertEquals(InGameMenuModel.CORE_OPTIONS_INTRO, page.intro)
         assertTrue("Game Settings" in page.intro && "Tools → Settings → Emulation → Default settings" in page.intro)
@@ -228,9 +228,9 @@ class InGameMenuModelTest {
         assertNull(m.press(NxButton.A))                      // open Video
         assertEquals(PageKind.Category("video"), m.state.page.kind)
         assertEquals("Video", m.state.page.title)
-        assertEquals(MenuEffect.SetOption("pal", "b"), m.press(NxButton.RIGHT))
+        assertEquals(MenuEffect.SetOption("pal", "b"), m.press(NxButton.A))   // A steps segments
         assertEquals("B", (m.state.page.rows.single() as MenuRow.Option).valueLabel)
-        assertEquals(MenuEffect.SetOption("pal", "a"), m.press(NxButton.RIGHT))   // wraps
+        assertEquals(MenuEffect.SetOption("pal", "a"), m.press(NxButton.A))   // wraps
     }
 
     @Test fun a_on_a_segmented_option_steps_it_and_shows_no_page() {
@@ -245,7 +245,7 @@ class InGameMenuModelTest {
 
     @Test fun a_on_option_without_choices_does_nothing() {
         val m = model()
-        m.select(3); m.activate(3); m.activate(m.optionsRow("Core Options"))
+        m.select(3); m.activate(3); m.activate(m.optionsRow("Emulator"))
         m.showCoreOptions(listOf(CoreOption("k", "v", label = "Raw", info = "Raw value.")), emptySet())
         assertEquals(NxSettingControl.VALUE, m.optionRow(0).control)
         assertNull(m.press(NxButton.A))
@@ -255,7 +255,7 @@ class InGameMenuModelTest {
 
     @Test fun left_right_on_option_without_choices_does_nothing() {
         val m = model()
-        m.select(3); m.activate(3); m.activate(m.optionsRow("Core Options"))
+        m.select(3); m.activate(3); m.activate(m.optionsRow("Emulator"))
         m.showCoreOptions(listOf(CoreOption("k", "v", label = "Raw")), emptySet())
         assertNull(m.press(NxButton.RIGHT))
         assertEquals("v", (m.state.page.rows.single() as MenuRow.Option).valueLabel)
@@ -263,10 +263,10 @@ class InGameMenuModelTest {
 
     @Test fun no_live_options_shows_the_empty_message() {
         val m = model()
-        m.select(3); m.activate(3); m.activate(m.optionsRow("Core Options"))
+        m.select(3); m.activate(3); m.activate(m.optionsRow("Emulator"))
         m.showCoreOptions(listOf(hidden), emptySet())
         assertEquals(PageKind.Message, m.state.page.kind)
-        assertEquals("This core has no options that\ncan be changed while running.", m.state.page.footer)
+        assertEquals("This emulator has no options that\ncan be changed while running.", m.state.page.footer)
     }
 
     @Test fun update_options_clamps_selection() {
@@ -306,7 +306,7 @@ class InGameMenuModelTest {
     }
 
     private fun InGameMenuModel.toCoreOptionsRow(): InGameMenuModel {
-        select(3); activate(3); select(optionsRow("Core Options"))   // Options page, Core Options selected
+        select(3); activate(3); select(optionsRow("Emulator"))   // Options page, Core Options selected
         return this
     }
 
@@ -341,7 +341,7 @@ class InGameMenuModelTest {
         m.updateOptions(listOf(a.copy(visible = false), b, c))
         assertEquals(1, m.state.page.selected)
         assertEquals("c", (m.state.page.rows[m.state.page.selected] as MenuRow.Option).key)
-        assertEquals(MenuEffect.SetOption("c", "2"), m.press(NxButton.RIGHT))
+        assertEquals(MenuEffect.SetOption("c", "2"), m.press(NxButton.A))
         m.updateOptions(listOf(a, b, c.copy(value = "2")))  // a revealed above the selection
         assertEquals(2, m.state.page.selected)
         assertEquals("c", (m.state.page.rows[m.state.page.selected] as MenuRow.Option).key)
@@ -367,7 +367,7 @@ class InGameMenuModelTest {
         val m = model().toCoreOptionsRow()
         m.press(NxButton.A)
         m.showCoreOptions(listOf(CoreOption("k", "z", label = "K", values = listOf("x", "y"))), emptySet())
-        assertEquals(MenuEffect.SetOption("k", "x"), m.press(NxButton.RIGHT))
+        assertEquals(MenuEffect.SetOption("k", "x"), m.press(NxButton.A))
     }
 
     private val overlayNames = listOf("Aspect.png", "Native.png")
@@ -387,6 +387,12 @@ class InGameMenuModelTest {
     }
 
     private fun InGameMenuModel.optionRow(i: Int) = state.page.rows[i] as MenuRow.Option
+
+    /** The selected option's next ([delta] 1) or previous choice, wrapping, as the picker or A on segments sets it. */
+    private fun InGameMenuModel.stepRow(delta: Int): MenuEffect? {
+        val r = optionRow(state.page.selected)
+        return setChoice(state.page.selected, (r.index + delta).mod(r.choices.size))
+    }
 
     @Test fun display_page_lists_the_picture_settings_with_values_and_visual_flags() {
         val m = model().openFrontend()
@@ -410,22 +416,25 @@ class InGameMenuModelTest {
         assertEquals(listOf("100%", "60%", "40%", "25%"), opacity.choices)
         assertEquals(2, opacity.index)
         m.select(1)
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.PAD_LANDSCAPE_OPACITY, "25"), m.press(NxButton.RIGHT))
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.PAD_LANDSCAPE_OPACITY, "25"), m.press(NxButton.A))   // A steps segments
         assertEquals("25%", m.optionRow(1).valueLabel)                     // not a visual row: in place
     }
 
-    @Test fun left_right_on_the_list_emit_set_frontend() {
+    @Test fun a_changes_a_row_left_right_go_between_pages() {
         val m = model().openFrontend()
-        // A visual row: RIGHT opens its live preview and changes it there; LEFT steps back in it.
+        // A visual row: A opens its live preview, RIGHT changes it there; LEFT steps back in it.
+        assertNull(m.press(NxButton.A))
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.press(NxButton.RIGHT))
         assertEquals(PageKind.Adjust(FrontendOptions.SCALING), m.state.page.kind)
         assertEquals("Native", m.optionRow(0).valueLabel)
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Auto"), m.press(NxButton.LEFT))
         m.press(NxButton.B)
         m.select(5)
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "On"), m.press(NxButton.RIGHT))
+        assertNull(m.press(NxButton.RIGHT))                                // a setting: RIGHT changes nothing
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "On"), m.press(NxButton.A))   // A flips the switch
         assertEquals("On", m.optionRow(5).valueLabel)                      // not a visual row: in place
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "Off"), m.press(NxButton.LEFT))
+        assertNull(m.press(NxButton.LEFT))                                 // LEFT goes back to Options
+        assertEquals(PageKind.Options, m.state.page.kind)
     }
 
     @Test fun frontend_page_shows_none_and_auto_by_default_whatever_the_files() {
@@ -439,7 +448,7 @@ class InGameMenuModelTest {
 
     @Test fun overlay_cycles_through_none_and_the_given_files() {
         val m = model().openFrontend()
-        m.select(2)
+        m.select(2); m.press(NxButton.A)                     // its live preview
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.OVERLAY, "Aspect.png"), m.press(NxButton.RIGHT))
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.OVERLAY, "Native.png"), m.press(NxButton.RIGHT))
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.OVERLAY, "None"), m.press(NxButton.RIGHT))
@@ -447,7 +456,7 @@ class InGameMenuModelTest {
 
     @Test fun overlay_without_files_does_nothing() {
         val m = model().openFrontend(overlays = emptyList())
-        m.select(2)
+        m.select(2); m.press(NxButton.A)                     // its live preview
         assertNull(m.press(NxButton.RIGHT))
         assertEquals("None", m.optionRow(0).valueLabel)                   // its live preview, unchanged
     }
@@ -529,6 +538,7 @@ class InGameMenuModelTest {
     @Test fun stored_raw_value_shows_raw_and_right_goes_to_first() {
         val m = model().openFrontend(values = FrontendOptions.defaults() + (FrontendOptions.SCALING to "Cropped"))
         assertEquals("Cropped", m.optionRow(0).valueLabel)
+        m.press(NxButton.A)                                  // its live preview
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Auto"), m.press(NxButton.RIGHT))
     }
 
@@ -608,6 +618,7 @@ class InGameMenuModelTest {
 
     @Test fun left_right_on_the_shader_row_emit_set_shader() {
         val m = shadersModel(values = mapOf("nx_shader" to "None"))
+        m.press(NxButton.A)                                  // its live preview
         assertEquals(MenuEffect.SetShader("nx_shader", "crt/crt-pi.glslp"), m.press(NxButton.RIGHT))
         assertEquals("crt/crt-pi.glslp", (m.state.page.rows[0] as MenuRow.Option).valueLabel)
         assertEquals(MenuEffect.SetShader("nx_shader", "None"), m.press(NxButton.LEFT))
@@ -616,6 +627,7 @@ class InGameMenuModelTest {
     @Test fun raw_preset_value_shows_raw_and_right_goes_to_none() {
         val m = shadersModel(values = mapOf("nx_shader" to "gone/x.glslp"))
         assertEquals("gone/x.glslp", (m.state.page.rows[0] as MenuRow.Option).valueLabel)
+        m.press(NxButton.A)                                  // its live preview
         assertEquals(MenuEffect.SetShader("nx_shader", "None"), m.press(NxButton.RIGHT))
     }
 
@@ -629,6 +641,7 @@ class InGameMenuModelTest {
         assertEquals(listOf("", ""), rows.map { it.info })                  // compact: never the raw parameter id
         assertTrue(rows.none { it.hasMoreInfo || "SCAN" in it.fullInfo || "MASK" in it.fullInfo })
         assertEquals(true, rows.all { it.visual })
+        m.press(NxButton.A)                                  // its live preview
         assertEquals(MenuEffect.SetShader("nx_shader_param_SCAN", "0.00"), m.press(NxButton.RIGHT))   // wraps past max
     }
 
@@ -1422,7 +1435,7 @@ class InGameMenuModelTest {
         assertEquals(listOf("Bottom screen") + PICTURE_ROWS, m.state.page.rows.map { it.label })
         m.select(0)
         assertEquals("System default", m.optionRow(0).valueLabel)
-        assertEquals(MenuEffect.SetFrontend(BottomScreenOptions.KEY, "main"), m.press(NxButton.RIGHT))
+        assertEquals(MenuEffect.SetFrontend(BottomScreenOptions.KEY, "main"), m.stepRow(1))
         assertEquals("Main screen", m.optionRow(0).valueLabel)
         m.setSecondScreen(connected = false, on = true)
         assertEquals(PICTURE_ROWS, m.state.page.rows.map { it.label })
@@ -1491,14 +1504,16 @@ class InGameMenuModelTest {
             m.state.page.rows.map { it.label },
         )
         assertEquals("Large screen", m.optionRow(0).valueLabel)           // the portrait layout's default
+        assertNull(m.press(NxButton.A))                                    // a visual row: A opens its live preview
         assertEquals(MenuEffect.SetFrontend(NdsOptions.LAYOUT_PORTRAIT, "stacked"), m.press(NxButton.RIGHT))
         assertEquals(PageKind.Adjust(NdsOptions.LAYOUT_PORTRAIT), m.state.page.kind)   // a visual row changes in its live preview
         assertEquals("Stacked", m.optionRow(0).valueLabel)
         m.press(NxButton.B)
         assertEquals("Large screen", m.optionRow(1).valueLabel)            // the controller layout's default
         m.select(5)                                                        // Big Screen
+        assertNull(m.press(NxButton.A))                                    // its live preview
         assertEquals(MenuEffect.SetFrontend(NdsOptions.BIG_SCREEN, "bottom"), m.press(NxButton.RIGHT))
-        assertEquals(PageKind.Adjust(NdsOptions.BIG_SCREEN), m.state.page.kind)   // RIGHT went into its live preview
+        assertEquals(PageKind.Adjust(NdsOptions.BIG_SCREEN), m.state.page.kind)
         assertNull(m.press(NxButton.A))                                    // A there does nothing
         assertEquals("Bottom screen", (m.state.page.rows.single() as MenuRow.Option).valueLabel)
         assertEquals(MenuEffect.SetFrontend(NdsOptions.BIG_SCREEN, "top"), m.press(NxButton.LEFT))
@@ -1519,7 +1534,7 @@ class InGameMenuModelTest {
         assertEquals("Large screen", landscape.valueLabel)
         assertFalse("Side by side" in landscape.choices)
         fold.select(2)
-        fold.press(NxButton.LEFT)                                          // Large screen back to the last one offered
+        fold.press(NxButton.A); fold.press(NxButton.LEFT)                  // its live preview: Large screen back to the last one offered
         assertEquals("Picture in picture", fold.optionRow(0).valueLabel)   // in its live preview
         val phone = model().apply { screen = ScreenClass.REGULAR_PHONE }.openConsoleSettings()
         assertEquals("Side by side", phone.optionRow(2).valueLabel)
@@ -1572,6 +1587,7 @@ class InGameMenuModelTest {
         assertNull(m.state.popup)
         m.setFrontend(FrontendOptions.defaults("NDS"), overlayNames, emptySet(), "NDS", overlayAvailable = true)
         assertEquals("None", m.optionRow(overlay).valueLabel)
+        m.press(NxButton.A)                                                // its live preview, now that it is visual
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.OVERLAY, "Aspect.png"), m.press(NxButton.RIGHT))
     }
 
@@ -1588,9 +1604,9 @@ class InGameMenuModelTest {
         assertTrue("Max Scale" in m.state.page.rows.map { it.label })
         assertTrue("Scale" !in m.state.page.rows.map { it.label })
         m.select(m.state.page.rows.indexOfFirst { it.label == "3D Resolution" })
-        assertEquals(MenuEffect.SetFrontend(NdsOptions.MODE_3D, "quality"), m.press(NxButton.RIGHT))
+        assertEquals(MenuEffect.SetFrontend(NdsOptions.MODE_3D, "quality"), m.stepRow(1))
         assertTrue(m.state.page.rows.none { it.label.endsWith("Scale") && it.label != "Big Screen" })
-        assertEquals(MenuEffect.SetFrontend(NdsOptions.MODE_3D, "performance"), m.press(NxButton.RIGHT))
+        assertEquals(MenuEffect.SetFrontend(NdsOptions.MODE_3D, "performance"), m.stepRow(1))
         assertTrue("Max Scale" !in m.state.page.rows.map { it.label })
         assertTrue("Scale" in m.state.page.rows.map { it.label })
     }
@@ -1658,8 +1674,8 @@ class InGameMenuModelTest {
         assertEquals(DISPLAY, m.state.page.kind)          // no Adjust page
         m.press(NxButton.B)
         assertNull(m.state.popup)
-        assertEquals(MenuEffect.SetFrontend(N3dsOptions.LAYOUT_LANDSCAPE, "stacked"), m.press(NxButton.RIGHT))
-        assertEquals(MenuEffect.SetFrontend(N3dsOptions.LAYOUT_LANDSCAPE, "large"), m.press(NxButton.LEFT))
+        assertEquals(MenuEffect.SetFrontend(N3dsOptions.LAYOUT_LANDSCAPE, "stacked"), m.stepRow(1))
+        assertEquals(MenuEffect.SetFrontend(N3dsOptions.LAYOUT_LANDSCAPE, "large"), m.stepRow(-1))
         assertEquals(DISPLAY, m.state.page.kind)
     }
 
@@ -1743,7 +1759,7 @@ class InGameMenuModelTest {
     /** Core Options with two plain options, their core text behind the info icon only. */
     private fun twoCoreOptions(): InGameMenuModel {
         val m = model()
-        m.select(3); m.activate(3); m.activate(m.optionsRow("Core Options"))
+        m.select(3); m.activate(3); m.activate(m.optionsRow("Emulator"))
         m.showCoreOptions(
             listOf(
                 CoreOption("a", "1", label = "Alpha", info = "Alpha text.", values = listOf("1", "2")),
@@ -1839,19 +1855,19 @@ class InGameMenuModelTest {
         val bare = MenuRow.Option("Speed", "k", "v", "")
         fun page(kind: PageKind, row: MenuRow) = MenuPage(kind, "T", listOf(row))
         assertEquals(
-            listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Adjust"), Hint(NxButton.X, "Info"), Hint(NxButton.B, "Back")),
+            listOf(Hint(NxButton.A, "Adjust"), Hint(NxButton.X, "Info"), Hint(NxButton.B, "Back")),
             hintsFor(page(DISPLAY, visual), visual, infoTruncated = true),
         )
         assertEquals(
-            listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Adjust"), Hint(NxButton.B, "Back")),
+            listOf(Hint(NxButton.A, "Adjust"), Hint(NxButton.B, "Back")),
             hintsFor(page(DISPLAY, visual), visual, infoTruncated = false),
         )
         assertEquals(
-            listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.X, "Info"), Hint(NxButton.B, "Back")),
+            listOf(Hint(NxButton.X, "Info"), Hint(NxButton.B, "Back")),
             hintsFor(page(DISPLAY, plain), plain, infoTruncated = true),
         )
-        assertEquals(listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.B, "Back")), hintsFor(page(DISPLAY, plain), plain))
-        assertEquals(listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.B, "Back")), hintsFor(page(PageKind.CoreOptions, bare), bare, infoTruncated = true))
+        assertEquals(listOf(Hint(NxButton.B, "Back")), hintsFor(page(DISPLAY, plain), plain))
+        assertEquals(listOf(Hint(NxButton.B, "Back")), hintsFor(page(PageKind.CoreOptions, bare), bare, infoTruncated = true))
         // The root has no info area: its option (Disc N/M) keeps A Info when it has info.
         assertEquals(
             listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Info"), Hint(NxButton.B, "Resume")),
@@ -1945,22 +1961,27 @@ class InGameMenuModelTest {
         assertEquals(InGameMenuModel.PLAYERS_FOOTER, m.state.page.footer)
     }
 
-    @Test fun left_right_on_a_player_row_cycles_empty_and_every_pad() {
+    @Test fun a_player_row_cycles_empty_and_every_pad() {
         val m = model()
         m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB, padC))
         m.openPlayers()
         // Player 1 holds k1; candidates are [Empty, k1, k2, k3]: a benched pad too (the host puts it back in play).
-        assertEquals(MenuEffect.SetPlayer(0, "k2"), m.press(NxButton.RIGHT))
-        assertEquals(MenuEffect.SetPlayer(0, null), m.press(NxButton.LEFT))     // Empty: the host benches k1
+        assertEquals(4, m.optionRow(0).choices.size)
+        assertEquals(MenuEffect.SetPlayer(0, "k2"), m.stepRow(1))
+        assertEquals(MenuEffect.SetPlayer(0, null), m.stepRow(-1))             // Empty: the host benches k1
         m.press(NxButton.DOWN)                                                   // Player 2, Empty
-        assertEquals(MenuEffect.SetPlayer(1, "k3"), m.press(NxButton.LEFT))     // wraps to the last candidate
+        assertEquals(MenuEffect.SetPlayer(1, "k3"), m.stepRow(-1))             // wraps to the last candidate
+        assertNull(m.press(NxButton.LEFT))                                       // LEFT goes back, it changes nothing
+        assertEquals(PageKind.Root, m.state.page.kind)
     }
 
     @Test fun a_held_slot_cycles_from_empty() {
         val m = model()
         m.setPlayers(listOf(PlayerSlotRow("k9", "DualSense", connected = false), PlayerSlotRow(null, "", connected = false)), listOf(padA))
         m.openPlayers()
-        assertEquals(MenuEffect.SetPlayer(0, "k1"), m.press(NxButton.RIGHT))
+        assertNull(m.press(NxButton.A))                                         // A opens its picker
+        assertIs<MenuPopup.Picker>(m.state.popup)
+        assertEquals(MenuEffect.SetPlayer(0, "k1"), m.pickChoice(1))           // the held pad is not a choice
     }
 
     @Test fun set_players_refreshes_the_open_page_keeping_the_row() {
@@ -2219,7 +2240,7 @@ class InGameMenuModelTest {
 
     @Test fun core_option_rows_offer_their_visible_values() {
         val m = model()
-        m.select(3); m.activate(3); m.activate(m.optionsRow("Core Options"))
+        m.select(3); m.activate(3); m.activate(m.optionsRow("Emulator"))
         val hiddenValue = CoreOption("q", "hi", label = "Quality", values = listOf("lo", "hi", "max"), valueLabels = listOf("Low", "High", "Max"), hiddenValues = setOf("hi"))
         m.showCoreOptions(listOf(speed, hiddenValue), emptySet())
         assertEquals(listOf("1x", "2x"), m.optionRow(0).choices)
@@ -2364,10 +2385,11 @@ class InGameMenuModelTest {
         val segments = MenuRow.Option("Size", "s", "Small", "x", choices = listOf("Small", "Large"), index = 0)
         val visual = segments.copy(visual = true)
         val page = MenuPage(DISPLAY, "F", listOf(switch, picker, segments, visual))
-        assertEquals(listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Toggle"), Hint(NxButton.B, "Back")), hintsFor(page, switch))
-        assertEquals(listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Choose"), Hint(NxButton.X, "Info"), Hint(NxButton.B, "Back")), hintsFor(page, picker, infoTruncated = true))
-        assertEquals(listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.B, "Back")), hintsFor(page, segments))
-        assertEquals(listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Adjust"), Hint(NxButton.B, "Back")), hintsFor(page, visual))
+        // No ◄► Change: LEFT/RIGHT go between the pages, A changes the row.
+        assertEquals(listOf(Hint(NxButton.A, "Toggle"), Hint(NxButton.B, "Back")), hintsFor(page, switch))
+        assertEquals(listOf(Hint(NxButton.A, "Choose"), Hint(NxButton.X, "Info"), Hint(NxButton.B, "Back")), hintsFor(page, picker, infoTruncated = true))
+        assertEquals(listOf(Hint(NxButton.A, "Change"), Hint(NxButton.B, "Back")), hintsFor(page, segments))
+        assertEquals(listOf(Hint(NxButton.A, "Adjust"), Hint(NxButton.B, "Back")), hintsFor(page, visual))
         val sub = MenuRow.Submenu("Video", PageKind.Category("video"), "Display settings.")
         assertEquals(listOf(Hint(NxButton.A, "Open"), Hint(NxButton.X, "Info"), Hint(NxButton.B, "Back")), hintsFor(page, sub, infoTruncated = true))
     }
@@ -2567,7 +2589,7 @@ class InGameMenuModelTest {
         val m = shortcuts(canRewind = false)
         m.selectRow("Touch button 1")
         assertEquals(listOf("None", "Toggle FF", "Hold FF", "Reset Game"), m.row("Touch button 1").choices)
-        assertEquals(MenuEffect.ShortcutsChanged(ShortcutOverrides(touch = mapOf(TouchSlot.ONE to ShortcutAction.TOGGLE_FF))), m.press(NxButton.RIGHT))
+        assertEquals(MenuEffect.ShortcutsChanged(ShortcutOverrides(touch = mapOf(TouchSlot.ONE to ShortcutAction.TOGGLE_FF))), m.stepRow(1))
         assertEquals("Toggle FF", m.row("Touch button 1").valueLabel)
         assertEquals(MenuEffect.ShortcutsChanged(ShortcutOverrides.NONE), m.press(NxButton.Y))
         assertEquals("None (default)", m.row("Touch button 1").valueLabel)
@@ -2607,6 +2629,6 @@ class InGameMenuModelTest {
         assertEquals(bind, hintsFor(m.state.page, m.row("Toggle FF")))
         m.press(NxButton.A)
         assertEquals(listOf(Hint(NxButton.B, "Cancel")), hintsFor(m.state.page, m.row("Toggle FF")))
-        assertEquals(Hint(NxButton.LEFT, "Change"), hintsFor(m.state.page, m.row("Touch button 1")).first())
+        assertEquals(NxButton.A, hintsFor(m.state.page, m.row("Touch button 1")).first().button)   // A changes it: no ◄►
     }
 }

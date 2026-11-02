@@ -536,9 +536,12 @@ private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit,
     ) }
 }
 
-/** The in-game menu's word lists' selected word: the accent while the list has the focus, else the main ink (Settings' sections). */
+/**
+ * The in-game menu's word lists' selected word: the accent while the list has the focus, else a lighter grey ([NxColors.inkName])
+ * than the rest's ([NxColors.inkDim]), so the open row reads apart from the focused one even with a white accent.
+ */
 @Composable
-private fun menuWordInk(focused: Boolean): Color = if (focused) LocalNxColors.current.accent else LocalNxColors.current.main
+private fun menuWordInk(focused: Boolean): Color = if (focused) LocalNxColors.current.accent else LocalNxColors.current.inkName
 
 /** A word list's row pitch: the menu's [base] pitch, or [MENU_WORD_PITCH] × the word size where that is more, so words keep air between them. */
 @Composable
@@ -946,23 +949,23 @@ private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, pan
  */
 private fun shortcutHints(row: MenuRow.Option): List<Hint> = buildList {
     if (row.valueLabel == SHORTCUT_PROMPT) { add(Hint(NxButton.B, "Cancel")); return@buildList }
-    if (row.choices.isEmpty()) add(Hint(NxButton.A, "Bind")) else { add(Hint(NxButton.LEFT, "Change")); add(Hint(NxButton.A, "Choose")) }
+    if (row.choices.isEmpty()) add(Hint(NxButton.A, "Bind")) else add(Hint(NxButton.A, if (row.control == NxSettingControl.PICKER) "Choose" else "Change"))
     add(Hint(NxButton.X, "None"))
     add(Hint(NxButton.Y, "Default"))
     add(Hint(NxButton.B, "Back"))
 }
 
 /**
- * An option row: Change; A's Adjust on a visual row, Toggle on a switch, Choose on a picker (none on a segmented or a
- * value-only row, where A steps or does nothing); X Info when its description is cut off on its row or says more
- * ([MenuState.selectedShowsInfo], passed as [infoTruncated]).
+ * An option row: A changes it as a tap does (LEFT/RIGHT go between the pages, never change a value): Adjust on a visual
+ * row, Toggle on a switch, Choose on a picker, Change on segments (none on a value-only row, where A does nothing);
+ * X Info when its description is cut off on its row or says more ([MenuState.selectedShowsInfo], passed as [infoTruncated]).
  */
 private fun optionHints(row: MenuRow.Option, infoTruncated: Boolean): List<Hint> = buildList {
-    add(Hint(NxButton.LEFT, "Change"))
     when {
         row.visual -> add(Hint(NxButton.A, "Adjust"))
         row.control == NxSettingControl.SWITCH -> add(Hint(NxButton.A, "Toggle"))
         row.control == NxSettingControl.PICKER -> add(Hint(NxButton.A, "Choose"))
+        row.control == NxSettingControl.SEGMENTED || row.control == NxSettingControl.SWATCHES -> add(Hint(NxButton.A, "Change"))
     }
     if (infoTruncated && row.fullInfo.isNotBlank()) add(Hint(NxButton.X, "Info"))
     add(Hint(NxButton.B, "Back"))

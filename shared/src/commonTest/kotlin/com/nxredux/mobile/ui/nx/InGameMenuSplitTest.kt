@@ -139,12 +139,31 @@ class InGameMenuSplitTest {
         assertNull(m.state.panelFocus)
     }
 
-    @Test fun rightOnASubmenuDeeperDoesNothingWhenNotSplit() {
+    // LEFT/RIGHT go between pages whether or not the menu splits: RIGHT opens a row's page, LEFT comes back.
+    @Test fun rightOpensASubmenuDeeperAndLeftComesBackWhenNotSplit() {
         val m = model(split = false)
         m.onRow("Options"); m.press(NxButton.A)
         m.onRow("Display")
         assertNull(m.press(NxButton.RIGHT))
+        assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
+        assertNull(m.press(NxButton.LEFT))
         assertEquals(PageKind.Options, m.state.page.kind)
+        assertEquals("Display", m.state.page.rows[m.state.page.selected].label)
+    }
+
+    // In two panes LEFT on any row of the right one (a setting too: it never changes a value) comes back to the left.
+    @Test fun leftOnASettingRowComesBackToTheLeftPaneWhenSplit() {
+        val m = model()
+        m.onRow("Options"); m.press(NxButton.RIGHT)
+        m.onRow("Display"); m.press(NxButton.RIGHT)
+        assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
+        assertNull(m.press(NxButton.RIGHT))                  // a setting: nothing (A changes it)
+        assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
+        assertNull(m.press(NxButton.LEFT))
+        assertEquals(PageKind.Options, m.state.page.kind)
+        assertNull(m.press(NxButton.LEFT))
+        assertEquals(PageKind.Root, m.state.page.kind)
+        assertEquals("Options", m.state.page.rows[m.state.page.selected].label)
     }
 
     @Test fun aTapOnTheParentPaneOpensThatRowInPlaceOfTheCurrentPage() {

@@ -16,6 +16,7 @@ import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.Res3dConsole
 import com.nxredux.mobile.storage.EmulatorConfigStore
+import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
 import kotlinx.coroutines.CancellationException
@@ -48,7 +49,7 @@ sealed interface EmulatorRow {
 val EmulatorRow.selectable: Boolean get() = this !is EmulatorRow.Header && this !is EmulatorRow.Notice && this != EmulatorRow.Gap
 
 object EmulatorRows {
-    const val NO_TABLE = "This core's options aren't available outside a game."
+    const val NO_TABLE = "This emulator's options aren't available outside a game."
 
     /** [page]'s rows at the top level ([category] null) or inside that category. */
     fun build(page: EmulatorPage, category: String?): List<EmulatorRow> {
@@ -63,13 +64,13 @@ object EmulatorRows {
             }
             val coreRows = buildList {
                 if (core == null) {
-                    add(EmulatorRow.Header("Core settings"))
+                    add(EmulatorRow.Header(InGameMenuModel.EMULATOR_LABEL))
                     add(EmulatorRow.Notice(NO_TABLE))
                 } else {
                     val loose = CoreOptionFilter.uncategorized(core).map { EmulatorRow.Core(it, inCategory = false) }
                     val categories = CoreOptionFilter.categories(core).map { EmulatorRow.Category(it.key, it.label) }
                     if (loose.isNotEmpty() || categories.isNotEmpty()) {
-                        add(EmulatorRow.Header("Core settings"))
+                        add(EmulatorRow.Header(InGameMenuModel.EMULATOR_LABEL))
                         addAll(loose)
                         addAll(categories)
                     }

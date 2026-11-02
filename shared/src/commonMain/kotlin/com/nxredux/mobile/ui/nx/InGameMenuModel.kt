@@ -517,9 +517,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 } else move(1)
                 null
             }
-            // A visual row's value changes in the live preview: its strip comes up first ([intoAdjust]).
-            NxButton.LEFT -> { intoAdjust(state.page.selected); change(-1) }
+            // Off the root LEFT goes back (in two panes: to the page on the left) and RIGHT opens a row's page: they never
+            // change a value there, A does (as a tap). The root's Disc row and Save / Load keep them for their values.
+            NxButton.LEFT -> if (root) { intoAdjust(state.page.selected); change(-1) } else back()
             NxButton.RIGHT -> when {
+                !root -> if (opensPage(state.page.rows.getOrNull(state.page.selected))) activate(state.page.selected) else null
                 visualRow(state.page.selected) != null -> { intoAdjust(state.page.selected); change(1) }
                 // The Disc row keeps RIGHT for its value; every other row enters the shortcuts (beside or below the words).
                 panelShown() && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Option -> {
@@ -737,7 +739,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         options = all
         this.locked = locked
         val page = coreOptionsPage()
-        push(if (page.rows.isEmpty()) message("Core Options", NO_LIVE_OPTIONS) else page)
+        push(if (page.rows.isEmpty()) message(EMULATOR_LABEL, NO_LIVE_OPTIONS) else page)
     }
 
     /** Refreshes option pages after values or visibility changed, keeping selections in range. */
@@ -1495,7 +1497,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             shownGroups().forEach { add(MenuRow.Submenu(it.label, PageKind.Settings(it))) }
             add(MenuRow.Submenu(SHORTCUTS_LABEL, PageKind.Shortcuts))
             add(MenuRow.Submenu("Shaders", PageKind.Shaders))
-            add(MenuRow.Submenu("Core Options", PageKind.CoreOptions))
+            add(MenuRow.Submenu(EMULATOR_LABEL, PageKind.CoreOptions))   // the core's own options
             add(MenuRow.Submenu("Save Changes", PageKind.SaveChanges))
         },
         footer = statusText(),
@@ -1764,7 +1766,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         val live = CoreOptionFilter.live(options, locked)
         val rows = CoreOptionFilter.categories(live).map { MenuRow.Submenu(it.label, PageKind.Category(it.key), detail = it.info) } +
             CoreOptionFilter.uncategorized(live).map { optionRow(it, inCategory = false) }
-        return MenuPage(PageKind.CoreOptions, "Core Options", rows, intro = CORE_OPTIONS_INTRO)
+        return MenuPage(PageKind.CoreOptions, EMULATOR_LABEL, rows, intro = CORE_OPTIONS_INTRO)
     }
 
     private fun categoryPage(key: String): MenuPage {
@@ -1815,9 +1817,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         private const val QUIT_TEXT = "Save & Quit keeps your place for next time. Quit keeps the last resume point."
         const val OVERLAY_UNAVAILABLE_LINE = "Off while the DS screens are drawn apart"
         const val OVERLAY_UNAVAILABLE_INFO = "Overlays are off while the DS screens\nare drawn apart."
-        private const val NO_LIVE_OPTIONS = "This core has no options that\ncan be changed while running."
+        private const val NO_LIVE_OPTIONS = "This emulator has no options that\ncan be changed while running."
 
-        /** The Core Options page's line: only live options are here, and where the ones read at start are. */
+        /** The core's options, on the Options page and outside the game: "Emulator" (the app's word for a core). */
+        const val EMULATOR_LABEL = "Emulator"
+
+        /** The Emulator page's line (the core's options): only live options are here, and where the ones read at start are. */
         internal const val CORE_OPTIONS_INTRO = "Only options that change while you play are listed. For the rest, which apply when a " +
             "game starts, use Game Settings in the game's context menu, or Tools → Settings → Emulation → Default settings."
         private const val NO_CATEGORY_OPTIONS = "This category has no options."
