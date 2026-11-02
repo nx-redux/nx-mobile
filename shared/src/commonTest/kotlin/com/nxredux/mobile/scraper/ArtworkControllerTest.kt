@@ -946,6 +946,7 @@ class ArtworkControllerTest {
         assertContentEquals(heroBytes, rig.fs.bytesAt(shotPath))
         assertEquals(hero.key, listed(rig).currentKey)
         assertEquals(hero.key, ArtOptionStore(rig.host).get(tetris.gamePath)?.pick)
+        assertEquals(setOf(tetris.gamePath), rig.controller.pickedGames())   // what the library scan reads
         assertEquals("Home/Roms/GB/.media/screenshot/Tetris.png", rig.host.applied.last().second.screenshot)
         rig.controller.fetchAll(replaceExisting = true)
         advanceUntilIdle()

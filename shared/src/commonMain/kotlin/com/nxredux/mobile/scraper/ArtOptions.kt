@@ -77,6 +77,9 @@ class ArtOptionStore(private val host: ArtworkHost, private val name: String = "
         save(map)
     }
 
+    /** The games that have a pick. */
+    suspend fun pickedPaths(): Set<String> = mutex.withLock { load().filterValues { it.pick != null }.keys.toSet() }
+
     /** True when the game has a pick. */
     suspend fun picked(gamePath: String): Boolean = mutex.withLock { load()[gamePath]?.pick != null }
 

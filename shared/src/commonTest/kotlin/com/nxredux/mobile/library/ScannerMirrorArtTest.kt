@@ -2,6 +2,8 @@ package com.nxredux.mobile.library
 
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.settings.ExtraFolder
+import com.nxredux.mobile.storage.GamePath
+import com.nxredux.mobile.storage.GameRef
 import com.nxredux.mobile.storage.MemorySidecarStore
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -57,6 +59,28 @@ class ScannerMirrorArtTest {
         assertEquals(ContentRef("$own/screenshot/Sonic.png"), game.screenshotRef)
         assertEquals(ContentRef("$own/grid/Sonic.png"), game.gridRef)
         assertEquals(ContentRef("$mirror/hero/Sonic.jpg"), game.heroRef)       // no own hero: the mirror's
+    }
+
+    @Test fun aPickedScreenshotInTheMirrorWinsOverTheFoldersOwn() = runTest {
+        // Change art writes a pick to the home mirror: for a picked game the mirror's screenshot wins, scan and art re-read.
+        val own = "sd/Ext/My Sega Genesis/.media"
+        val dirs = baseDirs + mapOf(
+            "sd/Ext/My Sega Genesis" to listOf("Sonic.md", "Streets.md", ".media"),
+            own to listOf("screenshot"),
+            "$own/screenshot" to listOf("Sonic.png", "Streets.png"),
+            mirror to listOf("screenshot"),
+            "$mirror/screenshot" to listOf("Sonic.png", "Streets.png"),
+        )
+        val src = FakeRomsSource(dirs)
+        val picked = GamePath.of(GameRef("x1", "My Sega Genesis", "Sonic.md"))
+        val scanner = LibraryScanner(src, Sidecars(src, MemorySidecarStore()) { home }, pickedShots = { setOf(picked) })
+        val index = scanner.scan(home, listOf(x1), emptyMap())
+        val games = index.toSystems().flatMap { it.games }
+        assertEquals(ContentRef("$mirror/screenshot/Sonic.png"), games.single { it.fileName == "Sonic.md" }.screenshotRef)
+        assertEquals(ContentRef("$own/screenshot/Streets.png"), games.single { it.fileName == "Streets.md" }.screenshotRef)   // not picked: own wins
+        val art = scanner.readArt(index)
+        assertEquals("$mirror/screenshot/Sonic.png", art.getValue(Triple("x1", "My Sega Genesis", "Sonic.md")).screenshot)
+        assertEquals("$own/screenshot/Streets.png", art.getValue(Triple("x1", "My Sega Genesis", "Streets.md")).screenshot)
     }
 
     @Test fun noMirrorWalksWhenTheExtraHasNoMirrorRoot() = runTest {

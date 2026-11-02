@@ -24,6 +24,8 @@ class ArtOptionStoreTest {
         assertTrue(g.wide)
         assertEquals(a.key, g.pick)
         assertTrue(s.picked("g"))
+        s.record("h", listOf(c), false)
+        assertEquals(setOf("g"), s.pickedPaths())
     }
 
     @Test fun a_grid_and_hero_with_one_asset_id_are_both_kept() = runTest {

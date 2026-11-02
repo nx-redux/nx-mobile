@@ -810,7 +810,10 @@ private class WatchedStateFlow<T>(private val flow: MutableStateFlow<T>, private
 
 class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private val sidecars = Sidecars(deps.source, deps.sidecarStore) { home() }
-    private val scanner = LibraryScanner(deps.source, sidecars, deps.arcadeSets, deps.naomiSets, compute = deps.compute, chdSectors = deps.chdSectors)
+    private val scanner = LibraryScanner(
+        deps.source, sidecars, deps.arcadeSets, deps.naomiSets, compute = deps.compute, chdSectors = deps.chdSectors,
+        pickedShots = { artworkController?.pickedGames().orEmpty() },   // a picked extra game keeps its mirror screenshot
+    )
     /** Controls -> Shortcuts as edited since it opened; null: closed (or untouched), [AppSettings.shortcuts] is all there is. */
     private var shortcutDraft: ShortcutSet? = null
 

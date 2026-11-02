@@ -408,6 +408,9 @@ class ArtworkController(
         }
     }
 
+    /** The games whose screenshot is a Change art pick (the library scan prefers an extra folder game's mirror copy). */
+    suspend fun pickedGames(): Set<String> = withContext(work) { store.pickedPaths() }
+
     /** The bytes the Change art previews take. */
     suspend fun optionCacheSize(): Long = withContext(work) { optionCache.size() }
 
