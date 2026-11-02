@@ -2,9 +2,11 @@ package com.nxredux.mobile.shortcuts
 
 /**
  * The SELECT / START / MENU page's state, for one pad [model]. PRESS: the user presses the three, each ticks off
- * ([found]) as it's recognised; any other button is "not one of the three" ([lastOther]), A, B, Back and the d-pad
- * stay the page's (its rows). All three found: DONE. Otherwise the "I've pressed them all" row ([pressedAll]) goes to BIND, which takes the next fresh press as each missing role in turn ([binding]), never B or Back
- * (they cancel back to PRESS), never A or the d-pad (the page's rows), never a button another role already has ([lastTaken]). MENU can be skipped
+ * ([found]) as it's recognised; any other button is "not one of the three" ([lastOther]), A, B and the d-pad
+ * stay the page's (its rows). The pad's Back is a button like any other: a Retroid Pocket Classic's home button sends
+ * it, and it must be able to become MENU (a phone's own back gesture is no pad's, so it never reaches the page).
+ * All three found: DONE. Otherwise the "I've pressed them all" row ([pressedAll]) goes to BIND, which takes the next fresh press as each missing role in turn ([binding]), never B
+ * (it cancels back to PRESS), never A or the d-pad (the page's rows), never a button another role already has ([lastTaken]). MENU can be skipped
  * (the Skip row, [skipMenu]): SELECT+START opens the menu instead.
  */
 class SystemButtonsPage(val model: PadModel, map: SystemButtonMap) {
@@ -59,7 +61,7 @@ class SystemButtonsPage(val model: PadModel, map: SystemButtonMap) {
 
     private fun bind(key: PhysicalKey): Boolean {
         val role = binding ?: return false
-        if (key.keyCode == KeyCodes.BUTTON_B || key.keyCode == KeyCodes.BACK) { cancelBind(); return true }
+        if (key.keyCode == KeyCodes.BUTTON_B) { cancelBind(); return true }
         // A and the d-pad choose the page's rows (Skip, Cancel): a highlighted row's A must not become MENU.
         if (key.keyCode in PAGE_KEYS) return false
         val holder = SystemButtons.roleOf(map, model.key, key)
@@ -85,7 +87,7 @@ class SystemButtonsPage(val model: PadModel, map: SystemButtonMap) {
         finish()
     }
 
-    /** B or Back in BIND: back to PRESS, the binds made so far kept. */
+    /** B in BIND: back to PRESS, the binds made so far kept. */
     fun cancelBind() {
         if (phase != Phase.BIND) return
         phase = Phase.PRESS
@@ -109,7 +111,7 @@ class SystemButtonsPage(val model: PadModel, map: SystemButtonMap) {
     private companion object {
         /** The page's own keys in PRESS: its rows' navigation and A / B. */
         val PAGE_KEYS = setOf(
-            KeyCodes.BUTTON_A, KeyCodes.BUTTON_B, KeyCodes.BACK,
+            KeyCodes.BUTTON_A, KeyCodes.BUTTON_B,
             KeyCodes.DPAD_UP, KeyCodes.DPAD_DOWN, KeyCodes.DPAD_LEFT, KeyCodes.DPAD_RIGHT,
         )
     }
