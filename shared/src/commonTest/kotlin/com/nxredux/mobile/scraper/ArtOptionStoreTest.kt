@@ -26,6 +26,13 @@ class ArtOptionStoreTest {
         assertTrue(s.picked("g"))
     }
 
+    @Test fun a_grid_and_hero_with_one_asset_id_are_both_kept() = runTest {
+        val s = ArtOptionStore(host())
+        val hero = c.copy(slot = ArtSlot.HERO, url = "http://x/h")
+        s.record("g", listOf(c, hero), false)
+        assertEquals(listOf(c, hero), s.get("g")!!.options)
+    }
+
     @Test fun persists_across_instances() = runTest {
         val h = host()
         ArtOptionStore(h).apply { record("g", listOf(a, c), true); setPick("g", c.key) }
@@ -45,10 +52,10 @@ class ArtOptionStoreTest {
         val s = ArtOptionStore(host())
         s.record("g1", listOf(a, b), false)
         s.record("g2", listOf(c), false)
-        assertEquals(setOf(a.key, b.key), s.forget(setOf("g1")))
+        assertEquals(mapOf("g1" to setOf(a.key, b.key)), s.forget(setOf("g1")))
         assertNull(s.get("g1"))
         assertEquals(listOf(c), s.get("g2")!!.options)
-        assertEquals(setOf(c.key), s.forget(null))
+        assertEquals(mapOf("g2" to setOf(c.key)), s.forget(null))
         assertNull(s.get("g2"))
     }
 

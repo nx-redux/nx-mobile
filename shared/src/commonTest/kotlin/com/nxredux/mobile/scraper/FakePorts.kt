@@ -73,7 +73,7 @@ class FakeSource(
     var starts = 0
     var fail: (LibraryGameRef) -> Exception? = { null }
     private val hits = mutableMapOf<String, List<ArtHit>>()
-    fun offer(file: String, slot: ArtSlot, url: String) { hits[file] = hits[file].orEmpty() + ArtHit(slot, url, ArtOrigin(id, file, url)) }
+    fun offer(file: String, slot: ArtSlot, url: String, assetId: String = url) { hits[file] = hits[file].orEmpty() + ArtHit(slot, url, ArtOrigin(id, file, assetId)) }
     override fun knows(ref: LibraryGameRef) = knowsGame(ref)
     override suspend fun startJob() { starts++ }
     override suspend fun find(ref: LibraryGameRef, wanted: Set<ArtSlot>): List<ArtHit> {

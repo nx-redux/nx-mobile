@@ -4,7 +4,7 @@ import com.nxredux.mobile.runner.ContentRef
 
 /**
  * The Change art previews: option images downloaded on demand, kept in app-private storage (never under `.media/`) by
- * the option's [ArtOption.key]. Losing them costs only a new download: the links stay in [ArtOptionStore].
+ * the game and the option's [ArtOption.key]. Losing them costs only a new download: the links stay in [ArtOptionStore].
  */
 interface ArtOptionCache {
     /** The cached image for [key], or null when it is not cached. */

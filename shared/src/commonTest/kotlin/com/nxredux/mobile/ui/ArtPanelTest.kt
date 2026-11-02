@@ -129,7 +129,7 @@ class ArtPanelTest {
     }
 
     @Test fun change_art_lists_without_a_fetch_and_marks_a_failed_preview() = runTest {
-        val port = FakePort(listOf(opt(ArtSlot.SCREENSHOT, SourceId.SS, "s1"), ArtOption(ArtSlot.SCREENSHOT, "https://m/bad", SourceId.TGDB, assetId = "s2")), currentKey = "${SourceId.TGDB}/s2")
+        val port = FakePort(listOf(opt(ArtSlot.SCREENSHOT, SourceId.SS, "s1"), ArtOption(ArtSlot.SCREENSHOT, "https://m/bad", SourceId.TGDB, assetId = "s2")), currentKey = ArtOption(ArtSlot.SCREENSHOT, "https://m/bad", SourceId.TGDB, assetId = "s2").key)
         val c = ArtPanelController(this, port, Settings(), onPicked = {})
         c.open(game, fetchFirst = false)
         assertEquals(ArtPanelPhase.LOADING, c.panel.value!!.phase)
@@ -179,6 +179,16 @@ class ArtPanelTest {
         advanceUntilIdle()
         assertEquals("options searchAgain=true", port.calls.last())
         assertEquals(3, port.calls.size)
+    }
+
+    @Test fun a_grid_and_hero_with_one_asset_id_are_two_tiles() = runTest {
+        val port = FakePort(listOf(opt(ArtSlot.GRID, SourceId.SGDB, "77"), opt(ArtSlot.HERO, SourceId.SGDB, "77")))
+        val c = ArtPanelController(this, port, Settings(), onPicked = {})
+        c.open(game, fetchFirst = false)
+        advanceUntilIdle()
+        val p = assertNotNull(c.panel.value)
+        assertEquals(listOf("SteamGridDB · Grid", "SteamGridDB · Hero"), p.tiles.map { it.label })
+        assertEquals(2, p.tiles.map { it.option.key }.toSet().size)
     }
 
     @Test fun empty_says_none_found() = runTest {

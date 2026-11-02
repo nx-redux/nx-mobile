@@ -200,7 +200,8 @@ class ArtPanelController(
                 _panel.update { it?.takeIf { p -> p.gamePath == path }?.copy(phase = ArtPanelPhase.READY, message = "Couldn't read the pictures") ?: it }
                 return@launch
             }
-            val tiles = result.options.filter { it.slot in SLOT_ORDER }.sortedBy { SLOT_ORDER.indexOf(it.slot) }
+            // One tile per key: the grid's item keys and the preview updates go by it.
+            val tiles = result.options.filter { it.slot in SLOT_ORDER }.distinctBy { it.key }.sortedBy { SLOT_ORDER.indexOf(it.slot) }
                 .map { ArtTile(it, artTileLabel(it), image = null, failed = false) }
             val current = tiles.indexOfFirst { it.option.key == result.currentKey }
             note = result.note

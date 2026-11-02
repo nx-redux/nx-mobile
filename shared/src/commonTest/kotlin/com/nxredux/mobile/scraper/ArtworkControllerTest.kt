@@ -884,8 +884,8 @@ class ArtworkControllerTest {
         assertFalse(listed(rig).options.any { it.key == hero.key })
         // A good one is downloaded once, then served from the cache.
         val grid = listed(rig).options.first { it.url == "https://g/Tetris-grid2" }
-        assertEquals(ContentRef("cache:${grid.key}"), rig.controller.optionImage(tetris.gamePath, grid))
-        assertEquals(ContentRef("cache:${grid.key}"), rig.controller.optionImage(tetris.gamePath, grid))
+        assertEquals(ContentRef("cache:${tetris.gamePath}\n${grid.key}"), rig.controller.optionImage(tetris.gamePath, grid))
+        assertEquals(ContentRef("cache:${tetris.gamePath}\n${grid.key}"), rig.controller.optionImage(tetris.gamePath, grid))
         assertEquals(1, rig.http.count("Tetris-grid2"))
     }
 
@@ -948,7 +948,7 @@ class ArtworkControllerTest {
         val hero1 = options.first { it.url == "https://g/Tetris-hero1" }
         val hero2 = options.first { it.url == "https://g/Tetris-hero2" }
         assertTrue(rig.controller.pickOption(tetris.gamePath, hero1))
-        rig.cache.files[hero2.key] = ByteArray(0)   // the fitter can't read it: the write fails
+        rig.cache.files["${tetris.gamePath}\n${hero2.key}"] = ByteArray(0)   // the fitter can't read it: the write fails
         assertFalse(rig.controller.pickOption(tetris.gamePath, hero2))
         assertEquals(hero1.key, ArtOptionStore(rig.host).get(tetris.gamePath)?.pick)
         assertEquals(hero1.key, listed(rig).currentKey)
@@ -965,12 +965,51 @@ class ArtworkControllerTest {
         rig.controller.resetArt(setOf("GB"))
         assertNull(rig.fs.bytesAt(shotPath))
         assertNull(ArtOptionStore(rig.host).get(tetris.gamePath))
-        assertFalse(hero.key in rig.cache.files)
-        assertTrue(sonicHero.key in rig.cache.files)   // another console's cache stays
+        assertFalse("${tetris.gamePath}\n${hero.key}" in rig.cache.files)
+        assertTrue("${sonic.gamePath}\n${sonicHero.key}" in rig.cache.files)   // another console's cache stays
         assertNotNull(ArtOptionStore(rig.host).get(sonic.gamePath))
         rig.controller.resetArt(null)
         assertTrue(rig.cache.files.isEmpty())
         assertNull(ArtOptionStore(rig.host).get(sonic.gamePath))
+    }
+
+    @Test fun previews_and_picks_are_cached_per_game() = runTest {
+        // ScreenScraper's asset id ("ss/us") is the same for every game: each game's preview is its own.
+        val rig = Rig(this, listOf(tetris, zelda))
+        rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png"))
+        rig.http.on("romnom=Zelda.gb", found("ss" to "https://m/z-ss.png"))
+        rig.http.on("https://m/t-ss", HttpResult(200, byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 1)))
+        rig.http.on("https://m/z-ss", HttpResult(200, byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 2)))
+        // Zelda's screenshot is hand-placed: the fetch keeps it, so its ScreenScraper one is not the current one.
+        val zeldaShot = "Home/Roms/GB/.media/screenshot/Zelda.png"
+        rig.fs.writeBytes(rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "screenshot"))!!, "Zelda.png", byteArrayOf(7))
+        val t = listed(rig).options.first { it.source == SourceId.SS && it.slot == ArtSlot.SCREENSHOT }
+        assertNotNull(rig.controller.optionImage(tetris.gamePath, t))
+        val zOptions = rig.controller.artOptions(zelda.gamePath, replaceExisting = false)
+        val z = zOptions.options.first { it.source == SourceId.SS && it.slot == ArtSlot.SCREENSHOT }
+        assertEquals(t.key, z.key)   // the same key within each game
+        assertNull(zOptions.currentKey)
+        val zRef = assertNotNull(rig.controller.optionImage(zelda.gamePath, z))
+        assertEquals(2, rig.cache.files.size)
+        assertTrue(zRef != rig.controller.optionImage(tetris.gamePath, t))
+        assertTrue(rig.controller.pickOption(zelda.gamePath, z))
+        assertContentEquals(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 2), rig.fs.bytesAt(zeldaShot))
+        assertContentEquals(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 1), rig.fs.bytesAt(shotPath))
+    }
+
+    @Test fun a_grid_and_hero_with_the_same_asset_id_are_two_options() = runTest {
+        val sg = FakeSource(SourceId.SGDB, slots = setOf(ArtSlot.GRID, ArtSlot.HERO)).apply {
+            offer("Tetris.gb", ArtSlot.GRID, "https://g/grid", assetId = "77")
+            offer("Tetris.gb", ArtSlot.HERO, "https://g/hero", assetId = "77")
+        }
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(sg))
+        rig.http.on("https://g/grid", OK_PNG)
+        rig.http.on("https://g/hero", HttpResult(200, heroBytes))
+        val options = listed(rig).options
+        assertEquals(setOf(ArtSlot.GRID, ArtSlot.HERO), options.map { it.slot }.toSet(), "$options")
+        assertEquals(2, options.map { it.key }.toSet().size)
+        for (o in options) assertNotNull(rig.controller.optionImage(tetris.gamePath, o))
+        assertEquals(2, rig.cache.files.size)
     }
 
     @Test fun clear_cache_reports_bytes_and_keeps_links() = runTest {

@@ -21,8 +21,8 @@ data class ArtOption(
     val assetId: String? = null,
     val note: String? = null,
 ) {
-    /** Identifies the option within a game: the source and its asset id (or the link). */
-    val key: String get() = "$source/${assetId ?: url}"
+    /** Identifies the option within a game: the source, the slot and its asset id (or the link). */
+    val key: String get() = "$source/${slot.name}/${assetId ?: url}"
     /** Where the picture came from, as the written-art log records it. */
     val origin: ArtOrigin get() = ArtOrigin(source, gameId, assetId)
 }
@@ -88,11 +88,11 @@ class ArtOptionStore(private val host: ArtworkHost, private val name: String = "
         save(map)
     }
 
-    /** Forgets the given games' options (null = every game); returns the forgotten options' keys. */
-    suspend fun forget(gamePaths: Set<String>?): Set<String> = mutex.withLock {
+    /** Forgets the given games' options (null = every game); returns the forgotten options' keys by game. */
+    suspend fun forget(gamePaths: Set<String>?): Map<String, Set<String>> = mutex.withLock {
         val map = load()
         val gone = map.keys.filter { gamePaths == null || it in gamePaths }
-        val keys = gone.flatMapTo(HashSet()) { g -> map.getValue(g).options.map { it.key } }
+        val keys = gone.associateWith { g -> map.getValue(g).options.mapTo(HashSet()) { it.key } }
         if (gone.isNotEmpty()) { gone.forEach { map.remove(it) }; save(map) }
         keys
     }

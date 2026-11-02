@@ -349,10 +349,13 @@ class ArtworkController(
      * there is no image to show.
      */
     override suspend fun optionImage(gamePath: String, option: ArtOption): ContentRef? = withContext(work) {
-        optionCache.ref(option.key)?.let { return@withContext it }
+        optionCache.ref(cacheKey(gamePath, option.key))?.let { return@withContext it }
         val bytes = downloadOption(gamePath, option) ?: return@withContext null
-        optionCache.write(option.key, bytes)
+        optionCache.write(cacheKey(gamePath, option.key), bytes)
     }
+
+    /** [key]'s preview in the cache: per game, as an option's key is unique only within its game. */
+    private fun cacheKey(gamePath: String, key: String): String = gamePath + "\n" + key
 
     /** [option]'s image from the link (at most [PREVIEW_DOWNLOADS] at once); see [optionImage] for a miss. */
     private suspend fun downloadOption(gamePath: String, option: ArtOption): ByteArray? {
@@ -376,8 +379,8 @@ class ArtworkController(
         singleLock.withLock {
             val saved = store.get(gamePath)
             if (option.key == currentKey(ref, saved)) return@withLock true
-            val bytes = optionCache.read(option.key)
-                ?: downloadOption(gamePath, option)?.also { optionCache.write(option.key, it) }
+            val bytes = optionCache.read(cacheKey(gamePath, option.key))
+                ?: downloadOption(gamePath, option)?.also { optionCache.write(cacheKey(gamePath, option.key), it) }
                 ?: return@withLock false
             withContext(NonCancellable) {
                 val previous = saved?.pick
@@ -515,7 +518,7 @@ class ArtworkController(
             // The scope's Change art lists, picks and previews go too; a failure there never fails the Reset.
             try {
                 val keys = store.forget(up?.let { games.filter { g -> g.tag.uppercase() in it }.mapTo(HashSet()) { it.gamePath } })
-                if (up == null) optionCache.clear() else optionCache.remove(keys)
+                if (up == null) optionCache.clear() else optionCache.remove(keys.flatMap { (g, ks) -> ks.map { cacheKey(g, it) } })
             } catch (e: CancellationException) { throw e } catch (_: Exception) {}
             for ((g, was) in before) host.applyArt(g.gamePath, ScrapeEngine.indexArt(g, was, engine.artOnDisk(g)))
             flushArt()   // one index write and one refresh for every game reset
