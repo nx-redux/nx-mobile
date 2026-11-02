@@ -18,8 +18,9 @@ import kotlin.test.assertTrue
 class ScrapeEngineTest {
     private class Rig(
         scope: TestScope, val fs: FakeRomsSource = Scrape.homeTree(), val hasher: FakeHasher = FakeHasher(), more: List<ArtSource> = emptyList(),
-        logged: MutableSet<String> = mutableSetOf(),
+        logged: MutableSet<String> = mutableSetOf(), picked: Boolean = false,
     ) {
+        val options = mutableListOf<Triple<String, List<ArtOption>, Boolean>>()
         val http = FakeHttp().apply { clock = { scope.testScheduler.currentTime } }
         var auth = ScraperAuth("DEV", "DEVPW")
         val arts = mutableListOf<Pair<String, ArtRefs>>()
@@ -28,6 +29,7 @@ class ScrapeEngineTest {
         val engine = ssEngine(
             http, fitter, hasher, fs, Scrape.home, { auth }, { scope.testScheduler.currentTime }, { delay(it) },
             onArt = { p, a -> arts += p to a }, onWritten = { written += it }, more = more, logged = FakeLoggedArt(logged),
+            onOptions = { p, o, w -> options += Triple(p, o, w) }, picked = { picked },
         )
 
         suspend fun run(games: List<LibraryGameRef>, start: ScrapeState = ScrapeState(items = games.map { Scrape.item(it) }), replace: Boolean = false) =
@@ -52,6 +54,47 @@ class ScrapeEngineTest {
         assertTrue(rig.http.times[second] >= rig.http.times[first] + ScreenScraperSource.RATE_MS)
         assertEquals(rig.http.times[first], rig.http.times[tImage])     // images follow at once
         assertEquals(rig.http.times[second], rig.http.times[zImage])
+    }
+
+    @Test fun records_every_option_slot_hit_it_sees() = runTest {
+        val sgdb = FakeSource("sgdb", setOf(ArtSlot.GRID, ArtSlot.HERO))
+        sgdb.offer("Tetris.gb", ArtSlot.GRID, "https://g/1.png"); sgdb.offer("Tetris.gb", ArtSlot.GRID, "https://g/2.png")
+        sgdb.offer("Tetris.gb", ArtSlot.HERO, "https://g/h.png")
+        val rig = Rig(this, more = listOf(sgdb))
+        val signed = "https://neoclone.screenscraper.fr/api2/mediaJeu.php?devid=D&devpassword=P&ssid=U&sspassword=W&jeuid=42"
+        rig.http.on("romnom=Tetris.gb", Scrape.json(
+            """{"response":{"jeu":{"id":"42","medias":[{"type":"ss","region":"us","url":"$signed&media=ss(us)"},{"type":"ss","region":"eu","url":"$signed&media=ss(eu)"},{"type":"box-2D","region":"us","url":"https://m/b.png"}]}}}""",
+        ))
+        rig.run(listOf(tetris))   // nothing downloads (404): every source is asked
+        val (path, options, wide) = rig.options.single()
+        assertEquals(tetris.gamePath, path)
+        assertEquals(false, wide)
+        assertEquals(listOf(ArtSlot.SCREENSHOT, ArtSlot.SCREENSHOT, ArtSlot.GRID, ArtSlot.GRID, ArtSlot.HERO), options.map { it.slot })
+        val shots = options.filter { it.slot == ArtSlot.SCREENSHOT }
+        assertTrue(shots.all { "devid" !in it.url && "devpassword" !in it.url && "ssid" !in it.url && "sspassword" !in it.url && "jeuid=42" in it.url }, shots.toString())
+        assertEquals(listOf(SourceId.SS, SourceId.SS, "sgdb", "sgdb", "sgdb"), options.map { it.source })
+    }
+
+    @Test fun picked_screenshot_survives_replace() = runTest {
+        val sgdb = FakeSource("sgdb", setOf(ArtSlot.GRID, ArtSlot.HERO))
+        sgdb.offer("Tetris.gb", ArtSlot.HERO, "https://m/h.png")
+        val rig = Rig(this, more = listOf(sgdb), picked = true)
+        rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png", "box-3D" to "https://m/t-3d.png"))
+        rig.http.on("https://m/", OK_PNG)
+        val end = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), replace = true)
+        assertEquals(ItemStatus.DONE, end.items.single().status)
+        assertTrue(rig.written.none { it.first.contains("screenshot") || it.first.contains("hero") }, rig.written.toString())
+        assertEquals(1, rig.http.count("t-3d"))   // the box is still fetched again
+        assertEquals(0, rig.http.count("t-ss"))
+        assertTrue(rig.options.all { o -> o.second.none { it.slot == ArtSlot.SCREENSHOT || it.slot == ArtSlot.HERO } })
+    }
+
+    @Test fun no_options_reported_when_nothing_asked() = runTest {
+        val rig = Rig(this)
+        val end = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)))
+        assertEquals(ItemStatus.SKIPPED, end.items.single().status)
+        assertEquals(ScrapeEngine.HAS_ART, end.items.single().reason)
+        assertTrue(rig.options.isEmpty())
     }
 
     @Test fun tryTwoOnlyAfterTryOneFails() = runTest {

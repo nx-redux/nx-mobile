@@ -90,7 +90,11 @@ fun ssEngine(
     onArt: suspend (String, ArtRefs) -> Unit, onWritten: suspend (List<Pair<String, ArtOrigin?>>) -> Unit,
     androidArt: AndroidArtStore? = null, onAndroidArt: suspend () -> Unit = {}, more: List<ArtSource> = emptyList(),
     logged: LoggedArt = LoggedArt.NONE,
-) = ScrapeEngine(http, fitter, source, home, listOf(ScreenScraperSource(http, hasher, auth, now, sleep)) + more, onArt, onWritten, androidArt, onAndroidArt, logged)
+    onOptions: suspend (String, List<ArtOption>, Boolean) -> Unit = { _, _, _ -> }, picked: suspend (String) -> Boolean = { false },
+) = ScrapeEngine(
+    http, fitter, source, home, listOf(ScreenScraperSource(http, hasher, auth, now, sleep)) + more, onArt, onWritten, androidArt, onAndroidArt, logged,
+    onOptions = onOptions, picked = picked,
+)
 
 /** The written-art log as a set of paths. */
 class FakeLoggedArt(private val paths: MutableSet<String>) : LoggedArt {

@@ -50,6 +50,13 @@ class ScrapeEngine(
     private val pixels: PixelCodec? = null,
     /** A mix that could not be made or saved (never a game's failure); no paths or URLs in the text. */
     private val warn: (String) -> Unit = {},
+    /**
+     * Every screenshot, grid and hero candidate the sources offered for a game (ScreenScraper links without their
+     * login), once per game; [wide] is true for the wide pass. The Change art list keeps them as links.
+     */
+    private val onOptions: suspend (gamePath: String, options: List<ArtOption>, wide: Boolean) -> Unit = { _, _, _ -> },
+    /** True when the user picked this game's screenshot: no fetch (Replace existing included) writes a screenshot or hero over it. */
+    private val picked: suspend (gamePath: String) -> Boolean = { false },
 ) {
     companion object {
         const val NO_CONNECTION = "No connection"
@@ -317,6 +324,8 @@ class ScrapeEngine(
             if (onDisk.grid) haveGrid = true
             if (onDisk.hero) haveHero = true
         }
+        // A picked screenshot is only changed by another pick or Reset artwork; a hero stands in for a missing screenshot.
+        if (picked(ref.gamePath)) needShot = false
         val mixOn = ex.mix && pixels != null
         // A missing mix (any under Replace), only for a game with a screenshot or a box to make it from, had or fetched
         // here.
@@ -362,6 +371,8 @@ class ScrapeEngine(
         }
         // A pause met mid-game (an image or a source without a connection): the files already written are reported first.
         var paused: JobPause? = null
+        /** Every screenshot, grid and hero hit seen, for [onOptions]. */
+        val options = ArrayList<ArtOption>()
         try {
             for (src in known) {
                 // A grid: the box when there is none, else the portrait background when there is no screenshot and no grid;
@@ -382,6 +393,9 @@ class ScrapeEngine(
                 asked++
                 val hits = try { src.find(ref, wanted) } catch (e: SourceStop) { stop(src, e); stoppedHere++; continue }
                 if (hits.isEmpty()) continue
+                for (h in hits) if (h.slot in OPTION_SLOTS) {
+                    options += ArtOption(h.slot, ScraperRequest.stripAuth(h.url), h.origin.source, h.origin.gameId, h.origin.assetId, h.note)
+                }
                 offered = true
                 if (!notified) { notified = true; downloading() }
                 // With the 2D box as its own download, the box here is the 3D one (or a grid); the 2D one follows.
@@ -425,6 +439,7 @@ class ScrapeEngine(
                 if (firstWritten(wheels) != null) { wantWheel = false; writers += src.shortLabel }
             }
         } catch (p: JobPause) { paused = p }
+        if (options.isNotEmpty()) withContext(NonCancellable) { onOptions(ref.gamePath, options, false) }
         // The mix from what the game has after the fetch, once nothing paused (a paused game is fetched again, its mix
         // with it). The app's own mix (logged) is made again when this run wrote one of its inputs, so one made from
         // partial art is not left stale; a hand-placed one only under Replace.
