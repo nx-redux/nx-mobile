@@ -60,6 +60,9 @@ data class FetchResult(val status: ItemStatus, val reason: String? = null)
  */
 data class ArtOptionsResult(val options: List<ArtOption>, val currentKey: String?, val note: String? = null)
 
+/** An option's preview: its [ref], or null when there is none to show; [dropped]: the link is dead and left the list. */
+data class OptionImage(val ref: ContentRef?, val dropped: Boolean = false)
+
 /** What the art panel asks of the artwork controller ([ArtworkController] implements it; the defaults are its own). */
 interface ArtOptionsPort {
     /** One game's fetch; [wide]: also every source's screenshot, grid and hero candidates. */
@@ -69,8 +72,8 @@ interface ArtOptionsPort {
      * as it is, never searched for (the read right after the panel's own Fetch art).
      */
     suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean = false, autoSearch: Boolean = true): ArtOptionsResult
-    /** [option]'s preview; null when there is none to show. */
-    suspend fun optionImage(gamePath: String, option: ArtOption): ContentRef?
+    /** [option]'s preview; [OptionImage.dropped] when its link is dead and the option was dropped from the list. */
+    suspend fun optionImage(gamePath: String, option: ArtOption): OptionImage
     /** Writes [option] as the game's screenshot; false when it could not. */
     suspend fun pickOption(gamePath: String, option: ArtOption): Boolean
 }

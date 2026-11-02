@@ -13,6 +13,7 @@ import com.nxredux.mobile.scraper.ArtOptionsResult
 import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.scraper.FetchResult
 import com.nxredux.mobile.scraper.ItemStatus
+import com.nxredux.mobile.scraper.OptionImage
 import com.nxredux.mobile.scraper.SourceId
 import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.settings.ExtraFolder
@@ -85,8 +86,12 @@ class ArtPanelTest {
             calls += "options searchAgain=$searchAgain" + (if (autoSearch) "" else " autoSearch=false")
             return ArtOptionsResult(options, currentKey)
         }
-        override suspend fun optionImage(gamePath: String, option: ArtOption): ContentRef? =
-            if (option.url.endsWith("bad")) null else ContentRef("file:///cache/${option.assetId}")
+        /** A link ending "bad" fails (offline); one ending "gone" is a dead link the controller drops. */
+        override suspend fun optionImage(gamePath: String, option: ArtOption): OptionImage = when {
+            option.url.endsWith("bad") -> OptionImage(null)
+            option.url.endsWith("gone") -> OptionImage(null, dropped = true)
+            else -> OptionImage(ContentRef("file:///cache/${option.assetId}"))
+        }
         override suspend fun pickOption(gamePath: String, option: ArtOption): Boolean {
             picked += option; currentKey = option.key; return true
         }
@@ -138,6 +143,22 @@ class ArtPanelTest {
         assertEquals(listOf("options searchAgain=false"), port.calls)
         assertEquals(listOf(false, true), p.tiles.map { it.failed })
         assertEquals(1, p.focus)   // on the picture in use
+    }
+
+    @Test fun a_dead_link_leaves_the_panel_an_offline_one_stays_failed() = runTest {
+        val bad = ArtOption(ArtSlot.SCREENSHOT, "https://m/bad", SourceId.TGDB, assetId = "s2")
+        val gone = ArtOption(ArtSlot.SCREENSHOT, "https://m/gone", SourceId.LIBRETRO, assetId = "s3")
+        val port = FakePort(listOf(opt(ArtSlot.SCREENSHOT, SourceId.SS, "s1"), gone, bad))
+        val c = ArtPanelController(this, port, Settings(), onPicked = {})
+        c.open(game, fetchFirst = false)
+        advanceUntilIdle()
+        val p = assertNotNull(c.panel.value)
+        assertEquals(listOf("s1", "s2"), p.tiles.map { it.option.assetId })
+        assertEquals(listOf(false, true), p.tiles.map { it.failed })   // "Couldn't load" for the offline one
+        c.onButton(NxButton.RIGHT)
+        assertEquals(1, c.panel.value!!.focus)
+        c.onButton(NxButton.DOWN)
+        assertTrue(c.panel.value!!.onSearchAgain)
     }
 
     @Test fun a_picks_focused_tile_and_marks_it() = runTest {

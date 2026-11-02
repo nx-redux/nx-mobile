@@ -347,27 +347,33 @@ class ArtworkController(
     /**
      * [option]'s preview: the cached image, else downloaded (ScreenScraper's with the current login) and cached. A link
      * that answered but gave no image is dropped from the list (never the pick); no connection keeps it. Null when
-     * there is no image to show.
+     * there is no image to show ([OptionImage.dropped] when the option was dropped).
      */
-    override suspend fun optionImage(gamePath: String, option: ArtOption): ContentRef? = withContext(work) {
-        optionCache.ref(cacheKey(gamePath, option.key))?.let { return@withContext it }
-        val bytes = downloadOption(gamePath, option) ?: return@withContext null
-        optionCache.write(cacheKey(gamePath, option.key), bytes)
+    override suspend fun optionImage(gamePath: String, option: ArtOption): OptionImage = withContext(work) {
+        optionCache.ref(cacheKey(gamePath, option.key))?.let { return@withContext OptionImage(it) }
+        val got = downloadOption(gamePath, option)
+        val bytes = got.bytes ?: return@withContext OptionImage(null, got.dropped)
+        OptionImage(optionCache.write(cacheKey(gamePath, option.key), bytes))
     }
+
+    /** A download's [bytes] (null: none); [dropped]: the link answered without an image and the option was dropped. */
+    private class Download(val bytes: ByteArray?, val dropped: Boolean = false)
 
     /** [key]'s preview in the cache: per game, as an option's key is unique only within its game. */
     private fun cacheKey(gamePath: String, key: String): String = gamePath + "\n" + key
 
     /** [option]'s image from the link (at most [PREVIEW_DOWNLOADS] at once); see [optionImage] for a miss. */
-    private suspend fun downloadOption(gamePath: String, option: ArtOption): ByteArray? {
+    private suspend fun downloadOption(gamePath: String, option: ArtOption): Download {
         val url = if (option.source == SourceId.SS) ScraperRequest.withAuth(option.url, auth()) else option.url
         val bytes = try {
             previews.withPermit { engine.downloadImage(url) }
         } catch (_: JobPause) {
-            return null   // no connection: the option stays
+            return Download(null)   // no connection: the option stays
         }
-        if (bytes == null && store.get(gamePath)?.pick != option.key) store.dropOption(gamePath, option.key)
-        return bytes
+        if (bytes != null) return Download(bytes)
+        if (store.get(gamePath)?.pick == option.key) return Download(null)   // never the pick
+        store.dropOption(gamePath, option.key)
+        return Download(null, dropped = true)
     }
 
     /**
@@ -384,7 +390,7 @@ class ArtworkController(
                 return@withLock true
             }
             val bytes = optionCache.read(cacheKey(gamePath, option.key))
-                ?: downloadOption(gamePath, option)?.also { optionCache.write(cacheKey(gamePath, option.key), it) }
+                ?: downloadOption(gamePath, option).bytes?.also { optionCache.write(cacheKey(gamePath, option.key), it) }
                 ?: return@withLock false
             withContext(NonCancellable) {
                 val previous = saved?.pick

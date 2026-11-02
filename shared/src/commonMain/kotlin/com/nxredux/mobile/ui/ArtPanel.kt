@@ -6,6 +6,7 @@ import com.nxredux.mobile.scraper.ArtOption
 import com.nxredux.mobile.scraper.ArtOptionsPort
 import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.scraper.ItemStatus
+import com.nxredux.mobile.scraper.OptionImage
 import com.nxredux.mobile.scraper.SourceId
 import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.ui.nx.NxButton
@@ -71,7 +72,7 @@ internal fun artTileLabel(o: ArtOption): String {
 
 /**
  * The game menu's Fetch art and Change art panel: [open] fetches first (Fetch art) or reads the saved options (Change
- * art), then the previews load, [PREVIEWS] at once. A or a tap picks a tile ([ArtOptionsPort.pickOption]; [onPicked]
+ * art), then the previews load, [PREVIEWS] at once (a dead link's tile leaves the panel). A or a tap picks a tile ([ArtOptionsPort.pickOption]; [onPicked]
  * with the game's path after one went through), Search again searches every source again; B closes.
  */
 class ArtPanelController(
@@ -214,15 +215,32 @@ class ArtPanelController(
             }
             val gate = Semaphore(PREVIEWS)
             for (t in tiles) launch {
-                val ref = gate.withPermit {
-                    try { port.optionImage(path, t.option) } catch (e: CancellationException) { throw e } catch (_: Throwable) { null }
+                val got = gate.withPermit {
+                    try { port.optionImage(path, t.option) } catch (e: CancellationException) { throw e } catch (_: Throwable) { OptionImage(null) }
                 }
                 _panel.update { now ->
-                    if (now?.gamePath != path) now
-                    else now.copy(tiles = now.tiles.map { if (it.option.key == t.option.key) it.copy(image = ref, failed = ref == null) else it })
+                    when {
+                        now?.gamePath != path -> now
+                        got.dropped -> without(now, t.option.key)   // a dead link: its tile goes
+                        else -> now.copy(tiles = now.tiles.map { if (it.option.key == t.option.key) it.copy(image = got.ref, failed = got.ref == null) else it })
+                    }
                 }
             }
         }
+    }
+
+    /** [p] without the tile for [key]: the focus stays on the same tile (or Search again), the count's message follows. */
+    private fun without(p: ArtPanel, key: String): ArtPanel {
+        val i = p.tiles.indexOfFirst { it.option.key == key }
+        if (i < 0) return p
+        val tiles = p.tiles.filterIndexed { j, _ -> j != i }
+        val focus = when {
+            p.focus > i -> p.focus - 1
+            p.focus == i && i == tiles.size && i > 0 -> i - 1   // it was the last tile: the one before it
+            else -> p.focus
+        }
+        val message = if (p.message == messageFor(p.tiles.size, note)) messageFor(tiles.size, note) else p.message
+        return p.copy(tiles = tiles, focus = focus, message = message)
     }
 
     /** None found, only one, or the sources' note (why some are missing). */
