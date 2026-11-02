@@ -31,7 +31,8 @@ interface ArtworkHost {
 
 /**
  * Builds the engine (its sources in order, ScreenScraper with the controller's live auth) and its art/log callbacks
- * ([onAndroidArt]: an Android game's screenshot stored; [logged]: the written-art log's queries).
+ * ([onAndroidArt]: an Android game's screenshot stored; [logged]: the written-art log's queries; [onOptions] and
+ * [picked]: the Change art option list, as [ScrapeEngine] takes them).
  */
 typealias ScrapeEngineFactory = (
     auth: () -> ScraperAuth,
@@ -39,6 +40,8 @@ typealias ScrapeEngineFactory = (
     onWritten: suspend (List<Pair<String, ArtOrigin?>>) -> Unit,
     onAndroidArt: suspend () -> Unit,
     logged: LoggedArt,
+    onOptions: suspend (gamePath: String, options: List<ArtOption>, wide: Boolean) -> Unit,
+    picked: suspend (gamePath: String) -> Boolean,
 ) -> ScrapeEngine
 
 /**
@@ -49,6 +52,12 @@ enum class SignInResult { OK, BAD_LOGIN, OFFLINE, UNAVAILABLE, BUILD_REFUSED }
 
 /** One game's fetch: its status and why (the item's reason, or the pause reason when the fetch was stopped). */
 data class FetchResult(val status: ItemStatus, val reason: String? = null)
+
+/**
+ * A game's Change art list: its saved [options] in the order found, [currentKey] the one its screenshot came from (null
+ * for a hand-placed screenshot or none), and [note] why some or every source is missing from it (stopped sources, a pause).
+ */
+data class ArtOptionsResult(val options: List<ArtOption>, val currentKey: String?, val note: String? = null)
 
 /** A Reset artwork: how many files it deleted and whether it paused the running fetch (it had games in scope). */
 data class ResetResult(val deleted: Int, val pausedJob: Boolean = false)
@@ -94,6 +103,9 @@ class ArtLogStore(private val host: ArtworkHost, private val name: String) : Log
     }
 
     override suspend fun contains(path: String): Boolean = mutex.withLock { path in load() }
+
+    /** Where the logged file at [path] came from; null when unknown or not logged. */
+    suspend fun origin(path: String): ArtOrigin? = mutex.withLock { load().origin(path) }
 
     override suspend fun remove(path: String) = mutex.withLock {
         val l = load()

@@ -69,8 +69,8 @@ class ArtOptionStore(private val host: ArtworkHost, private val name: String = "
         save(map)
     }
 
-    /** Marks the option with [key] as the game's pick. */
-    suspend fun setPick(gamePath: String, key: String) = mutex.withLock {
+    /** Marks the option with [key] as the game's pick (null: no pick). */
+    suspend fun setPick(gamePath: String, key: String?) = mutex.withLock {
         val map = load()
         val old = map[gamePath] ?: GameOptions()
         map[gamePath] = old.copy(pick = key)

@@ -3,6 +3,7 @@ package com.nxredux.mobile.scraper
 import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.library.ensurePath
+import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.scraper.Scrape.OK_PNG
 import com.nxredux.mobile.scraper.Scrape.found
 import kotlinx.coroutines.delay
@@ -32,15 +33,16 @@ class ArtworkControllerTest {
         val runner = FakeRunner()
         val art = FakeArtStore()
         var androidRefreshed = 0
+        val cache = FakeOptionCache()
         val controller = ArtworkController(
             host,
-            { auth, onArt, onWritten, _, logged ->
+            { auth, onArt, onWritten, _, logged, onOptions, picked ->
                 ssEngine(
                     http, FakeFitter(), FakeHasher(), fs, Scrape.home, auth, { scope.testScheduler.currentTime }, { delay(it) }, onArt, onWritten,
-                    art, { androidRefreshed++ }, more, logged,
+                    art, { androidRefreshed++ }, more, logged, onOptions, picked,
                 )
             },
-            creds, runner, scope, clock = jobClock,
+            creds, runner, scope, clock = jobClock, optionCache = cache,
         )
     }
 
@@ -781,5 +783,205 @@ class ArtworkControllerTest {
         rig.controller.resume()   // the job was cleared: Resume starts it again
         advanceUntilIdle()
         assertEquals(JobPhase.DONE, rig.controller.state.value.phase)
+    }
+
+    // Change art: the option list, previews and picks.
+
+    private val shotPath = "Home/Roms/GB/.media/screenshot/Tetris.png"
+    private val heroBytes = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 9)
+
+    /** SteamGridDB offering two grids and two heroes per game it is given. */
+    private fun sgdb(vararg files: String) = FakeSource(SourceId.SGDB, slots = setOf(ArtSlot.GRID, ArtSlot.HERO)).apply {
+        for (f in files) {
+            val b = f.substringBefore('.')
+            offer(f, ArtSlot.GRID, "https://g/$b-grid1"); offer(f, ArtSlot.GRID, "https://g/$b-grid2")
+            offer(f, ArtSlot.HERO, "https://g/$b-hero1"); offer(f, ArtSlot.HERO, "https://g/$b-hero2")
+        }
+    }
+
+    /** A source with one screenshot per game it is given. */
+    private fun shots(vararg files: String) = FakeSource("other", slots = setOf(ArtSlot.SCREENSHOT)).apply {
+        for (f in files) offer(f, ArtSlot.SCREENSHOT, "https://o/${f.substringBefore('.')}-ss")
+    }
+
+    private fun logWrites(rig: Rig) =
+        rig.host.writes.count { it.first == ArtworkController.LOG_FILE } + rig.host.appends.count { it.first == ArtworkController.LOG_FILE }
+
+    @Test fun bulk_fetch_saves_links_downloads_no_previews() = runTest {
+        val sg = sgdb("Tetris.gb", "Zelda.gb")
+        val rig = Rig(this, listOf(tetris, zelda), FakeCredentials(devId = ""), more = listOf(sg))
+        rig.http.on("https://g/", OK_PNG)
+        rig.controller.fetchConsole(setOf("GB"))
+        advanceUntilIdle()
+        assertEquals(JobPhase.DONE, rig.controller.state.value.phase)
+        val store = ArtOptionStore(rig.host)
+        for (g in listOf(tetris, zelda)) {
+            val saved = assertNotNull(store.get(g.gamePath), g.gamePath)
+            assertFalse(saved.wide)
+            assertTrue(saved.options.any { it.slot == ArtSlot.GRID && it.url.endsWith("-grid2") }, "${saved.options}")
+        }
+        assertTrue(rig.cache.files.isEmpty())
+        assertEquals(listOf("https://g/Tetris-grid1", "https://g/Tetris-hero1", "https://g/Zelda-grid1", "https://g/Zelda-hero1"), rig.http.calls)
+    }
+
+    @Test fun options_from_saved_list_make_no_lookup() = runTest {
+        val sg = sgdb("Tetris.gb")
+        val tg = FakeSource(SourceId.TGDB, slots = setOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT))
+        val rig = Rig(this, listOf(tetris), more = listOf(tg, sg))
+        rig.http.on("romnom=", Scrape.BOTH)
+        rig.http.on("https://m/", OK_PNG)
+        rig.http.on("https://g/", OK_PNG)
+        rig.controller.fetchGame(tetris.gamePath, wide = true)
+        val lookups = rig.http.count("jeuInfos") to (sg.asked.size + tg.asked.size)
+        assertTrue(lookups.first > 0)
+        val result = rig.controller.artOptions(tetris.gamePath, replaceExisting = false)
+        assertTrue(result.options.any { it.slot == ArtSlot.HERO }, "${result.options}")
+        assertTrue(result.options.any { it.source == SourceId.SS && it.slot == ArtSlot.SCREENSHOT }, "${result.options}")
+        assertEquals(lookups, rig.http.count("jeuInfos") to (sg.asked.size + tg.asked.size))
+    }
+
+    @Test fun narrow_list_triggers_one_wide_search() = runTest {
+        val sg = sgdb("Tetris.gb")
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb"), sg))
+        rig.http.on("https://", OK_PNG)
+        rig.controller.fetchConsole(setOf("GB"))
+        advanceUntilIdle()
+        assertFalse(assertNotNull(ArtOptionStore(rig.host).get(tetris.gamePath)).wide)
+        val asked = sg.asked.size
+        val first = rig.controller.artOptions(tetris.gamePath, replaceExisting = false)
+        assertTrue(sg.asked.size > asked)
+        assertTrue(first.options.any { it.slot == ArtSlot.HERO }, "${first.options}")
+        val afterWide = sg.asked.size
+        val second = rig.controller.artOptions(tetris.gamePath, replaceExisting = false)
+        assertEquals(afterWide, sg.asked.size)
+        assertEquals(first.options, second.options)
+        // Search again runs it once more.
+        rig.controller.artOptions(tetris.gamePath, replaceExisting = false, searchAgain = true)
+        assertTrue(sg.asked.size > afterWide)
+    }
+
+    private suspend fun listed(rig: Rig): ArtOptionsResult = rig.controller.artOptions(tetris.gamePath, replaceExisting = false)
+
+    @Test fun option_image_offline_keeps_option() = runTest {
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb"), sgdb("Tetris.gb")))
+        rig.http.on("Tetris-hero2", OK_PNG)   // ahead of the catch-all, so the test can change it
+        rig.http.on("https://", OK_PNG)
+        val hero = listed(rig).options.first { it.url == "https://g/Tetris-hero2" }
+        rig.http.set("Tetris-hero2", HttpResult(-1, null))
+        assertNull(rig.controller.optionImage(tetris.gamePath, hero))
+        assertEquals(2, rig.http.count("Tetris-hero2"))
+        assertTrue(hero in listed(rig).options)
+        assertTrue(rig.cache.files.isEmpty())
+    }
+
+    @Test fun option_image_404_drops_option() = runTest {
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb"), sgdb("Tetris.gb")))
+        rig.http.on("Tetris-hero2", OK_PNG)   // ahead of the catch-all, so the test can change it
+        rig.http.on("https://", OK_PNG)
+        val hero = listed(rig).options.first { it.url == "https://g/Tetris-hero2" }
+        rig.http.set("Tetris-hero2", HttpResult(404, null))
+        assertNull(rig.controller.optionImage(tetris.gamePath, hero))
+        assertFalse(listed(rig).options.any { it.key == hero.key })
+        // A good one is downloaded once, then served from the cache.
+        val grid = listed(rig).options.first { it.url == "https://g/Tetris-grid2" }
+        assertEquals(ContentRef("cache:${grid.key}"), rig.controller.optionImage(tetris.gamePath, grid))
+        assertEquals(ContentRef("cache:${grid.key}"), rig.controller.optionImage(tetris.gamePath, grid))
+        assertEquals(1, rig.http.count("Tetris-grid2"))
+    }
+
+    @Test fun ss_preview_signed_out_uses_dev_auth_only() = runTest {
+        val media = "https://neoclone.screenscraper.fr/api2/mediaJeu.php?devid=DEV&devpassword=DEVPW&ssid=U&sspassword=P&media=ss"
+        val rig = Rig(this, listOf(tetris))
+        rig.http.on("romnom=", found("ss" to media, "box-2D" to "https://m/b.png"))
+        rig.http.on("mediaJeu", OK_PNG)
+        rig.http.on("https://m/", OK_PNG)
+        val shot = listed(rig).options.first { it.source == SourceId.SS && it.slot == ArtSlot.SCREENSHOT }
+        assertFalse("devid=" in shot.url || "ssid=" in shot.url || "password" in shot.url, shot.url)
+        rig.http.calls.clear()
+        assertNotNull(rig.controller.optionImage(tetris.gamePath, shot))
+        val url = rig.http.calls.single()
+        assertTrue("devid=DEV" in url, url)
+        assertFalse("ssid=" in url, url)
+    }
+
+    @Test fun pick_writes_marks_and_survives_bulk_replace() = runTest {
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb"), sgdb("Tetris.gb")))
+        rig.http.on("Tetris-hero2", HttpResult(200, heroBytes))
+        rig.http.on("https://", OK_PNG)
+        rig.controller.fetchConsole(setOf("GB"))
+        advanceUntilIdle()
+        assertContentEquals(OK_PNG.body, rig.fs.bytesAt(shotPath))
+        val before = listed(rig)
+        assertEquals(before.options.first { it.url == "https://o/Tetris-ss" }.key, before.currentKey)   // the fetched screenshot's origin
+        val hero = before.options.first { it.url == "https://g/Tetris-hero2" }
+        assertTrue(rig.controller.pickOption(tetris.gamePath, hero))
+        assertContentEquals(heroBytes, rig.fs.bytesAt(shotPath))
+        assertEquals(hero.key, listed(rig).currentKey)
+        assertEquals(hero.key, ArtOptionStore(rig.host).get(tetris.gamePath)?.pick)
+        assertEquals("Home/Roms/GB/.media/screenshot/Tetris.png", rig.host.applied.last().second.screenshot)
+        rig.controller.fetchAll(replaceExisting = true)
+        advanceUntilIdle()
+        assertEquals(JobPhase.DONE, rig.controller.state.value.phase)
+        assertContentEquals(heroBytes, rig.fs.bytesAt(shotPath))
+        assertEquals(hero.key, listed(rig).currentKey)
+    }
+
+    @Test fun pick_current_is_noop() = runTest {
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb"), sgdb("Tetris.gb")))
+        rig.http.on("https://", OK_PNG)
+        val result = listed(rig)
+        val current = result.options.first { it.key == result.currentKey }
+        val writes = logWrites(rig)
+        val calls = rig.http.calls.size
+        val applied = rig.host.applied.size
+        assertTrue(rig.controller.pickOption(tetris.gamePath, current))
+        assertEquals(writes, logWrites(rig))
+        assertEquals(calls, rig.http.calls.size)
+        assertEquals(applied, rig.host.applied.size)
+        assertNull(ArtOptionStore(rig.host).get(tetris.gamePath)?.pick)
+    }
+
+    @Test fun a_failed_pick_write_restores_the_previous_pick() = runTest {
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb"), sgdb("Tetris.gb")))
+        rig.http.on("https://", OK_PNG)
+        val options = listed(rig).options
+        val hero1 = options.first { it.url == "https://g/Tetris-hero1" }
+        val hero2 = options.first { it.url == "https://g/Tetris-hero2" }
+        assertTrue(rig.controller.pickOption(tetris.gamePath, hero1))
+        rig.cache.files[hero2.key] = ByteArray(0)   // the fitter can't read it: the write fails
+        assertFalse(rig.controller.pickOption(tetris.gamePath, hero2))
+        assertEquals(hero1.key, ArtOptionStore(rig.host).get(tetris.gamePath)?.pick)
+        assertEquals(hero1.key, listed(rig).currentKey)
+    }
+
+    @Test fun reset_forgets_options_pick_and_cache() = runTest {
+        val rig = Rig(this, listOf(tetris, sonic), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb", "Sonic.md"), sgdb("Tetris.gb", "Sonic.md")))
+        rig.http.on("https://", OK_PNG)
+        val hero = listed(rig).options.first { it.url == "https://g/Tetris-hero2" }
+        assertNotNull(rig.controller.optionImage(tetris.gamePath, hero))
+        assertTrue(rig.controller.pickOption(tetris.gamePath, hero))
+        val sonicHero = rig.controller.artOptions(sonic.gamePath, replaceExisting = false).options.first { it.slot == ArtSlot.HERO }
+        assertNotNull(rig.controller.optionImage(sonic.gamePath, sonicHero))
+        rig.controller.resetArt(setOf("GB"))
+        assertNull(rig.fs.bytesAt(shotPath))
+        assertNull(ArtOptionStore(rig.host).get(tetris.gamePath))
+        assertFalse(hero.key in rig.cache.files)
+        assertTrue(sonicHero.key in rig.cache.files)   // another console's cache stays
+        assertNotNull(ArtOptionStore(rig.host).get(sonic.gamePath))
+        rig.controller.resetArt(null)
+        assertTrue(rig.cache.files.isEmpty())
+        assertNull(ArtOptionStore(rig.host).get(sonic.gamePath))
+    }
+
+    @Test fun clear_cache_reports_bytes_and_keeps_links() = runTest {
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb"), sgdb("Tetris.gb")))
+        rig.http.on("https://", OK_PNG)
+        val options = listed(rig).options
+        val two = options.filter { it.slot == ArtSlot.HERO }.take(2)
+        for (o in two) assertNotNull(rig.controller.optionImage(tetris.gamePath, o))
+        assertEquals(6L, rig.controller.optionCacheSize())
+        assertEquals(6L, rig.controller.clearOptionCache())
+        assertEquals(0L, rig.controller.optionCacheSize())
+        assertEquals(options, listed(rig).options)
     }
 }

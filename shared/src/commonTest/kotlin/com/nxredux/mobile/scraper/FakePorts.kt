@@ -211,3 +211,14 @@ object Scrape {
     )
     fun item(g: LibraryGameRef, status: ItemStatus = ItemStatus.WAITING) = ScrapeItem(g.gamePath, g.tag, g.name, status)
 }
+
+/** The option images in memory, by key; a cached one's ref is `cache:<key>`. */
+class FakeOptionCache : ArtOptionCache {
+    val files = linkedMapOf<String, ByteArray>()
+    override fun ref(key: String): ContentRef? = if (key in files) ContentRef("cache:$key") else null
+    override suspend fun read(key: String): ByteArray? = files[key]
+    override suspend fun write(key: String, bytes: ByteArray): ContentRef? { files[key] = bytes; return ref(key) }
+    override suspend fun size(): Long = files.values.sumOf { it.size.toLong() }
+    override suspend fun remove(keys: Collection<String>) { keys.forEach { files.remove(it) } }
+    override suspend fun clear(): Long = size().also { files.clear() }
+}

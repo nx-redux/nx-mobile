@@ -1,6 +1,7 @@
 package com.nxredux.mobile.scraper
 
 import com.nxredux.mobile.runner.ContentRef
+import com.nxredux.mobile.storage.GamePath
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -15,7 +16,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
@@ -31,6 +34,8 @@ class ArtworkController(
     private val work: CoroutineContext = EmptyCoroutineContext,
     /** Monotonic milliseconds, for spacing the running job's saves. */
     private val clock: () -> Long = { processStart.elapsedNow().inWholeMilliseconds },
+    /** The Change art previews (app-private); none = every preview is downloaded again. */
+    private val optionCache: ArtOptionCache = ArtOptionCache.NONE,
 ) {
     companion object {
         const val JOB_FILE = "scrape_job.json"
@@ -38,11 +43,16 @@ class ArtworkController(
         /** A running job is saved once this many more games finished, or [SAVE_EVERY_MS] after its last save. */
         const val SAVE_EVERY_ITEMS = 10
         const val SAVE_EVERY_MS = 5_000L
+        /** Change art previews downloaded at once, at most. */
+        const val PREVIEW_DOWNLOADS = 3
     }
 
     private fun auth() = ScraperAuth(credentials.devId, credentials.devPassword, user = credentials.user, password = credentials.password)
     private val log = ArtLogStore(host, LOG_FILE)
-    private val engine: ScrapeEngine = engine(::auth, host::applyArt, log::add, host::refreshAndroidConsole, log)
+    /** The Change art option links, recorded by every fetch. */
+    private val store = ArtOptionStore(host)
+    private val engine: ScrapeEngine = engine(::auth, host::applyArt, log::add, host::refreshAndroidConsole, log, store::record, store::picked)
+    private val previews = Semaphore(PREVIEW_DOWNLOADS)
 
     /** Any source is on; fetching works in a build without ScreenScraper's credentials when another source is. */
     val available: Boolean get() = engine.sources.any { it.enabled }
@@ -144,7 +154,8 @@ class ArtworkController(
             while (true) {
                 singleLock.withLock {}   // a fetchGame in flight finishes first: its game is never scraped twice at once
                 val refs = host.libraryGames().associateBy { it.gamePath }
-                val end = engine.run(start, { refs[it] }, lock.withLock { replace }) { publish(it) }
+                // Bulk jobs save the options found on the way, never the wide pass.
+                val end = engine.run(start, { refs[it] }, lock.withLock { replace }, wide = false) { publish(it) }
                 start = lock.withLock {
                     val merged = end.copy(items = end.items + pending)
                     pending = emptyList()
@@ -263,13 +274,19 @@ class ArtworkController(
      * the kinds the game lacks and never overwrites art already there unless [replaceExisting] (Replace existing art).
      * A game the running job still has queued is not fetched twice: this waits for the job's result. A pause case comes
      * back as ERROR with the pause reason. While a job runs, the shared sources' per-run state is the job's: this run
-     * does not start them again ([ScrapeEngine.run]'s `startSources`).
+     * does not start them again ([ScrapeEngine.run]'s `startSources`). [wide]: the Change art search ([ScrapeEngine.run]'s
+     * wide pass).
      */
-    suspend fun fetchGame(gamePath: String, replaceExisting: Boolean = false): FetchResult = withContext(work) {
-        if (!available) return@withContext FetchResult(ItemStatus.SKIPPED, "Fetching isn't available")
+    suspend fun fetchGame(gamePath: String, replaceExisting: Boolean = false, wide: Boolean = false): FetchResult =
+        fetchOne(gamePath, replaceExisting, wide).first
+
+    /** [fetchGame], with the sources' stop notes of its own run (none when the job fetched the game). */
+    private suspend fun fetchOne(gamePath: String, replaceExisting: Boolean, wide: Boolean): Pair<FetchResult, Map<String, String>> = withContext(work) {
+        if (!available) return@withContext FetchResult(ItemStatus.SKIPPED, "Fetching isn't available") to emptyMap()
         val ref = host.libraryGames().firstOrNull { it.gamePath == gamePath }
-            ?: return@withContext FetchResult(ItemStatus.SKIPPED, "Not in the library")
+            ?: return@withContext FetchResult(ItemStatus.SKIPPED, "Not in the library") to emptyMap()
         var result: FetchResult? = null
+        var notes: Map<String, String> = emptyMap()
         singleLock.withLock {
             // A job started after this check waits for [singleLock] before its run: the two never start the sources at once.
             var jobLive = false
@@ -279,7 +296,8 @@ class ArtworkController(
             }
             if (!inJob) try {
                 val one = ScrapeState(items = listOf(ScrapeItem(ref.gamePath, ref.tag, ref.name)))
-                val end = engine.run(one, { if (it == gamePath) ref else null }, replace = replaceExisting, startSources = !jobLive) {}
+                val end = engine.run(one, { if (it == gamePath) ref else null }, replace = replaceExisting, startSources = !jobLive, wide = wide) {}
+                notes = end.notes
                 end.quota?.let { q -> _state.update { it.copy(quota = q) } }
                 end.tgdbLeft?.let { n -> _state.update { it.copy(tgdbLeft = n) } }
                 val item = end.items.single()
@@ -289,8 +307,99 @@ class ArtworkController(
                 flushArt()   // the one game's art shows now, not after the host's batching pause
             }
         }
-        result ?: awaitJobItem(gamePath)
+        (result ?: awaitJobItem(gamePath)) to notes
     }
+
+    /**
+     * A game's Change art list. The saved list when the wide search ran for it; otherwise (none saved, only a fetch's
+     * links, or [searchAgain]) the game is fetched with the wide search first ([fetchGame], [replaceExisting] as set).
+     */
+    suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean = false): ArtOptionsResult = withContext(work) {
+        var saved = store.get(gamePath)
+        var note: String? = null
+        if (saved == null || !saved.wide || searchAgain) {
+            val (r, notes) = fetchOne(gamePath, replaceExisting, wide = true)
+            note = notes.values.joinToString(" · ").ifEmpty { null }
+                ?: r.reason.takeIf { r.status == ItemStatus.ERROR || r.status == ItemStatus.SKIPPED }
+            saved = store.get(gamePath)
+        }
+        val ref = host.libraryGames().firstOrNull { it.gamePath == gamePath }
+        ArtOptionsResult(saved?.options.orEmpty(), ref?.let { currentKey(it, saved) }, note)
+    }
+
+    /**
+     * The option [ref]'s screenshot is: the pick when it is still listed, else the one matching the written-art log's
+     * origin for the screenshot file; null for a hand-placed screenshot (or an extra folder's own), or none.
+     */
+    private suspend fun currentKey(ref: LibraryGameRef, saved: GameOptions?): String? {
+        val options = saved?.options.orEmpty()
+        saved?.pick?.let { p -> if (options.any { it.key == p }) return p }
+        val shot = ref.art.screenshot ?: return null
+        if (ref.sourceId != GamePath.HOME && engine.artOnDisk(ref).screenshot != shot) return null   // an extra folder's own file
+        val ext = shot.substringAfterLast('.').lowercase()
+        val enc = ArtEncoding.entries.firstOrNull { it.ext == ext } ?: return null
+        val t = try { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) } catch (_: IllegalArgumentException) { return null }
+        val origin = log.origin(t.path(ArtSlot.SCREENSHOT, enc)) ?: return null
+        return options.firstOrNull { it.source == origin.source && it.assetId != null && it.assetId == origin.assetId }?.key
+    }
+
+    /**
+     * [option]'s preview: the cached image, else downloaded (ScreenScraper's with the current login) and cached. A link
+     * that answered but gave no image is dropped from the list (never the pick); no connection keeps it. Null when
+     * there is no image to show.
+     */
+    suspend fun optionImage(gamePath: String, option: ArtOption): ContentRef? = withContext(work) {
+        optionCache.ref(option.key)?.let { return@withContext it }
+        val bytes = downloadOption(gamePath, option) ?: return@withContext null
+        optionCache.write(option.key, bytes)
+    }
+
+    /** [option]'s image from the link (at most [PREVIEW_DOWNLOADS] at once); see [optionImage] for a miss. */
+    private suspend fun downloadOption(gamePath: String, option: ArtOption): ByteArray? {
+        val url = if (option.source == SourceId.SS) ScraperRequest.withAuth(option.url, auth()) else option.url
+        val bytes = try {
+            previews.withPermit { engine.downloadImage(url) }
+        } catch (_: JobPause) {
+            return null   // no connection: the option stays
+        }
+        if (bytes == null && store.get(gamePath)?.pick != option.key) store.dropOption(gamePath, option.key)
+        return bytes
+    }
+
+    /**
+     * Writes [option] as the game's screenshot and marks it picked, so no fetch replaces it. Picking the current one
+     * does nothing. The pick is marked before the write (a running job reads it); a failed write puts the previous
+     * pick back. False when the image could not be had or written.
+     */
+    suspend fun pickOption(gamePath: String, option: ArtOption): Boolean = withContext(work) {
+        val ref = host.libraryGames().firstOrNull { it.gamePath == gamePath } ?: return@withContext false
+        singleLock.withLock {
+            val saved = store.get(gamePath)
+            if (option.key == currentKey(ref, saved)) return@withLock true
+            val bytes = optionCache.read(option.key)
+                ?: downloadOption(gamePath, option)?.also { optionCache.write(option.key, it) }
+                ?: return@withLock false
+            withContext(NonCancellable) {
+                val previous = saved?.pick
+                store.setPick(gamePath, option.key)
+                val art = try {
+                    engine.writePick(ref, bytes, option.origin)
+                } catch (t: Throwable) {
+                    store.setPick(gamePath, previous); throw t
+                }
+                if (art == null) { store.setPick(gamePath, previous); return@withContext false }
+                host.applyArt(gamePath, art)
+                flushArt()
+                true
+            }
+        }
+    }
+
+    /** The bytes the Change art previews take. */
+    suspend fun optionCacheSize(): Long = withContext(work) { optionCache.size() }
+
+    /** Deletes every Change art preview (the links stay); returns the bytes freed. */
+    suspend fun clearOptionCache(): Long = withContext(work) { optionCache.clear() }
 
     /** Why a run left its game waiting: the stopped sources' notes when every source stopped, else the pause reason. */
     private fun stopReason(end: ScrapeState): String? =
@@ -380,8 +489,8 @@ class ArtworkController(
      * legacy untyped mixes; one whose delete failed stays logged and uncounted), removes the slot and `.media` folders
      * that left empty, and, for Android's scope or All, the Android games console's stored screenshots; then re-reads
      * what is left on disk for every game whose art paths were touched (hidden games too), so hand-placed art stays in
-     * the index. A running job is paused only when it still has games in scope to fetch; an in-flight [fetchGame]
-     * finishes first.
+     * the index. The scope's Change art lists, picks and previews are forgotten too (All: every preview). A running job
+     * is paused only when it still has games in scope to fetch; an in-flight [fetchGame] finishes first.
      */
     suspend fun resetArt(tags: Set<String>?): ResetResult = withContext(work) {
         val up = tags?.mapTo(HashSet()) { it.uppercase() }
@@ -403,6 +512,11 @@ class ArtworkController(
             }
             // The Android games console's screenshots are app-private, outside the log: Android's scope or All deletes them.
             val androidDeleted = if (up == null || ANDROID_CONSOLE_TAG in up) engine.deleteAndroidArt() else 0
+            // The scope's Change art lists, picks and previews go too; a failure there never fails the Reset.
+            try {
+                val keys = store.forget(up?.let { games.filter { g -> g.tag.uppercase() in it }.mapTo(HashSet()) { it.gamePath } })
+                if (up == null) optionCache.clear() else optionCache.remove(keys)
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {}
             for ((g, was) in before) host.applyArt(g.gamePath, ScrapeEngine.indexArt(g, was, engine.artOnDisk(g)))
             flushArt()   // one index write and one refresh for every game reset
             ResetResult(deleted + androidDeleted, paused)

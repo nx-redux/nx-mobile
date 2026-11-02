@@ -63,7 +63,7 @@ object ArtworkService {
         val hasher = AndroidRomHasher(AndroidRefs(app.contentResolver))
         val androidArt = AndroidArtFiles(app)
         val credentials = AndroidScraperCredentials(settings)
-        val factory: ScrapeEngineFactory = { auth, onArt, onWritten, onAndroidArt, logged ->
+        val factory: ScrapeEngineFactory = { auth, onArt, onWritten, onAndroidArt, logged, onOptions, picked ->
             // The sources in the order they are asked: ScreenScraper, libretro-thumbnails, TheGamesDB, SteamGridDB.
             val sources = listOf<ArtSource>(
                 ScreenScraperSource(http, hasher, auth, System::currentTimeMillis) { delay(it) },
@@ -74,7 +74,7 @@ object ArtworkService {
             ScrapeEngine(
                 http, fitter, source, HomeRomsSource.HOME, sources, onArt, onWritten, androidArt, onAndroidArt, logged,
                 extras = { ArtExtras(settings.artBox2d, settings.artWheel, settings.artMix) }, pixels = fitter,
-                warn = { NxLog.w(TAG, it) },
+                warn = { NxLog.w(TAG, it) }, onOptions = onOptions, picked = picked,
             )
         }
         val runner = object : ScrapeRunner {

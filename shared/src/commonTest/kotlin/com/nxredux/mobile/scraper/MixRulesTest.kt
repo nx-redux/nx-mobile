@@ -195,7 +195,7 @@ class MixRulesTest {
         val host = FakeHost(listOf(tetris))
         val runner = FakeRunner()
         val controller = ArtworkController(
-            host, { _, onArt, onWritten, _, logged -> ScrapeEngine(FakeHttp(), FakeFitter(), fs, Scrape.home, listOf(src), onArt, onWritten, logged = logged) },
+            host, { _, onArt, onWritten, _, logged, _, _ -> ScrapeEngine(FakeHttp(), FakeFitter(), fs, Scrape.home, listOf(src), onArt, onWritten, logged = logged) },
             FakeCredentials(), runner, this,
         )
         controller.fetchMissing()

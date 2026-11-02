@@ -165,7 +165,7 @@ class ArtworkScreensTest {
             onHost(host)
             ArtworkController(
                 host,
-                { auth, onArt, onWritten, onAndroidArt, logged ->
+                { auth, onArt, onWritten, onAndroidArt, logged, _, _ ->
                     val now = { testScheduler.currentTime }
                     val more = listOfNotNull(
                         if (libretro) com.nxredux.mobile.scraper.LibretroThumbnails(http, now) { delay(it) } else null,
@@ -298,7 +298,7 @@ class ArtworkScreensTest {
         }
         val controller = ArtworkController(
             artHost,
-            { auth, onArt, onWritten, onAndroidArt, logged ->
+            { auth, onArt, onWritten, onAndroidArt, logged, _, _ ->
                 ssEngine(http, FakeFitter(), FakeHasher(), source, ContentRef("Home"), auth, { 0L }, { delay(it) }, onArt, onWritten, null, onAndroidArt, emptyList(), logged)
             },
             Credentials(settings, "DEV"), FakeRunner(), scope,
@@ -1132,7 +1132,7 @@ class ArtworkScreensTest {
         }
         val controller = ArtworkController(
             artHost,
-            { auth, onArt, onWritten, onAndroidArt, logged ->
+            { auth, onArt, onWritten, onAndroidArt, logged, _, _ ->
                 ssEngine(http, FakeFitter(), FakeHasher(), source, ContentRef("Home"), auth, { 0L }, { delay(it) }, onArt, onWritten, null, onAndroidArt, emptyList(), logged)
             },
             Credentials(settings, "DEV"), FakeRunner(), scope,
