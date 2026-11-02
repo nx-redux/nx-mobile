@@ -19,7 +19,7 @@ internal val SETTINGS_ROOT_HINTS = listOf(Hint(NxButton.A, "Open"), Hint(NxButto
  * Tools -> Settings: the section block ([SettingsSectionBlock]) alone, anchored bottom-left at the gutter and
  * [SETTINGS_BLOCK_BOTTOM] up, the rest of the screen empty (the mark is the background's, [SettingsBackground]). A tap on
  * a section opens it ([onTap]); A opens, B goes back to Tools. [rowsFocused]: the two-pane Settings' left pane while
- * its page has the focus (the current section drops to the main ink). [hintBar]: draw the root's A/B hints below the
+ * its page has the focus (the current section drops to the open grey with a "›"). [hintBar]: draw the root's A/B hints below the
  * block ([onHint] answers a tap on one); the wide Settings draws its own bar, so it passes false.
  */
 @Composable

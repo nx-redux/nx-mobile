@@ -344,7 +344,7 @@ private fun RootBody(
                     RootList(panes.left, rowHeight, onSelect, onActivate, onChange, focused = state.panelFocus == null)
                 } else {
                     val tap: (Int) -> Unit = { i -> split.onParentTap(panes.left.kind, i) }
-                    RootList(panes.left, rowHeight, tap, tap, {}, focused = false)
+                    RootList(panes.left, rowHeight, tap, tap, {}, focused = false, opened = true)
                 }
             }
         }
@@ -516,13 +516,13 @@ internal fun rootListTopPad(rowHeight: Dp): Dp = (menuTabWordCentre() - rowHeigh
  * sideways swipe on the list steps the slot, as on the slot card ([slotSwipe]).
  */
 @Composable
-private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit, onActivate: (Int) -> Unit, onChange: (Int) -> Unit, focused: Boolean = true) {
+private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit, onActivate: (Int) -> Unit, onChange: (Int) -> Unit, focused: Boolean = true, opened: Boolean = false) {
     val onSlot = page.rows.getOrNull(page.selected) is MenuRow.Slot
     val rowHeight = menuWordPitch(nxOptionsRowHeight(pageRowHeight, LocalNxOptionText.current))   // Appearance → Text size, as the option pages
     CompositionLocalProvider(LocalNxTapOpens provides { i -> !inGameRowTakesTwoTaps(page.rows.getOrNull(i)) }) { NxList(
         rows = page.rows.mapIndexed { i, row ->
             val value = (row as? MenuRow.Option)?.valueLabel
-            NxRow(row.label, secondary = value?.let { if (i == page.selected) "<  $it  >" else it })
+            NxRow(openedLabel(row.label, opened && i == page.selected), secondary = value?.let { if (i == page.selected) "<  $it  >" else it })
         },
         selectedIndex = page.selected,
         onSelect = onSelect,
@@ -537,11 +537,21 @@ private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit,
 }
 
 /**
- * The in-game menu's word lists' selected word: the accent while the list has the focus, else a lighter grey ([NxColors.inkName])
- * than the rest's ([NxColors.inkDim]), so the open row reads apart from the focused one even with a white accent.
+ * The in-game menu's word lists' selected word: the accent while the list has the focus, else a grey ([OPEN_WORD_ALPHA] of the
+ * ink, [NxColors.inkOpen]) a step lighter than the rest's ([NxColors.inkDim]), so the open row reads apart from the focused one even with a white accent.
  */
 @Composable
-private fun menuWordInk(focused: Boolean): Color = if (focused) LocalNxColors.current.accent else LocalNxColors.current.inkName
+private fun menuWordInk(focused: Boolean): Color =
+    if (focused) LocalNxColors.current.accent else LocalNxColors.current.inkOpen
+
+/**
+ * [label], ending in [OPENED_MARK] when its page is [open] beside it: the left pane's word points at the right pane
+ * ("Options ›"), in the in-game menu and Settings alike.
+ */
+internal fun openedLabel(label: String, open: Boolean): String = if (open) "$label  $OPENED_MARK" else label
+
+/** The mark after a word whose page is open in the other pane. */
+private const val OPENED_MARK = "›"
 
 /** A word list's row pitch: the menu's [base] pitch, or [MENU_WORD_PITCH] × the word size where that is more, so words keep air between them. */
 @Composable
@@ -594,7 +604,7 @@ private fun SplitBody(
                     PaneBody(panes.left, rowHeight, onSelect, onActivate, onChange, detail, focused = state.panelFocus == null)
                 } else {
                     val tap: (Int) -> Unit = { i -> split.onParentTap(panes.left.kind, i) }
-                    PaneBody(panes.left, rowHeight, tap, tap, {}, detail, focused = false)
+                    PaneBody(panes.left, rowHeight, tap, tap, {}, detail, focused = false, opened = true)
                 }
             },
             right = {
@@ -630,15 +640,16 @@ private fun PaneBody(
     onChange: (Int) -> Unit,
     detail: AchievementsUi,
     focused: Boolean,
+    opened: Boolean = false,   // the page beside it is this one's selected row, opened: its word ends in [OPENED_MARK]
 ) {
     when (page.kind) {
         // At the top, its first row beside the panel's tab row.
         PageKind.Root -> Box(
             Modifier.fillMaxSize().padding(start = nxListInset() - MenuPillPadding, end = 12.dp, bottom = 8.dp),
             contentAlignment = Alignment.TopStart,
-        ) { RootList(page, rowHeight, onSelect, onActivate, onChange, focused) }
+        ) { RootList(page, rowHeight, onSelect, onActivate, onChange, focused, opened) }
         PageKind.Achievements -> AchievementsBody(page, detail, onSelect, Modifier.fillMaxSize().alpha(if (focused) 1f else UNFOCUSED_ALPHA))   // role: an unfocused pane, dimmed
-        else -> key(page.kind) { RowsBody(page, rowHeight, onSelect, onActivate, onChange, Modifier.fillMaxSize(), focused) }
+        else -> key(page.kind) { RowsBody(page, rowHeight, onSelect, onActivate, onChange, Modifier.fillMaxSize(), focused, opened) }
     }
 }
 
@@ -660,6 +671,7 @@ private fun RowsBody(
     onChange: (Int) -> Unit,
     modifier: Modifier,
     focused: Boolean = false,
+    opened: Boolean = false,
 ) {
     val itemHeight = menuWordPitch(nxOptionsRowHeight(rowHeight, LocalNxOptionText.current), inner = true)   // Appearance → Text size
     BoxWithConstraints(
@@ -668,7 +680,7 @@ private fun RowsBody(
     ) {
         val shown = minOf(page.rows.size, maxOf(1, (maxHeight / itemHeight).toInt()))
         NxList(
-            rows = page.rows.map { NxRow(it.label) },
+            rows = page.rows.mapIndexed { i, row -> NxRow(openedLabel(row.label, opened && i == page.selected)) },
             selectedIndex = page.selected, onSelect = onSelect, onOpen = onActivate,
             modifier = Modifier.fillMaxWidth().height(itemHeight * shown.coerceAtLeast(1)),
             rowHeightOverride = itemHeight, pillPaddingOverride = MenuPillPadding,

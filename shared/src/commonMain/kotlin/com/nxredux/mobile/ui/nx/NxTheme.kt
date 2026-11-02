@@ -69,6 +69,11 @@ data class NxColors(
 
     /** Unselected tab words, the top-right icons and an unselected Grid tile's name: the [main] ink at 38%. */
     val inkDim: Color = main.copy(alpha = 0.38f)
+    /**
+     * A two-pane word list's open word while the other pane has the focus (the in-game menu's "Options ›", Settings'
+     * section beside its page): the [main] ink at 55%, a step over [inkDim]'s rest.
+     */
+    val inkOpen: Color = main.copy(alpha = 0.55f)
     /** List Home's unselected names: the [main] ink at 70%. */
     val inkName: Color = main.copy(alpha = 0.70f)
     /** An unlit tag pill (Continue) and the unlit plate behind a word: the [main] ink at 14%. */
