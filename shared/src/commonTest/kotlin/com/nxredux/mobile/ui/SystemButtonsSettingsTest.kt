@@ -79,17 +79,15 @@ class SystemButtonsSettingsTest {
         assertEquals("L3", s.row("SELECT").secondary)
     }
 
-    @Test fun bAndBackCancel() = runTest {
+    @Test fun bCancels() = runTest {
         pads = listOf(aya)
         val settings = SystemButtonsOnboardingTest.Settings()
         val s = state(settings)
         s.open()
         val before = settings.systemButtons
-        for (cancel in listOf(KeyCodes.BUTTON_B, KeyCodes.BACK)) {
-            s.bind(SystemRole.MENU)
-            assertTrue(s.tap(aya, cancel))
-            assertEquals("Standard", s.row("MENU").secondary)
-        }
+        s.bind(SystemRole.MENU)
+        assertTrue(s.tap(aya, KeyCodes.BUTTON_B))
+        assertEquals("Standard", s.row("MENU").secondary)
         s.bind(SystemRole.MENU)
         s.onButton(NxButton.B)                     // the touch hint's B: cancels, the page stays
         assertEquals(SettingsSection.SYSTEM_BUTTONS, s.page().section)

@@ -2725,7 +2725,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         if (repeat) return true
         systemButtonsHeld = systemButtonsHeld + model.key
         systemButtonWaiting = null
-        if (keyCode != KeyCodes.BUTTON_B && keyCode != KeyCodes.BACK) {
+        // B cancels; the pad's Back binds like any button (a Retroid Pocket Classic's home button sends it).
+        if (keyCode != KeyCodes.BUTTON_B) {
             deps.settings.systemButtons = SystemButtons.encode(SystemButtons.bind(systemButtonMap(), pad.key, role, PhysicalKey.of(keyCode, scanCode)))
         }
         refreshSettings()
