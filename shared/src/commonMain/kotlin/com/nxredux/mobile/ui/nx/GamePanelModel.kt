@@ -7,6 +7,14 @@ import com.nxredux.mobile.gametime.GameTimeFormat
 /** The game panel's tabs, in display order; [GamePanelModel.tabs] hides the ones that don't apply. */
 enum class GamePanelTab(val label: String) { SHORTCUTS("Shortcuts"), ACHIEVEMENTS("Achievements"), CHEATS("Cheats"), PLAYERS("Players") }
 
+/**
+ * The tab's word in the in-game menu's tab row: Shortcuts is the Menu tab there (the menu's words with the shortcuts
+ * beside or below them); the dual-screen panel keeps [GamePanelTab.label].
+ */
+val GamePanelTab.menuLabel: String get() = if (this == GamePanelTab.SHORTCUTS) MENU_TAB_LABEL else label
+
+const val MENU_TAB_LABEL = "Menu"
+
 /** The Shortcuts tab's one-tap actions, in display order. No Screenshot: the spec dropped it everywhere. */
 enum class Shortcut(val label: String) {
     SWAP_DISC("Swap disc"), SECOND_SCREEN("Second screen"), FAST_FORWARD("Fast forward"), REWIND("Rewind"), MIC("Mic"), RESET("Reset"),

@@ -373,6 +373,10 @@ internal class InGameMenuController(
                             panel = menuModel?.panelState(),
                             onPanelEvent = { ev -> if (!quitting) menuModel?.let { m -> val e = m.panelEvent(ev); menuState.value = m.state; handle(e) } },
                             onPanelColumns = { c -> menuModel?.panelColumns = c },
+                            // The Menu tab's shortcuts below its words (too narrow beside them): DOWN / UP move between them.
+                            onShortcutsBelow = { b -> menuModel?.shortcutsBelow = b },
+                            // Portrait: the Options page beside the root only while its words fit there, else whole.
+                            onOptionsBeside = { b -> menuModel?.optionsBeside = b },
                             // Not in netplay: the header over Continue / Leave only.
                             panelBeside = menuModel?.panelBeside ?: true,
                             // In the dual-screen panel's place: opaque, as the panel it replaces.

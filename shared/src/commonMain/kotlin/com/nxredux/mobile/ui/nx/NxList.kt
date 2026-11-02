@@ -154,7 +154,7 @@ internal fun NxList(
     BoxWithConstraints(if (topCut == null) modifier else modifier.onGloballyPositioned { bounds = it.boundsInRoot() }) {
         val rowHeight = rowHeightOverride ?: (maxHeight / nxRowCountFor(maxHeight))
         val listFont = textSizeOverride ?: nxListLabel()   // a fixed size: the rows stretch to fill the height, the text does not
-        val sidePad = endPadOverride ?: (maxWidth * 0.044f)
+        val sidePad = endPadOverride ?: (maxWidth * NX_LIST_END_SHARE)
         val pillPad = pillPaddingOverride ?: nxListInset()
         val density = LocalDensity.current
         // Whole rows the box shows, a px of float error forgiven: a band list's px rows fit it exactly ([nxListFit]).
@@ -190,6 +190,9 @@ internal fun NxList(
         }
     }
 }
+
+/** The share of a list's width kept clear at its rows' end (without an end pad of its own). */
+internal const val NX_LIST_END_SHARE = 0.044f
 
 /** A word list's line box as a share of its size, as Settings' section words. */
 internal const val NX_WORD_LINE = 1.2f
