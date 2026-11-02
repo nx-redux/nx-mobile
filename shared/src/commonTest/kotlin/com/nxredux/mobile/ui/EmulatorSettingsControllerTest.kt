@@ -63,8 +63,8 @@ class EmulatorSettingsControllerTest {
     @Test fun top_level_has_console_then_core_rows_then_categories() {
         assertEquals(
             listOf(
-                EmulatorRow.Header("Console settings"), EmulatorRow.Console(layout),
-                EmulatorRow.Gap,   // half a row of space between the console and the core settings
+                EmulatorRow.Header("Controls"), EmulatorRow.Console(layout),
+                EmulatorRow.Gap,   // half a row of space between the app's and the core settings
                 EmulatorRow.Header("Core settings"), EmulatorRow.Core(optA, inCategory = false), EmulatorRow.Category("video", "Video"),
             ),
             EmulatorRows.build(page(), null),
@@ -115,7 +115,23 @@ class EmulatorSettingsControllerTest {
     }
 
     @Test fun an_empty_core_table_gets_no_core_header() {
-        assertEquals(listOf(EmulatorRow.Header("Console settings"), EmulatorRow.Console(layout)), EmulatorRows.build(page(core = emptyList()), null))
+        assertEquals(listOf(EmulatorRow.Header("Controls"), EmulatorRow.Console(layout)), EmulatorRows.build(page(core = emptyList()), null))
+    }
+
+    // The app's settings under a header per group (Display, Controls, Gameplay, Audio), in group order, a gap between.
+    @Test fun the_console_rows_are_grouped_by_what_they_are_for() {
+        val speed = ConsoleRow(SpeedOptions.table.first { it.key == SpeedOptions.MAX_FF }, "4")
+        val audio = ConsoleRow(AudioOptions.row, AudioOptions.row.default)
+        val bottom = ConsoleRow(BottomScreenOptions.row, BottomScreenOptions.row.default)
+        assertEquals(
+            listOf(
+                EmulatorRow.Header("Display"), EmulatorRow.Console(bottom), EmulatorRow.Gap,
+                EmulatorRow.Header("Controls"), EmulatorRow.Console(layout), EmulatorRow.Gap,
+                EmulatorRow.Header("Gameplay"), EmulatorRow.Console(speed), EmulatorRow.Gap,
+                EmulatorRow.Header("Audio"), EmulatorRow.Console(audio),
+            ),
+            EmulatorRows.build(page(console = listOf(layout, audio, speed, bottom), core = emptyList()), null),
+        )
     }
 
     @Test fun inside_a_category_only_its_rows_marked_in_category() {

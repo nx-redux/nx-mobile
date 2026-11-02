@@ -3,6 +3,7 @@ package com.nxredux.mobile.ui.nx
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.options.FrontendOptions
+import com.nxredux.mobile.options.OptionGroup
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -60,8 +61,8 @@ class InGameMenuSplitTest {
             assertEquals(PageKind.Root, panes.left.kind)
             assertEquals("Options", panes.left.rows[panes.left.selected].label)
             assertEquals(m.state.page, assertIs<MenuPaneContent.Page>(panes.right).page)
-            m.onRow("Frontend"); m.press(NxButton.A)
-            assertEquals(PageKind.Frontend, m.state.page.kind)
+            m.onRow("Display"); m.press(NxButton.A)
+            assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
             if (split) assertEquals(PageKind.Options, menuPanes(m.state, split)!!.left.kind) else assertNull(menuPanes(m.state, split))
         }
     }
@@ -85,18 +86,18 @@ class InGameMenuSplitTest {
     @Test fun aDeeperPageSitsBesideItsParentOnTheRowThatOpenedIt() {
         val m = model()
         m.onRow("Options"); m.press(NxButton.A)
-        m.onRow("Frontend"); m.press(NxButton.A)
+        m.onRow("Display"); m.press(NxButton.A)
         val panes = menuPanes(m.state)!!
         assertFalse(panes.focusLeft)
         assertEquals(PageKind.Options, panes.left.kind)
-        assertEquals("Frontend", panes.left.rows[panes.left.selected].label)
-        assertEquals(PageKind.Frontend, assertIs<MenuPaneContent.Page>(panes.right).page.kind)
+        assertEquals("Display", panes.left.rows[panes.left.selected].label)
+        assertEquals(PageKind.Settings(OptionGroup.DISPLAY), assertIs<MenuPaneContent.Page>(panes.right).page.kind)
     }
 
     @Test fun adjustAndMessagePagesDrawWhole() {
         val m = model()
         m.onRow("Options"); m.press(NxButton.A)
-        m.onRow("Frontend"); m.press(NxButton.A)
+        m.onRow("Display"); m.press(NxButton.A)
         val visual = m.state.page.rows.indexOfFirst { (it as? MenuRow.Option)?.visual == true }
         m.activate(visual)
         assertIs<PageKind.Adjust>(m.state.page.kind)
@@ -115,9 +116,9 @@ class InGameMenuSplitTest {
         m.onRow("Options")
         m.press(NxButton.RIGHT)
         assertEquals(PageKind.Options, m.state.page.kind)
-        m.onRow("Frontend")
+        m.onRow("Display")
         m.press(NxButton.RIGHT)
-        assertEquals(PageKind.Frontend, m.state.page.kind)
+        assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
     }
 
     @Test fun rightStillChangesValuesWhenSplit() {
@@ -141,7 +142,7 @@ class InGameMenuSplitTest {
     @Test fun rightOnASubmenuDeeperDoesNothingWhenNotSplit() {
         val m = model(split = false)
         m.onRow("Options"); m.press(NxButton.A)
-        m.onRow("Frontend")
+        m.onRow("Display")
         assertNull(m.press(NxButton.RIGHT))
         assertEquals(PageKind.Options, m.state.page.kind)
     }
@@ -149,7 +150,7 @@ class InGameMenuSplitTest {
     @Test fun aTapOnTheParentPaneOpensThatRowInPlaceOfTheCurrentPage() {
         val m = model()
         m.onRow("Options"); m.press(NxButton.A)
-        m.onRow("Frontend"); m.press(NxButton.A)
+        m.onRow("Display"); m.press(NxButton.A)
         val shaders = m.state.stack[1].rows.indexOfFirst { it.label == "Shaders" }
         m.tapParent(PageKind.Options, shaders)
         assertEquals(listOf(PageKind.Root, PageKind.Options, PageKind.Shaders), m.state.stack.map { it.kind })

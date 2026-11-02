@@ -69,7 +69,7 @@ object WiiOptions {
 }
 
 /**
- * The Wii's widescreen system setting (SYSCONF), from Console Settings → Wii Screen and the orientation the game starts in.
+ * The Wii's widescreen system setting (SYSCONF), from Display → Wii Screen and the orientation the game starts in.
  * Games read it once at boot, and Dolphin applies it only then, so it is chosen at launch.
  */
 object WiiScreen {

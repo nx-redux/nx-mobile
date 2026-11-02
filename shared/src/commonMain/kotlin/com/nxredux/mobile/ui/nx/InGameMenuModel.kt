@@ -11,6 +11,7 @@ import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.ConsoleSettings
+import com.nxredux.mobile.options.OptionGroup
 import com.nxredux.mobile.options.CoreOption
 import com.nxredux.mobile.options.CoreOptionFilter
 import com.nxredux.mobile.options.FrontendOption
@@ -43,9 +44,11 @@ enum class SlotAction { SAVE, LOAD }
 sealed interface PageKind {
     data object Root : PageKind
     data object Options : PageKind
-    data object Frontend : PageKind
-    /** App-owned rows of this console ([ConsoleSettings]); edited like Frontend rows. */
-    data object ConsoleSettings : PageKind
+    /**
+     * One [OptionGroup]'s app settings (Display, Controls, Gameplay, Audio): this console's rows ([ConsoleSettings]) and
+     * the frontend rows ([FrontendOptions.table]) in it, saved with Save Changes.
+     */
+    data class Settings(val group: OptionGroup) : PageKind
     /**
      * This console's or game's shortcut overrides over Controls → Shortcuts ([InGameMenuModel.setShortcuts]): A binds by
      * press, X sets None here, Y goes back to the default; saved with Save Changes like the other rows.
@@ -229,8 +232,8 @@ sealed interface MenuEffect {
 }
 
 /**
- * The in-game pause menu as a page stack: root (Continue/Save/Load/Options/Quit) → Options → Console Settings (→ Adjust,
- * only for a console with its own rows), Frontend (→ Adjust), Shaders (→ Shader Parameters, → Adjust), Core Options →
+ * The in-game pause menu as a page stack: root (Continue/Save/Load/Options/Quit) → Options → Display, Controls, Gameplay,
+ * Audio (each only with rows to show; → Adjust), Shaders (→ Shader Parameters, → Adjust), Core Options →
  * category, and Save Changes (the cheats are the game panel's Cheats tab). Slots are 0-based internally and 1-based
  * in effects.
  *
@@ -296,7 +299,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         return if (preview == s.preview) s else s.copy(preview = preview)
     }
 
-    /** What [optionsPage] reads: the Console Settings row's inputs ([consoleRows]) and the footer's [status]. */
+    /** What [optionsPage] reads: the group rows' inputs ([consoleRows]) and the footer's [status]. */
     private data class OptionsPreviewInputs(val tag: String, val locked: Set<String>, val second: Boolean, val status: ConfigSource, val screen: ScreenClass?)
 
     /** [optionsPage], rebuilt only when one of its inputs has changed since the last call. */
@@ -313,7 +316,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var frontend: Map<String, String> = FrontendOptions.defaults()
     private var overlays: List<String> = emptyList()
     private var frontendLocked: Set<String> = emptySet()
-    private var frontendTag = ""                 // the console's tag: selects the Console Settings rows
+    private var frontendTag = ""                 // the console's tag: selects the console's own rows
     private var overlayAvailable = true          // false while the DS screens are split (the overlay is off)
 
     /**
@@ -324,7 +327,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /**
      * The biggest DS or 3DS 3D scale this display reaches (null: unknown): the 3D Resolution rows offer scales up to it. Set before
-     * the menu's pages are built; a change while open (a rotation, a fold) rebuilds open Console Settings/Frontend/Adjust pages.
+     * the menu's pages are built; a change while open (a rotation, a fold) rebuilds open group/Adjust pages.
      */
     var displayMax3d: Int? = null
         set(value) {
@@ -334,7 +337,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         }
 
     /**
-     * How the running DS or 3DS game is shown (null: unknown, neither): Console Settings then lists only the layout row in
+     * How the running DS or 3DS game is shown (null: unknown, neither): Display then lists only the layout row in
      * use ([NdsOptions.inGameRows], [N3dsOptions.inGameRows]) and, on the DS, the inset rows only in Picture in picture. A change while open (a rotation, a
      * controller) rebuilds the open pages.
      */
@@ -350,7 +353,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /**
      * The DS or 3DS 3D scale in use ([now], null: unknown) and whether the core renders in [software] (DS only: the 3D Resolution rows are
-     * then static, with a note). Refreshes open Console Settings/Frontend/Adjust pages.
+     * then static, with a note). Refreshes open group/Adjust pages.
      */
     fun setNds3d(now: Int?, software: Boolean) {
         if (now == nds3dNow && software == nds3dSoftware) return
@@ -752,20 +755,20 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /**
      * The frontend values in use (missing keys take their defaults for [overlays] and [tag]), the overlay file names
      * offered for the Overlay setting, the config's locked keys (locked frontend settings are hidden), the console's
-     * [tag] (it selects the console's own rows, shown on Options → Console Settings), and whether overlays can show
-     * ([overlayAvailable] is false while the DS screens are split). Refreshes open Console Settings/Frontend/Adjust pages.
+     * [tag] (it selects the console's own rows, shown in the Options groups), and whether overlays can show
+     * ([overlayAvailable] is false while the DS screens are split). Refreshes open group/Adjust pages.
      */
     fun setFrontend(values: Map<String, String>, overlays: List<String>, locked: Set<String>, tag: String = "", overlayAvailable: Boolean = true) {
         val tagChanged = tag != frontendTag
-        val hadConsoleRows = consoleRows().isNotEmpty()
+        val hadGroups = shownGroups()
         frontendTag = tag
         this.overlayAvailable = overlayAvailable
         frontend = FrontendOptions.fromConfig(values, tag)
         this.overlays = overlays
         frontendLocked = locked
-        // A new lock set (Restore defaults, the Wii's sensors once known) or console may lock or free every Console
-        // Settings row: an open Options page offers the row only while it leads somewhere, never to an empty page.
-        if (consoleRows().isNotEmpty() != hadConsoleRows) rebuildOptions()
+        // A new lock set (Restore defaults, the Wii's sensors once known) or console may lock or free every row of a
+        // group: an open Options page offers a group only while it leads somewhere, never to an empty page.
+        if (shownGroups() != hadGroups) rebuildOptions()
         refreshFrontendPages()
         if (tagChanged) fixPanel()   // the panel's header falls back to the console's logo
     }
@@ -841,7 +844,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /**
      * A second display is [connected] and the setting is [on]; shows (or hides) the panel's Second screen shortcut and
-     * Console Settings' Bottom screen row, keeping the selection.
+     * Display's Bottom screen row, keeping the selection.
      */
     fun setSecondScreen(connected: Boolean, on: Boolean) {
         val changed = connected != secondConnected
@@ -849,7 +852,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         secondOn = on
         refreshRoot()
         if (!changed) return
-        // Console Settings may come or go with its Bottom screen row (a console whose other rows are all locked).
+        // Display may come or go with its Bottom screen row (a console whose other rows are all locked).
         rebuildOptions()
         refreshFrontendPages()
     }
@@ -891,7 +894,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         return if (close) MenuEffect.Close else null
     }
 
-    /** Open Options pages built again (Console Settings offered or not), keeping the selected row and the status footer. */
+    /** Open Options pages built again (the groups offered or not), keeping the selected row and the status footer. */
     private fun rebuildOptions() {
         state = state.copy(stack = state.stack.map { p ->
             if (p.kind == PageKind.Options) rebuilt(p, optionsPage()).copy(footer = statusText()) else p
@@ -1229,9 +1232,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun openSubmenu(target: PageKind): MenuEffect? {
         when (target) {
             PageKind.Options -> push(optionsPage())
-            PageKind.ConsoleSettings -> push(consoleSettingsPage())
+            is PageKind.Settings -> push(groupPage(target.group))
             PageKind.Shortcuts -> push(shortcutsPage())
-            PageKind.Frontend -> push(frontendPage())
             PageKind.Shaders -> push(shadersPage())
             PageKind.ShaderParams -> push(shaderParamsPage())
             PageKind.CoreOptions -> {
@@ -1284,7 +1286,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** Pages whose Option rows are console, frontend or shader settings (not core options). */
     private fun isSettingsPage(kind: PageKind) =
-        kind == PageKind.ConsoleSettings || kind == PageKind.Frontend || kind == PageKind.Shaders || kind == PageKind.ShaderParams || kind is PageKind.Adjust
+        kind is PageKind.Settings || kind == PageKind.Shaders || kind == PageKind.ShaderParams || kind is PageKind.Adjust
 
     private fun changeFrontend(key: String, delta: Int): MenuEffect? {
         if (ShaderOptions.isShaderKey(key)) {
@@ -1385,7 +1387,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
-     * Adjust mode UP/DOWN: the previous/next visual row of the page the strip came from (Console Settings, Frontend,
+     * Adjust mode UP/DOWN: the previous/next visual row of the page the strip came from (a group page,
      * Shaders or Shader Parameters), wrapping.
      */
     private fun stepVisual(delta: Int) {
@@ -1402,16 +1404,15 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
-     * Rebuilds open Console Settings/Frontend/Shaders/ShaderParams/Adjust pages from the current values. A Console Settings
-     * page left with no rows (its Bottom screen row went with the second display, the others locked) closes, with any page
+     * Rebuilds open group (Display, Controls…)/Shaders/ShaderParams/Adjust pages from the current values. A group page
+     * left with no rows (its Bottom screen row went with the second display, the others locked) closes, with any page
      * above it: back to Options, which no longer offers it.
      */
     private fun refreshFrontendPages() {
         val stack = mutableListOf<MenuPage>()
         for (p in state.stack) {
             val page = when (val k = p.kind) {
-                PageKind.ConsoleSettings -> rebuilt(p, consoleSettingsPage())
-                PageKind.Frontend -> rebuilt(p, frontendPage())
+                is PageKind.Settings -> rebuilt(p, groupPage(k.group))
                 PageKind.Shaders -> rebuilt(p, shadersPage())
                 PageKind.ShaderParams -> rebuilt(p, shaderParamsPage())
                 // A row its page no longer lists (a parameter the new preset lacks; a DS layout or inset row after a
@@ -1423,7 +1424,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             }
             if (page != null) stack += page
         }
-        val empty = stack.indexOfFirst { it.kind == PageKind.ConsoleSettings && it.rows.isEmpty() }
+        val empty = stack.indexOfFirst { it.kind is PageKind.Settings && it.rows.isEmpty() }
         state = state.copy(stack = if (empty > 0) stack.take(empty) else stack)
     }
 
@@ -1490,10 +1491,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun optionsPage() = MenuPage(
         PageKind.Options, "Options",
         buildList {
-            // Only Frontend's name needs a line; the footer's status covers Save Changes.
-            if (consoleRows().isNotEmpty()) add(MenuRow.Submenu(CONSOLE_SETTINGS_LABEL, PageKind.ConsoleSettings))
+            // The app's settings by what they are for (Display, Controls, Gameplay, Audio), each only with rows to show.
+            shownGroups().forEach { add(MenuRow.Submenu(it.label, PageKind.Settings(it))) }
             add(MenuRow.Submenu(SHORTCUTS_LABEL, PageKind.Shortcuts))
-            add(MenuRow.Submenu("Frontend", PageKind.Frontend, detail = FRONTEND_DETAIL))   // compact: its text behind the info icon
             add(MenuRow.Submenu("Shaders", PageKind.Shaders))
             add(MenuRow.Submenu("Core Options", PageKind.CoreOptions))
             add(MenuRow.Submenu("Save Changes", PageKind.SaveChanges))
@@ -1502,18 +1502,23 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     )
 
     /**
-     * The console's own rows ([com.nxredux.mobile.options.ConsoleSettings]: the DS screens, the 3DS and Wii controls, the
-     * graphics API, the pad), locked ones hidden; values live with the frontend values.
+     * Group [group]'s page ([OptionGroup]): its rows of this console's ([consoleRows]: the DS screens, the 3DS and Wii
+     * controls, the graphics API, the pad, speed, audio) then of the frontend's ([frontendRows]), locked ones hidden.
      */
-    private fun consoleSettingsPage() = MenuPage(
-        PageKind.ConsoleSettings, CONSOLE_SETTINGS_LABEL,
-        consoleRows().map(::frontendRow),
+    private fun groupPage(group: OptionGroup) = MenuPage(
+        PageKind.Settings(group), group.label,
+        settingRows().filter { OptionGroup.of(it.key) == group }.map(::frontendRow),
     )
 
+    /** Every app setting the running game shows: this console's rows, then the frontend's. */
+    private fun settingRows(): List<FrontendOption> = consoleRows() + frontendRows()
+
+    /** The groups with rows to show, in order. */
+    private fun shownGroups(): List<OptionGroup> = OptionGroup.grouped(settingRows()) { it.key }.map { it.first }
+
     /**
-     * This console's Console Settings rows, locked ones and the ones read only at launch ([FrontendOption.atLaunch]: set in
-     * Game Settings / Emulator Settings) left out, and Bottom screen while no second display is [secondConnected]; none
-     * left = the page is not offered.
+     * This console's own rows, locked ones and the ones read only at launch ([FrontendOption.atLaunch]: set in
+     * Game Settings / Emulator Settings) left out, and Bottom screen while no second display is [secondConnected].
      */
     private fun consoleRows() = ConsoleSettings.tableFor(frontendTag, screen, displayMax3d).filter {
         it.key !in frontendLocked && !it.atLaunch && (secondConnected || it.key != BottomScreenOptions.KEY)
@@ -1527,10 +1532,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         }
     }.map { ConsoleSettings.fitted(it, frontend[it.key] ?: it.default).first }
 
-    private fun frontendPage() = MenuPage(
-        PageKind.Frontend, "Frontend",
-        FrontendOptions.table.filter { it.key !in frontendLocked }.map(::frontendRow),
-    )
+    /** The frontend's rows ([FrontendOptions.table]: scaling, sharpness, overlay, offsets, pad opacity, Debug HUD), locked ones left out. */
+    private fun frontendRows() = FrontendOptions.table.filter { it.key !in frontendLocked }
 
     private fun shadersPage() = MenuPage(
         PageKind.Shaders, "Shaders",
@@ -1787,7 +1790,6 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     companion object {
-        const val CONSOLE_SETTINGS_LABEL = "Console Settings"
         const val SHORTCUTS_LABEL = "Shortcuts"
         const val SHORTCUTS_FOOTER = "Changes here apply to this console or game. Save them with Save Changes."
         const val BIND_KEY_PREFIX = "nx:bind:"
@@ -1805,7 +1807,6 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val PLAYER_KEY_PREFIX = "nx:player:"
         // Presses while the menu is open never claim a slot.
         const val PLAYERS_FOOTER = "Close the menu, then press a button\non a new controller to join."
-        const val FRONTEND_DETAIL = "Screen scaling, overlays and on-screen extras"
         const val ACHIEVEMENTS_LABEL = "Achievements"
         const val NO_LOCKED = "Everything unlocked."
         const val ACH_KEY_PREFIX = "ach:"

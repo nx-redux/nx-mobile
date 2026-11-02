@@ -10,6 +10,7 @@ import com.nxredux.mobile.options.CoreOptionFilter
 import com.nxredux.mobile.options.CoreOptionSource
 import com.nxredux.mobile.options.EmulatorPage
 import com.nxredux.mobile.options.EmulatorSettings
+import com.nxredux.mobile.options.OptionGroup
 import com.nxredux.mobile.options.Ps2Options
 import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
@@ -39,7 +40,7 @@ sealed interface EmulatorRow {
     data class Core(val option: CoreOption, val inCategory: Boolean) : EmulatorRow
     data class Category(val key: String, val label: String) : EmulatorRow
     data class Notice(val text: String) : EmulatorRow
-    /** Half a row of space between the console settings and the core settings: drawn empty, never selected. */
+    /** Half a row of space between two groups (the app's settings, the core settings): drawn empty, never selected. */
     data object Gap : EmulatorRow
 }
 
@@ -54,9 +55,11 @@ object EmulatorRows {
         val core = page.core
         if (category != null) return core.orEmpty().let { CoreOptionFilter.inCategory(it, category) }.map { EmulatorRow.Core(it, inCategory = true) }
         return buildList {
-            if (page.console.isNotEmpty()) {
-                add(EmulatorRow.Header("Console settings"))
-                page.console.forEach { add(EmulatorRow.Console(it)) }
+            // The app's settings by what they are for, a header per group (Display, Controls, Gameplay, Audio), a gap between.
+            OptionGroup.grouped(page.console) { it.option.key }.forEachIndexed { i, (group, rows) ->
+                if (i > 0) add(EmulatorRow.Gap)
+                add(EmulatorRow.Header(group.label))
+                rows.forEach { add(EmulatorRow.Console(it)) }
             }
             val coreRows = buildList {
                 if (core == null) {

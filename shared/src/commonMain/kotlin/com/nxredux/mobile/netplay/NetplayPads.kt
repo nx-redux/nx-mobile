@@ -8,7 +8,7 @@ import com.nxredux.mobile.runner.SegaPadType
 /**
  * The controller a netplay session gives the core on ports 0-1, exactly what the handheld runs for the same tag and core,
  * so a game that probes the pad takes the same path on both devices (a 6-button probe against a 3-button pad desyncs).
- * Single player never reads this: it keeps Console Settings → Controller Type ([SegaPadType]).
+ * Single player never reads this: it keeps Controls → Controller Type ([SegaPadType]).
  *
  * Sources, nx-redux origin/main aa85f72c, `skeleton/SYSTEM/tg5040/paks/Emus/<TAG>.pak/default.cfg` and `launch.sh`:
  * - SMS.pak, GG.pak, SG1000.pak: `-picodrive_input1 = 3 button pad`, `-picodrive_input2 = 3 button pad`.
