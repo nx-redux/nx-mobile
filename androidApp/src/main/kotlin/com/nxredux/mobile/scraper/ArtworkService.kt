@@ -90,7 +90,8 @@ object ArtworkService {
         // A throwing host must not take the process down: log the class only (messages may carry paths or URLs).
         val errors = CoroutineExceptionHandler { _, e -> NxLog.e(TAG, "artwork task failed (${e::class.java.simpleName})") }
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + errors)
-        return ArtworkController(relay, factory, credentials, runner, scope, work = Dispatchers.Default)
+        return ArtworkController(relay, factory, credentials, runner, scope, work = Dispatchers.Default,
+            optionCache = AndroidArtOptionCache(app))
     }
 
     private fun versionName(context: Context): String {
