@@ -165,14 +165,14 @@ class ArtworkScreensTest {
             onHost(host)
             ArtworkController(
                 host,
-                { auth, onArt, onWritten, onAndroidArt, logged, _, _ ->
+                { auth, onArt, onWritten, onAndroidArt, logged, onOptions, picked ->
                     val now = { testScheduler.currentTime }
                     val more = listOfNotNull(
                         if (libretro) com.nxredux.mobile.scraper.LibretroThumbnails(http, now) { delay(it) } else null,
                         if (tgdbUserKey != null || tgdb) com.nxredux.mobile.scraper.TheGamesDbSource(http, { settings.tgdbApiKey.orEmpty() }, now) { delay(it) } else null,
                         if (sgdb) com.nxredux.mobile.scraper.SteamGridDbSource(http, { settings.sgdbApiKey }, now) { delay(it) } else null,
                     )
-                    ssEngine(http, FakeFitter(), FakeHasher(), source, ContentRef("Home"), auth, { testScheduler.currentTime }, { delay(it) }, onArt, onWritten, artStore, onAndroidArt, more, logged)
+                    ssEngine(http, FakeFitter(), FakeHasher(), source, ContentRef("Home"), auth, { testScheduler.currentTime }, { delay(it) }, onArt, onWritten, artStore, onAndroidArt, more, logged, onOptions, picked)
                 },
                 Credentials(settings, if (available) "DEV" else ""), FakeRunner(), scope,
             )
@@ -722,7 +722,9 @@ class ArtworkScreensTest {
         repeat(kinds.indexOf(ContextKind.FETCH_ART)) { r.state.onButton(NxButton.DOWN) }
         r.state.onButton(NxButton.A)
         advanceUntilIdle()
-        assertEquals(ARTWORK_STORAGE_ERROR, r.state.error.value)
+        assertNull(r.state.error.value)                                                    // the art panel says so itself
+        assertEquals("Couldn't read the pictures", assertNotNull(r.state.artPanel.value).message)
+        assertEquals(ArtPanelPhase.READY, r.state.artPanel.value!!.phase)
         assertFalse(r.state.loading.value)
     }
 
@@ -824,7 +826,7 @@ class ArtworkScreensTest {
         assertTrue(assertIs<Screen.ArtworkProgress>(r.state.screen.value).confirmCancel)
     }
 
-    @Test fun the_context_menu_fetches_art_for_a_supported_game_under_the_loader() = runTest {
+    @Test fun the_context_menu_fetch_art_opens_the_panel_fetches_then_lists_the_options() = runTest {
         val r = rig()
         r.http.latency = 500
         r.http.on("romnom=Tetris.gb", Scrape.found("ss" to "https://m/t-ss.png", "box-2D" to "https://m/t-box.png"))
@@ -837,40 +839,61 @@ class ArtworkScreensTest {
         repeat(kinds.indexOf(ContextKind.FETCH_ART)) { r.state.onButton(NxButton.DOWN) }
         r.state.onButton(NxButton.A)
         advanceTimeBy(300)
-        assertTrue(r.state.loading.value)
-        assertEquals("Fetching art…", r.state.loadingMessage.value)
+        assertFalse(r.state.loading.value)                                                 // no loading overlay: the panel
+        assertNull(assertIs<Screen.Games>(r.state.screen.value).menu)
+        assertEquals(ArtPanelPhase.FETCHING, assertNotNull(r.state.artPanel.value).phase)
+        assertEquals("Tetris", r.state.artPanel.value!!.title)
         advanceUntilIdle()
-        assertFalse(r.state.loading.value)
-        assertTrue("Art fetched" in r.notices, "${r.notices}")
+        val p = assertNotNull(r.state.artPanel.value)
+        assertEquals(ArtPanelPhase.READY, p.phase)
+        assertEquals(listOf("ScreenScraper · us"), p.tiles.map { it.label })
+        assertEquals(p.tiles[0].option.key, p.currentKey)                                   // the fetched screenshot is the one in use
         val games = assertIs<Screen.Games>(r.state.screen.value)
         assertEquals(ContentRef("Home/Roms/Game Boy (GB)/.media/screenshot/Tetris.png"), games.entries.first { it.game.fileName == "Tetris.gb" }.game.screenshotRef)
+        r.state.onButton(NxButton.B)                                                       // B closes the panel, the list stays
+        assertNull(r.state.artPanel.value)
+        assertIs<Screen.Games>(r.state.screen.value)
+        r.state.onButton(NxButton.MENU)                                                    // the game has art now: Change art
+        val after = assertNotNull(assertIs<Screen.Games>(r.state.screen.value).menu).items.map { it.kind }
+        assertTrue(ContextKind.CHANGE_ART in after && ContextKind.FETCH_ART !in after, "$after")
+        repeat(after.indexOf(ContextKind.CHANGE_ART)) { r.state.onButton(NxButton.DOWN) }
+        r.state.onButton(NxButton.A)
+        advanceUntilIdle()
+        assertEquals(ArtPanelPhase.READY, assertNotNull(r.state.artPanel.value).phase)   // the saved list: no search
+        assertEquals(1, r.state.artPanel.value!!.tiles.size)
+        assertEquals("Only one picture found", r.state.artPanel.value!!.message)
+        r.state.back()                                                                      // the system back closes it too
+        assertNull(r.state.artPanel.value)
+        assertIs<Screen.Games>(r.state.screen.value)
+        r.state.onButton(NxButton.MENU)
+        repeat(after.indexOf(ContextKind.CHANGE_ART)) { r.state.onButton(NxButton.DOWN) }
+        r.state.onButton(NxButton.A)
+        advanceUntilIdle()
+        r.state.back(); r.state.back()                                                      // the panel, then the list: it closes off the list
+        r.state.openSystem(gb)
+        assertNull(r.state.artPanel.value)
     }
 
-    /** Opens GB, puts the row on [file] and MENU; whether the menu offers Fetch art. */
-    private fun Rig.offersFetchArt(file: String): Boolean {
+    /** Opens GB, puts the row on [file] and MENU; the art item the menu offers (none, Fetch art or Change art). */
+    private fun Rig.artItem(file: String): ContextKind? {
         val gb = assertIs<Screen.Systems>(state.screen.value).tabs.flatMap { it.rows }.firstNotNullOf { (it as? MainRow.System)?.systems?.firstOrNull { s -> s.tag == "GB" } }
         state.openSystem(gb)
         state.select(assertIs<Screen.Games>(state.screen.value).entries.indexOfFirst { it.game.fileName == file })
         state.onButton(NxButton.MENU)
         val kinds = assertNotNull(assertIs<Screen.Games>(state.screen.value).menu).items.map { it.kind }
-        return ContextKind.FETCH_ART in kinds
+        return kinds.firstOrNull { it == ContextKind.FETCH_ART || it == ContextKind.CHANGE_ART }
     }
 
-    @Test fun fetch_art_is_offered_only_for_a_game_with_incomplete_art() = runTest {
-        assertTrue(rig().offersFetchArt("Tetris.gb"))     // no art at all
-        assertFalse(rig().offersFetchArt("Zelda.gb"))     // a box and a background
+    @Test fun fetch_art_for_a_game_without_art_change_art_once_it_has_any() = runTest {
+        assertEquals(ContextKind.FETCH_ART, rig().artItem("Tetris.gb"))     // no art at all (its .media root png is not art)
+        assertEquals(ContextKind.CHANGE_ART, rig().artItem("Zelda.gb"))     // a box and a background
     }
 
-    @Test fun fetch_art_is_offered_for_complete_art_when_replace_existing_is_on() = runTest {
-        val r = rig(); r.settings.artReplaceExisting = true
-        assertTrue(r.offersFetchArt("Zelda.gb"))
-    }
-
-    @Test fun fetch_art_follows_the_mix_rule_of_fetch_missing_art() = runTest {
-        val on = rig(); on.settings.artMix = true
-        assertTrue(on.offersFetchArt("Zelda.gb"))         // a box and a hero but no mix, Generate mix on
-        val off = rig(); off.settings.artMix = false
-        assertFalse(off.offersFetchArt("Zelda.gb"))
+    @Test fun replace_existing_and_generate_mix_no_longer_bring_fetch_art_back() = runTest {
+        val replace = rig(); replace.settings.artReplaceExisting = true
+        assertEquals(ContextKind.CHANGE_ART, replace.artItem("Zelda.gb"))
+        val mix = rig(); mix.settings.artMix = true
+        assertEquals(ContextKind.CHANGE_ART, mix.artItem("Zelda.gb"))      // no mix, yet it has art
     }
 
     @Test fun no_fetch_art_without_credentials_or_for_excluded_tags() = runTest {

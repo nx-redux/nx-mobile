@@ -1,6 +1,7 @@
 package com.nxredux.mobile.scraper
 
 import com.nxredux.mobile.library.ArtRefs
+import com.nxredux.mobile.runner.ContentRef
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -58,6 +59,18 @@ data class FetchResult(val status: ItemStatus, val reason: String? = null)
  * for a hand-placed screenshot or none), and [note] why some or every source is missing from it (stopped sources, a pause).
  */
 data class ArtOptionsResult(val options: List<ArtOption>, val currentKey: String?, val note: String? = null)
+
+/** What the art panel asks of the artwork controller ([ArtworkController] implements it; the defaults are its own). */
+interface ArtOptionsPort {
+    /** One game's fetch; [wide]: also every source's screenshot, grid and hero candidates. */
+    suspend fun fetchGame(gamePath: String, replaceExisting: Boolean = false, wide: Boolean = false): FetchResult
+    /** The game's Change art list; [searchAgain]: the wide search runs again first. */
+    suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean = false): ArtOptionsResult
+    /** [option]'s preview; null when there is none to show. */
+    suspend fun optionImage(gamePath: String, option: ArtOption): ContentRef?
+    /** Writes [option] as the game's screenshot; false when it could not. */
+    suspend fun pickOption(gamePath: String, option: ArtOption): Boolean
+}
 
 /** A Reset artwork: how many files it deleted and whether it paused the running fetch (it had games in scope). */
 data class ResetResult(val deleted: Int, val pausedJob: Boolean = false)

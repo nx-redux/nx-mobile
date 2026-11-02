@@ -1,8 +1,5 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.library.path
-import com.nxredux.mobile.scraper.ArtHave
-import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.scraper.ArtworkController
 import com.nxredux.mobile.scraper.JobPhase
 import com.nxredux.mobile.scraper.KeyResult
@@ -379,27 +376,16 @@ internal class ArtworkScreenController(
     /** A touch on an Artwork Settings row's control ([ArtworkAccountSettings.onSettingEvent]). */
     fun onSettingEvent(s: Screen.ArtworkSettings, event: NxSettingEvent) = more.onSettingEvent(s, event)
 
-    // --- The game context menu's Fetch art ---
+    // --- The game context menu's Fetch art / Change art ---
 
     /**
-     * A game in a console an enabled art source knows (excluded tags never), whose art is incomplete (Fetch missing art's
-     * rule, from the index in memory) or any game when Replace existing is on.
+     * None for a game no enabled art source knows (excluded tags never); Change art when it shows any art (3D or 2D
+     * box, screenshot, grid or hero; written by the app or placed by hand), else Fetch art.
      */
-    fun canFetch(entry: Listed): Boolean {
-        if (!controller.available || entry.system.unassigned || !controller.canFetch(entry.system.tag, entry.game.fileName)) return false
-        if (settings.artReplaceExisting) return true
+    fun artMenu(entry: Listed): ArtMenuItem {
+        if (!controller.available || entry.system.unassigned || !controller.canFetch(entry.system.tag, entry.game.fileName)) return ArtMenuItem.NONE
         val g = entry.game
-        val art = ArtRefs(
-            g.boxartRef?.value, g.box2dRef?.value, g.screenshotRef?.value, g.gridRef?.value, g.heroRef?.value,
-            wheel = g.wheelRef?.value, mix = g.mixRef?.value,
-        )
-        return !ArtHave.of(art, needMix = settings.artMix).complete
-    }
-
-    /** Fetches [entry]'s art in the foreground under the loading overlay (B cancels), then says how it went. */
-    fun fetchGame(entry: Listed) {
-        loader.start(message = "Fetching art…", cancellable = true) {
-            guardArtwork(error) { host.showNotice(fetchResultText(controller.fetchGame(entry.game.path, settings.artReplaceExisting))) }
-        }
+        val any = g.boxartRef != null || g.box2dRef != null || g.screenshotRef != null || g.gridRef != null || g.heroRef != null
+        return if (any) ArtMenuItem.CHANGE else ArtMenuItem.FETCH
     }
 }

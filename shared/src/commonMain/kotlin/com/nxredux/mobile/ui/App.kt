@@ -660,6 +660,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val index = { selection.value.index }
     val minimalOpening = state.minimalOpening.collectAsState()   // a Minimal page's row being opened (its page draws the band)
     val raPanel by state.raPanel.collectAsState()   // the achievements panel over the list
+    val artPanel by state.artPanel.collectAsState()   // the Fetch art / Change art panel over the list
     val dual by state.dualMenu.collectAsState()   // the menu is on the second display: its details pane has the achievements
     val current = { s.entries.getOrNull(selection.value.index) }
     GameListScreen(
@@ -683,6 +684,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
         minimalOpening = minimalOpening.value?.takeIf { it.page == s.source },
     )
     RaPanelOverlay(raPanel.takeIf { state.screen.value === s }, onRow = state::openRaPanelRow, onButton = state::onButton)
+    ArtPanelOverlay(artPanel.takeIf { state.screen.value === s }, onTap = state::artPanelTap, onDismiss = state::closeArtPanel)
     s.layoutMenu?.let { at ->
         GameListLayoutMenu(
             current = GameListLayouts.indexOf(state.settings.gameListStyle, state.settings.gameListOrientation, state.settings.gameListVerticalAlignment), highlighted = at,

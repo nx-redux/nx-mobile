@@ -36,7 +36,7 @@ class ArtworkController(
     private val clock: () -> Long = { processStart.elapsedNow().inWholeMilliseconds },
     /** The Change art previews (app-private); none = every preview is downloaded again. */
     private val optionCache: ArtOptionCache = ArtOptionCache.NONE,
-) {
+) : ArtOptionsPort {
     companion object {
         const val JOB_FILE = "scrape_job.json"
         const val LOG_FILE = "written_art.txt"
@@ -270,14 +270,14 @@ class ArtworkController(
     }
 
     /**
-     * One game in the caller's coroutine (for ScreenLoader, the game menu's Fetch art). As a job does, it asks only for
+     * One game in the caller's coroutine (the art panel's Fetch art). As a job does, it asks only for
      * the kinds the game lacks and never overwrites art already there unless [replaceExisting] (Replace existing art).
      * A game the running job still has queued is not fetched twice: this waits for the job's result. A pause case comes
      * back as ERROR with the pause reason. While a job runs, the shared sources' per-run state is the job's: this run
      * does not start them again ([ScrapeEngine.run]'s `startSources`). [wide]: the Change art search ([ScrapeEngine.run]'s
      * wide pass).
      */
-    suspend fun fetchGame(gamePath: String, replaceExisting: Boolean = false, wide: Boolean = false): FetchResult =
+    override suspend fun fetchGame(gamePath: String, replaceExisting: Boolean, wide: Boolean): FetchResult =
         fetchOne(gamePath, replaceExisting, wide).first
 
     /** [fetchGame], with the sources' stop notes of its own run (none when the job fetched the game). */
@@ -314,7 +314,7 @@ class ArtworkController(
      * A game's Change art list. The saved list when the wide search ran for it; otherwise (none saved, only a fetch's
      * links, or [searchAgain]) the game is fetched with the wide search first ([fetchGame], [replaceExisting] as set).
      */
-    suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean = false): ArtOptionsResult = withContext(work) {
+    override suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean): ArtOptionsResult = withContext(work) {
         var saved = store.get(gamePath)
         var note: String? = null
         if (saved == null || !saved.wide || searchAgain) {
@@ -348,7 +348,7 @@ class ArtworkController(
      * that answered but gave no image is dropped from the list (never the pick); no connection keeps it. Null when
      * there is no image to show.
      */
-    suspend fun optionImage(gamePath: String, option: ArtOption): ContentRef? = withContext(work) {
+    override suspend fun optionImage(gamePath: String, option: ArtOption): ContentRef? = withContext(work) {
         optionCache.ref(option.key)?.let { return@withContext it }
         val bytes = downloadOption(gamePath, option) ?: return@withContext null
         optionCache.write(option.key, bytes)
@@ -371,7 +371,7 @@ class ArtworkController(
      * does nothing. The pick is marked before the write (a running job reads it); a failed write puts the previous
      * pick back. False when the image could not be had or written.
      */
-    suspend fun pickOption(gamePath: String, option: ArtOption): Boolean = withContext(work) {
+    override suspend fun pickOption(gamePath: String, option: ArtOption): Boolean = withContext(work) {
         val ref = host.libraryGames().firstOrNull { it.gamePath == gamePath } ?: return@withContext false
         singleLock.withLock {
             val saved = store.get(gamePath)

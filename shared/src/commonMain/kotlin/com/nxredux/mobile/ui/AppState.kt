@@ -1299,6 +1299,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             _screen.collect {
                 if (setupScreen(it)) _toolOnTop.value = false   // a tool's page no more: setup takes the menu's screen
                 if (it !is Screen.Games) { ra.closeRaPanel() } else { ra.followRaPanel() }; ra.followRaDetails(); followSecondList(); followDrawerPreview()
+                if (it !is Screen.Games) closeArtPanel()   // as the achievements panel: only over a game list
             }
         }
         deps.achievements?.let { c ->
@@ -6350,8 +6351,11 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
     }
 
+    /** The artwork controller; null in a build without one (no Tools row, no Fetch art or Change art). */
+    private val artworkController: com.nxredux.mobile.scraper.ArtworkController? = deps.artwork?.invoke(artworkHost)
+
     /** Null without a controller (no Tools row, no Fetch art). */
-    private val artworkScreens: ArtworkScreenController? = deps.artwork?.invoke(artworkHost)?.let { c ->
+    private val artworkScreens: ArtworkScreenController? = artworkController?.let { c ->
         ArtworkScreenController(
             scope, _screen, _selection, _error, deps.settings, loader, c,
             host = object : ArtworkScreenHost {
@@ -6369,6 +6373,29 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             },
         ).also { screens -> scope.launch { c.state.collect { screens.onState(it) } } }
     }
+
+    /**
+     * The game menu's Fetch art / Change art panel over a game list; null without a controller. A pick's art is already
+     * in the index and shown ([com.nxredux.mobile.scraper.ArtworkHost.applyArt], then [flushArt]); the flush after it
+     * writes anything still batched.
+     */
+    private val artPanels: ArtPanelController? = artworkController?.let { c ->
+        ArtPanelController(scope, c, deps.settings, onPicked = { scope.launch { flushArt() } })
+    }
+    private val noArtPanel = MutableStateFlow<ArtPanel?>(null)
+    /** The art panel; null while closed (always, without a controller). */
+    val artPanel: StateFlow<ArtPanel?> = artPanels?.panel ?: noArtPanel
+
+    /** Opens the art panel on [entry] over the game list; [fetchFirst]: Fetch art, else Change art. */
+    private fun openArtPanel(entry: Listed, fetchFirst: Boolean) {
+        val panels = artPanels ?: return
+        ra.closeRaPanel()
+        panels.open(entry, fetchFirst)
+    }
+    /** A tap on the art panel's tile [index] (Search again at the tiles' count): picks it. */
+    fun artPanelTap(index: Int) { artPanels?.tap(index) }
+    /** Closes the art panel (a tap beside it). */
+    fun closeArtPanel() { artPanels?.close() }
 
     /** The Artwork sign-in modal's live username / password (the composable reports every change). */
     fun artworkDraftUser(text: String) { artworkScreens?.draftUser(text) }
@@ -6416,8 +6443,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             override suspend fun renameInIndex(game: GameEntry, name: String): Boolean = this@AppState.renameInIndex(game, name)
             override fun finishSwitch(game: GameEntry, from: SystemFolder, tag: String) = this@AppState.finishSwitch(game, from, tag)
             override fun openGameSettings(entry: Listed) = emulatorSettings.openGame(entry)
-            override fun canFetchArt(entry: Listed): Boolean = artworkScreens?.canFetch(entry) == true
-            override fun fetchArt(entry: Listed) { artworkScreens?.fetchGame(entry) }
+            override fun artMenu(entry: Listed): ArtMenuItem = artworkScreens?.artMenu(entry) ?: ArtMenuItem.NONE
+            override fun openArtPanel(entry: Listed, fetchFirst: Boolean) = this@AppState.openArtPanel(entry, fetchFirst)
             override fun netplayOffered(entry: Listed): Boolean = this@AppState.netplay?.offers(entry) == true
             override fun openNetplay(entry: Listed) = this@AppState.openNetplay(entry)
             override val netplayInMenu: Boolean get() = !launcherChrome().netplayHint || _screen.value is Screen.Systems   // the main menu has no hint bar
@@ -6748,6 +6775,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         (_screen.value as? Screen.Games)?.let { s ->
             s.search?.let { onListSearchButton(s, it, button); return }
             s.layoutMenu?.let { onLayoutMenuButton(s, it, button); return }
+            if (artPanel.value != null) { artPanels?.onButton(button); return }   // the art panel takes every press while open
             ra.raPanel.value?.let { ra.onRaPanelButton(it, button); return }
         }
         if (filePicker?.onButton(_screen.value, button) == true) return
@@ -6867,6 +6895,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 if (s.menu != null) { closeContextMenu(); return true }
                 if (s.search != null) { _screen.value = s.copy(search = null); return true }
                 if (s.layoutMenu != null) { _screen.value = s.copy(layoutMenu = null); return true }
+                if (artPanel.value != null) { closeArtPanel(); return true }
                 if (ra.backRaPanel()) return true
                 // Lands only on the main menu (Hidden and Unassigned go to Settings); a Minimal list's title drops back into a Minimal tab's row.
                 intendNav(if (styleOf(s) == MenuStyle.MINIMAL) NavMotion.MINIMAL_BACK else NavMotion.BACK)
