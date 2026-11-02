@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -51,6 +54,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -120,6 +128,8 @@ fun InGameMenu(
     panel: GamePanelState? = null,
     onPanelEvent: (GamePanelEvent) -> Unit = {},
     onPanelColumns: (Int) -> Unit = {},
+    onShortcutsBelow: (Boolean) -> Unit = {},
+    onOptionsBeside: (Boolean) -> Unit = {},
     panelBeside: Boolean = true,
     opaque: Boolean = false,
     onOption: (OptionEvent) -> Unit = {},
@@ -140,9 +150,12 @@ fun InGameMenu(
             AdjustContent(under.page, rowHeight, onDismiss, onChange, onPress, header = panel?.header?.takeIf { opaque })
         } else {
             val detail = AchievementsUi(badgePath, rowAchievement)
-            val panes = menuPanes(under, split)
+            // Portrait: the Options page beside the root only while its words fit there ([rememberOptionsBeside]).
+            val optionsBeside = split || rememberOptionsBeside(under, maxWidth)
+            SideEffect { onOptionsBeside(optionsBeside) }
+            val panes = menuPanes(under, split, optionsBeside)
             val splitUi = panes?.let { SplitUi(it, wide = split, onParentTap, onPreviewTap) }
-            val panelUi = panel?.let { PanelUi(it, onPanelEvent, onPanelColumns) }
+            val panelUi = panel?.let { PanelUi(it, onPanelEvent, onPanelColumns, onShortcutsBelow) }
             InGameMenuContent(under, slots, rowHeight, onSelect, onActivate, onDismiss, onChange, onPress, detail, onInfoTruncated, splitUi, panelUi, panelBeside, opaque, onOption)
         }
         if (dialog != null) {
@@ -172,19 +185,45 @@ internal fun menuDialog(state: MenuState): MenuDialog =
  */
 private class SplitUi(val panes: MenuPanes, val wide: Boolean, val onParentTap: (PageKind, Int) -> Unit, val onPreviewTap: (Int) -> Unit)
 
-/** The root's game panel ([GamePanel]): what it draws, its taps, and the shortcut columns it drew. */
-private class PanelUi(val state: GamePanelState, val onEvent: (GamePanelEvent) -> Unit, val onColumns: (Int) -> Unit)
+/**
+ * The root's game panel ([GamePanel]): what it draws, its taps, the shortcut columns it drew, and whether the Menu tab
+ * put the shortcuts below its words ([RootBody]).
+ */
+private class PanelUi(val state: GamePanelState, val onEvent: (GamePanelEvent) -> Unit, val onColumns: (Int) -> Unit, val onBelow: (Boolean) -> Unit)
 
-/** The panel (its header drawn across the menu's top instead) in [modifier]'s box, reporting the shortcut grid's columns at that width ([rememberGamePanelColumns]) for the model's UP/DOWN. */
+/**
+ * The panel's current tab body in [modifier]'s box (the header and the tab row are the menu's, across its top),
+ * reporting the shortcut grid's columns at that width ([rememberGamePanelColumns]) for the model's UP/DOWN.
+ */
 @Composable
 private fun MenuGamePanel(panel: PanelUi, modifier: Modifier) {
     BoxWithConstraints(modifier) {
         val columns = rememberGamePanelColumns(maxWidth, panel.state.shortcuts)
         SideEffect { panel.onColumns(columns) }
-        // The header is the menu's, across its top; the body sits on the menu's surface with the list.
-        GamePanel(panel.state, panel.onEvent, Modifier.fillMaxSize(), showHeader = false, opaque = false)
+        // The body sits on the menu's surface with the list.
+        GamePanel(panel.state, panel.onEvent, Modifier.fillMaxSize(), showHeader = false, opaque = false, showTabs = false)
     }
 }
+
+/** The menu's tab row under the header ([menuTabsShown]): the panel's tabs, Shortcuts as Menu ([menuLabel]). */
+@Composable
+private fun MenuTabs(panel: PanelUi, focused: Boolean) {
+    val tabs = panel.state.tabs.ifEmpty { listOf(GamePanelTab.SHORTCUTS) }
+    val tab = GamePanelModel.resolveTab(panel.state.tab, tabs)
+    MenuTabRow(
+        tabs.map { it.menuLabel }, tabs.indexOf(tab).coerceAtLeast(0), onTab = { panel.onEvent(GamePanelEvent.SelectTab(tabs[it])) },
+        // Its words where the root's words start ([nxListInset]): the row pads by the page inset itself, which the
+        // menu's column already has.
+        modifier = Modifier.offset(x = nxListInset() - nxPageInset().start), focused = focused,
+    )
+}
+
+/** The tab row is drawn over the menu's body ([menuTabsShown]): the lists start right under it, not level with its words. */
+private val LocalMenuTabsAbove = compositionLocalOf { false }
+
+/** The room above a word list's first row: none under the menu's tab row, else level with the tab words ([rootListTopPad]). */
+@Composable
+private fun wordListTopPad(rowHeight: Dp): Dp = if (LocalMenuTabsAbove.current) 0.dp else rootListTopPad(rowHeight)
 
 @Composable
 private fun InGameMenuContent(
@@ -210,6 +249,9 @@ private fun InGameMenuContent(
     // The save-slot card's text: the list label size.
     val slotTextSize = nxListLabel()   // Appearance → Text size
     val selectedRow = page.rows.getOrNull(page.selected)
+    // Not over the Options page drawn whole (no panes): it is a page deeper, as any other.
+    val tabsAbove = beside != null && menuTabsShown(state) && (state.stack.size == 1 || split != null)
+    val offMenuTab = tabsAbove && beside != null && GamePanelModel.resolveTab(beside.state.tab, beside.state.tabs) != GamePanelTab.SHORTCUTS
     Column(
         Modifier
             .fillMaxSize()
@@ -226,16 +268,23 @@ private fun InGameMenuContent(
         Column(Modifier.weight(1f).fillMaxWidth().padding(start = inset.pillStart, end = inset.pillEnd)) {
         // The game header on every page, where the dual-screen panel draws it; without a panel the standard page title.
         if (panel != null) GamePanelHeaderBar(panel.state.header) else NxPageTitle(page.title)
-        if (split?.wide == true) {
-            SplitBody(state, split, beside, slots, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption, Modifier.weight(1f))
-        } else if (split != null) {
-            RootBody(state, split, beside, slots, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption, Modifier.weight(1f))
-        } else when (page.kind) {
-            PageKind.Message -> MessageBody(page, onDismiss, Modifier.weight(1f))
-            PageKind.Achievements -> AchievementsBody(page, detail, onSelect, Modifier.weight(1f))
-            // Keyed by page so each page gets its own scroll position; whole width, so its name shows in the title row.
-            else -> key(page.kind) {
-                OptionsBody(page, rowHeight, onSelect, onActivate, onOption, onInfoTruncated, Modifier.weight(1f))
+        // The tab row across the menu on the root: the Menu tab is the words with the shortcuts (or the slot card, the
+        // Options preview); another tab takes the whole width.
+        if (tabsAbove && beside != null) MenuTabs(beside, focused = state.panelFocus == PanelFocus.Tabs)
+        CompositionLocalProvider(LocalMenuTabsAbove provides tabsAbove) {
+            if (offMenuTab && beside != null) {
+                MenuGamePanel(beside, Modifier.weight(1f).fillMaxWidth())
+            } else if (split?.wide == true) {
+                SplitBody(state, split, beside, slots, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption, Modifier.weight(1f))
+            } else if (split != null) {
+                RootBody(state, split, beside, slots, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption, Modifier.weight(1f))
+            } else when (page.kind) {
+                PageKind.Message -> MessageBody(page, onDismiss, Modifier.weight(1f))
+                PageKind.Achievements -> AchievementsBody(page, detail, onSelect, Modifier.weight(1f))
+                // Keyed by page so each page gets its own scroll position; whole width, so its name shows in the title row.
+                else -> key(page.kind) {
+                    OptionsBody(page, rowHeight, onSelect, onActivate, onOption, onInfoTruncated, Modifier.weight(1f))
+                }
             }
         }
         }
@@ -248,7 +297,7 @@ private fun InGameMenuContent(
             Modifier
         }
         NxHintBar(
-            hintsFor(page, selectedRow, state.selectedShowsInfo, state.panelFocus, state.panelTab, panel = beside != null), hintModifier,
+            hintsFor(page, selectedRow, state.selectedShowsInfo, state.panelFocus ?: PanelFocus.Tabs.takeIf { offMenuTab }, state.panelTab, panel = beside != null), hintModifier,
             onHint = { onPress(menuHintButton(it)) },
         )
     }
@@ -277,25 +326,118 @@ private fun RootBody(
 ) {
     val panes = split.panes
     val slotIndex = state.slotIndex
-    val listShare = rootListShare(LocalPortrait.current)
     // The labels start [MenuPillPadding] into their pills, where the page title's first letter sits ([nxListInset]).
-    // No top room: the panel's tab row sits right under the header, as in the dual-screen panel, the list's first row beside it.
-    Row(modifier.fillMaxWidth().padding(start = nxListInset() - MenuPillPadding, end = nxListInset(), bottom = 8.dp)) {
+    BoxWithConstraints(modifier.fillMaxWidth().padding(start = nxListInset() - MenuPillPadding, end = nxListInset(), bottom = 8.dp)) {
+        // The words' column: as wide as its longest row needs at this text size ([rememberRootWordsColumn]). The
+        // shortcuts beside it while their column still fits ([rememberShortcutColumnMin]), else below the words; decided on the shortcuts whatever the right side shows now, so the words never jump
+        // as Save / Load (the slot card) or Options (its preview) is highlighted.
+        val words = rememberRootWordsColumn(panes.left, maxWidth)
+        val need = panel?.let { rememberShortcutColumnMin(it.state.shortcuts) }
+        val below = need != null && maxWidth - words - RootColumnGap < need
+        SideEffect { panel?.onBelow?.invoke(below) }
+        val wordsMax = (maxHeight - StackedRightMin).coerceAtLeast(0.dp)   // stacked: the words' most height
         // Words as Settings' sections: the selected one in the accent while the list has the focus, the main ink while
         // the panel or the page beside it does.
-        if (panes.focusLeft) {
-            Box(Modifier.weight(listShare).fillMaxHeight(), contentAlignment = Alignment.TopStart) {
-                RootList(panes.left, rowHeight, onSelect, onActivate, onChange, focused = state.panelFocus == null)
-            }
-        } else {
-            val tap: (Int) -> Unit = { i -> split.onParentTap(panes.left.kind, i) }
-            Box(Modifier.weight(listShare).fillMaxHeight(), contentAlignment = Alignment.TopStart) {
-                RootList(panes.left, rowHeight, tap, tap, {}, focused = false)
+        val list: @Composable (Modifier) -> Unit = { m ->
+            Box(m, contentAlignment = Alignment.TopStart) {
+                if (panes.focusLeft) {
+                    RootList(panes.left, rowHeight, onSelect, onActivate, onChange, focused = state.panelFocus == null)
+                } else {
+                    val tap: (Int) -> Unit = { i -> split.onParentTap(panes.left.kind, i) }
+                    RootList(panes.left, rowHeight, tap, tap, {}, focused = false)
+                }
             }
         }
-        // Always reserve the right column so the list keeps a fixed width and doesn't shift
-        // when Save/Load (which shows the slot preview in place of the panel) is selected.
-        val right = Modifier.weight(1f - listShare).fillMaxHeight().padding(start = 12.dp)
+        if (below) {
+            Column(Modifier.fillMaxSize()) {
+                // The words keep [StackedRightMin] clear under them (they scroll past it), so a row of shortcuts always shows.
+                list(Modifier.fillMaxWidth().heightIn(max = wordsMax))
+                RootRight(state, split, panel, slots, slotIndex, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption,
+                    Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp))
+            }
+        } else {
+            Row(Modifier.fillMaxSize()) {
+                list(Modifier.width(words).fillMaxHeight())
+                // Always reserve the right column so the list keeps a fixed width and doesn't shift
+                // when Save/Load (which shows the slot preview in place of the panel) is selected.
+                RootRight(state, split, panel, slots, slotIndex, rowHeight, slotTextSize, onSelect, onActivate, onChange, detail, onInfoTruncated, onOption,
+                    Modifier.weight(1f).fillMaxHeight().padding(start = RootColumnGap))
+            }
+        }
+    }
+}
+
+/** Between the root's words and the shortcuts beside them. */
+private val RootColumnGap = 12.dp
+
+/** The least room the shortcuts keep below the words: a row of pills with the grid's top room and the focus ring. */
+private val StackedRightMin = 88.dp
+
+/**
+ * The root's words' column in a body [width] wide ([RootBody]): as wide as its longest row needs at the current text
+ * size ([rememberWordListWidth]), never under the share it always had ([rootListShare]).
+ */
+@Composable
+private fun rememberRootWordsColumn(root: MenuPage, width: Dp): Dp =
+    maxOf(rememberWordListWidth(root, menuWordSize()), width * rootListShare(LocalPortrait.current))
+
+/**
+ * Whether the Options page (open over the root, or its preview while the root's Options row is highlighted) fits beside
+ * the root's words in a menu [menuWidth] wide, in the root's columns ([RootBody]): its longest word uncut at the inner
+ * size ([menuWordSize]), with [RowsBody]'s side room. True with no Options page to show.
+ */
+@Composable
+private fun rememberOptionsBeside(state: MenuState, menuWidth: Dp): Boolean {
+    val options = state.preview ?: state.stack.getOrNull(1)?.takeIf { it.kind == PageKind.Options && state.stack.size == 2 } ?: return true
+    val inset = nxPageInset()
+    val body = menuWidth - inset.pillStart - inset.pillEnd - (nxListInset() - MenuPillPadding) - nxListInset()
+    val right = body - rememberRootWordsColumn(state.stack.first(), body) - RootColumnGap
+    val need = rememberWordListWidth(options, menuWordSize(inner = true)) + (nxListInset() - MenuPillPadding) + 12.dp   // RowsBody's padding
+    return right >= need
+}
+
+/**
+ * The width a word list of [page]'s rows needs at [size]: the longest row as [NxList] draws it (an Option row with its
+ * selected `<  value  >`), inside its pill's padding.
+ */
+@Composable
+private fun rememberWordListWidth(page: MenuPage, size: TextUnit): Dp {
+    val measurer = rememberTextMeasurer()
+    val font = LocalNxFont.current
+    val density = LocalDensity.current
+    val texts = page.rows.map { row -> row.label to (row as? MenuRow.Option)?.valueLabel?.let { "<  $it  >" } }
+    return remember(texts, font, size, density) {
+        val px = texts.maxOfOrNull { (label, value) ->
+            val text = buildAnnotatedString {
+                append(label)
+                value?.let { append("  "); withStyle(SpanStyle(fontSize = NxTextSizes.secondary(size))) { append(it) } }
+            }
+            measurer.measure(text, TextStyle(fontFamily = font, fontSize = size, fontWeight = FontWeight.Normal), maxLines = 1).size.width
+        } ?: 0
+        // [NxList] keeps [NX_LIST_END_SHARE] of its width clear at the end; a hair over, so rounding never cuts the last letter.
+        (with(density) { px.toDp() } + MenuPillPadding * 2 + 2.dp) / (1f - NX_LIST_END_SHARE)
+    }
+}
+
+/** The root's right side (beside or below the words): the panel's shortcuts, the slot card, or a page (the Options preview, or the Options page itself). */
+@Composable
+private fun RootRight(
+    state: MenuState,
+    split: SplitUi,
+    panel: PanelUi?,
+    slots: List<SlotUi>,
+    slotIndex: Int,
+    rowHeight: Dp,
+    slotTextSize: TextUnit,
+    onSelect: (Int) -> Unit,
+    onActivate: (Int) -> Unit,
+    onChange: (Int) -> Unit,
+    detail: AchievementsUi,
+    onInfoTruncated: (String, Boolean) -> Unit,
+    onOption: (OptionEvent) -> Unit,
+    right: Modifier,
+) {
+        val panes = split.panes
         when (val content = panes.right) {
             MenuPaneContent.Slots -> SlotPreview(
                 slot = slots.getOrNull(slotIndex),
@@ -310,7 +452,6 @@ private fun RootBody(
             MenuPaneContent.Empty -> Spacer(right)
             is MenuPaneContent.Page -> PagePane(content.page, !panes.focusLeft, split, rowHeight, onSelect, onActivate, detail, onInfoTruncated, onOption, right)
         }
-    }
 }
 
 /**
@@ -387,7 +528,7 @@ private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit,
         onSelect = onSelect,
         onOpen = onActivate,
         // Level with the panel's tab row: its first pill centred on the tab words.
-        modifier = Modifier.padding(top = rootListTopPad(rowHeight)).fillMaxWidth().height(rowHeight * page.rows.size.coerceAtLeast(1))
+        modifier = Modifier.padding(top = wordListTopPad(rowHeight)).fillMaxWidth().height(rowHeight * page.rows.size.coerceAtLeast(1))
             .then(if (onSlot) Modifier.slotSwipe(onChange) else Modifier),
         rowHeightOverride = rowHeight,
         pillPaddingOverride = MenuPillPadding,
@@ -438,6 +579,8 @@ private fun SplitBody(
     modifier: Modifier,
 ) {
     val panes = split.panes
+    // Two panes: the shortcuts always beside the words.
+    SideEffect { panel?.onBelow?.invoke(false) }
     Box(modifier.fillMaxWidth()) {
         SplitPanes(
             // No divider: the list and the panel (or the page) are one surface.
@@ -517,7 +660,7 @@ private fun RowsBody(
 ) {
     val itemHeight = menuWordPitch(nxOptionsRowHeight(rowHeight, LocalNxOptionText.current), inner = true)   // Appearance → Text size
     BoxWithConstraints(
-        modifier.fillMaxWidth().padding(start = nxListInset() - MenuPillPadding, end = 12.dp, top = rootListTopPad(itemHeight)),
+        modifier.fillMaxWidth().padding(start = nxListInset() - MenuPillPadding, end = 12.dp, top = wordListTopPad(itemHeight)),
         contentAlignment = Alignment.TopStart,
     ) {
         val shown = minOf(page.rows.size, maxOf(1, (maxHeight / itemHeight).toInt()))
@@ -750,7 +893,7 @@ internal fun hintsFor(
 ): List<Hint> {
     val hints = pageHints(page, row, infoTruncated, panelFocus, panelTab)
     val entersPanel = panel && panelFocus == null && page.kind == PageKind.Root && row is MenuRow.Action
-    return if (entersPanel) listOf(Hint(NxButton.RIGHT, "Panel")) + hints else hints
+    return if (entersPanel) listOf(Hint(NxButton.RIGHT, "Shortcuts")) + hints else hints
 }
 
 private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, panelFocus: PanelFocus?, panelTab: GamePanelTab?): List<Hint> = when {

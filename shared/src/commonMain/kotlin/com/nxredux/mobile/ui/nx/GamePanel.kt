@@ -63,12 +63,13 @@ import org.jetbrains.compose.resources.painterResource
  * buttons in a grid (4 columns, 2 or 1 where a label would not fit, [gamePanelColumns]; disabled ones dimmed and inert), Achievements as badge rows, Cheats as
  * rows with a switch, Players as the Players page's rows. The controller's [GamePanelState.focus] sits on the accent pill (the tab row's capsule on
  * Tabs). The Game pill (DS/3DS panel-up) sits bottom-right. The dual-screen panel and the in-game menu share it; the
- * menu draws the header itself across its top ([GamePanelHeaderBar]) and the panel with [showHeader] off, on its own
- * surface ([opaque] off: no black box of the panel's own).
+ * menu draws the header itself across its top ([GamePanelHeaderBar]) and its own tab row across the menu ([showTabs] off:
+ * the current tab's body alone), on its own surface ([opaque] off: no black box of the panel's own).
  */
 @Composable
 fun GamePanel(
     state: GamePanelState, onEvent: (GamePanelEvent) -> Unit, modifier: Modifier = Modifier, showHeader: Boolean = true, opaque: Boolean = true,
+    showTabs: Boolean = true,
 ) {
     val colors = LocalNxColors.current
     val tab = GamePanelModel.resolveTab(state.tab, state.tabs)
@@ -79,7 +80,7 @@ fun GamePanel(
     Box(modifier.fillMaxSize().then(if (opaque) Modifier.background(colors.background) else Modifier)) {
         Column(Modifier.fillMaxSize()) {
             if (showHeader) GamePanelHeaderBar(state.header)
-            MenuTabRow(
+            if (showTabs) MenuTabRow(
                 tabs.map { it.label }, tabs.indexOf(tab).coerceAtLeast(0), onTab = { onEvent(GamePanelEvent.SelectTab(tabs[it])) },
                 focused = state.focus == PanelFocus.Tabs,
             )
@@ -167,11 +168,15 @@ internal fun gamePanelColumns(width: Dp, widest: Dp): Int {
 
 /** [gamePanelColumns] for [shortcuts] in [width]: their labels and values measured as the pills draw them. */
 @Composable
-internal fun rememberGamePanelColumns(width: Dp, shortcuts: List<ShortcutState>): Int {
+internal fun rememberGamePanelColumns(width: Dp, shortcuts: List<ShortcutState>): Int = gamePanelColumns(width, rememberWidestShortcut(shortcuts))
+
+/** The widest of [shortcuts]' labels and values, measured as the pills draw them. */
+@Composable
+private fun rememberWidestShortcut(shortcuts: List<ShortcutState>): Dp {
     val measurer = rememberTextMeasurer()
     val font = LocalNxFont.current
     val density = LocalDensity.current
-    val widest = remember(shortcuts.map { it.label to it.value }, font, density) {
+    return remember(shortcuts.map { it.label to it.value }, font, density) {
         val label = TextStyle(fontFamily = font, fontSize = GP_LABEL_SIZE)
         val value = TextStyle(fontFamily = font, fontSize = GP_SMALL_SIZE)
         val px = shortcuts.maxOfOrNull { s ->
@@ -179,8 +184,16 @@ internal fun rememberGamePanelColumns(width: Dp, shortcuts: List<ShortcutState>)
         } ?: 0
         with(density) { px.toDp() }
     }
-    return gamePanelColumns(width, widest)
 }
+
+/**
+ * The least width the shortcut grid needs in one column: its widest pill uncut, inside the grid's gutters, and never
+ * under [GP_SHORTCUT_COLUMN_MIN] (a narrower column reads as squeezed). The in-game menu's Menu tab puts the shortcuts
+ * below its words when the room beside them is less.
+ */
+@Composable
+internal fun rememberShortcutColumnMin(shortcuts: List<ShortcutState>): Dp =
+    maxOf(GP_SHORTCUT_COLUMN_MIN, rememberWidestShortcut(shortcuts) + GP_PILL_PAD * 2 + GP_GUTTER * 2)
 
 /**
  * A hollow pill ([nxButtonRing]): the label, its value under it; at 0.35 alpha and not clickable while disabled. A toggle
@@ -433,6 +446,7 @@ private val GP_FOCUS_GAP = 3.dp      // between that ring and the pill
 private val GP_NARROW = 360.dp       // narrower: the shortcut grid goes to 2 columns (or 1)
 private val GP_CELL_GAP = 10.dp      // between shortcut pills
 private val GP_PILL_PAD = 10.dp      // a shortcut pill's label from its sides
+private val GP_SHORTCUT_COLUMN_MIN = 140.dp   // the Menu tab's shortcuts beside its words: a column at least this wide
 private val GP_TITLE_SIZE = 17.sp
 private val GP_LABEL_SIZE = 15.sp
 private val GP_SMALL_SIZE = 13.sp

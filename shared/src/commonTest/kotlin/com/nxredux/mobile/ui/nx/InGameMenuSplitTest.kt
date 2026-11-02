@@ -66,6 +66,22 @@ class InGameMenuSplitTest {
         }
     }
 
+    // A narrow portrait (the Flip): the Options words don't fit beside the root's, so the shortcuts stay and the page opens whole.
+    @Test fun inPortraitAnOptionsPageThatDoesNotFitBesideTheRootKeepsTheShortcutsAndOpensWhole() {
+        val m = model(split = false)
+        m.optionsBeside = false
+        m.onRow("Options")
+        assertEquals(MenuPaneContent.Panel, menuPanes(m.state, split = false, optionsBeside = false)!!.right)
+        assertTrue(menuTabsShown(m.state))
+        assertNull(m.press(NxButton.RIGHT))                  // the shortcuts beside the words, as from any other row
+        assertEquals(PanelFocus.Item(0), m.state.panelFocus)
+        m.press(NxButton.LEFT); m.press(NxButton.A)          // back on Options: A opens it
+        assertEquals(PageKind.Options, m.state.page.kind)
+        assertNull(menuPanes(m.state, split = false, optionsBeside = false))   // drawn whole
+        // Split, the rule never applies.
+        assertIs<MenuPaneContent.Page>(menuPanes(m.state, split = true, optionsBeside = false)!!.right)
+    }
+
     @Test fun aDeeperPageSitsBesideItsParentOnTheRowThatOpenedIt() {
         val m = model()
         m.onRow("Options"); m.press(NxButton.A)
@@ -89,12 +105,12 @@ class InGameMenuSplitTest {
         assertNull(menuPanes(m.state))
     }
 
-    @Test fun rightOnTheRootEntersThePanelAndOpensARowThatOpensAPageDeeper() {
+    @Test fun rightOnTheRootEntersTheShortcutsAndOpensARowThatOpensAPageDeeper() {
         val m = model()
         m.onRow("Continue")
         assertNull(m.press(NxButton.RIGHT))
         assertEquals(PageKind.Root, m.state.page.kind)
-        assertEquals(PanelFocus.Tabs, m.state.panelFocus)
+        assertEquals(PanelFocus.Item(0), m.state.panelFocus)
         m.press(NxButton.B)
         m.onRow("Options")
         m.press(NxButton.RIGHT)
@@ -161,7 +177,7 @@ class InGameMenuSplitTest {
         val continueRow = m.state.page.rows.indexOfFirst { it.label == "Continue" }
         m.select(continueRow)
         m.panelEvent(GamePanelEvent.SelectTab(GamePanelTab.PLAYERS))
-        m.press(NxButton.RIGHT); m.press(NxButton.A)        // the Players tab's full page, beside the root
+        m.press(NxButton.A)                                 // off the Menu tab no focus is its tab row: the Players tab's full page, beside the root
         assertEquals(listOf(PageKind.Root, PageKind.Players), m.state.stack.map { it.kind })
         assertEquals(continueRow, m.state.stack[0].selected)
         // Continue is highlighted but not open: the tap comes back to the root on it, as on any other row.

@@ -270,6 +270,18 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** The panel's shortcut grid columns as drawn (the UI reports them: 2 when narrow); UP/DOWN step a row of them. */
     var panelColumns: Int = 4
 
+    /**
+     * The Menu tab drew the shortcuts below its words (too narrow beside them; the UI reports it): DOWN from the last word
+     * goes into them and UP from their top row comes back, where beside them RIGHT and LEFT do.
+     */
+    var shortcutsBelow: Boolean = false
+
+    /**
+     * In portrait the Options page's words fit beside the root's (the UI reports it): else the root keeps the shortcuts
+     * while Options is highlighted (no preview) and the Options page opens whole ([menuPanes]).
+     */
+    var optionsBeside: Boolean = true
+
     /** The Options page [optionsPreview] last built, and the inputs it was built from. */
     private var previewPage: Pair<OptionsPreviewInputs, MenuPage>? = null
 
@@ -469,8 +481,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 else -> Unit
             }
         }
-        if (state.panelFocus != null) return pressPanel(button)
-        if ((button == NxButton.L1 || button == NxButton.R1) && panelShown()) { stepTab(if (button == NxButton.L1) -1 else 1); return null }
+        // Another tab than Menu hides the words: the input is the tab's (its tab row while nothing in it has the focus).
+        if (state.panelFocus != null || offMenuTab()) return pressPanel(button)
+        if ((button == NxButton.L1 || button == NxButton.R1) && tabsShown()) { stepTab(if (button == NxButton.L1) -1 else 1); return null }
         if (state.page.kind == PageKind.Achievements) {
             when (button) {
                 NxButton.Y -> { achievementsLockedOnly = !achievementsLockedOnly; refreshAchievementsPage(); return null }
@@ -490,15 +503,25 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             if (button == NxButton.LEFT) { move(-1); return null }
             if (button == NxButton.RIGHT) { move(1); return null }
         }
+        val root = state.page.kind == PageKind.Root
         return when (button) {
-            NxButton.UP -> { move(-1); null }
-            NxButton.DOWN -> { move(1); null }
+            // The first word: UP goes up to the tab row over it (the words no longer wrap there).
+            NxButton.UP -> { if (root && tabsShown() && state.page.selected == 0) state = state.copy(panelFocus = PanelFocus.Tabs) else move(-1); null }
+            // The last word with the shortcuts below: DOWN goes into them.
+            NxButton.DOWN -> {
+                if (root && panelShown() && shortcutsBelow && state.page.selected == state.page.rows.lastIndex && panelShortcuts().isNotEmpty()) {
+                    state = state.copy(panelFocus = PanelFocus.Item(0))
+                } else move(1)
+                null
+            }
             // A visual row's value changes in the live preview: its strip comes up first ([intoAdjust]).
             NxButton.LEFT -> { intoAdjust(state.page.selected); change(-1) }
             NxButton.RIGHT -> when {
                 visualRow(state.page.selected) != null -> { intoAdjust(state.page.selected); change(1) }
-                // The Disc row keeps RIGHT for its value; every other row beside the panel enters it.
-                panelShown() && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Option -> { state = state.copy(panelFocus = PanelFocus.Tabs); null }
+                // The Disc row keeps RIGHT for its value; every other row enters the shortcuts (beside or below the words).
+                panelShown() && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Option -> {
+                    state = state.copy(panelFocus = if (panelShortcuts().isNotEmpty()) PanelFocus.Item(0) else PanelFocus.Tabs); null
+                }
                 // Options moves into its preview, as A, whether or not the menu splits.
                 (split || state.preview != null) && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
                 else -> change(1)
@@ -976,7 +999,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             MenuEffect.SetSecondScreen(event.on)
         }
         is GamePanelEvent.SelectTab -> {
-            if (event.tab in panelTabs()) state = state.copy(panelTab = event.tab, panelFocus = state.panelFocus?.let { PanelFocus.Tabs })
+            // A tap leaves a touch player's focus nowhere: off the Menu tab that reads as the tab row ([pressPanel]). The
+            // tab row also shows over the Options page beside the root ([menuTabsShown]): a tab there goes back to the root.
+            if (event.tab in panelTabs()) {
+                if (state.stack.size > 1 && state.stack.first().kind == PageKind.Root) popTo(PageKind.Root)
+                state = state.copy(panelTab = event.tab, panelFocus = state.panelFocus?.let { PanelFocus.Tabs })
+            }
             null
         }
         is GamePanelEvent.SetPlayer -> MenuEffect.SetPlayer(event.slot, event.key)
@@ -995,12 +1023,21 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      */
     val panelBeside: Boolean get() = !netplay
 
+    /** The menu's tab row is up and live: the root on top with the panel ([panelBeside]); see [menuTabsShown]. */
+    private fun tabsShown(): Boolean = panelBeside && state.stack.size == 1 && state.page.kind == PageKind.Root
+
+    /** Another tab than Menu is shown: it takes the whole width, the words hidden. */
+    private fun offMenuTab(): Boolean = tabsShown() && panelTab() != GamePanelTab.SHORTCUTS
+
     /**
-     * The root's right side is the panel: the root on top with a row other than Save / Load (their slot card) or Options
-     * (its [MenuState.preview]) highlighted.
+     * The Menu tab would show the shortcuts beside or below the words: a row other than Save / Load (their slot card) or
+     * Options (its [MenuState.preview]) highlighted.
      */
-    private fun panelShown(): Boolean =
-        panelBeside && state.stack.size == 1 && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Slot && state.preview == null
+    private fun menuShortcutsShown(): Boolean =
+        tabsShown() && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Slot && (state.preview == null || (!split && !optionsBeside))
+
+    /** The shortcuts are on screen: the Menu tab, with [menuShortcutsShown]. */
+    private fun panelShown(): Boolean = menuShortcutsShown() && panelTab() == GamePanelTab.SHORTCUTS
 
     /**
      * Achievements with a set; Cheats for a core that takes them (none for the game: the tab says how to add some); Players
@@ -1028,43 +1065,70 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
-     * Input while the focus is in the panel: L1/R1 tabs, UP/DOWN between the tab row and the items (a row of the shortcut
-     * grid at a time), LEFT/RIGHT along a grid row, LEFT at the left edge or on the tabs and B back to the list, A the
-     * item (on the tab row: Achievements and Players open their full page).
+     * Input while the focus is in the panel, or on another tab than Menu: L1/R1 tabs; on the tab row LEFT/RIGHT step the
+     * tabs too and DOWN goes into the tab (the Menu tab: its words; another: its first item); in the shortcut grid UP/DOWN
+     * step a row, LEFT/RIGHT along it, LEFT at its left edge back to the words beside it, UP from its top row to the words
+     * above it ([shortcutsBelow]) or the tab row; B back to the Menu tab's words; A the item (on the tab row: the Menu tab
+     * goes to its words, Achievements and Players open their full page). Off the Menu tab no focus reads as the tab row.
      */
     private fun pressPanel(button: NxButton): MenuEffect? {
         val tab = panelTab()
-        val count = panelItemCount(tab)
-        val cols = if (tab == GamePanelTab.SHORTCUTS) panelColumns.coerceAtLeast(1) else 1
+        val onMenu = tab == GamePanelTab.SHORTCUTS
+        val count = if (onMenu && !panelShown()) 0 else panelItemCount(tab)
+        val cols = if (onMenu) panelColumns.coerceAtLeast(1) else 1
+        val below = onMenu && shortcutsBelow
         val at = (state.panelFocus as? PanelFocus.Item)?.index
         val focus: PanelFocus? = when (button) {
             NxButton.L1, NxButton.R1 -> { stepTab(if (button == NxButton.L1) -1 else 1); return null }
             NxButton.MENU -> return MenuEffect.Close
-            NxButton.A -> return if (at == null) { openTabPage(tab); null } else panelItemEvent(tab, at)?.let(::panelEvent)
-            NxButton.B -> null
-            NxButton.UP -> if (at == null || at - cols < 0) PanelFocus.Tabs else PanelFocus.Item(at - cols)
+            NxButton.A -> when {
+                at != null -> return panelItemEvent(tab, at)?.let(::panelEvent)
+                onMenu -> null
+                else -> { openTabPage(tab); return null }
+            }
+            NxButton.B -> { if (!onMenu) state = state.copy(panelTab = GamePanelTab.SHORTCUTS); null }
+            NxButton.UP -> when {
+                at == null -> PanelFocus.Tabs
+                at - cols >= 0 -> PanelFocus.Item(at - cols)
+                below -> null
+                else -> PanelFocus.Tabs
+            }
             NxButton.DOWN -> when {
-                at == null -> if (count > 0) PanelFocus.Item(0) else PanelFocus.Tabs
+                at == null -> if (onMenu) null else if (count > 0) PanelFocus.Item(0) else PanelFocus.Tabs
                 at + cols < count -> PanelFocus.Item(at + cols)
                 at / cols < (count - 1) / cols -> PanelFocus.Item(count - 1)   // the short last row's last pill
                 else -> PanelFocus.Item(at)
             }
-            NxButton.LEFT -> if (at == null || at % cols == 0) null else PanelFocus.Item(at - 1)
-            NxButton.RIGHT -> if (at != null && at % cols < cols - 1 && at + 1 < count) PanelFocus.Item(at + 1) else state.panelFocus
+            NxButton.LEFT -> when {
+                at == null -> { stepTab(-1); return null }
+                at % cols != 0 -> PanelFocus.Item(at - 1)
+                onMenu && !below -> null
+                else -> PanelFocus.Item(at)
+            }
+            NxButton.RIGHT -> when {
+                at == null -> { stepTab(1); return null }
+                at % cols < cols - 1 && at + 1 < count -> PanelFocus.Item(at + 1)
+                else -> PanelFocus.Item(at)
+            }
             else -> state.panelFocus
         }
         state = state.copy(panelFocus = focus)
         return null
     }
 
-    /** L1/R1: the previous/next shown tab, wrapping; focus on an item lands on the new tab's first (its tab row if empty). */
+    /**
+     * L1/R1 (and LEFT/RIGHT on the tab row): the previous/next shown tab, wrapping. Focus on an item lands on the new tab's
+     * first (its tab row if empty; on the Menu tab the words when the shortcuts are not shown); otherwise on the tab row.
+     */
     private fun stepTab(delta: Int) {
         val tabs = panelTabs()
         if (tabs.size < 2) return
         val next = tabs.stepFrom(panelTab(), delta)
-        val focus = when (state.panelFocus) {
-            is PanelFocus.Item -> if (panelItemCount(next) > 0) PanelFocus.Item(0) else PanelFocus.Tabs
-            else -> state.panelFocus
+        val focus = when {
+            state.panelFocus !is PanelFocus.Item -> PanelFocus.Tabs
+            next == GamePanelTab.SHORTCUTS -> if (menuShortcutsShown() && panelItemCount(next) > 0) PanelFocus.Item(0) else null
+            panelItemCount(next) > 0 -> PanelFocus.Item(0)
+            else -> PanelFocus.Tabs
         }
         state = state.copy(panelTab = next, panelFocus = focus)
     }
