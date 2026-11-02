@@ -32,8 +32,8 @@ class ScrapeEngineTest {
             onOptions = { p, o, w -> options += Triple(p, o, w) }, picked = { picked },
         )
 
-        suspend fun run(games: List<LibraryGameRef>, start: ScrapeState = ScrapeState(items = games.map { Scrape.item(it) }), replace: Boolean = false) =
-            engine.run(start, { p -> games.firstOrNull { it.gamePath == p } }, replace) {}
+        suspend fun run(games: List<LibraryGameRef>, start: ScrapeState = ScrapeState(items = games.map { Scrape.item(it) }), replace: Boolean = false, wide: Boolean = false) =
+            engine.run(start, { p -> games.firstOrNull { it.gamePath == p } }, replace, wide = wide) {}
     }
 
     private val tetris = Scrape.homeGame("Tetris.gb")
@@ -95,6 +95,76 @@ class ScrapeEngineTest {
         assertEquals(ItemStatus.SKIPPED, end.items.single().status)
         assertEquals(ScrapeEngine.HAS_ART, end.items.single().reason)
         assertTrue(rig.options.isEmpty())
+    }
+
+    @Test fun wide_asks_every_source_for_option_slots_without_writing() = runTest {
+        val tgdb = FakeSource("tgdb", setOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT, ArtSlot.GRID))
+        tgdb.offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://t/s.png"); tgdb.offer("Tetris.gb", ArtSlot.GRID, "https://t/g.png")
+        val sgdb = FakeSource("sgdb", setOf(ArtSlot.GRID, ArtSlot.HERO))
+        sgdb.offer("Tetris.gb", ArtSlot.HERO, "https://g/h.png")
+        val rig = Rig(this, more = listOf(tgdb, sgdb))
+        rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png", "box-3D" to "https://m/t-3d.png"))
+        val end = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), wide = true)
+        val item = end.items.single()
+        assertTrue(item.status != ItemStatus.SKIPPED || item.reason != ScrapeEngine.HAS_ART, item.toString())
+        assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.SCREENSHOT, ArtSlot.GRID)), tgdb.asked)
+        assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.GRID, ArtSlot.HERO)), sgdb.asked)
+        assertTrue(rig.written.isEmpty() && rig.arts.isEmpty() && rig.http.count("m/t-") == 0, rig.written.toString())
+        val (_, options, wide) = rig.options.single()
+        assertTrue(wide)
+        assertEquals(setOf(SourceId.SS, "tgdb", "sgdb"), options.map { it.source }.toSet())
+        assertEquals(4, options.size)
+    }
+
+    @Test fun wide_does_not_reask_a_slot_already_asked() = runTest {
+        val src = FakeSource("tgdb", setOf(ArtSlot.SCREENSHOT))
+        val rig = Rig(this, more = listOf(src))
+        rig.run(listOf(tetris.copy(have = ArtHave(box = true))), wide = true)
+        assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.SCREENSHOT)), src.asked)
+    }
+
+    @Test fun wide_source_stop_keeps_status() = runTest {
+        val sgdb = FakeSource("sgdb", setOf(ArtSlot.GRID, ArtSlot.HERO))
+        sgdb.fail = { SourceStop("Key refused") }
+        val rig = Rig(this, more = listOf(sgdb))
+        val end = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), wide = true)
+        assertEquals(ItemStatus.DONE, end.items.single().status)
+        assertEquals("Key refused", end.notes["sgdb"])
+    }
+
+    @Test fun wide_with_no_hits_reports_empty() = runTest {
+        val rig = Rig(this)
+        rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), wide = true)
+        assertEquals(Triple(tetris.gamePath, emptyList<ArtOption>(), true), rig.options.single())
+    }
+
+    @Test fun write_pick_replaces_screenshot_and_logs_origin() = runTest {
+        val fs = Scrape.homeTree()
+        val shot = fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "screenshot"))!!
+        fs.writeBytes(shot, "Tetris.jpg", byteArrayOf(7))
+        val rig = Rig(this, fs = fs)
+        val origin = ArtOrigin("steamgriddb", "9", "77")
+        val refs = rig.engine.writePick(tetris, OK_PNG.body!!, origin)
+        assertContentEquals(OK_PNG.body, fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"))
+        assertNull(fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.jpg"))
+        assertEquals(listOf<Pair<String, ArtOrigin?>>("Roms/GB/.media/screenshot/Tetris.png" to origin), rig.written)
+        assertEquals("Home/Roms/GB/.media/screenshot/Tetris.png", refs?.screenshot)
+    }
+
+    @Test fun write_pick_of_garbage_is_null() = runTest {
+        val rig = Rig(this)
+        rig.fitter.undecodable = { true }
+        assertNull(rig.engine.writePick(tetris, byteArrayOf(1, 2), ArtOrigin("x")))
+        assertTrue(rig.written.isEmpty())
+    }
+
+    @Test fun index_art_prefers_picked_mirror_screenshot() {
+        val own = "Extra/Genesis/.media/screenshot/Sonic.png"
+        val mirror = "Home/Roms/.sources/x1/Genesis/.media/screenshot/Sonic.png"
+        val sonic = Scrape.extraGame("Sonic.md", "MD").copy(art = ArtRefs(screenshot = own))
+        val after = ArtRefs(screenshot = mirror)
+        assertEquals(own, ScrapeEngine.indexArt(sonic, ArtRefs(), after).screenshot)
+        assertEquals(mirror, ScrapeEngine.indexArt(sonic, ArtRefs(), after, pickedShot = true).screenshot)
     }
 
     @Test fun tryTwoOnlyAfterTryOneFails() = runTest {

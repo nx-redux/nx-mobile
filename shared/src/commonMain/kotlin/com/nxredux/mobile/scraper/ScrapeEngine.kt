@@ -109,15 +109,16 @@ class ScrapeEngine(
          * The art to put in the index for [ref] once the engine has touched its folder: [after] (what the home tree, or
          * an extra's home mirror, holds after the run), except where the index holds an extra folder's own `.media`
          * file - a ref that is neither the mirror's file [before] the run nor after it - which wins per slot as in the
-         * scan.
+         * scan. With [pickedShot] (the user picked this game's screenshot) the mirror's screenshot wins over an extra
+         * folder's own file.
          */
-        internal fun indexArt(ref: LibraryGameRef, before: ArtRefs, after: ArtRefs): ArtRefs {
+        internal fun indexArt(ref: LibraryGameRef, before: ArtRefs, after: ArtRefs, pickedShot: Boolean = false): ArtRefs {
             if (ref.android || ref.sourceId == GamePath.HOME) return after
             val c = ref.art
             fun pick(cur: String?, b: String?, a: String?) = if (cur != null && cur != b && cur != a) cur else a
             return ArtRefs(
                 boxart = pick(c.boxart, before.boxart, after.boxart), box2d = pick(c.box2d, before.box2d, after.box2d),
-                screenshot = pick(c.screenshot, before.screenshot, after.screenshot), grid = pick(c.grid, before.grid, after.grid),
+                screenshot = if (pickedShot) after.screenshot else pick(c.screenshot, before.screenshot, after.screenshot), grid = pick(c.grid, before.grid, after.grid),
                 hero = pick(c.hero, before.hero, after.hero), wheel = pick(c.wheel, before.wheel, after.wheel), mix = pick(c.mix, before.mix, after.mix),
             )
         }
@@ -148,11 +149,14 @@ class ScrapeEngine(
      * game that has art by its turn ([ArtHave.complete]; art appeared since it was queued) is skipped. The sources
      * named in [ScrapeState.notes] of [start] stay stopped (a chained run of the same job); a new job or Resume clears
      * them. [startSources] false: the sources' [ArtSource.startJob] is not called (a single-game fetch while a job runs
-     * on the same sources must not reset that job's per-run state).
+     * on the same sources must not reset that job's per-run state). [wide] (a single-game Change art fetch): the has-art
+     * skips are bypassed and, after the usual flow, every known source is also asked for the screenshot, grid and hero
+     * slots it was not asked for, only to report the options ([onOptions] with wide = true, even when empty); nothing
+     * more is written, and a source stopping there never changes the game's status.
      */
     suspend fun run(
         start: ScrapeState, games: (String) -> LibraryGameRef?, replace: Boolean = false, startSources: Boolean = true,
-        update: suspend (ScrapeState) -> Unit,
+        wide: Boolean = false, update: suspend (ScrapeState) -> Unit,
     ): ScrapeState {
         var s = start.inFlightToWaiting().copy(phase = JobPhase.RUNNING, pauseReason = null)
         val stopped = HashSet(s.notes.keys)
@@ -175,12 +179,12 @@ class ScrapeEngine(
                 if (ref == null) { set(i, ItemStatus.SKIPPED, "Not in the library"); continue }
                 val known = sourcesFor(ref)
                 if (known.isEmpty()) { set(i, ItemStatus.SKIPPED, NO_SOURCE); continue }
-                if (hasArt(ref) && !replace) { set(i, ItemStatus.SKIPPED, HAS_ART); continue }
+                if (hasArt(ref) && !replace && !wide) { set(i, ItemStatus.SKIPPED, HAS_ART); continue }
                 // A game lacking only its mix is still made one from its files on disk (no source needed).
                 if (known.all { it.id in stopped } && !(lacksOnlyMix(ref) && !replace)) { blocked = true; continue }
                 set(i, ItemStatus.SEARCHING)
                 val downloading: suspend () -> Unit = { set(i, ItemStatus.DOWNLOADING) }
-                val result = if (ref.android) scrapeAndroid(ref, downloading) { stop(ss!!, it) } else scrape(ref, known, stopped, replace, listings, downloading, stop)
+                val result = if (ref.android) scrapeAndroid(ref, downloading) { stop(ss!!, it) } else scrape(ref, known, stopped, replace, wide, listings, downloading, stop)
                 if (result == null) { blocked = true; set(i, ItemStatus.WAITING); continue }   // every source stopped: Resume retries it
                 set(i, result.first, result.second)
             }
@@ -301,7 +305,7 @@ class ScrapeEngine(
      * game's run wrote one of its inputs ([MIX_INPUTS]).
      */
     private suspend fun scrape(
-        ref: LibraryGameRef, known: List<ArtSource>, stopped: Set<String>, replace: Boolean, ls: Listings,
+        ref: LibraryGameRef, known: List<ArtSource>, stopped: Set<String>, replace: Boolean, wide: Boolean, ls: Listings,
         downloading: suspend () -> Unit, stop: (ArtSource, SourceStop) -> Unit,
     ): Pair<ItemStatus, String?>? {
         val target = guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }
@@ -331,7 +335,7 @@ class ScrapeEngine(
         // here.
         val wantMix = mixOn && (replace || !(ref.have.mix || onDisk.mix)) &&
             (ref.have.mixInput || onDisk.mixInput || needBox || needShot)
-        if (!replace && !needBox && !needShot && !wantMix) {
+        if (!replace && !wide && !needBox && !needShot && !wantMix) {
             withContext(NonCancellable) { onArt(ref.gamePath, indexArt(ref, before, before)) }
             return ItemStatus.SKIPPED to HAS_ART
         }
@@ -373,6 +377,8 @@ class ScrapeEngine(
         var paused: JobPause? = null
         /** Every screenshot, grid and hero hit seen, for [onOptions]. */
         val options = ArrayList<ArtOption>()
+        /** The slots asked of each source in the usual flow (the wide pass does not ask them again). */
+        val askedSlots = HashMap<String, Set<ArtSlot>>()
         try {
             for (src in known) {
                 // A grid: the box when there is none, else the portrait background when there is no screenshot and no grid;
@@ -391,11 +397,10 @@ class ScrapeEngine(
                 if (wanted.isEmpty()) continue
                 if (src.id in stopped) { stoppedBefore++; continue }
                 asked++
+                askedSlots[src.id] = wanted
                 val hits = try { src.find(ref, wanted) } catch (e: SourceStop) { stop(src, e); stoppedHere++; continue }
                 if (hits.isEmpty()) continue
-                for (h in hits) if (h.slot in OPTION_SLOTS) {
-                    options += ArtOption(h.slot, ScraperRequest.stripAuth(h.url), h.origin.source, h.origin.gameId, h.origin.assetId, h.note)
-                }
+                recordOptions(hits, options)
                 offered = true
                 if (!notified) { notified = true; downloading() }
                 // With the 2D box as its own download, the box here is the 3D one (or a grid); the 2D one follows.
@@ -438,8 +443,15 @@ class ScrapeEngine(
                 if (wheels.isNotEmpty() && !notified) { notified = true; downloading() }
                 if (firstWritten(wheels) != null) { wantWheel = false; writers += src.shortLabel }
             }
+            // The wide pass: the option slots not asked yet, hits recorded only.
+            if (wide && !storageFailed) for (src in known) {
+                if (src.id in stopped) continue
+                val slots = (src.slots intersect OPTION_SLOTS) - askedSlots[src.id].orEmpty()
+                if (slots.isEmpty()) continue
+                recordOptions(try { src.find(ref, slots) } catch (e: SourceStop) { stop(src, e); continue }, options)
+            }
         } catch (p: JobPause) { paused = p }
-        if (options.isNotEmpty()) withContext(NonCancellable) { onOptions(ref.gamePath, options, false) }
+        if (options.isNotEmpty() || wide) withContext(NonCancellable) { onOptions(ref.gamePath, options, wide) }
         // The mix from what the game has after the fetch, once nothing paused (a paused game is fetched again, its mix
         // with it). The app's own mix (logged) is made again when this run wrote one of its inputs, so one made from
         // partial art is not left stale; a hand-placed one only under Replace.
@@ -463,6 +475,33 @@ class ScrapeEngine(
             else -> ItemStatus.NOT_FOUND to null
         }
     }
+
+    /** Adds [hits] in the option slots to [options] (links without a ScreenScraper login). */
+    private fun recordOptions(hits: List<ArtHit>, options: MutableList<ArtOption>) {
+        for (h in hits) if (h.slot in OPTION_SLOTS) {
+            options += ArtOption(h.slot, ScraperRequest.stripAuth(h.url), h.origin.source, h.origin.gameId, h.origin.assetId, h.note)
+        }
+    }
+
+    /**
+     * Writes the user's pick as [ref]'s screenshot: [image] fitted to the screenshot cap, replacing the slot's file
+     * (logged with [origin]; an extra folder's game gets it in its home mirror, never in the folder), then the app's
+     * own mix made again when Generate mix is on. The art for the index ([indexArt], the pick winning); null when the
+     * image cannot be read or the write failed.
+     */
+    suspend fun writePick(ref: LibraryGameRef, image: ByteArray, origin: ArtOrigin): ArtRefs? {
+        if (ref.android) return null
+        val target = guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) } ?: return null
+        val ls = Listings()
+        val before = artOnDisk(target, ls)
+        val fitted = guard { fitter.fit(image, ArtCaps.of(ArtSlot.SCREENSHOT)) } ?: return null
+        if (!writeSlot(target, ArtSlot.SCREENSHOT, fitted, origin, replace = true, ls)) return null
+        if (extras().mix && pixels != null && appMix(target, ls)) makeMix(ref, target, before, mapOf(ArtSlot.SCREENSHOT to fitted.bytes), ls)
+        return indexArt(ref, before, artOnDisk(target, ls), pickedShot = true)
+    }
+
+    /** An option's image (not paced): as the fetch downloads it, a miss is null and no connection pauses ([JobPause]). */
+    suspend fun downloadImage(url: String): ByteArray? = download(url)
 
     /**
      * Makes and writes [ref]'s mix ([MixCompositor]) from its screenshot, box (3D, else 2D; never a grid) and wheel: each
