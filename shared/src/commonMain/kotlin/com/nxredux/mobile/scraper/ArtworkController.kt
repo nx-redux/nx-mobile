@@ -372,14 +372,17 @@ class ArtworkController(
 
     /**
      * Writes [option] as the game's screenshot and marks it picked, so no fetch replaces it. Picking the current one
-     * does nothing. The pick is marked before the write (a running job reads it); a failed write puts the previous
+     * only marks it picked (no write). The pick is marked before the write (a running job reads it); a failed write puts the previous
      * pick back. False when the image could not be had or written.
      */
     override suspend fun pickOption(gamePath: String, option: ArtOption): Boolean = withContext(work) {
         val ref = host.libraryGames().firstOrNull { it.gamePath == gamePath } ?: return@withContext false
         singleLock.withLock {
             val saved = store.get(gamePath)
-            if (option.key == currentKey(ref, saved)) return@withLock true
+            if (option.key == currentKey(ref, saved)) {
+                if (saved?.pick != option.key) withContext(NonCancellable) { store.setPick(gamePath, option.key) }
+                return@withLock true
+            }
             val bytes = optionCache.read(cacheKey(gamePath, option.key))
                 ?: downloadOption(gamePath, option)?.also { optionCache.write(cacheKey(gamePath, option.key), it) }
                 ?: return@withLock false

@@ -161,6 +161,17 @@ class ArtPanelTest {
         assertEquals(0, c.panel.value!!.focus)
     }
 
+    @Test fun picking_the_current_picture_goes_through() = runTest {
+        val port = FakePort(mixed, currentKey = mixed[1].key)   // the ScreenScraper screenshot, tile 0
+        val c = ArtPanelController(this, port, Settings(), onPicked = {})
+        c.open(game, fetchFirst = false)
+        advanceUntilIdle()
+        assertEquals(0, c.panel.value!!.focus)
+        c.onButton(NxButton.A)
+        advanceUntilIdle()
+        assertEquals(listOf(mixed[1]), port.picked)   // the controller records it as the pick
+    }
+
     @Test fun search_again_reloads_with_search_again_true() = runTest {
         val port = FakePort(mixed)
         val c = ArtPanelController(this, port, Settings(), onPicked = {})

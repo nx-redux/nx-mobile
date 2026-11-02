@@ -161,7 +161,7 @@ class ArtPanelController(
     }
 
     private fun pick(p: ArtPanel, tile: ArtTile) {
-        if (picking?.isActive == true || tile.option.key == p.currentKey) return
+        if (picking?.isActive == true) return   // the current one too: picking it protects it from later fetches
         val path = p.gamePath
         picking = scope.launch {
             val ok = try {

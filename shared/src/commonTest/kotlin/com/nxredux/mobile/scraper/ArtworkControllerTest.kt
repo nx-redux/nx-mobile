@@ -942,9 +942,10 @@ class ArtworkControllerTest {
         assertEquals(hero.key, listed(rig).currentKey)
     }
 
-    @Test fun pick_current_is_noop() = runTest {
+    @Test fun pick_current_protects_it_without_a_write() = runTest {
         val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb"), sgdb("Tetris.gb")))
-        rig.http.on("https://", OK_PNG)
+        rig.http.on("https://o/", OK_PNG)
+        rig.http.on("https://", HttpResult(200, heroBytes))
         val result = listed(rig)
         val current = result.options.first { it.key == result.currentKey }
         val writes = logWrites(rig)
@@ -954,7 +955,14 @@ class ArtworkControllerTest {
         assertEquals(writes, logWrites(rig))
         assertEquals(calls, rig.http.calls.size)
         assertEquals(applied, rig.host.applied.size)
-        assertNull(ArtOptionStore(rig.host).get(tetris.gamePath)?.pick)
+        assertEquals(current.key, ArtOptionStore(rig.host).get(tetris.gamePath)?.pick)
+        assertTrue(ArtOptionStore(rig.host).picked(tetris.gamePath))
+        // Replace existing leaves the picked screenshot, though the source now gives another picture.
+        rig.http.set("https://o/", HttpResult(200, heroBytes))
+        rig.controller.fetchAll(replaceExisting = true)
+        advanceUntilIdle()
+        assertEquals(JobPhase.DONE, rig.controller.state.value.phase)
+        assertContentEquals(OK_PNG.body, rig.fs.bytesAt(shotPath))
     }
 
     @Test fun a_failed_pick_write_restores_the_previous_pick() = runTest {
