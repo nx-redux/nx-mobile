@@ -151,8 +151,10 @@ class ScrapeEngine(
      * them. [startSources] false: the sources' [ArtSource.startJob] is not called (a single-game fetch while a job runs
      * on the same sources must not reset that job's per-run state). [wide] (a single-game Change art fetch): the has-art
      * skips are bypassed and, after the usual flow, every known source is also asked for the screenshot, grid and hero
-     * slots it was not asked for, only to report the options ([onOptions] with wide = true, even when empty); nothing
-     * more is written, and a source stopping there never changes the game's status.
+     * slots it was not asked for, only to report the options ([onOptions], with wide = true only when that pass finished:
+     * a pause, a storage failure or a stopped source leaves it false, the hits so far still reported). The usual flow
+     * still writes the slots the game lacks; the wide pass writes nothing, and a source stopping there never changes
+     * the game's status.
      */
     suspend fun run(
         start: ScrapeState, games: (String) -> LibraryGameRef?, replace: Boolean = false, startSources: Boolean = true,
@@ -379,6 +381,8 @@ class ScrapeEngine(
         val options = ArrayList<ArtOption>()
         /** The slots asked of each source in the usual flow (the wide pass does not ask them again). */
         val askedSlots = HashMap<String, Set<ArtSlot>>()
+        /** The wide pass ran to its end: no pause, no storage failure, no source stopped that it needed. */
+        var wideDone = false
         try {
             for (src in known) {
                 // A grid: the box when there is none, else the portrait background when there is no screenshot and no grid;
@@ -444,14 +448,18 @@ class ScrapeEngine(
                 if (firstWritten(wheels) != null) { wantWheel = false; writers += src.shortLabel }
             }
             // The wide pass: the option slots not asked yet, hits recorded only.
-            if (wide && !storageFailed) for (src in known) {
-                if (src.id in stopped) continue
-                val slots = (src.slots intersect OPTION_SLOTS) - askedSlots[src.id].orEmpty()
-                if (slots.isEmpty()) continue
-                recordOptions(try { src.find(ref, slots) } catch (e: SourceStop) { stop(src, e); continue }, options)
+            if (wide && !storageFailed) {
+                var complete = true
+                for (src in known) {
+                    val slots = (src.slots intersect OPTION_SLOTS) - askedSlots[src.id].orEmpty()
+                    if (slots.isEmpty()) continue
+                    if (src.id in stopped) { complete = false; continue }
+                    recordOptions(try { src.find(ref, slots) } catch (e: SourceStop) { stop(src, e); complete = false; continue }, options)
+                }
+                wideDone = complete
             }
         } catch (p: JobPause) { paused = p }
-        if (options.isNotEmpty() || wide) withContext(NonCancellable) { onOptions(ref.gamePath, options, wide) }
+        if (options.isNotEmpty() || wide) withContext(NonCancellable) { onOptions(ref.gamePath, options, wide && wideDone) }
         // The mix from what the game has after the fetch, once nothing paused (a paused game is fetched again, its mix
         // with it). The app's own mix (logged) is made again when this run wrote one of its inputs, so one made from
         // partial art is not left stale; a hand-placed one only under Replace.

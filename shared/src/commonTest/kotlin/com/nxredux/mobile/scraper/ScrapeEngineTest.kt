@@ -132,6 +132,26 @@ class ScrapeEngineTest {
         assertEquals("Key refused", end.notes["sgdb"])
     }
 
+    @Test fun wide_source_stop_does_not_mark_wide() = runTest {
+        val sgdb = FakeSource("sgdb", setOf(ArtSlot.GRID, ArtSlot.HERO))
+        sgdb.fail = { SourceStop("Key refused") }
+        val tgdb = FakeSource("tgdb", setOf(ArtSlot.SCREENSHOT))
+        tgdb.offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://t/s.png")
+        val rig = Rig(this, more = listOf(tgdb, sgdb))
+        rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), wide = true)
+        val (_, options, wide) = rig.options.single()
+        assertEquals(false, wide)
+        assertEquals(listOf("tgdb"), options.map { it.source })
+    }
+
+    @Test fun wide_pause_does_not_mark_wide() = runTest {
+        val rig = Rig(this)
+        rig.http.on("romnom=Tetris.gb", HttpResult(-1, null))
+        val end = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), wide = true)
+        assertEquals(JobPhase.PAUSED, end.phase)
+        assertEquals(false, rig.options.single().third)
+    }
+
     @Test fun wide_with_no_hits_reports_empty() = runTest {
         val rig = Rig(this)
         rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), wide = true)
