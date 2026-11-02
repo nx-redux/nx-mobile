@@ -29,15 +29,17 @@ object SkinChoice {
     fun skinnable(baseTag: String, ds: Boolean): Boolean = ds || baseTag in SINGLE_TAGS
 
     /**
-     * The main menu's pad in a portrait [windowW] x [windowH] px area at [densityDpi]: the stacked menu layout, built
-     * from pieces: its buttons at their own size along the bottom, and its screen frame (where the menu goes) as big as
-     * fits above them, its shape kept. Null when the pack has no menu layout or the area is too small for it (the drawn
-     * pad then). [topInset]: window px at the top the screen frame keeps clear of ([SkinSolver.placePieces]).
+     * The main menu's pad in a [windowW] x [windowH] px area at [densityDpi], built from pieces. Portrait: the stacked
+     * menu layout, its buttons at their own size along the bottom and its screen frame (where the menu goes) over the
+     * room above them. Landscape: the grip menu layout, one shell with the buttons in a column each side and the screen
+     * frame between them. Null when the pack has no such layout or the area is too small for it (the drawn pad, or
+     * none, then). [topInset]: window px at the top the screen frame keeps clear of ([SkinSolver.placePieces]).
      */
     fun placeMenu(pack: SkinPackManifest, windowW: Int, windowH: Int, densityDpi: Int, topInset: Int = 0): SkinPlacement? {
-        if (windowW <= 0 || windowH <= windowW || densityDpi <= 0) return null
+        if (windowW <= 0 || windowH <= 0 || windowW == windowH || densityDpi <= 0) return null
         val k = scaleFor(pack, densityDpi)
-        val spec = pack.layouts.firstOrNull { it.family == SkinFamily.STACKED && it.variant == SkinVariant.MENU } ?: return null
+        val family = if (windowW > windowH) SkinFamily.GRIP else SkinFamily.STACKED
+        val spec = pack.layouts.firstOrNull { it.family == family && it.variant == SkinVariant.MENU && it.frame != null } ?: return null
         val p = SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, topInset = topInset.toFloat()) ?: return null
         val g = p.glasses.single().rect
         return p.takeIf { g.width / k >= MENU_MIN_GLASS && g.height / k >= MENU_MIN_GLASS }

@@ -74,9 +74,9 @@ val LocalPosture = compositionLocalOf<Posture> { Posture.Flat }
  * ([padBandPx]: the density bucket when the dpi is unknown, at most 60% of the height). Landscape: the screen fills the
  * display, no pad. Tabletop (Flex mode): the screen above the hinge, the pad or [clusters] below. [showPad] false
  * (Controls → Menu pad Off) drops the portrait band, the screen filling the area; tabletop keeps its controls below the
- * hinge. [skin] (a pad skin's pack, NX Carbon): in that portrait case the skin's menu layout instead, the whole device
- * drawn round the screen, which fills its glass ([skinPad] draws it and takes its buttons); the drawn band where the
- * skin has no menu layout or it does not fit. The caller wraps this in the safe-drawing insets.
+ * hinge. [skin] (a pad skin's pack, NX Carbon): with the pad shown, flat, the skin's menu layout instead (portrait or
+ * landscape), the whole device drawn round the screen, which fills its glass ([skinPad] draws it and takes its buttons);
+ * the drawn band (portrait) or no pad (landscape) where the skin has no menu layout or it does not fit. The caller wraps this in the safe-drawing insets.
  */
 @Composable
 fun HandheldShell(
@@ -111,8 +111,8 @@ fun HandheldShell(
             val tt = topInWindow?.let { top ->
                 with(density) { tabletopInArea(posture, top, maxWidth.roundToPx(), maxHeight.roundToPx(), controllerConnected) }
             }
-            // The skin's menu layout for this area (flat portrait with the pad shown only), its picture and its pieces' picture.
-            val skinPlaced = if (skin != null && portrait && showPad && tt == null && posture !is Posture.Tabletop) {
+            // The skin's menu layout for this area (flat, portrait or landscape, with the pad shown only), its picture and its pieces' picture.
+            val skinPlaced = if (skin != null && showPad && tt == null && posture !is Posture.Tabletop) {
                 val w = constraints.maxWidth
                 // the skin runs up under the status bar and the cutout (the shell starts below them); its screen frame clears them
                 val above = topInWindow ?: 0
@@ -172,7 +172,8 @@ fun HandheldShell(
                         layout(gw, gh) { p.place(gx, gy - above) }
                     },
                 ) {
-                    CompositionLocalProvider(LocalPortrait provides true, LocalPadBelow provides true, LocalWindowSize provides window, LocalInSkin provides true) { movableScreen(screenSlot) }
+                    // the pages lay out for the glass's own shape (landscape: a wide glass between the side columns)
+                    CompositionLocalProvider(LocalPortrait provides (gh > gw), LocalPadBelow provides true, LocalWindowSize provides window, LocalInSkin provides true) { movableScreen(screenSlot) }
                 }
             } else if (!portrait || !showPad) {
                 // Menu pad Off keeps the portrait layout, the screen filling the area.

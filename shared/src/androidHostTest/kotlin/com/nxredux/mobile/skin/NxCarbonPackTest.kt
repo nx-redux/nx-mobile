@@ -42,7 +42,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(8, pack.layouts.size)
+        assertEquals(9, pack.layouts.size)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -131,7 +131,7 @@ class NxCarbonPackTest {
             assertEquals(w - (1080 - 932 + 40) * p.k, c.getValue("R").x, 0.5f, name)
             assertEquals(8 + 7, p.pieces.size, name)   // the frame (corners and edges), then the seven button pieces
         }
-        assertNull(SkinChoice.placeMenu(pack, 1080, 900, 420))   // landscape or too short: the drawn pad
+        assertNull(SkinChoice.placeMenu(pack, 1080, 1100, 420))   // too short: the drawn pad
         // the game's choice never picks the menu layout
         assertEquals("stacked_single", place("game_single", 1080, 2400, ds = false, picture = 240f to 160f)?.spec?.id)
     }
@@ -238,6 +238,37 @@ class NxCarbonPackTest {
         val g0 = game0.glass(GlassScreen.PICTURE)!!.rect
         val g1 = game.glass(GlassScreen.PICTURE)!!.rect
         assertEquals(g0.y + g0.height, g1.y + g1.height, 0.5f)
+    }
+
+    @Test
+    fun theLandscapeMenuIsOneShellWithThePadsBesideTheScreen() {
+        for ((name, w, h, dpi) in listOf(
+            Quad("land_20x9", 2400, 1080, 420), Quad("land_flip", 2520, 1080 - 48, 480), Quad("land_cover", 1972, 1248 - 80, 420), Quad("land_inner", 2448, 1848 - 80, 420),
+            Quad("land_qhd", 3200, 1440, 560), Quad("land_tab", 2304, 1440, 280),
+        )) {
+            val p = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi), name)
+            dump(name, w, h, p)
+            assertEquals("grip_menu", p.spec.id)
+            val g = p.glasses.single().rect
+            val c = p.controls.associateBy { it.spec.id }
+            assertEquals(setOf("DPAD", "A", "B", "X", "Y", "L", "R", "START", "SELECT", "MENU"), c.keys)
+            // the screen between the columns, centred, the frame its margin from the top and bottom
+            assertEquals(w / 2f, g.x + g.width / 2f, 3f * p.k, name)   // the frame's border: 28 left, 32 right
+            assertTrue(g.x > (413 - 1) * p.k && g.x + g.width < w - (413 - 1) * p.k, "$name glass $g")
+            assertTrue(g.y >= 72f * p.k && g.y + g.height <= h - 72f * p.k, "$name glass $g")
+            // the pads (at 0.8 of their portrait size) in their columns, one group at the middle of the height
+            assertEquals(206.5f * p.k, c.getValue("DPAD").x, 0.5f, name)
+            assertEquals(w - 206.5f * p.k, c.getValue("X").x, 0.5f, name)
+            assertEquals(h / 2f - (430f - 405.2f) * p.k, c.getValue("DPAD").y, 0.5f, name)
+            assertEquals(0.8f * 72f * p.k, c.getValue("A").spec.r, 0.5f, name)
+            assertEquals(c.getValue("DPAD").y - (405.2f - 182.8f) * p.k, c.getValue("L").y, 0.5f, name)
+            assertTrue(c.getValue("L").y - 54f * p.k > 0f, name)
+            assertTrue(c.values.all { it.x < g.x || it.x > g.x + g.width }, name)
+            assertEquals(8 + 7, p.pieces.size, name)
+        }
+        // with the status bar over it, the frame starts right under it
+        val bar = assertNotNull(SkinChoice.placeMenu(pack, 2400, 1080, 420, topInset = 90))
+        assertEquals(90f, bar.pieces.minOf { it.dst.y }, 0.5f)
     }
 
     private data class Quad(val name: String, val w: Int, val h: Int, val dpi: Int)

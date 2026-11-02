@@ -96,6 +96,11 @@ object SkinSolver {
             PieceAnchor.CENTRE -> dx / 2f
             PieceAnchor.RIGHT -> dx - inwardShare(inward, dx)
         }
+        fun down(l: PieceLevel) = when (l) {
+            PieceLevel.TOP -> 0f
+            PieceLevel.MIDDLE -> dy / 2f
+            PieceLevel.BOTTOM -> dy
+        }
         fun win(x: Float, y: Float, pw: Float, ph: Float) = PxRect(x * k, y * k, pw * k, ph * k)
         val g = frame.glass
         // the frame's border round the glass, and the room the full render gives the frame, grown or shrunk with the window
@@ -105,7 +110,7 @@ object SkinSolver {
         val ownTop = if (frame.top >= 0) frame.top.toFloat() else frame.y.toFloat()
         val roomTop = if (topInset > 0f) topInset / k else ownTop   // the inset is the frame's top margin
         val roomW = w - left - right
-        val roomH = h - roomTop - (spec.refH - frame.y - frame.h)
+        val roomH = h - roomTop - (if (frame.bottom >= 0) frame.bottom.toFloat() else (spec.refH - frame.y - frame.h).toFloat())
         val (aw, ah) = gameSize(g.screen, picture) ?: (g.w.toFloat() to g.h.toFloat())   // the menu's: the glass's own
         val fit = minOf((roomW - bl - br) / aw, (roomH - bt - bb) / ah)
         if (fit <= 0f) return null
@@ -145,15 +150,15 @@ object SkinSolver {
         val glasses = arrayListOf(PlacedGlass(g.id, g.screen, win(fx + bl, fy + bt, gw, gh), fit * k))
         for (p in spec.pieces) {
             val px = p.x + across(p.anchor, p.inward)
-            val py = p.y + dy
-            pieces += SkinPiece(PxRect(p.sx.toFloat(), p.sy.toFloat(), p.w.toFloat(), p.h.toFloat()), win(px, py, p.w.toFloat(), p.h.toFloat()))
+            val py = p.y + down(p.level)
+            pieces += SkinPiece(PxRect(p.sx.toFloat(), p.sy.toFloat(), p.w.toFloat(), p.h.toFloat()), win(px, py, p.w * p.scale, p.h * p.scale))
             p.glass?.let { pg ->
                 val gameW = gameSize(pg.screen, picture)?.first ?: pg.w.toFloat()
                 glasses += PlacedGlass(pg.id, pg.screen, win(px + pg.x, py + pg.y, pg.w.toFloat(), pg.h.toFloat()), pg.w * k / gameW)
             }
         }
         controls += spec.controls.map { c ->
-            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelH = c.labelH * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward)) * k, (c.y + dy) * k)
+            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelH = c.labelH * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward)) * k, (c.y + down(c.level)) * k)
         }
         return SkinPlacement(spec, k, bg.cells, glasses, controls, pieces)
     }

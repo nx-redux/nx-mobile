@@ -90,8 +90,8 @@ data class SkinLayoutSpec(
  * the pad below), and the frame keeps its border round it: corners of at least [corner] px as drawn, each straight edge
  * stretched from a 2 px slice at its middle. Centred in that room. [fill]: the frame takes the whole room instead (the
  * screen is then all of it inside the border; the game places its picture in there by its own rules). [strip]: the
- * on-screen buttons under the screen. [side], [top]: the room's margins to the window's sides and top in render px,
- * when they differ from the frame's own place in the render (-1: its own).
+ * on-screen buttons under the screen. [side], [top], [bottom]: the room's margins to the window's sides, top and
+ * bottom in render px, when they differ from the frame's own place in the render (-1: its own).
  */
 @Serializable
 data class FrameSpec(
@@ -107,6 +107,7 @@ data class FrameSpec(
     val fill: Boolean = false,
     val side: Int = -1,
     val top: Int = -1,
+    val bottom: Int = -1,
 )
 
 /**
@@ -138,11 +139,21 @@ enum class PieceAnchor {
     @SerialName("right") RIGHT,
 }
 
+/** Which window edge a piece keeps its distance to up and down: the top, the bottom, or the middle (half of what the
+ * window adds in height above it). */
+@Serializable
+enum class PieceLevel {
+    @SerialName("top") TOP,
+    @SerialName("middle") MIDDLE,
+    @SerialName("bottom") BOTTOM,
+}
+
 /**
  * A piece (a button with its ring): [sx], [sy], [w] x [h] in the parts picture, at [x], [y] in the full render. It keeps
- * its size and its distance to the bottom edge and, across, to its [anchor] edge (or the middle), plus [inward] px
+ * its size and its distance to its [level] edge (the bottom unless said) and, across, to its [anchor] edge (or the middle), plus [inward] px
  * further in from that edge where the window is wide enough ([SkinSolver.inwardShare]). A piece with a [glass] (the
- * large layout's touch screen in its frame) has that screen at its spot (piece px), at its drawn size.
+ * large layout's touch screen in its frame) has that screen at its spot (piece px), at its drawn size. [scale]: drawn
+ * at that much of its size in the parts picture (the landscape menu's smaller pads), [x], [y] its drawn top-left.
  */
 @Serializable
 data class PieceSpec(
@@ -155,6 +166,8 @@ data class PieceSpec(
     val anchor: PieceAnchor,
     val inward: Int = 0,
     val glass: GlassSpec? = null,
+    val level: PieceLevel = PieceLevel.BOTTOM,
+    val scale: Float = 1f,
 )
 
 /** How a [SliceNode] cuts its box: into side-by-side columns or stacked rows. */
@@ -242,7 +255,7 @@ enum class ControlShape {
  * A control centred at [x], [y] (picture px). [id] is the app's name for it: A B X Y L R START SELECT MENU, DPAD, MIC,
  * SWAP, SAVE, LOAD, REWIND, FAST. [r] / [hw] / [hh] are the touch area; the cap itself (shaded while held) is [capR]
  * for a circle (0: three quarters of [r]), [hw] x [hh] for a rect, and arms [arm] each way across for the d-pad (0: a
- * third of [r]). In a layout built from pieces, [anchor] and [inward] place it like its piece (else it is where its slice
+ * third of [r]). In a layout built from pieces, [anchor], [inward] and [level] place it like its piece (else it is where its slice
  * lands). [label]: a word the app writes under it (the skin's picture has none there), its cap height [labelH] centred
  * [labelDy] below the control's centre.
  */
@@ -262,4 +275,5 @@ data class ControlSpec(
     val label: String? = null,
     val labelDy: Float = 0f,
     val labelH: Float = 0f,
+    val level: PieceLevel = PieceLevel.BOTTOM,
 )
