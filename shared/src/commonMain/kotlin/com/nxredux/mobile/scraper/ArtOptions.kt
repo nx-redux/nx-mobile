@@ -2,6 +2,7 @@ package com.nxredux.mobile.scraper
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -37,13 +38,19 @@ data class GameOptions(val options: List<ArtOption> = emptyList(), val wide: Boo
  */
 class ArtOptionStore(private val host: ArtworkHost, private val name: String = "art_options.json") {
     private val mutex = Mutex()
+    private val BAD_NAME = name.removeSuffix(".json") + ".bad.json"
     private var games: MutableMap<String, GameOptions>? = null
     private val json = Json { ignoreUnknownKeys = true }
     private val serializer = MapSerializer(String.serializer(), GameOptions.serializer())
 
     private suspend fun load(): MutableMap<String, GameOptions> = games ?: run {
         val text = host.readPrivate(name)   // a throw: not cached
-        val map = if (text.isNullOrBlank()) emptyMap() else runCatching { json.decodeFromString(serializer, text) }.getOrDefault(emptyMap())
+        val map = if (text.isNullOrBlank()) emptyMap() else try {
+            json.decodeFromString(serializer, text)
+        } catch (e: SerializationException) {
+            host.writePrivate(BAD_NAME, text)   // keep the unreadable file aside; a throw here: not cached
+            emptyMap()
+        }
         map.toMutableMap().also { games = it }
     }
 

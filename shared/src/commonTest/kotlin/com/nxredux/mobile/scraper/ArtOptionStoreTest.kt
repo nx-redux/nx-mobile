@@ -58,4 +58,11 @@ class ArtOptionStoreTest {
         assertFailsWith<IllegalStateException> { s.record("g", listOf(a), false) }
         assertTrue(h.writes.isEmpty())
     }
+
+    @Test fun corrupt_file_is_kept_aside_then_store_starts_empty() = runTest {
+        val h = host().apply { files["art_options.json"] = "not json" }
+        ArtOptionStore(h).record("g", listOf(a), false)
+        assertEquals("not json", h.files["art_options.bad.json"])
+        assertEquals(listOf(a), ArtOptionStore(h).get("g")!!.options)
+    }
 }
