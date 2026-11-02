@@ -471,19 +471,20 @@ sealed interface Screen {
     /**
      * Artwork -> Settings: Replace existing art, the art sources' accounts and Reset artwork; [signingIn]: the ScreenScraper
      * sign-in modal is open with [draftUser] / [draftPassword] as typed; [editingKey]: the [keyFor] key prompt
-     * (SteamGridDB or TheGamesDB) is open with [draftKey]; [confirmLogout]: the "Log out of ScreenScraper?" dialog is open.
+     * (SteamGridDB or TheGamesDB) is open with [draftKey]; [confirmLogout]: the "Log out of ScreenScraper?" dialog is open;
+     * [confirmClearCache]: the "Clear unused images" dialog is open.
      */
     data class ArtworkSettings(
         val rows: List<ArtworkSettingRow>, val signingIn: Boolean = false, val draftUser: String = "", val draftPassword: String = "",
         val editingKey: Boolean = false, val draftKey: String = "", val keyFor: ArtKeyFor = ArtKeyFor.SGDB,
-        val confirmLogout: Boolean = false,
+        val confirmLogout: Boolean = false, val confirmClearCache: Boolean = false,
     ) : Screen {
         /** A prompt or dialog is open over the rows: it takes every input. */
-        val dialogOpen: Boolean get() = signingIn || editingKey || confirmLogout
+        val dialogOpen: Boolean get() = signingIn || editingKey || confirmLogout || confirmClearCache
 
         /** The typed password and key never reach a log or an assertion message. */
         override fun toString(): String =
-            "ArtworkSettings(rows=$rows, signingIn=$signingIn, draftUser=$draftUser, draftPassword=***, editingKey=$editingKey, draftKey=***, keyFor=$keyFor, confirmLogout=$confirmLogout)"
+            "ArtworkSettings(rows=$rows, signingIn=$signingIn, draftUser=$draftUser, draftPassword=***, editingKey=$editingKey, draftKey=***, keyFor=$keyFor, confirmLogout=$confirmLogout, confirmClearCache=$confirmClearCache)"
     }
     /** Settings -> Reset artwork: All or a console; [confirm]: the delete dialog for that scope. */
     data class ArtworkReset(val scopes: List<ResetScope>, val confirm: ResetScope? = null) : Screen

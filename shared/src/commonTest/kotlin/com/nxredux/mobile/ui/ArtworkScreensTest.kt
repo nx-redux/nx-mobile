@@ -137,6 +137,7 @@ class ArtworkScreensTest {
         arcade: com.nxredux.mobile.library.ArcadeSets? = null, onHost: (com.nxredux.mobile.scraper.ArtworkHost) -> Unit = {},
         sgdb: Boolean = false, libretro: Boolean = false, tgdbUserKey: String? = null, tgdb: Boolean = false,
         onboardingAt: OnboardingStep? = null,   // onboarding to do, resumed at this step
+        optionCache: com.nxredux.mobile.scraper.ArtOptionCache = com.nxredux.mobile.scraper.ArtOptionCache.NONE,
         store: com.nxredux.mobile.storage.MemoryLibraryIndexStore = com.nxredux.mobile.storage.MemoryLibraryIndexStore(),
     ): Rig {
         val source = FakeRomsSource(
@@ -174,7 +175,7 @@ class ArtworkScreensTest {
                     )
                     ssEngine(http, FakeFitter(), FakeHasher(), source, ContentRef("Home"), auth, { testScheduler.currentTime }, { delay(it) }, onArt, onWritten, artStore, onAndroidArt, more, logged, onOptions, picked)
                 },
-                Credentials(settings, if (available) "DEV" else ""), FakeRunner(), scope,
+                Credentials(settings, if (available) "DEV" else ""), FakeRunner(), scope, optionCache = optionCache,
             )
         }
         val state = AppState(
@@ -333,7 +334,7 @@ class ArtworkScreensTest {
         assertEquals(listOf(ArtworkAction.SETTINGS), page.rows.map { it.action })
         assertTrue("Artwork fetching isn't available in this build." in page.details)
         r.state.pick(ArtworkAction.SETTINGS)
-        assertEquals(listOf(ArtworkSettingKind.RESET), assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.kind })
+        assertEquals(listOf(ArtworkSettingKind.CLEAR_CACHE, ArtworkSettingKind.RESET), assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.kind })
     }
 
     @Test fun arcade_games_reach_the_scraper_with_their_dat_title() = runTest {
@@ -473,7 +474,7 @@ class ArtworkScreensTest {
         r.state.openArtwork()
         r.state.pick(ArtworkAction.SETTINGS)
         val account = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.SGDB_KEY, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
+        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.SGDB_KEY, ArtworkSettingKind.CLEAR_CACHE, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
         assertEquals("Not set", account.rows[8].secondary)
 
         r.http.on("search/autocomplete/tetris", HttpResult(401, null))
@@ -505,7 +506,7 @@ class ArtworkScreensTest {
         r.state.select(saved.rows.indexOfFirst { it.kind == ArtworkSettingKind.SGDB_REMOVE }); r.state.onButton(NxButton.A)
         assertNull(r.settings.sgdbApiKey)
         assertTrue("SteamGridDB key removed" in r.notices)
-        assertEquals(ArtworkSettingKind.SGDB_KEY, assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.dropLast(2).last().kind)   // above the gap and Reset artwork
+        assertEquals(ArtworkSettingKind.SGDB_KEY, assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.dropLast(3).last().kind)   // above the gap, Clear unused images and Reset artwork
         // B closes the prompt without a check.
         r.state.onButton(NxButton.A); r.state.artworkDraftKey("X"); r.state.onButton(NxButton.B)
         assertFalse(assertIs<Screen.ArtworkSettings>(r.state.screen.value).editingKey)
@@ -517,7 +518,7 @@ class ArtworkScreensTest {
         r.state.openArtwork()
         r.state.pick(ArtworkAction.SETTINGS)
         val account = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.TGDB_KEY, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
+        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.TGDB_KEY, ArtworkSettingKind.CLEAR_CACHE, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
         assertEquals("TheGamesDB API key" to "Not set", account.rows[8].label to account.rows[8].secondary)
 
         r.http.on("API/Limit?apikey=WRONGKEY", HttpResult(200, """{"remaining_monthly_allowance":0,"allowance_refresh_timer":0}""".encodeToByteArray()))
@@ -549,7 +550,7 @@ class ArtworkScreensTest {
         assertNull(r.settings.tgdbApiKey)
         assertTrue("TheGamesDB key removed" in r.notices)
         val removed = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        assertEquals(ArtworkSettingKind.TGDB_KEY, removed.rows.dropLast(2).last().kind)   // above the gap and Reset: no allowance row without a key
+        assertEquals(ArtworkSettingKind.TGDB_KEY, removed.rows.dropLast(3).last().kind)   // above the gap, Clear unused images and Reset: no allowance row without a key
         r.state.onButton(NxButton.B)
     }
 
@@ -576,7 +577,7 @@ class ArtworkScreensTest {
         r.state.openArtwork()
         r.state.pick(ArtworkAction.SETTINGS)
         val account = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
+        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.CLEAR_CACHE, ArtworkSettingKind.RESET), account.rows.filter { it.selectable }.map { it.kind })
 
         r.http.on("ssuserInfos", Scrape.json("""{"response":{}}"""))   // an answer without a user: a bad login
         r.state.select(7); r.state.onButton(NxButton.A)   // ScreenScraper login, under Replace existing art and the optional art
@@ -645,12 +646,55 @@ class ArtworkScreensTest {
         assertTrue("Signed out" in r.notices)
     }
 
+    @Test fun clear_row_sits_above_reset_with_size() = runTest {
+        val cache = com.nxredux.mobile.scraper.FakeOptionCache().apply { files["a"] = ByteArray(1_500_000) }
+        val r = rig(optionCache = cache)
+        r.state.openArtwork(); r.state.pick(ArtworkAction.SETTINGS)
+        val rows = assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows
+        val i = rows.indexOfFirst { it.kind == ArtworkSettingKind.CLEAR_CACHE }
+        assertTrue(i >= 0)
+        assertEquals("Clear unused images" to "1.4 MB", rows[i].let { it.label to it.secondary })
+        assertEquals(ArtworkSettingKind.RESET, rows[i + 1].kind)
+        assertEquals("0 B", formatBytes(0)); assertEquals("512 B", formatBytes(512)); assertEquals("2.0 KB", formatBytes(2048))
+    }
+
+    @Test fun clear_confirm_delete_calls_clear_and_shows_notice() = runTest {
+        val cache = com.nxredux.mobile.scraper.FakeOptionCache().apply { files["a"] = ByteArray(2 * 1_048_576) }
+        val r = rig(optionCache = cache)
+        r.state.openArtwork(); r.state.pick(ArtworkAction.SETTINGS)
+        fun page() = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
+        r.state.select(page().rows.indexOfFirst { it.kind == ArtworkSettingKind.CLEAR_CACHE })
+        r.state.onButton(NxButton.A)
+        assertTrue(page().confirmClearCache)
+        r.state.onButton(NxButton.A)
+        advanceUntilIdle()
+        assertFalse(page().confirmClearCache)
+        assertTrue(cache.files.isEmpty())
+        assertTrue("Cleared 2.0 MB" in r.notices)
+        assertEquals("0 B", page().rows.single { it.kind == ArtworkSettingKind.CLEAR_CACHE }.secondary)
+    }
+
+    @Test fun clear_confirm_cancel_keeps_cache() = runTest {
+        val cache = com.nxredux.mobile.scraper.FakeOptionCache().apply { files["a"] = ByteArray(100) }
+        val r = rig(optionCache = cache)
+        r.state.openArtwork(); r.state.pick(ArtworkAction.SETTINGS)
+        fun page() = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
+        r.state.select(page().rows.indexOfFirst { it.kind == ArtworkSettingKind.CLEAR_CACHE })
+        r.state.onButton(NxButton.A)
+        assertTrue(page().confirmClearCache)
+        r.state.onButton(NxButton.B)
+        advanceUntilIdle()
+        assertFalse(page().confirmClearCache)
+        assertEquals(1, cache.files.size)
+        assertTrue(r.notices.none { it.startsWith("Cleared") })
+    }
+
     @Test fun replace_toggles() = runTest {
         val r = rig()
         r.state.openArtwork()
         r.state.pick(ArtworkAction.SETTINGS)
         fun rows() = assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows
-        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.RESET), rows().filter { it.selectable }.map { it.kind })
+        assertEquals(listOf(ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.SS_LOGIN, ArtworkSettingKind.CLEAR_CACHE, ArtworkSettingKind.RESET), rows().filter { it.selectable }.map { it.kind })
         assertEquals(ArtworkSettingKind.REPLACE, rows()[r.state.selection.value.index].kind)   // opens past the group label
         assertEquals("Off", rows()[1].secondary)
         r.state.onButton(NxButton.A)

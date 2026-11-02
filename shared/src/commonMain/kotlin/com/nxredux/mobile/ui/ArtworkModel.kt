@@ -29,10 +29,17 @@ enum class ArtKeyFor(val label: String) { SGDB("SteamGridDB"), TGDB("TheGamesDB"
  * artwork; [SECTION] a group's label and [GAP] the space before one, never selected.
  */
 enum class ArtworkSettingKind {
-    SECTION, GAP, REPLACE, BOX2D, WHEEL, MIX, SS_LOGIN, SS_LOGOUT, SGDB_KEY, SGDB_REMOVE, TGDB_KEY, TGDB_REMOVE, TGDB_LEFT, RESET;
+    SECTION, GAP, REPLACE, BOX2D, WHEEL, MIX, SS_LOGIN, SS_LOGOUT, SGDB_KEY, SGDB_REMOVE, TGDB_KEY, TGDB_REMOVE, TGDB_LEFT, CLEAR_CACHE, RESET;
 
     /** The On/Off rows that step on A / LEFT / RIGHT (when enabled). */
     val toggle: Boolean get() = this == REPLACE || this == BOX2D || this == WHEEL || this == MIX
+}
+
+/** [bytes] as "512 B", "2.0 KB" or "12.3 MB" (one decimal from a kilobyte up), for the cache size. */
+internal fun formatBytes(bytes: Long): String = when {
+    bytes < 1024 -> "$bytes B"
+    bytes < 1_048_576 -> { val t = (bytes * 10 + 512) / 1024; "${t / 10}.${t % 10} KB" }
+    else -> { val t = (bytes * 10 + 524_288) / 1_048_576; "${t / 10}.${t % 10} MB" }
 }
 
 /** [enabled] false: dimmed and A / LEFT / RIGHT do nothing. */

@@ -110,6 +110,12 @@ internal fun ArtworkDialogs(screen: Screen, state: AppState, onHint: (NxButton) 
                     onConfirm = { onHint(NxButton.A) }, confirmLabel = "Logout", onCancel = { onHint(NxButton.B) },
                 )
             }
+            if (screen.confirmClearCache) {
+                NxDialog(
+                    "Clear unused images?", "Delete cached pictures you aren't using? They download again when you change art.",
+                    onConfirm = { onHint(NxButton.A) }, confirmLabel = "Delete", onCancel = { onHint(NxButton.B) }, cancelLabel = "Cancel",
+                )
+            }
             if (screen.editingKey) {
                 NxTextPrompt(
                     "${screen.keyFor.label} API key", screen.draftKey, state::artworkDraftKey,
@@ -244,6 +250,10 @@ internal fun artworkSettingInfo(row: ArtworkSettingRow): SettingText = when (row
             "TheGamesDB turns it down, it is not saved.",
     )
     ArtworkSettingKind.TGDB_LEFT -> SettingText(row.secondary.orEmpty(), "The requests your TheGamesDB key has left this month.")
+    ArtworkSettingKind.CLEAR_CACHE -> quiet(
+        "Delete pictures kept for Change art",
+        "Delete the pictures kept for Change art that you aren't using. They download again when you change art.",
+    )
     ArtworkSettingKind.RESET -> quiet(
         "Delete art the app fetched",
         "Delete art the app fetched, for every console or one. Art you added yourself is kept.",

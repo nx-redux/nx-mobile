@@ -46,6 +46,13 @@ internal class ArtworkAccountSettings(
     private val host: ArtworkScreenHost,
     private val showPage: (ArtworkAction) -> Unit,
 ) {
+    /** The Change art preview cache's size, read when the page opens and after a clear (the rows are built synchronously). */
+    private var cacheBytes = 0L
+
+    private fun refreshCacheSize() {
+        scope.launch { quietly { cacheBytes = controller.optionCacheSize() }; refreshSettings() }
+    }
+
     private val signedIn: Boolean get() = settings.ssUsername.isNotEmpty() && settings.ssPassword != null
 
     /**
@@ -92,6 +99,7 @@ internal class ArtworkAccountSettings(
             add(ArtworkSettingRow(ArtworkSettingKind.TGDB_LEFT, "TheGamesDB", left?.let { "${groupThousands(it)} left this month" } ?: "—"))
         }
         if (isNotEmpty()) add(ArtworkSettingRow(ArtworkSettingKind.GAP, ""))
+        add(ArtworkSettingRow(ArtworkSettingKind.CLEAR_CACHE, "Clear unused images", formatBytes(cacheBytes)))
         add(ArtworkSettingRow(ArtworkSettingKind.RESET, "Reset artwork"))
     }
 
@@ -103,6 +111,7 @@ internal class ArtworkAccountSettings(
         screen.value = Screen.ArtworkSettings(rows)
         selection.value = ListSelection(on?.let { k -> rows.indexOfFirst { it.kind == k } }?.coerceAtLeast(0) ?: 0, rows.size)
             .landOn { rows[it].selectable }
+        refreshCacheSize()
         // The quota and allowance rows follow through [refreshSettings]; a failed read keeps "—".
         if (controller.ssAvailable && signedIn) scope.launch { quietly { controller.refreshQuota() } }
         if (controller.tgdbAvailable) scope.launch { quietly { controller.tgdbAllowance() } }
@@ -234,6 +243,24 @@ internal class ArtworkAccountSettings(
             }
             return
         }
+        if (s.confirmClearCache) {
+            when (button) {
+                NxButton.A -> {
+                    screen.value = s.copy(confirmClearCache = false)
+                    scope.launch {
+                        guardArtwork(error) {
+                            val freed = controller.clearOptionCache()
+                            cacheBytes = 0
+                            host.showNotice("Cleared ${formatBytes(freed)}")
+                        }
+                        refreshSettings()
+                    }
+                }
+                NxButton.B, NxButton.MENU -> screen.value = s.copy(confirmClearCache = false)
+                else -> Unit
+            }
+            return
+        }
         if (s.editingKey) {
             when (button) {
                 NxButton.A -> submitKey(s)
@@ -257,6 +284,7 @@ internal class ArtworkAccountSettings(
                 ArtworkSettingKind.TGDB_REMOVE -> {
                     controller.clearTgdbKey(); refreshSettings(); host.showNotice("TheGamesDB key removed"); refreshAllowance()
                 }
+                ArtworkSettingKind.CLEAR_CACHE -> screen.value = s.copy(confirmClearCache = true)
                 ArtworkSettingKind.RESET -> openReset()
                 ArtworkSettingKind.TGDB_LEFT, ArtworkSettingKind.SECTION, ArtworkSettingKind.GAP -> Unit
             }
