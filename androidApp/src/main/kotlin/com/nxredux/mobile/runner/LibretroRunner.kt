@@ -1,9 +1,9 @@
 package com.nxredux.mobile.runner
 
-import android.app.Activity
+import android.app.ActivityOptions
 import android.content.Context
 import android.content.Intent
-import android.os.Build
+import com.nxredux.mobile.R
 import com.nxredux.mobile.netplay.usb.UsbCables
 import com.nxredux.mobile.storage.Recent
 import com.swordfish.libretrodroid.NxLog
@@ -85,17 +85,25 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
             .addFlags(gameLaunchFlags(ownTask()))
             .putExtra(GameActivity.EXTRA_OWN_TASK, ownTask())
         try {
-            context.startActivity(intent)
-            // The launch sequence's black meets the game screen's black: no open animation. Android 14+ sets it in
-            // GameActivity.onCreate (overrideActivityTransition).
-            if (session.launchName != null && Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                @Suppress("DEPRECATION") (context as? Activity)?.overridePendingTransition(0, 0)
-            }
+            context.startActivity(intent, gameOpenAnimation(session.launchName != null))
         } catch (e: Throwable) {
             LaunchRecords.of(context).drop(launchId)
             launchFailed()
             throw e
         }
+    }
+
+    /**
+     * The game's open animation, given with the start: the game runs in its own process ([GameActivity] in `:game`), so
+     * the system picks the animation while that process is still starting, before GameActivity.onCreate could override
+     * it, and falls back to the default slide. A launch sequence's ([launchSequence]) opens with none (the menu's black
+     * meets the game screen's black and the name hold); else a cross-fade. Null in launcher mode: Android ignores an
+     * app's animation for a task change.
+     */
+    private fun gameOpenAnimation(launchSequence: Boolean): android.os.Bundle? {
+        if (ownTask()) return null
+        return if (launchSequence) ActivityOptions.makeCustomAnimation(context, R.anim.launch_hold, R.anim.launch_hold).toBundle()
+        else ActivityOptions.makeCustomAnimation(context, android.R.anim.fade_in, android.R.anim.fade_out).toBundle()
     }
 
     private companion object {

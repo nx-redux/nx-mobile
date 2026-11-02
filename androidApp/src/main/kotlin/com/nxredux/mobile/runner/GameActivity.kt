@@ -603,7 +603,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Cross-fade in from the menu instead of the default slide-from-right: the bottom pad is
         // identical and in the same position in both screens, so a fade keeps it visually steady while
         // only the top (game) area changes. A launch sequence's (a [launchName]) opens with none: the menu's black meets
-        // this screen's black and the name hold (below Android 14 LibretroRunner skips the open animation). Back to the
+        // this screen's black and the name hold (LibretroRunner gives the same with the start: the :game process starts too late for this alone). Back to the
         // menu the game fades to black over 150 ms (launch_return_out, see [finish]); the menu fades itself in. Only while
         // the game shares the menu's task (launcher mode off); in launcher mode it has its own task and the system task
         // animation runs, as Android ignores these overrides for a task change (LibretroRunner's gameLaunchFlags).
