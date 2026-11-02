@@ -78,4 +78,10 @@ class ScraperResponseTest {
         assertEquals("https://m/ss-ok.png", ScraperMedia.choose(g.medias)[ArtSlot.SCREENSHOT]?.url)
     }
     @Test fun nothingUseful() = assertTrue(ScraperMedia.choose(listOf(SsMedia("fanart", null, "x"))).isEmpty())
+    @Test fun alternates_keeps_every_screenshot_region() {
+        val m = listOf(SsMedia("ss", "eu", "ss-eu"), SsMedia("ss", "us", "ss-us"), SsMedia("ss", "jp", "ss-jp"), SsMedia("box-2D", "us", "box-us"))
+        val alt = ScraperMedia.alternates(m)
+        assertEquals(listOf("us", "eu", "jp"), alt[ArtSlot.SCREENSHOT]!!.map { it.region })
+        assertEquals(1, alt[ArtSlot.BOX_2D]!!.size)
+    }
 }

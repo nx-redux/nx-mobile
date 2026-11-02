@@ -170,6 +170,9 @@ object Libretro {
         return names.minWithOrNull(compareBy<String>({ unwanted(it) }, { regionRank(it) }, { it.length }, { it }))
     }
 
+    /** The region a name's first `(...)` group gives ("Tetris (Europe)" -> "Europe"), or null when it has none. */
+    fun regionOf(name: String): String? = TAG_GROUP.find(name)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }
+
     /** `%XX` escapes decoded as UTF-8 bytes; any other text (and a malformed escape) kept as is. */
     private fun percentDecode(s: String): String {
         if ('%' !in s) return s
@@ -233,9 +236,28 @@ class LibretroThumbnails(
         val hits = ArrayList<ArtHit>()
         for ((slot, folder) in listOf(ArtSlot.BOX_2D to Libretro.Folder.BOX, ArtSlot.SCREENSHOT to Libretro.Folder.SNAP)) {
             if (slot !in wanted) continue
-            (probe(systems, names, slot, folder) ?: fromList(systems, names.first(), slot, folder))?.let { hits += it }
+            val found = probe(systems, names, slot, folder) ?: fromList(systems, names.first(), slot, folder)
+            if (found != null) {
+                hits += found
+                if (slot == ArtSlot.SCREENSHOT) hits += regionalSnaps(found, folder)
+            }
         }
         return hits
+    }
+
+    /**
+     * The other regions of the found snap ([found]) the system's already loaded name list holds: names with the same
+     * [Libretro.matchKey], best first, as links only (no bytes). Nothing when the list was not read in this job (no
+     * extra request is made).
+     */
+    private suspend fun regionalSnaps(found: ArtHit, folder: String): List<ArtHit> {
+        val system = found.origin.gameId ?: return emptyList()
+        val foundName = found.origin.assetId?.substringAfter('/') ?: return emptyList()
+        val index = listLock.withLock { lists["$system/$folder"] } ?: return emptyList()
+        val key = Libretro.matchKey(foundName).ifEmpty { return emptyList() }
+        return index.exact[key].orEmpty().filter { it != foundName }
+            .sortedWith(compareBy<String>({ Libretro.unwanted(it) }, { Libretro.regionRank(it) }, { it.length }, { it }))
+            .map { name -> ArtHit(found.slot, Libretro.url(system, folder, name), ArtOrigin(SourceId.LIBRETRO, gameId = system, assetId = "$folder/$name"), note = Libretro.regionOf(name)) }
     }
 
     /** The first system x name that answers with an image. */
@@ -258,7 +280,7 @@ class LibretroThumbnails(
         val url = Libretro.url(system, folder, name)
         val body = get(url) ?: return null
         if (imageTypeOf(body) == ImageType.UNKNOWN) return null
-        return ArtHit(slot, url, ArtOrigin(SourceId.LIBRETRO, gameId = system, assetId = "$folder/$name"), body)
+        return ArtHit(slot, url, ArtOrigin(SourceId.LIBRETRO, gameId = system, assetId = "$folder/$name"), body, note = Libretro.regionOf(name))
     }
 
     /** [system]'s [folder] name list, read once per job (paced, as any GET). */

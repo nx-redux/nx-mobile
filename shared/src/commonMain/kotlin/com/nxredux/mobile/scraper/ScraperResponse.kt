@@ -101,10 +101,13 @@ object ScraperMedia {
 
     /**
      * Per slot ScreenScraper offers, the best media of each of its types in type order (the wheel: the best `wheel-hd`,
-     * then the best `wheel`), so a failed download of one falls back to the next from the same answer.
+     * then the best `wheel`), so a failed download of one falls back to the next from the same answer. The screenshot
+     * slot keeps every `ss` media, ranked as [rank] ranks, for the Change art list.
      */
     fun alternates(medias: List<SsMedia>): Map<ArtSlot, List<SsMedia>> = SLOTS.mapNotNull { s ->
-        typesOf(s).mapNotNull { type -> rank(medias.filter { it.type == type }, s).firstOrNull() }.takeIf { it.isNotEmpty() }?.let { s to it }
+        val list = if (s == ArtSlot.SCREENSHOT) rank(medias, s)
+        else typesOf(s).mapNotNull { type -> rank(medias.filter { it.type == type }, s).firstOrNull() }
+        list.takeIf { it.isNotEmpty() }?.let { s to it }
     }.toMap()
 
     /** The `ss` screenshot only (an Android game's art). */

@@ -85,7 +85,7 @@ class ScreenScraperSource(
         countLookup()
         val found = lookup(ref, systemId) ?: return emptyList()
         val offered = ScraperMedia.alternates(found.medias)
-        return ScraperMedia.SLOTS.filter { it in wanted }.flatMap { s -> offered[s].orEmpty().map { ArtHit(s, it.url, origin(found.id, it)) } }
+        return ScraperMedia.SLOTS.filter { it in wanted }.flatMap { s -> offered[s].orEmpty().map { ArtHit(s, it.url, origin(found.id, it), note = it.region) } }
     }
 
     /** The signed-in user's quota (paced), or null when not signed in or the call failed. */
