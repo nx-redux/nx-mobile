@@ -19,6 +19,7 @@ class ScrapeEngineTest {
     private class Rig(
         scope: TestScope, val fs: FakeRomsSource = Scrape.homeTree(), val hasher: FakeHasher = FakeHasher(), more: List<ArtSource> = emptyList(),
         logged: MutableSet<String> = mutableSetOf(), picked: Boolean = false,
+        pickedBy: suspend (String) -> Boolean = { picked },
     ) {
         val options = mutableListOf<Triple<String, List<ArtOption>, Boolean>>()
         val http = FakeHttp().apply { clock = { scope.testScheduler.currentTime } }
@@ -29,7 +30,7 @@ class ScrapeEngineTest {
         val engine = ssEngine(
             http, fitter, hasher, fs, Scrape.home, { auth }, { scope.testScheduler.currentTime }, { delay(it) },
             onArt = { p, a -> arts += p to a }, onWritten = { written += it }, more = more, logged = FakeLoggedArt(logged),
-            onOptions = { p, o, w -> options += Triple(p, o, w) }, picked = { picked },
+            onOptions = { p, o, w -> options += Triple(p, o, w) }, picked = pickedBy,
         )
 
         suspend fun run(games: List<LibraryGameRef>, start: ScrapeState = ScrapeState(items = games.map { Scrape.item(it) }), replace: Boolean = false, wide: Boolean = false) =
@@ -87,6 +88,19 @@ class ScrapeEngineTest {
         assertEquals(1, rig.http.count("t-3d"))   // the box is still fetched again
         assertEquals(0, rig.http.count("t-ss"))
         assertTrue(rig.options.all { o -> o.second.none { it.slot == ArtSlot.SCREENSHOT || it.slot == ArtSlot.HERO } })
+    }
+
+    @Test fun pick_made_mid_run_is_not_overwritten() = runTest {
+        var calls = 0
+        val rig = Rig(this, pickedBy = { calls++ > 0 })   // the user picks after the game's first check
+        rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png", "box-3D" to "https://m/t-3d.png"))
+        rig.http.on("https://m/", OK_PNG)
+        val end = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), replace = true)
+        assertTrue(calls > 1)
+        assertTrue(rig.written.none { it.first.contains("screenshot") }, rig.written.toString())
+        assertEquals(0, rig.http.count("t-ss"))
+        assertEquals(1, rig.http.count("t-3d"))
+        assertEquals(ItemStatus.DONE, end.items.single().status)
     }
 
     @Test fun no_options_reported_when_nothing_asked() = runTest {

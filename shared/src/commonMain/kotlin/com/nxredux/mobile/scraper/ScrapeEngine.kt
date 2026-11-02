@@ -341,7 +341,7 @@ class ScrapeEngine(
             withContext(NonCancellable) { onArt(ref.gamePath, indexArt(ref, before, before)) }
             return ItemStatus.SKIPPED to HAS_ART
         }
-        val wantedCount = listOf(needBox, needShot).count { it }
+        var wantedCount = listOf(needBox, needShot).count { it }
         var got = 0
         var offered = false
         var attempted = false
@@ -363,6 +363,15 @@ class ScrapeEngine(
         val laterWheels = ArrayList<Pair<String, List<ArtHit>>>()
         /** The [ArtSource.wheelLast] sources that offered wheels in turn (in [laterWheels]; not asked for the wheel alone). */
         val wheelsOffered = HashSet<String>()
+        /**
+         * The user picked this game's screenshot since the check above (a pick made while this game is fetched): the
+         * screenshot is no longer wanted, as for a game picked before. Asked only right before a screenshot role write.
+         */
+        suspend fun pickedSince(): Boolean {
+            if (!needShot || !picked(ref.gamePath)) return false
+            needShot = false; wantedCount--
+            return true
+        }
         /** The slot of the first hit that downloads, fits and is written, or null; a failed write stops (the job pauses). */
         suspend fun firstWritten(hits: List<ArtHit>): ArtSlot? {
             for (hit in hits) {
@@ -421,10 +430,14 @@ class ScrapeEngine(
                 if (!storageFailed && wantGrid && !haveGrid && firstWritten(hits.filter { it.slot == ArtSlot.GRID }) != null) {
                     haveGrid = true; writers += src.shortLabel
                 }
-                if (!storageFailed && needShot && firstWritten(hits.filter { it.slot == ArtSlot.SCREENSHOT }) != null) {
+                if (!storageFailed && needShot && hits.any { it.slot == ArtSlot.SCREENSHOT } && !pickedSince() &&
+                    firstWritten(hits.filter { it.slot == ArtSlot.SCREENSHOT }) != null
+                ) {
                     needShot = false; got++; writers += src.shortLabel
                 }
-                if (!storageFailed && wantHero && needShot && firstWritten(hits.filter { it.slot == ArtSlot.HERO }) != null) {
+                if (!storageFailed && wantHero && needShot && hits.any { it.slot == ArtSlot.HERO } && !pickedSince() &&
+                    firstWritten(hits.filter { it.slot == ArtSlot.HERO }) != null
+                ) {
                     haveHero = true; needShot = false; got++; standInOnly = true; writers += src.shortLabel
                 }
                 if (!storageFailed && wantWheel) {
