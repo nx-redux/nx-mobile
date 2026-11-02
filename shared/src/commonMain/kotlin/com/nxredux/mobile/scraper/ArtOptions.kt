@@ -1,0 +1,92 @@
+package com.nxredux.mobile.scraper
+
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
+
+/** The slots whose candidate images are kept for Change art. */
+val OPTION_SLOTS: Set<ArtSlot> = setOf(ArtSlot.SCREENSHOT, ArtSlot.GRID, ArtSlot.HERO)
+
+/** One candidate picture a source returned for a game: its [slot], link, [source] id and the source's ids and [note]. */
+@Serializable
+data class ArtOption(
+    val slot: ArtSlot,
+    val url: String,
+    val source: String,
+    val gameId: String? = null,
+    val assetId: String? = null,
+    val note: String? = null,
+) {
+    /** Identifies the option within a game: the source and its asset id (or the link). */
+    val key: String get() = "$source/${assetId ?: url}"
+    /** Where the picture came from, as the written-art log records it. */
+    val origin: ArtOrigin get() = ArtOrigin(source, gameId, assetId)
+}
+
+/** A game's saved options, in the order found; [wide] = the wide pass ran; [pick] = the picked option's [ArtOption.key]. */
+@Serializable
+data class GameOptions(val options: List<ArtOption> = emptyList(), val wide: Boolean = false, val pick: String? = null)
+
+/**
+ * The per-game option links, one JSON file in app-private storage ([ArtworkHost.writePrivate]), loaded once and saved
+ * whole on every change. An absent file is empty; a failed read ([ArtworkHost.readPrivate] throws) is neither cached
+ * nor saved over: the call fails and the next one reads again.
+ */
+class ArtOptionStore(private val host: ArtworkHost, private val name: String = "art_options.json") {
+    private val mutex = Mutex()
+    private var games: MutableMap<String, GameOptions>? = null
+    private val json = Json { ignoreUnknownKeys = true }
+    private val serializer = MapSerializer(String.serializer(), GameOptions.serializer())
+
+    private suspend fun load(): MutableMap<String, GameOptions> = games ?: run {
+        val text = host.readPrivate(name)   // a throw: not cached
+        val map = if (text.isNullOrBlank()) emptyMap() else runCatching { json.decodeFromString(serializer, text) }.getOrDefault(emptyMap())
+        map.toMutableMap().also { games = it }
+    }
+
+    private suspend fun save(map: Map<String, GameOptions>) = host.writePrivate(name, json.encodeToString(serializer, map))
+
+    /** The game's saved options, or null when it has none. */
+    suspend fun get(gamePath: String): GameOptions? = mutex.withLock { load()[gamePath] }
+
+    /** Merges [options] into the game's list by key (new ones last, existing order and pick kept); [wide] sticks once true. */
+    suspend fun record(gamePath: String, options: List<ArtOption>, wide: Boolean) = mutex.withLock {
+        val map = load()
+        val old = map[gamePath] ?: GameOptions()
+        val known = old.options.mapTo(HashSet()) { it.key }
+        val merged = old.options + options.filter { known.add(it.key) }
+        map[gamePath] = old.copy(options = merged, wide = old.wide || wide)
+        save(map)
+    }
+
+    /** Marks the option with [key] as the game's pick. */
+    suspend fun setPick(gamePath: String, key: String) = mutex.withLock {
+        val map = load()
+        val old = map[gamePath] ?: GameOptions()
+        map[gamePath] = old.copy(pick = key)
+        save(map)
+    }
+
+    /** True when the game has a pick. */
+    suspend fun picked(gamePath: String): Boolean = mutex.withLock { load()[gamePath]?.pick != null }
+
+    /** Removes the option with [key]; the pick is cleared when it was that option. */
+    suspend fun dropOption(gamePath: String, key: String) = mutex.withLock {
+        val map = load()
+        val old = map[gamePath] ?: return@withLock
+        map[gamePath] = old.copy(options = old.options.filter { it.key != key }, pick = old.pick.takeIf { it != key })
+        save(map)
+    }
+
+    /** Forgets the given games' options (null = every game); returns the forgotten options' keys. */
+    suspend fun forget(gamePaths: Set<String>?): Set<String> = mutex.withLock {
+        val map = load()
+        val gone = map.keys.filter { gamePaths == null || it in gamePaths }
+        val keys = gone.flatMapTo(HashSet()) { g -> map.getValue(g).options.map { it.key } }
+        if (gone.isNotEmpty()) { gone.forEach { map.remove(it) }; save(map) }
+        keys
+    }
+}

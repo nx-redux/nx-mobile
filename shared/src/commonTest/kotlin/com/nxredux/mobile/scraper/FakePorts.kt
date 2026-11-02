@@ -154,7 +154,9 @@ class FakeHost(var games: List<LibraryGameRef>, var hidden: List<LibraryGameRef>
     val appends = mutableListOf<Pair<String, String>>()
     /** When true, [appendPrivate] appends (as Android does); false, it declines and the caller rewrites. */
     var appendable = false
-    override suspend fun readPrivate(name: String) = files[name]
+    /** When true, [readPrivate] throws (an unreadable file). */
+    var failRead = false
+    override suspend fun readPrivate(name: String): String? { if (failRead) error("unreadable"); return files[name] }
     override suspend fun writePrivate(name: String, text: String) { files[name] = text; writes += name to text }
     override suspend fun appendPrivate(name: String, text: String): Boolean {
         if (!appendable) return false

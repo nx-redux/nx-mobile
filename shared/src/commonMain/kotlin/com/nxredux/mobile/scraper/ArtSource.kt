@@ -13,9 +13,10 @@ object SourceId {
 
 /**
  * One image a source offers for a slot, best first within the source. [bytes]: the image itself when the source already
- * downloaded it to find it (libretro-thumbnails probes by GET); the engine then does not fetch [url] again.
+ * downloaded it to find it (libretro-thumbnails probes by GET); the engine then does not fetch [url] again. [note]: a
+ * short label the source gives the image (a region, a style), shown with it in the Change art list.
  */
-class ArtHit(val slot: ArtSlot, val url: String, val origin: ArtOrigin, val bytes: ByteArray? = null)
+class ArtHit(val slot: ArtSlot, val url: String, val origin: ArtOrigin, val bytes: ByteArray? = null, val note: String? = null)
 
 /** This source is done for the rest of the job ([note] shown on the Artwork page); the job goes on with the others. */
 class SourceStop(val note: String) : Exception(note)
