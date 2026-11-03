@@ -813,6 +813,7 @@ void LibretroDroid::step() {
 
     // The frame sleep runs without the core lock, so achievements and the off-thread save calls aren't held up by it.
     lock.unlock();
+    frameDeadlineNanos = 0;   // set below for a sleep-timer frame only
     if (fastForward) {
         auto ahead = fastForwardPacer.sleepFor(std::chrono::steady_clock::now());
         if (ahead > Duration::zero()) std::this_thread::sleep_for(ahead);
@@ -824,6 +825,9 @@ void LibretroDroid::step() {
         if (runs > 0) {
             if (auto at = fpsSync->presentAt(std::chrono::microseconds(presentationLeadMicros.load()))) PresentTime::set(*at);
         }
+        // The second surface stamps its frame from the same deadline with its own display's lead (SecondaryOutput).
+        frameDeadlineNanos = (runs > 0 && fpsSync->presentAt(std::chrono::microseconds(0)))
+            ? std::chrono::duration_cast<std::chrono::nanoseconds>(fpsSync->deadline().time_since_epoch()).count() : 0;
     }
     hitchProbe.waited(HitchProbe::Clock::now());
     if (fastForward) hitchProbe.reset();
@@ -1138,6 +1142,8 @@ void LibretroDroid::handleVideoRefresh(
             if (video->rendersInVideoCallback()) {
                 video->renderFrame();
                 if (vulkan) VulkanBridge::get().afterGlDraw();
+                // nx-mobile 2026-11-03: the second surface gets the frame now, while it is whole (see setFrameDrawnHook).
+                if (frameDrawnHook && data != nullptr) frameDrawnHook();   // a duplicate leaves its last frame up
             }
         }
     } catch (...) {
@@ -1403,6 +1409,15 @@ void LibretroDroid::setSecondaryRegions(std::vector<ScreenRegion> regions) {
 
     if (video) {
         video->updateSecondaryRegions(secondaryRegions);
+    }
+}
+
+void LibretroDroid::renderSecondaryInFrame(unsigned width, unsigned height) {
+    if (!video) return;
+    try {
+        video->renderSecondary(width, height);
+    } catch (const std::exception& e) {
+        LOGE("Error rendering the second screen: %s", e.what());
     }
 }
 

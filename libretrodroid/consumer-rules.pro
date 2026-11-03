@@ -4,5 +4,6 @@
     private void sendAchievementServerCall(...);
     private void sendRumbleEvent(...);
     private void refreshAspectRatio();
+    private void onCoreFrameDrawn();
 }
 -keep class com.swordfish.libretrodroid.AchievementInfo { <init>(...); <fields>; }
