@@ -165,7 +165,8 @@ class FakeHost(var games: List<LibraryGameRef>, var hidden: List<LibraryGameRef>
     /** When non-null for a game, applyArt throws it (an Error such as running out of memory). */
     var throwOnApply: (String) -> Throwable? = { null }
     override suspend fun libraryGames() = games
-    override suspend fun allLibraryGames() = games + hidden
+    /** As the app's host: the Android games console's games are left out (their art is not in the log). */
+    override suspend fun allLibraryGames() = games.filterNot { it.android } + hidden
     /** Records the call and, like the real index, updates the game's [LibraryGameRef.have] and [LibraryGameRef.art] from the refs. */
     override suspend fun applyArt(gamePath: String, art: ArtRefs) {
         if (failApply(gamePath)) error("index update failed")

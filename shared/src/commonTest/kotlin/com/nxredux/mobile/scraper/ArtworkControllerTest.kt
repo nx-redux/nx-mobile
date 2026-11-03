@@ -278,6 +278,41 @@ class ArtworkControllerTest {
         assertEquals(2, rig.androidRefreshed)
     }
 
+    @Test fun resetOfAndroidForgetsItsPicksAndPreviewsSoAFetchWritesAgain() = runTest {
+        // As the app's host: the Android games are in libraryGames only, not allLibraryGames.
+        val pgo = Scrape.androidGame("com.nianticlabs.pokemongo/com.unity.Main", "Pokémon GO")
+        val rig = Rig(this, listOf(tetris, pgo))
+        val store = ArtOptionStore(rig.host)
+        val shot = ArtOption(ArtSlot.SCREENSHOT, "https://m/pgo-ss.png", SourceId.SS, assetId = "ss/us")
+        store.record(pgo.gamePath, listOf(shot), wide = true)
+        store.setPick(pgo.gamePath, ArtSlot.SCREENSHOT, shot.key)
+        rig.cache.files["${pgo.gamePath}\n${shot.key}"] = byteArrayOf(1)
+        rig.art.files[pgo.fileName] = byteArrayOf(9)
+        rig.controller.resetArt(setOf(ANDROID_CONSOLE_TAG))
+        assertTrue(rig.art.files.isEmpty())
+        assertEquals(emptySet(), ArtOptionStore(rig.host).pickedSlots(pgo.gamePath))
+        assertFalse("${pgo.gamePath}\n${shot.key}" in rig.cache.files)
+        rig.http.on("jeuInfos", found("ss" to "https://m/pgo-ss.png"))
+        rig.http.on("https://m/", OK_PNG)
+        assertEquals(ItemStatus.DONE, rig.controller.fetchGame(pgo.gamePath).status)
+        assertContentEquals(OK_PNG.body, rig.art.files[pgo.fileName])
+    }
+
+    @Test fun androidCurrentKeysAreItsPicksOnlyNeverAMirrorFile() = runTest {
+        val app = Scrape.androidGame("com.a", "A")
+        val rig = Rig(this, listOf(app))
+        val shot = ArtOption(ArtSlot.SCREENSHOT, "https://m/a-ss.png", SourceId.SS, assetId = "ss/us")
+        val box = ArtOption(ArtSlot.BOX_2D, "https://m/a-box.png", SourceId.SS, assetId = "box-2D/us")
+        // A file and log entry where ArtPaths would put a ROM named like the app id: never the app's art.
+        rig.fs.writeBytes(rig.fs.ensurePath(Scrape.home, listOf("Roms", ".sources", "android", ".media", "screenshot"))!!, "com.png", byteArrayOf(1))
+        ArtLogStore(rig.host, ArtworkController.LOG_FILE).add(listOf("Roms/.sources/android/.media/screenshot/com.png" to shot.origin))
+        val store = ArtOptionStore(rig.host)
+        store.record(app.gamePath, listOf(shot, box), wide = true)
+        store.setPick(app.gamePath, ArtSlot.BOX_2D, box.key)
+        val r = rig.controller.artOptions(app.gamePath, replaceExisting = false, autoSearch = false)
+        assertEquals(mapOf(ArtSlot.BOX_2D to box.key), r.currentKeys)
+    }
+
     @Test fun resetPausesAnAndroidJobForTheAndroidScope() = runTest {
         val pgo = Scrape.androidGame("com.nianticlabs.pokemongo/com.unity.Main", "Pokémon GO")
         val rig = Rig(this, listOf(tetris, pgo))
@@ -922,6 +957,17 @@ class ArtworkControllerTest {
         assertTrue(listed(rig).options.any { it.key == hero.key })
     }
 
+    @Test fun a_dead_link_without_a_thumbnail_fails_the_pick_and_stays_listed() = runTest {
+        val rig = Rig(this, listOf(tetris))
+        val dead = ArtOption(ArtSlot.SCREENSHOT, "https://m/dead.png", SourceId.SS, assetId = "ss/us")
+        ArtOptionStore(rig.host).record(tetris.gamePath, listOf(dead), wide = true)
+        rig.http.on("https://m/dead", HttpResult(404, null))
+        assertFalse(rig.controller.pickOption(tetris.gamePath, dead))
+        assertEquals(listOf(dead), ArtOptionStore(rig.host).get(tetris.gamePath)?.options)
+        assertNull(ArtOptionStore(rig.host).get(tetris.gamePath)?.picks?.get(ArtSlot.SCREENSHOT))
+        assertTrue(rig.cache.files.isEmpty())
+    }
+
     @Test fun ss_preview_signed_out_uses_dev_auth_only() = runTest {
         val media = "https://neoclone.screenscraper.fr/api2/mediaJeu.php?devid=DEV&devpassword=DEVPW&ssid=U&sspassword=P&media=ss"
         val rig = Rig(this, listOf(tetris))
@@ -1209,5 +1255,30 @@ class ArtworkControllerTest {
         // readArt agrees.
         val art = scanner.readArt(index)
         assertEquals(listOf(false, true, true), listOf("G.gb", "Mario v1.1.gb", "H.gb").map { art.getValue(Triple("home", "Roms/Game Boy (GB)", it)).heroShot })
+    }
+
+    @Test fun aHandPlacedHeroMovedKeepsHeroDrawingUntilAFetchReplacesIt() = runTest {
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb")))
+        rig.http.on("https://", OK_PNG)
+        val media = rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media"))!!
+        rig.fs.writeBytes(rig.fs.ensurePath(media, listOf("hero"))!!, "Tetris.jpg", byteArrayOf(5))
+        rig.fs.writeBytes(rig.fs.ensurePath(media, listOf("boxart"))!!, "Tetris.png", byteArrayOf(6))
+        ArtLogStore(rig.host, ArtworkController.LOG_FILE).add(listOf("Roms/GB/.media/boxart/Tetris.png" to null))   // the app's box
+        assertTrue(rig.controller.legacyArtMove(rig.fs).move(media, rig.fs.listChildren(media), listOf("Roms", "GB", ".media")))
+        val moved = "Roms/GB/.media/screenshot/Tetris.jpg"
+        assertContentEquals(byteArrayOf(5), rig.fs.bytesAt("Home/$moved"))
+        assertTrue(moved in rig.controller.heroShots())   // the scan's hero set
+        // Reset: never deleted (not logged), and the engine's re-read still draws it as a hero.
+        rig.controller.resetArt(setOf("GB"))
+        assertContentEquals(byteArrayOf(5), rig.fs.bytesAt("Home/$moved"))
+        assertNull(rig.fs.bytesAt("Home/Roms/GB/.media/boxart/Tetris.png"))
+        val art = rig.host.applied.last { it.first == tetris.gamePath }.second
+        assertEquals("Home/$moved", art.screenshot)
+        assertTrue(art.heroShot)
+        // A fetch under Replace writes a real screenshot over it: no longer a hero.
+        rig.controller.fetchGame(tetris.gamePath, replaceExisting = true)
+        assertNull(rig.fs.bytesAt("Home/$moved"))
+        assertFalse(moved in rig.controller.heroShots())
+        assertFalse(rig.host.applied.last { it.first == tetris.gamePath }.second.heroShot)
     }
 }

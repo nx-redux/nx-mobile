@@ -4888,7 +4888,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val list = s.gameListStyle
         return listOfNotNull(
             SettingsRow(SettingsKind.LIST_ART, "List art", s.gameListArt.label).takeIf { list == MenuStyle.LIST },
-            SettingsRow(SettingsKind.BACKDROP_ART, "Backdrop art", s.backdropArt.label).takeIf { list == MenuStyle.BACKDROP },
+            // Every layout: it also picks the game panel's header and the Game Switcher's box.
+            SettingsRow(SettingsKind.BACKDROP_ART, "Backdrop art", s.backdropArt.label),
             // A game list's Layout icon (hidden: Layouts only), and its trophy icon and X hint (hidden: X and the game's menu).
             SettingsRow(SettingsKind.LAYOUT_OPTIONS, "Layout options", shown(s.gameListLayoutOptions)),
             SettingsRow(SettingsKind.ACHIEVEMENTS_PANEL, "Achievements panel", shown(s.gameListAchievementsPanel)).takeIf { deps.achievements != null },

@@ -268,8 +268,8 @@ class ScrapeEngine(
 
     /**
      * [t]'s slots on disk (the 2D box: `boxart2d/`, else the legacy `box2d/`; never `grid/` or `hero/`); the `.media`
-     * folder is found once. [ArtRefs.heroShot]: the screenshot's written-art origin is SteamGridDB (a hero); not looked
-     * up without [heroes].
+     * folder is found once. [ArtRefs.heroShot]: the screenshot is a hero ([LoggedArt.hero]: its written-art origin is
+     * SteamGridDB, or a moved hand-placed hero); not looked up without [heroes].
      */
     private suspend fun artOnDisk(t: ArtTarget, ls: Listings, heroes: Boolean = true): ArtRefs {
         val media = guard { source.findDir(home, t.mediaSegments) } ?: return ArtRefs()
@@ -280,7 +280,7 @@ class ScrapeEngine(
         suspend fun slot(folder: String): String? = entry(folder)?.ref?.value
         val shot = entry(ArtSlot.SCREENSHOT.folder)
         val heroShot = heroes && shot != null &&
-            guard { logged.origin((t.segments(ArtSlot.SCREENSHOT) + shot.name).joinToString("/")) }?.source == SourceId.SGDB
+            guard { logged.hero((t.segments(ArtSlot.SCREENSHOT) + shot.name).joinToString("/")) } == true
         return ArtRefs(
             boxart = slot(ArtSlot.BOX_3D.folder), box2d = slot(ArtSlot.BOX_2D.folder) ?: slot(LEGACY_BOX2D_FOLDER),
             screenshot = shot?.ref?.value, wheel = slot(ArtSlot.WHEEL.folder), mix = slot(ArtSlot.MIX.folder), heroShot = heroShot,
@@ -392,6 +392,8 @@ class ScrapeEngine(
         val heroMayWrite = before.screenshot == null || before.heroShot
         /** A hero was written this run: only a stand-in, so a later source's real screenshot still replaces it. */
         var heroHere = false
+        /** A hero was offered for a screenshot kept as real ([heroMayWrite] false): the game is not missing one. */
+        var heroWithheld = false
         /** The sources that wrote a file for this game, in order (the Done reason). */
         val writers = LinkedHashSet<String>()
         /** A [ArtSource.wheelLast] source's wheels, tried once every source has been asked: (its short label, its hits). */
@@ -486,6 +488,7 @@ class ScrapeEngine(
                 // A hero written here is replaced by a later source's real screenshot (over it: it is this run's own file).
                 val shotHits = hits.filter { it.slot == ArtSlot.SCREENSHOT } +
                     (if (needShot && heroMayWrite) hits.filter { it.slot == ArtSlot.HERO } else emptyList())
+                if (needShot && !heroMayWrite && hits.any { it.slot == ArtSlot.HERO }) heroWithheld = true
                 if (!storageFailed && (needShot || heroHere) && shotHits.isNotEmpty()) {
                     firstWritten(shotHits, over = replace || heroHere)?.let { slot ->
                         if (needShot) { needShot = false; got++ }
@@ -540,6 +543,8 @@ class ScrapeEngine(
         }
         paused?.let { throw it }
         if (storageFailed) throw JobPause(STORAGE)
+        // Under Replace, a real screenshot kept because only a hero came is the game's screenshot, not a missing one.
+        if (needShot && heroWithheld) { needShot = false; got++ }
         return when {
             got == wantedCount && (wantedCount > 0 || !wantMix || madeMix) -> ItemStatus.DONE to doneReason(writers, standInOnly)
             got > 0 || writers.isNotEmpty() -> ItemStatus.PARTIAL to (if (needBox) NO_BOX else if (needShot) NO_SCREENSHOT else NO_MIX)

@@ -10,8 +10,10 @@ object RaLibraryView {
         val pendingByHash = journal.entries(user).groupBy { it.m }
         val confirmedByHash = confirmed.entries(user).groupBy { it.m }
         val artByKey = HashMap<Triple<String, String, String>, String?>()
-        // A game's art: its screenshot, else its 3D box, else its 2D cover (never a SteamGridDB grid or hero).
-        index?.systems?.forEach { s -> s.games.forEach { g -> artByKey[Triple(g.source, g.dir, g.file)] = g.screenshot ?: g.boxart ?: g.box2d } }
+        // A game's art: its screenshot (not a SteamGridDB hero's), else its 3D box, else its 2D cover.
+        index?.systems?.forEach { s ->
+            s.games.forEach { g -> artByKey[Triple(g.source, g.dir, g.file)] = g.screenshot?.takeIf { !g.heroShot } ?: g.boxart ?: g.box2d }
+        }
         val rows = store.list(RaPaths.GAMES).filter(RaPaths::isHash).mapNotNull { hash ->
             val sets = RaSetsCache.summary(store, hash) ?: return@mapNotNull null
             val pointer = RaGamePointers.read(store, hash)

@@ -53,9 +53,18 @@ class ArtworkController(
 
     private fun auth() = ScraperAuth(credentials.devId, credentials.devPassword, user = credentials.user, password = credentials.password)
     private val log = ArtLogStore(host, LOG_FILE)
+    /** The hand-placed heroes the one-time move put in `screenshot/` (unlogged, still heroes). */
+    private val movedHeroes = MovedHeroes(host)
+    /** The log as the engine reads it: a moved hand-placed hero is a hero too, as the scan has it ([heroShots]). */
+    private val engineLog = object : LoggedArt by log {
+        override suspend fun hero(path: String): Boolean = log.origin(path)?.source == SourceId.SGDB || movedHeroes.contains(path)
+    }
     /** The Change art option links, recorded by every fetch. */
     private val store = ArtOptionStore(host)
-    private val engine: ScrapeEngine = engine(::auth, host::applyArt, log::add, host::refreshAndroidConsole, log, store::record, store::pickedSlots)
+    private val engine: ScrapeEngine = engine(
+        ::auth, host::applyArt, { written -> log.add(written); movedHeroes.overwritten(written.map { it.first }) },
+        host::refreshAndroidConsole, engineLog, store::record, store::pickedSlots,
+    )
     private val previews = Semaphore(PREVIEW_DOWNLOADS)
 
     /** Any source is on; fetching works in a build without ScreenScraper's credentials when another source is. */
@@ -338,12 +347,14 @@ class ArtworkController(
     /**
      * Per file slot, the option [ref]'s file there is: the pick when it is still listed, else the one (of that slot)
      * matching the written-art log's origin (source and asset id) for the slot's file; no entry for a hand-placed file,
-     * an extra folder's own, or none. The 2D box's legacy `box2d/` file is never matched.
+     * an extra folder's own, or none. The 2D box's legacy `box2d/` file is never matched. An Android game's art is
+     * app-private, outside the tree and the log: only its picks.
      */
     private suspend fun currentKeys(ref: LibraryGameRef, saved: GameOptions?): Map<ArtSlot, String> {
         val options = saved?.options.orEmpty()
         if (options.isEmpty()) return emptyMap()
-        val t = try { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) } catch (_: IllegalArgumentException) { null }
+        val t = if (ref.android) null
+            else try { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) } catch (_: IllegalArgumentException) { null }
         val disk = t?.let { engine.artOnDisk(ref, heroes = false) }
         val out = LinkedHashMap<ArtSlot, String>()
         for (slot in PICK_SLOTS) {
@@ -412,14 +423,14 @@ class ArtworkController(
     /**
      * The full image a pick writes: [option]'s full link downloaded, not cached (the cache holds previews only); an
      * option without a thumbnail uses its cached preview, which is that image (else downloaded and cached as one).
-     * Null when it cannot be had; a pick's failed download never drops the option.
+     * Null when it cannot be had (no connection or a dead link); a pick's failed download never drops the option
+     * ([downloadPreview]'s drop is the preview's only).
      */
     private suspend fun fullImage(gamePath: String, option: ArtOption): ByteArray? {
-        if (option.thumb == null) {
-            return optionCache.read(cacheKey(gamePath, option.key))
-                ?: downloadPreview(gamePath, option).bytes?.also { optionCache.write(cacheKey(gamePath, option.key), it) }
-        }
-        return try { download(option, option.url) } catch (_: JobPause) { null }
+        if (option.thumb == null) optionCache.read(cacheKey(gamePath, option.key))?.let { return it }
+        val bytes = try { download(option, option.url) } catch (_: JobPause) { null }
+        if (option.thumb == null && bytes != null) optionCache.write(cacheKey(gamePath, option.key), bytes)
+        return bytes
     }
 
     /**
@@ -464,20 +475,22 @@ class ArtworkController(
      * The scan's one-time `grid/` and `hero/` move ([LegacyArtMove]) over [source], keeping this controller's
      * written-art log in step.
      */
-    fun legacyArtMove(source: RomsSource): LegacyArtMove = LegacyArtMove(source, log, host)
+    fun legacyArtMove(source: RomsSource): LegacyArtMove = LegacyArtMove(source, log, host, movedHeroes)
 
     /**
-     * The logged screenshots that are SteamGridDB heroes, as home-relative file paths
-     * (`Roms/GB/.media/screenshot/Tetris.jpg`): the scan's [ArtRefs.heroShot].
+     * The logged screenshots that are SteamGridDB heroes, and the hand-placed heroes the one-time move kept
+     * ([MovedHeroes]), as home-relative file paths (`Roms/GB/.media/screenshot/Tetris.jpg`): the scan's
+     * [ArtRefs.heroShot], as the engine's [LoggedArt.hero] reads them.
      */
     suspend fun heroShots(): Set<String> = withContext(work) {
-        log.read { l ->
+        val logged = log.read { l ->
             l.entries.filterTo(HashSet()) { path ->
                 val parts = path.split('/')
                 parts.size >= 3 && parts[parts.size - 2] == ArtSlot.SCREENSHOT.folder && parts[parts.size - 3] == ".media" &&
                     l.origin(path)?.source == SourceId.SGDB
             }
         }
+        logged + movedHeroes.all()
     }
 
     /** The bytes the Change art previews take. */
@@ -597,10 +610,16 @@ class ArtworkController(
                 before to results.count { it.value == ScrapeEngine.Deleted.DELETED }
             }
             // The Android games console's screenshots are app-private, outside the log: Android's scope or All deletes them.
-            val androidDeleted = if (up == null || ANDROID_CONSOLE_TAG in up) engine.deleteAndroidArt() else 0
-            // The scope's Change art lists, picks and previews go too; a failure there never fails the Reset.
+            val android = up == null || ANDROID_CONSOLE_TAG in up
+            val androidDeleted = if (android) engine.deleteAndroidArt() else 0
+            // The scope's Change art lists, picks and previews go too; a failure there never fails the Reset. The Android
+            // games are not in [games] (their art is outside the log): their picks would keep a fetch from storing again.
             try {
-                val keys = store.forget(up?.let { games.filter { g -> g.tag.uppercase() in it }.mapTo(HashSet()) { it.gamePath } })
+                val keys = store.forget(up?.let { u ->
+                    val paths = games.filter { g -> g.tag.uppercase() in u }.mapTo(HashSet()) { it.gamePath }
+                    if (android) host.libraryGames().filter { it.android }.mapTo(paths) { it.gamePath }
+                    paths
+                })
                 if (up == null) optionCache.clear() else optionCache.remove(keys.flatMap { (g, ks) -> ks.map { cacheKey(g, it) } })
             } catch (e: CancellationException) { throw e } catch (_: Exception) {}
             for ((g, was) in before) host.applyArt(g.gamePath, ScrapeEngine.indexArt(g, was, engine.artOnDisk(g)))

@@ -42,6 +42,8 @@ class RaLibraryViewTest {
         assertEquals("shot", artOf(indexOf(other.copy(boxart = "box", box2d = "cover", screenshot = "shot"))))   // the screenshot wins
         assertEquals("box", artOf(indexOf(other.copy(boxart = "box", box2d = "cover"))))                          // no screenshot: the 3D box
         assertEquals("cover", artOf(indexOf(other.copy(box2d = "cover"))))                                        // then the 2D cover
+        assertEquals("box", artOf(indexOf(other.copy(boxart = "box", screenshot = "hero", heroShot = true))))      // a hero screenshot: never
+        assertEquals(null, artOf(indexOf(other.copy(screenshot = "hero", heroShot = true))))
         assertEquals(null, artOf(indexOf(other)))                                                                 // no art: none
     }
     @Test fun a_game_with_only_the_unknown_emulator_warning_is_not_listed() = runTest {

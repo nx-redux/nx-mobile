@@ -8,6 +8,11 @@ interface LoggedArt {
     suspend fun contains(path: String): Boolean
     suspend fun remove(path: String)
     suspend fun origin(path: String): ArtOrigin? = null
+    /**
+     * The screenshot at [path] is a SteamGridDB hero: its logged origin says so (the controller adds the hand-placed
+     * heroes the one-time move kept, [MovedHeroes]).
+     */
+    suspend fun hero(path: String): Boolean = origin(path)?.source == SourceId.SGDB
 
     companion object {
         /** No log: nothing counts as the app's. */

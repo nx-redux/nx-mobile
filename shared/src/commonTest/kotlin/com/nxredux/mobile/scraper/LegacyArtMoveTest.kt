@@ -54,6 +54,36 @@ class LegacyArtMoveTest {
         assertEquals("$media\n", r.marker())
     }
 
+    @Test fun legacyBox2dCountsAsTaken() = runTest {
+        // A hand-placed legacy box2d/ cover and two grids for its game: the logged grid goes, a hand-placed one stays.
+        val r = Rig(mapOf(media to listOf("grid", "box2d"), "$media/grid" to listOf("A.jpg", "B.png", "C.png"), "$media/box2d" to listOf("A.PNG", "B.Jpeg")))
+        r.log.add(listOf("Roms/GB/.media/grid/A.jpg" to sgdbGrid, "Roms/GB/.media/grid/C.png" to sgdbGrid))
+        assertTrue(r.run())
+        assertEquals(listOf("C.png"), r.src.childNames("$media/boxart2d"))   // no box2d/ cover: moved
+        assertEquals(listOf("B.png"), r.src.childNames("$media/grid"))   // hand-placed: stays
+        assertEquals(listOf("A.PNG", "B.Jpeg"), r.src.childNames("$media/box2d"))
+        assertFalse(r.log.contains("Roms/GB/.media/grid/A.jpg"))
+        assertFalse(r.log.contains("Roms/GB/.media/boxart2d/A.jpg"))
+        assertEquals("$media\n", r.marker())
+    }
+
+    @Test fun aHandPlacedHeroIsListedALoggedOneIsNot() = runTest {
+        val r = Rig(mapOf(media to listOf("hero"), "$media/hero" to listOf("A.jpg", "B.jpg")))
+        r.log.add(listOf("Roms/GB/.media/hero/B.jpg" to sgdbHero))
+        assertTrue(r.run())
+        assertEquals(listOf("A.jpg", "B.jpg"), r.src.childNames("$media/screenshot"))
+        assertEquals("Roms/GB/.media/screenshot/A.jpg\n", r.host.files[MovedHeroes.FILE])   // never logged: Reset keeps it
+        assertFalse(r.log.contains("Roms/GB/.media/screenshot/A.jpg"))
+        assertEquals(sgdbHero, r.log.origin("Roms/GB/.media/screenshot/B.jpg"))
+    }
+
+    @Test fun aHeroWhoseMoveFailedIsNotListed() = runTest {
+        val r = Rig(mapOf(media to listOf("hero"), "$media/hero" to listOf("A.jpg")))
+        r.src.moveRefused = true
+        assertFalse(r.run())
+        assertEquals("", r.host.files[MovedHeroes.FILE].orEmpty())
+    }
+
     @Test fun targetTakenHandPlacedKept() = runTest {
         val r = Rig(mapOf(media to listOf("grid", "boxart2d"), "$media/grid" to listOf("A.jpg"), "$media/boxart2d" to listOf("A.png")))
         r.run()

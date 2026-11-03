@@ -141,7 +141,10 @@ enum class GameListArt(val label: String) {
     }
 }
 
-/** Layouts → Backdrop art: the box in a Backdrop row, BOX3D (the default), BOX2D or WHEEL. The background stays the screenshot. */
+/**
+ * Layouts → Backdrop art: the box in a Backdrop row, BOX3D (the default), BOX2D or WHEEL. The background stays the
+ * screenshot. In every layout it also sets the game panel's header and the Game Switcher's box.
+ */
 enum class BackdropArt(val label: String) {
     BOX3D("3D box art"), BOX2D("2D box art"), WHEEL("Wheel");
 
