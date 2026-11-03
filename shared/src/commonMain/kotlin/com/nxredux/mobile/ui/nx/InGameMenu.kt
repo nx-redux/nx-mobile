@@ -1073,8 +1073,9 @@ private fun SlotPreview(
                 contentAlignment = Alignment.Center,
             ) {
                 if (thumb != null) {
+                    val context = coil3.compose.LocalPlatformContext.current
                     AsyncImage(
-                        model = thumb,
+                        model = remember(thumb, context) { coil3.request.ImageRequest.Builder(context).data(thumb).memoryCacheKey(thumb).build() },
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize(),
