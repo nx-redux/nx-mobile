@@ -685,7 +685,10 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
         minimalOpening = minimalOpening.value?.takeIf { it.page == s.source },
     )
     RaPanelOverlay(raPanel.takeIf { state.screen.value === s }, onRow = state::openRaPanelRow, onButton = state::onButton)
-    ArtPanelOverlay(artPanel.takeIf { state.screen.value === s }, onTap = state::artPanelTap, onDismiss = state::closeArtPanel)
+    ArtPanelOverlay(
+        artPanel.takeIf { state.screen.value === s }, state.settings.backdropArt, state.settings.gameListArt,
+        onTap = state::artPanelTap, onAnswer = state::artPanelAnswer, onDismiss = state::closeArtPanel,
+    )
     s.layoutMenu?.let { at ->
         GameListLayoutMenu(
             current = GameListLayouts.indexOf(state.settings.gameListStyle, state.settings.gameListOrientation, state.settings.gameListVerticalAlignment), highlighted = at,

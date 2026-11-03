@@ -892,8 +892,9 @@ class ArtworkScreensTest {
         advanceUntilIdle()
         val p = assertNotNull(r.state.artPanel.value)
         assertEquals(ArtPanelPhase.READY, p.phase)
-        assertEquals(listOf("ScreenScraper · us"), p.tiles.map { it.label })
-        assertEquals(p.tiles[0].option.key, p.currentKey)                                   // the fetched screenshot is the one in use
+        assertEquals(listOf("ScreenScraper · us", "ScreenScraper · us"), p.tiles.map { it.label })   // the screenshot, then the 2D box
+        assertEquals(listOf(ArtSlot.SCREENSHOT, ArtSlot.BOX_2D), p.sections.map { it.slot })
+        assertEquals(p.tiles[0].option.key, p.currentKeys[ArtSlot.SCREENSHOT])                                   // the fetched screenshot is the one in use
         val games = assertIs<Screen.Games>(r.state.screen.value)
         assertEquals(ContentRef("Home/Roms/Game Boy (GB)/.media/screenshot/Tetris.png"), games.entries.first { it.game.fileName == "Tetris.gb" }.game.screenshotRef)
         r.state.onButton(NxButton.B)                                                       // B closes the panel, the list stays
@@ -906,8 +907,8 @@ class ArtworkScreensTest {
         r.state.onButton(NxButton.A)
         advanceUntilIdle()
         assertEquals(ArtPanelPhase.READY, assertNotNull(r.state.artPanel.value).phase)   // the saved list: no search
-        assertEquals(1, r.state.artPanel.value!!.tiles.size)
-        assertEquals("Only one picture found", r.state.artPanel.value!!.message)
+        assertEquals(2, r.state.artPanel.value!!.tiles.size)
+        assertNull(r.state.artPanel.value!!.message)
         r.state.back()                                                                      // the system back closes it too
         assertNull(r.state.artPanel.value)
         assertIs<Screen.Games>(r.state.screen.value)

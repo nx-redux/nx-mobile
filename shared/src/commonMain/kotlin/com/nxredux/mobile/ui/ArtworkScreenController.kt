@@ -384,8 +384,6 @@ internal class ArtworkScreenController(
      */
     fun artMenu(entry: Listed): ArtMenuItem {
         if (!controller.available || entry.system.unassigned || !controller.canFetch(entry.system.tag, entry.game.fileName, entry.system.android)) return ArtMenuItem.NONE
-        val g = entry.game
-        val any = g.boxartRef != null || g.box2dRef != null || g.screenshotRef != null
-        return if (any) ArtMenuItem.CHANGE else ArtMenuItem.FETCH
+        return if (hasAnyArt(entry.game)) ArtMenuItem.CHANGE else ArtMenuItem.FETCH
     }
 }

@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.scraper.ArtOption
@@ -8,7 +9,10 @@ import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.scraper.ItemStatus
 import com.nxredux.mobile.scraper.OptionImage
 import com.nxredux.mobile.scraper.SourceId
+import com.nxredux.mobile.scraper.fileSlot
 import com.nxredux.mobile.settings.AppSettings
+import com.nxredux.mobile.settings.BackdropArt
+import com.nxredux.mobile.settings.GameListArt
 import com.nxredux.mobile.ui.nx.NxButton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -31,27 +35,146 @@ enum class ArtPanelPhase { FETCHING, LOADING, READY }
 data class ArtTile(val option: ArtOption, val label: String, val image: ContentRef?, val failed: Boolean)
 
 /**
- * The art panel over a game list: the game ([gamePath], [title]), its [tiles] in order, [focus] on a tile or on
- * Search again (index `tiles.size`), [currentKey] the option in use now, and [message] when there is something to say.
+ * One art kind's part of the panel: its file [slot] (SCREENSHOT, BOX_2D, BOX_3D or WHEEL), its heading [title], its
+ * tiles in [columns] per row, each shaped to the art ([aspect]).
+ */
+data class ArtSection(val slot: ArtSlot, val title: String, val columns: Int, val tiles: List<ArtTile>) {
+    /** A tile's picture box, width over height: a screenshot's 4:3, a box's 3:4, a wheel's 2:1. */
+    val aspect: Float get() = when (slot) {
+        ArtSlot.SCREENSHOT -> 4f / 3f
+        ArtSlot.WHEEL -> 2f
+        else -> 3f / 4f
+    }
+}
+
+/** The panel's sections in order: their file slot, heading and columns. */
+private val SECTIONS = listOf(
+    Triple(ArtSlot.SCREENSHOT, "Screenshot", 2),
+    Triple(ArtSlot.BOX_2D, "2D box", 3),
+    Triple(ArtSlot.BOX_3D, "3D box", 3),
+    Triple(ArtSlot.WHEEL, "Wheel", 2),
+)
+
+/** [tiles] in their sections by file slot ([ArtSlot.fileSlot]: a grid is a 2D box, a hero a screenshot), each as found; empty ones left out. */
+internal fun artSections(tiles: List<ArtTile>): List<ArtSection> = SECTIONS.mapNotNull { (slot, title, columns) ->
+    tiles.filter { it.option.slot.fileSlot == slot }.takeIf { it.isNotEmpty() }?.let { ArtSection(slot, title, columns, it) }
+}
+
+/**
+ * After a box or wheel pick: offers to switch Layouts → Backdrop art to the picked [kind], and List art too when
+ * [alsoListArt]; [yesFocused] while Switch is lit (where it opens), else Keep.
+ */
+data class LayoutQuestion(val kind: BackdropArt, val alsoListArt: Boolean, val yesFocused: Boolean)
+
+/** The Backdrop art kind a pick in file slot [slot] shows as; null for a screenshot (or any other). */
+private fun backdropKindOf(slot: ArtSlot): BackdropArt? = when (slot) {
+    ArtSlot.BOX_3D -> BackdropArt.BOX3D
+    ArtSlot.BOX_2D -> BackdropArt.BOX2D
+    ArtSlot.WHEEL -> BackdropArt.WHEEL
+    else -> null
+}
+
+/** The List art value showing [kind]. */
+private fun listArtOf(kind: BackdropArt): GameListArt = when (kind) {
+    BackdropArt.BOX3D -> GameListArt.BOX3D
+    BackdropArt.BOX2D -> GameListArt.BOX2D
+    BackdropArt.WHEEL -> GameListArt.WHEEL
+}
+
+/**
+ * The question after a pick in file slot [pickSlot]: null for a screenshot, or when [backdrop] already shows the
+ * picked kind and [listArt] is not a box/wheel kind or shows it too. [LayoutQuestion.alsoListArt] when List art is
+ * 3D box, 2D box or wheel and not the picked kind.
+ */
+fun layoutQuestionFor(pickSlot: ArtSlot, backdrop: BackdropArt, listArt: GameListArt): LayoutQuestion? {
+    val kind = backdropKindOf(pickSlot.fileSlot) ?: return null
+    val listDiffers = listArt in BOXED_LIST_ART && listArt != listArtOf(kind)
+    if (backdrop == kind && !listDiffers) return null
+    return LayoutQuestion(kind, alsoListArt = listDiffers, yesFocused = true)
+}
+
+private val BOXED_LIST_ART = setOf(GameListArt.BOX3D, GameListArt.BOX2D, GameListArt.WHEEL)
+
+/** The question's title and buttons. */
+const val LAYOUT_QUESTION_TITLE = "Show this picture?"
+const val LAYOUT_QUESTION_YES = "Switch"
+const val LAYOUT_QUESTION_NO = "Keep"
+
+/**
+ * The question's text with Layouts set to [backdrop] and [listArt]: "Layouts → Backdrop art is set to 3D box art.
+ * Switch it to 2D box art?", " List art too." when [LayoutQuestion.alsoListArt]; when Backdrop art already shows the
+ * kind, only List art is named.
+ */
+fun layoutQuestionText(q: LayoutQuestion, backdrop: BackdropArt, listArt: GameListArt): String = when {
+    backdrop == q.kind && q.alsoListArt -> "Layouts → List art is set to ${listArt.label}. Switch it to ${listArtOf(q.kind).label}?"
+    else -> "Layouts → Backdrop art is set to ${backdrop.label}. Switch it to ${q.kind.label}?" + if (q.alsoListArt) " List art too." else ""
+}
+
+/**
+ * The d-pad over [sections] from the flat [focus] (a tile, or Search again at the tiles' count): LEFT / RIGHT within a
+ * row; DOWN to the tile below in the section (the next row's last when it is shorter), else the next section's first
+ * row at the nearest column, else Search again; UP mirrors it (the section above's last row), and from Search again
+ * goes to the last tile.
+ */
+internal fun artPanelMove(sections: List<ArtSection>, focus: Int, button: NxButton): Int {
+    val total = sections.sumOf { it.tiles.size }
+    if (focus >= total) return if (button == NxButton.UP && total > 0) total - 1 else focus
+    var base = 0
+    var at = 0
+    while (focus >= base + sections[at].tiles.size) { base += sections[at].tiles.size; at++ }
+    val sec = sections[at]
+    val n = sec.tiles.size
+    val cols = sec.columns
+    val i = focus - base
+    val col = i % cols
+    /** The column of [into] nearest this one's middle. */
+    fun nearest(into: ArtSection): Int = ((col + 0.5f) / cols * into.columns).toInt().coerceIn(0, into.columns - 1)
+    return when (button) {
+        NxButton.LEFT -> if (col > 0) focus - 1 else focus
+        NxButton.RIGHT -> if (col < cols - 1 && i + 1 < n) focus + 1 else focus
+        NxButton.DOWN -> when {
+            (i / cols + 1) * cols < n -> base + minOf(i + cols, n - 1)
+            at + 1 < sections.size -> base + n + minOf(nearest(sections[at + 1]), sections[at + 1].tiles.size - 1)
+            else -> total
+        }
+        NxButton.UP -> when {
+            i >= cols -> focus - cols
+            at > 0 -> {
+                val prev = sections[at - 1]
+                val lastRow = (prev.tiles.size - 1) / prev.columns * prev.columns
+                base - prev.tiles.size + minOf(lastRow + nearest(prev), prev.tiles.size - 1)
+            }
+            else -> focus
+        }
+        else -> focus
+    }
+}
+
+/** The game has some art on file: a 3D box, a 2D box, a screenshot or a wheel (Change art, else Fetch art). */
+internal fun hasAnyArt(g: GameEntry): Boolean = g.boxartRef != null || g.box2dRef != null || g.screenshotRef != null || g.wheelRef != null
+
+/**
+ * The art panel over a game list: the game ([gamePath], [title]), its [sections] in order, [focus] a flat index over
+ * their tiles (Search again at the tiles' count), [currentKeys] the option in use per file slot, [message] when there is
+ * something to say, and [question] after a box or wheel pick that Layouts does not show.
  */
 data class ArtPanel(
     val gamePath: String,
     val title: String,
     val phase: ArtPanelPhase,
-    val tiles: List<ArtTile>,
+    val sections: List<ArtSection>,
     val focus: Int,
-    val currentKey: String?,
+    val currentKeys: Map<ArtSlot, String>,
     val message: String?,
+    val question: LayoutQuestion? = null,
 ) {
+    /** Every tile, section by section: the flat order [focus] counts in. */
+    val tiles: List<ArtTile> get() = sections.flatMap { it.tiles }
     /** The focus is on Search again. */
-    val onSearchAgain: Boolean get() = focus == tiles.size
+    val onSearchAgain: Boolean get() = focus == sections.sumOf { it.tiles.size }
+    /** [t] is the picture in use in its section. */
+    fun isCurrent(t: ArtTile): Boolean = currentKeys[t.option.slot.fileSlot] == t.option.key
 }
-
-/** The panel's grid columns (the d-pad moves within a row, then by rows). */
-const val ART_PANEL_COLUMNS = 2
-
-/** The order of the slots in the panel: screenshots, then grids, then heroes. */
-private val SLOT_ORDER = listOf(ArtSlot.SCREENSHOT, ArtSlot.GRID, ArtSlot.HERO)
 
 /** A tile's label: the source's name, then the slot for SteamGridDB or the source's note ("ScreenScraper · us"). */
 internal fun artTileLabel(o: ArtOption): String {
@@ -73,7 +196,9 @@ internal fun artTileLabel(o: ArtOption): String {
 /**
  * The game menu's Fetch art and Change art panel: [open] fetches first (Fetch art) or reads the saved options (Change
  * art), then the previews load, [PREVIEWS] at once (a dead link's tile leaves the panel). A or a tap picks a tile ([ArtOptionsPort.pickOption]; [onPicked]
- * with the game's path after one went through), Search again searches every source again; B closes.
+ * with the game's path after one went through), Search again searches every source again; B closes. A box or wheel
+ * pick that Layouts → Backdrop art (or List art) does not show asks [LayoutQuestion] in the panel: Switch writes the
+ * settings, Keep (or B) leaves them.
  */
 class ArtPanelController(
     private val scope: CoroutineScope,
@@ -101,7 +226,7 @@ class ArtPanelController(
         load?.cancel()
         _panel.value = ArtPanel(
             entry.game.path, entry.shown, if (fetchFirst) ArtPanelPhase.FETCHING else ArtPanelPhase.LOADING,
-            tiles = emptyList(), focus = 0, currentKey = null, message = null,
+            sections = emptyList(), focus = 0, currentKeys = emptyMap(), message = null,
         )
         start(entry.game.path, fetchFirst, searchAgain = false)
     }
@@ -112,52 +237,58 @@ class ArtPanelController(
         _panel.value = null
     }
 
-    /** A pad press while the panel is open: the d-pad moves over the grid then Search again, A acts, B closes. */
+    /**
+     * A pad press while the panel is open: with the question showing, LEFT / RIGHT light Switch / Keep, A answers, B
+     * keeps; else the d-pad moves over the sections then Search again ([artPanelMove]), A acts, B closes.
+     */
     fun onButton(b: NxButton) {
         val p = _panel.value ?: return
+        p.question?.let { q ->
+            when (b) {
+                NxButton.LEFT -> if (!q.yesFocused) _panel.value = p.copy(question = q.copy(yesFocused = true))
+                NxButton.RIGHT -> if (q.yesFocused) _panel.value = p.copy(question = q.copy(yesFocused = false))
+                NxButton.A -> answer(q.yesFocused)
+                NxButton.B -> answer(false)
+                else -> {}
+            }
+            return
+        }
         if (b == NxButton.B) return close()
         if (p.phase != ArtPanelPhase.READY) return
-        val n = p.tiles.size
-        val f = p.focus
-        val row = f / ART_PANEL_COLUMNS
-        val lastRow = (n - 1) / ART_PANEL_COLUMNS
-        val to = when (b) {
-            NxButton.LEFT -> if (f < n && f % ART_PANEL_COLUMNS > 0) f - 1 else f
-            NxButton.RIGHT -> if (f < n && f % ART_PANEL_COLUMNS < ART_PANEL_COLUMNS - 1 && f + 1 < n) f + 1 else f
-            NxButton.UP -> when {
-                n == 0 -> f
-                f == n -> n - 1                              // Search again: the last tile
-                row > 0 -> f - ART_PANEL_COLUMNS
-                else -> f
-            }
-            NxButton.DOWN -> when {
-                f == n -> f
-                row < lastRow -> minOf(f + ART_PANEL_COLUMNS, n - 1)   // the next row's tile below, or its last
-                else -> n                                    // Search again
-            }
-            NxButton.A -> { act(p, f); return }
-            else -> return
-        }
-        if (to != f) _panel.value = p.copy(focus = to)
+        if (b == NxButton.A) return act(p, p.focus)
+        val to = artPanelMove(p.sections, p.focus, b)
+        if (to != p.focus) _panel.value = p.copy(focus = to)
     }
 
-    /** A tap on tile [index] (or Search again at `tiles.size`): focuses it and acts as A. */
+    /** The question's answer: [switch] sets Backdrop art (and List art when asked) to the picked kind; either way it goes. */
+    fun answer(switch: Boolean) {
+        val p = _panel.value ?: return
+        val q = p.question ?: return
+        if (switch) {
+            settings.backdropArt = q.kind
+            if (q.alsoListArt) settings.gameListArt = listArtOf(q.kind)
+        }
+        _panel.value = p.copy(question = null)
+    }
+
+    /** A tap on tile [index] (or Search again at the tiles' count): focuses it and acts as A; nothing while the question shows. */
     fun tap(index: Int) {
         val p = _panel.value ?: return
-        if (p.phase != ArtPanelPhase.READY || index !in 0..p.tiles.size) return
+        if (p.phase != ArtPanelPhase.READY || p.question != null || index !in 0..p.tiles.size) return
         val now = p.copy(focus = index)
         _panel.value = now
         act(now, index)
     }
 
     private fun act(p: ArtPanel, index: Int) {
-        if (index == p.tiles.size) return searchAgain(p)
-        pick(p, p.tiles.getOrNull(index) ?: return)
+        val tiles = p.tiles
+        if (index == tiles.size) return searchAgain(p)
+        pick(p, tiles.getOrNull(index) ?: return)
     }
 
     private fun searchAgain(p: ArtPanel) {
         load?.cancel()
-        _panel.value = p.copy(phase = ArtPanelPhase.LOADING, tiles = emptyList(), focus = 0, message = null)
+        _panel.value = p.copy(phase = ArtPanelPhase.LOADING, sections = emptyList(), focus = 0, message = null, question = null)
         start(p.gamePath, fetchFirst = false, searchAgain = true)
     }
 
@@ -173,10 +304,14 @@ class ArtPanelController(
                 false
             }
             if (ok) onPicked(path)
+            val slot = tile.option.slot.fileSlot
             _panel.update { now ->
                 when {
                     now?.gamePath != path -> now
-                    ok -> now.copy(currentKey = tile.option.key, message = messageFor(now.tiles.size, note))
+                    ok -> now.copy(
+                        currentKeys = now.currentKeys + (slot to tile.option.key), message = messageFor(now.tiles.size, note),
+                        question = layoutQuestionFor(slot, settings.backdropArt, settings.gameListArt),
+                    )
                     else -> now.copy(message = "Couldn't use that picture")
                 }
             }
@@ -203,15 +338,14 @@ class ArtPanelController(
                 return@launch
             }
             // One tile per key: the grid's item keys and the preview updates go by it.
-            val tiles = result.options.filter { it.slot in SLOT_ORDER }.distinctBy { it.key }.sortedBy { SLOT_ORDER.indexOf(it.slot) }
-                .map { ArtTile(it, artTileLabel(it), image = null, failed = false) }
-            // The screenshot's current one is marked (the panel's sections come later).
-            val currentKey = result.currentKeys[ArtSlot.SCREENSHOT]
-            val current = tiles.indexOfFirst { it.option.key == currentKey }
+            val sections = artSections(result.options.distinctBy { it.key }.map { ArtTile(it, artTileLabel(it), image = null, failed = false) })
+            val tiles = sections.flatMap { it.tiles }
+            // The first picture in use (sections in order) has the focus.
+            val current = tiles.indexOfFirst { result.currentKeys[it.option.slot.fileSlot] == it.option.key }
             note = result.note
             _panel.update {
                 it?.takeIf { p -> p.gamePath == path }?.copy(
-                    phase = ArtPanelPhase.READY, tiles = tiles, currentKey = currentKey,
+                    phase = ArtPanelPhase.READY, sections = sections, currentKeys = result.currentKeys,
                     focus = if (current >= 0) current else 0, message = messageFor(tiles.size, result.note),
                 ) ?: it
             }
@@ -224,25 +358,28 @@ class ArtPanelController(
                     when {
                         now?.gamePath != path -> now
                         got.dropped -> without(now, t.option.key)   // a dead link: its tile goes
-                        else -> now.copy(tiles = now.tiles.map { if (it.option.key == t.option.key) it.copy(image = got.ref, failed = got.ref == null) else it })
+                        else -> now.copy(sections = now.sections.map { s ->
+                            s.copy(tiles = s.tiles.map { if (it.option.key == t.option.key) it.copy(image = got.ref, failed = got.ref == null) else it })
+                        })
                     }
                 }
             }
         }
     }
 
-    /** [p] without the tile for [key]: the focus stays on the same tile (or Search again), the count's message follows. */
+    /** [p] without the tile for [key] (its section too when it was the last): the focus stays on the same tile (or Search again), the count's message follows. */
     private fun without(p: ArtPanel, key: String): ArtPanel {
         val i = p.tiles.indexOfFirst { it.option.key == key }
         if (i < 0) return p
-        val tiles = p.tiles.filterIndexed { j, _ -> j != i }
+        val sections = p.sections.map { s -> s.copy(tiles = s.tiles.filter { it.option.key != key }) }.filter { it.tiles.isNotEmpty() }
+        val count = sections.sumOf { it.tiles.size }
         val focus = when {
             p.focus > i -> p.focus - 1
-            p.focus == i && i == tiles.size && i > 0 -> i - 1   // it was the last tile: the one before it
+            p.focus == i && i == count && i > 0 -> i - 1   // it was the last tile: the one before it
             else -> p.focus
         }
-        val message = if (p.message == messageFor(p.tiles.size, note)) messageFor(tiles.size, note) else p.message
-        return p.copy(tiles = tiles, focus = focus, message = message)
+        val message = if (p.message == messageFor(p.tiles.size, note)) messageFor(count, note) else p.message
+        return p.copy(sections = sections, focus = focus, message = message)
     }
 
     /** None found, only one, or the sources' note (why some are missing). */

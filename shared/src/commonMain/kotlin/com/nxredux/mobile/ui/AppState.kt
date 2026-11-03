@@ -6412,6 +6412,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
     /** A tap on the art panel's tile [index] (Search again at the tiles' count): picks it. */
     fun artPanelTap(index: Int) { artPanels?.tap(index) }
+    /** A tap on the art panel question's Switch ([switch]) or Keep: Switch writes Layouts → Backdrop art (and List art). */
+    fun artPanelAnswer(switch: Boolean) { artPanels?.answer(switch) }
     /** Closes the art panel (a tap beside it). */
     fun closeArtPanel() { artPanels?.close() }
 
@@ -6913,7 +6915,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 if (s.menu != null) { closeContextMenu(); return true }
                 if (s.search != null) { _screen.value = s.copy(search = null); return true }
                 if (s.layoutMenu != null) { _screen.value = s.copy(layoutMenu = null); return true }
-                if (artPanel.value != null) { closeArtPanel(); return true }
+                if (artPanel.value != null) { artPanels?.onButton(NxButton.B); return true }   // closes it, or keeps on its question
                 if (ra.backRaPanel()) return true
                 // Lands only on the main menu (Hidden and Unassigned go to Settings); a Minimal list's title drops back into a Minimal tab's row.
                 intendNav(if (styleOf(s) == MenuStyle.MINIMAL) NavMotion.MINIMAL_BACK else NavMotion.BACK)
