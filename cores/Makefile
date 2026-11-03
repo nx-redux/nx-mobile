@@ -478,7 +478,9 @@ azahar_FLAGS = -DENABLE_LIBRETRO=ON -DENABLE_VULKAN=ON -DENABLE_OPENGL=ON -DENAB
 # nx_disc_open_fd reads the frontend's SAF descriptor through DirectIOFile::FromFd, past the VFS, and a CreateBlobReader
 # overload taking an open file); retro_cheat_set adds codes not in the game INIs. patches/dolphin/0001-hacks-base-layer.patch:
 # live graphics-hack option changes go to the base config layer (Config::SetBase), not straight into g_Config, so a game's
-# INI fixes (SMG2's EFB access, TTYD's bounding box) are never overwritten; logs the active hacks 2 s in and every 30 s. Sys/ is staged to system/dolphin-emu/Sys, where the core looks, minus Themes/ (Qt GUI icons, useless to
+# INI fixes (SMG2's EFB access, TTYD's bounding box) are never overwritten; logs the active hacks 2 s in and every 30 s.
+# patches/dolphin/0002-arm64-texture-decoder.patch: upstream PR #14928 (merged 2026-10-31) backported, AArch64 SIMD texture
+# decoders for every format but XFB (AArch64 used the generic ones); drop it once the pin includes it. Sys/ is staged to system/dolphin-emu/Sys, where the core looks, minus Themes/ (Qt GUI icons, useless to
 # libretro). dolphin_LICENSE ships the notice of every statically linked external (and the GC font licences) in licenses/dolphin.txt.
 # libiconv/libcharset (LGPL-2.1+) vendor no licence text; libusb's COPYING is the same FSF LGPL-2.1 text, from the pinned
 # checkout. KissFFT's BSD notice lives only in its source header, so notices/dolphin-kissfft.txt carries it.
