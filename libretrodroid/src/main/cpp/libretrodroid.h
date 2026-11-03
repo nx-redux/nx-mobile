@@ -235,6 +235,18 @@ public:
     // Draws the last frame's secondary regions into the current default framebuffer, width x height, after step().
     // Never runs the core; errors are logged, never thrown (the second screen must not end the game). GL thread.
     void renderSecondary(unsigned width, unsigned height);
+    // nx-mobile 2026-11-03: the second surface drawn from inside the core's frame (hw cores): the view's hook runs right
+    // after the main draw in handleVideoRefresh, while the frame is whole and the step holds the core lock, so no lock.
+    void renderSecondaryInFrame(unsigned width, unsigned height);
+    // Set by the step's JNI call for its duration: runs after a hw core's frame is drawn (the view draws its second
+    // surface then). Cleared after the step.
+    void setFrameDrawnHook(std::function<void()> hook) { frameDrawnHook = std::move(hook); }
+    // A hw core draws inside its video callback: its framebuffer is only whole then (Dolphin's dual core starts the next
+    // frame before retro_run returns), so nothing may sample it after the step. False before a game.
+    bool rendersInVideoCallback() { return video && video->rendersInVideoCallback(); }
+    // nx-mobile 2026-11-03: the last step's frame deadline on the sleep timer (CLOCK_MONOTONIC ns), 0 under vsync pacing,
+    // fast forward or a step that ran no frame: the second surface stamps its frame from it. GL thread.
+    int64_t getFrameDeadlineNanos() const { return frameDeadlineNanos; }
 
     // Base width, base height, aspect ratio and the core's rotation (radians, SET_ROTATION) of the running game; zeros
     // before it loads. Any thread.
@@ -326,6 +338,8 @@ private:
     std::exception_ptr videoCallbackError = nullptr;
 
     float screenRefreshRate = 60.0;
+    std::function<void()> frameDrawnHook;   // GL thread, for one step
+    int64_t frameDeadlineNanos = 0;          // GL thread
     int openglESVersion = 2;
     bool skipDuplicateFrames = false;
     bool immersiveModeEnabled = false;

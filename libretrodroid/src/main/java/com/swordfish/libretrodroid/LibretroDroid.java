@@ -174,6 +174,12 @@ public class LibretroDroid {
     public static native void setSecondaryRegions(float[] packed);
     /** Draws the last frame's secondary regions into the current default framebuffer (width x height); never runs the core. GL thread. */
     public static native void renderSecondary(int width, int height);
+    /** nx-mobile: renderSecondary from inside the core's frame (the view's onCoreFrameDrawn); takes no lock. GL thread. */
+    public static native void renderSecondaryInFrame(int width, int height);
+    /** nx-mobile: the running core draws inside its video callback (a hw core): its framebuffer is whole only then. */
+    public static native boolean rendersInVideoCallback();
+    /** nx-mobile: the last step's frame deadline on the sleep timer (CLOCK_MONOTONIC ns), 0 when not stamped. GL thread. */
+    public static native long getFrameDeadlineNanos();
     public static native float[] getGameGeometry();
 
     public static native boolean isHardwareRendered();
