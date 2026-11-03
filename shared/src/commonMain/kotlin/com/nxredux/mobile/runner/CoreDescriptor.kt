@@ -3,7 +3,7 @@ package com.nxredux.mobile.runner
 enum class LoadMode { FILE_DESCRIPTOR, REAL_PATH }
 
 /**
- * How a core switches between OpenGL ES and Vulkan (Console Settings → Graphics API): the core options forced for each,
+ * How a core switches between OpenGL ES and Vulkan (Display → Graphics API): the core options forced for each,
  * whether they are locked in Emulator Settings, and whether it renders into a swapchain on the bridge's surface (Dolphin).
  */
 data class VulkanSwitch(
@@ -84,7 +84,7 @@ data class CoreDescriptor(
      * network interface): never shown or written outside a game ([com.nxredux.mobile.options.EmulatorSettings.page]).
      */
     val offlineHiddenOptions: Set<String> = emptySet(),
-    /** How the core switches API under Console Settings → Graphics API; null = no Vulkan path, the console has no row. */
+    /** How the core switches API under Display → Graphics API; null = no Vulkan path, the console has no row. */
     val vulkan: VulkanSwitch? = null,
     /**
      * Whether the core can rewind (libretro docs feature table, checked 2026-10-24). False for azahar, flycast, ppsspp and

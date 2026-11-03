@@ -51,7 +51,7 @@ object SegaHeader {
 }
 
 /**
- * Console Settings → Controller Type for the Sega pad tags ([PadMap.isSegaPadTag]): Auto reads the header, 3 and 6 force.
+ * Controls → Controller Type for the Sega pad tags ([PadMap.isSegaPadTag]): Auto reads the header, 3 and 6 force.
  * genesis_plus_gx takes it as its port 0 device, and port 1's for player 2 (Auto leaves the core's own header detection,
  * `core/input_hw/input.c:85`); picodrive has no auto, so it gets `picodrive_input1` (and `picodrive_input2` for player 2)
  * from the resolved type.

@@ -35,7 +35,7 @@ internal const val UNFOCUSED_ALPHA = 0.6f
  * ([settingsFrameWidth], [settingsFrameLeft]: up to 560 dp, its right edge the gutter in), on the section block's
  * baseline and growing up to 24 dp under the top, then scrolling. On the Settings root the sections have the
  * focus and the rows preview the highlighted section (no selection, a tap opens it on that row,
- * [AppState.settingsPreviewTap]); on a page the rows have it and the current section drops to the main ink (a tap on a
+ * [AppState.settingsPreviewTap]); on a page the rows have it and the current section drops to the open grey with a "›" (a tap on a
  * section, [AppState.settingsCategoryTap]). A Layouts group's picture is part of its block, under the rows ([settingsWideBlockPage]);
  * the Android games picker draws whole from the old pane's edge. The root's hints are drawn on the left, a page's on the right; both sides keep
  * the bar's height, so the blocks share the baseline. The Remove folder dialog is drawn here, over the whole stage.
@@ -63,7 +63,7 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
                                 }
                             } else {
                                 val current = categories.indexOf(settingsCategoryOf(s)).coerceAtLeast(0)
-                                // The page has the focus: the current section drops to the main ink.
+                                // The page has the focus: the current section drops to the open grey, with its "›" ([openedLabel]).
                                 SettingsMenuScreen(
                                     Screen.SettingsMenu(categories), current,
                                     onTap = state::settingsCategoryTap, rowsFocused = true,

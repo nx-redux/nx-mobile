@@ -1,5 +1,7 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.LocalWindowSize
+import com.nxredux.mobile.ui.nx.valueHints
 import com.nxredux.mobile.ui.nx.HintTouch
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -76,7 +78,7 @@ internal fun ArtworkPageBody(
             val touch = rows.getOrNull(selectedIndex)
             NxSettingsPage(
                 toolPageTitle(screen, split), rows, selectedIndex,
-                hints = hints(artworkSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated))),
+                hints = hints(artworkSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated), rowEditTwoPane(screen, settingsSplit(LocalWindowSize.current)))),
                 onSelect = onSelect, onOpen = onOpen, onEvent = onSetting, modifier = modifier,
                 onTruncated = onTruncated, onHint = onHint, preview = !focused,
             )
@@ -252,17 +254,17 @@ internal fun artworkSettingInfo(row: ArtworkSettingRow): SettingText = when (row
 }
 
 /**
- * Artwork Settings' hints for the highlighted row, as Settings' ([settingsHints]): an On/Off row LEFT Change and A
- * Toggle; TheGamesDB's allowance and a dimmed row Back only; the rest A Select. X Info while its description is cut off
+ * Artwork Settings' hints for the highlighted row, as Settings' ([settingsHints]): an On/Off row A Toggle (and on one
+ * page LEFT Change, [valueHints]); TheGamesDB's allowance and a dimmed row Back only; the rest A Select. X Info while its description is cut off
  * or says more ([info]).
  */
-internal fun artworkSettingsHints(row: ArtworkSettingRow?, touch: NxSettingRow?, info: Boolean): List<Hint> {
+internal fun artworkSettingsHints(row: ArtworkSettingRow?, touch: NxSettingRow?, info: Boolean, twoPane: Boolean = false): List<Hint> {
     val back = Hint(NxButton.B, "Back")
     val x = if (info) listOf(Hint(NxButton.X, "Info")) else emptyList()
     return when {
         row == null || !row.selectable -> listOf(back)
         !row.enabled || row.kind == ArtworkSettingKind.TGDB_LEFT -> listOf(back) + x
-        touch?.control == NxSettingControl.SWITCH -> listOf(back, Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Toggle")) + x
+        touch?.control == NxSettingControl.SWITCH -> listOf(back) + touch.valueHints(twoPane) + x
         else -> listOf(back, Hint(NxButton.A, "Select")) + x
     }
 }
