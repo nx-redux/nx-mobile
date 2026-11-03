@@ -211,7 +211,7 @@ class ArtExtrasTest {
         assertEquals(ItemStatus.SKIPPED to ScrapeEngine.HAS_ART, again.status to again.reason)
     }
 
-    @Test fun mixUsesTheJustDownloadedArtThe3dBoxBeforeThe2dAndNeverAGrid() = runTest {
+    @Test fun mixUsesTheJustDownloadedArtThe3dBoxBeforeThe2dAndAGridAs2dBox() = runTest {
         val a = ss().apply {
             offer("Tetris.gb", ArtSlot.BOX_3D, "https://a/3d"); offer("Tetris.gb", ArtSlot.BOX_2D, "https://a/2d"); offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://a/ss")
         }

@@ -202,7 +202,7 @@ private fun GameSwitcherFullScreen(screen: Screen.Switcher, onButton: (NxButton)
         } else {
             // Tapping the preview resumes; the hint bar drawn on top swallows its own taps (see below).
             Box(Modifier.fillMaxSize().pointerInput(entry) { detectTapGestures { onButton(NxButton.A) } })
-            // The resume preview; else the box chain: the 3D box Fit, a 2D front or grid in the case, else "No Preview".
+            // The resume preview; else the box chain: the 3D box Fit, a 2D front in the case, else "No Preview".
             val preview = entry.resume.previewPath
             var failed by remember(entry) { mutableStateOf(emptySet<String>()) }
             val box = boxShown(entry.game.boxartRef?.value, entry.game.box2dRef?.value, null, failed)

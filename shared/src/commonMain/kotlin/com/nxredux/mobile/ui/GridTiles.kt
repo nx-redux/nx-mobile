@@ -66,7 +66,7 @@ internal fun abstractArtFor(e: Listed): String? =
 /**
  * Home's Continue card pictures, in fallback order (the next shows when one fails to load): the [resumeFrame] (its
  * hidden save state's frame, else the resume slot's: [continueFrame]), the
- * screenshot, the SteamGridDB hero, the grid (the tiles' stand-ins), and last the game's abstract picture
+ * screenshot, and last the game's abstract picture
  * ([abstractArtFor]); empty only for a game with none, which the card draws as a title card.
  */
 /** Continue's resume frame: the hidden save state's (Save & Quit's, [HomeShot]), else the resume slot's screenshot. */
@@ -77,7 +77,7 @@ internal fun continuePictures(resumeFrame: String?, e: Listed): List<String> =
 
 /**
  * A game list's full-screen picture for [e] (the List background, the Backdrop picture, either orientation):
- * [backgroundArt] (the screenshot, else the stand-in of the screen's shape), else its abstract picture
+ * [backgroundArt] (the screenshot), else its abstract picture
  * ([abstractBackgroundFor]: an Android game's without its icon), a box-only game's too (its real box stays in the box
  * slot).
  */

@@ -366,6 +366,13 @@ class ScrapeEngine(
         val fresh = HashMap<ArtSlot, ByteArray>()
         /** The screenshot written is a SteamGridDB hero, not a real screenshot. */
         var standInOnly = false
+        /**
+         * A hero may write the screenshot slot only when it holds no file or a hero (never over a real screenshot, the
+         * app's or a hand-placed one, Replace included).
+         */
+        val heroMayWrite = before.screenshot == null || before.heroShot
+        /** A hero was written this run: only a stand-in, so a later source's real screenshot still replaces it. */
+        var heroHere = false
         /** The sources that wrote a file for this game, in order (the Done reason). */
         val writers = LinkedHashSet<String>()
         /** A [ArtSource.wheelLast] source's wheels, tried once every source has been asked: (its short label, its hits). */
@@ -385,12 +392,12 @@ class ScrapeEngine(
          * The hit kind of the first hit that downloads, fits (to its kind's cap) and is written (in its [fileSlot]), or
          * null; a failed write stops (the job pauses).
          */
-        suspend fun firstWritten(hits: List<ArtHit>): ArtSlot? {
+        suspend fun firstWritten(hits: List<ArtHit>, over: Boolean = replace): ArtSlot? {
             for (hit in hits) {
                 val image = hit.bytes?.takeIf { it.isNotEmpty() } ?: download(hit.url) ?: continue
                 val fitted = guard { fitter.fit(image, ArtCaps.of(hit.slot)) } ?: continue
                 attempted = true
-                if (writeSlot(target, hit.slot, fitted, hit.origin, replace, ls)) {
+                if (writeSlot(target, hit.slot, fitted, hit.origin, over, ls)) {
                     wrote += hit.slot.fileSlot; fresh[hit.slot.fileSlot] = fitted.bytes; return hit.slot
                 }
                 storageFailed = true
@@ -412,6 +419,7 @@ class ScrapeEngine(
                     if (needBox) addAll(src.slots intersect BOX_SLOTS)
                     if (want2d) addAll(src.slots intersect BOX_2D_SLOTS)
                     if (needShot) addAll(src.slots intersect SHOT_SLOTS)
+                    else if (heroHere && ArtSlot.SCREENSHOT in src.slots) add(ArtSlot.SCREENSHOT)
                     // A wheel-last source: never asked in turn for the wheel alone (it would spend calls before the
                     // others), unless the wide pass asks it now anyway.
                     if (wantWheel && ArtSlot.WHEEL in src.slots && (!src.wheelLast || isNotEmpty() || wide)) add(ArtSlot.WHEEL)
@@ -441,10 +449,14 @@ class ScrapeEngine(
                     want2d = false; writers += src.shortLabel
                     if (needBox) { needBox = false; got++; if (replace) removeStaleHigherBoxes(target, ArtSlot.BOX_2D, wrote, ls) }
                 }
-                // The screenshot: a screenshot hit, else a hero (the stand-in noted on a DONE).
-                if (!storageFailed && needShot && hits.any { it.slot in SHOT_SLOTS } && !pickedSince()) {
-                    firstWritten(SHOT_SLOTS.flatMap { k -> hits.filter { it.slot == k } })?.let { slot ->
-                        needShot = false; got++; writers += src.shortLabel; standInOnly = slot == ArtSlot.HERO
+                // The screenshot: a screenshot hit, else a hero (the stand-in noted on a DONE; only where [heroMayWrite]).
+                // A hero written here is replaced by a later source's real screenshot (over it: it is this run's own file).
+                val shotHits = hits.filter { it.slot == ArtSlot.SCREENSHOT } +
+                    (if (needShot && heroMayWrite) hits.filter { it.slot == ArtSlot.HERO } else emptyList())
+                if (!storageFailed && (needShot || heroHere) && shotHits.isNotEmpty() && !pickedSince() && !(heroHere && picked(ref.gamePath))) {
+                    firstWritten(shotHits, over = replace || heroHere)?.let { slot ->
+                        if (needShot) { needShot = false; got++ }
+                        heroHere = slot == ArtSlot.HERO; standInOnly = heroHere; writers += src.shortLabel
                     }
                 }
                 if (!storageFailed && wantWheel) {
@@ -452,7 +464,7 @@ class ScrapeEngine(
                     if (src.wheelLast) { if (wheels.isNotEmpty()) { laterWheels += src.shortLabel to wheels; wheelsOffered += src.id } }
                     else if (firstWritten(wheels) != null) { wantWheel = false; writers += src.shortLabel }
                 }
-                if (storageFailed || (!needBox && !needShot && !want2d && !wantWheel)) break
+                if (storageFailed || (!needBox && !needShot && !want2d && !wantWheel && !heroHere)) break
             }
             for ((label, wheels) in laterWheels) {
                 if (storageFailed || !wantWheel) break
