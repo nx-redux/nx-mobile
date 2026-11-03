@@ -1,9 +1,9 @@
 diff --git a/Source/Core/DolphinLibretro/Main.cpp b/Source/Core/DolphinLibretro/Main.cpp
-index 901c870..f482138 100644
+index 6320b79..6285f70 100644
 --- a/Source/Core/DolphinLibretro/Main.cpp
 +++ b/Source/Core/DolphinLibretro/Main.cpp
-@@ -444,58 +444,61 @@ void retro_run(void)
-       );
+@@ -464,58 +464,61 @@ void retro_run(void)
+     Libretro::environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &info);
    }
  
 +  // nx-mobile 2026-11-03: the hacks go to the base layer, as at boot, never straight into g_Config: a game's INI
@@ -81,7 +81,7 @@ index 901c870..f482138 100644
  
    if (Libretro::Options::IsUpdated(Libretro::Options::sysconf::WII_SPEAK_MUTED))
      Config::SetCurrent(Config::MAIN_WII_SPEAK_MUTED,
-@@ -520,6 +523,18 @@ void retro_run(void)
+@@ -540,6 +543,18 @@ void retro_run(void)
  
    Libretro::VR::Update(Libretro::widescreen ? 16.0f / 9.0f : 4.0f / 3.0f);
  
