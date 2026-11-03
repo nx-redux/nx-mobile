@@ -34,6 +34,8 @@
 #include "video.h"
 #include "renderers/renderer.h"
 #include "fpssync.h"
+#include "threadlist.h"
+#include <unistd.h>
 #include "input.h"
 #include "rumble.h"
 #include "shadermanager.h"
@@ -505,6 +507,7 @@ void LibretroDroid::loadGameFromPath(const std::string& gamePath) {
         game_info.size = file.size;
     }
 
+    threadsBeforeLoad = ThreadList::list();   // nx-mobile ADPF: the core's threads are the ones after this
     bool result = core->retro_load_game(&game_info);
     if (!result) {
         LOGE("Cannot load game. Leaving.");
@@ -533,6 +536,7 @@ void LibretroDroid::loadGameFromBytes(std::unique_ptr<int8_t[]> data, size_t siz
         game_info.size = size;
     }
 
+    threadsBeforeLoad = ThreadList::list();   // nx-mobile ADPF: the core's threads are the ones after this
     bool result = core->retro_load_game(&game_info);
     if (!result) {
         LOGE("Cannot load game. Leaving.");
@@ -579,6 +583,7 @@ void LibretroDroid::loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles) 
         virtualFiles[0].releaseFD();
     }
 
+    threadsBeforeLoad = ThreadList::list();   // nx-mobile ADPF: the core's threads are the ones after this
     bool result = core->retro_load_game(&game_info);
     if (!result) {
         LOGE("Cannot load game. Leaving.");
@@ -651,6 +656,8 @@ void LibretroDroid::destroy() {
     fpsSync = nullptr;
     audio = nullptr;
     input = nullptr;
+    perfHint.close();   // nx-mobile ADPF
+    perfHintSteps = 0;
 
     Environment::getInstance().deinitialize();
     // Reset on unload only (initialize() runs deinitialize() too): the next core never sees a previous game's motion; the host sets it before each launch.
@@ -658,6 +665,24 @@ void LibretroDroid::destroy() {
     stickyPointers.fill(false);   // likewise: the next game's view sets its own (Wii only) before its first frame
     VFS::getInstance().deinitialize();
     TeardownContext::forget();
+}
+
+// nx-mobile 2026-11-03 (ADPF): two seconds in (the core has started its threads by then) open a session for the GL
+// thread and every thread the core started, with one content frame as the budget; then report each running step's work
+// (its run and draw, not the pacing sleep). A step that ran two frames reports both against one frame's budget, which is
+// the point: it was late.
+void LibretroDroid::updatePerfHint(std::chrono::steady_clock::time_point stepStart, unsigned runs) {
+    if (!fpsSync || runs == 0) return;
+    const auto budget = static_cast<int64_t>(1e9 / fpsSync->getContentRefreshRate());
+    if (!perfHint.isOpen()) {
+        if (++perfHintSteps != 120) return;
+        auto threads = ThreadList::added(threadsBeforeLoad, ThreadList::list());
+        threads.push_back(gettid());
+        perfHint.open(threads, budget);
+        return;
+    }
+    perfHint.updateTarget(budget);
+    perfHint.report(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - stepStart).count());
 }
 
 void LibretroDroid::resume() {
@@ -685,6 +710,7 @@ void LibretroDroid::pause() {
 }
 
 void LibretroDroid::step() {
+    const auto stepStart = std::chrono::steady_clock::now();
     // nx-mobile diag: a step that stayed on screen too long, split into its parts (Debug log only).
     if (hitchResetPending.exchange(false)) hitchProbe.reset();
     if (fpsSync) {
@@ -774,6 +800,7 @@ void LibretroDroid::step() {
     }
 
     hitchProbe.rendered(HitchProbe::Clock::now());
+    updatePerfHint(stepStart, runs);
     if (runs == 0) hitchProbe.reset();   // paused or an FF step with nothing due: its gap is no hitch
 
     // The frame sleep runs without the core lock, so achievements and the off-thread save calls aren't held up by it.

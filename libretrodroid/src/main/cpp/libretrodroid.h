@@ -40,6 +40,7 @@
 #include "fpssync.h"
 #include "fastforward.h"
 #include "hitchprobe.h"
+#include "perfhint.h"
 #include "rewind.h"
 #include "rewindprobe.h"
 #include "input.h"
@@ -355,6 +356,11 @@ private:
     FastForwardPacer fastForwardPacer;
     HitchProbe hitchProbe;   // nx-mobile diag: GL thread
     std::atomic<bool> hitchResetPending { false };   // resume() (UI thread) asks step() to restart it
+    // nx-mobile 2026-11-03 (ADPF): the threads before the game loaded, so the session can name the core's own; GL thread.
+    std::vector<int> threadsBeforeLoad;
+    PerfHint perfHint;
+    unsigned perfHintSteps = 0;
+    void updatePerfHint(std::chrono::steady_clock::time_point stepStart, unsigned runs);
     unsigned appliedFastForwardSpeed = 0;
     bool appliedFastForwardAudible = false;
     // Read by the audio callback, which threaded cores call off the GL thread: drop the samples (muted FF).
