@@ -35,10 +35,8 @@ object WiiOptions {
 
     val screenRow = FrontendOption(
         SCREEN, "Wii Screen", listOf(WiiScreen.AUTO, WiiScreen.FOUR_THREE, WiiScreen.WIDE), WiiScreen.AUTO,
-        "The Wii's screen shape. Auto is 16:9 when the game starts\nin landscape on a wide screen, 4:3 in portrait\n" +
-            "or on a squarer screen (4:3, 3:2).\n" +
-            "The game reads it only once, when it first starts:\nrotating keeps it until the next launch, and a save state\n" +
-            "keeps the shape the game started with when it was saved.",
+        "The Wii's screen shape. Auto is 16:9 in landscape on a wide screen, and 4:3 in portrait or on a squarer screen.\n" +
+            "The game reads it only once, when it first starts: rotating keeps that shape, and a save state keeps the shape it was saved in.",
         brief = "Read once at game start; a save state keeps its own",
         visual = false, valueLabels = listOf("Auto", "4:3", "16:9"), atLaunch = true,
     )

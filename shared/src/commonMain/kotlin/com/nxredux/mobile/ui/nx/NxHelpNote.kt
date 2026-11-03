@@ -2,6 +2,7 @@ package com.nxredux.mobile.ui.nx
 
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterExitState
@@ -101,6 +102,26 @@ private val HelpMaxWidth = 480.dp
 private val HelpRise = 4.dp
 /** The lit row's corners: its plate's ([NxTouchRow]). */
 private val HelpHoleCorner = 14.dp
+/**
+ * [text] as the note flows it: many help texts were wrapped by hand for a narrower note, so a line break inside a
+ * sentence (not after `.` `:` `!` `?`) becomes a space and the card wraps the words itself. A break after a sentence and
+ * a blank line stay, so lists ("Auto: ...", "Stacked: ...") keep a line each.
+ */
+internal fun helpFlow(text: String): String {
+    val out = StringBuilder(text.length)
+    for ((i, c) in text.withIndex()) {
+        if (c != '\n') { out.append(c); continue }
+        val before = out.trimEnd(' ').lastOrNull()
+        val next = text.getOrNull(i + 1)
+        val keep = before == null || before == '\n' || next == '\n' || next == null || before in ".:!?"
+        if (keep) out.append('\n')
+        else if (before != ' ') out.append(' ')
+    }
+    return out.toString()
+}
+
+/** The card's padding round its text; the Scroll hint under it starts on the same edge. */
+private val HelpCardPadding = 20.dp
 /** How far one d-pad press scrolls the note: about three lines. */
 private val HelpScrollStep = 72.dp
 
@@ -136,7 +157,7 @@ fun NxSettingInfoPopup(note: NxHelpText?, onClose: () -> Unit) {
                     val card = RoundedCornerShape(14.dp)
                     Column(
                         Modifier.weight(1f, fill = false).fillMaxWidth().clip(card).background(colors.background).border(1.dp, colors.inkLine, card)
-                            .nxScrollFade(scroll).verticalScroll(scroll).padding(20.dp),
+                            .nxScrollFade(scroll).verticalScroll(scroll).padding(HelpCardPadding),
                     ) {
                         Text(
                             n.title, color = colors.inkDim, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold,
@@ -144,15 +165,18 @@ fun NxSettingInfoPopup(note: NxHelpText?, onClose: () -> Unit) {
                         )
                         Spacer(Modifier.height(8.dp))
                         val body = 16.sp * nxTextScale()   // Appearance → Text size
-                        Text(n.text, color = colors.main, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal, fontSize = body, lineHeight = body * 1.45f)
+                        Text(helpFlow(n.text), color = colors.main, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal, fontSize = body, lineHeight = body * 1.45f)
                     }
                     // No OK row and no Close (B closes, as anywhere): with a pad, only Scroll under the card while the d-pad scrolls it.
                     if (LocalFooterMode.current == FooterMode.HINTS && scroll.maxValue > 0) {
                         val hints = listOf(Hint(NxButton.DOWN, "Scroll"))
-                        NxHintBar(
-                            hints, Modifier.padding(top = 4.dp), scrim = Color.Transparent, always = true,
-                            onHint = { b -> if (b == NxButton.DOWN) hintScope.launch { if (scroll.canScrollForward) scroll.animateScrollBy(stepPx) else scroll.animateScrollTo(0) } else onClose() },
-                        )
+                        // On the card's text edge ([HelpCardPadding] in from the card), not the page inset.
+                        CompositionLocalProvider(LocalNxHintBarStart provides HelpCardPadding, LocalNxHintBarEnd provides HelpCardPadding) {
+                            NxHintBar(
+                                hints, Modifier.padding(top = 4.dp), scrim = Color.Transparent, always = true,
+                                onHint = { b -> if (b == NxButton.DOWN) hintScope.launch { if (scroll.canScrollForward) scroll.animateScrollBy(stepPx) else scroll.animateScrollTo(0) } else onClose() },
+                            )
+                        }
                     }
                 }
             },
