@@ -176,12 +176,13 @@ class ContextMenusTest {
         assertNull(ContextMenus.consoleMenu("notes.txt"))
     }
 
-    @Test fun android_games_offer_pin_or_unpin_only() {
+    @Test fun android_games_offer_pin_or_unpin_and_the_art_item() {
         val s = SystemFolder("Android", ANDROID_TAG, null, emptyList(), android = true)
         val e = Listed(s, GameEntry(ContentRef("app:a/A"), "a/A", "Alpha", folder = ContentRef("app:"), sourceId = "android", relativeDir = ""))
         assertEquals(listOf(ContextKind.PIN), kinds(ListSource.Console(s), e))
         assertEquals(listOf(ContextKind.UNPIN), kinds(ListSource.Console(s), e, pinned = true))
-        assertEquals(listOf(ContextKind.PIN), ContextMenus.itemsFor(ListSource.Console(s), e, pinned = false, art = ArtMenuItem.FETCH).map { it.kind })
+        assertEquals(listOf(ContextKind.PIN, ContextKind.FETCH_ART), ContextMenus.itemsFor(ListSource.Console(s), e, pinned = false, art = ArtMenuItem.FETCH).map { it.kind })
+        assertEquals(listOf(ContextKind.UNPIN, ContextKind.CHANGE_ART), ContextMenus.itemsFor(ListSource.Console(s), e, pinned = true, art = ArtMenuItem.CHANGE).map { it.kind })
     }
 
     @Test fun a_search_list_offers_the_collection_items_without_remove() {

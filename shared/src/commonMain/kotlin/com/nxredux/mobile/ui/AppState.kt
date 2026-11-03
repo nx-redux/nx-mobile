@@ -91,6 +91,7 @@ import com.nxredux.mobile.runner.EmulatorRunner
 import com.nxredux.mobile.runner.GameSession
 import com.nxredux.mobile.runner.LaunchName
 import com.nxredux.mobile.scraper.AndroidArtStore
+import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.scraper.ArtHave
 import com.nxredux.mobile.scraper.ArtworkController
 import com.nxredux.mobile.scraper.ArtworkHost
@@ -701,15 +702,17 @@ internal const val ANDROID_SOURCE = "android"
 
 /**
  * The Android games console for [apps] (the console's members, [androidConsoleMembers]): a synthetic [SystemFolder] with no core,
- * each app a [GameEntry] whose file name is the app id and whose shown name is its label, its screenshot from [art]; no
- * box art. Null with no app: the console is hidden.
+ * each app a [GameEntry] whose file name is the app id and whose shown name is its label, its screenshot, 2D box and
+ * wheel from [store] ([AndroidArtStore.art]; a hero screenshot marked); no 3D box. Null with no app: the console is
+ * hidden.
  */
-internal fun androidConsoleOf(apps: List<InstalledApp>, art: (String) -> ContentRef?): SystemFolder? {
+internal fun androidConsoleOf(apps: List<InstalledApp>, store: AndroidArtStore?): SystemFolder? {
     if (apps.isEmpty()) return null
     val games = apps.map { a ->
-        val shot = art(a.id)
         GameEntry(
-            ref = ContentRef("app:${a.id}"), fileName = a.id, shownName = a.label, screenshotRef = shot,
+            ref = ContentRef("app:${a.id}"), fileName = a.id, shownName = a.label,
+            screenshotRef = store?.art(a.id, ArtSlot.SCREENSHOT), box2dRef = store?.art(a.id, ArtSlot.BOX_2D),
+            wheelRef = store?.art(a.id, ArtSlot.WHEEL), heroShot = store?.heroShot(a.id) == true,
             folder = ContentRef("app:"), sourceId = ANDROID_SOURCE, relativeDir = "",
         )
     }
@@ -6292,12 +6295,18 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** The Android games console shown now (none without a game). */
     private fun shownAndroidConsole(): SystemFolder? = androidConsole?.takeIf { it.games.isNotEmpty() }
 
-    /** The Android games console's games for the scraper: by app id and label, "has art" when a screenshot is stored (it never wants a box). */
+    /**
+     * The Android games console's games for the scraper: by app id and label, "has art" when a screenshot is stored (a
+     * fetch never wants a box), with the store's pictures as their art. The game path is the entry's own ([path]), as
+     * the game menu's art panel names the game by it.
+     */
     private fun androidArtworkGames(): List<LibraryGameRef> = shownAndroidConsole()?.games.orEmpty().map { g ->
+        val art = ArtRefs(box2d = g.box2dRef?.value, screenshot = g.screenshotRef?.value, wheel = g.wheelRef?.value, heroShot = g.heroShot)
         LibraryGameRef(
-            gamePath = g.ref.value, tag = ANDROID_TAG, name = g.shownName, fileName = g.fileName, rom = g.ref, sourceId = g.sourceId,
+            gamePath = g.path, tag = ANDROID_TAG, name = g.shownName, fileName = g.fileName, rom = g.ref, sourceId = g.sourceId,
             relativeDir = g.relativeDir, folderGame = false,
-            have = ArtHave(box = true, screenshot = g.screenshotRef != null), android = true,
+            have = ArtHave(box = true, screenshot = g.screenshotRef != null, box2d = g.box2dRef != null, wheel = g.wheelRef != null, heroShot = g.heroShot),
+            android = true, art = art,
         )
     }
 
@@ -7035,7 +7044,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** The Android games console as [installedCache] and the settings make it now ([androidConsoleOf]); null with no game or before the first load. */
     private fun buildAndroidConsole(): SystemFolder? {
         val installed = installedCache ?: return null
-        return androidConsoleOf(androidGames(installed)) { id -> deps.androidArtStore?.screenshot(id) }
+        return androidConsoleOf(androidGames(installed), deps.androidArtStore)
     }
 
     /** The app ids the Android games console holds by the settings now (their icons are kept, [AppIcons.retain]). */

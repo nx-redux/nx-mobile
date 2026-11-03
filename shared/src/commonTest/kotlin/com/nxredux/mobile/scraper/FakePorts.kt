@@ -115,17 +115,32 @@ class FakeHasher(var result: Pair<Long, Long>? = 0x1234L to 100L, var inZip: Pai
     override suspend fun crc32AndSizeInZip(zip: ContentRef): Pair<Long, Long>? { askedInZip += zip; return inZip }
 }
 
-/** The Android games' screenshots in memory; a stored one's ref is `file:///art/<package>.png`. [fail]: writes fail. */
+/**
+ * The Android games' pictures in memory: [files] the screenshots (by app id), [slots] every slot's picture, [heroes] the
+ * app ids whose screenshot is a hero. A stored one's ref is `file:///art/<package>.png` (`.box2d.png`, `.wheel.png`).
+ * [fail]: writes fail.
+ */
 class FakeArtStore(var fail: Boolean = false) : AndroidArtStore {
     val files = mutableMapOf<String, ByteArray>()
-    override fun screenshot(appId: String): ContentRef? =
-        if (appId in files) ContentRef("file:///art/${appId.substringBefore('/')}.png") else null
-    override suspend fun writeScreenshot(appId: String, png: ByteArray): ContentRef? {
-        if (fail) return null
-        files[appId] = png
-        return screenshot(appId)
+    val others = mutableMapOf<Pair<String, ArtSlot>, ByteArray>()
+    val heroes = mutableSetOf<String>()
+    private fun has(appId: String, slot: ArtSlot) = if (slot == ArtSlot.SCREENSHOT) appId in files else (appId to slot) in others
+    override fun art(appId: String, slot: ArtSlot): ContentRef? {
+        if (!has(appId, slot)) return null
+        val suffix = when (slot) { ArtSlot.BOX_2D -> ".box2d"; ArtSlot.WHEEL -> ".wheel"; else -> "" }
+        return ContentRef("file:///art/${appId.substringBefore('/')}$suffix.png")
     }
-    override suspend fun deleteAll(): Int = files.size.also { files.clear() }
+    override fun heroShot(appId: String): Boolean = appId in heroes
+    override suspend fun write(appId: String, slot: ArtSlot, bytes: ByteArray, hero: Boolean): ContentRef? {
+        if (fail) return null
+        when (slot) {
+            ArtSlot.SCREENSHOT -> { files[appId] = bytes; if (hero) heroes += appId else heroes -= appId }
+            ArtSlot.BOX_2D, ArtSlot.WHEEL -> others[appId to slot] = bytes
+            else -> return null
+        }
+        return art(appId, slot)
+    }
+    override suspend fun deleteAll(): Int = (files.size + others.size).also { files.clear(); others.clear(); heroes.clear() }
 }
 
 class FakeRunner : ScrapeRunner {

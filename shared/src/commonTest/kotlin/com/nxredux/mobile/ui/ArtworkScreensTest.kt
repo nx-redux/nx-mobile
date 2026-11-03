@@ -8,7 +8,9 @@ import com.nxredux.mobile.runner.EmulatorRunner
 import com.nxredux.mobile.runner.GameSession
 import com.nxredux.mobile.launcher.AppLauncher
 import com.nxredux.mobile.launcher.InstalledApp
+import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.scraper.ArtworkController
+import com.nxredux.mobile.scraper.SgdbFixtures
 import com.nxredux.mobile.scraper.FakeArtStore
 import com.nxredux.mobile.scraper.FakeFitter
 import com.nxredux.mobile.scraper.FakeHasher
@@ -992,6 +994,37 @@ class ArtworkScreensTest {
         assertNull(assertNotNull(r.state.androidConsole).games.single().screenshotRef)   // the tile falls back to the app icon
         r.state.onButton(NxButton.B)
         assertEquals("5 games · 1 with art · 4 missing", assertIs<Screen.Artwork>(r.state.screen.value).details[0])   // Zelda's own art stays
+    }
+
+    @Test fun an_android_game_gets_fetch_art_and_change_art_with_every_section() = runTest {
+        val store = FakeArtStore()
+        val tetris = InstalledApp("com.tetris.app/.Main", "Tetris", game = true)
+        val r = rig(apps = listOf(tetris), artStore = store, consoleApps = listOf(tetris.id), sgdb = true)
+        r.settings.sgdbApiKey = "K"
+        r.http.on("jeuInfos", Scrape.found("ss" to "https://m/t-ss.png", "wheel" to "https://m/t-wheel.png"))
+        r.http.on("https://m/", Scrape.OK_PNG)
+        r.http.on("search/autocomplete/", Scrape.json(SgdbFixtures.autocomplete))
+        r.http.on("grids/game/", Scrape.json(SgdbFixtures.grids))
+        r.http.on("cdn2.steamgriddb.com", Scrape.OK_PNG)
+        fun console() = assertIs<Screen.Systems>(r.state.screen.value).tabs.flatMap { it.rows }.filterIsInstance<MainRow.System>().map { it.system }.single { it.android }
+        r.state.openSystem(console())
+        r.state.onButton(NxButton.MENU)
+        val kinds = assertNotNull(assertIs<Screen.Games>(r.state.screen.value).menu).items.map { it.kind }
+        assertEquals(listOf(ContextKind.PIN, ContextKind.FETCH_ART), kinds)
+        repeat(kinds.indexOf(ContextKind.FETCH_ART)) { r.state.onButton(NxButton.DOWN) }
+        r.state.onButton(NxButton.A)
+        advanceUntilIdle()
+        val p = assertNotNull(r.state.artPanel.value)
+        assertEquals(ArtPanelPhase.READY, p.phase)
+        assertEquals(listOf(tetris.id), store.files.keys.toList())                          // the fetch wrote the screenshot
+        val slots = p.tiles.map { it.option.slot }.toSet()
+        assertTrue(setOf(ArtSlot.SCREENSHOT, ArtSlot.GRID).all { it in slots }, "$slots")   // the kinds the panel lists today
+        assertTrue(ArtSlot.BOX_3D !in slots)
+        val grid = p.tiles.indexOfFirst { it.option.slot == ArtSlot.GRID }
+        r.state.artPanelTap(grid)
+        advanceUntilIdle()
+        assertNotNull(store.art(tetris.id, ArtSlot.BOX_2D))
+        assertEquals(ContentRef("file:///art/com.tetris.app.box2d.png"), assertNotNull(r.state.androidConsole).games.single().box2dRef)
     }
 
     @Test fun reset_all_deletes_the_android_screenshots_too() = runTest {

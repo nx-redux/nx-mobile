@@ -383,7 +383,7 @@ internal class ArtworkScreenController(
      * box, screenshot; written by the app or placed by hand), else Fetch art.
      */
     fun artMenu(entry: Listed): ArtMenuItem {
-        if (!controller.available || entry.system.unassigned || !controller.canFetch(entry.system.tag, entry.game.fileName)) return ArtMenuItem.NONE
+        if (!controller.available || entry.system.unassigned || !controller.canFetch(entry.system.tag, entry.game.fileName, entry.system.android)) return ArtMenuItem.NONE
         val g = entry.game
         val any = g.boxartRef != null || g.box2dRef != null || g.screenshotRef != null
         return if (any) ArtMenuItem.CHANGE else ArtMenuItem.FETCH

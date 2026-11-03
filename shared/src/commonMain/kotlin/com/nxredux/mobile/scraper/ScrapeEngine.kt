@@ -27,8 +27,9 @@ internal suspend fun RomsSource.findDir(home: ContentRef, segments: List<String>
  * sources have all stopped stays WAITING and the run ends PAUSED ([ALL_STOPPED]) so Resume retries it.
  *
  * An Android game ([LibraryGameRef.android]) has its own flow ([scrapeAndroid]), ScreenScraper only: looked up by
- * label, its `ss` screenshot only, written to [androidArt] (app-private, never the home tree or the index), then
- * [onAndroidArt]. Without [androidArt] or ScreenScraper, Android games are skipped.
+ * label, its `ss` screenshot only written to [androidArt] (app-private, never the home tree or the index), then
+ * [onAndroidArt]; its other pictures come only from Change art picks. Without [androidArt] or ScreenScraper, Android
+ * games are skipped.
  */
 class ScrapeEngine(
     private val http: ScraperHttp, private val fitter: ImageFitter,
@@ -197,7 +198,7 @@ class ScrapeEngine(
                 if (known.all { it.id in stopped } && !(lacksOnlyMix(ref) && !replace)) { blocked = true; continue }
                 set(i, ItemStatus.SEARCHING)
                 val downloading: suspend () -> Unit = { set(i, ItemStatus.DOWNLOADING) }
-                val result = if (ref.android) scrapeAndroid(ref, downloading) { stop(ss!!, it) } else scrape(ref, known, stopped, replace, wide, listings, downloading, stop)
+                val result = if (ref.android) scrapeAndroid(ref, stopped, replace, wide, downloading, stop) else scrape(ref, known, stopped, replace, wide, listings, downloading, stop)
                 if (result == null) { blocked = true; set(i, ItemStatus.WAITING); continue }   // every source stopped: Resume retries it
                 set(i, result.first, result.second)
             }
@@ -236,7 +237,7 @@ class ScrapeEngine(
         for (d in slots + medias) guard { source.findDir(home, d.dropLast(1))?.let { source.deleteEmptyDirectory(it, d.last()) } }
     }
 
-    /** Deletes the Android games console's stored screenshots, then rebuilds the console when any went; how many. */
+    /** Deletes the Android games console's stored pictures (and hero marks), then rebuilds the console when any went; how many. */
     suspend fun deleteAndroidArt(): Int {
         val deleted = androidArt?.let { store -> guard { store.deleteAll() } } ?: 0
         if (deleted > 0) onAndroidArt()
@@ -568,7 +569,8 @@ class ScrapeEngine(
      * art for the index ([indexArt], the pick winning its slot); null when the image cannot be read or the write failed.
      */
     suspend fun writePick(ref: LibraryGameRef, slot: ArtSlot, image: ByteArray, option: ArtOption): ArtRefs? {
-        if (ref.android || option.slot.fileSlot != slot) return null
+        if (option.slot.fileSlot != slot) return null
+        if (ref.android) return writeAndroidPick(ref, slot, image, option)
         val target = guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) } ?: return null
         val ls = Listings()
         val before = artOnDisk(target, ls)
@@ -576,6 +578,22 @@ class ScrapeEngine(
         if (!writeSlot(target, option.slot, fitted, option.origin, replace = true, ls)) return null
         if (slot in MIX_INPUTS && extras().mix && pixels != null && appMix(target, ls)) makeMix(ref, target, before, mapOf(slot to fitted.bytes), ls)
         return indexArt(ref, before, artOnDisk(target, ls), picked = setOf(slot))
+    }
+
+    /**
+     * An Android game's pick: [image] fitted to the hit kind's cap, stored in [slot] of [androidArt] (a SteamGridDB
+     * screenshot marked a hero), then the console rebuilt ([onAndroidArt]). An empty [ArtRefs] (the console reads the
+     * store, not the index); null for a slot the store has none of (the 3D box), or when the image cannot be read or
+     * stored.
+     */
+    private suspend fun writeAndroidPick(ref: LibraryGameRef, slot: ArtSlot, image: ByteArray, option: ArtOption): ArtRefs? {
+        val store = androidArt ?: return null
+        if (slot !in AndroidArtStore.SLOTS) return null
+        val fitted = guard { fitter.fit(image, ArtCaps.of(option.slot)) } ?: return null
+        val hero = slot == ArtSlot.SCREENSHOT && option.source == SourceId.SGDB
+        guard { store.write(ref.fileName, slot, fitted.bytes, hero) } ?: return null
+        withContext(NonCancellable) { onAndroidArt() }
+        return ArtRefs()
     }
 
     /** An option's image (not paced): as the fetch downloads it, a miss is null and no connection pauses ([JobPause]). */
@@ -628,7 +646,7 @@ class ScrapeEngine(
      * an Android game's stored screenshot as the store has it.
      */
     private fun hasArt(ref: LibraryGameRef): Boolean =
-        if (ref.android) guard { androidArt?.screenshot(ref.fileName) } != null
+        if (ref.android) guard { androidArt?.art(ref.fileName, ArtSlot.SCREENSHOT) } != null
         else ref.have.copy(needMix = extras().mix && pixels != null).complete
 
     /** A ROM with a box and a screenshot whose mix is all it lacks ([hasArt] false): made without asking any source. */
@@ -636,22 +654,61 @@ class ScrapeEngine(
 
     /**
      * An Android game: ScreenScraper's lookup ([ScreenScraperSource.androidScreenshot]), its `ss` screenshot fitted to
-     * the screenshot cap, stored by app id, then the console refreshed. A failed store write is this game's error
-     * (app-private storage: not the home tree's pause). Null when ScreenScraper stopped ([stop]).
+     * the screenshot cap, stored by app id, then the console refreshed; written only when the store has no screenshot
+     * (or under [replace]) and the user has not picked one. The same lookup's screenshots, 2D boxes and wheels are its
+     * options ([onOptions]); [wide] also asks SteamGridDB by the app's label for its grids, heroes and logos (only
+     * recorded; never in a bulk fetch: [SteamGridDbSource.knows] leaves Android out). A failed store write is this
+     * game's error (app-private storage: not the home tree's pause). Null when ScreenScraper stopped ([stop]).
      */
-    private suspend fun scrapeAndroid(ref: LibraryGameRef, downloading: suspend () -> Unit, stop: (SourceStop) -> Unit): Pair<ItemStatus, String?>? {
+    private suspend fun scrapeAndroid(
+        ref: LibraryGameRef, stopped: Set<String>, replace: Boolean, wide: Boolean,
+        downloading: suspend () -> Unit, stop: (ArtSource, SourceStop) -> Unit,
+    ): Pair<ItemStatus, String?>? {
         val store = androidArt ?: return ItemStatus.SKIPPED to NO_SOURCE
         val ss = ss ?: return ItemStatus.SKIPPED to NO_SOURCE
-        val hit = try { ss.androidScreenshot(ref.name) } catch (e: SourceStop) { stop(e); return null }
-        val url = when (hit) {
-            AndroidHit.None -> return ItemStatus.NOT_FOUND to null
-            AndroidHit.NoScreenshot -> return ItemStatus.NOT_FOUND to "No artwork"
-            is AndroidHit.Screenshot -> hit.url
-        }
+        val options = ArrayList<ArtOption>()
+        var wideDone = false
+        var paused: JobPause? = null
+        var result: Pair<ItemStatus, String?>? = null
+        try {
+            val hit = try { ss.androidScreenshot(ref.name) } catch (e: SourceStop) { stop(ss, e); return null }
+            when (hit) {
+                is AndroidHit.Screenshot -> recordOptions(ss.androidHits(hit.medias, hit.gameId), options)
+                is AndroidHit.NoScreenshot -> recordOptions(ss.androidHits(hit.medias, hit.gameId), options)
+                AndroidHit.None -> {}
+            }
+            if (wide) {
+                val sg = sgdb?.takeIf { it.enabled }
+                wideDone = when {
+                    sg == null -> true
+                    sg.id in stopped -> false
+                    else -> try { recordOptions(sg.find(ref, sg.slots), options); true } catch (e: SourceStop) { stop(sg, e); false }
+                }
+            }
+            val picked = ArtSlot.SCREENSHOT in picked(ref.gamePath)
+            val has = guard { store.art(ref.fileName, ArtSlot.SCREENSHOT) } != null
+            result = when {
+                hit == AndroidHit.None -> ItemStatus.NOT_FOUND to null
+                picked || (has && !replace) -> ItemStatus.DONE to null   // nothing to write: the stored one stays
+                hit is AndroidHit.Screenshot -> writeAndroidShot(store, ref, hit.url, downloading, ss)
+                else -> ItemStatus.NOT_FOUND to "No artwork"
+            }
+        } catch (p: JobPause) { paused = p }
+        if (options.isNotEmpty() || wide) withContext(NonCancellable) { onOptions(ref.gamePath, options, wide && wideDone && paused == null) }
+        paused?.let { throw it }
+        return result
+    }
+
+    /** Downloads [url], fits it to the screenshot cap and stores it as [ref]'s screenshot (not a hero), then [onAndroidArt]. */
+    private suspend fun writeAndroidShot(
+        store: AndroidArtStore, ref: LibraryGameRef, url: String, downloading: suspend () -> Unit, ss: ScreenScraperSource,
+    ): Pair<ItemStatus, String?> {
         downloading()
         val image = download(url) ?: return ItemStatus.ERROR to "Couldn't download the art"
         val fitted = guard { fitter.fit(image, ArtCaps.of(ArtSlot.SCREENSHOT)) } ?: return ItemStatus.ERROR to "Couldn't make the art"
-        guard { store.writeScreenshot(ref.fileName, fitted.bytes) } ?: return ItemStatus.ERROR to "Couldn't save the art"
+        // A pick made while this game was fetched wins its slot.
+        if (ArtSlot.SCREENSHOT in picked(ref.gamePath)) return ItemStatus.DONE to null
+        guard { store.write(ref.fileName, ArtSlot.SCREENSHOT, fitted.bytes) } ?: return ItemStatus.ERROR to "Couldn't save the art"
         withContext(NonCancellable) { onAndroidArt() }
         return ItemStatus.DONE to doneReason(listOf(ss.shortLabel), standInOnly = false)
     }

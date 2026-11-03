@@ -10,14 +10,18 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Tools -> Artwork for the Android games console: lookup by label, then search; only `ss`, written to the art store. */
 class AndroidScrapeTest {
-    private class Rig(scope: TestScope, val store: AndroidArtStore? = FakeArtStore()) {
+    private class Rig(scope: TestScope, val store: AndroidArtStore? = FakeArtStore(), sgdbKey: String? = null) {
         val http = FakeHttp().apply { clock = { scope.testScheduler.currentTime } }
+        val options = mutableListOf<Triple<String, List<ArtOption>, Boolean>>()
+        val picks = mutableMapOf<String, Set<ArtSlot>>()
         val hasher = FakeHasher()
         val arts = mutableListOf<Pair<String, ArtRefs>>()
         val written = mutableListOf<Pair<String, ArtOrigin?>>()
@@ -27,11 +31,13 @@ class AndroidScrapeTest {
             http, fitter, hasher, Scrape.homeTree(), Scrape.home, { ScraperAuth("DEV", "DEVPW") }, { scope.testScheduler.currentTime }, { delay(it) },
             onArt = { p, a -> arts += p to a }, onWritten = { written += it },
             androidArt = store, onAndroidArt = { refreshed++ },
+            more = listOfNotNull(sgdbKey?.let { k -> SteamGridDbSource(http, { k }, { scope.testScheduler.currentTime }) { delay(it) } }),
+            onOptions = { p, o, w -> options += Triple(p, o, w) }, picked = { picks[it].orEmpty() },
         )
         val files get() = (store as FakeArtStore).files
 
-        suspend fun run(games: List<LibraryGameRef>, replace: Boolean = false) =
-            engine.run(ScrapeState(items = games.map { Scrape.item(it) }), { p -> games.firstOrNull { it.gamePath == p } }, replace) {}
+        suspend fun run(games: List<LibraryGameRef>, replace: Boolean = false, wide: Boolean = false) =
+            engine.run(ScrapeState(items = games.map { Scrape.item(it) }), { p -> games.firstOrNull { it.gamePath == p } }, replace, wide = wide) {}
 
         /** The API calls in order (image downloads left out). */
         val api get() = http.calls.filter { it.startsWith(ScraperRequest.API) }
@@ -177,6 +183,101 @@ class AndroidScrapeTest {
         val item = rig.run(listOf(pgo)).items.single()
         assertEquals(ItemStatus.SKIPPED, item.status)
         assertTrue(rig.api.isEmpty())
+    }
+
+    @Test fun androidFetchRecordsOptions() = runTest {
+        val rig = Rig(this)
+        rig.http.on("jeuInfos", found("ss" to "https://m/pgo-ss.png", "box-2D" to "https://m/pgo-box.png", "wheel" to "https://m/pgo-wheel.png", "box-3D" to "https://m/pgo-3d.png"))
+        rig.http.on("https://m/", OK_PNG)
+        assertEquals(ItemStatus.DONE, rig.run(listOf(pgo)).items.single().status)
+        val store = rig.store as FakeArtStore
+        assertEquals(setOf(pgo.fileName), rig.files.keys)
+        assertTrue(store.others.isEmpty())                                                // only the screenshot is written
+        assertEquals(listOf("https://m/pgo-ss.png"), rig.http.calls.filter { it.startsWith("https://m/") })
+        val (path, options, wide) = rig.options.single()
+        assertEquals(pgo.gamePath, path)
+        assertEquals(false, wide)
+        assertEquals(setOf(ArtSlot.SCREENSHOT, ArtSlot.BOX_2D, ArtSlot.WHEEL), options.map { it.slot }.toSet())   // no 3D box
+        assertTrue(options.all { it.source == SourceId.SS && it.gameId == "42" && it.thumb != null })
+        assertEquals("https://m/pgo-box.png", options.single { it.slot == ArtSlot.BOX_2D }.url)
+    }
+
+    @Test fun androidWithoutAScreenshotStillRecordsOptions() = runTest {
+        val rig = Rig(this)
+        rig.http.on("jeuInfos", found("box-2D" to "https://m/pgo-box.png"))
+        assertEquals(ItemStatus.NOT_FOUND, rig.run(listOf(pgo)).items.single().status)
+        assertEquals(listOf(ArtSlot.BOX_2D), rig.options.single().second.map { it.slot })
+    }
+
+    @Test fun androidWideAsksSgdb() = runTest {
+        val rig = Rig(this, sgdbKey = "K")
+        val tetris = Scrape.androidGame("com.tetris.app/.Main", "Tetris", hasShot = true)
+        (rig.store as FakeArtStore).files[tetris.fileName] = byteArrayOf(7)
+        rig.http.on("jeuInfos", found("ss" to "https://m/t-ss.png"))
+        rig.http.on("search/autocomplete/", Scrape.json(SgdbFixtures.autocomplete))
+        rig.http.on("grids/game/", Scrape.json(SgdbFixtures.grids))
+        rig.http.on("heroes/game/", Scrape.json(SgdbFixtures.heroes))
+        rig.http.on("logos/game/", Scrape.json(SgdbFixtures.logos))
+        rig.run(listOf(tetris), wide = true)
+        assertTrue(rig.http.calls.any { it.contains("search/autocomplete/Tetris") })
+        val (_, options, wide) = rig.options.single()
+        assertEquals(true, wide)
+        assertEquals(setOf(ArtSlot.GRID, ArtSlot.HERO, ArtSlot.WHEEL), options.filter { it.source == SourceId.SGDB }.map { it.slot }.toSet())
+        assertTrue(options.any { it.source == SourceId.SS && it.slot == ArtSlot.SCREENSHOT })
+        assertContentEquals(byteArrayOf(7), rig.files[tetris.fileName])                    // the wide pass writes nothing
+        assertTrue(rig.http.calls.none { it.startsWith("https://m/") || it.startsWith("https://cdn2.") })
+    }
+
+    @Test fun androidBulkFetchNeverAsksSgdb() = runTest {
+        val rig = Rig(this, sgdbKey = "K")
+        rig.http.on("jeuInfos", found("ss" to "https://m/pgo-ss.png"))
+        rig.http.on("https://m/", OK_PNG)
+        rig.run(listOf(pgo))
+        assertTrue(rig.http.calls.none { it.startsWith(Sgdb.API) })
+    }
+
+    @Test fun androidPickBox() = runTest {
+        val rig = Rig(this)
+        val option = ArtOption(ArtSlot.GRID, "https://cdn2.steamgriddb.com/grid/10.png", SourceId.SGDB, "5247", "10")
+        assertEquals(ArtRefs(), rig.engine.writePick(pgo, ArtSlot.BOX_2D, OK_PNG.body!!, option))
+        assertNotNull(rig.store!!.art(pgo.fileName, ArtSlot.BOX_2D))
+        assertNull(rig.store.art(pgo.fileName, ArtSlot.SCREENSHOT))
+        assertEquals(1, rig.refreshed)
+        assertEquals(listOf(ArtCaps.of(ArtSlot.GRID)), rig.fitter.caps)
+        assertTrue(rig.written.isEmpty())                                                  // never the home tree's log
+    }
+
+    @Test fun androidPickHeroMarksTheScreenshot() = runTest {
+        val rig = Rig(this)
+        val hero = ArtOption(ArtSlot.HERO, "https://cdn2.steamgriddb.com/hero/30.png", SourceId.SGDB, "5247", "30")
+        assertEquals(ArtRefs(), rig.engine.writePick(pgo, ArtSlot.SCREENSHOT, OK_PNG.body!!, hero))
+        assertTrue(rig.store!!.heroShot(pgo.fileName))
+        val shot = ArtOption(ArtSlot.SCREENSHOT, "https://m/pgo-ss.png", SourceId.SS, "42")
+        assertNotNull(rig.engine.writePick(pgo, ArtSlot.SCREENSHOT, OK_PNG.body!!, shot))
+        assertFalse(rig.store.heroShot(pgo.fileName))
+        assertNull(rig.engine.writePick(pgo, ArtSlot.BOX_3D, OK_PNG.body!!, ArtOption(ArtSlot.BOX_3D, "https://m/3d.png", SourceId.SS)))
+    }
+
+    @Test fun androidPickedShotNotRefetched() = runTest {
+        val rig = Rig(this)
+        rig.files[pgo.fileName] = byteArrayOf(7)
+        rig.picks[pgo.gamePath] = setOf(ArtSlot.SCREENSHOT)
+        rig.http.on("jeuInfos", found("ss" to "https://m/pgo-ss.png", "box-2D" to "https://m/pgo-box.png"))
+        rig.http.on("https://m/", OK_PNG)
+        rig.run(listOf(pgo), replace = true)
+        assertContentEquals(byteArrayOf(7), rig.files[pgo.fileName])
+        assertTrue(rig.http.calls.none { it.startsWith("https://m/") })
+        assertEquals(setOf(ArtSlot.SCREENSHOT, ArtSlot.BOX_2D), rig.options.single().second.map { it.slot }.toSet())
+    }
+
+    @Test fun androidResetDeletesEveryPicture() = runTest {
+        val rig = Rig(this)
+        val store = rig.store as FakeArtStore
+        rig.files[pgo.fileName] = byteArrayOf(1); store.others[pgo.fileName to ArtSlot.WHEEL] = byteArrayOf(2); store.heroes += pgo.fileName
+        assertEquals(2, rig.engine.deleteAndroidArt())
+        assertNull(store.art(pgo.fileName, ArtSlot.WHEEL))
+        assertFalse(store.heroShot(pgo.fileName))
+        assertEquals(1, rig.refreshed)
     }
 
     @Test fun searchResponsesParse() {

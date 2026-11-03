@@ -70,9 +70,12 @@ class ArtworkController(
     /** An enabled source knows [ref]'s system (an excluded tag never). */
     fun fetchable(ref: LibraryGameRef): Boolean = engine.sourcesFor(ref).isNotEmpty()
 
-    /** The game menu's Fetch art: a game file [fileName] in a console tagged [tag] that an enabled source knows. */
-    fun canFetch(tag: String, fileName: String): Boolean = fetchable(
-        LibraryGameRef("", tag, fileName, fileName, ContentRef(""), "", "", folderGame = false, have = ArtHave()),
+    /**
+     * The game menu's Fetch art: a game file [fileName] in a console tagged [tag] that an enabled source knows; [android]:
+     * an Android games console's app ([fileName] its app id).
+     */
+    fun canFetch(tag: String, fileName: String, android: Boolean = false): Boolean = fetchable(
+        LibraryGameRef("", tag, fileName, fileName, ContentRef(""), "", "", folderGame = false, have = ArtHave(), android = android),
     )
     private val _state = MutableStateFlow(ScrapeState())
     val state: StateFlow<ScrapeState> = _state.asStateFlow()

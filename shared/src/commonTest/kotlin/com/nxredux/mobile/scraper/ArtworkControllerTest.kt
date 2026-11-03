@@ -447,6 +447,8 @@ class ArtworkControllerTest {
         assertFalse(rig.controller.canFetch("PORTS", "Doom.sh"))   // excluded
         assertFalse(rig.controller.canFetch("", "thing.chd"))
         assertFalse(rig.controller.canFetch("PICO8X", "game.p8"))
+        assertTrue(rig.controller.canFetch("ANDROID", "com.a/.Main", android = true))   // ScreenScraper with the art store
+        assertFalse(rig.controller.canFetch("ANDROID", "com.a/.Main"))                  // a ROM folder tagged ANDROID has no system
         val anything = FakeSource("any", knowsGame = { true })
         val wide = Rig(this, emptyList(), FakeCredentials(devId = ""), more = listOf(anything))
         assertTrue(wide.controller.canFetch("ZZZ", "x.bin"))

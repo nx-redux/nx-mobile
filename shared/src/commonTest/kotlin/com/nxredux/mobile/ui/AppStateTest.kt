@@ -108,6 +108,7 @@ import com.nxredux.mobile.storage.Shortcuts
 import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.storage.GameRef
 import com.nxredux.mobile.scraper.AndroidArtStore
+import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.storage.ToolPins
 import com.nxredux.mobile.storage.UserDataStore
 import com.nxredux.mobile.ui.nx.Hint
@@ -12486,8 +12487,15 @@ class AppStateTest {
 
     @Test fun android_console_takes_screenshots_from_the_art_store() = runTest {
         val art = object : AndroidArtStore {
-            override fun screenshot(appId: String): ContentRef? = if (appId == "a/A") ContentRef("file:///art/a.png") else null
-            override suspend fun writeScreenshot(appId: String, png: ByteArray): ContentRef? = null
+            override fun art(appId: String, slot: ArtSlot): ContentRef? = when {
+                appId != "a/A" -> null
+                slot == ArtSlot.SCREENSHOT -> ContentRef("file:///art/a.png")
+                slot == ArtSlot.BOX_2D -> ContentRef("file:///art/a.box2d.png")
+                slot == ArtSlot.WHEEL -> ContentRef("file:///art/a.wheel.png")
+                else -> null
+            }
+            override fun heroShot(appId: String): Boolean = appId == "a/A"
+            override suspend fun write(appId: String, slot: ArtSlot, bytes: ByteArray, hero: Boolean): ContentRef? = null
             override suspend fun deleteAll(): Int = 0
         }
         val state = AppState(
@@ -12498,14 +12506,18 @@ class AppStateTest {
         state.load(); advanceUntilIdle()
         val games = assertNotNull(androidRow(state)).games
         assertEquals(listOf(ContentRef("file:///art/a.png"), null), games.map { it.screenshotRef })
+        assertEquals(listOf(ContentRef("file:///art/a.box2d.png"), null), games.map { it.box2dRef })
+        assertEquals(listOf(ContentRef("file:///art/a.wheel.png"), null), games.map { it.wheelRef })
+        assertEquals(listOf(true, false), games.map { it.heroShot })
         assertEquals(listOf(null, null), games.map { it.boxartRef })
     }
 
     @Test fun a_replaced_screenshot_with_a_new_ref_rebuilds_the_console_row() = runTest {
         var ref = ContentRef("file:///art/a.png?v=1")
         val art = object : AndroidArtStore {
-            override fun screenshot(appId: String): ContentRef? = ref.takeIf { appId == "a/A" }
-            override suspend fun writeScreenshot(appId: String, png: ByteArray): ContentRef? = null
+            override fun art(appId: String, slot: ArtSlot): ContentRef? = ref.takeIf { appId == "a/A" && slot == ArtSlot.SCREENSHOT }
+            override fun heroShot(appId: String): Boolean = false
+            override suspend fun write(appId: String, slot: ArtSlot, bytes: ByteArray, hero: Boolean): ContentRef? = null
             override suspend fun deleteAll(): Int = 0
         }
         val state = AppState(
