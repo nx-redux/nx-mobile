@@ -12,6 +12,25 @@ Mac-side Python 3 (stdlib only) driver for a TrimUI Brick (tg5040) on NX Redux, 
   before each sync and retries once when the phone pairs but never connects (seen on ROMs-on syncs).
 - `state_grid.py`: the save-state grid (`--only core,core`); report in `.local/device-tests/state-grid-<date>.md`.
 
+- `pacing.py`: frame pacing on any phone with the debug build: launches a game through the GAME hook (optionally from
+  a state in a slot, the same moment every run), records SurfaceFlinger timestats, and alternates an option
+  (`--ab nx_graphics_api=gles,vulkan`) or a system property (`--ab-prop debug.nx.presenttime=0,1`). Prints frames,
+  uneven frames, frames held 33 ms+, the core's work per frame (`--work`: Debug log on for the runs) and the temperature.
+- `quit_loop.py`: boot a game, wait, GAME_STOP, check its :game process ends with no ANR or watchdog stop; repeat.
+  GAME_STOP quits like Save & Quit, so the game's resume point moves.
+- `dolphin_sav.py`: wraps the libretro Dolphin core's state in standalone Dolphin's .sav headers, for comparing both
+  apps from one moment.
+
+### After a Dolphin pin bump
+
+1. `gmake -C cores dolphin`: the patches apply in order (`dolphin.patch`, `dolphin/0001…`, `dolphin/0002…`); on a
+   clash regenerate them on the new head with `git apply -3`, and drop a backport the pin now has (0002 once the
+   libretro fork includes upstream PR #14928). Keep each patch's licence header.
+2. Pacing, SMG2 from a state (Nova): `pacing.py --tag WII --core dolphin --rom <SMG2> --state <state> --runs 2 --work`;
+   expect about 5-10 uneven frames a minute, none held 33 ms, about 14 ms work a frame.
+3. Quit: `quit_loop.py --tag WII --rom <NSMB Wii> --runs 10`, then again with `nx_graphics_api = vulkan` set for it.
+4. Paper Mario TTYD: Mario and the crowd drawn; the log's `nx: active hacks for G8ME01` shows `BBox=true`.
+
 Run from the repo root; every adb call passes `-s`.
 
 Every file a test creates is named `nxtest-*`; `cleanup_nxtest()` removes them from `Roms`, `Saves`, `.userdata`,
