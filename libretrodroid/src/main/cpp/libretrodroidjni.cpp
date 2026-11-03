@@ -1106,6 +1106,14 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPresent
     LibretroDroid::getInstance().setPresentationDeadline(nanos);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFrameSkip(
+    JNIEnv* env,
+    jclass obj,
+    jboolean skip
+) {
+    LibretroDroid::getInstance().setFrameSkip(skip);
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFrameSpeed(
     JNIEnv* env,
     jclass obj,

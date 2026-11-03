@@ -89,6 +89,25 @@ int main() {
         check(!vsync.presentAt(lead).has_value(), "vsync pacing stamps nothing");
     }
 
+    {
+        // Frame skip off: a device that cannot keep up still runs one frame a step and shows every frame; the timer drops
+        // the lag past MAX_LAG_FRAMES instead of catching up, so the game runs slower rather than skipping frames.
+        FPSSync::frameSkip = false;
+        FPSSync sync(60.0, 90.0);
+        sync.advanceFrames(at(0));
+        check(sync.advanceFrames(at(4 * frame + 1)) == 1, "frame skip off: three frames late still runs one");
+        check(ms(sync.deadline()) > 4 * frame + 1 - 2 * frame - 0.1 && ms(sync.deadline()) <= 4 * frame + 1,
+              "and the clock keeps at most two frames of lag, behind now (no sleep)");
+        bool everyOne = true;
+        double t = 4 * frame + 1;
+        for (int i = 0; i < 100; i++) {
+            t += frame * 1.1;   // 10% too slow, steadily
+            if (sync.advanceFrames(at(t)) != 1) everyOne = false;
+        }
+        check(everyOne, "10% too slow for 100 steps: one frame each");
+        FPSSync::frameSkip = true;
+    }
+
     if (failures == 0) std::printf("fpssync_test: all passed\n");
     return failures == 0 ? 0 : 1;
 }

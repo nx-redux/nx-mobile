@@ -1418,11 +1418,13 @@ class InGameMenuModelTest {
     // Settings, not in the running game's menu.
     @Test fun rows_read_only_at_launch_stay_out_of_the_in_game_groups() {
         assertEquals(PICTURE_ROWS, inGameGroups("N64").getValue("Display"))   // no Graphics API
-        assertEquals(PICTURE_ROWS, inGameGroups("GC").getValue("Display"))
+        val gc = inGameGroups("GC")
+        assertEquals(PICTURE_ROWS, gc.getValue("Display"))
+        assertEquals(SPEED_ROWS + "Frame Skip", gc.getValue("Gameplay"))
         val wii = inGameGroups("WII")
         assertEquals(PICTURE_ROWS, wii.getValue("Display"))                   // no Wii Screen
         assertEquals(listOf("Wii Controller", "Motion Controls", "Controller Layout", "Pad Opacity (landscape)"), wii.getValue("Controls"))
-        assertEquals(SPEED_ROWS, wii.getValue("Gameplay"))
+        assertEquals(SPEED_ROWS + "Frame Skip", wii.getValue("Gameplay"))
     }
 
     // Bottom screen (every console) shows on the running game's Display page only while a second display is

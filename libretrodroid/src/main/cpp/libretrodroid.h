@@ -168,6 +168,8 @@ public:
     void handleRumbleUpdates(const std::function<void(int, float, float)> &handler);
 
     void setFrameSpeed(unsigned int speed);
+    // nx-mobile 2026-11-03: Frame Skip (Auto true, Off false): see FPSSync::frameSkip. Any thread, live.
+    void setFrameSkip(bool skip) { FPSSync::frameSkip = skip; }
 
     // nx-mobile 2026-11-03: the display's presentation deadline (how early a frame must be queued to show at a refresh);
     // a sleep-timer frame is stamped to show at its deadline + this + 1.5 ms. 0 = unknown: one frame. Any thread.

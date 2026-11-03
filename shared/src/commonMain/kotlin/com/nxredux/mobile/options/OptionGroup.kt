@@ -10,7 +10,7 @@ enum class OptionGroup(val label: String) {
     DISPLAY("Display"),
     /** The pad and the console's own controls: layout, type, portrait pad, landscape opacity, 3DS and Wii controls. */
     CONTROLS("Controls"),
-    /** How the game runs: fast forward, rewind (with their audio), the PS2 BIOS. */
+    /** How the game runs: fast forward, rewind (with their audio), Frame Skip, the PS2 BIOS. */
     GAMEPLAY("Gameplay"),
     /** Sound: the resampler. */
     AUDIO("Audio");
@@ -21,7 +21,7 @@ enum class OptionGroup(val label: String) {
             N3dsOptions.NEW_CONTROLS,
             WiiOptions.CONTROLLER, WiiOptions.MOTION, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT, WiiOptions.POINTER_OFFSET,
         )
-        private val GAMEPLAY_KEYS = setOf(SpeedOptions.MAX_FF, SpeedOptions.FF_AUDIO, SpeedOptions.REWIND, SpeedOptions.REWIND_AUDIO, Ps2Options.BIOS)
+        private val GAMEPLAY_KEYS = setOf(SpeedOptions.MAX_FF, SpeedOptions.FF_AUDIO, SpeedOptions.REWIND, SpeedOptions.REWIND_AUDIO, FrameSkipOptions.KEY, Ps2Options.BIOS)
         private val AUDIO_KEYS = setOf(AudioOptions.RESAMPLING)
 
         /** The group of the setting stored as [key]; the picture rows (every other one) are [DISPLAY]. */
