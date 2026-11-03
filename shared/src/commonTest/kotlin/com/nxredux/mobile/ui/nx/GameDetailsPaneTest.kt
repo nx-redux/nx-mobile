@@ -8,7 +8,9 @@ import com.nxredux.mobile.library.path
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.settings.BackdropArt
 import com.nxredux.mobile.storage.GamePath
+import com.nxredux.mobile.ui.ANDROID_SOURCE
 import com.nxredux.mobile.ui.GameInfo
 import com.nxredux.mobile.ui.Listed
 import com.nxredux.mobile.ui.RaPanel
@@ -39,6 +41,16 @@ class GameDetailsPaneTest {
         assertEquals("", h.clockText)
         assertNull(h.batteryPercent)
         assertNull(h.ra)
+    }
+
+    // The header follows Backdrop art, then 3D → 2D → wheel; a ROM's screenshot is never its header, an Android game's is.
+    @Test fun the_header_follows_backdrop_art_and_never_a_roms_screenshot() {
+        val wheeled = entry(box2d = "box.png").let { it.copy(game = it.game.copy(wheelRef = ContentRef("w.png"))) }
+        assertEquals("w.png", detailsHeader(wheeled, null, null, BackdropArt.WHEEL).artPath)
+        assertEquals("box.png", detailsHeader(wheeled, null, null, BackdropArt.BOX3D).artPath)
+        assertNull(detailsHeader(entry(screenshot = "shot.png"), null, null).artPath)
+        val app = entry(screenshot = "file:///art/a.png").let { it.copy(game = it.game.copy(sourceId = ANDROID_SOURCE)) }
+        assertEquals("file:///art/a.png", detailsHeader(app, null, null).artPath)
     }
 
     @Test fun no_art_and_no_info_draw_the_console_logo_and_no_time() {

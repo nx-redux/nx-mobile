@@ -5468,7 +5468,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             val launchName = if (_launchSequence.value?.phase == LaunchPhase.SPREAD) launchNameProvider?.invoke() else null
             launchHandedOff = true
             deps.runner.launch(GameSession(sys.tag, game.shownName, core, game.ref, game.folder, game.fileName, resumeSlot, all, systemSets = systemSets, gamePath = game.path,
-                artPath = panelArt(game.boxartRef?.value, game.box2dRef?.value, null, game.screenshotRef?.value), netplay = netplay, launchName = launchName, fromSwitcher = fromSwitcher), recent)
+                artPath = panelArt(settings.backdropArt, game), netplay = netplay, launchName = launchName, fromSwitcher = fromSwitcher), recent)
         }
         launchJob = job
         job.invokeOnCompletion { if (launchJob === job) launchJob = null }

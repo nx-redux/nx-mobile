@@ -39,6 +39,17 @@ class ListArtTest {
         assertEquals(ListArtShown.Full(gameBackground(bare, portrait = false)), listArtShown(bare, GameListArt.WHEEL, portrait = false))
     }
 
+    // A boxed kind the game lacks falls through 3D → 2D → wheel, then the full-screen picture; Mix has no chain.
+    @Test fun boxedFallsThroughChain() {
+        val wheelOnly = game("shot" to "s.png", "wheel" to "w.png")
+        assertEquals(ListArtShown.Boxed("w.png", "s.png"), listArtShown(wheelOnly, GameListArt.BOX2D, portrait = false))
+        assertEquals(ListArtShown.Full("s.png"), listArtShown(game("shot" to "s.png"), GameListArt.BOX2D, portrait = false))
+        val boxes = game("shot" to "s.png", "box" to "b.png", "box2d" to "b2.png")
+        assertEquals(ListArtShown.Boxed("b.png", "s.png"), listArtShown(boxes, GameListArt.WHEEL, portrait = false))
+        assertEquals(ListArtShown.Boxed("b2.png", "s.png"), listArtShown(game("shot" to "s.png", "box2d" to "b2.png"), GameListArt.BOX3D, portrait = false))
+        assertEquals(ListArtShown.Full("s.png"), listArtShown(boxes, GameListArt.MIX, portrait = false))
+    }
+
     @Test fun none_is_no_picture_at_all_and_an_empty_list_keeps_todays_mark() {
         assertEquals(ListArtShown.None, listArtShown(full, GameListArt.NONE, portrait = false))
         assertEquals(ListArtShown.None, listArtShown(null, GameListArt.NONE, portrait = false))

@@ -517,7 +517,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
     if (!onTop && page is Screen.Games && DualMenu.bottom(page, dualMenu) == BottomContent.Details) {
         val ra by state.gameDetailRa.collectAsState()
         val entry = page.entries.getOrNull(pageSelection.value.index)
-        GameDetailsPane(entry, entry?.let { allInfo[it.game.path] }, ra, onBack = { state.back() })
+        GameDetailsPane(entry, entry?.let { allInfo[it.game.path] }, ra, state.settings.backdropArt, onBack = { state.back() })
         return
     }
     val now = rememberNow(allInfo)
@@ -600,6 +600,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.Switcher -> GameSwitcherScreen(
                 s, state::onButton, info = gameInfoFor(gameInfo, now, s.entries.getOrNull(s.index)?.game, full = true),
                 onSelect = state::selectSwitcherRow, onOpen = { state.selectSwitcherRow(it); state.openSelected() },
+                backdropArt = state.settings.backdropArt,
             )
             // The other screens take the index as a value: [WithIndex] reads it, so only the screen recomposes.
             // Settings: two panes on a wide landscape window (the root on the left, its pages on the right), else one page.

@@ -553,10 +553,10 @@ private fun BoxScope.BackdropRowItem(
 }
 
 /**
- * A game's box in its slot, by Layouts → Backdrop art ([backdropBoxShown]; a wheel is fitted whole, never cased). The
- * 3D chain ([boxShown]): the 3D box art cut-out, Fit, frameless, over its drop shadow (a black copy at [SHADOW_ALPHA],
- * [SHADOW_DROP] down, blurred [SHADOW_BLUR], unbounded so nothing clips it);
- * else the 2D front, else the grid, Crop-filled into the case ([BoxCover]); else the placeholder box ([BoxPlaceholder]).
+ * A game's box in its slot, by Layouts → Backdrop art then 3D → 2D → wheel ([backdropBoxShown]). The 3D box art
+ * cut-out, Fit, frameless, over its drop shadow (a black copy at [SHADOW_ALPHA], [SHADOW_DROP] down, blurred
+ * [SHADOW_BLUR], unbounded so nothing clips it); the 2D front Crop-filled into the case ([BoxCover]); the wheel fitted
+ * whole, never cased; else the placeholder box ([BoxPlaceholder]).
  * Art that fails to load drops to the next link, so the row has no hole. While loading the slot stays blank.
  */
 @Composable
@@ -590,7 +590,7 @@ internal fun BoxArt(game: BackdropGame) {
 }
 
 /**
- * A flat cover (a 2D front or a SteamGridDB grid) as a game case: [BoxCase] [w] x [h] dp with the cover Crop-filled
+ * A flat cover (a 2D box, a SteamGridDB grid among them) as a game case: [BoxCase] [w] x [h] dp with the cover Crop-filled
  * in under the spine strip and the border (a wide cover loses its sides). [onError]: the cover did not load.
  */
 @Composable

@@ -55,6 +55,7 @@ import com.nxredux.mobile.ui.nx.NxScreenBackground
 import com.nxredux.mobile.ui.nx.NxTapNeverOpens
 import com.nxredux.mobile.ui.nx.SwitcherBarInfoLine
 import com.nxredux.mobile.ui.nx.nxEasedFade
+import com.nxredux.mobile.settings.BackdropArt
 import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.background
@@ -92,14 +93,15 @@ internal fun switcherListRows(entries: List<SwitcherEntry>): List<NxRow> {
 /**
  * The Game Switcher in its layout (Layouts → Game Switcher layout): [Screen.Switcher.list] a game list's List of the
  * recent games ([GameSwitcherListScreen]), else Full screen. [info]: the selected game's (empty with Extra info hidden).
+ * [backdropArt]: Layouts → Backdrop art, the kind Full screen's box shows first ([boxShown]).
  */
 @Composable
 fun GameSwitcherScreen(
     screen: Screen.Switcher, onButton: (NxButton) -> Unit, modifier: Modifier = Modifier, info: List<InfoLine> = emptyList(),
-    onSelect: (Int) -> Unit = {}, onOpen: (Int) -> Unit = {},
+    onSelect: (Int) -> Unit = {}, onOpen: (Int) -> Unit = {}, backdropArt: BackdropArt = BackdropArt.BOX3D,
 ) {
     if (screen.list && screen.entries.isNotEmpty()) GameSwitcherListScreen(screen, onButton, onSelect, onOpen, modifier, info)
-    else GameSwitcherFullScreen(screen, onButton, modifier, info)
+    else GameSwitcherFullScreen(screen, onButton, modifier, info, backdropArt)
 }
 
 /**
@@ -178,7 +180,7 @@ private fun RemoveDialog(entry: SwitcherEntry, onButton: (NxButton) -> Unit) = N
  * (the caller's [info]), and with Button hints hidden (where they can be) it moves into the bar's row, over its scrim.
  */
 @Composable
-private fun GameSwitcherFullScreen(screen: Screen.Switcher, onButton: (NxButton) -> Unit, modifier: Modifier, info: List<InfoLine>) {
+private fun GameSwitcherFullScreen(screen: Screen.Switcher, onButton: (NxButton) -> Unit, modifier: Modifier, info: List<InfoLine>, backdropArt: BackdropArt) {
     val colors = LocalNxColors.current
     val hintsShown = !LocalLauncherChrome.current.emptyBarRoom
     val font = LocalNxFont.current
@@ -202,10 +204,13 @@ private fun GameSwitcherFullScreen(screen: Screen.Switcher, onButton: (NxButton)
         } else {
             // Tapping the preview resumes; the hint bar drawn on top swallows its own taps (see below).
             Box(Modifier.fillMaxSize().pointerInput(entry) { detectTapGestures { onButton(NxButton.A) } })
-            // The resume preview; else the box chain: the 3D box Fit, a 2D front in the case, else "No Preview".
+            // The resume preview; else the box chain by Backdrop art then 3D → 2D → wheel ([boxShown]): the 3D box or a
+            // wheel Fit, a 2D front in the case; else an Android game's screenshot Fit; else "No Preview".
             val preview = entry.resume.previewPath
             var failed by remember(entry) { mutableStateOf(emptySet<String>()) }
-            val box = boxShown(entry.game.boxartRef?.value, entry.game.box2dRef?.value, null, failed)
+            val g = entry.game
+            val box = boxShown(backdropArt, g.boxartRef?.value, g.box2dRef?.value, g.wheelRef?.value, failed)
+            val androidShot = g.androidShot?.takeIf { it !in failed }
             when {
                 preview != null -> KeepUntilLoaded(preview) { shown, done ->
                     AsyncImage(
@@ -221,6 +226,14 @@ private fun GameSwitcherFullScreen(screen: Screen.Switcher, onButton: (NxButton)
                     val (w, h) = placeholderBoxSize(maxWidth.value, maxHeight.value * 0.8f)
                     BoxCover(box.url, w, h, null) { failed = failed + box.url }
                 }
+                box is BoxShown.Wheel -> AsyncImage(
+                    model = box.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.6f).align(Alignment.Center),
+                    onState = { if (it is AsyncImagePainter.State.Error) failed = failed + box.url },
+                )
+                androidShot != null -> AsyncImage(
+                    model = androidShot, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
+                    onState = { if (it is AsyncImagePainter.State.Error) failed = failed + androidShot },
+                )
                 else -> Text("No Preview", color = colors.hint, fontFamily = font, fontSize = 18.sp, modifier = Modifier.align(Alignment.Center))
             }
             // The title, and under it the game's system and its place among the recents, on a full-width fade mirroring the

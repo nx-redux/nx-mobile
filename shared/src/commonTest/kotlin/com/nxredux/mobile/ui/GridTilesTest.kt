@@ -102,16 +102,26 @@ class GridTilesTest {
         val zelda = listed("Zelda").let { it.copy(game = it.game.copy(box2dRef = ContentRef("2/zelda.jpg"))) }
         val game = backdropGames(listOf(zelda)).single()
         assertEquals("2/zelda.jpg", game.box2dUrl)
-        assertNull(game.gridUrl)
         assertNull(game.boxartUrl)
         assertNull(game.screenshotUrl)
-        // A tile carries no grid or hero stand-in any more.
+        // A tile never draws a box: a 2D-box-only game's tile is its abstract picture.
         val tile = gameGridTiles(listOf(zelda)).single()
         assertNull(tile.screenshotUrl)
-        assertNull(tile.heroUrl)
-        assertNull(tile.gridUrl)
+        assertEquals(false, tile.heroShot)
+        assertEquals(TileArt(abstractArtUrl("GBA", "Zelda.gba"), TileFit.CROP), tileArt(140f, 154f, tile.screenshotUrl, tile.heroShot, tile.abstractUrl))
+        assertEquals(TileArt(abstractArtUrl("GBA", "Zelda.gba"), TileFit.CROP), tileArt(340f, 240f, tile.screenshotUrl, tile.heroShot, tile.abstractUrl))
         val pin = gridTiles(listOf(MainRow.Pin(zelda))).single() as GridTile.Game
         assertEquals(tile.copy(title = pin.title), pin)
+    }
+
+    // A hero screenshot's flag travels with the tile, and the background drops it in portrait.
+    @Test fun heroShotTravelsToTheTileAndBackground() {
+        val zelda = listed("Zelda", shot = "s/zelda.png").let { it.copy(game = it.game.copy(heroShot = true)) }
+        assertEquals(true, gameGridTiles(listOf(zelda)).single().heroShot)
+        assertEquals("s/zelda.png", gameBackground(zelda, portrait = false))
+        assertEquals(abstractBackgroundFor(zelda), gameBackground(zelda, portrait = true))
+        // Home's resume frame is never a hero.
+        assertEquals(false, (gridTiles(listOf(MainRow.Pin(zelda, "frame.png"))).single() as GridTile.Game).heroShot)
     }
 
     // A pinned tool on Home is the Tools tab's tile.
@@ -189,12 +199,10 @@ class GridTilesTest {
         val shot = bare.copy(screenshotUrl = "s/kirby.png")
         assertEquals(false, shot.artLess(200f, 120f))
         assertEquals(false, shot.artLess(0f, 0f))                                           // unmeasured: still its screenshot
-        val hero = bare.copy(heroUrl = "h/kirby.png")
+        val hero = bare.copy(screenshotUrl = "s/kirby.png", heroShot = true)
         assertEquals(false, hero.artLess(200f, 120f))                                       // wide: the hero
-        assertEquals(true, hero.artLess(140f, 154f))                                        // tall: no grid, the abstract picture
-        val grid = bare.copy(gridUrl = "g/kirby.png")
-        assertEquals(false, grid.artLess(140f, 154f))
-        assertEquals(true, grid.artLess(200f, 120f))
+        assertEquals(true, hero.artLess(140f, 154f))                                        // tall: never a hero, the abstract picture
+        assertEquals(true, hero.artLess(0f, 0f))                                            // unmeasured: a hero waits for the shape
         assertEquals(true, bare.artLess(0f, 0f))                                            // unmeasured, no screenshot: a title tile
     }
 
