@@ -1,3 +1,5 @@
+# licence: modifies libretro/dolphin (https://github.com/libretro/dolphin), GPL-2.0 or later (its COPYING and
+# LICENSES/GPL-2.0-or-later.txt; see licenses/dolphin.txt); this patch is distributed under the same licence.
 From: dolphin-emu/dolphin PR #14928 (merged 2026-10-31), "VideoCommon: Add TextureDecoder_ARM64.cpp", backported by
 nx-mobile 2026-11-03: AArch64 SIMD decoders for every texture format but XFB (AArch64 used TextureDecoder_Generic.cpp).
 Source/Core only; the PR's unit test (Source/UnitTests) is not part of the libretro build.

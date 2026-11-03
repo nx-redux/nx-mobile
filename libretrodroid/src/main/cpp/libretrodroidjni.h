@@ -51,6 +51,7 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setRumbleE
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setGlDebugOutput(JNIEnv* env, jclass obj, jboolean enabled);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setKeepCoreLoaded(JNIEnv* env, jclass obj, jboolean keep);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFrameSpeed(JNIEnv* env, jclass obj, jint speed);
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPresentationDeadline(JNIEnv* env, jclass obj, jlong nanos);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setAudioEnabled(JNIEnv* env, jclass obj, jboolean enabled);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFastForward(JNIEnv* env, jclass obj, jint maxSpeed, jboolean audible);
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setRewindEnabled(JNIEnv* env, jclass obj, jboolean enabled);

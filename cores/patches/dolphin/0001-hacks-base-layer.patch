@@ -1,3 +1,5 @@
+# licence: modifies libretro/dolphin (https://github.com/libretro/dolphin), GPL-2.0 or later (its COPYING and
+# LICENSES/GPL-2.0-or-later.txt; see licenses/dolphin.txt); this patch is distributed under the same licence.
 diff --git a/Source/Core/DolphinLibretro/Main.cpp b/Source/Core/DolphinLibretro/Main.cpp
 index 6320b79..6285f70 100644
 --- a/Source/Core/DolphinLibretro/Main.cpp

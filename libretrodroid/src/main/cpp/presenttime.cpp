@@ -3,8 +3,8 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <cstring>
-#include <sys/system_properties.h>
 
+#include "debugprop.h"
 #include "log.h"
 
 namespace libretrodroid {
@@ -22,16 +22,11 @@ PresentationTime presentationTime() {
     return fn;
 }
 
-bool disabledByProperty() {
-    char value[PROP_VALUE_MAX] = {};
-    return __system_property_get("debug.nx.presenttime", value) > 0 && std::strcmp(value, "0") == 0;
-}
-
 }
 
 bool PresentTime::set(std::chrono::steady_clock::time_point when) {
     static const bool disabled = [] {
-        const bool off = disabledByProperty();
+        const bool off = debugPropertyOff("debug.nx.presenttime");
         if (off) LOGI("Presentation time: off (debug.nx.presenttime=0)");
         return off;
     }();

@@ -28,7 +28,7 @@ unsigned FPSSync::advanceFrames() {
 // nx-mobile 2026-11-03: a step that ends a frame or two late shows its frame late instead of running two frames at
 // once (upstream caught up at one frame late, skipping a frame and showing the other for 33 ms: SMG2's stutters on the
 // Nova). The clock stays behind, so the next steps skip their sleep until they catch up. Only past MAX_LAG_FRAMES (a
-// device that cannot keep up) does it run frames back to back to hold the game's speed.
+// device that cannot keep up) does a step run two frames back to back to hold the game's speed.
 unsigned FPSSync::advanceFrames(TimePoint now) {
     if (useVSync) return 1;
 
@@ -37,7 +37,13 @@ unsigned FPSSync::advanceFrames(TimePoint now) {
     }
 
     const long long behind = (now - lastFrame) / sampleInterval;
-    const long long frames = behind > MAX_LAG_FRAMES ? behind : 1;
+    long long frames = 1;
+    if (behind > MAX_LAG_FRAMES) {
+        // Two frames, the most step() runs, and the clock moves by those two only: no game time is skipped. A stall
+        // past MAX_DROP_FRAMES drops the rest of the lag instead of running two-frame steps for seconds.
+        frames = 2;
+        if (behind > MAX_DROP_FRAMES) lastFrame = now - sampleInterval * MAX_LAG_FRAMES;
+    }
     lastFrame = lastFrame + sampleInterval * frames;
 
     return frames;
@@ -56,9 +62,10 @@ void FPSSync::start(TimePoint now) {
     lastFrame = now;
 }
 
-std::optional<TimePoint> FPSSync::presentAt() const {
+std::optional<TimePoint> FPSSync::presentAt(std::chrono::microseconds lead) const {
     if (useVSync || lastFrame == MIN_TIME) return std::nullopt;
-    return lastFrame + sampleInterval;
+    if (lead.count() <= 0) return lastFrame + sampleInterval;
+    return lastFrame + std::chrono::duration_cast<Duration>(lead);
 }
 
 void FPSSync::reset() {

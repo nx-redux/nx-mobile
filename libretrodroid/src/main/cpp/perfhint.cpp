@@ -2,8 +2,8 @@
 
 #include <cstring>
 #include <dlfcn.h>
-#include <sys/system_properties.h>
 
+#include "debugprop.h"
 #include "log.h"
 
 namespace libretrodroid {
@@ -43,17 +43,12 @@ const Api& api() {
     return loaded;
 }
 
-bool disabledByProperty() {
-    char value[PROP_VALUE_MAX] = {};
-    return __system_property_get("debug.nx.adpf", value) > 0 && std::strcmp(value, "0") == 0;
-}
-
 }
 
 bool PerfHint::open(const std::vector<int>& threads, int64_t targetNanos) {
     close();
     if (threads.empty() || targetNanos <= 0) return false;
-    if (disabledByProperty()) {
+    if (debugPropertyOff("debug.nx.adpf")) {
         LOGI("ADPF: off (debug.nx.adpf=0)");
         return false;
     }

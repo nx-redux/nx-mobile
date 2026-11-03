@@ -413,9 +413,10 @@ object CoreRegistry {
     // GC disc played under WII (a loose GC image resolves to WII) uses WII's.
     // Defaults: hardware renderer; dual core with the GPU thread unsynced, as standalone Dolphin (no game in its
     // GameSettings asks for SyncGPU). Synced it was ~3x the uneven frames in SMG2 on the Retroid Pocket Nova; the NSMB
-    // Wii FIFO desync after the opening airship that made us sync it (2026-10-13) no longer happens on the 3aac3f05 pin
-    // (NSMB Wii past 1-1 and Paper Mario TTYD checked unsynced, 2026-11-03). Synchronize GPU Thread stays a Console
-    // Setting for a game that needs it; async with skip-rendering (shaders compile in the background on the runner's shared contexts and an effect
+    // Wii FIFO desync after the opening airship that made us sync it (2026-10-13, an older pin) no longer happens: NSMB
+    // Wii past the airship and 1-1 and Paper Mario TTYD played unsynced on 3aac3f05, and NSMB Wii's resume point past the
+    // airship booted 15 times unsynced on b93001ed (2026-11-03; b93001ed adds only aspect and D3D11 changes). Synchronize
+    // GPU Thread stays a Console Setting for a game that needs it; async with skip-rendering (shaders compile in the background on the runner's shared contexts and an effect
     // whose shader is not ready is skipped for a moment, not drawn with GPU-heavy ubershaders, which made SMG2 lag on the
     // Fold); on-screen messages off. The orientation hotkeys are off because the app sets the controller type itself
     // (nx_wii_controller); for the same reason Wiimote Device stays "Set per port" (it would override every port's). Audio is pushed per frame (mode 0):

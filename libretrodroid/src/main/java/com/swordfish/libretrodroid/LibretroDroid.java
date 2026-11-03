@@ -135,6 +135,8 @@ public class LibretroDroid {
     /** Keep the next core's library loaded after its session (RTLD_NODELETE), so it is never reloaded elsewhere. Set before create(). */
     public static native void setKeepCoreLoaded(boolean keep);
     public static native void setFrameSpeed(int speed);
+    /** nx-mobile: the display's presentation deadline (Display.getPresentationDeadlineNanos), for the sleep timer's frame stamps. Any thread. */
+    public static native void setPresentationDeadline(long nanos);
     public static native void setAudioEnabled(boolean enabled);
     /**
      * Fast forward up to maxSpeed times the content's frame rate (0 = off), its audio played or muted. Separate from

@@ -1,3 +1,5 @@
+# licence: modifies libretro/dolphin (https://github.com/libretro/dolphin), GPL-2.0 or later (its COPYING and
+# LICENSES/GPL-2.0-or-later.txt; see licenses/dolphin.txt); this patch is distributed under the same licence.
 diff --git a/Source/Core/Common/DirectIOFile.cpp b/Source/Core/Common/DirectIOFile.cpp
 index b09ffd1..a0d1ece 100644
 --- a/Source/Core/Common/DirectIOFile.cpp

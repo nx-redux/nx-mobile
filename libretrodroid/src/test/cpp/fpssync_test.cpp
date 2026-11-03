@@ -43,11 +43,22 @@ int main() {
     }
 
     {
-        // A device that cannot keep up: past two frames of lag it runs frames back to back to hold the game's speed.
+        // A device that cannot keep up: past two frames of lag a step runs two frames (the most step() runs) and the
+        // clock moves by exactly those two, so no game time is skipped; the lag shrinks a frame per such step.
         FPSSync sync(60.0, 120.0);
         sync.advanceFrames(at(0));
-        check(sync.advanceFrames(at(4 * frame + 1)) >= 2, "three frames late catches up");
-        check(ms(sync.deadline()) >= 4 * frame - 0.1, "and the clock catches up with it");
+        const double before = ms(sync.deadline());
+        check(sync.advanceFrames(at(4 * frame + 1)) == 2, "three frames late runs two");
+        check(std::abs(ms(sync.deadline()) - (before + 2 * frame)) < 0.1, "the clock moves by the two frames run");
+    }
+
+    {
+        // Hopelessly behind (a stall past eight frames): two frames, and the clock drops the rest of the lag instead of
+        // running two-frame steps for seconds.
+        FPSSync sync(60.0, 120.0);
+        sync.advanceFrames(at(0));
+        check(sync.advanceFrames(at(30 * frame)) == 2, "a stall runs two");
+        check(ms(sync.deadline()) > 27 * frame, "and the clock drops the rest");
     }
 
     {
@@ -61,17 +72,21 @@ int main() {
         // The sleep timer stamps each frame to be shown one frame after its deadline, so the display picks a steady slot
         // whatever the step's run time; vsync pacing (the swap paces it) and a step before the first deadline stamp nothing.
         FPSSync sync(60.0, 90.0);
-        check(!sync.presentAt().has_value(), "no stamp before the first step");
+        const auto lead = std::chrono::microseconds(12833);   // the Nova's 120 Hz presentation deadline + 1.5 ms
+        check(!sync.presentAt(lead).has_value(), "no stamp before the first step");
         sync.advanceFrames(at(0));
-        auto stamp = sync.presentAt();
-        check(stamp.has_value() && ms(*stamp) > 2 * frame - 0.1 && ms(*stamp) < 2 * frame + 0.1, "deadline + one frame");
+        auto stamp = sync.presentAt(lead);
+        check(stamp.has_value() && std::abs(ms(*stamp) - (frame + 12.833)) < 0.1, "deadline + the display's lead");
         sync.advanceFrames(at(frame));
-        auto next = sync.presentAt();
-        check(next.has_value() && ms(*next) - ms(*stamp) > frame - 0.1 && ms(*next) - ms(*stamp) < frame + 0.1, "stamps a frame apart");
+        auto next = sync.presentAt(lead);
+        check(next.has_value() && std::abs(ms(*next) - ms(*stamp) - frame) < 0.1, "stamps a frame apart");
+        auto fallback = sync.presentAt(std::chrono::microseconds(0));
+        check(fallback.has_value() && std::abs(ms(*fallback) - ms(sync.deadline()) - frame) < 0.1,
+              "no known lead: deadline + one frame");
 
         FPSSync vsync(59.94, 60.0);
         vsync.advanceFrames(at(0));
-        check(!vsync.presentAt().has_value(), "vsync pacing stamps nothing");
+        check(!vsync.presentAt(lead).has_value(), "vsync pacing stamps nothing");
     }
 
     if (failures == 0) std::printf("fpssync_test: all passed\n");

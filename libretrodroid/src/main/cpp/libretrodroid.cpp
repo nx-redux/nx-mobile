@@ -669,15 +669,18 @@ void LibretroDroid::destroy() {
 }
 
 // nx-mobile 2026-11-03 (ADPF): two seconds in (the core has started its threads by then) open a session for the GL
-// thread and every thread the core started, with one content frame as the budget; then report each running step's work
+// thread and the emulation threads started since the load (not audio, Java or binder ones), with one content frame
+// as the budget; then report each running step's work
 // (its run and draw, not the pacing sleep). A step that ran two frames reports both against one frame's budget, which is
 // the point: it was late.
 void LibretroDroid::updatePerfHint(std::chrono::steady_clock::time_point stepStart, unsigned runs) {
     if (!fpsSync || runs == 0) return;
     const auto budget = static_cast<int64_t>(1e9 / fpsSync->getContentRefreshRate());
     if (!perfHint.isOpen()) {
-        if (++perfHintSteps != 120) return;
-        auto threads = ThreadList::added(threadsBeforeLoad, ThreadList::list());
+        // Tried at 2, 4 and 8 seconds: a listed thread that exits before the session is made fails the whole request.
+        ++perfHintSteps;
+        if (perfHintSteps != 120 && perfHintSteps != 240 && perfHintSteps != 480) return;
+        auto threads = ThreadList::emulation(ThreadList::added(threadsBeforeLoad, ThreadList::list()));
         threads.push_back(gettid());
         perfHint.open(threads, budget);
         return;
@@ -711,12 +714,14 @@ void LibretroDroid::pause() {
 }
 
 void LibretroDroid::step() {
+    std::unique_lock<std::mutex> lock(coreLock);
+    // nx-mobile: timed once the core lock is held, so an off-thread save's hold on it never counts as the core's work.
     const auto stepStart = std::chrono::steady_clock::now();
     // nx-mobile diag: a step that stayed on screen too long, split into its parts (Debug log only).
     if (hitchResetPending.exchange(false)) hitchProbe.reset();
     if (fpsSync) {
         const double frameMs = 1000.0 / fpsSync->getContentRefreshRate();
-        if (auto hitch = hitchProbe.begin(HitchProbe::Clock::now(), frameMs)) {
+        if (auto hitch = hitchProbe.begin(stepStart, frameMs)) {
             LOGW("NXHITCH period=%.1f run=%.1f render=%.1f wait=%.1f outside=%.1f frames=%u screen=%.2f content=%.3f",
                  hitch->periodMs, hitch->runMs, hitch->renderMs, hitch->waitMs, hitch->outsideMs, hitch->frames,
                  screenRefreshRate, fpsSync->getContentRefreshRate());
@@ -727,7 +732,6 @@ void LibretroDroid::step() {
                  hitchProbe.hitches(), run.averageMs, run.worstMs);
         }
     }
-    std::unique_lock<std::mutex> lock(coreLock);
 
     LOGD("Stepping into retro_run()");
 
@@ -769,6 +773,7 @@ void LibretroDroid::step() {
     unsigned runs = frames * speed;
     if (rewinding) {
         runs = stepRewinding(frameSeconds);
+        hitchProbe.ranCore(HitchProbe::Clock::now(), runs);
     } else {
         if (fastForward) {
             runs = fastForwardPacer.framesFor(std::chrono::steady_clock::now());
@@ -803,7 +808,7 @@ void LibretroDroid::step() {
     }
 
     hitchProbe.rendered(HitchProbe::Clock::now());
-    updatePerfHint(stepStart, runs);
+    if (!fastForward) updatePerfHint(stepStart, runs);   // FF runs many frames against one frame's budget
     if (runs == 0) hitchProbe.reset();   // paused or an FF step with nothing due: its gap is no hitch
 
     // The frame sleep runs without the core lock, so achievements and the off-thread save calls aren't held up by it.
@@ -813,10 +818,11 @@ void LibretroDroid::step() {
         if (ahead > Duration::zero()) std::this_thread::sleep_for(ahead);
     } else if (fpsSync) {
         fpsSync->wait();
-        // nx-mobile 2026-11-03: the sleep timer's frame goes on screen at a steady time (its deadline + one frame), not at
-        // the first refresh after this step happened to end (8/25 ms frames of a 60 fps game on a 120 Hz screen).
+        // nx-mobile 2026-11-03: the sleep timer's frame goes on screen at a steady time (its deadline + the display's
+        // presentation deadline and a margin: no later than a frame queued then could show), not at the first refresh
+        // after this step happened to end (8/25 ms frames of a 60 fps game on a 120 Hz screen).
         if (runs > 0) {
-            if (auto at = fpsSync->presentAt()) PresentTime::set(*at);
+            if (auto at = fpsSync->presentAt(std::chrono::microseconds(presentationLeadMicros.load()))) PresentTime::set(*at);
         }
     }
     hitchProbe.waited(HitchProbe::Clock::now());
