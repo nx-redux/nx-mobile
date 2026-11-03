@@ -196,6 +196,16 @@ class SteamGridDbTest {
         assertEquals(SgdbAsset(1, "https://x/1.png"), Sgdb.parseAssets("""{"success":true,"data":[{"id":1,"url":"https://x/1.png"}]}""").single())
     }
 
+    @Test fun thumbFromAsset() = runTest {
+        val r = Rig()
+        r.http.on("search/autocomplete/", ok(SgdbFixtures.autocomplete))
+        r.http.on("grids/game/", ok("""{"success":true,"data":[{"id":7,"score":1,"style":"alternate","width":600,"height":900,"mime":"image/jpeg","url":"https://cdn2.steamgriddb.com/grid/x.jpg","thumb":"https://cdn2.steamgriddb.com/thumb/x.jpg"}]}"""))
+        val hit = r.src.find(tetris, setOf(ArtSlot.GRID)).single()
+        assertEquals("https://cdn2.steamgriddb.com/grid/x.jpg", hit.url)
+        assertEquals("https://cdn2.steamgriddb.com/thumb/x.jpg", hit.thumb)
+        assertNull(Sgdb.parseAssets("""{"success":true,"data":[{"id":1,"url":"https://x/1.png","thumb":""}]}""").single().thumb)
+    }
+
     @Test fun findReturnsGridsThenHeroesWithOrigins() = runTest {
         val r = Rig()
         r.answerAll()

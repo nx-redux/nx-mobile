@@ -22,9 +22,9 @@ internal sealed interface AndroidHit {
 }
 
 /**
- * ScreenScraper as an [ArtSource] (NX Redux `scraper.c`): paced lookups (try 1 by name, try 2 with CRC + size), the
- * best `box-3D`, `box-2D`, `ss` and wheel (`wheel-hd`, then `wheel` should its download fail) per
- * [ScraperMedia.alternates], the quota read at job start and every [QUOTA_EVERY] lookups when signed in, and the error
+ * ScreenScraper as an [ArtSource] (NX Redux `scraper.c`): paced lookups (try 1 by name, try 2 with CRC + size), every
+ * `box-3D`, `box-2D`, `ss` and wheel (`wheel-hd`, then `wheel`) ranked per [ScraperMedia.alternates], each with its
+ * thumbnail link ([ScraperRequest.thumb]), the quota read at job start and every [QUOTA_EVERY] lookups when signed in, and the error
  * table: no connection pauses the job, every other refusal stops this source only. Also the account calls (sign-in
  * check, quota) and the Android games console's lookup.
  */
@@ -85,7 +85,7 @@ class ScreenScraperSource(
         countLookup()
         val found = lookup(ref, systemId) ?: return emptyList()
         val offered = ScraperMedia.alternates(found.medias)
-        return ScraperMedia.SLOTS.filter { it in wanted }.flatMap { s -> offered[s].orEmpty().map { ArtHit(s, it.url, origin(found.id, it), note = it.region) } }
+        return ScraperMedia.SLOTS.filter { it in wanted }.flatMap { s -> offered[s].orEmpty().map { ArtHit(s, it.url, origin(found.id, it), note = it.region, thumb = ScraperRequest.thumb(it.url)) } }
     }
 
     /** The signed-in user's quota (paced), or null when not signed in or the call failed. */

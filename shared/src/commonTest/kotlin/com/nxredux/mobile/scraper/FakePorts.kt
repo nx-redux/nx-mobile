@@ -90,10 +90,11 @@ fun ssEngine(
     onArt: suspend (String, ArtRefs) -> Unit, onWritten: suspend (List<Pair<String, ArtOrigin?>>) -> Unit,
     androidArt: AndroidArtStore? = null, onAndroidArt: suspend () -> Unit = {}, more: List<ArtSource> = emptyList(),
     logged: LoggedArt = LoggedArt.NONE,
-    onOptions: suspend (String, List<ArtOption>, Boolean) -> Unit = { _, _, _ -> }, picked: suspend (String) -> Boolean = { false },
+    onOptions: suspend (String, List<ArtOption>, Boolean) -> Unit = { _, _, _ -> }, picked: suspend (String) -> Set<ArtSlot> = { emptySet() },
+    extras: () -> ArtExtras = { ArtExtras() },
 ) = ScrapeEngine(
     http, fitter, source, home, listOf(ScreenScraperSource(http, hasher, auth, now, sleep)) + more, onArt, onWritten, androidArt, onAndroidArt, logged,
-    onOptions = onOptions, picked = picked,
+    extras = extras, onOptions = onOptions, picked = picked,
 )
 
 /** The written-art log as a set of paths; [origins]: each path's origin ([LoggedArt.origin]), a rig's writes recorded there. */

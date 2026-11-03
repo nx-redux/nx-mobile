@@ -8,10 +8,13 @@ import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
-/** The slots whose candidate images are kept for Change art. */
-val OPTION_SLOTS: Set<ArtSlot> = setOf(ArtSlot.SCREENSHOT, ArtSlot.GRID, ArtSlot.HERO)
+/** The slots whose candidate images are kept for Change art: every hit kind but the mix (made on the device). */
+val OPTION_SLOTS: Set<ArtSlot> = ArtSlot.entries.toSet() - ArtSlot.MIX
 
-/** One candidate picture a source returned for a game: its [slot], link, [source] id and the source's ids and [note]. */
+/**
+ * One candidate picture a source returned for a game: its [slot] (the hit kind), link, [source] id, the source's ids
+ * and [note], and [thumb], a small version's link when the source offers one (ScreenScraper's both without its login).
+ */
 @Serializable
 data class ArtOption(
     val slot: ArtSlot,
@@ -20,6 +23,7 @@ data class ArtOption(
     val gameId: String? = null,
     val assetId: String? = null,
     val note: String? = null,
+    val thumb: String? = null,
 ) {
     /** Identifies the option within a game: the source, the slot and its asset id (or the link). */
     val key: String get() = "$source/${slot.name}/${assetId ?: url}"
@@ -27,16 +31,24 @@ data class ArtOption(
     val origin: ArtOrigin get() = ArtOrigin(source, gameId, assetId)
 }
 
-/** A game's saved options, in the order found; [wide] = the wide pass ran; [pick] = the picked option's [ArtOption.key]. */
+/**
+ * A game's saved options, in the order found; [wide] = the wide pass ran; [picks] = the picked option's [ArtOption.key]
+ * per file slot ([ArtSlot.fileSlot]: SCREENSHOT, BOX_2D, BOX_3D, WHEEL), each protected from fetches.
+ */
 @Serializable
-data class GameOptions(val options: List<ArtOption> = emptyList(), val wide: Boolean = false, val pick: String? = null)
+data class GameOptions(val options: List<ArtOption> = emptyList(), val wide: Boolean = false, val picks: Map<ArtSlot, String> = emptyMap())
 
 /**
  * The per-game option links, one JSON file in app-private storage ([ArtworkHost.writePrivate]), loaded once and saved
  * whole on every change. An absent file is empty; a failed read ([ArtworkHost.readPrivate] throws) is neither cached
  * nor saved over: the call fails and the next one reads again.
  */
-class ArtOptionStore(private val host: ArtworkHost, private val name: String = "art_options.json") {
+class ArtOptionStore(private val host: ArtworkHost, private val name: String = FILE) {
+    companion object {
+        /** Part 1's `art_options.json` (one pick per game; never shipped) is not read. */
+        const val FILE = "art_options2.json"
+    }
+
     private val mutex = Mutex()
     private val BAD_NAME = name.removeSuffix(".json") + ".bad.json"
     private var games: MutableMap<String, GameOptions>? = null
@@ -59,7 +71,7 @@ class ArtOptionStore(private val host: ArtworkHost, private val name: String = "
     /** The game's saved options, or null when it has none. */
     suspend fun get(gamePath: String): GameOptions? = mutex.withLock { load()[gamePath] }
 
-    /** Merges [options] into the game's list by key (new ones last, existing order and pick kept); [wide] sticks once true. */
+    /** Merges [options] into the game's list by key (new ones last, existing order and picks kept); [wide] sticks once true. */
     suspend fun record(gamePath: String, options: List<ArtOption>, wide: Boolean) = mutex.withLock {
         val map = load()
         val old = map[gamePath] ?: GameOptions()
@@ -69,25 +81,31 @@ class ArtOptionStore(private val host: ArtworkHost, private val name: String = "
         save(map)
     }
 
-    /** Marks the option with [key] as the game's pick (null: no pick). */
-    suspend fun setPick(gamePath: String, key: String?) = mutex.withLock {
+    /** Marks the option with [key] as the game's pick in [slot]'s file slot ([ArtSlot.fileSlot]); null: no pick there. */
+    suspend fun setPick(gamePath: String, slot: ArtSlot, key: String?) = mutex.withLock {
         val map = load()
         val old = map[gamePath] ?: GameOptions()
-        map[gamePath] = old.copy(pick = key)
+        val file = slot.fileSlot
+        map[gamePath] = old.copy(picks = if (key == null) old.picks - file else old.picks + (file to key))
         save(map)
     }
 
-    /** The games that have a pick. */
-    suspend fun pickedPaths(): Set<String> = mutex.withLock { load().filterValues { it.pick != null }.keys.toSet() }
+    /** The file slots each game has a pick in (games without one left out). */
+    suspend fun picks(): Map<String, Set<ArtSlot>> = mutex.withLock {
+        load().mapNotNull { (g, o) -> o.picks.keys.takeIf { it.isNotEmpty() }?.let { g to it.toSet() } }.toMap()
+    }
 
-    /** True when the game has a pick. */
-    suspend fun picked(gamePath: String): Boolean = mutex.withLock { load()[gamePath]?.pick != null }
+    /** The file slots the game has a pick in. */
+    suspend fun pickedSlots(gamePath: String): Set<ArtSlot> = mutex.withLock { load()[gamePath]?.picks?.keys?.toSet().orEmpty() }
 
-    /** Removes the option with [key]; the pick is cleared when it was that option. */
+    /** True when the game has a pick in [slot]'s file slot. */
+    suspend fun picked(gamePath: String, slot: ArtSlot): Boolean = mutex.withLock { load()[gamePath]?.picks?.containsKey(slot.fileSlot) == true }
+
+    /** Removes the option with [key]; a pick that was that option is cleared. */
     suspend fun dropOption(gamePath: String, key: String) = mutex.withLock {
         val map = load()
         val old = map[gamePath] ?: return@withLock
-        map[gamePath] = old.copy(options = old.options.filter { it.key != key }, pick = old.pick.takeIf { it != key })
+        map[gamePath] = old.copy(options = old.options.filter { it.key != key }, picks = old.picks.filterValues { it != key })
         save(map)
     }
 

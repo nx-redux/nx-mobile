@@ -42,7 +42,7 @@ typealias ScrapeEngineFactory = (
     onAndroidArt: suspend () -> Unit,
     logged: LoggedArt,
     onOptions: suspend (gamePath: String, options: List<ArtOption>, wide: Boolean) -> Unit,
-    picked: suspend (gamePath: String) -> Boolean,
+    picked: suspend (gamePath: String) -> Set<ArtSlot>,
 ) -> ScrapeEngine
 
 /**

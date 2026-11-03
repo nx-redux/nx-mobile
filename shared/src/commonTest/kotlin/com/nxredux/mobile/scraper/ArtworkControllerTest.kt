@@ -948,7 +948,7 @@ class ArtworkControllerTest {
         assertTrue(rig.controller.pickOption(tetris.gamePath, hero))
         assertContentEquals(heroBytes, rig.fs.bytesAt(shotPath))
         assertEquals(hero.key, listed(rig).currentKey)
-        assertEquals(hero.key, ArtOptionStore(rig.host).get(tetris.gamePath)?.pick)
+        assertEquals(hero.key, ArtOptionStore(rig.host).get(tetris.gamePath)?.picks?.get(ArtSlot.SCREENSHOT))
         assertEquals(setOf(tetris.gamePath), rig.controller.pickedGames())   // what the library scan reads
         assertEquals("Home/Roms/GB/.media/screenshot/Tetris.png", rig.host.applied.last().second.screenshot)
         rig.controller.fetchAll(replaceExisting = true)
@@ -971,8 +971,8 @@ class ArtworkControllerTest {
         assertEquals(writes, logWrites(rig))
         assertEquals(calls, rig.http.calls.size)
         assertEquals(applied, rig.host.applied.size)
-        assertEquals(current.key, ArtOptionStore(rig.host).get(tetris.gamePath)?.pick)
-        assertTrue(ArtOptionStore(rig.host).picked(tetris.gamePath))
+        assertEquals(current.key, ArtOptionStore(rig.host).get(tetris.gamePath)?.picks?.get(ArtSlot.SCREENSHOT))
+        assertTrue(ArtOptionStore(rig.host).picked(tetris.gamePath, ArtSlot.SCREENSHOT))
         // Replace existing leaves the picked screenshot, though the source now gives another picture.
         rig.http.set("https://o/", HttpResult(200, heroBytes))
         rig.controller.fetchAll(replaceExisting = true)
@@ -990,7 +990,7 @@ class ArtworkControllerTest {
         assertTrue(rig.controller.pickOption(tetris.gamePath, hero1))
         rig.cache.files["${tetris.gamePath}\n${hero2.key}"] = ByteArray(0)   // the fitter can't read it: the write fails
         assertFalse(rig.controller.pickOption(tetris.gamePath, hero2))
-        assertEquals(hero1.key, ArtOptionStore(rig.host).get(tetris.gamePath)?.pick)
+        assertEquals(hero1.key, ArtOptionStore(rig.host).get(tetris.gamePath)?.picks?.get(ArtSlot.SCREENSHOT))
         assertEquals(hero1.key, listed(rig).currentKey)
     }
 

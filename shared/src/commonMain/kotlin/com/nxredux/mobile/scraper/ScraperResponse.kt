@@ -100,15 +100,12 @@ object ScraperMedia {
         SLOTS.mapNotNull { s -> rank(medias, s).firstOrNull()?.let { s to it } }.toMap()
 
     /**
-     * Per slot ScreenScraper offers, the best media of each of its types in type order (the wheel: the best `wheel-hd`,
-     * then the best `wheel`), so a failed download of one falls back to the next from the same answer. The screenshot
-     * slot keeps every `ss` media, ranked as [rank] ranks, for the Change art list.
+     * Per slot ScreenScraper offers, every media of every one of its types (every region), ranked as [rank] ranks (the
+     * wheel: each `wheel-hd`, then each `wheel`): the write takes the first that downloads, so a failed download falls
+     * back to the next from the same answer, and the Change art list keeps them all.
      */
-    fun alternates(medias: List<SsMedia>): Map<ArtSlot, List<SsMedia>> = SLOTS.mapNotNull { s ->
-        val list = if (s == ArtSlot.SCREENSHOT) rank(medias, s)
-        else typesOf(s).mapNotNull { type -> rank(medias.filter { it.type == type }, s).firstOrNull() }
-        list.takeIf { it.isNotEmpty() }?.let { s to it }
-    }.toMap()
+    fun alternates(medias: List<SsMedia>): Map<ArtSlot, List<SsMedia>> =
+        SLOTS.mapNotNull { s -> rank(medias, s).takeIf { it.isNotEmpty() }?.let { s to it } }.toMap()
 
     /** The `ss` screenshot only (an Android game's art). */
     fun screenshotOnly(medias: List<SsMedia>): String? = rank(medias, ArtSlot.SCREENSHOT).firstOrNull()?.url

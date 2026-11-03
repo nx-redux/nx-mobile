@@ -4,6 +4,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -17,15 +18,16 @@ class ArtOptionStoreTest {
     @Test fun record_merges_by_key_keeps_order_and_pick() = runTest {
         val s = ArtOptionStore(host())
         s.record("g", listOf(a, b), false)
-        s.setPick("g", a.key)
+        s.setPick("g", ArtSlot.SCREENSHOT, a.key)
         s.record("g", listOf(b, c), true)
         val g = s.get("g")!!
         assertEquals(listOf(a, b, c), g.options)
         assertTrue(g.wide)
-        assertEquals(a.key, g.pick)
-        assertTrue(s.picked("g"))
+        assertEquals(mapOf(ArtSlot.SCREENSHOT to a.key), g.picks)
+        assertTrue(s.picked("g", ArtSlot.SCREENSHOT))
+        assertFalse(s.picked("g", ArtSlot.BOX_2D))
         s.record("h", listOf(c), false)
-        assertEquals(setOf("g"), s.pickedPaths())
+        assertEquals(mapOf("g" to setOf(ArtSlot.SCREENSHOT)), s.picks())
     }
 
     @Test fun a_grid_and_hero_with_one_asset_id_are_both_kept() = runTest {
@@ -37,17 +39,40 @@ class ArtOptionStoreTest {
 
     @Test fun persists_across_instances() = runTest {
         val h = host()
-        ArtOptionStore(h).apply { record("g", listOf(a, c), true); setPick("g", c.key) }
-        assertEquals(GameOptions(listOf(a, c), true, c.key), ArtOptionStore(h).get("g"))
+        ArtOptionStore(h).apply { record("g", listOf(a, c), true); setPick("g", ArtSlot.BOX_2D, c.key) }
+        assertEquals(GameOptions(listOf(a, c), true, mapOf(ArtSlot.BOX_2D to c.key)), ArtOptionStore(h).get("g"))
     }
 
     @Test fun drop_option_clears_pick_when_it_was_the_pick() = runTest {
         val s = ArtOptionStore(host())
         s.record("g", listOf(a, b), false)
-        s.setPick("g", a.key)
+        s.setPick("g", ArtSlot.SCREENSHOT, a.key)
+        s.setPick("g", ArtSlot.BOX_2D, c.key)
         s.dropOption("g", a.key)
         assertEquals(listOf(b), s.get("g")!!.options)
-        assertNull(s.get("g")!!.pick)
+        assertEquals(mapOf(ArtSlot.BOX_2D to c.key), s.get("g")!!.picks)
+    }
+
+    @Test fun picksPerSlot() = runTest {
+        val h = host()
+        val s = ArtOptionStore(h)
+        s.setPick("g", ArtSlot.BOX_2D, "k1")
+        s.setPick("g", ArtSlot.SCREENSHOT, "k2")
+        assertEquals(setOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT), s.pickedSlots("g"))
+        s.setPick("g", ArtSlot.BOX_2D, null)
+        assertEquals(setOf(ArtSlot.SCREENSHOT), s.pickedSlots("g"))
+        assertEquals(setOf(ArtSlot.SCREENSHOT), ArtOptionStore(h).pickedSlots("g"))
+        assertEquals(emptySet<ArtSlot>(), s.pickedSlots("other"))
+    }
+
+    @Test fun part_one_file_is_not_read() = runTest {
+        // Part 1's file (one pick per game): never read, so its pick protects nothing.
+        val h = host().apply {
+            files["art_options.json"] = """{"g":{"options":[{"slot":"SCREENSHOT","url":"http://x/a","source":"ss","assetId":"us"}],"wide":true,"pick":"ss/SCREENSHOT/us"}}"""
+        }
+        val s = ArtOptionStore(h)
+        assertNull(s.get("g"))
+        assertEquals(emptySet<ArtSlot>(), s.pickedSlots("g"))
     }
 
     @Test fun forget_scope_and_all() = runTest {
@@ -69,9 +94,9 @@ class ArtOptionStoreTest {
     }
 
     @Test fun corrupt_file_is_kept_aside_then_store_starts_empty() = runTest {
-        val h = host().apply { files["art_options.json"] = "not json" }
+        val h = host().apply { files["art_options2.json"] = "not json" }
         ArtOptionStore(h).record("g", listOf(a), false)
-        assertEquals("not json", h.files["art_options.bad.json"])
+        assertEquals("not json", h.files["art_options2.bad.json"])
         assertEquals(listOf(a), ArtOptionStore(h).get("g")!!.options)
     }
 }

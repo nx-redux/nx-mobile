@@ -51,12 +51,16 @@ class ScrapeEngine(
     /** A mix that could not be made or saved (never a game's failure); no paths or URLs in the text. */
     private val warn: (String) -> Unit = {},
     /**
-     * Every screenshot, grid and hero candidate the sources offered for a game (ScreenScraper links without their
-     * login), once per game; [wide] is true for the wide pass. The Change art list keeps them as links.
+     * Every candidate the sources offered for a game in the option slots ([OPTION_SLOTS]; ScreenScraper links and
+     * thumbnails without their login), once per game; [wide] is true for the wide pass. The Change art list keeps them
+     * as links.
      */
     private val onOptions: suspend (gamePath: String, options: List<ArtOption>, wide: Boolean) -> Unit = { _, _, _ -> },
-    /** True when the user picked this game's screenshot: no fetch (Replace existing included) writes a screenshot or hero over it. */
-    private val picked: suspend (gamePath: String) -> Boolean = { false },
+    /**
+     * The file slots the user picked for this game (SCREENSHOT, BOX_2D, BOX_3D, WHEEL): no fetch (Replace existing
+     * included) writes, replaces or removes a picked slot's file.
+     */
+    private val picked: suspend (gamePath: String) -> Set<ArtSlot> = { emptySet() },
 ) {
     companion object {
         const val NO_CONNECTION = "No connection"
@@ -339,8 +343,22 @@ class ScrapeEngine(
             if (onDisk.box) needBox = false
             if (onDisk.screenshot) needShot = false
         }
-        // A picked screenshot is only changed by another pick or Reset artwork; a hero stands in for a missing screenshot.
-        if (picked(ref.gamePath)) needShot = false
+        /**
+         * A picked slot is only changed by another pick or Reset artwork. With the 2D box picked the game has its box;
+         * under Replace a 3D box is still fetched beside it ([want3d], never counted), as the 3D box is its own slot.
+         */
+        var want3d = false
+        var picks = picked(ref.gamePath)
+        fun applyPicks(p: Set<ArtSlot>) {
+            if (ArtSlot.SCREENSHOT in p) needShot = false
+            if (ArtSlot.BOX_3D in p) { needBox = false; want3d = false }
+            if (ArtSlot.BOX_2D in p) {
+                if (needBox) { needBox = false; want3d = replace && ArtSlot.BOX_3D !in p }
+                want2d = false
+            }
+            if (ArtSlot.WHEEL in p) wantWheel = false
+        }
+        applyPicks(picks)
         val mixOn = ex.mix && pixels != null
         // A missing mix (any under Replace), only for a game with a screenshot or a box to make it from, had or fetched
         // here.
@@ -380,19 +398,28 @@ class ScrapeEngine(
         /** The [ArtSource.wheelLast] sources that offered wheels in turn (in [laterWheels]; not asked for the wheel alone). */
         val wheelsOffered = HashSet<String>()
         /**
-         * The user picked this game's screenshot since the check above (a pick made while this game is fetched): the
-         * screenshot is no longer wanted, as for a game picked before. Asked only right before a screenshot role write.
+         * The user's picks read again right before a write (a pick made while this game is fetched): a slot picked since
+         * the check above is no longer wanted, as for a game picked before ([applyPicks]; a counted kind leaves the
+         * count), and a hero written here is no longer replaced. [hits] less those whose file slot is picked now.
          */
-        suspend fun pickedSince(): Boolean {
-            if (!needShot || !picked(ref.gamePath)) return false
-            needShot = false; wantedCount--
-            return true
+        suspend fun pickedSince(hits: List<ArtHit>): List<ArtHit> {
+            if (hits.isEmpty()) return hits
+            val now = picked(ref.gamePath)
+            if (now != picks) {
+                val counted = listOf(needBox, needShot).count { it }
+                applyPicks(now)
+                wantedCount -= counted - listOf(needBox, needShot).count { it }
+                if (ArtSlot.SCREENSHOT in now) heroHere = false
+                picks = now
+            }
+            return hits.filter { it.slot.fileSlot !in now }
         }
         /**
          * The hit kind of the first hit that downloads, fits (to its kind's cap) and is written (in its [fileSlot]), or
-         * null; a failed write stops (the job pauses).
+         * null; a failed write stops (the job pauses). A hit whose file slot is picked ([pickedSince]) is never tried.
          */
-        suspend fun firstWritten(hits: List<ArtHit>, over: Boolean = replace): ArtSlot? {
+        suspend fun firstWritten(all: List<ArtHit>, over: Boolean = replace): ArtSlot? {
+            val hits = pickedSince(all)
             for (hit in hits) {
                 val image = hit.bytes?.takeIf { it.isNotEmpty() } ?: download(hit.url) ?: continue
                 val fitted = guard { fitter.fit(image, ArtCaps.of(hit.slot)) } ?: continue
@@ -407,7 +434,7 @@ class ScrapeEngine(
         }
         // A pause met mid-game (an image or a source without a connection): the files already written are reported first.
         var paused: JobPause? = null
-        /** Every screenshot, grid and hero hit seen, for [onOptions]. */
+        /** Every option slot hit seen ([OPTION_SLOTS]), for [onOptions]. */
         val options = ArrayList<ArtOption>()
         /** The slots asked of each source in the usual flow (the wide pass does not ask them again). */
         val askedSlots = HashMap<String, Set<ArtSlot>>()
@@ -417,6 +444,7 @@ class ScrapeEngine(
             for (src in known) {
                 val usual = buildSet {
                     if (needBox) addAll(src.slots intersect BOX_SLOTS)
+                    if (want3d && ArtSlot.BOX_3D in src.slots) add(ArtSlot.BOX_3D)
                     if (want2d) addAll(src.slots intersect BOX_2D_SLOTS)
                     if (needShot) addAll(src.slots intersect SHOT_SLOTS)
                     else if (heroHere && ArtSlot.SCREENSHOT in src.slots) add(ArtSlot.SCREENSHOT)
@@ -443,17 +471,19 @@ class ScrapeEngine(
                 val boxHits = if (want2d) hits.filter { it.slot == ArtSlot.BOX_3D } else hits.filter { it.slot in BOX_SLOTS }
                 if (needBox) firstWritten(boxHits)?.let { slot ->
                     needBox = false; got++; writers += src.shortLabel
-                    if (replace) removeStaleHigherBoxes(target, slot.fileSlot, wrote, ls)
+                    if (replace) removeStaleHigherBoxes(target, slot.fileSlot, wrote, picks, ls)
                 }
+                // The 2D box picked: the 3D box beside it under Replace (nothing above it to remove).
+                if (!storageFailed && want3d) firstWritten(hits.filter { it.slot == ArtSlot.BOX_3D })?.let { want3d = false; writers += src.shortLabel }
                 if (!storageFailed && want2d) firstWritten(BOX_2D_SLOTS.flatMap { k -> hits.filter { it.slot == k } })?.let {
                     want2d = false; writers += src.shortLabel
-                    if (needBox) { needBox = false; got++; if (replace) removeStaleHigherBoxes(target, ArtSlot.BOX_2D, wrote, ls) }
+                    if (needBox) { needBox = false; got++; if (replace) removeStaleHigherBoxes(target, ArtSlot.BOX_2D, wrote, picks, ls) }
                 }
                 // The screenshot: a screenshot hit, else a hero (the stand-in noted on a DONE; only where [heroMayWrite]).
                 // A hero written here is replaced by a later source's real screenshot (over it: it is this run's own file).
                 val shotHits = hits.filter { it.slot == ArtSlot.SCREENSHOT } +
                     (if (needShot && heroMayWrite) hits.filter { it.slot == ArtSlot.HERO } else emptyList())
-                if (!storageFailed && (needShot || heroHere) && shotHits.isNotEmpty() && !pickedSince() && !(heroHere && picked(ref.gamePath))) {
+                if (!storageFailed && (needShot || heroHere) && shotHits.isNotEmpty()) {
                     firstWritten(shotHits, over = replace || heroHere)?.let { slot ->
                         if (needShot) { needShot = false; got++ }
                         heroHere = slot == ArtSlot.HERO; standInOnly = heroHere; writers += src.shortLabel
@@ -464,7 +494,7 @@ class ScrapeEngine(
                     if (src.wheelLast) { if (wheels.isNotEmpty()) { laterWheels += src.shortLabel to wheels; wheelsOffered += src.id } }
                     else if (firstWritten(wheels) != null) { wantWheel = false; writers += src.shortLabel }
                 }
-                if (storageFailed || (!needBox && !needShot && !want2d && !wantWheel && !heroHere)) break
+                if (storageFailed || (!needBox && !needShot && !want2d && !want3d && !wantWheel && !heroHere)) break
             }
             for ((label, wheels) in laterWheels) {
                 if (storageFailed || !wantWheel) break
@@ -479,7 +509,8 @@ class ScrapeEngine(
                 if (wheels.isNotEmpty() && !notified) { notified = true; downloading() }
                 if (firstWritten(wheels) != null) { wantWheel = false; writers += src.shortLabel }
             }
-            // The wide pass: the option slots not asked yet (a source the usual flow skipped or stopped at), hits recorded only.
+            // The wide pass: every option slot a source offers that it was not asked yet (a source the usual flow
+            // skipped or stopped at), hits recorded only.
             if (wide && !storageFailed) {
                 var complete = true
                 for (src in known) {
@@ -516,10 +547,13 @@ class ScrapeEngine(
         }
     }
 
-    /** Adds [hits] in the option slots to [options] (links without a ScreenScraper login). */
+    /** Adds [hits] in the option slots to [options] (links and thumbnails without a ScreenScraper login). */
     private fun recordOptions(hits: List<ArtHit>, options: MutableList<ArtOption>) {
         for (h in hits) if (h.slot in OPTION_SLOTS) {
-            options += ArtOption(h.slot, ScraperRequest.stripAuth(h.url), h.origin.source, h.origin.gameId, h.origin.assetId, h.note)
+            options += ArtOption(
+                h.slot, ScraperRequest.stripAuth(h.url), h.origin.source, h.origin.gameId, h.origin.assetId, h.note,
+                thumb = h.thumb?.let(ScraperRequest::stripAuth),
+            )
         }
     }
 
@@ -664,11 +698,11 @@ class ScrapeEngine(
     /**
      * Under Replace, after a box was written in [slot]: the higher box slots ([BOX_CHAIN]) this run did not write lose
      * the files the app wrote there (in the written-art log; dropped from it; the 2D box's legacy `box2d/` too), so the
-     * new box is the one drawn. A file the log does not have (hand-placed) is never removed.
+     * new box is the one drawn. A file the log does not have (hand-placed) and a [picked] slot's are never removed.
      */
-    private suspend fun removeStaleHigherBoxes(t: ArtTarget, slot: ArtSlot, wrote: Set<ArtSlot>, ls: Listings) {
+    private suspend fun removeStaleHigherBoxes(t: ArtTarget, slot: ArtSlot, wrote: Set<ArtSlot>, picked: Set<ArtSlot>, ls: Listings) {
         for (higher in BOX_CHAIN.takeWhile { it != slot }) {
-            if (higher in wrote) continue
+            if (higher in wrote || higher in picked) continue
             val folders = if (higher == ArtSlot.BOX_2D) listOf(t.segments(higher), t.mediaSegments + LEGACY_BOX2D_FOLDER) else listOf(t.segments(higher))
             for (segments in folders) removeLogged(segments, t.base, ls)
         }

@@ -57,6 +57,9 @@ object ScraperRequest {
         return bare + (if ('?' in bare) "&" else "?") + creds
     }
 
+    /** A ScreenScraper media link's small version (the Change art preview): the server scales it to fit 320x320. */
+    fun thumb(url: String): String = url + (if ('?' in url) "&" else "?") + "maxwidth=320&maxheight=320"
+
     private fun dev(a: ScraperAuth) = "devid=${ssEncode(a.devId)}&devpassword=${ssEncode(a.devPassword)}&softname=${ssEncode(a.softname)}"
     private fun user(a: ScraperAuth) = if (a.signedIn) "&ssid=${ssEncode(a.user!!)}&sspassword=${ssEncode(a.password!!)}" else ""
 
