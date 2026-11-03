@@ -40,15 +40,15 @@ class ArtworkResolver(private val source: RomsSource) {
      */
     class SubArtMaps {
         private val lock = Mutex()
-        private val maps = HashMap<ContentRef, Pair<Long, Map<String, ContentRef>>>()
+        private val maps = HashMap<ContentRef, Pair<Long, Map<String, Entry>>>()
 
         /** [dir]'s kept map, when it was read at [dir]'s current modified time. */
-        suspend fun unchanged(dir: Entry): Map<String, ContentRef>? {
+        suspend fun unchanged(dir: Entry): Map<String, Entry>? {
             val modified = dir.lastModified ?: return null
             return lock.withLock { maps[dir.ref] }?.takeIf { it.first == modified }?.second
         }
 
-        suspend fun put(dir: Entry, map: Map<String, ContentRef>) {
+        suspend fun put(dir: Entry, map: Map<String, Entry>) {
             lock.withLock { if (dir.lastModified == null) maps.remove(dir.ref) else maps[dir.ref] = dir.lastModified to map }
         }
 
@@ -65,14 +65,18 @@ class ArtworkResolver(private val source: RomsSource) {
      * baseName -> ref for the files in `.media/<sub>` (one of [TYPED]): `.png`, else `.jpg`, else `.jpeg` (the extension
      * in any case), whatever the listing order; the scrape engine reads a slot the same way.
      */
-    suspend fun subArtMap(mediaEntries: List<Entry>, sub: String, maps: SubArtMaps? = null, reuse: Boolean = false): Map<String, ContentRef> {
+    suspend fun subArtMap(mediaEntries: List<Entry>, sub: String, maps: SubArtMaps? = null, reuse: Boolean = false): Map<String, ContentRef> =
+        subArtFiles(mediaEntries, sub, maps, reuse).mapValues { it.value.ref }
+
+    /** As [subArtMap], with each name's chosen file (its full name: the written-art log's key). */
+    suspend fun subArtFiles(mediaEntries: List<Entry>, sub: String, maps: SubArtMaps? = null, reuse: Boolean = false): Map<String, Entry> {
         val dir = mediaEntries.firstOrNull { it.isDirectory && it.name == sub } ?: return emptyMap()
         if (reuse) maps?.unchanged(dir)?.let { return it }
         val files = source.listChildren(dir.ref).filter { !it.isDirectory }
         fun withExt(ext: String) = files.filter { it.name.endsWith(ext, ignoreCase = true) && it.name.length > ext.length }
-            .associate { it.name.dropLast(ext.length) to it.ref }
+            .associateBy { it.name.dropLast(ext.length) }
         // Lowest priority first: each later map overrides the names it shares.
-        return (JPEG.reversed().fold(emptyMap<String, ContentRef>()) { m, ext -> m + withExt(ext) } + pngMap(files)).also { maps?.put(dir, it) }
+        return (JPEG.reversed().fold(emptyMap<String, Entry>()) { m, ext -> m + withExt(ext) } + withExt(".png")).also { maps?.put(dir, it) }
     }
 
     /** Top-level `.media` map from a folder's already-listed children. */

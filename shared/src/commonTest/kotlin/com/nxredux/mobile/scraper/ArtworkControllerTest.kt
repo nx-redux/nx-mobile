@@ -2,10 +2,13 @@ package com.nxredux.mobile.scraper
 
 import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.library.FakeRomsSource
+import com.nxredux.mobile.library.LibraryScanner
+import com.nxredux.mobile.library.Sidecars
 import com.nxredux.mobile.library.ensurePath
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.scraper.Scrape.OK_PNG
 import com.nxredux.mobile.scraper.Scrape.found
+import com.nxredux.mobile.storage.MemorySidecarStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -1059,5 +1062,60 @@ class ArtworkControllerTest {
         assertEquals(6L, rig.controller.clearOptionCache())
         assertEquals(0L, rig.controller.optionCacheSize())
         assertEquals(options, listed(rig).options)
+    }
+    private fun logLines(vararg entries: Pair<String, ArtOrigin?>) = entries.joinToString("") { (p, o) -> WrittenArtLog.line(p, o) }
+
+    @Test fun heroShotsAreTheLoggedSteamGridDbScreenshots() = runTest {
+        val rig = Rig(this, emptyList())
+        val sgdb = ArtOrigin(SourceId.SGDB, "1", "2")
+        rig.host.files[ArtworkController.LOG_FILE] = logLines(
+            "Roms/GB/.media/screenshot/Tetris.jpg" to sgdb,
+            "Roms/GB/.media/screenshot/Mario v1.1.png" to sgdb,                        // dots in the base name
+            "Roms/GB/.media/screenshot/Zelda.png" to ArtOrigin(SourceId.SS, "9", "ss"),  // not SteamGridDB
+            "Roms/GB/.media/screenshot/Kirby.png" to null,                             // unknown origin
+            "Roms/GB/.media/boxart2d/Tetris.png" to sgdb,                              // a grid, not a screenshot
+            "Roms/.sources/x1/GB/.media/screenshot/Sonic.jpg" to sgdb,
+        )
+        assertEquals(
+            setOf("Roms/GB/.media/screenshot/Tetris.jpg", "Roms/GB/.media/screenshot/Mario v1.1.png", "Roms/.sources/x1/GB/.media/screenshot/Sonic.jpg"),
+            rig.controller.heroShots(),
+        )
+    }
+
+    @Test fun theScanFlagsHeroesFromTheControllersLog() = runTest {
+        val gb = "Home/Roms/Game Boy (GB)"
+        val src = FakeRomsSource(
+            mapOf(
+                "Home" to listOf("Roms"),
+                "Home/Roms" to listOf("Game Boy (GB)"),
+                gb to listOf("G.gb", "H.gb", "Mario v1.1.gb", ".media"),
+                "$gb/.media" to listOf("screenshot", "hero"),
+                "$gb/.media/screenshot" to listOf("G.png", "G.jpg", "Mario v1.1.png"),
+                "$gb/.media/hero" to listOf("H.jpg"),
+            ),
+        )
+        val rig = Rig(this, emptyList(), fs = src)
+        val sgdb = ArtOrigin(SourceId.SGDB, "1", "2")
+        rig.host.files[ArtworkController.LOG_FILE] = logLines(
+            "Roms/Game Boy (GB)/.media/screenshot/G.jpg" to sgdb,           // under a hand-placed G.png, which is shown
+            "Roms/Game Boy (GB)/.media/screenshot/Mario v1.1.png" to sgdb,
+            "Roms/Game Boy (GB)/.media/hero/H.jpg" to sgdb,                 // moved by the scan, its log entry with it
+        )
+        val move = rig.controller.legacyArtMove(src)
+        val home = ContentRef("Home")
+        val scanner = LibraryScanner(
+            src, Sidecars(src, MemorySidecarStore()) { home },
+            heroShots = { rig.controller.heroShots() }, legacyMove = { move },
+        )
+        val index = scanner.scan(home, emptyList(), emptyMap())
+        val games = index.systems.flatMap { it.games }.associateBy { it.file }
+        assertEquals("$gb/.media/screenshot/G.png", games.getValue("G.gb").screenshot)
+        assertFalse(games.getValue("G.gb").heroShot)   // as the engine reads the shown file
+        assertTrue(games.getValue("Mario v1.1.gb").heroShot)
+        assertEquals("$gb/.media/screenshot/H.jpg", games.getValue("H.gb").screenshot)
+        assertTrue(games.getValue("H.gb").heroShot)
+        // readArt agrees.
+        val art = scanner.readArt(index)
+        assertEquals(listOf(false, true, true), listOf("G.gb", "Mario v1.1.gb", "H.gb").map { art.getValue(Triple("home", "Roms/Game Boy (GB)", it)).heroShot })
     }
 }

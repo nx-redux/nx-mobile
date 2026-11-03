@@ -1,6 +1,12 @@
 package com.nxredux.mobile.library
 
 import com.nxredux.mobile.runner.ContentRef
+import com.nxredux.mobile.scraper.ArtLogStore
+import com.nxredux.mobile.scraper.ArtOrigin
+import com.nxredux.mobile.scraper.ArtworkController
+import com.nxredux.mobile.scraper.FakeHost
+import com.nxredux.mobile.scraper.LegacyArtMove
+import com.nxredux.mobile.scraper.SourceId
 import com.nxredux.mobile.settings.ExtraFolder
 import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.storage.GameRef
@@ -125,9 +131,9 @@ class ScannerMirrorArtTest {
             "$mirror/screenshot" to listOf("Sonic.jpg", "Streets.jpg"),
         )
         val heroes = setOf(
-            "Roms/Game Boy (GB)/.media/screenshot/G",
-            "Roms/.sources/x1/My Sega Genesis/.media/screenshot/Sonic",
-            "Roms/.sources/x1/My Sega Genesis/.media/screenshot/Streets",
+            "Roms/Game Boy (GB)/.media/screenshot/G.jpg",
+            "Roms/.sources/x1/My Sega Genesis/.media/screenshot/Sonic.jpg",
+            "Roms/.sources/x1/My Sega Genesis/.media/screenshot/Streets.jpg",
         )
         val src = FakeRomsSource(dirs)
         val scanner = LibraryScanner(src, Sidecars(src, MemorySidecarStore()) { home }, heroShots = { heroes })
@@ -163,13 +169,13 @@ class ScannerMirrorArtTest {
                 "$gb/.media/hero" to listOf("G.jpg"),
             ),
         )
-        val host = com.nxredux.mobile.scraper.FakeHost(emptyList())
-        val log = com.nxredux.mobile.scraper.ArtLogStore(host, com.nxredux.mobile.scraper.ArtworkController.LOG_FILE)
-        log.add(listOf("Roms/Game Boy (GB)/.media/hero/G.jpg" to com.nxredux.mobile.scraper.ArtOrigin(com.nxredux.mobile.scraper.SourceId.SGDB)))
-        val move = com.nxredux.mobile.scraper.LegacyArtMove(src, log, host)
+        val host = FakeHost(emptyList())
+        val log = ArtLogStore(host, ArtworkController.LOG_FILE)
+        log.add(listOf("Roms/Game Boy (GB)/.media/hero/G.jpg" to ArtOrigin(SourceId.SGDB)))
+        val move = LegacyArtMove(src, log, host)
         val scanner = LibraryScanner(
             src, Sidecars(src, MemorySidecarStore()) { home }, legacyMove = { move },
-            heroShots = { if (log.contains("Roms/Game Boy (GB)/.media/screenshot/G.jpg")) setOf("Roms/Game Boy (GB)/.media/screenshot/G") else emptySet() },
+            heroShots = { if (log.contains("Roms/Game Boy (GB)/.media/screenshot/G.jpg")) setOf("Roms/Game Boy (GB)/.media/screenshot/G.jpg") else emptySet() },
         )
         val index = scanner.scan(home, emptyList(), emptyMap())
         val g = index.toSystems().flatMap { it.games }.single { it.fileName == "G.gb" }

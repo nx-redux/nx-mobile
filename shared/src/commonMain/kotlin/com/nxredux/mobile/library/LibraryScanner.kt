@@ -4,6 +4,7 @@ import com.nxredux.mobile.runner.Console
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.scraper.LegacyArtMove
 import com.nxredux.mobile.settings.ExtraFolder
 import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.GamePath
@@ -94,9 +95,9 @@ class LibraryScanner(
      */
     private val pickedShots: suspend () -> Set<String> = { emptySet() },
     /**
-     * The written-art log's SteamGridDB hero screenshots, as home-relative paths without extension
-     * (`Roms/GB/.media/screenshot/Tetris`): a game whose screenshot is the home tree's or its mirror's file of such a
-     * path is [ArtRefs.heroShot]. Read at most once per [scan] and [readArt] (again after a [legacyMove] changed a folder).
+     * The written-art log's SteamGridDB hero screenshots, as home-relative file paths
+     * (`Roms/GB/.media/screenshot/Tetris.jpg`): a game whose chosen screenshot is the home tree's or its mirror's file at
+     * such a path is [ArtRefs.heroShot]. Read at most once per [scan] and [readArt] (again after a [legacyMove] changed a folder).
      */
     private val heroShots: suspend () -> Set<String> = { emptySet() },
     /**
@@ -104,7 +105,7 @@ class LibraryScanner(
      * the mirrors' and an extra folder's own) before it is mapped. A function, so the app can hand over a mover built
      * after the scanner; null runs none.
      */
-    private val legacyMove: suspend () -> com.nxredux.mobile.scraper.LegacyArtMove? = { null },
+    private val legacyMove: suspend () -> LegacyArtMove? = { null },
 ) {
     private val art = ArtworkResolver(source)
 
@@ -544,14 +545,16 @@ class LibraryScanner(
         media: List<Entry>, names: Map<String, String>, reuse: Boolean = false, heroes: HeroShots, heroDir: List<String>?,
     ): FolderLookup {
         suspend fun sub(name: String) = art.subArtMap(media, name, artMaps, reuse)
-        val shots = sub("screenshot")
-        // [heroDir]: this `.media`'s home-relative path, where the log's hero paths are ([heroShots]).
-        val hero = if (heroDir == null || shots.isEmpty()) emptySet() else heroes.get().let { all ->
+        val shotFiles = art.subArtFiles(media, "screenshot", artMaps, reuse)
+        // [heroDir]: this `.media`'s home-relative path, where the log's hero paths are ([heroShots]). Each name's chosen
+        // file is checked by its full name, as the engine checks it (a hand-placed G.png beside a logged hero G.jpg is
+        // the one shown, and no hero).
+        val hero = if (heroDir == null || shotFiles.isEmpty()) emptySet() else heroes.get().let { all ->
             val at = (heroDir + "screenshot").joinToString("/")
-            if (all.isEmpty()) emptySet() else shots.keys.filterTo(HashSet()) { "$at/$it" in all }
+            if (all.isEmpty()) emptySet() else shotFiles.filterTo(HashMap()) { (_, f) -> "$at/${f.name}" in all }.keys
         }
         return FolderLookup(
-            sub("boxart"), sub("box2d") + sub("boxart2d"), shots, names, sub("wheel"), sub("mix"), heroes = hero,
+            sub("boxart"), sub("box2d") + sub("boxart2d"), shotFiles.mapValues { it.value.ref }, names, sub("wheel"), sub("mix"), heroes = hero,
         )
     }
 

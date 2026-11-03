@@ -94,6 +94,7 @@ import com.nxredux.mobile.scraper.AndroidArtStore
 import com.nxredux.mobile.scraper.ArtHave
 import com.nxredux.mobile.scraper.ArtworkController
 import com.nxredux.mobile.scraper.ArtworkHost
+import com.nxredux.mobile.scraper.LegacyArtMove
 import com.nxredux.mobile.scraper.LibraryGameRef
 import com.nxredux.mobile.settings.AccentPreset
 import com.nxredux.mobile.storage.ImportSummary
@@ -6360,7 +6361,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** The artwork controller; null in a build without one (no Tools row, no Fetch art or Change art). */
     private val artworkController: com.nxredux.mobile.scraper.ArtworkController? = deps.artwork?.invoke(artworkHost)
     /** The scanner's one-time `grid/` and `hero/` move, sharing the artwork controller's written-art log; none without it. */
-    private val legacyArtMove: com.nxredux.mobile.scraper.LegacyArtMove? = artworkController?.legacyArtMove(deps.source)
+    private val legacyArtMove: LegacyArtMove? = artworkController?.legacyArtMove(deps.source)
 
     /** Null without a controller (no Tools row, no Fetch art). */
     private val artworkScreens: ArtworkScreenController? = artworkController?.let { c ->

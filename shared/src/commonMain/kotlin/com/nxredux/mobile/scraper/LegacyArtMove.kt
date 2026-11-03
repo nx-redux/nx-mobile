@@ -65,6 +65,7 @@ class LegacyArtMove(private val source: RomsSource, private val log: MovedArtLog
                             } else ok = false
                         }
                     }
+                    // False when files stay (hand-placed or failed ones): harmless, the folder is just not read.
                     if (source.deleteEmptyDirectory(media, dir.name)) changed = true
                 }
                 if (ok) {
