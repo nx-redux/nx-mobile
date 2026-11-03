@@ -35,9 +35,11 @@ object WiiOptions {
 
     val screenRow = FrontendOption(
         SCREEN, "Wii Screen", listOf(WiiScreen.AUTO, WiiScreen.FOUR_THREE, WiiScreen.WIDE), WiiScreen.AUTO,
-        "The Wii's screen shape. Auto is 4:3 when the game starts\nin portrait, 16:9 in landscape.\n" +
-            "Set when the game starts: rotating keeps it until the next launch.",
-        brief = "Set at launch. Auto: 4:3 in portrait, 16:9 in landscape",
+        "The Wii's screen shape. Auto is 16:9 when the game starts\nin landscape on a wide screen, 4:3 in portrait\n" +
+            "or on a squarer screen (4:3, 3:2).\n" +
+            "The game reads it only once, when it first starts:\nrotating keeps it until the next launch, and a save state\n" +
+            "keeps the shape the game started with when it was saved.",
+        brief = "Read once at game start; a save state keeps its own",
         visual = false, valueLabels = listOf("Auto", "4:3", "16:9"), atLaunch = true,
     )
 
@@ -69,8 +71,10 @@ object WiiOptions {
 }
 
 /**
- * The Wii's widescreen system setting (SYSCONF), from Display → Wii Screen and the orientation the game starts in.
- * Games read it once at boot, and Dolphin applies it only then, so it is chosen at launch.
+ * The Wii's widescreen system setting (SYSCONF), from Display → Wii Screen, the orientation the game starts in and the
+ * screen's shape. Games read it once at boot, and Dolphin applies it only then, so it is chosen at launch. A save state
+ * keeps the shape its game booted with (Dolphin saves it with the state), so a resumed game can run in the other shape:
+ * the core's frame aspect says which ([isWide]), and the pointer follows it.
  */
 object WiiScreen {
     const val AUTO = "auto"
@@ -79,12 +83,31 @@ object WiiScreen {
     /** Dolphin's option for it (System Configuration > Widescreen (Wii)), locked in Emulator Settings. */
     const val CORE_KEY = "dolphin_widescreen"
 
-    /** 16:9 for [value] when the game starts in [portrait] or not: Auto (or unknown) is 4:3 in portrait, 16:9 in landscape. */
-    fun widescreen(value: String?, portrait: Boolean): Boolean = when (value) {
+    /**
+     * The long side over the short one from which a screen counts as wide: halfway between 4:3 (1.33) and 16:9 (1.78),
+     * so a 4:3 handheld (the Retroid Pocket Nova's 1280x960), a 3:2 one or an unfolded Fold is 4:3, and a phone is 16:9.
+     */
+    const val WIDE_FROM = 1.55f
+
+    /**
+     * 16:9 for [value] when the game starts in [portrait] or not on a screen of [screenAspect] (long side over short):
+     * Auto (or unknown) is 16:9 in landscape on a wide screen, 4:3 in portrait or on a squarer screen.
+     */
+    fun widescreen(value: String?, portrait: Boolean, screenAspect: Float = 16f / 9f): Boolean = when (value) {
         FOUR_THREE -> false
         WIDE -> true
-        else -> !portrait
+        else -> !portrait && screenAspect >= WIDE_FROM
     }
+
+    /** Whether the game draws 16:9, from the core's frame [aspect] (Dolphin gives 16:9 or 4:3, by the game's shape). */
+    fun isWide(aspect: Float): Boolean = aspect >= WIDE_FROM
+
+    /** Said once when a resumed game runs in the other shape than the one chosen at launch ([launchWide]). */
+    fun keptShapeNote(gameWide: Boolean, launchWide: Boolean): String? =
+        if (gameWide == launchWide) null
+        else "This save is in ${label(gameWide)}. Wii Screen ${label(launchWide)} applies when the game starts fresh."
+
+    private fun label(wide: Boolean) = if (wide) WIDE else FOUR_THREE
 
     fun coreValue(widescreen: Boolean): String = if (widescreen) "enabled" else "disabled"
 
