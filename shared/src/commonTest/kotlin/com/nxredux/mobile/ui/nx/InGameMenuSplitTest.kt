@@ -140,13 +140,13 @@ class InGameMenuSplitTest {
     }
 
     // LEFT/RIGHT go between pages whether or not the menu splits: RIGHT opens a row's page, LEFT comes back.
-    @Test fun rightOpensASubmenuDeeperAndLeftComesBackWhenNotSplit() {
+    @Test fun rightOpensASubmenuDeeperAndBComesBackWhenNotSplit() {
         val m = model(split = false)
         m.onRow("Options"); m.press(NxButton.A)
         m.onRow("Display")
         assertNull(m.press(NxButton.RIGHT))
         assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
-        assertNull(m.press(NxButton.LEFT))
+        assertNull(m.press(NxButton.B))   // one page: LEFT / RIGHT change its rows, B comes back
         assertEquals(PageKind.Options, m.state.page.kind)
         assertEquals("Display", m.state.page.rows[m.state.page.selected].label)
     }

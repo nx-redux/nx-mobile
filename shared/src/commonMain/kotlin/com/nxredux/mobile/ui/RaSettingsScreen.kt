@@ -4,6 +4,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.nxredux.mobile.ui.nx.LocalWindowSize
+import com.nxredux.mobile.ui.nx.NX_EDIT_HINTS
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxDialog
@@ -30,12 +34,16 @@ fun RaSettingsScreen(
     onTruncated: (String, Boolean) -> Unit = { _, _ -> },
     truncated: String? = null,   // the selected row's description the UI reported cut off ([AppState.settingInfoTruncated])
 ) {
-    val rows = remember(screen.rows) { screen.rows.map(::raSettingsTouchRow) }   // not per d-pad move
+    val edit by state.rowEdit.collectAsState()
+    val editing = rowEditIndex(screen, edit, selectedIndex)   // the row the pad is changing
+    val rows = remember(screen.rows, editing) {   // not per d-pad move
+        screen.rows.mapIndexed { i, r -> raSettingsTouchRow(r).let { if (i == editing) it.copy(editing = true) else it } }
+    }
     val touch = rows.getOrNull(selectedIndex)
     Box(modifier.fillMaxSize()) {
         NxSettingsPage(
             toolPageTitle(screen, split), rows, selectedIndex,
-            hints = raSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated)),
+            hints = if (editing >= 0) NX_EDIT_HINTS else raSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated), rowEditTwoPane(screen, settingsSplit(LocalWindowSize.current))),
             onSelect = onSelect, onOpen = onOpen, onEvent = onSetting, onTruncated = onTruncated, onHint = onHint,
         )
         if (!split) RaSettingsDialogs(screen, state, onHint)

@@ -29,6 +29,7 @@ import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -422,6 +423,7 @@ class InGameMenuModelTest {
 
     @Test fun a_changes_a_row_left_right_go_between_pages() {
         val m = model().openFrontend()
+        m.split = true   // two panes: LEFT / RIGHT go between them
         // A visual row: A opens its live preview, RIGHT changes it there; LEFT steps back in it.
         assertNull(m.press(NxButton.A))
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.SCALING, "Native"), m.press(NxButton.RIGHT))
@@ -1877,6 +1879,35 @@ class InGameMenuModelTest {
         assertEquals(listOf(Hint(NxButton.B, "Back")), hintsFor(MenuPage(PageKind.Message, "T", emptyList(), footer = "x"), null))
     }
 
+    @Test fun one_page_left_right_change_a_row_at_once_and_a_steps_segments() {
+        val m = model().openFrontend()   // not split: one page
+        m.select(5)                                                            // Debug HUD, a switch
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "On"), m.press(NxButton.RIGHT))
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "Off"), m.press(NxButton.LEFT))
+        assertFalse(m.state.editing)                                           // no change step on one page
+        assertEquals(
+            listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Toggle"), Hint(NxButton.B, "Back")),
+            hintsFor(m.state.page, m.state.page.rows[5], twoPane = false),
+        )
+    }
+
+    @Test fun two_panes_a_starts_changing_segments_and_b_stops() {
+        val m = model().openCoreOptions()
+        m.press(NxButton.A)                                                    // Video
+        m.split = true
+        assertEquals(NxSettingControl.SEGMENTED, m.optionRow(0).control)      // A / B
+        assertNull(m.press(NxButton.A)); assertTrue(m.state.editing)          // A: changing it, nothing changed yet
+        assertEquals(0, m.optionRow(0).index)
+        assertEquals(NX_EDIT_HINTS, hintsFor(m.state.page, m.state.page.rows[0], editing = true))
+        assertEquals(MenuEffect.SetOption("pal", "b"), m.press(NxButton.RIGHT))   // RIGHT steps it
+        assertTrue(m.state.editing)
+        assertEquals(MenuEffect.SetOption("pal", "a"), m.press(NxButton.LEFT))
+        assertNull(m.press(NxButton.B)); assertFalse(m.state.editing)         // B stops, still on the page
+        assertEquals(PageKind.Category("video"), m.state.page.kind)
+        assertNull(m.press(NxButton.RIGHT))                                    // not changing: RIGHT changes nothing
+        assertEquals(0, m.optionRow(0).index)
+    }
+
     @Test fun up_down_on_the_info_popup_ask_the_ui_to_scroll_it() {
         val m = model().openConsoleSettings()
         m.press(NxButton.X)
@@ -1965,6 +1996,7 @@ class InGameMenuModelTest {
         val m = model()
         m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB, padC))
         m.openPlayers()
+        m.split = true   // two panes: LEFT goes back
         // Player 1 holds k1; candidates are [Empty, k1, k2, k3]: a benched pad too (the host puts it back in play).
         assertEquals(4, m.optionRow(0).choices.size)
         assertEquals(MenuEffect.SetPlayer(0, "k2"), m.stepRow(1))

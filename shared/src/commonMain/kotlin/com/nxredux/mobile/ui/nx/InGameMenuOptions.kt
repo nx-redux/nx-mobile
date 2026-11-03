@@ -56,6 +56,7 @@ internal fun OptionsBody(
     val itemHeight = nxOptionsRowHeight(rowHeight, LocalNxOptionText.current)   // Appearance → Text size
     val listState = rememberLazyListState()
     val tapOpens = LocalNxTapOpens.current
+    val editing = LocalMenuEditing.current
     Column(modifier.fillMaxWidth()) {
         BoxWithConstraints(
             Modifier.weight(1f).fillMaxWidth().padding(start = NxOptionsSidePad, end = NxOptionsSidePad, top = rootListTopPad(itemHeight)),
@@ -81,7 +82,7 @@ internal fun OptionsBody(
                         val selected = i == page.selected
                         val default = { nxTap(i, selected, tapOpens(i), onSelect, onActivate) }
                         OptionTouchRow(
-                            row, selected, sizes,
+                            row, selected, sizes, editing = selected && editing,
                             onTap = optionRowTap(row, i, onSelect, onOption) ?: default,
                             onOption = { onOption(it) }, index = i,
                             onTruncated = { info, t -> if (selected) onInfoTruncated(info, t) },
@@ -119,17 +120,19 @@ private fun OptionTouchRow(
     row: MenuRow, selected: Boolean, sizes: NxTouchRowSizes,
     onTap: () -> Unit, onOption: (OptionEvent) -> Unit, index: Int,
     onTruncated: (String, Boolean) -> Unit,
+    editing: Boolean = false,   // the pad is changing it: a ring round its plate, `<` `>` round its control ([NxEditArrows])
 ) {
     if (row is MenuRow.Action) return ActionWordRow(row.label, selected, onTap)
     NxTouchRow(
         row.label, row.info, row.hasMoreInfo, selected, sizes,
         onTap = onTap, onInfo = { onOption(OptionEvent.Info(index)) }, onTruncated = onTruncated,
+        editing = editing,
         below = if (row is MenuRow.Option && sizes.segmentsBelow(row)) {
-            { NxSegments(row.choices, row.index, sizes.value) { onOption(OptionEvent.Choose(index, it)) } }
+            { NxEditArrows(editing, sizes.value) { NxSegments(row.choices, row.index, sizes.value) { onOption(OptionEvent.Choose(index, it)) } } }
         } else null,
     ) {
         when (row) {
-            is MenuRow.Option -> OptionControlView(row, index, sizes.value, onOption)
+            is MenuRow.Option -> NxEditArrows(editing, sizes.value) { OptionControlView(row, index, sizes.value, onOption) }
             is MenuRow.Submenu -> NxValueText("›", sizes.label, LocalNxColors.current.listText)
             is MenuRow.Action -> Unit   // drawn as a word ([ActionWordRow])
             is MenuRow.Slot -> Unit

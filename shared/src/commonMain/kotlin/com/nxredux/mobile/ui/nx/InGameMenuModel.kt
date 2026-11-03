@@ -163,6 +163,11 @@ data class MenuState(
     val panelVersion: Int = 0,
     val popup: MenuPopup? = null,
     val preview: MenuPage? = null,
+    /**
+     * The top page's selected option row is being changed with the pad ([NxPadA.EDIT]): LEFT / RIGHT step it, A or B
+     * stop. A move, a tap on another row, a push or a pop ends it.
+     */
+    val editing: Boolean = false,
 ) {
     val page: MenuPage get() = stack.last()
 
@@ -474,6 +479,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             }
         }
         if (state.page.kind is PageKind.Adjust) return pressAdjust(button)
+        if (state.editing) when (button) {
+            NxButton.LEFT -> return change(-1)
+            NxButton.RIGHT -> return change(1)
+            NxButton.A, NxButton.B -> { state = state.copy(editing = false); return null }
+            NxButton.UP, NxButton.DOWN -> state = state.copy(editing = false)   // and move, below
+            else -> Unit   // X its info, MENU closes
+        }
         if (state.page.kind == PageKind.Shortcuts) {
             // Waiting for a press, the controller's keys are the capture's ([captureKey]); a touch B cancels, nothing
             // else (MENU included, L23) does anything.
@@ -517,11 +529,16 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 } else move(1)
                 null
             }
-            // Off the root LEFT goes back (in two panes: to the page on the left) and RIGHT opens a row's page: they never
-            // change a value there, A does (as a tap). The root's Disc row and Save / Load keep them for their values.
-            NxButton.LEFT -> if (root) { intoAdjust(state.page.selected); change(-1) } else back()
+            // In two panes ([split]), off the root LEFT goes back to the page on the left and RIGHT opens a row's page:
+            // they never change a value there, A starts that ([editsOnA]). One page (no pane to go to): LEFT / RIGHT
+            // change a value row at once, as on the root's Disc row and Save / Load; B goes back.
+            NxButton.LEFT -> when {
+                root || stepsOnSide() -> { intoAdjust(state.page.selected); change(-1) }
+                else -> back()
+            }
             NxButton.RIGHT -> when {
-                !root -> if (opensPage(state.page.rows.getOrNull(state.page.selected))) activate(state.page.selected) else null
+                !root && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
+                !root -> if (stepsOnSide()) { intoAdjust(state.page.selected); change(1) } else null
                 visualRow(state.page.selected) != null -> { intoAdjust(state.page.selected); change(1) }
                 // The Disc row keeps RIGHT for its value; every other row enters the shortcuts (beside or below the words).
                 panelShown() && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Option -> {
@@ -531,8 +548,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 (split || state.preview != null) && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
                 else -> change(1)
             }
-            // A on Quit saves and quits; a touch tap ([activate]) asks how to quit instead.
-            NxButton.A -> if (selectedAction() == MenuAction.QUIT) MenuEffect.Quit else activate(state.page.selected)
+            // A on Quit saves and quits; a touch tap ([activate]) asks how to quit instead. On two panes A on segments or
+            // swatches starts changing it ([MenuState.editing]); a tap changes it at once.
+            NxButton.A -> when {
+                selectedAction() == MenuAction.QUIT -> MenuEffect.Quit
+                editsOnA(state.page.selected) -> { state = state.copy(editing = true); null }
+                else -> activate(state.page.selected)
+            }
             NxButton.B -> back()
             NxButton.MENU -> MenuEffect.Close
             else -> null
@@ -656,8 +678,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     fun select(index: Int) {
         if (index in state.page.rows.indices) {
             if (capturing != null && index != state.page.selected) cancelCapture()   // another row: the wait ends
+            val editing = state.editing && index == state.page.selected   // another row ends a change
             replaceTop(state.page.copy(selected = index))
-            state = state.copy(panelFocus = null)
+            state = state.copy(panelFocus = null, editing = editing)
         }
     }
 
@@ -688,6 +711,28 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             }
         }
     }
+
+    /**
+     * A on row [index] of the top page starts changing it with LEFT / RIGHT ([MenuState.editing]), in two panes
+     * ([split]): an option row of segments or swatches, off the root and Achievements, not a visual row (its strip) nor a
+     * Shortcuts row that binds.
+     */
+    private fun editsOnA(index: Int): Boolean {
+        if (!split) return false   // one page: LEFT / RIGHT change it at once ([stepsOnSide]), A as a tap
+        val row = state.page.rows.getOrNull(index) as? MenuRow.Option ?: return false
+        val kind = state.page.kind
+        if (kind == PageKind.Root || kind == PageKind.Achievements || row.visual) return false
+        if (kind == PageKind.Shortcuts && row.choices.isEmpty()) return false
+        return row.control == NxSettingControl.SEGMENTED || row.control == NxSettingControl.SWATCHES
+    }
+
+    /**
+     * LEFT / RIGHT change the top page's highlighted row at once: an option row of a page off the root drawn as one page
+     * (not [split]), where they have no pane to go to. A visual row opens its strip with the change.
+     */
+    private fun stepsOnSide(): Boolean =
+        !split && state.page.kind != PageKind.Root && state.page.kind != PageKind.Achievements &&
+            state.page.rows.getOrNull(state.page.selected) is MenuRow.Option
 
     /** The action of the top page's highlighted row, or null for another row. */
     private fun selectedAction(): MenuAction? = (state.page.rows.getOrNull(state.page.selected) as? MenuRow.Action)?.action
@@ -1437,17 +1482,19 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         val p = state.page
         if (p.rows.isEmpty()) return
         replaceTop(p.copy(selected = ((p.selected + delta) % p.rows.size + p.rows.size) % p.rows.size))
+        state = state.copy(editing = false)
     }
 
     // A push or pop leaves the panel: back on the root, the focus is on the list.
     // A push or pop also closes a popup: it belonged to the page it was over.
     // A push or pop also ends a Shortcuts wait: its row is no longer on top.
-    private fun push(page: MenuPage) { endWait(); state = state.copy(stack = state.stack + page, panelFocus = null, popup = null) }
-    private fun pop() { endWait(); if (state.stack.size > 1) state = state.copy(stack = state.stack.dropLast(1), panelFocus = null, popup = null) }
+    // A push or pop also ends a change ([MenuState.editing]): its row is no longer on top.
+    private fun push(page: MenuPage) { endWait(); state = state.copy(stack = state.stack + page, panelFocus = null, popup = null, editing = false) }
+    private fun pop() { endWait(); if (state.stack.size > 1) state = state.copy(stack = state.stack.dropLast(1), panelFocus = null, popup = null, editing = false) }
     private fun popTo(kind: PageKind) {
         endWait()
         val i = state.stack.indexOfLast { it.kind == kind }
-        if (i >= 0) state = state.copy(stack = state.stack.take(i + 1), panelFocus = null, popup = null)
+        if (i >= 0) state = state.copy(stack = state.stack.take(i + 1), panelFocus = null, popup = null, editing = false)
     }
     private fun replaceTop(page: MenuPage) { state = state.copy(stack = state.stack.dropLast(1) + page) }
     /** [new] with [old]'s title, keeping the selected row by identity (option key / submenu target) when it survives. */
