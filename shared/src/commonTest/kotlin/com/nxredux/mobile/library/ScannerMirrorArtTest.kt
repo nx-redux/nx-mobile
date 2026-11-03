@@ -20,7 +20,7 @@ class ScannerMirrorArtTest {
         "Home/Roms/.sources" to listOf("x1"),
         "Home/Roms/.sources/x1" to listOf("My Sega Genesis"),
         "Home/Roms/.sources/x1/My Sega Genesis" to listOf(".media"),
-        mirror to listOf("Sonic.png", "boxart", "box2d", "grid", "hero"),
+        mirror to listOf("Sonic.png", "boxart", "box2d", "grid", "hero"),   // grid/ and hero/: no longer read
         "$mirror/boxart" to listOf("Sonic.png"),
         "$mirror/box2d" to listOf("Sonic.jpg"),
         "$mirror/grid" to listOf("Sonic.jpg"),
@@ -38,8 +38,6 @@ class ScannerMirrorArtTest {
         val game = sonic(baseDirs + ("sd/Ext/My Sega Genesis" to listOf("Sonic.md")))
         assertEquals(ContentRef("$mirror/boxart/Sonic.png"), game.boxartRef)
         assertEquals(ContentRef("$mirror/box2d/Sonic.jpg"), game.box2dRef)
-        assertEquals(ContentRef("$mirror/grid/Sonic.jpg"), game.gridRef)
-        assertEquals(ContentRef("$mirror/hero/Sonic.jpg"), game.heroRef)
         assertNull(game.screenshotRef)   // the mirror's untyped Sonic.png is not art
     }
 
@@ -57,8 +55,6 @@ class ScannerMirrorArtTest {
         assertEquals(ContentRef("$mirror/boxart/Sonic.png"), game.boxartRef)   // mirror fills only what is missing
         assertEquals(ContentRef("$own/box2d/Sonic.png"), game.box2dRef)        // own box2d over the mirror's
         assertEquals(ContentRef("$own/screenshot/Sonic.png"), game.screenshotRef)
-        assertEquals(ContentRef("$own/grid/Sonic.png"), game.gridRef)
-        assertEquals(ContentRef("$mirror/hero/Sonic.jpg"), game.heroRef)       // no own hero: the mirror's
     }
 
     @Test fun aPickedScreenshotInTheMirrorWinsOverTheFoldersOwn() = runTest {

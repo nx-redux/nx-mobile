@@ -198,7 +198,11 @@ class ScrapeEngineTest {
         val sonic = Scrape.extraGame("Sonic.md", "MD").copy(art = ArtRefs(screenshot = own))
         val after = ArtRefs(screenshot = mirror)
         assertEquals(own, ScrapeEngine.indexArt(sonic, ArtRefs(), after).screenshot)
-        assertEquals(mirror, ScrapeEngine.indexArt(sonic, ArtRefs(), after, pickedShot = true).screenshot)
+        assertEquals(mirror, ScrapeEngine.indexArt(sonic, ArtRefs(), after, picked = setOf(ArtSlot.SCREENSHOT)).screenshot)
+        // The hero flag follows the screenshot chosen.
+        val heroAfter = after.copy(heroShot = true)
+        assertEquals(false, ScrapeEngine.indexArt(sonic, ArtRefs(), heroAfter).heroShot)
+        assertEquals(true, ScrapeEngine.indexArt(sonic, ArtRefs(), heroAfter, picked = setOf(ArtSlot.SCREENSHOT)).heroShot)
     }
 
     @Test fun tryTwoOnlyAfterTryOneFails() = runTest {

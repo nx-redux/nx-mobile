@@ -64,26 +64,26 @@ interface ScraperCredentials {
 }
 
 /**
- * Which kinds of art a game has: [box] = boxart, box2d or grid; a background = a screenshot or a hero. It has art
- * ([complete]) with both, and with its [mix] when [needMix] (Generate mix on, [ArtExtras.mix]) and it has something to
- * make one from ([mixInput]); a fetch asks only for what it lacks. [box2d] and [wheel] (the optional extras) never
- * count toward it. [boxart]: the 3D box (by default a [box] that is not a grid).
+ * Which kinds of art a game has: [box] = boxart or box2d (a SteamGridDB grid is written as the 2D box); a
+ * [screenshot] (a SteamGridDB hero is written as one: [heroShot]). It has art ([complete]) with both, and with its [mix]
+ * when [needMix] (Generate mix on, [ArtExtras.mix]) and it has something to make one from ([mixInput]); a fetch asks
+ * only for what it lacks. [box2d] and [wheel] (the optional extras) never count toward it beyond the box. [boxart]: the
+ * 3D box (by default any [box]).
  */
 data class ArtHave(
-    val box: Boolean = false, val screenshot: Boolean = false, val grid: Boolean = false, val hero: Boolean = false,
+    val box: Boolean = false, val screenshot: Boolean = false,
     val box2d: Boolean = false, val wheel: Boolean = false, val mix: Boolean = false, val needMix: Boolean = false,
-    val boxart: Boolean = box && !grid,
+    val boxart: Boolean = box, val heroShot: Boolean = false,
 ) {
-    val background: Boolean get() = screenshot || hero
-    /** A screenshot or a box (3D or 2D, never a grid): NX Redux's mix needs one of them, so only then is a mix needed. */
-    val mixInput: Boolean get() = screenshot || boxart || box2d
-    val complete: Boolean get() = box && background && (!needMix || mix || !mixInput)
+    /** A screenshot that is not a hero, or a box (3D or 2D): NX Redux's mix needs one of them, so only then is a mix needed. */
+    val mixInput: Boolean get() = (screenshot && !heroShot) || boxart || box2d
+    val complete: Boolean get() = box && screenshot && (!needMix || mix || !mixInput)
 
     companion object {
         fun of(art: ArtRefs, needMix: Boolean = false) = ArtHave(
-            box = art.boxart != null || art.box2d != null || art.grid != null,
-            screenshot = art.screenshot != null, grid = art.grid != null, hero = art.hero != null,
+            box = art.boxart != null || art.box2d != null, screenshot = art.screenshot != null,
             box2d = art.box2d != null, wheel = art.wheel != null, mix = art.mix != null, needMix = needMix, boxart = art.boxart != null,
+            heroShot = art.heroShot,
         )
     }
 }

@@ -1,9 +1,13 @@
 package com.nxredux.mobile.scraper
 
-/** What the engine asks of the written-art log: whether the app wrote a home-relative path, and dropping one it deleted. */
+/**
+ * What the engine asks of the written-art log: whether the app wrote a home-relative path, dropping one it deleted, and
+ * where a logged file came from ([origin]; null when unknown or not logged).
+ */
 interface LoggedArt {
     suspend fun contains(path: String): Boolean
     suspend fun remove(path: String)
+    suspend fun origin(path: String): ArtOrigin? = null
 
     companion object {
         /** No log: nothing counts as the app's. */

@@ -5468,7 +5468,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             val launchName = if (_launchSequence.value?.phase == LaunchPhase.SPREAD) launchNameProvider?.invoke() else null
             launchHandedOff = true
             deps.runner.launch(GameSession(sys.tag, game.shownName, core, game.ref, game.folder, game.fileName, resumeSlot, all, systemSets = systemSets, gamePath = game.path,
-                artPath = panelArt(game.boxartRef?.value, game.box2dRef?.value, game.gridRef?.value, game.screenshotRef?.value), netplay = netplay, launchName = launchName, fromSwitcher = fromSwitcher), recent)
+                artPath = panelArt(game.boxartRef?.value, game.box2dRef?.value, null, game.screenshotRef?.value), netplay = netplay, launchName = launchName, fromSwitcher = fromSwitcher), recent)
         }
         launchJob = job
         job.invokeOnCompletion { if (launchJob === job) launchJob = null }
@@ -6257,8 +6257,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         ix?.playableSystems(if (withHidden) emptySet() else hiddenPaths.toSet()).orEmpty().flatMap { s ->
             s.games.map { g ->
                 val art = ArtRefs(
-                    g.boxartRef?.value, g.box2dRef?.value, g.screenshotRef?.value, g.gridRef?.value, g.heroRef?.value,
-                    wheel = g.wheelRef?.value, mix = g.mixRef?.value,
+                    g.boxartRef?.value, g.box2dRef?.value, g.screenshotRef?.value,
+                    wheel = g.wheelRef?.value, mix = g.mixRef?.value, heroShot = g.heroShot,
                 )
                 LibraryGameRef(
                     gamePath = g.path, tag = s.tag, name = g.shownName, fileName = g.fileName, rom = g.ref, sourceId = g.sourceId,

@@ -96,10 +96,13 @@ fun ssEngine(
     onOptions = onOptions, picked = picked,
 )
 
-/** The written-art log as a set of paths. */
-class FakeLoggedArt(private val paths: MutableSet<String>) : LoggedArt {
+/** The written-art log as a set of paths; [origins]: each path's origin ([LoggedArt.origin]), a rig's writes recorded there. */
+class FakeLoggedArt(private val paths: MutableSet<String>, val origins: MutableMap<String, ArtOrigin> = mutableMapOf()) : LoggedArt {
     override suspend fun contains(path: String) = path in paths
-    override suspend fun remove(path: String) { paths -= path }
+    override suspend fun remove(path: String) { paths -= path; origins -= path }
+    override suspend fun origin(path: String): ArtOrigin? = origins[path]
+    /** Records [written] origins (an engine's onWritten), as the app's log does before each write. */
+    fun record(written: List<Pair<String, ArtOrigin?>>) { for ((p, o) in written) if (o != null) origins[p] = o }
 }
 
 class FakeHasher(var result: Pair<Long, Long>? = 0x1234L to 100L, var inZip: Pair<Long, Long>? = 0x5678L to 200L) : RomHasher {

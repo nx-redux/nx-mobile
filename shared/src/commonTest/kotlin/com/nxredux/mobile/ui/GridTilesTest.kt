@@ -42,9 +42,6 @@ class GridTilesTest {
         assertEquals(abstractArtUrl("GBA", "Kirby.gba"), gameBackground(boxOnly, portrait = false))
         assertEquals(abstractArtUrl("GBA", "Kirby.gba"), gameBackground(boxOnly, portrait = true))
         assertEquals("s/z.png", gameBackground(listed("Zelda", shot = "s/z.png"), portrait = false))
-        val hero = listed("Metroid").let { it.copy(game = it.game.copy(heroRef = ContentRef("h"))) }
-        assertEquals("h", gameBackground(hero, portrait = false))
-        assertEquals(abstractArtUrl("GBA", "Metroid.gba"), gameBackground(hero, portrait = true))   // a hero never fills a portrait screen
         // An Android game's background: its icon-less form (the cover shows the icon); a ROM's unchanged.
         val app = boxOnly.copy(system = gba.copy(android = true))
         assertEquals(abstractAppArtUrl("Kirby.gba", icon = false), gameBackground(app, portrait = false))
@@ -100,19 +97,19 @@ class GridTilesTest {
         assertEquals(BackdropGame(null, null, "Kirby", "GBA", abstractUrl = abstractArtUrl("GBA", "Kirby.gba")), games[1])   // no art: its abstract picture
     }
 
-    // The 2D front and the grid travel with the game, for the cover drawn in the case; the hero only to the Grid tile.
-    @Test fun backdropGamesCarryBox2dAndGrid() {
-        val zelda = listed("Zelda").let { it.copy(game = it.game.copy(box2dRef = ContentRef("2/zelda.jpg"), gridRef = ContentRef("g/zelda.jpg"), heroRef = ContentRef("h/zelda.jpg"))) }
+    // The 2D front travels with the game, for the cover drawn in the case (a grid is a 2D box on disk now).
+    @Test fun backdropGamesCarryBox2d() {
+        val zelda = listed("Zelda").let { it.copy(game = it.game.copy(box2dRef = ContentRef("2/zelda.jpg"))) }
         val game = backdropGames(listOf(zelda)).single()
         assertEquals("2/zelda.jpg", game.box2dUrl)
-        assertEquals("g/zelda.jpg", game.gridUrl)
+        assertNull(game.gridUrl)
         assertNull(game.boxartUrl)
         assertNull(game.screenshotUrl)
-        // A tile keeps the screenshot apart and carries both stand-ins; it picks by its own shape ([tileArt]).
+        // A tile carries no grid or hero stand-in any more.
         val tile = gameGridTiles(listOf(zelda)).single()
         assertNull(tile.screenshotUrl)
-        assertEquals("h/zelda.jpg", tile.heroUrl)
-        assertEquals("g/zelda.jpg", tile.gridUrl)
+        assertNull(tile.heroUrl)
+        assertNull(tile.gridUrl)
         val pin = gridTiles(listOf(MainRow.Pin(zelda))).single() as GridTile.Game
         assertEquals(tile.copy(title = pin.title), pin)
     }
@@ -161,15 +158,13 @@ class GridTilesTest {
         assertEquals(abstractArtUrl("GBA", "com.example.alpha"), abstractArtFor(rom))
     }
 
-    // Home's Continue card: the resume frame, the screenshot, the hero, the grid, then the abstract picture; a missing
-    // link is skipped, so a game with no art at all still has a picture.
+    // Home's Continue card: the resume frame, the screenshot, then the abstract picture; a missing link is skipped, so
+    // a game with no art at all still has a picture.
     @Test fun continuePicturesRunTheWholeChain() {
-        val full = listed("Zelda", shot = "s").let { it.copy(game = it.game.copy(heroRef = ContentRef("h"), gridRef = ContentRef("g"))) }
-        assertEquals(listOf("r", "s", "h", "g", abstractArtUrl("GBA", "Zelda.gba")), continuePictures("r", full))
-        assertEquals(listOf("s", "h", "g", abstractArtUrl("GBA", "Zelda.gba")), continuePictures(null, full))
+        val full = listed("Zelda", shot = "s")
+        assertEquals(listOf("r", "s", abstractArtUrl("GBA", "Zelda.gba")), continuePictures("r", full))
+        assertEquals(listOf("s", abstractArtUrl("GBA", "Zelda.gba")), continuePictures(null, full))
         assertEquals(listOf(abstractArtUrl("GBA", "Kirby.gba")), continuePictures(null, listed("Kirby", box = "b")))   // a box never fills the card
-        val gridOnly = listed("Metroid").let { it.copy(game = it.game.copy(gridRef = ContentRef("g"))) }
-        assertEquals(listOf("g", abstractArtUrl("GBA", "Metroid.gba")), continuePictures(null, gridOnly))
         val android = SystemFolder("Android", ANDROID_TAG, null, emptyList(), android = true)
         val alpha = Listed(android, GameEntry(ContentRef("app:a/A"), "a/A", "Alpha", folder = ContentRef("app:"), sourceId = "android", relativeDir = ""))
         assertEquals(listOf(abstractAppArtUrl("a/A")), continuePictures(null, alpha))

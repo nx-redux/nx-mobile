@@ -380,12 +380,12 @@ internal class ArtworkScreenController(
 
     /**
      * None for a game no enabled art source knows (excluded tags never); Change art when it shows any art (3D or 2D
-     * box, screenshot, grid or hero; written by the app or placed by hand), else Fetch art.
+     * box, screenshot; written by the app or placed by hand), else Fetch art.
      */
     fun artMenu(entry: Listed): ArtMenuItem {
         if (!controller.available || entry.system.unassigned || !controller.canFetch(entry.system.tag, entry.game.fileName)) return ArtMenuItem.NONE
         val g = entry.game
-        val any = g.boxartRef != null || g.box2dRef != null || g.screenshotRef != null || g.gridRef != null || g.heroRef != null
+        val any = g.boxartRef != null || g.box2dRef != null || g.screenshotRef != null
         return if (any) ArtMenuItem.CHANGE else ArtMenuItem.FETCH
     }
 }

@@ -53,10 +53,9 @@ data class GameEntry(
     val boxartRef: ContentRef? = null,     // .media/boxart/<name> (3D box)
     val screenshotRef: ContentRef? = null, // .media/screenshot/<name>
     val box2dRef: ContentRef? = null,      // .media/boxart2d/<name>, else the legacy .media/box2d/<name> (2D front cover)
-    val gridRef: ContentRef? = null,       // .media/grid/<name> (SteamGridDB 2:3 grid)
-    val heroRef: ContentRef? = null,       // .media/hero/<name> (SteamGridDB wide hero)
     val wheelRef: ContentRef? = null,      // .media/wheel/<name> (known, not shown)
     val mixRef: ContentRef? = null,        // .media/mix/<name> (known, not shown: Generate mix's has-art rule)
+    val heroShot: Boolean = false,         // the screenshot is a SteamGridDB hero ([IndexedGame.heroShot])
     val folder: ContentRef,
     val sourceId: String,
     val relativeDir: String,
@@ -105,7 +104,7 @@ class LibraryScanner(
     /** One folder's typed `.media` art (by base name, per [ArtworkResolver.TYPED] folder) and `map.txt` aliases, looked up once per scan. */
     private class FolderLookup(
         val box3d: Map<String, ContentRef>, val box2d: Map<String, ContentRef>, val screenshot: Map<String, ContentRef>,
-        val grid: Map<String, ContentRef>, val hero: Map<String, ContentRef>, val names: Map<String, String>,
+        val names: Map<String, String>,
         val wheel: Map<String, ContentRef> = emptyMap(), val mix: Map<String, ContentRef> = emptyMap(),
         /** An extra folder's home mirror screenshots alone ([withMirror]), for a picked game. */
         val mirrorShot: Map<String, ContentRef> = emptyMap(),
@@ -119,7 +118,6 @@ class LibraryScanner(
             fun Map<String, ContentRef>.of(): String? = (this[key] ?: this[base])?.value
             return ArtRefs(
                 boxart = box3d.of(), box2d = box2d.of(), screenshot = (if (picked) mirrorShot.of() else null) ?: screenshot.of(),
-                grid = grid.of(), hero = hero.of(),
                 wheel = wheel.of(), mix = mix.of(),
             )
         }
@@ -467,7 +465,7 @@ class LibraryScanner(
         mirror ?: return own
         // The extra folder's own `.media` wins per typed folder; the home mirror fills only the names it lacks there.
         return FolderLookup(
-            mirror.box3d + own.box3d, mirror.box2d + own.box2d, mirror.screenshot + own.screenshot, mirror.grid + own.grid, mirror.hero + own.hero, own.names,
+            mirror.box3d + own.box3d, mirror.box2d + own.box2d, mirror.screenshot + own.screenshot, own.names,
             mirror.wheel + own.wheel, mirror.mix + own.mix, mirrorShot = mirror.screenshot,
         )
     }
@@ -494,7 +492,7 @@ class LibraryScanner(
     private suspend fun mediaLookup(media: List<Entry>, names: Map<String, String>, reuse: Boolean = false): FolderLookup {
         suspend fun sub(name: String) = art.subArtMap(media, name, artMaps, reuse)
         return FolderLookup(
-            sub("boxart"), sub("box2d") + sub("boxart2d"), sub("screenshot"), sub("grid"), sub("hero"), names, sub("wheel"), sub("mix"),
+            sub("boxart"), sub("box2d") + sub("boxart2d"), sub("screenshot"), names, sub("wheel"), sub("mix"),
         )
     }
 

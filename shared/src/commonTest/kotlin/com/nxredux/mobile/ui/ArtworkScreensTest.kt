@@ -147,9 +147,9 @@ class ArtworkScreensTest {
                 "Home/Roms/Arcade (FBN)" to listOf("sf2.zip"),
                 "sd/Loose" to listOf("Mystery.7z"),
                 "Home/Roms/Game Boy (GB)" to listOf("Tetris.gb", "Zelda.gb", ".media"),
-                "Home/Roms/Game Boy (GB)/.media" to listOf("Tetris.png", "box2d", "hero"),   // Tetris's NX Redux mix is not art
+                "Home/Roms/Game Boy (GB)/.media" to listOf("Tetris.png", "box2d", "screenshot"),   // Tetris's NX Redux mix is not art
                 "Home/Roms/Game Boy (GB)/.media/box2d" to listOf("Zelda.jpg"),
-                "Home/Roms/Game Boy (GB)/.media/hero" to listOf("Zelda.jpg"),           // a box and a background: Zelda has art
+                "Home/Roms/Game Boy (GB)/.media/screenshot" to listOf("Zelda.jpg"),     // a box and a screenshot: Zelda has art
                 "Home/Roms/Game Boy Advance (GBA)" to listOf("Mario.gba"),
                 "Home/Roms/Sega Genesis (MD)" to listOf("Sonic.md"),
             ),

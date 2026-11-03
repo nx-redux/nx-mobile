@@ -220,13 +220,13 @@ class ArtExtrasTest {
         assertEquals(ItemStatus.DONE, rig.run(listOf(tetris)).items.single().status)
         assertEquals(listOf(png(3).body!!.toList(), png(1).body!!.toList()), rig.pixels.decoded.map { it.toList() })   // no wheel anywhere: left out
         assertNotNull(rig.fs.bytesAt("$media/mix/Tetris.png"))
-        // A grid as the box: the mix has no box layer.
+        // A grid as the box: written as the 2D box, so it is the mix's box layer.
         val grid = FakeSource("sgdb", slots = setOf(ArtSlot.GRID)).apply { offer("Tetris.gb", ArtSlot.GRID, "https://g/1") }
         val shots = FakeSource("b", slots = setOf(ArtSlot.SCREENSHOT)).apply { offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://b/ss") }
         val rig2 = Rig(shots, grid, extras = ArtExtras(mix = true))
         rig2.http.on("https://g/", png(7)); rig2.http.on("https://b/", png(8))
         assertEquals(ItemStatus.DONE, rig2.run(listOf(tetris)).items.single().status)
-        assertEquals(listOf(png(8).body!!.toList()), rig2.pixels.decoded.map { it.toList() })
+        assertEquals(listOf(png(8).body!!.toList(), png(7).body!!.toList()), rig2.pixels.decoded.map { it.toList() })
     }
 
     @Test fun aMixThatFailsNeverFailsTheGame() = runTest {
@@ -241,16 +241,16 @@ class ArtExtrasTest {
     }
 
     @Test fun aGameLackingOnlyItsMixWithNothingToMakeItFromIsNotFound() = runTest {
-        // A grid box (never in a mix) and a screenshot that does not decode: nothing to make the mix from.
+        // A box and a screenshot that do not decode: nothing to make the mix from.
         val rig = Rig(ss(), extras = ArtExtras(mix = true))
         rig.pixels.undecodable = { true }
-        rig.put("grid", "Tetris.jpg", byteArrayOf(1))()
+        rig.put("boxart2d", "Tetris.jpg", byteArrayOf(1))()
         rig.put("screenshot", "Tetris.png", byteArrayOf(2))()
-        val item = rig.run(listOf(tetris.copy(have = ArtHave(box = true, grid = true, screenshot = true)))).items.single()
+        val item = rig.run(listOf(tetris.copy(have = ArtHave(box = true, box2d = true, screenshot = true)))).items.single()
         assertEquals(ItemStatus.NOT_FOUND to ScrapeEngine.NO_MIX, item.status to item.reason)
-        assertEquals(listOf(listOf<Byte>(2)), rig.pixels.decoded.map { it.toList() })
+        assertEquals(listOf(listOf<Byte>(2), listOf<Byte>(1)), rig.pixels.decoded.map { it.toList() })
         assertNull(rig.fs.bytesAt("$media/mix/Tetris.png"))
-        assertEquals(1, rig.warns.size)
+        assertEquals(2, rig.warns.size)
     }
 
     @Test fun replaceRemakesTheMix() = runTest {
@@ -281,6 +281,6 @@ class ArtExtrasTest {
         rig.http.on("https://g/", png(1))
         rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), replace = true)
         assertNull(rig.fs.bytesAt("$media/box2d/Tetris.jpg"))
-        assertEquals("$media/grid/Tetris.jpg", rig.arts.single().second.grid)
+        assertEquals("$media/boxart2d/Tetris.jpg", rig.arts.single().second.box2d)
     }
 }

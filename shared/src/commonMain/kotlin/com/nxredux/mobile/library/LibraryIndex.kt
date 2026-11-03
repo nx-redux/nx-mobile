@@ -40,9 +40,9 @@ data class LibraryIndex(
          * defaults and fills on the next scan ([scannedAt], [IndexedGame.firstSeen]). An index without
          * [IndexedGame.hiddenCopies] would list the extra copies the scan hides; one without `wheel` and `mix` would hide
          * an extra folder's own handheld art from the scraper (which reads only the home mirror on disk), so it would
-         * write a second copy in `Roms/.sources/`.
+         * write a second copy in `Roms/.sources/`. 12: `grid` and `hero` are gone (no longer read), `heroShot` added.
          */
-        const val VERSION = 11
+        const val VERSION = 12
     }
 }
 
@@ -91,16 +91,15 @@ data class IndexedGame(
     /** The shown name: the `map.txt` alias, else the arcade title or file name without bracketed text (the stem when that collides in its folder). */
     val name: String,
     /**
-     * Typed art refs: 3D box, 2D front cover (`boxart2d/`, else the legacy `box2d/`), screenshot, SteamGridDB grid and
-     * hero; the wheel and the mix (known, not shown).
+     * Typed art refs: 3D box, 2D front cover (`boxart2d/`, else the legacy `box2d/`), screenshot; the wheel and the mix
+     * (known, not shown). [heroShot]: the screenshot is a SteamGridDB hero (from the written-art log).
      */
     val boxart: String? = null,
     val box2d: String? = null,
     val screenshot: String? = null,
-    val grid: String? = null,
-    val hero: String? = null,
     val wheel: String? = null,
     val mix: String? = null,
+    val heroShot: Boolean = false,
     /** Where its art and `map.txt` name live: [dir], or for a disc folder the folder around it. */
     val lookupDir: String = dir,
     /** An extra-folder copy's folder name, shown under the name when a rule-named copy with the same name lives in another folder; null otherwise (a home copy, and Unassigned, which shows [dir]). */
@@ -137,7 +136,7 @@ fun LibraryIndex.toSystems(hidden: Set<String> = emptySet()): List<SystemFolder>
             GameEntry(
                 ref = ContentRef(g.ref), fileName = g.file, shownName = g.name,
                 boxartRef = g.boxart?.let { ContentRef(it) }, screenshotRef = g.screenshot?.let { ContentRef(it) },
-                box2dRef = g.box2d?.let { ContentRef(it) }, gridRef = g.grid?.let { ContentRef(it) }, heroRef = g.hero?.let { ContentRef(it) },
+                box2dRef = g.box2d?.let { ContentRef(it) }, heroShot = g.heroShot,
                 wheelRef = g.wheel?.let { ContentRef(it) }, mixRef = g.mix?.let { ContentRef(it) },
                 folder = ContentRef(g.folder), sourceId = g.source, relativeDir = g.dir, lookupDir = g.lookupDir,
                 subtitle = if (s.unassigned) g.dir.ifEmpty { "/" } else g.subtitle,
@@ -187,11 +186,12 @@ fun LibraryIndex.rename(game: GameEntry, name: String): LibraryIndex {
 
 /**
  * A game's typed art refs (ContentRef values), as the index stores them; null = no file of that kind. [wheel] and [mix]
- * are only known, never shown: Generate mix's has-art rule needs the mix.
+ * are only known, never shown: Generate mix's has-art rule needs the mix. [heroShot]: the [screenshot] is a SteamGridDB
+ * hero (its written-art origin), drawn as a hero and never a mix input.
  */
 data class ArtRefs(
-    val boxart: String? = null, val box2d: String? = null, val screenshot: String? = null, val grid: String? = null, val hero: String? = null,
-    val wheel: String? = null, val mix: String? = null,
+    val boxart: String? = null, val box2d: String? = null, val screenshot: String? = null,
+    val wheel: String? = null, val mix: String? = null, val heroShot: Boolean = false,
 )
 
 /** [game] with all its art refs replaced by [art]; other fields and order kept. Unchanged (same instance) when [game] is not in the index. */
@@ -212,14 +212,14 @@ typealias ArtKey = Triple<String, String, String>
 fun artKey(game: IndexedGame): ArtKey = Triple(game.source, game.dir, game.file)
 
 /** [IndexedGame]'s art refs as [ArtRefs]. */
-val IndexedGame.artRefs: ArtRefs get() = ArtRefs(boxart, box2d, screenshot, grid, hero, wheel, mix)
+val IndexedGame.artRefs: ArtRefs get() = ArtRefs(boxart, box2d, screenshot, wheel, mix, heroShot)
 
 /**
  * This game with all its art refs replaced by [a], every other field kept. With [artRefs] and [ArtRefs] itself, the
  * only places that name each art kind: a new kind is added here, not at every copy.
  */
 fun IndexedGame.withArt(a: ArtRefs): IndexedGame =
-    copy(boxart = a.boxart, box2d = a.box2d, screenshot = a.screenshot, grid = a.grid, hero = a.hero, wheel = a.wheel, mix = a.mix)
+    copy(boxart = a.boxart, box2d = a.box2d, screenshot = a.screenshot, wheel = a.wheel, mix = a.mix, heroShot = a.heroShot)
 
 /**
  * Each game in [art] with its art refs replaced by its entry there (a game not in [art] keeps its own); other fields and

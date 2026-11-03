@@ -54,7 +54,7 @@ object SyncExtras {
                 val landing = if (folderGame) dir.last() else g.file
                 val key = (listOf(".sources", g.source) + dir + g.file).joinToString("/")
                 val landingKey = if (folderGame) "${dir.last()}/${g.file}" else g.file
-                val art = listOfNotNull(g.boxart, g.box2d, g.screenshot, g.grid, g.hero, g.wheel, g.mix)
+                val art = listOfNotNull(g.boxart, g.box2d, g.screenshot, g.wheel, g.mix)
                     .filter { it.startsWith("$sourcesPrefix.sources/") }.map { it.removePrefix(sourcesPrefix) }
                 out += ExtraUnit(root.n, sys.tag.uppercase(), parent, names, landing, key, landingKey, art)
             }

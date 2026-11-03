@@ -124,7 +124,7 @@ class ArtLogStore(private val host: ArtworkHost, private val name: String) : Log
     override suspend fun contains(path: String): Boolean = mutex.withLock { path in load() }
 
     /** Where the logged file at [path] came from; null when unknown or not logged. */
-    suspend fun origin(path: String): ArtOrigin? = mutex.withLock { load().origin(path) }
+    override suspend fun origin(path: String): ArtOrigin? = mutex.withLock { load().origin(path) }
 
     override suspend fun remove(path: String) = mutex.withLock {
         val l = load()

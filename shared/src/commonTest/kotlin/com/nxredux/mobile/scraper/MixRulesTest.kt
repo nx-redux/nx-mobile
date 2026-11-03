@@ -27,9 +27,10 @@ class MixRulesTest {
         val written = mutableListOf<Pair<String, ArtOrigin?>>()
         val warns = mutableListOf<String>()
         val logged = mutableSetOf<String>()
+        val log = FakeLoggedArt(logged)
         val engine = ScrapeEngine(
-            http, FakeFitter(), fs, Scrape.home, sources.toList(), onArt = { p, a -> arts += p to a }, onWritten = { written += it },
-            logged = FakeLoggedArt(logged), extras = { extras }, pixels = pixels, warn = { warns += it },
+            http, FakeFitter(), fs, Scrape.home, sources.toList(), onArt = { p, a -> arts += p to a }, onWritten = { written += it; log.record(it) },
+            logged = log, extras = { extras }, pixels = pixels, warn = { warns += it },
         )
 
         suspend fun run(games: List<LibraryGameRef>, replace: Boolean = false, notes: Map<String, String> = emptyMap()) =
@@ -80,34 +81,29 @@ class MixRulesTest {
     }
 
     @Test fun aMixIsNeededOnlyWithAScreenshotOrABox() {
-        // SteamGridDB's grid and hero only: nothing a mix could be made from, so it has art.
-        assertTrue(ArtHave.of(ArtRefs(grid = "g.jpg", hero = "h.jpg"), needMix = true).complete)
-        assertFalse(ArtHave.of(ArtRefs(grid = "g.jpg", screenshot = "s.png"), needMix = true).complete)
-        assertFalse(ArtHave.of(ArtRefs(boxart = "b.png", hero = "h.jpg"), needMix = true).complete)
-        assertFalse(ArtHave.of(ArtRefs(box2d = "c.png", hero = "h.jpg"), needMix = true).complete)
-        assertFalse(ArtHave(box = true, hero = true, needMix = true).complete)   // a box given plainly is a real box
-        assertTrue(ArtHave(box = true, grid = true, hero = true, needMix = true).complete)
+        // A hero in the screenshot slot is no mix input; a 2D box (a grid among them) is.
+        assertFalse(ArtHave.of(ArtRefs(screenshot = "h.jpg", heroShot = true), needMix = true).mixInput)
+        assertFalse(ArtHave.of(ArtRefs(box2d = "g.jpg", screenshot = "h.jpg", heroShot = true), needMix = true).complete)
+        assertFalse(ArtHave.of(ArtRefs(boxart = "b.png", screenshot = "s.png"), needMix = true).complete)
+        assertTrue(ArtHave.of(ArtRefs(boxart = "b.png", screenshot = "s.png", mix = "m.png"), needMix = true).complete)
     }
 
-    @Test fun aGameWithOnlyAGridAndAHeroIsNotFetchedForAWheel() = runTest {
-        val a = ss().apply { offer("Tetris.gb", ArtSlot.WHEEL, "https://a/w") }
-        val rig = Rig(a)
-        val have = ArtHave.of(ArtRefs(grid = "g.jpg", hero = "h.jpg"), needMix = true)
-        val item = rig.run(listOf(tetris.copy(have = have))).items.single()
-        assertEquals(ItemStatus.SKIPPED to ScrapeEngine.HAS_ART, item.status to item.reason)
-        assertTrue(a.asked.isEmpty())
-        // The index may lag the disk: the files there say the same.
-        rig.put("grid", "Tetris.jpg", byteArrayOf(1))
-        rig.put("hero", "Tetris.jpg", byteArrayOf(2))
-        val again = rig.run(listOf(tetris.copy(have = ArtHave(box = true, hero = true, grid = true)))).items.single()
-        assertEquals(ItemStatus.SKIPPED to ScrapeEngine.HAS_ART, again.status to again.reason)
-        assertTrue(a.asked.isEmpty())
+    @Test fun mixSkipsHeroShot() = runTest {
+        val sg = FakeSource(SourceId.SGDB, slots = setOf(ArtSlot.GRID, ArtSlot.HERO)).apply { offer("Tetris.gb", ArtSlot.HERO, "https://g/h") }
+        val rig = Rig(sg)
+        rig.put("boxart", "Tetris.png", byteArrayOf(11))
+        rig.http.on("https://g/", png(5))
+        val item = rig.run(listOf(tetris.copy(have = ArtHave(box = true)))).items.single()
+        assertEquals(ItemStatus.DONE, item.status)
+        assertEquals(listOf(listOf<Byte>(11)), rig.pixels.decoded.map { it.toList() })   // the box alone: the hero is no screenshot input
+        assertContentEquals(FakePixels.MIX_PNG, rig.fs.bytesAt("$media/mix/Tetris.png"))
+        assertTrue(rig.arts.single().second.heroShot)
     }
 
     @Test fun theWheelAloneMakesNoMix() = runTest {
         val rig = Rig(ss().apply { offer("Tetris.gb", ArtSlot.WHEEL, "https://a/w") })
         rig.http.on("https://a/", png(3))
-        rig.run(listOf(tetris.copy(have = ArtHave(hero = true))))
+        rig.run(listOf(tetris.copy(have = ArtHave(screenshot = true))))
         assertNotNull(rig.fs.bytesAt("$media/wheel/Tetris.png"))
         assertNull(rig.fs.bytesAt("$media/mix/Tetris.png"))
         assertTrue(rig.written.none { it.first.contains("/mix/") })

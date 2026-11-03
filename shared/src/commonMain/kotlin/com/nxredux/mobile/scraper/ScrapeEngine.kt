@@ -66,9 +66,9 @@ class ScrapeEngine(
         /** Every source that knows a waiting game has stopped for this run (Resume tries them again). */
         const val ALL_STOPPED = "Every art source stopped"
         const val NO_SOURCE = "No art source for its system"
-        /** Skipped: the game has a box and a background already (without Replace existing art). */
+        /** Skipped: the game has a box and a screenshot already (without Replace existing art). */
         const val HAS_ART = "Has art"
-        /** Done with a SteamGridDB hero as the background (no real screenshot), or Partial without a screenshot. */
+        /** Done with a SteamGridDB hero as the screenshot (no real one), or Partial without a screenshot. */
         const val NO_SCREENSHOT = "no screenshot"
         /** Partial: a screenshot but no box. */
         const val NO_BOX = "no box"
@@ -81,14 +81,19 @@ class ScrapeEngine(
 
         /**
          * A Done game's reason: the sources that wrote its files ([ArtSource.shortLabel], in the order they wrote),
-         * then [NO_SCREENSHOT] when the background is a hero; null when nothing names a source.
+         * then [NO_SCREENSHOT] when the screenshot is a hero; null when nothing names a source.
          */
         internal fun doneReason(writers: Collection<String>, standInOnly: Boolean): String? =
             listOfNotNull(writers.joinToString(", ").ifEmpty { null }, NO_SCREENSHOT.takeIf { standInOnly })
                 .joinToString(" · ").ifEmpty { null }
+        /** The hit kinds a box is written from (a grid is written as the 2D box, [fileSlot]). */
         private val BOX_SLOTS = setOf(ArtSlot.BOX_3D, ArtSlot.BOX_2D, ArtSlot.GRID)
-        /** The box chain's order where box art is drawn: boxart, then box2d, then grid. */
-        private val BOX_CHAIN = listOf(ArtSlot.BOX_3D, ArtSlot.BOX_2D, ArtSlot.GRID)
+        /** The 2D box's hit kinds, in the order they are tried: a 2D box, then a grid. */
+        private val BOX_2D_SLOTS = listOf(ArtSlot.BOX_2D, ArtSlot.GRID)
+        /** The screenshot's hit kinds, in the order they are tried: a screenshot, then a hero (written as one, [fileSlot]). */
+        private val SHOT_SLOTS = listOf(ArtSlot.SCREENSHOT, ArtSlot.HERO)
+        /** The box chain's order where box art is drawn: boxart, then box2d. */
+        private val BOX_CHAIN = listOf(ArtSlot.BOX_3D, ArtSlot.BOX_2D)
         /** The slots a mix is made from ([makeMix]); writing one of them makes the app's own mix again. */
         private val MIX_INPUTS = setOf(ArtSlot.SCREENSHOT, ArtSlot.BOX_3D, ArtSlot.BOX_2D, ArtSlot.WHEEL)
         /** An image download without an answer is tried again once after this; a second miss pauses ([NO_CONNECTION]). */
@@ -109,17 +114,19 @@ class ScrapeEngine(
          * The art to put in the index for [ref] once the engine has touched its folder: [after] (what the home tree, or
          * an extra's home mirror, holds after the run), except where the index holds an extra folder's own `.media`
          * file - a ref that is neither the mirror's file [before] the run nor after it - which wins per slot as in the
-         * scan. With [pickedShot] (the user picked this game's screenshot) the mirror's screenshot wins over an extra
-         * folder's own file.
+         * scan. A slot in [picked] (the user picked it for this game) takes [after]'s ref over an extra folder's own
+         * file. [ArtRefs.heroShot] follows the screenshot ref chosen.
          */
-        internal fun indexArt(ref: LibraryGameRef, before: ArtRefs, after: ArtRefs, pickedShot: Boolean = false): ArtRefs {
+        internal fun indexArt(ref: LibraryGameRef, before: ArtRefs, after: ArtRefs, picked: Set<ArtSlot> = emptySet()): ArtRefs {
             if (ref.android || ref.sourceId == GamePath.HOME) return after
             val c = ref.art
-            fun pick(cur: String?, b: String?, a: String?) = if (cur != null && cur != b && cur != a) cur else a
+            fun pick(slot: ArtSlot, cur: String?, b: String?, a: String?) =
+                if (slot !in picked && cur != null && cur != b && cur != a) cur else a
+            val shot = pick(ArtSlot.SCREENSHOT, c.screenshot, before.screenshot, after.screenshot)
             return ArtRefs(
-                boxart = pick(c.boxart, before.boxart, after.boxart), box2d = pick(c.box2d, before.box2d, after.box2d),
-                screenshot = if (pickedShot) after.screenshot else pick(c.screenshot, before.screenshot, after.screenshot), grid = pick(c.grid, before.grid, after.grid),
-                hero = pick(c.hero, before.hero, after.hero), wheel = pick(c.wheel, before.wheel, after.wheel), mix = pick(c.mix, before.mix, after.mix),
+                boxart = pick(ArtSlot.BOX_3D, c.boxart, before.boxart, after.boxart), box2d = pick(ArtSlot.BOX_2D, c.box2d, before.box2d, after.box2d),
+                screenshot = shot, wheel = pick(ArtSlot.WHEEL, c.wheel, before.wheel, after.wheel), mix = pick(ArtSlot.MIX, c.mix, before.mix, after.mix),
+                heroShot = if (shot == after.screenshot) after.heroShot else c.heroShot,
             )
         }
     }
@@ -235,10 +242,11 @@ class ScrapeEngine(
     /**
      * [ref]'s typed art files in the home tree (an extra's home mirror) as they are, read as the scanner reads them;
      * null when absent (after a Reset). An extra's own `.media` is not read here: [indexArt] keeps the index's refs to
-     * it.
+     * it. [heroes] false: [ArtRefs.heroShot] is not looked up in the written-art log (a caller holding the log's lock,
+     * Reset's before pass, whose refs are only compared).
      */
-    suspend fun artOnDisk(ref: LibraryGameRef): ArtRefs =
-        guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }?.let { artOnDisk(it, Listings()) } ?: ArtRefs()
+    suspend fun artOnDisk(ref: LibraryGameRef, heroes: Boolean = true): ArtRefs =
+        guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }?.let { artOnDisk(it, Listings(), heroes) } ?: ArtRefs()
 
     /**
      * One run's slot-folder listings: each folder is listed at most once per run (a console's games share them), then
@@ -253,17 +261,24 @@ class ScrapeEngine(
         fun deleted(dir: ContentRef, name: String) { map[dir.value]?.removeAll { it.name == name } }
     }
 
-    /** [t]'s slots on disk (the 2D box: `boxart2d/`, else the legacy `box2d/`); the `.media` folder is found once. */
-    private suspend fun artOnDisk(t: ArtTarget, ls: Listings): ArtRefs {
+    /**
+     * [t]'s slots on disk (the 2D box: `boxart2d/`, else the legacy `box2d/`; never `grid/` or `hero/`); the `.media`
+     * folder is found once. [ArtRefs.heroShot]: the screenshot's written-art origin is SteamGridDB (a hero); not looked
+     * up without [heroes].
+     */
+    private suspend fun artOnDisk(t: ArtTarget, ls: Listings, heroes: Boolean = true): ArtRefs {
         val media = guard { source.findDir(home, t.mediaSegments) } ?: return ArtRefs()
-        suspend fun slot(folder: String): String? = guard {
+        suspend fun entry(folder: String): Entry? = guard {
             val dir = source.child(media, folder)?.takeIf { it.isDirectory }?.ref ?: return@guard null
-            fileIn(dir, t.base, ls)
+            filesIn(dir, t.base, ls).firstOrNull()
         }
+        suspend fun slot(folder: String): String? = entry(folder)?.ref?.value
+        val shot = entry(ArtSlot.SCREENSHOT.folder)
+        val heroShot = heroes && shot != null &&
+            guard { logged.origin((t.segments(ArtSlot.SCREENSHOT) + shot.name).joinToString("/")) }?.source == SourceId.SGDB
         return ArtRefs(
             boxart = slot(ArtSlot.BOX_3D.folder), box2d = slot(ArtSlot.BOX_2D.folder) ?: slot(LEGACY_BOX2D_FOLDER),
-            screenshot = slot(ArtSlot.SCREENSHOT.folder), grid = slot(ArtSlot.GRID.folder), hero = slot(ArtSlot.HERO.folder),
-            wheel = slot(ArtSlot.WHEEL.folder), mix = slot(ArtSlot.MIX.folder),
+            screenshot = shot?.ref?.value, wheel = slot(ArtSlot.WHEEL.folder), mix = slot(ArtSlot.MIX.folder), heroShot = heroShot,
         )
     }
 
@@ -284,21 +299,20 @@ class ScrapeEngine(
     /**
      * A ROM game: asks [known] in order (those in [stopped] left out) only for the kinds it lacks (box: each source's
      * box slots in its hit order; screenshot), each kind from the first hit that downloads and fits; a source that
-     * throws [SourceStop] is [stop]ped and the next one asked. SteamGridDB's stand-ins: a grid is asked for when there
-     * is no box, or no screenshot and no grid (the portrait background); a hero when there is no screenshot and no
-     * hero; a hero written counts as the background ([NO_SCREENSHOT] on a DONE). A DONE names the sources that wrote
-     * ([doneReason]); a PARTIAL names what is missing ([NO_BOX], [NO_SCREENSHOT]). Without [replace], art already on
-     * disk counts (placed since the last scan: never overwritten, and reported when it completes the game). DONE =
-     * every wanted kind written, PARTIAL = some (or only a stand-in the has-art rule does not count, a grid as the
-     * portrait background), NOT_FOUND = none; null = nothing written, and every source relevant to what it lacks (one
-     * with a slot it wants) stopped, this game or before (it stays waiting). Under [replace], a box written removes the
-     * app's own (logged) files of the higher box slots this run did not write, so a stale one cannot stay in front of
-     * it; hand-placed files stay.
+     * throws [SourceStop] is [stop]ped and the next one asked. SteamGridDB's kinds are written into the standard
+     * folders ([fileSlot]): a grid is a 2D box (asked with the box), a hero a screenshot (asked with the screenshot,
+     * tried after a source's screenshots; a hero written is noted [NO_SCREENSHOT] on a DONE). A DONE names the sources
+     * that wrote ([doneReason]); a PARTIAL names what is missing ([NO_BOX], [NO_SCREENSHOT]). Without [replace], art
+     * already on disk counts (placed since the last scan: never overwritten, and reported when it completes the game).
+     * DONE = every wanted kind written, PARTIAL = some, NOT_FOUND = none; null = nothing written, and every source
+     * relevant to what it lacks (one with a slot it wants) stopped, this game or before (it stays waiting). Under
+     * [replace], a box written removes the app's own (logged) files of the higher box slots this run did not write, so a
+     * stale one cannot stay in front of it; hand-placed files stay.
      *
-     * The extras ([extras], NX Redux's flow): with the 2D box on, a game being fetched also gets its 2D box as its own
-     * download beside the 3D one (a 2D box written while the game has no box is its box, as without the setting); with
-     * the wheel wanted ([ArtExtras.wantWheel]) its wheel, from the first source that has one, a [ArtSource.wheelLast]
-     * source's only once every other has been asked (it is asked for the wheel only beside other slots in turn, and for
+     * The extras ([extras], NX Redux's flow): with the 2D box on, a game being fetched also gets its 2D box (a 2D box hit,
+     * else a grid) as its own download beside the 3D one (a 2D box written while the game has no box is its box, as
+     * without the setting); with the wheel wanted ([ArtExtras.wantWheel]) its wheel, from the first source that has
+     * one, a [ArtSource.wheelLast] source's only once every other has been asked (it is asked for the wheel only beside other slots in turn, and for
      * the wheel alone only when no other source had one). Neither is ever a reason to fetch a game nor counts toward
      * DONE. With Generate mix on, a game without a mix is fetched (only for what it lacks, so a game with a screenshot
      * and a box downloads neither again) and its mix made from what it has then ([makeMix]); a mix that cannot be made
@@ -318,17 +332,12 @@ class ScrapeEngine(
         val onDisk = ArtHave.of(before)
         var needBox = replace || !ref.have.box
         var needShot = replace || !ref.have.screenshot
-        // The stand-ins already there (the want rule); under Replace they are fetched again.
-        var haveGrid = !replace && ref.have.grid
-        var haveHero = !replace && ref.have.hero
         // The extras: without Replace only when the index and the disk have none.
         var want2d = ex.box2d && (replace || !(ref.have.box2d || onDisk.box2d))
         var wantWheel = ex.wantWheel && (replace || !(ref.have.wheel || onDisk.wheel))
         if (!replace) {
             if (onDisk.box) needBox = false
             if (onDisk.screenshot) needShot = false
-            if (onDisk.grid) haveGrid = true
-            if (onDisk.hero) haveHero = true
         }
         // A picked screenshot is only changed by another pick or Reset artwork; a hero stands in for a missing screenshot.
         if (picked(ref.gamePath)) needShot = false
@@ -351,11 +360,11 @@ class ScrapeEngine(
         var stoppedHere = 0
         /** Relevant sources already stopped for this job before this game (not asked). */
         var stoppedBefore = 0
-        /** The slots written for this game. */
+        /** The slots written for this game, by the folder written ([fileSlot]). */
         val wrote = HashSet<ArtSlot>()
-        /** The fitted images written for this game, by slot (the mix's inputs: never read back from disk). */
+        /** The fitted images written for this game, by the folder written (the mix's inputs: never read back from disk). */
         val fresh = HashMap<ArtSlot, ByteArray>()
-        /** The background came from a hero, not a screenshot. */
+        /** The screenshot written is a SteamGridDB hero, not a real screenshot. */
         var standInOnly = false
         /** The sources that wrote a file for this game, in order (the Done reason). */
         val writers = LinkedHashSet<String>()
@@ -372,13 +381,18 @@ class ScrapeEngine(
             needShot = false; wantedCount--
             return true
         }
-        /** The slot of the first hit that downloads, fits and is written, or null; a failed write stops (the job pauses). */
+        /**
+         * The hit kind of the first hit that downloads, fits (to its kind's cap) and is written (in its [fileSlot]), or
+         * null; a failed write stops (the job pauses).
+         */
         suspend fun firstWritten(hits: List<ArtHit>): ArtSlot? {
             for (hit in hits) {
                 val image = hit.bytes?.takeIf { it.isNotEmpty() } ?: download(hit.url) ?: continue
                 val fitted = guard { fitter.fit(image, ArtCaps.of(hit.slot)) } ?: continue
                 attempted = true
-                if (writeSlot(target, hit.slot, fitted, hit.origin, replace, ls)) { wrote += hit.slot; fresh[hit.slot] = fitted.bytes; return hit.slot }
+                if (writeSlot(target, hit.slot, fitted, hit.origin, replace, ls)) {
+                    wrote += hit.slot.fileSlot; fresh[hit.slot.fileSlot] = fitted.bytes; return hit.slot
+                }
                 storageFailed = true
                 return null
             }
@@ -394,16 +408,10 @@ class ScrapeEngine(
         var wideDone = false
         try {
             for (src in known) {
-                // A grid: the box when there is none, else the portrait background when there is no screenshot and no grid;
-                // a hero (the landscape background) only when there is no screenshot and no hero.
-                val wantGrid = ArtSlot.GRID in src.slots && (needBox || (needShot && !haveGrid))
-                val wantHero = ArtSlot.HERO in src.slots && needShot && !haveHero
                 val usual = buildSet {
                     if (needBox) addAll(src.slots intersect BOX_SLOTS)
-                    if (want2d && ArtSlot.BOX_2D in src.slots) add(ArtSlot.BOX_2D)
-                    if (wantGrid) add(ArtSlot.GRID)
-                    if (needShot && ArtSlot.SCREENSHOT in src.slots) add(ArtSlot.SCREENSHOT)
-                    if (wantHero) add(ArtSlot.HERO)
+                    if (want2d) addAll(src.slots intersect BOX_2D_SLOTS)
+                    if (needShot) addAll(src.slots intersect SHOT_SLOTS)
                     // A wheel-last source: never asked in turn for the wheel alone (it would spend calls before the
                     // others), unless the wide pass asks it now anyway.
                     if (wantWheel && ArtSlot.WHEEL in src.slots && (!src.wheelLast || isNotEmpty() || wide)) add(ArtSlot.WHEEL)
@@ -423,29 +431,21 @@ class ScrapeEngine(
                 if (hits.none { it.slot in usual }) continue
                 offered = true
                 if (!notified) { notified = true; downloading() }
-                // With the 2D box as its own download, the box here is the 3D one (or a grid); the 2D one follows.
-                val boxSlots = if (want2d) BOX_SLOTS - ArtSlot.BOX_2D else BOX_SLOTS
-                if (needBox) firstWritten(hits.filter { it.slot in boxSlots })?.let { slot ->
+                // With the 2D box as its own download, the box here is the 3D one; the 2D one (a 2D box, else a grid) follows.
+                val boxHits = if (want2d) hits.filter { it.slot == ArtSlot.BOX_3D } else hits.filter { it.slot in BOX_SLOTS }
+                if (needBox) firstWritten(boxHits)?.let { slot ->
                     needBox = false; got++; writers += src.shortLabel
-                    if (slot == ArtSlot.GRID) haveGrid = true
-                    if (replace) removeStaleHigherBoxes(target, slot, wrote, ls)
+                    if (replace) removeStaleHigherBoxes(target, slot.fileSlot, wrote, ls)
                 }
-                if (!storageFailed && want2d) firstWritten(hits.filter { it.slot == ArtSlot.BOX_2D })?.let {
+                if (!storageFailed && want2d) firstWritten(BOX_2D_SLOTS.flatMap { k -> hits.filter { it.slot == k } })?.let {
                     want2d = false; writers += src.shortLabel
                     if (needBox) { needBox = false; got++; if (replace) removeStaleHigherBoxes(target, ArtSlot.BOX_2D, wrote, ls) }
                 }
-                if (!storageFailed && wantGrid && !haveGrid && firstWritten(hits.filter { it.slot == ArtSlot.GRID }) != null) {
-                    haveGrid = true; writers += src.shortLabel
-                }
-                if (!storageFailed && needShot && hits.any { it.slot == ArtSlot.SCREENSHOT } && !pickedSince() &&
-                    firstWritten(hits.filter { it.slot == ArtSlot.SCREENSHOT }) != null
-                ) {
-                    needShot = false; got++; writers += src.shortLabel
-                }
-                if (!storageFailed && wantHero && needShot && hits.any { it.slot == ArtSlot.HERO } && !pickedSince() &&
-                    firstWritten(hits.filter { it.slot == ArtSlot.HERO }) != null
-                ) {
-                    haveHero = true; needShot = false; got++; standInOnly = true; writers += src.shortLabel
+                // The screenshot: a screenshot hit, else a hero (the stand-in noted on a DONE).
+                if (!storageFailed && needShot && hits.any { it.slot in SHOT_SLOTS } && !pickedSince()) {
+                    firstWritten(SHOT_SLOTS.flatMap { k -> hits.filter { it.slot == k } })?.let { slot ->
+                        needShot = false; got++; writers += src.shortLabel; standInOnly = slot == ArtSlot.HERO
+                    }
                 }
                 if (!storageFailed && wantWheel) {
                     val wheels = hits.filter { it.slot == ArtSlot.WHEEL }
@@ -525,14 +525,15 @@ class ScrapeEngine(
         val fitted = guard { fitter.fit(image, ArtCaps.of(ArtSlot.SCREENSHOT)) } ?: return null
         if (!writeSlot(target, ArtSlot.SCREENSHOT, fitted, origin, replace = true, ls)) return null
         if (extras().mix && pixels != null && appMix(target, ls)) makeMix(ref, target, before, mapOf(ArtSlot.SCREENSHOT to fitted.bytes), ls)
-        return indexArt(ref, before, artOnDisk(target, ls), pickedShot = true)
+        return indexArt(ref, before, artOnDisk(target, ls), picked = setOf(ArtSlot.SCREENSHOT))
     }
 
     /** An option's image (not paced): as the fetch downloads it, a miss is null and no connection pauses ([JobPause]). */
     suspend fun downloadImage(url: String): ByteArray? = download(url)
 
     /**
-     * Makes and writes [ref]'s mix ([MixCompositor]) from its screenshot, box (3D, else 2D; never a grid) and wheel: each
+     * Makes and writes [ref]'s mix ([MixCompositor]) from its screenshot (never a hero: [ArtRefs.heroShot]), box (3D,
+     * else 2D) and wheel: each
      * the image just written ([fresh]) or else the file it has (the home tree's, or an extra folder's own `.media`), a
      * missing one left out and one that cannot be read or decoded (out of memory included) left out with a [warn]. As
      * NX Redux, no mix without a screenshot or a box (the wheel alone makes none). Written as the other art (logged
@@ -550,7 +551,7 @@ class ScrapeEngine(
             return lenient { codec.decode(bytes) }
                 ?: run { warn("mix: could not decode the ${slot.folder} of a ${ref.tag} game"); warned = true; null }
         }
-        val shot = image(ArtSlot.SCREENSHOT, now.screenshot)
+        val shot = if (now.heroShot) null else image(ArtSlot.SCREENSHOT, now.screenshot)
         val box = image(ArtSlot.BOX_3D, now.boxart) ?: image(ArtSlot.BOX_2D, now.box2d)
         if (shot == null && box == null) { if (!warned) warn("mix: no screenshot or box for a ${ref.tag} game"); return false }
         val wheel = image(ArtSlot.WHEEL, now.wheel)
@@ -580,8 +581,8 @@ class ScrapeEngine(
         if (ref.android) guard { androidArt?.screenshot(ref.fileName) } != null
         else ref.have.copy(needMix = extras().mix && pixels != null).complete
 
-    /** A ROM with a box and a background whose mix is all it lacks ([hasArt] false): made without asking any source. */
-    private fun lacksOnlyMix(ref: LibraryGameRef): Boolean = !ref.android && ref.have.box && ref.have.background && !hasArt(ref)
+    /** A ROM with a box and a screenshot whose mix is all it lacks ([hasArt] false): made without asking any source. */
+    private fun lacksOnlyMix(ref: LibraryGameRef): Boolean = !ref.android && ref.have.box && ref.have.screenshot && !hasArt(ref)
 
     /**
      * An Android game: ScreenScraper's lookup ([ScreenScraperSource.androidScreenshot]), its `ss` screenshot fitted to
@@ -625,13 +626,15 @@ class ScrapeEngine(
     }
 
     /**
-     * Writes [slot]'s file in [img]'s encoding; logs its path (with [origin]) first, so a write cut short is still
+     * Writes the file of a [kind] hit in its folder ([fileSlot]: a grid is a 2D box, a hero a screenshot) in [img]'s
+     * encoding; logs its path (with [origin]) first, so a write cut short is still
      * resettable. Without [replace] a slot that already has a file (any extension, any case) is never written (the
      * has-art rule keeps such a slot from being asked for; this holds it here too) and counts as written. Under [replace],
      * a successful write removes the slot's file in the other extensions (and cases), so a stale one cannot win the scan.
      * False when the write failed.
      */
-    private suspend fun writeSlot(t: ArtTarget, slot: ArtSlot, img: FittedImage, origin: ArtOrigin, replace: Boolean, ls: Listings): Boolean {
+    private suspend fun writeSlot(t: ArtTarget, kind: ArtSlot, img: FittedImage, origin: ArtOrigin, replace: Boolean, ls: Listings): Boolean {
+        val slot = kind.fileSlot
         val segments = t.segments(slot)
         if (!replace && guard { source.findDir(home, segments)?.let { fileIn(it, t.base, ls) } } != null) return true
         val name = t.name(img.encoding)

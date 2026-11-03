@@ -48,7 +48,7 @@ internal fun gameGridTiles(entries: List<Listed>): List<GridTile.Game> = entries
 
 private fun gameTile(e: Listed, title: String, shot: String? = null) =
     GridTile.Game(
-        shot ?: e.game.screenshotRef?.value, title, e.appId, heroUrl = e.game.heroRef?.value, gridUrl = e.game.gridRef?.value, abstractUrl = abstractArtFor(e),
+        shot ?: e.game.screenshotRef?.value, title, e.appId, heroUrl = null, gridUrl = null, abstractUrl = abstractArtFor(e),
         resumeFrame = shot != null,   // a hidden save state's frame: trimmed and zoomed, as Continue's
     )
 
@@ -73,7 +73,7 @@ internal fun abstractArtFor(e: Listed): String? =
 internal fun continueFrame(row: MainRow.Continue): String? = row.shot ?: row.resume.previewPath
 
 internal fun continuePictures(resumeFrame: String?, e: Listed): List<String> =
-    listOfNotNull(resumeFrame, e.game.screenshotRef?.value, e.game.heroRef?.value, e.game.gridRef?.value, abstractArtFor(e)).distinct()
+    listOfNotNull(resumeFrame, e.game.screenshotRef?.value, abstractArtFor(e)).distinct()
 
 /**
  * A game list's full-screen picture for [e] (the List background, the Backdrop picture, either orientation):
@@ -82,7 +82,7 @@ internal fun continuePictures(resumeFrame: String?, e: Listed): List<String> =
  * slot).
  */
 internal fun gameBackground(e: Listed, portrait: Boolean): String? =
-    backgroundArt(e.game.screenshotRef?.value, e.game.heroRef?.value, e.game.gridRef?.value, portrait) ?: abstractBackgroundFor(e)
+    backgroundArt(e.game.screenshotRef?.value, null, null, portrait) ?: abstractBackgroundFor(e)
 
 /**
  * A game's abstract picture as a full-screen background ([gameBackground]): an Android game's without its icon
@@ -145,7 +145,7 @@ internal fun backdropGames(entries: List<Listed>, art: BackdropArt = BackdropArt
     entries.map {
         BackdropGame(
             it.game.boxartRef?.value, it.game.screenshotRef?.value, it.shown, it.system.tag, it.appId,
-            box2dUrl = it.game.box2dRef?.value, gridUrl = it.game.gridRef?.value, abstractUrl = abstractArtFor(it),
+            box2dUrl = it.game.box2dRef?.value, gridUrl = null, abstractUrl = abstractArtFor(it),
             wheelUrl = it.game.wheelRef?.value, art = art,
         )
     }

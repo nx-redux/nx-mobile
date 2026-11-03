@@ -42,7 +42,7 @@ internal fun detailsHeader(entry: Listed, info: GameInfo?, ra: RaPanel?): GamePa
     val count = list?.let { all -> all.count { it.state != RaAchievementState.LOCKED } to all.size }
         ?: info?.ra?.let { it.unlocked to it.total }
     return GamePanelHeader(
-        entry.shown, panelArt(g.boxartRef?.value, g.box2dRef?.value, g.gridRef?.value, g.screenshotRef?.value),
+        entry.shown, panelArt(g.boxartRef?.value, g.box2dRef?.value, null, g.screenshotRef?.value),
         entry.system.tag, info?.totalMs ?: 0L, count, clockText = "", batteryPercent = null,
     )
 }

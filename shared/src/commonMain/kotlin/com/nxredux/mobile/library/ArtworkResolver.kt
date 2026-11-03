@@ -9,7 +9,7 @@ import kotlinx.coroutines.sync.withLock
  *   - 3D box art:      .media/boxart/<name>
  *   - 2D front cover:  .media/boxart2d/<name> (NX Redux's folder), else the legacy .media/box2d/<name>
  *   - screenshot:      .media/screenshot/<name>
- *   - SteamGridDB:     .media/grid/<name> (2:3 portrait), .media/hero/<name> (wide banner)
+ *   - SteamGridDB's grids and heroes are written as 2D boxes and screenshots; `.media/grid/` and `.media/hero/` are not read
  *   - wheel (logo):    .media/wheel/<name>  (known, not shown)
  *   - mix:             .media/mix/<name>    (NX Redux's mix; known, not shown)
  *   - folder bg:       .media/bg.png   (key "bg" in the top-level map)
@@ -20,7 +20,7 @@ import kotlinx.coroutines.sync.withLock
 class ArtworkResolver(private val source: RomsSource) {
     companion object {
         /** The typed `.media` subfolders a game's art is read from. */
-        val TYPED = listOf("boxart", "boxart2d", "box2d", "screenshot", "grid", "hero", "wheel", "mix")
+        val TYPED = listOf("boxart", "boxart2d", "box2d", "screenshot", "wheel", "mix")
         private val JPEG = listOf(".jpg", ".jpeg")
     }
 

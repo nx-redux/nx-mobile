@@ -205,7 +205,7 @@ private fun GameSwitcherFullScreen(screen: Screen.Switcher, onButton: (NxButton)
             // The resume preview; else the box chain: the 3D box Fit, a 2D front or grid in the case, else "No Preview".
             val preview = entry.resume.previewPath
             var failed by remember(entry) { mutableStateOf(emptySet<String>()) }
-            val box = boxShown(entry.game.boxartRef?.value, entry.game.box2dRef?.value, entry.game.gridRef?.value, failed)
+            val box = boxShown(entry.game.boxartRef?.value, entry.game.box2dRef?.value, null, failed)
             when {
                 preview != null -> KeepUntilLoaded(preview) { shown, done ->
                     AsyncImage(

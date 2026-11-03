@@ -518,8 +518,9 @@ class ArtworkController(
             val (before, deleted) = log.edit { l ->
                 val inScope = if (scopePaths == null) l.entries.toList() else l.entries.filter { it in scopePaths }
                 val touched = inScope.toSet()
-                // Each touched game's files before the deletes: tells the mirror's refs from an extra folder's own.
-                val before = games.filter { g -> artPaths(g).any { it in touched } }.map { it to engine.artOnDisk(it) }
+                // Each touched game's files before the deletes: tells the mirror's refs from an extra folder's own (refs
+                // only: the hero flag would ask the log, whose lock this holds).
+                val before = games.filter { g -> artPaths(g).any { it in touched } }.map { it to engine.artOnDisk(it, heroes = false) }
                 val results = inScope.associateWith { engine.deleteArt(it) }
                 // A file still there after a failed delete stays logged: still the app's, so a later Reset tries it again.
                 l.remove(results.filterValues { it != ScrapeEngine.Deleted.FAILED }.keys)
