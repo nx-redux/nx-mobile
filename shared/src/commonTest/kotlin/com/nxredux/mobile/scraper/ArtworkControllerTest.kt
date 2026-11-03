@@ -943,19 +943,23 @@ class ArtworkControllerTest {
         advanceUntilIdle()
         assertContentEquals(OK_PNG.body, rig.fs.bytesAt(shotPath))
         val before = listed(rig)
-        assertEquals(before.options.first { it.url == "https://o/Tetris-ss" }.key, before.currentKey)   // the fetched screenshot's origin
+        assertEquals(before.options.first { it.url == "https://o/Tetris-ss" }.key, before.currentKeys[ArtSlot.SCREENSHOT])   // the fetched screenshot's origin
         val hero = before.options.first { it.url == "https://g/Tetris-hero2" }
         assertTrue(rig.controller.pickOption(tetris.gamePath, hero))
-        assertContentEquals(heroBytes, rig.fs.bytesAt(shotPath))
-        assertEquals(hero.key, listed(rig).currentKey)
+        // Fitted as a hero (JPEG), the fetched PNG replaced.
+        val heroPath = shotPath.replace(".png", ".jpg")
+        assertContentEquals(heroBytes, rig.fs.bytesAt(heroPath))
+        assertNull(rig.fs.bytesAt(shotPath))
+        assertEquals(hero.key, listed(rig).currentKeys[ArtSlot.SCREENSHOT])
         assertEquals(hero.key, ArtOptionStore(rig.host).get(tetris.gamePath)?.picks?.get(ArtSlot.SCREENSHOT))
-        assertEquals(setOf(tetris.gamePath), rig.controller.pickedGames())   // what the library scan reads
-        assertEquals("Home/Roms/GB/.media/screenshot/Tetris.png", rig.host.applied.last().second.screenshot)
+        assertEquals(mapOf(tetris.gamePath to setOf(ArtSlot.SCREENSHOT)), rig.controller.picks())   // what the library scan reads
+        assertEquals(heroPath, rig.host.applied.last().second.screenshot)
+        assertTrue(rig.host.applied.last().second.heroShot)
         rig.controller.fetchAll(replaceExisting = true)
         advanceUntilIdle()
         assertEquals(JobPhase.DONE, rig.controller.state.value.phase)
-        assertContentEquals(heroBytes, rig.fs.bytesAt(shotPath))
-        assertEquals(hero.key, listed(rig).currentKey)
+        assertContentEquals(heroBytes, rig.fs.bytesAt(heroPath))
+        assertEquals(hero.key, listed(rig).currentKeys[ArtSlot.SCREENSHOT])
     }
 
     @Test fun pick_current_protects_it_without_a_write() = runTest {
@@ -963,7 +967,7 @@ class ArtworkControllerTest {
         rig.http.on("https://o/", OK_PNG)
         rig.http.on("https://", HttpResult(200, heroBytes))
         val result = listed(rig)
-        val current = result.options.first { it.key == result.currentKey }
+        val current = result.options.first { it.key == result.currentKeys[ArtSlot.SCREENSHOT] }
         val writes = logWrites(rig)
         val calls = rig.http.calls.size
         val applied = rig.host.applied.size
@@ -991,7 +995,7 @@ class ArtworkControllerTest {
         rig.cache.files["${tetris.gamePath}\n${hero2.key}"] = ByteArray(0)   // the fitter can't read it: the write fails
         assertFalse(rig.controller.pickOption(tetris.gamePath, hero2))
         assertEquals(hero1.key, ArtOptionStore(rig.host).get(tetris.gamePath)?.picks?.get(ArtSlot.SCREENSHOT))
-        assertEquals(hero1.key, listed(rig).currentKey)
+        assertEquals(hero1.key, listed(rig).currentKeys[ArtSlot.SCREENSHOT])
     }
 
     @Test fun reset_forgets_options_pick_and_cache() = runTest {
@@ -1028,7 +1032,7 @@ class ArtworkControllerTest {
         val zOptions = rig.controller.artOptions(zelda.gamePath, replaceExisting = false)
         val z = zOptions.options.first { it.source == SourceId.SS && it.slot == ArtSlot.SCREENSHOT }
         assertEquals(t.key, z.key)   // the same key within each game
-        assertNull(zOptions.currentKey)
+        assertNull(zOptions.currentKeys[ArtSlot.SCREENSHOT])
         val zRef = assertNotNull(rig.controller.optionImage(zelda.gamePath, z).ref)
         assertEquals(2, rig.cache.files.size)
         assertTrue(zRef != rig.controller.optionImage(tetris.gamePath, t).ref)
@@ -1062,6 +1066,92 @@ class ArtworkControllerTest {
         assertEquals(6L, rig.controller.clearOptionCache())
         assertEquals(0L, rig.controller.optionCacheSize())
         assertEquals(options, listed(rig).options)
+    }
+    private val box2dPath = "Home/Roms/GB/.media/boxart2d/Tetris.jpg"
+    private val gridBytes = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 2)
+
+    /** SteamGridDB offering two grids per game, each with a thumbnail (`https://t/...`) beside its full image (`https://u/...`). */
+    private fun thumbGrids(vararg files: String) = FakeSource(SourceId.SGDB, slots = setOf(ArtSlot.GRID, ArtSlot.HERO)).apply {
+        for (f in files) {
+            val b = f.substringBefore('.')
+            for (n in 1..2) offer(f, ArtSlot.GRID, "https://u/$b-grid$n", assetId = "g$n", thumb = "https://t/$b-grid$n")
+            offer(f, ArtSlot.HERO, "https://g/$b-hero1")
+        }
+    }
+
+    @Test fun previewUsesThumb() = runTest {
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(thumbGrids("Tetris.gb")))
+        rig.http.on("https://", OK_PNG)
+        val grid2 = listed(rig).options.single { it.assetId == "g2" }
+        assertEquals("https://t/Tetris-grid2", grid2.thumb)
+        rig.http.calls.clear(); rig.cache.files.clear()
+        assertNotNull(rig.controller.optionImage(tetris.gamePath, grid2).ref)
+        assertEquals(listOf("https://t/Tetris-grid2"), rig.http.calls)
+        assertTrue(rig.controller.pickOption(tetris.gamePath, grid2))
+        assertEquals(listOf("https://t/Tetris-grid2", "https://u/Tetris-grid2"), rig.http.calls)
+        assertEquals(1, rig.cache.files.size)   // only the preview
+    }
+
+    @Test fun pickBox2dWritesBoxart2d() = runTest {
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb"), thumbGrids("Tetris.gb")))
+        rig.http.on("https://u/Tetris-grid2", HttpResult(200, gridBytes))
+        rig.http.on("https://", OK_PNG)
+        rig.controller.fetchConsole(setOf("GB"))
+        advanceUntilIdle()
+        val before = listed(rig)
+        val shotKey = assertNotNull(before.currentKeys[ArtSlot.SCREENSHOT])
+        assertEquals(before.options.single { it.assetId == "g1" }.key, before.currentKeys[ArtSlot.BOX_2D])   // the fetched grid
+        val shotBytes = rig.fs.bytesAt(shotPath)
+        val grid2 = before.options.single { it.assetId == "g2" }
+        assertTrue(rig.controller.pickOption(tetris.gamePath, grid2))
+        assertContentEquals(gridBytes, rig.fs.bytesAt(box2dPath))
+        assertContentEquals(shotBytes, rig.fs.bytesAt(shotPath))   // the screenshot is not touched
+        val after = listed(rig)
+        assertEquals(grid2.key, after.currentKeys[ArtSlot.BOX_2D])
+        assertEquals(shotKey, after.currentKeys[ArtSlot.SCREENSHOT])
+        assertEquals(box2dPath, rig.host.applied.last().second.box2d)
+        assertEquals(mapOf(tetris.gamePath to setOf(ArtSlot.BOX_2D)), rig.controller.picks())
+        // Replace existing leaves the picked box.
+        rig.controller.fetchAll(replaceExisting = true)
+        advanceUntilIdle()
+        assertContentEquals(gridBytes, rig.fs.bytesAt(box2dPath))
+    }
+
+    @Test fun deadFullLinkKeepsArt() = runTest {
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(thumbGrids("Tetris.gb")))
+        rig.http.on("https://u/Tetris-grid2", OK_PNG)   // ahead of the catch-all, so the test can change it
+        rig.http.on("https://", OK_PNG)
+        val grid2 = listed(rig).options.single { it.assetId == "g2" }
+        val box = rig.fs.bytesAt(box2dPath)
+        rig.http.set("https://u/Tetris-grid2", HttpResult(404, null))
+        assertNotNull(rig.controller.optionImage(tetris.gamePath, grid2).ref)   // the thumbnail answers
+        assertFalse(rig.controller.pickOption(tetris.gamePath, grid2))
+        assertContentEquals(box, rig.fs.bytesAt(box2dPath))
+        assertTrue(rig.controller.picks().isEmpty())
+        assertTrue(listed(rig).options.any { it.key == grid2.key })
+    }
+
+    @Test fun currentKeysFromLog() = runTest {
+        val rig = Rig(this, listOf(tetris))
+        rig.fs.writeBytes(rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "boxart"))!!, "Tetris.png", OK_PNG.body!!)
+        rig.host.files[ArtworkController.LOG_FILE] = logLines("Roms/GB/.media/boxart/Tetris.png" to ArtOrigin(SourceId.SS, "1", "a1"))
+        val a1 = ArtOption(ArtSlot.BOX_3D, "https://m/b-a1.png", SourceId.SS, "1", "a1")
+        val a2 = ArtOption(ArtSlot.BOX_3D, "https://m/b-a2.png", SourceId.SS, "1", "a2")
+        val otherSlot = ArtOption(ArtSlot.BOX_2D, "https://m/b2-a1.png", SourceId.SS, "1", "a1")   // the same asset id, another slot
+        ArtOptionStore(rig.host).record(tetris.gamePath, listOf(otherSlot, a2, a1), wide = true)
+        val result = rig.controller.artOptions(tetris.gamePath, replaceExisting = false, autoSearch = false)
+        assertEquals(mapOf(ArtSlot.BOX_3D to a1.key), result.currentKeys)
+    }
+
+    @Test fun resetForgetsPicksAllSlots() = runTest {
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb"), sgdb("Tetris.gb")))
+        rig.http.on("https://", OK_PNG)
+        val options = listed(rig).options
+        assertTrue(rig.controller.pickOption(tetris.gamePath, options.first { it.url == "https://g/Tetris-hero2" }))
+        assertTrue(rig.controller.pickOption(tetris.gamePath, options.first { it.url == "https://g/Tetris-grid2" }))
+        assertEquals(mapOf(tetris.gamePath to setOf(ArtSlot.SCREENSHOT, ArtSlot.BOX_2D)), rig.controller.picks())
+        rig.controller.resetArt(setOf("GB"))
+        assertNull(rig.controller.picks()[tetris.gamePath])
     }
     private fun logLines(vararg entries: Pair<String, ArtOrigin?>) = entries.joinToString("") { (p, o) -> WrittenArtLog.line(p, o) }
 

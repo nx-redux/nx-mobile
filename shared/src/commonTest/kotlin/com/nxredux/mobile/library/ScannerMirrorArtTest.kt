@@ -3,6 +3,7 @@ package com.nxredux.mobile.library
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.scraper.ArtLogStore
 import com.nxredux.mobile.scraper.ArtOrigin
+import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.scraper.ArtworkController
 import com.nxredux.mobile.scraper.FakeHost
 import com.nxredux.mobile.scraper.LegacyArtMove
@@ -77,7 +78,7 @@ class ScannerMirrorArtTest {
         )
         val src = FakeRomsSource(dirs)
         val picked = GamePath.of(GameRef("x1", "My Sega Genesis", "Sonic.md"))
-        val scanner = LibraryScanner(src, Sidecars(src, MemorySidecarStore()) { home }, pickedShots = { setOf(picked) })
+        val scanner = LibraryScanner(src, Sidecars(src, MemorySidecarStore()) { home }, picks = { mapOf(picked to setOf(ArtSlot.SCREENSHOT)) })
         val index = scanner.scan(home, listOf(x1), emptyMap())
         val games = index.toSystems().flatMap { it.games }
         assertEquals(ContentRef("$mirror/screenshot/Sonic.png"), games.single { it.fileName == "Sonic.md" }.screenshotRef)
@@ -85,6 +86,30 @@ class ScannerMirrorArtTest {
         val art = scanner.readArt(index)
         assertEquals("$mirror/screenshot/Sonic.png", art.getValue(Triple("x1", "My Sega Genesis", "Sonic.md")).screenshot)
         assertEquals("$own/screenshot/Streets.png", art.getValue(Triple("x1", "My Sega Genesis", "Streets.md")).screenshot)
+    }
+
+    @Test fun pickedBoxPrefersMirror() = runTest {
+        // A 2D box pick is written to the home mirror: for that slot the mirror's file wins; the others keep the folder's own.
+        val own = "sd/Ext/My Sega Genesis/.media"
+        val dirs = baseDirs + mapOf(
+            "sd/Ext/My Sega Genesis" to listOf("Sonic.md", ".media"),
+            own to listOf("boxart2d", "screenshot"),
+            "$own/boxart2d" to listOf("Sonic.png"),
+            "$own/screenshot" to listOf("Sonic.png"),
+            mirror to listOf("boxart2d", "screenshot"),
+            "$mirror/boxart2d" to listOf("Sonic.jpg"),
+            "$mirror/screenshot" to listOf("Sonic.png"),
+        )
+        val src = FakeRomsSource(dirs)
+        val picked = GamePath.of(GameRef("x1", "My Sega Genesis", "Sonic.md"))
+        val scanner = LibraryScanner(src, Sidecars(src, MemorySidecarStore()) { home }, picks = { mapOf(picked to setOf(ArtSlot.BOX_2D)) })
+        val index = scanner.scan(home, listOf(x1), emptyMap())
+        val game = index.toSystems().flatMap { it.games }.single { it.fileName == "Sonic.md" }
+        assertEquals(ContentRef("$mirror/boxart2d/Sonic.jpg"), game.box2dRef)
+        assertEquals(ContentRef("$own/screenshot/Sonic.png"), game.screenshotRef)   // not picked: own wins
+        val art = scanner.readArt(index).getValue(Triple("x1", "My Sega Genesis", "Sonic.md"))
+        assertEquals("$mirror/boxart2d/Sonic.jpg", art.box2d)
+        assertEquals("$own/screenshot/Sonic.png", art.screenshot)
     }
 
     @Test fun noMirrorWalksWhenTheExtraHasNoMirrorRoot() = runTest {
@@ -152,7 +177,7 @@ class ScannerMirrorArtTest {
         // A picked extra game shows the mirror's screenshot, and so its hero flag.
         val picked = LibraryScanner(
             src, Sidecars(src, MemorySidecarStore()) { home }, heroShots = { heroes },
-            pickedShots = { setOf(GamePath.of(GameRef("x1", "My Sega Genesis", "Sonic.md"))) },
+            picks = { mapOf(GamePath.of(GameRef("x1", "My Sega Genesis", "Sonic.md")) to setOf(ArtSlot.SCREENSHOT)) },
         ).scan(home, listOf(x1), emptyMap()).toSystems().flatMap { it.games }.single { it.fileName == "Sonic.md" }
         assertTrue(picked.heroShot)
     }

@@ -813,7 +813,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private val sidecars = Sidecars(deps.source, deps.sidecarStore) { home() }
     private val scanner = LibraryScanner(
         deps.source, sidecars, deps.arcadeSets, deps.naomiSets, compute = deps.compute, chdSectors = deps.chdSectors,
-        pickedShots = { artworkController?.pickedGames().orEmpty() },   // a picked extra game keeps its mirror screenshot
+        picks = { artworkController?.picks().orEmpty() },               // a picked extra game slot keeps its mirror file
         heroShots = { artworkController?.heroShots().orEmpty() },       // a SteamGridDB hero screenshot keeps hero drawing
         legacyMove = { legacyArtMove },                                  // old grid/ and hero/ files move once
     )

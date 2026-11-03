@@ -47,6 +47,8 @@ class ArtworkController(
         const val SAVE_EVERY_MS = 5_000L
         /** Change art previews downloaded at once, at most. */
         const val PREVIEW_DOWNLOADS = 3
+        /** The file slots an option is picked into ([ArtSlot.fileSlot] of [OPTION_SLOTS]). */
+        private val PICK_SLOTS = listOf(ArtSlot.SCREENSHOT, ArtSlot.BOX_2D, ArtSlot.BOX_3D, ArtSlot.WHEEL)
     }
 
     private fun auth() = ScraperAuth(credentials.devId, credentials.devPassword, user = credentials.user, password = credentials.password)
@@ -327,33 +329,53 @@ class ArtworkController(
             saved = store.get(gamePath)
         }
         val ref = host.libraryGames().firstOrNull { it.gamePath == gamePath }
-        ArtOptionsResult(saved?.options.orEmpty(), ref?.let { currentKey(it, saved) }, note)
+        ArtOptionsResult(saved?.options.orEmpty(), ref?.let { currentKeys(it, saved) }.orEmpty(), note)
     }
 
     /**
-     * The option [ref]'s screenshot is: the pick when it is still listed, else the one matching the written-art log's
-     * origin for the screenshot file; null for a hand-placed screenshot (or an extra folder's own), or none.
+     * Per file slot, the option [ref]'s file there is: the pick when it is still listed, else the one (of that slot)
+     * matching the written-art log's origin (source and asset id) for the slot's file; no entry for a hand-placed file,
+     * an extra folder's own, or none. The 2D box's legacy `box2d/` file is never matched.
      */
-    private suspend fun currentKey(ref: LibraryGameRef, saved: GameOptions?): String? {
+    private suspend fun currentKeys(ref: LibraryGameRef, saved: GameOptions?): Map<ArtSlot, String> {
         val options = saved?.options.orEmpty()
-        saved?.picks?.get(ArtSlot.SCREENSHOT)?.let { p -> if (options.any { it.key == p }) return p }
-        val shot = ref.art.screenshot ?: return null
-        if (ref.sourceId != GamePath.HOME && engine.artOnDisk(ref).screenshot != shot) return null   // an extra folder's own file
-        val ext = shot.substringAfterLast('.').lowercase()
-        val enc = ArtEncoding.entries.firstOrNull { it.ext == ext } ?: return null
-        val t = try { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) } catch (_: IllegalArgumentException) { return null }
-        val origin = log.origin(t.path(ArtSlot.SCREENSHOT, enc)) ?: return null
-        return options.firstOrNull { it.source == origin.source && it.assetId != null && it.assetId == origin.assetId }?.key
+        if (options.isEmpty()) return emptyMap()
+        val t = try { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) } catch (_: IllegalArgumentException) { null }
+        val disk = t?.let { engine.artOnDisk(ref, heroes = false) }
+        val out = LinkedHashMap<ArtSlot, String>()
+        for (slot in PICK_SLOTS) {
+            val mine = options.filter { it.slot.fileSlot == slot }
+            saved?.picks?.get(slot)?.let { p -> if (mine.any { it.key == p }) { out[slot] = p; continue } }
+            if (t == null || disk == null) continue
+            val file = disk.of(slot) ?: continue
+            // An extra folder's game: the index's file there is the folder's own, not the mirror's.
+            val shown = ref.art.of(slot)
+            if (ref.sourceId != GamePath.HOME && shown != null && shown != file) continue
+            val enc = ArtEncoding.entries.firstOrNull { it.ext == file.substringAfterLast('.').lowercase() } ?: continue
+            val origin = log.origin(t.path(slot, enc)) ?: continue
+            mine.firstOrNull { it.source == origin.source && it.assetId != null && it.assetId == origin.assetId }?.let { out[slot] = it.key }
+        }
+        return out
+    }
+
+    /** The ref of this art's file in the file [slot]. */
+    private fun ArtRefs.of(slot: ArtSlot): String? = when (slot) {
+        ArtSlot.SCREENSHOT -> screenshot
+        ArtSlot.BOX_2D -> box2d
+        ArtSlot.BOX_3D -> boxart
+        ArtSlot.WHEEL -> wheel
+        else -> null
     }
 
     /**
-     * [option]'s preview: the cached image, else downloaded (ScreenScraper's with the current login) and cached. A link
-     * that answered but gave no image is dropped from the list (never the pick); no connection keeps it. Null when
-     * there is no image to show ([OptionImage.dropped] when the option was dropped).
+     * [option]'s preview: the cached image, else its thumbnail link (the full image when it has none) downloaded
+     * (ScreenScraper's with the current login) and cached. A link that answered but gave no image is dropped from the
+     * list (never a pick); no connection keeps it. Null when there is no image to show ([OptionImage.dropped] when the
+     * option was dropped).
      */
     override suspend fun optionImage(gamePath: String, option: ArtOption): OptionImage = withContext(work) {
         optionCache.ref(cacheKey(gamePath, option.key))?.let { return@withContext OptionImage(it) }
-        val got = downloadOption(gamePath, option)
+        val got = downloadPreview(gamePath, option)
         val bytes = got.bytes ?: return@withContext OptionImage(null, got.dropped)
         OptionImage(optionCache.write(cacheKey(gamePath, option.key), bytes))
     }
@@ -364,11 +386,13 @@ class ArtworkController(
     /** [key]'s preview in the cache: per game, as an option's key is unique only within its game. */
     private fun cacheKey(gamePath: String, key: String): String = gamePath + "\n" + key
 
-    /** [option]'s image from the link (at most [PREVIEW_DOWNLOADS] at once); see [optionImage] for a miss. */
-    private suspend fun downloadOption(gamePath: String, option: ArtOption): Download {
-        val url = if (option.source == SourceId.SS) ScraperRequest.withAuth(option.url, auth()) else option.url
+    /**
+     * [option]'s preview from its thumbnail link, else its full link (at most [PREVIEW_DOWNLOADS] at once); see
+     * [optionImage] for a miss.
+     */
+    private suspend fun downloadPreview(gamePath: String, option: ArtOption): Download {
         val bytes = try {
-            previews.withPermit { engine.downloadImage(url) }
+            previews.withPermit { download(option, option.thumb ?: option.url) }
         } catch (_: JobPause) {
             return Download(null)   // no connection: the option stays
         }
@@ -378,28 +402,44 @@ class ArtworkController(
         return Download(null, dropped = true)
     }
 
+    /** [url] of [option] (ScreenScraper's with the current login, as its links are saved without one). */
+    private suspend fun download(option: ArtOption, url: String): ByteArray? =
+        engine.downloadImage(if (option.source == SourceId.SS) ScraperRequest.withAuth(url, auth()) else url)
+
     /**
-     * Writes [option] as the game's screenshot and marks it picked, so no fetch replaces it. Picking the current one
-     * only marks it picked (no write). The pick is marked before the write (a running job reads it); a failed write puts the previous
-     * pick back. False when the image could not be had or written.
+     * The full image a pick writes: [option]'s full link downloaded, not cached (the cache holds previews only); an
+     * option without a thumbnail uses its cached preview, which is that image (else downloaded and cached as one).
+     * Null when it cannot be had; a pick's failed download never drops the option.
+     */
+    private suspend fun fullImage(gamePath: String, option: ArtOption): ByteArray? {
+        if (option.thumb == null) {
+            return optionCache.read(cacheKey(gamePath, option.key))
+                ?: downloadPreview(gamePath, option).bytes?.also { optionCache.write(cacheKey(gamePath, option.key), it) }
+        }
+        return try { download(option, option.url) } catch (_: JobPause) { null }
+    }
+
+    /**
+     * Writes [option] into its file slot ([ArtSlot.fileSlot]: a grid into the 2D box, a hero into the screenshot) and
+     * marks it picked there, so no fetch replaces it. Picking the slot's current one only marks it picked (no write).
+     * The full image is downloaded ([fullImage]); the pick is marked before the write (a running job reads it) and a
+     * failed write puts the previous pick back. False when the image could not be had or written.
      */
     override suspend fun pickOption(gamePath: String, option: ArtOption): Boolean = withContext(work) {
         val ref = host.libraryGames().firstOrNull { it.gamePath == gamePath } ?: return@withContext false
         singleLock.withLock {
             val saved = store.get(gamePath)
             val slot = option.slot.fileSlot
-            if (option.key == currentKey(ref, saved)) {
+            if (option.key == currentKeys(ref, saved)[slot]) {
                 if (saved?.picks?.get(slot) != option.key) withContext(NonCancellable) { store.setPick(gamePath, slot, option.key) }
                 return@withLock true
             }
-            val bytes = optionCache.read(cacheKey(gamePath, option.key))
-                ?: downloadOption(gamePath, option).bytes?.also { optionCache.write(cacheKey(gamePath, option.key), it) }
-                ?: return@withLock false
+            val bytes = fullImage(gamePath, option) ?: return@withLock false
             withContext(NonCancellable) {
                 val previous = saved?.picks?.get(slot)
                 store.setPick(gamePath, slot, option.key)
                 val art = try {
-                    engine.writePick(ref, bytes, option.origin)
+                    engine.writePick(ref, slot, bytes, option)
                 } catch (t: Throwable) {
                     store.setPick(gamePath, slot, previous); throw t
                 }
@@ -411,8 +451,11 @@ class ArtworkController(
         }
     }
 
-    /** The games whose screenshot is a Change art pick (the library scan prefers an extra folder game's mirror copy). */
-    suspend fun pickedGames(): Set<String> = withContext(work) { store.picks().filterValues { ArtSlot.SCREENSHOT in it }.keys }
+    /**
+     * The picked file slots per game ([GameOptions.picks]): the library scan shows an extra folder game's picked slots
+     * from its home mirror, where the pick is written.
+     */
+    suspend fun picks(): Map<String, Set<ArtSlot>> = withContext(work) { store.picks() }
 
     /**
      * The scan's one-time `grid/` and `hero/` move ([LegacyArtMove]) over [source], keeping this controller's

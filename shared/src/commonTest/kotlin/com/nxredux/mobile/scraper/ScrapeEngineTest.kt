@@ -181,6 +181,19 @@ class ScrapeEngineTest {
         assertEquals(0, rig.http.count("t-3d"))
     }
 
+    @Test fun boxPickedMidFetchStillDone() = runTest {
+        // The 2D box is picked while the game is fetched: it leaves the count, and the 3D box written then is not counted
+        // again (the game is DONE, not PARTIAL).
+        var reads = 0
+        val rig = Rig(this, pickedBy = { if (reads++ == 0) emptySet() else setOf(ArtSlot.BOX_2D) })
+        rig.http.on("romnom=Tetris.gb", found("box-3D" to "https://m/t-3d.png", "box-2D" to "https://m/t-2d.png", "ss" to "https://m/t-ss.png"))
+        rig.http.on("https://m/", OK_PNG)
+        val end = rig.run(listOf(tetris))
+        assertContentEquals(OK_PNG.body, rig.fs.bytesAt("Home/Roms/GB/.media/boxart/Tetris.png"))
+        assertEquals(0, rig.http.count("t-2d"))
+        assertEquals(ItemStatus.DONE, end.items.single().status, end.items.single().reason)
+    }
+
     @Test fun pickedWheelNotFetched() = runTest {
         val rig = Rig(this, picked = setOf(ArtSlot.WHEEL), extras = ArtExtras(wheel = true))
         rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png", "box-3D" to "https://m/t-3d.png", "wheel" to "https://m/t-wheel.png"))
@@ -239,7 +252,8 @@ class ScrapeEngineTest {
         fs.writeBytes(shot, "Tetris.jpg", byteArrayOf(7))
         val rig = Rig(this, fs = fs)
         val origin = ArtOrigin("steamgriddb", "9", "77")
-        val refs = rig.engine.writePick(tetris, OK_PNG.body!!, origin)
+        val option = ArtOption(ArtSlot.SCREENSHOT, "https://x/shot", origin.source, origin.gameId, origin.assetId)
+        val refs = rig.engine.writePick(tetris, ArtSlot.SCREENSHOT, OK_PNG.body!!, option)
         assertContentEquals(OK_PNG.body, fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"))
         assertNull(fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.jpg"))
         assertEquals(listOf<Pair<String, ArtOrigin?>>("Roms/GB/.media/screenshot/Tetris.png" to origin), rig.written)
@@ -249,7 +263,7 @@ class ScrapeEngineTest {
     @Test fun write_pick_of_garbage_is_null() = runTest {
         val rig = Rig(this)
         rig.fitter.undecodable = { true }
-        assertNull(rig.engine.writePick(tetris, byteArrayOf(1, 2), ArtOrigin("x")))
+        assertNull(rig.engine.writePick(tetris, ArtSlot.SCREENSHOT, byteArrayOf(1, 2), ArtOption(ArtSlot.SCREENSHOT, "https://x/s", "x")))
         assertTrue(rig.written.isEmpty())
     }
 

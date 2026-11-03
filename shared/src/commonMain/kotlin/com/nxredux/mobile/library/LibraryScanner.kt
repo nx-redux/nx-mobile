@@ -4,6 +4,7 @@ import com.nxredux.mobile.runner.Console
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.scraper.LegacyArtMove
 import com.nxredux.mobile.settings.ExtraFolder
 import com.nxredux.mobile.storage.FileRefs
@@ -90,10 +91,11 @@ class LibraryScanner(
     /** A CD CHD's sectors for the disc probe (Android's libchdr); null places only GD and DVD CHDs. */
     private val chdSectors: com.nxredux.mobile.library.disc.ChdSectors? = null,
     /**
-     * The games ([GameEntry.path]) whose screenshot is a Change art pick, read once per [scan] and [readArt]: an extra
-     * folder's picked game shows its home mirror's screenshot (where the pick is written) over the folder's own.
+     * The Change art picks: per game ([GameEntry.path]) its picked file slots ([ArtSlot.SCREENSHOT], [ArtSlot.BOX_2D],
+     * [ArtSlot.BOX_3D], [ArtSlot.WHEEL]), read once per [scan] and [readArt]: an extra folder's game shows a picked
+     * slot's file from its home mirror (where the pick is written) over the folder's own.
      */
-    private val pickedShots: suspend () -> Set<String> = { emptySet() },
+    private val picks: suspend () -> Map<String, Set<ArtSlot>> = { emptyMap() },
     /**
      * The written-art log's SteamGridDB hero screenshots, as home-relative file paths
      * (`Roms/GB/.media/screenshot/Tetris.jpg`): a game whose chosen screenshot is the home tree's or its mirror's file at
@@ -119,29 +121,30 @@ class LibraryScanner(
         val box3d: Map<String, ContentRef>, val box2d: Map<String, ContentRef>, val screenshot: Map<String, ContentRef>,
         val names: Map<String, String>,
         val wheel: Map<String, ContentRef> = emptyMap(), val mix: Map<String, ContentRef> = emptyMap(),
-        /** An extra folder's home mirror screenshots alone ([withMirror]), for a picked game. */
-        val mirrorShot: Map<String, ContentRef> = emptyMap(),
         /** The names in [screenshot] whose file is a SteamGridDB hero ([heroShots]); an extra folder's own files never are. */
         val heroes: Set<String> = emptySet(),
-        /** The names in [mirrorShot] whose file is a hero. */
-        val mirrorHeroes: Set<String> = emptySet(),
+        /** An extra folder's home mirror alone ([withMirror]), for a game's picked slots. */
+        val mirror: FolderLookup? = null,
     ) {
         /**
          * A game's art of every kind: the file named for [key] (a disc folder's name, else the file's base name), else
-         * for [base]. The one place an art kind is mapped: the scan and [readArt] both read it. [picked]: the screenshot is
-         * a Change art pick, the mirror's first.
+         * for [base]. The one place an art kind is mapped: the scan and [readArt] both read it. [picked]: the file slots
+         * that are a Change art pick, each the mirror's first.
          */
-        fun artFor(key: String, base: String, picked: Boolean = false): ArtRefs {
+        fun artFor(key: String, base: String, picked: Set<ArtSlot> = emptySet()): ArtRefs {
             fun Map<String, ContentRef>.of(): String? = (this[key] ?: this[base])?.value
             fun Map<String, ContentRef>.nameOf(): String? = if (key in this) key else base.takeIf { it in this }
+            val m = mirror?.takeIf { picked.isNotEmpty() }
+            fun slot(s: ArtSlot, mine: Map<String, ContentRef>, theirs: Map<String, ContentRef>?): String? =
+                (if (s in picked) theirs?.of() else null) ?: mine.of()
             // The screenshot and whether it is a hero, from the same map and name.
-            val mirrorName = if (picked) mirrorShot.nameOf() else null
+            val mirrorName = if (ArtSlot.SCREENSHOT in picked) m?.screenshot?.nameOf() else null
             val shotName = if (mirrorName != null) null else screenshot.nameOf()
             return ArtRefs(
-                boxart = box3d.of(), box2d = box2d.of(),
-                screenshot = mirrorName?.let { mirrorShot[it] }?.value ?: shotName?.let { screenshot[it] }?.value,
-                wheel = wheel.of(), mix = mix.of(),
-                heroShot = if (mirrorName != null) mirrorName in mirrorHeroes else shotName != null && shotName in heroes,
+                boxart = slot(ArtSlot.BOX_3D, box3d, m?.box3d), box2d = slot(ArtSlot.BOX_2D, box2d, m?.box2d),
+                screenshot = mirrorName?.let { m?.screenshot?.get(it) }?.value ?: shotName?.let { screenshot[it] }?.value,
+                wheel = slot(ArtSlot.WHEEL, wheel, m?.wheel), mix = mix.of(),
+                heroShot = if (mirrorName != null) mirrorName in m?.heroes.orEmpty() else shotName != null && shotName in heroes,
             )
         }
     }
@@ -369,7 +372,7 @@ class LibraryScanner(
      */
     private suspend fun indexGames(
         reads: ScanReads, files: List<IndexedFile>, lookups: MutableMap<ContentRef, FolderLookup>, tag: String?, scanSets: ScanSets, extraNames: Map<String, String>,
-        picked: Set<String>, heroes: HeroShots,
+        picked: Map<String, Set<ArtSlot>>, heroes: HeroShots,
     ): List<IndexedGame> {
         for (f in files) if (f.lookupFolder !in lookups) lookups[f.lookupFolder] = lookup(reads, f, heroes)
         val core = tag?.let { CoreRegistry.forTag(it)?.id }
@@ -380,7 +383,7 @@ class LibraryScanner(
 
     private fun buildGames(
         files: List<IndexedFile>, lookups: Map<ContentRef, FolderLookup>, tag: String?, core: String?, sets: ArcadeSets, naomi: NaomiSets, extraNames: Map<String, String>,
-        picked: Set<String>,
+        picked: Map<String, Set<ArtSlot>>,
     ): List<IndexedGame> {
         val out = ArrayList<IndexedGame>()
         val plain = ArrayList<Boolean>()   // per out entry: named by a rule, not an alias
@@ -404,7 +407,7 @@ class LibraryScanner(
                     ?: (if (naomiSet) naomi.title(base)?.let(Names::plainTitle) else null) ?: Names.plainName(key),
                 lookupDir = f.lookupDir,
                 firstSeen = f.entry.lastModified,   // the file's date; withFirstSeen keeps a known game's
-            ).withArt(look.artFor(key, base, picked = isPicked(picked, f.sourceId, f.relativeDir, name)))
+            ).withArt(look.artFor(key, base, picked = pickedSlots(picked, f.sourceId, f.relativeDir, name)))
             plain += alias == null
         }
         // An extra folder's copy of a home game (the same file name, any case) is left out: the home copy is the one
@@ -490,18 +493,18 @@ class LibraryScanner(
         // The extra folder's own `.media` wins per typed folder; the home mirror fills only the names it lacks there.
         return FolderLookup(
             mirror.box3d + own.box3d, mirror.box2d + own.box2d, mirror.screenshot + own.screenshot, own.names,
-            mirror.wheel + own.wheel, mirror.mix + own.mix, mirrorShot = mirror.screenshot,
-            heroes = own.heroes + (mirror.heroes - own.screenshot.keys), mirrorHeroes = mirror.heroes,
+            mirror.wheel + own.wheel, mirror.mix + own.mix,
+            heroes = own.heroes + (mirror.heroes - own.screenshot.keys), mirror = mirror,
         )
     }
 
-    /** The picked games' paths; a failed read is none (the folders' own screenshots, as before Change art). */
-    private suspend fun pickedGames(): Set<String> =
-        try { pickedShots() } catch (e: CancellationException) { throw e } catch (_: Throwable) { emptySet() }
+    /** The picked slots per game; a failed read is none (the folders' own files, as before Change art). */
+    private suspend fun pickedGames(): Map<String, Set<ArtSlot>> =
+        try { picks() } catch (e: CancellationException) { throw e } catch (_: Throwable) { emptyMap() }
 
-    /** An extra folder's game in [picked] (a home game's pick is in its own folder: nothing to prefer). */
-    private fun isPicked(picked: Set<String>, sourceId: String, dir: String, file: String): Boolean =
-        sourceId != Recents.HOME && picked.isNotEmpty() && GamePath.of(GameRef(sourceId, dir, file)) in picked
+    /** An extra folder's game's picked slots in [picked] (a home game's pick is in its own folder: nothing to prefer). */
+    private fun pickedSlots(picked: Map<String, Set<ArtSlot>>, sourceId: String, dir: String, file: String): Set<ArtSlot> =
+        if (sourceId == Recents.HOME || picked.isEmpty()) emptySet() else picked[GamePath.of(GameRef(sourceId, dir, file))].orEmpty()
 
     /** The scan's (or [readArt]'s) [heroShots], read when first needed and again after a [legacyMove] changed a folder; a failed read is none. */
     private inner class HeroShots {
@@ -604,7 +607,7 @@ class LibraryScanner(
             for (g in games) {
                 val base = Names.stripExtension(g.file)
                 val key = if (g.lookupDir != g.dir) g.dir.substringAfterLast('/') else base   // a disc folder's game: its folder's name
-                out[artKey(g)] = look.artFor(key, base, picked = isPicked(picked, g.source, g.dir, g.file))
+                out[artKey(g)] = look.artFor(key, base, picked = pickedSlots(picked, g.source, g.dir, g.file))
             }
         }
         out

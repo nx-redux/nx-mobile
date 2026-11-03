@@ -55,10 +55,11 @@ enum class SignInResult { OK, BAD_LOGIN, OFFLINE, UNAVAILABLE, BUILD_REFUSED }
 data class FetchResult(val status: ItemStatus, val reason: String? = null)
 
 /**
- * A game's Change art list: its saved [options] in the order found, [currentKey] the one its screenshot came from (null
- * for a hand-placed screenshot or none), and [note] why some or every source is missing from it (stopped sources, a pause).
+ * A game's Change art list: its saved [options] in the order found, [currentKeys] per file slot ([ArtSlot.fileSlot]) the
+ * option that slot's file came from (no entry for a hand-placed file, an extra folder's own, or none), and [note] why
+ * some or every source is missing from it (stopped sources, a pause).
  */
-data class ArtOptionsResult(val options: List<ArtOption>, val currentKey: String?, val note: String? = null)
+data class ArtOptionsResult(val options: List<ArtOption>, val currentKeys: Map<ArtSlot, String>, val note: String? = null)
 
 /** An option's preview: its [ref], or null when there is none to show; [dropped]: the link is dead and left the list. */
 data class OptionImage(val ref: ContentRef?, val dropped: Boolean = false)
@@ -74,7 +75,7 @@ interface ArtOptionsPort {
     suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean = false, autoSearch: Boolean = true): ArtOptionsResult
     /** [option]'s preview; [OptionImage.dropped] when its link is dead and the option was dropped from the list. */
     suspend fun optionImage(gamePath: String, option: ArtOption): OptionImage
-    /** Writes [option] as the game's screenshot; false when it could not. */
+    /** Writes [option] into its file slot (2D box, 3D box, wheel or screenshot); false when it could not. */
     suspend fun pickOption(gamePath: String, option: ArtOption): Boolean
 }
 

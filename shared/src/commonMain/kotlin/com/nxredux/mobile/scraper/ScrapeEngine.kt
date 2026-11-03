@@ -469,8 +469,10 @@ class ScrapeEngine(
                 if (!notified) { notified = true; downloading() }
                 // With the 2D box as its own download, the box here is the 3D one; the 2D one (a 2D box, else a grid) follows.
                 val boxHits = if (want2d) hits.filter { it.slot == ArtSlot.BOX_3D } else hits.filter { it.slot in BOX_SLOTS }
+                // A box pick made meanwhile ([pickedSince]) may have taken the box out of the count already.
                 if (needBox) firstWritten(boxHits)?.let { slot ->
-                    needBox = false; got++; writers += src.shortLabel
+                    if (needBox) { needBox = false; got++ }
+                    writers += src.shortLabel
                     if (replace) removeStaleHigherBoxes(target, slot.fileSlot, wrote, picks, ls)
                 }
                 // The 2D box picked: the 3D box beside it under Replace (nothing above it to remove).
@@ -558,20 +560,22 @@ class ScrapeEngine(
     }
 
     /**
-     * Writes the user's pick as [ref]'s screenshot: [image] fitted to the screenshot cap, replacing the slot's file
-     * (logged with [origin]; an extra folder's game gets it in its home mirror, never in the folder), then the app's
-     * own mix made again when Generate mix is on. The art for the index ([indexArt], the pick winning); null when the
-     * image cannot be read or the write failed.
+     * Writes the user's pick into [ref]'s file [slot] ([ArtSlot.fileSlot] of [option]'s hit kind): [image] fitted to
+     * the hit kind's cap (a grid's, a hero's), replacing the slot's file in every extension, hand-placed or not (only
+     * the user's pick may); a 2D box also drops the app's own legacy `box2d/` file. Logged with [option]'s origin (a
+     * SteamGridDB hero in the screenshot slot is one: [ArtRefs.heroShot]); an extra folder's game gets it in its home
+     * mirror, never in the folder. The app's own mix is made again when Generate mix is on and a mix input changed. The
+     * art for the index ([indexArt], the pick winning its slot); null when the image cannot be read or the write failed.
      */
-    suspend fun writePick(ref: LibraryGameRef, image: ByteArray, origin: ArtOrigin): ArtRefs? {
-        if (ref.android) return null
+    suspend fun writePick(ref: LibraryGameRef, slot: ArtSlot, image: ByteArray, option: ArtOption): ArtRefs? {
+        if (ref.android || option.slot.fileSlot != slot) return null
         val target = guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) } ?: return null
         val ls = Listings()
         val before = artOnDisk(target, ls)
-        val fitted = guard { fitter.fit(image, ArtCaps.of(ArtSlot.SCREENSHOT)) } ?: return null
-        if (!writeSlot(target, ArtSlot.SCREENSHOT, fitted, origin, replace = true, ls)) return null
-        if (extras().mix && pixels != null && appMix(target, ls)) makeMix(ref, target, before, mapOf(ArtSlot.SCREENSHOT to fitted.bytes), ls)
-        return indexArt(ref, before, artOnDisk(target, ls), picked = setOf(ArtSlot.SCREENSHOT))
+        val fitted = guard { fitter.fit(image, ArtCaps.of(option.slot)) } ?: return null
+        if (!writeSlot(target, option.slot, fitted, option.origin, replace = true, ls)) return null
+        if (slot in MIX_INPUTS && extras().mix && pixels != null && appMix(target, ls)) makeMix(ref, target, before, mapOf(slot to fitted.bytes), ls)
+        return indexArt(ref, before, artOnDisk(target, ls), picked = setOf(slot))
     }
 
     /** An option's image (not paced): as the fetch downloads it, a miss is null and no connection pauses ([JobPause]). */

@@ -205,11 +205,13 @@ class ArtPanelController(
             // One tile per key: the grid's item keys and the preview updates go by it.
             val tiles = result.options.filter { it.slot in SLOT_ORDER }.distinctBy { it.key }.sortedBy { SLOT_ORDER.indexOf(it.slot) }
                 .map { ArtTile(it, artTileLabel(it), image = null, failed = false) }
-            val current = tiles.indexOfFirst { it.option.key == result.currentKey }
+            // The screenshot's current one is marked (the panel's sections come later).
+            val currentKey = result.currentKeys[ArtSlot.SCREENSHOT]
+            val current = tiles.indexOfFirst { it.option.key == currentKey }
             note = result.note
             _panel.update {
                 it?.takeIf { p -> p.gamePath == path }?.copy(
-                    phase = ArtPanelPhase.READY, tiles = tiles, currentKey = result.currentKey,
+                    phase = ArtPanelPhase.READY, tiles = tiles, currentKey = currentKey,
                     focus = if (current >= 0) current else 0, message = messageFor(tiles.size, result.note),
                 ) ?: it
             }

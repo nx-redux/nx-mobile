@@ -11,6 +11,7 @@ import com.nxredux.mobile.scraper.ArtOption
 import com.nxredux.mobile.scraper.ArtOptionsPort
 import com.nxredux.mobile.scraper.ArtOptionsResult
 import com.nxredux.mobile.scraper.ArtSlot
+import com.nxredux.mobile.scraper.fileSlot
 import com.nxredux.mobile.scraper.FetchResult
 import com.nxredux.mobile.scraper.ItemStatus
 import com.nxredux.mobile.scraper.OptionImage
@@ -84,7 +85,7 @@ class ArtPanelTest {
         }
         override suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean, autoSearch: Boolean): ArtOptionsResult {
             calls += "options searchAgain=$searchAgain" + (if (autoSearch) "" else " autoSearch=false")
-            return ArtOptionsResult(options, currentKey)
+            return ArtOptionsResult(options, currentKey?.let { k -> options.firstOrNull { it.key == k }?.let { mapOf(it.slot.fileSlot to k) } }.orEmpty())
         }
         /** A link ending "bad" fails (offline); one ending "gone" is a dead link the controller drops. */
         override suspend fun optionImage(gamePath: String, option: ArtOption): OptionImage = when {
