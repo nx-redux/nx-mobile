@@ -662,6 +662,7 @@ void LibretroDroid::destroy() {
 
 void LibretroDroid::resume() {
     LOGD("Performing libretrodroid resume");
+    hitchResetPending = true;
 
     inputResetPending = true;
 
@@ -684,6 +685,19 @@ void LibretroDroid::pause() {
 }
 
 void LibretroDroid::step() {
+    // nx-mobile diag: a step that stayed on screen too long, split into its parts (Debug log only).
+    if (hitchResetPending.exchange(false)) hitchProbe.reset();
+    if (fpsSync) {
+        const double frameMs = 1000.0 / fpsSync->getContentRefreshRate();
+        if (auto hitch = hitchProbe.begin(HitchProbe::Clock::now(), frameMs)) {
+            LOGW("NXHITCH period=%.1f run=%.1f render=%.1f wait=%.1f outside=%.1f frames=%u screen=%.2f content=%.3f",
+                 hitch->periodMs, hitch->runMs, hitch->renderMs, hitch->waitMs, hitch->outsideMs, hitch->frames,
+                 screenRefreshRate, fpsSync->getContentRefreshRate());
+        }
+        if (hitchProbe.steps() % 600 == 0) {
+            LOGW("NXHITCH summary steps=%lu hitches=%lu", hitchProbe.steps(), hitchProbe.hitches());
+        }
+    }
     std::unique_lock<std::mutex> lock(coreLock);
 
     LOGD("Stepping into retro_run()");
@@ -741,6 +755,7 @@ void LibretroDroid::step() {
             if (!np && !lk) rewind.capture(rewindSerialize);
         }
         rewindPlayed += runs;   // the probe's clock (RewindProbe): a paused step plays none
+        hitchProbe.ranCore(HitchProbe::Clock::now(), runs);
         if (speed > 0) rewindState = (np || lk) ? REWIND_STATUS_OFF : rewind.enabled() ? REWIND_STATUS_READY : offStatus();
     }
     auto& achievements = Achievements::getInstance();
@@ -758,6 +773,9 @@ void LibretroDroid::step() {
         }
     }
 
+    hitchProbe.rendered(HitchProbe::Clock::now());
+    if (runs == 0) hitchProbe.reset();   // paused or an FF step with nothing due: its gap is no hitch
+
     // The frame sleep runs without the core lock, so achievements and the off-thread save calls aren't held up by it.
     lock.unlock();
     if (fastForward) {
@@ -766,6 +784,8 @@ void LibretroDroid::step() {
     } else if (fpsSync) {
         fpsSync->wait();
     }
+    hitchProbe.waited(HitchProbe::Clock::now());
+    if (fastForward) hitchProbe.reset();
     lock.lock();
 
     // A core that changed its frame rate mid-game (SET_SYSTEM_AV_INFO) is paced at the new rate from the next step.

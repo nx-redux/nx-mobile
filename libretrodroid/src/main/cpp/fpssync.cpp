@@ -22,14 +22,22 @@
 namespace libretrodroid {
 
 unsigned FPSSync::advanceFrames() {
+    return advanceFrames(std::chrono::steady_clock::now());
+}
+
+// nx-mobile 2026-11-03: a step that ends a frame or two late shows its frame late instead of running two frames at
+// once (upstream caught up at one frame late, skipping a frame and showing the other for 33 ms: SMG2's stutters on the
+// Nova). The clock stays behind, so the next steps skip their sleep until they catch up. Only past MAX_LAG_FRAMES (a
+// device that cannot keep up) does it run frames back to back to hold the game's speed.
+unsigned FPSSync::advanceFrames(TimePoint now) {
     if (useVSync) return 1;
 
     if (lastFrame == MIN_TIME) {
-        start();
+        start(now);
     }
 
-    auto now = std::chrono::steady_clock::now();
-    auto frames = std::max((now - lastFrame) / sampleInterval, (long long) 1);
+    const long long behind = (now - lastFrame) / sampleInterval;
+    const long long frames = behind > MAX_LAG_FRAMES ? behind : 1;
     lastFrame = lastFrame + sampleInterval * frames;
 
     return frames;
@@ -43,9 +51,9 @@ FPSSync::FPSSync(double contentRefreshRate, double screenRefreshRate) {
     reset();
 }
 
-void FPSSync::start() {
+void FPSSync::start(TimePoint now) {
     LOGI("Starting game with fps %f on a screen with refresh rate %f. Using vsync: %d", contentRefreshRate, screenRefreshRate, useVSync);
-    lastFrame = std::chrono::steady_clock::now();
+    lastFrame = now;
 }
 
 void FPSSync::reset() {

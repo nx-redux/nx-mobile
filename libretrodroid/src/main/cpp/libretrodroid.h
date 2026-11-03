@@ -39,6 +39,7 @@
 #include "renderers/renderer.h"
 #include "fpssync.h"
 #include "fastforward.h"
+#include "hitchprobe.h"
 #include "rewind.h"
 #include "rewindprobe.h"
 #include "input.h"
@@ -352,6 +353,8 @@ private:
     std::atomic<bool> fastForwardAudible { false };
     std::atomic<int> resamplingQuality { 2 };
     FastForwardPacer fastForwardPacer;
+    HitchProbe hitchProbe;   // nx-mobile diag: GL thread
+    std::atomic<bool> hitchResetPending { false };   // resume() (UI thread) asks step() to restart it
     unsigned appliedFastForwardSpeed = 0;
     bool appliedFastForwardAudible = false;
     // Read by the audio callback, which threaded cores call off the GL thread: drop the samples (muted FF).

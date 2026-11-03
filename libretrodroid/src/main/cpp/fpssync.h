@@ -33,6 +33,8 @@ public:
 
     void reset();
     unsigned advanceFrames();
+    unsigned advanceFrames(TimePoint now);   // nx-mobile: the clock injected (host tests)
+    TimePoint deadline() const { return lastFrame; }   // when this step's frame is due; wait() sleeps until it
     void wait();
     double getTimeStretchFactor();
     double getContentRefreshRate() const { return contentRefreshRate; }
@@ -43,8 +45,11 @@ private:
     bool useVSync;
     const double FPS_TOLERANCE = 5;
 
+    // nx-mobile 2026-11-03: how many whole frames the sleep timer may fall behind before it runs frames back to back.
+    static constexpr long long MAX_LAG_FRAMES = 2;
+
     const TimePoint MIN_TIME = TimePoint::min();
-    void start();
+    void start(TimePoint now);
 
     TimePoint lastFrame = MIN_TIME;
     Duration sampleInterval;
