@@ -17,6 +17,7 @@ import com.nxredux.mobile.skin.PlacedControl
 import com.nxredux.mobile.skin.SkinCell
 import com.nxredux.mobile.skin.SkinPackManifest
 import com.nxredux.mobile.skin.SkinPlacement
+import com.nxredux.mobile.skin.skinTiles
 import com.nxredux.mobile.ui.nx.PadEvent
 import com.nxredux.mobile.ui.nx.SkinPackSource
 import com.nxredux.mobile.ui.nx.SkinPadTouch
@@ -124,7 +125,7 @@ internal class PadSkinView(
     private var shown: SkinPlacement? = null
     private fun refresh() {
         val p = placement
-        val ids = p?.spec?.frame?.strip?.labels?.map { it.id }?.toSet().orEmpty()
+        val ids = p?.spec?.let { sp -> (listOfNotNull(sp.frame?.strip) + sp.pieces.mapNotNull { it.strip }).flatMap { st -> st.labels.map { it.id } } }?.toSet().orEmpty()
         val gone = if (stripHidden) ids else ids.filter { id -> slotOf(id)?.let { it !in shortcuts } ?: false }.toSet()
         shown = if (p == null || gone.isEmpty()) p
             else p.copy(pieces = if (stripHidden) p.pieces.filterNot { it.strip } else p.pieces, controls = spread(p.controls.filterNot { it.spec.id in gone }, p, ids))
@@ -188,7 +189,9 @@ internal class PadSkinView(
             val text = c.spec.label ?: continue
             if (c.spec.labelH <= 0f) continue
             label.textSize = c.spec.labelH / SKIN_LABEL_CAP
-            canvas.drawText(text, c.x, c.y + c.spec.labelDy + c.spec.labelH / 2f, label)   // the baseline: cap height centred
+            val dx = c.spec.labelDx
+            label.textAlign = if (dx < 0f) Paint.Align.RIGHT else if (dx > 0f) Paint.Align.LEFT else Paint.Align.CENTER
+            canvas.drawText(text, c.x + dx, c.y + c.spec.labelDy + c.spec.labelH / 2f, label)   // the baseline: cap height centred
         }
         // the strip's touch slots: the action's short name, in the label grey (a running toggle in white)
         for (c in p.controls) {
@@ -210,27 +213,17 @@ internal class PadSkinView(
         }
     }
 
-    /** One slice: copied where its part is fixed, tiled in picture-size steps where it repeats (the last tile cut). */
+    /** One slice: copied where its part is fixed, laid in mirrored tiles where it repeats ([skinTiles]). */
     private fun drawCell(canvas: Canvas, pic: Bitmap, c: SkinCell, k: Float) {
-        val tileW = c.src.width * k
-        val tileH = c.src.height * k
-        if (tileW <= 0f || tileH <= 0f || c.dst.width <= 0f || c.dst.height <= 0f) return
-        // a plain strip a few px across is stretched, not tiled: the same look in one draw (tiled, a big window's
-        // strips would be thousands of draws a frame)
-        val tileX = c.tileX && c.src.width > SKIN_STRETCH_MAX
-        val tileY = c.tileY && c.src.height > SKIN_STRETCH_MAX
-        val nx = if (tileX) ceil(c.dst.width / tileW - 0.001f).toInt().coerceAtLeast(1) else 1
-        val ny = if (tileY) ceil(c.dst.height / tileH - 0.001f).toInt().coerceAtLeast(1) else 1
-        for (j in 0 until ny) for (i in 0 until nx) {
-            val x0 = c.dst.x + i * (if (tileX) tileW else c.dst.width)
-            val y0 = c.dst.y + j * (if (tileY) tileH else c.dst.height)
-            val w = if (tileX) min(tileW, c.dst.x + c.dst.width - x0) else c.dst.width
-            val h = if (tileY) min(tileH, c.dst.y + c.dst.height - y0) else c.dst.height
-            val sw = if (tileX) w / k else c.src.width
-            val sh = if (tileY) h / k else c.src.height
-            src.set(c.src.x.roundToInt(), c.src.y.roundToInt(), (c.src.x + sw).roundToInt(), (c.src.y + sh).roundToInt())
-            dst.set(x0.roundToInt(), y0.roundToInt(), (x0 + w).roundToInt(), (y0 + h).roundToInt())
-            if (src.width() > 0 && src.height() > 0 && dst.width() > 0 && dst.height() > 0) canvas.drawBitmap(pic, src, dst, paint)
+        for (t in skinTiles(c, k, SKIN_STRETCH_MAX)) {
+            src.set(t.src.x.roundToInt(), t.src.y.roundToInt(), (t.src.x + t.src.width).roundToInt(), (t.src.y + t.src.height).roundToInt())
+            dst.set(t.dst.x.roundToInt(), t.dst.y.roundToInt(), (t.dst.x + t.dst.width).roundToInt(), (t.dst.y + t.dst.height).roundToInt())
+            if (src.width() <= 0 || src.height() <= 0 || dst.width() <= 0 || dst.height() <= 0) continue
+            if (!t.flipX && !t.flipY) { canvas.drawBitmap(pic, src, dst, paint); continue }
+            val save = canvas.save()
+            canvas.scale(if (t.flipX) -1f else 1f, if (t.flipY) -1f else 1f, dst.exactCenterX(), dst.exactCenterY())
+            canvas.drawBitmap(pic, src, dst, paint)
+            canvas.restoreToCount(save)
         }
     }
 

@@ -91,7 +91,8 @@ data class SkinLayoutSpec(
  * stretched from a 2 px slice at its middle. Centred in that room. [fill]: the frame takes the whole room instead (the
  * screen is then all of it inside the border; the game places its picture in there by its own rules). [strip]: the
  * on-screen buttons under the screen. [side], [top], [bottom]: the room's margins to the window's sides, top and
- * bottom in render px, when they differ from the frame's own place in the render (-1: its own).
+ * bottom in render px, when they differ from the frame's own place in the render (-1: its own). [hinge]: half-folded,
+ * the room ends this far above the fold instead (-1: a layout not made for half-folding).
  */
 @Serializable
 data class FrameSpec(
@@ -108,6 +109,7 @@ data class FrameSpec(
     val side: Int = -1,
     val top: Int = -1,
     val bottom: Int = -1,
+    val hinge: Int = -1,
 )
 
 /**
@@ -154,6 +156,8 @@ enum class PieceLevel {
  * further in from that edge where the window is wide enough ([SkinSolver.inwardShare]). A piece with a [glass] (the
  * large layout's touch screen in its frame) has that screen at its spot (piece px), at its drawn size. [scale]: drawn
  * at that much of its size in the parts picture (the landscape menu's smaller pads), [x], [y] its drawn top-left.
+ * [strip]: on-screen buttons under its [glass] (the large layout's touch screen), as a frame's strip, [StripSpec.y]
+ * from the piece's bottom.
  */
 @Serializable
 data class PieceSpec(
@@ -168,6 +172,7 @@ data class PieceSpec(
     val glass: GlassSpec? = null,
     val level: PieceLevel = PieceLevel.BOTTOM,
     val scale: Float = 1f,
+    val strip: StripSpec? = null,
 )
 
 /** How a [SliceNode] cuts its box: into side-by-side columns or stacked rows. */
@@ -257,7 +262,8 @@ enum class ControlShape {
  * for a circle (0: three quarters of [r]), [hw] x [hh] for a rect, and arms [arm] each way across for the d-pad (0: a
  * third of [r]). In a layout built from pieces, [anchor], [inward] and [level] place it like its piece (else it is where its slice
  * lands). [label]: a word the app writes under it (the skin's picture has none there), its cap height [labelH] centred
- * [labelDy] below the control's centre.
+ * [labelDy] below the control's centre, and [labelDx] across (beside the button: right-aligned left of it when
+ * negative, left-aligned right of it when positive).
  */
 @Serializable
 data class ControlSpec(
@@ -274,6 +280,7 @@ data class ControlSpec(
     val inward: Int = 0,
     val label: String? = null,
     val labelDy: Float = 0f,
+    val labelDx: Float = 0f,
     val labelH: Float = 0f,
     val level: PieceLevel = PieceLevel.BOTTOM,
 )

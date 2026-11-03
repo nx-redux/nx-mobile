@@ -38,6 +38,8 @@ import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.misans_semibold
 import org.jetbrains.compose.resources.Font
 import com.nxredux.mobile.skin.SkinCell
+import com.nxredux.mobile.skin.skinTiles
+import androidx.compose.ui.graphics.drawscope.scale
 import com.nxredux.mobile.skin.SkinPackManifest
 import com.nxredux.mobile.skin.SkinPiece
 import com.nxredux.mobile.skin.SkinPlacement
@@ -109,7 +111,9 @@ fun SkinPad(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
                     fontSize = (c.spec.labelH / SKIN_LABEL_CAP).toSp())   // role: a printed button label
                 val m = measurer.measure(text, style)
                 val capTop = c.y + c.spec.labelDy - c.spec.labelH / 2f
-                drawText(m, topLeft = Offset(c.x - m.size.width / 2f, capTop + c.spec.labelH - m.firstBaseline))
+                val dx = c.spec.labelDx   // beside the button: right-aligned left of it, left-aligned right of it
+                val left = if (dx < 0f) c.x + dx - m.size.width else if (dx > 0f) c.x + dx else c.x - m.size.width / 2f
+                drawText(m, topLeft = Offset(left, capTop + c.spec.labelH - m.firstBaseline))
             }
           }
         }
@@ -142,32 +146,20 @@ private fun DrawScope.drawPiece(parts: ImageBitmap, p: SkinPiece) {
     }
 }
 
-/** One slice: copied where its part is fixed, tiled in picture-size steps where it repeats (the last tile cut). */
+/** One slice: copied where its part is fixed, laid in mirrored tiles where it repeats ([skinTiles]). */
 private fun DrawScope.drawCell(pic: ImageBitmap, c: SkinCell, k: Float) {
-    val tileW = c.src.width * k
-    val tileH = c.src.height * k
-    if (tileW <= 0f || tileH <= 0f || c.dst.width <= 0f || c.dst.height <= 0f) return
-    // a plain strip a few px across is stretched, not tiled: the same look in one draw (tiled, a big window's
-    // strips would be thousands of draws a frame)
-    val tileX = c.tileX && c.src.width > SKIN_STRETCH_MAX
-    val tileY = c.tileY && c.src.height > SKIN_STRETCH_MAX
-    val nx = if (tileX) ceil(c.dst.width / tileW - 0.001f).toInt().coerceAtLeast(1) else 1
-    val ny = if (tileY) ceil(c.dst.height / tileH - 0.001f).toInt().coerceAtLeast(1) else 1
-    for (j in 0 until ny) for (i in 0 until nx) {
-        val x0 = c.dst.x + i * (if (tileX) tileW else c.dst.width)
-        val y0 = c.dst.y + j * (if (tileY) tileH else c.dst.height)
-        val w = if (tileX) min(tileW, c.dst.x + c.dst.width - x0) else c.dst.width
-        val h = if (tileY) min(tileH, c.dst.y + c.dst.height - y0) else c.dst.height
-        val sw = if (tileX) w / k else c.src.width
-        val sh = if (tileY) h / k else c.src.height
-        val sx = c.src.x.roundToInt()
-        val sy = c.src.y.roundToInt()
-        val srcSize = IntSize((c.src.x + sw).roundToInt() - sx, (c.src.y + sh).roundToInt() - sy)
-        val dx = x0.roundToInt()
-        val dy = y0.roundToInt()
-        val dstSize = IntSize((x0 + w).roundToInt() - dx, (y0 + h).roundToInt() - dy)
-        if (srcSize.width > 0 && srcSize.height > 0 && dstSize.width > 0 && dstSize.height > 0) {
-            drawImage(pic, IntOffset(sx, sy), srcSize, IntOffset(dx, dy), dstSize)
+    for (t in skinTiles(c, k, SKIN_STRETCH_MAX)) {
+        val sx = t.src.x.roundToInt()
+        val sy = t.src.y.roundToInt()
+        val srcSize = IntSize((t.src.x + t.src.width).roundToInt() - sx, (t.src.y + t.src.height).roundToInt() - sy)
+        val dx = t.dst.x.roundToInt()
+        val dy = t.dst.y.roundToInt()
+        val dstSize = IntSize((t.dst.x + t.dst.width).roundToInt() - dx, (t.dst.y + t.dst.height).roundToInt() - dy)
+        if (srcSize.width <= 0 || srcSize.height <= 0 || dstSize.width <= 0 || dstSize.height <= 0) continue
+        if (!t.flipX && !t.flipY) { drawImage(pic, IntOffset(sx, sy), srcSize, IntOffset(dx, dy), dstSize); continue }
+        val pivot = Offset(dx + dstSize.width / 2f, dy + dstSize.height / 2f)
+        scale(if (t.flipX) -1f else 1f, if (t.flipY) -1f else 1f, pivot) {
+            this@drawCell.drawImage(pic, IntOffset(sx, sy), srcSize, IntOffset(dx, dy), dstSize)
         }
     }
 }

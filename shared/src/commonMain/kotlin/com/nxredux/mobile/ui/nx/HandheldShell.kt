@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
+import com.nxredux.mobile.layout.DeviceTraits
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Box
@@ -121,7 +122,7 @@ fun HandheldShell(
                 val h = constraints.maxHeight + above
                 val dpi = (density.density * 160f).roundToInt()
                 remember(skin, w, h, dpi) {
-                    SkinChoice.placeMenu(skin.manifest, w, h, dpi)?.let { p ->
+                    SkinChoice.placeMenu(skin.manifest, w, h, dpi, foldable = DeviceTraits.canHalfFold)?.let { p ->
                         val parts = p.spec.parts?.let { skin.picture(it) ?: return@let null }
                         skin.picture(p.spec.image)?.takeIf { p.spec.parts == null || parts != null }?.let { Triple(p, it, parts) }
                     }

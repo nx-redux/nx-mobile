@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.layout.DeviceTraits
 import android.content.res.Configuration
 import android.os.Build
 import android.os.SystemClock
@@ -860,7 +861,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val top = 0
         val key = SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, top)
         val placed = skinCache?.takeIf { it.first == key }?.second ?: SkinChoice.place(
-            pack.manifest, w, h, key.dpi, tablet, ds, aspect?.let { (it * 240f) to 240f }, hinge, top,
+            pack.manifest, w, h, key.dpi, tablet, ds, aspect?.let { (it * 240f) to 240f }, hinge, top, DeviceTraits.canHalfFold,
         ).also { skinCache = key to it }
         skinView?.placement = placed
         return placed

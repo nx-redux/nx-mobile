@@ -6,6 +6,41 @@ import kotlin.math.abs
 /** One slice of a skin picture: [src] in the picture's px drawn at [dst]; [tileX] / [tileY]: repeated along that axis. */
 data class SkinCell(val src: PxRect, val dst: PxRect, val tileX: Boolean, val tileY: Boolean)
 
+/** One draw of a cell: [src] (picture px, whole) at [dst] (window px), mirrored across where [flipX] / [flipY]. */
+data class SkinTile(val src: PxRect, val dst: PxRect, val flipX: Boolean, val flipY: Boolean)
+
+/**
+ * The draws for [c] at [k] window px per picture px. A fixed slice, or a repeating one at most [stretchMax] picture px
+ * across, is one draw (stretched). A wider repeating slice is laid as an odd number of tiles, every other one mirrored,
+ * so each tile meets the next on the same edge and the run starts and ends as the picture does on either side (no seam);
+ * the tiles share the length alike, the count picked so each stays nearest the picture's own size (the board's grain
+ * kept, never smeared into lines).
+ */
+fun skinTiles(c: SkinCell, k: Float, stretchMax: Float): List<SkinTile> {
+    if (c.src.width <= 0f || c.src.height <= 0f || c.dst.width <= 0f || c.dst.height <= 0f) return emptyList()
+    fun counts(tile: Boolean, src: Float, dst: Float): Int {
+        if (!tile || src <= stretchMax) return 1
+        val n = dst / (src * k)
+        // odd only: 1, 3, 5... the nearest to n by the tile's scale (above or below its size)
+        var best = 1
+        var i = 3
+        while (i <= n * 2 + 1) {
+            if (abs(kotlin.math.ln(n / i)) < abs(kotlin.math.ln(n / best))) best = i
+            i += 2
+        }
+        return best
+    }
+    val nx = counts(c.tileX, c.src.width, c.dst.width)
+    val ny = counts(c.tileY, c.src.height, c.dst.height)
+    val w = c.dst.width / nx
+    val h = c.dst.height / ny
+    return buildList {
+        for (j in 0 until ny) for (i in 0 until nx) {
+            add(SkinTile(c.src, PxRect(c.dst.x + i * w, c.dst.y + j * h, w, h), flipX = i % 2 == 1, flipY = j % 2 == 1))
+        }
+    }
+}
+
 /** A piece of a layout built from pieces: [src] in its parts picture drawn at [dst] (scaled when the sizes differ). */
 /** [strip]: one of the frame strip's shortcut labels (hidden with the in-game menu open). */
 data class SkinPiece(val src: PxRect, val dst: PxRect, val strip: Boolean = false)
@@ -83,8 +118,10 @@ object SkinSolver {
      * inside the border (its scale: the picture's as big as fits in it). Null when the window is smaller than the background or leaves no room.
      * [topInset]: window px at the top the screen keeps clear of (a camera cutout, the status bar); the background still
      * runs under it, and the frame starts right below it (the inset is its top margin, in place of the render's own).
+     * [hingeY]: the fold's middle in window px while half-folded, for a frame made for it ([FrameSpec.hinge]): the frame's
+     * room ends above the fold, and every piece must lie below it (else null).
      */
-    fun placePieces(spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, picture: Pair<Float, Float>? = null, topInset: Float = 0f): SkinPlacement? {
+    fun placePieces(spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, picture: Pair<Float, Float>? = null, topInset: Float = 0f, hingeY: Float? = null): SkinPlacement? {
         val frame = spec.frame ?: return null
         if (k <= 0f || spec.refW <= 0 || spec.refH <= 0) return null
         val bg = place(spec.copy(glasses = emptyList(), scales = listOf(emptyList()), controls = emptyList()), windowW, windowH, k) ?: return null
@@ -111,7 +148,11 @@ object SkinSolver {
         val ownTop = if (frame.top >= 0) frame.top.toFloat() else frame.y.toFloat()
         val roomTop = if (topInset > 0f) topInset / k else ownTop   // the inset is the frame's top margin
         val roomW = w - left - right
-        val roomH = h - roomTop - (if (frame.bottom >= 0) frame.bottom.toFloat() else (spec.refH - frame.y - frame.h).toFloat())
+        val folded = hingeY != null && frame.hinge >= 0
+        val roomH = if (folded) hingeY!! / k - frame.hinge - roomTop
+            else h - roomTop - (if (frame.bottom >= 0) frame.bottom.toFloat() else (spec.refH - frame.y - frame.h).toFloat())
+        // half-folded, the pad's pieces all go below the fold
+        if (folded && spec.pieces.any { it.y + down(it.level) < hingeY!! / k + frame.hinge }) return null
         val (aw, ah) = gameSize(g.screen, picture) ?: (g.w.toFloat() to g.h.toFloat())   // the menu's: the glass's own
         val fit = minOf((roomW - bl - br) / aw, (roomH - bt - bb) / ah)
         if (fit <= 0f) return null
@@ -156,11 +197,23 @@ object SkinSolver {
             pieces += SkinPiece(PxRect(p.sx.toFloat(), p.sy.toFloat(), p.w.toFloat(), p.h.toFloat()), win(px, py, p.w * p.scale, p.h * p.scale))
             p.glass?.let { pg ->
                 val gameW = gameSize(pg.screen, picture)?.first ?: pg.w.toFloat()
-                glasses += PlacedGlass(pg.id, pg.screen, win(px + pg.x, py + pg.y, pg.w.toFloat(), pg.h.toFloat()), pg.w * k / gameW)
+                val sc = p.scale
+                glasses += PlacedGlass(pg.id, pg.screen, win(px + pg.x * sc, py + pg.y * sc, pg.w * sc, pg.h * sc), pg.w * sc * k / gameW)
+            }
+            p.strip?.let { st ->
+                // the piece's strip: an even share of its glass's width each (the whole piece's without one)
+                val sc = p.scale
+                val sx = px + (p.glass?.x ?: 0) * sc; val sw = (p.glass?.w ?: p.w) * sc
+                val share = sw / st.labels.size
+                st.labels.forEachIndexed { i, l ->
+                    val cx = sx + share * (i + 0.5f)
+                    val cy = py + (p.h - st.y) * sc
+                    controls += PlacedControl(ControlSpec(l.id, ControlShape.RECT, cx, cy, hw = share / 2f * k, hh = st.hh * sc * k), cx * k, cy * k)
+                }
             }
         }
         controls += spec.controls.map { c ->
-            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelH = c.labelH * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward)) * k, (c.y + down(c.level)) * k)
+            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward)) * k, (c.y + down(c.level)) * k)
         }
         return SkinPlacement(spec, k, bg.cells, glasses, controls, pieces)
     }
@@ -209,7 +262,7 @@ object SkinSolver {
         }
         val controls = spec.controls.map { c ->
             val (x, y) = ctx.map(c.x, c.y) ?: return null
-            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelH = c.labelH * k), x * k, y * k)
+            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k), x * k, y * k)
         }
         val windowCells = cells.map { it.copy(dst = PxRect(it.dst.x * k, it.dst.y * k, it.dst.width * k, it.dst.height * k)) }
         return SkinPlacement(spec, k, windowCells, glasses, controls)
