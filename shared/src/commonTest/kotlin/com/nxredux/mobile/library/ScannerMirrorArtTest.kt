@@ -7,7 +7,9 @@ import com.nxredux.mobile.storage.GameRef
 import com.nxredux.mobile.storage.MemorySidecarStore
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 
 class ScannerMirrorArtTest {
@@ -105,5 +107,76 @@ class ScannerMirrorArtTest {
         val src = FakeRomsSource(baseDirs + mapOf("Home/Roms" to listOf(".sources", "Sega Genesis (MD)"), "Home/Roms/Sega Genesis (MD)" to listOf("Sonic.md")))
         val index = LibraryScanner(src, Sidecars(src, MemorySidecarStore()) { home }).scan(home, emptyList(), emptyMap())
         assertNull(index.toSystems().flatMap { it.games }.single { it.fileName == "Sonic.md" }.boxartRef)
+    }
+    @Test fun heroFlagFromLog() = runTest {
+        // A home game's screenshot logged as a SteamGridDB hero is a hero; an extra folder's own file of the same name
+        // is not (only the mirror's is logged), while the mirror's own hero is.
+        val gb = "Home/Roms/Game Boy (GB)"
+        val own = "sd/Ext/My Sega Genesis/.media"
+        val dirs = baseDirs + mapOf(
+            "Home/Roms" to listOf(".sources", "Game Boy (GB)"),
+            gb to listOf("G.gb", "H.gb", ".media"),
+            "$gb/.media" to listOf("screenshot"),
+            "$gb/.media/screenshot" to listOf("G.jpg", "H.png"),
+            "sd/Ext/My Sega Genesis" to listOf("Sonic.md", "Streets.md", ".media"),
+            own to listOf("screenshot"),
+            "$own/screenshot" to listOf("Sonic.png"),
+            mirror to listOf("screenshot"),
+            "$mirror/screenshot" to listOf("Sonic.jpg", "Streets.jpg"),
+        )
+        val heroes = setOf(
+            "Roms/Game Boy (GB)/.media/screenshot/G",
+            "Roms/.sources/x1/My Sega Genesis/.media/screenshot/Sonic",
+            "Roms/.sources/x1/My Sega Genesis/.media/screenshot/Streets",
+        )
+        val src = FakeRomsSource(dirs)
+        val scanner = LibraryScanner(src, Sidecars(src, MemorySidecarStore()) { home }, heroShots = { heroes })
+        val index = scanner.scan(home, listOf(x1), emptyMap())
+        val games = index.toSystems().flatMap { it.games }.associateBy { it.fileName }
+        assertTrue(games.getValue("G.gb").heroShot)
+        assertFalse(games.getValue("H.gb").heroShot)
+        assertEquals(ContentRef("$own/screenshot/Sonic.png"), games.getValue("Sonic.md").screenshotRef)
+        assertFalse(games.getValue("Sonic.md").heroShot)       // the folder's own file, not the mirror's hero
+        assertTrue(games.getValue("Streets.md").heroShot)      // the mirror's hero
+        val art = scanner.readArt(index)
+        assertTrue(art.getValue(Triple(GamePath.HOME, "Roms/Game Boy (GB)", "G.gb")).heroShot)
+        assertFalse(art.getValue(Triple(GamePath.HOME, "Roms/Game Boy (GB)", "H.gb")).heroShot)
+        assertFalse(art.getValue(Triple("x1", "My Sega Genesis", "Sonic.md")).heroShot)
+        assertTrue(art.getValue(Triple("x1", "My Sega Genesis", "Streets.md")).heroShot)
+        // A picked extra game shows the mirror's screenshot, and so its hero flag.
+        val picked = LibraryScanner(
+            src, Sidecars(src, MemorySidecarStore()) { home }, heroShots = { heroes },
+            pickedShots = { setOf(GamePath.of(GameRef("x1", "My Sega Genesis", "Sonic.md"))) },
+        ).scan(home, listOf(x1), emptyMap()).toSystems().flatMap { it.games }.single { it.fileName == "Sonic.md" }
+        assertTrue(picked.heroShot)
+    }
+
+    @Test fun moveRunsOnScan() = runTest {
+        val gb = "Home/Roms/Game Boy (GB)"
+        val src = FakeRomsSource(
+            mapOf(
+                "Home" to listOf("Roms"),
+                "Home/Roms" to listOf("Game Boy (GB)"),
+                gb to listOf("G.gb", ".media"),
+                "$gb/.media" to listOf("grid", "hero"),
+                "$gb/.media/grid" to listOf("G.png"),
+                "$gb/.media/hero" to listOf("G.jpg"),
+            ),
+        )
+        val host = com.nxredux.mobile.scraper.FakeHost(emptyList())
+        val log = com.nxredux.mobile.scraper.ArtLogStore(host, com.nxredux.mobile.scraper.ArtworkController.LOG_FILE)
+        log.add(listOf("Roms/Game Boy (GB)/.media/hero/G.jpg" to com.nxredux.mobile.scraper.ArtOrigin(com.nxredux.mobile.scraper.SourceId.SGDB)))
+        val move = com.nxredux.mobile.scraper.LegacyArtMove(src, log, host)
+        val scanner = LibraryScanner(
+            src, Sidecars(src, MemorySidecarStore()) { home }, legacyMove = { move },
+            heroShots = { if (log.contains("Roms/Game Boy (GB)/.media/screenshot/G.jpg")) setOf("Roms/Game Boy (GB)/.media/screenshot/G") else emptySet() },
+        )
+        val index = scanner.scan(home, emptyList(), emptyMap())
+        val g = index.toSystems().flatMap { it.games }.single { it.fileName == "G.gb" }
+        assertEquals(ContentRef("$gb/.media/boxart2d/G.png"), g.box2dRef)
+        assertEquals(ContentRef("$gb/.media/screenshot/G.jpg"), g.screenshotRef)
+        assertTrue(g.heroShot)   // the log as it is after the move
+        assertNull(src.childNames("$gb/.media/grid"))
+        assertTrue(src.childNames("$gb/.media")!!.none { it == "hero" })
     }
 }

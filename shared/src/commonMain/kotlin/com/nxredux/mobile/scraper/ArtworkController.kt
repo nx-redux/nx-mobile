@@ -411,6 +411,26 @@ class ArtworkController(
     /** The games whose screenshot is a Change art pick (the library scan prefers an extra folder game's mirror copy). */
     suspend fun pickedGames(): Set<String> = withContext(work) { store.pickedPaths() }
 
+    /**
+     * The scan's one-time `grid/` and `hero/` move ([LegacyArtMove]) over [source], keeping this controller's
+     * written-art log in step.
+     */
+    fun legacyArtMove(source: com.nxredux.mobile.library.RomsSource): LegacyArtMove = LegacyArtMove(source, log, host)
+
+    /**
+     * The logged screenshots that are SteamGridDB heroes, as home-relative paths without their extension
+     * (`Roms/GB/.media/screenshot/Tetris`): the scan's [com.nxredux.mobile.library.ArtRefs.heroShot].
+     */
+    suspend fun heroShots(): Set<String> = withContext(work) {
+        log.read { l ->
+            l.entries.filterTo(HashSet()) { path ->
+                val parts = path.split('/')
+                parts.size >= 3 && parts[parts.size - 2] == ArtSlot.SCREENSHOT.folder && parts[parts.size - 3] == ".media" &&
+                    l.origin(path)?.source == SourceId.SGDB
+            }.mapTo(HashSet()) { it.substringBeforeLast('/') + "/" + it.substringAfterLast('/').substringBeforeLast('.') }
+        }
+    }
+
     /** The bytes the Change art previews take. */
     suspend fun optionCacheSize(): Long = withContext(work) { optionCache.size() }
 

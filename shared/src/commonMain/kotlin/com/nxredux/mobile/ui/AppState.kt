@@ -813,6 +813,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private val scanner = LibraryScanner(
         deps.source, sidecars, deps.arcadeSets, deps.naomiSets, compute = deps.compute, chdSectors = deps.chdSectors,
         pickedShots = { artworkController?.pickedGames().orEmpty() },   // a picked extra game keeps its mirror screenshot
+        heroShots = { artworkController?.heroShots().orEmpty() },       // a SteamGridDB hero screenshot keeps hero drawing
+        legacyMove = { legacyArtMove },                                  // old grid/ and hero/ files move once
     )
     /** Controls -> Shortcuts as edited since it opened; null: closed (or untouched), [AppSettings.shortcuts] is all there is. */
     private var shortcutDraft: ShortcutSet? = null
@@ -6357,6 +6359,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /** The artwork controller; null in a build without one (no Tools row, no Fetch art or Change art). */
     private val artworkController: com.nxredux.mobile.scraper.ArtworkController? = deps.artwork?.invoke(artworkHost)
+    /** The scanner's one-time `grid/` and `hero/` move, sharing the artwork controller's written-art log; none without it. */
+    private val legacyArtMove: com.nxredux.mobile.scraper.LegacyArtMove? = artworkController?.legacyArtMove(deps.source)
 
     /** Null without a controller (no Tools row, no Fetch art). */
     private val artworkScreens: ArtworkScreenController? = artworkController?.let { c ->

@@ -89,7 +89,7 @@ data class ResetResult(val deleted: Int, val pausedJob: Boolean = false)
  * next change rewrites the file. An absent file is an empty log; a failed read ([ArtworkHost.readPrivate] throws) is
  * neither cached nor saved over: the call fails and the next one reads again.
  */
-class ArtLogStore(private val host: ArtworkHost, private val name: String) : LoggedArt {
+class ArtLogStore(private val host: ArtworkHost, private val name: String) : LoggedArt, MovedArtLog {
     private val mutex = Mutex()
     private var log: WrittenArtLog? = null
     /** Lines appended since the file was last written whole. */
@@ -130,6 +130,20 @@ class ArtLogStore(private val host: ArtworkHost, private val name: String) : Log
         val l = load()
         if (path in l) { l.remove(listOf(path)); save(l) }
     }
+
+    /** The entry at [from] now at [to], its origin kept, in one save; nothing when [from] is not logged. */
+    override suspend fun move(from: String, to: String) = mutex.withLock {
+        val l = load()
+        if (from !in l) return@withLock
+        val origin = l.origin(from)
+        l.remove(listOf(from))
+        l.remove(listOf(to))   // [to]'s origin is [from]'s, even an unknown one
+        l.add(to, origin)
+        save(l)
+    }
+
+    /** [block]'s answer from the log under its lock, nothing saved. */
+    suspend fun <T> read(block: (WrittenArtLog) -> T): T = mutex.withLock { block(load()) }
 
     /** Runs [block] on the log under its lock, then saves it. */
     suspend fun <T> edit(block: suspend (WrittenArtLog) -> T): T = mutex.withLock {
