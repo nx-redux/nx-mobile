@@ -1749,6 +1749,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 view.getGameGeometryChanges().collect {
                     val g = view.getGameGeometry()
                     renderer.onCoreGeometry(g)
+                    followWiiShape(g)
                 }
             }
             renderer.relayoutFrontend()   // the core's geometry (a DS game's 256x384) is only known now
@@ -2347,19 +2348,51 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** Takes the phone's attitude at the next reading as the Wiimote's level. */
     override fun recenterWiiMotion() { motionSensors?.recenter() }
 
+    /** The Wii shape chosen at launch ([wiiScreenOption]); null for any other console. */
+    private var wiiLaunchWide: Boolean? = null
+    /** The shape the pointer geometry is set for: the launch's, then the game's own ([followWiiShape]). */
+    private var wiiPointerWide: Boolean? = null
+    /** [WiiScreen.keptShapeNote] is said once per launch. */
+    private var wiiShapeNoted = false
+
     /**
      * Display → Wii Screen for a Wii game: Dolphin's widescreen system setting, chosen from the orientation the
-     * game starts in (games read it once at boot), and the touch pointer's geometry for that shape. Empty for any other
-     * console.
+     * game starts in and the screen's shape (games read it once at boot), and the touch pointer's geometry for that
+     * shape. Empty for any other console.
      */
     private fun wiiScreenOption(): Map<String, String> {
         if (!WiiOptions.appliesTo(gameTag) || wiiGameCube) return emptyMap()
         val portrait = resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
-        val wide = WiiScreen.widescreen(frontendValues[WiiOptions.SCREEN], portrait)
-        val pointer = WiiScreen.pointerOptions(
-            wide, frontendValues[WiiOptions.POINTER_WIDTH], frontendValues[WiiOptions.POINTER_HEIGHT], frontendValues[WiiOptions.POINTER_OFFSET],
-        )
-        return mapOf(WiiScreen.CORE_KEY to WiiScreen.coreValue(wide)) + pointer
+        val m = resources.displayMetrics
+        val screenAspect = maxOf(m.widthPixels, m.heightPixels).toFloat() / minOf(m.widthPixels, m.heightPixels).coerceAtLeast(1)
+        val wide = WiiScreen.widescreen(frontendValues[WiiOptions.SCREEN], portrait, screenAspect)
+        wiiLaunchWide = wide
+        wiiPointerWide = wide
+        return mapOf(WiiScreen.CORE_KEY to WiiScreen.coreValue(wide)) + wiiPointerOptions(wide)
+    }
+
+    private fun wiiPointerOptions(wide: Boolean): Map<String, String> = WiiScreen.pointerOptions(
+        wide, frontendValues[WiiOptions.POINTER_WIDTH], frontendValues[WiiOptions.POINTER_HEIGHT], frontendValues[WiiOptions.POINTER_OFFSET],
+    )
+
+    /**
+     * A save state keeps the shape its game booted with, so a resumed Wii game can draw the other shape than the one
+     * chosen at launch: the core's frame aspect ([g], `[w, h, aspect, rotation]`) says which. The pointer geometry follows
+     * it (Dolphin takes it live), so a tap still lands under the finger, and a note says once why Wii Screen did not apply.
+     */
+    private fun followWiiShape(g: FloatArray) {
+        val launchWide = wiiLaunchWide ?: return
+        if (g.size < 3 || g[2] <= 0f) return
+        val wide = WiiScreen.isWide(g[2])
+        if (wide != wiiPointerWide) {
+            wiiPointerWide = wide
+            NxLog.i("GameActivity", "Wii game draws ${if (wide) "16:9" else "4:3"} (launched ${if (launchWide) "16:9" else "4:3"}): pointer follows")
+            applyOptions(wiiPointerOptions(wide).map { (k, v) -> Variable(k, v) })
+        }
+        if (!wiiShapeNoted) WiiScreen.keptShapeNote(wide, launchWide)?.let {
+            wiiShapeNoted = true
+            android.widget.Toast.makeText(this, it, android.widget.Toast.LENGTH_LONG).show()   // two lines: the short one ends too soon
+        }
     }
 
     /**
