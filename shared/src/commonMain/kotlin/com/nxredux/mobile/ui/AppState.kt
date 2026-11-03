@@ -4391,8 +4391,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             if (a == waiting) SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, SHORTCUT_PROMPT, note = "Hold MENU for a combo", shortcut = a)
             else SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, set.bindings[a]?.let(KeyLabels::label) ?: "None", note = if (a.mic) MIC_ROW_NOTE else null, shortcut = a)
         }
-        return binds + TouchSlot.entries.mapIndexed { i, t ->
-            SettingsRow(SettingsKind.SHORTCUT_TOUCH, "Touch button ${i + 1}", set.touch[t]?.label ?: "None", touchSlot = t)
+        return binds + TouchSlot.entries.map { t ->
+            SettingsRow(SettingsKind.SHORTCUT_TOUCH, t.label, set.touch[t]?.label ?: "None", touchSlot = t)
         } + SettingsRow(SettingsKind.RESET_DEFAULTS, "Clear all")
     }
 

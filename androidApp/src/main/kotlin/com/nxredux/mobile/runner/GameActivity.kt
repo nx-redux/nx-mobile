@@ -3156,7 +3156,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     // The in-game menu's view, input and layout, owned by [menu].
     override val menuView: ComposeView? get() = menu.menuView
     override val menuRouter: InputRouter get() = menu.menuRouter
-    override fun menuLayoutParams(orientation: Int, overPanel: Boolean): FrameLayout.LayoutParams = menu.menuLayoutParams(orientation, overPanel)
+    override fun menuLayoutParams(orientation: Int, overPanel: Boolean, glass: Boolean): FrameLayout.LayoutParams = menu.menuLayoutParams(orientation, overPanel, glass)
     override fun toggleMenu() = menu.toggleMenu()
     override fun backPressed() = menu.backPressed()
 
@@ -3165,8 +3165,17 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         when (speed.onAction(action, down)) {
             SpeedEffect.AskReset -> askReset()
             SpeedEffect.SaveAndQuit -> quitWithAutoState(chosen = true, autoState = true)   // the menu's Save & Quit
+            SpeedEffect.SaveState -> quickState(save = true)
+            SpeedEffect.LoadState -> quickState(save = false)
             null -> Unit
         }
+    }
+
+    /** Save state / Load state from a shortcut: the save-state slot last used, as the in-game menu's. */
+    private fun quickState(save: Boolean) {
+        if (saveStates == null) { toast("Save states are off here"); return }
+        val slot = lastSlotCache ?: saveStates?.lastSlot() ?: 1
+        if (save) saveToSlot(slot) else loadFromSlot(slot)
     }
 
     override fun releaseShortcutHolds() = speed.releaseHolds()
@@ -3177,14 +3186,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun onSkinShortcut(action: SkinAction, down: Boolean) {
         if (down && menuOpen) return   // a release always goes through: a held REWIND must not stick
         when (action) {
-            SkinAction.SAVE, SkinAction.LOAD -> if (down) {
-                if (saveStates == null) { toast("Save states are off here"); return }
-                val slot = lastSlotCache ?: saveStates?.lastSlot() ?: 1
-                if (action == SkinAction.SAVE) saveToSlot(slot) else loadFromSlot(slot)
-            }
+            SkinAction.SAVE, SkinAction.LOAD -> if (down) quickState(save = action == SkinAction.SAVE)
             SkinAction.REWIND -> onShortcut(ShortcutAction.HOLD_REWIND, down)
             SkinAction.FAST -> onShortcut(ShortcutAction.TOGGLE_FF, down)
-            SkinAction.MIC, SkinAction.SWAP -> Unit   // the pad layout's own
+            else -> Unit   // MIC, SWAP: the pad layout's own; the strip's slots go to [onPadShortcut]
         }
     }
 
@@ -3210,6 +3215,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun refreshTouchShortcuts() {
         val before = touchShortcuts.value.keys
         touchShortcuts.value = visibleTouchShortcuts(effectiveShortcuts, speed.output, speed.inSession, rewind = speed.rewindShown)
+        padLayout.refreshSkinShortcuts()
         // A button coming or going changes the landscape pad's second row, so its height and reach: lay out again.
         if (touchShortcuts.value.keys != before) findViewById<View?>(R.id.root)?.post { renderer.relayoutFrontend() }
     }

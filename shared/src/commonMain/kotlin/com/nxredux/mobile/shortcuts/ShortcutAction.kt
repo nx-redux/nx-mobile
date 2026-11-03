@@ -11,6 +11,9 @@ enum class ShortcutAction(val label: String, val key: String, val rewind: Boolea
     TOGGLE_REWIND("Toggle Rewind", "toggle_rewind", true),
     HOLD_REWIND("Hold Rewind", "hold_rewind", true),
     RESET("Reset Game", "reset", false),
+    /** Save state / Load state: the save-state slot last used (as the in-game menu's), on the press. */
+    SAVE_STATE("Save State", "save_state", false),
+    LOAD_STATE("Load State", "load_state", false),
     /** The in-game menu's Save & Quit; unbound unless the player binds it (a MENU combo, say: SELECT is never one). */
     SAVE_AND_QUIT("Save & Quit", "save_and_quit", false, touch = false),
     TOGGLE_MIC("Toggle mic", "toggle_mic", rewind = false, mic = true, touch = false);
@@ -20,8 +23,17 @@ enum class ShortcutAction(val label: String, val key: String, val rewind: Boolea
     }
 }
 
-/** The two on-screen touch buttons a console or game can give an action. */
-enum class TouchSlot(val key: String) {
+/**
+ * The on-screen touch buttons a console or game can give an action: the drawn pad shows [ONE] and [TWO] ([padDrawn]),
+ * a pad skin's strip under its screen all four.
+ */
+enum class TouchSlot(val key: String, val padDrawn: Boolean = true) {
     ONE("touch_1"),
     TWO("touch_2"),
+    THREE("touch_3", padDrawn = false),
+    FOUR("touch_4", padDrawn = false),
+    ;
+
+    /** Its row's name: "Touch button 3 (skin)" for one only a pad skin's strip shows. */
+    val label: String get() = "Touch button ${ordinal + 1}" + if (padDrawn) "" else " (skin)"
 }

@@ -16,6 +16,8 @@ fun touchShortcutLabel(a: ShortcutAction): String = when (a) {
     ShortcutAction.TOGGLE_REWIND -> "RW"
     ShortcutAction.HOLD_REWIND -> "Hold RW"
     ShortcutAction.RESET -> "Reset"
+    ShortcutAction.SAVE_STATE -> "Save"
+    ShortcutAction.LOAD_STATE -> "Load"
     ShortcutAction.SAVE_AND_QUIT -> "Quit"   // never a touch button ([ShortcutAction.touch]); named for completeness
     ShortcutAction.TOGGLE_MIC -> "Mic"   // never drawn: not offered for the touch slots
 }
@@ -48,6 +50,7 @@ fun visibleTouchShortcuts(
 internal val TouchSlot.padGroup: PadGroup get() = when (this) {
     TouchSlot.ONE -> PadGroup.SHORTCUT_1
     TouchSlot.TWO -> PadGroup.SHORTCUT_2
+    TouchSlot.THREE, TouchSlot.FOUR -> error("$this is a pad skin's only ([TouchSlot.padDrawn])")
 }
 
 /** The editor's placeholder label for [slot]'s piece. */

@@ -98,7 +98,7 @@ internal interface DualScreenHost : LifecycleOwner {
     /** The in-game menu's view while it is open (the panel on main takes its place). */
     val menuView: ComposeView?
     fun layoutTag(): String
-    fun menuLayoutParams(orientation: Int, overPanel: Boolean): FrameLayout.LayoutParams
+    fun menuLayoutParams(orientation: Int, overPanel: Boolean, glass: Boolean): FrameLayout.LayoutParams
     fun isLandscape(): Boolean
     fun syncN3dsCore()
     fun toast(msg: String): android.widget.Toast
@@ -152,7 +152,7 @@ internal class DualScreenController(
     private val achievements get() = owner.achievements
     private val menuView get() = owner.menuView
     private fun layoutTag() = owner.layoutTag()
-    private fun menuLayoutParams(orientation: Int, overPanel: Boolean = false) = owner.menuLayoutParams(orientation, overPanel)
+    private fun menuLayoutParams(orientation: Int, overPanel: Boolean = false, glass: Boolean = false) = owner.menuLayoutParams(orientation, overPanel, glass)
     private fun isLandscape() = owner.isLandscape()
     private fun syncN3dsCore() = owner.syncN3dsCore()
     private fun toast(msg: String) = owner.toast(msg)
@@ -496,7 +496,7 @@ internal class DualScreenController(
         if (wasOnMain != mainPanelShown()) {
             padLayout.updatePadVisibility()
             if (mainPanelShown()) input.releaseAllGameInput()   // the pad went from under the fingers: nothing it held may stick
-            menuView?.layoutParams = menuLayoutParams(resources.configuration.orientation, overPanel = mainPanelShown())
+            menuView?.layoutParams = menuLayoutParams(resources.configuration.orientation, overPanel = mainPanelShown(), glass = true)
         }
         // Re-read as it comes up; while up, each RA event, player, disc and setting change refreshes it.
         if (shown && !panelWasShown) {

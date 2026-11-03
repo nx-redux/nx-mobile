@@ -67,6 +67,12 @@ data class EffectiveShortcuts(
 )
 
 object Shortcuts {
+    /**
+     * The base before the player sets any: Save state and Load state on the pad skin's touch slots 3 and 4 (the drawn
+     * pad, on 1 and 2, starts with none). Clear all stores the empty set, which stays empty.
+     */
+    const val DEFAULT_BASE = "touch_3=save_state;touch_4=load_state"
+
     const val PREFIX = "nx_bind_"
     private const val NONE = "none"
 

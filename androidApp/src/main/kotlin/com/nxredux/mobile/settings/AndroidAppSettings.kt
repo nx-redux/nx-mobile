@@ -217,8 +217,9 @@ class AndroidAppSettings(context: Context) : AppSettings {
         set(value) = prefs.edit { putString(KEY_PAD_LAYOUTS_V2, PadLayouts.encode(value)) }
 
     override var shortcuts: String
-        get() = prefs.getString(KEY_SHORTCUTS, null).orEmpty()
-        set(value) = prefs.edit { if (value.isEmpty()) remove(KEY_SHORTCUTS) else putString(KEY_SHORTCUTS, value) }
+        // never written: the defaults (Save / Load on the skin's slots); written empty (Clear all): none
+        get() = prefs.getString(KEY_SHORTCUTS, null) ?: com.nxredux.mobile.shortcuts.Shortcuts.DEFAULT_BASE
+        set(value) = prefs.edit { putString(KEY_SHORTCUTS, value) }
 
     override var systemButtons: String
         get() = prefs.getString(KEY_SYSTEM_BUTTONS, null).orEmpty()

@@ -226,7 +226,8 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.SHORTCUT_TOUCH -> quiet(
         "What this on-screen touch button does; None hides it",
         "The action of a touch button on the on-screen pad. None, the default, leaves it off the pad. Hold actions work " +
-            "while your finger stays on it, toggles flip on each tap. Move it in Pad layout.",
+            "while your finger stays on it, toggles flip on each tap. Move it in Pad layout. A pad skin shows all four in " +
+            "the row under its screen; the drawn pad shows 1 and 2.",
     )
     // System's Launcher and Developer groups.
     SettingsKind.HOME_SCREEN -> quiet(

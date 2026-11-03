@@ -12,6 +12,8 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
+import com.nxredux.mobile.shortcuts.TouchSlot
+import com.nxredux.mobile.skin.PlacedControl
 import com.nxredux.mobile.skin.SkinCell
 import com.nxredux.mobile.skin.SkinPackManifest
 import com.nxredux.mobile.skin.SkinPlacement
@@ -19,6 +21,8 @@ import com.nxredux.mobile.ui.nx.PadEvent
 import com.nxredux.mobile.ui.nx.SkinPackSource
 import com.nxredux.mobile.ui.nx.SkinPadTouch
 import com.nxredux.mobile.ui.nx.SkinPressShape
+import com.nxredux.mobile.ui.nx.TouchShortcut
+import com.nxredux.mobile.ui.nx.touchShortcutLabel
 import com.nxredux.mobile.ui.nx.SKIN_PRESS_SHADE
 import com.nxredux.mobile.ui.nx.SKIN_LABEL_CAP
 import com.nxredux.mobile.ui.nx.SKIN_LABEL_GREY
@@ -61,7 +65,14 @@ internal class PadSkinPack(val manifest: SkinPackManifest, private val open: (St
 }
 
 /** What a skin's buttons do beyond the pad's own buttons. */
-internal enum class SkinAction { MIC, SWAP, SAVE, LOAD, REWIND, FAST }
+/** A strip slot's written label: its cap height in picture px (MENU's is 17). */
+private const val STRIP_CAP = 17f
+
+internal enum class SkinAction(val slot: TouchSlot? = null) {
+    MIC, SWAP, SAVE, LOAD, REWIND, FAST,
+    /** The frame strip's touch shortcut slots: the player's actions for them ([PadSkinView.shortcuts]). */
+    TOUCH_1(TouchSlot.ONE), TOUCH_2(TouchSlot.TWO), TOUCH_3(TouchSlot.THREE), TOUCH_4(TouchSlot.FOUR),
+}
 
 /**
  * Draws a [SkinPlacement] (the skin assembled for this window) over the game and takes its buttons' touches: the pad
@@ -93,10 +104,34 @@ internal class PadSkinView(
             field = value
             picture = value?.let { pack.picture(it.spec.image) }
             parts = value?.spec?.parts?.let { pack.picture(it) }
-            touch.placement = value
-            layer.invalidate()
-            invalidate()
+            refresh()
         }
+    /** The touch shortcut slots' actions: the strip's TOUCH_n buttons write theirs; an empty slot is plain strip, not pressed. */
+    var shortcuts: Map<TouchSlot, TouchShortcut> = emptyMap()
+        set(value) {
+            if (field == value) return
+            field = value
+            refresh()
+        }
+    /** The in-game menu is open: the frame strip's shortcuts (SAVE, LOAD, ...) neither drawn nor pressed, its black left. */
+    var stripHidden: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            refresh()
+        }
+    /** [placement] as drawn and hit-tested now: without the strip's shortcuts while [stripHidden]. */
+    private var shown: SkinPlacement? = null
+    private fun refresh() {
+        val p = placement
+        val ids = p?.spec?.frame?.strip?.labels?.map { it.id }?.toSet().orEmpty()
+        val gone = if (stripHidden) ids else ids.filter { id -> slotOf(id)?.let { it !in shortcuts } ?: false }.toSet()
+        shown = if (p == null || gone.isEmpty()) p
+            else p.copy(pieces = if (stripHidden) p.pieces.filterNot { it.strip } else p.pieces, controls = spread(p.controls.filterNot { it.spec.id in gone }, p, ids))
+        touch.placement = shown
+        layer.invalidate()
+        invalidate()
+    }
     private var picture: Bitmap? = null
     private var parts: Bitmap? = null
 
@@ -111,6 +146,22 @@ internal class PadSkinView(
         typeface = runCatching { Typeface.createFromAsset(context.assets, "composeResources/com.nxredux.mobile.shared.res/font/misans_semibold.ttf") }
             .getOrDefault(Typeface.DEFAULT_BOLD)
     }
+    private val slotLabel = Paint(label)
+    /**
+     * The strip's filled slots spread over the strip's whole width, an even share each (two: centred in its halves),
+     * in slot order; the strip's other buttons as placed.
+     */
+    private fun spread(controls: List<PlacedControl>, p: SkinPlacement, ids: Set<String>): List<PlacedControl> {
+        val all = p.controls.filter { it.spec.id in ids && slotOf(it.spec.id) != null }
+        val kept = controls.filter { it in all }
+        if (all.isEmpty() || kept.isEmpty() || kept.size == all.size) return controls
+        val share = all.first().spec.hw * 2f
+        val left = all.minOf { it.x } - share / 2f
+        val newShare = share * all.size / kept.size
+        val moved = kept.mapIndexed { i, c -> c to c.copy(spec = c.spec.copy(hw = newShare / 2f), x = left + newShare * (i + 0.5f)) }.toMap()
+        return controls.map { moved[it] ?: it }
+    }
+    private fun slotOf(id: String): TouchSlot? = SkinAction.entries.firstOrNull { it.name == id }?.slot
     private val shade = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.argb((SKIN_PRESS_SHADE * 255).roundToInt(), 0, 0, 0) }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -120,7 +171,7 @@ internal class PadSkinView(
 
     /** The skin: slices, pieces, labels (the [layer]'s drawing). */
     private fun drawSkin(canvas: Canvas) {
-        val p = placement ?: return
+        val p = shown ?: return
         val pic = picture ?: return
         // the screens are holes: the game shows through them (the background runs under them otherwise)
         canvas.save()
@@ -138,6 +189,14 @@ internal class PadSkinView(
             if (c.spec.labelH <= 0f) continue
             label.textSize = c.spec.labelH / SKIN_LABEL_CAP
             canvas.drawText(text, c.x, c.y + c.spec.labelDy + c.spec.labelH / 2f, label)   // the baseline: cap height centred
+        }
+        // the strip's touch slots: the action's short name, in the label grey (a running toggle in white)
+        for (c in p.controls) {
+            val sc = slotOf(c.spec.id)?.let(shortcuts::get) ?: continue
+            val cap = STRIP_CAP * p.k
+            slotLabel.textSize = cap / SKIN_LABEL_CAP
+            slotLabel.color = if (sc.on) android.graphics.Color.WHITE else SKIN_LABEL_GREY
+            canvas.drawText(touchShortcutLabel(sc.action).uppercase(), c.x, c.y + cap / 2f, slotLabel)
         }
         canvas.restore()
     }

@@ -157,7 +157,7 @@ class SkinPadTouch(
             "A" to NxButton.A, "B" to NxButton.B, "X" to NxButton.X, "Y" to NxButton.Y, "L" to NxButton.L1, "R" to NxButton.R1,
             "START" to NxButton.START, "SELECT" to NxButton.SELECT, "MENU" to NxButton.MENU,
         )
-        val ACTIONS = setOf("MIC", "SWAP", "SAVE", "LOAD", "REWIND", "FAST")
+        val ACTIONS = setOf("MIC", "SWAP", "SAVE", "LOAD", "REWIND", "FAST", "TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4")
     }
 }
 

@@ -138,7 +138,7 @@ internal interface PadLayoutHost {
     fun syncN3dsCore()
     fun mainPanelShown(): Boolean
     fun placeMainPanelHost()
-    fun menuLayoutParams(orientation: Int, overPanel: Boolean = false): FrameLayout.LayoutParams
+    fun menuLayoutParams(orientation: Int, overPanel: Boolean = false, glass: Boolean = false): FrameLayout.LayoutParams
     fun relayoutFrontend()
     fun applyFrontend(values: Map<String, String>)
     /** Saves [key] = [value] for the console (off the main thread, in order with the other config writes); [failure] toasts. */
@@ -180,7 +180,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private fun syncN3dsCore() = host.syncN3dsCore()
     private fun mainPanelShown() = host.mainPanelShown()
     private fun placeMainPanelHost() = host.placeMainPanelHost()
-    private fun menuLayoutParams(orientation: Int, overPanel: Boolean = false) = host.menuLayoutParams(orientation, overPanel)
+    private fun menuLayoutParams(orientation: Int, overPanel: Boolean = false, glass: Boolean = false) = host.menuLayoutParams(orientation, overPanel, glass)
     private fun relayoutFrontend() = host.relayoutFrontend()
     private fun applyFrontend(values: Map<String, String>) = host.applyFrontend(values)
     private fun toast(msg: String) = host.toast(msg)
@@ -246,6 +246,11 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private val skinPack: PadSkinPack? by lazy { padTheme.skin?.let { PadSkinPack.builtIn(activity, it) } }
     /** The skin's view while the skin is the layout ([applySkinLayout]), else null. */
     private var skinView: PadSkinView? = null
+    /** The touch shortcuts changed ([PadLayoutHost.padShortcuts]): the skin's strip writes the new ones. */
+    fun refreshSkinShortcuts() { skinView?.shortcuts = host.padShortcuts }
+    /** The in-game menu is open: the skin's strip shortcuts are hidden ([PadSkinView.stripHidden]). */
+    var skinStripHidden: Boolean = false
+        set(value) { field = value; skinView?.stripHidden = value }
     /** The last [skinPlacement] worked out, and what it was worked out for. */
     private var skinCache: Pair<SkinKey, SkinPlacement?>? = null
     private data class SkinKey(val w: Int, val h: Int, val dpi: Int, val tablet: Boolean, val tag: String, val aspect: Float?, val hinge: Float?, val top: Int)
@@ -392,7 +397,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         game.requestLayout()
         updatePadVisibility()
         syncN3dsCore()
-        menuView?.layoutParams = menuLayoutParams(orientation, overPanel = mainPanelShown())
+        menuView?.layoutParams = menuLayoutParams(orientation, overPanel = mainPanelShown(), glass = true)
         notificationsView?.layoutParams = menuLayoutParams(orientation)
         // The DS layouts follow the new area (gameContainer's size listener does too, once it is laid out).
         game.post { relayoutFrontend() }
@@ -812,7 +817,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         if (tabletopDsViews != null) startReveal(root)
         game.requestLayout()
         updatePadVisibility()
-        menuView?.layoutParams = menuLayoutParams(orientation, overPanel = mainPanelShown())
+        menuView?.layoutParams = menuLayoutParams(orientation, overPanel = mainPanelShown(), glass = true)
         notificationsView?.layoutParams = menuLayoutParams(orientation)
         game.post { relayoutFrontend() }
     }
@@ -872,18 +877,21 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val below = listOfNotNull(menuView, notificationsView).map { root.indexOfChild(it) }.filter { it >= 0 }.minOrNull() ?: -1
         root.addView(view, below, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         skinView = view
+        view.stripHidden = skinStripHidden
+        view.shortcuts = host.padShortcuts
         skinShownState.value = true
         if (input.ndsStylusOn.value) input.toggleNdsStylus()   // no stylus mode under a skin: a touch off its buttons is the touch screen
         skinPlacement()
         game.requestLayout()
         updatePadVisibility()
-        menuView?.layoutParams = menuLayoutParams(orientation, overPanel = mainPanelShown())
+        menuView?.layoutParams = menuLayoutParams(orientation, overPanel = mainPanelShown(), glass = true)
         notificationsView?.layoutParams = menuLayoutParams(orientation)
         game.post { relayoutFrontend() }
     }
 
     /** MIC and SWAP are the pad's own (the DS mic toggle, swap screens); the rest are the game's ([PadLayoutHost.onSkinShortcut]). */
     private fun onSkinAction(action: SkinAction, down: Boolean) {
+        action.slot?.let { host.onPadShortcut(it, down); return }   // a strip slot: the player's action, as the drawn pad's
         when (action) {
             SkinAction.MIC -> if (down) padMic()?.onTap?.invoke()
             SkinAction.SWAP -> if (down) input.applyNdsAction(NdsAction.SwapScreens)

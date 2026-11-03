@@ -1658,10 +1658,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             }
         }
         val choices = touchChoices()
-        val touch = TouchSlot.entries.mapIndexed { i, t ->
+        val touch = TouchSlot.entries.map { t ->
             val action = effective.touch[t]
             MenuRow.Option(
-                "Touch button ${i + 1}", TOUCH_KEY_PREFIX + t.key, shown(action?.label ?: NONE_LABEL, t !in shortcutOverrides.touch),
+                t.label, TOUCH_KEY_PREFIX + t.key, shown(action?.label ?: NONE_LABEL, t !in shortcutOverrides.touch),
                 choices = choices.map { it?.label ?: NONE_LABEL }, index = choices.indexOf(action),
             )
         }

@@ -7,7 +7,8 @@ import kotlin.math.abs
 data class SkinCell(val src: PxRect, val dst: PxRect, val tileX: Boolean, val tileY: Boolean)
 
 /** A piece of a layout built from pieces: [src] in its parts picture drawn at [dst] (scaled when the sizes differ). */
-data class SkinPiece(val src: PxRect, val dst: PxRect)
+/** [strip]: one of the frame strip's shortcut labels (hidden with the in-game menu open). */
+data class SkinPiece(val src: PxRect, val dst: PxRect, val strip: Boolean = false)
 
 /** A control's hit area placed in the window: its [spec] (id, shape, sizes scaled) at [x], [y]. */
 data class PlacedControl(val spec: ControlSpec, val x: Float, val y: Float)
@@ -143,7 +144,8 @@ object SkinSolver {
             st.labels.forEachIndexed { i, l ->
                 val cx = fx + bl + share * (i + 0.5f)
                 val cy = fy + fh - st.y
-                pieces += SkinPiece(PxRect(l.sx.toFloat(), l.sy.toFloat(), l.w.toFloat(), l.h.toFloat()), win(cx - l.w / 2f, cy - l.h / 2f, l.w.toFloat(), l.h.toFloat()))
+                // a label drawn in the picture; none (the touch slots, TOUCH_1..4): the app writes the slot's action
+                if (l.w > 0 && l.h > 0) pieces += SkinPiece(PxRect(l.sx.toFloat(), l.sy.toFloat(), l.w.toFloat(), l.h.toFloat()), win(cx - l.w / 2f, cy - l.h / 2f, l.w.toFloat(), l.h.toFloat()), strip = true)
                 controls += PlacedControl(ControlSpec(l.id, ControlShape.RECT, cx, cy, hw = share / 2f * k, hh = st.hh * k), cx * k, cy * k)
             }
         }

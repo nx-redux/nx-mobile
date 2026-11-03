@@ -2355,7 +2355,7 @@ class InGameMenuModelTest {
         val m = shortcuts(overrides = ShortcutOverrides(mapOf(ShortcutAction.TOGGLE_FF to menuR1), emptyMap()))
         assertEquals("", m.state.page.intro)
         m.setControllerConnected(false)
-        assertEquals(listOf("Touch button 1", "Touch button 2"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Touch button 1", "Touch button 2", "Touch button 3 (skin)", "Touch button 4 (skin)"), m.state.page.rows.map { it.label })
         assertEquals(SHORTCUTS_NO_CONTROLLER, m.state.page.intro)
         assertEquals("Touch button 1", m.state.page.rows[m.state.page.selected].label)
         m.setControllerConnected(true)
@@ -2465,7 +2465,7 @@ class InGameMenuModelTest {
     @Test fun touchRowsCycleAndUseDefault() {
         val m = shortcuts(canRewind = false)
         m.selectRow("Touch button 1")
-        assertEquals(listOf("None", "Toggle FF", "Hold FF", "Reset Game"), m.row("Touch button 1").choices)
+        assertEquals(listOf("None", "Toggle FF", "Hold FF", "Reset Game", "Save State", "Load State"), m.row("Touch button 1").choices)
         assertEquals(MenuEffect.ShortcutsChanged(ShortcutOverrides(touch = mapOf(TouchSlot.ONE to ShortcutAction.TOGGLE_FF))), m.press(NxButton.RIGHT))
         assertEquals("Toggle FF", m.row("Touch button 1").valueLabel)
         assertEquals(MenuEffect.ShortcutsChanged(ShortcutOverrides.NONE), m.press(NxButton.Y))
@@ -2474,11 +2474,11 @@ class InGameMenuModelTest {
 
     @Test fun noRewindRowsWithoutRewind() {
         assertEquals(
-            listOf("Toggle FF", "Hold FF", "Reset Game", "Save & Quit", "Touch button 1", "Touch button 2"),
+            listOf("Toggle FF", "Hold FF", "Reset Game", "Save State", "Load State", "Save & Quit", "Touch button 1", "Touch button 2", "Touch button 3 (skin)", "Touch button 4 (skin)"),
             shortcuts(canRewind = false).state.page.rows.map { it.label },
         )
         assertEquals(
-            listOf("Toggle FF", "Hold FF", "Toggle Rewind", "Hold Rewind", "Reset Game", "Save & Quit", "Touch button 1", "Touch button 2"),
+            listOf("Toggle FF", "Hold FF", "Toggle Rewind", "Hold Rewind", "Reset Game", "Save State", "Load State", "Save & Quit", "Touch button 1", "Touch button 2", "Touch button 3 (skin)", "Touch button 4 (skin)"),
             shortcuts(canRewind = true).state.page.rows.map { it.label },
         )
     }

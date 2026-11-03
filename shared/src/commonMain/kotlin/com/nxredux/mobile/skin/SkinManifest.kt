@@ -125,10 +125,10 @@ data class StripSpec(
 @Serializable
 data class StripLabel(
     val id: String,
-    val sx: Int,
-    val sy: Int,
-    val w: Int,
-    val h: Int,
+    val sx: Int = 0,
+    val sy: Int = 0,
+    val w: Int = 0,
+    val h: Int = 0,
 )
 
 /** Which window edge a piece keeps its distance to across. */

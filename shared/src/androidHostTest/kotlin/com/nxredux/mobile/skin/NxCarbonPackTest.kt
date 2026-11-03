@@ -151,12 +151,15 @@ class NxCarbonPackTest {
             assertTrue(g.width > w - 160f * p.k, "$id glass $g")
             assertEquals(minOf(g.width / picture.first, g.height / picture.second), p.glass(GlassScreen.PICTURE)!!.scale, 0.01f, id)
             assertEquals(w / 2f, g.x + g.width / 2f, 20f * p.k, id)
-            // SAVE LOAD REWIND FAST: an even share of the picture's width each, just under it, above the pad's buttons
-            val strip = p.controls.filter { it.spec.id in setOf("SAVE", "LOAD", "REWIND", "FAST") }.sortedBy { it.x }
-            assertEquals(listOf("SAVE", "LOAD", "REWIND", "FAST"), strip.map { it.spec.id }, id)
+            // the touch shortcut slots: an even share of the picture's width each, just under it, above the pad's buttons;
+            // no label art (the app writes each slot's action)
+            val slots = listOf("TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4")
+            val strip = p.controls.filter { it.spec.id in slots }.sortedBy { it.x }
+            assertEquals(slots, strip.map { it.spec.id }, id)
+            assertTrue(p.pieces.none { it.strip }, id)
             strip.forEachIndexed { i, c -> assertEquals(g.x + g.width * (2 * i + 1) / 8f, c.x, 1f, id) }
             assertTrue(strip.all { it.y > g.y + g.height && it.y < g.y + g.height + 140f * p.k }, id)
-            val pad = p.controls.filter { it.spec.id !in setOf("SAVE", "LOAD", "REWIND", "FAST") }
+            val pad = p.controls.filter { it.spec.id !in slots }
             assertTrue(pad.all { it.y > strip.first().y }, id)
         }
     }
@@ -173,7 +176,7 @@ class NxCarbonPackTest {
             val g = p.glass(GlassScreen.STACK)!!.rect
             assertTrue(g.width > w - 160f * p.k, "$name glass $g")   // the frame fills the room; the screens go in it
             val ids = p.controls.map { it.spec.id }.toSet()
-            assertTrue(ids.containsAll(listOf("MIC", "MENU", "SAVE", "FAST", "DPAD", "A")), "$name $ids")
+            assertTrue(ids.containsAll(listOf("MIC", "MENU", "TOUCH_1", "TOUCH_4", "DPAD", "A")), "$name $ids")
             // the d-pad's and the face buttons' rings (208 px) keep apart, however narrow the phone
             val c = p.controls.associateBy { it.spec.id }
             val faceX = (c.getValue("Y").x + c.getValue("A").x) / 2f
@@ -254,13 +257,14 @@ class NxCarbonPackTest {
             assertEquals(setOf("DPAD", "A", "B", "X", "Y", "L", "R", "START", "SELECT", "MENU"), c.keys)
             // the screen between the columns, centred, the frame its margin from the top and bottom
             assertEquals(w / 2f, g.x + g.width / 2f, 3f * p.k, name)   // the frame's border: 28 left, 32 right
-            assertTrue(g.x > (413 - 1) * p.k && g.x + g.width < w - (413 - 1) * p.k, "$name glass $g")
+            assertTrue(c.values.all { it.x < g.x || it.x > g.x + g.width }, "$name glass $g")
             assertTrue(g.y >= 72f * p.k && g.y + g.height <= h - 72f * p.k, "$name glass $g")
-            // the pads (at 0.8 of their portrait size) in their columns, one group at the middle of the height
-            assertEquals(206.5f * p.k, c.getValue("DPAD").x, 0.5f, name)
-            assertEquals(w - 206.5f * p.k, c.getValue("X").x, 0.5f, name)
+            // the pads in their columns at the standard (portrait) size, one group at the middle of the height
+            val spec = p.spec.controls.associateBy { it.id }
+            assertEquals(72f * p.k, c.getValue("A").spec.r, 0.5f, name)
+            assertEquals(spec.getValue("DPAD").x * p.k, c.getValue("DPAD").x, 0.5f, name)
+            assertEquals(w - (p.spec.width - spec.getValue("X").x) * p.k, c.getValue("X").x, 0.5f, name)
             assertEquals(h / 2f - (p.spec.height / 2f - p.spec.controls.first { it.id == "DPAD" }.y) * p.k, c.getValue("DPAD").y, 0.5f, name)
-            assertEquals(0.8f * 72f * p.k, c.getValue("A").spec.r, 0.5f, name)
             assertEquals(c.getValue("DPAD").y - (p.spec.controls.first { it.id == "DPAD" }.y - p.spec.controls.first { it.id == "L" }.y) * p.k, c.getValue("L").y, 0.5f, name)
             assertTrue(c.getValue("L").y - 54f * p.k > 0f, name)
             assertTrue(c.values.all { it.x < g.x || it.x > g.x + g.width }, name)

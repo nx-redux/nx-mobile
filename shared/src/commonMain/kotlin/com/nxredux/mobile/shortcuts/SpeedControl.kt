@@ -21,6 +21,10 @@ sealed interface SpeedEffect {
 
     /** Save & Quit, as the in-game menu's: the host writes the resume point and leaves. */
     data object SaveAndQuit : SpeedEffect
+
+    /** Save state / Load state: the host writes or loads the save-state slot last used. */
+    data object SaveState : SpeedEffect
+    data object LoadState : SpeedEffect
 }
 
 /**
@@ -57,6 +61,8 @@ class SpeedControl {
         when (a) {
             ShortcutAction.RESET -> return if (down) SpeedEffect.AskReset else null
             ShortcutAction.SAVE_AND_QUIT -> return if (down) SpeedEffect.SaveAndQuit else null
+            ShortcutAction.SAVE_STATE -> return if (down) SpeedEffect.SaveState else null
+            ShortcutAction.LOAD_STATE -> return if (down) SpeedEffect.LoadState else null
             ShortcutAction.TOGGLE_FF -> if (down) {
                 toggleFf = !toggleFf
                 if (toggleFf) toggleRewind = false
