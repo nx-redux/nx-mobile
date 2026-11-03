@@ -464,8 +464,8 @@ private fun RowScope.StripMost(m: HomeStripMost) {
 }
 
 /**
- * Continue: the last game's resume frame, else its screenshot, hero, grid, else its abstract picture ([continuePictures],
- * all through the one image loader). The picture is cropped, framed at 40% from the top, then zoomed [HOME_CONTINUE_ZOOM]
+ * Continue: the last game's resume frame, else its screenshot (a hero one not in [portrait]), else its abstract
+ * picture ([continuePictures], all through the one image loader). The picture is cropped, framed at 40% from the top, then zoomed [HOME_CONTINUE_ZOOM]
  * about that point and clipped to the card. Over it, the pinned games' caption fade ([homeCaptionFade], the bottom 80%)
  * holds the name (up to 2 balanced lines where the card holds them) and the time ([info], TIME only) at the name's size.
  * With no picture at all it is a title card: the name large in the middle, the time at the bottom. A "Continue"
@@ -476,7 +476,7 @@ private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLin
     val colors = LocalNxColors.current
     val game = row.entry.game
     val frame = remember(row) { continueFrame(row) }   // its hidden save state's, else its resume slot's
-    val pictures = remember(row) { continuePictures(frame, row.entry) }
+    val pictures = remember(row, portrait) { continuePictures(frame, row.entry, portrait) }
     val failed = remember(row) { mutableIntStateOf(0) }   // pictures that would not load, in order: the next one shows
     val picture = pictures.getOrNull(failed.intValue)
     // The info at the game list Carousel card's size, the name a step under its name (Appearance → Text size), each

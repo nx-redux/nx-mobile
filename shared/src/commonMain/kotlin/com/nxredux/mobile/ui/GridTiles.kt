@@ -64,17 +64,18 @@ private fun gameTile(e: Listed, title: String, shot: String? = null) =
 internal fun abstractArtFor(e: Listed): String? =
     e.appId?.let(::abstractAppArtUrl) ?: abstractArtUrl(e.system.tag, e.game.fileName)
 
-/**
- * Home's Continue card pictures, in fallback order (the next shows when one fails to load): the [resumeFrame] (its
- * hidden save state's frame, else the resume slot's: [continueFrame]), the
- * screenshot, and last the game's abstract picture
- * ([abstractArtFor]); empty only for a game with none, which the card draws as a title card.
- */
 /** Continue's resume frame: the hidden save state's (Save & Quit's, [HomeShot]), else the resume slot's screenshot. */
 internal fun continueFrame(row: MainRow.Continue): String? = row.shot ?: row.resume.previewPath
 
-internal fun continuePictures(resumeFrame: String?, e: Listed): List<String> =
-    listOfNotNull(resumeFrame, e.game.screenshotRef?.value, abstractArtFor(e)).distinct()
+/**
+ * Home's Continue card pictures (and the Game Switcher List's background), in fallback order (the next shows when one
+ * fails to load): the [resumeFrame] (its hidden save state's frame, else the resume slot's: [continueFrame]), the
+ * screenshot, and last the game's abstract picture ([abstractArtFor]); empty only for a game with none, which the card
+ * draws as a title card. A hero screenshot ([com.nxredux.mobile.library.GameEntry.heroShot]) is left out when
+ * [portrait], as on every portrait background ([backgroundArt]).
+ */
+internal fun continuePictures(resumeFrame: String?, e: Listed, portrait: Boolean = false): List<String> =
+    listOfNotNull(resumeFrame, backgroundArt(e.game.screenshotRef?.value, e.game.heroShot, portrait), abstractArtFor(e)).distinct()
 
 /**
  * A game list's full-screen picture for [e] (the List background, the Backdrop picture, either orientation):

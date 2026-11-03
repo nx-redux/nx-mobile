@@ -49,6 +49,7 @@ import com.nxredux.mobile.ui.nx.BoxCover
 import com.nxredux.mobile.ui.nx.GameInfoBand
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.LocalLauncherChrome
+import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.LocalNxTapOpens
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxScreenBackground
@@ -121,7 +122,8 @@ private fun GameSwitcherListScreen(
     val index = rememberUpdatedState(screen.index)
     Box(modifier.fillMaxSize().background(Color.Black)) {
         // The pictures in turn ([continuePictures]): one that will not load gives way to the next, as Home's Continue card.
-        val pictures = remember(entry) { entry?.let { continuePictures(it.resume.previewPath, Listed(it.system, it.game)) }.orEmpty() }
+        val portrait = LocalPortrait.current   // a hero screenshot never fills a portrait background
+        val pictures = remember(entry, portrait) { entry?.let { continuePictures(it.resume.previewPath, Listed(it.system, it.game), portrait) }.orEmpty() }
         var failed by remember(entry) { mutableIntStateOf(0) }
         val picture = pictures.getOrNull(failed)
         // The resume frame is a copy of the whole game view: trimmed of its letterbox first ([homeCoverTrim]), as Continue's.

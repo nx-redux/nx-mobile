@@ -180,6 +180,17 @@ class GridTilesTest {
         assertEquals(listOf(abstractAppArtUrl("a/A")), continuePictures(null, alpha))
     }
 
+    // A hero screenshot never fills a portrait Continue card or Switcher List background (the next picture shows); in
+    // landscape, and behind a resume frame, it stays in the chain.
+    @Test fun continuePicturesDropAHeroInPortrait() {
+        val hero = listed("Zelda", shot = "s").let { it.copy(game = it.game.copy(heroShot = true)) }
+        val abstract = abstractArtUrl("GBA", "Zelda.gba")
+        assertEquals(listOf(abstract), continuePictures(null, hero, portrait = true))
+        assertEquals(listOf("r", abstract), continuePictures("r", hero, portrait = true))
+        assertEquals(listOf("s", abstract), continuePictures(null, hero, portrait = false))
+        assertEquals(listOf("s", abstract), continuePictures(null, listed("Zelda", shot = "s"), portrait = true))   // a plain screenshot stays
+    }
+
     // The Grid's reset identity ignores game counts: a rescan that only changes them keeps the grid steady.
     @Test fun theResetIdentityIgnoresCounts() {
         val before = listOf(GridTile.Logo(null, "GBA", count = 3), GridTile.Collection("Co-op", count = 2), GridTile.Game(null, "Kirby"))

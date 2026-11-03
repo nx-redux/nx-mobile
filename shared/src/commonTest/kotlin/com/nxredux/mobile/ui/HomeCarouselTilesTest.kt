@@ -22,6 +22,18 @@ class HomeCarouselTilesTest {
     private val a = g("Advance Wars")
     private val t1 = ToolRow(ToolKind.SETTINGS, "Settings", null)
 
+    // Continue's hero screenshot is drawn as a hero in the wide Carousel tile; a resume frame never is.
+    @Test fun continue_draws_a_hero_screenshot_as_a_hero() {
+        val hero = a.copy(game = a.game.copy(screenshotRef = ContentRef("h.png"), heroShot = true))
+        val tile = homeCarouselTiles(listOf(MainRow.Continue(hero, ResumeInfo(1))), 0).single() as GridTile.Game
+        assertEquals("h.png", tile.screenshotUrl)
+        assertTrue(tile.heroShot)
+        assertEquals(TileArt("h.png", TileFit.HERO), tileArt(340f, 240f, tile.screenshotUrl, tile.heroShot, tile.abstractUrl))
+        val framed = homeCarouselTiles(listOf(MainRow.Continue(hero, ResumeInfo(1, previewPath = "f.png"))), 0).single() as GridTile.Game
+        assertEquals("f.png", framed.screenshotUrl)
+        assertFalse(framed.heroShot)
+    }
+
     // Continue shows its resume frame (Grid Home's first picture) under its name; Pick a game the accent's picture;
     // the dock's items are not the carousel's.
     @Test fun continue_shows_its_resume_frame_and_pick_a_game_the_accent_picture() {
