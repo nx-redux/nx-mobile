@@ -1363,8 +1363,8 @@ class InGameMenuModelTest {
     // Settings, not in the running game's menu.
     @Test fun rows_read_only_at_launch_stay_out_of_the_in_game_console_settings() {
         assertEquals(listOf("Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio", "Audio Resampling Quality"), inGameConsoleRows("N64"))   // no Graphics API
-        assertEquals(listOf("Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio", "Audio Resampling Quality"), inGameConsoleRows("GC"))
-        assertEquals(listOf("Wii Controller", "Motion Controls", "Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio", "Audio Resampling Quality"), inGameConsoleRows("WII"))
+        assertEquals(listOf("Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio", "Audio Resampling Quality", "Frame Skip"), inGameConsoleRows("GC"))
+        assertEquals(listOf("Wii Controller", "Motion Controls", "Controller Layout", "Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio", "Audio Resampling Quality", "Frame Skip"), inGameConsoleRows("WII"))
     }
 
     // Bottom screen (every console) shows in the running game's Console Settings only while a second display is

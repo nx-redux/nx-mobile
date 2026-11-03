@@ -38,7 +38,10 @@ unsigned FPSSync::advanceFrames(TimePoint now) {
 
     const long long behind = (now - lastFrame) / sampleInterval;
     long long frames = 1;
-    if (behind > MAX_LAG_FRAMES) {
+    if (behind > MAX_LAG_FRAMES && !frameSkip) {
+        // Frame skip off: one frame, and the lag past MAX_LAG_FRAMES is dropped (the game slows instead of skipping).
+        lastFrame = now - sampleInterval * MAX_LAG_FRAMES;
+    } else if (behind > MAX_LAG_FRAMES) {
         // Two frames, the most step() runs, and the clock moves by those two only: no game time is skipped. A stall
         // past MAX_DROP_FRAMES drops the rest of the lag instead of running two-frame steps for seconds.
         frames = 2;

@@ -18,6 +18,7 @@
 #ifndef LIBRETRODROID_FPSSYNC_H
 #define LIBRETRODROID_FPSSYNC_H
 
+#include <atomic>
 #include <chrono>
 #include <optional>
 #include <thread>
@@ -43,6 +44,11 @@ public:
     void wait();
     double getTimeStretchFactor();
     double getContentRefreshRate() const { return contentRefreshRate; }
+
+    // nx-mobile 2026-11-03: Frame skip. On (Auto): a device that cannot keep up runs two frames a step past
+    // MAX_LAG_FRAMES, holding the game's speed but showing one of the two. Off: always one frame a step; the lag past
+    // MAX_LAG_FRAMES is dropped, so every frame shows and the game runs slower (its audio may then run short).
+    static inline std::atomic<bool> frameSkip { true };   // set from the UI thread (the Frame Skip row)
 private:
 
     double screenRefreshRate;

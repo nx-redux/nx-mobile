@@ -36,6 +36,7 @@
 #include "fpssync.h"
 #include "threadlist.h"
 #include "presenttime.h"
+#include "debugprop.h"
 #include <unistd.h>
 #include "input.h"
 #include "rumble.h"

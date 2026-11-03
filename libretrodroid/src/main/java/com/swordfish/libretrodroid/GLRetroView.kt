@@ -88,6 +88,16 @@ class GLRetroView(
      * Audible fast forward plays at Medium at most. Main thread; pushed straight to native, kept across games and
      * re-applied after create().
      */
+    /**
+     * nx-mobile 2026-11-03: Frame Skip: true (Auto) runs two frames in a step when the phone can't keep up, holding the
+     * game's speed; false shows every frame and lets the game slow down. Applied live.
+     */
+    var frameSkip: Boolean = true
+        set(value) {
+            field = value
+            LibretroDroid.setFrameSkip(value)
+        }
+
     var resamplingQuality: Int by Delegates.observable(2) { _, old, value ->
         if (old != value) pushResamplingQuality()
     }
