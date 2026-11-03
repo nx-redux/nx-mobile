@@ -130,6 +130,7 @@ add_library(libretrodroid SHARED
         fpssync.h
         fpssync.cpp
         perfhint.cpp
+        presenttime.cpp
         threadlist.cpp
         fastforward.h
         fastforward.cpp

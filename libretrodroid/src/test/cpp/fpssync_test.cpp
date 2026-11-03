@@ -57,6 +57,23 @@ int main() {
         check(sync.advanceFrames(at(100)) == 1, "vsync never catches up");
     }
 
+    {
+        // The sleep timer stamps each frame to be shown one frame after its deadline, so the display picks a steady slot
+        // whatever the step's run time; vsync pacing (the swap paces it) and a step before the first deadline stamp nothing.
+        FPSSync sync(60.0, 90.0);
+        check(!sync.presentAt().has_value(), "no stamp before the first step");
+        sync.advanceFrames(at(0));
+        auto stamp = sync.presentAt();
+        check(stamp.has_value() && ms(*stamp) > 2 * frame - 0.1 && ms(*stamp) < 2 * frame + 0.1, "deadline + one frame");
+        sync.advanceFrames(at(frame));
+        auto next = sync.presentAt();
+        check(next.has_value() && ms(*next) - ms(*stamp) > frame - 0.1 && ms(*next) - ms(*stamp) < frame + 0.1, "stamps a frame apart");
+
+        FPSSync vsync(59.94, 60.0);
+        vsync.advanceFrames(at(0));
+        check(!vsync.presentAt().has_value(), "vsync pacing stamps nothing");
+    }
+
     if (failures == 0) std::printf("fpssync_test: all passed\n");
     return failures == 0 ? 0 : 1;
 }

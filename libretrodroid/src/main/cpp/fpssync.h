@@ -19,6 +19,7 @@
 #define LIBRETRODROID_FPSSYNC_H
 
 #include <chrono>
+#include <optional>
 #include <thread>
 
 namespace libretrodroid {
@@ -35,6 +36,9 @@ public:
     unsigned advanceFrames();
     unsigned advanceFrames(TimePoint now);   // nx-mobile: the clock injected (host tests)
     TimePoint deadline() const { return lastFrame; }   // when this step's frame is due; wait() sleeps until it
+    // nx-mobile 2026-11-03: when the sleep timer wants this step's frame on screen (its deadline + one frame), so the
+    // display shows every frame on a steady slot whatever the step's run time; none under vsync pacing or before a step.
+    std::optional<TimePoint> presentAt() const;
     void wait();
     double getTimeStretchFactor();
     double getContentRefreshRate() const { return contentRefreshRate; }

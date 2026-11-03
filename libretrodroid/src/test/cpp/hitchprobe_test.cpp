@@ -68,6 +68,19 @@ int main() {
     check(p.steps() == 6, "steps counted");
     check(p.hitches() == 2, "hitches counted");
 
+    {
+        // The summary's work figures: each step's core run per frame, averaged and the worst, since the last take.
+        HitchProbe w;
+        step(w, 0, 10, 1, 5);          // 10 ms, one frame
+        step(w, 16.7, 12, 1, 3);       // 12 ms
+        step(w, 33.4, 30, 1, 0, 2);    // 30 ms over two frames: 15 ms a frame
+        auto s = w.takeRunStats();
+        check(s.frames == 4, "frames counted");
+        check(near(s.averageMs, (10 + 12 + 30) / 4.0), "average run per frame");
+        check(near(s.worstMs, 15), "worst run per frame");
+        check(w.takeRunStats().frames == 0, "a take starts over");
+    }
+
     if (failures == 0) std::printf("hitchprobe_test: all passed\n");
     return failures == 0 ? 0 : 1;
 }

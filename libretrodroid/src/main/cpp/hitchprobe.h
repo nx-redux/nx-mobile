@@ -42,7 +42,24 @@ public:
         return report;
     }
 
-    void ranCore(Clock::time_point now, unsigned frames) { last.ranAt = now; last.frames = frames; }
+    void ranCore(Clock::time_point now, unsigned frames) {
+        last.ranAt = now;
+        last.frames = frames;
+        if (frames == 0) return;
+        const double perFrame = ms(now - last.start) / frames;
+        runTotalMs += perFrame * frames;
+        runFrames += frames;
+        if (perFrame > runWorstMs) runWorstMs = perFrame;
+    }
+
+    // The core's run per frame since the last take (the summary's work figures): a faster core shows here at 60 fps,
+    // where the pacing figures would not move.
+    struct RunStats { unsigned long frames; double averageMs; double worstMs; };
+    RunStats takeRunStats() {
+        RunStats s { runFrames, runFrames ? runTotalMs / runFrames : 0.0, runWorstMs };
+        runTotalMs = 0; runFrames = 0; runWorstMs = 0;
+        return s;
+    }
     void rendered(Clock::time_point now) { last.renderedAt = now; }
     void waited(Clock::time_point now) { last.end = now; last.ended = true; }
 
@@ -65,6 +82,9 @@ private:
     Step last {};
     unsigned long stepCount = 0;
     unsigned long hitchCount = 0;
+    double runTotalMs = 0;
+    unsigned long runFrames = 0;
+    double runWorstMs = 0;
 };
 
 }

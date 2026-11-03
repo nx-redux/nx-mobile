@@ -35,6 +35,7 @@
 #include "renderers/renderer.h"
 #include "fpssync.h"
 #include "threadlist.h"
+#include "presenttime.h"
 #include <unistd.h>
 #include "input.h"
 #include "rumble.h"
@@ -721,7 +722,9 @@ void LibretroDroid::step() {
                  screenRefreshRate, fpsSync->getContentRefreshRate());
         }
         if (hitchProbe.steps() % 600 == 0) {
-            LOGW("NXHITCH summary steps=%lu hitches=%lu", hitchProbe.steps(), hitchProbe.hitches());
+            const auto run = hitchProbe.takeRunStats();
+            LOGW("NXHITCH summary steps=%lu hitches=%lu run_avg=%.2f run_worst=%.1f", hitchProbe.steps(),
+                 hitchProbe.hitches(), run.averageMs, run.worstMs);
         }
     }
     std::unique_lock<std::mutex> lock(coreLock);
@@ -810,6 +813,11 @@ void LibretroDroid::step() {
         if (ahead > Duration::zero()) std::this_thread::sleep_for(ahead);
     } else if (fpsSync) {
         fpsSync->wait();
+        // nx-mobile 2026-11-03: the sleep timer's frame goes on screen at a steady time (its deadline + one frame), not at
+        // the first refresh after this step happened to end (8/25 ms frames of a 60 fps game on a 120 Hz screen).
+        if (runs > 0) {
+            if (auto at = fpsSync->presentAt()) PresentTime::set(*at);
+        }
     }
     hitchProbe.waited(HitchProbe::Clock::now());
     if (fastForward) hitchProbe.reset();

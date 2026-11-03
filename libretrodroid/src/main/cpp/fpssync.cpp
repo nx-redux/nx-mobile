@@ -56,6 +56,11 @@ void FPSSync::start(TimePoint now) {
     lastFrame = now;
 }
 
+std::optional<TimePoint> FPSSync::presentAt() const {
+    if (useVSync || lastFrame == MIN_TIME) return std::nullopt;
+    return lastFrame + sampleInterval;
+}
+
 void FPSSync::reset() {
     lastFrame = MIN_TIME;
 }
