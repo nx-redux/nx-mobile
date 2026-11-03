@@ -39,6 +39,8 @@
 #include "renderers/renderer.h"
 #include "fpssync.h"
 #include "fastforward.h"
+#include "hitchprobe.h"
+#include "perfhint.h"
 #include "rewind.h"
 #include "rewindprobe.h"
 #include "input.h"
@@ -166,6 +168,10 @@ public:
     void handleRumbleUpdates(const std::function<void(int, float, float)> &handler);
 
     void setFrameSpeed(unsigned int speed);
+
+    // nx-mobile 2026-11-03: the display's presentation deadline (how early a frame must be queued to show at a refresh);
+    // a sleep-timer frame is stamped to show at its deadline + this + 1.5 ms. 0 = unknown: one frame. Any thread.
+    void setPresentationDeadline(int64_t nanos) { presentationLeadMicros = nanos > 0 ? nanos / 1000 + 1500 : 0; }
 
     // nx-mobile 2026-10-24: fast forward up to maxSpeed × the content's rate (0 = off), with or without its audio.
     // Separate from frameSpeed, which stays pause (0) / run (1): a pause and resume never drop FF. Not applied in
@@ -352,6 +358,14 @@ private:
     std::atomic<bool> fastForwardAudible { false };
     std::atomic<int> resamplingQuality { 2 };
     FastForwardPacer fastForwardPacer;
+    HitchProbe hitchProbe;   // nx-mobile diag: GL thread
+    std::atomic<bool> hitchResetPending { false };   // resume() (UI thread) asks step() to restart it
+    // nx-mobile 2026-11-03 (ADPF): the threads before the game loaded, so the session can name the core's own; GL thread.
+    std::vector<int> threadsBeforeLoad;
+    PerfHint perfHint;
+    std::atomic<long> presentationLeadMicros { 0 };
+    unsigned perfHintSteps = 0;
+    void updatePerfHint(std::chrono::steady_clock::time_point stepStart, unsigned runs);
     unsigned appliedFastForwardSpeed = 0;
     bool appliedFastForwardAudible = false;
     // Read by the audio callback, which threaded cores call off the GL thread: drop the samples (muted FF).

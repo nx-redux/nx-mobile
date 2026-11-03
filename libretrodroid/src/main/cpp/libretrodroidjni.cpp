@@ -1080,6 +1080,14 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setKeepCor
     coreretention::setKeepLoaded(keep);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPresentationDeadline(
+    JNIEnv* env,
+    jclass obj,
+    jlong nanos
+) {
+    LibretroDroid::getInstance().setPresentationDeadline(nanos);
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFrameSpeed(
     JNIEnv* env,
     jclass obj,

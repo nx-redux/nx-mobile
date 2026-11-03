@@ -463,8 +463,9 @@ azahar_NINJA = $(SDK)/cmake/3.30.3/bin/ninja
 azahar_PLATFORM = android-21
 azahar_FLAGS = -DENABLE_LIBRETRO=ON -DENABLE_VULKAN=ON -DENABLE_OPENGL=ON -DENABLE_TESTS=OFF -DANDROID_STL=c++_static
 
-# Dolphin (Wii, GameCube): libretro/dolphin at the 2026-10-23 head (its d3ca3028 fixed a GPU-loop stop the CPU thread sent
-# before retro_run entered RunGpuLoop: lost, it hung retro_run with the CPU paused, a Wii game frozen ~10 s in). CMake like azahar, needing >= 3.25 (3.30.3 below). The
+# Dolphin (Wii, GameCube): libretro/dolphin at the 2026-10-29 head (its d3ca3028 fixed a GPU-loop stop the CPU thread sent
+# before retro_run entered RunGpuLoop: lost, it hung retro_run with the CPU paused, a Wii game frozen ~10 s in; its 3d6c2881
+# shows every Aspect Ratio mode unsqueezed and hands Vulkan's whole swapchain image over, not the EFB's 640x528). CMake like azahar, needing >= 3.25 (3.30.3 below). The
 # libretro target is Source/Core/DolphinLibretro's SHARED dolphin_libretro, suffix "_android.so", built in the build root.
 # Flags follow upstream's Android CI (.gitlab-ci.yml .core-defs: -DLIBRETRO=ON -DENABLE_LTO=ON, API 24). The core asks
 # GET_PREFERRED_HW_RENDER: the runner answers GLES3, or Vulkan when Console Settings → Graphics API picks it. 34 submodules, recursive (template default). Licences
@@ -475,12 +476,16 @@ azahar_FLAGS = -DENABLE_LIBRETRO=ON -DENABLE_VULKAN=ON -DENABLE_OPENGL=ON -DENAB
 # IMU unbound on the stick-tilt path, a null-source guard in the emulated Wiimote's HID output (states restored with
 # more remotes linked than connected), raw-disc reader exports for RetroAchievements hashing (NxDisc.cpp;
 # nx_disc_open_fd reads the frontend's SAF descriptor through DirectIOFile::FromFd, past the VFS, and a CreateBlobReader
-# overload taking an open file); retro_cheat_set adds codes not in the game INIs. Sys/ is staged to system/dolphin-emu/Sys, where the core looks, minus Themes/ (Qt GUI icons, useless to
+# overload taking an open file); retro_cheat_set adds codes not in the game INIs. patches/dolphin/0001-hacks-base-layer.patch:
+# live graphics-hack option changes go to the base config layer (Config::SetBase), not straight into g_Config, so a game's
+# INI fixes (SMG2's EFB access, TTYD's bounding box) are never overwritten; logs the active hacks 2 s in and every 30 s.
+# patches/dolphin/0002-arm64-texture-decoder.patch: upstream PR #14928 (merged 2026-10-31) backported, AArch64 SIMD texture
+# decoders for every format but XFB (AArch64 used the generic ones); drop it once the pin includes it. Sys/ is staged to system/dolphin-emu/Sys, where the core looks, minus Themes/ (Qt GUI icons, useless to
 # libretro). dolphin_LICENSE ships the notice of every statically linked external (and the GC font licences) in licenses/dolphin.txt.
 # libiconv/libcharset (LGPL-2.1+) vendor no licence text; libusb's COPYING is the same FSF LGPL-2.1 text, from the pinned
 # checkout. KissFFT's BSD notice lives only in its source header, so notices/dolphin-kissfft.txt carries it.
 dolphin_REPO = https://github.com/libretro/dolphin
-dolphin_HASH = 3aac3f052f733f8df2f1616843a4d2e14002ed11
+dolphin_HASH = b93001ed50c8b34e6ead4eed713c2005a80386e4
 dolphin_LICENSE = COPYING LICENSES/GPL-2.0-or-later.txt LICENSES/MIT.txt LICENSES/BSD-3-Clause.txt LICENSES/CC0-1.0.txt Data/Sys/GC/font-licenses.txt \
   Externals/FatFs/LICENSE.txt Externals/LZO/COPYING Externals/SFML/SFML/license.md Externals/bzip2/bzip2/LICENSE \
   Externals/cpp-optparse/cpp-optparse/LICENSE Externals/curl/curl/COPYING Externals/ed25519/license.txt \

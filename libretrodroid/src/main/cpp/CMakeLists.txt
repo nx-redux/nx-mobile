@@ -129,6 +129,9 @@ add_library(libretrodroid SHARED
         audio.cpp
         fpssync.h
         fpssync.cpp
+        perfhint.cpp
+        presenttime.cpp
+        threadlist.cpp
         fastforward.h
         fastforward.cpp
         environment.h

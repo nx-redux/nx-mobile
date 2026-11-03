@@ -508,6 +508,7 @@ class GLRetroView(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         emulationThreadGone = false
+        display?.let { LibretroDroid.setPresentationDeadline(it.presentationDeadlineNanos) }
     }
 
     override fun onDetachedFromWindow() {
