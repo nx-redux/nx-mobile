@@ -79,6 +79,7 @@ class ArtPanelTest {
     private class FakePort(var options: List<ArtOption>, var currentKey: String? = null, var currentKeys: Map<ArtSlot, String>? = null) : ArtOptionsPort {
         val calls = mutableListOf<String>()
         var fetchGate: CompletableDeferred<Unit>? = null
+        var pickGate: CompletableDeferred<Unit>? = null
         val picked = mutableListOf<ArtOption>()
         override suspend fun fetchGame(gamePath: String, replaceExisting: Boolean, wide: Boolean): FetchResult {
             calls += "fetch wide=$wide"
@@ -96,6 +97,7 @@ class ArtPanelTest {
             else -> OptionImage(ContentRef("file:///cache/${option.assetId}"))
         }
         override suspend fun pickOption(gamePath: String, option: ArtOption): Boolean {
+            pickGate?.await()
             picked += option; currentKey = option.key; return true
         }
     }
@@ -369,6 +371,32 @@ class ArtPanelTest {
         advanceUntilIdle()
         assertNull(c.panel.value!!.question)
         assertEquals("Couldn't use that picture", c.panel.value!!.message)
+    }
+
+    @Test fun aPickFinishingOverAnotherListMarksNothing() = runTest {
+        val box = opt(ArtSlot.BOX_2D, SourceId.SS, "b2")
+        val port = FakePort(listOf(box)).apply { pickGate = CompletableDeferred() }
+        val c = ArtPanelController(this, port, Settings(), onPicked = {})
+        c.open(game, fetchFirst = false)
+        advanceUntilIdle()
+        c.onButton(NxButton.A)   // the pick waits
+        runCurrent()
+        c.onButton(NxButton.DOWN); c.onButton(NxButton.A)   // Search again
+        runCurrent()
+        port.pickGate!!.complete(Unit)
+        advanceUntilIdle()
+        assertNull(c.panel.value!!.question)
+        assertEquals(emptyMap(), c.panel.value!!.currentKeys)
+        // A close and reopen too.
+        port.pickGate = CompletableDeferred(); port.currentKey = null
+        c.onButton(NxButton.UP); c.onButton(NxButton.A)
+        runCurrent()
+        c.close(); port.currentKey = null; c.open(game, fetchFirst = false)
+        advanceUntilIdle()
+        port.pickGate!!.complete(Unit)
+        advanceUntilIdle()
+        assertNull(c.panel.value!!.question)
+        assertEquals(emptyMap(), c.panel.value!!.currentKeys)
     }
 
     @Test fun currentMarkPerSection() = runTest {

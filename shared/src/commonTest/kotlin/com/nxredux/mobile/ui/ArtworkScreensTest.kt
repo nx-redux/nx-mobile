@@ -9,6 +9,8 @@ import com.nxredux.mobile.runner.GameSession
 import com.nxredux.mobile.launcher.AppLauncher
 import com.nxredux.mobile.launcher.InstalledApp
 import com.nxredux.mobile.scraper.ArtSlot
+import com.nxredux.mobile.settings.BackdropArt
+import com.nxredux.mobile.settings.GameListArt
 import com.nxredux.mobile.scraper.ArtworkController
 import com.nxredux.mobile.scraper.SgdbFixtures
 import com.nxredux.mobile.scraper.FakeArtStore
@@ -919,6 +921,30 @@ class ArtworkScreensTest {
         r.state.back(); r.state.back()                                                      // the panel, then the list: it closes off the list
         r.state.openSystem(gb)
         assertNull(r.state.artPanel.value)
+    }
+
+    @Test fun the_panels_switch_shows_the_new_backdrop_art_on_the_open_list() = runTest {
+        val r = rig()
+        r.http.on("romnom=Tetris.gb", Scrape.found("ss" to "https://m/t-ss.png", "box-2D" to "https://m/t-box.png"))
+        r.http.on("https://m/", Scrape.OK_PNG)
+        val gb = assertIs<Screen.Systems>(r.state.screen.value).tabs.flatMap { it.rows }.firstNotNullOf { (it as? MainRow.System)?.systems?.firstOrNull { s -> s.tag == "GB" } }
+        r.state.openSystem(gb)
+        r.state.onButton(NxButton.MENU)
+        val kinds = assertNotNull(assertIs<Screen.Games>(r.state.screen.value).menu).items.map { it.kind }
+        repeat(kinds.indexOf(ContextKind.FETCH_ART)) { r.state.onButton(NxButton.DOWN) }
+        r.state.onButton(NxButton.A)
+        advanceUntilIdle()
+        assertEquals(ArtLayout(BackdropArt.BOX3D, GameListArt.SCREENSHOT), r.state.artLayout.value)
+        val box = r.state.artPanel.value!!.tiles.indexOfFirst { it.option.slot == ArtSlot.BOX_2D }
+        r.state.artPanelTap(box)
+        advanceUntilIdle()
+        assertEquals(LayoutQuestion(BackdropArt.BOX2D, alsoListArt = false, yesFocused = true), r.state.artPanel.value!!.question)
+        r.state.artPanelAnswer(switch = true)
+        assertEquals(BackdropArt.BOX2D, r.state.settings.backdropArt)
+        assertEquals(ArtLayout(BackdropArt.BOX2D, GameListArt.SCREENSHOT), r.state.artLayout.value)   // the open list redraws with it
+        assertIs<Screen.Games>(r.state.screen.value)
+        assertNotNull(r.state.artPanel.value)   // the panel stays open, the question gone
+        assertNull(r.state.artPanel.value!!.question)
     }
 
     /** Opens GB, puts the row on [file] and MENU; the art item the menu offers (none, Fetch art or Change art). */

@@ -4774,6 +4774,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             s.showNewShelf = true; s.showNotStartedShelf = true; s.showMostPlayedShelf = true
             s.showNetplayHint = true
             s.consoleArt = ConsoleArt.DEFAULT; s.gameListArt = GameListArt.DEFAULT; s.backdropArt = BackdropArt.DEFAULT
+            syncArtLayout()
             s.menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE
             s.menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS
             s.menuExtraInfo = MenuStyles.DEFAULT_EXTRA_INFO
@@ -4969,6 +4970,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /** Rebuilds the open page's rows in place (selection clamped). */
     private fun refreshSettings(confirm: ExtraFolder? = null) {
+        syncArtLayout()
         val old = _screen.value as? Screen.Settings
         val section = old?.section ?: SettingsSection.LIBRARY
         val page = settingsPage(section, confirm)
@@ -6398,9 +6400,17 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * writes anything still batched.
      */
     private val artPanels: ArtPanelController? = artworkController?.let { c ->
-        ArtPanelController(scope, c, deps.settings, onPicked = { scope.launch { flushArt() } })
+        ArtPanelController(scope, c, deps.settings, onPicked = { scope.launch { flushArt() } }, onLayoutSwitched = ::syncArtLayout)
     }
     private val noArtPanel = MutableStateFlow<ArtPanel?>(null)
+    private val _artLayout = MutableStateFlow(ArtLayout(deps.settings.backdropArt, deps.settings.gameListArt))
+    /**
+     * Layouts → Backdrop art and List art as the screens draw them: the open list, its background, the top screen and
+     * the Game Switcher read this, so a change made over a list (the art panel's Switch) shows at once.
+     */
+    val artLayout: StateFlow<ArtLayout> = _artLayout.asStateFlow()
+    /** [artLayout] follows the settings (after Settings' rows, its reset, and the art panel's Switch). */
+    private fun syncArtLayout() { _artLayout.value = ArtLayout(deps.settings.backdropArt, deps.settings.gameListArt) }
     /** The art panel; null while closed (always, without a controller). */
     val artPanel: StateFlow<ArtPanel?> = artPanels?.panel ?: noArtPanel
 

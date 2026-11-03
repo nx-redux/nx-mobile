@@ -517,7 +517,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
     if (!onTop && page is Screen.Games && DualMenu.bottom(page, dualMenu) == BottomContent.Details) {
         val ra by state.gameDetailRa.collectAsState()
         val entry = page.entries.getOrNull(pageSelection.value.index)
-        GameDetailsPane(entry, entry?.let { allInfo[it.game.path] }, ra, state.settings.backdropArt, onBack = { state.back() })
+        GameDetailsPane(entry, entry?.let { allInfo[it.game.path] }, ra, state.artLayout.collectAsState().value.backdrop, onBack = { state.back() })
         return
     }
     val now = rememberNow(allInfo)
@@ -600,7 +600,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.Switcher -> GameSwitcherScreen(
                 s, state::onButton, info = gameInfoFor(gameInfo, now, s.entries.getOrNull(s.index)?.game, full = true),
                 onSelect = state::selectSwitcherRow, onOpen = { state.selectSwitcherRow(it); state.openSelected() },
-                backdropArt = state.settings.backdropArt,
+                backdropArt = state.artLayout.collectAsState().value.backdrop,
             )
             // The other screens take the index as a value: [WithIndex] reads it, so only the screen recomposes.
             // Settings: two panes on a wide landscape window (the root on the left, its pages on the right), else one page.
@@ -662,6 +662,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val minimalOpening = state.minimalOpening.collectAsState()   // a Minimal page's row being opened (its page draws the band)
     val raPanel by state.raPanel.collectAsState()   // the achievements panel over the list
     val artPanel by state.artPanel.collectAsState()   // the Fetch art / Change art panel over the list
+    val artLayout by state.artLayout.collectAsState()   // Layouts → Backdrop art / List art: the panel's Switch changes them here
     val dual by state.dualMenu.collectAsState()   // the menu is on the second display: its details pane has the achievements
     val current = { s.entries.getOrNull(selection.value.index) }
     GameListScreen(
@@ -676,8 +677,8 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
         emptyText = if (s.source is ListSource.Search || s.source is ListSource.Filtered) "No results" else null,
         info = { gameInfoFor(gameInfo, now, current()?.game, full = true) },   // Grid shows none (its tiles have tileInfo)
         style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = remember(s.entries, gameInfo, now) { entryTileInfo(s.entries, gameInfo, now) }, layoutKey = s.source,
-        artBox = state.settings.gameListArt.boxed,
-        backdropArt = state.settings.backdropArt,
+        artBox = artLayout.list.boxed,
+        backdropArt = artLayout.backdrop,
         onSearch = state::openListSearch.takeIf { s.source.searchable },
         onLayout = state::toggleLayoutMenu.takeIf { state.settings.gameListLayoutOptions }, layoutOpen = s.layoutMenu != null,
         // Layouts → Achievements panel Hide: no icon or hint (X and the game's menu still open it). Dual: none (X does nothing).
@@ -686,7 +687,7 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     )
     RaPanelOverlay(raPanel.takeIf { state.screen.value === s }, onRow = state::openRaPanelRow, onButton = state::onButton)
     ArtPanelOverlay(
-        artPanel.takeIf { state.screen.value === s }, state.settings.backdropArt, state.settings.gameListArt,
+        artPanel.takeIf { state.screen.value === s }, artLayout.backdrop, artLayout.list,
         onTap = state::artPanelTap, onAnswer = state::artPanelAnswer, onDismiss = state::closeArtPanel,
     )
     s.layoutMenu?.let { at ->
@@ -759,7 +760,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
                 derivedStateOf(structuralEqualityPolicy()) { menuBackground(style, category, s.rows.getOrNull(selection.value.index), consoleArt, portrait) }
             }
             // Grid and Carousel: plain, as menuBackground gives every non-List style (a Carousel Consoles tab on Background aside).
-            MainMenuBackground(bg, state.settings.gameListArt)
+            MainMenuBackground(bg, state.artLayout.collectAsState().value.list)
         }
         is Screen.Games -> {
             // Grid and Carousel: plain black, as their tabs (the tiles carry the art). Minimal: the names alone, no art.
@@ -782,7 +783,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
                     NxBackdropPicture(backdropPictureTarget(live.value, url), Modifier.fillMaxSize())
                 } else {
                     // List: Layouts → List art ([listArtShown]).
-                    val art = state.settings.gameListArt
+                    val art = state.artLayout.collectAsState().value.list
                     val shown by remember(s, portrait, art, selection) {
                         derivedStateOf(structuralEqualityPolicy()) { listArtShown(s.entries.getOrNull(selection.value.index), art, portrait) }
                     }

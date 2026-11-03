@@ -379,8 +379,8 @@ internal class ArtworkScreenController(
     // --- The game context menu's Fetch art / Change art ---
 
     /**
-     * None for a game no enabled art source knows (excluded tags never); Change art when it shows any art (3D or 2D
-     * box, screenshot; written by the app or placed by hand), else Fetch art.
+     * None for a game no enabled art source knows (excluded tags never); Change art when it has any art (3D or 2D
+     * box, screenshot, wheel; written by the app or placed by hand: [hasAnyArt]), else Fetch art.
      */
     fun artMenu(entry: Listed): ArtMenuItem {
         if (!controller.available || entry.system.unassigned || !controller.canFetch(entry.system.tag, entry.game.fileName, entry.system.android)) return ArtMenuItem.NONE

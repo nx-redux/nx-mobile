@@ -74,6 +74,9 @@ private fun backdropKindOf(slot: ArtSlot): BackdropArt? = when (slot) {
     else -> null
 }
 
+/** Layouts → Backdrop art and List art together, as the screens draw them ([AppState.artLayout]). */
+data class ArtLayout(val backdrop: BackdropArt, val list: GameListArt)
+
 /** The List art value showing [kind]. */
 private fun listArtOf(kind: BackdropArt): GameListArt = when (kind) {
     BackdropArt.BOX3D -> GameListArt.BOX3D
@@ -205,6 +208,8 @@ class ArtPanelController(
     private val port: ArtOptionsPort,
     private val settings: AppSettings,
     private val onPicked: (String) -> Unit,
+    /** After Switch wrote Layouts → Backdrop art (and List art): the screens follow. */
+    private val onLayoutSwitched: () -> Unit = {},
 ) {
     private companion object {
         /** Previews loaded at once, at most. */
@@ -267,6 +272,7 @@ class ArtPanelController(
         if (switch) {
             settings.backdropArt = q.kind
             if (q.alsoListArt) settings.gameListArt = listArtOf(q.kind)
+            onLayoutSwitched()
         }
         _panel.value = p.copy(question = null)
     }
@@ -295,6 +301,7 @@ class ArtPanelController(
     private fun pick(p: ArtPanel, tile: ArtTile) {
         if (picking?.isActive == true) return   // the current one too: picking it protects it from later fetches
         val path = p.gamePath
+        val shown = load   // the list the tile is from: a pick finishing after Search again or a reopen marks nothing
         picking = scope.launch {
             val ok = try {
                 port.pickOption(path, tile.option)
@@ -307,7 +314,7 @@ class ArtPanelController(
             val slot = tile.option.slot.fileSlot
             _panel.update { now ->
                 when {
-                    now?.gamePath != path -> now
+                    now?.gamePath != path || load !== shown || now.phase != ArtPanelPhase.READY -> now
                     ok -> now.copy(
                         currentKeys = now.currentKeys + (slot to tile.option.key), message = messageFor(now.tiles.size, note),
                         question = layoutQuestionFor(slot, settings.backdropArt, settings.gameListArt),

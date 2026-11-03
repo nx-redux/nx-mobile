@@ -107,6 +107,22 @@ private fun ColumnScope.ArtPanelBody(p: ArtPanel, backdropArt: BackdropArt, list
     }
 }
 
+/**
+ * The grid item to bring into view for the flat [focus]: a tile in its section's first row brings the section's
+ * heading (above it), the first tile the message too; any other tile, itself; Search again, its own.
+ */
+private fun gridTopOf(p: ArtPanel, focus: Int): Int {
+    if (focus == 0) return 0
+    var item = if (p.message != null) 1 else 0
+    var left = focus
+    for (s in p.sections) {
+        if (left < s.tiles.size) return if (left < s.columns) item else item + 1 + left
+        item += 1 + s.tiles.size
+        left -= s.tiles.size
+    }
+    return item
+}
+
 /** The grid item of the flat [focus]: after the message's item, each section's heading and tiles; Search again's after them all. */
 private fun gridItemOf(p: ArtPanel, focus: Int): Int {
     var item = if (p.message != null) 1 else 0
@@ -125,17 +141,19 @@ private fun ArtGrid(p: ArtPanel, modifier: Modifier, onTap: (Int) -> Unit) {
     val font = LocalNxFont.current
     val grid = rememberLazyGridState()
     val focusItem = gridItemOf(p, p.focus)   // a tile's item, or Search again's after them
+    val topItem = gridTopOf(p, p.focus)       // the item that must show above it: its heading in a section's first row
     val tileCount = p.sections.sumOf { it.tiles.size }
     // A d-pad move past the viewport scrolls just far enough to show the focused item whole.
     LaunchedEffect(focusItem, tileCount) {
         val info = grid.layoutInfo
         val item = info.visibleItemsInfo.firstOrNull { it.index == focusItem }
+        val head = info.visibleItemsInfo.firstOrNull { it.index == topItem }
         val top = info.viewportStartOffset
         val end = info.viewportEndOffset - info.afterContentPadding
         when {
             // The message and the first heading too when on the first tile; a section's heading with its first row.
-            item == null -> grid.animateScrollToItem(if (p.focus == 0) 0 else focusItem)
-            item.offset.y < top -> grid.animateScrollBy((item.offset.y - top).toFloat())
+            item == null || head == null -> grid.animateScrollToItem(topItem)
+            (head ?: item).offset.y < top -> grid.animateScrollBy(((head ?: item).offset.y - top).toFloat())
             item.offset.y + item.size.height > end -> grid.animateScrollBy((item.offset.y + item.size.height - end).toFloat())
         }
     }
