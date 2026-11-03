@@ -23,7 +23,7 @@ enum class FaceMode { LETTERS, LETTERS_SWAPPED, POSITIONS }
 /**
  * The keycode a physical key is sent to the runner as. The runner hands each core the key's own letter (BUTTON_B as
  * JOYPAD_B). A pad's keycodes sit where its detected [PadFaceLayout] says (an Xbox-layout pad's bottom key is BUTTON_A,
- * a Nintendo-layout pad's BUTTON_B); Console Settings → Controller Layout names the letters printed on it (Auto: the
+ * a Nintendo-layout pad's BUTTON_B); Controls → Controller Layout names the letters printed on it (Auto: the
  * detected layout). A key is first turned into its printed letter ([printed]: swapped when the two differ), then sent
  * per the console's [FaceMode]. An unknown device (null detected layout: an injected or virtual-device event) is sent
  * as is.

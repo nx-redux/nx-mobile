@@ -221,6 +221,9 @@ private fun MenuTabs(panel: PanelUi, focused: Boolean) {
 /** The tab row is drawn over the menu's body ([menuTabsShown]): the lists start right under it, not level with its words. */
 private val LocalMenuTabsAbove = compositionLocalOf { false }
 
+/** The focused page's selected option row is being changed with the pad ([MenuState.editing]): [OptionsBody] marks it. */
+internal val LocalMenuEditing = compositionLocalOf { false }
+
 /** The room above a word list's first row: none under the menu's tab row, else level with the tab words ([rootListTopPad]). */
 @Composable
 private fun wordListTopPad(rowHeight: Dp): Dp = if (LocalMenuTabsAbove.current) 0.dp else rootListTopPad(rowHeight)
@@ -271,7 +274,7 @@ private fun InGameMenuContent(
         // The tab row across the menu on the root: the Menu tab is the words with the shortcuts (or the slot card, the
         // Options preview); another tab takes the whole width.
         if (tabsAbove && beside != null) MenuTabs(beside, focused = state.panelFocus == PanelFocus.Tabs)
-        CompositionLocalProvider(LocalMenuTabsAbove provides tabsAbove) {
+        CompositionLocalProvider(LocalMenuTabsAbove provides tabsAbove, LocalMenuEditing provides state.editing) {
             if (offMenuTab && beside != null) {
                 MenuGamePanel(beside, Modifier.weight(1f).fillMaxWidth())
             } else if (split?.wide == true) {
@@ -297,7 +300,7 @@ private fun InGameMenuContent(
             Modifier
         }
         NxHintBar(
-            hintsFor(page, selectedRow, state.selectedShowsInfo, state.panelFocus ?: PanelFocus.Tabs.takeIf { offMenuTab }, state.panelTab, panel = beside != null), hintModifier,
+            hintsFor(page, selectedRow, state.selectedShowsInfo, state.panelFocus ?: PanelFocus.Tabs.takeIf { offMenuTab }, state.panelTab, panel = beside != null, editing = state.editing, twoPane = split != null), hintModifier,
             onHint = { onPress(menuHintButton(it)) },
         )
     }
@@ -344,7 +347,7 @@ private fun RootBody(
                     RootList(panes.left, rowHeight, onSelect, onActivate, onChange, focused = state.panelFocus == null)
                 } else {
                     val tap: (Int) -> Unit = { i -> split.onParentTap(panes.left.kind, i) }
-                    RootList(panes.left, rowHeight, tap, tap, {}, focused = false)
+                    RootList(panes.left, rowHeight, tap, tap, {}, focused = false, opened = true)
                 }
             }
         }
@@ -379,7 +382,7 @@ private val StackedRightMin = 88.dp
  */
 @Composable
 private fun rememberRootWordsColumn(root: MenuPage, width: Dp): Dp =
-    maxOf(rememberWordListWidth(root, menuWordSize()), width * rootListShare(LocalPortrait.current))
+    maxOf(rememberWordListWidth(root, menuWordSize(), opened = true), width * rootListShare(LocalPortrait.current))
 
 /**
  * Whether the Options page (open over the root, or its preview while the root's Options row is highlighted) fits beside
@@ -398,14 +401,15 @@ private fun rememberOptionsBeside(state: MenuState, menuWidth: Dp): Boolean {
 
 /**
  * The width a word list of [page]'s rows needs at [size]: the longest row as [NxList] draws it (an Option row with its
- * selected `<  value  >`), inside its pill's padding.
+ * selected `<  value  >`), inside its pill's padding. [opened]: room for [OPENED_MARK] after any word, as the column the
+ * page beside it opened from draws its selected word ([openedLabel]), so the width doesn't change as the selection moves.
  */
 @Composable
-private fun rememberWordListWidth(page: MenuPage, size: TextUnit): Dp {
+private fun rememberWordListWidth(page: MenuPage, size: TextUnit, opened: Boolean = false): Dp {
     val measurer = rememberTextMeasurer()
     val font = LocalNxFont.current
     val density = LocalDensity.current
-    val texts = page.rows.map { row -> row.label to (row as? MenuRow.Option)?.valueLabel?.let { "<  $it  >" } }
+    val texts = page.rows.map { row -> openedLabel(row.label, opened) to (row as? MenuRow.Option)?.valueLabel?.let { "<  $it  >" } }
     return remember(texts, font, size, density) {
         val px = texts.maxOfOrNull { (label, value) ->
             val text = buildAnnotatedString {
@@ -516,13 +520,13 @@ internal fun rootListTopPad(rowHeight: Dp): Dp = (menuTabWordCentre() - rowHeigh
  * sideways swipe on the list steps the slot, as on the slot card ([slotSwipe]).
  */
 @Composable
-private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit, onActivate: (Int) -> Unit, onChange: (Int) -> Unit, focused: Boolean = true) {
+private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit, onActivate: (Int) -> Unit, onChange: (Int) -> Unit, focused: Boolean = true, opened: Boolean = false) {
     val onSlot = page.rows.getOrNull(page.selected) is MenuRow.Slot
     val rowHeight = menuWordPitch(nxOptionsRowHeight(pageRowHeight, LocalNxOptionText.current))   // Appearance → Text size, as the option pages
     CompositionLocalProvider(LocalNxTapOpens provides { i -> !inGameRowTakesTwoTaps(page.rows.getOrNull(i)) }) { NxList(
         rows = page.rows.mapIndexed { i, row ->
             val value = (row as? MenuRow.Option)?.valueLabel
-            NxRow(row.label, secondary = value?.let { if (i == page.selected) "<  $it  >" else it })
+            NxRow(openedLabel(row.label, opened && i == page.selected), secondary = value?.let { if (i == page.selected) "<  $it  >" else it })
         },
         selectedIndex = page.selected,
         onSelect = onSelect,
@@ -536,9 +540,22 @@ private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit,
     ) }
 }
 
-/** The in-game menu's word lists' selected word: the accent while the list has the focus, else the main ink (Settings' sections). */
+/**
+ * The in-game menu's word lists' selected word: the accent while the list has the focus, else a grey ([OPEN_WORD_ALPHA] of the
+ * ink, [NxColors.inkOpen]) a step lighter than the rest's ([NxColors.inkDim]), so the open row reads apart from the focused one even with a white accent.
+ */
 @Composable
-private fun menuWordInk(focused: Boolean): Color = if (focused) LocalNxColors.current.accent else LocalNxColors.current.main
+private fun menuWordInk(focused: Boolean): Color =
+    if (focused) LocalNxColors.current.accent else LocalNxColors.current.inkOpen
+
+/**
+ * [label], ending in [OPENED_MARK] when its page is [open] beside it: the left pane's word points at the right pane
+ * ("Options ›"), in the in-game menu and Settings alike.
+ */
+internal fun openedLabel(label: String, open: Boolean): String = if (open) "$label  $OPENED_MARK" else label
+
+/** The mark after a word whose page is open in the other pane. */
+private const val OPENED_MARK = "›"
 
 /** A word list's row pitch: the menu's [base] pitch, or [MENU_WORD_PITCH] × the word size where that is more, so words keep air between them. */
 @Composable
@@ -591,7 +608,7 @@ private fun SplitBody(
                     PaneBody(panes.left, rowHeight, onSelect, onActivate, onChange, detail, focused = state.panelFocus == null)
                 } else {
                     val tap: (Int) -> Unit = { i -> split.onParentTap(panes.left.kind, i) }
-                    PaneBody(panes.left, rowHeight, tap, tap, {}, detail, focused = false)
+                    PaneBody(panes.left, rowHeight, tap, tap, {}, detail, focused = false, opened = true)
                 }
             },
             right = {
@@ -627,15 +644,16 @@ private fun PaneBody(
     onChange: (Int) -> Unit,
     detail: AchievementsUi,
     focused: Boolean,
+    opened: Boolean = false,   // the page beside it is this one's selected row, opened: its word ends in [OPENED_MARK]
 ) {
     when (page.kind) {
         // At the top, its first row beside the panel's tab row.
         PageKind.Root -> Box(
             Modifier.fillMaxSize().padding(start = nxListInset() - MenuPillPadding, end = 12.dp, bottom = 8.dp),
             contentAlignment = Alignment.TopStart,
-        ) { RootList(page, rowHeight, onSelect, onActivate, onChange, focused) }
+        ) { RootList(page, rowHeight, onSelect, onActivate, onChange, focused, opened) }
         PageKind.Achievements -> AchievementsBody(page, detail, onSelect, Modifier.fillMaxSize().alpha(if (focused) 1f else UNFOCUSED_ALPHA))   // role: an unfocused pane, dimmed
-        else -> key(page.kind) { RowsBody(page, rowHeight, onSelect, onActivate, onChange, Modifier.fillMaxSize(), focused) }
+        else -> key(page.kind) { RowsBody(page, rowHeight, onSelect, onActivate, onChange, Modifier.fillMaxSize(), focused, opened) }
     }
 }
 
@@ -657,6 +675,7 @@ private fun RowsBody(
     onChange: (Int) -> Unit,
     modifier: Modifier,
     focused: Boolean = false,
+    opened: Boolean = false,
 ) {
     val itemHeight = menuWordPitch(nxOptionsRowHeight(rowHeight, LocalNxOptionText.current), inner = true)   // Appearance → Text size
     BoxWithConstraints(
@@ -665,7 +684,7 @@ private fun RowsBody(
     ) {
         val shown = minOf(page.rows.size, maxOf(1, (maxHeight / itemHeight).toInt()))
         NxList(
-            rows = page.rows.map { NxRow(it.label) },
+            rows = page.rows.mapIndexed { i, row -> NxRow(openedLabel(row.label, opened && i == page.selected)) },
             selectedIndex = page.selected, onSelect = onSelect, onOpen = onActivate,
             modifier = Modifier.fillMaxWidth().height(itemHeight * shown.coerceAtLeast(1)),
             rowHeightOverride = itemHeight, pillPaddingOverride = MenuPillPadding,
@@ -890,13 +909,16 @@ private fun AdjustArrow(text: String, size: TextUnit, color: Color, onClick: () 
 internal fun hintsFor(
     page: MenuPage, row: MenuRow?, infoTruncated: Boolean = false, panelFocus: PanelFocus? = null, panelTab: GamePanelTab? = null,
     panel: Boolean = false,
+    editing: Boolean = false,   // the row is being changed ([MenuState.editing]): LEFT / RIGHT change, B done
+    twoPane: Boolean = true,    // drawn as two panes ([inGameMenuSplit]); one page: LEFT / RIGHT change a value row at once
 ): List<Hint> {
-    val hints = pageHints(page, row, infoTruncated, panelFocus, panelTab)
+    if (editing && panelFocus == null) return NX_EDIT_HINTS
+    val hints = pageHints(page, row, infoTruncated, panelFocus, panelTab, twoPane)
     val entersPanel = panel && panelFocus == null && page.kind == PageKind.Root && row is MenuRow.Action
     return if (entersPanel) listOf(Hint(NxButton.RIGHT, "Shortcuts")) + hints else hints
 }
 
-private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, panelFocus: PanelFocus?, panelTab: GamePanelTab?): List<Hint> = when {
+private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, panelFocus: PanelFocus?, panelTab: GamePanelTab?, twoPane: Boolean): List<Hint> = when {
     panelFocus != null -> buildList {
         add(Hint(NxButton.L1, "Tab"))
         if (panelFocus is PanelFocus.Item) { if (panelTab != GamePanelTab.ACHIEVEMENTS) add(Hint(NxButton.A, "Select")) }   // its rows open nothing
@@ -913,13 +935,13 @@ private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, pan
     page.kind == PageKind.Root && row is MenuRow.Slot ->
         listOf(Hint(NxButton.LEFT, "Slot"), Hint(NxButton.A, row.label), Hint(NxButton.B, "Resume"))
     // The root has no info area (Disc N/M): A opens the info there.
-    page.kind == PageKind.Shortcuts && row is MenuRow.Option -> shortcutHints(row)
+    page.kind == PageKind.Shortcuts && row is MenuRow.Option -> shortcutHints(row, twoPane)
     page.kind == PageKind.Root && row is MenuRow.Option -> buildList {
         add(Hint(NxButton.LEFT, "Change"))
         if (row.fullInfo.isNotBlank()) add(Hint(NxButton.A, "Info"))
         add(Hint(NxButton.B, "Resume"))
     }
-    row is MenuRow.Option -> optionHints(row, infoTruncated)
+    row is MenuRow.Option -> optionHints(row, infoTruncated, twoPane)
     // Options: A opens its page (previewed on the right).
     page.kind == PageKind.Root && row is MenuRow.Submenu -> listOf(Hint(NxButton.A, "Open"), Hint(NxButton.B, "Resume"))
     row is MenuRow.Submenu -> buildList {
@@ -944,25 +966,33 @@ private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, pan
  * An Options → Shortcuts row: waiting for a press, only B Cancel (every other key is the press); a bind row's A Bind, a
  * touch button's Change and Choose; then X None (here) and Y Default (back to Controls → Shortcuts).
  */
-private fun shortcutHints(row: MenuRow.Option): List<Hint> = buildList {
+private fun shortcutHints(row: MenuRow.Option, twoPane: Boolean): List<Hint> = buildList {
     if (row.valueLabel == SHORTCUT_PROMPT) { add(Hint(NxButton.B, "Cancel")); return@buildList }
-    if (row.choices.isEmpty()) add(Hint(NxButton.A, "Bind")) else { add(Hint(NxButton.LEFT, "Change")); add(Hint(NxButton.A, "Choose")) }
+    when {
+        row.choices.isEmpty() -> add(Hint(NxButton.A, "Bind"))
+        !twoPane -> { add(Hint(NxButton.LEFT, "Change")); if (row.control == NxSettingControl.PICKER) add(Hint(NxButton.A, "Choose")) }
+        else -> add(Hint(NxButton.A, if (row.control == NxSettingControl.PICKER) "Choose" else "Change"))
+    }
     add(Hint(NxButton.X, "None"))
     add(Hint(NxButton.Y, "Default"))
     add(Hint(NxButton.B, "Back"))
 }
 
 /**
- * An option row: Change; A's Adjust on a visual row, Toggle on a switch, Choose on a picker (none on a segmented or a
- * value-only row, where A steps or does nothing); X Info when its description is cut off on its row or says more
- * ([MenuState.selectedShowsInfo], passed as [infoTruncated]).
+ * An option row: A changes it as a tap does (LEFT/RIGHT go between the pages, never change a value): Adjust on a visual
+ * row, Toggle on a switch, Choose on a picker, in two panes Change on segments or swatches (A then LEFT / RIGHT,
+ * [MenuState.editing]); on one page LEFT / RIGHT change it at once (◄► Change);
+ * X Info when its description is cut off on its row or says more ([MenuState.selectedShowsInfo], passed as [infoTruncated]).
  */
-private fun optionHints(row: MenuRow.Option, infoTruncated: Boolean): List<Hint> = buildList {
-    add(Hint(NxButton.LEFT, "Change"))
+private fun optionHints(row: MenuRow.Option, infoTruncated: Boolean, twoPane: Boolean): List<Hint> = buildList {
+    // One page: LEFT / RIGHT change it at once (A as a tap: segments step, no hint of their own).
+    if (!twoPane) add(Hint(NxButton.LEFT, "Change"))
     when {
         row.visual -> add(Hint(NxButton.A, "Adjust"))
         row.control == NxSettingControl.SWITCH -> add(Hint(NxButton.A, "Toggle"))
         row.control == NxSettingControl.PICKER -> add(Hint(NxButton.A, "Choose"))
+        // Two panes: A starts changing segments or swatches ([MenuState.editing]).
+        twoPane && (row.control == NxSettingControl.SEGMENTED || row.control == NxSettingControl.SWATCHES) -> add(Hint(NxButton.A, "Change"))
     }
     if (infoTruncated && row.fullInfo.isNotBlank()) add(Hint(NxButton.X, "Info"))
     add(Hint(NxButton.B, "Back"))

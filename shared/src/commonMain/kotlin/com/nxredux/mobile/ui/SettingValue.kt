@@ -49,3 +49,38 @@ internal class SettingValue<T>(
         return true
     }
 }
+
+/** A row the pad is changing: the page it is on ([rowEditKey]) and its index there. */
+data class RowEdit(val key: Any, val index: Int)
+
+/**
+ * The page of setting rows [s] is, for [RowEdit] (a Settings section, an emulator's options page, RetroAchievements' or
+ * Artwork's settings); null on any other screen.
+ */
+internal fun rowEditKey(s: Screen): Any? = when (s) {
+    is Screen.Settings -> s.section
+    is Screen.EmulatorOptions -> "emulator:${s.category}"
+    is Screen.RaSettings -> "ra"
+    is Screen.ArtworkSettings -> "artwork"
+    else -> null
+}
+
+/**
+ * [s] is drawn beside another page on a [split] window: a Settings page, an emulator's console-wide options (a game's
+ * own are a modal), RetroAchievements' or Artwork's settings. Only there do LEFT / RIGHT go between pages and A start a
+ * change ([RowEdit]); one page keeps LEFT / RIGHT for its values.
+ */
+internal fun rowEditTwoPane(s: Screen, split: Boolean): Boolean =
+    split && (settingsPane(s) != null || raSplitLevel(s) || artworkSplitLevel(s))
+
+/** [s] has a dialog open that takes the pad (a confirm, a sign-in, a key): no row is changed under it. */
+internal fun rowEditBlocked(s: Screen): Boolean = when (s) {
+    is Screen.Settings -> s.confirmReset || s.confirmRemove != null
+    is Screen.RaSettings -> s.signingIn || s.confirm != null
+    is Screen.ArtworkSettings -> s.dialogOpen
+    else -> false
+}
+
+/** The row of [s] being changed while [selected] is the selection ([edit] is on it), else -1: the UI's [NxSettingRow.editing]. */
+internal fun rowEditIndex(s: Screen, edit: RowEdit?, selected: Int): Int =
+    if (edit != null && edit.index == selected && edit.key == rowEditKey(s)) selected else -1

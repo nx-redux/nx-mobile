@@ -1,7 +1,7 @@
 package com.nxredux.mobile.options
 
 /**
- * Console Settings → Audio Resampling Quality, for every console: how the game's sound is converted to the phone's
+ * Audio → Audio Resampling Quality, for every console: how the game's sound is converted to the phone's
  * output rate, as the handheld's frontend option (Low zero-order hold, Medium linear, High and Max sinc; libsamplerate
  * in the runner). A frontend `nx_` key, per game with a console default, applied live. Audible fast forward plays at
  * Medium at most (the runner's choice, not stored).

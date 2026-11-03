@@ -83,7 +83,56 @@ data class NxSettingRow(
     val swatches: List<Int>? = null,
     /** An add row (Library's Add ROM folder): a "+" before its name and description, no value. */
     val adds: Boolean = false,
+    /**
+     * The pad is changing this row ([NxPadA.EDIT]): LEFT / RIGHT step its value until A or B. Drawn with an accent ring
+     * round its plate and `<` `>` round its control, so it reads apart from a row only selected.
+     */
+    val editing: Boolean = false,
 ) : NxDescribedRow
+
+/** What A does on a row with a pad ([padA]). */
+enum class NxPadA {
+    /** Nothing of its own: the screen's A (open, act). */
+    NONE,
+    /** A switch: A flips it. */
+    FLIP,
+    /** Many or long values: A opens the picker. */
+    PICK,
+    /** Segments, swatches or a stepped value: A starts changing it ([NxSettingRow.editing]); LEFT / RIGHT step, A or B stop. */
+    EDIT,
+}
+
+/** What A does on [this] row with a pad: flip a switch, open a picker, change segments, swatches or a value in place. */
+val NxSettingRow.padA: NxPadA get() = when {
+    !enabled || choices.size < 2 -> NxPadA.NONE
+    control == NxSettingControl.SWITCH -> NxPadA.FLIP
+    control == NxSettingControl.PICKER -> NxPadA.PICK
+    else -> NxPadA.EDIT
+}
+
+/** A's hint on [this] row by [padA]: Toggle, Choose or Change; null when A does nothing of the row's own. */
+val NxSettingRow.padAHint: Hint? get() = when (padA) {
+    NxPadA.FLIP -> Hint(NxButton.A, "Toggle")
+    NxPadA.PICK -> Hint(NxButton.A, "Choose")
+    NxPadA.EDIT -> Hint(NxButton.A, "Change")
+    NxPadA.NONE -> null
+}
+
+/**
+ * [this] value row's hints by how the page is drawn: beside another page ([twoPane]) A's alone ([padAHint]: Toggle,
+ * Choose or Change, LEFT / RIGHT then step it); one page, LEFT / RIGHT change it at once and A toggles a switch or opens
+ * a picker (segments step on A too, no hint of their own). [side] false: LEFT / RIGHT leave this row alone (a row
+ * Android changes).
+ */
+fun NxSettingRow.valueHints(twoPane: Boolean, side: Boolean = true): List<Hint> =
+    if (twoPane) listOfNotNull(padAHint)
+    else listOfNotNull(
+        Hint(NxButton.LEFT, "Change").takeIf { side },
+        when (padA) { NxPadA.FLIP -> Hint(NxButton.A, "Toggle"); NxPadA.PICK -> Hint(NxButton.A, "Choose"); else -> null },
+    )
+
+/** The hints while a row is being changed ([NxSettingRow.editing]): LEFT / RIGHT change it, A or B are done. */
+val NX_EDIT_HINTS: List<Hint> = listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.B, "Done"))
 
 val NxSettingRow.control: NxSettingControl get() = when {
     swatches != null && choices.size >= 2 -> NxSettingControl.SWATCHES
@@ -391,21 +440,25 @@ private fun NxSettingTouchRow(
     // it); elsewhere it only focuses the row, so a control never acts on it either.
     var cut by remember(row.info) { mutableStateOf(false) }
     val hold = info?.let { if (row.hasMoreInfo || cut) it else onTap }
+    val editing = selected && row.editing
     NxTouchRow(
         row.label, row.info, row.hasMoreInfo, selected, sizes,
         onTap = onTap, onInfo = info, onTruncated = onTruncated,
         enabled = row.enabled, warning = row.warning, onLongPress = hold, onFits = { cut = !it }, action = row.action,
         leading = if (row.adds) { { NxAddGlyph(sizes.label) } } else null,
+        editing = editing,
         below = when {
             !sizes.segmentsBelow(row) -> null
-            row.control == NxSettingControl.SWATCHES -> { { NxSwatches(row.swatches.orEmpty(), row.index, nxAutoSecondary(), hold, choose) } }
-            else -> { { NxSegments(row.choices, row.index, sizes.value, hold, choose) } }
+            row.control == NxSettingControl.SWATCHES -> { { NxEditArrows(editing, sizes.value) { NxSwatches(row.swatches.orEmpty(), row.index, nxAutoSecondary(), hold, choose) } } }
+            else -> { { NxEditArrows(editing, sizes.value) { NxSegments(row.choices, row.index, sizes.value, hold, choose) } } }
         },
     ) {
-        SettingControlView(
-            row, sizes, choose, onEvent?.let { e -> { e(NxSettingEvent.OpenPicker(index)) } },
-            onButton.takeIf { onEvent != null && row.enabled }, hold,
-        )
+        NxEditArrows(editing, sizes.value) {
+            SettingControlView(
+                row, sizes, choose, onEvent?.let { e -> { e(NxSettingEvent.OpenPicker(index)) } },
+                onButton.takeIf { onEvent != null && row.enabled }, hold,
+            )
+        }
     }
 }
 

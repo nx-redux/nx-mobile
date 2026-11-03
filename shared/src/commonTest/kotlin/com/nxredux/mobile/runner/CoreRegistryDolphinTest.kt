@@ -38,7 +38,7 @@ class CoreRegistryDolphinTest {
         assertEquals("18", wii.defaultOptions["dolphin_ir_yaw"])
         assertEquals("20", wii.defaultOptions["dolphin_ir_pitch"])
         assertEquals("16", wii.defaultOptions["dolphin_ir_offset"])
-        // Console Settings → Wii Screen sets it at launch: the core option is locked.
+        // Display → Wii Screen sets it at launch: the core option is locked.
         assertTrue("dolphin_widescreen" in wii.lockedOptions)
         // ...and the pointer geometry with it (WiiScreen.pointerOptions): saved values would otherwise win.
         assertTrue(listOf("dolphin_ir_yaw", "dolphin_ir_pitch", "dolphin_ir_offset").all { it in wii.lockedOptions })

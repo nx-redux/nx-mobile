@@ -11,7 +11,7 @@ data class WiiControls(val classic: Boolean, val nunchuk: Boolean, val motionPlu
 }
 
 /**
- * Console Settings → Wii Controller (`nx_wii_controller`): Auto picks from the game's [WiiControls], the others force.
+ * Controls → Wii Controller (`nx_wii_controller`): Auto picks from the game's [WiiControls], the others force.
  * Auto prefers the Classic Controller whenever the game takes one (the closest to a gamepad), except for MotionPlus games.
  */
 object WiiController {
@@ -58,7 +58,7 @@ object WiiController {
     }
 }
 
-/** Console Settings → Motion Controls (`nx_wii_motion`): Auto = on for MotionPlus games. Never without sensors or on Classic. */
+/** Controls → Motion Controls (`nx_wii_motion`): Auto = on for MotionPlus games. Never without sensors or on Classic. */
 object WiiMotion {
     const val AUTO = "auto"
     const val ON = "on"

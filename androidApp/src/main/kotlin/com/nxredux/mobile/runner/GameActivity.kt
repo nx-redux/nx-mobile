@@ -322,7 +322,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var wiiGameCube = false
     override val isWii: Boolean get() = WiiOptions.appliesTo(gameTag) && !wiiGameCube
     override val isDolphin: Boolean get() = gameCoreId == DOLPHIN_ID
-    /** This launch asked the core for Vulkan (Console Settings → Graphics API): a failure to start it relaunches on GLES. */
+    /** This launch asked the core for Vulkan (Display → Graphics API): a failure to start it relaunches on GLES. */
     @Volatile private var launchedOnVulkan = false
     /**
      * This screen is being recreated to start the game again on OpenGL ES ([relaunchOnGles]): it writes no auto state
@@ -1530,7 +1530,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             withContext(Dispatchers.IO) {
                 // The name the core sees: an arcade zip in lowercase (fbneo matches the driver name case-sensitively).
                 val fileName = CoreRegistry.contentName(tag, romFileName)
-                // Console Settings → Graphics API: the core options for the API and whether the runner offers Vulkan.
+                // Display → Graphics API: the core options for the API and whether the runner offers Vulkan.
                 // Vulkan that could not start here before, or this is the relaunch after it did: OpenGL ES (VulkanFallback).
                 val vulkanFailed = intent.getBooleanExtra(EXTRA_FORCE_GLES, false) ||
                     descriptor?.id in AndroidAppSettings(this@GameActivity).vulkanFailedCores
@@ -1565,7 +1565,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     // GL driver messages and a frame probe to tag NXGL, with Settings → System → Debug log on at
                     // launch.
                     glDebugOutput = NxLog.enabled
-                    // Console Settings → Graphics API ([graphics]): Vulkan frames are bridged into the GLES presentation.
+                    // Display → Graphics API ([graphics]): Vulkan frames are bridged into the GLES presentation.
                     preferVulkan = graphics.preferVulkan
                     vulkanSwapchainFrames = graphics.swapchainFrames
                     // gpsp: never unload the core between games, so its recompiler cache stays mapped near it.
@@ -1923,7 +1923,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     // netplay: a relaunch would start without the session (it is gone), so the dialog says what to do. An
                     // ended link session's relaunch ([netplayLocal]) is a plain launch, which relaunches as any other.
                     if (intent.hasExtra(EXTRA_NETPLAY_ROLE) && !netplayLocal) {
-                        fail("Vulkan could not start for this game on this device. Set Console Settings → Graphics API to OpenGL ES.")
+                        fail("Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES.")
                     } else {
                         relaunchOnGles()
                     }
@@ -2162,9 +2162,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val res3dKeys = res3d?.keys.orEmpty()
         val old3d = res3dKeys.map { frontendValues[it] }
         frontendValues = values
-        // Console Settings → 3D Resolution (the menu, live): the new value goes at once, not as a size change.
+        // Display → 3D Resolution (the menu, live): the new value goes at once, not as a size change.
         if (setsRes3d() && res3dKeys.map { values[it] } != old3d) offerNds3d(sizeChange = false)
-        // Console Settings → Bottom screen (the menu, live): the picture may move. Posted, as for the Sega pad.
+        // Display → Bottom screen (the menu, live): the picture may move. Posted, as for the Sega pad.
         if (values[BottomScreenOptions.KEY] != oldBottomScreen) findViewById<View?>(R.id.root)?.post { dual.recheckPictureOn() }
         val segaSetting = values[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
         if (segaSetting != oldSegaSetting && PadMap.isSegaPadTag(gameTag)) applySegaPad(segaSetting)
@@ -2348,7 +2348,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun recenterWiiMotion() { motionSensors?.recenter() }
 
     /**
-     * Console Settings → Wii Screen for a Wii game: Dolphin's widescreen system setting, chosen from the orientation the
+     * Display → Wii Screen for a Wii game: Dolphin's widescreen system setting, chosen from the orientation the
      * game starts in (games read it once at boot), and the touch pointer's geometry for that shape. Empty for any other
      * console.
      */
