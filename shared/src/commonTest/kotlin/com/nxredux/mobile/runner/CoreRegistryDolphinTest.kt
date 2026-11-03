@@ -22,11 +22,11 @@ class CoreRegistryDolphinTest {
         assertEquals(CoreDescriptor.WIIMOTE_SIDEWAYS, wii.controllerPort0)
         assertEquals(CoreDescriptor.JOYPAD, gc.controllerPort0)
     }
-    @Test fun defaults_run_synced_dual_core_with_background_shaders() {
+    @Test fun defaults_run_unsynced_dual_core_with_background_shaders() {
         for (d in listOf(wii, gc)) {
             assertEquals("Hardware", d.defaultOptions["dolphin_renderer"])
             assertEquals("enabled", d.defaultOptions["dolphin_main_cpu_thread"])
-            assertEquals("enabled", d.defaultOptions["dolphin_sync_gpu"])
+            assertEquals("disabled", d.defaultOptions["dolphin_sync_gpu"])
             assertEquals("disabled", d.defaultOptions["dolphin_osd_enabled"])
             assertEquals("3", d.defaultOptions["dolphin_shader_compilation_mode"])
             assertTrue("dolphin_renderer" in d.lockedOptions && "dolphin_osd_enabled" in d.lockedOptions)

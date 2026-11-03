@@ -475,7 +475,9 @@ azahar_FLAGS = -DENABLE_LIBRETRO=ON -DENABLE_VULKAN=ON -DENABLE_OPENGL=ON -DENAB
 # IMU unbound on the stick-tilt path, a null-source guard in the emulated Wiimote's HID output (states restored with
 # more remotes linked than connected), raw-disc reader exports for RetroAchievements hashing (NxDisc.cpp;
 # nx_disc_open_fd reads the frontend's SAF descriptor through DirectIOFile::FromFd, past the VFS, and a CreateBlobReader
-# overload taking an open file); retro_cheat_set adds codes not in the game INIs. Sys/ is staged to system/dolphin-emu/Sys, where the core looks, minus Themes/ (Qt GUI icons, useless to
+# overload taking an open file); retro_cheat_set adds codes not in the game INIs. patches/dolphin/0001-hacks-base-layer.patch:
+# live graphics-hack option changes go to the base config layer (Config::SetBase), not straight into g_Config, so a game's
+# INI fixes (SMG2's EFB access, TTYD's bounding box) are never overwritten; logs the active hacks 2 s in and every 30 s. Sys/ is staged to system/dolphin-emu/Sys, where the core looks, minus Themes/ (Qt GUI icons, useless to
 # libretro). dolphin_LICENSE ships the notice of every statically linked external (and the GC font licences) in licenses/dolphin.txt.
 # libiconv/libcharset (LGPL-2.1+) vendor no licence text; libusb's COPYING is the same FSF LGPL-2.1 text, from the pinned
 # checkout. KissFFT's BSD notice lives only in its source header, so notices/dolphin-kissfft.txt carries it.

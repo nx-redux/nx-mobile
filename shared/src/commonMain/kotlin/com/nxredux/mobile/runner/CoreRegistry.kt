@@ -411,8 +411,11 @@ object CoreRegistry {
     // descriptor in place, not a multi-GB copy into the cache. Its user dir is <save dir>/User/, so each console has its
     // own (Saves/WII/User, Saves/GC/User) and one's NAND (User/Wii) and memory cards (User/GC) are not seen by the other; a
     // GC disc played under WII (a loose GC image resolves to WII) uses WII's.
-    // Defaults: hardware renderer; dual core with the GPU thread synced (unsynced, NSMB Wii desynced the FIFO after the
-    // airship); async with skip-rendering (shaders compile in the background on the runner's shared contexts and an effect
+    // Defaults: hardware renderer; dual core with the GPU thread unsynced, as standalone Dolphin (no game in its
+    // GameSettings asks for SyncGPU). Synced it was ~3x the uneven frames in SMG2 on the Retroid Pocket Nova; the NSMB
+    // Wii FIFO desync after the opening airship that made us sync it (2026-10-13) no longer happens on the 3aac3f05 pin
+    // (NSMB Wii past 1-1 and Paper Mario TTYD checked unsynced, 2026-11-03). Synchronize GPU Thread stays a Console
+    // Setting for a game that needs it; async with skip-rendering (shaders compile in the background on the runner's shared contexts and an effect
     // whose shader is not ready is skipped for a moment, not drawn with GPU-heavy ubershaders, which made SMG2 lag on the
     // Fold); on-screen messages off. The orientation hotkeys are off because the app sets the controller type itself
     // (nx_wii_controller); for the same reason Wiimote Device stays "Set per port" (it would override every port's). Audio is pushed per frame (mode 0):
@@ -423,7 +426,7 @@ object CoreRegistry {
     private val dolphinOptions = mapOf(
         "dolphin_renderer" to "Hardware",
         "dolphin_main_cpu_thread" to "enabled",
-        "dolphin_sync_gpu" to "enabled",
+        "dolphin_sync_gpu" to "disabled",
         "dolphin_osd_enabled" to "disabled",
         "dolphin_shader_compilation_mode" to "3",
         "dolphin_hotkey_sideways_toggle" to "Disabled",
