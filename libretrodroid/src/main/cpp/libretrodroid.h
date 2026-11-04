@@ -18,6 +18,7 @@
 #ifndef LIBRETRODROID_LIBRETRODROID_H
 #define LIBRETRODROID_LIBRETRODROID_H
 
+#include <functional>
 #include <jni.h>
 
 #include <EGL/egl.h>
