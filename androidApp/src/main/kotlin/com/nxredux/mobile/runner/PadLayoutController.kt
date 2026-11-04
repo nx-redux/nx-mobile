@@ -850,7 +850,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val tag = layoutTag()
         if (names.isNotEmpty() || host.dualMode != DualMode.OFF || N3dsOptions.appliesTo(tag)) return null
         val ds = NdsOptions.appliesTo(tag)
-        if (!SkinChoice.skinnable(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds)) return null
+        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds) ?: return null
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null
         val tablet = activity.windowShape().screenClass.isTablet
@@ -861,7 +861,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val top = 0
         val key = SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, top)
         val placed = skinCache?.takeIf { it.first == key }?.second ?: SkinChoice.place(
-            pack.manifest, w, h, key.dpi, tablet, ds, aspect?.let { (it * 240f) to 240f }, hinge, top, DeviceTraits.canHalfFold,
+            pack.manifest, w, h, key.dpi, tablet, ds, aspect?.let { (it * 240f) to 240f }, hinge, top, DeviceTraits.canHalfFold, variant,
         ).also { skinCache = key to it }
         skinView?.placement = placed
         return placed

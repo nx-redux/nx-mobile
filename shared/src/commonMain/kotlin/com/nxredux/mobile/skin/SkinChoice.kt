@@ -31,8 +31,20 @@ object SkinChoice {
         "NGP", "NGPC", "PCE", "VB", "LYNX", "A2600", "A7800", "PKM", "WS", "WSC", "COLECO", "FBN",
     )
 
-    /** Whether a skin draws the pad for the console [baseTag] (upper case, GPGX prefix dropped): the DS or [SINGLE_TAGS]. */
-    fun skinnable(baseTag: String, ds: Boolean): Boolean = ds || baseTag in SINGLE_TAGS
+    /**
+     * The skin layout set for the console [baseTag] (upper case, GPGX prefix dropped; [ds]: a DS game): its own button
+     * set (the Game Boys, the GBA), the shared one-screen set ([SINGLE_TAGS]), the DS's, or null: no skin.
+     */
+    fun variantFor(baseTag: String, ds: Boolean): SkinVariant? = when {
+        ds -> SkinVariant.DS
+        baseTag in GB_TAGS -> SkinVariant.GB
+        baseTag in GBA_TAGS -> SkinVariant.GBA
+        baseTag in SINGLE_TAGS -> SkinVariant.SINGLE
+        else -> null
+    }
+
+    private val GB_TAGS = setOf("GB", "GBC", "SGB")
+    private val GBA_TAGS = setOf("GBA", "MGBA")
 
     /**
      * The main menu's pad in a [windowW] x [windowH] px area at [densityDpi], built from pieces. Portrait: the stacked
@@ -92,24 +104,28 @@ object SkinChoice {
      * [windowW] x [windowH] px at [densityDpi]; [tablet]: a tablet-class window; [ds]: a DS game (else one screen of
      * [picture] game px); [hingeY]: the fold's middle in window px while half-folded, else null; [topInset]: window px at
      * the top the screen frame keeps clear of (the camera cutout; [SkinSolver.placePieces]); [foldable]: a device that
-     * half-folds.
+     * half-folds; [variant]: the console's layout set ([variantFor]; null: the DS's or the shared one-screen one by [ds]).
      */
     fun place(
         pack: SkinPackManifest, windowW: Int, windowH: Int, densityDpi: Int, tablet: Boolean, ds: Boolean,
         picture: Pair<Float, Float>? = null, hingeY: Float? = null, topInset: Int = 0, foldable: Boolean = false,
+        variant: SkinVariant? = null,
     ): SkinPlacement? {
         if (windowW <= 0 || windowH <= 0 || densityDpi <= 0) return null
+        val v = variant ?: if (ds) SkinVariant.DS else SkinVariant.SINGLE
+        // a console's own set the pack does not have (an older or a player's pack): the shared one-screen set
+        if (v != SkinVariant.DS && v != SkinVariant.SINGLE && pack.layouts.none { it.variant == v })
+            return place(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, SkinVariant.SINGLE)
         val k = scaleFor(pack, densityDpi)
-        val variant = if (ds) SkinVariant.DS else SkinVariant.SINGLE
         val landscape = windowW > windowH
         // sideways: the main menu's landscape shell, the game in its screen frame (the strip under it; a DS's MIC, SWAP)
-        if (landscape) return shell(pack, SkinFamily.GRIP, variant, windowW, windowH, k, picture, topInset)
+        if (landscape) return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset)
         // half-folded: the screen frame above the fold, the pad below it (a DS's touch screen with it)
         // a foldable's inner screen or a tablet: the fold board, split at its hinge flat or not (the window's middle when flat)
-        if (foldable || tablet) widest(pack, SkinFamily.FLEX, variant, fold = true) { spec ->
+        if (foldable || tablet) widest(pack, SkinFamily.FLEX, v, fold = true) { spec ->
             SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), hingeY ?: (windowH / 2f))
         }?.let { return it }
-        if (hingeY != null) return widest(pack, SkinFamily.FLEX, variant, fold = false) { spec ->
+        if (hingeY != null) return widest(pack, SkinFamily.FLEX, v, fold = false) { spec ->
             if (spec.frame?.hinge?.let { it >= 0 } != true) null
             else SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), hingeY)
         }
@@ -120,7 +136,7 @@ object SkinChoice {
             else -> listOf(SkinFamily.LARGE, SkinFamily.STACKED)
         }
         for (family in families) {
-            widest(pack, family, variant, fold = false) { spec ->
+            widest(pack, family, v, fold = false) { spec ->
                 if (spec.frame != null) SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat())
                 else SkinSolver.place(spec, windowW.toFloat(), windowH.toFloat(), k, picture)
             }?.let { return it }

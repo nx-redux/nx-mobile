@@ -52,6 +52,10 @@ enum class SkinVariant {
     @SerialName("ds") DS,
     @SerialName("single") SINGLE,
     @SerialName("menu") MENU,
+    /** Game Boy, Game Boy Color, Super Game Boy: d-pad, A B, TA TB (on X Y), SELECT START MENU; no shoulders. */
+    @SerialName("gb") GB,
+    /** Game Boy Advance: the GB set with L R and TL TR (on L2 R2). */
+    @SerialName("gba") GBA,
 }
 
 /**

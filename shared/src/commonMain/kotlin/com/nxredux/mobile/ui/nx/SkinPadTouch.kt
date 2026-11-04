@@ -154,7 +154,7 @@ class SkinPadTouch(
     private companion object {
         const val ARM_CORNER = 10f
         val BUTTONS = mapOf(
-            "A" to NxButton.A, "B" to NxButton.B, "X" to NxButton.X, "Y" to NxButton.Y, "L" to NxButton.L1, "R" to NxButton.R1,
+            "A" to NxButton.A, "B" to NxButton.B, "X" to NxButton.X, "Y" to NxButton.Y, "L" to NxButton.L1, "R" to NxButton.R1, "L2" to NxButton.L2, "R2" to NxButton.R2,
             "START" to NxButton.START, "SELECT" to NxButton.SELECT, "MENU" to NxButton.MENU,
         )
         val ACTIONS = setOf("MIC", "SWAP", "SAVE", "LOAD", "REWIND", "FAST", "TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4")
