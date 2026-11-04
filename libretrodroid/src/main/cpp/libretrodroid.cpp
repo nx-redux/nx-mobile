@@ -730,6 +730,10 @@ void LibretroDroid::step() {
             const auto run = hitchProbe.takeRunStats();
             LOGW("NXHITCH summary steps=%lu hitches=%lu run_avg=%.2f run_worst=%.1f", hitchProbe.steps(),
                  hitchProbe.hitches(), run.averageMs, run.worstMs);
+            if (audio) {
+                const auto f = audio->takeFifoStats();
+                LOGW("NXAUDIO underrun=%ld overrun=%ld min_fill=%ld capacity=%ld xruns_total=%ld slowdown=%.3f", f.underrun, f.overrun, f.minFill, f.capacity, f.xruns, slowdownMeter.speed());
+            }
         }
     }
 
@@ -790,6 +794,21 @@ void LibretroDroid::step() {
         }
         rewindPlayed += runs;   // the probe's clock (RewindProbe): a paused step plays none
         hitchProbe.ranCore(HitchProbe::Clock::now(), runs);
+        // Fill Audio Gaps: a game that falls behind (Frame Skip Off lets it slow down) makes its sound slower than real
+        // time; the audio plays at the speed it reaches, as a slower tempo at the same pitch (time stretch), instead of
+        // running dry. Auto does it with Frame Skip Off; never in netplay or a link, and FF plays at its own speed.
+        if (audio) {
+            const int gaps = fillAudioGaps.load();
+            const bool fill = !np && !lk && (gaps == FILL_GAPS_ON || (gaps == FILL_GAPS_AUTO && !FPSSync::frameSkip));
+            audio->setTimeStretch(fill);
+            const bool measure = fill && fpsSync && !fastForward && speed > 0;
+            if (measure) {
+                audio->setSlowdownSpeed(slowdownMeter.add(SlowdownMeter::Clock::now(), runs, fpsSync->getContentRefreshRate()));
+            } else {
+                slowdownMeter.reset();
+                audio->setSlowdownSpeed(1.0);
+            }
+        }
         if (speed > 0) rewindState = (np || lk) ? REWIND_STATUS_OFF : rewind.enabled() ? REWIND_STATUS_READY : offStatus();
     }
     auto& achievements = Achievements::getInstance();
@@ -1295,7 +1314,8 @@ void LibretroDroid::afterGameLoad() {
     audio = std::make_unique<Audio>(
         (int32_t) std::lround(inputSampleRate),
         system_av_info.timing.fps,
-        preferLowLatencyAudio
+        preferLowLatencyAudio,
+        audioBufferMs.load()
     );
     audio->setResamplingQuality(resamplingQuality.load());
 

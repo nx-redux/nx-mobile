@@ -39,6 +39,7 @@
 #include "video.h"
 #include "renderers/renderer.h"
 #include "fpssync.h"
+#include "slowdown.h"
 #include "fastforward.h"
 #include "hitchprobe.h"
 #include "perfhint.h"
@@ -171,6 +172,8 @@ public:
     void setFrameSpeed(unsigned int speed);
     // nx-mobile 2026-11-03: Frame Skip (Auto true, Off false): see FPSSync::frameSkip. Any thread, live.
     void setFrameSkip(bool skip) { FPSSync::frameSkip = skip; }
+    // Frame Skip Off: the game's achieved speed, which the audio plays at (SlowdownMeter). GL thread.
+    SlowdownMeter slowdownMeter;
 
     // nx-mobile 2026-11-03: the display's presentation deadline (how early a frame must be queued to show at a refresh);
     // a sleep-timer frame is stamped to show at its deadline + this + 1.5 ms. 0 = unknown: one frame. Any thread.
@@ -184,6 +187,13 @@ public:
     // nx-mobile 2026-10-30: the Audio Resampling Quality row, 0 Low to 3 Max (Audio::Quality). Any thread; step()
     // hands it to the audio, as afterGameLoad does a new one.
     void setResamplingQuality(int quality) { resamplingQuality.store(quality); }
+    // nx-mobile 2026-11-04: Audio Buffer (ms kept ready, 0 default), read when the game's audio starts; Fill Audio Gaps
+    // (FILL_GAPS_*), live. Any thread.
+    void setAudioBufferMs(int ms) { audioBufferMs.store(ms); }
+    void setFillAudioGaps(int mode) { fillAudioGaps.store(mode); }
+    static constexpr int FILL_GAPS_AUTO = 0;   // with Frame Skip Off, where the game slows down
+    static constexpr int FILL_GAPS_ON = 1;
+    static constexpr int FILL_GAPS_OFF = 2;
 
     // nx-mobile 2026-10-24: rewind. Enabled, step() snapshots the game after each frame (once the core can serialize);
     // rewinding, it steps back through those snapshots instead of playing, one per capture interval, and wins over
@@ -374,6 +384,8 @@ private:
     std::atomic<unsigned> fastForwardSpeed { 0 };
     std::atomic<bool> fastForwardAudible { false };
     std::atomic<int> resamplingQuality { 2 };
+    std::atomic<int> audioBufferMs { 0 };
+    std::atomic<int> fillAudioGaps { FILL_GAPS_AUTO };
     FastForwardPacer fastForwardPacer;
     HitchProbe hitchProbe;   // nx-mobile diag: GL thread
     std::atomic<bool> hitchResetPending { false };   // resume() (UI thread) asks step() to restart it

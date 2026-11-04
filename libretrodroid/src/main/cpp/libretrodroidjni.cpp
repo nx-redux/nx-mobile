@@ -1106,6 +1106,22 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPresent
     LibretroDroid::getInstance().setPresentationDeadline(nanos);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setAudioBufferMs(
+    JNIEnv* env,
+    jclass obj,
+    jint ms
+) {
+    LibretroDroid::getInstance().setAudioBufferMs(ms);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFillAudioGaps(
+    JNIEnv* env,
+    jclass obj,
+    jint mode
+) {
+    LibretroDroid::getInstance().setFillAudioGaps(mode);
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFrameSkip(
     JNIEnv* env,
     jclass obj,

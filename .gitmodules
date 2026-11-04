@@ -14,3 +14,6 @@
 [submodule "libretrodroid/src/main/cpp/libsamplerate"]
 	path = libretrodroid/src/main/cpp/libsamplerate
 	url = https://github.com/libsndfile/libsamplerate
+[submodule "libretrodroid/src/main/cpp/soundtouch"]
+	path = libretrodroid/src/main/cpp/soundtouch
+	url = https://codeberg.org/soundtouch/soundtouch

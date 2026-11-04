@@ -24,8 +24,9 @@
 
 namespace libretrodroid {
 
-Audio::Audio(int32_t sampleRate, double refreshRate, bool preferLowLatencyAudio) {
+Audio::Audio(int32_t sampleRate, double refreshRate, bool preferLowLatencyAudio, int32_t bufferMs) {
     LOGI("Audio initialization has been called with input sample rate %d", sampleRate);
+    requestedBufferMs = std::max(bufferMs, 0);
 
     contentRefreshRate = refreshRate;
     inputSampleRate = sampleRate;
@@ -38,6 +39,16 @@ Audio::Audio(int32_t sampleRate, double refreshRate, bool preferLowLatencyAudio)
     inputShorts = std::unique_ptr<int16_t[]>(new int16_t[INPUT_CHUNK_FRAMES * 2]);
     inputFloats = std::unique_ptr<float[]>(new float[INPUT_CHUNK_FRAMES * 2]);
     outputFloats = std::unique_ptr<float[]>(new float[OUTPUT_CHUNK_FRAMES * 2]);
+    stretchedFloats = std::unique_ptr<float[]>(new float[OUTPUT_CHUNK_FRAMES * 2]);
+    // Frame Skip Off's time stretch: a short sequence keeps its added latency near 50 ms; quick seek keeps it light.
+    stretcher = std::make_unique<soundtouch::SoundTouch>();
+    stretcher->setChannels(2);
+    stretcher->setSampleRate(48000);
+    stretcher->setSetting(SETTING_SEQUENCE_MS, 40);
+    stretcher->setSetting(SETTING_SEEKWINDOW_MS, 15);
+    stretcher->setSetting(SETTING_OVERLAP_MS, 8);
+    stretcher->setSetting(SETTING_USE_QUICKSEEK, 1);
+    stretcher->setSetting(SETTING_USE_AA_FILTER, 0);
     // MEDIUM always exists (audible FF's cap), HIGH is the default; the others are made when picked.
     setResamplingQuality(MEDIUM);
     setResamplingQuality(HIGH);
@@ -127,7 +138,8 @@ int32_t Audio::computeAudioBufferSize() {
 
 double Audio::computeMaximumLatency() const {
     double maxLatency = (audioLatencySettings->bufferSizeInVideoFrames / contentRefreshRate) * 1000;
-    return std::max(maxLatency, 32.0);
+    // nx-mobile Audio Buffer: the FIFO is kept half full, so its whole length is twice the sound kept ready.
+    return std::max({ maxLatency, 32.0, 2.0 * requestedBufferMs });
 }
 
 void Audio::start() {
@@ -145,7 +157,22 @@ void Audio::stop() {
 }
 
 void Audio::write(const int16_t *data, size_t frames) {
-    fifoBuffer->write(data, frames * 2);
+    const int32_t asked = (int32_t) frames * 2;
+    const int32_t written = fifoBuffer->write(data, asked);
+    if (written < asked) overrunSamples.fetch_add(asked - written);
+}
+
+Audio::FifoStats Audio::takeFifoStats() {
+    long xruns = -1;
+    {
+        std::unique_lock<std::mutex> lock(streamMutex, std::try_to_lock);
+        if (lock.owns_lock() && stream != nullptr) {
+            auto r = stream->getXRunCount();
+            if (r) xruns = r.value();
+        }
+    }
+    return { underrunSamples.exchange(0), overrunSamples.exchange(0), minFillSamples.exchange(-1),
+             (long) fifoBuffer->getBufferCapacityInFrames(), xruns };
 }
 
 void Audio::setPlaybackSpeed(const double newPlaybackSpeed) {
@@ -186,6 +213,8 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
     double speed = playbackSpeed.load();
     const double fastForward = fastForwardSpeed.load();
     if (speed > 0.0 && fastForward > 0.0) speed = fastForward;
+    // Frame Skip Off: as fast as the game runs, as a slower tempo (time stretch) at the same pitch.
+    const bool stretch = timeStretchWanted.load() && fastForward <= 0.0;
     const bool muted = outputMuted.load();
 
     // Muted fast forward (or rewind): what the FIFO still holds is from before; dropped here (the reader's side) so it
@@ -208,6 +237,7 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
     if (speed <= 0.0 || muted || refilling) {
         std::fill_n(outputArray, numFrames * 2, (int16_t) 0);
         converterResetPending = true;
+        stretching = false;   // starts empty again: no stale tail after the pause
         tuneLatency();
         return oboe::DataCallbackResult::Continue;
     }
@@ -221,18 +251,63 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
     constexpr double MAX_RATIO = 256.0;   // libsamplerate's limit either way
     const double ratio = std::clamp(1.0 / finalConversionFactor, 1.0 / MAX_RATIO, MAX_RATIO);
     int32_t framesDone = 0;
-    while (converter != nullptr && framesDone < numFrames) {
-        const long frames = std::min(numFrames - framesDone, OUTPUT_CHUNK_FRAMES);
-        const long produced = src_callback_read(converter, ratio, frames, outputFloats.get());
-        if (produced <= 0) break;
-        src_float_to_short_array(outputFloats.get(), outputArray + framesDone * 2, (int) produced * 2);
-        framesDone += (int32_t) produced;
+    if (stretch && converter != nullptr) {
+        const int32_t rate = oboeStream->getSampleRate();
+        if (!stretching || rate != stretcherRate) {
+            stretcher->setSampleRate((uint) rate);
+            stretcher->clear();
+            stretchCarry = 0.0;
+            stretcherRate = rate;
+            stretching = true;
+        }
+        const double tempo = slowdownSpeed.load();
+        stretcher->setTempo(tempo);
+        framesDone = readStretched(converter, ratio, numFrames, outputArray, tempo);
+    } else {
+        stretching = false;
+        while (converter != nullptr && framesDone < numFrames) {
+            const long frames = std::min(numFrames - framesDone, OUTPUT_CHUNK_FRAMES);
+            const long produced = src_callback_read(converter, ratio, frames, outputFloats.get());
+            if (produced <= 0) break;
+            src_float_to_short_array(outputFloats.get(), outputArray + framesDone * 2, (int) produced * 2);
+            framesDone += (int32_t) produced;
+        }
     }
     std::fill(outputArray + framesDone * 2, outputArray + numFrames * 2, (int16_t) 0);
 
     tuneLatency();
 
     return oboe::DataCallbackResult::Continue;
+}
+
+int32_t Audio::readStretched(SRC_STATE *converter, double ratio, int32_t numFrames, int16_t *out, double tempo) {
+    // A steady pull: each callback feeds SoundTouch the frames this callback plays at this tempo (the fraction carried),
+    // so the FIFO drains evenly. Fed only as it needs, it pulled a whole sequence (~40 ms) in one callback and could
+    // empty the FIFO. Topped up only when it holds less than a callback's worth (once on start, after a tempo jump).
+    stretchCarry += numFrames * tempo;
+    auto feed = [&](long frames) {
+        while (frames > 0) {
+            const long chunk = std::min(frames, (long) STRETCH_CHUNK_FRAMES);
+            const long produced = src_callback_read(converter, ratio, chunk, outputFloats.get());
+            if (produced <= 0) return;
+            stretcher->putSamples(outputFloats.get(), (uint) produced);
+            frames -= produced;
+        }
+    };
+    const long steady = (long) stretchCarry;
+    stretchCarry -= steady;
+    feed(steady);
+    int guard = 64;
+    while ((int32_t) stretcher->numSamples() < numFrames && guard-- > 0) feed(STRETCH_CHUNK_FRAMES);
+    int32_t done = 0;
+    while (done < numFrames) {
+        const uint want = (uint) std::min(numFrames - done, OUTPUT_CHUNK_FRAMES);
+        const uint got = stretcher->receiveSamples(stretchedFloats.get(), want);
+        if (got == 0) break;
+        src_float_to_short_array(stretchedFloats.get(), out + done * 2, (int) got * 2);
+        done += (int32_t) got;
+    }
+    return done;
 }
 
 void Audio::setResamplingQuality(int newQuality) {
@@ -254,7 +329,11 @@ void Audio::setResamplingQuality(int newQuality) {
 
 long Audio::readInput(void *self, float **data) {
     auto audio = static_cast<Audio *>(self);
-    audio->fifoBuffer->readNow(audio->inputShorts.get(), INPUT_CHUNK_FRAMES * 2);
+    const long fill = audio->fifoBuffer->getFullFramesAvailable();
+    long seen = audio->minFillSamples.load();
+    while ((seen < 0 || fill < seen) && !audio->minFillSamples.compare_exchange_weak(seen, fill)) {}
+    const int32_t got = audio->fifoBuffer->readNow(audio->inputShorts.get(), INPUT_CHUNK_FRAMES * 2);
+    if (got < INPUT_CHUNK_FRAMES * 2) audio->underrunSamples.fetch_add(INPUT_CHUNK_FRAMES * 2 - got);
     src_short_to_float_array(audio->inputShorts.get(), audio->inputFloats.get(), INPUT_CHUNK_FRAMES * 2);
     *data = audio->inputFloats.get();
     return INPUT_CHUNK_FRAMES;

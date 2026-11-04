@@ -40,7 +40,7 @@ class InGameMenuModelTest {
      * are locked here (a locked row is hidden, and a page with none left is not offered).
      */
     private val plainTag = "GBA"   // a console with the Controller Layout row only (N64 has Graphics API too)
-    private val plainLocked = setOf(PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.row).map { it.key }
+    private val plainLocked = setOf(PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.rows).map { it.key }
 
     private fun plain(m: InGameMenuModel) = m.apply { setFrontend(FrontendOptions.defaults(plainTag), emptyList(), plainLocked, plainTag) }
 
@@ -1408,7 +1408,7 @@ class InGameMenuModelTest {
                 "Display" to PICTURE_ROWS,
                 "Controls" to listOf("Controller Layout", "Pad Opacity (landscape)"),
                 "Gameplay" to SPEED_ROWS,
-                "Audio" to listOf("Audio Resampling Quality"),
+                "Audio" to listOf("Audio Resampling Quality", "Fill Audio Gaps"),   // Audio Buffer is read at launch
             ),
             inGameGroups("GBA"),
         )
