@@ -2181,6 +2181,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         padLayout.padLandscapeAlpha.value = s.padLandscapeAlpha
         val view = retroView ?: return
         view.resamplingQuality = AudioOptions.qualityOf(values)
+        view.audioBufferMs = AudioOptions.bufferMsOf(values, gameTag)   // read when the game's audio starts
+        view.fillAudioGaps = AudioOptions.fillGapsOf(values)
         view.frameSkip = FrameSkipOptions.skipOf(values, gameTag)
         view.scaleMode = when (s.scaling) {
             ScreenScaling.NATIVE -> ScaleMode.INTEGER

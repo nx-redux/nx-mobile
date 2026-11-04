@@ -137,6 +137,10 @@ public class LibretroDroid {
     public static native void setFrameSpeed(int speed);
     /** nx-mobile: Frame Skip: true (Auto) skips frames to hold the game's speed, false shows every frame and lets it slow. Any thread. */
     public static native void setFrameSkip(boolean skip);
+    // nx-mobile: Audio Buffer (ms kept ready, 0 default; read when the game's audio starts) and Fill Audio Gaps (0 Auto,
+    // 1 On, 2 Off; live).
+    public static native void setAudioBufferMs(int ms);
+    public static native void setFillAudioGaps(int mode);
     /** nx-mobile: the display's presentation deadline (Display.getPresentationDeadlineNanos), for the sleep timer's frame stamps. Any thread. */
     public static native void setPresentationDeadline(long nanos);
     public static native void setAudioEnabled(boolean enabled);

@@ -16,7 +16,7 @@ class OptionGroupTest {
             labelsIn(OptionGroup.CONTROLS),
         )
         assertEquals(setOf("Max FF Speed", "Fast Forward Audio", "Rewind", "Rewind Audio", "Frame Skip", "PS2 BIOS"), labelsIn(OptionGroup.GAMEPLAY))
-        assertEquals(setOf("Audio Resampling Quality"), labelsIn(OptionGroup.AUDIO))
+        assertEquals(setOf("Audio Resampling Quality", "Audio Buffer", "Fill Audio Gaps"), labelsIn(OptionGroup.AUDIO))
         // The rest is the picture: a new row lands here unless it is put in a group above.
         val display = labelsIn(OptionGroup.DISPLAY)
         for (label in listOf("Screen Scaling", "Overlay", "Debug HUD", "Wii Screen", "Graphics API", "Bottom screen", "3D Resolution", "Layout (portrait)")) {

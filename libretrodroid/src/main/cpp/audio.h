@@ -20,6 +20,7 @@
 
 #include <array>
 #include <atomic>
+#include "SoundTouch.h"
 #include <memory>
 #include <mutex>
 #include <unistd.h>
@@ -44,6 +45,7 @@ private:
     // stream holds this handler by shared_ptr, and ~Audio detaches it, so a late disconnect never reaches a dead Audio.
     class StreamErrorHandler : public oboe::AudioStreamErrorCallback {
     public:
+
         explicit StreamErrorHandler(Audio* owner) : owner(owner) { }
         void onErrorAfterClose(oboe::AudioStream* oldStream, oboe::Result result) override;
         void detach();
@@ -54,7 +56,8 @@ private:
     };
 
 public:
-    Audio(int32_t sampleRate, double refreshRate, bool preferLowLatencyAudio);
+    // [bufferMs]: the sound kept ready on average (Audio Buffer), 0 for the default (about 33 ms).
+    Audio(int32_t sampleRate, double refreshRate, bool preferLowLatencyAudio, int32_t bufferMs = 0);
     ~Audio() override;
 
     void start();
@@ -68,12 +71,23 @@ public:
 
 public:
     void write(const int16_t *data, size_t frames);
+    // nx-mobile diag (NXHITCH summary): samples the FIFO lacked when read (played as silence), samples dropped because
+    // it was full, and its lowest fill seen (samples), since the last take. Any thread.
+    struct FifoStats { long underrun; long overrun; long minFill; long capacity; long xruns; };
+    FifoStats takeFifoStats();
+
     // The pause (0) / run (1) speed. UI thread.
     void setPlaybackSpeed(const double newPlaybackSpeed);
     // nx-mobile 2026-10-24: audible FF's playback speed (the game's achieved speed), 0 when not in audible FF. Separate
     // from setPlaybackSpeed, which another thread writes: the callback combines them with a pause (0) winning, so an FF
     // update landing just after a pause can't play the FIFO's tail at FF pitch in the menu. GL thread.
     void setFastForwardSpeed(double speed);
+    // nx-mobile 2026-11-04: the game's achieved speed with Frame Skip Off (SlowdownMeter), 1 otherwise; playback follows
+    // it outside fast forward. GL thread.
+    void setSlowdownSpeed(double speed) { slowdownSpeed.store(speed); }
+    // nx-mobile 2026-11-04: Frame Skip Off plays the game's slowdown as a slower tempo at the same pitch (SoundTouch),
+    // not a lower pitch. GL thread.
+    void setTimeStretch(bool on) { timeStretchWanted.store(on); }
     // nx-mobile 2026-10-24: fast forward. Muted, the realtime callback plays silence with the rate controller held, as
     // at speed 0, and drops what the FIFO still held; audible, the caller sets the FF speed. Whenever the output was
     // muted and is not anymore (FF ended, or muted FF turned audible) it stays silent until the FIFO is refilled
@@ -96,6 +110,7 @@ private:
     void tuneLatency();
     std::unique_ptr<Audio::AudioLatencySettings> findBestLatencySettings(bool preferLowLatencyAudio);
     double computeMaximumLatency() const;
+    int32_t requestedBufferMs = 0;
     // libsamplerate's input callback: the next INPUT_CHUNK_FRAMES from the FIFO (zeros past what it holds).
     static long readInput(void *self, float **data);
     // Audio callback thread: the converter for this callback (the level, capped during audible FF), reset when the
@@ -103,6 +118,10 @@ private:
     SRC_STATE *converterFor(bool audibleFastForward);
 
 private:
+    std::atomic<long> underrunSamples { 0 };
+    std::atomic<long> overrunSamples { 0 };
+    std::atomic<long> minFillSamples { -1 };
+
     const double kp = 0.006;
     const double ki = 0.00002;
     const double maxp = 0.003;
@@ -117,6 +136,7 @@ private:
     // linear resampler it replaces, which restarted at every buffer edge.
     static constexpr int32_t INPUT_CHUNK_FRAMES = 64;
     static constexpr int32_t OUTPUT_CHUNK_FRAMES = 1024;
+    static constexpr int32_t STRETCH_CHUNK_FRAMES = 256;
     std::array<std::atomic<SRC_STATE *>, QUALITY_COUNT> converters {};
     std::atomic<int> quality { HIGH };
     std::unique_ptr<int16_t[]> inputShorts;
@@ -145,6 +165,16 @@ private:
 
     std::atomic<double> playbackSpeed { 1.0 };
     std::atomic<double> fastForwardSpeed { 0.0 };
+    std::atomic<double> slowdownSpeed { 1.0 };
+    std::atomic<bool> timeStretchWanted { false };
+    // Audio callback thread only: SoundTouch at the output rate, after the resampler, while Frame Skip is Off.
+    std::unique_ptr<soundtouch::SoundTouch> stretcher;
+    bool stretching = false;
+    int32_t stretcherRate = 0;
+    std::unique_ptr<float[]> stretchedFloats;
+    // Fills [out] with [numFrames] stretched frames from the resampler at [ratio]; the frames it could make.
+    int32_t readStretched(SRC_STATE *converter, double ratio, int32_t numFrames, int16_t *out, double tempo);
+    double stretchCarry = 0.0;
 
     // Fast forward (setFastForward): written by the GL thread, read by the audio callback.
     // Rewind likewise (setRewind). outputMuted is either one muting.

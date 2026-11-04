@@ -98,6 +98,20 @@ class GLRetroView(
             LibretroDroid.setFrameSkip(value)
         }
 
+    /** Audio Buffer: the sound kept ready, in ms (0 the default). Read when the game's audio starts: set it before. */
+    var audioBufferMs: Int = 0
+        set(value) {
+            field = value
+            LibretroDroid.setAudioBufferMs(value)
+        }
+
+    /** Fill Audio Gaps: 0 Auto (with Frame Skip Off), 1 On, 2 Off. Live. */
+    var fillAudioGaps: Int = 0
+        set(value) {
+            field = value
+            LibretroDroid.setFillAudioGaps(value)
+        }
+
     var resamplingQuality: Int by Delegates.observable(2) { _, old, value ->
         if (old != value) pushResamplingQuality()
     }
