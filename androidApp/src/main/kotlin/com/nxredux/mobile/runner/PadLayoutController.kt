@@ -886,9 +886,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private fun applySkinLayout(root: FrameLayout, game: FrameLayout, orientation: Int) {
         game.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         val pack = skinPack ?: return
-        val view = PadSkinView(activity, pack, input::onPad, ::onSkinAction, haptics = padVibration != com.nxredux.mobile.settings.PadVibration.OFF) {
-            root.post { onSkinResized() }
-        }
+        val view = PadSkinView(activity, pack, input::onPad, ::onSkinAction, haptics = padVibration != com.nxredux.mobile.settings.PadVibration.OFF,
+            onResized = { root.post { onSkinResized() } }, onStick = input::onStick)
+        view.useStick = PadStickModes[padStickKey, stickDefault()]   // the drawn pad's choice, shared
         // under the menu and the notifications, over the game
         val below = listOfNotNull(menuView, notificationsView).map { root.indexOfChild(it) }.filter { it >= 0 }.minOrNull() ?: -1
         root.addView(view, below, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -911,6 +911,14 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         when (action) {
             SkinAction.MIC -> if (down) padMic()?.onTap?.invoke()
             SkinAction.SWAP -> if (down) input.applyNdsAction(NdsAction.SwapScreens)
+            // the stick or the d-pad on a tight Dreamcast layout: the drawn pad's choice flipped (nothing held may stick;
+            // the new placement lets go of the skin's own touches)
+            SkinAction.STICK_SWAP -> if (down) {
+                input.releaseAllGameInput()
+                val next = !PadStickModes[padStickKey, stickDefault()]
+                PadStickModes[padStickKey] = next
+                skinView?.useStick = next
+            }
             else -> host.onSkinShortcut(action, down)
         }
     }

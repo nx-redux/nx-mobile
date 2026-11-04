@@ -76,6 +76,8 @@ internal enum class SkinAction(val slot: TouchSlot? = null) {
     TOUCH_1(TouchSlot.ONE), TOUCH_2(TouchSlot.TWO), TOUCH_3(TouchSlot.THREE), TOUCH_4(TouchSlot.FOUR),
     /** The arcade's turbo caps (turbo A / B): nothing yet, the frontend turbo gives them their meaning; never core input. */
     TURBO_A, TURBO_B,
+    /** A Dreamcast skin's swap between the stick and the d-pad on a tight layout. */
+    STICK_SWAP,
 }
 
 /**
@@ -94,6 +96,8 @@ internal class PadSkinView(
     private val haptics: Boolean,
     /** The view's size changed (insets, a fold, a resize): the layout is worked out again for it. */
     private val onResized: () -> Unit,
+    /** The skin's analog stick: x right, y down, -1..1 ([SkinPadTouch]). */
+    private val onStick: (Float, Float) -> Unit = { _, _ -> },
 ) : FrameLayout(context) {
 
     /** The skin itself: its own view, so its drawing is kept and replayed while only the shades over it change. */
@@ -124,10 +128,17 @@ internal class PadSkinView(
             field = value
             refresh()
         }
+    /** On a layout that swaps them, the stick (true) or the d-pad is shown and pressed ([SkinPlacement.forStick]). */
+    var useStick: Boolean = true
+        set(value) {
+            if (field == value) return
+            field = value
+            refresh()
+        }
     /** [placement] as drawn and hit-tested now: without the strip's shortcuts while [stripHidden]. */
     private var shown: SkinPlacement? = null
     private fun refresh() {
-        val p = placement
+        val p = placement?.forStick(useStick)
         val ids = p?.spec?.let { sp -> (listOfNotNull(sp.frame?.strip) + sp.pieces.mapNotNull { it.strip }).flatMap { st -> st.labels.map { it.id } } }?.toSet().orEmpty()
         val gone = if (stripHidden) ids else ids.filter { id -> slotOf(id)?.let { it !in shortcuts } ?: false }.toSet()
         shown = if (p == null || gone.isEmpty()) p
@@ -143,7 +154,7 @@ internal class PadSkinView(
     private val holes = Path()
     private val src = Rect()
     private val dst = Rect()
-    private val touch = SkinPadTouch(onPad, { id, down -> onAction(SkinAction.valueOf(id), down) }, ::tick, ::invalidate)
+    private val touch = SkinPadTouch(onPad, { id, down -> onAction(SkinAction.valueOf(id), down) }, ::tick, ::invalidate, onStick)
     /** The labels under the buttons, written here (the picture has none there). */
     private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = SKIN_LABEL_GREY
@@ -189,6 +200,7 @@ internal class PadSkinView(
         canvas.save()
         parts?.let { pp ->
             for (piece in p.pieces) {
+                if (piece.knob) continue   // the stick's knob moves: drawn over the layer ([dispatchDraw])
                 src.set(piece.src.x.roundToInt(), piece.src.y.roundToInt(), (piece.src.x + piece.src.width).roundToInt(), (piece.src.y + piece.src.height).roundToInt())
                 dst.set(piece.dst.x.roundToInt(), piece.dst.y.roundToInt(), (piece.dst.x + piece.dst.width).roundToInt(), (piece.dst.y + piece.dst.height).roundToInt())
                 canvas.drawBitmap(pp, src, dst, paint)
@@ -216,6 +228,18 @@ internal class PadSkinView(
     /** The held caps' shades over the skin layer (a press redraws only these). */
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
+        // the stick's knob, where the thumb has it
+        val p = shown
+        val pp = parts
+        if (p != null && pp != null) {
+            val (kx, ky) = touch.knobOffset()
+            for (piece in p.pieces) {
+                if (!piece.knob) continue
+                src.set(piece.src.x.roundToInt(), piece.src.y.roundToInt(), (piece.src.x + piece.src.width).roundToInt(), (piece.src.y + piece.src.height).roundToInt())
+                dst.set((piece.dst.x + kx).roundToInt(), (piece.dst.y + ky).roundToInt(), (piece.dst.x + kx + piece.dst.width).roundToInt(), (piece.dst.y + ky + piece.dst.height).roundToInt())
+                canvas.drawBitmap(pp, src, dst, paint)
+            }
+        }
         for (shape in touch.pressedShapes()) when (shape) {   // a held cap's shade, the one thing painted
             is SkinPressShape.Circle -> canvas.drawCircle(shape.x, shape.y, shape.r, shade)
             is SkinPressShape.Box -> canvas.drawRoundRect(shape.left, shape.top, shape.right, shape.bottom, shape.corner, shape.corner, shade)
