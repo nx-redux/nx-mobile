@@ -8,8 +8,11 @@ package com.nxredux.mobile.skin
  * below it (the flex layouts; a DS's touch screen below the fold with the pad), on a board with nothing but plates there.
  * Portrait DS flat: the large-screen layout on a tablet-class window or a shorter phone, the stacked one on a tall phone
  * (at least 2:1), each falling back to the other when it does not fit. Portrait one-screen consoles: the stacked layout.
- * A foldable's inner screen upright ([place]'s foldable): the fold board's layouts first, split at its hinge flat and
- * half-folded alike, so folding never changes the board. The main menu keeps the phone board everywhere.
+ * A foldable's inner screen or a tablet upright ([place]'s foldable, tablet): the fold board's layouts first, split at its
+ * hinge (the window's middle when flat), so folding or opening a game never changes the board. Its main menu is two
+ * screens there ([placeMenu]'s tablet): the top screen in a frame above the hinge, the menu in a touch screen below. A
+ * Flip's main screen is too narrow for the fold board and keeps the stacked layouts. The main menu elsewhere keeps the
+ * phone board.
  * Null when nothing fits: the normal pad is used.
  */
 object SkinChoice {
@@ -37,13 +40,21 @@ object SkinChoice {
      * room above them. Landscape: the grip menu layout, one shell with the buttons in a column each side and the screen
      * frame between them. Null when the pack has no such layout or the area is too small for it (the drawn pad, or
      * none, then). [topInset]: window px at the top the screen frame keeps clear of ([SkinSolver.placePieces]).
-     * [foldable]: a device that half-folds (its inner screen may take the fold board's layout).
+     * [foldable]: a device that half-folds. [tablet]: a tablet-class window (the Fold's inner screen too): upright, the
+     * menu on two screens on the fold board (glasses `menutop` and `menu`), split at [hingeY] (window px; the window's
+     * middle when null) when [twoScreens] (false while the menu already has a second display) and it fits.
      */
-    fun placeMenu(pack: SkinPackManifest, windowW: Int, windowH: Int, densityDpi: Int, topInset: Int = 0, foldable: Boolean = false): SkinPlacement? {
+    fun placeMenu(
+        pack: SkinPackManifest, windowW: Int, windowH: Int, densityDpi: Int, topInset: Int = 0, foldable: Boolean = false,
+        tablet: Boolean = false, hingeY: Float? = null, twoScreens: Boolean = true,
+    ): SkinPlacement? {
         if (windowW <= 0 || windowH <= 0 || windowW == windowH || densityDpi <= 0) return null
         val k = scaleFor(pack, densityDpi)
-        val family = if (windowW > windowH) SkinFamily.GRIP else SkinFamily.STACKED
-        return shell(pack, family, SkinVariant.MENU, windowW, windowH, k, null, topInset, foldable)
+        val landscape = windowW > windowH
+        if (!landscape && tablet && twoScreens) widest(pack, SkinFamily.STACKED, SkinVariant.MENU, fold = true) { spec ->
+            SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, null, topInset.toFloat(), hingeY ?: (windowH / 2f))
+        }?.let { return it }
+        return shell(pack, if (landscape) SkinFamily.GRIP else SkinFamily.STACKED, SkinVariant.MENU, windowW, windowH, k, null, topInset)
     }
 
     /**
@@ -52,9 +63,9 @@ object SkinChoice {
      */
     private fun shell(
         pack: SkinPackManifest, family: SkinFamily, variant: SkinVariant, windowW: Int, windowH: Int, k: Float,
-        picture: Pair<Float, Float>?, topInset: Int, foldable: Boolean = false,
+        picture: Pair<Float, Float>?, topInset: Int,
     ): SkinPlacement? =
-        pack.layouts.filter { it.family == family && it.variant == variant && it.frame != null && (foldable || !it.foldBoard) }
+        pack.layouts.filter { it.family == family && it.variant == variant && it.frame != null && !it.foldBoard }
             .sortedByDescending { it.height }
             .firstNotNullOfOrNull { spec ->
                 SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset = topInset.toFloat())?.takeIf { p ->
@@ -94,8 +105,8 @@ object SkinChoice {
         // sideways: the main menu's landscape shell, the game in its screen frame (the strip under it; a DS's MIC, SWAP)
         if (landscape) return shell(pack, SkinFamily.GRIP, variant, windowW, windowH, k, picture, topInset)
         // half-folded: the screen frame above the fold, the pad below it (a DS's touch screen with it)
-        // a foldable's inner screen: the fold board, split at its hinge flat or not (the window's middle when flat)
-        if (foldable) widest(pack, SkinFamily.FLEX, variant, fold = true) { spec ->
+        // a foldable's inner screen or a tablet: the fold board, split at its hinge flat or not (the window's middle when flat)
+        if (foldable || tablet) widest(pack, SkinFamily.FLEX, variant, fold = true) { spec ->
             SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), hingeY ?: (windowH / 2f))
         }?.let { return it }
         if (hingeY != null) return widest(pack, SkinFamily.FLEX, variant, fold = false) { spec ->

@@ -42,7 +42,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(17, pack.layouts.size)
+        assertEquals(18, pack.layouts.size)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -77,8 +77,8 @@ class NxCarbonPackTest {
         assertTrue(c.getValue("MIC").x == c.getValue("SWAP").x && c.getValue("MENU").x > t.x, "mic swap left, menu middle")
         assertTrue(c.getValue("DPAD").x + c.getValue("DPAD").spec.r < t.x, "dpad")
         assertTrue(c.getValue("START").x - c.getValue("START").spec.r > t.x + t.width, "start")
-        // a device that does not fold keeps the big portrait board
-        assertEquals("large_ds_wide", assertNotNull(place("inner_size_tablet", 1848, 2448, tablet = true)).spec.id)
+        // a tablet that does not fold takes the fold board too (the menu's board: a game never changes it)
+        assertEquals("flex_ds_fold", assertNotNull(place("inner_size_tablet", 1848, 2448, tablet = true)).spec.id)
         // the main menu keeps the phone board, a foldable's inner screen too
         assertEquals("stacked_menu", assertNotNull(SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true)).spec.id)
         assertEquals("stacked_menu", assertNotNull(SkinChoice.placeMenu(pack, 1848, 2448, 420)).spec.id)
@@ -154,6 +154,42 @@ class NxCarbonPackTest {
         assertNotNull(place("tab_s10_portrait", 1440, 2304, dpi = 280, tablet = true))
         assertNotNull(place("tab_s10_land", 2304, 1440, dpi = 280, tablet = true))
         assertNotNull(place("phone_land_gba", 2400, 1080, ds = false, picture = 240f to 160f))
+    }
+
+    private fun twoScreens(name: String, p: SkinPlacement?, w: Int, h: Int, hinge: Float) {
+        val placed = assertNotNull(p, name)
+        dump(name, w, h, placed)
+        assertEquals("stacked_menu_fold", placed.spec.id, name)
+        val top = placed.glasses.single { it.id == "menutop" }.rect
+        val menu = placed.glasses.single { it.id == "menu" }.rect
+        assertTrue(top.y + top.height < hinge && hinge < menu.y, "$name top $top menu $menu hinge $hinge")
+        val c = placed.controls.associateBy { it.spec.id }
+        assertTrue("MIC" !in c && "SWAP" !in c, name)
+        assertTrue(c.getValue("MENU").y - c.getValue("MENU").spec.r > menu.y + menu.height, "$name menu glass $menu")
+    }
+
+    @Test
+    fun foldInnerMenuIsTwoScreens() {
+        twoScreens("menu_inner_two", SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true), 1848, 2448, 1224f)
+        twoScreens("menu_inner_half", SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true, hingeY = 1300f), 1848, 2448, 1300f)
+    }
+
+    @Test
+    fun tabletMenuIsTwoScreens() {
+        twoScreens("menu_tab_two", SkinChoice.placeMenu(pack, 1440, 2304, 280, tablet = true), 1440, 2304, 1152f)
+    }
+
+    @Test
+    fun flipAndPhonesKeepOneScreenMenu() {
+        assertEquals("stacked_menu", SkinChoice.placeMenu(pack, 1080, 2520, 420, foldable = true)?.spec?.id)
+        assertEquals("stacked_menu", SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true, twoScreens = false)?.spec?.id)
+        assertTrue(SkinChoice.placeMenu(pack, 2448, 1848, 420, tablet = true)?.spec?.id?.startsWith("grip_menu") == true)
+    }
+
+    @Test
+    fun tabletGamesTakeTheFoldBoard() {
+        assertEquals("flex_ds_fold", place("tab_two_ds", 1440, 2304, dpi = 280, tablet = true)?.spec?.id)
+        assertEquals("flex_single_fold", place("tab_two_gba", 1440, 2304, dpi = 280, tablet = true, ds = false, picture = 240f to 160f)?.spec?.id)
     }
 
     @Test
