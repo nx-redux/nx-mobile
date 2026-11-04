@@ -47,7 +47,7 @@ class SkinPadTouch(
         for (c in p.controls) {
             val hit = when (c.spec.shape) {
                 ControlShape.DPAD -> abs(x - c.x) <= c.spec.r + slop && abs(y - c.y) <= c.spec.r + slop
-                ControlShape.CIRCLE -> hypot(x - c.x, y - c.y) <= c.spec.r
+                ControlShape.CIRCLE, ControlShape.STICK -> hypot(x - c.x, y - c.y) <= c.spec.r
                 ControlShape.RECT -> abs(x - c.x) <= c.spec.hw + slop && abs(y - c.y) <= c.spec.hh + slop
             }
             if (hit) return hitOf(c) ?: continue

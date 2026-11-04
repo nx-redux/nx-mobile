@@ -58,6 +58,8 @@ enum class SkinVariant {
     @SerialName("gba") GBA,
     /** Arcade (FBNeo): d-pad, A B X Y, L R with TB TA (turbo B / A, the app's; no core input) beside them, COIN START MENU. */
     @SerialName("arcade") ARCADE,
+    /** Dreamcast discs: the stick and d-pad (or a swap between them), A B X Y as Dreamcast letters, L R triggers (L2 R2), START MENU. */
+    @SerialName("dc") DC,
 }
 
 /**
@@ -184,6 +186,10 @@ data class PieceSpec(
      * glass's shape kept, upward, clear of the hinge), drawn nine-sliced with corners this many picture px.
      */
     val grow: Int = 0,
+    /** The stick's knob: drawn by the app at the thumb's offset from the stick's centre, not with the still pieces. */
+    val knob: Boolean = false,
+    /** As [ControlSpec.alt]: shown only with the stick ("stick") or the d-pad ("dpad"); null: always. */
+    val alt: String? = null,
 )
 
 /** How a [SliceNode] cuts its box: into side-by-side columns or stacked rows. */
@@ -272,6 +278,8 @@ enum class ControlShape {
     @SerialName("rect") RECT,
     /** The d-pad: a square [ControlSpec.r] each way, eight directions by angle. */
     @SerialName("dpad") DPAD,
+    /** The analog stick: a circle of radius [ControlSpec.r] (its ring), the knob moving [ControlSpec.travel] at most. */
+    @SerialName("stick") STICK,
 }
 
 /**
@@ -301,4 +309,8 @@ data class ControlSpec(
     val labelDx: Float = 0f,
     val labelH: Float = 0f,
     val level: PieceLevel = PieceLevel.BOTTOM,
+    /** A [ControlShape.STICK]: how far (picture px) the knob moves from the centre at full tilt. */
+    val travel: Float = 0f,
+    /** Shown only with the stick ("stick") or only with the d-pad ("dpad") on a layout that swaps them; null: always. */
+    val alt: String? = null,
 )

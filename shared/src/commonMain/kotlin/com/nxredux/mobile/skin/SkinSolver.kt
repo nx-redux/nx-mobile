@@ -43,7 +43,7 @@ fun skinTiles(c: SkinCell, k: Float, stretchMax: Float): List<SkinTile> {
 
 /** A piece of a layout built from pieces: [src] in its parts picture drawn at [dst] (scaled when the sizes differ). */
 /** [strip]: one of the frame strip's shortcut labels (hidden with the in-game menu open). */
-data class SkinPiece(val src: PxRect, val dst: PxRect, val strip: Boolean = false)
+data class SkinPiece(val src: PxRect, val dst: PxRect, val strip: Boolean = false, val alt: String? = null, val knob: Boolean = false)
 
 /** A control's hit area placed in the window: its [spec] (id, shape, sizes scaled) at [x], [y]. */
 data class PlacedControl(val spec: ControlSpec, val x: Float, val y: Float)
@@ -65,6 +65,16 @@ data class SkinPlacement(
     val pieces: List<SkinPiece> = emptyList(),
 ) {
     fun glass(screen: GlassScreen): PlacedGlass? = glasses.firstOrNull { it.screen == screen }
+
+    /**
+     * The controls and pieces shown with the stick ([useStick]) or the d-pad: a layout that swaps them carries both, each
+     * marked `alt` "stick" / "dpad"; unmarked ones always show.
+     */
+    fun forStick(useStick: Boolean): SkinPlacement {
+        val drop = if (useStick) "dpad" else "stick"
+        if (controls.none { it.spec.alt == drop } && pieces.none { it.alt == drop }) return this
+        return copy(controls = controls.filter { it.spec.alt != drop }, pieces = pieces.filter { it.alt != drop })
+    }
 }
 
 /**
@@ -213,7 +223,7 @@ object SkinSolver {
             if (gx > 0f || gy > 0f) {
                 pieces += nineSlice(p, p.grow.toFloat(), p.w + gx, p.h + gy) { x, y, w_, h_ -> win(px + x, py + y, w_, h_) }
             } else {
-                pieces += SkinPiece(PxRect(p.sx.toFloat(), p.sy.toFloat(), p.w.toFloat(), p.h.toFloat()), win(px, py, p.w * p.scale, p.h * p.scale))
+                pieces += SkinPiece(PxRect(p.sx.toFloat(), p.sy.toFloat(), p.w.toFloat(), p.h.toFloat()), win(px, py, p.w * p.scale, p.h * p.scale), alt = p.alt, knob = p.knob)
             }
             p.glass?.let { pg ->
                 val gameW = gameSize(pg.screen, picture)?.first ?: (pg.w + gx)
@@ -233,7 +243,7 @@ object SkinSolver {
             }
         }
         controls += spec.controls.map { c ->
-            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward)) * k, (c.y + down(c.level)) * k)
+            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward)) * k, (c.y + down(c.level)) * k)
         }
         return SkinPlacement(spec, k, bg.cells, glasses, controls, pieces)
     }
@@ -299,7 +309,7 @@ object SkinSolver {
         }
         val controls = spec.controls.map { c ->
             val (x, y) = ctx.map(c.x, c.y) ?: return null
-            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k), x * k, y * k)
+            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k), x * k, y * k)
         }
         val windowCells = cells.map { it.copy(dst = PxRect(it.dst.x * k, it.dst.y * k, it.dst.width * k, it.dst.height * k)) }
         return SkinPlacement(spec, k, windowCells, glasses, controls)
