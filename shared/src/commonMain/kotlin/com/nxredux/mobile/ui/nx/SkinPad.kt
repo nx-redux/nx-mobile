@@ -67,7 +67,7 @@ fun SkinPad(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
     val emit by rememberUpdatedState(onPadEvent)
     val haptic = rememberPadHaptic()
     val held = remember { mutableIntStateOf(0) }   // bumped on every press change: the shade redraws (draw only)
-    val touch = remember { SkinPadTouch({ emit(it) }, { _, _ -> }, haptic) { held.intValue++ } }
+    val touch = remember { SkinPadTouch({ emit(it) }, { _, _ -> }, haptic, onChange = { held.intValue++ }) }
     SideEffect { touch.placement = placement }
     DisposableEffect(touch) { onDispose { touch.releaseAll() } }
     val semibold = Font(Res.font.misans_semibold, FontWeight.SemiBold)

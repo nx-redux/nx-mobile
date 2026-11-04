@@ -1,9 +1,12 @@
 package com.nxredux.mobile.skin
 
 import com.nxredux.mobile.options.PxRect
+import com.nxredux.mobile.ui.nx.PadEvent
+import com.nxredux.mobile.ui.nx.SkinPadTouch
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** The analog stick in a skin: its control and knob piece, the stick / d-pad alternates, and the stick under the thumb. */
 class SkinStickTest {
@@ -47,5 +50,61 @@ class SkinStickTest {
         val plain = p.copy(controls = p.controls.filter { it.spec.alt == null }, pieces = p.pieces.filter { it.alt == null })
         assertEquals(plain, plain.forStick(true))
         assertEquals(plain, plain.forStick(false))
+    }
+
+    // one stick at (500, 500), ring 100, travel 60; the d-pad under it at (500, 760), 110 each way
+    private val sticks = mutableListOf<Pair<Float, Float>>()
+    private val pads = mutableListOf<PadEvent>()
+    private val actions = mutableListOf<Pair<String, Boolean>>()
+    private fun touch() = SkinPadTouch({ pads += it }, { id, d -> actions += id to d }, {}, onStick = { x, y -> sticks += x to y }).apply {
+        placement = SkinPlacement(spec(), 1f, emptyList(), emptyList(), listOf(
+            ctl("STICK", ControlShape.STICK, 500f, 500f, 100f, travel = 60f), ctl("DPAD", ControlShape.DPAD, 500f, 760f, 110f),
+            ctl("STICK_SWAP", ControlShape.CIRCLE, 800f, 900f, 40f)))
+    }
+    private fun near(a: Pair<Float, Float>, x: Float, y: Float) = kotlin.math.abs(a.first - x) < 1e-3f && kotlin.math.abs(a.second - y) < 1e-3f
+
+    @Test
+    fun firstTouchCentresTheStick() {
+        val t = touch()
+        assertTrue(t.press(1, 530f, 480f))
+        assertTrue(near(sticks.last(), 0f, 0f), "$sticks")
+        t.move(1, 560f, 480f)
+        assertTrue(near(sticks.last(), 0.5f, 0f), "$sticks")
+        assertTrue(near(t.knobOffset(), 30f, 0f), "${t.knobOffset()}")
+    }
+
+    @Test
+    fun pastTheRingIsFullTilt() {
+        val t = touch()
+        t.press(1, 530f, 480f)
+        t.move(1, 530f, 380f)
+        assertTrue(near(sticks.last(), 0f, -1f), "$sticks")
+        assertTrue(near(t.knobOffset(), 0f, -60f), "${t.knobOffset()}")
+    }
+
+    @Test
+    fun releaseCentresIt() {
+        val t = touch()
+        t.press(1, 530f, 480f); t.move(1, 560f, 480f); t.release(1)
+        assertTrue(near(sticks.last(), 0f, 0f), "$sticks")
+        assertTrue(near(t.knobOffset(), 0f, 0f))
+        assertTrue(t.pressedShapes().isEmpty())
+    }
+
+    @Test
+    fun theEdgeOfTheTouchAreaTakesTheStick() {
+        val t = touch()
+        assertTrue(t.press(1, 500f, 615f))   // past the ring (100), inside 1.25 x; the d-pad's box starts at 650
+        assertTrue(t.holds(1))
+        assertTrue(pads.isEmpty(), "$pads")
+        assertTrue(sticks.isNotEmpty())
+        assertEquals(1, t.pressedShapes().size)
+    }
+
+    @Test
+    fun swapIsAnAction() {
+        val t = touch()
+        assertTrue(t.press(2, 800f, 900f))
+        assertEquals(listOf("STICK_SWAP" to true), actions)
     }
 }

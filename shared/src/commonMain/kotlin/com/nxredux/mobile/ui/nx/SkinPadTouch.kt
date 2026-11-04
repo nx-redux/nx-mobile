@@ -20,6 +20,11 @@ class SkinPadTouch(
     private val tick: () -> Unit,
     /** What is held changed: the pressed shade ([pressedShapes]) is drawn again. */
     private val onChange: () -> Unit = {},
+    /**
+     * The analog stick's position, x right and y down, each -1..1 and no longer than 1 together (as the drawn pad's
+     * stick, [normalizeStick]); (0, 0) when let go.
+     */
+    private val onStick: (Float, Float) -> Unit = { _, _ -> },
 ) {
     /** The layout hit-tested; a new one lets go of everything held on the old. */
     var placement: SkinPlacement? = null
@@ -33,21 +38,29 @@ class SkinPadTouch(
     private data class Btn(val b: NxButton) : Hit
     private data class Act(val id: String) : Hit
     private object Dpad : Hit
+    private class Stick(val c: PlacedControl) : Hit
 
     /** Pointer id -> the buttons it holds (the d-pad holds up to two directions), or the action it holds. */
     private val held = HashMap<Long, Set<NxButton>>()
     private val heldAction = HashMap<Long, String>()
+    // The finger on the stick, where it landed (the stick's centre for it: first touch centres it) and the knob's offset.
+    private var stickId: Long? = null
+    private var stickCentre = 0f to 0f
+    private var knob = 0f to 0f
 
     /** Whether [x], [y] (window px of the placement) is on one of the skin's controls. */
     fun hits(x: Float, y: Float): Boolean = hitAt(x, y) != null
 
     private fun hitAt(x: Float, y: Float): Hit? {
         val p = placement ?: return null
+        // the stick first, over a touch area a little larger than its ring: it wins a touch on the d-pad's edge
+        p.controls.firstOrNull { it.spec.shape == ControlShape.STICK && hypot(x - it.x, y - it.y) <= it.spec.r * STICK_SLOP }?.let { return Stick(it) }
         val slop = 22f * p.k
         for (c in p.controls) {
             val hit = when (c.spec.shape) {
                 ControlShape.DPAD -> abs(x - c.x) <= c.spec.r + slop && abs(y - c.y) <= c.spec.r + slop
-                ControlShape.CIRCLE, ControlShape.STICK -> hypot(x - c.x, y - c.y) <= c.spec.r
+                ControlShape.CIRCLE -> hypot(x - c.x, y - c.y) <= c.spec.r
+                ControlShape.STICK -> false
                 ControlShape.RECT -> abs(x - c.x) <= c.spec.hw + slop && abs(y - c.y) <= c.spec.hh + slop
             }
             if (hit) return hitOf(c) ?: continue
@@ -92,15 +105,32 @@ class SkinPadTouch(
             is Btn -> setHeld(id, setOf(h.b))
             Dpad -> setHeld(id, dpadAt(x, y))
             is Act -> { heldAction[id] = h.id; onAction(h.id, true); tick(); onChange() }
+            is Stick -> {
+                if (stickId != null) return true   // a second finger on the stick: the first keeps it
+                stickId = id; stickCentre = x to y; knob = 0f to 0f
+                onStick(0f, 0f); tick(); onChange()
+            }
         }
         return true
     }
 
+    /** The stick's knob offset from its centre, window px (no longer than its travel); (0, 0) while not held. */
+    fun knobOffset(): Pair<Float, Float> = knob
+
+    private fun moveStick(x: Float, y: Float) {
+        val c = placement?.controls?.firstOrNull { it.spec.shape == ControlShape.STICK } ?: return
+        val travel = if (c.spec.travel > 0f) c.spec.travel else c.spec.r * 0.6f
+        val (nx, ny) = normalizeStick(x - stickCentre.first, y - stickCentre.second, travel)
+        knob = nx * travel to ny * travel
+        onStick(nx, ny); onChange()
+    }
+
     /** Whether the finger [id] went down on a control and is still held. */
-    fun holds(id: Long): Boolean = id in held || id in heldAction
+    fun holds(id: Long): Boolean = id in held || id in heldAction || id == stickId
 
     /** A held finger moved: the d-pad keeps steering; a finger on a button slides to the button it is over. */
     fun move(id: Long, x: Float, y: Float) {
+        if (id == stickId) { moveStick(x, y); return }
         if (id in heldAction) return
         val cur = held[id] ?: return
         val onDpad = cur.isEmpty() || cur.all { it.isDirection }
@@ -110,12 +140,13 @@ class SkinPadTouch(
     }
 
     fun release(id: Long) {
+        if (id == stickId) { stickId = null; knob = 0f to 0f; onStick(0f, 0f); onChange() }
         heldAction.remove(id)?.let { onAction(it, false); onChange() }
         held[id]?.let { setHeld(id, emptySet()) }
         held.remove(id)
     }
 
-    fun releaseAll() = (held.keys + heldAction.keys).toList().forEach(::release)
+    fun releaseAll() = (held.keys + heldAction.keys + listOfNotNull(stickId)).toList().forEach(::release)
 
     /**
      * The caps held now, as shapes in the placement's px, each shaded while held: a round cap, a rect's pill, the
@@ -125,11 +156,13 @@ class SkinPadTouch(
         val p = placement ?: return emptyList()
         val buttons = held.values.flatten().toSet()
         val actions = heldAction.values.toSet()
-        if (buttons.isEmpty() && actions.isEmpty()) return emptyList()
+        if (buttons.isEmpty() && actions.isEmpty() && stickId == null) return emptyList()
         val out = ArrayList<SkinPressShape>()
         for (c in p.controls) {
             val s = c.spec
             when (s.shape) {
+                // the knob, where it is now
+                ControlShape.STICK -> if (stickId != null) out += SkinPressShape.Circle(c.x + knob.first, c.y + knob.second, if (s.capR > 0f) s.capR else s.r - s.travel)
                 ControlShape.DPAD -> {
                     val a = if (s.arm > 0f) s.arm else s.r / 3f
                     val l = s.r
@@ -153,11 +186,13 @@ class SkinPadTouch(
 
     private companion object {
         const val ARM_CORNER = 10f
+        /** The stick's touch area: its ring's radius times this. */
+        const val STICK_SLOP = 1.25f
         val BUTTONS = mapOf(
             "A" to NxButton.A, "B" to NxButton.B, "X" to NxButton.X, "Y" to NxButton.Y, "L" to NxButton.L1, "R" to NxButton.R1, "L2" to NxButton.L2, "R2" to NxButton.R2,
             "START" to NxButton.START, "SELECT" to NxButton.SELECT, "MENU" to NxButton.MENU,
         )
-        val ACTIONS = setOf("MIC", "SWAP", "SAVE", "LOAD", "REWIND", "FAST", "TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4", "TURBO_A", "TURBO_B")
+        val ACTIONS = setOf("MIC", "SWAP", "SAVE", "LOAD", "REWIND", "FAST", "TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4", "TURBO_A", "TURBO_B", "STICK_SWAP")
     }
 }
 
