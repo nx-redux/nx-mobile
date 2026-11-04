@@ -39,12 +39,14 @@ object SkinChoice {
         ds -> SkinVariant.DS
         baseTag in GB_TAGS -> SkinVariant.GB
         baseTag in GBA_TAGS -> SkinVariant.GBA
+        baseTag in ARCADE_TAGS -> SkinVariant.ARCADE
         baseTag in SINGLE_TAGS -> SkinVariant.SINGLE
         else -> null
     }
 
     private val GB_TAGS = setOf("GB", "GBC", "SGB")
     private val GBA_TAGS = setOf("GBA", "MGBA")
+    private val ARCADE_TAGS = setOf("FBN")
 
     /**
      * The main menu's pad in a [windowW] x [windowH] px area at [densityDpi], built from pieces. Portrait: the stacked

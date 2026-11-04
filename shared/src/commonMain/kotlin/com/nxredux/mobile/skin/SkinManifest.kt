@@ -56,6 +56,8 @@ enum class SkinVariant {
     @SerialName("gb") GB,
     /** Game Boy Advance: the GB set with L R and TL TR (on L2 R2). */
     @SerialName("gba") GBA,
+    /** Arcade (FBNeo): d-pad, A B X Y, L R with TB TA (turbo B / A, the app's; no core input) beside them, COIN START MENU. */
+    @SerialName("arcade") ARCADE,
 }
 
 /**

@@ -14,4 +14,9 @@ class SkinVariantForTest {
         for (t in listOf("FC", "SFC", "MD", "PCE")) assertEquals(SkinVariant.SINGLE, SkinChoice.variantFor(t, false), t)
         for (t in listOf("N64", "PSP", "3DS", "")) assertNull(SkinChoice.variantFor(t, false), t)
     }
+
+    @Test
+    fun arcadeGetsTheArcadeLayout() {
+        assertEquals(SkinVariant.ARCADE, SkinChoice.variantFor("FBN", ds = false))
+    }
 }

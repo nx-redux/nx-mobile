@@ -74,6 +74,8 @@ internal enum class SkinAction(val slot: TouchSlot? = null) {
     MIC, SWAP, SAVE, LOAD, REWIND, FAST,
     /** The frame strip's touch shortcut slots: the player's actions for them ([PadSkinView.shortcuts]). */
     TOUCH_1(TouchSlot.ONE), TOUCH_2(TouchSlot.TWO), TOUCH_3(TouchSlot.THREE), TOUCH_4(TouchSlot.FOUR),
+    /** The arcade's turbo caps (turbo A / B): nothing yet, the frontend turbo gives them their meaning; never core input. */
+    TURBO_A, TURBO_B,
 }
 
 /**
