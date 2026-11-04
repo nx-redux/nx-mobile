@@ -16,11 +16,14 @@ class FakeHttp(private val routes: MutableMap<String, ArrayDeque<HttpResult>> = 
     var clock: () -> Long = { 0L }
     /** Virtual time each request takes, so a job can be caught mid-flight. */
     var latency = 0L
+    /** Extra virtual time for a URL containing the key (first match), on top of [latency]. */
+    val delays = linkedMapOf<String, Long>()
     fun on(urlPart: String, vararg r: HttpResult) { routes.getOrPut(urlPart) { ArrayDeque() }.addAll(r) }
     fun set(urlPart: String, vararg r: HttpResult) { routes[urlPart] = ArrayDeque(r.toList()) }
     override suspend fun get(url: String, headers: Map<String, String>): HttpResult {
         calls += url; this.headers += headers; times += clock()
         if (latency > 0) delay(latency)
+        delays.entries.firstOrNull { url.contains(it.key) }?.let { delay(it.value) }
         val key = routes.keys.firstOrNull { url.contains(it) } ?: return HttpResult(404, null)
         val q = routes.getValue(key); return if (q.size > 1) q.removeFirst() else q.first()
     }

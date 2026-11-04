@@ -75,26 +75,39 @@ class ArtPanelTest {
         override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = com.nxredux.mobile.settings.MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = com.nxredux.mobile.settings.AccentPreset.DEFAULT; override var secondaryAccent: com.nxredux.mobile.settings.SecondaryAccent = com.nxredux.mobile.settings.SecondaryAccent.DEFAULT
     }
 
-    /** Records every call; [options] is what artOptions answers, [fetchGate] holds fetchGame until completed. */
+    /**
+     * Records every call; [options] is what artOptions answers, [fetchGate] holds fetchGame until completed. [early]: the
+     * lists a searching call reports as the sources answer (fetchGame, or artOptions when it searches), before its gate
+     * ([fetchGate], [searchGate] for artOptions).
+     */
     private class FakePort(var options: List<ArtOption>, var currentKey: String? = null, var currentKeys: Map<ArtSlot, String>? = null) : ArtOptionsPort {
         val calls = mutableListOf<String>()
         var fetchGate: CompletableDeferred<Unit>? = null
+        var searchGate: CompletableDeferred<Unit>? = null
         var pickGate: CompletableDeferred<Unit>? = null
+        var early: List<List<ArtOption>> = emptyList()
         val picked = mutableListOf<ArtOption>()
-        override suspend fun fetchGame(gamePath: String, replaceExisting: Boolean, wide: Boolean): FetchResult {
+        /** The keys optionImage was asked for, in order. */
+        val images = mutableListOf<String>()
+        override suspend fun fetchGame(gamePath: String, replaceExisting: Boolean, wide: Boolean, found: suspend (List<ArtOption>) -> Unit): FetchResult {
             calls += "fetch wide=$wide"
+            early.forEach { found(it) }
             fetchGate?.await()
             return FetchResult(ItemStatus.DONE)
         }
-        override suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean, autoSearch: Boolean): ArtOptionsResult {
+        override suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean, autoSearch: Boolean, found: suspend (List<ArtOption>) -> Unit): ArtOptionsResult {
             calls += "options searchAgain=$searchAgain" + (if (autoSearch) "" else " autoSearch=false")
+            if (searchAgain || autoSearch) { early.forEach { found(it) }; searchGate?.await() }
             return ArtOptionsResult(options, currentKeys ?: currentKey?.let { k -> options.firstOrNull { it.key == k }?.let { mapOf(it.slot.fileSlot to k) } }.orEmpty())
         }
         /** A link ending "bad" fails (offline); one ending "gone" is a dead link the controller drops. */
-        override suspend fun optionImage(gamePath: String, option: ArtOption): OptionImage = when {
-            option.url.endsWith("bad") -> OptionImage(null)
-            option.url.endsWith("gone") -> OptionImage(null, dropped = true)
-            else -> OptionImage(ContentRef("file:///cache/${option.assetId}"))
+        override suspend fun optionImage(gamePath: String, option: ArtOption): OptionImage {
+            images += option.key
+            return when {
+                option.url.endsWith("bad") -> OptionImage(null)
+                option.url.endsWith("gone") -> OptionImage(null, dropped = true)
+                else -> OptionImage(ContentRef("file:///cache/${option.assetId}"))
+            }
         }
         override suspend fun pickOption(gamePath: String, option: ArtOption): Boolean {
             pickGate?.await()
@@ -413,6 +426,104 @@ class ArtPanelTest {
         advanceUntilIdle()
         val q = c.panel.value!!
         assertEquals(listOf(false, true, true, false), q.tiles.map { q.isCurrent(it) })
+    }
+
+    @Test fun tiles_show_as_sources_answer_while_the_fetch_runs() = runTest {
+        val port = FakePort(mixed).apply { fetchGate = CompletableDeferred(); early = listOf(mixed.take(1), mixed.take(3)) }
+        val c = ArtPanelController(this, port, Settings(), onPicked = {})
+        c.open(game, fetchFirst = true)
+        runCurrent()
+        val p = assertNotNull(c.panel.value)
+        assertEquals(ArtPanelPhase.READY, p.phase)   // usable while the fetch runs
+        assertEquals(listOf("s1", "s2", "g1"), p.tiles.map { it.option.assetId })
+        assertEquals(listOf("Screenshot", "2D box"), p.sections.map { it.title })
+        assertEquals(ArtPanelController.STILL_LOOKING, p.message)
+        assertTrue(p.tiles.all { it.image != null })   // their previews loaded at once
+        assertEquals(listOf("fetch wide=true"), port.calls)
+        port.fetchGate!!.complete(Unit)
+        advanceUntilIdle()
+        val q = assertNotNull(c.panel.value)
+        assertEquals(ArtPanelPhase.READY, q.phase)
+        assertEquals(listOf("s1", "s2", "s3", "h1", "g1"), q.tiles.map { it.option.assetId })
+        assertNull(q.message)
+        assertTrue(q.tiles.all { it.image != null })
+        assertEquals(mixed.map { it.key }.sorted(), port.images.sorted())   // each preview loaded once
+    }
+
+    @Test fun no_tiles_yet_keeps_looking_for_pictures() = runTest {
+        val port = FakePort(mixed).apply { searchGate = CompletableDeferred() }
+        val c = ArtPanelController(this, port, Settings(), onPicked = {})
+        c.open(game, fetchFirst = false)
+        runCurrent()
+        assertEquals(ArtPanelPhase.LOADING, c.panel.value!!.phase)
+        port.searchGate!!.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(ArtPanelPhase.READY, c.panel.value!!.phase)
+        assertEquals(5, c.panel.value!!.tiles.size)
+    }
+
+    @Test fun search_again_shows_tiles_as_they_come() = runTest {
+        val port = FakePort(mixed)
+        val c = ArtPanelController(this, port, Settings(), onPicked = {})
+        c.open(game, fetchFirst = false)
+        advanceUntilIdle()
+        port.early = listOf(mixed.take(2)); port.searchGate = CompletableDeferred()
+        c.tap(mixed.size)   // Search again
+        runCurrent()
+        val p = assertNotNull(c.panel.value)
+        assertEquals(ArtPanelPhase.READY, p.phase)
+        assertEquals(listOf("s1", "g1"), p.tiles.map { it.option.assetId })
+        assertEquals(ArtPanelController.STILL_LOOKING, p.message)
+        port.searchGate!!.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(5, c.panel.value!!.tiles.size)
+        assertNull(c.panel.value!!.message)
+    }
+
+    @Test fun an_early_pick_keeps_its_mark_after_the_fetch() = runTest {
+        val port = FakePort(mixed).apply { fetchGate = CompletableDeferred(); early = listOf(mixed.take(3)) }
+        val picked = mutableListOf<String>()
+        val c = ArtPanelController(this, port, Settings(), onPicked = { picked += it })
+        c.open(game, fetchFirst = true)
+        runCurrent()
+        c.tap(1)   // TheGamesDB's screenshot, while the fetch still runs
+        runCurrent()
+        assertEquals(listOf(mixed[2]), port.picked)
+        assertEquals(listOf(game.game.path), picked)
+        assertEquals(mapOf(ArtSlot.SCREENSHOT to mixed[2].key), c.panel.value!!.currentKeys)
+        assertEquals(ArtPanelController.STILL_LOOKING, c.panel.value!!.message)   // still looking
+        port.fetchGate!!.complete(Unit)
+        advanceUntilIdle()
+        val p = assertNotNull(c.panel.value)
+        assertEquals(mapOf(ArtSlot.SCREENSHOT to mixed[2].key), p.currentKeys)
+        assertEquals(mixed[2].key, p.tiles[p.focus].option.key)   // the focus stays on it
+        assertNull(p.message)
+    }
+
+    @Test fun an_early_pick_keeps_its_mark_over_a_list_read_before_it() = runTest {
+        // The final list's marks were read before the pick was stored: the pick still shows.
+        val port = FakePort(mixed, currentKeys = emptyMap()).apply { fetchGate = CompletableDeferred(); early = listOf(mixed.take(3)) }
+        val c = ArtPanelController(this, port, Settings(), onPicked = {})
+        c.open(game, fetchFirst = true)
+        runCurrent()
+        c.tap(0)
+        runCurrent()
+        port.fetchGate!!.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(mapOf(ArtSlot.SCREENSHOT to mixed[0].key), c.panel.value!!.currentKeys)
+    }
+
+    @Test fun a_dead_link_found_early_is_not_added_back() = runTest {
+        val gone = ArtOption(ArtSlot.SCREENSHOT, "https://m/gone", SourceId.LIBRETRO, assetId = "s9")
+        val port = FakePort(mixed + gone).apply { fetchGate = CompletableDeferred(); early = listOf(listOf(mixed[0], gone)) }
+        val c = ArtPanelController(this, port, Settings(), onPicked = {})
+        c.open(game, fetchFirst = true)
+        runCurrent()
+        assertEquals(listOf("s1"), c.panel.value!!.tiles.map { it.option.assetId })
+        port.fetchGate!!.complete(Unit)
+        advanceUntilIdle()
+        assertTrue(c.panel.value!!.tiles.none { it.option.key == gone.key })
+        assertEquals(1, port.images.count { it == gone.key })
     }
 
     @Test fun anyArtCountsTheWheelAndTheBox() {

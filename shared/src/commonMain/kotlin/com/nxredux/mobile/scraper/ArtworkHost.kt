@@ -66,13 +66,22 @@ data class OptionImage(val ref: ContentRef?, val dropped: Boolean = false)
 
 /** What the art panel asks of the artwork controller ([ArtworkController] implements it; the defaults are its own). */
 interface ArtOptionsPort {
-    /** One game's fetch; [wide]: also every source's screenshot, grid and hero candidates. */
-    suspend fun fetchGame(gamePath: String, replaceExisting: Boolean = false, wide: Boolean = false): FetchResult
+    /**
+     * One game's fetch; [wide]: also every source's screenshot, grid and hero candidates. [found]: the options so far,
+     * each time a source's answer adds some while this call's own run goes on (shown only, not the saved list).
+     */
+    suspend fun fetchGame(
+        gamePath: String, replaceExisting: Boolean = false, wide: Boolean = false, found: suspend (List<ArtOption>) -> Unit = {},
+    ): FetchResult
     /**
      * The game's Change art list; [searchAgain]: the wide search runs again first. [autoSearch] false: the saved list
-     * as it is, never searched for (the read right after the panel's own Fetch art).
+     * as it is, never searched for (the read right after the panel's own Fetch art). [found]: as [fetchGame]'s, while
+     * the search runs.
      */
-    suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean = false, autoSearch: Boolean = true): ArtOptionsResult
+    suspend fun artOptions(
+        gamePath: String, replaceExisting: Boolean, searchAgain: Boolean = false, autoSearch: Boolean = true,
+        found: suspend (List<ArtOption>) -> Unit = {},
+    ): ArtOptionsResult
     /** [option]'s preview; [OptionImage.dropped] when its link is dead and the option was dropped from the list. */
     suspend fun optionImage(gamePath: String, option: ArtOption): OptionImage
     /** Writes [option] into its file slot (2D box, 3D box, wheel or screenshot); false when it could not. */

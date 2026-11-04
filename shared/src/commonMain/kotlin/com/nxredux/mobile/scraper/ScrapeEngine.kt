@@ -9,6 +9,8 @@ import com.nxredux.mobile.storage.GamePath
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /** The existing folder at [segments] below [home] (nothing created); null when any part is missing. */
@@ -166,11 +168,13 @@ class ScrapeEngine(
      * flow's call to it, or after the usual flow for a source it did not ask), only to report the options ([onOptions], with wide = true only when that pass finished:
      * a pause, a storage failure or a stopped source leaves it false, the hits so far still reported). The usual flow
      * still writes the slots the game lacks; the wide pass writes nothing, and a source stopping there never changes
-     * the game's status.
+     * the game's status. [found]: each game's options so far, each time a source's answer adds some (the art panel's
+     * tiles while the run goes on; nothing is saved by it, [onOptions] still reports the game's list once at its end).
      */
     suspend fun run(
         start: ScrapeState, games: (String) -> LibraryGameRef?, replace: Boolean = false, startSources: Boolean = true,
-        wide: Boolean = false, update: suspend (ScrapeState) -> Unit,
+        wide: Boolean = false, found: suspend (gamePath: String, options: List<ArtOption>) -> Unit = { _, _ -> },
+        update: suspend (ScrapeState) -> Unit,
     ): ScrapeState {
         var s = start.inFlightToWaiting().copy(phase = JobPhase.RUNNING, pauseReason = null)
         val stopped = HashSet(s.notes.keys)
@@ -198,7 +202,7 @@ class ScrapeEngine(
                 if (known.all { it.id in stopped } && !(lacksOnlyMix(ref) && !replace)) { blocked = true; continue }
                 set(i, ItemStatus.SEARCHING)
                 val downloading: suspend () -> Unit = { set(i, ItemStatus.DOWNLOADING) }
-                val result = if (ref.android) scrapeAndroid(ref, stopped, replace, wide, downloading, stop) else scrape(ref, known, stopped, replace, wide, listings, downloading, stop)
+                val result = if (ref.android) scrapeAndroid(ref, stopped, replace, wide, downloading, stop, found) else scrape(ref, known, stopped, replace, wide, listings, downloading, stop, found)
                 if (result == null) { blocked = true; set(i, ItemStatus.WAITING); continue }   // every source stopped: Resume retries it
                 set(i, result.first, result.second)
             }
@@ -252,6 +256,13 @@ class ScrapeEngine(
      */
     suspend fun artOnDisk(ref: LibraryGameRef, heroes: Boolean = true): ArtRefs =
         guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }?.let { artOnDisk(it, Listings(), heroes) } ?: ArtRefs()
+
+    /**
+     * Held by a run's write into a pick slot (with its pick check right before it) and its index update, and by a
+     * pick's write ([writePick]): a pick made while the game is fetched lands either before the run's check (the run
+     * leaves the slot) or after the run's write (the pick replaces it), never under it.
+     */
+    private val pickWrites = Mutex()
 
     /**
      * One run's slot-folder listings: each folder is listed at most once per run (a console's games share them), then
@@ -328,6 +339,7 @@ class ScrapeEngine(
     private suspend fun scrape(
         ref: LibraryGameRef, known: List<ArtSource>, stopped: Set<String>, replace: Boolean, wide: Boolean, ls: Listings,
         downloading: suspend () -> Unit, stop: (ArtSource, SourceStop) -> Unit,
+        found: suspend (gamePath: String, options: List<ArtOption>) -> Unit,
     ): Pair<ItemStatus, String?>? {
         val target = guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }
             ?: return ItemStatus.ERROR to "No place for its art"
@@ -360,6 +372,8 @@ class ScrapeEngine(
             if (ArtSlot.WHEEL in p) wantWheel = false
         }
         applyPicks(picks)
+        /** The picks at the game's start: a pick made since has changed the folder under this run's listings. */
+        val picksAtStart = picks
         val mixOn = ex.mix && pixels != null
         // A missing mix (any under Replace), only for a game with a screenshot or a box to make it from, had or fetched
         // here.
@@ -427,7 +441,12 @@ class ScrapeEngine(
                 val image = hit.bytes?.takeIf { it.isNotEmpty() } ?: download(hit.url) ?: continue
                 val fitted = guard { fitter.fit(image, ArtCaps.of(hit.slot)) } ?: continue
                 attempted = true
-                if (writeSlot(target, hit.slot, fitted, hit.origin, over, ls)) {
+                // Read again right before the write (the download may have taken a while): a pick made meanwhile wins.
+                val written = pickWrites.withLock {
+                    if (pickedSince(listOf(hit)).isEmpty()) return null
+                    writeSlot(target, hit.slot, fitted, hit.origin, over, ls)
+                }
+                if (written) {
                     wrote += hit.slot.fileSlot; fresh[hit.slot.fileSlot] = fitted.bytes; return hit.slot
                 }
                 storageFailed = true
@@ -439,6 +458,8 @@ class ScrapeEngine(
         var paused: JobPause? = null
         /** Every option slot hit seen ([OPTION_SLOTS]), for [onOptions]. */
         val options = ArrayList<ArtOption>()
+        /** Records [hits] and reports the options so far ([found]) when they added any. */
+        suspend fun record(hits: List<ArtHit>) { if (recordOptions(hits, options)) found(ref.gamePath, options.toList()) }
         /** The slots asked of each source in the usual flow (the wide pass does not ask them again). */
         val askedSlots = HashMap<String, Set<ArtSlot>>()
         /** The wide pass ran to its end: no pause, no storage failure, no source stopped that it needed. */
@@ -466,7 +487,7 @@ class ScrapeEngine(
                 val hits = try { src.find(ref, wanted) } catch (e: SourceStop) { stop(src, e); if (counts) stoppedHere++; continue }
                 askedSlots[src.id] = wanted   // only once answered: a stop here leaves the wide pass to find it stopped
                 if (hits.isEmpty()) continue
-                recordOptions(hits, options)
+                record(hits)
                 if (hits.none { it.slot in usual }) continue
                 offered = true
                 if (!notified) { notified = true; downloading() }
@@ -523,7 +544,7 @@ class ScrapeEngine(
                     val slots = (src.slots intersect OPTION_SLOTS) - askedSlots[src.id].orEmpty()
                     if (slots.isEmpty()) continue
                     if (src.id in stopped) { complete = false; continue }
-                    recordOptions(try { src.find(ref, slots) } catch (e: SourceStop) { stop(src, e); complete = false; continue }, options)
+                    record(try { src.find(ref, slots) } catch (e: SourceStop) { stop(src, e); complete = false; continue })
                 }
                 wideDone = complete
             }
@@ -535,11 +556,14 @@ class ScrapeEngine(
         val remakeMix = mixOn && !wantMix && wrote.any { it in MIX_INPUTS } && appMix(target, ls)
         val madeMix = (wantMix || remakeMix) && paused == null && !storageFailed && makeMix(ref, target, before, fresh, ls)
         if (madeMix) { attempted = true; wrote += ArtSlot.MIX }
-        if (attempted) {
+        if (attempted) withContext(NonCancellable) {
             // Whatever is on disk after the writes (a failed replace may have removed the old file), an extra's own
-            // media kept.
-            val art = indexArt(ref, before, artOnDisk(target, ls))
-            withContext(NonCancellable) { onArt(ref.gamePath, art) }
+            // media kept; listed again when a pick wrote meanwhile (this run's listings do not know its file).
+            pickWrites.withLock {
+                val now = picked(ref.gamePath)
+                val art = indexArt(ref, before, artOnDisk(target, if (now != picksAtStart) Listings() else ls), picked = now - picksAtStart)
+                onArt(ref.gamePath, art)
+            }
         }
         paused?.let { throw it }
         if (storageFailed) throw JobPause(STORAGE)
@@ -555,14 +579,16 @@ class ScrapeEngine(
         }
     }
 
-    /** Adds [hits] in the option slots to [options] (links and thumbnails without a ScreenScraper login). */
-    private fun recordOptions(hits: List<ArtHit>, options: MutableList<ArtOption>) {
+    /** Adds [hits] in the option slots to [options] (links and thumbnails without a ScreenScraper login); true when any were. */
+    private fun recordOptions(hits: List<ArtHit>, options: MutableList<ArtOption>): Boolean {
+        val had = options.size
         for (h in hits) if (h.slot in OPTION_SLOTS) {
             options += ArtOption(
                 h.slot, ScraperRequest.stripAuth(h.url), h.origin.source, h.origin.gameId, h.origin.assetId, h.note,
                 thumb = h.thumb?.let(ScraperRequest::stripAuth),
             )
         }
+        return options.size > had
     }
 
     /**
@@ -577,12 +603,14 @@ class ScrapeEngine(
         if (option.slot.fileSlot != slot) return null
         if (ref.android) return writeAndroidPick(ref, slot, image, option)
         val target = guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) } ?: return null
-        val ls = Listings()
-        val before = artOnDisk(target, ls)
         val fitted = guard { fitter.fit(image, ArtCaps.of(option.slot)) } ?: return null
-        if (!writeSlot(target, option.slot, fitted, option.origin, replace = true, ls)) return null
-        if (slot in MIX_INPUTS && extras().mix && pixels != null && appMix(target, ls)) makeMix(ref, target, before, mapOf(slot to fitted.bytes), ls)
-        return indexArt(ref, before, artOnDisk(target, ls), picked = setOf(slot))
+        return pickWrites.withLock {
+            val ls = Listings()
+            val before = artOnDisk(target, ls)
+            if (!writeSlot(target, option.slot, fitted, option.origin, replace = true, ls)) return@withLock null
+            if (slot in MIX_INPUTS && extras().mix && pixels != null && appMix(target, ls)) makeMix(ref, target, before, mapOf(slot to fitted.bytes), ls)
+            indexArt(ref, before, artOnDisk(target, ls), picked = setOf(slot))
+        }
     }
 
     /**
@@ -596,7 +624,7 @@ class ScrapeEngine(
         if (slot !in AndroidArtStore.SLOTS) return null
         val fitted = guard { fitter.fit(image, ArtCaps.of(option.slot)) } ?: return null
         val hero = slot == ArtSlot.SCREENSHOT && option.source == SourceId.SGDB
-        guard { store.write(ref.fileName, slot, fitted.bytes, hero) } ?: return null
+        pickWrites.withLock { guard { store.write(ref.fileName, slot, fitted.bytes, hero) } } ?: return null
         withContext(NonCancellable) { onAndroidArt() }
         return ArtRefs()
     }
@@ -668,6 +696,7 @@ class ScrapeEngine(
     private suspend fun scrapeAndroid(
         ref: LibraryGameRef, stopped: Set<String>, replace: Boolean, wide: Boolean,
         downloading: suspend () -> Unit, stop: (ArtSource, SourceStop) -> Unit,
+        found: suspend (gamePath: String, options: List<ArtOption>) -> Unit,
     ): Pair<ItemStatus, String?>? {
         val store = androidArt ?: return ItemStatus.SKIPPED to NO_SOURCE
         val ss = ss ?: return ItemStatus.SKIPPED to NO_SOURCE
@@ -675,11 +704,13 @@ class ScrapeEngine(
         var wideDone = false
         var paused: JobPause? = null
         var result: Pair<ItemStatus, String?>? = null
+        /** Records [hits] and reports the options so far ([found]) when they added any. */
+        suspend fun record(hits: List<ArtHit>) { if (recordOptions(hits, options)) found(ref.gamePath, options.toList()) }
         try {
             val hit = try { ss.androidScreenshot(ref.name) } catch (e: SourceStop) { stop(ss, e); return null }
             when (hit) {
-                is AndroidHit.Screenshot -> recordOptions(ss.androidHits(hit.medias, hit.gameId), options)
-                is AndroidHit.NoScreenshot -> recordOptions(ss.androidHits(hit.medias, hit.gameId), options)
+                is AndroidHit.Screenshot -> record(ss.androidHits(hit.medias, hit.gameId))
+                is AndroidHit.NoScreenshot -> record(ss.androidHits(hit.medias, hit.gameId))
                 AndroidHit.None -> {}
             }
             if (wide) {
@@ -687,7 +718,7 @@ class ScrapeEngine(
                 wideDone = when {
                     sg == null -> true
                     sg.id in stopped -> false
-                    else -> try { recordOptions(sg.find(ref, sg.slots), options); true } catch (e: SourceStop) { stop(sg, e); false }
+                    else -> try { record(sg.find(ref, sg.slots)); true } catch (e: SourceStop) { stop(sg, e); false }
                 }
             }
             val picked = ArtSlot.SCREENSHOT in picked(ref.gamePath)
@@ -711,9 +742,11 @@ class ScrapeEngine(
         downloading()
         val image = download(url) ?: return ItemStatus.ERROR to "Couldn't download the art"
         val fitted = guard { fitter.fit(image, ArtCaps.of(ArtSlot.SCREENSHOT)) } ?: return ItemStatus.ERROR to "Couldn't make the art"
-        // A pick made while this game was fetched wins its slot.
-        if (ArtSlot.SCREENSHOT in picked(ref.gamePath)) return ItemStatus.DONE to null
-        guard { store.write(ref.fileName, ArtSlot.SCREENSHOT, fitted.bytes) } ?: return ItemStatus.ERROR to "Couldn't save the art"
+        // A pick made while this game was fetched wins its slot (read under the lock its write takes).
+        pickWrites.withLock {
+            if (ArtSlot.SCREENSHOT in picked(ref.gamePath)) return ItemStatus.DONE to null
+            guard { store.write(ref.fileName, ArtSlot.SCREENSHOT, fitted.bytes) }
+        } ?: return ItemStatus.ERROR to "Couldn't save the art"
         withContext(NonCancellable) { onAndroidArt() }
         return ItemStatus.DONE to doneReason(listOf(ss.shortLabel), standInOnly = false)
     }

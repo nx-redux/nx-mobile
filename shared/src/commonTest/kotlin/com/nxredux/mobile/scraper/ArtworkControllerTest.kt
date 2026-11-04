@@ -900,6 +900,42 @@ class ArtworkControllerTest {
         assertTrue(sg.asked.size > afterWide)
     }
 
+    @Test fun a_search_reports_options_as_each_source_answers() = runTest {
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb"), sgdb("Tetris.gb")))
+        rig.http.on("https://", OK_PNG)
+        val found = mutableListOf<List<ArtOption>>()
+        val result = rig.controller.artOptions(tetris.gamePath, replaceExisting = false, searchAgain = true) { found += it }
+        assertEquals(listOf(1, 5), found.map { it.size })   // the screenshot source's, then SteamGridDB's on top
+        assertEquals(found.last().map { it.key }.toSet(), result.options.map { it.key }.toSet())
+        assertTrue(assertNotNull(ArtOptionStore(rig.host).get(tetris.gamePath)).wide)   // saved as before
+    }
+
+    @Test fun a_pick_while_the_panels_fetch_runs_goes_through_at_once_and_wins_its_slot() = runTest {
+        val two = FakeSource("other", slots = setOf(ArtSlot.SCREENSHOT)).apply {
+            offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://o/Tetris-ss1"); offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://o/Tetris-ss2")
+        }
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(two))
+        val mine = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 5)
+        rig.http.on("Tetris-ss2", HttpResult(200, mine))
+        rig.http.on("https://", OK_PNG)
+        rig.http.delays["Tetris-ss1"] = 300   // the fetch's own download is slow
+        val found = mutableListOf<List<ArtOption>>()
+        var fetched = false
+        launch { rig.controller.fetchGame(tetris.gamePath, replaceExisting = true, wide = true) { found += it }; fetched = true }   // Replace: its write would replace the pick
+        testScheduler.runCurrent()
+        val ss2 = found.single().first { it.url.endsWith("ss2") }
+        var picked: Boolean? = null
+        launch { picked = rig.controller.pickOption(tetris.gamePath, ss2) }
+        testScheduler.advanceTimeBy(100)
+        assertEquals(true, picked)   // not held until the fetch ends
+        assertFalse(fetched)
+        advanceUntilIdle()
+        assertTrue(fetched)
+        assertContentEquals(mine, rig.fs.bytesAt(shotPath))   // the fetch's later write left the pick alone
+        assertEquals(shotPath, rig.host.applied.last { it.first == tetris.gamePath }.second.screenshot)   // the index has it too
+        assertEquals(ss2.key, listed(rig).currentKeys[ArtSlot.SCREENSHOT])
+    }
+
     @Test fun fetch_art_cut_short_searches_once() = runTest {
         // SteamGridDB stops in the wide pass: the list is not marked wide, and the read right after the fetch asks no one.
         val sg = sgdb("Tetris.gb").apply { fail = { SourceStop("Key refused") } }

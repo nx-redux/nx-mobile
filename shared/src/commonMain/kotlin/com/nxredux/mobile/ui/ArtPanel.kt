@@ -159,7 +159,8 @@ internal fun hasAnyArt(g: GameEntry): Boolean = g.boxartRef != null || g.box2dRe
 /**
  * The art panel over a game list: the game ([gamePath], [title]), its [sections] in order, [focus] a flat index over
  * their tiles (Search again at the tiles' count), [currentKeys] the option in use per file slot, [message] when there is
- * something to say, and [question] after a box or wheel pick that Layouts does not show.
+ * something to say, and [question] after a box or wheel pick that Layouts does not show. [searching]: the tiles are
+ * the ones found so far, the fetch still runs behind them.
  */
 data class ArtPanel(
     val gamePath: String,
@@ -170,6 +171,7 @@ data class ArtPanel(
     val currentKeys: Map<ArtSlot, String>,
     val message: String?,
     val question: LayoutQuestion? = null,
+    val searching: Boolean = false,
 ) {
     /** Every tile, section by section: the flat order [focus] counts in. */
     val tiles: List<ArtTile> get() = sections.flatMap { it.tiles }
@@ -198,7 +200,9 @@ internal fun artTileLabel(o: ArtOption): String {
 
 /**
  * The game menu's Fetch art and Change art panel: [open] fetches first (Fetch art) or reads the saved options (Change
- * art), then the previews load, [PREVIEWS] at once (a dead link's tile leaves the panel). A or a tap picks a tile ([ArtOptionsPort.pickOption]; [onPicked]
+ * art), then the previews load, [PREVIEWS] at once (a dead link's tile leaves the panel). While a fetch or search runs,
+ * each source's options join the panel as it answers (their previews loading at once), [STILL_LOOKING] showing until
+ * the saved list replaces them. A or a tap picks a tile ([ArtOptionsPort.pickOption]; [onPicked]
  * with the game's path after one went through), Search again searches every source again; B closes. A box or wheel
  * pick that Layouts → Backdrop art (or List art) does not show asks [LayoutQuestion] in the panel: Switch writes the
  * settings, Keep (or B) leaves them.
@@ -211,9 +215,11 @@ class ArtPanelController(
     /** After Switch wrote Layouts → Backdrop art (and List art): the screens follow. */
     private val onLayoutSwitched: () -> Unit = {},
 ) {
-    private companion object {
+    companion object {
         /** Previews loaded at once, at most. */
-        const val PREVIEWS = 3
+        private const val PREVIEWS = 3
+        /** The message while tiles show and the fetch still runs behind them. */
+        const val STILL_LOOKING = "Still looking…"
     }
 
     private val _panel = MutableStateFlow<ArtPanel?>(null)
@@ -225,6 +231,8 @@ class ArtPanelController(
     private var picking: Job? = null
     /** The shown list's note from the sources (why some are missing), kept under a pick's message. */
     private var note: String? = null
+    /** The picks made over the current load's tiles: they keep their mark over its final list, whenever that was read. */
+    private var picksHere: Map<ArtSlot, String> = emptyMap()
 
     /** Opens the panel for [entry]; [fetchFirst]: Fetch art (the game's art is fetched before the list shows). */
     fun open(entry: Listed, fetchFirst: Boolean) {
@@ -294,7 +302,7 @@ class ArtPanelController(
 
     private fun searchAgain(p: ArtPanel) {
         load?.cancel()
-        _panel.value = p.copy(phase = ArtPanelPhase.LOADING, sections = emptyList(), focus = 0, message = null, question = null)
+        _panel.value = p.copy(phase = ArtPanelPhase.LOADING, sections = emptyList(), focus = 0, message = null, question = null, searching = false)
         start(p.gamePath, fetchFirst = false, searchAgain = true)
     }
 
@@ -312,11 +320,13 @@ class ArtPanelController(
             }
             if (ok) onPicked(path)
             val slot = tile.option.slot.fileSlot
+            // The same load still running (tiles shown while the fetch goes on) marks it too.
+            if (ok && load === shown && _panel.value?.gamePath == path) picksHere = picksHere + (slot to tile.option.key)
             _panel.update { now ->
                 when {
                     now?.gamePath != path || load !== shown || now.phase != ArtPanelPhase.READY -> now
                     ok -> now.copy(
-                        currentKeys = now.currentKeys + (slot to tile.option.key), message = messageFor(now.tiles.size, note),
+                        currentKeys = now.currentKeys + (slot to tile.option.key), message = listMessage(now, now.tiles.size),
                         question = layoutQuestionFor(slot, settings.backdropArt, settings.gameListArt),
                     )
                     else -> now.copy(message = "Couldn't use that picture")
@@ -325,53 +335,98 @@ class ArtPanelController(
         }
     }
 
-    /** The fetch (when [fetchFirst]), then the list, then each preview. */
+    /**
+     * The fetch (when [fetchFirst]), then the list, then each preview. The options a fetch or search finds on the way
+     * show as they come ([withTiles], [ArtPanel.searching]); the final list then replaces them, a dead link's tile
+     * not coming back and a pick made meanwhile keeping its mark.
+     */
     private fun start(path: String, fetchFirst: Boolean, searchAgain: Boolean) {
+        picksHere = emptyMap()
         load = scope.launch {
+            val loading = this
+            val gate = Semaphore(PREVIEWS)
+            /** The options whose preview has been asked for (each once per load). */
+            val previewing = HashSet<String>()
+            /** The dead links dropped from this load's tiles: a list read later must not show them again. */
+            val dropped = MutableStateFlow(emptySet<String>())
+            fun preview(o: ArtOption) {
+                if (!previewing.add(o.key)) return
+                loading.launch {
+                    val got = gate.withPermit {
+                        try { port.optionImage(path, o) } catch (e: CancellationException) { throw e } catch (_: Throwable) { OptionImage(null) }
+                    }
+                    if (got.dropped) dropped.update { it + o.key }
+                    _panel.update { now ->
+                        when {
+                            now?.gamePath != path -> now
+                            got.dropped -> without(now, o.key)   // a dead link: its tile goes
+                            else -> now.copy(sections = now.sections.map { s ->
+                                s.copy(tiles = s.tiles.map { if (it.option.key == o.key) it.copy(image = got.ref, failed = got.ref == null) else it })
+                            })
+                        }
+                    }
+                }
+            }
+            val found: suspend (List<ArtOption>) -> Unit = { options ->
+                val shown = options.distinctBy { it.key }.filter { it.key !in dropped.value }
+                if (shown.isNotEmpty()) {
+                    _panel.update { now ->
+                        now?.takeIf { it.gamePath == path }?.let { withTiles(it, shown).copy(phase = ArtPanelPhase.READY, searching = true, message = STILL_LOOKING) } ?: now
+                    }
+                    shown.forEach(::preview)
+                }
+            }
             val replace = settings.artReplaceExisting
             val result = try {
                 var fetchNote: String? = null
                 if (fetchFirst) {
-                    val r = port.fetchGame(path, replace, wide = true)
+                    val r = port.fetchGame(path, replace, wide = true, found)
                     if (r.status == ItemStatus.ERROR) fetchNote = fetchResultText(r)
-                    _panel.update { it?.takeIf { p -> p.gamePath == path }?.copy(phase = ArtPanelPhase.LOADING) ?: it }
+                    _panel.update { it?.takeIf { p -> p.gamePath == path && p.phase == ArtPanelPhase.FETCHING }?.copy(phase = ArtPanelPhase.LOADING) ?: it }
                 }
                 // After its own Fetch art, the list as that fetch left it: a wide pass cut short is not run again here.
-                port.artOptions(path, replace, searchAgain, autoSearch = !fetchFirst).let { if (it.note == null && fetchNote != null) it.copy(note = fetchNote) else it }
+                port.artOptions(path, replace, searchAgain, autoSearch = !fetchFirst, found).let { if (it.note == null && fetchNote != null) it.copy(note = fetchNote) else it }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Throwable) {
-                _panel.update { it?.takeIf { p -> p.gamePath == path }?.copy(phase = ArtPanelPhase.READY, message = "Couldn't read the pictures") ?: it }
+                _panel.update { it?.takeIf { p -> p.gamePath == path }?.copy(phase = ArtPanelPhase.READY, message = "Couldn't read the pictures", searching = false) ?: it }
                 return@launch
             }
-            // One tile per key: the grid's item keys and the preview updates go by it.
-            val sections = artSections(result.options.distinctBy { it.key }.map { ArtTile(it, artTileLabel(it), image = null, failed = false) })
-            val tiles = sections.flatMap { it.tiles }
-            // The first picture in use (sections in order) has the focus.
-            val current = tiles.indexOfFirst { result.currentKeys[it.option.slot.fileSlot] == it.option.key }
             note = result.note
+            // One tile per key: the grid's item keys and the preview updates go by it.
+            val options = result.options.distinctBy { it.key }.filter { it.key !in dropped.value }
             _panel.update {
-                it?.takeIf { p -> p.gamePath == path }?.copy(
-                    phase = ArtPanelPhase.READY, sections = sections, currentKeys = result.currentKeys,
-                    focus = if (current >= 0) current else 0, message = messageFor(tiles.size, result.note),
-                ) ?: it
+                it?.takeIf { p -> p.gamePath == path }?.let { p ->
+                    val early = p.phase == ArtPanelPhase.READY && p.searching
+                    val q = withTiles(p, options)
+                    val currentKeys = result.currentKeys + picksHere
+                    // The first picture in use (sections in order) has the focus; tiles shown early keep it where it is.
+                    val current = q.tiles.indexOfFirst { t -> currentKeys[t.option.slot.fileSlot] == t.option.key }
+                    q.copy(
+                        phase = ArtPanelPhase.READY, searching = false, currentKeys = currentKeys,
+                        focus = if (early) q.focus else if (current >= 0) current else 0, message = messageFor(q.tiles.size, result.note),
+                    )
+                } ?: it
             }
-            val gate = Semaphore(PREVIEWS)
-            for (t in tiles) launch {
-                val got = gate.withPermit {
-                    try { port.optionImage(path, t.option) } catch (e: CancellationException) { throw e } catch (_: Throwable) { OptionImage(null) }
-                }
-                _panel.update { now ->
-                    when {
-                        now?.gamePath != path -> now
-                        got.dropped -> without(now, t.option.key)   // a dead link: its tile goes
-                        else -> now.copy(sections = now.sections.map { s ->
-                            s.copy(tiles = s.tiles.map { if (it.option.key == t.option.key) it.copy(image = got.ref, failed = got.ref == null) else it })
-                        })
-                    }
-                }
-            }
+            options.forEach(::preview)
         }
+    }
+
+    /**
+     * [p] with the tiles for [options] in their order (one already shown keeps its preview, one not listed goes), in
+     * their sections. A shown panel's focus stays on the same tile (or Search again, or the nearest place when its
+     * tile went); one not shown yet starts on the first.
+     */
+    private fun withTiles(p: ArtPanel, options: List<ArtOption>): ArtPanel {
+        val have = p.tiles.associateBy { it.option.key }
+        val sections = artSections(options.map { have[it.key] ?: ArtTile(it, artTileLabel(it), image = null, failed = false) })
+        val tiles = sections.flatMap { it.tiles }
+        val focus = when {
+            p.phase != ArtPanelPhase.READY -> 0
+            p.onSearchAgain -> tiles.size
+            else -> tiles.indexOfFirst { it.option.key == p.tiles[p.focus].option.key }.takeIf { it >= 0 } ?: minOf(p.focus, tiles.size)
+        }
+        return p.copy(sections = sections, focus = focus)
     }
 
     /** [p] without the tile for [key] (its section too when it was the last): the focus stays on the same tile (or Search again), the count's message follows. */
@@ -385,9 +440,12 @@ class ArtPanelController(
             p.focus == i && i == count && i > 0 -> i - 1   // it was the last tile: the one before it
             else -> p.focus
         }
-        val message = if (p.message == messageFor(p.tiles.size, note)) messageFor(count, note) else p.message
+        val message = if (p.message == listMessage(p, p.tiles.size)) listMessage(p, count) else p.message
         return p.copy(sections = sections, focus = focus, message = message)
     }
+
+    /** [p]'s message for [count] tiles: [STILL_LOOKING] while it is [ArtPanel.searching], else [messageFor]. */
+    private fun listMessage(p: ArtPanel, count: Int): String? = if (p.searching) STILL_LOOKING else messageFor(count, note)
 
     /** None found, only one, or the sources' note (why some are missing). */
     private fun messageFor(count: Int, note: String?): String? {

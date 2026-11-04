@@ -21,6 +21,8 @@ class AndroidScrapeTest {
     private class Rig(scope: TestScope, val store: AndroidArtStore? = FakeArtStore(), sgdbKey: String? = null) {
         val http = FakeHttp().apply { clock = { scope.testScheduler.currentTime } }
         val options = mutableListOf<Triple<String, List<ArtOption>, Boolean>>()
+        /** Each early report ([ScrapeEngine.run]'s found) with the full-size downloads made by then. */
+        val found = mutableListOf<Pair<List<ArtOption>, Int>>()
         val picks = mutableMapOf<String, Set<ArtSlot>>()
         val hasher = FakeHasher()
         val arts = mutableListOf<Pair<String, ArtRefs>>()
@@ -37,7 +39,10 @@ class AndroidScrapeTest {
         val files get() = (store as FakeArtStore).files
 
         suspend fun run(games: List<LibraryGameRef>, replace: Boolean = false, wide: Boolean = false) =
-            engine.run(ScrapeState(items = games.map { Scrape.item(it) }), { p -> games.firstOrNull { it.gamePath == p } }, replace, wide = wide) {}
+            engine.run(
+                ScrapeState(items = games.map { Scrape.item(it) }), { p -> games.firstOrNull { it.gamePath == p } }, replace, wide = wide,
+                found = { _, o -> found += o to http.count("https://m/") },
+            ) {}
 
         /** The API calls in order (image downloads left out). */
         val api get() = http.calls.filter { it.startsWith(ScraperRequest.API) }
@@ -226,6 +231,25 @@ class AndroidScrapeTest {
         assertTrue(options.any { it.source == SourceId.SS && it.slot == ArtSlot.SCREENSHOT })
         assertContentEquals(byteArrayOf(7), rig.files[tetris.fileName])                    // the wide pass writes nothing
         assertTrue(rig.http.calls.none { it.startsWith("https://m/") || it.startsWith("https://cdn2.") })
+    }
+
+    @Test fun androidOptionsReportedAsEachSourceAnswers() = runTest {
+        val rig = Rig(this, sgdbKey = "K")
+        val tetris = Scrape.androidGame("com.tetris.app/.Main", "Tetris")
+        rig.http.on("jeuInfos", found("ss" to "https://m/pgo-ss.png", "box-2D" to "https://m/pgo-box.png"))
+        rig.http.on("https://m/", OK_PNG)
+        rig.http.on("search/autocomplete/", Scrape.json(SgdbFixtures.autocomplete))
+        rig.http.on("grids/game/", Scrape.json(SgdbFixtures.grids))
+        rig.http.on("heroes/game/", Scrape.json(SgdbFixtures.heroes))
+        rig.http.on("logos/game/", Scrape.json(SgdbFixtures.logos))
+        rig.run(listOf(tetris), wide = true)
+        assertEquals(2, rig.found.size)
+        val (first, downloads) = rig.found.first()
+        assertEquals(0, downloads)                                                         // before the screenshot's download
+        assertTrue(first.all { it.source == SourceId.SS })
+        assertTrue(rig.found.last().first.any { it.source == SourceId.SGDB })
+        assertEquals(rig.options.single().second, rig.found.last().first)
+        assertEquals(1, rig.http.count("https://m/pgo-ss.png"))
     }
 
     @Test fun androidBulkFetchNeverAsksSgdb() = runTest {

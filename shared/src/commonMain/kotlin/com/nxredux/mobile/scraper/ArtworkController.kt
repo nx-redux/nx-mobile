@@ -99,6 +99,11 @@ class ArtworkController(
     /** The game a [fetchGame] is scraping outside the job (never queued meanwhile). */
     private var single: String? = null
     private val singleLock = Mutex()
+    /**
+     * One pick at a time, and none during Reset artwork. Not [singleLock]: a pick goes through while the art panel's
+     * own fetch runs, as during a job (the engine reads the picks right before each write).
+     */
+    private val pickLock = Mutex()
     /** Guards [progress]; never waits on [lock]. */
     private val aliveLock = Mutex()
     private var progress: String? = null
@@ -291,13 +296,15 @@ class ArtworkController(
      * A game the running job still has queued is not fetched twice: this waits for the job's result. A pause case comes
      * back as ERROR with the pause reason. While a job runs, the shared sources' per-run state is the job's: this run
      * does not start them again ([ScrapeEngine.run]'s `startSources`). [wide]: the Change art search ([ScrapeEngine.run]'s
-     * wide pass).
+     * wide pass). [found]: its own run's options so far ([ScrapeEngine.run]'s); none when the job fetched the game.
      */
-    override suspend fun fetchGame(gamePath: String, replaceExisting: Boolean, wide: Boolean): FetchResult =
-        fetchOne(gamePath, replaceExisting, wide).first
+    override suspend fun fetchGame(gamePath: String, replaceExisting: Boolean, wide: Boolean, found: suspend (List<ArtOption>) -> Unit): FetchResult =
+        fetchOne(gamePath, replaceExisting, wide, found).first
 
     /** [fetchGame], with the sources' stop notes of its own run (none when the job fetched the game). */
-    private suspend fun fetchOne(gamePath: String, replaceExisting: Boolean, wide: Boolean): Pair<FetchResult, Map<String, String>> = withContext(work) {
+    private suspend fun fetchOne(
+        gamePath: String, replaceExisting: Boolean, wide: Boolean, found: suspend (List<ArtOption>) -> Unit = {},
+    ): Pair<FetchResult, Map<String, String>> = withContext(work) {
         if (!available) return@withContext FetchResult(ItemStatus.SKIPPED, "Fetching isn't available") to emptyMap()
         val ref = host.libraryGames().firstOrNull { it.gamePath == gamePath }
             ?: return@withContext FetchResult(ItemStatus.SKIPPED, "Not in the library") to emptyMap()
@@ -312,7 +319,7 @@ class ArtworkController(
             }
             if (!inJob) try {
                 val one = ScrapeState(items = listOf(ScrapeItem(ref.gamePath, ref.tag, ref.name)))
-                val end = engine.run(one, { if (it == gamePath) ref else null }, replace = replaceExisting, startSources = !jobLive, wide = wide) {}
+                val end = engine.run(one, { if (it == gamePath) ref else null }, replace = replaceExisting, startSources = !jobLive, wide = wide, found = { _, o -> found(o) }) {}
                 notes = end.notes
                 end.quota?.let { q -> _state.update { it.copy(quota = q) } }
                 end.tgdbLeft?.let { n -> _state.update { it.copy(tgdbLeft = n) } }
@@ -329,13 +336,16 @@ class ArtworkController(
     /**
      * A game's Change art list. The saved list when the wide search ran for it; otherwise (none saved, only a fetch's
      * links, or [searchAgain]) the game is fetched with the wide search first ([fetchGame], [replaceExisting] as set).
-     * [autoSearch] false: only [searchAgain] searches (the caller has just run the wide fetch itself).
+     * [autoSearch] false: only [searchAgain] searches (the caller has just run the wide fetch itself). [found]: the
+     * search's options so far, as [fetchGame]'s.
      */
-    override suspend fun artOptions(gamePath: String, replaceExisting: Boolean, searchAgain: Boolean, autoSearch: Boolean): ArtOptionsResult = withContext(work) {
+    override suspend fun artOptions(
+        gamePath: String, replaceExisting: Boolean, searchAgain: Boolean, autoSearch: Boolean, found: suspend (List<ArtOption>) -> Unit,
+    ): ArtOptionsResult = withContext(work) {
         var saved = store.get(gamePath)
         var note: String? = null
         if (searchAgain || (autoSearch && (saved == null || !saved.wide))) {
-            val (r, notes) = fetchOne(gamePath, replaceExisting, wide = true)
+            val (r, notes) = fetchOne(gamePath, replaceExisting, wide = true, found)
             note = notes.values.joinToString(" · ").ifEmpty { null }
                 ?: r.reason.takeIf { r.status == ItemStatus.ERROR || r.status == ItemStatus.SKIPPED }
             saved = store.get(gamePath)
@@ -441,7 +451,7 @@ class ArtworkController(
      */
     override suspend fun pickOption(gamePath: String, option: ArtOption): Boolean = withContext(work) {
         val ref = host.libraryGames().firstOrNull { it.gamePath == gamePath } ?: return@withContext false
-        singleLock.withLock {
+        pickLock.withLock {
             val saved = store.get(gamePath)
             val slot = option.slot.fileSlot
             if (option.key == currentKeys(ref, saved)[slot]) {
@@ -593,7 +603,7 @@ class ArtworkController(
     suspend fun resetArt(tags: Set<String>?): ResetResult = withContext(work) {
         val up = tags?.mapTo(HashSet()) { it.uppercase() }
         val paused = halt(JobPhase.PAUSED) { s -> s.items.any { it.status.inFlightOrWaiting && (up == null || it.tag.uppercase() in up) } }
-        singleLock.withLock {
+        singleLock.withLock { pickLock.withLock {   // a pick going through finishes first
             val games = host.allLibraryGames().distinctBy { it.gamePath }
             // By console: exactly the art paths of its games (a folder shared with another console's games is not a scope).
             val scopePaths = up?.let { games.filter { g -> g.tag.uppercase() in it }.flatMapTo(HashSet(), ::artPaths) }
@@ -625,7 +635,7 @@ class ArtworkController(
             for ((g, was) in before) host.applyArt(g.gamePath, ScrapeEngine.indexArt(g, was, engine.artOnDisk(g)))
             flushArt()   // one index write and one refresh for every game reset
             ResetResult(deleted + androidDeleted, paused)
-        }
+        } }
     }
 
     /**

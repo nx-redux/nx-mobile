@@ -22,6 +22,8 @@ class ScrapeEngineTest {
         pickedBy: suspend (String) -> Set<ArtSlot> = { picked }, var extras: ArtExtras = ArtExtras(),
     ) {
         val options = mutableListOf<Triple<String, List<ArtOption>, Boolean>>()
+        /** Each early report ([ScrapeEngine.run]'s found) with the full-size downloads made by then. */
+        val found = mutableListOf<Triple<String, List<ArtOption>, Int>>()
         val http = FakeHttp().apply { clock = { scope.testScheduler.currentTime } }
         var auth = ScraperAuth("DEV", "DEVPW")
         val arts = mutableListOf<Pair<String, ArtRefs>>()
@@ -34,7 +36,7 @@ class ScrapeEngineTest {
         )
 
         suspend fun run(games: List<LibraryGameRef>, start: ScrapeState = ScrapeState(items = games.map { Scrape.item(it) }), replace: Boolean = false, wide: Boolean = false) =
-            engine.run(start, { p -> games.firstOrNull { it.gamePath == p } }, replace, wide = wide) {}
+            engine.run(start, { p -> games.firstOrNull { it.gamePath == p } }, replace, wide = wide, found = { p, o -> found += Triple(p, o, http.count("https://m/")) }) {}
     }
 
     private val tetris = Scrape.homeGame("Tetris.gb")
@@ -102,6 +104,33 @@ class ScrapeEngineTest {
         assertEquals(0, rig.http.count("t-ss"))
         assertEquals(1, rig.http.count("t-3d"))
         assertEquals(ItemStatus.DONE, end.items.single().status)
+    }
+
+    @Test fun options_reported_as_each_source_answers() = runTest {
+        val tgdb = FakeSource("tgdb", setOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT, ArtSlot.GRID))
+        tgdb.offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://t/s.png")
+        val sgdb = FakeSource("sgdb", setOf(ArtSlot.GRID, ArtSlot.HERO))
+        sgdb.offer("Tetris.gb", ArtSlot.HERO, "https://g/h.png")
+        val rig = Rig(this, more = listOf(tgdb, sgdb))
+        rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png", "box-3D" to "https://m/t-3d.png"))
+        rig.http.on("https://m/", OK_PNG)
+        rig.run(listOf(tetris), wide = true)
+        assertTrue(rig.found.all { it.first == tetris.gamePath })
+        // ScreenScraper's two before any of its downloads, then each source's on top, in the order found.
+        assertEquals(listOf(2, 3, 4), rig.found.map { it.second.size })
+        assertEquals(0, rig.found.first().third)
+        assertEquals(listOf(SourceId.SS, SourceId.SS), rig.found.first().second.map { it.source })
+        assertEquals(rig.options.single().second, rig.found.last().second)   // the end's list is the last one reported
+        assertTrue(rig.options.single().third)
+    }
+
+    @Test fun bulk_run_reports_nothing_early_without_a_listener() = runTest {
+        val rig = Rig(this)
+        rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png"))
+        rig.http.on("https://m/", OK_PNG)
+        rig.engine.run(ScrapeState(items = listOf(Scrape.item(tetris))), { tetris }) {}   // no found: as before
+        assertEquals(1, rig.options.single().second.size)
+        assertTrue(rig.found.isEmpty())
     }
 
     @Test fun no_options_reported_when_nothing_asked() = runTest {
