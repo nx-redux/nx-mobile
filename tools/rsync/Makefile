@@ -1,7 +1,7 @@
 # rsync for netplay's save copy (nx-redux wizard_sync.c's command lines), cross-built with the Android NDK as a PIE
 # executable and shipped as jniLibs/arm64-v8a/librsync_exec.so (Android only executes files it extracted at install:
 # androidApp sets useLegacyPackaging). GPL-3.0-or-later; rsync's licence ships as licenses/rsync.txt. GNU make >= 3.82.
-NDK_VERSION ?= 26.1.10909125
+NDK_VERSION ?= 29.0.14206865
 NDK ?= $(or $(ANDROID_NDK_HOME),$(if $(ANDROID_HOME),$(ANDROID_HOME)/ndk/$(NDK_VERSION),$(HOME)/Library/Android/sdk/ndk/$(NDK_VERSION)))
 UNAME_S := $(shell uname -s)
 HOST_TAG := $(if $(filter Darwin,$(UNAME_S)),darwin-x86_64,linux-x86_64)

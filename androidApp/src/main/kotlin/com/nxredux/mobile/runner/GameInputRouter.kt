@@ -202,7 +202,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
 
     /**
      * The console button [keyCode] is for this game, as its keycode ([PhysicalKeys.toRunner]): the printed letter
-     * (Console Settings → Controller Layout names the pad's letters; Auto = the detected layout), through the core's
+     * (Controls → Controller Layout names the pad's letters; Auto = the detected layout), through the core's
      * letter swap on DC/NGP, or the key's position on the positional consoles (PlayStation, Sega, arcade...).
      */
     private fun positionOf(event: KeyEvent, keyCode: Int): Int {

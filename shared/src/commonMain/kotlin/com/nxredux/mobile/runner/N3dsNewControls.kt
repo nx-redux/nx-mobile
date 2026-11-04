@@ -1,7 +1,7 @@
 package com.nxredux.mobile.runner
 
 /**
- * Console Settings → New 3DS Controls: whether the on-screen 3DS pad draws ZL, ZR and the C-stick. Auto draws them for
+ * Controls → New 3DS Controls: whether the on-screen 3DS pad draws ZL, ZR and the C-stick. Auto draws them for
  * the games in [TITLE_IDS] / [GAME_CODES]: New 3DS-only games, games that use the New 3DS's C-stick, ZL or ZR, and
  * Circle Pad Pro games (the New 3DS's C-stick, ZL and ZR stand in for the Circle Pad Pro in those, and Azahar emulates the
  * Circle Pad Pro on ir:USER as well). A file whose title cannot be read (compressed, homebrew) counts as unlisted.

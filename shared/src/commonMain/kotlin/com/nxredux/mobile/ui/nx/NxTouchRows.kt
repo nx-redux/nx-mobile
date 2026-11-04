@@ -207,6 +207,7 @@ internal fun NxTouchRow(
     action: String? = null,
     below: (@Composable () -> Unit)? = null,
     leading: (@Composable () -> Unit)? = null,   // before the name and description (an add row's "+")
+    editing: Boolean = false,   // the pad is changing it ([NxSettingRow.editing]): an accent ring round the plate
     control: @Composable () -> Unit,
 ) {
     val colors = LocalNxColors.current
@@ -220,6 +221,7 @@ internal fun NxTouchRow(
             .then(if (selected) Modifier.onGloballyPositioned { NxHelpAnchor.row = NxHelpRow(label, it.boundsInWindow(), sizes.desc) } else Modifier)
             .clip(shape)
             .then(if (selected) Modifier.background(colors.accent.copy(alpha = SOFT_SELECTION_ALPHA), shape) else Modifier)   // role: a touch row's soft selection
+            .then(if (editing) Modifier.border(EDIT_RING, colors.accent, shape) else Modifier)
             .nxTapOrHold(onTap, onLongPress).padding(horizontal = NxOptionsInnerPad, vertical = TOUCH_ROW_AIR - TOUCH_ROW_GAP)
             .alpha(if (enabled) 1f else NX_DISABLED_ALPHA),   // role: a disabled row
         verticalArrangement = Arrangement.Center,
@@ -271,6 +273,29 @@ internal fun Modifier.nxTapOrHold(onTap: (() -> Unit)?, onLongPress: (() -> Unit
     onTap != null -> clickable(onClick = onTap)
     else -> this
 }
+
+/** The ring round a row's plate while the pad changes it ([NxTouchRow]'s editing). */
+private val EDIT_RING = 1.5.dp
+
+/**
+ * [content] (a row's control) with `<` and `>` in the accent either side while [editing] (the pad is changing it,
+ * LEFT / RIGHT step it); as it is otherwise.
+ */
+@Composable
+internal fun NxEditArrows(editing: Boolean, size: TextUnit, content: @Composable () -> Unit) {
+    if (!editing) { content(); return }
+    val accent = LocalNxColors.current.accent
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        NxValueText("<", size, accent)
+        Spacer(Modifier.width(EDIT_ARROW_GAP))
+        Box(Modifier.weight(1f, fill = false)) { content() }
+        Spacer(Modifier.width(EDIT_ARROW_GAP))
+        NxValueText(">", size, accent)
+    }
+}
+
+/** The room between an editing control and its arrows ([NxEditArrows]). */
+private val EDIT_ARROW_GAP = 6.dp
 
 /** A touch row's value text: one line, Semibold. */
 @Composable

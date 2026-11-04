@@ -39,8 +39,25 @@ class SystemButtonsPageTest {
         assertFalse(p.tap(key(KeyCodes.BUTTON_A)))
         assertFalse(p.tap(key(KeyCodes.BUTTON_B)))
         assertFalse(p.tap(key(KeyCodes.DPAD_DOWN)))
-        assertFalse(p.tap(key(KeyCodes.BACK)))
         assertFalse(p.lastOther)
+    }
+
+    @Test fun padBackIsAButton() {
+        // The Retroid Pocket Classic's home button sends BACK: the page keeps it ("not one of the three"), B goes back.
+        val p = page()
+        assertTrue(p.tap(key(KeyCodes.BACK)))
+        assertTrue(p.lastOther)
+        assertEquals(SystemButtonsPage.Phase.PRESS, p.phase)
+    }
+
+    @Test fun backBindsAsMenu() {
+        val p = page()
+        p.tap(key(KeyCodes.BUTTON_SELECT)); p.tap(key(KeyCodes.BUTTON_START))
+        p.pressedAll()
+        assertEquals(SystemRole.MENU, p.binding)
+        assertTrue(p.tap(key(KeyCodes.BACK)))
+        assertEquals(SystemButtonsPage.Phase.DONE, p.phase)
+        assertEquals(KeyCodes.BUTTON_MODE, SystemButtons.translate(p.map, model.key, KeyCodes.BACK, 0))
     }
 
     @Test fun holdingStartDoesNothing() {
@@ -73,16 +90,14 @@ class SystemButtonsPageTest {
         assertEquals(110, SystemButtons.translate(p.map, model.key, 0, 0x2f1))
     }
 
-    @Test fun bAndBackDontBind() {
-        for (cancel in listOf(KeyCodes.BUTTON_B, KeyCodes.BACK)) {
-            val p = page()
-            p.tap(key(KeyCodes.BUTTON_SELECT)); p.tap(key(KeyCodes.BUTTON_START))
-            p.pressedAll()
-            assertTrue(p.tap(key(cancel)))
-            assertEquals(SystemButtonsPage.Phase.PRESS, p.phase)
-            assertNull(p.binding)
-            assertEquals(SystemButtonMap(), p.map)
-        }
+    @Test fun bDoesntBind() {
+        val p = page()
+        p.tap(key(KeyCodes.BUTTON_SELECT)); p.tap(key(KeyCodes.BUTTON_START))
+        p.pressedAll()
+        assertTrue(p.tap(key(KeyCodes.BUTTON_B)))
+        assertEquals(SystemButtonsPage.Phase.PRESS, p.phase)
+        assertNull(p.binding)
+        assertEquals(SystemButtonMap(), p.map)
     }
 
     @Test fun pressHeldBeforeBindIsIgnored() {

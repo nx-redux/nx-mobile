@@ -91,6 +91,7 @@ import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.options.AudioOptions
+import com.nxredux.mobile.options.FrameSkipOptions
 import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.CoreConfig
@@ -328,7 +329,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var wiiGameCube = false
     override val isWii: Boolean get() = WiiOptions.appliesTo(gameTag) && !wiiGameCube
     override val isDolphin: Boolean get() = gameCoreId == DOLPHIN_ID
-    /** This launch asked the core for Vulkan (Console Settings → Graphics API): a failure to start it relaunches on GLES. */
+    /** This launch asked the core for Vulkan (Display → Graphics API): a failure to start it relaunches on GLES. */
     @Volatile private var launchedOnVulkan = false
     /**
      * This screen is being recreated to start the game again on OpenGL ES ([relaunchOnGles]): it writes no auto state
@@ -598,7 +599,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Debug only: a GAME test hook's game runs on a locked test device (NxTestResults.markShowWhenLocked).
         if (BuildConfig.DEBUG && com.nxredux.mobile.test.NxTestResults.takeShowWhenLocked(this)) {
             setShowWhenLocked(true); setTurnScreenOn(true)
-            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            testAwake = true
         }
         // Cross-fade in from the menu instead of the default slide-from-right: the bottom pad is
         // identical and in the same position in both screens, so a fade keeps it visually steady while
@@ -622,7 +623,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         showNameHold(savedInstanceState)
         dual.readPlayTotal()   // before this launch's own slices land: the header's total stays as it was
         volumeControlStream = AudioManager.STREAM_MUSIC   // volume keys set the game's (media) volume, even between sounds
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        syncKeepScreenOn()
         window.goImmersive()
         // Portrait: start the game below a top camera cutout. Returned unconsumed so children still get it.
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root)) { _, insets ->
@@ -787,8 +788,21 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         pushMicSource()
     }
 
+    // Debug only: a GAME test hook's locked test device stays awake whatever the menu does.
+    private var testAwake = false
+
+    /**
+     * The screen stays on while the game runs (cutscenes and attract screens get no input), not under the in-game menu:
+     * a paused game sleeps on Android's timeout. A live netplay session runs on under the menu, so it holds the screen too.
+     */
+    private fun syncKeepScreenOn() {
+        if (testAwake || !menuOpen || netplayGame?.live == true) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
     /** The opening menu holds the game ([InGameMenuController.openMenu]), as [focusPause] does. */
     override fun pauseForMenu() {
+        syncKeepScreenOn()
         syncMotionSensors()   // no motion while paused
         // netplay: native runs a session at speed 1 whatever frameSpeed says; a local pause stops this device's input instead.
         netplayGame?.takeIf { it.live }?.pause() ?: run { retroView?.frameSpeed = 0 }
@@ -800,6 +814,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /** The menu closed ([InGameMenuController.closeMenu]): the game plays on, unless the focus pause still holds it. */
     override fun resumeAfterMenu() {
+        syncKeepScreenOn()
         if (focusPaused) { syncMotionSensors(); pushMicSource(); return }   // another app has the focus: focusResume plays on later
         netplayGame?.takeIf { it.live }?.resume()   // netplay: input goes out again (see openMenu)
         if (!netplayStartFailed) {   // netplay: a failed start keeps the game paused behind its dialog
@@ -1522,7 +1537,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             withContext(Dispatchers.IO) {
                 // The name the core sees: an arcade zip in lowercase (fbneo matches the driver name case-sensitively).
                 val fileName = CoreRegistry.contentName(tag, romFileName)
-                // Console Settings → Graphics API: the core options for the API and whether the runner offers Vulkan.
+                // Display → Graphics API: the core options for the API and whether the runner offers Vulkan.
                 // Vulkan that could not start here before, or this is the relaunch after it did: OpenGL ES (VulkanFallback).
                 val vulkanFailed = intent.getBooleanExtra(EXTRA_FORCE_GLES, false) ||
                     descriptor?.id in AndroidAppSettings(this@GameActivity).vulkanFailedCores
@@ -1557,7 +1572,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     // GL driver messages and a frame probe to tag NXGL, with Settings → System → Debug log on at
                     // launch.
                     glDebugOutput = NxLog.enabled
-                    // Console Settings → Graphics API ([graphics]): Vulkan frames are bridged into the GLES presentation.
+                    // Display → Graphics API ([graphics]): Vulkan frames are bridged into the GLES presentation.
                     preferVulkan = graphics.preferVulkan
                     vulkanSwapchainFrames = graphics.swapchainFrames
                     // gpsp: never unload the core between games, so its recompiler cache stays mapped near it.
@@ -1741,6 +1756,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 view.getGameGeometryChanges().collect {
                     val g = view.getGameGeometry()
                     renderer.onCoreGeometry(g)
+                    followWiiShape(g)
                 }
             }
             renderer.relayoutFrontend()   // the core's geometry (a DS game's 256x384) is only known now
@@ -1915,7 +1931,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     // netplay: a relaunch would start without the session (it is gone), so the dialog says what to do. An
                     // ended link session's relaunch ([netplayLocal]) is a plain launch, which relaunches as any other.
                     if (intent.hasExtra(EXTRA_NETPLAY_ROLE) && !netplayLocal) {
-                        fail("Vulkan could not start for this game on this device. Set Console Settings → Graphics API to OpenGL ES.")
+                        fail("Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES.")
                     } else {
                         relaunchOnGles()
                     }
@@ -2154,9 +2170,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val res3dKeys = res3d?.keys.orEmpty()
         val old3d = res3dKeys.map { frontendValues[it] }
         frontendValues = values
-        // Console Settings → 3D Resolution (the menu, live): the new value goes at once, not as a size change.
+        // Display → 3D Resolution (the menu, live): the new value goes at once, not as a size change.
         if (setsRes3d() && res3dKeys.map { values[it] } != old3d) offerNds3d(sizeChange = false)
-        // Console Settings → Bottom screen (the menu, live): the picture may move. Posted, as for the Sega pad.
+        // Display → Bottom screen (the menu, live): the picture may move. Posted, as for the Sega pad.
         if (values[BottomScreenOptions.KEY] != oldBottomScreen) findViewById<View?>(R.id.root)?.post { dual.recheckPictureOn() }
         val segaSetting = values[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
         if (segaSetting != oldSegaSetting && PadMap.isSegaPadTag(gameTag)) applySegaPad(segaSetting)
@@ -2172,6 +2188,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         padLayout.padLandscapeAlpha.value = s.padLandscapeAlpha
         val view = retroView ?: return
         view.resamplingQuality = AudioOptions.qualityOf(values)
+        view.frameSkip = FrameSkipOptions.skipOf(values, gameTag)
         view.scaleMode = when (s.scaling) {
             ScreenScaling.NATIVE -> ScaleMode.INTEGER
             // Auto: the viewport is the picture (or its overlay box) as the renderer placed it; the game fits it.
@@ -2338,19 +2355,51 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** Takes the phone's attitude at the next reading as the Wiimote's level. */
     override fun recenterWiiMotion() { motionSensors?.recenter() }
 
+    /** The Wii shape chosen at launch ([wiiScreenOption]); null for any other console. */
+    private var wiiLaunchWide: Boolean? = null
+    /** The shape the pointer geometry is set for: the launch's, then the game's own ([followWiiShape]). */
+    private var wiiPointerWide: Boolean? = null
+    /** [WiiScreen.keptShapeNote] is said once per launch. */
+    private var wiiShapeNoted = false
+
     /**
-     * Console Settings → Wii Screen for a Wii game: Dolphin's widescreen system setting, chosen from the orientation the
-     * game starts in (games read it once at boot), and the touch pointer's geometry for that shape. Empty for any other
-     * console.
+     * Display → Wii Screen for a Wii game: Dolphin's widescreen system setting, chosen from the orientation the
+     * game starts in and the screen's shape (games read it once at boot), and the touch pointer's geometry for that
+     * shape. Empty for any other console.
      */
     private fun wiiScreenOption(): Map<String, String> {
         if (!WiiOptions.appliesTo(gameTag) || wiiGameCube) return emptyMap()
         val portrait = resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
-        val wide = WiiScreen.widescreen(frontendValues[WiiOptions.SCREEN], portrait)
-        val pointer = WiiScreen.pointerOptions(
-            wide, frontendValues[WiiOptions.POINTER_WIDTH], frontendValues[WiiOptions.POINTER_HEIGHT], frontendValues[WiiOptions.POINTER_OFFSET],
-        )
-        return mapOf(WiiScreen.CORE_KEY to WiiScreen.coreValue(wide)) + pointer
+        val m = resources.displayMetrics
+        val screenAspect = maxOf(m.widthPixels, m.heightPixels).toFloat() / minOf(m.widthPixels, m.heightPixels).coerceAtLeast(1)
+        val wide = WiiScreen.widescreen(frontendValues[WiiOptions.SCREEN], portrait, screenAspect)
+        wiiLaunchWide = wide
+        wiiPointerWide = wide
+        return mapOf(WiiScreen.CORE_KEY to WiiScreen.coreValue(wide)) + wiiPointerOptions(wide)
+    }
+
+    private fun wiiPointerOptions(wide: Boolean): Map<String, String> = WiiScreen.pointerOptions(
+        wide, frontendValues[WiiOptions.POINTER_WIDTH], frontendValues[WiiOptions.POINTER_HEIGHT], frontendValues[WiiOptions.POINTER_OFFSET],
+    )
+
+    /**
+     * A save state keeps the shape its game booted with, so a resumed Wii game can draw the other shape than the one
+     * chosen at launch: the core's frame aspect ([g], `[w, h, aspect, rotation]`) says which. The pointer geometry follows
+     * it (Dolphin takes it live), so a tap still lands under the finger, and a note says once why Wii Screen did not apply.
+     */
+    private fun followWiiShape(g: FloatArray) {
+        val launchWide = wiiLaunchWide ?: return
+        if (g.size < 3 || g[2] <= 0f) return
+        val wide = WiiScreen.isWide(g[2])
+        if (wide != wiiPointerWide) {
+            wiiPointerWide = wide
+            NxLog.i("GameActivity", "Wii game draws ${if (wide) "16:9" else "4:3"} (launched ${if (launchWide) "16:9" else "4:3"}): pointer follows")
+            applyOptions(wiiPointerOptions(wide).map { (k, v) -> Variable(k, v) })
+        }
+        if (!wiiShapeNoted) WiiScreen.keptShapeNote(wide, launchWide)?.let {
+            wiiShapeNoted = true
+            android.widget.Toast.makeText(this, it, android.widget.Toast.LENGTH_LONG).show()   // two lines: the short one ends too soon
+        }
     }
 
     /**
@@ -2631,10 +2680,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** The slot strip for [ss]: file listings and thumbnail bounds. Blocking I/O. */
     private fun readSlots(ss: SaveStates): List<SlotUi> = ss.slots().map { slotUi(it, "Slot ${it.index}") }
 
-    /** One slot as the strip shows it; the thumbnail's ref carries its mtime, so a new save reloads it. Blocking I/O. */
+    /**
+     * One slot as the strip shows it; the thumbnail's ref carries its stamp and the state's time, so a new save reloads
+     * it even when the screenshot kept its old modification time ([contentStamp]). Blocking I/O.
+     */
     private fun slotUi(s: SaveStates.Slot, label: String): SlotUi {
         val sub = if (s.occupied) formatSlotTime(s.timestampMillis) else "empty"
-        val thumb = s.thumb?.let { FileRefs.versioned(it.absolutePath, it.lastModified()) }
+        val thumb = s.thumb?.let { FileRefs.versioned(it.absolutePath, it.contentStamp() xor s.timestampMillis) }
         return SlotUi(
             label = label,
             subtitle = sub,

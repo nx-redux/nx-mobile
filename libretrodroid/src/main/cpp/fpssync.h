@@ -18,7 +18,9 @@
 #ifndef LIBRETRODROID_FPSSYNC_H
 #define LIBRETRODROID_FPSSYNC_H
 
+#include <atomic>
 #include <chrono>
+#include <optional>
 #include <thread>
 
 namespace libretrodroid {
@@ -33,9 +35,20 @@ public:
 
     void reset();
     unsigned advanceFrames();
+    unsigned advanceFrames(TimePoint now);   // nx-mobile: the clock injected (host tests)
+    TimePoint deadline() const { return lastFrame; }   // when this step's frame is due; wait() sleeps until it
+    // nx-mobile 2026-11-03: when the sleep timer wants this step's frame on screen, so the display shows every frame on a
+    // steady slot whatever the step's run time: its deadline + lead (the display's presentation deadline and a margin,
+    // the earliest a frame queued at the deadline can show; one frame when lead is 0). None under vsync or before a step.
+    std::optional<TimePoint> presentAt(std::chrono::microseconds lead) const;
     void wait();
     double getTimeStretchFactor();
     double getContentRefreshRate() const { return contentRefreshRate; }
+
+    // nx-mobile 2026-11-03: Frame skip. On (Auto): a device that cannot keep up runs two frames a step past
+    // MAX_LAG_FRAMES, holding the game's speed but showing one of the two. Off: always one frame a step; the lag past
+    // MAX_LAG_FRAMES is dropped, so every frame shows and the game runs slower (its audio may then run short).
+    static inline std::atomic<bool> frameSkip { true };   // set from the UI thread (the Frame Skip row)
 private:
 
     double screenRefreshRate;
@@ -43,8 +56,13 @@ private:
     bool useVSync;
     const double FPS_TOLERANCE = 5;
 
+    // nx-mobile 2026-11-03: how many whole frames the sleep timer may fall behind before it runs frames back to back.
+    static constexpr long long MAX_LAG_FRAMES = 2;
+    // ...and how far before it drops the rest of the lag (a stall), so catching up never runs for seconds.
+    static constexpr long long MAX_DROP_FRAMES = 8;
+
     const TimePoint MIN_TIME = TimePoint::min();
-    void start();
+    void start(TimePoint now);
 
     TimePoint lastFrame = MIN_TIME;
     Duration sampleInterval;

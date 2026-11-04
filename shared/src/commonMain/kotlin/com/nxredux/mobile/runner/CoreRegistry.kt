@@ -274,7 +274,7 @@ object CoreRegistry {
         // Its NDK build has no libretro VFS (plain fopen on the path): give it a real file.
         loadMode = LoadMode.REAL_PATH,
         // The Brick's MD, SEGACD and 32X paks' values (the rest of theirs are the core's defaults); picodrive_input1 and
-        // picodrive_input2 are set at launch and on a change from Console Settings → Controller Type (SegaPadType).
+        // picodrive_input2 are set at launch and on a change from Controls → Controller Type (SegaPadType).
         defaultOptions = mapOf(
             "picodrive_drc" to "enabled", "picodrive_sound_rate" to "44100",
             "picodrive_input1" to "6 button pad", "picodrive_input2" to "6 button pad",
@@ -411,8 +411,12 @@ object CoreRegistry {
     // descriptor in place, not a multi-GB copy into the cache. Its user dir is <save dir>/User/, so each console has its
     // own (Saves/WII/User, Saves/GC/User) and one's NAND (User/Wii) and memory cards (User/GC) are not seen by the other; a
     // GC disc played under WII (a loose GC image resolves to WII) uses WII's.
-    // Defaults: hardware renderer; dual core with the GPU thread synced (unsynced, NSMB Wii desynced the FIFO after the
-    // airship); async with skip-rendering (shaders compile in the background on the runner's shared contexts and an effect
+    // Defaults: hardware renderer; dual core with the GPU thread unsynced, as standalone Dolphin (no game in its
+    // GameSettings asks for SyncGPU). Synced it was ~3x the uneven frames in SMG2 on the Retroid Pocket Nova; the NSMB
+    // Wii FIFO desync after the opening airship that made us sync it (2026-10-13, an older pin) no longer happens: NSMB
+    // Wii past the airship and 1-1 and Paper Mario TTYD played unsynced on 3aac3f05, and NSMB Wii's resume point past the
+    // airship booted 15 times unsynced on b93001ed (2026-11-03; b93001ed adds only aspect and D3D11 changes). Synchronize
+    // GPU Thread stays a Console Setting for a game that needs it; async with skip-rendering (shaders compile in the background on the runner's shared contexts and an effect
     // whose shader is not ready is skipped for a moment, not drawn with GPU-heavy ubershaders, which made SMG2 lag on the
     // Fold); on-screen messages off. The orientation hotkeys are off because the app sets the controller type itself
     // (nx_wii_controller); for the same reason Wiimote Device stays "Set per port" (it would override every port's). Audio is pushed per frame (mode 0):
@@ -423,7 +427,7 @@ object CoreRegistry {
     private val dolphinOptions = mapOf(
         "dolphin_renderer" to "Hardware",
         "dolphin_main_cpu_thread" to "enabled",
-        "dolphin_sync_gpu" to "enabled",
+        "dolphin_sync_gpu" to "disabled",
         "dolphin_osd_enabled" to "disabled",
         "dolphin_shader_compilation_mode" to "3",
         "dolphin_hotkey_sideways_toggle" to "Disabled",
@@ -442,7 +446,7 @@ object CoreRegistry {
         "dolphin_log_dsplle_enabled", "dolphin_log_dsp_mail_enabled",
         "dolphin_hotkey_sideways_toggle", "dolphin_hotkey_upright_toggle", "dolphin_cheats_enabled",
         "dolphin_vr_mode", "dolphin_wiimote_default_device", "dolphin_log_popups_enabled",
-        // Console Settings → Wii Screen sets these at launch (WiiScreen): the shape, and the pointer geometry for it.
+        // Display → Wii Screen sets these at launch (WiiScreen): the shape, and the pointer geometry for it.
         "dolphin_widescreen", "dolphin_ir_yaw", "dolphin_ir_pitch", "dolphin_ir_offset",
     )
     private val dolphinWii = CoreDescriptor(

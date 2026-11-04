@@ -3,6 +3,7 @@ package com.nxredux.mobile.ui.nx
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.options.FrontendOptions
+import com.nxredux.mobile.options.OptionGroup
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -60,27 +61,43 @@ class InGameMenuSplitTest {
             assertEquals(PageKind.Root, panes.left.kind)
             assertEquals("Options", panes.left.rows[panes.left.selected].label)
             assertEquals(m.state.page, assertIs<MenuPaneContent.Page>(panes.right).page)
-            m.onRow("Frontend"); m.press(NxButton.A)
-            assertEquals(PageKind.Frontend, m.state.page.kind)
+            m.onRow("Display"); m.press(NxButton.A)
+            assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
             if (split) assertEquals(PageKind.Options, menuPanes(m.state, split)!!.left.kind) else assertNull(menuPanes(m.state, split))
         }
+    }
+
+    // A narrow portrait (the Flip): the Options words don't fit beside the root's, so the shortcuts stay and the page opens whole.
+    @Test fun inPortraitAnOptionsPageThatDoesNotFitBesideTheRootKeepsTheShortcutsAndOpensWhole() {
+        val m = model(split = false)
+        m.optionsBeside = false
+        m.onRow("Options")
+        assertEquals(MenuPaneContent.Panel, menuPanes(m.state, split = false, optionsBeside = false)!!.right)
+        assertTrue(menuTabsShown(m.state))
+        assertNull(m.press(NxButton.RIGHT))                  // the shortcuts beside the words, as from any other row
+        assertEquals(PanelFocus.Item(0), m.state.panelFocus)
+        m.press(NxButton.LEFT); m.press(NxButton.A)          // back on Options: A opens it
+        assertEquals(PageKind.Options, m.state.page.kind)
+        assertNull(menuPanes(m.state, split = false, optionsBeside = false))   // drawn whole
+        // Split, the rule never applies.
+        assertIs<MenuPaneContent.Page>(menuPanes(m.state, split = true, optionsBeside = false)!!.right)
     }
 
     @Test fun aDeeperPageSitsBesideItsParentOnTheRowThatOpenedIt() {
         val m = model()
         m.onRow("Options"); m.press(NxButton.A)
-        m.onRow("Frontend"); m.press(NxButton.A)
+        m.onRow("Display"); m.press(NxButton.A)
         val panes = menuPanes(m.state)!!
         assertFalse(panes.focusLeft)
         assertEquals(PageKind.Options, panes.left.kind)
-        assertEquals("Frontend", panes.left.rows[panes.left.selected].label)
-        assertEquals(PageKind.Frontend, assertIs<MenuPaneContent.Page>(panes.right).page.kind)
+        assertEquals("Display", panes.left.rows[panes.left.selected].label)
+        assertEquals(PageKind.Settings(OptionGroup.DISPLAY), assertIs<MenuPaneContent.Page>(panes.right).page.kind)
     }
 
     @Test fun adjustAndMessagePagesDrawWhole() {
         val m = model()
         m.onRow("Options"); m.press(NxButton.A)
-        m.onRow("Frontend"); m.press(NxButton.A)
+        m.onRow("Display"); m.press(NxButton.A)
         val visual = m.state.page.rows.indexOfFirst { (it as? MenuRow.Option)?.visual == true }
         m.activate(visual)
         assertIs<PageKind.Adjust>(m.state.page.kind)
@@ -89,19 +106,19 @@ class InGameMenuSplitTest {
         assertNull(menuPanes(m.state))
     }
 
-    @Test fun rightOnTheRootEntersThePanelAndOpensARowThatOpensAPageDeeper() {
+    @Test fun rightOnTheRootEntersTheShortcutsAndOpensARowThatOpensAPageDeeper() {
         val m = model()
         m.onRow("Continue")
         assertNull(m.press(NxButton.RIGHT))
         assertEquals(PageKind.Root, m.state.page.kind)
-        assertEquals(PanelFocus.Tabs, m.state.panelFocus)
+        assertEquals(PanelFocus.Item(0), m.state.panelFocus)
         m.press(NxButton.B)
         m.onRow("Options")
         m.press(NxButton.RIGHT)
         assertEquals(PageKind.Options, m.state.page.kind)
-        m.onRow("Frontend")
+        m.onRow("Display")
         m.press(NxButton.RIGHT)
-        assertEquals(PageKind.Frontend, m.state.page.kind)
+        assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
     }
 
     @Test fun rightStillChangesValuesWhenSplit() {
@@ -122,18 +139,37 @@ class InGameMenuSplitTest {
         assertNull(m.state.panelFocus)
     }
 
-    @Test fun rightOnASubmenuDeeperDoesNothingWhenNotSplit() {
+    // LEFT/RIGHT go between pages whether or not the menu splits: RIGHT opens a row's page, LEFT comes back.
+    @Test fun rightOpensASubmenuDeeperAndBComesBackWhenNotSplit() {
         val m = model(split = false)
         m.onRow("Options"); m.press(NxButton.A)
-        m.onRow("Frontend")
+        m.onRow("Display")
         assertNull(m.press(NxButton.RIGHT))
+        assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
+        assertNull(m.press(NxButton.B))   // one page: LEFT / RIGHT change its rows, B comes back
         assertEquals(PageKind.Options, m.state.page.kind)
+        assertEquals("Display", m.state.page.rows[m.state.page.selected].label)
+    }
+
+    // In two panes LEFT on any row of the right one (a setting too: it never changes a value) comes back to the left.
+    @Test fun leftOnASettingRowComesBackToTheLeftPaneWhenSplit() {
+        val m = model()
+        m.onRow("Options"); m.press(NxButton.RIGHT)
+        m.onRow("Display"); m.press(NxButton.RIGHT)
+        assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
+        assertNull(m.press(NxButton.RIGHT))                  // a setting: nothing (A changes it)
+        assertEquals(PageKind.Settings(OptionGroup.DISPLAY), m.state.page.kind)
+        assertNull(m.press(NxButton.LEFT))
+        assertEquals(PageKind.Options, m.state.page.kind)
+        assertNull(m.press(NxButton.LEFT))
+        assertEquals(PageKind.Root, m.state.page.kind)
+        assertEquals("Options", m.state.page.rows[m.state.page.selected].label)
     }
 
     @Test fun aTapOnTheParentPaneOpensThatRowInPlaceOfTheCurrentPage() {
         val m = model()
         m.onRow("Options"); m.press(NxButton.A)
-        m.onRow("Frontend"); m.press(NxButton.A)
+        m.onRow("Display"); m.press(NxButton.A)
         val shaders = m.state.stack[1].rows.indexOfFirst { it.label == "Shaders" }
         m.tapParent(PageKind.Options, shaders)
         assertEquals(listOf(PageKind.Root, PageKind.Options, PageKind.Shaders), m.state.stack.map { it.kind })
@@ -161,7 +197,7 @@ class InGameMenuSplitTest {
         val continueRow = m.state.page.rows.indexOfFirst { it.label == "Continue" }
         m.select(continueRow)
         m.panelEvent(GamePanelEvent.SelectTab(GamePanelTab.PLAYERS))
-        m.press(NxButton.RIGHT); m.press(NxButton.A)        // the Players tab's full page, beside the root
+        m.press(NxButton.A)                                 // off the Menu tab no focus is its tab row: the Players tab's full page, beside the root
         assertEquals(listOf(PageKind.Root, PageKind.Players), m.state.stack.map { it.kind })
         assertEquals(continueRow, m.state.stack[0].selected)
         // Continue is highlighted but not open: the tap comes back to the root on it, as on any other row.

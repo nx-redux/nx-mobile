@@ -47,10 +47,13 @@ internal fun GameSettingsModal(
     screen: Screen.EmulatorOptions, selectedIndex: Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onHint: (NxButton) -> Unit, onClose: () -> Unit,
     onSetting: (NxSettingEvent) -> Unit = {}, onTruncated: (String, Boolean) -> Unit = { _, _ -> },
+    editing: Int = -1,   // the row the pad is changing ([AppState.rowEdit]); -1 none
 ) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
-    val rows = remember(screen.rows) { screen.rows.map(::emulatorTouchRow) }   // not per d-pad move
+    val rows = remember(screen.rows, editing) {   // not per d-pad move
+        screen.rows.mapIndexed { i, r -> emulatorTouchRow(r).let { if (i == editing) it.copy(editing = true) else it } }
+    }
     BoxWithConstraints(
         Modifier.fillMaxSize().background(LocalNxColors.current.scrimModal).pointerInput(Unit) { detectTapGestures { onClose() } },
         contentAlignment = Alignment.Center,

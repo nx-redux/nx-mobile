@@ -5,6 +5,7 @@ import com.nxredux.mobile.runner.WiiMotion
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class WiiOptionsTest {
@@ -13,13 +14,13 @@ class WiiOptionsTest {
             listOf(
                 WiiOptions.CONTROLLER, WiiOptions.MOTION, WiiOptions.SCREEN, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT,
                 WiiOptions.POINTER_OFFSET, GraphicsApiOptions.KEY, BottomScreenOptions.KEY, PadOptions.LAYOUT,
-            ) + (SpeedOptions.table + AudioOptions.row).map { it.key },
+            ) + (SpeedOptions.table + AudioOptions.row + FrameSkipOptions.row).map { it.key },
             ConsoleSettings.tableFor("WII").map { it.key },
         )
     }
 
     @Test fun gameCubeGetsNeither() {
-        assertEquals(listOf(GraphicsApiOptions.KEY, BottomScreenOptions.KEY, PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.row).map { it.key }, ConsoleSettings.tableFor("GC").map { it.key })
+        assertEquals(listOf(GraphicsApiOptions.KEY, BottomScreenOptions.KEY, PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.row + FrameSkipOptions.row).map { it.key }, ConsoleSettings.tableFor("GC").map { it.key })
         assertFalse(WiiOptions.appliesTo("GC"))
         assertTrue(WiiOptions.appliesTo(" wii "))
     }
@@ -34,7 +35,7 @@ class WiiOptionsTest {
         assertEquals("Classic Controller", WiiOptions.controllerRow.labelOf(WiiController.CLASSIC))
     }
 
-    // Wii Screen: Auto is 4:3 when the game starts in portrait, 16:9 in landscape; a fixed choice wins either way.
+    // Wii Screen: Auto is 4:3 when the game starts in portrait, 16:9 in landscape on a wide screen; a fixed choice wins.
     @Test fun theWiiScreenFollowsTheOrientationTheGameStartsIn() {
         assertEquals(listOf(WiiScreen.AUTO, WiiScreen.FOUR_THREE, WiiScreen.WIDE), WiiOptions.screenRow.values)
         assertEquals(WiiScreen.AUTO, WiiOptions.screenRow.default)
@@ -44,6 +45,12 @@ class WiiOptionsTest {
         assertFalse(WiiScreen.widescreen(WiiScreen.FOUR_THREE, portrait = false))
         assertTrue(WiiScreen.widescreen(WiiScreen.WIDE, portrait = true))
         assertTrue(WiiScreen.widescreen(null, portrait = false))   // unknown = Auto
+        // Auto follows the screen's shape in landscape: a 4:3 handheld (Retroid Pocket Nova, 1280x960) or a 3:2 one is 4:3.
+        assertFalse(WiiScreen.widescreen(WiiScreen.AUTO, portrait = false, screenAspect = 1280f / 960f))
+        assertFalse(WiiScreen.widescreen(WiiScreen.AUTO, portrait = false, screenAspect = 1.5f))
+        assertTrue(WiiScreen.widescreen(WiiScreen.AUTO, portrait = false, screenAspect = 1920f / 1080f))
+        assertTrue(WiiScreen.widescreen(WiiScreen.AUTO, portrait = false, screenAspect = 2340f / 1080f))
+        assertTrue(WiiScreen.widescreen(WiiScreen.WIDE, portrait = false, screenAspect = 4f / 3f))   // a fixed choice wins
         assertEquals("disabled", WiiScreen.coreValue(widescreen = false))
         assertEquals("enabled", WiiScreen.coreValue(widescreen = true))
     }
@@ -87,5 +94,20 @@ class WiiOptionsTest {
         val keys = ConsoleSettings.all.map { it.key }
         assertEquals(keys.toSet().size, keys.size)
         assertTrue(WiiOptions.CONTROLLER in keys && WiiOptions.MOTION in keys)
+    }
+
+    // A save state keeps the shape its game booted with: the core's frame aspect tells it, and a note says why once.
+    @Test fun aResumedGameKeepsTheShapeItWasSavedIn() {
+        assertTrue(WiiScreen.isWide(16f / 9f))
+        assertFalse(WiiScreen.isWide(4f / 3f))
+        assertNull(WiiScreen.keptShapeNote(gameWide = true, launchWide = true))
+        assertEquals(
+            "This save is in 16:9. Wii Screen 4:3 applies when the game starts fresh.",
+            WiiScreen.keptShapeNote(gameWide = true, launchWide = false),
+        )
+        assertEquals(
+            "This save is in 4:3. Wii Screen 16:9 applies when the game starts fresh.",
+            WiiScreen.keptShapeNote(gameWide = false, launchWide = true),
+        )
     }
 }

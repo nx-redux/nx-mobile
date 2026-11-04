@@ -459,7 +459,14 @@ internal class DualScreenController(
         val view = retroView ?: return
         val want = secondSurface?.takeIf { secondDraws() }
         if ((want == pushedSecondSurface && !force) || (want != null && !view.isAttachedToWindow)) return
-        view.setSecondarySurface(want?.surface, want?.width ?: 0, want?.height ?: 0)
+        // The second surface's frames are stamped to show at a steady time from a presentation deadline: the shorter of its
+        // display's and this one's, the least latency. The Retroid Pocket Nova composes its DisplayPort output on the
+        // built-in 120 Hz cadence, so its 60 Hz deadline only added delay; a display with its own clock shows the frame
+        // at its next refresh from the stamp either way.
+        val second = presentation?.display?.presentationDeadlineNanos ?: 0L
+        val own = view.display?.presentationDeadlineNanos ?: 0L
+        val deadline = if (want == null) 0L else listOf(second, own).filter { it > 0 }.minOrNull() ?: 0L
+        view.setSecondarySurface(want?.surface, want?.width ?: 0, want?.height ?: 0, deadline)
         pushedSecondSurface = want
     }
 

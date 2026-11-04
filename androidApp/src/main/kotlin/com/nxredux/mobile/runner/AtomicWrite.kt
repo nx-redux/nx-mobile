@@ -24,3 +24,11 @@ fun File.writeAtomically(bytes: ByteArray) {
         throw e
     }
 }
+
+/**
+ * A stamp that changes when the file is rewritten, for an image ref's version ([com.nxredux.mobile.storage.FileRefs.versioned]):
+ * the modification time and the size together. A save state's screenshot (`.bmp`) renamed over the old one on shared storage
+ * can still show the old modification time to another reader (seen from adb on a Retroid Pocket Nova, Android 13, while the
+ * writing process saw the new one); two screenshots of different frames all but never have the same size.
+ */
+fun File.contentStamp(): Long = lastModified() xor (length() shl 24)

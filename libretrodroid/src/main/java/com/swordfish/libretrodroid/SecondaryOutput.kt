@@ -21,14 +21,16 @@ import android.opengl.EGL14
 import android.opengl.EGLConfig
 import android.opengl.EGLContext
 import android.opengl.EGLDisplay
+import android.opengl.EGLExt
 import android.opengl.EGLSurface
 import android.opengl.GLES20
 import android.view.Surface
 
 /**
- * A second display's [Surface], drawn from the GL thread's own context after each step: the frame's secondary regions
- * ([LibretroDroid.renderSecondary]) go to an EGL window surface made for it, then the main surface is made current again.
- * GL thread only.
+ * A second display's [Surface], drawn from the GL thread's own context: the frame's secondary regions go to an EGL window
+ * surface made for it, then the main surface is made current again. A software core's frame is drawn after each step
+ * ([LibretroDroid.renderSecondary]); a hw core's from inside its frame ([LibretroDroid.renderSecondaryInFrame], via
+ * GLRetroView.onCoreFrameDrawn), the only time its framebuffer is whole. GL thread only.
  */
 internal class SecondaryOutput {
     private var surface: Surface? = null
@@ -38,16 +40,21 @@ internal class SecondaryOutput {
     private var eglDisplay: EGLDisplay = EGL14.EGL_NO_DISPLAY
     private var eglSurface: EGLSurface = EGL14.EGL_NO_SURFACE
     private var swapIntervalSet = false
+    private var presentationDeadlineNanos = 0L   // the second display's; 0 = unknown, frames are not stamped
+
+    /** A surface is set and drawable. */
+    val active: Boolean get() = surface != null && !dropped && width > 0 && height > 0
 
     // Set when the surface went bad (or could not be made): nothing is drawn until a surface is set again.
     private var dropped = false
 
     /** A new target; null tears down. A different [surface] drops the old EGL surface here, on the GL thread. */
-    fun setSurface(surface: Surface?, width: Int, height: Int) {
+    fun setSurface(surface: Surface?, width: Int, height: Int, presentationDeadlineNanos: Long = 0L) {
         if (surface !== this.surface) destroyEglSurface()
         this.surface = surface
         this.width = width
         this.height = height
+        this.presentationDeadlineNanos = presentationDeadlineNanos
         dropped = false
     }
 
@@ -68,8 +75,16 @@ internal class SecondaryOutput {
         dropped = false
     }
 
-    /** Draws one frame on the second surface, if one is set; the main surface is current again afterwards. */
-    fun draw() {
+    // A frame drawn inside the core's frame waits here for its swap after the step (see draw's inFrame).
+    private var swapPending = false
+
+    /**
+     * Draws one frame on the second surface, if one is set; the main surface is current again afterwards. [inFrame]: from
+     * inside the core's frame (the step holds the core lock), so the lock-free render, and no swap yet: the swap and its
+     * stamp come once the step returns ([swapPending]), as the main surface's, so nothing waits inside retro_run. The core
+     * never draws into this surface meanwhile.
+     */
+    fun draw(inFrame: Boolean = false) {
         val target = surface ?: return
         if (dropped || width <= 0 || height <= 0) return
 
@@ -95,16 +110,57 @@ internal class SecondaryOutput {
         }
         try {
             if (!swapIntervalSet) {
-                // Never wait for the second display's vsync: the main surface paces the emulation.
+                // Never wait for the second display's vsync: the main surface paces the emulation, and the frames are
+                // stamped with when to show (stampAndSwap).
                 EGL14.eglSwapInterval(display, 0)
                 swapIntervalSet = true
             }
             GLES20.glViewport(0, 0, width, height)
-            LibretroDroid.renderSecondary(width, height)
-            if (!EGL14.eglSwapBuffers(display, eglSurface)) onEglError("eglSwapBuffers", drop = false)
+            if (inFrame) {
+                LibretroDroid.renderSecondaryInFrame(width, height)
+                swapPending = true
+            } else {
+                LibretroDroid.renderSecondary(width, height)
+                stampAndSwap(display)
+            }
         } finally {
             restore(display, mainDraw, mainRead, context)
         }
+    }
+
+    /** Stamps and swaps the frame drawn inside the core's frame, once the step has returned. */
+    fun swapPending() {
+        if (!swapPending) return
+        swapPending = false
+        if (dropped || eglSurface == EGL14.EGL_NO_SURFACE) return
+        val display = EGL14.eglGetCurrentDisplay()
+        val context = EGL14.eglGetCurrentContext()
+        val mainDraw = EGL14.eglGetCurrentSurface(EGL14.EGL_DRAW)
+        val mainRead = EGL14.eglGetCurrentSurface(EGL14.EGL_READ)
+        if (display == EGL14.EGL_NO_DISPLAY || context == EGL14.EGL_NO_CONTEXT) return
+        if (!EGL14.eglMakeCurrent(display, eglSurface, eglSurface, context)) {
+            onEglError("eglMakeCurrent", drop = true)
+            restore(display, mainDraw, mainRead, context)
+            return
+        }
+        try {
+            stampAndSwap(display)
+        } finally {
+            restore(display, mainDraw, mainRead, context)
+        }
+    }
+
+    /**
+     * nx-mobile 2026-11-03: a sleep-timer frame is stamped to show at its deadline + this display's presentation deadline
+     * + 1.5 ms (as the main surface's, with its own deadline), so it lands on a steady refresh whatever the step's run
+     * time, then swapped. eglSurface is current.
+     */
+    private fun stampAndSwap(display: EGLDisplay) {
+        val deadline = LibretroDroid.getFrameDeadlineNanos()
+        if (deadline > 0 && presentationDeadlineNanos > 0) {
+            EGLExt.eglPresentationTimeANDROID(display, eglSurface, deadline + presentationDeadlineNanos + STAMP_MARGIN_NANOS)
+        }
+        if (!EGL14.eglSwapBuffers(display, eglSurface)) onEglError("eglSwapBuffers", drop = false)
     }
 
     private fun restore(display: EGLDisplay, draw: EGLSurface, read: EGLSurface, context: EGLContext) {
@@ -161,6 +217,7 @@ internal class SecondaryOutput {
     }
 
     private fun forgetEglSurface() {
+        swapPending = false
         eglSurface = EGL14.EGL_NO_SURFACE
         eglDisplay = EGL14.EGL_NO_DISPLAY
         swapIntervalSet = false
@@ -168,5 +225,6 @@ internal class SecondaryOutput {
 
     private companion object {
         const val TAG = "SecondaryOutput"
+        const val STAMP_MARGIN_NANOS = 1_500_000L
     }
 }

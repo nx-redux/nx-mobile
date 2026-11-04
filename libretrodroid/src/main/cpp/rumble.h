@@ -18,6 +18,7 @@
 #ifndef LIBRETRODROID_RUMBLE_H
 #define LIBRETRODROID_RUMBLE_H
 
+#include <functional>
 #include <array>
 
 #include "rumblestate.h"

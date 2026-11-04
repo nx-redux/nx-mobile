@@ -34,6 +34,9 @@
 #include "video.h"
 #include "renderers/renderer.h"
 #include "fpssync.h"
+#include "threadlist.h"
+#include "presenttime.h"
+#include <unistd.h>
 #include "input.h"
 #include "rumble.h"
 #include "shadermanager.h"
@@ -505,6 +508,7 @@ void LibretroDroid::loadGameFromPath(const std::string& gamePath) {
         game_info.size = file.size;
     }
 
+    threadsBeforeLoad = ThreadList::list();   // nx-mobile ADPF: the core's threads are the ones after this
     bool result = core->retro_load_game(&game_info);
     if (!result) {
         LOGE("Cannot load game. Leaving.");
@@ -533,6 +537,7 @@ void LibretroDroid::loadGameFromBytes(std::unique_ptr<int8_t[]> data, size_t siz
         game_info.size = size;
     }
 
+    threadsBeforeLoad = ThreadList::list();   // nx-mobile ADPF: the core's threads are the ones after this
     bool result = core->retro_load_game(&game_info);
     if (!result) {
         LOGE("Cannot load game. Leaving.");
@@ -579,6 +584,7 @@ void LibretroDroid::loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles) 
         virtualFiles[0].releaseFD();
     }
 
+    threadsBeforeLoad = ThreadList::list();   // nx-mobile ADPF: the core's threads are the ones after this
     bool result = core->retro_load_game(&game_info);
     if (!result) {
         LOGE("Cannot load game. Leaving.");
@@ -651,6 +657,8 @@ void LibretroDroid::destroy() {
     fpsSync = nullptr;
     audio = nullptr;
     input = nullptr;
+    perfHint.close();   // nx-mobile ADPF
+    perfHintSteps = 0;
 
     Environment::getInstance().deinitialize();
     // Reset on unload only (initialize() runs deinitialize() too): the next core never sees a previous game's motion; the host sets it before each launch.
@@ -660,8 +668,30 @@ void LibretroDroid::destroy() {
     TeardownContext::forget();
 }
 
+// nx-mobile 2026-11-03 (ADPF): two seconds in (the core has started its threads by then) open a session for the GL
+// thread and the emulation threads started since the load (not audio, Java or binder ones), with one content frame
+// as the budget; then report each running step's work
+// (its run and draw, not the pacing sleep). A step that ran two frames reports both against one frame's budget, which is
+// the point: it was late.
+void LibretroDroid::updatePerfHint(std::chrono::steady_clock::time_point stepStart, unsigned runs) {
+    if (!fpsSync || runs == 0) return;
+    const auto budget = static_cast<int64_t>(1e9 / fpsSync->getContentRefreshRate());
+    if (!perfHint.isOpen()) {
+        // Tried at 2, 4 and 8 seconds: a listed thread that exits before the session is made fails the whole request.
+        ++perfHintSteps;
+        if (perfHintSteps != 120 && perfHintSteps != 240 && perfHintSteps != 480) return;
+        auto threads = ThreadList::emulation(ThreadList::added(threadsBeforeLoad, ThreadList::list()));
+        threads.push_back(gettid());
+        perfHint.open(threads, budget);
+        return;
+    }
+    perfHint.updateTarget(budget);
+    perfHint.report(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - stepStart).count());
+}
+
 void LibretroDroid::resume() {
     LOGD("Performing libretrodroid resume");
+    hitchResetPending = true;
 
     inputResetPending = true;
 
@@ -685,6 +715,23 @@ void LibretroDroid::pause() {
 
 void LibretroDroid::step() {
     std::unique_lock<std::mutex> lock(coreLock);
+    // nx-mobile: timed once the core lock is held, so an off-thread save's hold on it never counts as the core's work.
+    const auto stepStart = std::chrono::steady_clock::now();
+    // nx-mobile diag: a step that stayed on screen too long, split into its parts (Debug log only).
+    if (hitchResetPending.exchange(false)) hitchProbe.reset();
+    if (fpsSync) {
+        const double frameMs = 1000.0 / fpsSync->getContentRefreshRate();
+        if (auto hitch = hitchProbe.begin(stepStart, frameMs)) {
+            LOGW("NXHITCH period=%.1f run=%.1f render=%.1f wait=%.1f outside=%.1f frames=%u screen=%.2f content=%.3f",
+                 hitch->periodMs, hitch->runMs, hitch->renderMs, hitch->waitMs, hitch->outsideMs, hitch->frames,
+                 screenRefreshRate, fpsSync->getContentRefreshRate());
+        }
+        if (hitchProbe.steps() % 600 == 0) {
+            const auto run = hitchProbe.takeRunStats();
+            LOGW("NXHITCH summary steps=%lu hitches=%lu run_avg=%.2f run_worst=%.1f", hitchProbe.steps(),
+                 hitchProbe.hitches(), run.averageMs, run.worstMs);
+        }
+    }
 
     LOGD("Stepping into retro_run()");
 
@@ -726,6 +773,7 @@ void LibretroDroid::step() {
     unsigned runs = frames * speed;
     if (rewinding) {
         runs = stepRewinding(frameSeconds);
+        hitchProbe.ranCore(HitchProbe::Clock::now(), runs);
     } else {
         if (fastForward) {
             runs = fastForwardPacer.framesFor(std::chrono::steady_clock::now());
@@ -741,6 +789,7 @@ void LibretroDroid::step() {
             if (!np && !lk) rewind.capture(rewindSerialize);
         }
         rewindPlayed += runs;   // the probe's clock (RewindProbe): a paused step plays none
+        hitchProbe.ranCore(HitchProbe::Clock::now(), runs);
         if (speed > 0) rewindState = (np || lk) ? REWIND_STATUS_OFF : rewind.enabled() ? REWIND_STATUS_READY : offStatus();
     }
     auto& achievements = Achievements::getInstance();
@@ -758,14 +807,30 @@ void LibretroDroid::step() {
         }
     }
 
+    hitchProbe.rendered(HitchProbe::Clock::now());
+    if (!fastForward) updatePerfHint(stepStart, runs);   // FF runs many frames against one frame's budget
+    if (runs == 0) hitchProbe.reset();   // paused or an FF step with nothing due: its gap is no hitch
+
     // The frame sleep runs without the core lock, so achievements and the off-thread save calls aren't held up by it.
     lock.unlock();
+    frameDeadlineNanos = 0;   // set below for a sleep-timer frame only
     if (fastForward) {
         auto ahead = fastForwardPacer.sleepFor(std::chrono::steady_clock::now());
         if (ahead > Duration::zero()) std::this_thread::sleep_for(ahead);
     } else if (fpsSync) {
         fpsSync->wait();
+        // nx-mobile 2026-11-03: the sleep timer's frame goes on screen at a steady time (its deadline + the display's
+        // presentation deadline and a margin: no later than a frame queued then could show), not at the first refresh
+        // after this step happened to end (8/25 ms frames of a 60 fps game on a 120 Hz screen).
+        if (runs > 0) {
+            if (auto at = fpsSync->presentAt(std::chrono::microseconds(presentationLeadMicros.load()))) PresentTime::set(*at);
+        }
+        // The second surface stamps its frame from the same deadline with its own display's lead (SecondaryOutput).
+        frameDeadlineNanos = (runs > 0 && fpsSync->presentAt(std::chrono::microseconds(0)))
+            ? std::chrono::duration_cast<std::chrono::nanoseconds>(fpsSync->deadline().time_since_epoch()).count() : 0;
     }
+    hitchProbe.waited(HitchProbe::Clock::now());
+    if (fastForward) hitchProbe.reset();
     lock.lock();
 
     // A core that changed its frame rate mid-game (SET_SYSTEM_AV_INFO) is paced at the new rate from the next step.
@@ -1077,6 +1142,8 @@ void LibretroDroid::handleVideoRefresh(
             if (video->rendersInVideoCallback()) {
                 video->renderFrame();
                 if (vulkan) VulkanBridge::get().afterGlDraw();
+                // nx-mobile 2026-11-03: the second surface gets the frame now, while it is whole (see setFrameDrawnHook).
+                if (frameDrawnHook && data != nullptr) frameDrawnHook();   // a duplicate leaves its last frame up
             }
         }
     } catch (...) {
@@ -1342,6 +1409,15 @@ void LibretroDroid::setSecondaryRegions(std::vector<ScreenRegion> regions) {
 
     if (video) {
         video->updateSecondaryRegions(secondaryRegions);
+    }
+}
+
+void LibretroDroid::renderSecondaryInFrame(unsigned width, unsigned height) {
+    if (!video) return;
+    try {
+        video->renderSecondary(width, height);
+    } catch (const std::exception& e) {
+        LOGE("Error rendering the second screen: %s", e.what());
     }
 }
 

@@ -15,7 +15,7 @@ import com.nxredux.mobile.ui.nx.HintTouch
 import com.nxredux.mobile.ui.nx.GamePanelModel
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxRichRow
-import com.nxredux.mobile.ui.nx.NxSettingControl
+import com.nxredux.mobile.ui.nx.valueHints
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.NxTone
@@ -52,21 +52,17 @@ data class RaSettingsRow(
 }
 
 /**
- * The settings page's hints for the highlighted row, as Settings' ([settingsHints]): a value row LEFT Change, with A
- * Toggle on a switch or Choose on a picker (none on segments, where A steps); an action A Select; a dimmed row Back
- * only. X Info while its description is cut off or says more ([info]).
+ * The settings page's hints for the highlighted row, as Settings' ([settingsHints]): a value row's [valueHints] (on one
+ * page LEFT Change; A Toggle on a switch, Choose on a picker, on two panes Change on segments); an action A Select; a
+ * dimmed row Back only. X Info while its description is cut off or says more ([info]).
  */
-fun raSettingsHints(row: RaSettingsRow?, touch: NxSettingRow? = null, info: Boolean = false): List<Hint> {
+fun raSettingsHints(row: RaSettingsRow?, touch: NxSettingRow? = null, info: Boolean = false, twoPane: Boolean = false): List<Hint> {
     val back = Hint(NxButton.B, "Back")
     val x = if (info) listOf(Hint(NxButton.X, "Info")) else emptyList()
     return when {
         row == null || !row.selectable -> listOf(back)
         !row.enabled -> listOf(back) + x
-        touch != null && touch.choices.size >= 2 -> listOf(back, Hint(NxButton.LEFT, "Change")) + when (touch.control) {
-            NxSettingControl.SWITCH -> listOf(Hint(NxButton.A, "Toggle"))
-            NxSettingControl.PICKER -> listOf(Hint(NxButton.A, "Choose"))
-            else -> emptyList()
-        } + x
+        touch != null && touch.choices.size >= 2 -> listOf(back) + touch.valueHints(twoPane) + x
         else -> listOf(back, Hint(NxButton.A, "Select")) + x
     }
 }

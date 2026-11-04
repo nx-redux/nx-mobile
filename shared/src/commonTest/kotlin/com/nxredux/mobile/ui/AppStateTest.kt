@@ -138,6 +138,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import com.nxredux.mobile.ui.nx.NxPadA
+import com.nxredux.mobile.ui.nx.padA
 import kotlin.test.assertSame
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -6335,6 +6337,52 @@ class AppStateTest {
         return state to settings
     }
 
+    /** The first row of the open Settings page that A starts changing in two panes ([NxPadA.EDIT]), and its value's index. */
+    private fun editRow(state: AppState): Int {
+        val s = assertIs<Screen.Settings>(state.screen.value)
+        return s.rows.indices.first { settingsTouchRow(s.rows[it], s.choices.getOrNull(it), s.section).padA == NxPadA.EDIT }
+    }
+
+    private fun valueIndex(state: AppState, row: Int): Int {
+        val s = assertIs<Screen.Settings>(state.screen.value)
+        return settingsTouchRow(s.rows[row], s.choices.getOrNull(row), s.section).index
+    }
+
+    @Test fun split_a_starts_changing_a_row_left_right_step_it_and_b_stops() = runTest {
+        val (state, _) = splitSettings()
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.onButton(NxButton.A)   // Appearance
+        val row = editRow(state)
+        state.select(row)
+        val before = valueIndex(state, row)
+        state.onButton(NxButton.A)                                         // changing it: nothing changed yet
+        assertEquals(RowEdit(SettingsSection.APPEARANCE, row), state.rowEdit.value)
+        assertEquals(before, valueIndex(state, row))
+        state.onButton(NxButton.RIGHT)                                     // RIGHT steps it
+        assertNotEquals(before, valueIndex(state, row))
+        state.onButton(NxButton.LEFT)                                      // LEFT steps it back, still on the page
+        assertEquals(before, valueIndex(state, row))
+        state.onButton(NxButton.B)                                         // B stops changing, the page stays
+        assertNull(state.rowEdit.value)
+        assertEquals(SettingsSection.APPEARANCE, assertIs<Screen.Settings>(state.screen.value).section)
+        state.onButton(NxButton.RIGHT)                                     // not changing: RIGHT leaves it alone
+        assertEquals(before, valueIndex(state, row))
+    }
+
+    @Test fun one_page_left_right_change_a_row_at_once() = runTest {
+        val (state, _) = splitSettings()
+        state.onSettingsSplit(false)
+        state.openSettings(SettingsSection.APPEARANCE)
+        val row = editRow(state)
+        state.select(row)
+        val before = valueIndex(state, row)
+        state.onButton(NxButton.RIGHT)                                     // no change step on one page
+        assertNotEquals(before, valueIndex(state, row))
+        assertNull(state.rowEdit.value)
+        state.onButton(NxButton.LEFT)
+        assertEquals(before, valueIndex(state, row))
+        assertEquals(SettingsSection.APPEARANCE, assertIs<Screen.Settings>(state.screen.value).section)
+    }
+
     @Test fun split_right_or_a_moves_into_the_category_and_b_comes_back_on_it() = runTest {
         val (state, _) = splitSettings()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN)   // Appearance, live in the right pane
@@ -6359,13 +6407,13 @@ class AppStateTest {
         assertIs<Screen.SettingsMenu>(state.screen.value)
     }
 
-    @Test fun split_left_on_a_row_without_a_value_stays_in_the_right_pane() = runTest {
+    @Test fun split_left_on_a_page_goes_back_to_the_sections() = runTest {
         val (state, _) = splitSettings()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
         state.select(3)                                                 // Reset to defaults: no value
-        state.onButton(NxButton.LEFT)
-        assertEquals(SettingsSection.APPEARANCE, assertIs<Screen.Settings>(state.screen.value).section)
-        assertEquals(3, state.selection.value.index)
+        state.onButton(NxButton.LEFT)                                   // two panes: LEFT is the left pane, as B
+        assertIs<Screen.SettingsMenu>(state.screen.value)
+        assertEquals(2, state.selection.value.index)                    // on Appearance
     }
 
     @Test fun split_sub_pages_open_in_the_right_pane_and_b_goes_up_one_level_then_left() = runTest {
