@@ -59,6 +59,27 @@ class NxCarbonPackTest {
     private val gbSet = setOf("DPAD", "A", "B", "X", "Y", "SELECT", "START", "MENU")
     private val gbaSet = gbSet + setOf("L", "R", "L2", "R2")
 
+    // The screen hole's rounded corners are in the frame's picture: every corner of every glass must fall in a frame part
+    // drawn as it is, never in an edge stretched from a 2 px slice (the corner then comes out square and the board shows
+    // through it, as the cover's game frame did under its thick strip border)
+    @Test
+    fun glassCornersAreNeverInAStretchedFrameEdge() {
+        val windows = listOf(Triple(1248, 1972, null), Triple(1080, 2520, null), Triple(1848, 2448, null), Triple(1848, 2448, 1236f), Triple(2520, 1080, null), Triple(2448, 1848, null))
+        for (v in listOf(SkinVariant.SINGLE, SkinVariant.GB, SkinVariant.GBA, SkinVariant.DS)) for ((w, h, hinge) in windows) {
+            val p = SkinChoice.place(pack, w, h, 420, false, v == SkinVariant.DS, if (v == SkinVariant.DS) null else 240f to 160f, hinge,
+                foldable = w == 1848 || w == 2448, variant = v) ?: continue
+            for (g in p.glasses.filter { it.corner > 0f }) {
+                val r = g.rect; val c = g.corner
+                val corners = listOf(r.x to r.y, r.x + r.width - c to r.y, r.x to r.y + r.height - c, r.x + r.width - c to r.y + r.height - c)
+                for ((cx, cy) in corners) for (pc in p.pieces.filter { it.src.width == 2f || it.src.height == 2f }) {
+                    val d = pc.dst
+                    val overlap = d.x < cx + c - 0.5f && cx + 0.5f < d.x + d.width && d.y < cy + c - 0.5f && cy + 0.5f < d.y + d.height
+                    assertTrue(!overlap, "${p.spec.id} ${w}x$h ${g.id} corner ($cx, $cy) in a stretched edge $d")
+                }
+            }
+        }
+    }
+
     @Test
     fun gameBoyLayoutsHaveTheirButtonsInEveryFamily() {
         for ((v, ids) in mapOf(SkinVariant.GB to gbSet, SkinVariant.GBA to gbaSet)) {

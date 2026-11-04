@@ -165,9 +165,13 @@ object SkinSolver {
         val fx = left + (roomW - fw) / 2f
         val fy = roomTop + (roomH - fh)   // down against what is under it: the spare height goes above
         val pieces = ArrayList<SkinPiece>()
-        // the frame: corners as drawn, straight edges stretched from the 2 px slice at their middle (the glass, a hole, skipped)
-        val cl = maxOf(bl, frame.corner.toFloat()); val ct = maxOf(bt, frame.corner.toFloat())
-        val cr = maxOf(br, frame.corner.toFloat()); val cb = maxOf(bb, frame.corner.toFloat())
+        // the frame: corners as drawn, straight edges stretched from the 2 px slice at their middle (the glass, a hole, skipped).
+        // Each drawn border reaches past the glass's edge by its corner radius, so the hole's rounded corners are drawn
+        // as they are (a border thicker than the frame's corner, as under the strip, would start right at the glass and
+        // stretch the corner's curve into a square: the board then shows through)
+        val gc = g.corner.toFloat()
+        val cl = maxOf(bl + gc, frame.corner.toFloat()); val ct = maxOf(bt + gc, frame.corner.toFloat())
+        val cr = maxOf(br + gc, frame.corner.toFloat()); val cb = maxOf(bb + gc, frame.corner.toFloat())
         val sx0 = frame.sx.toFloat(); val sy0 = frame.sy.toFloat()
         val midX = sx0 + frame.w / 2f - 1f; val midY = sy0 + frame.h / 2f - 1f
         val colsSrc = listOf(sx0 to cl, midX to 2f, sx0 + frame.w - cr to cr)
