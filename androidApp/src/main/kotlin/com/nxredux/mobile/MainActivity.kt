@@ -487,7 +487,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
      */
     private fun appTopDisplay(): Int? {
         val second = secondScreens.current.value
-        val dual = state.dualMenu.value || TopScreenHost.active
+        val dual = state.displayDualMenu.value || TopScreenHost.active   // the skin's two screens: an app opens here
         return topScreenDisplay(dual, second != null && menuOnSecondFor(second), currentDisplayId(), second?.displayId)
     }
 

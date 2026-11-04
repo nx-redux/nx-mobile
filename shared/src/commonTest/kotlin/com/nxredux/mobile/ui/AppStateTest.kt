@@ -7067,6 +7067,26 @@ class AppStateTest {
         assertEquals(listOf("First", "Second"), f.state.gameDetailRa.value?.visible?.map { it.title })
     }
 
+    @Test fun skinDualMenuTurnsTheDualMenuOn() = runTest {
+        val f = panelFixture()
+        f.state.onSkinDualMenu(true)
+        assertTrue(f.state.dualMenu.value)
+        assertFalse(f.state.displayDualMenu.value)
+        f.state.openConsole("GB"); runCurrent()   // the details pane's feed runs as with a second display
+        assertEquals(listOf("First", "Second"), f.state.gameDetailRa.value?.visible?.map { it.title })
+    }
+
+    @Test fun displayOffKeepsSkinDual() = runTest {
+        val f = panelFixture()
+        f.state.onSkinDualMenu(true)
+        f.state.onDualMenu(false)   // the second display's sync, no display there
+        assertTrue(f.state.dualMenu.value)
+        f.state.onDualMenu(true)
+        assertTrue(f.state.displayDualMenu.value)
+        f.state.onDualMenu(false); f.state.onSkinDualMenu(false)
+        assertFalse(f.state.dualMenu.value)
+    }
+
     private val threeGbaRoms = FakeRomsSource(dirs = mapOf(
         "Home" to listOf("Roms"), "Home/Roms" to listOf("Game Boy Advance (GBA)"),
         "Home/Roms/Game Boy Advance (GBA)" to listOf("A.gba", "B.gba", "C.gba"),

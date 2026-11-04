@@ -975,8 +975,16 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     )
 
     private val _dualMenu = MutableStateFlow(false)
-    /** The main menu is on the second display ([onDualMenu]): the preview and the game list's details live there. */
+    /**
+     * The main menu is on two screens: a second display ([onDualMenu]) or the skin's two screens ([onSkinDualMenu]). The
+     * preview and the game list's details live on the top one.
+     */
     val dualMenu: StateFlow<Boolean> = _dualMenu.asStateFlow()
+
+    private val _displayDualMenu = MutableStateFlow(false)
+    /** The main menu's top screen is a second display (the presentation path), not the skin's top glass. */
+    val displayDualMenu: StateFlow<Boolean> = _displayDualMenu.asStateFlow()
+    private var skinDualMenu = false
 
     private val _secondList = MutableStateFlow<SecondList?>(null)
     /** While [dualMenu]: the highlighted console's or collection's games (the list A would open), for the second display; else null. */
@@ -999,6 +1007,18 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /** The platform tells the menu is on the second display ([active]) or back on the main one. */
     fun onDualMenu(active: Boolean) {
+        _displayDualMenu.value = active
+        applyDualMenu()
+    }
+
+    /** The menu skin shows its two screens ([active]: the top screen in its top glass, the menu below) or not. */
+    fun onSkinDualMenu(active: Boolean) {
+        skinDualMenu = active
+        applyDualMenu()
+    }
+
+    private fun applyDualMenu() {
+        val active = _displayDualMenu.value || skinDualMenu
         if (_dualMenu.value == active) return
         _dualMenu.value = active
         if (active) ra.closeRaPanel()   // the panel is a single-screen overlay: dual mode shows the details pane instead
