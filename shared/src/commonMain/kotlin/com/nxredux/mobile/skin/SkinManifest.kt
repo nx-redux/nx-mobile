@@ -245,6 +245,8 @@ enum class GlassScreen {
     @SerialName("stack") STACK,
     /** A one-screen console's picture. */
     @SerialName("picture") PICTURE,
+    /** The game panel: a one-screen game's bottom screen (the fold board), sized by its piece. */
+    @SerialName("panel") PANEL,
 }
 
 /** A screen spot: [x], [y], [w], [h] in the picture's px, showing [screen]; [corner]: its rounded corners' radius (picture px). */

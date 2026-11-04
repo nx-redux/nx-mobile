@@ -264,6 +264,7 @@ object SkinSolver {
         GlassScreen.TOP, GlassScreen.TOUCH -> DS_W to DS_H
         GlassScreen.STACK -> DS_W to 2f * DS_H
         GlassScreen.PICTURE -> picture?.takeIf { it.first > 0f && it.second > 0f }
+        GlassScreen.PANEL -> null
     }
 
     /** A [solve]: the [placement], or null; [tooBig]: a slice came out shorter than nothing (the glasses are too big). */
