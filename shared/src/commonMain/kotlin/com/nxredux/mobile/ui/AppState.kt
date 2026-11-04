@@ -167,6 +167,8 @@ import com.nxredux.mobile.ui.nx.LauncherChrome
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxSettingControl
+import com.nxredux.mobile.ui.nx.NxPadA
+import com.nxredux.mobile.ui.nx.padA
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.control
@@ -830,12 +832,17 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** The action a Shortcuts bind row is waiting on a press for; while set the platform hands raw keys to [captureKey] first. */
     val capturingShortcut: StateFlow<ShortcutAction?> = _capturingShortcut.asStateFlow()
 
+    private val _rowEdit = MutableStateFlow<RowEdit?>(null)
+    /** The row the pad is changing ([NxPadA.EDIT], [onRowEditButton]); another page drops it. */
+    val rowEdit: StateFlow<RowEdit?> = _rowEdit.asStateFlow()
+
     /**
      * Every screen write, here or in a controller sharing it: one that leaves the Shortcuts page, by B, another page,
      * Home or anything else, closes it ([closeShortcuts]), so no way out keeps a wait swallowing the menu's keys or
-     * drops the draft. Declared after the Shortcuts state it reads.
+     * drops the draft. Declared after the Shortcuts and row-edit state it reads.
      */
     private val _screen: MutableStateFlow<Screen> = WatchedStateFlow(MutableStateFlow(Screen.Loading)) { s ->
+        if (_rowEdit.value?.key != rowEditKey(s)) _rowEdit.value = null
         if ((s as? Screen.Settings)?.section != SettingsSection.SHORTCUTS && (shortcutDraft != null || _capturingShortcut.value != null)) closeShortcuts()
         if ((s as? Screen.Settings)?.section != SettingsSection.SYSTEM_BUTTONS) systemButtonWaiting = null
     }
@@ -2736,7 +2743,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         if (repeat) return true
         systemButtonsHeld = systemButtonsHeld + model.key
         systemButtonWaiting = null
-        if (keyCode != KeyCodes.BUTTON_B && keyCode != KeyCodes.BACK) {
+        // B cancels; the pad's Back binds like any button (a Retroid Pocket Classic's home button sends it).
+        if (keyCode != KeyCodes.BUTTON_B) {
             deps.settings.systemButtons = SystemButtons.encode(SystemButtons.bind(systemButtonMap(), pad.key, role, PhysicalKey.of(keyCode, scanCode)))
         }
         refreshSettings()
@@ -4093,6 +4101,33 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         else -> null
     }
 
+    /**
+     * The pad on a page of setting rows ([rowEditKey]) drawn beside another ([rowEditTwoPane]); one page keeps LEFT /
+     * RIGHT for its values (the page's own handling). Two panes: LEFT and RIGHT go between pages (LEFT as B; RIGHT opens a `›`
+     * row, as A) and never change a value. A on a row of segments, swatches or a stepped value ([NxPadA.EDIT]) starts
+     * changing it: then LEFT / RIGHT step it (the page's own LEFT / RIGHT), A or B stop, UP / DOWN stop and move. A
+     * switch's A flips it and a picker's opens it, as before (the page's own A). True when the press is taken here.
+     */
+    private fun onRowEditButton(s: Screen, button: NxButton): Boolean {
+        val key = rowEditKey(s) ?: return false
+        if (rowEditBlocked(s)) return false
+        if (!rowEditTwoPane(s, settingsSplit)) { _rowEdit.value = null; return false }
+        val i = _selection.value.index
+        if (_rowEdit.value == RowEdit(key, i)) return when (button) {
+            NxButton.A, NxButton.B -> { _rowEdit.value = null; true }
+            NxButton.UP, NxButton.DOWN -> { _rowEdit.value = null; false }
+            else -> false   // LEFT / RIGHT: the page steps the value; X: its info
+        }
+        _rowEdit.value = null
+        val row = settingTouchRow(i)
+        return when (button) {
+            NxButton.A -> if (row?.padA == NxPadA.EDIT) { _rowEdit.value = RowEdit(key, i); true } else false
+            NxButton.LEFT -> { onButton(NxButton.B); true }
+            NxButton.RIGHT -> { if (row?.opens == true) onButton(NxButton.A); true }
+            else -> false
+        }
+    }
+
     /** Whether X opens the selected Settings row's info: its line is cut off on the row, or a fuller text is behind it. */
     private fun selectedSettingShowsInfo(): Boolean {
         val r = settingTouchRow(_selection.value.index) ?: return false
@@ -5062,10 +5097,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 if (row.kind == SettingsKind.SHORTCUT_BIND) row.shortcut?.let { setShortcut(it, null) }   // back to None
                 else if (selectedSettingShowsInfo()) showSettingInfo(_selection.value.index)
             }
-            // NX Redux ITEM_CYCLE: every value row steps on LEFT/RIGHT too (A steps forward). A default emulator steps
-            // through its console's tags.
+            // A value row being changed ([onRowEditButton]) steps on LEFT/RIGHT; a default emulator steps through its
+            // console's tags. Otherwise LEFT / RIGHT go between pages there.
             NxButton.LEFT, NxButton.RIGHT -> if (s is Screen.SettingsMenu) {
-                // Two panes: RIGHT on a category moves into its page, like A. LEFT never leaves a page (B does).
+                // Two panes: RIGHT on a category moves into its page, like A. One page has no pane to go to.
                 if (settingsSplit && button == NxButton.RIGHT) openSelected()
             } else (s as? Screen.Settings)?.rows?.getOrNull(_selection.value.index)?.let { row ->
                 if (row.enabled) settingValue(row)?.change(if (button == NxButton.LEFT) -1 else 1)   // a dimmed row (one tag) stays
@@ -6799,6 +6834,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         dismissNoticeOnPress()
         (_screen.value as? Screen.Onboarding)?.let { onOnboardingButton(it, button); return }
         netplay?.takeIf { it.page.value != null }?.let { it.onButton(button); return }   // the Netplay sheet over a game list
+        if (onRowEditButton(_screen.value, button)) return
         _screen.value.takeIf { it is Screen.Settings || it is Screen.SettingsMenu }?.let { onSettingsButton(it, button); return }
         (_screen.value as? Screen.ToolApps)?.takeIf { it.menu == null }?.let { androidApps.onToolAppsButton(it, button); return }
         _screen.value.contextMenu?.let { contextMenus.onMenuButton(it, button); return }

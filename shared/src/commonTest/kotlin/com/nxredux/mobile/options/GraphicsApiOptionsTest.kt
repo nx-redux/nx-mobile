@@ -8,9 +8,9 @@ import kotlin.test.assertTrue
 
 class GraphicsApiOptionsTest {
     @Test fun wii_and_gamecube_offer_the_graphics_api_row() {
-        assertEquals(WiiOptions.table + GraphicsApiOptions.row, ConsoleSettings.tableFor("WII").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.row) })
+        assertEquals(WiiOptions.table + GraphicsApiOptions.row, ConsoleSettings.tableFor("WII").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row) })
         assertTrue(WiiOptions.screenRow in WiiOptions.table)
-        assertEquals(listOf(GraphicsApiOptions.row), ConsoleSettings.tableFor(" gc ").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.row) })
+        assertEquals(listOf(GraphicsApiOptions.row), ConsoleSettings.tableFor(" gc ").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row) })
         assertEquals(listOf("Auto", "OpenGL ES", "Vulkan"), GraphicsApiOptions.row.values.map(GraphicsApiOptions.row::labelOf))
         assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.row.default)
     }
@@ -19,7 +19,7 @@ class GraphicsApiOptionsTest {
         listOf("WII", "GC", "PSP", "PSX", "N64", "DC", "3DS").forEach { assertTrue(GraphicsApiOptions.appliesTo(it), it) }
         listOf("PS", "GBA", "NDS", "SNES", "").forEach { assertFalse(GraphicsApiOptions.appliesTo(it), it) }
         assertTrue(ConsoleSettings.tableFor("PSX").any { it.key == GraphicsApiOptions.KEY })
-        assertEquals(N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + listOf(N3dsOptions.newControlsRow, GraphicsApiOptions.row), ConsoleSettings.tableFor("3DS").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.row) })
+        assertEquals(N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + listOf(N3dsOptions.newControlsRow, GraphicsApiOptions.row), ConsoleSettings.tableFor("3DS").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows) })
         assertTrue(ConsoleSettings.tableFor("PS").none { it.key == GraphicsApiOptions.KEY })
     }
 
@@ -27,7 +27,7 @@ class GraphicsApiOptionsTest {
     @Test fun exactly_the_rows_read_at_launch_are_marked() {
         val all = listOf("WII", "GC", "N64", "PSP", "PSX", "DC", "3DS", "NDS", "MD", "GBA").flatMap(ConsoleSettings::tableFor).distinct()
         assertEquals(
-            setOf(GraphicsApiOptions.KEY, WiiOptions.SCREEN, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT, WiiOptions.POINTER_OFFSET),
+            setOf(GraphicsApiOptions.KEY, WiiOptions.SCREEN, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT, WiiOptions.POINTER_OFFSET, AudioOptions.BUFFER),
             all.filter { it.atLaunch }.map { it.key }.toSet(),
         )
     }

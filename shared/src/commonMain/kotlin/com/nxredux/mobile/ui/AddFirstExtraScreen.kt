@@ -66,7 +66,7 @@ fun PickFolderScreen(
     SetupStepScreen(
         title, "Pick a home folder",
         listOf(
-            "An empty folder, or one NX Redux used before. Roms and Bios are made inside it; games elsewhere in it move into Roms." +
+            "An empty folder, or one NX Redux used before. Roms and Bios are made inside it." +
                 // With All files access (the app's picker) the saves move into the home too ([homeFolderStatus]).
                 if (systemPicker) " Not the storage root, the SD card root or Download."
                 else " Your saves and save states live here too, so uninstalling the app keeps them. An SD card's root works too.",

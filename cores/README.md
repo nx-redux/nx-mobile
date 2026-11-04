@@ -3,7 +3,7 @@
 Builds the libretro cores bundled in the app from pinned upstream sources with the Android NDK.
 No binaries are tracked; `src/`, `build/`, `output/` and the app's `jniLibs/` are gitignored.
 
-Prerequisites: Android NDK 26.1.10909125 and cmake 3.22.1 from the Android SDK
+Prerequisites: Android NDK 29.0.14206865 and cmake 3.22.1 from the Android SDK
 (`~/Library/Android/sdk`), GNU make >= 3.82 (`brew install make`, then use `gmake`), git.
 
     gmake check-tools      # find NDK, cmake, ninja, llvm-readelf
@@ -61,8 +61,8 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | gearcoleco | drhelius/Gearcoleco | ed5095b3ce158ff0cf82395a61c2476505634894 | ndk-build (`platforms/libretro`; 0.7 MB stripped) | 0:10 |
 | fbneo | libretro/FBNeo | 6a5cc250c2db8d874a06ee86e302a2a78918b4c1 | ndk-build (`src/burner/libretro`, + `system/fbneo/`; 63.2 MB stripped) | 0:28 |
 | flycast (DC) | flyinghead/flycast | 5aa091fde632fb332c8d8c34e280d62dc951954c (v2.7) | cmake (dynarec, GLES3, patched; 6 submodules; 23.1 MB stripped) | 1:15 |
-| dolphin | libretro/dolphin | 3aac3f052f733f8df2f1616843a4d2e14002ed11 | cmake 3.30.3 (LTO, GLES, patched; 34 submodules; + system/dolphin-emu/Sys 14 MB; ~15 MB stripped) | 4:09 |
-| armsx2 (PS2) | ARMSX2/ARMSX2 | 023224576867a3846faedc7640911772c7783529 (2.9) | cmake 3.30.3, NDK r29 (own pin; upstream's dependency script into build/armsx2-deps; GLES/Vulkan; page size read at runtime, so 4 KB and 16 KB kernels; games open through the libretro VFS, no ISO copy; + system/pcsx2/resources 11 MB; 33.0 MB stripped) | 5:12 |
+| dolphin | libretro/dolphin | 32c61f9d0e933331bb7087ba57e96883241b4960 | cmake 3.30.3 (LTO, GLES, patched; 34 submodules; + system/dolphin-emu/Sys 14 MB; ~15 MB stripped) | 4:09 |
+| armsx2 (PS2) | ARMSX2/ARMSX2 | 023224576867a3846faedc7640911772c7783529 (2.9) | cmake 3.30.3 (upstream's dependency script into build/armsx2-deps; GLES/Vulkan; page size read at runtime, so 4 KB and 16 KB kernels; games open through the libretro VFS, no ISO copy; + system/pcsx2/resources 11 MB; 33.0 MB stripped) | 5:12 |
 
 melondsds (melonDS DS) replaced libretro/melonDS on 2026-09-27. Its eleven CMake FetchContent dependencies are pinned
 by full SHA in `MELONDSDS_DEPS` and cloned into `src/melondsds-deps/<name>-src` before configure, which runs with
@@ -108,6 +108,9 @@ interpreter) is the fallback if `mprotect` is refused.
 Since 2026-10-30 its `sound.c` part derives the PSG clock (length, envelope and sweep, 256 Hz) from `gpsp_sound_rate`:
 upstream fixes the per-sample step at the 65536 Hz value, so at 32768 Hz (the option's default) those units ran at half
 speed, and GB-style notes held twice as long (Pokémon FireRed sounded off; 65536 was fine). Emulation-only; states load.
+Since 2026-11-03 it also holds each DirectSound FIFO sample until the next (zero-order hold, as the hardware and mGBA
+do; upstream's linear interpolation cut 7-22 dB above 8 kHz and sounded dull), and reads the mix out x3/4, on mGBA's
+scale (the hardware's 10-bit output x48; upstream was 4/3 of it, 2.5 dB louder). States load.
 
 `patches/fceumm.patch` adds one `path_vfs_init` call next to its `filestream_vfs_init`, so the content check
 (`path_is_valid`) uses the runner's VFS v3 `stat` and a SAF file-descriptor ROM (`/rom/<name>`) loads without a cache
@@ -148,7 +151,7 @@ Build from a worktree with the main checkout's caches as roots, so the existing 
 `gmake -C cores SRC_ROOT=<main>/cores/src OUTPUT_ROOT=<main>/cores/output BUILD_ROOT=<main>/cores/build <core>`.
 Deviations (build flags only, no source patch): `mednafen_wswan_FLAGS = -C jni`, because its `jni/Android.mk` includes
 `../Makefile.common` relative to the working directory; `mednafen_supafaust_FLAGS = APP_CPPFLAGS=-Wno-register`, because
-`OwlResampler_neon.inc` uses the C++17-removed `register` specifier, which NDK 26's clang rejects by default.
+`OwlResampler_neon.inc` uses the C++17-removed `register` specifier, which the NDK's clang rejects by default.
 
 (2026-09-23, the original eight cores) Clean `gmake all` (re-clone + build all eight + verify + install): 17m49s total on an M-series Mac,
 run 2026-09-23. Per-core times are from `output/*.so` mtimes relative to the run start (cores build

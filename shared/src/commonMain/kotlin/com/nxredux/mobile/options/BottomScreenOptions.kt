@@ -3,7 +3,7 @@ package com.nxredux.mobile.options
 import com.nxredux.mobile.runner.BottomScreen
 
 /**
- * Console Settings → Bottom screen, for every console: which display is the touch screen when a second one is in use,
+ * Display → Bottom screen, for every console: which display is the touch screen when a second one is in use,
  * over Settings → Second screen → Bottom screen (System default follows it). A frontend `nx_` key, saved like the other
  * console rows; GameActivity moves the picture live when it changes.
  */

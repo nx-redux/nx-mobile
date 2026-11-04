@@ -22,14 +22,31 @@
 namespace libretrodroid {
 
 unsigned FPSSync::advanceFrames() {
+    return advanceFrames(std::chrono::steady_clock::now());
+}
+
+// nx-mobile 2026-11-03: a step that ends a frame or two late shows its frame late instead of running two frames at
+// once (upstream caught up at one frame late, skipping a frame and showing the other for 33 ms: SMG2's stutters on the
+// Nova). The clock stays behind, so the next steps skip their sleep until they catch up. Only past MAX_LAG_FRAMES (a
+// device that cannot keep up) does a step run two frames back to back to hold the game's speed.
+unsigned FPSSync::advanceFrames(TimePoint now) {
     if (useVSync) return 1;
 
     if (lastFrame == MIN_TIME) {
-        start();
+        start(now);
     }
 
-    auto now = std::chrono::steady_clock::now();
-    auto frames = std::max((now - lastFrame) / sampleInterval, (long long) 1);
+    const long long behind = (now - lastFrame) / sampleInterval;
+    long long frames = 1;
+    if (behind > MAX_LAG_FRAMES && !frameSkip) {
+        // Frame skip off: one frame, and the lag past MAX_LAG_FRAMES is dropped (the game slows instead of skipping).
+        lastFrame = now - sampleInterval * MAX_LAG_FRAMES;
+    } else if (behind > MAX_LAG_FRAMES) {
+        // Two frames, the most step() runs, and the clock moves by those two only: no game time is skipped. A stall
+        // past MAX_DROP_FRAMES drops the rest of the lag instead of running two-frame steps for seconds.
+        frames = 2;
+        if (behind > MAX_DROP_FRAMES) lastFrame = now - sampleInterval * MAX_LAG_FRAMES;
+    }
     lastFrame = lastFrame + sampleInterval * frames;
 
     return frames;
@@ -43,9 +60,15 @@ FPSSync::FPSSync(double contentRefreshRate, double screenRefreshRate) {
     reset();
 }
 
-void FPSSync::start() {
+void FPSSync::start(TimePoint now) {
     LOGI("Starting game with fps %f on a screen with refresh rate %f. Using vsync: %d", contentRefreshRate, screenRefreshRate, useVSync);
-    lastFrame = std::chrono::steady_clock::now();
+    lastFrame = now;
+}
+
+std::optional<TimePoint> FPSSync::presentAt(std::chrono::microseconds lead) const {
+    if (useVSync || lastFrame == MIN_TIME) return std::nullopt;
+    if (lead.count() <= 0) return lastFrame + sampleInterval;
+    return lastFrame + std::chrono::duration_cast<Duration>(lead);
 }
 
 void FPSSync::reset() {

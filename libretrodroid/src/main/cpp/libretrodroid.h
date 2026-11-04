@@ -18,6 +18,7 @@
 #ifndef LIBRETRODROID_LIBRETRODROID_H
 #define LIBRETRODROID_LIBRETRODROID_H
 
+#include <functional>
 #include <jni.h>
 
 #include <EGL/egl.h>
@@ -38,7 +39,10 @@
 #include "video.h"
 #include "renderers/renderer.h"
 #include "fpssync.h"
+#include "slowdown.h"
 #include "fastforward.h"
+#include "hitchprobe.h"
+#include "perfhint.h"
 #include "rewind.h"
 #include "rewindprobe.h"
 #include "input.h"
@@ -166,6 +170,14 @@ public:
     void handleRumbleUpdates(const std::function<void(int, float, float)> &handler);
 
     void setFrameSpeed(unsigned int speed);
+    // nx-mobile 2026-11-03: Frame Skip (Auto true, Off false): see FPSSync::frameSkip. Any thread, live.
+    void setFrameSkip(bool skip) { FPSSync::frameSkip = skip; }
+    // Frame Skip Off: the game's achieved speed, which the audio plays at (SlowdownMeter). GL thread.
+    SlowdownMeter slowdownMeter;
+
+    // nx-mobile 2026-11-03: the display's presentation deadline (how early a frame must be queued to show at a refresh);
+    // a sleep-timer frame is stamped to show at its deadline + this + 1.5 ms. 0 = unknown: one frame. Any thread.
+    void setPresentationDeadline(int64_t nanos) { presentationLeadMicros = nanos > 0 ? nanos / 1000 + 1500 : 0; }
 
     // nx-mobile 2026-10-24: fast forward up to maxSpeed × the content's rate (0 = off), with or without its audio.
     // Separate from frameSpeed, which stays pause (0) / run (1): a pause and resume never drop FF. Not applied in
@@ -175,6 +187,13 @@ public:
     // nx-mobile 2026-10-30: the Audio Resampling Quality row, 0 Low to 3 Max (Audio::Quality). Any thread; step()
     // hands it to the audio, as afterGameLoad does a new one.
     void setResamplingQuality(int quality) { resamplingQuality.store(quality); }
+    // nx-mobile 2026-11-04: Audio Buffer (ms kept ready, 0 default), read when the game's audio starts; Fill Audio Gaps
+    // (FILL_GAPS_*), live. Any thread.
+    void setAudioBufferMs(int ms) { audioBufferMs.store(ms); }
+    void setFillAudioGaps(int mode) { fillAudioGaps.store(mode); }
+    static constexpr int FILL_GAPS_AUTO = 0;   // with Frame Skip Off, where the game slows down
+    static constexpr int FILL_GAPS_ON = 1;
+    static constexpr int FILL_GAPS_OFF = 2;
 
     // nx-mobile 2026-10-24: rewind. Enabled, step() snapshots the game after each frame (once the core can serialize);
     // rewinding, it steps back through those snapshots instead of playing, one per capture interval, and wins over
@@ -229,6 +248,18 @@ public:
     // Draws the last frame's secondary regions into the current default framebuffer, width x height, after step().
     // Never runs the core; errors are logged, never thrown (the second screen must not end the game). GL thread.
     void renderSecondary(unsigned width, unsigned height);
+    // nx-mobile 2026-11-03: the second surface drawn from inside the core's frame (hw cores): the view's hook runs right
+    // after the main draw in handleVideoRefresh, while the frame is whole and the step holds the core lock, so no lock.
+    void renderSecondaryInFrame(unsigned width, unsigned height);
+    // Set by the step's JNI call for its duration: runs after a hw core's frame is drawn (the view draws its second
+    // surface then). Cleared after the step.
+    void setFrameDrawnHook(std::function<void()> hook) { frameDrawnHook = std::move(hook); }
+    // A hw core draws inside its video callback: its framebuffer is only whole then (Dolphin's dual core starts the next
+    // frame before retro_run returns), so nothing may sample it after the step. False before a game.
+    bool rendersInVideoCallback() { return video && video->rendersInVideoCallback(); }
+    // nx-mobile 2026-11-03: the last step's frame deadline on the sleep timer (CLOCK_MONOTONIC ns), 0 under vsync pacing,
+    // fast forward or a step that ran no frame: the second surface stamps its frame from it. GL thread.
+    int64_t getFrameDeadlineNanos() const { return frameDeadlineNanos; }
 
     // Base width, base height, aspect ratio and the core's rotation (radians, SET_ROTATION) of the running game; zeros
     // before it loads. Any thread.
@@ -320,6 +351,8 @@ private:
     std::exception_ptr videoCallbackError = nullptr;
 
     float screenRefreshRate = 60.0;
+    std::function<void()> frameDrawnHook;   // GL thread, for one step
+    int64_t frameDeadlineNanos = 0;          // GL thread
     int openglESVersion = 2;
     bool skipDuplicateFrames = false;
     bool immersiveModeEnabled = false;
@@ -351,7 +384,17 @@ private:
     std::atomic<unsigned> fastForwardSpeed { 0 };
     std::atomic<bool> fastForwardAudible { false };
     std::atomic<int> resamplingQuality { 2 };
+    std::atomic<int> audioBufferMs { 0 };
+    std::atomic<int> fillAudioGaps { FILL_GAPS_AUTO };
     FastForwardPacer fastForwardPacer;
+    HitchProbe hitchProbe;   // nx-mobile diag: GL thread
+    std::atomic<bool> hitchResetPending { false };   // resume() (UI thread) asks step() to restart it
+    // nx-mobile 2026-11-03 (ADPF): the threads before the game loaded, so the session can name the core's own; GL thread.
+    std::vector<int> threadsBeforeLoad;
+    PerfHint perfHint;
+    std::atomic<long> presentationLeadMicros { 0 };
+    unsigned perfHintSteps = 0;
+    void updatePerfHint(std::chrono::steady_clock::time_point stepStart, unsigned runs);
     unsigned appliedFastForwardSpeed = 0;
     bool appliedFastForwardAudible = false;
     // Read by the audio callback, which threaded cores call off the GL thread: drop the samples (muted FF).

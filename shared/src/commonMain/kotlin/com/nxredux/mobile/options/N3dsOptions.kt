@@ -21,7 +21,7 @@ object N3dsOptions {
     const val DEADZONE = "citra_analog_deadzone"
     const val DEFAULT_DEADZONE = 0.15f
 
-    /** Console Settings → New 3DS Controls ([N3dsNewControls]): auto, on or off, per game with a console default. */
+    /** Controls → New 3DS Controls ([N3dsNewControls]): auto, on or off, per game with a console default. */
     const val NEW_CONTROLS = "nx_3ds_new_controls"
 
     val newControlsRow = FrontendOption(

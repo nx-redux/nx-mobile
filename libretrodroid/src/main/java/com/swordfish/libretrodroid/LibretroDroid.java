@@ -135,6 +135,14 @@ public class LibretroDroid {
     /** Keep the next core's library loaded after its session (RTLD_NODELETE), so it is never reloaded elsewhere. Set before create(). */
     public static native void setKeepCoreLoaded(boolean keep);
     public static native void setFrameSpeed(int speed);
+    /** nx-mobile: Frame Skip: true (Auto) skips frames to hold the game's speed, false shows every frame and lets it slow. Any thread. */
+    public static native void setFrameSkip(boolean skip);
+    // nx-mobile: Audio Buffer (ms kept ready, 0 default; read when the game's audio starts) and Fill Audio Gaps (0 Auto,
+    // 1 On, 2 Off; live).
+    public static native void setAudioBufferMs(int ms);
+    public static native void setFillAudioGaps(int mode);
+    /** nx-mobile: the display's presentation deadline (Display.getPresentationDeadlineNanos), for the sleep timer's frame stamps. Any thread. */
+    public static native void setPresentationDeadline(long nanos);
     public static native void setAudioEnabled(boolean enabled);
     /**
      * Fast forward up to maxSpeed times the content's frame rate (0 = off), its audio played or muted. Separate from
@@ -172,6 +180,12 @@ public class LibretroDroid {
     public static native void setSecondaryRegions(float[] packed);
     /** Draws the last frame's secondary regions into the current default framebuffer (width x height); never runs the core. GL thread. */
     public static native void renderSecondary(int width, int height);
+    /** nx-mobile: renderSecondary from inside the core's frame (the view's onCoreFrameDrawn); takes no lock. GL thread. */
+    public static native void renderSecondaryInFrame(int width, int height);
+    /** nx-mobile: the running core draws inside its video callback (a hw core): its framebuffer is whole only then. */
+    public static native boolean rendersInVideoCallback();
+    /** nx-mobile: the last step's frame deadline on the sleep timer (CLOCK_MONOTONIC ns), 0 when not stamped. GL thread. */
+    public static native long getFrameDeadlineNanos();
     public static native float[] getGameGeometry();
 
     public static native boolean isHardwareRendered();

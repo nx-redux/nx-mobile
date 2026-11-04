@@ -29,6 +29,7 @@ import com.nxredux.mobile.ui.nx.LocalNxTapOpens
 import com.nxredux.mobile.ui.nx.NX_DISABLED_ALPHA
 import com.nxredux.mobile.ui.nx.NxKeepSelectedInView
 import com.nxredux.mobile.ui.nx.NxRow
+import com.nxredux.mobile.ui.nx.openedLabel
 import com.nxredux.mobile.ui.nx.nxScrollFade
 import com.nxredux.mobile.ui.nx.nxTap
 import androidx.compose.foundation.layout.Arrangement
@@ -151,14 +152,15 @@ internal fun settingsSizeClass(): SettingsSizeClass = LocalWindowSize.current.le
 
 /**
  * The Settings section block: "Settings" in hint at 13 sp, 6 dp above the sections; the sections at
- * [SETTINGS_SECTION_SIZE], one per 1.2 line, the [current] one in the accent (the [main][com.nxredux.mobile.ui.nx.NxColors.main]
- * ink while [rowsFocused]) and the rest inkDim. No Back word: B (or the back gesture) goes back.
+ * [SETTINGS_SECTION_SIZE], one per 1.2 line, the [current] one in the accent (while [rowsFocused], the
+ * [inkOpen][com.nxredux.mobile.ui.nx.NxColors.inkOpen] ink and a "›" after it, [openedLabel]) and the rest inkDim. No Back word: B (or the back gesture) goes back.
  * No pill, no underline, no plate; it never scrolls. A tap on a section calls [onTap] with its index.
  */
 @Composable
 fun SettingsSectionBlock(
     sections: List<SettingsSection>, current: Int, rowsFocused: Boolean,
     onTap: (Int) -> Unit, modifier: Modifier = Modifier,
+    markAll: Boolean = false,   // every word with its open mark: the size probe ([WithSettingsSectionSize]), so the block is as wide open
 ) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
@@ -172,10 +174,11 @@ fun SettingsSectionBlock(
         sections.forEachIndexed { i, section ->
             val color = when {
                 i != current -> colors.inkDim
-                rowsFocused -> colors.main
+                rowsFocused -> colors.inkOpen
                 else -> colors.accent
             }
-            SettingsWord(section.label, color, wordStyle) { onTap(i) }
+            // The open section points at its page beside it ("Display ›"), as the in-game menu's open word.
+            SettingsWord(openedLabel(section.label, (rowsFocused && i == current) || markAll), color, wordStyle) { onTap(i) }
         }
     }
 }
@@ -318,7 +321,7 @@ internal fun WithSettingsSectionSize(sections: List<SettingsSection>, content: @
     val slot = remember { SectionSizeSlot() }
     SubcomposeLayout { constraints ->
         val probe = subcompose("probe") {
-            SettingsSectionBlock(sections, current = 0, rowsFocused = false, onTap = {})
+            SettingsSectionBlock(sections, current = 0, rowsFocused = false, onTap = {}, markAll = true)
         }
         val width = probe.maxOfOrNull { it.maxIntrinsicWidth(constraints.maxHeight) } ?: 0
         val height = probe.maxOfOrNull { it.minIntrinsicHeight(width) } ?: 0

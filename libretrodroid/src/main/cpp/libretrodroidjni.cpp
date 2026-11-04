@@ -964,8 +964,26 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_step(
     jobject glRetroView
 ) {
     try {
+        // nx-mobile 2026-11-03: a hw core's finished frame goes to the view's second surface from inside the frame.
+        LibretroDroid::getInstance().setFrameDrawnHook([env, glRetroView]() {
+            static jmethodID onFrame = nullptr;
+            if (onFrame == nullptr) {
+                jclass cls = env->GetObjectClass(glRetroView);
+                onFrame = env->GetMethodID(cls, "onCoreFrameDrawn", "()V");
+                env->DeleteLocalRef(cls);
+            }
+            if (onFrame == nullptr) { env->ExceptionClear(); return; }
+            env->CallVoidMethod(glRetroView, onFrame);
+            // Nothing may unwind through the core's frames: a Java exception is logged and dropped here.
+            if (env->ExceptionCheck()) {
+                env->ExceptionDescribe();
+                env->ExceptionClear();
+            }
+        });
         LibretroDroid::getInstance().step();
+        LibretroDroid::getInstance().setFrameDrawnHook(nullptr);
     } catch (std::exception &exception) {
+        LibretroDroid::getInstance().setFrameDrawnHook(nullptr);
         LOGE("Error in step: %s", exception.what());
         JavaUtils::throwRetroException(env, ERROR_GENERIC);
         return;
@@ -1078,6 +1096,38 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setKeepCor
     jboolean keep
 ) {
     coreretention::setKeepLoaded(keep);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPresentationDeadline(
+    JNIEnv* env,
+    jclass obj,
+    jlong nanos
+) {
+    LibretroDroid::getInstance().setPresentationDeadline(nanos);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setAudioBufferMs(
+    JNIEnv* env,
+    jclass obj,
+    jint ms
+) {
+    LibretroDroid::getInstance().setAudioBufferMs(ms);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFillAudioGaps(
+    JNIEnv* env,
+    jclass obj,
+    jint mode
+) {
+    LibretroDroid::getInstance().setFillAudioGaps(mode);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFrameSkip(
+    JNIEnv* env,
+    jclass obj,
+    jboolean skip
+) {
+    LibretroDroid::getInstance().setFrameSkip(skip);
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setFrameSpeed(
@@ -1236,6 +1286,30 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setSeconda
     std::vector<float> data((size_t) count);
     if (count > 0) env->GetFloatArrayRegion(packed, 0, count, data.data());
     LibretroDroid::getInstance().setSecondaryRegions(ScreenRegion::unpack(data.data(), data.size()));
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_renderSecondaryInFrame(
+    JNIEnv* env,
+    jclass obj,
+    jint width,
+    jint height
+) {
+    if (width <= 0 || height <= 0) return;
+    LibretroDroid::getInstance().renderSecondaryInFrame((unsigned) width, (unsigned) height);
+}
+
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_rendersInVideoCallback(
+    JNIEnv* env,
+    jclass obj
+) {
+    return LibretroDroid::getInstance().rendersInVideoCallback();
+}
+
+JNIEXPORT jlong JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getFrameDeadlineNanos(
+    JNIEnv* env,
+    jclass obj
+) {
+    return (jlong) LibretroDroid::getInstance().getFrameDeadlineNanos();
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_renderSecondary(

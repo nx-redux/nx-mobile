@@ -20,7 +20,7 @@ object ConsoleSettings {
         WiiOptions.appliesTo(tag) -> WiiOptions.table
         Ps2Options.appliesTo(tag) -> Ps2Options.rowsFor(biosFiles) + Ps2Options.resolutionRows(displayMax)
         else -> emptyList()
-    } + graphicsRows(tag) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table + AudioOptions.row
+    } + graphicsRows(tag) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.rowsFor(tag)
 
     /**
      * The row and the value it shows for [value] (stored, else the row default). Only the 3D Resolution scales differ: a
@@ -43,5 +43,5 @@ object ConsoleSettings {
 
     /** Every console's rows (keys are unique across them); built when read, as [NdsOptions.table]. */
     val all: List<FrontendOption> get() =
-        NdsOptions.table + N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + N3dsOptions.newControlsRow + WiiOptions.table + Ps2Options.biosRow(emptyList()) + Ps2Options.resolutionRows(null) + GraphicsApiOptions.row + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table + AudioOptions.row
+        NdsOptions.table + N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + N3dsOptions.newControlsRow + WiiOptions.table + Ps2Options.biosRow(emptyList()) + Ps2Options.resolutionRows(null) + GraphicsApiOptions.row + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row
 }

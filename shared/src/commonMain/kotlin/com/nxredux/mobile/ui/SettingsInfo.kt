@@ -67,7 +67,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.BOTTOM_SCREEN -> SettingText(
         "Which screen is the touch screen",
         "Which screen is the touch screen. Auto picks by shape. Each console can override it with its own Bottom screen " +
-            "row in its Console Settings.",
+            "row under Display.",
     )
     // Appearance.
     SettingsKind.PAD_THEME -> quiet(

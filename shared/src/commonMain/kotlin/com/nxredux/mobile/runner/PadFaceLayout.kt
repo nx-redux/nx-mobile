@@ -3,7 +3,7 @@ package com.nxredux.mobile.runner
 /**
  * Which key code a controller's face buttons send by position. [XBOX] is Android's usual convention (bottom BUTTON_A,
  * right B, left X, top Y); [NINTENDO] has the letters where a Nintendo pad prints them (bottom BUTTON_B, right A, left Y,
- * top X). Detection says where a pad's keycodes sit; Console Settings → Controller Layout can name other printed letters
+ * top X). Detection says where a pad's keycodes sit; Controls → Controller Layout can name other printed letters
  * ([PhysicalKeys]).
  */
 enum class PadFaceLayout {

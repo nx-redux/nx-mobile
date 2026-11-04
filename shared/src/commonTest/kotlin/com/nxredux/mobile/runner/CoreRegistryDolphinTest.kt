@@ -22,11 +22,11 @@ class CoreRegistryDolphinTest {
         assertEquals(CoreDescriptor.WIIMOTE_SIDEWAYS, wii.controllerPort0)
         assertEquals(CoreDescriptor.JOYPAD, gc.controllerPort0)
     }
-    @Test fun defaults_run_synced_dual_core_with_background_shaders() {
+    @Test fun defaults_run_unsynced_dual_core_with_background_shaders() {
         for (d in listOf(wii, gc)) {
             assertEquals("Hardware", d.defaultOptions["dolphin_renderer"])
             assertEquals("enabled", d.defaultOptions["dolphin_main_cpu_thread"])
-            assertEquals("enabled", d.defaultOptions["dolphin_sync_gpu"])
+            assertEquals("disabled", d.defaultOptions["dolphin_sync_gpu"])
             assertEquals("disabled", d.defaultOptions["dolphin_osd_enabled"])
             assertEquals("3", d.defaultOptions["dolphin_shader_compilation_mode"])
             assertTrue("dolphin_renderer" in d.lockedOptions && "dolphin_osd_enabled" in d.lockedOptions)
@@ -38,7 +38,7 @@ class CoreRegistryDolphinTest {
         assertEquals("18", wii.defaultOptions["dolphin_ir_yaw"])
         assertEquals("20", wii.defaultOptions["dolphin_ir_pitch"])
         assertEquals("16", wii.defaultOptions["dolphin_ir_offset"])
-        // Console Settings → Wii Screen sets it at launch: the core option is locked.
+        // Display → Wii Screen sets it at launch: the core option is locked.
         assertTrue("dolphin_widescreen" in wii.lockedOptions)
         // ...and the pointer geometry with it (WiiScreen.pointerOptions): saved values would otherwise win.
         assertTrue(listOf("dolphin_ir_yaw", "dolphin_ir_pitch", "dolphin_ir_offset").all { it in wii.lockedOptions })

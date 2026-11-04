@@ -59,6 +59,23 @@ target_include_directories (samplerate PUBLIC libsamplerate/include)
 target_compile_definitions (samplerate PRIVATE HAVE_STDBOOL_H=1 ENABLE_SINC_FAST_CONVERTER ENABLE_SINC_BEST_CONVERTER
         CPU_CLIPS_POSITIVE=0 CPU_CLIPS_NEGATIVE=0 PACKAGE="libsamplerate" VERSION="0.2.2")
 
+# SoundTouch 2.3.3 (LGPL-2.1): with Frame Skip Off, a game's slowdown plays as a slower tempo at the same pitch (time
+# stretch). Static, from its sources (float samples, no x86 code on ARM); the rate transposer and BPM detector are unused.
+add_library (soundtouch STATIC
+        soundtouch/source/SoundTouch/SoundTouch.cpp
+        soundtouch/source/SoundTouch/TDStretch.cpp
+        soundtouch/source/SoundTouch/FIFOSampleBuffer.cpp
+        soundtouch/source/SoundTouch/RateTransposer.cpp
+        soundtouch/source/SoundTouch/AAFilter.cpp
+        soundtouch/source/SoundTouch/FIRFilter.cpp
+        soundtouch/source/SoundTouch/InterpolateCubic.cpp
+        soundtouch/source/SoundTouch/InterpolateLinear.cpp
+        soundtouch/source/SoundTouch/InterpolateShannon.cpp
+        soundtouch/source/SoundTouch/cpu_detect_x86.cpp
+)
+target_include_directories (soundtouch PUBLIC soundtouch/include)
+target_compile_definitions (soundtouch PUBLIC SOUNDTOUCH_FLOAT_SAMPLES=1 SOUNDTOUCH_DISABLE_X86_OPTIMIZATIONS=1)
+
 set (LIBRETRO_COMMON
         libretro/libretro-common/vfs/vfs_implementation.c
         libretro/libretro-common/string/stdstring.c
@@ -129,6 +146,9 @@ add_library(libretrodroid SHARED
         audio.cpp
         fpssync.h
         fpssync.cpp
+        perfhint.cpp
+        presenttime.cpp
+        threadlist.cpp
         fastforward.h
         fastforward.cpp
         environment.h
@@ -211,6 +231,7 @@ target_link_libraries(libretrodroid
                       EGL
                       oboe
                       samplerate
+                      soundtouch
                       chdr-static
                       GLESv3
                       vulkan

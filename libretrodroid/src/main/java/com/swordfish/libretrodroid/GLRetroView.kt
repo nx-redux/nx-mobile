@@ -88,6 +88,30 @@ class GLRetroView(
      * Audible fast forward plays at Medium at most. Main thread; pushed straight to native, kept across games and
      * re-applied after create().
      */
+    /**
+     * nx-mobile 2026-11-03: Frame Skip: true (Auto) runs two frames in a step when the phone can't keep up, holding the
+     * game's speed; false shows every frame and lets the game slow down. Applied live.
+     */
+    var frameSkip: Boolean = true
+        set(value) {
+            field = value
+            LibretroDroid.setFrameSkip(value)
+        }
+
+    /** Audio Buffer: the sound kept ready, in ms (0 the default). Read when the game's audio starts: set it before. */
+    var audioBufferMs: Int = 0
+        set(value) {
+            field = value
+            LibretroDroid.setAudioBufferMs(value)
+        }
+
+    /** Fill Audio Gaps: 0 Auto (with Frame Skip Off), 1 On, 2 Off. Live. */
+    var fillAudioGaps: Int = 0
+        set(value) {
+            field = value
+            LibretroDroid.setFillAudioGaps(value)
+        }
+
     var resamplingQuality: Int by Delegates.observable(2) { _, old, value ->
         if (old != value) pushResamplingQuality()
     }
@@ -212,10 +236,10 @@ class GLRetroView(
      * it down. Main thread. A null waits (briefly) for the GL thread to destroy the EGL surface, so the caller may
      * release the Surface right after; drawing to a surface that went bad stops until a new one is set.
      */
-    fun setSecondarySurface(surface: Surface?, width: Int, height: Int) {
+    fun setSecondarySurface(surface: Surface?, width: Int, height: Int, presentationDeadlineNanos: Long = 0L) {
         // Setting a surface needn't wait; nor does a null on a detached view (its exited GL thread took the EGL surface).
         if (surface != null || emulationThreadGone) {
-            queueEvent { secondaryOutput.setSurface(surface, width, height) }
+            queueEvent { secondaryOutput.setSurface(surface, width, height, presentationDeadlineNanos) }
             return
         }
         val latch = CountDownLatch(1)
@@ -331,7 +355,8 @@ class GLRetroView(
         preserveEGLContextOnPause = true
         setEGLContextClientVersion(openGLESVersion)
         setRenderer(Renderer())
-        keepScreenOn = true
+        // No keepScreenOn here: the host's window decides (nx-mobile's GameActivity holds the screen on while the game
+        // runs, not under its in-game menu). A view's own flag would hold it whatever the window says.
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -507,6 +532,7 @@ class GLRetroView(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         emulationThreadGone = false
+        display?.let { LibretroDroid.setPresentationDeadline(it.presentationDeadlineNanos) }
     }
 
     override fun onDetachedFromWindow() {
@@ -787,7 +813,10 @@ class GLRetroView(
                     shaderErrorPolled = true
                     reportShaderError()
                 }
-                secondaryOutput.draw()
+                // nx-mobile 2026-11-03: a hw core's frame went to the second surface from inside the frame
+                // (onCoreFrameDrawn); afterwards its framebuffer may already hold the next frame's first draws (Dolphin's
+                // dual core: the background missing, flicker), and while paused the second display keeps its last frame.
+                if (LibretroDroid.rendersInVideoCallback()) secondaryOutput.swapPending() else secondaryOutput.draw()
             }
         }
 
@@ -1004,6 +1033,14 @@ class GLRetroView(
     ) {
         val event = AchievementEvent(type, id, title, description, badge, points, progress, percent, extra)
         if (!achievementEvents.tryEmit(event)) NxLog.w(TAG_LOG, "achievement event dropped: $type")
+    }
+
+    /**
+     * Called from the jni side (GL thread) inside a hw core's frame, right after the main surface's draw: the second
+     * surface gets the frame while it is whole. The step holds the core lock.
+     */
+    private fun onCoreFrameDrawn() {
+        if (secondaryOutput.active) secondaryOutput.draw(inFrame = true)
     }
 
     /** Called from the jni side (emulation thread) after each step. */

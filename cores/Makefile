@@ -5,7 +5,10 @@ $(error GNU make >= 3.82 required; on macOS run gmake (brew install make))
 endif
 
 # ---- tools -----------------------------------------------------------------
-NDK_VERSION ?= 26.1.10909125
+# NDK r29, the one libretro's buildbot builds its Android cores with (libretro-build-android, since 2026-07-19), and
+# flycast's and ARMSX2's own CI. r26's libc++ std::ranges::binary_search compared against the first element (Dolphin
+# flushed on most draws, ~600 glFlush a frame in Super Mario Galaxy 2).
+NDK_VERSION ?= 29.0.14206865
 NDK ?= $(or $(ANDROID_NDK_HOME),$(if $(ANDROID_HOME),$(ANDROID_HOME)/ndk/$(NDK_VERSION),$(HOME)/Library/Android/sdk/ndk/$(NDK_VERSION)))
 SDK ?= $(or $(ANDROID_HOME),$(HOME)/Library/Android/sdk)
 CMAKE ?= $(SDK)/cmake/3.22.1/bin/cmake
@@ -300,7 +303,7 @@ mednafen_supafaust_LICENSE = COPYING
 mednafen_supafaust_KIND = ndkbuild
 mednafen_supafaust_BUILD_PATH = .
 mednafen_supafaust_ARTIFACT = libs/$(ABI)/libretro.so
-# OwlResampler_neon.inc uses the C++17-removed `register` specifier; NDK 26's clang makes that an error by default.
+# OwlResampler_neon.inc uses the C++17-removed `register` specifier; the NDK's clang makes that an error by default.
 mednafen_supafaust_FLAGS = APP_CPPFLAGS=-Wno-register
 
 # patches/pokemini.patch: nx-redux's resume-audio fix (the only nx-redux source patch carried over).
@@ -463,24 +466,27 @@ azahar_NINJA = $(SDK)/cmake/3.30.3/bin/ninja
 azahar_PLATFORM = android-21
 azahar_FLAGS = -DENABLE_LIBRETRO=ON -DENABLE_VULKAN=ON -DENABLE_OPENGL=ON -DENABLE_TESTS=OFF -DANDROID_STL=c++_static
 
-# Dolphin (Wii, GameCube): libretro/dolphin at the 2026-10-23 head (its d3ca3028 fixed a GPU-loop stop the CPU thread sent
-# before retro_run entered RunGpuLoop: lost, it hung retro_run with the CPU paused, a Wii game frozen ~10 s in). CMake like azahar, needing >= 3.25 (3.30.3 below). The
+# Dolphin (Wii, GameCube): libretro/dolphin at the 2026-11-04 head, which has nx-mobile's merged PRs #528-#534 (graphics
+# hacks on the base config layer, option defaults, Synchronize GPU Thread, a failed load without a hardware context,
+# sensors re-asked per port, the Wii Menu closing the game, the Wiimote HID source guard) and #527 (region-free titles in
+# their game ID's region); before it (2026-10-29: its d3ca3028 fixed a GPU-loop stop the CPU thread sent
+# before retro_run entered RunGpuLoop: lost, it hung retro_run with the CPU paused, a Wii game frozen ~10 s in; its 3d6c2881
+# shows every Aspect Ratio mode unsqueezed and hands Vulkan's whole swapchain image over, not the EFB's 640x528). CMake like azahar, needing >= 3.25 (3.30.3 below). The
 # libretro target is Source/Core/DolphinLibretro's SHARED dolphin_libretro, suffix "_android.so", built in the build root.
 # Flags follow upstream's Android CI (.gitlab-ci.yml .core-defs: -DLIBRETRO=ON -DENABLE_LTO=ON, API 24). The core asks
 # GET_PREFERRED_HW_RENDER: the runner answers GLES3, or Vulkan when Console Settings → Graphics API picks it. 34 submodules, recursive (template default). Licences
 # are REUSE-style under LICENSES/. patches/dolphin.patch: SET_SYSTEM_AV_INFO on every refresh-rate change (the runner
-# paces by it; Dolphin's boot-time 119.88 Hz was never taken back), a Synchronize GPU Thread option (unsynced dual core
-# desynced NSMB Wii's FIFO), shared GL contexts through the runner's private call (nxsharedgl.h; upstream's own EGL ones after it), and a failed load
-# when no hardware context was granted, sensors re-asked when a port's device is resent (live motion toggle), with the
-# IMU unbound on the stick-tilt path, a null-source guard in the emulated Wiimote's HID output (states restored with
-# more remotes linked than connected), raw-disc reader exports for RetroAchievements hashing (NxDisc.cpp;
+# paces by it; Dolphin's boot-time 119.88 Hz was never taken back), shared GL contexts through the runner's private call
+# (nxsharedgl.h; upstream's own EGL ones after it), raw-disc reader exports for RetroAchievements hashing (NxDisc.cpp;
 # nx_disc_open_fd reads the frontend's SAF descriptor through DirectIOFile::FromFd, past the VFS, and a CreateBlobReader
-# overload taking an open file); retro_cheat_set adds codes not in the game INIs. Sys/ is staged to system/dolphin-emu/Sys, where the core looks, minus Themes/ (Qt GUI icons, useless to
+# overload taking an open file); retro_cheat_set adds codes not in the game INIs.
+# patches/dolphin/0002-arm64-texture-decoder.patch: upstream PR #14928 (merged 2026-10-31) backported, AArch64 SIMD texture
+# decoders for every format but XFB (AArch64 used the generic ones); drop it once the pin includes it. Sys/ is staged to system/dolphin-emu/Sys, where the core looks, minus Themes/ (Qt GUI icons, useless to
 # libretro). dolphin_LICENSE ships the notice of every statically linked external (and the GC font licences) in licenses/dolphin.txt.
 # libiconv/libcharset (LGPL-2.1+) vendor no licence text; libusb's COPYING is the same FSF LGPL-2.1 text, from the pinned
 # checkout. KissFFT's BSD notice lives only in its source header, so notices/dolphin-kissfft.txt carries it.
 dolphin_REPO = https://github.com/libretro/dolphin
-dolphin_HASH = 3aac3f052f733f8df2f1616843a4d2e14002ed11
+dolphin_HASH = 32c61f9d0e933331bb7087ba57e96883241b4960
 dolphin_LICENSE = COPYING LICENSES/GPL-2.0-or-later.txt LICENSES/MIT.txt LICENSES/BSD-3-Clause.txt LICENSES/CC0-1.0.txt Data/Sys/GC/font-licenses.txt \
   Externals/FatFs/LICENSE.txt Externals/LZO/COPYING Externals/SFML/SFML/license.md Externals/bzip2/bzip2/LICENSE \
   Externals/cpp-optparse/cpp-optparse/LICENSE Externals/curl/curl/COPYING Externals/ed25519/license.txt \
@@ -505,8 +511,7 @@ dolphin_FLAGS = -DLIBRETRO=ON -DENABLE_LTO=ON -DANDROID_STL=c++_static
 # ARMSX2 (PS2): ARMSX2/ARMSX2 at its 2.9 release tag, a PCSX2 fork with arm64 recompilers. Its libretro port is
 # pcsx2-libretro/ (SHARED pcsx2-libretro, OUTPUT_NAME armsx2_libretro, empty prefix), added only with ENABLE_LIBRETRO=ON;
 # the build tree's bin/ holds it. Flags follow upstream's Android libretro CI (.gitlab-ci.yml .core-defs-android, API 28:
-# bionic's posix_spawn). NDK r29 like upstream's own Android app (armsx2.ndkVersion); the
-# other cores stay on $(NDK_VERSION). Its static dependencies (png, jpeg-turbo, zstd, lz4, webp, SDL3, freetype, plutovg,
+# bionic's posix_spawn). Its static dependencies (png, jpeg-turbo, zstd, lz4, webp, SDL3, freetype, plutovg,
 # plutosvg, curl without TLS, libpcap, shaderc) come from upstream's own script, run once into $(ARMSX2_DEPS) with the
 # same NDK; the stamp names the pin, so a bump rebuilds them. CMake >= 3.25 policy range: 3.30.3, as azahar/dolphin.
 # Renders on GLES 3.2 or Vulkan (armsx2_renderer, set by the app per Graphics API). bin/resources (shaders, GameIndex,
@@ -540,8 +545,6 @@ armsx2_CMAKE_TARGET = pcsx2-libretro
 armsx2_ARTIFACT = bin/armsx2_libretro.so
 armsx2_CMAKE = $(SDK)/cmake/3.30.3/bin/cmake
 armsx2_NINJA = $(SDK)/cmake/3.30.3/bin/ninja
-armsx2_NDK_VERSION = 29.0.14206865
-armsx2_NDK = $(SDK)/ndk/$(armsx2_NDK_VERSION)
 armsx2_PLATFORM = android-28
 ARMSX2_DEPS = $(abspath $(BUILD_ROOT))/armsx2-deps
 armsx2_FLAGS = -DCMAKE_PREFIX_PATH=$(ARMSX2_DEPS)/prefix -DCMAKE_FIND_ROOT_PATH=$(ARMSX2_DEPS)/prefix -DANDROID_STL=c++_static \
@@ -600,7 +603,7 @@ dolphin: $(OUTPUT_ROOT)/system/dolphin-emu/Sys/.staged
 $(ARMSX2_DEPS)/.built-$(armsx2_HASH): $(SRC_ROOT)/armsx2/.patched
 	rm -rf $(ARMSX2_DEPS)/prefix $(ARMSX2_DEPS)/.built-*
 	mkdir -p $(ARMSX2_DEPS)/prefix
-	cd $(ARMSX2_DEPS) && PATH="$(dir $(armsx2_CMAKE)):$$PATH" ANDROID_NDK=$(armsx2_NDK) ANDROID_ABI=$(ABI) ANDROID_API=28 \
+	cd $(ARMSX2_DEPS) && PATH="$(dir $(armsx2_CMAKE)):$$PATH" ANDROID_NDK=$(NDK) ANDROID_ABI=$(ABI) ANDROID_API=28 \
 	  bash $(CURDIR)/$(SRC_ROOT)/armsx2/.github/workflows/scripts/android/build-dependencies.sh $(ARMSX2_DEPS)/prefix
 	touch $@
 $(OUTPUT_ROOT)/armsx2_libretro_android.so: $(ARMSX2_DEPS)/.built-$(armsx2_HASH)
@@ -777,10 +780,6 @@ options:
 COMMA := ,
 cores-json:
 	@echo '[$(subst " ","$(COMMA)",$(patsubst %,"%",$(strip $(CORES))))]'
-# armsx2's NDK pin, for the release workflow's sdkmanager step (make -s -C cores print-armsx2-ndk).
-print-armsx2-ndk:
-	@echo '$(armsx2_NDK_VERSION)'
-.PHONY: print-armsx2-ndk
 
 clean: $(foreach CORE,$(CORES),clean-$(CORE))
 nuke:
