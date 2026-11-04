@@ -217,6 +217,16 @@ class NxCarbonPackTest {
                 for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
             }
             if (name in roomy) assertTrue(c("STICK").y < c("DPAD").y, "$name stick above the d-pad")
+            else {   // swapped: the stick where the d-pad is, its well and knob too (inward shift and all)
+                assertEquals(c("DPAD").x, c("STICK").x, 0.5f, "$name stick x")
+                assertEquals(c("DPAD").y, c("STICK").y, 0.5f, "$name stick y")
+                fun mid(pc: SkinPiece) = (pc.dst.x + pc.dst.width / 2f) to (pc.dst.y + pc.dst.height / 2f)
+                val (kx, ky) = mid(p.pieces.single { it.knob })
+                assertEquals(c("DPAD").x, kx, 1f, "$name knob x"); assertEquals(c("DPAD").y, ky, 1f, "$name knob y")
+                val dp = p.pieces.filter { it.alt == "dpad" }.maxBy { it.dst.width }
+                val st = p.pieces.filter { it.alt == "stick" && !it.knob }.maxBy { it.dst.width }
+                assertEquals(mid(dp).first, mid(st).first, 1f, "$name well x"); assertEquals(mid(dp).second, mid(st).second, 1f, "$name well y")
+            }
             if (name == "tablet") {   // the stack and the face centred on the bottom screen, L / R level (user)
                 val r = p.glasses.single { it.screen == GlassScreen.PANEL }.rect
                 val mid = r.y + r.height / 2f
