@@ -89,6 +89,11 @@ data class SkinLayoutSpec(
     val refH: Int = 0,
     val frame: FrameSpec? = null,
     val pieces: List<PieceSpec> = emptyList(),
+    /**
+     * Only for a window at least this tall in picture px (its height over the scale): a layout that needs real extra
+     * height (the Dreamcast's stick above the d-pad on a tablet), tried before its siblings without it.
+     */
+    val minRefH: Int = 0,
 )
 
 /**
@@ -309,8 +314,10 @@ data class ControlSpec(
     val labelDx: Float = 0f,
     val labelH: Float = 0f,
     val level: PieceLevel = PieceLevel.BOTTOM,
-    /** A [ControlShape.STICK]: how far (picture px) the knob moves from the centre at full tilt. */
+    /** A [ControlShape.STICK]: how far (picture px) the thumb goes from where it landed for full tilt. */
     val travel: Float = 0f,
+    /** A [ControlShape.STICK]: how far (picture px) the drawn knob moves at full tilt (a big knob in its hole: a little); 0: [travel]. */
+    val knobTravel: Float = 0f,
     /** Shown only with the stick ("stick") or only with the d-pad ("dpad") on a layout that swaps them; null: always. */
     val alt: String? = null,
 )

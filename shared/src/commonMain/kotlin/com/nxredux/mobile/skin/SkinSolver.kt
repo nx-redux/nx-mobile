@@ -243,7 +243,7 @@ object SkinSolver {
             }
         }
         controls += spec.controls.map { c ->
-            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward)) * k, (c.y + down(c.level)) * k)
+            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k, knobTravel = c.knobTravel * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward)) * k, (c.y + down(c.level)) * k)
         }
         return SkinPlacement(spec, k, bg.cells, glasses, controls, pieces)
     }
@@ -309,7 +309,7 @@ object SkinSolver {
         }
         val controls = spec.controls.map { c ->
             val (x, y) = ctx.map(c.x, c.y) ?: return null
-            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k), x * k, y * k)
+            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k, knobTravel = c.knobTravel * k), x * k, y * k)
         }
         val windowCells = cells.map { it.copy(dst = PxRect(it.dst.x * k, it.dst.y * k, it.dst.width * k, it.dst.height * k)) }
         return SkinPlacement(spec, k, windowCells, glasses, controls)

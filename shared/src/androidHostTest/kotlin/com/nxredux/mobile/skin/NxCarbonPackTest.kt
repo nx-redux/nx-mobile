@@ -42,7 +42,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(42, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade and dc twins
+        assertEquals(44, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade and dc twins, and dc both-shown on the tall boards (fold, landscape tall)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -186,9 +186,10 @@ class NxCarbonPackTest {
 
     @Test
     fun dreamcastLayoutsInEveryFamily() {
-        val roomy = setOf("inner", "inner_half", "tablet", "inner_land")
-        for ((name, d) in consoleDevices) {
-            val tablet = name == "tablet"
+        // both stick and d-pad only with real extra height (tablets); the Fold's inner screen swaps them like a phone
+        val roomy = setOf("tablet", "tablet_land")
+        for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
+            val tablet = name.startsWith("tablet")
             val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 640f to 480f,
                 d.third, foldable = name.startsWith("inner"), variant = SkinVariant.DC), name)
             dump("dc_$name", d.first, d.second, p)
@@ -216,6 +217,20 @@ class NxCarbonPackTest {
                 for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
             }
             if (name in roomy) assertTrue(c("STICK").y < c("DPAD").y, "$name stick above the d-pad")
+            if (name == "tablet") {   // the stack and the face centred on the bottom screen, L / R level (user)
+                val r = p.glasses.single { it.screen == GlassScreen.PANEL }.rect
+                val mid = r.y + r.height / 2f
+                assertEquals(mid, (c("STICK").y + c("DPAD").y) / 2f, 20f * p.k * 3, "$name stack")
+                assertEquals(mid, (c("X").y + c("B").y) / 2f, 20f * p.k * 3, "$name face")
+                assertEquals(c("L2").y, c("R2").y, 1f, "$name L R")
+            }
+            // the swap cap's word: what a tap gives (the d-pad while on the stick, and back)
+            if (name !in roomy) {
+                assertEquals("D-PAD", p.forStick(true).controls.single { it.spec.id == "STICK_SWAP" }.spec.label, name)
+                assertEquals("STICK", p.forStick(false).controls.single { it.spec.id == "STICK_SWAP" }.spec.label, name)
+            }
+            // the stick nearly fills the d-pad's ring: its hole as big as the d-pad's reach, a small gap to the ring
+            assertTrue(c("STICK").spec.r >= 160f * p.k, "$name stick ${c("STICK").spec.r}")
             if (name in setOf("inner", "inner_half", "tablet")) {
                 val r = p.glasses.single { it.screen == GlassScreen.PANEL }.rect
                 for (x in p.controls) assertTrue(apart(box(x), floatArrayOf(r.x, r.y, r.x + r.width, r.y + r.height)), "$name ${x.spec.id} on the panel")

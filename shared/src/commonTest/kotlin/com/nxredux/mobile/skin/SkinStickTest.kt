@@ -17,8 +17,8 @@ class SkinStickTest {
         tree = SliceNode(SliceSplit.ROWS, listOf(SlicePart(1000))), glasses = emptyList(), scales = listOf(emptyList()), controls = emptyList(),
     )
 
-    private fun ctl(id: String, shape: ControlShape, x: Float, y: Float, r: Float, alt: String? = null, travel: Float = 0f) =
-        PlacedControl(ControlSpec(id, shape, x, y, r = r, travel = travel, alt = alt), x, y)
+    private fun ctl(id: String, shape: ControlShape, x: Float, y: Float, r: Float, alt: String? = null, travel: Float = 0f, knobTravel: Float = 0f) =
+        PlacedControl(ControlSpec(id, shape, x, y, r = r, travel = travel, alt = alt, knobTravel = knobTravel), x, y)
 
     private fun piece(x: Float, alt: String? = null, knob: Boolean = false) =
         SkinPiece(PxRect(0f, 0f, 10f, 10f), PxRect(x, 0f, 10f, 10f), alt = alt, knob = knob)
@@ -106,5 +106,18 @@ class SkinStickTest {
         val t = touch()
         assertTrue(t.press(2, 800f, 900f))
         assertEquals(listOf("STICK_SWAP" to true), actions)
+    }
+
+    @Test
+    fun theKnobMovesItsOwnShorterWay() {
+        // a big knob in its hole moves 20 px at full tilt while the thumb goes 60 for it
+        val t = SkinPadTouch({ pads += it }, { _, _ -> }, {}, onStick = { x, y -> sticks += x to y }).apply {
+            placement = SkinPlacement(spec(), 1f, emptyList(), emptyList(), listOf(ctl("STICK", ControlShape.STICK, 500f, 500f, 170f, travel = 60f, knobTravel = 20f)))
+        }
+        t.press(1, 500f, 500f); t.move(1, 530f, 500f)
+        assertTrue(near(sticks.last(), 0.5f, 0f), "$sticks")
+        assertTrue(near(t.knobOffset(), 10f, 0f), "${t.knobOffset()}")
+        t.move(1, 500f, 400f)
+        assertTrue(near(t.knobOffset(), 0f, -20f), "${t.knobOffset()}")
     }
 }

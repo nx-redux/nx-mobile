@@ -120,8 +120,9 @@ class SkinPadTouch(
     private fun moveStick(x: Float, y: Float) {
         val c = placement?.controls?.firstOrNull { it.spec.shape == ControlShape.STICK } ?: return
         val travel = if (c.spec.travel > 0f) c.spec.travel else c.spec.r * 0.6f
+        val drawn = if (c.spec.knobTravel > 0f) c.spec.knobTravel else travel   // the knob's own (shorter) way
         val (nx, ny) = normalizeStick(x - stickCentre.first, y - stickCentre.second, travel)
-        knob = nx * travel to ny * travel
+        knob = nx * drawn to ny * drawn
         onStick(nx, ny); onChange()
     }
 
@@ -162,7 +163,7 @@ class SkinPadTouch(
             val s = c.spec
             when (s.shape) {
                 // the knob, where it is now
-                ControlShape.STICK -> if (stickId != null) out += SkinPressShape.Circle(c.x + knob.first, c.y + knob.second, if (s.capR > 0f) s.capR else s.r - s.travel)
+                ControlShape.STICK -> if (stickId != null) out += SkinPressShape.Circle(c.x + knob.first, c.y + knob.second, if (s.capR > 0f) s.capR else s.r - (if (s.knobTravel > 0f) s.knobTravel else s.travel))
                 ControlShape.DPAD -> {
                     val a = if (s.arm > 0f) s.arm else s.r / 3f
                     val l = s.r

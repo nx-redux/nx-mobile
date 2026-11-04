@@ -81,8 +81,8 @@ object SkinChoice {
         pack: SkinPackManifest, family: SkinFamily, variant: SkinVariant, windowW: Int, windowH: Int, k: Float,
         picture: Pair<Float, Float>?, topInset: Int,
     ): SkinPlacement? =
-        pack.layouts.filter { it.family == family && it.variant == variant && it.frame != null && !it.foldBoard }
-            .sortedByDescending { it.height }
+        pack.layouts.filter { it.family == family && it.variant == variant && it.frame != null && !it.foldBoard && it.minRefH <= windowH / k }
+            .sortedWith(compareByDescending<SkinLayoutSpec> { it.minRefH }.thenByDescending { it.height })
             .firstNotNullOfOrNull { spec ->
                 SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset = topInset.toFloat())?.takeIf { p ->
                     val g = p.glasses.first().rect
@@ -94,8 +94,12 @@ object SkinChoice {
      * The first of [family]'s [variant] layouts, widest background first, that [placed] places: a big window gets the
      * board rendered for it (a background only grows, so a smaller window takes a smaller one).
      */
-    private fun widest(pack: SkinPackManifest, family: SkinFamily, variant: SkinVariant, fold: Boolean, placed: (SkinLayoutSpec) -> SkinPlacement?): SkinPlacement? =
-        pack.layouts.filter { it.family == family && it.variant == variant && it.foldBoard == fold }.sortedByDescending { it.width }.firstNotNullOfOrNull(placed)
+    private fun widest(
+        pack: SkinPackManifest, family: SkinFamily, variant: SkinVariant, fold: Boolean, refH: Float = Float.MAX_VALUE,
+        placed: (SkinLayoutSpec) -> SkinPlacement?,
+    ): SkinPlacement? =
+        pack.layouts.filter { it.family == family && it.variant == variant && it.foldBoard == fold && it.minRefH <= refH }
+            .sortedWith(compareByDescending<SkinLayoutSpec> { it.minRefH }.thenByDescending { it.width }).firstNotNullOfOrNull(placed)
 
     /** A layout on a foldable's board: its background has a hinge (an inner screen's two halves). */
     private val SkinLayoutSpec.foldBoard: Boolean get() = tree.parts.any { it.isHinge }
@@ -135,7 +139,7 @@ object SkinChoice {
         if (landscape) return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset)
         // half-folded: the screen frame above the fold, the pad below it (a DS's touch screen with it)
         // a foldable's inner screen or a tablet: the fold board, split at its hinge flat or not (the window's middle when flat)
-        if (foldable || tablet) widest(pack, SkinFamily.FLEX, v, fold = true) { spec ->
+        if (foldable || tablet) widest(pack, SkinFamily.FLEX, v, fold = true, refH = windowH / k) { spec ->
             SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), hingeY ?: (windowH / 2f))
         }?.let { return it }
         if (hingeY != null) return widest(pack, SkinFamily.FLEX, v, fold = false) { spec ->
