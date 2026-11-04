@@ -129,9 +129,12 @@ class NxCarbonPackTest {
             assertEquals("flex_ds_fold", ds.spec.id)
             assertHalfFolded(ds, 1224f)
             assertEquals(3.5f, ds.glass(GlassScreen.TOUCH)!!.scale, 0.01f)   // as the old tablet render: touch 3.5x
-            // the top screen: the frame filling the half above the hinge (the DS top screen centred in it), as the menu's
+            // the top screen: the frame filling the half above the hinge (the DS top screen centred in it), as the menu's,
+            // with shell round it as a clamshell's: clear of the hinge (its top ~62 px above the fold) by the shell
             val top = ds.glass(GlassScreen.TOP)!!.rect
-            assertTrue(top.width > 1700f && top.y + top.height < 1224f && top.height > 1000f, "top $top")
+            assertTrue(top.width > 1600f && top.height > 1000f, "top $top")
+            assertTrue(top.y + top.height <= 1224f - 62f - 32f, "top $top: on the hinge")
+            assertTrue(top.x >= 32f && top.x + top.width <= 1848f - 32f, "top $top: edge to edge")
             val gba = assertNotNull(place("fold_inner_${suffix}_gba", 1848, 2448, tablet = true, ds = false, picture = 240f to 160f, hinge = hinge, foldable = true))
             assertEquals("flex_single_fold", gba.spec.id)
             assertHalfFolded(gba, 1224f)

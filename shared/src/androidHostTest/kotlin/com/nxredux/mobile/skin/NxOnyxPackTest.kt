@@ -22,6 +22,8 @@ class NxOnyxPackTest {
         for ((o, c) in onyx.layouts.zip(carbon.layouts)) {
             assertEquals(c.width to c.height, o.width to o.height, o.id)
             assertEquals(c.controls.map { it.id to (it.x to it.y) }, o.controls.map { it.id to (it.x to it.y) }, o.id)
+            // the screen frame placed alike (its margins, the hinge gap): a pack built before a layout change shows it
+            assertEquals(c.frame?.let { listOf(it.side, it.top, it.hinge, it.bottom, it.corner) }, o.frame?.let { listOf(it.side, it.top, it.hinge, it.bottom, it.corner) }, o.id)
             assertTrue(File(skins, "nx-onyx/${o.image}").isFile, o.image)
             o.parts?.let { assertTrue(File(skins, "nx-onyx/$it").isFile, it) }
         }
