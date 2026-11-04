@@ -30,7 +30,7 @@ class NxCarbonPackTest {
         sb.append("],\"parts\":${p?.spec?.parts?.let { "\"$it\"" }},\"pieces\":[")
         p?.pieces?.forEachIndexed { i, c ->
             if (i > 0) sb.append(',')
-            sb.append("[${c.src.x},${c.src.y},${c.src.width},${c.src.height},${c.dst.x},${c.dst.y},${c.dst.width},${c.dst.height}]")
+            sb.append("[${c.src.x},${c.src.y},${c.src.width},${c.src.height},${c.dst.x},${c.dst.y},${c.dst.width},${c.dst.height},${c.alt?.let { "\"$it\"" }}]")
         }
         sb.append("],\"glasses\":[")
         p?.glasses?.forEachIndexed { i, g -> if (i > 0) sb.append(','); sb.append("[\"${g.screen}\",${g.rect.x},${g.rect.y},${g.rect.width},${g.rect.height},${g.scale}]") }
@@ -42,7 +42,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(36, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba and arcade twins
+        assertEquals(42, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade and dc twins
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -180,6 +180,45 @@ class NxCarbonPackTest {
                     val hw = if (c.spec.r > 0f) c.spec.r else c.spec.hw; val hh = if (c.spec.r > 0f) c.spec.r else c.spec.hh
                     assertTrue(apart(floatArrayOf(c.x - hw, c.y - hh, c.x + hw, c.y + hh), floatArrayOf(r.x, r.y, r.x + r.width, r.y + r.height)), "$name ${c.spec.id} on the panel")
                 }
+            }
+        }
+    }
+
+    @Test
+    fun dreamcastLayoutsInEveryFamily() {
+        val roomy = setOf("inner", "inner_half", "tablet", "inner_land")
+        for ((name, d) in consoleDevices) {
+            val tablet = name == "tablet"
+            val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 640f to 480f,
+                d.third, foldable = name.startsWith("inner"), variant = SkinVariant.DC), name)
+            dump("dc_$name", d.first, d.second, p)
+            assertEquals(SkinVariant.DC, p.spec.variant, name)
+            val ids = p.controls.map { it.spec.id }.filterNot { it.startsWith("TOUCH_") }.toSet()
+            val base = setOf("STICK", "DPAD", "A", "B", "X", "Y", "L2", "R2", "START", "MENU")
+            assertEquals(if (name in roomy) base else base + "STICK_SWAP", ids, name)
+            assertEquals(1, p.pieces.count { it.knob }, name)
+            fun c(id: String) = p.controls.first { it.spec.id == id }
+            fun box(pc: PlacedControl): FloatArray {
+                val r = when (pc.spec.shape) { ControlShape.STICK -> pc.spec.r * 1.25f; ControlShape.RECT -> 0f; else -> pc.spec.r }
+                val hw = if (r > 0f) r else pc.spec.hw; val hh = if (r > 0f) r else pc.spec.hh
+                return floatArrayOf(pc.x - hw, pc.y - hh, pc.x + hw, pc.y + hh)
+            }
+            fun apart(a: FloatArray, b: FloatArray) = a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1]
+            for (useStick in listOf(true, false)) {
+                val shown = p.forStick(useStick)
+                if (name !in roomy) assertEquals(1, shown.controls.count { it.spec.id == "STICK" || it.spec.id == "DPAD" }, "$name $useStick")
+                val cs = shown.controls.filterNot { it.spec.id.startsWith("TOUCH_") }
+                val face = setOf("A", "B", "X", "Y")   // the diamond's caps share their edges (as on every layout)
+                for (i in cs.indices) for (j in i + 1 until cs.size) {
+                    if (cs[i].spec.id in face && cs[j].spec.id in face) continue
+                    assertTrue(apart(box(cs[i]), box(cs[j])), "$name ${cs[i].spec.id} ${cs[j].spec.id}")
+                }
+                for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
+            }
+            if (name in roomy) assertTrue(c("STICK").y < c("DPAD").y, "$name stick above the d-pad")
+            if (name in setOf("inner", "inner_half", "tablet")) {
+                val r = p.glasses.single { it.screen == GlassScreen.PANEL }.rect
+                for (x in p.controls) assertTrue(apart(box(x), floatArrayOf(r.x, r.y, r.x + r.width, r.y + r.height)), "$name ${x.spec.id} on the panel")
             }
         }
     }
