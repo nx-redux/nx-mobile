@@ -115,9 +115,17 @@ object SkinChoice {
     ): SkinPlacement? {
         if (windowW <= 0 || windowH <= 0 || densityDpi <= 0) return null
         val v = variant ?: if (ds) SkinVariant.DS else SkinVariant.SINGLE
-        // a console's own set the pack does not have (an older or a player's pack): the shared one-screen set
-        if (v != SkinVariant.DS && v != SkinVariant.SINGLE && pack.layouts.none { it.variant == v })
-            return place(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, SkinVariant.SINGLE)
+        val own = placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, v)
+        // a console's own set the pack lacks for this screen (an older pack, or a player's partly made one): the shared
+        // one-screen set, decided per screen, so a missing landscape layout never leaves the game without a skin
+        if (own != null || v == SkinVariant.DS || v == SkinVariant.SINGLE) return own
+        return placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, SkinVariant.SINGLE)
+    }
+
+    private fun placeAs(
+        pack: SkinPackManifest, windowW: Int, windowH: Int, densityDpi: Int, tablet: Boolean, ds: Boolean,
+        picture: Pair<Float, Float>?, hingeY: Float?, topInset: Int, foldable: Boolean, v: SkinVariant,
+    ): SkinPlacement? {
         val k = scaleFor(pack, densityDpi)
         val landscape = windowW > windowH
         // sideways: the main menu's landscape shell, the game in its screen frame (the strip under it; a DS's MIC, SWAP)

@@ -60,4 +60,16 @@ class SkinConsoleLayoutTest {
         val p = assertNotNull(SkinChoice.place(old, 1080, 2520, 420, tablet = false, ds = false, picture = 320f to 224f, variant = SkinVariant.ARCADE))
         assertEquals(SkinVariant.SINGLE, p.spec.variant)
     }
+
+    @Test
+    fun aScreenWithoutTheConsolesLayoutTakesTheSharedOne() {
+        // a player's pack with its console layouts for portrait only: sideways, the shared one-screen layout, not no skin
+        for (v in listOf(SkinVariant.ARCADE, SkinVariant.GB, SkinVariant.GBA)) {
+            val partial = pack.copy(layouts = pack.layouts.filterNot { it.variant == v && it.family == SkinFamily.GRIP })
+            val land = assertNotNull(SkinChoice.place(partial, 2520, 1080, 420, tablet = false, ds = false, picture = 320f to 224f, variant = v), "$v")
+            assertEquals(SkinVariant.SINGLE, land.spec.variant, "$v")
+            // portrait keeps the console's own
+            assertEquals(v, assertNotNull(SkinChoice.place(partial, 1080, 2520, 420, tablet = false, ds = false, picture = 320f to 224f, variant = v)).spec.variant)
+        }
+    }
 }
