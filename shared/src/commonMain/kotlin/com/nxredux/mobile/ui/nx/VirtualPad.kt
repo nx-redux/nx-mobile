@@ -326,7 +326,7 @@ internal val LocalPadColors = staticCompositionLocalOf { CharcoalPadColors }
 
 /** [theme]'s colours; [buttons] picks Black's button set and is ignored by the other themes. */
 internal fun padColorsFor(theme: PadTheme, buttons: PadButtons = PadButtons.DEFAULT): PadColors = when (theme) {
-    PadTheme.CHARCOAL, PadTheme.NX_CARBON -> CharcoalPadColors   // a skin's pad, where the skin has no layout, is Charcoal
+    PadTheme.CHARCOAL, PadTheme.NX_CARBON, PadTheme.NX_ONYX -> CharcoalPadColors   // a skin's pad, where the skin has no layout, is Charcoal
     PadTheme.RETRO -> RetroPadColors
     PadTheme.BLACK -> when (buttons) {
         PadButtons.GREY -> BlackGreyPadColors

@@ -913,7 +913,7 @@ class AppStateTest {
     @Test fun customise_walks_its_pages_and_writes_each() = runTest {
         val (state, settings) = atCustomise()
         assertEquals(OnboardingStep.PAD, step(state))
-        state.select(1); state.onButton(NxButton.RIGHT); state.onButton(NxButton.RIGHT)   // the theme row: NX Carbon → Charcoal → Retro
+        state.select(1); repeat(3) { state.onButton(NxButton.RIGHT) }   // the theme row: NX Carbon → NX Onyx → Charcoal → Retro
         state.select(2); state.onButton(NxButton.A)                         // Continue (the pad Show, as it is)
         assertEquals(OnboardingStep.TITLE, step(state))
         state.select(0); state.onButton(NxButton.A)                         // the page title: Hide (flips in place)
@@ -961,8 +961,8 @@ class AppStateTest {
     @Test fun the_pad_theme_row_flips_in_place() = runTest {
         val (state, settings) = atCustomise()
         val before = state.screen.value
-        state.select(1); state.onButton(NxButton.A)                         // NX Carbon → Charcoal, the page stays
-        assertEquals(PadTheme.CHARCOAL, settings.padTheme)
+        state.select(1); state.onButton(NxButton.A)                         // NX Carbon → NX Onyx, the page stays
+        assertEquals(PadTheme.NX_ONYX, settings.padTheme)
         assertEquals(OnboardingStep.PAD, step(state))
         assertNotEquals(before, state.screen.value)                        // republished: App re-reads the theme
         state.onButton(NxButton.LEFT)
@@ -5582,6 +5582,9 @@ class AppStateTest {
         state.openSettings(SettingsSection.APPEARANCE)
         assertEquals(SettingsRow(SettingsKind.PAD_THEME, "Pad theme", "NX Carbon"), assertIs<Screen.Settings>(state.screen.value).rows[0])
         state.select(0); state.onButton(NxButton.RIGHT)
+        assertEquals(PadTheme.NX_ONYX, settings.padTheme)
+        assertEquals("NX Onyx", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
+        state.onButton(NxButton.RIGHT)
         assertEquals(PadTheme.CHARCOAL, settings.padTheme)
         assertEquals("Charcoal", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
         assertEquals(ListSelection(0, 5), state.selection.value)   // the row stays highlighted
@@ -10680,7 +10683,7 @@ class AppStateTest {
             assertEquals(s.rows.size, s.choices.size)
             return s.choices[s.rows.indexOfFirst { it.kind == kind }]
         }
-        assertEquals(SettingChoices(listOf("NX Carbon", "Charcoal", "Retro", "Black"), 0), choices(SettingsSection.APPEARANCE, SettingsKind.PAD_THEME))
+        assertEquals(SettingChoices(listOf("NX Carbon", "NX Onyx", "Charcoal", "Retro", "Black"), 0), choices(SettingsSection.APPEARANCE, SettingsKind.PAD_THEME))
         assertEquals(SettingChoices(AccentPreset.entries.map { it.label }, 0), choices(SettingsSection.APPEARANCE, SettingsKind.ACCENT))
         assertEquals(SettingChoices(listOf("Large", "Small"), 0), choices(SettingsSection.APPEARANCE, SettingsKind.TEXT_SIZE))
         assertNull(choices(SettingsSection.APPEARANCE, SettingsKind.RESET_DEFAULTS))

@@ -21,8 +21,9 @@ class PadButtonsTest {
 
     @Test fun nxCarbonIsTheDefaultThemeAndFirst() {
         assertEquals(PadTheme.NX_CARBON, PadTheme.DEFAULT)
-        assertEquals(listOf(PadTheme.NX_CARBON, PadTheme.CHARCOAL, PadTheme.RETRO, PadTheme.BLACK), PadTheme.entries)
+        assertEquals(listOf(PadTheme.NX_CARBON, PadTheme.NX_ONYX, PadTheme.CHARCOAL, PadTheme.RETRO, PadTheme.BLACK), PadTheme.entries)
         assertEquals("nx-carbon", PadTheme.NX_CARBON.skin)
+        assertEquals("nx-onyx", PadTheme.NX_ONYX.skin)
         assertEquals(null, PadTheme.BLACK.skin)
     }
 }
