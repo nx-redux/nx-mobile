@@ -128,7 +128,7 @@ private fun GameSwitcherListScreen(
         if (picture == null) NxScreenBackground(url = null, fallback = Res.drawable.background, fade = false, modifier = Modifier.fillMaxSize(), centred = true)
         else KeepUntilLoaded(picture) { shown, done ->
             val request = remember(shown, context) {
-                if (shown == preview) ImageRequest.Builder(context).data(shown).transformations(homeCoverTrim()).build() else null
+                if (shown == preview) ImageRequest.Builder(context).data(shown).transformations(homeCoverTrim()).memoryCacheKey("$shown#trim").build() else null
             }
             NxScreenBackground(
                 url = shown, fallback = null, fade = true, modifier = Modifier.fillMaxSize(), request = request,

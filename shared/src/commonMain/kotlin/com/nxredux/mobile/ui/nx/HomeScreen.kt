@@ -489,7 +489,7 @@ private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLin
     // main thread in the load, so the crop always covers the card.
     val context = LocalPlatformContext.current
     val model: Any? = remember(picture, context) {
-        if (picture != null && picture == frame) ImageRequest.Builder(context).data(picture).transformations(homeCoverTrim()).build()
+        if (picture != null && picture == frame) ImageRequest.Builder(context).data(picture).transformations(homeCoverTrim()).memoryCacheKey("$picture#trim").build()
         else picture
     }
     val rows = backdropCaptionRows(info)   // the time only ([timeOnly]); none without it

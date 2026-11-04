@@ -2671,10 +2671,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** The slot strip for [ss]: file listings and thumbnail bounds. Blocking I/O. */
     private fun readSlots(ss: SaveStates): List<SlotUi> = ss.slots().map { slotUi(it, "Slot ${it.index}") }
 
-    /** One slot as the strip shows it; the thumbnail's ref carries its mtime, so a new save reloads it. Blocking I/O. */
+    /**
+     * One slot as the strip shows it; the thumbnail's ref carries its stamp and the state's time, so a new save reloads
+     * it even when the screenshot kept its old modification time ([contentStamp]). Blocking I/O.
+     */
     private fun slotUi(s: SaveStates.Slot, label: String): SlotUi {
         val sub = if (s.occupied) formatSlotTime(s.timestampMillis) else "empty"
-        val thumb = s.thumb?.let { FileRefs.versioned(it.absolutePath, it.lastModified()) }
+        val thumb = s.thumb?.let { FileRefs.versioned(it.absolutePath, it.contentStamp() xor s.timestampMillis) }
         return SlotUi(
             label = label,
             subtitle = sub,
