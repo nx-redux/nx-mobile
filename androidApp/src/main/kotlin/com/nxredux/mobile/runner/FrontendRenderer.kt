@@ -763,7 +763,7 @@ internal class FrontendRenderer(
         if (dualMode == DualMode.SPLIT) {
             val main = DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn)
             // under a pad skin (landscape with a second display): the main display's screen in the skin's screen
-            val glass = padLayout.skinPlacement()?.takeIf { padLayout.skinShown }?.let { it.glass(GlassScreen.STACK) ?: it.glass(GlassScreen.PICTURE) }?.rect
+            val glass = SkinDual.splitGlass(padLayout.skinPlacement()?.takeIf { padLayout.skinShown }, main)
             return if (glass != null) DualScreen.ndsScreenIn(SkinDual.dsScreenIn(glass), main) else DualScreen.ndsScreen(w, h, main)
         }
         if (dualMode == DualMode.PANEL_UP) return DualScreen.ndsPanelUp(w, h, NdsSettings.parse(frontendValues))

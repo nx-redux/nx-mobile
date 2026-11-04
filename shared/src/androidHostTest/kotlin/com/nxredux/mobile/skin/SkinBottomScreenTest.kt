@@ -1,5 +1,6 @@
 package com.nxredux.mobile.skin
 
+import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.runner.DualMode
 import com.nxredux.mobile.runner.PictureOn
 import java.io.File
@@ -41,5 +42,22 @@ class SkinBottomScreenTest {
         assertNull(SkinDual.panelGlass(grip, DualMode.PANEL, PictureOn.MAIN))
         assertNull(SkinDual.panelGlass(grip, DualMode.OFF, PictureOn.MAIN))
         assertNull(SkinDual.panelGlass(null, DualMode.OFF, PictureOn.MAIN))
+    }
+
+    @Test
+    fun aPortraitFoldBoardNeverPutsThePanelInItsTopScreen() {
+        // a second display came before the turn to landscape (or the lock is ignored): no glass, the panel covers the window
+        val single = assertNotNull(SkinChoice.place(pack, 1848, 2448, 420, tablet = true, ds = false, picture = 240f to 160f, foldable = true))
+        assertNull(SkinDual.panelGlass(single, DualMode.PANEL, PictureOn.SECOND))
+    }
+
+    @Test
+    fun aDsSplitGoesInTheScreenGlassItShows() {
+        val fold = assertNotNull(SkinChoice.place(pack, 1848, 2448, 420, tablet = true, ds = true, foldable = true))
+        assertEquals(fold.glass(GlassScreen.TOUCH)!!.rect, SkinDual.splitGlass(fold, NdsScreen.BOTTOM))
+        assertEquals(fold.glass(GlassScreen.TOP)!!.rect, SkinDual.splitGlass(fold, NdsScreen.TOP))
+        val grip = assertNotNull(SkinChoice.place(pack, 2448, 1848, 420, tablet = true, ds = true, foldable = true))
+        assertEquals(grip.glass(GlassScreen.STACK)!!.rect, SkinDual.splitGlass(grip, NdsScreen.BOTTOM))
+        assertNull(SkinDual.splitGlass(null, NdsScreen.BOTTOM))
     }
 }

@@ -45,7 +45,6 @@ import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_ART_PATH
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_GAME_PATH
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_TITLE
 import com.nxredux.mobile.settings.AndroidAppSettings
-import com.nxredux.mobile.skin.GlassScreen
 import com.nxredux.mobile.skin.PanelSpot
 import com.nxredux.mobile.skin.PlacedGlass
 import com.nxredux.mobile.skin.SkinDual
@@ -596,7 +595,8 @@ internal class DualScreenController(
         val host = mainPanelHost ?: return
         if (mainPanel.value != null || !mainPanelPill.value) return
         val root = findViewById<View>(R.id.root)
-        val g = padLayout.skinPlacement()?.takeIf { padLayout.skinShown }?.let { it.glass(GlassScreen.STACK) ?: it.glass(GlassScreen.PICTURE) }?.rect
+        val main = DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn)
+        val g = SkinDual.splitGlass(padLayout.skinPlacement()?.takeIf { padLayout.skinShown }, main)
         host.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
             if (g != null && root.width > 0) {
                 rightMargin = (root.width - (g.x + g.width)).roundToInt().coerceAtLeast(0)

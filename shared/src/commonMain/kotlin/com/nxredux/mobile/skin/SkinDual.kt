@@ -1,5 +1,6 @@
 package com.nxredux.mobile.skin
 
+import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.runner.DualMode
 import com.nxredux.mobile.runner.PictureOn
@@ -29,7 +30,9 @@ object SkinDual {
     fun panelGlass(p: SkinPlacement?, mode: DualMode, pictureOn: PictureOn): PlacedGlass? = when {
         p == null -> null
         mode == DualMode.OFF -> p.glass(GlassScreen.PANEL)
-        mode == DualMode.PANEL && pictureOn == PictureOn.SECOND -> p.glass(GlassScreen.PICTURE)
+        // the landscape skin's screen only: a portrait layout still placed (before the turn to landscape, or where the
+        // lock is ignored) keeps its top screen, and the panel covers the window instead
+        mode == DualMode.PANEL && pictureOn == PictureOn.SECOND && p.spec.family == SkinFamily.GRIP -> p.glass(GlassScreen.PICTURE)
         else -> null
     }
 
@@ -55,5 +58,15 @@ object SkinDual {
         val w = minOf(glass.width, glass.height * aspect)
         val h = w / aspect
         return PxRect(glass.x + (glass.width - w) / 2f, glass.y + (glass.height - h) / 2f, w, h)
+    }
+
+    /**
+     * Where a DS split's main-display screen [main] goes in [p]: the landscape skin's one screen (both screens' glass),
+     * else that screen's own glass (a portrait DS layout still placed), else the picture glass; null without a skin.
+     */
+    fun splitGlass(p: SkinPlacement?, main: NdsScreen): PxRect? {
+        p ?: return null
+        val own = if (main == NdsScreen.BOTTOM) GlassScreen.TOUCH else GlassScreen.TOP
+        return (p.glass(GlassScreen.STACK) ?: p.glass(own) ?: p.glass(GlassScreen.PICTURE))?.rect
     }
 }
