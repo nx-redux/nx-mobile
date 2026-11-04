@@ -24,6 +24,8 @@ class NxOnyxPackTest {
             assertEquals(c.controls.map { it.id to (it.x to it.y) }, o.controls.map { it.id to (it.x to it.y) }, o.id)
             // the screen frame placed alike (its margins, the hinge gap): a pack built before a layout change shows it
             assertEquals(c.frame?.let { listOf(it.side, it.top, it.hinge, it.bottom, it.corner) }, o.frame?.let { listOf(it.side, it.top, it.hinge, it.bottom, it.corner) }, o.id)
+            // the pieces' glasses (the fold board's touch and panel screens) alike
+            assertEquals(c.pieces.mapNotNull { it.glass }, o.pieces.mapNotNull { it.glass }, o.id)
             assertTrue(File(skins, "nx-onyx/${o.image}").isFile, o.image)
             o.parts?.let { assertTrue(File(skins, "nx-onyx/$it").isFile, it) }
         }

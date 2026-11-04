@@ -107,6 +107,43 @@ class NxCarbonPackTest {
     }
 
     @Test
+    fun oneScreenGamesOnTheFoldBoardHaveTheBottomScreen() {
+        val hinges = mapOf("inner" to 1224f, "inner_half" to 1236f, "tablet" to 1152f)
+        for (v in listOf(SkinVariant.SINGLE, SkinVariant.GB, SkinVariant.GBA)) for ((name, hinge) in hinges) {
+            val id = "$v $name"
+            val p = consolePlace(v, name, consoleDevices.toMap().getValue(name))
+            dump("fold_panel_${v.name.lowercase()}_$name", consoleDevices.toMap().getValue(name).first, consoleDevices.toMap().getValue(name).second, p)
+            assertEquals("flex_${if (v == SkinVariant.SINGLE) "single" else v.name.lowercase()}_fold", p.spec.id, id)
+            val panel = p.glasses.single { it.screen == GlassScreen.PANEL }
+            assertEquals("panel", panel.id, id)
+            val r = panel.rect
+            val c = p.controls.associateBy { it.spec.id }
+            val menu = c.getValue("MENU")
+            assertTrue(r.y > hinge && r.y + r.height < menu.y - menu.spec.r, "$id panel $r hinge $hinge menu ${menu.y}")
+            for (ctl in p.controls) {
+                val hw = if (ctl.spec.r > 0f) ctl.spec.r else ctl.spec.hw
+                val hh = if (ctl.spec.r > 0f) ctl.spec.r else ctl.spec.hh
+                val apart = ctl.x + hw <= r.x || r.x + r.width <= ctl.x - hw || ctl.y + hh <= r.y || r.y + r.height <= ctl.y - hh
+                assertTrue(apart, "$id ${ctl.spec.id} (${ctl.x}, ${ctl.y}) on the panel $r")
+            }
+            val pic = p.glass(GlassScreen.PICTURE)!!.rect
+            assertTrue(pic.y + pic.height <= hinge - 62f, "$id picture $pic")
+            assertTrue(c.keys.none { it.startsWith("TOUCH_") || it == "MIC" || it == "SWAP" }, "$id ${c.keys}")
+            assertTrue(p.pieces.none { it.strip } && p.spec.frame?.strip == null, "$id strip")
+        }
+    }
+
+    @Test
+    fun foldBoardDsAndMenuAreUnchanged() {
+        val ds = assertNotNull(place("fold_ds_kept", 1848, 2448, tablet = true, foldable = true))
+        assertEquals("flex_ds_fold", ds.spec.id)
+        assertNotNull(ds.glass(GlassScreen.TOUCH))
+        assertTrue(listOf("TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4").all { t -> ds.controls.any { it.spec.id == t } })
+        val menu = assertNotNull(SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true))
+        assertEquals(setOf("menutop", "menu"), menu.glasses.map { it.id }.toSet())
+    }
+
+    @Test
     fun gbaShoulderCapsDoNotOverlap() {
         for ((name, d) in consoleDevices) {
             val p = consolePlace(SkinVariant.GBA, name, d)
@@ -175,7 +212,10 @@ class NxCarbonPackTest {
         if (ds) assertTrue(p.glass(GlassScreen.TOUCH)!!.rect.y > hinge)
         val below = p.controls.filter { it.spec.id in setOf("DPAD", "A", "L", "R", "START", "MENU") + if (ds) setOf("MIC", "SWAP", "TOUCH_1") else emptySet() }
         assertTrue(below.all { it.y > hinge }, "${p.spec.id} ${below.map { it.spec.id to it.y }}")
-        assertTrue(p.controls.any { it.spec.id == "TOUCH_4" })
+        // the strip, but on the fold board's one-screen layouts: their panel's Shortcuts do its job (no strip)
+        val panel = p.glass(GlassScreen.PANEL)
+        if (panel != null) assertTrue(panel.rect.y > hinge && p.controls.none { it.spec.id == "TOUCH_4" }, p.spec.id)
+        else assertTrue(p.controls.any { it.spec.id == "TOUCH_4" })
     }
 
     @Test
