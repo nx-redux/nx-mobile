@@ -42,7 +42,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(18, pack.layouts.size)
+        assertEquals(30, pack.layouts.size)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -52,6 +52,50 @@ class NxCarbonPackTest {
             for (c in p.controls) {
                 val s = spec.controls.first { it.id == c.spec.id }
                 assertEquals(s.x, c.x, 1f, "${spec.id} ${s.id} x"); assertEquals(s.y, c.y, 1f, "${spec.id} ${s.id} y")
+            }
+        }
+    }
+
+    private val gbSet = setOf("DPAD", "A", "B", "X", "Y", "SELECT", "START", "MENU")
+    private val gbaSet = gbSet + setOf("L", "R", "L2", "R2")
+
+    @Test
+    fun gameBoyLayoutsHaveTheirButtonsInEveryFamily() {
+        for ((v, ids) in mapOf(SkinVariant.GB to gbSet, SkinVariant.GBA to gbaSet)) {
+            val ls = pack.layouts.filter { it.variant == v }
+            assertEquals(6, ls.size, "$v")
+            for (l in ls) assertEquals(ids, l.controls.map { it.id }.toSet(), l.id)
+        }
+    }
+
+    // every device a GB or GBA game is played on: the console's own layout, never the shared one
+    private val consoleDevices = listOf(
+        "cover" to Triple(1248, 1972, null), "flip" to Triple(1080, 2520, null), "inner" to Triple(1848, 2448, null),
+        "inner_half" to Triple(1848, 2448, 1236f), "tablet" to Triple(1440, 2304, null), "phone_land" to Triple(2520, 1080, null),
+        "inner_land" to Triple(2448, 1848, null))
+
+    private fun consolePlace(v: SkinVariant, name: String, d: Triple<Int, Int, Float?>): SkinPlacement {
+        val tablet = name == "tablet"
+        return assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, if (v == SkinVariant.GB) 160f to 144f else 240f to 160f,
+            d.third, foldable = name.startsWith("inner"), variant = v), "$v $name")
+    }
+
+    @Test
+    fun gameBoyGamesGetTheirLayoutOnEveryDevice() {
+        for (v in listOf(SkinVariant.GB, SkinVariant.GBA)) for ((name, d) in consoleDevices) assertEquals(v, consolePlace(v, name, d).spec.variant, "$v $name")
+    }
+
+    @Test
+    fun gbaShoulderCapsDoNotOverlap() {
+        for ((name, d) in consoleDevices) {
+            val p = consolePlace(SkinVariant.GBA, name, d)
+            fun box(id: String) = p.controls.first { it.spec.id == id }.let { floatArrayOf(it.x - it.spec.hw, it.y - it.spec.hh, it.x + it.spec.hw, it.y + it.spec.hh) }
+            fun apart(a: FloatArray, b: FloatArray) = a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1]
+            val ids = listOf("L", "L2", "R2", "R")
+            for (i in ids.indices) for (j in i + 1 until ids.size) assertTrue(apart(box(ids[i]), box(ids[j])), "$name ${ids[i]} ${ids[j]}")
+            for (s in ids) for (c in listOf("DPAD", "A", "B", "X", "Y")) {
+                val o = p.controls.first { it.spec.id == c }; val r = if (c == "DPAD") o.spec.r else o.spec.r
+                assertTrue(apart(box(s), floatArrayOf(o.x - r, o.y - r, o.x + r, o.y + r)), "$name $s $c")
             }
         }
     }
