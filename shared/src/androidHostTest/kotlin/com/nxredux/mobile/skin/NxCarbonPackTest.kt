@@ -134,6 +134,17 @@ class NxCarbonPackTest {
     }
 
     @Test
+    fun foldBoardTopScreensHaveTheSameShellAboveAsBeside() {
+        val fold = pack.layouts.filter { it.tree.parts.any { p -> p.isHinge } && it.frame != null }
+        assertTrue(fold.map { it.id }.containsAll(listOf("stacked_menu_fold", "flex_ds_fold", "flex_single_fold", "flex_gb_fold", "flex_gba_fold")), "${fold.map { it.id }}")
+        for (l in fold) assertEquals(l.frame!!.side, l.frame!!.top, l.id)
+        // placed on the inner screen: the frame's top margin as its left one
+        val p = assertNotNull(SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true))
+        val f = p.pieces.first()
+        assertEquals(f.dst.x, f.dst.y, 1f)
+    }
+
+    @Test
     fun foldBoardDsAndMenuAreUnchanged() {
         val ds = assertNotNull(place("fold_ds_kept", 1848, 2448, tablet = true, foldable = true))
         assertEquals("flex_ds_fold", ds.spec.id)
