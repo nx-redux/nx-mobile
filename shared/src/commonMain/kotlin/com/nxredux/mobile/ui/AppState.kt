@@ -981,6 +981,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      */
     val dualMenu: StateFlow<Boolean> = _dualMenu.asStateFlow()
 
+    /** The menu window is tablet-class (the Fold's inner screen too): upright, the menu skin may show two screens. */
+    fun tabletWindow(): Boolean = deps.screenClass()?.isTablet == true
+
     private val _displayDualMenu = MutableStateFlow(false)
     /** The main menu's top screen is a second display (the presentation path), not the skin's top glass. */
     val displayDualMenu: StateFlow<Boolean> = _displayDualMenu.asStateFlow()

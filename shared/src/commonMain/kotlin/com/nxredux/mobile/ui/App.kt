@@ -182,6 +182,9 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     val gameInfo by state.gameInfo.collectAsState()
     val netplayPage = state.netplay?.page?.collectAsState()   // the Netplay sheet's page (null: closed); no controller, no sheet
     val dualMenu by state.dualMenu.collectAsState()   // the menu is on the second display: the game list's overlays go to the top screen
+    val displayDualMenu by state.displayDualMenu.collectAsState()   // a second display has the top screen: the skin keeps one
+    val windowSize = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+    val tabletWindow = remember(windowSize) { state.tabletWindow() }   // read again when the window changes (fold, unfold)
     val toolOnTop by state.toolOnTop.collectAsState()   // a tool has the focus: with the menu on the second display, it and its overlays are on the top screen
     LaunchedEffect(Unit) { state.loadOnce() }   // App may be composed again on the other display (the main menu there)
     // Settings are plain properties: every Pad theme change republishes the screen, so re-read it when the screen changes.
@@ -219,6 +222,11 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
             showPad = menuPad,
             skin = skin,
             skinPad = { m, placement, picture, parts -> PadVibrationProvider(padVibration) { SkinPad(placement, picture, parts, onPadEvent, m) } },
+            // the Fold's inner screen and tablets upright: the menu below, the top screen in the skin's frame above the hinge
+            tablet = tabletWindow,
+            twoScreens = !displayDualMenu,
+            top = { m -> Box(m) { MenuTopScreen(state, inSkin = true) } },
+            onTwoScreens = state::onSkinDualMenu,
             // Flex mode on a wide window: the two clusters below the hinge (the main app has no analog stick use).
             clusters = { l, r ->
                 NxTheme {

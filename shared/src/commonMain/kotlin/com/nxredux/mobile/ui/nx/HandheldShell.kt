@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
@@ -55,6 +56,11 @@ val LocalPadBelow = compositionLocalOf { false }
 /** True while the screen is inside a pad skin's frame: the frame is already a margin, so pages take the phone inset ([nxPageInset]). */
 val LocalInSkin = compositionLocalOf { false }
 
+/** The skin's glass the main menu goes in on a two-screen layout (else its only glass). */
+private const val MENU_GLASS = "menu"
+/** The two-screen layout's top glass: the top screen ([HandheldShell]'s top). */
+private const val TOP_GLASS = "menutop"
+
 /**
  * The screen's vertical centre in window px: the app's area under the status bar, down to the pad band or the bottom
  * without one, for content centred on the screen rather than its own box ([NxCarousel]'s game list, the Carousel Home
@@ -89,6 +95,10 @@ fun HandheldShell(
     clusters: @Composable (left: Modifier, right: Modifier) -> Unit = { _, _ -> },
     skin: SkinPackSource? = null,
     skinPad: @Composable (Modifier, SkinPlacement, ImageBitmap, ImageBitmap?) -> Unit = { _, _, _, _ -> },
+    tablet: Boolean = false,
+    twoScreens: Boolean = true,
+    top: (@Composable (Modifier) -> Unit)? = null,
+    onTwoScreens: (Boolean) -> Unit = {},
 ) {
     val colors = LocalNxColors.current
     val density = LocalDensity.current
@@ -114,24 +124,34 @@ fun HandheldShell(
                 with(density) { tabletopInArea(posture, top, maxWidth.roundToPx(), maxHeight.roundToPx(), controllerConnected) }
             }
             // The skin's menu layout for this area (flat, portrait or landscape, with the pad shown only), its picture and its pieces' picture.
-            val skinPlaced = if (skin != null && showPad && tt == null && posture !is Posture.Tabletop) {
+            // Half-folded only the two-screen layout (a tablet-class window: the Fold's inner screen) keeps the skin, split at the hinge.
+            val hingeY = (posture as? Posture.Tabletop)?.let { (it.hingeTop + it.hingeBottom) / 2f }
+            val canTwo = top != null && tablet && twoScreens && portrait
+            val skinPlaced = if (skin != null && showPad && (canTwo || (tt == null && posture !is Posture.Tabletop))) {
                 val w = constraints.maxWidth
                 // the skin runs up under the cutout (the shell starts below it), its screen too: the frame keeps its own top
                 // margin and the glass reaches under the camera; the page inside clears it ([cutoutPad] below)
                 val above = topInWindow ?: 0
                 val h = constraints.maxHeight + above
                 val dpi = (density.density * 160f).roundToInt()
-                remember(skin, w, h, dpi) {
-                    SkinChoice.placeMenu(skin.manifest, w, h, dpi, foldable = DeviceTraits.canHalfFold)?.let { p ->
+                remember(skin, w, h, dpi, canTwo, hingeY) {
+                    SkinChoice.placeMenu(skin.manifest, w, h, dpi, foldable = DeviceTraits.canHalfFold, tablet = tablet, hingeY = hingeY, twoScreens = canTwo)
+                        ?.takeIf { posture !is Posture.Tabletop || it.glasses.any { g -> g.id == TOP_GLASS } }?.let { p ->
                         val parts = p.spec.parts?.let { skin.picture(it) ?: return@let null }
                         skin.picture(p.spec.image)?.takeIf { p.spec.parts == null || parts != null }?.let { Triple(p, it, parts) }
                     }
                 }
             } else null
+            val twoUp = skinPlaced?.first?.glasses?.any { it.id == TOP_GLASS } == true && top != null
+            val report by rememberUpdatedState(onTwoScreens)
+            DisposableEffect(twoUp) {
+                report(twoUp)
+                onDispose { report(false) }
+            }
             if (posture is Posture.Tabletop && topInWindow == null) {
                 // The first frame in tabletop: the hinge split needs the shell's position, so compose nothing rather than a
                 // branch that is swapped out a frame later.
-            } else if (tt != null) {
+            } else if (tt != null && skinPlaced == null) {
                 // Flex mode: the screen above the hinge, the controls (portrait pad, or the two clusters drawn solid) below it.
                 val screenH = with(density) { tt.gameBottom.toDp() }
                 val padH = maxHeight - with(density) { tt.padTop.toDp() }
@@ -155,7 +175,9 @@ fun HandheldShell(
                 // Placed for the window from its top: drawn that far up, over the bars' strip.
                 val (placement, picture, parts) = skinPlaced
                 val above = topInWindow ?: 0
-                val g = placement.glasses.first().rect
+                // two screens: the menu in the touch glass, the [top] screen in the frame above the hinge
+                val g = (placement.glasses.firstOrNull { it.id == MENU_GLASS } ?: placement.glasses.first()).rect
+                val topGlass = placement.glasses.firstOrNull { it.id == TOP_GLASS }?.rect?.takeIf { top != null }
                 val gx = g.x.roundToInt()
                 val gy = g.y.roundToInt()
                 val gw = (g.x + g.width).roundToInt() - gx
@@ -180,6 +202,23 @@ fun HandheldShell(
                     val cutoutPad = with(density) { (above - g.y).coerceAtLeast(0f).toDp() }
                     CompositionLocalProvider(LocalPortrait provides (gh > gw), LocalPadBelow provides true, LocalWindowSize provides window, LocalInSkin provides true) {
                         Box(Modifier.fillMaxSize().padding(top = cutoutPad)) { movableScreen(screenSlot) }
+                    }
+                }
+                if (topGlass != null && top != null) {
+                    val tx = topGlass.x.roundToInt()
+                    val ty = topGlass.y.roundToInt()
+                    val tw = (topGlass.x + topGlass.width).roundToInt() - tx
+                    val th = (topGlass.y + topGlass.height).roundToInt() - ty
+                    Box(
+                        Modifier.layout { m, _ ->
+                            val p = m.measure(Constraints.fixed(tw, th))
+                            layout(tw, th) { p.place(tx, ty - above) }
+                        },
+                    ) {
+                        val cutoutPad = with(density) { (above - topGlass.y).coerceAtLeast(0f).toDp() }
+                        CompositionLocalProvider(LocalPortrait provides (th > tw), LocalWindowSize provides window, LocalInSkin provides true) {
+                            Box(Modifier.fillMaxSize().padding(top = cutoutPad)) { top(Modifier.fillMaxSize()) }
+                        }
                     }
                 }
             } else if (!portrait || !showPad) {
