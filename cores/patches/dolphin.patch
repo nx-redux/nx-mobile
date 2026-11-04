@@ -205,19 +205,6 @@ index bcb2be8..db5cb41 100644
    INFO_LOG_FMT(IOS_ES, "IOCTL_ES_GETVIEWCNT for titleID: {:016x} (View Count = {})", TitleID,
                 view_count);
  
-diff --git a/Source/Core/Core/IOS/IOS.cpp b/Source/Core/Core/IOS/IOS.cpp
-index f49b82e..12f1ecf 100644
---- a/Source/Core/Core/IOS/IOS.cpp
-+++ b/Source/Core/Core/IOS/IOS.cpp
-@@ -692,7 +692,7 @@ std::optional<IPCReply> EmulationKernel::OpenDevice(OpenRequest& request)
-     constexpr std::string_view cios_devices[] = {"/dev/flash", "/dev/mload", "/dev/sdio/sdhc",
-                                                  "/dev/usb123", "/dev/usb2"};
-     static_assert(std::ranges::is_sorted(cios_devices));
--    if (std::ranges::binary_search(cios_devices, request.path))
-+    if (std::binary_search(std::begin(cios_devices), std::end(cios_devices), request.path))
-       WARN_LOG_FMT(IOS, "Possible anti-piracy check for cIOS device {}", request.path);
-     else
-       ERROR_LOG_FMT(IOS, "Unknown device: {}", request.path);
 diff --git a/Source/Core/Core/IOS/USB/Bluetooth/WiimoteDevice.cpp b/Source/Core/Core/IOS/USB/Bluetooth/WiimoteDevice.cpp
 index 4c522e3..8d5ddea 100644
 --- a/Source/Core/Core/IOS/USB/Bluetooth/WiimoteDevice.cpp
@@ -285,28 +272,6 @@ index 3551c31..c43310a 100644
  
  using CompressCB = std::function<bool(const std::string& text, float percent)>;
  
-diff --git a/Source/Core/DiscIO/VolumeVerifier.cpp b/Source/Core/DiscIO/VolumeVerifier.cpp
-index 3031f14..5585683 100644
---- a/Source/Core/DiscIO/VolumeVerifier.cpp
-+++ b/Source/Core/DiscIO/VolumeVerifier.cpp
-@@ -733,7 +733,7 @@ bool VolumeVerifier::ShouldHaveChannelPartition() const
-   };
-   static_assert(std::ranges::is_sorted(channel_discs));
- 
--  return std::ranges::binary_search(channel_discs, m_volume.GetGameID());
-+  return std::binary_search(std::begin(channel_discs), std::end(channel_discs), m_volume.GetGameID());
- }
- 
- bool VolumeVerifier::ShouldHaveInstallPartition() const
-@@ -764,7 +764,7 @@ bool VolumeVerifier::ShouldBeDualLayer() const
-   };
-   static_assert(std::ranges::is_sorted(dual_layer_discs));
- 
--  return std::ranges::binary_search(dual_layer_discs, m_volume.GetGameID());
-+  return std::binary_search(std::begin(dual_layer_discs), std::end(dual_layer_discs), m_volume.GetGameID());
- }
- 
- void VolumeVerifier::CheckVolumeSize()
 diff --git a/Source/Core/DolphinLibretro/Boot.cpp b/Source/Core/DolphinLibretro/Boot.cpp
 index aaa4cbe..fa0526d 100644
 --- a/Source/Core/DolphinLibretro/Boot.cpp
@@ -808,31 +773,3 @@ index 0000000..0a71c03
 +    void (*release)(void* handle);        // unbinds it from the calling thread
 +    void (*destroy)(void* handle);        // releases first if current on the calling thread
 +};
-diff --git a/Source/Core/UICommon/GameFile.cpp b/Source/Core/UICommon/GameFile.cpp
-index c24bb62..c33c66d 100644
---- a/Source/Core/UICommon/GameFile.cpp
-+++ b/Source/Core/UICommon/GameFile.cpp
-@@ -613,7 +613,7 @@ bool GameFile::CheckIfTwoDiscGame(const std::string& game_id) const
-   static_assert(std::ranges::is_sorted(two_disc_game_id_prefixes));
- 
-   std::string_view game_id_prefix(game_id.data(), GAME_ID_PREFIX_SIZE);
--  return std::ranges::binary_search(two_disc_game_id_prefixes, game_id_prefix);
-+  return std::binary_search(std::begin(two_disc_game_id_prefixes), std::end(two_disc_game_id_prefixes), game_id_prefix);
- }
- 
- std::string GameFile::GetNetPlayName(const Core::TitleDatabase& title_database) const
-diff --git a/Source/Core/VideoCommon/VertexManagerBase.cpp b/Source/Core/VideoCommon/VertexManagerBase.cpp
-index 2d5e28b..2025727 100644
---- a/Source/Core/VideoCommon/VertexManagerBase.cpp
-+++ b/Source/Core/VideoCommon/VertexManagerBase.cpp
-@@ -969,7 +969,9 @@ void VertexManagerBase::OnDraw()
- 
-   // Check if this draw is scheduled to kick a command buffer.
-   // The draw counters will always be sorted so a binary search is possible here.
--  if (std::ranges::binary_search(m_scheduled_command_buffer_kicks, m_draw_counter))
-+  // Not std::ranges::binary_search: NDK r26's libc++ compares against the first element, so every draw
-+  // between the first and last kick would flush (about 600 glFlush a frame in Super Mario Galaxy).
-+  if (std::binary_search(std::begin(m_scheduled_command_buffer_kicks), std::end(m_scheduled_command_buffer_kicks), m_draw_counter))
-   {
-     // Kick a command buffer on the background thread.
-     g_gfx->Flush();

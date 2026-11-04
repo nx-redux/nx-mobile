@@ -138,9 +138,10 @@ jobs:
           if [ "${{ matrix.core }}" = "azahar" ] || [ "${{ matrix.core }}" = "dolphin" ] || [ "${{ matrix.core }}" = "armsx2" ]; then
             "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmake;3.30.3" > /dev/null
           fi
-          # armsx2 builds with its own NDK (armsx2_NDK_VERSION in cores/Makefile, upstream's r29).
-          if [ "${{ matrix.core }}" = "armsx2" ]; then
-            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$(make -s -C cores print-armsx2-ndk)" > /dev/null
+          # armsx2 and dolphin build with their own NDK (<core>_NDK_VERSION in cores/Makefile, r29).
+          CORE_NDK="$(make -s -C cores print-ndk-${{ matrix.core }})"
+          if [ -n "$CORE_NDK" ]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$CORE_NDK" > /dev/null
           fi
 
       - name: Build ${{ matrix.core }} core
