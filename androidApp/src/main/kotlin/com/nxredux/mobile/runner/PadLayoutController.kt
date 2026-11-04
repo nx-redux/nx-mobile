@@ -138,6 +138,8 @@ internal interface PadLayoutHost {
     fun isLandscape(orientation: Int): Boolean
     fun isLandscape(): Boolean
     fun syncN3dsCore()
+    /** A NAOMI / Atomiswave set under the Dreamcast tag ([com.nxredux.mobile.skin.DcGames.isArcadeSet]): the arcade skin, on the d-pad. */
+    val dcArcadeSet: Boolean
     /** The game panel fills the whole window (it hides the pad; the menu opens over it). */
     fun mainPanelCoversWindow(): Boolean
     fun placeMainPanelHost()
@@ -230,6 +232,10 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             ?: "${intent.getStringExtra(EXTRA_TAG)}/${intent.getStringExtra(EXTRA_FILE_NAME)}"
 
     private fun onPadStickMode(useJoystick: Boolean) { PadStickModes[padStickKey] = useJoystick }
+
+    /** The stick (true) or the d-pad until the player chooses: the profile's, and a Dreamcast disc on its stick. */
+    private fun stickDefault(): Boolean =
+        padProfile().stickByDefault || com.nxredux.mobile.skin.DcGames.stickFirst(com.nxredux.mobile.runner.CoreRegistry.baseTag(layoutTag()), host.dcArcadeSet)
 
     /**
      * A pad over the game is laid out (the landscape clusters, or portrait's overlay with the band hidden): the
@@ -377,7 +383,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             ).apply { bottomMargin = bandPx; topMargin = cutoutTop }
             if (bandPx > 0) {
                 val bandLayout = padLayout(PadShape.PORTRAIT)
-                val pad = composePad { PadThemeProvider(padTheme, padButtons) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = bandLayout, tools = padTools(), shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic()) } }
+                val pad = composePad { PadThemeProvider(padTheme, padButtons) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, stickDefault()], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = bandLayout, tools = padTools(), shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic()) } }
                 addPad(root, pad, FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT, bandPx, Gravity.BOTTOM))
                 bandShown = true
@@ -478,7 +484,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val left = composePad {
             val density = LocalDensity.current
             VirtualPadLeft(input::onPad, input::onStick, Modifier.fillMaxSize().padding(start = with(density) { clusterInsetPx.value.toDp() }).alpha(clusterAlpha()), profile = padProfile(),
-                useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, overGame = true, motion = padMotion(), latched = input.gcLatched.value, layout = overlayLayout, tools = padTools(),
+                useJoystick = PadStickModes[padStickKey, stickDefault()], onUseJoystickChange = ::onPadStickMode, overGame = true, motion = padMotion(), latched = input.gcLatched.value, layout = overlayLayout, tools = padTools(),
                 shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, onGroupBounds = leftBounds,
                 besidePicture = true, unitOverride = clusterUnitPx.value?.let { with(density) { it.toDp() } }, secondRow = clusterSecondRow.value,
                 rowsOnScreen = clusterRowsOnScreen.value, mic = padMic())
@@ -647,7 +653,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             val unitDp = with(LocalDensity.current) { units.unitPx.toDp() }
             PortraitOverlayPad(
                 input::onPad, input::onStick, unitDp, Modifier.fillMaxSize().alpha(if (overlayClear.value) 1f else padLandscapeAlpha.value),
-                analog = true, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode,
+                analog = true, profile = padProfile(), useJoystick = PadStickModes[padStickKey, stickDefault()], onUseJoystickChange = ::onPadStickMode,
                 latched = input.gcLatched.value, shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut,
                 bandWidthUnits = units.widthUnits, bandHeightUnits = units.heightUnits, tools = padTools(), onCStick = padCStick(), mic = padMic(),
             )
@@ -799,14 +805,14 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         when (tt.pad) {
             TabletopPad.PORTRAIT -> {
                 val portraitLayout = padLayout(PadShape.PORTRAIT)
-                val pad = composePad { PadThemeProvider(padTheme, padButtons) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = portraitLayout, shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic()) } }
+                val pad = composePad { PadThemeProvider(padTheme, padButtons) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, stickDefault()], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = portraitLayout, shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic()) } }
                 addPad(root, pad, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, padH, Gravity.BOTTOM))
             }
             TabletopPad.CLUSTERS -> {
                 val halfW = (rootW * CLUSTER_MAX_WIDTH_SHARE).toInt()
                 val left = composePad {
                     VirtualPadLeft(input::onPad, input::onStick, Modifier.fillMaxSize().clearOfCutout(WindowInsetsSides.Start), profile = padProfile(),
-                        useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, motion = padMotion(), latched = input.gcLatched.value,
+                        useJoystick = PadStickModes[padStickKey, stickDefault()], onUseJoystickChange = ::onPadStickMode, motion = padMotion(), latched = input.gcLatched.value,
                         shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic())
                 }
                 val right = composePad {
@@ -857,7 +863,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val ds = NdsOptions.appliesTo(tag)
         // with a second display: one-screen games and a DS split keep the skin (its screen the touch screen, [SkinDual])
         if (names.isNotEmpty() || !SkinDual.skinAllowed(host.dualMode, ds, N3dsOptions.appliesTo(tag))) return null
-        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds) ?: return null
+        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet) ?: return null
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null
         val tablet = activity.windowShape().screenClass.isTablet

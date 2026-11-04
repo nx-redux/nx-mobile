@@ -3203,6 +3203,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun secondRegions(g: FloatArray, ds: List<NdsRegion>?): List<ScreenRegion> = dual.secondRegions(g, ds)
     override fun onN3dsSwapPressed(down: Boolean): Boolean = dual.onN3dsSwapPressed(down) || renderer.onTabletopN3dsSwap(down)
     override fun mainPanelCoversWindow(): Boolean = dual.mainPanelCoversWindow()
+    /** A NAOMI / Atomiswave set (flycast's set table, the launcher's rule): read once, the table only for a DC archive. */
+    override val dcArcadeSet: Boolean by lazy {
+        val name = intent.getStringExtra(EXTRA_FILE_NAME).orEmpty()
+        val tag = CoreRegistry.baseTag(layoutTag())
+        tag == "DC" && com.nxredux.mobile.library.Names.isArchive(name) &&
+            com.nxredux.mobile.skin.DcGames.isArcadeSet(tag, name, NaomiSetsAsset.get(this))
+    }
     override fun onSkinPlaced() = dual.syncPanel()
     override fun placeMainPanelHost() = dual.placeMainPanelHost()
 

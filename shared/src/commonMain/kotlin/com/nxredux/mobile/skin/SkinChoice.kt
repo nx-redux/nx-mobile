@@ -35,11 +35,13 @@ object SkinChoice {
      * The skin layout set for the console [baseTag] (upper case, GPGX prefix dropped; [ds]: a DS game): its own button
      * set (the Game Boys, the GBA), the shared one-screen set ([SINGLE_TAGS]), the DS's, or null: no skin.
      */
-    fun variantFor(baseTag: String, ds: Boolean): SkinVariant? = when {
+    fun variantFor(baseTag: String, ds: Boolean, arcadeSet: Boolean = false): SkinVariant? = when {
         ds -> SkinVariant.DS
         baseTag in GB_TAGS -> SkinVariant.GB
         baseTag in GBA_TAGS -> SkinVariant.GBA
         baseTag in ARCADE_TAGS -> SkinVariant.ARCADE
+        // flycast: a NAOMI / Atomiswave set takes the arcade skin, a disc the Dreamcast one ([DcGames.isArcadeSet])
+        baseTag == "DC" -> if (arcadeSet) SkinVariant.ARCADE else SkinVariant.DC
         baseTag in SINGLE_TAGS -> SkinVariant.SINGLE
         else -> null
     }
@@ -118,7 +120,8 @@ object SkinChoice {
         val own = placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, v)
         // a console's own set the pack lacks for this screen (an older pack, or a player's partly made one): the shared
         // one-screen set, decided per screen, so a missing landscape layout never leaves the game without a skin
-        if (own != null || v == SkinVariant.DS || v == SkinVariant.SINGLE) return own
+        // (never for the Dreamcast: the shared set has no stick)
+        if (own != null || v == SkinVariant.DS || v == SkinVariant.SINGLE || v == SkinVariant.DC) return own
         return placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, SkinVariant.SINGLE)
     }
 

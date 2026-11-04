@@ -19,4 +19,10 @@ class SkinVariantForTest {
     fun arcadeGetsTheArcadeLayout() {
         assertEquals(SkinVariant.ARCADE, SkinChoice.variantFor("FBN", ds = false))
     }
+
+    @Test
+    fun dreamcastDiscsGetTheirsAndArcadeSetsTheArcadeOne() {
+        assertEquals(SkinVariant.DC, SkinChoice.variantFor("DC", ds = false))
+        assertEquals(SkinVariant.ARCADE, SkinChoice.variantFor("DC", ds = false, arcadeSet = true))
+    }
 }

@@ -72,4 +72,12 @@ class SkinConsoleLayoutTest {
             assertEquals(v, assertNotNull(SkinChoice.place(partial, 1080, 2520, 420, tablet = false, ds = false, picture = 320f to 224f, variant = v)).spec.variant)
         }
     }
+
+    @Test
+    fun dcNeverFallsBackToTheStickless() {
+        // the shared one-screen set has no stick: a pack without dc layouts gives a Dreamcast disc no skin
+        val noDc = pack.copy(layouts = pack.layouts.filter { it.variant != SkinVariant.DC })
+        kotlin.test.assertNull(SkinChoice.place(noDc, 1080, 2520, 420, tablet = false, ds = false, picture = 640f to 480f, variant = SkinVariant.DC))
+        kotlin.test.assertNull(SkinChoice.place(noDc, 2520, 1080, 420, tablet = false, ds = false, picture = 640f to 480f, variant = SkinVariant.DC))
+    }
 }
