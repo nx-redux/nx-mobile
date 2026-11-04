@@ -173,6 +173,11 @@ data class PieceSpec(
     val level: PieceLevel = PieceLevel.BOTTOM,
     val scale: Float = 1f,
     val strip: StripSpec? = null,
+    /**
+     * More than 0: on a window wider than the render the piece grows with the room between the side clusters (its
+     * glass's shape kept, upward, clear of the hinge), drawn nine-sliced with corners this many picture px.
+     */
+    val grow: Int = 0,
 )
 
 /** How a [SliceNode] cuts its box: into side-by-side columns or stacked rows. */
@@ -197,7 +202,9 @@ data class SliceNode(
  * - `fixed`: keeps its length;
  * - `repeat`: shares what the window adds or takes away in proportion to its [weight] (tiled, may shrink to nothing);
  * - `glass:<id>`: shares the growth of that glass along this axis (so the glass meets its size exactly);
- * - `hinge`: fixed, and its middle lands on the window's fold when the device is half-folded.
+ * - `hinge`: fixed, and its middle lands on the window's fold when the device is half-folded;
+ * - `crop`: a repeat that, taking away, shows its own bottom part at its size (its top cut off, never squeezed): a tall
+ *   board's extra content under a hinge, hidden on a shorter window.
  * [node] cuts the slice further (null: a leaf).
  */
 @Serializable
@@ -209,7 +216,8 @@ data class SlicePart(
     /** A repeat that only grows (a hairline of plain border that widens when the glass is narrower). */
     val shrink: Boolean = true,
 ) {
-    val isRepeat get() = mode == REPEAT
+    val isRepeat get() = mode == REPEAT || mode == CROP
+    val isCrop get() = mode == CROP
     val glass: String? get() = mode.takeIf { it.startsWith(GLASS) }?.removePrefix(GLASS)
     val isHinge get() = mode == HINGE
 
@@ -218,6 +226,7 @@ data class SlicePart(
         const val REPEAT = "repeat"
         const val GLASS = "glass:"
         const val HINGE = "hinge"
+        const val CROP = "crop"
     }
 }
 

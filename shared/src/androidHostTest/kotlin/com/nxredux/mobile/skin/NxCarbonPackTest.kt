@@ -63,8 +63,10 @@ class NxCarbonPackTest {
             val ds = assertNotNull(place("fold_inner_$suffix", 1848, 2448, tablet = true, hinge = hinge, foldable = true))
             assertEquals("flex_ds_fold", ds.spec.id)
             assertHalfFolded(ds, 1224f)
-            assertEquals(3.5f, ds.glass(GlassScreen.TOUCH)!!.scale, 0.01f)   // as the old tablet render: top 5x, touch 3.5x
-            assertEquals(5f, ds.glass(GlassScreen.TOP)!!.scale, 0.01f)
+            assertEquals(3.5f, ds.glass(GlassScreen.TOUCH)!!.scale, 0.01f)   // as the old tablet render: touch 3.5x
+            // the top screen: the frame filling the half above the hinge (the DS top screen centred in it), as the menu's
+            val top = ds.glass(GlassScreen.TOP)!!.rect
+            assertTrue(top.width > 1700f && top.y + top.height < 1224f && top.height > 1000f, "top $top")
             val gba = assertNotNull(place("fold_inner_${suffix}_gba", 1848, 2448, tablet = true, ds = false, picture = 240f to 160f, hinge = hinge, foldable = true))
             assertEquals("flex_single_fold", gba.spec.id)
             assertHalfFolded(gba, 1224f)
@@ -159,6 +161,9 @@ class NxCarbonPackTest {
     private fun twoScreens(name: String, p: SkinPlacement?, w: Int, h: Int, hinge: Float) {
         val placed = assertNotNull(p, name)
         dump(name, w, h, placed)
+        // the board's own hinge is drawn where the fold is: its middle row at [hinge]
+        val hc = placed.cells.filter { it.src.y in 1163f..1165f }
+        assertTrue(hc.isNotEmpty() && hc.all { kotlin.math.abs(it.dst.y + it.dst.height / 2f - hinge) < 2f }, "$name hinge cells ${hc.map { it.dst }}")
         assertEquals("stacked_menu_fold", placed.spec.id, name)
         val top = placed.glasses.single { it.id == "menutop" }.rect
         val menu = placed.glasses.single { it.id == "menu" }.rect
@@ -171,12 +176,19 @@ class NxCarbonPackTest {
     @Test
     fun foldInnerMenuIsTwoScreens() {
         twoScreens("menu_inner_two", SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true), 1848, 2448, 1224f)
-        twoScreens("menu_inner_half", SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true, hingeY = 1300f), 1848, 2448, 1300f)
+        twoScreens("menu_inner_half", SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true, hingeY = 1236f), 1848, 2448, 1236f)
     }
 
     @Test
     fun tabletMenuIsTwoScreens() {
         twoScreens("menu_tab_two", SkinChoice.placeMenu(pack, 1440, 2304, 280, tablet = true), 1440, 2304, 1152f)
+        // the tablet's wider room: the menu's touch screen grows (its shape kept); the Fold's keeps its own size
+        val tab = assertNotNull(SkinChoice.placeMenu(pack, 1440, 2304, 280, tablet = true))
+        val tg = tab.glasses.single { it.id == "menu" }.rect
+        assertTrue(tg.width / tab.k > 1100f, "tablet menu glass $tg")
+        assertEquals(944f / 740f, tg.width / tg.height, 0.02f)
+        val fold = assertNotNull(SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true))
+        assertEquals(944f, fold.glasses.single { it.id == "menu" }.rect.width, 1f)
     }
 
     @Test

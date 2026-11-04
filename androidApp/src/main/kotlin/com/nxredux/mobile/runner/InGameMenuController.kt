@@ -439,15 +439,16 @@ internal class InGameMenuController(
         }
     }
 
-    /** The pad skin's screen glass, window px (all its screens' glasses as one, a DS's both), or null with no skin shown. */
-    /** The pad skin's screen glass's corner radius, window px (the largest of its screens'). */
-    private fun skinGlassCorner(): Float = padLayout.skinPlacement()?.glasses?.maxOfOrNull { it.corner } ?: 0f
+    /** The corner radius of the glass the menu sits in, window px. */
+    private fun skinGlassCorner(): Float = menuGlass()?.corner ?: 0f
 
-    private fun skinGlass(): PxRect? {
+    /** The pad skin's screen glass the menu sits in, window px ([menuGlass]), or null with no skin shown. */
+    private fun skinGlass(): PxRect? = menuGlass()?.rect
+
+    /** The glass the menu sits in: the biggest of the skin's (a DS's top screen), never across the frames between two. */
+    private fun menuGlass(): com.nxredux.mobile.skin.PlacedGlass? {
         if (!padLayout.skinShown) return null
-        val gs = padLayout.skinPlacement()?.glasses?.map { it.rect }?.takeIf { it.isNotEmpty() } ?: return null
-        val x0 = gs.minOf { it.x }; val y0 = gs.minOf { it.y }
-        return PxRect(x0, y0, gs.maxOf { it.x + it.width } - x0, gs.maxOf { it.y + it.height } - y0)
+        return padLayout.skinPlacement()?.glasses?.maxByOrNull { it.rect.width * it.rect.height }
     }
 
     fun closeMenu() {

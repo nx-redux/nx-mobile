@@ -27,6 +27,29 @@ class SkinSolverTest {
 
     private fun row3(frame: String) = SliceNode(SliceSplit.COLS, listOf(SlicePart(100, frame), SlicePart(800, "glass:g"), SlicePart(100, frame)))
 
+    /** 100 x 1000, rows: fixed 300 | crop 400 | fixed 300. */
+    private fun cropSpec() = SkinLayoutSpec(
+        id = "c", family = SkinFamily.STACKED, variant = SkinVariant.MENU, image = "c.png", width = 100, height = 1000,
+        tree = SliceNode(SliceSplit.ROWS, listOf(SlicePart(300), SlicePart(400, "crop"), SlicePart(300))),
+        glasses = emptyList(), scales = listOf(emptyList()), controls = emptyList(),
+    )
+
+    @Test
+    fun aCropSliceShowsItsBottomWhenShortAndRepeatsWhenTall() {
+        // 800 tall: the crop slice has 200 of its 400 and shows the bottom 200 (src 500..700), drawn 1:1, not squeezed
+        val short = assertNotNull(SkinSolver.place(cropSpec(), 100f, 800f, 1f, picture = null))
+        val c = short.cells.single { it.dst.y in 299f..301f }
+        assertEquals(500f, c.src.y, 0.5f); assertEquals(200f, c.src.height, 0.5f); assertEquals(200f, c.dst.height, 0.5f)
+        assertTrue(!c.tileY)
+        // 600 tall: cropped away entirely; the bottom part follows the top one
+        val none = assertNotNull(SkinSolver.place(cropSpec(), 100f, 600f, 1f, picture = null))
+        assertTrue(none.cells.none { it.src.y in 300f..699f && it.dst.height > 0.5f })
+        // 1200 tall: it grows as a repeat (tiled)
+        val tall = assertNotNull(SkinSolver.place(cropSpec(), 100f, 1200f, 1f, picture = null))
+        val t = tall.cells.single { it.src.y in 299f..301f }
+        assertEquals(600f, t.dst.height, 0.5f); assertTrue(t.tileY)
+    }
+
     @Test
     fun sameSizeKeepsEverything() {
         val p = assertNotNull(SkinSolver.place(spec(listOf(listOf(0f))), 1000f, 1000f, 1f, picture = 800f to 400f))

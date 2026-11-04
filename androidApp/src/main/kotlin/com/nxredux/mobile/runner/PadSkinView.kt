@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.view.HapticFeedbackConstants
@@ -137,6 +138,7 @@ internal class PadSkinView(
     private var parts: Bitmap? = null
 
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val holes = Path()
     private val src = Rect()
     private val dst = Rect()
     private val touch = SkinPadTouch(onPad, { id, down -> onAction(SkinAction.valueOf(id), down) }, ::tick, ::invalidate)
@@ -174,10 +176,15 @@ internal class PadSkinView(
     private fun drawSkin(canvas: Canvas) {
         val p = shown ?: return
         val pic = picture ?: return
-        // the screens are holes: the game shows through them (the background runs under them otherwise)
+        // the screens are holes in the background (it runs under them otherwise), cut to the glasses' rounded corners; the
+        // frame and the other pieces are drawn whole over the game: their own holes are cut round, so they round its corners
         canvas.save()
-        for (g in p.glasses) canvas.clipOutRect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height)
+        holes.reset()
+        for (g in p.glasses) holes.addRoundRect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height, g.corner, g.corner, Path.Direction.CW)
+        canvas.clipOutPath(holes)
         for (c in p.cells) drawCell(canvas, pic, c, p.k)
+        canvas.restore()
+        canvas.save()
         parts?.let { pp ->
             for (piece in p.pieces) {
                 src.set(piece.src.x.roundToInt(), piece.src.y.roundToInt(), (piece.src.x + piece.src.width).roundToInt(), (piece.src.y + piece.src.height).roundToInt())

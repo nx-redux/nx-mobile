@@ -124,7 +124,8 @@ object SkinSolver {
     fun placePieces(spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, picture: Pair<Float, Float>? = null, topInset: Float = 0f, hingeY: Float? = null): SkinPlacement? {
         val frame = spec.frame ?: return null
         if (k <= 0f || spec.refW <= 0 || spec.refH <= 0) return null
-        val bg = place(spec.copy(glasses = emptyList(), scales = listOf(emptyList()), controls = emptyList()), windowW, windowH, k) ?: return null
+        // the background split at the fold too: each half takes its own side's room, the board's hinge on the fold
+        val bg = place(spec.copy(glasses = emptyList(), scales = listOf(emptyList()), controls = emptyList()), windowW, windowH, k, hingeY = hingeY) ?: return null
         val w = windowW / k
         val h = windowH / k
         val dx = w - spec.refW
@@ -191,14 +192,29 @@ object SkinSolver {
             }
         }
         val glasses = arrayListOf(PlacedGlass(g.id, g.screen, win(fx + bl, fy + bt, gw, gh), fit * k, g.corner * k))
+        val maxInward = spec.pieces.maxOfOrNull { it.inward } ?: 0
         for (p in spec.pieces) {
-            val px = p.x + across(p.anchor, p.inward)
-            val py = p.y + down(p.level)
-            pieces += SkinPiece(PxRect(p.sx.toFloat(), p.sy.toFloat(), p.w.toFloat(), p.h.toFloat()), win(px, py, p.w * p.scale, p.h * p.scale))
+            var px = p.x + across(p.anchor, p.inward)
+            var py = p.y + down(p.level)
+            var gx = 0f; var gy = 0f   // a growing piece's growth, picture px
+            val pg0 = p.glass
+            if (p.grow > 0 && pg0 != null && dx > 0f) {
+                // the room the side clusters leave as they spread, the glass's shape kept, up to just under the hinge
+                gx = maxOf(0f, dx - 2f * maxInward)
+                gy = gx * pg0.h / pg0.w
+                val ceiling = (hingeY?.let { it / k } ?: roomTop) + HINGE_CLEAR
+                if (py - gy < ceiling) { gy = maxOf(0f, py - ceiling); gx = gy * pg0.w / pg0.h }
+                px -= gx / 2f; py -= gy
+            }
+            if (gx > 0f || gy > 0f) {
+                pieces += nineSlice(p, p.grow.toFloat(), p.w + gx, p.h + gy) { x, y, w_, h_ -> win(px + x, py + y, w_, h_) }
+            } else {
+                pieces += SkinPiece(PxRect(p.sx.toFloat(), p.sy.toFloat(), p.w.toFloat(), p.h.toFloat()), win(px, py, p.w * p.scale, p.h * p.scale))
+            }
             p.glass?.let { pg ->
-                val gameW = gameSize(pg.screen, picture)?.first ?: pg.w.toFloat()
+                val gameW = gameSize(pg.screen, picture)?.first ?: (pg.w + gx)
                 val sc = p.scale
-                glasses += PlacedGlass(pg.id, pg.screen, win(px + pg.x * sc, py + pg.y * sc, pg.w * sc, pg.h * sc), pg.w * sc * k / gameW, pg.corner * sc * k)
+                glasses += PlacedGlass(pg.id, pg.screen, win(px + pg.x * sc, py + pg.y * sc, (pg.w + gx) * sc, (pg.h + gy) * sc), (pg.w + gx) * sc * k / gameW, pg.corner * sc * k)
             }
             p.strip?.let { st ->
                 // the piece's strip: an even share of its glass's width each (the whole piece's without one)
@@ -216,6 +232,22 @@ object SkinSolver {
             PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward)) * k, (c.y + down(c.level)) * k)
         }
         return SkinPlacement(spec, k, bg.cells, glasses, controls, pieces)
+    }
+
+    /** A growing piece keeps this far (picture px) under the hinge (or the room's top). */
+    private const val HINGE_CLEAR = 80f
+
+    /** Piece [p]'s picture drawn [w] x [h] picture px: corners [c] as drawn, the edges and middle stretched. */
+    private fun nineSlice(p: PieceSpec, c: Float, w: Float, h: Float, dst: (Float, Float, Float, Float) -> PxRect): List<SkinPiece> {
+        val sx = p.sx.toFloat(); val sy = p.sy.toFloat()
+        val cols = listOf(Triple(sx, c, 0f to c), Triple(sx + c, p.w - 2 * c, c to w - 2 * c), Triple(sx + p.w - c, c, w - c to c))
+        val rows = listOf(Triple(sy, c, 0f to c), Triple(sy + c, p.h - 2 * c, c to h - 2 * c), Triple(sy + p.h - c, c, h - c to c))
+        return buildList {
+            for ((ry, rh, rd) in rows) for ((cx, cw, cd) in cols) {
+                if (cd.second <= 0f || rd.second <= 0f) continue
+                add(SkinPiece(PxRect(cx, ry, cw, rh), dst(cd.first, rd.first, cd.second, rd.second)))
+            }
+        }
     }
 
     /**
@@ -286,10 +318,15 @@ object SkinSolver {
             var d = dstStart
             node.parts.forEachIndexed { i, p ->
                 val l = lens[i]
-                val partSrc = if (cols) PxRect(s, src.y, p.len.toFloat(), src.height) else PxRect(src.x, s, src.width, p.len.toFloat())
+                // a crop slice given less than its length: its last [l] px at their size (the top cut off)
+                val cropped = p.isCrop && l < p.len
+                val from = if (cropped) s + p.len - l else s
+                val take = if (cropped) l else p.len.toFloat()
+                val partSrc = if (cols) PxRect(from, src.y, take, src.height) else PxRect(src.x, from, src.width, take)
                 val partDst = if (cols) PxRect(d, dst.y, l, dst.height) else PxRect(dst.x, d, dst.width, l)
-                val tx = tiledX || (cols && p.mode != SlicePart.FIXED && p.mode != SlicePart.HINGE)
-                val ty = tiledY || (!cols && p.mode != SlicePart.FIXED && p.mode != SlicePart.HINGE)
+                val stretches = p.mode != SlicePart.FIXED && p.mode != SlicePart.HINGE && !cropped
+                val tx = tiledX || (cols && stretches)
+                val ty = tiledY || (!cols && stretches)
                 if (l > 0.01f || p.node != null) {
                     if (!lay(p.node ?: SliceNode(), partSrc, partDst, tx, ty)) return false
                 }
