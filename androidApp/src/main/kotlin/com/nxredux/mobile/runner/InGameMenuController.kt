@@ -411,7 +411,7 @@ internal class InGameMenuController(
         }
         menuView = overlay
         padLayout.skinStripHidden = true   // the skin's strip shortcuts (SAVE, LOAD, ...) go while the menu is up
-        root.addView(overlay, menuLayoutParams(resources.configuration.orientation, overPanel = dual.mainPanelShown(), glass = true))
+        root.addView(overlay, menuLayoutParams(resources.configuration.orientation, overPanel = dual.mainPanelCoversWindow(), glass = true))
         dual.syncMainPanelHost()
         padLayout.updatePadVisibility()
     }

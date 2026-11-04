@@ -137,8 +137,11 @@ internal interface PadLayoutHost {
     fun isLandscape(orientation: Int): Boolean
     fun isLandscape(): Boolean
     fun syncN3dsCore()
-    fun mainPanelShown(): Boolean
+    /** The game panel fills the whole window (it hides the pad; the menu opens over it). */
+    fun mainPanelCoversWindow(): Boolean
     fun placeMainPanelHost()
+    /** The skin was placed anew, or dropped: the game panel follows its glass ([DualScreenController.syncPanel]). */
+    fun onSkinPlaced()
     fun menuLayoutParams(orientation: Int, overPanel: Boolean = false, glass: Boolean = false): FrameLayout.LayoutParams
     fun relayoutFrontend()
     fun applyFrontend(values: Map<String, String>)
@@ -179,7 +182,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private fun padMic() = host.padMic()
     private fun isLandscape(orientation: Int) = host.isLandscape(orientation)
     private fun syncN3dsCore() = host.syncN3dsCore()
-    private fun mainPanelShown() = host.mainPanelShown()
+    private fun mainPanelShown() = host.mainPanelCoversWindow()
     private fun placeMainPanelHost() = host.placeMainPanelHost()
     private fun menuLayoutParams(orientation: Int, overPanel: Boolean = false, glass: Boolean = false) = host.menuLayoutParams(orientation, overPanel, glass)
     private fun relayoutFrontend() = host.relayoutFrontend()
@@ -354,6 +357,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         if (skinPlacement(names) != null) {
             applySkinLayout(root, game, orientation)
             syncN3dsCore()
+            host.onSkinPlaced()
             return
         }
         if (tt != null) {
@@ -402,6 +406,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         notificationsView?.layoutParams = menuLayoutParams(orientation)
         // The DS layouts follow the new area (gameContainer's size listener does too, once it is laid out).
         game.post { relayoutFrontend() }
+        host.onSkinPlaced()   // no skin now: a panel in its glass goes
     }
 
     /**
@@ -863,7 +868,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val placed = skinCache?.takeIf { it.first == key }?.second ?: SkinChoice.place(
             pack.manifest, w, h, key.dpi, tablet, ds, aspect?.let { (it * 240f) to 240f }, hinge, top, DeviceTraits.canHalfFold, variant,
         ).also { skinCache = key to it }
+        val moved = skinView != null && skinView?.placement != placed
         skinView?.placement = placed
+        if (moved) host.onSkinPlaced()   // a new size: the panel follows its glass
         return placed
     }
 
@@ -908,6 +915,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 
     /** Whether the pad skin is the layout now. */
     val skinShown: Boolean get() = skinView != null
+    /** The skin's view while shown: a panel in its glass sits right above it. */
+    val skinViewNow: View? get() = skinView
     /** [skinShown] as state, for the notifications (top-centre over a skin). */
     val skinShownState = mutableStateOf(false)
 

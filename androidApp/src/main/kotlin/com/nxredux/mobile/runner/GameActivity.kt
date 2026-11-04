@@ -3150,7 +3150,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun secondWholeFrame(g: FloatArray): com.nxredux.mobile.options.PxRect? = dual.secondWholeFrame(g)
     override fun secondRegions(g: FloatArray, ds: List<NdsRegion>?): List<ScreenRegion> = dual.secondRegions(g, ds)
     override fun onN3dsSwapPressed(down: Boolean): Boolean = dual.onN3dsSwapPressed(down) || renderer.onTabletopN3dsSwap(down)
-    override fun mainPanelShown(): Boolean = dual.mainPanelShown()
+    override fun mainPanelCoversWindow(): Boolean = dual.mainPanelCoversWindow()
+    override fun onSkinPlaced() = dual.syncPanel()
     override fun placeMainPanelHost() = dual.placeMainPanelHost()
 
     // The in-game menu's view, input and layout, owned by [menu].
