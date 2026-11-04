@@ -48,8 +48,8 @@ data class SkinPiece(val src: PxRect, val dst: PxRect, val strip: Boolean = fals
 /** A control's hit area placed in the window: its [spec] (id, shape, sizes scaled) at [x], [y]. */
 data class PlacedControl(val spec: ControlSpec, val x: Float, val y: Float)
 
-/** A glass placed in the window: [rect] showing [screen] at [scale] window px per game px. */
-data class PlacedGlass(val id: String, val screen: GlassScreen, val rect: PxRect, val scale: Float)
+/** A glass placed in the window: [rect] showing [screen] at [scale] window px per game px; [corner]: its corners' radius, window px. */
+data class PlacedGlass(val id: String, val screen: GlassScreen, val rect: PxRect, val scale: Float, val corner: Float = 0f)
 
 /**
  * A skin layout assembled for one window: the [cells] to draw, the [glasses] where the game's screens go and the
@@ -190,7 +190,7 @@ object SkinSolver {
                 controls += PlacedControl(ControlSpec(l.id, ControlShape.RECT, cx, cy, hw = share / 2f * k, hh = st.hh * k), cx * k, cy * k)
             }
         }
-        val glasses = arrayListOf(PlacedGlass(g.id, g.screen, win(fx + bl, fy + bt, gw, gh), fit * k))
+        val glasses = arrayListOf(PlacedGlass(g.id, g.screen, win(fx + bl, fy + bt, gw, gh), fit * k, g.corner * k))
         for (p in spec.pieces) {
             val px = p.x + across(p.anchor, p.inward)
             val py = p.y + down(p.level)
@@ -198,7 +198,7 @@ object SkinSolver {
             p.glass?.let { pg ->
                 val gameW = gameSize(pg.screen, picture)?.first ?: pg.w.toFloat()
                 val sc = p.scale
-                glasses += PlacedGlass(pg.id, pg.screen, win(px + pg.x * sc, py + pg.y * sc, pg.w * sc, pg.h * sc), pg.w * sc * k / gameW)
+                glasses += PlacedGlass(pg.id, pg.screen, win(px + pg.x * sc, py + pg.y * sc, pg.w * sc, pg.h * sc), pg.w * sc * k / gameW, pg.corner * sc * k)
             }
             p.strip?.let { st ->
                 // the piece's strip: an even share of its glass's width each (the whole piece's without one)
@@ -258,7 +258,7 @@ object SkinSolver {
         val glasses = spec.glasses.mapIndexed { i, g ->
             val (x, y) = ctx.map(g.x + 0.5f, g.y + 0.5f) ?: return null
             val (w, h) = size.getValue(g.id)
-            PlacedGlass(g.id, g.screen, PxRect((x - 0.5f) * k, (y - 0.5f) * k, w * k, h * k), scales[i])
+            PlacedGlass(g.id, g.screen, PxRect((x - 0.5f) * k, (y - 0.5f) * k, w * k, h * k), scales[i], g.corner * k)
         }
         val controls = spec.controls.map { c ->
             val (x, y) = ctx.map(c.x, c.y) ?: return null

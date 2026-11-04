@@ -24,6 +24,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -176,8 +178,12 @@ fun HandheldShell(
                 val (placement, picture, parts) = skinPlaced
                 val above = topInWindow ?: 0
                 // two screens: the menu in the touch glass, the [top] screen in the frame above the hinge
-                val g = (placement.glasses.firstOrNull { it.id == MENU_GLASS } ?: placement.glasses.first()).rect
-                val topGlass = placement.glasses.firstOrNull { it.id == TOP_GLASS }?.rect?.takeIf { top != null }
+                val menuGlass = placement.glasses.firstOrNull { it.id == MENU_GLASS } ?: placement.glasses.first()
+                val g = menuGlass.rect
+                val topPlaced = placement.glasses.firstOrNull { it.id == TOP_GLASS }?.takeIf { top != null }
+                val topGlass = topPlaced?.rect
+                // the pages are drawn over the skin: clipped to the glass's rounded corners, as the frame's hole is cut
+                fun corner(px: Float) = RoundedCornerShape(with(density) { px.toDp() })
                 val gx = g.x.roundToInt()
                 val gy = g.y.roundToInt()
                 val gw = (g.x + g.width).roundToInt() - gx
@@ -195,7 +201,7 @@ fun HandheldShell(
                     Modifier.layout { m, _ ->
                         val p = m.measure(Constraints.fixed(gw, gh))
                         layout(gw, gh) { p.place(gx, gy - above) }
-                    },
+                    }.clip(corner(menuGlass.corner)),
                 ) {
                     // the pages lay out for the glass's own shape (landscape: a wide glass between the side columns)
                     // the glass reaches under the camera cutout: the page starts below it (the shell's own top, [above])
@@ -213,7 +219,7 @@ fun HandheldShell(
                         Modifier.layout { m, _ ->
                             val p = m.measure(Constraints.fixed(tw, th))
                             layout(tw, th) { p.place(tx, ty - above) }
-                        },
+                        }.clip(corner(topPlaced?.corner ?: 0f)),
                     ) {
                         val cutoutPad = with(density) { (above - topGlass.y).coerceAtLeast(0f).toDp() }
                         CompositionLocalProvider(LocalPortrait provides (th > tw), LocalWindowSize provides window, LocalInSkin provides true) {

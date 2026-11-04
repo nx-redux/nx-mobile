@@ -234,7 +234,7 @@ enum class GlassScreen {
     @SerialName("picture") PICTURE,
 }
 
-/** A screen spot: [x], [y], [w], [h] in the picture's px, showing [screen]. */
+/** A screen spot: [x], [y], [w], [h] in the picture's px, showing [screen]; [corner]: its rounded corners' radius (picture px). */
 @Serializable
 data class GlassSpec(
     val id: String,
@@ -243,6 +243,7 @@ data class GlassSpec(
     val y: Int,
     val w: Int,
     val h: Int,
+    val corner: Float = 0f,
 )
 
 /** A hit area's shape. */

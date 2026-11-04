@@ -1,5 +1,7 @@
 package com.nxredux.mobile.runner
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import android.content.res.Configuration
 import android.view.Gravity
 import com.nxredux.mobile.options.PxRect
@@ -370,7 +372,9 @@ internal class InGameMenuController(
                         val windowH = (root.height.takeIf { it > 0 } ?: activity.windowShape().heightPx).toFloat()
                         with(density) { PaddingValues(top = g.y.coerceAtLeast(0f).toDp(), bottom = (windowH - g.y - g.height).coerceAtLeast(0f).toDp()) }
                     }
-                    Box(if (outside != null) Modifier.consumeWindowInsets(outside) else Modifier) {
+                    // in the glass: clipped to its rounded corners, as the frame's hole is cut
+                    val glassCorner = if (skinGlass != null) with(density) { skinGlassCorner().toDp() } else 0.dp
+                    Box((if (outside != null) Modifier.consumeWindowInsets(outside) else Modifier).clip(RoundedCornerShape(glassCorner))) {
                     menuState.value?.let { s ->
                         InGameMenu(
                             state = s,
@@ -436,6 +440,9 @@ internal class InGameMenuController(
     }
 
     /** The pad skin's screen glass, window px (all its screens' glasses as one, a DS's both), or null with no skin shown. */
+    /** The pad skin's screen glass's corner radius, window px (the largest of its screens'). */
+    private fun skinGlassCorner(): Float = padLayout.skinPlacement()?.glasses?.maxOfOrNull { it.corner } ?: 0f
+
     private fun skinGlass(): PxRect? {
         if (!padLayout.skinShown) return null
         val gs = padLayout.skinPlacement()?.glasses?.map { it.rect }?.takeIf { it.isNotEmpty() } ?: return null
