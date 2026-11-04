@@ -108,6 +108,10 @@ object DualScreen {
      */
     fun ndsScreen(areaW: Float, areaH: Float, which: NdsScreen): List<NdsRegion> = single(areaW, areaH, which, NdsLayout.src(which), DS_ASPECT)
 
+    /** [ndsScreen] in [area] (game-view px) instead of the whole view: a pad skin's screen (its glass) holds it. */
+    fun ndsScreenIn(area: PxRect, which: NdsScreen): List<NdsRegion> =
+        ndsScreen(area.width, area.height, which).map { it.copy(dst = it.dst.copy(x = it.dst.x + area.x, y = it.dst.y + area.y)) }
+
     /**
      * Both DS screens side by side on the main display (the panel is on the second one), edge to edge, fitted to the area
      * (whole pixels, not whole-number scales) and centred; touch on the bottom screen. Dual screen keeps its own layout,

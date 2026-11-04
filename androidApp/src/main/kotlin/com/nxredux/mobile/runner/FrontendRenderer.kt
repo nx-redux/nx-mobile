@@ -1,6 +1,7 @@
 package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.skin.GlassScreen
+import com.nxredux.mobile.skin.SkinDual
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -759,7 +760,12 @@ internal class FrontendRenderer(
             }
             return null
         }
-        if (dualMode == DualMode.SPLIT) return DualScreen.ndsScreen(w, h, DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn))
+        if (dualMode == DualMode.SPLIT) {
+            val main = DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn)
+            // under a pad skin (landscape with a second display): the main display's screen in the skin's screen
+            val glass = padLayout.skinPlacement()?.takeIf { padLayout.skinShown }?.let { it.glass(GlassScreen.STACK) ?: it.glass(GlassScreen.PICTURE) }?.rect
+            return if (glass != null) DualScreen.ndsScreenIn(SkinDual.dsScreenIn(glass), main) else DualScreen.ndsScreen(w, h, main)
+        }
         if (dualMode == DualMode.PANEL_UP) return DualScreen.ndsPanelUp(w, h, NdsSettings.parse(frontendValues))
         val landscape = isLandscape()
         val settings = NdsSettings.parse(frontendValues)

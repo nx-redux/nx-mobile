@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.window.layout.WindowMetricsCalculator
 import com.nxredux.mobile.R
 import com.nxredux.mobile.layout.CoreFrame
+import com.nxredux.mobile.skin.SkinDual
 import com.nxredux.mobile.skin.SkinChoice
 import com.nxredux.mobile.skin.SkinPlacement
 import com.nxredux.mobile.layout.DsKind
@@ -853,8 +854,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     fun skinPlacement(names: List<String> = layoutControllerNames()): SkinPlacement? {
         val pack = skinPack ?: return null
         val tag = layoutTag()
-        if (names.isNotEmpty() || host.dualMode != DualMode.OFF || N3dsOptions.appliesTo(tag)) return null
         val ds = NdsOptions.appliesTo(tag)
+        // with a second display: one-screen games and a DS split keep the skin (its screen the touch screen, [SkinDual])
+        if (names.isNotEmpty() || !SkinDual.skinAllowed(host.dualMode, ds, N3dsOptions.appliesTo(tag))) return null
         val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds) ?: return null
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null

@@ -136,4 +136,13 @@ class DualScreenTest {
         assertNull(DualScreen.penOn(main = top, second = emptyList()))                     // top screen alone
         assertNull(DualScreen.penOn(emptyList(), emptyList()))                             // not split
     }
+
+    @Test
+    fun aSplitScreenGoesInTheSkinsGlass() {
+        val inGlass = DualScreen.ndsScreenIn(PxRect(100f, 50f, 800f, 600f), NdsScreen.BOTTOM)
+        val whole = DualScreen.ndsScreen(800f, 600f, NdsScreen.BOTTOM)
+        assertEquals(whole.map { it.copy(dst = it.dst.copy(x = it.dst.x + 100f, y = it.dst.y + 50f)) }, inGlass)
+        assertEquals(PxRect(100f, 50f, 800f, 600f), inGlass.single().dst)
+        assertTrue(inGlass.single().touch)
+    }
 }

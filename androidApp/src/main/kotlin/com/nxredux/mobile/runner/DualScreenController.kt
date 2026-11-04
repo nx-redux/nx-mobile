@@ -45,6 +45,7 @@ import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_ART_PATH
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_GAME_PATH
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_TITLE
 import com.nxredux.mobile.settings.AndroidAppSettings
+import com.nxredux.mobile.skin.GlassScreen
 import com.nxredux.mobile.skin.PanelSpot
 import com.nxredux.mobile.skin.PlacedGlass
 import com.nxredux.mobile.skin.SkinDual
@@ -369,7 +370,8 @@ internal class DualScreenController(
         }
         // Half-folded, a DS / 3DS gets its own tabletop only without a second screen ([tabletopDualScreen]): a new mode
         // builds the other tabletop (the pad, the game area, the menu's bounds).
-        if (changed && padLayout.tabletop() != null) padLayout.applyLayout(activity.resources.configuration.orientation)
+        // A new mode builds the pad again too: the skin comes or goes with it ([SkinDual.skinAllowed]).
+        if (changed) padLayout.applyLayout(activity.resources.configuration.orientation)
         renderer.relayoutFrontend(geometry)
     }
 
@@ -510,6 +512,7 @@ internal class DualScreenController(
             content.takeIf { spot == PanelSpot.SKIN_GLASS || spot == PanelSpot.WINDOW },
             pill = p != null && dualMode == DualMode.SPLIT && onMain, glass = glass.takeIf { spot == PanelSpot.SKIN_GLASS },
         )
+        placeMainPanelPill()
         val inGlass = mainPanelGlass.value
         // The pad went from under the fingers (a panel over the window), or the panel came or moved in a glass beside it:
         // nothing it held may stick.
@@ -586,6 +589,24 @@ internal class DualScreenController(
     }
 
     /**
+     * The Panel pill alone under a pad skin (a DS split, its touch screen in the skin's screen): at that screen's
+     * bottom-right corner, not the window's (over the right cluster); else the window's, as without a skin.
+     */
+    private fun placeMainPanelPill() {
+        val host = mainPanelHost ?: return
+        if (mainPanel.value != null || !mainPanelPill.value) return
+        val root = findViewById<View>(R.id.root)
+        val g = padLayout.skinPlacement()?.takeIf { padLayout.skinShown }?.let { it.glass(GlassScreen.STACK) ?: it.glass(GlassScreen.PICTURE) }?.rect
+        host.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
+            if (g != null && root.width > 0) {
+                rightMargin = (root.width - (g.x + g.width)).roundToInt().coerceAtLeast(0)
+                bottomMargin = (root.height - (g.y + g.height)).roundToInt().coerceAtLeast(0)
+            }
+        }
+        placeMainPanelHost()
+    }
+
+    /**
      * Where the main panel's host sits among the root's children: the panel right above gameContainer (under the pads,
      * which it hides anyway); the Panel pill alone right above the pads, whose right cluster would cover it in landscape,
      * and still under the menu and the notifications. Moved only when its place changed.
@@ -603,8 +624,7 @@ internal class DualScreenController(
         // in a skin's glass: right above the skin's view (which would take its touches), under the menu and the notifications
         val skin = padLayout.skinViewNow?.let { without(root.indexOfChild(it)) } ?: -1
         val target = when {
-            inGlass -> maxOf(game, lastPad, skin) + 1
-            pillOnly -> maxOf(game, lastPad) + 1
+            inGlass || pillOnly -> maxOf(game, lastPad, skin) + 1
             else -> game + 1
         }
         if (current == target) return
