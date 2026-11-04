@@ -88,8 +88,9 @@ class PadMap private constructor(
             "A2600" -> PadMap(labels = mapOf(B to "Fire"))
             "LYNX" -> PadMap(labels = mapOf(L1 to "Opt 1", R1 to "Opt 2"))
             "PKM" -> PadMap(labels = mapOf(R1 to "C", L1 to "Shake", SELECT to "POWER", X to "TA"))
-            "GB", "GBC", "GBA" -> PadMap(labels = TURBO_AB)
-            "MGBA", "SGB" -> PadMap(labels = TURBO_AB + mapOf(L2 to "TL", R2 to "TR"))
+            // the Game Boys have no shoulders; the GBA's TL / TR are mGBA's turbo L / R (gpSP: nothing yet, its patch is to come)
+            "GB", "GBC", "SGB" -> PadMap(labels = TURBO_AB, hidden = setOf(L1, R1, L2, R2))
+            "GBA", "MGBA" -> PadMap(labels = TURBO_AB + mapOf(L2 to "TL", R2 to "TR"))
             "VB" -> PadMap(labels = mapOf(X to "Batt", L2 to "R↑", R2 to "R←"))
             "FC", "FDS" -> PadMap(labels = mapOf(L1 to "Side", R1 to "Insert", R2 to "Coin"))
             // The DS has only L and R. L2 and R2 are NX Redux's stylus and swap-screens hotkeys (NdsHotkeys): a controller's

@@ -57,6 +57,15 @@ class PadMapTest {
         for (sega in listOf(null, SegaPad.SIX)) for (b in NxButton.entries) assertFalse(PadMap.forTag("MD", sega).isHiddenInCluster(b))
     }
 
+    // The Game Boys have no shoulder buttons (their skin has none either); the GBA keeps L / R and has TL / TR.
+    @Test fun game_boys_hide_the_shoulders() {
+        for (t in listOf("GB", "GBC", "SGB")) {
+            for (b in listOf(L1, R1, L2, R2)) assertTrue(PadMap.forTag(t).isHidden(b), "$t $b")
+            assertEquals("TA", PadMap.forTag(t).label(X)); assertEquals("TB", PadMap.forTag(t).label(Y))
+        }
+        for (t in listOf("GBA", "MGBA")) for (b in listOf(L1, R1, L2, R2)) assertFalse(PadMap.forTag(t).isHidden(b), "$t $b")
+    }
+
     @Test fun label_only_consoles() {
         fun l(tag: String, b: NxButton) = PadMap.forTag(tag).label(b)
         for (t in listOf("SMS", "GG", "SG1000", "A7800")) { assertEquals("1", l(t, B)); assertEquals("2", l(t, A)) }
@@ -68,8 +77,8 @@ class PadMapTest {
         assertEquals("Opt 1", l("LYNX", L1)); assertEquals("Opt 2", l("LYNX", R1))
         assertEquals(listOf("C", "Shake", "POWER", "TA"), listOf(R1, L1, SELECT, X).map { l("PKM", it) })
         for (t in listOf("GB", "GBC", "GBA", "MGBA", "SGB")) { assertEquals("TA", l(t, X)); assertEquals("TB", l(t, Y)) }
-        for (t in listOf("MGBA", "SGB")) { assertEquals("TL", l(t, L2)); assertEquals("TR", l(t, R2)) }
-        assertNull(l("GBA", L2))
+        for (t in listOf("GBA", "MGBA")) { assertEquals("TL", l(t, L2)); assertEquals("TR", l(t, R2)) }
+        assertNull(l("SGB", L2))
         assertEquals("Batt", l("VB", X)); assertEquals("R↑", l("VB", L2)); assertEquals("R←", l("VB", R2))
         for (t in listOf("FC", "FDS")) { assertEquals("Side", l(t, L1)); assertEquals("Insert", l(t, R1)); assertEquals("Coin", l(t, R2)) }
     }
