@@ -505,13 +505,18 @@ dolphin_ARTIFACT = dolphin_libretro_android.so
 dolphin_CMAKE = $(SDK)/cmake/3.30.3/bin/cmake
 dolphin_NINJA = $(SDK)/cmake/3.30.3/bin/ninja
 dolphin_PLATFORM = android-24
+# NDK r29, the one upstream's libretro CI builds with. r26's libc++ std::ranges::binary_search compared against the first
+# element, so VertexManagerBase::OnDraw flushed on every draw between the first and last scheduled kick (~600 glFlush a
+# frame in Super Mario Galaxy 2); r29's is correct, so the patch no longer swaps it for std::binary_search.
+dolphin_NDK_VERSION = 29.0.14206865
+dolphin_NDK = $(SDK)/ndk/$(dolphin_NDK_VERSION)
 dolphin_FLAGS = -DLIBRETRO=ON -DENABLE_LTO=ON -DANDROID_STL=c++_static
 
 # ARMSX2 (PS2): ARMSX2/ARMSX2 at its 2.9 release tag, a PCSX2 fork with arm64 recompilers. Its libretro port is
 # pcsx2-libretro/ (SHARED pcsx2-libretro, OUTPUT_NAME armsx2_libretro, empty prefix), added only with ENABLE_LIBRETRO=ON;
 # the build tree's bin/ holds it. Flags follow upstream's Android libretro CI (.gitlab-ci.yml .core-defs-android, API 28:
 # bionic's posix_spawn). NDK r29 like upstream's own Android app (armsx2.ndkVersion); the
-# other cores stay on $(NDK_VERSION). Its static dependencies (png, jpeg-turbo, zstd, lz4, webp, SDL3, freetype, plutovg,
+# other cores but dolphin stay on $(NDK_VERSION). Its static dependencies (png, jpeg-turbo, zstd, lz4, webp, SDL3, freetype, plutovg,
 # plutosvg, curl without TLS, libpcap, shaderc) come from upstream's own script, run once into $(ARMSX2_DEPS) with the
 # same NDK; the stamp names the pin, so a bump rebuilds them. CMake >= 3.25 policy range: 3.30.3, as azahar/dolphin.
 # Renders on GLES 3.2 or Vulkan (armsx2_renderer, set by the app per Graphics API). bin/resources (shaders, GameIndex,
@@ -782,10 +787,11 @@ options:
 COMMA := ,
 cores-json:
 	@echo '[$(subst " ","$(COMMA)",$(patsubst %,"%",$(strip $(CORES))))]'
-# armsx2's NDK pin, for the release workflow's sdkmanager step (make -s -C cores print-armsx2-ndk).
-print-armsx2-ndk:
-	@echo '$(armsx2_NDK_VERSION)'
-.PHONY: print-armsx2-ndk
+# A core's own NDK pin (empty when it builds with $(NDK_VERSION)), for the release workflow's sdkmanager step
+# (make -s -C cores print-ndk-<core>).
+print-ndk-%:
+	@echo '$($*_NDK_VERSION)'
+.PHONY: print-ndk-%
 
 clean: $(foreach CORE,$(CORES),clean-$(CORE))
 nuke:
