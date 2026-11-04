@@ -42,7 +42,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(30, pack.layouts.size)
+        assertEquals(36, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba and arcade twins
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -152,6 +152,36 @@ class NxCarbonPackTest {
         assertTrue(listOf("TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4").all { t -> ds.controls.any { it.spec.id == t } })
         val menu = assertNotNull(SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true))
         assertEquals(setOf("menutop", "menu"), menu.glasses.map { it.id }.toSet())
+    }
+
+    @Test
+    fun arcadeLayoutsHaveTheirButtonsInEveryFamily() {
+        val hinges = mapOf("inner" to 1224f, "inner_half" to 1236f, "tablet" to 1152f)
+        for ((name, d) in consoleDevices) {
+            val tablet = name == "tablet"
+            val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 320f to 224f,
+                d.third, foldable = name.startsWith("inner"), variant = SkinVariant.ARCADE), name)
+            dump("arcade_$name", d.first, d.second, p)
+            assertEquals(SkinVariant.ARCADE, p.spec.variant, name)
+            assertEquals(setOf("DPAD", "A", "B", "X", "Y", "L", "R", "TURBO_B", "TURBO_A", "START", "SELECT", "MENU"),
+                p.controls.map { it.spec.id }.filterNot { it.startsWith("TOUCH_") }.toSet(), name)
+            assertEquals("COIN", p.controls.first { it.spec.id == "SELECT" }.spec.label, name)
+            fun box(id: String) = p.controls.first { it.spec.id == id }.let { floatArrayOf(it.x - it.spec.hw, it.y - it.spec.hh, it.x + it.spec.hw, it.y + it.spec.hh) }
+            fun apart(a: FloatArray, b: FloatArray) = a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1]
+            val ids = listOf("L", "TURBO_B", "TURBO_A", "R")
+            for (i in ids.indices) for (j in i + 1 until ids.size) assertTrue(apart(box(ids[i]), box(ids[j])), "$name ${ids[i]} ${ids[j]}")
+            for (sh in ids) for (c in listOf("DPAD", "A", "B", "X", "Y")) {
+                val o = p.controls.first { it.spec.id == c }
+                assertTrue(apart(box(sh), floatArrayOf(o.x - o.spec.r, o.y - o.spec.r, o.x + o.spec.r, o.y + o.spec.r)), "$name $sh $c")
+            }
+            if (name in hinges) {
+                val r = p.glasses.single { it.screen == GlassScreen.PANEL }.rect
+                for (c in p.controls) {
+                    val hw = if (c.spec.r > 0f) c.spec.r else c.spec.hw; val hh = if (c.spec.r > 0f) c.spec.r else c.spec.hh
+                    assertTrue(apart(floatArrayOf(c.x - hw, c.y - hh, c.x + hw, c.y + hh), floatArrayOf(r.x, r.y, r.x + r.width, r.y + r.height)), "$name ${c.spec.id} on the panel")
+                }
+            }
+        }
     }
 
     @Test

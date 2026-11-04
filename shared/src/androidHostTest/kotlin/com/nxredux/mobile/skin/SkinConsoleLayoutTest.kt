@@ -37,4 +37,27 @@ class SkinConsoleLayoutTest {
         assertTrue(touch.pressedShapes().size == 2)
         assertEquals(listOf<PadEvent>(PadEvent.Down(NxButton.L2), PadEvent.Down(NxButton.R2)), events)
     }
+
+    @Test
+    fun turboCapsSendNoPadEvent() {
+        val p = assertNotNull(SkinChoice.place(pack, 1080, 2520, 420, tablet = false, ds = false, picture = 320f to 224f, variant = SkinVariant.ARCADE))
+        assertEquals(SkinVariant.ARCADE, p.spec.variant)
+        val events = mutableListOf<PadEvent>(); val actions = mutableListOf<Pair<String, Boolean>>()
+        val touch = SkinPadTouch({ events += it }, { id, d -> actions += id to d }, {}).apply { placement = p }
+        val tb = p.controls.first { it.spec.id == "TURBO_B" }; val b = p.controls.first { it.spec.id == "B" }
+        assertTrue(touch.press(1, tb.x, tb.y))
+        assertEquals(listOf("TURBO_B" to true), actions)
+        assertEquals(1, touch.pressedShapes().size)
+        touch.move(1, b.x, b.y)   // an action cap does not slide (as MIC, SWAP)
+        touch.release(1)
+        assertEquals(listOf("TURBO_B" to true, "TURBO_B" to false), actions)
+        assertTrue(events.isEmpty(), "$events")
+    }
+
+    @Test
+    fun arcadeFallsBackToSingleWithoutItsLayouts() {
+        val old = pack.copy(layouts = pack.layouts.filter { it.variant != SkinVariant.ARCADE })
+        val p = assertNotNull(SkinChoice.place(old, 1080, 2520, 420, tablet = false, ds = false, picture = 320f to 224f, variant = SkinVariant.ARCADE))
+        assertEquals(SkinVariant.SINGLE, p.spec.variant)
+    }
 }
