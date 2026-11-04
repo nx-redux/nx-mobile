@@ -1,7 +1,7 @@
 # licence: modifies libretro/dolphin (https://github.com/libretro/dolphin), GPL-2.0 or later (its COPYING and
 # LICENSES/GPL-2.0-or-later.txt; see licenses/dolphin.txt); this patch is distributed under the same licence.
 diff --git a/Source/Core/Common/DirectIOFile.cpp b/Source/Core/Common/DirectIOFile.cpp
-index b09ffd1..a0d1ece 100644
+index b09ffd176c..a0d1ece49b 100644
 --- a/Source/Core/Common/DirectIOFile.cpp
 +++ b/Source/Core/Common/DirectIOFile.cpp
 @@ -176,6 +176,25 @@ bool DirectIOFile::Open(const std::string& path, AccessMode access_mode, OpenMod
@@ -110,7 +110,7 @@ index b09ffd1..a0d1ece 100644
      // We need to reopen the file, since VFS handles cannot be duplicated.
      result.m_vfs_handle = Libretro::VFile::Open(
 diff --git a/Source/Core/Common/DirectIOFile.h b/Source/Core/Common/DirectIOFile.h
-index 6bff9b0..51b7790 100644
+index 6bff9b04ef..51b77901e8 100644
 --- a/Source/Core/Common/DirectIOFile.h
 +++ b/Source/Core/Common/DirectIOFile.h
 @@ -60,6 +60,11 @@ public:
@@ -143,98 +143,8 @@ index 6bff9b0..51b7790 100644
  
    friend bool Resize(DirectIOFile& file, u64 size);
  #endif
-diff --git a/Source/Core/Core/IOS/ES/ES.cpp b/Source/Core/Core/IOS/ES/ES.cpp
-index 5366444..4f09f2f 100644
---- a/Source/Core/Core/IOS/ES/ES.cpp
-+++ b/Source/Core/Core/IOS/ES/ES.cpp
-@@ -32,6 +32,10 @@
- #include "Core/System.h"
- #include "DiscIO/Enums.h"
- 
-+#ifdef __LIBRETRO__
-+#include "DolphinLibretro/Common/Globals.h"
-+#endif
-+
- namespace IOS::HLE
- {
- namespace
-@@ -431,6 +435,12 @@ bool ESDevice::LaunchPPCTitle(u64 title_id)
-                      "The emulated software will likely hang now.",
-                      title_id);
-     }
-+#ifdef __LIBRETRO__
-+    // nx-mobile: only the disc is booted, so leaving it (HOME menu → Wii Menu) would hang on a black screen. Ask the
-+    // frontend to close the game instead, as a real Wii returns to its menu.
-+    if (Libretro::environ_cb)
-+      Libretro::environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, nullptr);
-+#endif
-     return false;
-   }
- 
-diff --git a/Source/Core/Core/IOS/ES/Views.cpp b/Source/Core/Core/IOS/ES/Views.cpp
-index bcb2be8..db5cb41 100644
---- a/Source/Core/Core/IOS/ES/Views.cpp
-+++ b/Source/Core/Core/IOS/ES/Views.cpp
-@@ -17,6 +17,10 @@
- #include "Core/IOS/VersionInfo.h"
- #include "Core/System.h"
- 
-+#ifdef __LIBRETRO__
-+#include "DolphinLibretro/Common/Globals.h"
-+#endif
-+
- namespace IOS::HLE
- {
- // HACK: Since we do not want to require users to install disc updates when launching
-@@ -59,6 +63,18 @@ IPCReply ESDevice::GetTicketViewCount(const IOCtlVRequest& request)
-     WARN_LOG_FMT(IOS_ES, "GetViewCount: Faking IOS title {:016x} being present", TitleID);
-   }
- 
-+#ifdef __LIBRETRO__
-+  // nx-mobile: only the disc is booted, so the Wii Menu has no ticket. A game returning to it (HOME menu → Wii Menu,
-+  // OSReturnToMenu) asks for its ticket views first and stalls on none, a black screen. Ask the frontend to close the
-+  // game instead, as a real Wii returns to its menu.
-+  if (TitleID == Titles::SYSTEM_MENU && view_count == 0)
-+  {
-+    NOTICE_LOG_FMT(IOS_ES, "GetViewCount: the Wii Menu is not installed; asking the frontend to close the game");
-+    if (Libretro::environ_cb)
-+      Libretro::environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, nullptr);
-+  }
-+#endif
-+
-   INFO_LOG_FMT(IOS_ES, "IOCTL_ES_GETVIEWCNT for titleID: {:016x} (View Count = {})", TitleID,
-                view_count);
- 
-diff --git a/Source/Core/Core/IOS/USB/Bluetooth/WiimoteDevice.cpp b/Source/Core/Core/IOS/USB/Bluetooth/WiimoteDevice.cpp
-index 4c522e3..8d5ddea 100644
---- a/Source/Core/Core/IOS/USB/Bluetooth/WiimoteDevice.cpp
-+++ b/Source/Core/Core/IOS/USB/Bluetooth/WiimoteDevice.cpp
-@@ -453,7 +453,9 @@ void WiimoteDevice::ExecuteL2capCmd(u8* ptr, u32 size)
-       m_host->SendACLPacket(GetBD(), reinterpret_cast<const u8*>(&data_frame), sizeof(data_frame));
- 
-       // Does the wii remote reply on the control or interrupt channel in this situation?
--      m_hid_source->InterruptDataOutput(data + sizeof(hid_type), data_size - sizeof(hid_type));
-+      // nx-mobile: a state restored with more remotes linked than this session has sources
-+      if (IsSourceValid())
-+        m_hid_source->InterruptDataOutput(data + sizeof(hid_type), data_size - sizeof(hid_type));
-     }
-     else
-     {
-@@ -466,7 +468,11 @@ void WiimoteDevice::ExecuteL2capCmd(u8* ptr, u32 size)
-   {
-     const u8 hid_type = data[0];
-     if (hid_type == ((WiimoteCommon::HID_TYPE_DATA << 4) | WiimoteCommon::HID_PARAM_OUTPUT))
--      m_hid_source->InterruptDataOutput(data + sizeof(hid_type), data_size - sizeof(hid_type));
-+    {
-+      // nx-mobile: a state restored with more remotes linked than this session has sources
-+      if (IsSourceValid())
-+        m_hid_source->InterruptDataOutput(data + sizeof(hid_type), data_size - sizeof(hid_type));
-+    }
-     else
-       ERROR_LOG_FMT(IOS_WIIMOTE, "Unknown HID-type ({:#x}) on L2CAP_PSM_HID_INTR", hid_type);
-   }
 diff --git a/Source/Core/DiscIO/Blob.cpp b/Source/Core/DiscIO/Blob.cpp
-index aad8b60..fb60ffa 100644
+index aad8b60b5e..fb60ffad2c 100644
 --- a/Source/Core/DiscIO/Blob.cpp
 +++ b/Source/Core/DiscIO/Blob.cpp
 @@ -212,7 +212,11 @@ u32 SectorReader::ReadChunk(u8* buffer, u64 chunk_num)
@@ -251,7 +161,7 @@ index aad8b60..fb60ffa 100644
    if (!file.Read(Common::AsWritableU8Span(magic)))
      return nullptr;
 diff --git a/Source/Core/DiscIO/Blob.h b/Source/Core/DiscIO/Blob.h
-index 3551c31..c43310a 100644
+index 3551c31d44..c43310ae6f 100644
 --- a/Source/Core/DiscIO/Blob.h
 +++ b/Source/Core/DiscIO/Blob.h
 @@ -21,6 +21,7 @@
@@ -272,38 +182,8 @@ index 3551c31..c43310a 100644
  
  using CompressCB = std::function<bool(const std::string& text, float percent)>;
  
-diff --git a/Source/Core/DolphinLibretro/Boot.cpp b/Source/Core/DolphinLibretro/Boot.cpp
-index aaa4cbe..fa0526d 100644
---- a/Source/Core/DolphinLibretro/Boot.cpp
-+++ b/Source/Core/DolphinLibretro/Boot.cpp
-@@ -370,6 +370,10 @@ bool retro_load_game(const struct retro_game_info* game)
-   Config::SetBase(Config::MAIN_CPU_THREAD,
-     Libretro::GetOption<bool>(core::MAIN_CPU_THREAD, /*def=*/true));
- 
-+  // nx-mobile: dual core's GPU thread kept in step with the CPU thread (Dolphin's "Synchronize GPU thread")
-+  Config::SetBase(Config::MAIN_SYNC_GPU,
-+    Libretro::GetOption<bool>(core::MAIN_SYNC_GPU, /*def=*/false));
-+
-   Config::SetBase(Config::MAIN_LOAD_GAME_INTO_MEMORY,
-     Libretro::GetOption<bool>(core::MAIN_LOAD_GAME_INTO_MEMORY, /*def=*/false));
- 
-@@ -679,6 +683,14 @@ bool retro_load_game(const struct retro_game_info* game)
-   Libretro::FrameTiming::Init();
-   Libretro::Audio::Init();
-   Libretro::Video::Init();
-+  // nx-mobile 2026-10-13: hardware asked for and refused (no GLES 3 context): fail the load so the frontend says so,
-+  // rather than run on the null backend behind a black screen.
-+  if (Libretro::Options::GetCached<std::string>(Libretro::Options::gfx_settings::RENDERER) == "Hardware" &&
-+      Libretro::Video::hw_render.context_type == RETRO_HW_CONTEXT_NONE)
-+  {
-+    ERROR_LOG_FMT(VIDEO, "No hardware render context was granted; refusing to load");
-+    return false;
-+  }
-   WindowSystemInfo wsi(WindowSystemType::Libretro, nullptr, nullptr, nullptr);
-   VideoBackendBase::PopulateBackendInfo(wsi);
-   NOTICE_LOG_FMT(VIDEO, "Using GFX backend: {}", Config::Get(Config::MAIN_GFX_BACKEND));
 diff --git a/Source/Core/DolphinLibretro/CMakeLists.txt b/Source/Core/DolphinLibretro/CMakeLists.txt
-index 2023b8b..a64e183 100644
+index 2023b8b1a5..a64e18353b 100644
 --- a/Source/Core/DolphinLibretro/CMakeLists.txt
 +++ b/Source/Core/DolphinLibretro/CMakeLists.txt
 @@ -6,6 +6,7 @@ add_library(dolphin_libretro SHARED
@@ -314,159 +194,8 @@ index 2023b8b..a64e183 100644
    Video.cpp
    VR.cpp
  )
-diff --git a/Source/Core/DolphinLibretro/Common/Options.cpp b/Source/Core/DolphinLibretro/Common/Options.cpp
-index e54214d..86046c6 100644
---- a/Source/Core/DolphinLibretro/Common/Options.cpp
-+++ b/Source/Core/DolphinLibretro/Common/Options.cpp
-@@ -175,6 +175,20 @@ static struct retro_core_option_v2_definition option_defs[] = {
-     },
-     "enabled"
-   },
-+  {
-+    Libretro::Options::core::MAIN_SYNC_GPU,
-+    "Core > Synchronize GPU Thread",
-+    "Synchronize GPU Thread",
-+    "Keeps the dual-core GPU thread in step with the CPU thread, which stops FIFO desyncs at some speed cost. Requires core RESTART.",
-+    nullptr,
-+    CATEGORY_CORE,
-+    {
-+      { "disabled", "Disabled" },
-+      { "enabled",  "Enabled" },
-+      { nullptr, nullptr }
-+    },
-+    "disabled"
-+  },
-   {
-     Libretro::Options::core::MAIN_LOAD_GAME_INTO_MEMORY,
-     "Core > Load Whole Game Into Memory",
-@@ -950,7 +964,8 @@ static struct retro_core_option_v2_definition option_defs[] = {
-       { "2", "Async (UberShaders)" }, // ShaderCompilationMode::AsynchronousUberShaders
-       { nullptr, nullptr }
-     },
--    STR(ShaderCompilationMode::Synchronous)
-+    // nx-mobile 2026-10-13: STR() stringified the enumerator name; the default must be one of the values ("0" = Synchronous).
-+    "0"
-   },
-   {
-     Libretro::Options::gfx_settings::WAIT_FOR_SHADERS,
-@@ -1164,7 +1179,8 @@ static struct retro_core_option_v2_definition option_defs[] = {
-       { "6", "Area Sampling" },
-       { nullptr, nullptr }
-     },
--    "default"
-+    // nx-mobile 2026-10-13: "default" was not one of the values; "0" is OutputResamplingMode::Default.
-+    "0"
-   },
-   {
-     Libretro::Options::gfx_enhancements::FORCE_TRUE_COLOR,
-diff --git a/Source/Core/DolphinLibretro/Common/Options.h b/Source/Core/DolphinLibretro/Common/Options.h
-index 1ec94d6..8793e14 100644
---- a/Source/Core/DolphinLibretro/Common/Options.h
-+++ b/Source/Core/DolphinLibretro/Common/Options.h
-@@ -164,6 +164,7 @@ namespace core {
-   constexpr const char CPU_CLOCK_RATE[] = "dolphin_cpu_clock_rate";
-   constexpr const char EMULATION_SPEED[] = "dolphin_emulation_speed";
-   constexpr const char MAIN_CPU_THREAD[] = "dolphin_main_cpu_thread";
-+  constexpr const char MAIN_SYNC_GPU[] = "dolphin_sync_gpu";
-   constexpr const char MAIN_LOAD_GAME_INTO_MEMORY[] = "dolphin_main_load_game_into_memory";
-   constexpr const char MAIN_PRECISION_FRAME_TIMING[] = "dolphin_precision_frame_timing";
-   constexpr const char FASTMEM[] = "dolphin_fastmem";
-diff --git a/Source/Core/DolphinLibretro/Input.cpp b/Source/Core/DolphinLibretro/Input.cpp
-index 24d7950..127af2b 100644
---- a/Source/Core/DolphinLibretro/Input.cpp
-+++ b/Source/Core/DolphinLibretro/Input.cpp
-@@ -115,6 +115,7 @@ static unsigned frontend_types[8];
- static bool g_init_wiimotes = false;
- static bool s_sensor_init_pending = false;
- static bool sensor_enabled[NUM_CONTROLLERS_FOR_SENSORS][SENSOR_COUNT] = {};
-+static bool s_sensor_registered[NUM_CONTROLLERS_FOR_SENSORS] = {};
- static int port_max;
- double g_accel_pos[NUM_CONTROLLERS_FOR_SENSORS][3] = {}; // x, y, z
- double g_accel_neg[NUM_CONTROLLERS_FOR_SENSORS][3] = {}; // x, y, z
-@@ -695,6 +696,7 @@ void InitSensors()
-         auto sensor = std::make_shared<SensorDevice>(i);
-         sensor->RegisterAll();
-         g_controller_interface.AddDevice(sensor);
-+        s_sensor_registered[i] = true;
-       }
-     }
-   }
-@@ -702,6 +704,24 @@ void InitSensors()
-   ResetControllers(WiimoteUpdateFlags{});
- }
- 
-+// nx-mobile 2026-10-13: asks the frontend again whether this port has sensors before its device is wired, so a frontend
-+// turns motion on or off by resending the port's device (InitSensors asked only once, at the first retro_run). The Sensor
-+// device is registered the first time a port gets one and kept; sensor_enabled decides whether it is bound.
-+static void RefreshSensors(unsigned port)
-+{
-+  if (port >= NUM_CONTROLLERS_FOR_SENSORS || !sensor_interface.set_sensor_state)
-+    return;
-+  sensor_enabled[port][SENSOR_ACCELEROMETER] = sensor_interface.set_sensor_state(port, RETRO_SENSOR_ACCELEROMETER_ENABLE, 60);
-+  sensor_enabled[port][SENSOR_GYRO] = sensor_interface.set_sensor_state(port, RETRO_SENSOR_GYROSCOPE_ENABLE, 60);
-+  if ((sensor_enabled[port][SENSOR_ACCELEROMETER] || sensor_enabled[port][SENSOR_GYRO]) && !s_sensor_registered[port])
-+  {
-+    auto sensor = std::make_shared<SensorDevice>(port);
-+    sensor->RegisterAll();
-+    g_controller_interface.AddDevice(sensor);
-+    s_sensor_registered[port] = true;
-+  }
-+}
-+
- void Shutdown()
- {
-   if (g_init_wiimotes)
-@@ -1551,6 +1571,9 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
-     return;
-   }
- 
-+  if (!Libretro::Input::s_sensor_init_pending && !Config::Get(Config::MAIN_BLUETOOTH_PASSTHROUGH_ENABLED))
-+    Libretro::Input::RefreshSensors(port);
-+
-   bool altGCPorts = Libretro::Options::GetCached<bool>(Libretro::Options::sysconf::ALT_GC_PORTS_ON_WII);
-   if (!altGCPorts) // Disconnect GC controller to avoid conflict with Wii device
-   {
-@@ -1786,6 +1809,12 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
-             wmAccel->SetControlExpression(5, "`" + devSensor + ":AccelY+`");  // Backward
-           }
-         }
-+        else if (auto* wmAccelOff = static_cast<ControllerEmu::IMUAccelerometer*>(
-+                     wm->GetWiimoteGroup(WiimoteEmu::WiimoteGroup::IMUAccelerometer)))
-+        {
-+          for (int i = 0; i < 6; i++)
-+            wmAccelOff->SetControlExpression(i, "");
-+        }
- 
-         // A sibling, not a child: nested, gyro-without-accelerometer bound neither.
-         if (Libretro::Input::sensor_enabled[port][SENSOR_GYRO])
-@@ -1806,9 +1835,25 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
-             wmGyro->SetControlExpression(5, "`" + devSensor + ":GyroZ-`");  // Yaw Right
-           }
-         }
-+        else if (auto* wmGyroOff = static_cast<ControllerEmu::IMUGyroscope*>(
-+                     wm->GetWiimoteGroup(WiimoteEmu::WiimoteGroup::IMUGyroscope)))
-+        {
-+          for (int i = 0; i < 6; i++)
-+            wmGyroOff->SetControlExpression(i, "");
-+        }
-       }
-       else
-       {
-+        // Clear any IMU binding left from a sensor run, or Dolphin reads the unbound accelerometer as free fall.
-+        auto* wmAccelOff = static_cast<ControllerEmu::IMUAccelerometer*>(
-+            wm->GetWiimoteGroup(WiimoteEmu::WiimoteGroup::IMUAccelerometer));
-+        auto* wmGyroOff = static_cast<ControllerEmu::IMUGyroscope*>(
-+            wm->GetWiimoteGroup(WiimoteEmu::WiimoteGroup::IMUGyroscope));
-+        for (int i = 0; i < 6; i++)
-+        {
-+          if (wmAccelOff) wmAccelOff->SetControlExpression(i, "");
-+          if (wmGyroOff) wmGyroOff->SetControlExpression(i, "");
-+        }
-         wmTilt->SetControlExpression(0, "`" + devAnalog + ":Y0-`");  // Forward
-         wmTilt->SetControlExpression(1, "`" + devAnalog + ":Y0+`");  // Backward
-         wmTilt->SetControlExpression(2, "`" + devAnalog + ":X0-`");  // Left
 diff --git a/Source/Core/DolphinLibretro/Main.cpp b/Source/Core/DolphinLibretro/Main.cpp
-index 098f6c6..6320b79 100644
+index 97ba667a1e..6c1c291949 100644
 --- a/Source/Core/DolphinLibretro/Main.cpp
 +++ b/Source/Core/DolphinLibretro/Main.cpp
 @@ -1,4 +1,5 @@
@@ -608,7 +337,7 @@ index 098f6c6..6320b79 100644
      // Apply Action Replay
 diff --git a/Source/Core/DolphinLibretro/NxDisc.cpp b/Source/Core/DolphinLibretro/NxDisc.cpp
 new file mode 100644
-index 0000000..5a810c5
+index 0000000000..5a810c5867
 --- /dev/null
 +++ b/Source/Core/DolphinLibretro/NxDisc.cpp
 @@ -0,0 +1,57 @@
@@ -670,7 +399,7 @@ index 0000000..5a810c5
 +  delete static_cast<DiscIO::BlobReader*>(h);
 +}
 diff --git a/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.cpp b/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.cpp
-index a3f108e..20e82d1 100644
+index a3f108e31b..20e82d138e 100644
 --- a/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.cpp
 +++ b/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.cpp
 @@ -304,6 +304,11 @@ std::unique_ptr<GLContext> CreateSharedGLX(GLContext::Mode mode)
@@ -741,7 +470,7 @@ index a3f108e..20e82d1 100644
    if (auto context = CreateSharedEGL(m_opengl_mode))
      return context;
 diff --git a/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.h b/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.h
-index 1bf7a79..155ed3c 100644
+index 1bf7a790db..155ed3cfb4 100644
 --- a/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.h
 +++ b/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.h
 @@ -1,7 +1,9 @@
@@ -756,7 +485,7 @@ index 1bf7a79..155ed3c 100644
  class GLContextLR : public GLContext
 diff --git a/Source/Core/DolphinLibretro/VideoContexts/nxsharedgl.h b/Source/Core/DolphinLibretro/VideoContexts/nxsharedgl.h
 new file mode 100644
-index 0000000..0a71c03
+index 0000000000..0a71c03c5b
 --- /dev/null
 +++ b/Source/Core/DolphinLibretro/VideoContexts/nxsharedgl.h
 @@ -0,0 +1,13 @@
