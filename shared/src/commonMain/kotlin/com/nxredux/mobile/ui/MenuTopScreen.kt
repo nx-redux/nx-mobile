@@ -67,7 +67,7 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
     val controllerConnected = rememberControllerConnected()
     val touchscreen = rememberHasTouchscreen()
     NxTheme(colors = look.colors) {
-        MenuLocals(state, look, footerModeFor(controllerConnected, padVisible = false), touchscreen) {
+        MenuLocals(state, look, footerModeFor(controllerConnected, padVisible = inSkin), touchscreen) {
             BoxWithConstraints(
                 Modifier.fillMaxSize().background(LocalNxColors.current.background)
                     .let { if (inSkin) it else it.windowInsetsPadding(nxScreenInsets()) }.clipToBounds(),

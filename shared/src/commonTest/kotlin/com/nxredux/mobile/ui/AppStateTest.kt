@@ -12168,6 +12168,26 @@ class AppStateTest {
         assertFalse(state.toolOnTop.value)
     }
 
+    // The skin's two screens: a tool opened from the menu keeps the menu pad (the skin) shown, so it stays in the top glass
+    // with the menu below, through its pages, until B.
+    @Test fun a_tool_keeps_the_skin_two_screens_through_its_pages() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { menuPad = true; onboardingDone = true }
+        val state = state(settings, launcher = FakeLauncher(listOf(alpha, beta)))
+        state.load()
+        state.onSkinDualMenu(true)
+        assertTrue(state.menuPadShown())
+        state.openTools()
+        state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }); state.onButton(NxButton.A)
+        assertTrue(state.toolOnTop.value)
+        assertTrue(state.menuPadShown())                                     // Settings' root: the skin stays
+        state.onButton(NxButton.B)
+        assertFalse(state.toolOnTop.value)
+        state.onSkinDualMenu(false)
+        state.openTools()
+        state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }); state.onButton(NxButton.A)
+        assertFalse(state.menuPadShown())                                    // one screen: Settings' root as before
+    }
+
     // Dual screen: the highlighted Apps tile previews the drawer on the top screen; a tap there opens it on that app.
     // An app added meanwhile sorts before Apps: the menu below still shows Apps highlighted, and B lands on it.
     @Test fun the_drawer_previews_on_the_top_screen_and_opens_there() = runTest {

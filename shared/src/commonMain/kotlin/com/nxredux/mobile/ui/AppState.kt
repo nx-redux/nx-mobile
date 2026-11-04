@@ -2010,7 +2010,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             else -> Unit
         }
         // First setup between the welcome and HANDHELD (the folder steps and their pickers): not asked yet.
-        val step = onboarding.step ?: return deps.settings.menuPad && deps.settings.onboardingDone != false && padScreen(_screen.value)
+        // A tool opened from the menu while the skin shows two screens: it is on the top screen, the menu (and its pad) below.
+        val step = onboarding.step ?: return deps.settings.menuPad && deps.settings.onboardingDone != false &&
+            (padScreen(_screen.value) || (skinDualMenu && _toolOnTop.value))
         // Setup shows it on its own page only (the choice, live); every other page keeps the full height.
         return step == OnboardingStep.PAD && deps.settings.menuPad
     }
