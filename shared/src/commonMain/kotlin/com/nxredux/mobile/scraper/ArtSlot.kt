@@ -22,11 +22,11 @@ const val LEGACY_BOX2D_FOLDER = "box2d"
 
 /**
  * Tools → Artwork → Settings' optional art (NX Redux `scraper_prefs.h`), all off by default: [box2d] the 2D box art as
- * an extra download beside the 3D box, [wheel] the game's logo, [mix] the device-made picture of the screenshot, box and
- * wheel (which needs the wheel: [wantWheel]). With [mix] on a game has art only with its mix ([ArtHave.complete]).
+ * an extra download beside the 3D box, [wheel] the game's logo, [mix] the handheld's mix picture (ScreenScraper's, else the
+ * device-made one of the screenshot, box and wheel). With [mix] on a game has art only with its mix ([ArtHave.complete]).
  */
 data class ArtExtras(val box2d: Boolean = false, val wheel: Boolean = false, val mix: Boolean = false) {
-    val wantWheel: Boolean get() = wheel || mix
+    val wantWheel: Boolean get() = wheel
 }
 
 /** How the app writes a fitted image; [ext] is the file extension. */

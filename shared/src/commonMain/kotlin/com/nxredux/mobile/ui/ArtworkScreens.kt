@@ -196,7 +196,7 @@ private val ART_DESCRIBED_KINDS = setOf(ArtworkSettingKind.SS_LOGOUT, ArtworkSet
 
 /**
  * A Settings row as a touch row, as Settings' ([settingsTouchRow]): the On/Off rows (Replace existing art, 2D box art,
- * Wheel, Generate mix) a switch (a locked Wheel its value only); ScreenScraper's logout and TheGamesDB's allowance their
+ * Wheel, Mix) a switch; ScreenScraper's logout and TheGamesDB's allowance their
  * count as the line; the key rows their Set / Not set; Reset artwork `›`. A group label and a gap as the list's.
  */
 internal fun artworkSettingTouchRow(row: ArtworkSettingRow): NxSettingRow {
@@ -227,10 +227,11 @@ internal fun artworkSettingInfo(row: ArtworkSettingRow): SettingText = when (row
         "Fetch art again for games that already have it. Fetch missing art then reads Fetch all art.",
     )
     ArtworkSettingKind.BOX2D -> quiet("Also fetch the flat 2D cover, beside the 3D box")
-    ArtworkSettingKind.WHEEL ->
-        if (row.enabled) quiet("Also fetch the game's logo")
-        else SettingText("Needed by Generate mix", "Also fetch the game's logo. Locked On while Generate mix is on.")
-    ArtworkSettingKind.MIX -> quiet("Make the handheld's mix picture on the phone", "Make the handheld's mix picture on the phone. It needs the Wheel, so Wheel stays On.")
+    ArtworkSettingKind.WHEEL -> quiet("Also fetch the game's logo")
+    ArtworkSettingKind.MIX -> quiet(
+        "Fetch the handheld's mix picture",
+        "Fetch ScreenScraper's mix picture. When it has none, the app makes one from the screenshot, box and wheel.",
+    )
     ArtworkSettingKind.SS_LOGIN -> quiet(
         "Log in for your own daily allowance",
         "ScreenScraper works without an account, on a shared allowance. A free ScreenScraper account gives you your own " +

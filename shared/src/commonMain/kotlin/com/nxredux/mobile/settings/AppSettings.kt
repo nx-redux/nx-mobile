@@ -259,11 +259,11 @@ interface AppSettings {
     var artBox2d: Boolean
         get() = false
         set(value) {}
-    /** Art settings → Wheel: a fetch also downloads the game's logo (default off; Generate mix needs it either way). */
+    /** Art settings → Wheel: a fetch also downloads the game's logo (default off). */
     var artWheel: Boolean
         get() = false
         set(value) {}
-    /** Art settings → Generate mix: the device makes NX Redux's screenshot + box + wheel picture (default off; a game has art only with it). */
+    /** Art settings → Mix: fetch the mix picture, else the device makes NX Redux's screenshot + box + wheel one (default off; a game has art only with it). */
     var artMix: Boolean
         get() = false
         set(value) {}

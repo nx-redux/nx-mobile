@@ -20,7 +20,7 @@ import kotlin.time.Duration.Companion.seconds
 
 /** When the mix is wanted, remade and made at all (NX Redux `scraper_compositor.c` needs a screenshot or a box). */
 class MixRulesTest {
-    private class Rig(vararg val sources: FakeSource, var extras: ArtExtras = ArtExtras(mix = true), val fs: FakeRomsSource = Scrape.homeTree()) {
+    private class Rig(vararg val sources: FakeSource, var extras: ArtExtras = ArtExtras(wheel = true, mix = true), val fs: FakeRomsSource = Scrape.homeTree()) {
         val http = FakeHttp()
         val pixels = FakePixels()
         val arts = mutableListOf<Pair<String, ArtRefs>>()

@@ -7,6 +7,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -188,10 +189,15 @@ class ArtExtrasTest {
         assertEquals("Roms/GB/.media/wheel/Tetris.png" to ArtOrigin("tgdb", "Tetris.gb", "https://t/logo"), rig2.written.last())
     }
 
+    @Test fun mixDoesNotForceTheWheel() {
+        assertFalse(ArtExtras(mix = true).wantWheel)
+        assertTrue(ArtExtras(wheel = true).wantWheel)
+    }
+
     @Test fun mixOnFetchesOnlyTheWheelAndMakesTheMixFromTheFilesOnDisk() = runTest {
         val rig = Rig(ss().apply {
             offer("Tetris.gb", ArtSlot.BOX_3D, "https://a/3d"); offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://a/ss"); offer("Tetris.gb", ArtSlot.WHEEL, "https://a/w")
-        }, extras = ArtExtras(mix = true))
+        }, extras = ArtExtras(wheel = true, mix = true))
         rig.put("boxart", "Tetris.png", byteArrayOf(11))()
         rig.put("screenshot", "Tetris.png", byteArrayOf(12))()
         rig.http.on("https://a/w", png(13))

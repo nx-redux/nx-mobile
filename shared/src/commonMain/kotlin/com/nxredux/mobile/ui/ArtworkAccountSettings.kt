@@ -31,7 +31,7 @@ internal suspend fun guardArtwork(error: MutableStateFlow<String?>, block: suspe
 }
 
 /**
- * Tools → Artwork → Settings: Replace existing art, the optional art (2D box art, Wheel, Generate mix), the art
+ * Tools → Artwork → Settings: Replace existing art, the optional art (2D box art, Wheel, Mix), the art
  * sources' accounts (ScreenScraper sign-in modal and the SteamGridDB / TheGamesDB key prompt, drafts in the screen, as
  * RetroAchievements) and Reset artwork. [showPage] goes back to the Artwork page on a row.
  */
@@ -56,9 +56,8 @@ internal class ArtworkAccountSettings(
     private val signedIn: Boolean get() = settings.ssUsername.isNotEmpty() && settings.ssPassword != null
 
     /**
-     * In groups: Art to fetch (Replace existing art and the optional art: 2D box art, Wheel, Generate mix; only when
-     * fetching is available; the Wheel shows On and is locked while Generate mix needs it, as NX Redux's "Needed by
-     * Generate mix"), then Accounts (ScreenScraper's login / logout row, only in a build with its credentials; the
+     * In groups: Art to fetch (Replace existing art and the optional art: 2D box art, Wheel, Mix; only when
+     * fetching is available), then Accounts (ScreenScraper's login / logout row, only in a build with its credentials; the
      * SteamGridDB key row, one row each: the key prompt, or once set Remove; TheGamesDB's key row likewise and its
      * read-only allowance for the key in use, only once the user's key is set), and Reset artwork last, after a gap.
      */
@@ -67,8 +66,8 @@ internal class ArtworkAccountSettings(
             add(ArtworkSettingRow(ArtworkSettingKind.SECTION, "Art to fetch"))
             add(ArtworkSettingRow(ArtworkSettingKind.REPLACE, "Replace existing art", onOff(settings.artReplaceExisting)))
             add(ArtworkSettingRow(ArtworkSettingKind.BOX2D, "2D box art", onOff(settings.artBox2d)))
-            add(ArtworkSettingRow(ArtworkSettingKind.WHEEL, "Wheel", onOff(settings.artWheel || settings.artMix), enabled = !settings.artMix))
-            add(ArtworkSettingRow(ArtworkSettingKind.MIX, "Generate mix", onOff(settings.artMix)))
+            add(ArtworkSettingRow(ArtworkSettingKind.WHEEL, "Wheel", onOff(settings.artWheel)))
+            add(ArtworkSettingRow(ArtworkSettingKind.MIX, "Mix", onOff(settings.artMix)))
         }
         if (controller.ssAvailable || controller.sgdbAvailable || controller.tgdbSupported) {
             if (isNotEmpty()) add(ArtworkSettingRow(ArtworkSettingKind.GAP, ""))
@@ -311,12 +310,12 @@ internal class ArtworkAccountSettings(
 
     private fun onOff(on: Boolean) = if (on) "On" else "Off"
 
-    /** Flips an On/Off row's setting (the Wheel only while Generate mix is off: its row is locked otherwise). */
+    /** Flips an On/Off row's setting (the Wheel and the Mix are independent). */
     private fun toggle(kind: ArtworkSettingKind) {
         when (kind) {
             ArtworkSettingKind.REPLACE -> settings.artReplaceExisting = !settings.artReplaceExisting
             ArtworkSettingKind.BOX2D -> settings.artBox2d = !settings.artBox2d
-            ArtworkSettingKind.WHEEL -> if (!settings.artMix) settings.artWheel = !settings.artWheel
+            ArtworkSettingKind.WHEEL -> settings.artWheel = !settings.artWheel
             ArtworkSettingKind.MIX -> settings.artMix = !settings.artMix
             else -> return
         }

@@ -723,7 +723,7 @@ class ArtworkScreensTest {
         assertEquals("Fetch all art", assertIs<Screen.Artwork>(r.state.screen.value).rows.first { it.action == ArtworkAction.FETCH_MISSING }.label)
     }
 
-    @Test fun extras_toggle_and_generate_mix_locks_the_wheel_on() = runTest {
+    @Test fun extras_toggle_and_mix_leaves_the_wheel_free() = runTest {
         val r = rig()
         r.state.openArtwork()
         assertEquals("4 games · 1 with art · 3 missing", assertIs<Screen.Artwork>(r.state.screen.value).details[0])
@@ -731,7 +731,7 @@ class ArtworkScreensTest {
         fun rows() = assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows
         fun row(k: ArtworkSettingKind) = rows().first { it.kind == k }
         fun on(k: ArtworkSettingKind) { r.state.select(rows().indexOfFirst { it.kind == k }) }
-        assertEquals(listOf("Art to fetch", "Replace existing art", "2D box art", "Wheel", "Generate mix"), rows().take(5).map { it.label })
+        assertEquals(listOf("Art to fetch", "Replace existing art", "2D box art", "Wheel", "Mix"), rows().take(5).map { it.label })
         assertEquals(listOf("Off", "Off", "Off"), listOf(ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX).map { row(it).secondary })
         on(ArtworkSettingKind.BOX2D); r.state.onButton(NxButton.RIGHT)
         assertTrue(r.settings.artBox2d); assertEquals("On", row(ArtworkSettingKind.BOX2D).secondary)
@@ -741,18 +741,19 @@ class ArtworkScreensTest {
         assertFalse(r.settings.artWheel)
         on(ArtworkSettingKind.MIX); r.state.onButton(NxButton.A)
         assertTrue(r.settings.artMix)
-        // The mix needs the wheel: it reads On, dimmed, and does not step (NX Redux: "Needed by Generate mix").
-        assertEquals(ArtworkSettingRow(ArtworkSettingKind.WHEEL, "Wheel", "On", enabled = false), row(ArtworkSettingKind.WHEEL))
-        assertEquals(NxSettingRow("Wheel", info = "Needed by Generate mix", detail = "Also fetch the game's logo. Locked On while Generate mix is on.", value = "On", enabled = false), artworkSettingTouchRow(row(ArtworkSettingKind.WHEEL)))
+        // The mix does not force the wheel: its row stays free, Off, and A on it flips the setting.
+        assertEquals(ArtworkSettingRow(ArtworkSettingKind.WHEEL, "Wheel", "Off"), row(ArtworkSettingKind.WHEEL))
+        assertTrue(row(ArtworkSettingKind.WHEEL).enabled)
+        assertEquals(NxSettingRow("Wheel", info = "", detail = "Also fetch the game's logo", choices = listOf("Off", "On"), index = 0), artworkSettingTouchRow(row(ArtworkSettingKind.WHEEL)))
         assertEquals(listOf("Off", "On"), artworkSettingTouchRow(row(ArtworkSettingKind.MIX)).choices)
-        on(ArtworkSettingKind.WHEEL); r.state.onButton(NxButton.A); r.state.onButton(NxButton.RIGHT)
-        assertFalse(r.settings.artWheel)
-        // With Generate mix on, a game has art only with its mix: Zelda (a box and a background, no mix) is missing again.
+        on(ArtworkSettingKind.WHEEL); r.state.onButton(NxButton.A)
+        assertTrue(r.settings.artWheel)
+        // With Mix on, a game has art only with its mix: Zelda (a box and a background, no mix) is missing again.
         r.state.onButton(NxButton.B)
         assertEquals("4 games · 0 with art · 4 missing", assertIs<Screen.Artwork>(r.state.screen.value).details[0])
         r.state.pick(ArtworkAction.SETTINGS)
         on(ArtworkSettingKind.MIX); r.state.onButton(NxButton.A)
-        assertFalse(r.settings.artMix); assertEquals(ArtworkSettingRow(ArtworkSettingKind.WHEEL, "Wheel", "Off"), row(ArtworkSettingKind.WHEEL))
+        assertFalse(r.settings.artMix); assertEquals(ArtworkSettingRow(ArtworkSettingKind.WHEEL, "Wheel", "On"), row(ArtworkSettingKind.WHEEL))
     }
 
     /** Every write fails, as on a full disk. */
