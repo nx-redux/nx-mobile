@@ -96,10 +96,10 @@ fun ssEngine(
     androidArt: AndroidArtStore? = null, onAndroidArt: suspend () -> Unit = {}, more: List<ArtSource> = emptyList(),
     logged: LoggedArt = LoggedArt.NONE,
     onOptions: suspend (String, List<ArtOption>, Boolean) -> Unit = { _, _, _ -> }, picked: suspend (String) -> Set<ArtSlot> = { emptySet() },
-    extras: () -> ArtExtras = { ArtExtras() },
+    extras: () -> ArtExtras = { ArtExtras() }, pixels: PixelCodec? = null, warn: (String) -> Unit = {},
 ) = ScrapeEngine(
     http, fitter, source, home, listOf(ScreenScraperSource(http, hasher, auth, now, sleep)) + more, onArt, onWritten, androidArt, onAndroidArt, logged,
-    extras = extras, onOptions = onOptions, picked = picked,
+    extras = extras, pixels = pixels, warn = warn, onOptions = onOptions, picked = picked,
 )
 
 /** The written-art log as a set of paths; [origins]: each path's origin ([LoggedArt.origin]), a rig's writes recorded there. */
@@ -130,7 +130,7 @@ class FakeArtStore(var fail: Boolean = false) : AndroidArtStore {
     private fun has(appId: String, slot: ArtSlot) = if (slot == ArtSlot.SCREENSHOT) appId in files else (appId to slot) in others
     override fun art(appId: String, slot: ArtSlot): ContentRef? {
         if (!has(appId, slot)) return null
-        val suffix = when (slot) { ArtSlot.BOX_2D -> ".box2d"; ArtSlot.WHEEL -> ".wheel"; else -> "" }
+        val suffix = when (slot) { ArtSlot.BOX_2D -> ".box2d"; ArtSlot.WHEEL -> ".wheel"; ArtSlot.MIX -> ".mix"; else -> "" }
         return ContentRef("file:///art/${appId.substringBefore('/')}$suffix.png")
     }
     override fun heroShot(appId: String): Boolean = appId in heroes
@@ -138,11 +138,12 @@ class FakeArtStore(var fail: Boolean = false) : AndroidArtStore {
         if (fail) return null
         when (slot) {
             ArtSlot.SCREENSHOT -> { files[appId] = bytes; if (hero) heroes += appId else heroes -= appId }
-            ArtSlot.BOX_2D, ArtSlot.WHEEL -> others[appId to slot] = bytes
+            ArtSlot.BOX_2D, ArtSlot.WHEEL, ArtSlot.MIX -> others[appId to slot] = bytes
             else -> return null
         }
         return art(appId, slot)
     }
+    override suspend fun read(appId: String, slot: ArtSlot): ByteArray? = if (slot == ArtSlot.SCREENSHOT) files[appId] else others[appId to slot]
     override suspend fun deleteAll(): Int = (files.size + others.size).also { files.clear(); others.clear(); heroes.clear() }
 }
 

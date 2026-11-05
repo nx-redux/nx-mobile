@@ -12544,6 +12544,7 @@ class AppStateTest {
             }
             override fun heroShot(appId: String): Boolean = appId == "a/A"
             override suspend fun write(appId: String, slot: ArtSlot, bytes: ByteArray, hero: Boolean): ContentRef? = null
+            override suspend fun read(appId: String, slot: ArtSlot): ByteArray? = null
             override suspend fun deleteAll(): Int = 0
         }
         val state = AppState(
@@ -12566,6 +12567,7 @@ class AppStateTest {
             override fun art(appId: String, slot: ArtSlot): ContentRef? = ref.takeIf { appId == "a/A" && slot == ArtSlot.SCREENSHOT }
             override fun heroShot(appId: String): Boolean = false
             override suspend fun write(appId: String, slot: ArtSlot, bytes: ByteArray, hero: Boolean): ContentRef? = null
+            override suspend fun read(appId: String, slot: ArtSlot): ByteArray? = null
             override suspend fun deleteAll(): Int = 0
         }
         val state = AppState(

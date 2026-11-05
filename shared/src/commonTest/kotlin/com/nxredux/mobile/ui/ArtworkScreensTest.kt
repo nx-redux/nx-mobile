@@ -17,6 +17,7 @@ import com.nxredux.mobile.scraper.FakeArtStore
 import com.nxredux.mobile.scraper.FakeFitter
 import com.nxredux.mobile.scraper.FakeHasher
 import com.nxredux.mobile.scraper.FakeHttp
+import com.nxredux.mobile.scraper.FakePixels
 import com.nxredux.mobile.scraper.FakeRunner
 import com.nxredux.mobile.scraper.HttpResult
 import com.nxredux.mobile.scraper.ItemStatus
@@ -143,6 +144,7 @@ class ArtworkScreensTest {
         onboardingAt: OnboardingStep? = null,   // onboarding to do, resumed at this step
         optionCache: com.nxredux.mobile.scraper.ArtOptionCache = com.nxredux.mobile.scraper.ArtOptionCache.NONE,
         store: com.nxredux.mobile.storage.MemoryLibraryIndexStore = com.nxredux.mobile.storage.MemoryLibraryIndexStore(),
+        mixEngine: Boolean = false,   // the engine reads Settings' Mix and has a codec, as the app's
     ): Rig {
         val source = FakeRomsSource(
             dirs = mapOf(
@@ -177,7 +179,10 @@ class ArtworkScreensTest {
                         if (tgdbUserKey != null || tgdb) com.nxredux.mobile.scraper.TheGamesDbSource(http, { settings.tgdbApiKey.orEmpty() }, now) { delay(it) } else null,
                         if (sgdb) com.nxredux.mobile.scraper.SteamGridDbSource(http, { settings.sgdbApiKey }, now) { delay(it) } else null,
                     )
-                    ssEngine(http, FakeFitter(), FakeHasher(), source, ContentRef("Home"), auth, { testScheduler.currentTime }, { delay(it) }, onArt, onWritten, artStore, onAndroidArt, more, logged, onOptions, picked)
+                    ssEngine(
+                        http, FakeFitter(), FakeHasher(), source, ContentRef("Home"), auth, { testScheduler.currentTime }, { delay(it) }, onArt, onWritten, artStore, onAndroidArt, more, logged, onOptions, picked,
+                        extras = { com.nxredux.mobile.scraper.ArtExtras(mix = mixEngine && settings.artMix) }, pixels = if (mixEngine) FakePixels() else null,
+                    )
                 },
                 Credentials(settings, if (available) "DEV" else ""), FakeRunner(), scope, optionCache = optionCache,
             )
@@ -1066,6 +1071,27 @@ class ArtworkScreensTest {
         advanceUntilIdle()
         assertNotNull(store.art(tetris.id, ArtSlot.BOX_2D))
         assertEquals(ContentRef("file:///art/com.tetris.app.box2d.png"), assertNotNull(r.state.androidConsole).games.single().box2dRef)
+    }
+
+    @Test fun android_mix_shows_as_the_consoles_mix_and_counts_as_missing_until_built() = runTest {
+        val store = FakeArtStore()
+        val pgo = InstalledApp("com.nianticlabs.pokemongo/com.unity.Main", "Pokémon GO", game = true)
+        store.files[pgo.id] = byteArrayOf(7)
+        val r = rig(apps = listOf(pgo), artStore = store, consoleApps = listOf(pgo.id), mixEngine = true)
+        r.settings.artMix = true
+        assertNull(assertNotNull(r.state.androidConsole).games.single().mixRef)
+
+        r.state.openArtwork()
+        r.state.pick(ArtworkAction.FETCH_BY_CONSOLE)
+        val consoles = assertIs<Screen.ArtworkConsoles>(r.state.screen.value).rows
+        assertEquals(1, consoles.single { it.name == "Android" }.missing)                      // a screenshot, no mix: missing
+        r.state.onButton(NxButton.B)
+        r.state.pick(ArtworkAction.FETCH_MISSING)
+        advanceUntilIdle()
+        val job = assertIs<Screen.ArtworkProgress>(r.state.screen.value).job
+        assertEquals(ItemStatus.DONE, job.items.single { it.name == pgo.label }.status)
+        assertTrue(r.http.calls.none { it.contains("systemeid=63") }, "${r.http.calls}")        // built locally: no lookup
+        assertEquals(ContentRef("file:///art/com.nianticlabs.pokemongo.mix.png"), assertNotNull(r.state.androidConsole).games.single().mixRef)
     }
 
     @Test fun reset_all_deletes_the_android_screenshots_too() = runTest {

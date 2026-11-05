@@ -10,8 +10,8 @@ import java.io.File
 
 /**
  * The Android games console's pictures at `filesDir/android-art/`, by package (the app id before `/`): the screenshot
- * `<package>.png`, the 2D box `<package>.box2d.png`, the wheel `<package>.wheel.png`, and an empty `<package>.hero`
- * while the screenshot is a SteamGridDB hero. App-private: never the home tree, which holds only ROM data. A stored
+ * `<package>.png`, the 2D box `<package>.box2d.png`, the wheel `<package>.wheel.png`, the app-built mix
+ * `<package>.mix.png`, and an empty `<package>.hero` while the screenshot is a SteamGridDB hero. App-private: never the home tree, which holds only ROM data. A stored
  * one's ref is a `file://` uri (Coil's model) with the file's version, `?v=<lastModified>`: a replaced picture gets a new
  * ref, so Coil's memory cache (keyed by the uri) loads it afresh and the console, compared by refs, is rebuilt. Coil
  * opens the uri's path, without the query.
@@ -28,6 +28,7 @@ class AndroidArtFiles(private val dir: File) : AndroidArtStore {
             ArtSlot.SCREENSHOT -> ".png"
             ArtSlot.BOX_2D -> ".box2d.png"
             ArtSlot.WHEEL -> ".wheel.png"
+            ArtSlot.MIX -> ".mix.png"
             else -> null
         }
     }
@@ -60,9 +61,14 @@ class AndroidArtFiles(private val dir: File) : AndroidArtStore {
         art(appId, slot)
     }
 
+    override suspend fun read(appId: String, slot: ArtSlot): ByteArray? = withContext(Dispatchers.IO) {
+        val f = file(appId, slot)?.takeIf { it.isFile } ?: return@withContext null
+        runCatching { f.readBytes() }.onFailure { NxLog.w(TAG, "read failed (${it::class.java.simpleName})") }.getOrNull()
+    }
+
     /**
      * Deletes every file in [dir] (hero marks, and a temp file left by an interrupted write, too); counts only the
-     * pictures deleted (`.png`: screenshots, 2D boxes and wheels).
+     * pictures deleted (`.png`: screenshots, 2D boxes, wheels and mixes).
      */
     override suspend fun deleteAll(): Int = withContext(Dispatchers.IO) {
         val files = dir.listFiles().orEmpty().filter { it.isFile }

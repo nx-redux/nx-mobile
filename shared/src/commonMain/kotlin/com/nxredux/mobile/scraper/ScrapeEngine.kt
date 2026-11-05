@@ -30,8 +30,8 @@ internal suspend fun RomsSource.findDir(home: ContentRef, segments: List<String>
  *
  * An Android game ([LibraryGameRef.android]) has its own flow ([scrapeAndroid]), ScreenScraper only: looked up by
  * label, its `ss` screenshot only written to [androidArt] (app-private, never the home tree or the index), then
- * [onAndroidArt]; its other pictures come only from Change art picks. Without [androidArt] or ScreenScraper, Android
- * games are skipped.
+ * [onAndroidArt]; its other pictures come only from Change art picks. While Mix is on, its mix is built from those
+ * pictures ([makeAndroidMix]) and stored beside them. Without [androidArt] or ScreenScraper, Android games are skipped.
  */
 class ScrapeEngine(
     private val http: ScraperHttp, private val fitter: ImageFitter,
@@ -198,6 +198,12 @@ class ScrapeEngine(
                 val known = sourcesFor(ref)
                 if (known.isEmpty()) { set(i, ItemStatus.SKIPPED, NO_SOURCE); continue }
                 if (hasArt(ref) && !replace && !wide) { set(i, ItemStatus.SKIPPED, HAS_ART); continue }
+                // An Android game lacking only its mix is made one from its stored pictures (no request), ScreenScraper
+                // stopped or not.
+                if (ref.android && !replace && !wide && androidMixOnly(ref)) {
+                    if (ensureAndroidMix(ref)) set(i, ItemStatus.DONE) else set(i, ItemStatus.NOT_FOUND, NO_MIX)
+                    continue
+                }
                 // A game lacking only its mix, with no source that has mixes, is made one from its files on disk (no
                 // request); one ScreenScraper would be asked waits while it is stopped, as any other.
                 if (known.all { it.id in stopped } && !(mixOnlyLocal(ref, known) && !replace)) { blocked = true; continue }
@@ -640,7 +646,8 @@ class ScrapeEngine(
 
     /**
      * An Android game's pick: [image] fitted to the hit kind's cap, stored in [slot] of [androidArt] (a SteamGridDB
-     * screenshot marked a hero), then the console rebuilt ([onAndroidArt]). An empty [ArtRefs] (the console reads the
+     * screenshot marked a hero), its mix built again while Mix is on ([makeAndroidMix], under the same lock), then the
+     * console rebuilt ([onAndroidArt]). An empty [ArtRefs] (the console reads the
      * store, not the index); null for a slot the store has none of (the 3D box), or when the image cannot be read or
      * stored.
      */
@@ -649,7 +656,11 @@ class ScrapeEngine(
         if (slot !in AndroidArtStore.SLOTS) return null
         val fitted = fitFor(option.slot, image) ?: return null
         val hero = slot == ArtSlot.SCREENSHOT && option.source == SourceId.SGDB
-        pickWrites.withLock { guard { store.write(ref.fileName, slot, fitted.bytes, hero) } } ?: return null
+        pickWrites.withLock {
+            guard { store.write(ref.fileName, slot, fitted.bytes, hero) } ?: return null
+            // Every pickable slot is a mix input: the mix is built again from what the game has now.
+            if (androidHave(ref)?.let { it.needMix && it.mixInput } == true) makeAndroidMix(ref, store)
+        }
         withContext(NonCancellable) { onAndroidArt() }
         return ArtRefs()
     }
@@ -703,12 +714,72 @@ class ScrapeEngine(
     } ?: false
 
     /**
-     * A ROM's art as the host saw it ([ArtHave.complete], the mix needed when Mix is on and a mix can be made);
-     * an Android game's stored screenshot as the store has it.
+     * A ROM's art as the host saw it ([ArtHave.complete], the mix needed when Mix is on and a mix can be made); an
+     * Android game's as the store has it ([androidHave]: a screenshot, and its mix when one is needed and can be made).
      */
     private fun hasArt(ref: LibraryGameRef): Boolean =
-        if (ref.android) guard { androidArt?.art(ref.fileName, ArtSlot.SCREENSHOT) } != null
-        else ref.have.copy(needMix = extras().mix && pixels != null).complete
+        if (ref.android) androidHave(ref)?.complete == true
+        else ref.have.copy(needMix = mixMade()).complete
+
+    /** Mix is on and the app can make one (a [pixels] codec). */
+    private fun mixMade(): Boolean = extras().mix && pixels != null
+
+    /**
+     * [ref]'s (an Android game's) pictures as [androidArt] has them: a box always (it never wants one, and no 3D box:
+     * so its mix input is a screenshot that is not a hero, or a 2D box), the mix needed when [mixMade]; null without a store
+     * or when it cannot be read.
+     */
+    private fun androidHave(ref: LibraryGameRef): ArtHave? = androidArt?.let { store ->
+        guard {
+            ArtHave(
+                box = true, boxart = false, screenshot = store.art(ref.fileName, ArtSlot.SCREENSHOT) != null,
+                box2d = store.art(ref.fileName, ArtSlot.BOX_2D) != null, wheel = store.art(ref.fileName, ArtSlot.WHEEL) != null,
+                mix = store.art(ref.fileName, ArtSlot.MIX) != null, needMix = mixMade(), heroShot = store.heroShot(ref.fileName),
+            )
+        }
+    }
+
+    /** An Android game with a stored screenshot whose mix is all it lacks: Mix is on, no mix stored, an input there. */
+    private fun androidMixOnly(ref: LibraryGameRef): Boolean = androidHave(ref)?.let { it.screenshot && !it.complete } == true
+
+    /**
+     * Builds [ref]'s (an Android game's) mix when one is needed and missing and it has an input ([androidHave]), under
+     * the lock a pick's write takes ([makeAndroidMix] takes none), then rebuilds the console ([onAndroidArt]); true
+     * when one was made.
+     */
+    private suspend fun ensureAndroidMix(ref: LibraryGameRef): Boolean {
+        val store = androidArt ?: return false
+        val made = pickWrites.withLock {
+            androidHave(ref)?.let { it.needMix && !it.mix && it.mixInput } == true && makeAndroidMix(ref, store)
+        }
+        if (made) withContext(NonCancellable) { onAndroidArt() }
+        return made
+    }
+
+    /**
+     * Makes and stores [ref]'s (an Android game's) mix ([MixCompositor]) from its stored screenshot (never a hero:
+     * [AndroidArtStore.heroShot]), 2D box and wheel ([AndroidArtStore.read]), a missing one left out and one that cannot
+     * be decoded (out of memory included) left out with a [warn]. As [makeMix], none without a screenshot or a box.
+     * Only while Mix is on ([mixMade]). False, with a [warn] (no paths), when it could not be made or stored. The caller
+     * holds [pickWrites] and rebuilds the console after ([onAndroidArt]).
+     */
+    private suspend fun makeAndroidMix(ref: LibraryGameRef, store: AndroidArtStore): Boolean {
+        val codec = pixels?.takeIf { extras().mix } ?: return false
+        var warned = false
+        suspend fun image(slot: ArtSlot): ArgbImage? {
+            val bytes = lenient { store.read(ref.fileName, slot) }?.takeIf { it.isNotEmpty() && it.size < MIX_INPUT_MAX } ?: return null
+            return lenient { codec.decode(bytes) }
+                ?: run { warn("mix: could not decode the ${slot.folder} of an Android game"); warned = true; null }
+        }
+        val shot = if (guard { store.heroShot(ref.fileName) } != false) null else image(ArtSlot.SCREENSHOT)
+        val box = image(ArtSlot.BOX_2D)
+        if (shot == null && box == null) { if (!warned) warn("mix: no screenshot or box for an Android game"); return false }
+        val wheel = image(ArtSlot.WHEEL)
+        val png = lenient { MixCompositor.create(shot, box, wheel)?.let { codec.encodePng(it) } }
+        if (png == null) { warn("mix: could not make it for an Android game"); return false }
+        return (guard { store.write(ref.fileName, ArtSlot.MIX, png) } != null)
+            .also { if (!it) warn("mix: could not save it for an Android game") }
+    }
 
     /**
      * A ROM with a box and a screenshot whose mix is all it lacks ([hasArt] false), and none of [known] has mixes (no
@@ -720,7 +791,8 @@ class ScrapeEngine(
     /**
      * An Android game: ScreenScraper's lookup ([ScreenScraperSource.androidScreenshot]), its `ss` screenshot fitted to
      * the screenshot cap, stored by app id, then the console refreshed; written only when the store has no screenshot
-     * (or under [replace]) and the user has not picked one. The same lookup's screenshots, 2D boxes and wheels are its
+     * (or under [replace]) and the user has not picked one. While Mix is on, a Done game gets its mix: built again
+     * after the screenshot's write, or built when none is stored. The same lookup's screenshots, 2D boxes and wheels are its
      * options ([onOptions]); [wide] also asks SteamGridDB by the app's label for its grids, heroes and logos (only
      * recorded; never in a bulk fetch: [SteamGridDbSource.knows] leaves Android out). A failed store write is this
      * game's error (app-private storage: not the home tree's pause). Null when ScreenScraper stopped ([stop]).
@@ -757,7 +829,8 @@ class ScrapeEngine(
             val has = guard { store.art(ref.fileName, ArtSlot.SCREENSHOT) } != null
             result = when {
                 hit == AndroidHit.None -> ItemStatus.NOT_FOUND to null
-                picked || (has && !replace) -> ItemStatus.DONE to null   // nothing to write: the stored one stays
+                // Nothing to write: the stored one stays, and gets its mix when it has none.
+                picked || (has && !replace) -> { ensureAndroidMix(ref); ItemStatus.DONE to null }
                 hit is AndroidHit.Screenshot -> writeAndroidShot(store, ref, hit.url, downloading, ss)
                 else -> ItemStatus.NOT_FOUND to "No artwork"
             }
@@ -767,18 +840,25 @@ class ScrapeEngine(
         return result
     }
 
-    /** Downloads [url], fits it to the screenshot cap and stores it as [ref]'s screenshot (not a hero), then [onAndroidArt]. */
+    /**
+     * Downloads [url], fits it to the screenshot cap and stores it as [ref]'s screenshot (not a hero), builds its mix
+     * again while Mix is on ([makeAndroidMix], under the same lock), then [onAndroidArt].
+     */
     private suspend fun writeAndroidShot(
         store: AndroidArtStore, ref: LibraryGameRef, url: String, downloading: suspend () -> Unit, ss: ScreenScraperSource,
     ): Pair<ItemStatus, String?> {
         downloading()
         val image = download(url) ?: return ItemStatus.ERROR to "Couldn't download the art"
         val fitted = guard { fitter.fit(image, ArtCaps.of(ArtSlot.SCREENSHOT)) } ?: return ItemStatus.ERROR to "Couldn't make the art"
-        // A pick made while this game was fetched wins its slot (read under the lock its write takes).
-        pickWrites.withLock {
-            if (ArtSlot.SCREENSHOT in picked(ref.gamePath)) return ItemStatus.DONE to null
-            guard { store.write(ref.fileName, ArtSlot.SCREENSHOT, fitted.bytes) }
-        } ?: return ItemStatus.ERROR to "Couldn't save the art"
+        // A pick made while this game was fetched wins its slot (read under the lock its write takes); the game still
+        // gets its mix when it has none.
+        val wrote = pickWrites.withLock {
+            if (ArtSlot.SCREENSHOT in picked(ref.gamePath)) return@withLock false
+            guard { store.write(ref.fileName, ArtSlot.SCREENSHOT, fitted.bytes) } ?: return ItemStatus.ERROR to "Couldn't save the art"
+            if (androidHave(ref)?.let { it.needMix && it.mixInput } == true) makeAndroidMix(ref, store)
+            true
+        }
+        if (!wrote) { ensureAndroidMix(ref); return ItemStatus.DONE to null }
         withContext(NonCancellable) { onAndroidArt() }
         return ItemStatus.DONE to doneReason(listOf(ss.shortLabel), standInOnly = false)
     }

@@ -8,6 +8,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -87,5 +88,23 @@ class AndroidArtFilesTest {
         assertNull(store.write("com.a/.Main", ArtSlot.BOX_3D, byteArrayOf(1)))
         assertNull(store.art("com.a/.Main", ArtSlot.BOX_3D))
         assertTrue(!dir.exists() || dir.list()!!.isEmpty())
+        assertNotNull(store.write("com.a/.Main", ArtSlot.MIX, byteArrayOf(2)))                    // the mix is stored
+        assertEquals(listOf("com.a.mix.png"), dir.list()!!.toList())
+    }
+
+    @Test fun mixIsStoredBesideTheOthers() = runBlocking {
+        assertNull(store.read("com.a/.Main", ArtSlot.MIX))                                      // none yet
+        store.write("com.a/.Main", ArtSlot.SCREENSHOT, byteArrayOf(1))
+        val ref = store.write("com.a/.Main", ArtSlot.MIX, byteArrayOf(6, 7))
+        val file = File(dir, "com.a.mix.png")
+        assertArrayEquals(byteArrayOf(6, 7), file.readBytes())
+        assertEquals(ContentRef("file://${file.absolutePath}?v=${file.lastModified()}"), ref)
+        assertEquals(ref, store.art("com.a/.Main", ArtSlot.MIX))
+        assertArrayEquals(byteArrayOf(6, 7), store.read("com.a/.Main", ArtSlot.MIX))
+        assertArrayEquals(byteArrayOf(1), store.read("com.a/.Main", ArtSlot.SCREENSHOT))
+        assertNull(store.read("com.a/.Main", ArtSlot.WHEEL))
+        assertNull(store.read("../escape/.Main", ArtSlot.MIX))
+        assertEquals(2, store.deleteAll())                                                     // the mix counts as a picture
+        assertNull(store.art("com.a/.Main", ArtSlot.MIX))
     }
 }

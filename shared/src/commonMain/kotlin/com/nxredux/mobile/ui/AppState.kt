@@ -704,8 +704,8 @@ internal const val ANDROID_SOURCE = "android"
 
 /**
  * The Android games console for [apps] (the console's members, [androidConsoleMembers]): a synthetic [SystemFolder] with no core,
- * each app a [GameEntry] whose file name is the app id and whose shown name is its label, its screenshot, 2D box and
- * wheel from [store] ([AndroidArtStore.art]; a hero screenshot marked); no 3D box. Null with no app: the console is
+ * each app a [GameEntry] whose file name is the app id and whose shown name is its label, its screenshot, 2D box,
+ * wheel and app-built mix from [store] ([AndroidArtStore.art]; a hero screenshot marked); no 3D box. Null with no app: the console is
  * hidden.
  */
 internal fun androidConsoleOf(apps: List<InstalledApp>, store: AndroidArtStore?): SystemFolder? {
@@ -714,7 +714,7 @@ internal fun androidConsoleOf(apps: List<InstalledApp>, store: AndroidArtStore?)
         GameEntry(
             ref = ContentRef("app:${a.id}"), fileName = a.id, shownName = a.label,
             screenshotRef = store?.art(a.id, ArtSlot.SCREENSHOT), box2dRef = store?.art(a.id, ArtSlot.BOX_2D),
-            wheelRef = store?.art(a.id, ArtSlot.WHEEL), heroShot = store?.heroShot(a.id) == true,
+            wheelRef = store?.art(a.id, ArtSlot.WHEEL), mixRef = store?.art(a.id, ArtSlot.MIX), heroShot = store?.heroShot(a.id) == true,
             folder = ContentRef("app:"), sourceId = ANDROID_SOURCE, relativeDir = "",
         )
     }
@@ -6335,15 +6335,19 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /**
      * The Android games console's games for the scraper: by app id and label, "has art" when a screenshot is stored (a
-     * fetch never wants a box), with the store's pictures as their art. The game path is the entry's own ([path]), as
+     * fetch never wants a box) and, while Mix is on, its mix when it has an input, with the store's pictures as their art. The game path is the entry's own ([path]), as
      * the game menu's art panel names the game by it.
      */
     private fun androidArtworkGames(): List<LibraryGameRef> = shownAndroidConsole()?.games.orEmpty().map { g ->
-        val art = ArtRefs(box2d = g.box2dRef?.value, screenshot = g.screenshotRef?.value, wheel = g.wheelRef?.value, heroShot = g.heroShot)
+        val art = ArtRefs(box2d = g.box2dRef?.value, screenshot = g.screenshotRef?.value, wheel = g.wheelRef?.value, mix = g.mixRef?.value, heroShot = g.heroShot)
         LibraryGameRef(
             gamePath = g.path, tag = ANDROID_TAG, name = g.shownName, fileName = g.fileName, rom = g.ref, sourceId = g.sourceId,
             relativeDir = g.relativeDir, folderGame = false,
-            have = ArtHave(box = true, screenshot = g.screenshotRef != null, box2d = g.box2dRef != null, wheel = g.wheelRef != null, heroShot = g.heroShot),
+            // No 3D box: its mix input is a screenshot that is not a hero, or a 2D box.
+            have = ArtHave(
+                box = true, boxart = false, screenshot = g.screenshotRef != null, box2d = g.box2dRef != null, wheel = g.wheelRef != null,
+                mix = g.mixRef != null, needMix = settings.artMix, heroShot = g.heroShot,
+            ),
             android = true, art = art,
         )
     }
