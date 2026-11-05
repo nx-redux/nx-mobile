@@ -96,6 +96,7 @@ class ArtworkScreensTest {
         override var artBox2d = false
         override var artWheel = false
         override var artMix = false
+        override var artWheelMigrated = false
         override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = com.nxredux.mobile.settings.MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = com.nxredux.mobile.settings.AccentPreset.DEFAULT; override var secondaryAccent: com.nxredux.mobile.settings.SecondaryAccent = com.nxredux.mobile.settings.SecondaryAccent.DEFAULT
     }
 
@@ -145,6 +146,7 @@ class ArtworkScreensTest {
         optionCache: com.nxredux.mobile.scraper.ArtOptionCache = com.nxredux.mobile.scraper.ArtOptionCache.NONE,
         store: com.nxredux.mobile.storage.MemoryLibraryIndexStore = com.nxredux.mobile.storage.MemoryLibraryIndexStore(),
         mixEngine: Boolean = false,   // the engine reads Settings' Mix and has a codec, as the app's
+        stored: Settings.() -> Unit = {},   // settings as an earlier version left them, before the first load
     ): Rig {
         val source = FakeRomsSource(
             dirs = mapOf(
@@ -165,6 +167,7 @@ class ArtworkScreensTest {
             androidConsoleApps = consoleApps; androidGamesAsked = true
             tgdbApiKey = tgdbUserKey
             if (onboardingAt != null) { onboardingDone = false; onboardingStep = onboardingAt.name }
+            stored()
         }
         val http = FakeHttp().apply { clock = { testScheduler.currentTime } }
         val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
@@ -806,6 +809,25 @@ class ArtworkScreensTest {
         r.state.onButton(NxButton.A)
         r.state.onButton(NxButton.B)
         assertEquals("Fetch all art", assertIs<Screen.Artwork>(r.state.screen.value).rows.first { it.action == ArtworkAction.FETCH_MISSING }.label)
+    }
+
+    @Test fun generate_mix_users_keep_their_wheel_once() = runTest {
+        // Mix used to fetch wheels whatever Wheel said; now it does not, so the first load turns Wheel on for them.
+        val r = rig(stored = { artMix = true; artWheel = false })
+        assertTrue(r.settings.artWheel); assertTrue(r.settings.artWheelMigrated)
+        // Done once: Wheel turned off stays off on the next launch.
+        r.settings.artWheel = false
+        r.state.load(); advanceUntilIdle()
+        assertFalse(r.settings.artWheel)
+    }
+
+    @Test fun without_generate_mix_the_wheel_is_left_alone() = runTest {
+        val r = rig(stored = { artMix = false; artWheel = false })
+        assertFalse(r.settings.artWheel); assertTrue(r.settings.artWheelMigrated)
+        // Turning Mix on afterwards does not bring the wheel back on a later launch.
+        r.settings.artMix = true
+        r.state.load(); advanceUntilIdle()
+        assertFalse(r.settings.artWheel)
     }
 
     @Test fun extras_toggle_and_mix_leaves_the_wheel_free() = runTest {

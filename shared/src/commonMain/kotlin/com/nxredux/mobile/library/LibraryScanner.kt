@@ -56,7 +56,7 @@ data class GameEntry(
     val screenshotRef: ContentRef? = null, // .media/screenshot/<name>
     val box2dRef: ContentRef? = null,      // .media/boxart2d/<name>, else the legacy .media/box2d/<name> (2D front cover)
     val wheelRef: ContentRef? = null,      // .media/wheel/<name> (known, not shown)
-    val mixRef: ContentRef? = null,        // .media/mix/<name> (known, not shown: Generate mix's has-art rule)
+    val mixRef: ContentRef? = null,        // .media/mix/<name> (known, not shown: Mix's has-art rule)
     val heroShot: Boolean = false,         // the screenshot is a SteamGridDB hero ([IndexedGame.heroShot])
     val folder: ContentRef,
     val sourceId: String,

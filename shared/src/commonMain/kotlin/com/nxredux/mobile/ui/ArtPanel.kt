@@ -89,9 +89,10 @@ private fun listArtOf(kind: BackdropArt): GameListArt = when (kind) {
 }
 
 /**
- * The question after a pick in file slot [pickSlot]: null for a screenshot, or when [backdrop] already shows the
- * picked kind and [listArt] is not a box/wheel kind or shows it too. [LayoutQuestion.alsoListArt] when List art is
- * 3D box, 2D box or wheel and not the picked kind. A mix pick asks about List art alone: null when it is already Mix.
+ * The question after a box, wheel or mix pick in file slot [pickSlot] (a mix's about List art only): null for a
+ * screenshot, or when [backdrop] already shows the picked kind and [listArt] is not a box/wheel kind or shows it too.
+ * [LayoutQuestion.alsoListArt] when List art is 3D box, 2D box or wheel and not the picked kind. A mix pick asks about
+ * List art alone: null when it is already Mix.
  */
 fun layoutQuestionFor(pickSlot: ArtSlot, backdrop: BackdropArt, listArt: GameListArt): LayoutQuestion? {
     if (pickSlot.fileSlot == ArtSlot.MIX) {

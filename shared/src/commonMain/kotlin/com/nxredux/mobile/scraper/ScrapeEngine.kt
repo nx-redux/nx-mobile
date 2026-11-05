@@ -195,15 +195,15 @@ class ScrapeEngine(
                 if (s.items[i].status != ItemStatus.WAITING) continue
                 val ref = games(s.items[i].gamePath)
                 if (ref == null) { set(i, ItemStatus.SKIPPED, "Not in the library"); continue }
-                val known = sourcesFor(ref)
-                if (known.isEmpty()) { set(i, ItemStatus.SKIPPED, NO_SOURCE); continue }
-                if (hasArt(ref) && !replace && !wide) { set(i, ItemStatus.SKIPPED, HAS_ART); continue }
                 // An Android game lacking only its mix is made one from its stored pictures (no request), ScreenScraper
-                // stopped or not.
-                if (ref.android && !replace && !wide && androidMixOnly(ref)) {
+                // stopped, or not there at all.
+                if (ref.android && androidArt != null && !replace && !wide && androidMixOnly(ref)) {
                     if (ensureAndroidMix(ref)) set(i, ItemStatus.DONE) else set(i, ItemStatus.NOT_FOUND, NO_MIX)
                     continue
                 }
+                val known = sourcesFor(ref)
+                if (known.isEmpty()) { set(i, ItemStatus.SKIPPED, NO_SOURCE); continue }
+                if (hasArt(ref) && !replace && !wide) { set(i, ItemStatus.SKIPPED, HAS_ART); continue }
                 // A game lacking only its mix, with no source that has mixes, is made one from its files on disk (no
                 // request); one ScreenScraper would be asked waits while it is stopped, as any other.
                 if (known.all { it.id in stopped } && !(mixOnlyLocal(ref, known) && !replace)) { blocked = true; continue }

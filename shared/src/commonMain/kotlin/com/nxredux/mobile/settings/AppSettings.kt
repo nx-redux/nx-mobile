@@ -267,6 +267,13 @@ interface AppSettings {
     var artMix: Boolean
         get() = false
         set(value) {}
+    /**
+     * [migrateMixWheel] has run: Wheel was switched on once for a user who had Mix on when it forced the wheel.
+     * Defaulted: a store without it counts as done, so it never touches Wheel.
+     */
+    var artWheelMigrated: Boolean
+        get() = true
+        set(@Suppress("UNUSED_PARAMETER") value) {}
     /** Layouts → Home tab, Consoles tab, Collections tab, Tools tab: Show (true, the default) or Hide. A hidden tab stays reachable from MENU. */
     var showHomeTab: Boolean
     var showConsolesTab: Boolean
@@ -435,6 +442,17 @@ interface AppSettings {
     var accent: AccentPreset
     /** Appearance → Secondary accent: the bar behind a selected option's value; unset or unknown is [SecondaryAccent.DEFAULT] (Auto). */
     var secondaryAccent: SecondaryAccent
+}
+
+/**
+ * One-time, for the Mix that no longer forces the wheel: before, Mix on fetched wheels whatever Wheel said. A user
+ * who had it on gets Wheel switched on once, so nothing changes until they turn it off; done either way, so it never
+ * runs again.
+ */
+fun AppSettings.migrateMixWheel() {
+    if (artWheelMigrated) return
+    if (artMix) artWheel = true
+    artWheelMigrated = true
 }
 
 /** Opens the platform folder picker; the host passes the result to AppState.setHome or AppState.addExtra. */

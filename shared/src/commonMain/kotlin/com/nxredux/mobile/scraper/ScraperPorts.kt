@@ -91,8 +91,9 @@ data class ArtHave(
 /**
  * A library game as the scrape engine needs it; built by the host from the library index. [android]: an installed
  * Android game of the Android games console ([fileName] its app id, [name] its label, [gamePath] and [rom] its `app:`
- * ref, [have] `box` always and `screenshot` when one is stored, as it never wants a box): looked up by label and stored
- * in the [AndroidArtStore]. [datTitle]: an arcade set's raw DAT title (fbneo's table, or flycast's for a DC zip/7z;
+ * ref, [have] `box` always and `screenshot` when one is stored, as it never wants a box, and while Mix is on its mix:
+ * stored or not, from a screenshot that is not a hero or a 2D box): looked up by label and stored in the
+ * [AndroidArtStore]. [datTitle]: an arcade set's raw DAT title (fbneo's table, or flycast's for a DC zip/7z;
  * libretro-thumbnails names arcade art by it), null otherwise. [art]: the index's current art refs (an extra folder's
  * own `.media` refs among them, which the engine keeps when it reports the game's art).
  */

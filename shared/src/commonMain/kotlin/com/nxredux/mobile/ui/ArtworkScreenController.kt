@@ -71,12 +71,12 @@ internal class ArtworkScreenController(
 
     // --- The Artwork page ---
 
-    /** The page's game counts and what they were counted from ([ArtworkScreenHost.gamesInputs], the sources, Generate mix). */
+    /** The page's game counts and what they were counted from ([ArtworkScreenHost.gamesInputs], the sources, Mix). */
     private class PageCounts(val inputs: List<Any?>, val sources: ArtSources, val mix: Boolean, val games: Int, val withArt: Int, val missing: Int)
     private var counts: PageCounts? = null
 
     /**
-     * The counts over the whole library, counted again only when the library, the sources or Generate mix (the has-art
+     * The counts over the whole library, counted again only when the library, the sources or Mix (the has-art
      * rule) changed: a job emits per item (progress, quota), and most emissions leave them as they were.
      */
     private fun counts(): PageCounts {

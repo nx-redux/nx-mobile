@@ -186,7 +186,7 @@ fun LibraryIndex.rename(game: GameEntry, name: String): LibraryIndex {
 
 /**
  * A game's typed art refs (ContentRef values), as the index stores them; null = no file of that kind. [wheel] and [mix]
- * are only known, never shown: Generate mix's has-art rule needs the mix. [heroShot]: the [screenshot] is a SteamGridDB
+ * are only known, never shown: Mix's has-art rule needs the mix. [heroShot]: the [screenshot] is a SteamGridDB
  * hero (its written-art origin), drawn as a hero and never a mix input.
  */
 data class ArtRefs(

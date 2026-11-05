@@ -198,8 +198,8 @@ private fun ArtGrid(p: ArtPanel, modifier: Modifier, onTap: (Int) -> Unit) {
 }
 
 /**
- * The question after a box or wheel pick, a card in the panel: "Show this picture?", its [text], then Switch and Keep
- * (the lit one in the accent; a tap answers, [onAnswer] true for Switch).
+ * The question after a box, wheel or mix pick (a mix's asks about List art only), a card in the panel: "Show this
+ * picture?", its [text], then Switch and Keep (the lit one in the accent; a tap answers, [onAnswer] true for Switch).
  */
 @Composable
 private fun LayoutQuestionCard(q: LayoutQuestion, text: String, onAnswer: (Boolean) -> Unit, modifier: Modifier) {

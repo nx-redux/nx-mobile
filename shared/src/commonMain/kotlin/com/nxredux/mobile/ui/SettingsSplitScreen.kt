@@ -46,7 +46,7 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
         title = SETTINGS_TITLE,
         words = (root?.sections ?: categories).map { it.label },
         lines = emptyList(),
-        current = if (root != null) selection.value.index else categories.indexOf(settingsCategoryOf(s)).coerceAtLeast(0),
+        current = { if (root != null) selection.value.index else categories.indexOf(settingsCategoryOf(s)).coerceAtLeast(0) },
         root = root != null,
         onWordTap = state::settingsCategoryTap,
         blockPage = settingsWideBlockPage(s),
@@ -82,13 +82,14 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
  * to 560 dp, its right edge the gutter in), on the word block's baseline and growing up to 24 dp under the top, then
  * scrolling; without [blockPage] the page draws whole from [SETTINGS_SPLIT_LEFT]. On the [root] the words have the
  * focus, [current] is the highlighted word and the right side is its [preview]; on a page the right side is the [page]
- * and [current] drops to the open grey with a "›". A tap on a word calls [onWordTap]. The root's hints are drawn on the
- * left ([onHint] answers a tap on one), a page's on the right; both sides keep the bar's height, so the blocks share
- * the baseline. [over] is drawn over the whole stage (a dialog's scrim takes every tap).
+ * and [current] drops to the open grey with a "›". [current] is read only by the word block ([WithCurrent]), so a
+ * d-pad move on the root recomposes the words and the preview, not the stage. A tap on a word calls [onWordTap]. The
+ * root's hints are drawn on the left ([onHint] answers a tap on one), a page's on the right; both sides keep the bar's
+ * height, so the blocks share the baseline. [over] is drawn over the whole stage (a dialog's scrim takes every tap).
  */
 @Composable
 internal fun SettingsStage(
-    title: String, words: List<String>, lines: List<String>, current: Int, root: Boolean,
+    title: String, words: List<String>, lines: List<String>, current: () -> Int, root: Boolean,
     onWordTap: (Int) -> Unit, blockPage: Boolean, onHint: (NxButton) -> Unit,
     preview: @Composable () -> Unit, page: @Composable () -> Unit, over: @Composable () -> Unit = {},
 ) {
@@ -106,7 +107,7 @@ internal fun SettingsStage(
                     Column(Modifier.width(if (blockPage) maxOf(left, sectionRight + gutter) else left).fillMaxHeight()) {
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             // On a page it has the focus: the current word drops to the open grey, with its "›" ([openedLabel]).
-                            SettingsRootScreen(title, words, lines, current, onWordTap, rowsFocused = !root)
+                            WithCurrent(current) { SettingsRootScreen(title, words, lines, it, onWordTap, rowsFocused = !root) }
                         }
                         // The root shows its A/B hints here; a page shows its own on the right. Either way this bar keeps the room, so the baselines meet.
                         NxHintBar(if (root) SETTINGS_ROOT_HINTS else emptyList(), onHint = onHint)
@@ -127,6 +128,10 @@ internal fun SettingsStage(
         }
     }
 }
+
+/** [content] with [current]'s value, read in this scope only (as [WithIndex]). */
+@Composable
+private fun WithCurrent(current: () -> Int, content: @Composable (Int) -> Unit) = content(current())
 
 /**
  * The two-pane frame on a wide landscape window ([settingsSplit]): [left] in [SETTINGS_SPLIT_LEFT] of the width, a 1 dp

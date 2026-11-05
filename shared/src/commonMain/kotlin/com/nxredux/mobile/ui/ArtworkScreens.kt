@@ -158,13 +158,14 @@ internal fun ArtworkStageScreen(state: AppState, s: Screen, selection: State<Lis
     val job = state.artworkJob?.collectAsState()?.value
     val words = remember(s, job) { state.artworkStagePage(s) }
     val root = s is Screen.Artwork
-    val current = if (root) selection.value.index else words.rows.indexOfFirst { it.action == state.artworkWord(s) }.coerceAtLeast(0)
+    // Read where it is drawn (the word block, the preview), so a d-pad move on the root does not recompose the stage.
+    val current = { if (root) selection.value.index else words.rows.indexOfFirst { it.action == state.artworkWord(s) }.coerceAtLeast(0) }
     val truncated by state.settingInfoTruncated.collectAsState()   // Settings' selected row's cut-off line: its X Info hint
     SettingsStage(
         title = ARTWORK_TITLE, words = words.rows.map { it.label }, lines = words.details, current = current, root = root,
         onWordTap = state::artworkWordTap, blockPage = true, onHint = state::onButton,
         preview = {
-            val action = words.rows.getOrNull(current)?.action
+            val action = words.rows.getOrNull(current())?.action
             val preview = remember(s, action, job) { action?.let(state::artworkPreview) }
             // No selection, undimmed, no hints: the highlighted word is the one accent word, as Settings' preview.
             preview?.let { ArtworkPageBody(it, -1, onSelect = state::artworkPreviewTap, onOpen = state::artworkPreviewTap, onHint = {}, split = true, focused = false) }
@@ -202,8 +203,9 @@ private val ART_DESCRIBED_KINDS = setOf(ArtworkSettingKind.SS_LOGOUT, ArtworkSet
 
 /**
  * A Settings row as a touch row, as Settings' ([settingsTouchRow]): the On/Off rows (Replace existing art, 2D box art,
- * Wheel, Mix) a switch; ScreenScraper's logout and TheGamesDB's allowance their
- * count as the line; the key rows their Set / Not set; Reset artwork `›`. A group label and a gap as the list's.
+ * Wheel, Mix) a switch; ScreenScraper's logout and TheGamesDB's allowance their count as the line; an unset key row
+ * its Not set (once set it is a Remove row, no value); Reset artwork `›`. A dimmed row is drawn disabled. A group
+ * label and a gap as the list's.
  */
 internal fun artworkSettingTouchRow(row: ArtworkSettingRow): NxSettingRow {
     if (row.kind == ArtworkSettingKind.SECTION) return NxSettingRow(row.label, section = true)
@@ -224,8 +226,8 @@ private val ART_ON_OFF = listOf("Off", "On")
 private fun quiet(text: String, detail: String = "") = SettingText("", detail.ifEmpty { text })
 
 /**
- * [row]'s description, from the user guide's Artwork page: a line for a status (today's requests, the allowance left)
- * or a locked row's reason, the fuller text behind the info icon; the rest compact ([quiet]).
+ * [row]'s description, from the user guide's Artwork page: a line for a status (today's requests, the allowance left),
+ * its fuller text behind the info icon; the rest compact ([quiet]), why a row is dimmed in its fuller text.
  */
 internal fun artworkSettingInfo(row: ArtworkSettingRow): SettingText = when (row.kind) {
     ArtworkSettingKind.REPLACE -> quiet(

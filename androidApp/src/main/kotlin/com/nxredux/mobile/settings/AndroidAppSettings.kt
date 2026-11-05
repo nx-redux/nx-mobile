@@ -144,6 +144,9 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var artMix: Boolean
         get() = prefs.getBoolean(KEY_ART_MIX, false)
         set(value) = prefs.edit { putBoolean(KEY_ART_MIX, value) }
+    override var artWheelMigrated: Boolean
+        get() = prefs.getBoolean(KEY_ART_WHEEL_MIGRATED, false)
+        set(value) = prefs.edit { putBoolean(KEY_ART_WHEEL_MIGRATED, value) }
 
     override var showHomeTab: Boolean
         get() = prefs.getBoolean(KEY_SHOW_HOME_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
@@ -327,6 +330,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_ART_BOX2D = "art_box2d"
         private const val KEY_ART_WHEEL = "art_wheel"
         private const val KEY_ART_MIX = "art_mix"
+        private const val KEY_ART_WHEEL_MIGRATED = "art_wheel_migrated"
         private const val KEY_SHOW_HOME_TAB = "show_home_tab"
         private const val KEY_SHOW_CONSOLES_TAB = "show_consoles_tab"
         private const val KEY_SHOW_COLLECTIONS_TAB = "show_collections_tab"

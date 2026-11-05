@@ -101,6 +101,7 @@ import com.nxredux.mobile.settings.AccentPreset
 import com.nxredux.mobile.storage.ImportSummary
 import com.nxredux.mobile.storage.SaveFormat
 import com.nxredux.mobile.storage.StateFormat
+import com.nxredux.mobile.settings.migrateMixWheel
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.settings.OptionTextSize
 import com.nxredux.mobile.settings.AppSettings
@@ -3170,6 +3171,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     fun load(then: ((List<SystemFolder>) -> Unit)? = null) {
         // An install from before onboarding has its home already: it counts as done. A fresh one has onboarding to do.
         if (deps.settings.onboardingDone == null) deps.settings.onboardingDone = deps.settings.treeRef != null
+        deps.settings.migrateMixWheel()   // Mix users from before Wheel was its own setting keep their wheels, once
         // The one-time storage upgrade (v0.3.0 and earlier) comes before anything else; a load while it is up leaves it.
         if (upgradeOn || upgradeDue()) { if (!upgradeOn) startStorageUpgrade(); return }
         if (upgradeCase() == UpgradeCase.QUIET) deps.storageUpgrade?.startQuietMove()   // Case A: in the background, never mid-game
@@ -6335,8 +6337,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /**
      * The Android games console's games for the scraper: by app id and label, "has art" when a screenshot is stored (a
-     * fetch never wants a box) and, while Mix is on, its mix when it has an input, with the store's pictures as their art. The game path is the entry's own ([path]), as
-     * the game menu's art panel names the game by it.
+     * fetch never wants a box) and, while Mix is on, its mix when it has an input, with the store's pictures as their
+     * art. The game path is the entry's own ([path]), as the game menu's art panel names the game by it.
      */
     private fun androidArtworkGames(): List<LibraryGameRef> = shownAndroidConsole()?.games.orEmpty().map { g ->
         val art = ArtRefs(box2d = g.box2dRef?.value, screenshot = g.screenshotRef?.value, wheel = g.wheelRef?.value, mix = g.mixRef?.value, heroShot = g.heroShot)

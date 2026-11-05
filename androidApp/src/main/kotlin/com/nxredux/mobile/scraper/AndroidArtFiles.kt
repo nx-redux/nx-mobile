@@ -11,10 +11,10 @@ import java.io.File
 /**
  * The Android games console's pictures at `filesDir/android-art/`, by package (the app id before `/`): the screenshot
  * `<package>.png`, the 2D box `<package>.box2d.png`, the wheel `<package>.wheel.png`, the app-built mix
- * `<package>.mix.png`, and an empty `<package>.hero` while the screenshot is a SteamGridDB hero. App-private: never the home tree, which holds only ROM data. A stored
- * one's ref is a `file://` uri (Coil's model) with the file's version, `?v=<lastModified>`: a replaced picture gets a new
- * ref, so Coil's memory cache (keyed by the uri) loads it afresh and the console, compared by refs, is rebuilt. Coil
- * opens the uri's path, without the query.
+ * `<package>.mix.png`, and an empty `<package>.hero` while the screenshot is a SteamGridDB hero. App-private: never
+ * the home tree, which holds only ROM data. A stored one's ref is a `file://` uri (Coil's model) with the file's
+ * version, `?v=<lastModified>`: a replaced picture gets a new ref, so Coil's memory cache (keyed by the uri) loads it
+ * afresh and the console, compared by refs, is rebuilt. Coil opens the uri's path, without the query.
  */
 class AndroidArtFiles(private val dir: File) : AndroidArtStore {
     constructor(context: Context) : this(File(context.applicationContext.filesDir, DIR))

@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 
 /** Tools -> Artwork for the Android games console: lookup by label, then search; only `ss`, written to the art store. */
 class AndroidScrapeTest {
-    private class Rig(scope: TestScope, val store: AndroidArtStore? = FakeArtStore(), sgdbKey: String? = null, var mix: Boolean = false) {
+    private class Rig(scope: TestScope, val store: AndroidArtStore? = FakeArtStore(), sgdbKey: String? = null, var mix: Boolean = false, auth: ScraperAuth = ScraperAuth("DEV", "DEVPW")) {
         val http = FakeHttp().apply { clock = { scope.testScheduler.currentTime } }
         val options = mutableListOf<Triple<String, List<ArtOption>, Boolean>>()
         /** Each early report ([ScrapeEngine.run]'s found) with the full-size downloads made by then. */
@@ -31,7 +31,7 @@ class AndroidScrapeTest {
         var refreshed = 0
         val pixels = FakePixels()
         val engine = ssEngine(
-            http, fitter, hasher, Scrape.homeTree(), Scrape.home, { ScraperAuth("DEV", "DEVPW") }, { scope.testScheduler.currentTime }, { delay(it) },
+            http, fitter, hasher, Scrape.homeTree(), Scrape.home, { auth }, { scope.testScheduler.currentTime }, { delay(it) },
             onArt = { p, a -> arts += p to a }, onWritten = { written += it },
             androidArt = store, onAndroidArt = { refreshed++ },
             more = listOfNotNull(sgdbKey?.let { k -> SteamGridDbSource(http, { k }, { scope.testScheduler.currentTime }) { delay(it) } }),
@@ -363,6 +363,23 @@ class AndroidScrapeTest {
         assertEquals(ItemStatus.DONE, end.items.single().status)
         assertEquals(0, other.http.calls.size)
         assertNotNull(other.store!!.art(pgo.fileName, ArtSlot.MIX))
+    }
+
+    @Test fun androidMixIsBuiltWithoutScreenScraper() = runTest {
+        // A build without ScreenScraper (no dev credentials): no source for the game, yet its mix is made from its art.
+        val rig = Rig(this, mix = true, auth = ScraperAuth("", ""))
+        assertTrue(rig.engine.sourcesFor(pgo).isEmpty())
+        rig.files[pgo.fileName] = byteArrayOf(7)
+        val end = rig.run(listOf(pgo))
+        assertEquals(JobPhase.DONE, end.phase)
+        assertEquals(ItemStatus.DONE to null, end.items.single().let { it.status to it.reason })
+        assertEquals(0, rig.http.calls.size)
+        assertContentEquals(FakePixels.MIX_PNG, rig.others[pgo.fileName to ArtSlot.MIX])
+        assertEquals(1, rig.refreshed)
+        // With Mix off there is nothing to build: still no source.
+        val off = Rig(this, auth = ScraperAuth("", ""))
+        off.files[pgo.fileName] = byteArrayOf(7)
+        assertEquals(ItemStatus.SKIPPED to ScrapeEngine.NO_SOURCE, off.run(listOf(pgo)).items.single().let { it.status to it.reason })
     }
 
     @Test fun androidPickOfABoxRebuildsTheMix() = runTest {
