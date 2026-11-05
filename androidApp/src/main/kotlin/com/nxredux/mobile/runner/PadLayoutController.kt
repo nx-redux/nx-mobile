@@ -890,12 +890,29 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         return placed
     }
 
+    /** A finger the skin view passed on ([PadSkinView] px, the skin filling the root) to the game view in [game]. */
+    private fun glassTouch(game: FrameLayout, x: Float, y: Float, down: Boolean) {
+        val view = retroIn(game) ?: return
+        val skin = skinView ?: return
+        val a = IntArray(2).also(skin::getLocationInWindow); val b = IntArray(2).also(view::getLocationInWindow)
+        view.hostTouch(x + a[0] - b[0], y + a[1] - b[1], down)
+    }
+
+    private fun retroIn(g: android.view.ViewGroup): com.swordfish.libretrodroid.GLRetroView? {
+        for (i in 0 until g.childCount) when (val c = g.getChildAt(i)) {
+            is com.swordfish.libretrodroid.GLRetroView -> return c
+            is android.view.ViewGroup -> retroIn(c)?.let { return it }
+        }
+        return null
+    }
+
     /** The skin is the layout: the game view fills the window under the skin's view, which takes the pad's touches. */
     private fun applySkinLayout(root: FrameLayout, game: FrameLayout, orientation: Int) {
         game.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         val pack = skinPack ?: return
         val view = PadSkinView(activity, pack, input::onPad, ::onSkinAction, haptics = padVibration != com.nxredux.mobile.settings.PadVibration.OFF,
-            onResized = { root.post { onSkinResized() } }, onStick = input::onStick, onCStick = input::onCStick)
+            onResized = { root.post { onSkinResized() } }, onStick = input::onStick, onCStick = input::onCStick,
+            onGlass = { x, y, down -> glassTouch(game, x, y, down) })
         view.useStick = PadStickModes[padStickKey, stickDefault()]   // the drawn pad's choice, shared
         // under the menu and the notifications, over the game
         val below = listOfNotNull(menuView, notificationsView).map { root.indexOfChild(it) }.filter { it >= 0 }.minOrNull() ?: -1

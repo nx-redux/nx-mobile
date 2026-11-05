@@ -554,6 +554,16 @@ class GLRetroView(
         return true
     }
 
+    /**
+     * A finger the host's view on top owns, on the picture ([x], [y] in this view's px; lifted when not [down]): Android
+     * gives a gesture to the view its first finger landed on, so with a host's button held first the touch screen
+     * reaches this way. Ignored while this view's own finger drives the pointer. Main thread.
+     */
+    fun hostTouch(x: Float, y: Float, down: Boolean) {
+        if (touchPointerId != MotionEvent.INVALID_POINTER_ID) return
+        if (down) touchAt(x, y) else liftPointer()
+    }
+
     private fun touchAt(x: Float, y: Float) {
         if (y >= touchCutoffY) { liftPointer(); return }
         val regions = screenRegions

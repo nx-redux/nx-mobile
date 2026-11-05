@@ -21,6 +21,7 @@ import com.nxredux.mobile.skin.SkinPlacement
 import com.nxredux.mobile.skin.skinTiles
 import com.nxredux.mobile.ui.nx.PadEvent
 import com.nxredux.mobile.ui.nx.SkinPackSource
+import com.nxredux.mobile.ui.nx.SkinGlassPass
 import com.nxredux.mobile.ui.nx.SkinPadTouch
 import com.nxredux.mobile.ui.nx.SkinPressShape
 import com.nxredux.mobile.ui.nx.TouchShortcut
@@ -100,7 +101,10 @@ internal class PadSkinView(
     private val onStick: (Float, Float) -> Unit = { _, _ -> },
     /** The 3DS skin's C-stick nub (control `CSTICK`), as [onStick]. */
     private val onCStick: (Float, Float) -> Unit = { _, _ -> },
+    /** A finger on no cap after one on a cap: on to the game's touch screen (view px, [SkinGlassPass]). */
+    onGlass: (Float, Float, Boolean) -> Unit = { _, _, _ -> },
 ) : FrameLayout(context) {
+    private val glass = SkinGlassPass(onGlass)
 
     /** The skin itself: its own view, so its drawing is kept and replayed while only the shades over it change. */
     private val layer = object : View(context) {
@@ -268,6 +272,7 @@ internal class PadSkinView(
 
     override fun onDetachedFromWindow() {
         touch.releaseAll()
+        glass.cancel()
         super.onDetachedFromWindow()
     }
 
@@ -276,10 +281,16 @@ internal class PadSkinView(
         val i = e.actionIndex
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> return touch.press(e.getPointerId(0).toLong(), e.getX(0), e.getY(0))   // false: the game view gets it
-            MotionEvent.ACTION_POINTER_DOWN -> touch.press(e.getPointerId(i).toLong(), e.getX(i), e.getY(i))
-            MotionEvent.ACTION_MOVE -> for (p in 0 until e.pointerCount) touch.move(e.getPointerId(p).toLong(), e.getX(p), e.getY(p))
-            MotionEvent.ACTION_POINTER_UP -> touch.release(e.getPointerId(i).toLong())
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> touch.releaseAll()
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                val id = e.getPointerId(i).toLong()
+                glass.down(id, e.getX(i), e.getY(i), onCap = touch.press(id, e.getX(i), e.getY(i)))
+            }
+            MotionEvent.ACTION_MOVE -> for (p in 0 until e.pointerCount) {
+                val id = e.getPointerId(p).toLong()
+                touch.move(id, e.getX(p), e.getY(p)); glass.move(id, e.getX(p), e.getY(p))
+            }
+            MotionEvent.ACTION_POINTER_UP -> e.getPointerId(i).toLong().let { touch.release(it); glass.up(it) }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { touch.releaseAll(); glass.cancel() }
         }
         return true
     }
