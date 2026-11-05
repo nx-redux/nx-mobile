@@ -2130,7 +2130,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * equal screens ([N3dsOptions.coreLayoutFor]), whatever layout the player saved. A posture change re-runs [PadLayoutController.applyLayout],
      * which calls [syncN3dsCore]. A second screen's split still wins ([withN3dsSplit]).
      */
-    private fun n3dsTabletop(): Boolean = padLayout.tabletop() != null
+    private fun n3dsTabletop(): Boolean = padLayout.tabletop() != null || (isN3ds && padLayout.skinShown)   // a 3DS skin cuts the same stack
 
     /**
      * The 3DS touch screen's proportion for the row in use ([N3dsOptions.stackedSmallProportion]): Large screen in portrait

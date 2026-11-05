@@ -1,6 +1,7 @@
 package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.skin.GlassScreen
+import com.nxredux.mobile.skin.SkinN3ds
 import com.nxredux.mobile.skin.SkinDual
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -781,11 +782,14 @@ internal class FrontendRenderer(
     }
 
     /**
-     * A DS under a pad skin: its screens in the skin's glass (the top and touch glasses, or the halves of one tall glass),
-     * laid out as the half-folded split is. Null without a skin, or for a DS frame that is not the plain stack.
+     * A DS or 3DS under a pad skin: its screens in the skin's glass (the top and touch glasses, or the halves of one tall
+     * glass), laid out as the half-folded split is. Null without a skin, or for a DS frame that is not the plain stack.
+     * A 3DS ([SkinN3ds]): each screen at its own shape (SWAP trades them, [PadLayoutController.n3dsTabletopBig]); a frame
+     * that isn't azahar's plain stack (netplay keeps the player's layout) is drawn whole in the top glass.
      */
     private fun skinDsLayout(shape: WindowShape, g: FloatArray): HalfFolded? {
         if (!padLayout.skinShown || dualMode != DualMode.OFF) return null
+        if (isN3ds) return skinN3dsLayout(shape, g)
         if (!NdsOptions.appliesTo(gameTag) || !NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt())) return null
         val p = padLayout.skinPlacement() ?: return null
         val stack = p.glass(GlassScreen.STACK)?.rect?.let { fitAspect(it, 256f / 384f) }   // the two screens' stack, centred in the glass
@@ -794,6 +798,22 @@ internal class FrontendRenderer(
         val placement = TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, null, null)
         val big = NdsSettings.parse(frontendValues).big
         return HalfFolded(placement, tabletopRegions(placement, DsKind.DS, big), padLayout.tabletopDsPad(shape))
+    }
+
+    private fun skinN3dsLayout(shape: WindowShape, g: FloatArray): HalfFolded? {
+        val p = padLayout.skinPlacement() ?: return null
+        val stack = p.glass(GlassScreen.STACK)?.rect
+        val top = p.glass(GlassScreen.TOP)?.rect
+        val fw = g[0].roundToInt()
+        val fh = g[1].roundToInt()
+        val regions = if (SkinN3ds.isPlainStack(fw, fh)) {
+            SkinN3ds.regions(stack, top, p.glass(GlassScreen.TOUCH)?.rect, padLayout.n3dsTabletopBig) ?: return null
+        } else {
+            val whole = SkinN3ds.whole(stack, top, fw, fh) ?: return null
+            listOf(NdsRegion(NdsScreen.TOP, FrameRect(0f, 0f, 1f, 1f), whole, shaded = true, touch = false))
+        }
+        val placement = TabletopDsPlacement(TabletopDsMode.SPLIT, regions[0].dst, regions.getOrNull(1)?.dst ?: regions[0].dst, null, null)
+        return HalfFolded(placement, regions, padLayout.tabletopDsPad(shape))
     }
 
     /** The biggest [aspect] (width / height) rect centred in [r]; [r] itself for an unknown aspect. */
@@ -873,7 +893,7 @@ internal class FrontendRenderer(
      * core never sees it. False otherwise: the key is someone else's (split's, else Azahar's own).
      */
     fun onTabletopN3dsSwap(down: Boolean): Boolean {
-        if (!isN3ds || dualMode != DualMode.OFF || padLayout.tabletop() == null) return false
+        if (!isN3ds || dualMode != DualMode.OFF || (padLayout.tabletop() == null && !padLayout.skinShown)) return false
         if (down) {
             padLayout.swapTabletopN3ds()   // the halves move with the screens' new sizes
             relayoutFrontend()
