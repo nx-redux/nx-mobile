@@ -185,11 +185,11 @@ class LibraryScannerTest {
             "H" to listOf("Roms"),
             "H/Roms" to listOf("Game Boy (GB)"),
             "H/Roms/Game Boy (GB)" to listOf("Tetris.gb", "Zelda.gb", ".media"),
-            gb to listOf("boxart", "screenshot", "grid"),
+            gb to listOf("boxart", "screenshot", "wheel"),
             "$gb/boxart" to listOf("Tetris.png"),
             "$gb/screenshot" to listOf("Tetris.png"),
-            "$gb/grid" to listOf("Tetris.png"),
-        )).apply { stamps["$gb/boxart"] = 1_000L; stamps["$gb/screenshot"] = 1_000L }   // grid: no time
+            "$gb/wheel" to listOf("Tetris.png"),
+        )).apply { stamps["$gb/boxart"] = 1_000L; stamps["$gb/screenshot"] = 1_000L }   // wheel: no time
         val src = CountingRomsSource(fake)
         val scanner = LibraryScanner(src, Sidecars(src, MemorySidecarStore()) { ContentRef("H") })
         val index = scanner.scan(ContentRef("H"), emptyList(), emptyMap())
@@ -197,22 +197,22 @@ class LibraryScannerTest {
 
         src.calls.clear()
         assertTrue(index.withArt(scanner.readArt(index, reuse = true)) === index)
-        assertEquals(setOf("listChildren:$gb/grid"), subListings())   // only the folder with no time
+        assertEquals(setOf("listChildren:$gb/wheel"), subListings())   // only the folder with no time
 
         assertTrue(fake.writeText(ContentRef("$gb/boxart"), "Zelda.png", ""))
         fake.stamps["$gb/boxart"] = 2_000L
         src.calls.clear()
         val fresh = index.withArt(scanner.readArt(index, reuse = true))
-        assertEquals(setOf("listChildren:$gb/boxart", "listChildren:$gb/grid"), subListings())
+        assertEquals(setOf("listChildren:$gb/boxart", "listChildren:$gb/wheel"), subListings())
         assertEquals("$gb/boxart/Zelda.png", fresh.systems.single().games.single { it.file == "Zelda.gb" }.boxart)
 
         src.calls.clear()
         assertTrue(fresh.withArt(scanner.readArt(fresh, reuse = true)) === fresh)   // the changed folder's new map is kept
-        assertEquals(setOf("listChildren:$gb/grid"), subListings())
+        assertEquals(setOf("listChildren:$gb/wheel"), subListings())
 
         src.calls.clear()
         assertTrue(fresh.withArt(scanner.readArt(fresh)) === fresh)
-        assertEquals(setOf("listChildren:$gb/boxart", "listChildren:$gb/screenshot", "listChildren:$gb/grid"), subListings())
+        assertEquals(setOf("listChildren:$gb/boxart", "listChildren:$gb/screenshot", "listChildren:$gb/wheel"), subListings())
     }
 
     @Test fun readsEveryTypedFolder() = runTest {
@@ -232,15 +232,25 @@ class LibraryScannerTest {
         assertEquals("$gb/boxart/Tetris.png", tetris.boxart)
         assertEquals("$gb/box2d/Tetris.jpg", tetris.box2d)   // a .jpg is read
         assertEquals("$gb/screenshot/Tetris.png", tetris.screenshot)
-        assertEquals("$gb/grid/Tetris.jpg", tetris.grid)
-        assertEquals("$gb/hero/Tetris.jpg", tetris.hero)
         val zelda = games.getValue("Zelda.gb")
-        assertEquals(listOf(null, "$gb/box2d/Zelda.png", null, null, "$gb/hero/Zelda.jpeg"), listOf(zelda.boxart, zelda.box2d, zelda.screenshot, zelda.grid, zelda.hero))
+        assertEquals(listOf(null, "$gb/box2d/Zelda.png", null), listOf(zelda.boxart, zelda.box2d, zelda.screenshot))   // its hero is not read
         val entry = index.toSystems().single().games.single { it.fileName == "Tetris.gb" }   // the lists get every slot
         assertEquals(
-            listOf("$gb/boxart/Tetris.png", "$gb/box2d/Tetris.jpg", "$gb/screenshot/Tetris.png", "$gb/grid/Tetris.jpg", "$gb/hero/Tetris.jpg"),
-            listOf(entry.boxartRef, entry.box2dRef, entry.screenshotRef, entry.gridRef, entry.heroRef).map { it?.value },
+            listOf("$gb/boxart/Tetris.png", "$gb/box2d/Tetris.jpg", "$gb/screenshot/Tetris.png"),
+            listOf(entry.boxartRef, entry.box2dRef, entry.screenshotRef).map { it?.value },
         )
+    }
+
+    @Test fun gridAndHeroNotRead() = runTest {
+        val gb = "H/Roms/Game Boy (GB)/.media"
+        val index = scanHome(mapOf(
+            "H/Roms" to listOf("Game Boy (GB)"),
+            "H/Roms/Game Boy (GB)" to listOf("G.gb", ".media"),
+            gb to listOf("grid", "hero"),
+            "$gb/grid" to listOf("G.png"),
+            "$gb/hero" to listOf("G.png"),
+        ))
+        assertEquals(ArtRefs(), index.systems.single().games.single().artRefs)
     }
 
     @Test fun systemArtAndBgStillIndexed() = runTest {

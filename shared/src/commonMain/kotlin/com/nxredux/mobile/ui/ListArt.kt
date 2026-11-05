@@ -13,22 +13,25 @@ sealed interface ListArtShown {
 }
 
 /**
- * The List art for the highlighted [e] by Layouts → List art ([art]): Screenshot, the full-screen picture; Mix, 3D
- * box art, 2D box art or Wheel, that picture in a box on the right, a game without it showing its full-screen picture
- * (the handheld's ROM_findListArt); None, nothing at all, whatever is highlighted. [shot]: List Home's game's hidden
- * save state's frame ([HomeShot]), its full-screen picture in place of the screenshot.
+ * The List art for the highlighted [e] by Layouts → List art ([art]): Screenshot, the full-screen picture; Mix, that
+ * picture in a box on the right, a game without one showing its full-screen picture (the handheld's ROM_findListArt);
+ * 3D box art, 2D box art or Wheel, that picture boxed, else the first of 3D → 2D → wheel, else the full-screen
+ * picture; None, nothing at all, whatever is highlighted. [shot]: List Home's game's hidden save state's frame
+ * ([HomeShot]), its full-screen picture in place of the screenshot.
  */
 internal fun listArtShown(e: Listed?, art: GameListArt, portrait: Boolean, shot: String? = null): ListArtShown {
     if (art == GameListArt.NONE) return ListArtShown.None
     if (e == null) return ListArtShown.Full(null)
     val full = shot ?: gameBackground(e, portrait)
+    val g = e.game
+    val chain = listOf(g.boxartRef, g.box2dRef, g.wheelRef)
     val boxed = when (art) {
-        GameListArt.MIX -> e.game.mixRef
-        GameListArt.BOX3D -> e.game.boxartRef
-        GameListArt.BOX2D -> e.game.box2dRef
-        GameListArt.WHEEL -> e.game.wheelRef
-        GameListArt.SCREENSHOT, GameListArt.NONE -> null
-    }
+        GameListArt.MIX -> listOf(g.mixRef)
+        GameListArt.BOX3D -> chain
+        GameListArt.BOX2D -> listOf(g.box2dRef) + chain
+        GameListArt.WHEEL -> listOf(g.wheelRef) + chain
+        GameListArt.SCREENSHOT, GameListArt.NONE -> emptyList()
+    }.firstNotNullOfOrNull { it }
     return boxed?.let { ListArtShown.Boxed(it.value, full) } ?: ListArtShown.Full(full)
 }
 

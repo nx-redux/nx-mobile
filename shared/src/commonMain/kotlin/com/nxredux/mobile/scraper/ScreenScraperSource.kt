@@ -13,18 +13,22 @@ internal fun LibraryGameRef.systemId(): Int? = when {
     else -> ScraperSystems.systemIdFor(tag, fileName)
 }
 
-/** An Android game's lookup ([ScreenScraperSource.androidScreenshot]). */
+/**
+ * An Android game's lookup ([ScreenScraperSource.androidScreenshot]); a match carries its [medias] (every one it has, for
+ * the Change art options) and its ScreenScraper game id when the answer had one.
+ */
 internal sealed interface AndroidHit {
     data object None : AndroidHit
-    /** A game matched, but none of the matches has a screenshot. */
-    data object NoScreenshot : AndroidHit
-    data class Screenshot(val url: String) : AndroidHit
+    /** A game matched, but none of the matches has a screenshot: the first match's media. */
+    data class NoScreenshot(val medias: List<SsMedia>, val gameId: String?) : AndroidHit
+    /** The first match with a screenshot: its best `ss` [url] and its media. */
+    data class Screenshot(val url: String, val medias: List<SsMedia>, val gameId: String?) : AndroidHit
 }
 
 /**
- * ScreenScraper as an [ArtSource] (NX Redux `scraper.c`): paced lookups (try 1 by name, try 2 with CRC + size), the
- * best `box-3D`, `box-2D`, `ss` and wheel (`wheel-hd`, then `wheel` should its download fail) per
- * [ScraperMedia.alternates], the quota read at job start and every [QUOTA_EVERY] lookups when signed in, and the error
+ * ScreenScraper as an [ArtSource] (NX Redux `scraper.c`): paced lookups (try 1 by name, try 2 with CRC + size), every
+ * `box-3D`, `box-2D`, `ss` and wheel (`wheel-hd`, then `wheel`) ranked per [ScraperMedia.alternates], each with its
+ * thumbnail link ([ScraperRequest.thumb]), the quota read at job start and every [QUOTA_EVERY] lookups when signed in, and the error
  * table: no connection pauses the job, every other refusal stops this source only. Also the account calls (sign-in
  * check, quota) and the Android games console's lookup.
  */
@@ -85,7 +89,7 @@ class ScreenScraperSource(
         countLookup()
         val found = lookup(ref, systemId) ?: return emptyList()
         val offered = ScraperMedia.alternates(found.medias)
-        return ScraperMedia.SLOTS.filter { it in wanted }.flatMap { s -> offered[s].orEmpty().map { ArtHit(s, it.url, origin(found.id, it)) } }
+        return ScraperMedia.SLOTS.filter { it in wanted }.flatMap { s -> offered[s].orEmpty().map { ArtHit(s, it.url, origin(found.id, it), note = it.region, thumb = ScraperRequest.thumb(it.url)) } }
     }
 
     /** The signed-in user's quota (paced), or null when not signed in or the call failed. */
@@ -121,25 +125,36 @@ class ScreenScraperSource(
      * Android's lookup order: `jeuInfos` on Android by `<label>.apk` (ScreenScraper falls back to a name match), then
      * `jeuRecherche` on Android, then on every system; a search keeps only games with a name equal to [label] once
      * normalised ([normaliseTitle]), never the first hit as such. A match without an `ss` screenshot moves on to the
-     * next step. Every call is paced; no hashing.
+     * next step (the first match's media are kept: [AndroidHit.NoScreenshot]). Every call is paced; no hashing.
      */
     internal suspend fun androidScreenshot(label: String): AndroidHit {
         countLookup()
         val a = auth()
-        var matched = false
+        var first: AndroidHit.NoScreenshot? = null
         found(api(ScraperRequest.gameInfo(a, "$label.apk", ScraperSystems.ANDROID)))?.let { hit ->
-            matched = true
-            ScraperMedia.screenshotOnly(hit.medias)?.let { return AndroidHit.Screenshot(it) }
+            ScraperMedia.screenshotOnly(hit.medias)?.let { return AndroidHit.Screenshot(it, hit.medias, hit.id) }
+            first = AndroidHit.NoScreenshot(hit.medias, hit.id)
         }
         val wanted = normaliseTitle(label)
         for (system in listOf(ScraperSystems.ANDROID, null)) {
             val r = api(ScraperRequest.search(a, label, system))
             val exact = ScraperResponse.parseSearch(r.status, r.body?.decodeToString())
                 .filter { g -> g.names.any { normaliseTitle(it) == wanted } }
-            if (exact.isNotEmpty()) matched = true
-            exact.firstNotNullOfOrNull { ScraperMedia.screenshotOnly(it.medias) }?.let { return AndroidHit.Screenshot(it) }
+            if (first == null) exact.firstOrNull()?.let { first = AndroidHit.NoScreenshot(it.medias, null) }
+            exact.firstNotNullOfOrNull { g -> ScraperMedia.screenshotOnly(g.medias)?.let { AndroidHit.Screenshot(it, g.medias, null) } }?.let { return it }
         }
-        return if (matched) AndroidHit.NoScreenshot else AndroidHit.None
+        return first ?: AndroidHit.None
+    }
+
+    /**
+     * An Android game's options from its lookup's [medias] ([androidScreenshot]): every screenshot, 2D box and wheel
+     * (no 3D box: an Android game has none), as [find] gives them (each with its thumbnail link and origin).
+     */
+    internal fun androidHits(medias: List<SsMedia>, gameId: String?): List<ArtHit> {
+        val offered = ScraperMedia.alternates(medias)
+        return ScraperMedia.SLOTS.filter { it in AndroidArtStore.SLOTS }.flatMap { s ->
+            offered[s].orEmpty().map { ArtHit(s, it.url, origin(gameId, it), note = it.region, thumb = ScraperRequest.thumb(it.url)) }
+        }
     }
 
     /** Every [QUOTA_EVERY] games looked up, a signed-in user's quota is read again. */

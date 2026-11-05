@@ -141,7 +141,10 @@ enum class GameListArt(val label: String) {
     }
 }
 
-/** Layouts → Backdrop art: the box in a Backdrop row, BOX3D (the default), BOX2D or WHEEL. The background stays the screenshot. */
+/**
+ * Layouts → Backdrop art: the box in a Backdrop row, BOX3D (the default), BOX2D or WHEEL. The background stays the
+ * screenshot. In every layout it also sets the game panel's header and the Game Switcher's box.
+ */
 enum class BackdropArt(val label: String) {
     BOX3D("3D box art"), BOX2D("2D box art"), WHEEL("Wheel");
 
@@ -256,14 +259,21 @@ interface AppSettings {
     var artBox2d: Boolean
         get() = false
         set(value) {}
-    /** Art settings → Wheel: a fetch also downloads the game's logo (default off; Generate mix needs it either way). */
+    /** Art settings → Wheel: a fetch also downloads the game's logo (default off). */
     var artWheel: Boolean
         get() = false
         set(value) {}
-    /** Art settings → Generate mix: the device makes NX Redux's screenshot + box + wheel picture (default off; a game has art only with it). */
+    /** Art settings → Mix: fetch the mix picture, else the device makes NX Redux's screenshot + box + wheel one (default off; a game has art only with it). */
     var artMix: Boolean
         get() = false
         set(value) {}
+    /**
+     * [migrateMixWheel] has run: Wheel was switched on once for a user who had Mix on when it forced the wheel.
+     * Defaulted: a store without it counts as done, so it never touches Wheel.
+     */
+    var artWheelMigrated: Boolean
+        get() = true
+        set(@Suppress("UNUSED_PARAMETER") value) {}
     /** Layouts → Home tab, Consoles tab, Collections tab, Tools tab: Show (true, the default) or Hide. A hidden tab stays reachable from MENU. */
     var showHomeTab: Boolean
     var showConsolesTab: Boolean
@@ -432,6 +442,17 @@ interface AppSettings {
     var accent: AccentPreset
     /** Appearance → Secondary accent: the bar behind a selected option's value; unset or unknown is [SecondaryAccent.DEFAULT] (Auto). */
     var secondaryAccent: SecondaryAccent
+}
+
+/**
+ * One-time, for the Mix that no longer forces the wheel: before, Mix on fetched wheels whatever Wheel said. A user
+ * who had it on gets Wheel switched on once, so nothing changes until they turn it off; done either way, so it never
+ * runs again.
+ */
+fun AppSettings.migrateMixWheel() {
+    if (artWheelMigrated) return
+    if (artMix) artWheel = true
+    artWheelMigrated = true
 }
 
 /** Opens the platform folder picker; the host passes the result to AppState.setHome or AppState.addExtra. */

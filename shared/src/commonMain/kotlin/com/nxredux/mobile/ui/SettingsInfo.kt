@@ -139,7 +139,10 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "picture whole, in a box on the right; None shows no picture. A game without the picture shows its " +
             "screenshot instead.",
     )
-    SettingsKind.BACKDROP_ART -> quiet("The box in a Backdrop row; the background stays the screenshot")
+    SettingsKind.BACKDROP_ART -> quiet(
+        "The box in a Backdrop row; the background stays the screenshot. In every layout it also sets the game panel's " +
+            "header and the Game Switcher's box.",
+    )
     SettingsKind.LAYOUT_OPTIONS -> SettingText(
         "The Layout icon in game list titles",
         "The Layout icon opens a dropdown of every game list layout; picking one sets the game lists' rows here. Hidden, " +

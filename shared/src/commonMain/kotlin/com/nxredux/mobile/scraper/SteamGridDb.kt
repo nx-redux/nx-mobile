@@ -11,10 +11,11 @@ import kotlinx.serialization.json.booleanOrNull
 /** A `search/autocomplete` result. */
 data class SgdbGame(val id: Int, val name: String, val verified: Boolean = false)
 
-/** A grid, hero or logo; absent fields take these defaults (0 width / height fails every shape check). */
+/** A grid, hero or logo; absent fields take these defaults (0 width / height fails every shape check); [thumb]: its small version. */
 data class SgdbAsset(
     val id: Int, val url: String, val width: Int = 0, val height: Int = 0, val mime: String? = null, val score: Int = 0,
     val nsfw: Boolean = false, val humor: Boolean = false, val epilepsy: Boolean = false, val style: String? = null,
+    val thumb: String? = null,
 )
 
 /** The answer of a key check ([SteamGridDbSource.check]). */
@@ -62,6 +63,7 @@ object Sgdb {
             id = a["id"].int() ?: return@mapNotNull null, url = a["url"].str()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null,
             width = a["width"].int() ?: 0, height = a["height"].int() ?: 0, mime = a["mime"].str(), score = a["score"].int() ?: 0,
             nsfw = a["nsfw"].bool(), humor = a["humor"].bool(), epilepsy = a["epilepsy"].bool(), style = a["style"].str(),
+            thumb = a["thumb"].str()?.takeIf { it.isNotEmpty() },
         )
     }
 
@@ -148,7 +150,7 @@ class SteamGridDbSource(
         val hits = ArrayList<ArtHit>()
         suspend fun add(slot: ArtSlot, url: String, rank: (List<SgdbAsset>) -> List<SgdbAsset>) {
             val body = try { api(url, k) } catch (e: SourceStop) { pendingStop.hold(e, hits); return }
-            rank(Sgdb.parseAssets(body)).mapTo(hits) { ArtHit(slot, it.url, ArtOrigin(SourceId.SGDB, game.id.toString(), it.id.toString())) }
+            rank(Sgdb.parseAssets(body)).mapTo(hits) { ArtHit(slot, it.url, ArtOrigin(SourceId.SGDB, game.id.toString(), it.id.toString()), thumb = it.thumb) }
         }
         if (ArtSlot.GRID in wanted) add(ArtSlot.GRID, Sgdb.grids(game.id), Sgdb::rankGrids)
         if (ArtSlot.HERO in wanted && !pendingStop.held()) add(ArtSlot.HERO, Sgdb.heroes(game.id), Sgdb::rankHeroes)

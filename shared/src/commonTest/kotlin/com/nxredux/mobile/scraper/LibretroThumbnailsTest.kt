@@ -351,4 +351,27 @@ class LibretroThumbnailsTest {
         assertEquals(ScrapeEngine.NO_CONNECTION, e.reason)
         assertEquals(3, http.count("?F=0"))
     }
+
+    @Test fun extra_regional_snaps_when_listing_loaded() = runTest {
+        val http = FakeHttp()
+        http.on("Named_Snaps/?F=0", HttpResult(200, """<a href="Tetris%20(USA).png">x</a><a href="Tetris%20(Europe).png">x</a>""".encodeToByteArray()))
+        http.on("Named_Snaps/Tetris%20%28USA%29.png", png)
+        val src = LibretroThumbnails(http, { 0L }) {}
+        // Without the listing: only the probed snap, and no listing request.
+        val plain = FakeHttp().apply { on("Named_Snaps/Tetris.png", png) }
+        val alone = LibretroThumbnails(plain, { 0L }) {}.find(game("Tetris.gb"), setOf(ArtSlot.SCREENSHOT))
+        assertEquals(1, alone.size)
+        assertEquals(0, plain.count("?F=0"))
+        // Another game missed, so the snap listing is loaded for this run.
+        src.find(game("Zzz.gb"), setOf(ArtSlot.SCREENSHOT))
+        assertEquals(1, http.count("Named_Snaps/?F=0"))
+        val hits = src.find(game("Tetris.gb"), setOf(ArtSlot.SCREENSHOT))
+        assertEquals(1, http.count("Named_Snaps/?F=0"))
+        assertEquals(2, hits.size)
+        assertTrue(hits[0].url.endsWith("Tetris%20%28USA%29.png"))
+        assertEquals("USA", hits[0].note)
+        assertTrue(hits[1].url.endsWith("Tetris%20%28Europe%29.png"))
+        assertEquals("Europe", hits[1].note)
+        assertEquals(null, hits[1].bytes)
+    }
 }

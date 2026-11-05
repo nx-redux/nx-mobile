@@ -5,22 +5,28 @@ import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** Has art: a box (boxart, box2d or grid) and a background (screenshot or hero). */
+/** Has art: a box (boxart or a 2D box, a grid among them on disk) and a screenshot (a hero among them on disk). */
 class ArtHaveTest {
     @Test fun boxAndScreenshotIsComplete() = assertTrue(ArtHave(box = true, screenshot = true).complete)
 
-    @Test fun boxAndHeroIsComplete() = assertTrue(ArtHave(box = true, hero = true).complete)
+    @Test fun gridIsNotABox() {
+        val shotOnly = ArtHave.of(ArtRefs(screenshot = "s"))
+        assertFalse(shotOnly.box)
+        assertFalse(shotOnly.complete)
+        // A grid is written as the 2D box: that is the box.
+        assertTrue(ArtHave.of(ArtRefs(box2d = "b", screenshot = "s")).complete)
+    }
 
-    @Test fun gridCountsAsBox() {
-        val have = ArtHave.of(ArtRefs(grid = "g.jpg", screenshot = "s.png"))
-        assertTrue(have.box)
-        assertTrue(have.grid)
-        assertTrue(have.complete)
+    @Test fun heroShotIsNoMixInput() {
+        assertFalse(ArtHave.of(ArtRefs(screenshot = "s", heroShot = true)).mixInput)
+        assertTrue(ArtHave.of(ArtRefs(screenshot = "s")).mixInput)
+        // A hero still counts as the screenshot for has-art.
+        assertTrue(ArtHave.of(ArtRefs(box2d = "b", screenshot = "s", heroShot = true)).complete)
     }
 
     @Test fun screenshotAloneIsNotComplete() {
         assertFalse(ArtHave(screenshot = true).complete)
-        assertFalse(ArtHave.of(ArtRefs(screenshot = "s.png", hero = "h.jpg")).complete)
+        assertFalse(ArtHave.of(ArtRefs(screenshot = "s.png", heroShot = true)).complete)
     }
 
     @Test fun boxAloneIsNotComplete() {

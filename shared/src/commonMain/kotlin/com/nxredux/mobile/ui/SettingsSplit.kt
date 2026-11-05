@@ -84,20 +84,23 @@ fun raSplitLevel(screen: Screen): Boolean =
 fun gameTimeSplitView(window: DpSize, screen: Screen): Boolean = settingsSplit(window) && screen is Screen.GameTimeSessions
 
 /**
- * The Artwork column browser on a split window ([settingsSplit], the same rule): a page below the Artwork page (Fetch by
- * console, Progress, Settings, Reset artwork) is the focused right pane, the page it came from the dimmed left pane with
- * the row that opened it highlighted ([AppState.artworkParent]): the Artwork page beside the first three, Settings beside
- * Reset. The Artwork page itself is drawn whole, as the RetroAchievements page.
+ * Artwork on Settings' wide stage ([settingsSplit], the same rule): the Artwork page and every page under it (Fetch by
+ * console, Progress, Settings, Reset artwork), its words on the left, the page or the highlighted word's preview on the
+ * right ([ArtworkStageScreen]). Narrow and portrait windows draw one page at a time.
  */
-fun artworkSplitView(window: DpSize, screen: Screen): Boolean = settingsSplit(window) && artworkSplitLevel(screen)
+fun artworkSplitView(window: DpSize, screen: Screen): Boolean =
+    settingsSplit(window) && (screen is Screen.Artwork || artworkSplitLevel(screen))
 
-/** Whether [screen] is an Artwork page drawn beside its parent when the window splits ([artworkSplitView]). */
+/** Whether [screen] is a page under the Artwork page, drawn in the stage's right frame when the window splits ([artworkSplitView]). */
 fun artworkSplitLevel(screen: Screen): Boolean =
     screen is Screen.ArtworkConsoles || screen is Screen.ArtworkProgress || screen is Screen.ArtworkSettings || screen is Screen.ArtworkReset
 
-/** Whether [screen] is drawn as two panes in [window]: the two-pane Settings or a column browser (RetroAchievements, Game Tracker, Artwork). */
+/**
+ * Whether [screen] is drawn as two panes in [window]: the two-pane Settings or a column browser (RetroAchievements,
+ * Game Tracker). Artwork's stage has Settings' background, so no centred watermark to move ([artworkSplitView]).
+ */
 fun twoPaneView(window: DpSize, screen: Screen): Boolean =
-    settingsSplitView(window, screen) || raSplitView(window, screen) || gameTimeSplitView(window, screen) || artworkSplitView(window, screen)
+    settingsSplitView(window, screen) || raSplitView(window, screen) || gameTimeSplitView(window, screen)
 
 /** The RetroAchievements page's row that opened [screen] (Achievements, Settings), highlighted in the left pane; null below that. */
 fun raPageRow(screen: Screen): Int? = when (screen) {
@@ -108,6 +111,3 @@ fun raPageRow(screen: Screen): Int? = when (screen) {
 
 /** The level a RetroAchievements left pane shows ([AppState.raParent]): its [screen] and the highlighted [row], the one that opened the right pane. */
 data class RaParent(val screen: Screen, val row: Int)
-
-/** The page an Artwork left pane shows ([AppState.artworkParent]): its [screen] (the Artwork page or Settings) and the highlighted [row], the one that opened the right pane. */
-data class ArtworkParent(val screen: Screen, val row: Int)

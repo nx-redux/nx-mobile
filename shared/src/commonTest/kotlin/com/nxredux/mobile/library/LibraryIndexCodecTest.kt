@@ -25,7 +25,7 @@ class LibraryIndexCodecTest {
                 games = listOf(
                     IndexedGame(
                         "home", "Roms/Game Boy (GB)", "Tetris.gb", "Home/Roms/Game Boy (GB)/Tetris.gb", "Home/Roms/Game Boy (GB)", "Tetris",
-                        boxart = "b.png", box2d = "c.jpg", screenshot = "s.png", grid = "g.jpg", hero = "h.jpg", subtitle = "My GB",
+                        boxart = "b.png", box2d = "c.jpg", screenshot = "s.png", heroShot = true, subtitle = "My GB",
                     ),
                 ),
             ),
@@ -71,7 +71,7 @@ class LibraryIndexCodecTest {
     }
 
     @Test fun another_version_decodes_to_null() {
-        assertEquals(11, LibraryIndex.VERSION)
+        assertEquals(12, LibraryIndex.VERSION)
         assertNull(LibraryIndexCodec.decode(LibraryIndexCodec.encode(index.copy(version = LibraryIndex.VERSION + 1))))
         assertNull(LibraryIndexCodec.decode(LibraryIndexCodec.encode(index.copy(version = 0))))
         assertNull(LibraryIndexCodec.decode(LibraryIndexCodec.encode(index.copy(version = 3))))   // before archives listed

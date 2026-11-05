@@ -211,7 +211,7 @@ internal val NoTileInfo: () -> List<InfoLine> = { emptyList() }
 internal enum class GameTileLayer { PICTURE, EDGE, FADE, TITLE, CAPTION }
 
 /**
- * A game tile's layers bottom to top ([picture]: it has a screenshot or a stand-in; [lit]; [caption]: a lit tile shows its caption;
+ * A game tile's layers bottom to top ([picture]: it has a screenshot or its abstract picture; [lit]; [caption]: a lit tile shows its caption;
  * [homeCaption]: Home's eased fade, drawn even on a title tile under its info line). A title tile's centred name is
  * drawn over the fade, so a lit one keeps its full white instead of the fade greying it.
  * [gameFade]: a game list's Grid ([GAME_FADE_SHARE]): a lit tile with a picture has its shade (even without a caption);
@@ -252,10 +252,9 @@ private fun GameTile(
     val litness = nxLitness(lit)
     // An opaque base: the glide's white must show only as the ring, never through a plain, loading or failed tile.
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.background)) {
-        // The screenshot, else the SteamGridDB stand-in of the tile's shape, else the generated abstract picture
-        // ([tileArt]); all drawn as a screenshot (a hero: full height, anchored right), the name only in the caption (or
-        // beside the tile).
-        val art = tileArt(maxWidth.value, maxHeight.value, tile.screenshotUrl, tile.heroUrl, tile.gridUrl, tile.abstractUrl)
+        // The screenshot (a hero one in wide tiles only), else the generated abstract picture ([tileArt]); all drawn
+        // as a screenshot (a hero: full height, anchored right), the name only in the caption (or beside the tile).
+        val art = tileArt(maxWidth.value, maxHeight.value, tile.screenshotUrl, tile.heroShot, tile.abstractUrl)
         val url = art?.url
         // An Android game's picture is its art, else its abstract picture, like any game's; its app icon (centred, full
         // colour) stands in only for one with no abstract picture.

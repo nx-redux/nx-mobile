@@ -77,13 +77,14 @@ object ScraperResponse {
 object ScraperMedia {
     val REGIONS = listOf("us", "wor", "eu")
 
-    /** The ScreenScraper media types for [slot], best first; empty for the slots ScreenScraper does not fill (grid, hero, mix). */
+    /** The ScreenScraper media types for [slot], best first; empty for the slots ScreenScraper does not fill (grid, hero). */
     fun typesOf(slot: ArtSlot): List<String> = when (slot) {
         ArtSlot.BOX_3D -> listOf("box-3D")
         ArtSlot.BOX_2D -> listOf("box-2D")
         ArtSlot.SCREENSHOT -> listOf("ss")
         ArtSlot.WHEEL -> listOf("wheel-hd", "wheel")
-        ArtSlot.GRID, ArtSlot.HERO, ArtSlot.MIX -> emptyList()
+        ArtSlot.MIX -> listOf("mixrbv2", "mixrbv1")   // v2 first, the newer layout
+        ArtSlot.GRID, ArtSlot.HERO -> emptyList()
     }
 
     /** Every media for [slot], best first: by type, then by region. */
@@ -93,19 +94,19 @@ object ScraperMedia {
     }
 
     /** The slots ScreenScraper fills, in [choose]'s order. */
-    val SLOTS = listOf(ArtSlot.BOX_3D, ArtSlot.BOX_2D, ArtSlot.SCREENSHOT, ArtSlot.WHEEL)
+    val SLOTS = listOf(ArtSlot.BOX_3D, ArtSlot.BOX_2D, ArtSlot.SCREENSHOT, ArtSlot.WHEEL, ArtSlot.MIX)
 
     /** The best media per slot ScreenScraper offers (absent slots left out). */
     fun choose(medias: List<SsMedia>): Map<ArtSlot, SsMedia> =
         SLOTS.mapNotNull { s -> rank(medias, s).firstOrNull()?.let { s to it } }.toMap()
 
     /**
-     * Per slot ScreenScraper offers, the best media of each of its types in type order (the wheel: the best `wheel-hd`,
-     * then the best `wheel`), so a failed download of one falls back to the next from the same answer.
+     * Per slot ScreenScraper offers, every media of every one of its types (every region), ranked as [rank] ranks (the
+     * wheel: each `wheel-hd`, then each `wheel`): the write takes the first that downloads, so a failed download falls
+     * back to the next from the same answer, and the Change art list keeps them all.
      */
-    fun alternates(medias: List<SsMedia>): Map<ArtSlot, List<SsMedia>> = SLOTS.mapNotNull { s ->
-        typesOf(s).mapNotNull { type -> rank(medias.filter { it.type == type }, s).firstOrNull() }.takeIf { it.isNotEmpty() }?.let { s to it }
-    }.toMap()
+    fun alternates(medias: List<SsMedia>): Map<ArtSlot, List<SsMedia>> =
+        SLOTS.mapNotNull { s -> rank(medias, s).takeIf { it.isNotEmpty() }?.let { s to it } }.toMap()
 
     /** The `ss` screenshot only (an Android game's art). */
     fun screenshotOnly(medias: List<SsMedia>): String? = rank(medias, ArtSlot.SCREENSHOT).firstOrNull()?.url

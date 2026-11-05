@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.achievements.RaAchievementState
 import com.nxredux.mobile.library.path
+import com.nxredux.mobile.settings.BackdropArt
 import com.nxredux.mobile.ui.GameInfo
 import com.nxredux.mobile.ui.Listed
 import com.nxredux.mobile.ui.RaPanel
@@ -32,17 +33,17 @@ internal sealed interface DetailsBody {
 }
 
 /**
- * The details pane's header for [entry]: its name, box art (else its console's logo), total play time from [info], and
- * the achievement count: the pane's own list's ([ra], pending counted as unlocked, as [RaPanel.progress]) once it has
- * one, else the menus' cached count ([GameInfo.ra]). No clock or battery: the status bar shows on the menu.
+ * The details pane's header for [entry]: its name, box art ([panelArt] by Layouts → Backdrop art [prefer], else its
+ * console's logo), total play time from [info], and the achievement count: the pane's own list's ([ra], pending
+ * counted as unlocked, as [RaPanel.progress]) once it has one, else the menus' cached count ([GameInfo.ra]). No clock or battery: the status bar shows on the menu.
  */
-internal fun detailsHeader(entry: Listed, info: GameInfo?, ra: RaPanel?): GamePanelHeader {
+internal fun detailsHeader(entry: Listed, info: GameInfo?, ra: RaPanel?, prefer: BackdropArt = BackdropArt.BOX3D): GamePanelHeader {
     val g = entry.game
     val list = (ra?.content as? RaPanelContent.Game)?.achievements?.takeIf { it.isNotEmpty() }
     val count = list?.let { all -> all.count { it.state != RaAchievementState.LOCKED } to all.size }
         ?: info?.ra?.let { it.unlocked to it.total }
     return GamePanelHeader(
-        entry.shown, panelArt(g.boxartRef?.value, g.box2dRef?.value, g.gridRef?.value, g.screenshotRef?.value),
+        entry.shown, panelArt(prefer, g),
         entry.system.tag, info?.totalMs ?: 0L, count, clockText = "", batteryPercent = null,
     )
 }
@@ -66,7 +67,7 @@ internal fun detailsBody(ra: RaPanel?): DetailsBody = when (val c = ra?.content)
  * a Back pill bottom-right calls [onBack] (B and the back gesture do the same through AppState), since the pane has no hints.
  */
 @Composable
-fun GameDetailsPane(entry: Listed?, info: GameInfo?, ra: RaPanel?, onBack: () -> Unit) {
+fun GameDetailsPane(entry: Listed?, info: GameInfo?, ra: RaPanel?, prefer: BackdropArt = BackdropArt.BOX3D, onBack: () -> Unit) {
     val colors = LocalNxColors.current
     val touch = LocalHasTouchscreen.current
     Box(Modifier.fillMaxSize().background(colors.background)) {
@@ -78,7 +79,7 @@ fun GameDetailsPane(entry: Listed?, info: GameInfo?, ra: RaPanel?, onBack: () ->
                 contentPadding = PaddingValues(bottom = if (touch) DP_LIST_BOTTOM else DP_LIST_END),
             ) {
                 // The header in its own gutters, as the game panel's; the rows in the panel's narrower list gutter.
-                item(key = "header") { GamePanelHeaderBar(detailsHeader(entry, info, shown)) }
+                item(key = "header") { GamePanelHeaderBar(detailsHeader(entry, info, shown, prefer)) }
                 when (body) {
                     DetailsBody.None -> Unit
                     DetailsBody.Downloading -> item(key = "downloading") {

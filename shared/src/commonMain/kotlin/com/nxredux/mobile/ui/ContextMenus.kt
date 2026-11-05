@@ -8,7 +8,7 @@ import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.settings.MenuCategory
 
-enum class ContextKind { PIN, UNPIN, HIDE, UNHIDE, RENAME, ADD_TO_COLLECTION, GAME_SETTINGS, REMOVE_FROM_COLLECTION, REMOVE_RECENT, EMULATOR, CONSOLE, FETCH_ART, PIN_TOOL, UNPIN_TOOL, ADD_TO_TOOLS, REMOVE_FROM_TOOLS, RENAME_COLLECTION, DELETE_COLLECTION, NETPLAY, PLAY_FROM_START, OPEN_CONSOLES, OPEN_COLLECTIONS, OPEN_TOOLS, ACHIEVEMENTS }
+enum class ContextKind { PIN, UNPIN, HIDE, UNHIDE, RENAME, ADD_TO_COLLECTION, GAME_SETTINGS, REMOVE_FROM_COLLECTION, REMOVE_RECENT, EMULATOR, CONSOLE, FETCH_ART, CHANGE_ART, PIN_TOOL, UNPIN_TOOL, ADD_TO_TOOLS, REMOVE_FROM_TOOLS, RENAME_COLLECTION, DELETE_COLLECTION, NETPLAY, PLAY_FROM_START, OPEN_CONSOLES, OPEN_COLLECTIONS, OPEN_TOOLS, ACHIEVEMENTS }
 
 data class ContextItem(val kind: ContextKind, val label: String)
 
@@ -73,6 +73,7 @@ object ContextMenus {
     private val addToCollection = ContextItem(ContextKind.ADD_TO_COLLECTION, "Add to Collection")
     private val gameSettings = ContextItem(ContextKind.GAME_SETTINGS, "Game Settings")
     private val fetchArt = ContextItem(ContextKind.FETCH_ART, "Fetch art")
+    private val changeArt = ContextItem(ContextKind.CHANGE_ART, "Change art")
     private val netplayItem = ContextItem(ContextKind.NETPLAY, "Netplay")
     private val fromStartItem = ContextItem(ContextKind.PLAY_FROM_START, "Play from start")
 
@@ -81,31 +82,31 @@ object ContextMenus {
      * Settings (a game with a core), then Emulator (multi-emulator consoles) or Console (Unassigned: no pin, no collection,
      * no Game Settings, since the game cannot launch). Recently Played: Remove only, after the lead items. A collection:
      * the console items plus Remove from Collection. A search list: a collection's items without Remove from Collection.
-     * Hidden: none (A unhides). The Android games console: Pin or Unpin only (Settings › Library › Android games is the
-     * only way out of the console; [pinned]: in the Android pins).
+     * Hidden: none (A unhides). The Android games console: Pin or Unpin, then the art item (Settings › Library › Android
+     * games is the only way out of the console; [pinned]: in the Android pins).
      * [netplay]: the platform has Wi-Fi netplay, so Netplay follows Game Settings for a game whose tag has it.
-     * [fetchArt]: the game's console is one ScreenScraper knows and the build can fetch, so Fetch art follows them
+     * [art]: an enabled art source knows the game, so Fetch art (no art yet) or Change art (it has art) follows them
      * (console, collection and search lists).
      * The lead items: [canResume] (the game has a save state, which A resumes) leads with Play from start;
      * [netplayLeads] (the Netplay hint hidden, alone or with the bar) puts Netplay next, and not again below. Hidden and
      * Android lists and Unassigned games have neither.
      */
     fun itemsFor(
-        source: ListSource, entry: Listed, pinned: Boolean, fetchArt: Boolean = false, netplay: Boolean = false,
+        source: ListSource, entry: Listed, pinned: Boolean, art: ArtMenuItem = ArtMenuItem.NONE, netplay: Boolean = false,
         canResume: Boolean = false, netplayLeads: Boolean = false,
     ): List<ContextItem> {
         val lead = leadItems(entry, canResume, netplay && netplayLeads)
         val below = netplay && !netplayLeads && hasNetplay(entry)
         return when (source) {
         is ListSource.Console -> when {
-            source.system.android -> listOf(if (pinned) unpin else pin)
+            source.system.android -> listOfNotNull(if (pinned) unpin else pin, artItem(art))
             source.system.unassigned -> listOf(hide, rename, ContextItem(ContextKind.CONSOLE, "Console"))
             else -> buildList {
                 addAll(lead)
                 add(if (pinned) unpin else pin); add(hide); add(rename); add(addToCollection)
                 if (hasCore(entry)) add(gameSettings)
                 if (below) add(netplayItem)
-                if (fetchArt) add(this@ContextMenus.fetchArt)
+                artItem(art)?.let(::add)
                 if ((CoreRegistry.consoleOf(entry.system.tag)?.tags?.size ?: 0) > 1) add(ContextItem(ContextKind.EMULATOR, "Emulator"))   // the game's own tag (a merged console mixes them)
             }
         }
@@ -115,7 +116,7 @@ object ContextMenus {
             add(if (pinned) unpin else pin); add(hide); add(rename); add(addToCollection)
             if (hasCore(entry)) add(gameSettings)
             if (below) add(netplayItem)
-            if (fetchArt) add(this@ContextMenus.fetchArt)
+            artItem(art)?.let(::add)
             add(ContextItem(ContextKind.REMOVE_FROM_COLLECTION, "Remove from Collection"))
         }
         is ListSource.Search -> buildList {
@@ -123,11 +124,18 @@ object ContextMenus {
             add(if (pinned) unpin else pin); add(hide); add(rename); add(addToCollection)
             if (hasCore(entry)) add(gameSettings)
             if (below) add(netplayItem)
-            if (fetchArt) add(this@ContextMenus.fetchArt)
+            artItem(art)?.let(::add)
         }
-        is ListSource.Filtered -> itemsFor(source.parent, entry, pinned, fetchArt, netplay, canResume, netplayLeads)   // its list's own
+        is ListSource.Filtered -> itemsFor(source.parent, entry, pinned, art, netplay, canResume, netplayLeads)   // its list's own
         ListSource.Hidden -> emptyList()   // A unhides directly; UNHIDE stays in the enum for act's exhaustive when
         }
+    }
+
+    /** [art]'s menu item: Fetch art, Change art, or none. */
+    private fun artItem(art: ArtMenuItem): ContextItem? = when (art) {
+        ArtMenuItem.NONE -> null
+        ArtMenuItem.FETCH -> fetchArt
+        ArtMenuItem.CHANGE -> changeArt
     }
 
     /**

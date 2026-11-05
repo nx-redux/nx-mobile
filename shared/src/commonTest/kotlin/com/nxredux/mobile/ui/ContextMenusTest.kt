@@ -74,10 +74,25 @@ class ContextMenusTest {
     @Test fun fetch_art_follows_game_settings_where_offered_and_never_in_unassigned() {
         val gb = entry("GB", file = "Tetris.gb")
         assertEquals(listOf(ContextKind.PIN, ContextKind.HIDE, ContextKind.RENAME, ContextKind.ADD_TO_COLLECTION, ContextKind.GAME_SETTINGS, ContextKind.FETCH_ART),
-            ContextMenus.itemsFor(ListSource.Console(gb.system), gb, false, fetchArt = true).map { it.kind })
-        assertEquals("Fetch art", ContextMenus.itemsFor(ListSource.Collection("RPGs"), gb, false, fetchArt = true)[5].label)
+            ContextMenus.itemsFor(ListSource.Console(gb.system), gb, false, art = ArtMenuItem.FETCH).map { it.kind })
+        assertEquals("Fetch art", ContextMenus.itemsFor(ListSource.Collection("RPGs"), gb, false, art = ArtMenuItem.FETCH)[5].label)
         val u = entry("", unassigned = true, file = "thing.chd")
-        assertTrue(ContextKind.FETCH_ART !in ContextMenus.itemsFor(ListSource.Console(u.system), u, false, fetchArt = true).map { it.kind })
+        assertTrue(ContextKind.FETCH_ART !in ContextMenus.itemsFor(ListSource.Console(u.system), u, false, art = ArtMenuItem.FETCH).map { it.kind })
+    }
+
+    @Test fun change_art_replaces_fetch_art_when_game_has_art() {
+        val gb = entry("GB", file = "Tetris.gb")
+        for (src in listOf(ListSource.Console(gb.system), ListSource.Collection("RPGs"), ListSource.Search("tetris"))) {
+            val change = ContextMenus.itemsFor(src, gb, false, art = ArtMenuItem.CHANGE).map { it.label }
+            assertTrue("Change art" in change, "$src $change")
+            assertTrue("Fetch art" !in change, "$src $change")
+            val fetch = ContextMenus.itemsFor(src, gb, false, art = ArtMenuItem.FETCH).map { it.label }
+            assertTrue("Fetch art" in fetch && "Change art" !in fetch, "$src $fetch")
+            val none = ContextMenus.itemsFor(src, gb, false, art = ArtMenuItem.NONE).map { it.label }
+            assertTrue("Fetch art" !in none && "Change art" !in none, "$src $none")
+        }
+        // In Fetch art's place: after Game Settings, before Remove from Collection.
+        assertEquals(ContextKind.CHANGE_ART, ContextMenus.itemsFor(ListSource.Collection("RPGs"), gb, false, art = ArtMenuItem.CHANGE)[5].kind)
     }
 
     @Test fun context_menu_has_netplay_only_for_supported_tags() {
@@ -161,23 +176,24 @@ class ContextMenusTest {
         assertNull(ContextMenus.consoleMenu("notes.txt"))
     }
 
-    @Test fun android_games_offer_pin_or_unpin_only() {
+    @Test fun android_games_offer_pin_or_unpin_and_the_art_item() {
         val s = SystemFolder("Android", ANDROID_TAG, null, emptyList(), android = true)
         val e = Listed(s, GameEntry(ContentRef("app:a/A"), "a/A", "Alpha", folder = ContentRef("app:"), sourceId = "android", relativeDir = ""))
         assertEquals(listOf(ContextKind.PIN), kinds(ListSource.Console(s), e))
         assertEquals(listOf(ContextKind.UNPIN), kinds(ListSource.Console(s), e, pinned = true))
-        assertEquals(listOf(ContextKind.PIN), ContextMenus.itemsFor(ListSource.Console(s), e, pinned = false, fetchArt = true).map { it.kind })
+        assertEquals(listOf(ContextKind.PIN, ContextKind.FETCH_ART), ContextMenus.itemsFor(ListSource.Console(s), e, pinned = false, art = ArtMenuItem.FETCH).map { it.kind })
+        assertEquals(listOf(ContextKind.UNPIN, ContextKind.CHANGE_ART), ContextMenus.itemsFor(ListSource.Console(s), e, pinned = true, art = ArtMenuItem.CHANGE).map { it.kind })
     }
 
     @Test fun a_search_list_offers_the_collection_items_without_remove() {
         val entry = entry("GB", file = "Tetris.gb")
-        val items = ContextMenus.itemsFor(ListSource.Search("mario"), entry, pinned = false, fetchArt = true, netplay = true).map { it.kind }
-        val collection = ContextMenus.itemsFor(ListSource.Collection("RPGs"), entry, pinned = false, fetchArt = true, netplay = true).map { it.kind }
+        val items = ContextMenus.itemsFor(ListSource.Search("mario"), entry, pinned = false, art = ArtMenuItem.FETCH, netplay = true).map { it.kind }
+        val collection = ContextMenus.itemsFor(ListSource.Collection("RPGs"), entry, pinned = false, art = ArtMenuItem.FETCH, netplay = true).map { it.kind }
         assertEquals(collection - ContextKind.REMOVE_FROM_COLLECTION, items)
     }
 
-    private fun lead(source: ListSource, e: Listed, canResume: Boolean = true, netplay: Boolean = true, fetchArt: Boolean = false) =
-        ContextMenus.itemsFor(source, e, pinned = false, fetchArt = fetchArt, netplay = netplay, canResume = canResume, netplayLeads = true)
+    private fun lead(source: ListSource, e: Listed, canResume: Boolean = true, netplay: Boolean = true, art: ArtMenuItem = ArtMenuItem.NONE) =
+        ContextMenus.itemsFor(source, e, pinned = false, art = art, netplay = netplay, canResume = canResume, netplayLeads = true)
 
     // A resumes a game with a save state, so its menu leads with Play from start and has no Resume.
     @Test fun a_game_with_a_save_leads_its_menu_with_play_from_start() {
@@ -202,7 +218,7 @@ class ContextMenusTest {
     @Test fun collection_and_search_menus_list_netplay_once() {
         val e = entry("SFC", file = "Kart.sfc")
         for (src in listOf(ListSource.Collection("RPGs"), ListSource.Search("kart"))) {
-            val kinds = lead(src, e, fetchArt = true).map { it.kind }
+            val kinds = lead(src, e, art = ArtMenuItem.FETCH).map { it.kind }
             assertEquals(listOf(ContextKind.PLAY_FROM_START, ContextKind.NETPLAY, ContextKind.PIN), kinds.take(3))
             assertEquals(1, kinds.count { it == ContextKind.NETPLAY })
             assertTrue(ContextKind.FETCH_ART in kinds)

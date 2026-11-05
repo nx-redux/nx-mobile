@@ -33,16 +33,18 @@ class RaLibraryViewTest {
         val games = RaLibraryView.games(store, RaJournal(store, RaPaths.JOURNAL), RaJournal(store, RaPaths.CONFIRMED), index, "me")
         assertEquals(listOf(RaGameView(h1, 42, "Game (m3u)", "shot1", 2, 2, 1), RaGameView(h3, 7, "Other", "box3", 1, 1, 0)), games)
     }
-    @Test fun a_games_art_is_its_screenshot_then_its_box_art_then_its_cover_never_grid_or_hero() = runTest {
+    @Test fun a_games_art_is_its_screenshot_then_its_box_art_then_its_cover() = runTest {
         val store = FakeRaStore(); seed(store)
         fun indexOf(vararg games: IndexedGame) = LibraryIndex(2, "home", emptyList(), emptyMap(), listOf(IndexedSystem("PS", "Sony PlayStation", games = games.toList())))
         suspend fun artOf(i: LibraryIndex) =
             RaLibraryView.games(store, RaJournal(store, RaPaths.JOURNAL), RaJournal(store, RaPaths.CONFIRMED), i, "me").first { it.hash == h3 }.art
         val other = IndexedGame("home", "Roms/PS", "Other.cue", "r3", "f", "Other")
-        assertEquals("shot", artOf(indexOf(other.copy(boxart = "box", box2d = "cover", screenshot = "shot", hero = "hero"))))   // the screenshot wins
+        assertEquals("shot", artOf(indexOf(other.copy(boxart = "box", box2d = "cover", screenshot = "shot"))))   // the screenshot wins
         assertEquals("box", artOf(indexOf(other.copy(boxart = "box", box2d = "cover"))))                          // no screenshot: the 3D box
-        assertEquals("cover", artOf(indexOf(other.copy(box2d = "cover", grid = "grid"))))                         // then the 2D cover
-        assertEquals(null, artOf(indexOf(other.copy(grid = "grid", hero = "hero"))))                              // SteamGridDB art alone: none
+        assertEquals("cover", artOf(indexOf(other.copy(box2d = "cover"))))                                        // then the 2D cover
+        assertEquals("box", artOf(indexOf(other.copy(boxart = "box", screenshot = "hero", heroShot = true))))      // a hero screenshot: never
+        assertEquals(null, artOf(indexOf(other.copy(screenshot = "hero", heroShot = true))))
+        assertEquals(null, artOf(indexOf(other)))                                                                 // no art: none
     }
     @Test fun a_game_with_only_the_unknown_emulator_warning_is_not_listed() = runTest {
         val store = FakeRaStore(); seed(store)

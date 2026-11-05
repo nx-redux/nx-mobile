@@ -97,24 +97,21 @@ class SettingsSplitTest {
         assertFalse(gameTimeSplitView(DpSize(933.dp, 704.dp), Screen.GameTime(emptyList(), 0L)))   // the list is drawn whole, no preview
     }
 
-    @Test fun theArtworkPagesSitBesideTheirParentOnTheSameWindows() {
+    @Test fun theArtworkPagesSitOnSettingsStageOnTheSameWindows() {
         val settings = Screen.ArtworkSettings(emptyList())
-        val levels = listOf(
+        val pages = listOf(
+            Screen.Artwork(emptyList(), emptyList()),
             Screen.ArtworkConsoles(emptyList()), Screen.ArtworkProgress(com.nxredux.mobile.scraper.ScrapeState()), settings,
             settings.copy(signingIn = true), Screen.ArtworkReset(emptyList()),
         )
-        for (s in levels) {
-            assertTrue(artworkSplitLevel(s))
+        for (s in pages) {
             assertTrue(artworkSplitView(DpSize(933.dp, 704.dp), s))      // the unfolded Fold, landscape
             assertTrue(artworkSplitView(DpSize(840.dp, 360.dp), s))
             assertFalse(artworkSplitView(DpSize(704.dp, 933.dp), s))     // portrait: one page
             assertFalse(artworkSplitView(DpSize(560.dp, 360.dp), s))     // the cover screen and narrow windows
-            assertTrue(twoPaneView(DpSize(933.dp, 704.dp), s))           // the watermark centres on the right pane
-            assertFalse(twoPaneView(DpSize(560.dp, 360.dp), s))
+            assertFalse(twoPaneView(DpSize(933.dp, 704.dp), s))          // Settings' background: no centred watermark to move
         }
-        val page = Screen.Artwork(emptyList(), emptyList())
-        assertFalse(artworkSplitLevel(page)); assertFalse(artworkSplitView(DpSize(933.dp, 704.dp), page))   // the page is drawn whole
-        assertFalse(twoPaneView(DpSize(933.dp, 704.dp), page))
+        assertFalse(artworkSplitView(DpSize(933.dp, 704.dp), Screen.RetroAchievements()))
     }
 
     @Test fun theWatermarkCentresOnTheRightPaneWhenSplit() {

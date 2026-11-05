@@ -517,7 +517,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
     if (!onTop && page is Screen.Games && DualMenu.bottom(page, dualMenu) == BottomContent.Details) {
         val ra by state.gameDetailRa.collectAsState()
         val entry = page.entries.getOrNull(pageSelection.value.index)
-        GameDetailsPane(entry, entry?.let { allInfo[it.game.path] }, ra, onBack = { state.back() })
+        GameDetailsPane(entry, entry?.let { allInfo[it.game.path] }, ra, state.artLayout.collectAsState().value.backdrop, onBack = { state.back() })
         return
     }
     val now = rememberNow(allInfo)
@@ -600,6 +600,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.Switcher -> GameSwitcherScreen(
                 s, state::onButton, info = gameInfoFor(gameInfo, now, s.entries.getOrNull(s.index)?.game, full = true),
                 onSelect = state::selectSwitcherRow, onOpen = { state.selectSwitcherRow(it); state.openSelected() },
+                backdropArt = state.artLayout.collectAsState().value.backdrop,
             )
             // The other screens take the index as a value: [WithIndex] reads it, so only the screen recomposes.
             // Settings: two panes on a wide landscape window (the root on the left, its pages on the right), else one page.
@@ -629,11 +630,17 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.RaGames, is Screen.RaGame, is Screen.RaAchievement, is Screen.RaSettings ->
                 if (raSplitView(LocalWindowSize.current, s)) RaSplitScreen(state, s) { RaLevelPage(state, s, selection, split = true) }
                 else RaLevelPage(state, s, selection, split = false)
-            // Artwork's pages: on a split window a column browser beside the page they came from (the RetroAchievements
-            // rule); the Artwork page itself, and every page on a narrow or portrait window, one page.
+            // Artwork and its pages: on a split window Settings' wide stage (its words on the left, the page or the
+            // highlighted word's preview on the right); on a narrow or portrait window one page. Either way the Settings
+            // look: the hint bar follows Layouts → Button hints and starts at the words' edge, as Settings'.
             is Screen.Artwork, is Screen.ArtworkConsoles, is Screen.ArtworkProgress, is Screen.ArtworkSettings,
             is Screen.ArtworkReset ->
-                if (artworkSplitView(LocalWindowSize.current, s)) ArtworkSplitScreen(state, s, selection)
+                if (artworkSplitView(LocalWindowSize.current, s)) CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
+                    ArtworkStageScreen(state, s, selection)
+                }
+                else if (s is Screen.Artwork) CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
+                    WithIndex(selection) { ArtworkScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton) }
+                }
                 else WithIndex(selection) { ArtworkScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton) }
         }
         (page as? Screen.EmulatorOptions)?.takeIf(::gameSettingsModal)?.let { modal ->
@@ -661,6 +668,8 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val index = { selection.value.index }
     val minimalOpening = state.minimalOpening.collectAsState()   // a Minimal page's row being opened (its page draws the band)
     val raPanel by state.raPanel.collectAsState()   // the achievements panel over the list
+    val artPanel by state.artPanel.collectAsState()   // the Fetch art / Change art panel over the list
+    val artLayout by state.artLayout.collectAsState()   // Layouts → Backdrop art / List art: the panel's Switch changes them here
     val dual by state.dualMenu.collectAsState()   // the menu is on the second display: its details pane has the achievements
     val current = { s.entries.getOrNull(selection.value.index) }
     GameListScreen(
@@ -675,8 +684,8 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
         emptyText = if (s.source is ListSource.Search || s.source is ListSource.Filtered) "No results" else null,
         info = { gameInfoFor(gameInfo, now, current()?.game, full = true) },   // Grid shows none (its tiles have tileInfo)
         style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = remember(s.entries, gameInfo, now) { entryTileInfo(s.entries, gameInfo, now) }, layoutKey = s.source,
-        artBox = state.settings.gameListArt.boxed,
-        backdropArt = state.settings.backdropArt,
+        artBox = artLayout.list.boxed,
+        backdropArt = artLayout.backdrop,
         onSearch = state::openListSearch.takeIf { s.source.searchable },
         onLayout = state::toggleLayoutMenu.takeIf { state.settings.gameListLayoutOptions }, layoutOpen = s.layoutMenu != null,
         // Layouts → Achievements panel Hide: no icon or hint (X and the game's menu still open it). Dual: none (X does nothing).
@@ -684,6 +693,10 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
         minimalOpening = minimalOpening.value?.takeIf { it.page == s.source },
     )
     RaPanelOverlay(raPanel.takeIf { state.screen.value === s }, onRow = state::openRaPanelRow, onButton = state::onButton)
+    ArtPanelOverlay(
+        artPanel.takeIf { state.screen.value === s }, artLayout.backdrop, artLayout.list,
+        onTap = state::artPanelTap, onAnswer = state::artPanelAnswer, onDismiss = state::closeArtPanel,
+    )
     s.layoutMenu?.let { at ->
         GameListLayoutMenu(
             current = GameListLayouts.indexOf(state.settings.gameListStyle, state.settings.gameListOrientation, state.settings.gameListVerticalAlignment), highlighted = at,
@@ -755,7 +768,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
                 derivedStateOf(structuralEqualityPolicy()) { menuBackground(style, category, s.rows.getOrNull(selection.value.index), consoleArt, portrait) }
             }
             // Grid and Carousel: plain, as menuBackground gives every non-List style (a Carousel Consoles tab on Background aside).
-            MainMenuBackground(bg, state.settings.gameListArt)
+            MainMenuBackground(bg, state.artLayout.collectAsState().value.list)
         }
         is Screen.Games -> {
             // Grid and Carousel: plain black, as their tabs (the tiles carry the art). Minimal: the names alone, no art.
@@ -778,7 +791,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
                     NxBackdropPicture(backdropPictureTarget(live.value, url), Modifier.fillMaxSize())
                 } else {
                     // List: Layouts → List art ([listArtShown]).
-                    val art = state.settings.gameListArt
+                    val art = state.artLayout.collectAsState().value.list
                     val shown by remember(s, portrait, art, selection) {
                         derivedStateOf(structuralEqualityPolicy()) { listArtShown(s.entries.getOrNull(selection.value.index), art, portrait) }
                     }
@@ -797,12 +810,15 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
         is Screen.StorageUpgrade, is Screen.CopySaves -> SettingsBackground()
         // The folder picker: the small mark only, so the large one never sits behind its names.
         is Screen.FilePicker -> SettingsBackground()
-        // Settings: the small mark at the top right alone ([SettingsBackground]); the large centred mark is not drawn.
-        else -> if (settingsPane(s) != null) SettingsBackground() else MarkBackground(s)
+        // Settings, the Artwork page (drawn as Settings' root) and every Artwork page on Settings' wide stage: the small
+        // mark at the top right alone ([SettingsBackground]); the large centred mark is not drawn. Artwork's other pages
+        // on a narrow window keep it.
+        is Screen.Artwork -> SettingsBackground()
+        else -> if (settingsPane(s) != null || artworkSplitView(LocalWindowSize.current, s)) SettingsBackground() else MarkBackground(s)
     }
 }
 
-/** The NX mark; two panes (the RetroAchievements column browser, Game Tracker, Artwork), centred on the right pane (same size), as the page it sits behind. */
+/** The NX mark; two panes (the RetroAchievements column browser, Game Tracker), centred on the right pane (same size), as the page it sits behind. */
 @Composable
 private fun MarkBackground(s: Screen) = NxScreenBackground(
     url = null, fallback = Res.drawable.background, fade = false, modifier = Modifier.fillMaxSize().clipToBounds(), centred = true,

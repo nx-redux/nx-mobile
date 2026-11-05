@@ -91,14 +91,17 @@ import com.nxredux.mobile.runner.EmulatorRunner
 import com.nxredux.mobile.runner.GameSession
 import com.nxredux.mobile.runner.LaunchName
 import com.nxredux.mobile.scraper.AndroidArtStore
+import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.scraper.ArtHave
 import com.nxredux.mobile.scraper.ArtworkController
 import com.nxredux.mobile.scraper.ArtworkHost
+import com.nxredux.mobile.scraper.LegacyArtMove
 import com.nxredux.mobile.scraper.LibraryGameRef
 import com.nxredux.mobile.settings.AccentPreset
 import com.nxredux.mobile.storage.ImportSummary
 import com.nxredux.mobile.storage.SaveFormat
 import com.nxredux.mobile.storage.StateFormat
+import com.nxredux.mobile.settings.migrateMixWheel
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.settings.OptionTextSize
 import com.nxredux.mobile.settings.AppSettings
@@ -473,19 +476,20 @@ sealed interface Screen {
     /**
      * Artwork -> Settings: Replace existing art, the art sources' accounts and Reset artwork; [signingIn]: the ScreenScraper
      * sign-in modal is open with [draftUser] / [draftPassword] as typed; [editingKey]: the [keyFor] key prompt
-     * (SteamGridDB or TheGamesDB) is open with [draftKey]; [confirmLogout]: the "Log out of ScreenScraper?" dialog is open.
+     * (SteamGridDB or TheGamesDB) is open with [draftKey]; [confirmLogout]: the "Log out of ScreenScraper?" dialog is open;
+     * [confirmClearCache]: the "Clear unused images" dialog is open.
      */
     data class ArtworkSettings(
         val rows: List<ArtworkSettingRow>, val signingIn: Boolean = false, val draftUser: String = "", val draftPassword: String = "",
         val editingKey: Boolean = false, val draftKey: String = "", val keyFor: ArtKeyFor = ArtKeyFor.SGDB,
-        val confirmLogout: Boolean = false,
+        val confirmLogout: Boolean = false, val confirmClearCache: Boolean = false,
     ) : Screen {
         /** A prompt or dialog is open over the rows: it takes every input. */
-        val dialogOpen: Boolean get() = signingIn || editingKey || confirmLogout
+        val dialogOpen: Boolean get() = signingIn || editingKey || confirmLogout || confirmClearCache
 
         /** The typed password and key never reach a log or an assertion message. */
         override fun toString(): String =
-            "ArtworkSettings(rows=$rows, signingIn=$signingIn, draftUser=$draftUser, draftPassword=***, editingKey=$editingKey, draftKey=***, keyFor=$keyFor, confirmLogout=$confirmLogout)"
+            "ArtworkSettings(rows=$rows, signingIn=$signingIn, draftUser=$draftUser, draftPassword=***, editingKey=$editingKey, draftKey=***, keyFor=$keyFor, confirmLogout=$confirmLogout, confirmClearCache=$confirmClearCache)"
     }
     /** Settings -> Reset artwork: All or a console; [confirm]: the delete dialog for that scope. */
     data class ArtworkReset(val scopes: List<ResetScope>, val confirm: ResetScope? = null) : Screen
@@ -701,15 +705,17 @@ internal const val ANDROID_SOURCE = "android"
 
 /**
  * The Android games console for [apps] (the console's members, [androidConsoleMembers]): a synthetic [SystemFolder] with no core,
- * each app a [GameEntry] whose file name is the app id and whose shown name is its label, its screenshot from [art]; no
- * box art. Null with no app: the console is hidden.
+ * each app a [GameEntry] whose file name is the app id and whose shown name is its label, its screenshot, 2D box,
+ * wheel and app-built mix from [store] ([AndroidArtStore.art]; a hero screenshot marked); no 3D box. Null with no app: the console is
+ * hidden.
  */
-internal fun androidConsoleOf(apps: List<InstalledApp>, art: (String) -> ContentRef?): SystemFolder? {
+internal fun androidConsoleOf(apps: List<InstalledApp>, store: AndroidArtStore?): SystemFolder? {
     if (apps.isEmpty()) return null
     val games = apps.map { a ->
-        val shot = art(a.id)
         GameEntry(
-            ref = ContentRef("app:${a.id}"), fileName = a.id, shownName = a.label, screenshotRef = shot,
+            ref = ContentRef("app:${a.id}"), fileName = a.id, shownName = a.label,
+            screenshotRef = store?.art(a.id, ArtSlot.SCREENSHOT), box2dRef = store?.art(a.id, ArtSlot.BOX_2D),
+            wheelRef = store?.art(a.id, ArtSlot.WHEEL), mixRef = store?.art(a.id, ArtSlot.MIX), heroShot = store?.heroShot(a.id) == true,
             folder = ContentRef("app:"), sourceId = ANDROID_SOURCE, relativeDir = "",
         )
     }
@@ -811,7 +817,12 @@ private class WatchedStateFlow<T>(private val flow: MutableStateFlow<T>, private
 
 class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private val sidecars = Sidecars(deps.source, deps.sidecarStore) { home() }
-    private val scanner = LibraryScanner(deps.source, sidecars, deps.arcadeSets, deps.naomiSets, compute = deps.compute, chdSectors = deps.chdSectors)
+    private val scanner = LibraryScanner(
+        deps.source, sidecars, deps.arcadeSets, deps.naomiSets, compute = deps.compute, chdSectors = deps.chdSectors,
+        picks = { artworkController?.picks().orEmpty() },               // a picked extra game slot keeps its mirror file
+        heroShots = { artworkController?.heroShots().orEmpty() },       // a SteamGridDB hero screenshot keeps hero drawing
+        legacyMove = { legacyArtMove },                                  // old grid/ and hero/ files move once
+    )
     /** Controls -> Shortcuts as edited since it opened; null: closed (or untouched), [AppSettings.shortcuts] is all there is. */
     private var shortcutDraft: ShortcutSet? = null
 
@@ -1306,6 +1317,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             _screen.collect {
                 if (setupScreen(it)) _toolOnTop.value = false   // a tool's page no more: setup takes the menu's screen
                 if (it !is Screen.Games) { ra.closeRaPanel() } else { ra.followRaPanel() }; ra.followRaDetails(); followSecondList(); followDrawerPreview()
+                if (it !is Screen.Games) closeArtPanel()   // as the achievements panel: only over a game list
             }
         }
         deps.achievements?.let { c ->
@@ -3159,6 +3171,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     fun load(then: ((List<SystemFolder>) -> Unit)? = null) {
         // An install from before onboarding has its home already: it counts as done. A fresh one has onboarding to do.
         if (deps.settings.onboardingDone == null) deps.settings.onboardingDone = deps.settings.treeRef != null
+        deps.settings.migrateMixWheel()   // Mix users from before Wheel was its own setting keep their wheels, once
         // The one-time storage upgrade (v0.3.0 and earlier) comes before anything else; a load while it is up leaves it.
         if (upgradeOn || upgradeDue()) { if (!upgradeOn) startStorageUpgrade(); return }
         if (upgradeCase() == UpgradeCase.QUIET) deps.storageUpgrade?.startQuietMove()   // Case A: in the background, never mid-game
@@ -4798,6 +4811,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             s.showNewShelf = true; s.showNotStartedShelf = true; s.showMostPlayedShelf = true
             s.showNetplayHint = true
             s.consoleArt = ConsoleArt.DEFAULT; s.gameListArt = GameListArt.DEFAULT; s.backdropArt = BackdropArt.DEFAULT
+            syncArtLayout()
             s.menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE
             s.menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS
             s.menuExtraInfo = MenuStyles.DEFAULT_EXTRA_INFO
@@ -4911,7 +4925,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         val list = s.gameListStyle
         return listOfNotNull(
             SettingsRow(SettingsKind.LIST_ART, "List art", s.gameListArt.label).takeIf { list == MenuStyle.LIST },
-            SettingsRow(SettingsKind.BACKDROP_ART, "Backdrop art", s.backdropArt.label).takeIf { list == MenuStyle.BACKDROP },
+            // Every layout: it also picks the game panel's header and the Game Switcher's box.
+            SettingsRow(SettingsKind.BACKDROP_ART, "Backdrop art", s.backdropArt.label),
             // A game list's Layout icon (hidden: Layouts only), and its trophy icon and X hint (hidden: X and the game's menu).
             SettingsRow(SettingsKind.LAYOUT_OPTIONS, "Layout options", shown(s.gameListLayoutOptions)),
             SettingsRow(SettingsKind.ACHIEVEMENTS_PANEL, "Achievements panel", shown(s.gameListAchievementsPanel)).takeIf { deps.achievements != null },
@@ -4993,6 +5008,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /** Rebuilds the open page's rows in place (selection clamped). */
     private fun refreshSettings(confirm: ExtraFolder? = null) {
+        syncArtLayout()
         val old = _screen.value as? Screen.Settings
         val section = old?.section ?: SettingsSection.LIBRARY
         val page = settingsPage(section, confirm)
@@ -5498,7 +5514,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             val launchName = if (_launchSequence.value?.phase == LaunchPhase.SPREAD) launchNameProvider?.invoke() else null
             launchHandedOff = true
             deps.runner.launch(GameSession(sys.tag, game.shownName, core, game.ref, game.folder, game.fileName, resumeSlot, all, systemSets = systemSets, gamePath = game.path,
-                artPath = panelArt(game.boxartRef?.value, game.box2dRef?.value, game.gridRef?.value, game.screenshotRef?.value), netplay = netplay, launchName = launchName, fromSwitcher = fromSwitcher), recent)
+                artPath = panelArt(settings.backdropArt, game), netplay = netplay, launchName = launchName, fromSwitcher = fromSwitcher), recent)
         }
         launchJob = job
         job.invokeOnCompletion { if (launchJob === job) launchJob = null }
@@ -6287,8 +6303,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         ix?.playableSystems(if (withHidden) emptySet() else hiddenPaths.toSet()).orEmpty().flatMap { s ->
             s.games.map { g ->
                 val art = ArtRefs(
-                    g.boxartRef?.value, g.box2dRef?.value, g.screenshotRef?.value, g.gridRef?.value, g.heroRef?.value,
-                    wheel = g.wheelRef?.value, mix = g.mixRef?.value,
+                    g.boxartRef?.value, g.box2dRef?.value, g.screenshotRef?.value,
+                    wheel = g.wheelRef?.value, mix = g.mixRef?.value, heroShot = g.heroShot,
                 )
                 LibraryGameRef(
                     gamePath = g.path, tag = s.tag, name = g.shownName, fileName = g.fileName, rom = g.ref, sourceId = g.sourceId,
@@ -6319,12 +6335,22 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** The Android games console shown now (none without a game). */
     private fun shownAndroidConsole(): SystemFolder? = androidConsole?.takeIf { it.games.isNotEmpty() }
 
-    /** The Android games console's games for the scraper: by app id and label, "has art" when a screenshot is stored (it never wants a box). */
+    /**
+     * The Android games console's games for the scraper: by app id and label, "has art" when a screenshot is stored (a
+     * fetch never wants a box) and, while Mix is on, its mix when it has an input, with the store's pictures as their
+     * art. The game path is the entry's own ([path]), as the game menu's art panel names the game by it.
+     */
     private fun androidArtworkGames(): List<LibraryGameRef> = shownAndroidConsole()?.games.orEmpty().map { g ->
+        val art = ArtRefs(box2d = g.box2dRef?.value, screenshot = g.screenshotRef?.value, wheel = g.wheelRef?.value, mix = g.mixRef?.value, heroShot = g.heroShot)
         LibraryGameRef(
-            gamePath = g.ref.value, tag = ANDROID_TAG, name = g.shownName, fileName = g.fileName, rom = g.ref, sourceId = g.sourceId,
+            gamePath = g.path, tag = ANDROID_TAG, name = g.shownName, fileName = g.fileName, rom = g.ref, sourceId = g.sourceId,
             relativeDir = g.relativeDir, folderGame = false,
-            have = ArtHave(box = true, screenshot = g.screenshotRef != null), android = true,
+            // No 3D box: its mix input is a screenshot that is not a hero, or a 2D box.
+            have = ArtHave(
+                box = true, boxart = false, screenshot = g.screenshotRef != null, box2d = g.box2dRef != null, wheel = g.wheelRef != null,
+                mix = g.mixRef != null, needMix = settings.artMix, heroShot = g.heroShot,
+            ),
+            android = true, art = art,
         )
     }
 
@@ -6385,8 +6411,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
     }
 
+    /** The artwork controller; null in a build without one (no Tools row, no Fetch art or Change art). */
+    private val artworkController: com.nxredux.mobile.scraper.ArtworkController? = deps.artwork?.invoke(artworkHost)
+    /** The scanner's one-time `grid/` and `hero/` move, sharing the artwork controller's written-art log; none without it. */
+    private val legacyArtMove: LegacyArtMove? = artworkController?.legacyArtMove(deps.source)
+
     /** Null without a controller (no Tools row, no Fetch art). */
-    private val artworkScreens: ArtworkScreenController? = deps.artwork?.invoke(artworkHost)?.let { c ->
+    private val artworkScreens: ArtworkScreenController? = artworkController?.let { c ->
         ArtworkScreenController(
             scope, _screen, _selection, _error, deps.settings, loader, c,
             host = object : ArtworkScreenHost {
@@ -6405,6 +6436,39 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         ).also { screens -> scope.launch { c.state.collect { screens.onState(it) } } }
     }
 
+    /**
+     * The game menu's Fetch art / Change art panel over a game list; null without a controller. A pick's art is already
+     * in the index and shown ([com.nxredux.mobile.scraper.ArtworkHost.applyArt], then [flushArt]); the flush after it
+     * writes anything still batched.
+     */
+    private val artPanels: ArtPanelController? = artworkController?.let { c ->
+        ArtPanelController(scope, c, deps.settings, onPicked = { scope.launch { flushArt() } }, onLayoutSwitched = ::syncArtLayout)
+    }
+    private val noArtPanel = MutableStateFlow<ArtPanel?>(null)
+    private val _artLayout = MutableStateFlow(ArtLayout(deps.settings.backdropArt, deps.settings.gameListArt))
+    /**
+     * Layouts → Backdrop art and List art as the screens draw them: the open list, its background, the top screen and
+     * the Game Switcher read this, so a change made over a list (the art panel's Switch) shows at once.
+     */
+    val artLayout: StateFlow<ArtLayout> = _artLayout.asStateFlow()
+    /** [artLayout] follows the settings (after Settings' rows, its reset, and the art panel's Switch). */
+    private fun syncArtLayout() { _artLayout.value = ArtLayout(deps.settings.backdropArt, deps.settings.gameListArt) }
+    /** The art panel; null while closed (always, without a controller). */
+    val artPanel: StateFlow<ArtPanel?> = artPanels?.panel ?: noArtPanel
+
+    /** Opens the art panel on [entry] over the game list; [fetchFirst]: Fetch art, else Change art. */
+    private fun openArtPanel(entry: Listed, fetchFirst: Boolean) {
+        val panels = artPanels ?: return
+        ra.closeRaPanel()
+        panels.open(entry, fetchFirst)
+    }
+    /** A tap on the art panel's tile [index] (Search again at the tiles' count): picks it. */
+    fun artPanelTap(index: Int) { artPanels?.tap(index) }
+    /** A tap on the art panel question's Switch ([switch]) or Keep: Switch writes Layouts → Backdrop art (and List art). */
+    fun artPanelAnswer(switch: Boolean) { artPanels?.answer(switch) }
+    /** Closes the art panel (a tap beside it). */
+    fun closeArtPanel() { artPanels?.close() }
+
     /** The Artwork sign-in modal's live username / password (the composable reports every change). */
     fun artworkDraftUser(text: String) { artworkScreens?.draftUser(text) }
     fun artworkDraftPassword(text: String) { artworkScreens?.draftPassword(text) }
@@ -6412,19 +6476,25 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     fun artworkDraftKey(text: String) { artworkScreens?.draftKey(text) }
 
     /**
-     * The page the left pane shows beside [screen] in the Artwork column browser ([artworkSplitView]): the Artwork page
-     * beside Fetch by console, Progress and Settings, Settings beside Reset, the row that opened it lit. Null otherwise.
-     */
-    fun artworkParent(screen: Screen): ArtworkParent? = artworkScreens?.parentOf(screen)
-
-    /**
-     * The art fetch job as it moves (null without a controller): the Artwork left pane is drawn again on each emission,
-     * so its counts and rows follow a running fetch while the right pane stays the same screen.
+     * The art fetch job as it moves (null without a controller): the Artwork stage is drawn again on each emission, so
+     * its words, status lines and previews follow a running fetch while the open page stays the same screen.
      */
     val artworkJob: StateFlow<com.nxredux.mobile.scraper.ScrapeState>? get() = artworkScreens?.job
 
-    /** A tap on row [index] of the dimmed Artwork left pane showing [parent] ([artworkParent]): that row opens in place of the right pane. */
-    fun artworkParentTap(parent: Screen, index: Int) { artworkScreens?.parentTap(parent, index) }
+    /** The Artwork page whose words and status lines the wide stage shows beside [screen] ([ArtworkScreenController.stagePage]). */
+    fun artworkStagePage(screen: Screen): Screen.Artwork = artworkScreens?.stagePage(screen) ?: Screen.Artwork(emptyList(), emptyList())
+
+    /** The stage's word lit for the open Artwork page [screen]; null on the Artwork page itself ([ArtworkScreenController.wordOf]). */
+    fun artworkWord(screen: Screen): ArtworkAction? = artworkScreens?.wordOf(screen)
+
+    /** A tap on the stage's word [index]: on the page, select and open it; on a page, that word's page in place ([ArtworkScreenController.wordTap]). */
+    fun artworkWordTap(index: Int) { artworkScreens?.wordTap(index) }
+
+    /** The page the root previews while [action] is highlighted; null for none ([ArtworkScreenController.preview]). */
+    fun artworkPreview(action: ArtworkAction): Screen? = artworkScreens?.preview(action)
+
+    /** A tap on [row] of the root's preview: opens that page on the row, a second tap acts ([ArtworkScreenController.previewTap]). */
+    fun artworkPreviewTap(row: Int) { artworkScreens?.previewTap(row) }
 
     // --- Context menu: hosted by a game list or the main menu (a pinned or recent row) ---
 
@@ -6451,8 +6521,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             override suspend fun renameInIndex(game: GameEntry, name: String): Boolean = this@AppState.renameInIndex(game, name)
             override fun finishSwitch(game: GameEntry, from: SystemFolder, tag: String) = this@AppState.finishSwitch(game, from, tag)
             override fun openGameSettings(entry: Listed) = emulatorSettings.openGame(entry)
-            override fun canFetchArt(entry: Listed): Boolean = artworkScreens?.canFetch(entry) == true
-            override fun fetchArt(entry: Listed) { artworkScreens?.fetchGame(entry) }
+            override fun artMenu(entry: Listed): ArtMenuItem = artworkScreens?.artMenu(entry) ?: ArtMenuItem.NONE
+            override fun openArtPanel(entry: Listed, fetchFirst: Boolean) = this@AppState.openArtPanel(entry, fetchFirst)
             override fun netplayOffered(entry: Listed): Boolean = this@AppState.netplay?.offers(entry) == true
             override fun openNetplay(entry: Listed) = this@AppState.openNetplay(entry)
             override val netplayInMenu: Boolean get() = !launcherChrome().netplayHint || _screen.value is Screen.Systems   // the main menu has no hint bar
@@ -6784,6 +6854,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         (_screen.value as? Screen.Games)?.let { s ->
             s.search?.let { onListSearchButton(s, it, button); return }
             s.layoutMenu?.let { onLayoutMenuButton(s, it, button); return }
+            if (artPanel.value != null) { artPanels?.onButton(button); return }   // the art panel takes every press while open
             ra.raPanel.value?.let { ra.onRaPanelButton(it, button); return }
         }
         if (filePicker?.onButton(_screen.value, button) == true) return
@@ -6903,6 +6974,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 if (s.menu != null) { closeContextMenu(); return true }
                 if (s.search != null) { _screen.value = s.copy(search = null); return true }
                 if (s.layoutMenu != null) { _screen.value = s.copy(layoutMenu = null); return true }
+                if (artPanel.value != null) { artPanels?.onButton(NxButton.B); return true }   // closes it, or keeps on its question
                 if (ra.backRaPanel()) return true
                 // Lands only on the main menu (Hidden and Unassigned go to Settings); a Minimal list's title drops back into a Minimal tab's row.
                 intendNav(if (styleOf(s) == MenuStyle.MINIMAL) NavMotion.MINIMAL_BACK else NavMotion.BACK)
@@ -7033,7 +7105,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** The Android games console as [installedCache] and the settings make it now ([androidConsoleOf]); null with no game or before the first load. */
     private fun buildAndroidConsole(): SystemFolder? {
         val installed = installedCache ?: return null
-        return androidConsoleOf(androidGames(installed)) { id -> deps.androidArtStore?.screenshot(id) }
+        return androidConsoleOf(androidGames(installed), deps.androidArtStore)
     }
 
     /** The app ids the Android games console holds by the settings now (their icons are kept, [AppIcons.retain]). */

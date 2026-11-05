@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxHintBarKeepHeight
+import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxHintBar
 import com.nxredux.mobile.ui.nx.NxOptionsInnerPad
 import com.nxredux.mobile.ui.nx.LocalNxHintBarEnd
@@ -30,22 +31,70 @@ import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
 internal const val UNFOCUSED_ALPHA = 0.6f
 
 /**
- * The wide Settings ([settingsSplit]): one stage, nothing above but the small mark (the background's). The section block
- * ([SettingsMenuScreen]) rests bottom-left; the page is the rows block ([LocalSettingsBlock]) in a fixed frame at the right
- * ([settingsFrameWidth], [settingsFrameLeft]: up to 560 dp, its right edge the gutter in), on the section block's
- * baseline and growing up to 24 dp under the top, then scrolling. On the Settings root the sections have the
- * focus and the rows preview the highlighted section (no selection, a tap opens it on that row,
- * [AppState.settingsPreviewTap]); on a page the rows have it and the current section drops to the open grey with a "›" (a tap on a
- * section, [AppState.settingsCategoryTap]). A Layouts group's picture is part of its block, under the rows ([settingsWideBlockPage]);
- * the Android games picker draws whole from the old pane's edge. The root's hints are drawn on the left, a page's on the right; both sides keep
- * the bar's height, so the blocks share the baseline. The Remove folder dialog is drawn here, over the whole stage.
+ * The wide Settings ([settingsSplit]) on its stage ([SettingsStage]): the sections on the left, the rows block on the
+ * right. On the Settings root the sections have the focus and the rows preview the highlighted section (no selection,
+ * a tap opens it on that row, [AppState.settingsPreviewTap]); on a page the rows have it and the current section drops
+ * to the open grey with a "›" (a tap on a section, [AppState.settingsCategoryTap]). A Layouts group's picture is part
+ * of its block, under the rows ([settingsWideBlockPage]); the Android games picker draws whole from the old pane's
+ * edge. The Remove folder and Reset dialogs are drawn over the whole stage.
  */
 @Composable
 internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<ListSelection>, page: @Composable () -> Unit) {
     val categories = state.settingsSections()   // not remembered: a second screen coming or going changes it
-    val blockPage = settingsWideBlockPage(s)
+    val root = s as? Screen.SettingsMenu
+    SettingsStage(
+        title = SETTINGS_TITLE,
+        words = (root?.sections ?: categories).map { it.label },
+        lines = emptyList(),
+        current = { if (root != null) selection.value.index else categories.indexOf(settingsCategoryOf(s)).coerceAtLeast(0) },
+        root = root != null,
+        onWordTap = state::settingsCategoryTap,
+        blockPage = settingsWideBlockPage(s),
+        onHint = state::onButton,
+        preview = {
+            WithIndex(selection) { i ->
+                root?.sections?.getOrNull(i)?.let { section ->
+                    val gpu by state.gpu.collectAsState()   // About's GPU row lands after its query
+                    val update by state.updateLabel.collectAsState()   // and its update row follows the updater
+                    val preview = remember(s, section, gpu, update) { state.settingsPreview(section) }
+                    // No selection, undimmed: the current section is the one accent word.
+                    SettingsScreen(
+                        preview, -1,
+                        onSelect = state::settingsPreviewTap, onOpen = state::settingsPreviewTap,
+                        titled = true, hints = emptyList(),
+                    )
+                }
+            }
+        },
+        page = page,
+        over = {
+            // Over the whole stage, so its scrim takes every tap until it is answered.
+            if ((s as? Screen.Settings)?.confirmRemove != null) SettingsRemoveDialog(state::onButton)
+            (s as? Screen.Settings)?.takeIf { it.confirmReset }?.let { settingsResetAsk(it, selection.value.index) }?.let { SettingsResetDialog(it, state::onButton) }
+        },
+    )
+}
+
+/**
+ * Settings' wide stage: one stage, nothing above but the small mark (the background's). The word block ([title] and
+ * [words], [SettingsRootScreen]) rests bottom-left, the status [lines] at the left pane's top; the page is the rows block
+ * ([LocalSettingsBlock], while [blockPage]) in a fixed frame at the right ([settingsFrameWidth], [settingsFrameLeft]: up
+ * to 560 dp, its right edge the gutter in), on the word block's baseline and growing up to 24 dp under the top, then
+ * scrolling; without [blockPage] the page draws whole from [SETTINGS_SPLIT_LEFT]. On the [root] the words have the
+ * focus, [current] is the highlighted word and the right side is its [preview]; on a page the right side is the [page]
+ * and [current] drops to the open grey with a "›". [current] is read only by the word block ([WithCurrent]), so a
+ * d-pad move on the root recomposes the words and the preview, not the stage. A tap on a word calls [onWordTap]. The
+ * root's hints are drawn on the left ([onHint] answers a tap on one), a page's on the right; both sides keep the bar's
+ * height, so the blocks share the baseline. [over] is drawn over the whole stage (a dialog's scrim takes every tap).
+ */
+@Composable
+internal fun SettingsStage(
+    title: String, words: List<String>, lines: List<String>, current: () -> Int, root: Boolean,
+    onWordTap: (Int) -> Unit, blockPage: Boolean, onHint: (NxButton) -> Unit,
+    preview: @Composable () -> Unit, page: @Composable () -> Unit, over: @Composable () -> Unit = {},
+) {
     val gutter = settingsPlateEnd()   // the right side's plate edge: the frame's and the picture's right edge
-    WithSettingsSectionSize(categories) { block ->
+    WithSettingsWordBlockSize(title, words) { block ->
         val sectionRight = settingsSectionStart() + block.width
         Box(Modifier.fillMaxSize()) {
             CompositionLocalProvider(LocalNxHintBarKeepHeight provides true) {
@@ -54,24 +103,14 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
                     // A phone on its side: a Layouts group's picture takes the whole room right of the sections.
                     val pictureWidth = settingsLayoutPictureWidth(settingsSizeClass(), maxWidth, sectionRight, gutter)
                     val wideBlock = remember(pictureWidth, block.height) { SettingsBlockMode(crumb = null, pictureWidth = pictureWidth, minHeight = block.height) }
-                    // The section block keeps its gutter on the right even when the frame comes within 24 dp of it.
+                    // The word block keeps its gutter on the right even when the frame comes within 24 dp of it.
                     Column(Modifier.width(if (blockPage) maxOf(left, sectionRight + gutter) else left).fillMaxHeight()) {
                         Box(Modifier.weight(1f).fillMaxWidth()) {
-                            if (s is Screen.SettingsMenu) {
-                                WithIndex(selection) {
-                                    SettingsMenuScreen(s, it, state::settingsCategoryTap)
-                                }
-                            } else {
-                                val current = categories.indexOf(settingsCategoryOf(s)).coerceAtLeast(0)
-                                // The page has the focus: the current section drops to the open grey, with its "›" ([openedLabel]).
-                                SettingsMenuScreen(
-                                    Screen.SettingsMenu(categories), current,
-                                    onTap = state::settingsCategoryTap, rowsFocused = true,
-                                )
-                            }
+                            // On a page it has the focus: the current word drops to the open grey, with its "›" ([openedLabel]).
+                            WithCurrent(current) { SettingsRootScreen(title, words, lines, it, onWordTap, rowsFocused = !root, clearMark = false) }
                         }
                         // The root shows its A/B hints here; a page shows its own on the right. Either way this bar keeps the room, so the baselines meet.
-                        NxHintBar(if (s is Screen.SettingsMenu) SETTINGS_ROOT_HINTS else emptyList(), onHint = state::onButton)
+                        NxHintBar(if (root) SETTINGS_ROOT_HINTS else emptyList(), onHint = onHint)
                     }
                     Box(Modifier.padding(start = left).fillMaxSize()) {
                         // A page's own hint bar on the right: from its rows' text edge (the left column already keeps the
@@ -80,39 +119,25 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
                             LocalSettingsBlock provides wideBlock.takeIf { blockPage },
                             LocalNxHintBarStart provides NxOptionsInnerPad, LocalNxHintBarEnd provides gutter,
                         ) {
-                            if (s is Screen.SettingsMenu) {
-                                WithIndex(selection) { i ->
-                                    s.sections.getOrNull(i)?.let { section ->
-                                        val gpu by state.gpu.collectAsState()   // About's GPU row lands after its query
-                                        val update by state.updateLabel.collectAsState()   // and its update row follows the updater
-                                        val preview = remember(s, section, gpu, update) { state.settingsPreview(section) }
-                                        // No selection, undimmed: the current section is the one accent word.
-                                        SettingsScreen(
-                                            preview, -1,
-                                            onSelect = state::settingsPreviewTap, onOpen = state::settingsPreviewTap,
-                                            titled = true, hints = emptyList(),
-                                        )
-                                    }
-                                }
-                            } else {
-                                page()
-                            }
+                            if (root) preview() else page()
                         }
                     }
                 }
             }
-            // Over the whole stage, so its scrim takes every tap until it is answered.
-            if ((s as? Screen.Settings)?.confirmRemove != null) SettingsRemoveDialog(state::onButton)
-            (s as? Screen.Settings)?.takeIf { it.confirmReset }?.let { settingsResetAsk(it, selection.value.index) }?.let { SettingsResetDialog(it, state::onButton) }
+            over()
         }
     }
 }
+
+/** [content] with [current]'s value, read in this scope only (as [WithIndex]). */
+@Composable
+private fun WithCurrent(current: () -> Int, content: @Composable (Int) -> Unit) = content(current())
 
 /**
  * The two-pane frame on a wide landscape window ([settingsSplit]): [left] in [SETTINGS_SPLIT_LEFT] of the width, a 1 dp
  * divider at 8%, [right] in the rest, then [over] drawn over both panes (a dialog's scrim covers the whole window).
  * Both panes' hint bars keep their height, so their rows stay level when only the focused one shows hints. Used by the
- * column browsers (RetroAchievements, Game Tracker, Artwork) and the in-game menu, which passes its
+ * column browsers (RetroAchievements, Game Tracker) and the in-game menu, which passes its
  * own [leftShare] and no [divider] (its list sits beside the game panel as one surface).
  */
 @Composable

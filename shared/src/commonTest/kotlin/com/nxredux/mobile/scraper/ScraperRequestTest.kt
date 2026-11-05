@@ -45,4 +45,21 @@ class ScraperRequestTest {
     @Test fun searchCarriesTheUserLogin() = assertTrue(
         ScraperRequest.search(auth.copy(user = "me", password = "pw"), "a", null).endsWith("&output=json&ssid=me&sspassword=pw"),
     )
+
+    private val signed = "https://neoclone.screenscraper.fr/api2/mediaJeu.php?devid=D&devpassword=P&softname=nx&ssid=U&sspassword=W&systemeid=1&jeuid=42&media=ss(us)"
+    private val stripped = "https://neoclone.screenscraper.fr/api2/mediaJeu.php?softname=nx&systemeid=1&jeuid=42&media=ss(us)"
+    @Test fun strip_removes_only_credential_params() = assertEquals(stripped, ScraperRequest.stripAuth(signed))
+    @Test fun strip_leaves_other_hosts() {
+        val u = "https://cdn2.steamgriddb.com/grid/x.png?devid=1"
+        assertEquals(u, ScraperRequest.stripAuth(u))
+        assertEquals(u, ScraperRequest.withAuth(u, ScraperAuth("D", "P")))
+    }
+    @Test fun with_auth_restores_signed_in() {
+        val u = ScraperRequest.withAuth(stripped, ScraperAuth("D", "P", user = "U", password = "W"))
+        for (part in listOf("devid=D", "devpassword=P", "ssid=U", "sspassword=W", "jeuid=42")) assertTrue(u.contains(part), part)
+    }
+    @Test fun with_auth_signed_out_has_no_ssid() {
+        val u = ScraperRequest.withAuth(stripped, ScraperAuth("D", "P"))
+        assertTrue(u.contains("devid=D")); assertFalse(u.contains("ssid="))
+    }
 }

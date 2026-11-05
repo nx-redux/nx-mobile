@@ -56,9 +56,9 @@ class ScraperResponseTest {
         assertEquals("hd-eu", ScraperMedia.choose(m)[ArtSlot.WHEEL]?.url)
         assertEquals(listOf("hd-eu", "hd-jp", "w-us", "w-wor"), ScraperMedia.rank(m, ArtSlot.WHEEL).map { it.url })
         assertEquals("w-us", ScraperMedia.choose(listOf(SsMedia("wheel", "jp", "w-jp"), SsMedia("wheel", "us", "w-us")))[ArtSlot.WHEEL]?.url)
-        // The best of each type, in type order: a failed wheel-hd download falls back to the plain wheel.
-        assertEquals(listOf("hd-eu", "w-us"), ScraperMedia.alternates(m)[ArtSlot.WHEEL]?.map { it.url })
-        assertEquals(listOf("w-us"), ScraperMedia.alternates(m.filter { it.type == "wheel" })[ArtSlot.WHEEL]?.map { it.url })
+        // Every media of each type, ranked: a failed wheel-hd download falls back to the next, the plain wheel after them.
+        assertEquals(listOf("hd-eu", "hd-jp", "w-us", "w-wor"), ScraperMedia.alternates(m)[ArtSlot.WHEEL]?.map { it.url })
+        assertEquals(listOf("w-us", "w-wor"), ScraperMedia.alternates(m.filter { it.type == "wheel" })[ArtSlot.WHEEL]?.map { it.url })
         assertTrue(ScraperMedia.rank(m, ArtSlot.MIX).isEmpty())
     }
     @Test fun regionOrderWithinAType() {
@@ -78,4 +78,22 @@ class ScraperResponseTest {
         assertEquals("https://m/ss-ok.png", ScraperMedia.choose(g.medias)[ArtSlot.SCREENSHOT]?.url)
     }
     @Test fun nothingUseful() = assertTrue(ScraperMedia.choose(listOf(SsMedia("fanart", null, "x"))).isEmpty())
+    @Test fun alternates_keeps_every_screenshot_region() {
+        val m = listOf(SsMedia("ss", "eu", "ss-eu"), SsMedia("ss", "us", "ss-us"), SsMedia("ss", "jp", "ss-jp"), SsMedia("box-2D", "us", "box-us"))
+        val alt = ScraperMedia.alternates(m)
+        assertEquals(listOf("us", "eu", "jp"), alt[ArtSlot.SCREENSHOT]!!.map { it.region })
+        assertEquals(1, alt[ArtSlot.BOX_2D]!!.size)
+    }
+    @Test fun alternates_keep_every_region_of_every_type() {
+        val m = listOf(SsMedia("box-2D", "jp", "b-jp"), SsMedia("box-2D", "us", "b-us"), SsMedia("wheel", "us", "w-us"), SsMedia("wheel-hd", "eu", "w-eu"))
+        val alt = ScraperMedia.alternates(m)
+        assertEquals(listOf("b-us", "b-jp"), alt[ArtSlot.BOX_2D]!!.map { it.url })
+        assertEquals(listOf("w-eu", "w-us"), alt[ArtSlot.WHEEL]!!.map { it.url })
+    }
+
+    @Test fun mixIsMixrbv2ThenMixrbv1() {
+        val m = listOf(SsMedia("mixrbv1", "wor", "u1"), SsMedia("mixrbv2", "eu", "u2"))
+        assertEquals(listOf("u2", "u1"), ScraperMedia.rank(m, ArtSlot.MIX).map { it.url })
+        assertEquals("u2", ScraperMedia.choose(m)[ArtSlot.MIX]!!.url)
+    }
 }

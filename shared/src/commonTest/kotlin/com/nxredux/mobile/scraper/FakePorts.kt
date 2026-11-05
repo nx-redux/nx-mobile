@@ -16,11 +16,14 @@ class FakeHttp(private val routes: MutableMap<String, ArrayDeque<HttpResult>> = 
     var clock: () -> Long = { 0L }
     /** Virtual time each request takes, so a job can be caught mid-flight. */
     var latency = 0L
+    /** Extra virtual time for a URL containing the key (first match), on top of [latency]. */
+    val delays = linkedMapOf<String, Long>()
     fun on(urlPart: String, vararg r: HttpResult) { routes.getOrPut(urlPart) { ArrayDeque() }.addAll(r) }
     fun set(urlPart: String, vararg r: HttpResult) { routes[urlPart] = ArrayDeque(r.toList()) }
     override suspend fun get(url: String, headers: Map<String, String>): HttpResult {
         calls += url; this.headers += headers; times += clock()
         if (latency > 0) delay(latency)
+        delays.entries.firstOrNull { url.contains(it.key) }?.let { delay(it.value) }
         val key = routes.keys.firstOrNull { url.contains(it) } ?: return HttpResult(404, null)
         val q = routes.getValue(key); return if (q.size > 1) q.removeFirst() else q.first()
     }
@@ -73,7 +76,9 @@ class FakeSource(
     var starts = 0
     var fail: (LibraryGameRef) -> Exception? = { null }
     private val hits = mutableMapOf<String, List<ArtHit>>()
-    fun offer(file: String, slot: ArtSlot, url: String) { hits[file] = hits[file].orEmpty() + ArtHit(slot, url, ArtOrigin(id, file, url)) }
+    fun offer(file: String, slot: ArtSlot, url: String, assetId: String = url, thumb: String? = null) {
+        hits[file] = hits[file].orEmpty() + ArtHit(slot, url, ArtOrigin(id, file, assetId), thumb = thumb)
+    }
     override fun knows(ref: LibraryGameRef) = knowsGame(ref)
     override suspend fun startJob() { starts++ }
     override suspend fun find(ref: LibraryGameRef, wanted: Set<ArtSlot>): List<ArtHit> {
@@ -90,12 +95,20 @@ fun ssEngine(
     onArt: suspend (String, ArtRefs) -> Unit, onWritten: suspend (List<Pair<String, ArtOrigin?>>) -> Unit,
     androidArt: AndroidArtStore? = null, onAndroidArt: suspend () -> Unit = {}, more: List<ArtSource> = emptyList(),
     logged: LoggedArt = LoggedArt.NONE,
-) = ScrapeEngine(http, fitter, source, home, listOf(ScreenScraperSource(http, hasher, auth, now, sleep)) + more, onArt, onWritten, androidArt, onAndroidArt, logged)
+    onOptions: suspend (String, List<ArtOption>, Boolean) -> Unit = { _, _, _ -> }, picked: suspend (String) -> Set<ArtSlot> = { emptySet() },
+    extras: () -> ArtExtras = { ArtExtras() }, pixels: PixelCodec? = null, warn: (String) -> Unit = {},
+) = ScrapeEngine(
+    http, fitter, source, home, listOf(ScreenScraperSource(http, hasher, auth, now, sleep)) + more, onArt, onWritten, androidArt, onAndroidArt, logged,
+    extras = extras, pixels = pixels, warn = warn, onOptions = onOptions, picked = picked,
+)
 
-/** The written-art log as a set of paths. */
-class FakeLoggedArt(private val paths: MutableSet<String>) : LoggedArt {
+/** The written-art log as a set of paths; [origins]: each path's origin ([LoggedArt.origin]), a rig's writes recorded there. */
+class FakeLoggedArt(private val paths: MutableSet<String>, val origins: MutableMap<String, ArtOrigin> = mutableMapOf()) : LoggedArt {
     override suspend fun contains(path: String) = path in paths
-    override suspend fun remove(path: String) { paths -= path }
+    override suspend fun remove(path: String) { paths -= path; origins -= path }
+    override suspend fun origin(path: String): ArtOrigin? = origins[path]
+    /** Records [written] origins (an engine's onWritten), as the app's log does before each write. */
+    fun record(written: List<Pair<String, ArtOrigin?>>) { for ((p, o) in written) if (o != null) origins[p] = o }
 }
 
 class FakeHasher(var result: Pair<Long, Long>? = 0x1234L to 100L, var inZip: Pair<Long, Long>? = 0x5678L to 200L) : RomHasher {
@@ -105,17 +118,33 @@ class FakeHasher(var result: Pair<Long, Long>? = 0x1234L to 100L, var inZip: Pai
     override suspend fun crc32AndSizeInZip(zip: ContentRef): Pair<Long, Long>? { askedInZip += zip; return inZip }
 }
 
-/** The Android games' screenshots in memory; a stored one's ref is `file:///art/<package>.png`. [fail]: writes fail. */
+/**
+ * The Android games' pictures in memory: [files] the screenshots (by app id), [slots] every slot's picture, [heroes] the
+ * app ids whose screenshot is a hero. A stored one's ref is `file:///art/<package>.png` (`.box2d.png`, `.wheel.png`).
+ * [fail]: writes fail.
+ */
 class FakeArtStore(var fail: Boolean = false) : AndroidArtStore {
     val files = mutableMapOf<String, ByteArray>()
-    override fun screenshot(appId: String): ContentRef? =
-        if (appId in files) ContentRef("file:///art/${appId.substringBefore('/')}.png") else null
-    override suspend fun writeScreenshot(appId: String, png: ByteArray): ContentRef? {
-        if (fail) return null
-        files[appId] = png
-        return screenshot(appId)
+    val others = mutableMapOf<Pair<String, ArtSlot>, ByteArray>()
+    val heroes = mutableSetOf<String>()
+    private fun has(appId: String, slot: ArtSlot) = if (slot == ArtSlot.SCREENSHOT) appId in files else (appId to slot) in others
+    override fun art(appId: String, slot: ArtSlot): ContentRef? {
+        if (!has(appId, slot)) return null
+        val suffix = when (slot) { ArtSlot.BOX_2D -> ".box2d"; ArtSlot.WHEEL -> ".wheel"; ArtSlot.MIX -> ".mix"; else -> "" }
+        return ContentRef("file:///art/${appId.substringBefore('/')}$suffix.png")
     }
-    override suspend fun deleteAll(): Int = files.size.also { files.clear() }
+    override fun heroShot(appId: String): Boolean = appId in heroes
+    override suspend fun write(appId: String, slot: ArtSlot, bytes: ByteArray, hero: Boolean): ContentRef? {
+        if (fail) return null
+        when (slot) {
+            ArtSlot.SCREENSHOT -> { files[appId] = bytes; if (hero) heroes += appId else heroes -= appId }
+            ArtSlot.BOX_2D, ArtSlot.WHEEL, ArtSlot.MIX -> others[appId to slot] = bytes
+            else -> return null
+        }
+        return art(appId, slot)
+    }
+    override suspend fun read(appId: String, slot: ArtSlot): ByteArray? = if (slot == ArtSlot.SCREENSHOT) files[appId] else others[appId to slot]
+    override suspend fun deleteAll(): Int = (files.size + others.size).also { files.clear(); others.clear(); heroes.clear() }
 }
 
 class FakeRunner : ScrapeRunner {
@@ -140,7 +169,8 @@ class FakeHost(var games: List<LibraryGameRef>, var hidden: List<LibraryGameRef>
     /** When non-null for a game, applyArt throws it (an Error such as running out of memory). */
     var throwOnApply: (String) -> Throwable? = { null }
     override suspend fun libraryGames() = games
-    override suspend fun allLibraryGames() = games + hidden
+    /** As the app's host: the Android games console's games are left out (their art is not in the log). */
+    override suspend fun allLibraryGames() = games.filterNot { it.android } + hidden
     /** Records the call and, like the real index, updates the game's [LibraryGameRef.have] and [LibraryGameRef.art] from the refs. */
     override suspend fun applyArt(gamePath: String, art: ArtRefs) {
         if (failApply(gamePath)) error("index update failed")
@@ -154,7 +184,9 @@ class FakeHost(var games: List<LibraryGameRef>, var hidden: List<LibraryGameRef>
     val appends = mutableListOf<Pair<String, String>>()
     /** When true, [appendPrivate] appends (as Android does); false, it declines and the caller rewrites. */
     var appendable = false
-    override suspend fun readPrivate(name: String) = files[name]
+    /** When true, [readPrivate] throws (an unreadable file). */
+    var failRead = false
+    override suspend fun readPrivate(name: String): String? { if (failRead) error("unreadable"); return files[name] }
     override suspend fun writePrivate(name: String, text: String) { files[name] = text; writes += name to text }
     override suspend fun appendPrivate(name: String, text: String): Boolean {
         if (!appendable) return false
@@ -204,4 +236,15 @@ object Scrape {
         }}]}}""",
     )
     fun item(g: LibraryGameRef, status: ItemStatus = ItemStatus.WAITING) = ScrapeItem(g.gamePath, g.tag, g.name, status)
+}
+
+/** The option images in memory, by key; a cached one's ref is `cache:<key>`. */
+class FakeOptionCache : ArtOptionCache {
+    val files = linkedMapOf<String, ByteArray>()
+    override fun ref(key: String): ContentRef? = if (key in files) ContentRef("cache:$key") else null
+    override suspend fun read(key: String): ByteArray? = files[key]
+    override suspend fun write(key: String, bytes: ByteArray): ContentRef? { files[key] = bytes; return ref(key) }
+    override suspend fun size(): Long = files.values.sumOf { it.size.toLong() }
+    override suspend fun remove(keys: Collection<String>) { keys.forEach { files.remove(it) } }
+    override suspend fun clear(): Long = size().also { files.clear() }
 }

@@ -87,11 +87,11 @@ internal interface ContextMenuHost {
     /** After a tag switch's sidecar write (and copy prompt): moves the game in the index and opens the new tag's list. */
     fun finishSwitch(game: GameEntry, from: SystemFolder, tag: String)
 
-    /** Fetch art is offered for [entry]: a console ScreenScraper knows, in a build that can fetch. */
-    fun canFetchArt(entry: Listed): Boolean = false
+    /** The art item [entry]'s menu offers: none, Fetch art (no art yet) or Change art. */
+    fun artMenu(entry: Listed): ArtMenuItem = ArtMenuItem.NONE
 
-    /** Fetches [entry]'s art under the loading overlay, then shows the result as a notice. */
-    fun fetchArt(entry: Listed) {}
+    /** Opens the art panel for [entry]; [fetchFirst]: Fetch art (its art is fetched first), else Change art. */
+    fun openArtPanel(entry: Listed, fetchFirst: Boolean) {}
 
     /** [entry] can be played over netplay here (the platform has netplay, and the game's tag has it now). */
     fun netplayOffered(entry: Listed): Boolean = false
@@ -237,7 +237,7 @@ internal class ContextMenuController(
     /** Opens [s]'s menu on [e]; [canResume]: it has a save state, so Play from start leads. */
     private fun gameMenu(s: Screen.Games, e: Listed, canResume: Boolean) {
         val items = ContextMenus.itemsFor(
-            s.source, e, pinned = pinned(e), fetchArt = host.canFetchArt(e), netplay = host.netplayOffered(e),
+            s.source, e, pinned = pinned(e), art = host.artMenu(e), netplay = host.netplayOffered(e),
             canResume = canResume, netplayLeads = host.netplayInMenu,
         )
         // The achievements panel, last, while Layouts hides its icon and hint.
@@ -380,7 +380,8 @@ internal class ContextMenuController(
             ContextKind.RENAME -> setMenu(m.copy(prompt = MenuPrompt.Rename(m.game.game.shownName), promptFocus = -1))
             ContextKind.ADD_TO_COLLECTION -> openCollectionPicker(m)
             ContextKind.GAME_SETTINGS -> { closeContextMenu(); host.openGameSettings(m.game) }
-            ContextKind.FETCH_ART -> { closeContextMenu(); host.fetchArt(m.game) }
+            ContextKind.FETCH_ART -> { closeContextMenu(); host.openArtPanel(m.game, fetchFirst = true) }
+            ContextKind.CHANGE_ART -> { closeContextMenu(); host.openArtPanel(m.game, fetchFirst = false) }
             ContextKind.NETPLAY -> { closeContextMenu(); host.openNetplay(m.game) }
             ContextKind.PLAY_FROM_START -> { closeContextMenu(); host.playFromStart(m.game) }
         }
@@ -533,7 +534,7 @@ internal class ContextMenuController(
             ContextKind.CONSOLE -> CoreRegistry.consoles.firstOrNull { it.id == value }?.let { c -> applyTag(m, c.defaultTagFor(settings.defaultTags[c.id])) }
             ContextKind.ADD_TO_COLLECTION -> if (value.isEmpty()) setMenu(m.copy(sub = null, prompt = MenuPrompt.NewCollection(), promptFocus = -1)) else addToCollection(m, value)
             ContextKind.PIN, ContextKind.UNPIN, ContextKind.HIDE, ContextKind.UNHIDE, ContextKind.RENAME,
-            ContextKind.REMOVE_FROM_COLLECTION, ContextKind.REMOVE_RECENT, ContextKind.GAME_SETTINGS, ContextKind.FETCH_ART,
+            ContextKind.REMOVE_FROM_COLLECTION, ContextKind.REMOVE_RECENT, ContextKind.GAME_SETTINGS, ContextKind.FETCH_ART, ContextKind.CHANGE_ART,
             ContextKind.PIN_TOOL, ContextKind.UNPIN_TOOL, ContextKind.ADD_TO_TOOLS, ContextKind.REMOVE_FROM_TOOLS,
             ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.NETPLAY, ContextKind.PLAY_FROM_START,
             ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS -> closeContextMenu()
