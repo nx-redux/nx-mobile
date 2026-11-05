@@ -331,6 +331,7 @@ class GLRetroView(
 
     // Buffered so tryEmit from the GL thread never suspends; the host collects promptly.
     private val achievementEvents = MutableSharedFlow<AchievementEvent>(extraBufferCapacity = 64)
+    private val coreMessages = MutableSharedFlow<String>(extraBufferCapacity = 16)
     // Unlimited channel: a server call must never be dropped, or rc_client waits for its answer forever.
     private val achievementServerCalls = Channel<AchievementServerCall>(Channel.UNLIMITED)
 
@@ -655,6 +656,9 @@ class GLRetroView(
      * so subscribe before calling `LibretroDroid.achievementsLogin`.
      */
     fun getAchievementEvents(): Flow<AchievementEvent> = achievementEvents
+
+    /** The core's on-screen messages (SET_MESSAGE), as it sends them; the app picks which to show. */
+    fun getCoreMessages(): Flow<String> = coreMessages
 
     /**
      * HTTP requests rc_client wants sent. Buffered until collected (single consumer); every call must be answered
@@ -1010,6 +1014,11 @@ class GLRetroView(
         lifecycle?.coroutineScope?.launch {
             rumbleEventsSubject.emit(RumbleEvent(port, strengthWeak, strengthStrong))
         }
+    }
+
+    /** Called from the jni side (emulation thread) after each step. */
+    private fun sendCoreMessage(msg: String) {
+        coreMessages.tryEmit(msg)   // a full buffer drops it: messages are only shown, never needed
     }
 
     /** Called from the jni side (emulation thread) after each step. */

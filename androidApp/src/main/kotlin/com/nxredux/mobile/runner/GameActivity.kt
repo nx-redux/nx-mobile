@@ -1665,6 +1665,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             b.attach(view)
             lifecycleScope.launch { b.events.collect(::onAchievementEvent) }
         }
+        // The core's on-screen messages: the few worth showing (CoreMessages: the FDS disk side) as a toast on the picture.
+        lifecycleScope.launch { view.getCoreMessages().collect { m -> CoreMessages.toast(coreId, m)?.let(dual::pictureToast) } }
         // The core loads the game on the GL thread once the view is added (SurfaceCreated follows): the waiting pads'
         // timeout counts from then, not through the load.
         lifecycleScope.launch {

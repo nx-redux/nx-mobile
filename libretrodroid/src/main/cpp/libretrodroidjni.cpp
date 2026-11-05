@@ -989,6 +989,18 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_step(
         return;
     }
 
+    auto coreMessages = Environment::getInstance().takeCoreMessages();
+    if (!coreMessages.empty()) {
+        jclass cls = env->GetObjectClass(glRetroView);
+        jmethodID send = env->GetMethodID(cls, "sendCoreMessage", "(Ljava/lang/String;)V");
+        for (auto& m : coreMessages) {
+            jstring text = newSafeJString(env, m);   // a core's text: never straight to NewStringUTF
+            env->CallVoidMethod(glRetroView, send, text);
+            env->DeleteLocalRef(text);
+        }
+        env->DeleteLocalRef(cls);
+    }
+
     auto& achievements = Achievements::getInstance();
     if (achievements.isEnabled()) {
         auto calls = achievements.takeServerCalls();
