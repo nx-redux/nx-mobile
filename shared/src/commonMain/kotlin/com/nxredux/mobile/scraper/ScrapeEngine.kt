@@ -573,7 +573,11 @@ class ScrapeEngine(
         // An app-built mix is built again when this run wrote one of its inputs, so one made from partial art is not
         // left stale; a downloaded or picked one never is.
         val remakeMix = mixOn && !wantMix && !mixFetched && ArtSlot.MIX !in picks && wrote.any { it in MIX_INPUTS } && appMix(target, ls)
-        val madeMix = (buildMix || remakeMix) && paused == null && !storageFailed && makeMix(ref, target, before, fresh, ls)
+        // Read the picks again under the lock a pick's write takes (makeMix itself takes none: writePick calls it under
+        // it): a mix picked while this game was fetched wins, and its file is never replaced by the built one.
+        val madeMix = (buildMix || remakeMix) && paused == null && !storageFailed && pickWrites.withLock {
+            if (ArtSlot.MIX in picked(ref.gamePath)) { wantMix = false; false } else makeMix(ref, target, before, fresh, ls)
+        }
         if (madeMix) { attempted = true; wrote += ArtSlot.MIX }
         val mixDone = mixFetched || madeMix
         if (attempted) withContext(NonCancellable) {

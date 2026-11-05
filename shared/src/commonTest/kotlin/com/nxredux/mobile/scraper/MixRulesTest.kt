@@ -20,7 +20,7 @@ import kotlin.time.Duration.Companion.seconds
 
 /** When the mix is wanted, remade and made at all (NX Redux `scraper_compositor.c` needs a screenshot or a box). */
 class MixRulesTest {
-    private class Rig(vararg val sources: FakeSource, var extras: ArtExtras = ArtExtras(wheel = true, mix = true), val fs: FakeRomsSource = Scrape.homeTree()) {
+    private class Rig(vararg val sources: ArtSource, var extras: ArtExtras = ArtExtras(wheel = true, mix = true), val fs: FakeRomsSource = Scrape.homeTree()) {
         val http = FakeHttp()
         val pixels = FakePixels()
         val arts = mutableListOf<Pair<String, ArtRefs>>()
@@ -235,6 +235,32 @@ class MixRulesTest {
         assertTrue(a.asked.none { ArtSlot.MIX in it.second }, "${a.asked}")
         assertContentEquals(oldMix, rig.fs.bytesAt("$media/mix/Tetris.png"))
         assertTrue(rig.pixels.decoded.isEmpty())
+    }
+
+    /** ScreenScraper with no mix for the game; while it is asked, [during] runs (the user picks a mix meanwhile). */
+    private class PickDuringFind(val during: suspend () -> Unit) : ArtSource {
+        override val id = SourceId.SS
+        override val label = id
+        override val slots = setOf(ArtSlot.BOX_3D, ArtSlot.SCREENSHOT, ArtSlot.MIX)
+        override val enabled = true
+        val asked = mutableListOf<Set<ArtSlot>>()
+        override fun knows(ref: LibraryGameRef) = true
+        override suspend fun find(ref: LibraryGameRef, wanted: Set<ArtSlot>): List<ArtHit> { asked += wanted; during(); return emptyList() }
+    }
+
+    @Test fun aMixPickedDuringTheFetchWinsOverTheBuiltMix() = runTest {
+        lateinit var rig: Rig
+        val pickedMix = byteArrayOf(42)
+        // The pick as writePick makes it: its file written and logged with the option's origin, then the slot picked.
+        val src = PickDuringFind { rig.put("mix", "Tetris.png", pickedMix); rig.logMix(SourceId.SS); rig.picks = setOf(ArtSlot.MIX) }
+        rig = Rig(src, extras = ArtExtras(mix = true))
+        rig.put("boxart", "Tetris.png", byteArrayOf(11))
+        rig.put("screenshot", "Tetris.png", byteArrayOf(12))
+        val item = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART))).items.single()
+        assertEquals(listOf(setOf(ArtSlot.MIX)), src.asked)
+        assertContentEquals(pickedMix, rig.fs.bytesAt("$media/mix/Tetris.png"))
+        assertTrue(rig.written.none { it.first == MIX_PATH }, "${rig.written}")
+        assertEquals(ItemStatus.DONE, item.status)
     }
 
     @Test fun aGameWithAnyMixIsNotAskedAgainWithoutReplace() = runTest {
