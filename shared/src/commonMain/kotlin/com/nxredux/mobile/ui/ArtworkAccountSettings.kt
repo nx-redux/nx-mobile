@@ -59,8 +59,8 @@ internal class ArtworkAccountSettings(
      * In groups: Art to fetch (Replace existing art and the optional art: 2D box art, Wheel, Generate mix; only when
      * fetching is available; the Wheel shows On and is locked while Generate mix needs it, as NX Redux's "Needed by
      * Generate mix"), then Accounts (ScreenScraper's login / logout row, only in a build with its credentials; the
-     * SteamGridDB key rows; TheGamesDB's key rows and its read-only allowance for the key in use, only once the user's key
-     * is set), and Reset artwork last, after a gap.
+     * SteamGridDB key row, one row each: the key prompt, or once set Remove; TheGamesDB's key row likewise and its
+     * read-only allowance for the key in use, only once the user's key is set), and Reset artwork last, after a gap.
      */
     private fun settingRows(): List<ArtworkSettingRow> = buildList {
         if (controller.available) {
@@ -86,13 +86,13 @@ internal class ArtworkAccountSettings(
         }
         if (controller.sgdbAvailable) {
             val set = controller.sgdbKeySet
-            add(ArtworkSettingRow(ArtworkSettingKind.SGDB_KEY, "SteamGridDB API key", if (set) "Set" else "Not set"))
             if (set) add(ArtworkSettingRow(ArtworkSettingKind.SGDB_REMOVE, "Remove SteamGridDB key"))
+            else add(ArtworkSettingRow(ArtworkSettingKind.SGDB_KEY, "SteamGridDB API key", "Not set"))
         }
         if (controller.tgdbSupported) {
             val set = controller.tgdbKeySet
-            add(ArtworkSettingRow(ArtworkSettingKind.TGDB_KEY, "TheGamesDB API key", if (set) "Set" else "Not set"))
             if (set) add(ArtworkSettingRow(ArtworkSettingKind.TGDB_REMOVE, "Remove TheGamesDB key"))
+            else add(ArtworkSettingRow(ArtworkSettingKind.TGDB_KEY, "TheGamesDB API key", "Not set"))
         }
         if (controller.tgdbAvailable) {
             val left = controller.state.value.tgdbLeft
@@ -141,8 +141,8 @@ internal class ArtworkAccountSettings(
 
     /**
      * Where the highlight goes when the rows change, so a second A never lands on another action: the same row kind
-     * when it is still there; ScreenScraper's login for its logout (and back); otherwise the nearest row above it that
-     * stays (a key's Remove row or TheGamesDB's allowance: that source's key row), or the first. Never a group label or gap.
+     * when it is still there; ScreenScraper's login for its logout (and back), a source's key row for its Remove row (and
+     * back); otherwise the nearest row above it that stays (TheGamesDB's allowance), or the first. Never a group label or gap.
      */
     private fun keepRow(before: List<ArtworkSettingRow>, index: Int, rows: List<ArtworkSettingRow>): Int {
         fun at(kind: ArtworkSettingKind) = rows.indexOfFirst { it.kind == kind && it.selectable }.takeIf { it >= 0 }
@@ -153,6 +153,10 @@ internal class ArtworkAccountSettings(
         when (kind) {
             ArtworkSettingKind.SS_LOGOUT -> at(ArtworkSettingKind.SS_LOGIN)
             ArtworkSettingKind.SS_LOGIN -> at(ArtworkSettingKind.SS_LOGOUT)
+            ArtworkSettingKind.SGDB_KEY -> at(ArtworkSettingKind.SGDB_REMOVE)
+            ArtworkSettingKind.SGDB_REMOVE -> at(ArtworkSettingKind.SGDB_KEY)
+            ArtworkSettingKind.TGDB_KEY -> at(ArtworkSettingKind.TGDB_REMOVE)
+            ArtworkSettingKind.TGDB_REMOVE -> at(ArtworkSettingKind.TGDB_KEY)
             else -> null
         }?.let { return it }
         return (index - 1 downTo 0).firstNotNullOfOrNull { i -> before[i].takeIf { it.selectable }?.let { at(it.kind) } } ?: first

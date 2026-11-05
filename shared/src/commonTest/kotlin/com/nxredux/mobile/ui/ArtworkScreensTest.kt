@@ -505,12 +505,17 @@ class ArtworkScreensTest {
         assertTrue("SteamGridDB key saved" in r.notices)
         assertEquals("GOODKEY", r.settings.sgdbApiKey)
         val saved = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        assertEquals("Set", saved.rows.first { it.kind == ArtworkSettingKind.SGDB_KEY }.secondary)
+        assertTrue(saved.rows.none { it.kind == ArtworkSettingKind.SGDB_KEY })
+        assertEquals("Remove SteamGridDB key", saved.rows.single { it.kind == ArtworkSettingKind.SGDB_REMOVE }.label)
+        assertEquals(ArtworkSettingKind.SGDB_REMOVE, saved.rows[r.state.selection.value.index].kind)
 
         r.state.select(saved.rows.indexOfFirst { it.kind == ArtworkSettingKind.SGDB_REMOVE }); r.state.onButton(NxButton.A)
         assertNull(r.settings.sgdbApiKey)
         assertTrue("SteamGridDB key removed" in r.notices)
-        assertEquals(ArtworkSettingKind.SGDB_KEY, assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.dropLast(3).last().kind)   // above the gap, Clear unused images and Reset artwork
+        val removedSgdb = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
+        assertEquals(ArtworkSettingKind.SGDB_KEY, removedSgdb.rows.dropLast(3).last().kind)   // above the gap, Clear unused images and Reset artwork
+        assertEquals("Not set", removedSgdb.rows.single { it.kind == ArtworkSettingKind.SGDB_KEY }.secondary)
+        assertEquals(ArtworkSettingKind.SGDB_KEY, removedSgdb.rows[r.state.selection.value.index].kind)
         // B closes the prompt without a check.
         r.state.onButton(NxButton.A); r.state.artworkDraftKey("X"); r.state.onButton(NxButton.B)
         assertFalse(assertIs<Screen.ArtworkSettings>(r.state.screen.value).editingKey)
@@ -546,7 +551,10 @@ class ArtworkScreensTest {
         assertTrue("TheGamesDB key saved" in r.notices)
         assertEquals("GOODKEY", r.settings.tgdbApiKey)
         val saved = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        assertEquals("Set", saved.rows.first { it.kind == ArtworkSettingKind.TGDB_KEY }.secondary)
+        assertTrue(saved.rows.none { it.kind == ArtworkSettingKind.TGDB_KEY })
+        assertEquals("Remove TheGamesDB key", saved.rows.single { it.kind == ArtworkSettingKind.TGDB_REMOVE }.label)
+        assertEquals(ArtworkSettingKind.TGDB_REMOVE, saved.rows[r.state.selection.value.index].kind)
+        assertEquals("TheGamesDB", saved.rows.single { it.kind == ArtworkSettingKind.TGDB_LEFT }.label)
         assertEquals("1,500 left this month", saved.rows.single { it.kind == ArtworkSettingKind.TGDB_LEFT }.secondary)
 
         r.state.select(saved.rows.indexOfFirst { it.kind == ArtworkSettingKind.TGDB_REMOVE }); r.state.onButton(NxButton.A)
@@ -555,6 +563,8 @@ class ArtworkScreensTest {
         assertTrue("TheGamesDB key removed" in r.notices)
         val removed = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
         assertEquals(ArtworkSettingKind.TGDB_KEY, removed.rows.dropLast(3).last().kind)   // above the gap, Clear unused images and Reset: no allowance row without a key
+        assertEquals("Not set", removed.rows.single { it.kind == ArtworkSettingKind.TGDB_KEY }.secondary)
+        assertEquals(ArtworkSettingKind.TGDB_KEY, removed.rows[r.state.selection.value.index].kind)
         r.state.onButton(NxButton.B)
     }
 
@@ -566,8 +576,11 @@ class ArtworkScreensTest {
         r.state.pick(ArtworkAction.SETTINGS)
         advanceUntilIdle()
         var rows = assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows
-        assertEquals("Set", rows.single { it.kind == ArtworkSettingKind.TGDB_KEY }.secondary)
         assertEquals("900 left this month", rows.single { it.kind == ArtworkSettingKind.TGDB_LEFT }.secondary)
+        // A set key shows only Remove; the new key goes in once the old one is removed.
+        r.state.select(rows.indexOfFirst { it.kind == ArtworkSettingKind.TGDB_REMOVE }); r.state.onButton(NxButton.A)
+        advanceUntilIdle()
+        rows = assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows
         r.state.select(rows.indexOfFirst { it.kind == ArtworkSettingKind.TGDB_KEY }); r.state.onButton(NxButton.A)
         r.state.artworkDraftKey("MINE"); r.state.onButton(NxButton.A)
         advanceUntilIdle()
