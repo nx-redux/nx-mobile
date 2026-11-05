@@ -912,8 +912,14 @@ internal class FrontendRenderer(
     }
 
     /** 3DS split across the displays: the main display's screen alone, as a region of Azahar's fixed stacked frame; else null. */
-    private fun n3dsSplitLayout(w: Float, h: Float): List<NdsRegion>? =
-        if (isN3ds && dualMode == DualMode.SPLIT) DualScreen.n3dsScreen(w, h, DualScreen.splitMain(n3dsPicture, pictureOn)) else null
+    private fun n3dsSplitLayout(w: Float, h: Float): List<NdsRegion>? {
+        if (!isN3ds || dualMode != DualMode.SPLIT) return null
+        val main = DualScreen.splitMain(n3dsPicture, pictureOn)
+        // under a pad skin (landscape with a second display): the main display's screen in the skin's screen, at its shape
+        val glass = SkinDual.splitGlass(padLayout.skinPlacement()?.takeIf { padLayout.skinShown }, main)
+            ?: return DualScreen.n3dsScreen(w, h, main)
+        return DualScreen.n3dsScreenIn(SkinDual.screenIn(glass, if (main == NdsScreen.TOP) 5f / 3f else 4f / 3f), main)
+    }
 
     /** Split DS screens turn the overlay off and the menu shows it unavailable; both follow when that changes. */
     private fun setNdsSplit(split: Boolean) {

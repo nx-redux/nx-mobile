@@ -3226,6 +3226,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             com.nxredux.mobile.skin.DcGames.isArcadeSet(tag, name, NaomiSetsAsset.get(this))
     }
     override fun onSkinPlaced() = dual.syncPanel()
+    override fun onLayoutControllersChanged() = dual.recheckPictureOn()
     override fun placeMainPanelHost() = dual.placeMainPanelHost()
 
     // The in-game menu's view, input and layout, owned by [menu].

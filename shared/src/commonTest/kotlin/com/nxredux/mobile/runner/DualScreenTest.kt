@@ -17,6 +17,23 @@ class DualScreenTest {
     @Test fun mode_panel_up_for_ds() = assertEquals(DualMode.PANEL_UP, DualScreen.mode(true, true, true, true))
     @Test fun mode_panel_for_regular_game() = assertEquals(DualMode.PANEL, DualScreen.mode(true, true, false, false))
 
+    // a 2400x1080 phone and a 1920x1080 second display: by shape the phone (the wider) gets the picture
+    @Test fun auto_under_a_skin_puts_the_bottom_on_main() {
+        assertEquals(PictureOn.SECOND, DualScreen.pictureOn(2400, 1080, 1920, 1080, bottom = BottomScreen.AUTO, skin = true))
+        assertEquals(PictureOn.MAIN, DualScreen.pictureOn(2400, 1080, 1920, 1080, bottom = BottomScreen.SECOND, skin = true))
+        assertEquals(PictureOn.SECOND, DualScreen.pictureOn(2400, 1080, 1920, 1080, bottom = BottomScreen.MAIN, skin = true))
+        assertEquals(PictureOn.MAIN, DualScreen.pictureOn(2400, 1080, 1920, 1080, rotated = true, bottom = BottomScreen.AUTO, skin = true))
+    }
+
+    @Test fun auto_without_a_skin_still_goes_by_shape() =
+        assertEquals(PictureOn.MAIN, DualScreen.pictureOn(2400, 1080, 1920, 1080, bottom = BottomScreen.AUTO, skin = false))
+
+    @Test fun n3ds_screen_in_offsets_into_the_area() {
+        val r = DualScreen.n3dsScreenIn(PxRect(100f, 50f, 400f, 300f), NdsScreen.BOTTOM).single()
+        assertEquals(PxRect(100f, 50f, 400f, 300f), r.dst)
+        assertTrue(r.touch)
+    }
+
     @Test fun menu_goes_on_the_second_display_when_the_main_one_is_the_picture() {
         // The wide monitor is the picture on AUTO, so the menu stays on the phone.
         assertFalse(DualScreen.menuOnSecond(1248, 1972, 2560, 1600, rotated = false, BottomScreen.AUTO))

@@ -29,6 +29,12 @@ class SkinDualTest {
     }
 
     @Test
+    fun screenInFitsAnyAspect() {
+        assertEquals(PxRect(50f, 0f, 500f, 300f), SkinDual.screenIn(PxRect(0f, 0f, 600f, 300f), 5f / 3f))
+        assertEquals(SkinDual.dsScreenIn(PxRect(0f, 0f, 600f, 300f)), SkinDual.screenIn(PxRect(0f, 0f, 600f, 300f), 4f / 3f))
+    }
+
+    @Test
     fun thePanelIsInOnePlaceOnly() {
         for (mode in DualMode.entries) for (on in PictureOn.entries) for (second in listOf(true, false)) for (g in listOf(glass, null)) {
             val spot = SkinDual.panelSpot(mode, on, second, g)

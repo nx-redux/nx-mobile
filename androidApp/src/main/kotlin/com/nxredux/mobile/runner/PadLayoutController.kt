@@ -138,6 +138,8 @@ internal interface PadLayoutHost {
     fun isLandscape(orientation: Int): Boolean
     fun isLandscape(): Boolean
     fun syncN3dsCore()
+    /** The controllers the layout goes by changed: with a second display, which one is the bottom screen may too. */
+    fun onLayoutControllersChanged()
     /** A NAOMI / Atomiswave set under the Dreamcast tag ([com.nxredux.mobile.skin.DcGames.isArcadeSet]): the arcade skin, on the d-pad. */
     val dcArcadeSet: Boolean
     /** The game panel fills the whole window (it hides the pad; the menu opens over it). */
@@ -360,6 +362,10 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         controllerConnected.value = pads.isNotEmpty()
         // What the layout goes by: a multiplayer game's benched pads leave the on-screen pad up for Player 1.
         val names = layoutControllerNames(pads)
+        if (names != lastLayoutNames) {
+            if (lastLayoutNames != null) root.post { host.onLayoutControllersChanged() }
+            lastLayoutNames = names
+        }
         val tt = tabletop(names)
         builtTabletop = tabletopBuild(tt, names)
         if (skinPlacement(names) != null) {
@@ -934,6 +940,23 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private fun onSkinResized() {
         if (skinView == null) return
         if (skinPlacement() == null) applyLayout(resources.configuration.orientation) else relayoutFrontend()
+    }
+
+    private var lastLayoutNames: List<String>? = null
+
+    /**
+     * A DS or 3DS game whose pad skin will show with a second display: a pack picked, no controller in the layout, the
+     * Dual screen mode allowing it and a layout set for the console. No window measure (decided before the turn to
+     * landscape): the Bottom screen's Auto then means the phone ([DualScreen.pictureOn]'s skin).
+     */
+    fun dualSkinWanted(): Boolean {
+        skinPack ?: return false
+        val tag = layoutTag()
+        val ds = NdsOptions.appliesTo(tag)
+        val n3ds = N3dsOptions.appliesTo(tag)
+        if (!ds && !n3ds) return false
+        return layoutControllerNames().isEmpty() && SkinDual.skinAllowed(host.dualMode, ds, n3ds) &&
+            SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet) != null
     }
 
     /** Whether the pad skin is the layout now. */

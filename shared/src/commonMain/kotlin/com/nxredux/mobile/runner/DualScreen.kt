@@ -67,11 +67,15 @@ object DualScreen {
      */
     fun pictureOn(
         mainW: Int, mainH: Int, secondW: Int, secondH: Int, rotated: Boolean = false, bottom: BottomScreen = BottomScreen.AUTO,
+        skin: Boolean = false,
     ): PictureOn = when {
         rotated -> PictureOn.MAIN
         secondW <= 0 || secondH <= 0 || mainW <= 0 || mainH <= 0 -> PictureOn.MAIN
         bottom == BottomScreen.MAIN -> PictureOn.SECOND
         bottom == BottomScreen.SECOND -> PictureOn.MAIN
+        // under a pad skin (no controller) AUTO means the phone is the bottom (touch) screen: by shape a wide phone in
+        // landscape would take the top screen (user)
+        skin -> PictureOn.SECOND
         secondW.toLong() * mainH >= mainW.toLong() * secondH -> PictureOn.SECOND
         else -> PictureOn.MAIN
     }
@@ -134,6 +138,10 @@ object DualScreen {
     /** Split, 3DS screen [which] alone on a display's area, as [ndsScreen]: the top fitted 5:3, the bottom 4:3, centred. */
     fun n3dsScreen(areaW: Float, areaH: Float, which: NdsScreen): List<NdsRegion> =
         single(areaW, areaH, which, n3dsSrc(which), if (which == NdsScreen.TOP) N3DS_TOP_ASPECT else DS_ASPECT)
+
+    /** [n3dsScreen] in [area] (game-view px) instead of the whole view: a pad skin's screen (its glass) holds it. */
+    fun n3dsScreenIn(area: PxRect, which: NdsScreen): List<NdsRegion> =
+        n3dsScreen(area.width, area.height, which).map { it.copy(dst = it.dst.copy(x = it.dst.x + area.x, y = it.dst.y + area.y)) }
 
     /**
      * The Azahar options a mode needs, or null to put back the usual ones ([DualMode.OFF], [DualMode.PANEL]: the caller

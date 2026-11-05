@@ -53,8 +53,10 @@ object SkinDual {
     }
 
     /** The biggest 256:192 (one DS screen) rect centred in [glass]. */
-    fun dsScreenIn(glass: PxRect): PxRect {
-        val aspect = 256f / 192f
+    fun dsScreenIn(glass: PxRect): PxRect = screenIn(glass, 256f / 192f)
+
+    /** The biggest [aspect] (width / height) rect centred in [glass]: one screen in a skin's screen. */
+    fun screenIn(glass: PxRect, aspect: Float): PxRect {
         val w = minOf(glass.width, glass.height * aspect)
         val h = w / aspect
         return PxRect(glass.x + (glass.width - w) / 2f, glass.y + (glass.height - h) / 2f, w, h)

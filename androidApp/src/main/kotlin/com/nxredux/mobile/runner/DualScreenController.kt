@@ -387,7 +387,7 @@ internal class DualScreenController(
         val real = android.graphics.Point().also { @Suppress("DEPRECATION") display.getRealSize(it) }
         val bottom = BottomScreen.resolve(frontendValues[BottomScreenOptions.KEY], appSettings.bottomScreen)
         // A core that turns its picture (SET_ROTATION): the second display's regions draw it unturned, so it stays on main.
-        return DualScreen.pictureOn(maxOf(w, h), minOf(w, h), real.x, real.y, GameGeometry.of(geometry).rotated, bottom)
+        return DualScreen.pictureOn(maxOf(w, h), minOf(w, h), real.x, real.y, GameGeometry.of(geometry).rotated, bottom, skin = padLayout.dualSkinWanted())
     }
 
     /**
@@ -602,7 +602,7 @@ internal class DualScreenController(
         val host = mainPanelHost ?: return
         if (mainPanel.value != null || !mainPanelPill.value) return
         val root = findViewById<View>(R.id.root)
-        val main = DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn)
+        val main = DualScreen.splitMain(if (isN3ds) n3dsPicture else NdsSettings.parse(frontendValues).big, pictureOn)
         val g = SkinDual.splitGlass(padLayout.skinPlacement()?.takeIf { padLayout.skinShown }, main)
         host.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
             if (g != null && root.width > 0) {
