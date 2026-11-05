@@ -170,6 +170,28 @@ bit-identical. Only `ppsspp` differs, because it embeds a build timestamp: its b
 (`ext/libpng17/pngerror.c`) compiles `__DATE__`/`__TIME__` into the copyright string
 (e.g. `translated Sep 23 2026 00:59:43`). The other seven cores are byte-for-byte reproducible.
 
+## Azahar (3DS): check save states on every pin bump
+
+Pin and build notes are in the `Makefile` above `azahar_HASH`. A 3DS save state records the git revision of the core
+that wrote it. Upstream's libretro core refuses any state from another revision, so before our patch every pin bump
+broke all the states players had. `patches/azahar.patch` (`src/core/savestate.cpp`, `System::LoadStateBuffer`) loads
+such a state with a warning instead.
+
+**The risk:** the revision check was upstream's guard against a changed state format. Without it, a state from an older
+core is read by the new code. If the format changed, it usually fails cleanly: the reader throws, `retro_unserialize`
+returns false and the app shows its load failure. A change the reader does not notice could instead load a broken
+game state.
+
+**So on every Azahar pin bump:**
+
+1. Look at the upstream diff between the two pins for serialization changes: `serialize`, `SERIALIZE_EXPORT`,
+   `BOOST_CLASS_VERSION`, `template <class Archive>` and new members of serialized classes.
+2. On a device, resume a state saved by the old core (the `Mario Kart 7` race state is the usual one) and play on for
+   a minute: the race goes on, with no error in the log beyond the revision warning.
+3. If the format changed, say so in the release notes so players know older 3DS states will not load.
+
+Checked: 2126.1.2 → 2126.2 (2026-11-05, Nova): old states load and play.
+
 ## Link cores (netplay stage 2c, 2026-10-10)
 
 GB/GBC and GBA link as on the NX Redux handheld (nx-redux main 2f25643b):

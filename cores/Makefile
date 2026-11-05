@@ -441,7 +441,7 @@ flycast_SUBMODULES = --recursive core/deps/libchdr core/deps/tinygettext core/de
   core/deps/glslang core/deps/Vulkan-Headers core/deps/VulkanMemoryAllocator
 flycast_FLAGS = -DLIBRETRO=ON -DUSE_GLES=ON -DUSE_OPENMP=OFF -DCMAKE_OSX_ARCHITECTURES=arm64
 
-# Azahar (Nintendo 3DS), 2126.1.2 (a lightweight tag on 9e6f523a57fac9564ac0bf8286db3c3702d301ec). The libretro core is
+# Azahar (Nintendo 3DS), 2126.2 (a lightweight tag on 219d743a1e698101fe1ab8bef43e6563126c3c27). The libretro core is
 # src/citra_libretro, the SHARED target citra_libretro (OUTPUT_NAME azahar_libretro, empty prefix) gated on
 # ENABLE_LIBRETRO=ON, which forces the Qt/SDL2/web/room/cubeb/OpenAL/libusb frontends off by itself. Its
 # CMAKE_LIBRARY_OUTPUT_DIRECTORY is bin/<config>, so the artifact is bin/Release/. Flags follow upstream's Android
@@ -454,7 +454,7 @@ flycast_FLAGS = -DLIBRETRO=ON -DUSE_GLES=ON -DUSE_OPENMP=OFF -DCMAKE_OSX_ARCHITE
 # (upstream CI's version) and azahar_CMAKE / azahar_NINJA below. No FetchContent: ~35 git submodules, all initialised
 # recursively by the template's default. Built-in AES keyblob and open-source shared font: no BIOS. Decrypted games only.
 azahar_REPO = https://github.com/azahar-emu/azahar
-azahar_HASH = 9e6f523a57fac9564ac0bf8286db3c3702d301ec
+azahar_HASH = 219d743a1e698101fe1ab8bef43e6563126c3c27
 azahar_KIND = cmake
 azahar_BUILD_PATH = .
 azahar_CMAKE_TARGET = citra_libretro
