@@ -1,7 +1,7 @@
 # licence: modifies FCEUmm (https://github.com/libretro/libretro-fceumm), GPL-2.0 (its Copying file); this patch is
 # distributed under the same licence.
 diff --git a/src/drivers/libretro/libretro.c b/src/drivers/libretro/libretro.c
-index 5ecaa3f..e8e3237 100644
+index 5ecaa3f..6ad8c04 100644
 --- a/src/drivers/libretro/libretro.c
 +++ b/src/drivers/libretro/libretro.c
 @@ -1834,7 +1834,14 @@ void retro_set_environment(retro_environment_t cb)
@@ -33,7 +33,7 @@ index 5ecaa3f..e8e3237 100644
     /* Reset clears the turbo toggle phase so the rapid-fire cycle starts
      * at the same point every reset, matching how the core's other
      * input-poll state behaves on power-cycle.  Without this, a held
-@@ -3119,13 +3131,35 @@ static void FCEUD_UpdateInput(void)
+@@ -3119,13 +3131,40 @@ static void FCEUD_UpdateInput(void)
        bool curR = input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R);
        static bool prevL = false, prevR = false;
  
@@ -42,8 +42,10 @@ index 5ecaa3f..e8e3237 100644
 +      /* NX Redux: L with a disk in turns it over in one press: eject now,
 +       * then select the next side and insert it FDS_FLIP_FRAMES later, so
 +       * the game sees the drive go empty as on the real drive. With the
-+       * drive empty L only steps the side (as before); L while a flip is
-+       * pending is ignored; R cancels a pending flip, then acts as before. */
++       * drive empty (R, a state saved mid-flip, a reset) L puts the next
++       * side in at once, so L alone always ends with a disk in; L while a
++       * flip is pending is ignored; R cancels a pending flip, then acts as
++       * before. */
 +      if (curL && !prevL && fds_flip_wait == 0)
 +      {
 +         if (FCEU_FDSInserted())
@@ -52,7 +54,10 @@ index 5ecaa3f..e8e3237 100644
 +            fds_flip_wait = FDS_FLIP_FRAMES;
 +         }
 +         else
++         {
 +            FCEU_FDSSelect();       /* Swap FDisk side */
++            FCEU_FDSInsert(-1);     /* and insert it */
++         }
 +      }
        prevL = curL;
  
@@ -71,7 +76,7 @@ index 5ecaa3f..e8e3237 100644
     }
  
     /* Handle internal palette switching */
-@@ -3419,6 +3453,9 @@ bool retro_serialize(void *data, size_t size)
+@@ -3419,6 +3458,9 @@ bool retro_serialize(void *data, size_t size)
  
  bool retro_unserialize(const void * data, size_t size)
  {
@@ -81,7 +86,7 @@ index 5ecaa3f..e8e3237 100644
     /* Cannot load state while Game Genie
      * screen is open */
     if (geniestage == 1)
-@@ -4329,6 +4366,7 @@ bool retro_load_game_special(
+@@ -4329,6 +4371,7 @@ bool retro_load_game_special(
  
  void retro_unload_game(void)
  {

@@ -196,6 +196,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             NdsOptions.LAYOUT_PORTRAIT, NdsOptions.LAYOUT_LANDSCAPE, NdsOptions.PIP_CORNER, NdsOptions.PIP_SIZE, NdsOptions.PIP_OPACITY,
         )
         const val EXTRA_CORE_FILE = "core_file"
+        private const val KEY_FCEUMM_TURBO_SINCE = "fceumm_turbo_since"
         const val EXTRA_CORE_ID = "core_id"
         const val EXTRA_TAG = "tag"
         const val EXTRA_TITLE = "title"
@@ -1239,6 +1240,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         val store = CoreConfigStore(File(dataRoot, paths.consoleConfig), File(dataRoot, paths.gameConfig)).also { configStore = it }
         val resolved = withContext(Dispatchers.IO) {
+            // fceumm's turbo default (Player 1): a cfg saved before it holds the old None as if picked ([FceummTurbo])
+            if (coreId == "fceumm") store.migrateFceummTurbo(fceummTurboSince())
             val (console, game) = store.read()
             CoreConfig.resolve(descriptorDefaults, console, game, forcedOptions, hiddenValues)
         }
@@ -3180,6 +3183,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         notificationsView = view
         findViewById<FrameLayout>(R.id.root).addView(view, menu.menuLayoutParams(resources.configuration.orientation))
+    }
+
+    /**
+     * When this app first ran with fceumm's turbo on by default: cfg files written before then hold the old default
+     * ([CoreConfigStore.migrateFceummTurbo]). Kept in its own prefs file, written once.
+     */
+    private fun fceummTurboSince(): Long {
+        val prefs = getSharedPreferences("nx-migrations", MODE_PRIVATE)
+        prefs.getLong(KEY_FCEUMM_TURBO_SINCE, 0L).takeIf { it > 0L }?.let { return it }
+        return System.currentTimeMillis().also { prefs.edit().putLong(KEY_FCEUMM_TURBO_SINCE, it).commit() }
     }
 
     /** Shows [msg] briefly; returns the toast so a caller can take it down early. */
