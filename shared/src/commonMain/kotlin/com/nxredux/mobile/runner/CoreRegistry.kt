@@ -115,6 +115,8 @@ object CoreRegistry {
         biosFiles = listOf("disksys.rom"),
         players = 2,
         name = "FCEUmm",
+        // X / Y are fceumm's turbo A / B only with this on (its default is None): the GB-style skins' TA / TB caps
+        defaultOptions = mapOf("fceumm_turbo_enable" to "Player 1"),
     )
     private val snes9x = CoreDescriptor(
         "snes9x", "libsnes9x_libretro_android.so", setOf("sfc", "smc", "fig", "swc", "bs", "st"),

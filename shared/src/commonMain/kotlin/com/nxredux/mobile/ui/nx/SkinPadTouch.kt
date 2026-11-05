@@ -191,6 +191,7 @@ class SkinPadTouch(
         const val STICK_SLOP = 1.25f
         val BUTTONS = mapOf(
             "A" to NxButton.A, "B" to NxButton.B, "X" to NxButton.X, "Y" to NxButton.Y, "L" to NxButton.L1, "R" to NxButton.R1, "L2" to NxButton.L2, "R2" to NxButton.R2,
+            "DISK" to NxButton.L1,   // the FDS skin's DISK: fceumm's L, its one-press disk flip
             "START" to NxButton.START, "SELECT" to NxButton.SELECT, "MENU" to NxButton.MENU,
         )
         val ACTIONS = setOf("MIC", "SWAP", "SAVE", "LOAD", "REWIND", "FAST", "TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4", "TURBO_A", "TURBO_B", "STICK_SWAP")

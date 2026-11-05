@@ -60,6 +60,8 @@ enum class SkinVariant {
     @SerialName("arcade") ARCADE,
     /** Dreamcast discs: the stick and d-pad (or a swap between them), A B X Y as Dreamcast letters, L R triggers (L2 R2), START MENU. */
     @SerialName("dc") DC,
+    /** Famicom Disk System: the GB set (d-pad, A B, TA TB, SELECT START MENU) and DISK (L: fceumm's one-press disk flip). */
+    @SerialName("fds") FDS,
 }
 
 /**

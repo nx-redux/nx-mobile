@@ -16,6 +16,12 @@ class SkinVariantForTest {
     }
 
     @Test
+    fun fdsGetsTheFdsLayout() {
+        assertEquals(SkinVariant.FDS, SkinChoice.variantFor("FDS", ds = false))
+        assertEquals(SkinVariant.SINGLE, SkinChoice.variantFor("FC", ds = false))   // the NES keeps the shared set
+    }
+
+    @Test
     fun arcadeGetsTheArcadeLayout() {
         assertEquals(SkinVariant.ARCADE, SkinChoice.variantFor("FBN", ds = false))
     }

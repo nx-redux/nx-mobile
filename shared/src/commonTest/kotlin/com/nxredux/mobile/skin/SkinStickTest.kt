@@ -1,6 +1,7 @@
 package com.nxredux.mobile.skin
 
 import com.nxredux.mobile.options.PxRect
+import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.PadEvent
 import com.nxredux.mobile.ui.nx.SkinPadTouch
 import kotlinx.serialization.json.Json
@@ -119,5 +120,21 @@ class SkinStickTest {
         assertTrue(near(t.knobOffset(), 10f, 0f), "${t.knobOffset()}")
         t.move(1, 500f, 400f)
         assertTrue(near(t.knobOffset(), 0f, -20f), "${t.knobOffset()}")
+    }
+
+    @Test
+    fun diskCapPressesL1AndSlidesLikeAButton() {
+        // the FDS skin's DISK: fceumm's L (the one-press disk flip), the same press as a controller's L1
+        val events = mutableListOf<PadEvent>()
+        val t = SkinPadTouch({ events += it }, { _, _ -> }, {}).apply {
+            placement = SkinPlacement(spec(), 1f, emptyList(), emptyList(), listOf(
+                ctl("DISK", ControlShape.CIRCLE, 500f, 500f, 60f), ctl("B", ControlShape.CIRCLE, 700f, 500f, 60f)))
+        }
+        assertTrue(t.press(1, 500f, 500f))
+        assertEquals(listOf<PadEvent>(PadEvent.Down(NxButton.L1)), events)
+        t.move(1, 700f, 500f)
+        assertEquals(listOf(PadEvent.Down(NxButton.L1), PadEvent.Up(NxButton.L1), PadEvent.Down(NxButton.B)), events)
+        t.release(1)
+        assertEquals(PadEvent.Up(NxButton.B), events.last())
     }
 }
