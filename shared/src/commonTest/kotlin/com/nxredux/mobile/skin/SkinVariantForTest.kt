@@ -9,16 +9,16 @@ class SkinVariantForTest {
     @Test
     fun eachConsoleGetsItsButtonSet() {
         assertEquals(SkinVariant.DS, SkinChoice.variantFor("NDS", ds = true))
-        for (t in listOf("GB", "GBC", "SGB")) assertEquals(SkinVariant.GB, SkinChoice.variantFor(t, false), t)
+        for (t in listOf("GB", "GBC", "SGB", "FC")) assertEquals(SkinVariant.GB, SkinChoice.variantFor(t, false), t)
         for (t in listOf("GBA", "MGBA")) assertEquals(SkinVariant.GBA, SkinChoice.variantFor(t, false), t)
-        for (t in listOf("FC", "SFC", "MD", "PCE")) assertEquals(SkinVariant.SINGLE, SkinChoice.variantFor(t, false), t)
+        for (t in listOf("SFC", "MD", "PCE")) assertEquals(SkinVariant.SINGLE, SkinChoice.variantFor(t, false), t)
         for (t in listOf("PSP", "")) assertNull(SkinChoice.variantFor(t, false), t)
     }
 
     @Test
     fun fdsGetsTheFdsLayout() {
         assertEquals(SkinVariant.FDS, SkinChoice.variantFor("FDS", ds = false))
-        assertEquals(SkinVariant.SINGLE, SkinChoice.variantFor("FC", ds = false))   // the NES keeps the shared set
+        assertEquals(SkinVariant.GB, SkinChoice.variantFor("FC", ds = false))   // the NES: the Game Boy set, no DISK (fceumm's X / Y turbo on by default)
     }
 
     @Test

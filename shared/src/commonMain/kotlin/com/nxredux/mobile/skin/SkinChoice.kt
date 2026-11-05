@@ -48,7 +48,7 @@ object SkinChoice {
         else -> null
     }
 
-    private val GB_TAGS = setOf("GB", "GBC", "SGB")
+    private val GB_TAGS = setOf("GB", "GBC", "SGB", "FC")   // the NES too (user): A B, fceumm's turbo on TA / TB, no DISK
     private val GBA_TAGS = setOf("GBA", "MGBA")
     private val ARCADE_TAGS = setOf("FBN")
 
