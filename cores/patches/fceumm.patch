@@ -1,7 +1,7 @@
 # licence: modifies FCEUmm (https://github.com/libretro/libretro-fceumm), GPL-2.0 (its Copying file); this patch is
 # distributed under the same licence.
 diff --git a/src/drivers/libretro/libretro.c b/src/drivers/libretro/libretro.c
-index 5ecaa3f..07f9e19 100644
+index 5ecaa3f..e8e3237 100644
 --- a/src/drivers/libretro/libretro.c
 +++ b/src/drivers/libretro/libretro.c
 @@ -1834,7 +1834,14 @@ void retro_set_environment(retro_environment_t cb)
@@ -19,3 +19,101 @@ index 5ecaa3f..07f9e19 100644
  
     environ_cb(RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE,
           (void*)content_overrides);
+@@ -2043,8 +2050,13 @@ void retro_deinit (void)
+    stereo_filter_deinit();
+ }
+ 
++/* NX Redux: frames left until a one-press disk flip inserts the next side (0: none pending) */
++#define FDS_FLIP_FRAMES 60
++static int fds_flip_wait = 0;
++
+ void retro_reset(void)
+ {
++   fds_flip_wait = 0;
+    /* Reset clears the turbo toggle phase so the rapid-fire cycle starts
+     * at the same point every reset, matching how the core's other
+     * input-poll state behaves on power-cycle.  Without this, a held
+@@ -3119,13 +3131,35 @@ static void FCEUD_UpdateInput(void)
+       bool curR = input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R);
+       static bool prevL = false, prevR = false;
+ 
+-      if (curL && !prevL)
+-         FCEU_FDSSelect();          /* Swap FDisk side */
++      /* NX Redux: L with a disk in turns it over in one press: eject now,
++       * then select the next side and insert it FDS_FLIP_FRAMES later, so
++       * the game sees the drive go empty as on the real drive. With the
++       * drive empty L only steps the side (as before); L while a flip is
++       * pending is ignored; R cancels a pending flip, then acts as before. */
++      if (curL && !prevL && fds_flip_wait == 0)
++      {
++         if (FCEU_FDSInserted())
++         {
++            FCEU_FDSInsert(-1);     /* eject */
++            fds_flip_wait = FDS_FLIP_FRAMES;
++         }
++         else
++            FCEU_FDSSelect();       /* Swap FDisk side */
++      }
+       prevL = curL;
+ 
+       if (curR && !prevR)
++      {
++         fds_flip_wait = 0;
+          FCEU_FDSInsert(-1);        /* Insert or eject the disk */
++      }
+       prevR = curR;
++
++      if (fds_flip_wait > 0 && --fds_flip_wait == 0)
++      {
++         FCEU_FDSSelect();
++         FCEU_FDSInsert(-1);        /* insert the next side */
++      }
+    }
+ 
+    /* Handle internal palette switching */
+@@ -3419,6 +3453,9 @@ bool retro_serialize(void *data, size_t size)
+ 
+ bool retro_unserialize(const void * data, size_t size)
+ {
++   /* NX Redux: a pending disk flip belongs to the state left behind */
++   fds_flip_wait = 0;
++
+    /* Cannot load state while Game Genie
+     * screen is open */
+    if (geniestage == 1)
+@@ -4329,6 +4366,7 @@ bool retro_load_game_special(
+ 
+ void retro_unload_game(void)
+ {
++   fds_flip_wait = 0;
+ #ifdef HAVE_HDPACK
+    HDNes_Unload();
+    if (hd_patched_rom)
+diff --git a/src/fds.c b/src/fds.c
+index afff0e8..f027ef1 100644
+--- a/src/fds.c
++++ b/src/fds.c
+@@ -215,6 +215,10 @@ void FCEU_FDSEject(void) {
+ 	InDisk = 255;
+ }
+ 
++int FCEU_FDSInserted(void) {
++	return InDisk != 255;
++}
++
+ void FCEU_FDSSelect(void) {
+ 	if (InDisk != 255) {
+ 		FCEUD_DispMessage(RETRO_LOG_WARN, 2000, "Eject disk before selecting");
+diff --git a/src/fds.h b/src/fds.h
+index 190ddbe..faf5de3 100644
+--- a/src/fds.h
++++ b/src/fds.h
+@@ -9,6 +9,8 @@ uint32_t FDSROM_size(void);
+ void FCEU_FDSInsert(int oride);
+ void FCEU_FDSEject(void);
+ void FCEU_FDSSelect(void);
++/* NX Redux: whether a disk is in the drive (one-press side flip, libretro.c) */
++int FCEU_FDSInserted(void);
+ 
+ int FDSLoad(const char *name, FCEUFILE *fp);
+ 
