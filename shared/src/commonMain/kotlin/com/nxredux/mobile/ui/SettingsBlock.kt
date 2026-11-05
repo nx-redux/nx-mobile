@@ -47,16 +47,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.layout.SubcomposeLayout
-import androidx.compose.ui.layout.IntrinsicMeasurable
-import androidx.compose.ui.layout.IntrinsicMeasureScope
-import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.Measurable
-import androidx.compose.ui.layout.MeasureResult
-import androidx.compose.ui.layout.MeasureScope
-import androidx.compose.ui.layout.MultiContentMeasurePolicy
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.constrainHeight
-import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -176,79 +166,49 @@ fun SettingsSectionBlock(
  * [SETTINGS_SECTION_SIZE], one per 1.2 line, the [current] one in the accent (while [rowsFocused], the
  * [inkOpen][com.nxredux.mobile.ui.nx.NxColors.inkOpen] ink and a "›" after it, [openedLabel]) and the rest inkDim. No Back
  * word: B (or the back gesture) goes back. No pill, no underline, no plate; it never scrolls. A tap on a word calls
- * [onTap] with its index. [lines]: small status lines above the title, in hint at the title's size, 6 dp apart, as wide
- * as the title and words take: they wrap there and never widen the block. [markAll]: every word with its open mark (the
- * size probe, [WithSettingsWordBlockSize], so the block is as wide open).
+ * [onTap] with its index. [markAll]: every word with its open mark (the size probe, [WithSettingsWordBlockSize], so the
+ * block is as wide open).
  */
 @Composable
 fun SettingsWordBlock(
     title: String, words: List<String>, current: Int, rowsFocused: Boolean,
-    onTap: (Int) -> Unit, modifier: Modifier = Modifier,
-    lines: List<String> = emptyList(), markAll: Boolean = false,
+    onTap: (Int) -> Unit, modifier: Modifier = Modifier, markAll: Boolean = false,
 ) {
     val colors = LocalNxColors.current
-    val font = LocalNxFont.current
-    val scale = nxTextScale()   // Appearance → Text size
     val wordStyle = settingsWordStyle()
-    val small = NxTextSizes.menuInfo.pinned() * scale
-    Layout(
-        contents = listOf<@Composable () -> Unit>(
-            {
-                lines.forEach {
-                    Text(it, color = colors.hint, fontFamily = font, fontSize = small, modifier = Modifier.padding(bottom = SETTINGS_LABEL_GAP))
-                }
-            },
-            {
-                Column {
-                    Text(
-                        title, color = colors.hint, fontFamily = font, fontSize = small,
-                        maxLines = 1, softWrap = false, modifier = Modifier.padding(bottom = SETTINGS_LABEL_GAP),
-                    )
-                    words.forEachIndexed { i, word ->
-                        val color = when {
-                            i != current -> colors.inkDim
-                            rowsFocused -> colors.inkOpen
-                            else -> colors.accent
-                        }
-                        // The open word points at its page beside it ("Display ›"), as the in-game menu's open word.
-                        SettingsWord(openedLabel(word, (rowsFocused && i == current) || markAll), color, wordStyle) { onTap(i) }
-                    }
-                }
-            },
-        ),
-        modifier, WordBlockPolicy,
-    )
-}
-
-/**
- * [SettingsWordBlock]'s layout: the title and words at their own width, the status lines above them wrapped at that
- * width; the block that wide and as tall as both. Its intrinsics say the same, so the size probe agrees.
- */
-private object WordBlockPolicy : MultiContentMeasurePolicy {
-    override fun MeasureScope.measure(measurables: List<List<Measurable>>, constraints: Constraints): MeasureResult {
-        val (lineItems, blockItems) = measurables
-        val loose = constraints.copy(minWidth = 0, minHeight = 0)
-        val block = blockItems.map { it.measure(loose) }
-        val width = block.maxOfOrNull { it.width } ?: 0
-        val lines = lineItems.map { it.measure(Constraints(maxWidth = width)) }
-        val height = lines.sumOf { it.height } + block.sumOf { it.height }
-        return layout(constraints.constrainWidth(width), constraints.constrainHeight(height)) {
-            var y = 0
-            (lines + block).forEach { it.place(0, y); y += it.height }
+    Column(modifier) {
+        Text(
+            title, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = settingsSmallSize(),
+            maxLines = 1, softWrap = false, modifier = Modifier.padding(bottom = SETTINGS_LABEL_GAP),
+        )
+        words.forEachIndexed { i, word ->
+            val color = when {
+                i != current -> colors.inkDim
+                rowsFocused -> colors.inkOpen
+                else -> colors.accent
+            }
+            // The open word points at its page beside it ("Display ›"), as the in-game menu's open word.
+            SettingsWord(openedLabel(word, (rowsFocused && i == current) || markAll), color, wordStyle) { onTap(i) }
         }
     }
+}
 
-    override fun IntrinsicMeasureScope.minIntrinsicWidth(measurables: List<List<IntrinsicMeasurable>>, height: Int): Int =
-        measurables[1].maxOfOrNull { it.minIntrinsicWidth(height) } ?: 0
+/** The block's small text (its title, a root page's status lines): menuInfo under Appearance → Text size. */
+@Composable
+private fun settingsSmallSize(): TextUnit = NxTextSizes.menuInfo.pinned() * nxTextScale()
 
-    override fun IntrinsicMeasureScope.maxIntrinsicWidth(measurables: List<List<IntrinsicMeasurable>>, height: Int): Int =
-        measurables[1].maxOfOrNull { it.maxIntrinsicWidth(height) } ?: 0
-
-    override fun IntrinsicMeasureScope.minIntrinsicHeight(measurables: List<List<IntrinsicMeasurable>>, width: Int): Int =
-        measurables.sumOf { items -> items.sumOf { it.minIntrinsicHeight(width) } }
-
-    override fun IntrinsicMeasureScope.maxIntrinsicHeight(measurables: List<List<IntrinsicMeasurable>>, width: Int): Int =
-        measurables.sumOf { items -> items.sumOf { it.maxIntrinsicHeight(width) } }
+/**
+ * A root page's status lines ([SettingsRootScreen]): small lines in hint at the block title's size, 6 dp apart,
+ * wrapping at the width they're given.
+ */
+@Composable
+fun SettingsStatusLines(lines: List<String>, modifier: Modifier = Modifier) {
+    val colors = LocalNxColors.current
+    val font = LocalNxFont.current
+    val small = settingsSmallSize()
+    Column(modifier) {
+        lines.forEach { Text(it, color = colors.hint, fontFamily = font, fontSize = small, modifier = Modifier.padding(bottom = SETTINGS_LABEL_GAP)) }
+    }
 }
 
 /**
@@ -385,20 +345,19 @@ fun settingsWideBlockPage(screen: Screen): Boolean =
  */
 @Composable
 internal fun WithSettingsSectionSize(sections: List<SettingsSection>, content: @Composable (DpSize) -> Unit) =
-    WithSettingsWordBlockSize(SETTINGS_TITLE, sections.map { it.label }, emptyList(), content)
+    WithSettingsWordBlockSize(SETTINGS_TITLE, sections.map { it.label }, content)
 
 /**
- * [content] given a word block's size ([SettingsWordBlock] for [title], [words] and [lines]): its widest word or title
- * as drawn, open marks included (the lines wrap inside it, never widen it), and its height with the lines; measured in
- * the same pass (no frame late).
+ * [content] given a word block's size ([SettingsWordBlock] for [title] and [words]): its widest word or title as
+ * drawn, open marks included, and its height; measured in the same pass (no frame late).
  */
 @Composable
-internal fun WithSettingsWordBlockSize(title: String, words: List<String>, lines: List<String>, content: @Composable (DpSize) -> Unit) {
+internal fun WithSettingsWordBlockSize(title: String, words: List<String>, content: @Composable (DpSize) -> Unit) {
     // The content slot is kept while neither the size nor [content] changes, so a remeasure does not recompose the stage.
     val slot = remember { SectionSizeSlot() }
     SubcomposeLayout { constraints ->
         val probe = subcompose("probe") {
-            SettingsWordBlock(title, words, current = 0, rowsFocused = false, onTap = {}, lines = lines, markAll = true)
+            SettingsWordBlock(title, words, current = 0, rowsFocused = false, onTap = {}, markAll = true)
         }
         val width = probe.maxOfOrNull { it.maxIntrinsicWidth(constraints.maxHeight) } ?: 0
         val height = probe.maxOfOrNull { it.minIntrinsicHeight(width) } ?: 0

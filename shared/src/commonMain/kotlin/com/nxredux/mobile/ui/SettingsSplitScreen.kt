@@ -76,8 +76,8 @@ internal fun SettingsSplitScreen(state: AppState, s: Screen, selection: State<Li
 }
 
 /**
- * Settings' wide stage: one stage, nothing above but the small mark (the background's). The word block ([title],
- * [words] and the status [lines], [SettingsRootScreen]) rests bottom-left; the page is the rows block
+ * Settings' wide stage: one stage, nothing above but the small mark (the background's). The word block ([title] and
+ * [words], [SettingsRootScreen]) rests bottom-left, the status [lines] at the left pane's top; the page is the rows block
  * ([LocalSettingsBlock], while [blockPage]) in a fixed frame at the right ([settingsFrameWidth], [settingsFrameLeft]: up
  * to 560 dp, its right edge the gutter in), on the word block's baseline and growing up to 24 dp under the top, then
  * scrolling; without [blockPage] the page draws whole from [SETTINGS_SPLIT_LEFT]. On the [root] the words have the
@@ -94,7 +94,7 @@ internal fun SettingsStage(
     preview: @Composable () -> Unit, page: @Composable () -> Unit, over: @Composable () -> Unit = {},
 ) {
     val gutter = settingsPlateEnd()   // the right side's plate edge: the frame's and the picture's right edge
-    WithSettingsWordBlockSize(title, words, lines) { block ->
+    WithSettingsWordBlockSize(title, words) { block ->
         val sectionRight = settingsSectionStart() + block.width
         Box(Modifier.fillMaxSize()) {
             CompositionLocalProvider(LocalNxHintBarKeepHeight provides true) {
@@ -107,7 +107,7 @@ internal fun SettingsStage(
                     Column(Modifier.width(if (blockPage) maxOf(left, sectionRight + gutter) else left).fillMaxHeight()) {
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             // On a page it has the focus: the current word drops to the open grey, with its "›" ([openedLabel]).
-                            WithCurrent(current) { SettingsRootScreen(title, words, lines, it, onWordTap, rowsFocused = !root) }
+                            WithCurrent(current) { SettingsRootScreen(title, words, lines, it, onWordTap, rowsFocused = !root, clearMark = false) }
                         }
                         // The root shows its A/B hints here; a page shows its own on the right. Either way this bar keeps the room, so the baselines meet.
                         NxHintBar(if (root) SETTINGS_ROOT_HINTS else emptyList(), onHint = onHint)

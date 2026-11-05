@@ -51,21 +51,17 @@ data class ArtworkSettingRow(val kind: ArtworkSettingKind, val label: String, va
 data class ResetScope(val label: String, val tags: Set<String>?)
 
 /**
- * Which art sources this build and the user's keys turn on, for the Artwork page and Settings: [ss] the build's
+ * Which art sources this build and the user's keys turn on, for Artwork → Settings: [ss] the build's
  * credentials, [tgdb] TheGamesDB has the user's key and [tgdbBuilt] the engine has the source, [sgdb] the
- * build has SteamGridDB and [sgdbKey] the user's key is set; [labels] the enabled sources' names in fetch order (the
- * credit line).
+ * build has SteamGridDB and [sgdbKey] the user's key is set.
  */
 data class ArtSources(
     val ss: Boolean = false, val tgdb: Boolean = false, val sgdb: Boolean = false, val sgdbKey: Boolean = false,
-    val labels: List<String> = emptyList(), val tgdbBuilt: Boolean = false,
+    val tgdbBuilt: Boolean = false,
 )
 
-/** The Artwork page's detail lines: counts, the job, stopped sources' notes, the credit. */
-internal fun artworkDetails(
-    available: Boolean, games: Int, withArt: Int, missing: Int, state: ScrapeState, sources: ArtSources,
-): List<String> = buildList {
-    add("${gamesLabel(games)} · $withArt with art · $missing missing")
+/** The Artwork page's status lines: the job and stopped sources' notes (none while idle), or why the build can't fetch. */
+internal fun artworkDetails(available: Boolean, state: ScrapeState): List<String> = buildList {
     if (!available) { add("Artwork fetching isn't available in this build."); return@buildList }
     // No per-source account lines (sign-in, quota, keys): the Account page has them, and here they cost rows on a narrow screen.
     when (state.phase) {
@@ -74,12 +70,7 @@ internal fun artworkDetails(
         else -> Unit
     }
     state.notes.values.forEach(::add)   // each stopped source's note
-    artCredit(sources.labels)?.let(::add)
 }
-
-/** The credit line: "Source: a - b - c" over the enabled sources, short for a narrow screen; null with none. */
-internal fun artCredit(sources: List<String>): String? =
-    sources.takeIf { it.isNotEmpty() }?.joinToString(" - ", prefix = "Source: ")
 
 internal fun quotaText(q: SsQuota): String = "${groupThousands(q.today)} / ${groupThousands(q.max)}"
 

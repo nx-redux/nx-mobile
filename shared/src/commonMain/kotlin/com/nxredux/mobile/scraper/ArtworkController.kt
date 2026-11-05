@@ -73,8 +73,6 @@ class ArtworkController(
     val ssAvailable: Boolean get() = engine.ss?.enabled == true
     /** TheGamesDB has the user's key (its allowance line). */
     val tgdbAvailable: Boolean get() = engine.tgdb?.enabled == true
-    /** The enabled sources' names in fetch order (the credit line). */
-    val sourceLabels: List<String> get() = engine.sources.filter { it.enabled }.map { it.label }
 
     /** An enabled source knows [ref]'s system (an excluded tag never). */
     fun fetchable(ref: LibraryGameRef): Boolean = engine.sourcesFor(ref).isNotEmpty()

@@ -16,10 +16,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-/** What [controller]'s build and keys turn on ([artworkDetails], Settings). */
+/** What [controller]'s build and keys turn on (Settings). */
 internal fun artSources(controller: ArtworkController) = ArtSources(
     ss = controller.ssAvailable, tgdb = controller.tgdbAvailable, sgdb = controller.sgdbAvailable,
-    sgdbKey = controller.sgdbKeySet, labels = controller.sourceLabels, tgdbBuilt = controller.tgdbSupported,
+    sgdbKey = controller.sgdbKeySet, tgdbBuilt = controller.tgdbSupported,
 )
 
 /** What the Artwork pages need from [AppState]: its notice, the Tools page and the library as it stands. */
@@ -71,29 +71,10 @@ internal class ArtworkScreenController(
 
     // --- The Artwork page ---
 
-    /** The page's game counts and what they were counted from ([ArtworkScreenHost.gamesInputs], the sources, Mix). */
-    private class PageCounts(val inputs: List<Any?>, val sources: ArtSources, val mix: Boolean, val games: Int, val withArt: Int, val missing: Int)
-    private var counts: PageCounts? = null
-
-    /**
-     * The counts over the whole library, counted again only when the library, the sources or Mix (the has-art
-     * rule) changed: a job emits per item (progress, quota), and most emissions leave them as they were.
-     */
-    private fun counts(): PageCounts {
-        val inputs = host.gamesInputs()
-        val sources = artSources(controller)
-        val mix = settings.artMix
-        counts?.takeIf { c -> c.sources == sources && c.mix == mix && c.inputs.size == inputs.size && c.inputs.indices.all { c.inputs[it] === inputs[it] } }?.let { return it }
-        // Only games in consoles an art source knows (Unassigned and unsupported left out): games = with art + missing.
-        val games = host.games().filter { controller.fetchable(it) }
-        return PageCounts(inputs, sources, mix, games.size, games.count { it.have.complete }, controller.missingCount(games)).also { counts = it }
-    }
-
     /** The page as it stands; [progress]: with its Progress row even before the job is there (beside a starting fetch). */
     private fun page(progress: Boolean = false): Screen.Artwork {
-        val c = counts()
         val state = controller.state.value
-        val details = artworkDetails(controller.available, c.games, c.withArt, c.missing, state, c.sources)
+        val details = artworkDetails(controller.available, state)
         return Screen.Artwork(details, artworkRows(controller.available, state, settings.artReplaceExisting, progress))
     }
 
@@ -123,7 +104,7 @@ internal class ArtworkScreenController(
         selection.value = (if (at >= 0) ListSelection(at, p.rows.size) else selection.value).clampedTo(p.rows.size)
     }
 
-    /** The library's art changed outside a fetch ([AppState]'s art check): the open page's counts follow. */
+    /** The library's art changed outside a fetch ([AppState]'s art check): Fetch by console's counts follow. */
     fun libraryChanged() = onState(controller.state.value)
 
     /**

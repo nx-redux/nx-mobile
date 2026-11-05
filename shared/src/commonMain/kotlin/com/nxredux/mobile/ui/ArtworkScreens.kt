@@ -64,7 +64,7 @@ internal fun ArtworkPageBody(
 ) {
     fun hints(h: List<Hint>) = if (focused) h else emptyList()
     when (screen) {
-        // The Settings root's look: the actions as its large words, the details as status lines above "Artwork"; a tap opens at once.
+        // The Settings root's look: the actions as its large words, the details as status lines at the top; a tap opens at once.
         is Screen.Artwork -> SettingsRootScreen(
             ARTWORK_TITLE, screen.rows.map { it.label }, screen.details, selectedIndex,
             onTap = { onSelect(it); onOpen(it) }, modifier = modifier, hintBar = focused, onHint = onHint,

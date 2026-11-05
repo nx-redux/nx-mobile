@@ -1,13 +1,13 @@
 package com.nxredux.mobile.ui
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxHintBar
@@ -30,9 +30,11 @@ fun SettingsMenuScreen(
 )
 
 /**
- * A root page in the Settings style (Settings, Tools → Artwork): its word block ([SettingsWordBlock] with [title],
- * [words] and the status [lines] above the title) alone, anchored bottom-left at the gutter and [SETTINGS_BLOCK_BOTTOM]
- * up, the rest of the screen empty (the mark is the background's, [SettingsBackground]). A tap on a word calls [onTap];
+ * A root page in the Settings style (Settings, Tools → Artwork): its word block ([SettingsWordBlock] with [title] and
+ * [words]) anchored bottom-left at the gutter and [SETTINGS_BLOCK_BOTTOM] up; the status [lines] ([SettingsStatusLines])
+ * at the top left, level with the mark ([SETTINGS_MARK_TOP] down) and kept clear of it while [clearMark] (the wide
+ * stage's left pane never reaches it); on a short screen the lines push the block down, never draw over it. The rest
+ * of the screen is empty (the mark is the background's, [SettingsBackground]). A tap on a word calls [onTap];
  * A opens, B goes back to Tools. [rowsFocused]: the two-pane stage's left pane while its page has the focus (the current
  * word drops to the open grey with a "›"). [hintBar]: draw the root's A/B hints ([SETTINGS_ROOT_HINTS]) below the block
  * ([onHint] answers a tap on one); the wide stage draws its own bar, so it passes false.
@@ -42,14 +44,21 @@ fun SettingsRootScreen(
     title: String, words: List<String>, lines: List<String>, selectedIndex: Int,
     onTap: (Int) -> Unit, modifier: Modifier = Modifier,
     rowsFocused: Boolean = false, hintBar: Boolean = false, onHint: ((NxButton) -> Unit)? = null,
+    clearMark: Boolean = true,
 ) {
     Column(modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        Column(Modifier.weight(1f).fillMaxWidth()) {
+            if (lines.isNotEmpty()) SettingsStatusLines(
+                lines,
+                Modifier.padding(
+                    start = settingsSectionStart(), top = SETTINGS_MARK_TOP,
+                    end = settingsPlateEnd() + if (clearMark) SETTINGS_MARK + SETTINGS_MARK_TOP else 0.dp,
+                ),
+            )
+            Spacer(Modifier.weight(1f))
             SettingsWordBlock(
                 title, words, selectedIndex, rowsFocused, onTap,
-                Modifier.align(Alignment.BottomStart)
-                    .padding(start = settingsSectionStart(), end = settingsPlateEnd(), bottom = SETTINGS_BLOCK_BOTTOM),
-                lines = lines,
+                Modifier.padding(start = settingsSectionStart(), end = settingsPlateEnd(), bottom = SETTINGS_BLOCK_BOTTOM),
             )
         }
         if (hintBar) NxHintBar(SETTINGS_ROOT_HINTS, onHint = onHint)
