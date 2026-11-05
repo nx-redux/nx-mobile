@@ -66,7 +66,7 @@ interface ScraperCredentials {
 /**
  * Which kinds of art a game has: [box] = boxart or box2d (a SteamGridDB grid is written as the 2D box); a
  * [screenshot] (a SteamGridDB hero is written as one: [heroShot]). It has art ([complete]) with both, and with its [mix]
- * when [needMix] (Generate mix on, [ArtExtras.mix]) and it has something to make one from ([mixInput]); a fetch asks
+ * when [needMix] (Mix on, [ArtExtras.mix]) and it has something to make one from ([mixInput]); a fetch asks
  * only for what it lacks. [box2d] and [wheel] (the optional extras) never count toward it beyond the box. [boxart]: the
  * 3D box (by default any [box]).
  */

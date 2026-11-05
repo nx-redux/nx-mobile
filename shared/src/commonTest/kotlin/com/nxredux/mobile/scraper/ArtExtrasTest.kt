@@ -21,9 +21,10 @@ class ArtExtrasTest {
         val written = mutableListOf<Pair<String, ArtOrigin?>>()
         val warns = mutableListOf<String>()
         val logged = mutableSetOf<String>()
+        val log = FakeLoggedArt(logged)
         val engine = ScrapeEngine(
-            http, FakeFitter(), fs, Scrape.home, sources.toList(), onArt = { p, a -> arts += p to a }, onWritten = { written += it },
-            logged = FakeLoggedArt(logged), extras = { extras }, pixels = pixels, warn = { warns += it },
+            http, FakeFitter(), fs, Scrape.home, sources.toList(), onArt = { p, a -> arts += p to a }, onWritten = { written += it; log.record(it) },
+            logged = log, extras = { extras }, pixels = pixels, warn = { warns += it },
         )
 
         suspend fun run(games: List<LibraryGameRef>, replace: Boolean = false) =
@@ -38,6 +39,8 @@ class ArtExtrasTest {
     private val all = setOf(ArtSlot.BOX_3D, ArtSlot.BOX_2D, ArtSlot.SCREENSHOT, ArtSlot.WHEEL)
     private fun png(b: Int) = HttpResult(200, byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, b.toByte()))
     private fun ss() = FakeSource("ss", slots = all)
+    /** A source with the mix slot (ScreenScraper's). */
+    private fun ssMix() = FakeSource("ss", slots = all + ArtSlot.MIX)
     private val media = "Home/Roms/GB/.media"
 
     @Test fun extrasOffKeepTheOldFlow() = runTest {
@@ -194,8 +197,8 @@ class ArtExtrasTest {
         assertTrue(ArtExtras(wheel = true).wantWheel)
     }
 
-    @Test fun mixOnFetchesOnlyTheWheelAndMakesTheMixFromTheFilesOnDisk() = runTest {
-        val rig = Rig(ss().apply {
+    @Test fun aGameLackingItsMixAndWheelAsksForBothThenBuildsTheMixWhenNoneCame() = runTest {
+        val rig = Rig(ssMix().apply {
             offer("Tetris.gb", ArtSlot.BOX_3D, "https://a/3d"); offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://a/ss"); offer("Tetris.gb", ArtSlot.WHEEL, "https://a/w")
         }, extras = ArtExtras(wheel = true, mix = true))
         rig.put("boxart", "Tetris.png", byteArrayOf(11))()
@@ -203,7 +206,7 @@ class ArtExtrasTest {
         rig.http.on("https://a/w", png(13))
         val item = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART))).items.single()   // has art, but no mix: fetched
         assertEquals(ItemStatus.DONE to "ss", item.status to item.reason)
-        assertEquals(setOf(ArtSlot.WHEEL), rig.sources[0].asked.single().second)   // the mix needs the wheel (Wheel off)
+        assertEquals(setOf(ArtSlot.WHEEL, ArtSlot.MIX), rig.sources[0].asked.single().second)   // no mix offered: built
         assertEquals(listOf("https://a/w"), rig.http.calls)                        // no box or screenshot downloaded again
         assertEquals(listOf(listOf<Byte>(12), listOf<Byte>(11), png(13).body!!.toList()), rig.pixels.decoded.map { it.toList() })
         assertContentEquals(FakePixels.MIX_PNG, rig.fs.bytesAt("$media/mix/Tetris.png"))
@@ -248,24 +251,35 @@ class ArtExtrasTest {
 
     @Test fun aGameLackingOnlyItsMixWithNothingToMakeItFromIsNotFound() = runTest {
         // A box and a screenshot that do not decode: nothing to make the mix from.
-        val rig = Rig(ss(), extras = ArtExtras(mix = true))
+        val a = ssMix()   // asked for the mix, has none
+        val rig = Rig(a, extras = ArtExtras(mix = true))
         rig.pixels.undecodable = { true }
         rig.put("boxart2d", "Tetris.jpg", byteArrayOf(1))()
         rig.put("screenshot", "Tetris.png", byteArrayOf(2))()
         val item = rig.run(listOf(tetris.copy(have = ArtHave(box = true, box2d = true, screenshot = true)))).items.single()
         assertEquals(ItemStatus.NOT_FOUND to ScrapeEngine.NO_MIX, item.status to item.reason)
+        assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.MIX)), a.asked)
         assertEquals(listOf(listOf<Byte>(2), listOf<Byte>(1)), rig.pixels.decoded.map { it.toList() })
         assertNull(rig.fs.bytesAt("$media/mix/Tetris.png"))
         assertEquals(2, rig.warns.size)
     }
 
-    @Test fun replaceRemakesTheMix() = runTest {
-        val a = ss().apply { offer("Tetris.gb", ArtSlot.BOX_3D, "https://a/3d"); offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://a/ss") }
-        val rig = Rig(a, extras = ArtExtras(mix = true))
+    @Test fun replaceRemakesTheAppsMixButNotAHandPlacedOne() = runTest {
+        fun source() = ss().apply { offer("Tetris.gb", ArtSlot.BOX_3D, "https://a/3d"); offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://a/ss") }
+        val game = tetris.copy(have = ArtHave(box = true, screenshot = true, mix = true))
+        val rig = Rig(source(), extras = ArtExtras(mix = true))
         rig.put("mix", "Tetris.png", byteArrayOf(9))()
+        rig.logged += "Roms/GB/.media/mix/Tetris.png"
+        rig.log.origins["Roms/GB/.media/mix/Tetris.png"] = ArtOrigin(ScrapeEngine.MIX_ORIGIN)
         rig.http.on("https://a/", png(1))
-        rig.run(listOf(tetris.copy(have = ArtHave(box = true, screenshot = true, mix = true))), replace = true)
+        rig.run(listOf(game), replace = true)
         assertContentEquals(FakePixels.MIX_PNG, rig.fs.bytesAt("$media/mix/Tetris.png"))
+        // Not in the log: hand-placed, kept (the build never overwrites it, Replace included).
+        val rig2 = Rig(source(), extras = ArtExtras(mix = true))
+        rig2.put("mix", "Tetris.png", byteArrayOf(9))()
+        rig2.http.on("https://a/", png(1))
+        rig2.run(listOf(game), replace = true)
+        assertContentEquals(byteArrayOf(9), rig2.fs.bytesAt("$media/mix/Tetris.png"))
     }
 
     @Test fun theLegacyBox2dFolderIsStillReadAndBoxart2dWins() = runTest {

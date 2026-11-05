@@ -111,7 +111,7 @@ class ArtworkController(
     private var savedDone = 0
     private var savedAt = 0L
 
-    /** Games without art (no box or no background, or no mix with Generate mix on); each is asked only for what it lacks. */
+    /** Games without art (no box or no background, or no mix with Mix on); each is asked only for what it lacks. */
     fun fetchMissing(): Job? = enqueue(false) { !it.have.complete }
     fun fetchConsole(tags: Set<String>, replaceExisting: Boolean = false): Job? {
         val up = tags.mapTo(HashSet()) { it.uppercase() }

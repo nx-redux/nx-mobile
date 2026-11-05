@@ -79,7 +79,7 @@ class ScrapeEngine(
         const val NO_SCREENSHOT = "no screenshot"
         /** Partial: a screenshot but no box. */
         const val NO_BOX = "no box"
-        /** Partial or Not found: Generate mix is on and no mix could be made (the game lacked only that). */
+        /** Partial or Not found: Mix is on and no mix was downloaded or could be made (the game lacked only that). */
         const val NO_MIX = "no mix"
         /** The written-art log's source of a mix (made on the device, not downloaded). */
         const val MIX_ORIGIN = "device"
@@ -198,8 +198,9 @@ class ScrapeEngine(
                 val known = sourcesFor(ref)
                 if (known.isEmpty()) { set(i, ItemStatus.SKIPPED, NO_SOURCE); continue }
                 if (hasArt(ref) && !replace && !wide) { set(i, ItemStatus.SKIPPED, HAS_ART); continue }
-                // A game lacking only its mix is still made one from its files on disk (no source needed).
-                if (known.all { it.id in stopped } && !(lacksOnlyMix(ref) && !replace)) { blocked = true; continue }
+                // A game lacking only its mix, with no source that has mixes, is made one from its files on disk (no
+                // request); one ScreenScraper would be asked waits while it is stopped, as any other.
+                if (known.all { it.id in stopped } && !(mixOnlyLocal(ref, known) && !replace)) { blocked = true; continue }
                 set(i, ItemStatus.SEARCHING)
                 val downloading: suspend () -> Unit = { set(i, ItemStatus.DOWNLOADING) }
                 val result = if (ref.android) scrapeAndroid(ref, stopped, replace, wide, downloading, stop, found) else scrape(ref, known, stopped, replace, wide, listings, downloading, stop, found)
@@ -330,11 +331,15 @@ class ScrapeEngine(
      * without the setting); with the wheel wanted ([ArtExtras.wantWheel]) its wheel, from the first source that has
      * one, a [ArtSource.wheelLast] source's only once every other has been asked (it is asked for the wheel only beside other slots in turn, and for
      * the wheel alone only when no other source had one). Neither is ever a reason to fetch a game nor counts toward
-     * DONE. With Generate mix on, a game without a mix is fetched (only for what it lacks, so a game with a screenshot
-     * and a box downloads neither again) and its mix made from what it has then ([makeMix]); a mix that cannot be made
-     * never fails the game, unless the mix was all it lacked ([NO_MIX]). A game with no screenshot or box to make one
-     * from (had or fetched in this run) wants none ([ArtHave.mixInput]); the app's own mix is made again when this
-     * game's run wrote one of its inputs ([MIX_INPUTS]).
+     * DONE. With Mix on, a game without a mix is fetched (only for what it lacks, so a game with a screenshot and a box
+     * asks for the mix alone): each source with the mix slot (ScreenScraper's) is asked for it in the same call as the
+     * rest, and its mix is placed on the mix canvas ([fitFor]). Only when no source had one, the app builds it from
+     * what the game has then ([makeMix]), never over a downloaded, picked or hand-placed mix (Replace included), and not
+     * while a source with the mix slot is stopped (the game is asked again later, a game lacking only its mix waits). A
+     * mix that cannot be had never fails the game, unless the mix was all it lacked ([NO_MIX]). A game with no
+     * screenshot or box to make one from (had or fetched in this run) wants none ([ArtHave.mixInput]); a picked mix is
+     * never fetched or rebuilt. An app-built mix ([appMix]) is built again when this game's run wrote one of its inputs
+     * ([MIX_INPUTS]); a downloaded one never is.
      */
     private suspend fun scrape(
         ref: LibraryGameRef, known: List<ArtSource>, stopped: Set<String>, replace: Boolean, wide: Boolean, ls: Listings,
@@ -361,6 +366,8 @@ class ScrapeEngine(
          * under Replace a 3D box is still fetched beside it ([want3d], never counted), as the 3D box is its own slot.
          */
         var want3d = false
+        /** The mix is still wanted: set below, cleared once a source's mix is written or the mix is picked. */
+        var wantMix = false
         var picks = picked(ref.gamePath)
         fun applyPicks(p: Set<ArtSlot>) {
             if (ArtSlot.SCREENSHOT in p) needShot = false
@@ -370,6 +377,7 @@ class ScrapeEngine(
                 want2d = false
             }
             if (ArtSlot.WHEEL in p) wantWheel = false
+            if (ArtSlot.MIX in p) wantMix = false
         }
         applyPicks(picks)
         /** The picks at the game's start: a pick made since has changed the folder under this run's listings. */
@@ -377,8 +385,10 @@ class ScrapeEngine(
         val mixOn = ex.mix && pixels != null
         // A missing mix (any under Replace), only for a game with a screenshot or a box to make it from, had or fetched
         // here.
-        val wantMix = mixOn && (replace || !(ref.have.mix || onDisk.mix)) &&
+        wantMix = mixOn && ArtSlot.MIX !in picks && (replace || !(ref.have.mix || onDisk.mix)) &&
             (ref.have.mixInput || onDisk.mixInput || needBox || needShot)
+        /** A source's mix was written for this game (never rebuilt by the app). */
+        var mixFetched = false
         if (!replace && !wide && !needBox && !needShot && !wantMix) {
             withContext(NonCancellable) { onArt(ref.gamePath, indexArt(ref, before, before)) }
             return ItemStatus.SKIPPED to HAS_ART
@@ -475,6 +485,7 @@ class ScrapeEngine(
                     // A wheel-last source: never asked in turn for the wheel alone (it would spend calls before the
                     // others), unless the wide pass asks it now anyway.
                     if (wantWheel && ArtSlot.WHEEL in src.slots && (!src.wheelLast || isNotEmpty() || wide)) add(ArtSlot.WHEEL)
+                    if (wantMix && ArtSlot.MIX in src.slots) add(ArtSlot.MIX)
                 }
                 // The wide pass's slots ride on this call (a second lookup could cost another request): their hits are
                 // only recorded, the writes below stay gated by what the game lacks, and a source asked only for them
@@ -516,12 +527,16 @@ class ScrapeEngine(
                         heroHere = slot == ArtSlot.HERO; standInOnly = heroHere; writers += src.shortLabel
                     }
                 }
+                // The source's mix, placed on the mix canvas; the app builds none then.
+                if (!storageFailed && wantMix) firstWritten(hits.filter { it.slot == ArtSlot.MIX })?.let {
+                    wantMix = false; mixFetched = true; writers += src.shortLabel
+                }
                 if (!storageFailed && wantWheel) {
                     val wheels = hits.filter { it.slot == ArtSlot.WHEEL }
                     if (src.wheelLast) { if (wheels.isNotEmpty()) { laterWheels += src.shortLabel to wheels; wheelsOffered += src.id } }
                     else if (firstWritten(wheels) != null) { wantWheel = false; writers += src.shortLabel }
                 }
-                if (storageFailed || (!needBox && !needShot && !want2d && !want3d && !wantWheel && !heroHere)) break
+                if (storageFailed || (!needBox && !needShot && !want2d && !want3d && !wantWheel && !heroHere && !wantMix)) break
             }
             for ((label, wheels) in laterWheels) {
                 if (storageFailed || !wantWheel) break
@@ -550,12 +565,17 @@ class ScrapeEngine(
             }
         } catch (p: JobPause) { paused = p }
         if (options.isNotEmpty() || wide) withContext(NonCancellable) { onOptions(ref.gamePath, options, wide && wideDone) }
-        // The mix from what the game has after the fetch, once nothing paused (a paused game is fetched again, its mix
-        // with it). The app's own mix (logged) is made again when this run wrote one of its inputs, so one made from
-        // partial art is not left stale; a hand-placed one only under Replace.
-        val remakeMix = mixOn && !wantMix && wrote.any { it in MIX_INPUTS } && appMix(target, ls)
-        val madeMix = (wantMix || remakeMix) && paused == null && !storageFailed && makeMix(ref, target, before, fresh, ls)
+        // No source's mix: the app builds one from what the game has after the fetch, once nothing paused (a paused
+        // game is fetched again, its mix with it) and no source with mixes stopped (it is asked again later). Never over
+        // a downloaded, picked or hand-placed mix, Replace included: only where there is none or the app built it.
+        val mixStopped = known.any { ArtSlot.MIX in it.slots && it.id in stopped }
+        val buildMix = wantMix && !mixStopped && (before.mix == null || appMix(target, ls))
+        // An app-built mix is built again when this run wrote one of its inputs, so one made from partial art is not
+        // left stale; a downloaded or picked one never is.
+        val remakeMix = mixOn && !wantMix && !mixFetched && ArtSlot.MIX !in picks && wrote.any { it in MIX_INPUTS } && appMix(target, ls)
+        val madeMix = (buildMix || remakeMix) && paused == null && !storageFailed && makeMix(ref, target, before, fresh, ls)
         if (madeMix) { attempted = true; wrote += ArtSlot.MIX }
+        val mixDone = mixFetched || madeMix
         if (attempted) withContext(NonCancellable) {
             // Whatever is on disk after the writes (a failed replace may have removed the old file), an extra's own
             // media kept; listed again when a pick wrote meanwhile (this run's listings do not know its file).
@@ -570,9 +590,10 @@ class ScrapeEngine(
         // Under Replace, a real screenshot kept because only a hero came is the game's screenshot, not a missing one.
         if (needShot && heroWithheld) { needShot = false; got++ }
         return when {
-            got == wantedCount && (wantedCount > 0 || !wantMix || madeMix) -> ItemStatus.DONE to doneReason(writers, standInOnly)
+            got == wantedCount && (wantedCount > 0 || !wantMix || mixDone) -> ItemStatus.DONE to doneReason(writers, standInOnly)
             got > 0 || writers.isNotEmpty() -> ItemStatus.PARTIAL to (if (needBox) NO_BOX else if (needShot) NO_SCREENSHOT else NO_MIX)
-            wantedCount == 0 -> ItemStatus.NOT_FOUND to NO_MIX   // only the mix was wanted, and none could be made
+            // Only the mix was wanted, and none came or could be made (a stopped source with mixes: it waits, below).
+            wantedCount == 0 && !mixStopped -> ItemStatus.NOT_FOUND to NO_MIX
             stoppedHere == asked && stoppedHere + stoppedBefore > 0 -> null
             offered -> ItemStatus.NOT_FOUND to "No artwork"
             else -> ItemStatus.NOT_FOUND to null
@@ -596,7 +617,7 @@ class ScrapeEngine(
      * the hit kind's cap (a grid's, a hero's), replacing the slot's file in every extension, hand-placed or not (only
      * the user's pick may); a 2D box also drops the app's own legacy `box2d/` file. Logged with [option]'s origin (a
      * SteamGridDB hero in the screenshot slot is one: [ArtRefs.heroShot]); an extra folder's game gets it in its home
-     * mirror, never in the folder. The app's own mix is made again when Generate mix is on and a mix input changed. The
+     * mirror, never in the folder. An app-built mix ([appMix]) is built again when Mix is on and a mix input changed. The
      * art for the index ([indexArt], the pick winning its slot); null when the image cannot be read or the write failed.
      */
     suspend fun writePick(ref: LibraryGameRef, slot: ArtSlot, image: ByteArray, option: ArtOption): ArtRefs? {
@@ -666,24 +687,31 @@ class ScrapeEngine(
         }
     }
 
-    /** [t]'s mix on disk is the app's own (its best file is in the written-art log), not one the user placed. */
+    /**
+     * [t]'s mix on disk was built by the app: its best file's written-art origin is [MIX_ORIGIN]. A downloaded or picked
+     * mix (logged with its source) and a hand-placed one (not logged) are not.
+     */
     private suspend fun appMix(t: ArtTarget, ls: Listings): Boolean = guard {
         val segments = t.segments(ArtSlot.MIX)
         val dir = source.findDir(home, segments) ?: return@guard null
         val e = filesIn(dir, t.base, ls).firstOrNull() ?: return@guard null
-        logged.contains((segments + e.name).joinToString("/"))
+        logged.origin((segments + e.name).joinToString("/"))?.source == MIX_ORIGIN
     } ?: false
 
     /**
-     * A ROM's art as the host saw it ([ArtHave.complete], the mix needed when Generate mix is on and a mix can be made);
+     * A ROM's art as the host saw it ([ArtHave.complete], the mix needed when Mix is on and a mix can be made);
      * an Android game's stored screenshot as the store has it.
      */
     private fun hasArt(ref: LibraryGameRef): Boolean =
         if (ref.android) guard { androidArt?.art(ref.fileName, ArtSlot.SCREENSHOT) } != null
         else ref.have.copy(needMix = extras().mix && pixels != null).complete
 
-    /** A ROM with a box and a screenshot whose mix is all it lacks ([hasArt] false): made without asking any source. */
-    private fun lacksOnlyMix(ref: LibraryGameRef): Boolean = !ref.android && ref.have.box && ref.have.screenshot && !hasArt(ref)
+    /**
+     * A ROM with a box and a screenshot whose mix is all it lacks ([hasArt] false), and none of [known] has mixes (no
+     * ScreenScraper): its mix is built from its files without asking any source.
+     */
+    private fun mixOnlyLocal(ref: LibraryGameRef, known: List<ArtSource>): Boolean =
+        !ref.android && ref.have.box && ref.have.screenshot && !hasArt(ref) && known.none { ArtSlot.MIX in it.slots }
 
     /**
      * An Android game: ScreenScraper's lookup ([ScreenScraperSource.androidScreenshot]), its `ss` screenshot fitted to
