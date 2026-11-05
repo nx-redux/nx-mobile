@@ -530,6 +530,27 @@ index e602bd3..b76b22c 100644
      }
  }
  
+diff --git a/src/core/savestate.cpp b/src/core/savestate.cpp
+index 16c3db6..dd23075 100644
+--- a/src/core/savestate.cpp
++++ b/src/core/savestate.cpp
+@@ -299,10 +299,12 @@ bool System::LoadStateBuffer(std::vector<u8> buffer) {
+     }
+     std::string revision = fmt::format("{:02x}", fmt::join(header.revision, ""));
+     if (revision != Common::g_scm_rev) {
+-        LOG_ERROR(Core,
+-                  "Save state file created from a different revision (core: {}, savestate: {})",
+-                  Common::g_scm_rev, revision);
+-        return false;
++        // nx-mobile: a core update changes the revision, which would refuse every state players already have.
++        // Try it anyway; a state the new code can't read throws, and retro_unserialize reports the load as failed.
++        LOG_WARNING(Core,
++                    "Save state file created from a different revision (core: {}, savestate: {}), "
++                    "loading anyway",
++                    Common::g_scm_rev, revision);
+     }
+ 
+     std::vector<u8> state(buffer.begin() + sizeof(CSTHeader), buffer.end());
 diff --git a/src/video_core/cursor_dot.h b/src/video_core/cursor_dot.h
 new file mode 100644
 index 0000000..bb33f02
