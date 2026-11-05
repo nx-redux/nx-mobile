@@ -273,6 +273,86 @@ class ArtworkScreensTest {
         assertIs<Screen.Systems>(r.state.screen.value).also { assertEquals(MenuCategory.TOOLS, it.category) }
     }
 
+    // The page's words (the Settings-style block): the job's phases change them, Resume comes with a pause and goes.
+    @Test fun the_page_words_follow_the_job_and_resume_comes_and_goes() = runTest {
+        val r = rig()
+        r.http.latency = 5_000
+        fun words() = assertIs<Screen.Artwork>(r.state.screen.value).rows.map { it.label }
+        r.state.openArtwork()
+        assertEquals(listOf("Fetch missing art", "Fetch by console", "Settings"), words())
+        r.state.onButton(NxButton.B)
+        r.settings.artReplaceExisting = true
+        r.state.openArtwork()
+        assertEquals("Fetch all art", words().first())
+        r.settings.artReplaceExisting = false
+        r.state.onButton(NxButton.B); r.state.openArtwork()
+
+        r.state.pick(ArtworkAction.FETCH_MISSING)
+        r.state.onButton(NxButton.B)
+        assertEquals(listOf("Fetch missing art", "Fetch by console", "Progress", "Settings"), words())
+
+        r.state.pick(ArtworkAction.PROGRESS)
+        r.state.onButton(NxButton.Y); runCurrent()
+        val job = assertIs<Screen.ArtworkProgress>(r.state.screen.value).job
+        assertEquals(JobPhase.PAUSED, job.phase)
+        r.state.onButton(NxButton.B)
+        assertEquals("Resume art fetch (${job.done}/${job.total})", words().first())
+
+        r.state.pick(ArtworkAction.RESUME); runCurrent()
+        if (r.state.screen.value !is Screen.Artwork) r.state.onButton(NxButton.B)
+        assertTrue(words().none { it.startsWith("Resume") }, "${words()}")
+        advanceUntilIdle()
+        r.state.pick(ArtworkAction.PROGRESS)
+        assertEquals(JobPhase.DONE, assertIs<Screen.ArtworkProgress>(r.state.screen.value).job.phase)
+        r.state.onButton(NxButton.A); runCurrent()   // Done clears it
+        assertEquals(listOf("Fetch missing art", "Fetch by console", "Settings"), words())
+    }
+
+    // The status lines above the "Artwork" label are the page's details: counts, the job, the credit last.
+    @Test fun the_page_status_lines_are_the_details() = runTest {
+        val r = rig()
+        r.http.latency = 5_000
+        fun lines() = assertIs<Screen.Artwork>(r.state.screen.value).details
+        r.state.openArtwork()
+        assertEquals("4 games · 1 with art · 3 missing", lines()[0])
+        assertEquals("Source: ScreenScraper", lines().last())
+
+        r.state.pick(ArtworkAction.FETCH_MISSING)
+        val running = assertIs<Screen.ArtworkProgress>(r.state.screen.value).job
+        r.state.onButton(NxButton.B)
+        assertTrue("Fetching ${running.done} / ${running.total} …" in lines(), "${lines()}")
+        assertEquals("Source: ScreenScraper", lines().last())
+
+        r.state.pick(ArtworkAction.PROGRESS)
+        r.state.onButton(NxButton.Y); runCurrent()
+        val paused = assertIs<Screen.ArtworkProgress>(r.state.screen.value).job
+        r.state.onButton(NxButton.B)
+        assertTrue("Paused at ${paused.done} / ${paused.total}" in lines(), "${lines()}")
+        assertEquals("Source: ScreenScraper", lines().last())
+
+        val off = rig(available = false)
+        off.state.openArtwork()
+        val page = assertIs<Screen.Artwork>(off.state.screen.value)
+        assertEquals(2, page.details.size, "${page.details}")
+        assertTrue(page.details[0].endsWith(" missing"), page.details[0])   // the counts line, then the reason
+        assertEquals("Artwork fetching isn't available in this build.", page.details[1])
+        assertEquals(listOf("Settings"), page.rows.map { it.label })
+    }
+
+    // A tap on a word selects and opens it at once (Settings' rule); B comes back to it, then to Tools.
+    @Test fun a_tap_on_a_word_opens_it_and_b_goes_back_to_tools() = runTest {
+        val r = rig()
+        r.state.openArtwork()
+        val at = assertIs<Screen.Artwork>(r.state.screen.value).rows.indexOfFirst { it.action == ArtworkAction.FETCH_BY_CONSOLE }
+        r.state.select(at); r.state.openSelected()
+        assertIs<Screen.ArtworkConsoles>(r.state.screen.value)
+        r.state.onButton(NxButton.B)
+        val page = assertIs<Screen.Artwork>(r.state.screen.value)
+        assertEquals(ArtworkAction.FETCH_BY_CONSOLE, page.rows[r.state.selection.value.index].action)
+        r.state.onButton(NxButton.B)
+        assertEquals(MenuCategory.TOOLS, assertIs<Screen.Systems>(r.state.screen.value).category)
+    }
+
     @Test fun the_header_counts_only_games_in_supported_consoles() = runTest {
         val r = rig(unassigned = true)
         r.state.openArtwork()

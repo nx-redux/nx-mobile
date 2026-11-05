@@ -635,6 +635,10 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.Artwork, is Screen.ArtworkConsoles, is Screen.ArtworkProgress, is Screen.ArtworkSettings,
             is Screen.ArtworkReset ->
                 if (artworkSplitView(LocalWindowSize.current, s)) ArtworkSplitScreen(state, s, selection)
+                // The Artwork page in the Settings root's look: its hint bar follows Layouts → Button hints, as Settings'.
+                else if (s is Screen.Artwork) CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
+                    WithIndex(selection) { ArtworkScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton) }
+                }
                 else WithIndex(selection) { ArtworkScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton) }
         }
         (page as? Screen.EmulatorOptions)?.takeIf(::gameSettingsModal)?.let { modal ->
@@ -804,7 +808,9 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
         is Screen.StorageUpgrade, is Screen.CopySaves -> SettingsBackground()
         // The folder picker: the small mark only, so the large one never sits behind its names.
         is Screen.FilePicker -> SettingsBackground()
-        // Settings: the small mark at the top right alone ([SettingsBackground]); the large centred mark is not drawn.
+        // Settings and the Artwork page (drawn as Settings' root): the small mark at the top right alone
+        // ([SettingsBackground]); the large centred mark is not drawn. Artwork's other pages keep it.
+        is Screen.Artwork -> SettingsBackground()
         else -> if (settingsPane(s) != null) SettingsBackground() else MarkBackground(s)
     }
 }

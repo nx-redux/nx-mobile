@@ -29,9 +29,12 @@ import com.nxredux.mobile.ui.nx.NxTextPrompt
 
 private val selectBack = listOf(Hint(NxButton.A, "Select"), Hint(NxButton.B, "Back"))
 
+/** The Artwork page's label above its words, as "Settings" above Settings' ([SettingsRootScreen]). */
+internal const val ARTWORK_TITLE = "Artwork"
+
 /**
- * Tools → Artwork and its pages, all in the tool-page shape: title, detail
- * lines, whole rows with scroll arrows. The state is in the screen ([ArtworkScreenController] republishes it). One page:
+ * Tools → Artwork and its pages: the Artwork page in the Settings root's look ([SettingsRootScreen]), the pages under it
+ * in the tool-page shape (title, detail lines, whole rows with scroll arrows). The state is in the screen ([ArtworkScreenController] republishes it). One page:
  * the body ([ArtworkPageBody]) with its dialogs ([ArtworkDialogs]) over it; the column browser draws them apart.
  */
 @Composable
@@ -62,9 +65,10 @@ internal fun ArtworkPageBody(
 ) {
     fun hints(h: List<Hint>) = if (focused) h else emptyList()
     when (screen) {
-        is Screen.Artwork -> NxDetailListBody(
-            title = "Artwork", details = screen.details, rows = screen.rows.map { NxRow(it.label) },
-            selectedIndex = selectedIndex, hints = hints(selectBack), onSelect = onSelect, onOpen = onOpen, modifier = modifier, onHint = onHint,
+        // The Settings root's look: the actions as its large words, the details as status lines above "Artwork"; a tap opens at once.
+        is Screen.Artwork -> SettingsRootScreen(
+            ARTWORK_TITLE, screen.rows.map { it.label }, screen.details, selectedIndex,
+            onTap = { onSelect(it); onOpen(it) }, modifier = modifier, hintBar = focused, onHint = onHint,
         )
         is Screen.ArtworkConsoles -> NxDetailListBody(
             title = toolPageTitle(screen, split).orEmpty(), details = emptyList(),
