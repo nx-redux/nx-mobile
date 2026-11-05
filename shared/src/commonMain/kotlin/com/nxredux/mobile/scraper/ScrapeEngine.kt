@@ -439,7 +439,7 @@ class ScrapeEngine(
             val hits = pickedSince(all)
             for (hit in hits) {
                 val image = hit.bytes?.takeIf { it.isNotEmpty() } ?: download(hit.url) ?: continue
-                val fitted = guard { fitter.fit(image, ArtCaps.of(hit.slot)) } ?: continue
+                val fitted = fitFor(hit.slot, image) ?: continue
                 attempted = true
                 // Read again right before the write (the download may have taken a while): a pick made meanwhile wins.
                 val written = pickWrites.withLock {
@@ -603,7 +603,7 @@ class ScrapeEngine(
         if (option.slot.fileSlot != slot) return null
         if (ref.android) return writeAndroidPick(ref, slot, image, option)
         val target = guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) } ?: return null
-        val fitted = guard { fitter.fit(image, ArtCaps.of(option.slot)) } ?: return null
+        val fitted = fitFor(option.slot, image) ?: return null
         return pickWrites.withLock {
             val ls = Listings()
             val before = artOnDisk(target, ls)
@@ -622,7 +622,7 @@ class ScrapeEngine(
     private suspend fun writeAndroidPick(ref: LibraryGameRef, slot: ArtSlot, image: ByteArray, option: ArtOption): ArtRefs? {
         val store = androidArt ?: return null
         if (slot !in AndroidArtStore.SLOTS) return null
-        val fitted = guard { fitter.fit(image, ArtCaps.of(option.slot)) } ?: return null
+        val fitted = fitFor(option.slot, image) ?: return null
         val hero = slot == ArtSlot.SCREENSHOT && option.source == SourceId.SGDB
         pickWrites.withLock { guard { store.write(ref.fileName, slot, fitted.bytes, hero) } } ?: return null
         withContext(NonCancellable) { onAndroidArt() }
@@ -823,6 +823,16 @@ class ScrapeEngine(
         val dir = source.ensurePath(home, segments) ?: return@guard null
         if (!source.writeBytes(dir, name, bytes)) return@guard null
         source.child(dir, name)?.takeIf { !it.isDirectory }?.let { dir to it }
+    }
+
+    /**
+     * [image] made ready to write as [slot]'s art: a downloaded mix is placed whole on the mix canvas
+     * ([MixCompositor.onCanvas], PNG; null without a pixel codec or on any failure), any other slot is fitted by [fitter].
+     */
+    private suspend fun fitFor(slot: ArtSlot, image: ByteArray): FittedImage? {
+        if (slot != ArtSlot.MIX) return guard { fitter.fit(image, ArtCaps.of(slot)) }
+        val codec = pixels ?: return null
+        return lenient { codec.decode(image)?.let { codec.encodePng(MixCompositor.onCanvas(it)) } }?.let { FittedImage(it, ArtEncoding.PNG) }
     }
 
     /**

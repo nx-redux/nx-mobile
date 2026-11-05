@@ -90,4 +90,10 @@ class ScraperResponseTest {
         assertEquals(listOf("b-us", "b-jp"), alt[ArtSlot.BOX_2D]!!.map { it.url })
         assertEquals(listOf("w-eu", "w-us"), alt[ArtSlot.WHEEL]!!.map { it.url })
     }
+
+    @Test fun mixIsMixrbv2ThenMixrbv1() {
+        val m = listOf(SsMedia("mixrbv1", "wor", "u1"), SsMedia("mixrbv2", "eu", "u2"))
+        assertEquals(listOf("u2", "u1"), ScraperMedia.rank(m, ArtSlot.MIX).map { it.url })
+        assertEquals("u2", ScraperMedia.choose(m)[ArtSlot.MIX]!!.url)
+    }
 }

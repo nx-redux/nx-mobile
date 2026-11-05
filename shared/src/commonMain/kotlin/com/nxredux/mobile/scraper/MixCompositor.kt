@@ -44,6 +44,14 @@ object MixCompositor {
         return canvas
     }
 
+    /** A downloaded mix: [src] fitted whole (grown when smaller, [resizeSharp]) and centred on a transparent [W] x [H] canvas, copied as it is (no blend, no shadow). */
+    fun onCanvas(src: ArgbImage): ArgbImage {
+        val (w, h) = fitSize(src.width, src.height, W, H, grow = true)
+        val canvas = ArgbImage(W, H)
+        copy(canvas, resizeSharp(src, w, h), (W - w) / 2, (H - h) / 2)
+        return canvas
+    }
+
     /** `fitSize`: [sw] x [sh] within [maxW] x [maxH], aspect kept, truncated, at least 1x1; [grow] false caps the scale at 1. */
     fun fitSize(sw: Int, sh: Int, maxW: Int, maxH: Int, grow: Boolean): Pair<Int, Int> {
         var scale = minOf(maxW.toDouble() / sw, maxH.toDouble() / sh)

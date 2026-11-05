@@ -77,13 +77,14 @@ object ScraperResponse {
 object ScraperMedia {
     val REGIONS = listOf("us", "wor", "eu")
 
-    /** The ScreenScraper media types for [slot], best first; empty for the slots ScreenScraper does not fill (grid, hero, mix). */
+    /** The ScreenScraper media types for [slot], best first; empty for the slots ScreenScraper does not fill (grid, hero). */
     fun typesOf(slot: ArtSlot): List<String> = when (slot) {
         ArtSlot.BOX_3D -> listOf("box-3D")
         ArtSlot.BOX_2D -> listOf("box-2D")
         ArtSlot.SCREENSHOT -> listOf("ss")
         ArtSlot.WHEEL -> listOf("wheel-hd", "wheel")
-        ArtSlot.GRID, ArtSlot.HERO, ArtSlot.MIX -> emptyList()
+        ArtSlot.MIX -> listOf("mixrbv2", "mixrbv1")   // v2 first, the newer layout
+        ArtSlot.GRID, ArtSlot.HERO -> emptyList()
     }
 
     /** Every media for [slot], best first: by type, then by region. */
@@ -93,7 +94,7 @@ object ScraperMedia {
     }
 
     /** The slots ScreenScraper fills, in [choose]'s order. */
-    val SLOTS = listOf(ArtSlot.BOX_3D, ArtSlot.BOX_2D, ArtSlot.SCREENSHOT, ArtSlot.WHEEL)
+    val SLOTS = listOf(ArtSlot.BOX_3D, ArtSlot.BOX_2D, ArtSlot.SCREENSHOT, ArtSlot.WHEEL, ArtSlot.MIX)
 
     /** The best media per slot ScreenScraper offers (absent slots left out). */
     fun choose(medias: List<SsMedia>): Map<ArtSlot, SsMedia> =

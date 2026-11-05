@@ -12,6 +12,18 @@ class MixCompositorTest {
     private val green = 0xFF00FF00.toInt()
     private val blue = 0xFF0000FF.toInt()
 
+    @Test fun onCanvasCentresAWideImageWhole() {
+        val out = MixCompositor.onCanvas(solid(768, 288, red))
+        assertEquals(MixCompositor.W, out.width); assertEquals(MixCompositor.H, out.height)
+        for (y in listOf(0, 71, 216, 287)) for (x in 0 until out.width) assertEquals(0, out[x, y] ushr 24, "row $y")
+        for (x in 0 until out.width) assertEquals(0xFF, out[x, 144] ushr 24)
+    }
+
+    @Test fun onCanvasGrowsASmallImage() {
+        val out = MixCompositor.onCanvas(solid(96, 72, green))
+        assertTrue(out.pixels.all { it == green })
+    }
+
     @Test fun fitSizeTruncatesAndKeepsOnePixel() {
         assertEquals(96 to 144, MixCompositor.fitSize(100, 150, 192, 144, grow = true))
         assertEquals(192 to 48, MixCompositor.fitSize(200, 50, 192, 86, grow = true))

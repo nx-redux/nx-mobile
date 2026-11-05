@@ -8,8 +8,8 @@ import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
-/** The slots whose candidate images are kept for Change art: every hit kind but the mix (made on the device). */
-val OPTION_SLOTS: Set<ArtSlot> = ArtSlot.entries.toSet() - ArtSlot.MIX
+/** The slots whose candidate images are kept for Change art: every hit kind (the mix too: ScreenScraper's own). */
+val OPTION_SLOTS: Set<ArtSlot> = ArtSlot.entries.toSet()
 
 /**
  * One candidate picture a source returned for a game: its [slot] (the hit kind), link, [source] id, the source's ids
@@ -33,7 +33,7 @@ data class ArtOption(
 
 /**
  * A game's saved options, in the order found; [wide] = the wide pass ran; [picks] = the picked option's [ArtOption.key]
- * per file slot ([ArtSlot.fileSlot]: SCREENSHOT, BOX_2D, BOX_3D, WHEEL), each protected from fetches.
+ * per file slot ([ArtSlot.fileSlot]: SCREENSHOT, BOX_2D, BOX_3D, WHEEL, MIX), each protected from fetches.
  */
 @Serializable
 data class GameOptions(val options: List<ArtOption> = emptyList(), val wide: Boolean = false, val picks: Map<ArtSlot, String> = emptyMap())

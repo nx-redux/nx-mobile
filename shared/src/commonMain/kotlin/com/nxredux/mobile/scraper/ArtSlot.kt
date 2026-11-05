@@ -56,7 +56,7 @@ data class ArtCap(val maxW: Int, val maxH: Int, val force: ArtEncoding? = null, 
 /**
  * The per-slot caps. Pixel size never filters or ranks a pick; it only bounds what is written. The 2D box and the wheel
  * as NX Redux stores them (`scraper_compositor.h`: full-colour PNG within 480x576, never grown); the mix is made at
- * exactly its canvas size ([MixCompositor]), so its cap only names the encoding.
+ * exactly its canvas size ([MixCompositor.create], or [MixCompositor.onCanvas] for a downloaded one), so its cap only names the encoding.
  */
 object ArtCaps {
     fun of(slot: ArtSlot): ArtCap = when (slot) {
