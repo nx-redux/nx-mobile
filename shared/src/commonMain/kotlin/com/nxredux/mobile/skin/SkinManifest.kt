@@ -72,6 +72,11 @@ enum class SkinVariant {
      * places, B / A in their own tilted well, Z (L2) and L beside or under each other, R, START with MENU beside it.
      */
     @SerialName("n64") N64,
+    /**
+     * GameCube: the stick and d-pad (or a swap between them), A B X Y in the diamond (X top, Y left, B bottom, A right),
+     * L R the analog triggers (L2 R2), Z (R: R1) beside or above R, the C-stick nub (`CSTICK`, the right analog), START.
+     */
+    @SerialName("gc") GC,
 }
 
 /**

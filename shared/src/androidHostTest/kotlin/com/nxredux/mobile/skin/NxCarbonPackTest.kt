@@ -44,7 +44,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(58 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc and n64 twins, and dc / n64 both-shown on the tall boards (fold, landscape tall)
+        assertEquals(65 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64 and gc twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -265,6 +265,47 @@ class NxCarbonPackTest {
             assertTrue(c("B").x < c("A").x && c("B").y < c("A").y, "$name B up left of A")
             assertTrue(c("L2").x < c("L").x || c("L2").y > c("L").y, "$name Z outside or under L")
             assertEquals("MENU", c("MENU").spec.label, name)
+        }
+    }
+
+    @Test
+    fun gameCubeLayoutsInEveryFamily() {
+        // the stick as Dreamcast's, the diamond, L R triggers (L2 R2) with Z (R) inside R or above it, the C-stick nub, START MENU;
+        // both sticks on the tablet board and every tall landscape (the Fold's inner too), the C-stick then under the face
+        val roomy = setOf("tablet", "tablet_land", "inner_land")
+        for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
+            val tablet = name.startsWith("tablet")
+            val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 640f to 480f,
+                d.third, foldable = name.startsWith("inner"), variant = SkinVariant.GC), name)
+            dump("gc_$name", d.first, d.second, p)
+            assertEquals(SkinVariant.GC, p.spec.variant, name)
+            val ids = p.controls.map { it.spec.id }.filterNot { it.startsWith("TOUCH_") }.toSet()
+            val base = setOf("STICK", "DPAD", "A", "B", "X", "Y", "L2", "R2", "R", "CSTICK", "START", "MENU")
+            assertEquals(if (name in roomy) base else base + "STICK_SWAP", ids, name)
+            fun c(id: String) = p.controls.first { it.spec.id == id }
+            fun box(pc: PlacedControl): FloatArray {
+                val r = when (pc.spec.shape) { ControlShape.STICK -> pc.spec.r * 1.25f; ControlShape.RECT -> 0f; else -> pc.spec.r }
+                val hw = if (r > 0f) r else pc.spec.hw; val hh = if (r > 0f) r else pc.spec.hh
+                return floatArrayOf(pc.x - hw, pc.y - hh, pc.x + hw, pc.y + hh)
+            }
+            fun apart(a: FloatArray, b: FloatArray) = a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1]
+            fun reach(pc: PlacedControl) = if (pc.spec.shape == ControlShape.STICK) pc.spec.r * 1.25f else pc.spec.r
+            fun round(a: PlacedControl, b: PlacedControl) = kotlin.math.hypot(a.x - b.x, a.y - b.y) >= reach(a) + reach(b) - 1f
+            fun circle(pc: PlacedControl) = pc.spec.shape == ControlShape.CIRCLE || pc.spec.shape == ControlShape.STICK
+            val face = setOf("A", "B", "X", "Y")   // the diamond's caps share their edges (as on every layout)
+            for (useStick in listOf(true, false)) {
+                val cs = p.forStick(useStick).controls.filterNot { it.spec.id.startsWith("TOUCH_") }
+                for (i in cs.indices) for (j in i + 1 until cs.size) {
+                    val a = cs[i]; val b = cs[j]
+                    if (a.spec.id in face && b.spec.id in face) continue
+                    assertTrue(if (circle(a) && circle(b)) round(a, b) else apart(box(a), box(b)), "$name ${a.spec.id} ${b.spec.id}")
+                }
+                for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
+            }
+            if (name in roomy) assertTrue(c("STICK").y < c("DPAD").y, "$name stick above the d-pad")
+            assertTrue(c("R").x < c("R2").x || c("R").y < c("R2").y, "$name Z inside R or above it")
+            assertEquals(2, p.pieces.count { it.knob }, name)
+            if (name in roomy) assertTrue(c("CSTICK").y > c("B").y && kotlin.math.abs(c("CSTICK").y - c("DPAD").y) < 1f, "$name C-stick under the face, level with the d-pad")
         }
     }
 

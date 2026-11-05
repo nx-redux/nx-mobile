@@ -237,7 +237,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 
     /** The stick (true) or the d-pad until the player chooses: the profile's, and a Dreamcast disc on its stick. */
     private fun stickDefault(): Boolean =
-        padProfile().stickByDefault || com.nxredux.mobile.skin.DcGames.stickFirst(com.nxredux.mobile.runner.CoreRegistry.baseTag(layoutTag()), host.dcArcadeSet)
+        padProfile().stickByDefault || com.nxredux.mobile.skin.DcGames.stickFirst(com.nxredux.mobile.runner.CoreRegistry.baseTag(layoutTag()), host.dcArcadeSet) ||
+            padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC   // a GameCube disc under the Wii tag too
 
     /**
      * A pad over the game is laid out (the landscape clusters, or portrait's overlay with the band hidden): the
@@ -871,7 +872,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val n3ds = N3dsOptions.appliesTo(tag)
         // with a second display: one-screen games and a DS / 3DS split keep the skin (its screen the touch screen, [SkinDual])
         if (names.isNotEmpty() || !SkinDual.skinAllowed(host.dualMode, ds, n3ds)) return null
-        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet) ?: return null
+        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC) ?: return null
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null
         val tablet = activity.windowShape().screenClass.isTablet
@@ -911,7 +912,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         game.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         val pack = skinPack ?: return
         val view = PadSkinView(activity, pack, input::onPad, ::onSkinAction, haptics = padVibration != com.nxredux.mobile.settings.PadVibration.OFF,
-            onResized = { root.post { onSkinResized() } }, onStick = input::onStick, onCStick = input::onCStick,
+            onResized = { root.post { onSkinResized() } }, onStick = input::onStick,
+            onCStick = { x, y -> if (input.gcPad) input.onWiiRightStick(x, y) else input.onCStick(x, y) },   // the GameCube's C-stick: the right analog
             onGlass = { x, y, down -> glassTouch(game, x, y, down) })
         view.useStick = PadStickModes[padStickKey, stickDefault()]   // the drawn pad's choice, shared
         // under the menu and the notifications, over the game
@@ -973,7 +975,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val n3ds = N3dsOptions.appliesTo(tag)
         if (!ds && !n3ds) return false
         return layoutControllerNames().isEmpty() && SkinDual.skinAllowed(mode, ds, n3ds) &&
-            SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet) != null
+            SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC) != null
     }
 
     /** Whether the pad skin is the layout now. */

@@ -28,6 +28,11 @@ class DcGamesTest {
     }
 
     @Test
+    fun gameCubeGamesStartOnTheStick() {
+        assertTrue(DcGames.stickFirst("GC", arcadeSet = false))
+    }
+
+    @Test
     fun n64GamesStartOnTheStick() {   // nearly every N64 game steers with it
         assertTrue(DcGames.stickFirst("N64", arcadeSet = false))
     }

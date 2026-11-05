@@ -41,4 +41,11 @@ class SkinVariantForTest {
     fun n64GetsItsOwnLayout() {
         assertEquals(SkinVariant.N64, SkinChoice.variantFor("N64", ds = false))
     }
+
+    @Test
+    fun gameCubeGetsItsOwnLayout() {   // a GC disc run under the Wii tag too
+        assertEquals(SkinVariant.GC, SkinChoice.variantFor("GC", ds = false))
+        assertEquals(SkinVariant.GC, SkinChoice.variantFor("WII", ds = false, gameCube = true))
+        assertNull(SkinChoice.variantFor("WII", ds = false))
+    }
 }
