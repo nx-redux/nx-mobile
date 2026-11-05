@@ -42,7 +42,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(44, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade and dc twins, and dc both-shown on the tall boards (fold, landscape tall)
+        assertEquals(50, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds and dc twins, and dc both-shown on the tall boards (fold, landscape tall)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -152,6 +152,43 @@ class NxCarbonPackTest {
         assertTrue(listOf("TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4").all { t -> ds.controls.any { it.spec.id == t } })
         val menu = assertNotNull(SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true))
         assertEquals(setOf("menutop", "menu"), menu.glasses.map { it.id }.toSet())
+    }
+
+    @Test
+    fun fdsLayoutsInEveryFamily() {
+        val hinges = setOf("inner", "inner_half", "tablet")
+        for ((name, d) in consoleDevices) {
+            val tablet = name == "tablet"
+            val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 256f to 240f,
+                d.third, foldable = name.startsWith("inner"), variant = SkinVariant.FDS), name)
+            dump("fds_$name", d.first, d.second, p)
+            assertEquals(SkinVariant.FDS, p.spec.variant, name)
+            assertEquals(setOf("DPAD", "A", "B", "X", "Y", "DISK", "SELECT", "START", "MENU"),
+                p.controls.map { it.spec.id }.filterNot { it.startsWith("TOUCH_") }.toSet(), name)
+            val disk = p.controls.single { it.spec.id == "DISK" }; val menu = p.controls.single { it.spec.id == "MENU" }
+            assertEquals("DISK", disk.spec.label, name)
+            fun box(c: PlacedControl) = (if (c.spec.r > 0f) c.spec.r else c.spec.hw).let { hw -> val hh = if (c.spec.r > 0f) c.spec.r else c.spec.hh
+                floatArrayOf(c.x - hw, c.y - hh, c.x + hw, c.y + hh) }
+            fun apart(a: FloatArray, b: FloatArray) = a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1]
+            for (c in p.controls) if (c !== disk) assertTrue(apart(box(disk), box(c)), "$name DISK on ${c.spec.id}")
+            if (name in hinges) {
+                // the fold board (user): DISK and MENU together under the d-pad, the pair centred on its column, clear of the panel
+                val dp = p.controls.single { it.spec.id == "DPAD" }
+                assertEquals(dp.x, (disk.x + menu.x) / 2, 1f, name); assertTrue(disk.y > dp.y, name)
+                assertEquals(menu.y, disk.y, 1f, name); assertTrue(disk.x < menu.x, name)
+                val r = p.glasses.single { it.screen == GlassScreen.PANEL }.rect
+                for (c in p.controls) assertTrue(apart(box(c), floatArrayOf(r.x, r.y, r.x + r.width, r.y + r.height)), "$name ${c.spec.id} on the panel")
+            } else {
+                assertEquals(menu.y, disk.y, 1f, name); assertTrue(disk.x < menu.x, name)
+            }
+        }
+    }
+
+    @Test
+    fun fdsFallsBackToSingleWithoutItsLayouts() {
+        val old = pack.copy(layouts = pack.layouts.filter { it.variant != SkinVariant.FDS })
+        val p = assertNotNull(SkinChoice.place(old, 1080, 2520, 420, tablet = false, ds = false, picture = 256f to 240f, variant = SkinVariant.FDS))
+        assertEquals(SkinVariant.SINGLE, p.spec.variant)
     }
 
     @Test
