@@ -957,7 +957,7 @@ class ArtworkScreensTest {
         val box = r.state.artPanel.value!!.tiles.indexOfFirst { it.option.slot == ArtSlot.BOX_2D }
         r.state.artPanelTap(box)
         advanceUntilIdle()
-        assertEquals(LayoutQuestion(BackdropArt.BOX2D, alsoListArt = false, yesFocused = true), r.state.artPanel.value!!.question)
+        assertEquals(LayoutQuestion(BackdropArt.BOX2D, GameListArt.BOX2D, alsoListArt = false, yesFocused = true), r.state.artPanel.value!!.question)
         r.state.artPanelAnswer(switch = true)
         assertEquals(BackdropArt.BOX2D, r.state.settings.backdropArt)
         assertEquals(ArtLayout(BackdropArt.BOX2D, GameListArt.SCREENSHOT), r.state.artLayout.value)   // the open list redraws with it

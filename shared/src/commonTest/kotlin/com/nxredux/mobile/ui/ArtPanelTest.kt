@@ -258,14 +258,15 @@ class ArtPanelTest {
         val given = listOf(
             opt(ArtSlot.WHEEL, SourceId.SS, "w1"), opt(ArtSlot.BOX_3D, SourceId.SS, "b3"), opt(ArtSlot.GRID, SourceId.SGDB, "g1"),
             opt(ArtSlot.HERO, SourceId.SGDB, "h1"), opt(ArtSlot.BOX_2D, SourceId.TGDB, "b2"), opt(ArtSlot.SCREENSHOT, SourceId.SS, "s1"),
+            opt(ArtSlot.MIX, SourceId.SS, "m1"),
         )
         val sections = artSections(given.map { ArtTile(it, artTileLabel(it), null, false) })
-        assertEquals(listOf(ArtSlot.SCREENSHOT, ArtSlot.BOX_2D, ArtSlot.BOX_3D, ArtSlot.WHEEL), sections.map { it.slot })
-        assertEquals(listOf("Screenshot", "2D box", "3D box", "Wheel"), sections.map { it.title })
-        assertEquals(listOf(2, 3, 3, 2), sections.map { it.columns })
+        assertEquals(listOf(ArtSlot.SCREENSHOT, ArtSlot.BOX_2D, ArtSlot.BOX_3D, ArtSlot.WHEEL, ArtSlot.MIX), sections.map { it.slot })
+        assertEquals(listOf("Screenshot", "2D box", "3D box", "Wheel", "Mix"), sections.map { it.title })
+        assertEquals(listOf(2, 3, 3, 2, 2), sections.map { it.columns })
         assertEquals(listOf("h1", "s1"), sections[0].tiles.map { it.option.assetId })   // a hero is a screenshot
         assertEquals(listOf("g1", "b2"), sections[1].tiles.map { it.option.assetId })   // a grid is a 2D box
-        assertEquals(listOf(4f / 3f, 3f / 4f, 3f / 4f, 2f), sections.map { it.aspect })
+        assertEquals(listOf(4f / 3f, 3f / 4f, 3f / 4f, 2f, 4f / 3f), sections.map { it.aspect })
         assertEquals(listOf(ArtSlot.WHEEL), artSections(given.take(1).map { ArtTile(it, "", null, false) }).map { it.slot })   // empty ones left out
     }
 
@@ -297,25 +298,46 @@ class ArtPanelTest {
     }
 
     @Test fun questionRules() {
-        assertEquals(LayoutQuestion(BackdropArt.BOX2D, alsoListArt = false, yesFocused = true), layoutQuestionFor(ArtSlot.BOX_2D, BackdropArt.BOX3D, GameListArt.SCREENSHOT))
-        assertEquals(LayoutQuestion(BackdropArt.BOX2D, alsoListArt = true, yesFocused = true), layoutQuestionFor(ArtSlot.BOX_2D, BackdropArt.BOX2D, GameListArt.BOX3D))
+        assertEquals(LayoutQuestion(BackdropArt.BOX2D, GameListArt.BOX2D, alsoListArt = false, yesFocused = true), layoutQuestionFor(ArtSlot.BOX_2D, BackdropArt.BOX3D, GameListArt.SCREENSHOT))
+        assertEquals(LayoutQuestion(BackdropArt.BOX2D, GameListArt.BOX2D, alsoListArt = true, yesFocused = true), layoutQuestionFor(ArtSlot.BOX_2D, BackdropArt.BOX2D, GameListArt.BOX3D))
         assertNull(layoutQuestionFor(ArtSlot.BOX_2D, BackdropArt.BOX2D, GameListArt.MIX))
         assertNull(layoutQuestionFor(ArtSlot.SCREENSHOT, BackdropArt.BOX3D, GameListArt.BOX2D))
         assertNull(layoutQuestionFor(ArtSlot.WHEEL, BackdropArt.WHEEL, GameListArt.WHEEL))
-        assertEquals(LayoutQuestion(BackdropArt.WHEEL, alsoListArt = true, yesFocused = true), layoutQuestionFor(ArtSlot.WHEEL, BackdropArt.BOX3D, GameListArt.BOX2D))
+        assertEquals(LayoutQuestion(BackdropArt.WHEEL, GameListArt.WHEEL, alsoListArt = true, yesFocused = true), layoutQuestionFor(ArtSlot.WHEEL, BackdropArt.BOX3D, GameListArt.BOX2D))
+        // A mix pick asks about List art alone.
+        assertEquals(LayoutQuestion(null, GameListArt.MIX, true, true), layoutQuestionFor(ArtSlot.MIX, BackdropArt.BOX3D, GameListArt.SCREENSHOT))
+        assertNull(layoutQuestionFor(ArtSlot.MIX, BackdropArt.WHEEL, GameListArt.MIX))
+        assertEquals(
+            "Layouts → List art is set to Screenshot. Switch it to Mix?",
+            layoutQuestionText(LayoutQuestion(null, GameListArt.MIX, true, true), BackdropArt.BOX3D, GameListArt.SCREENSHOT),
+        )
         assertEquals(
             "Layouts → Backdrop art is set to 3D box art. Switch it to 2D box art?",
-            layoutQuestionText(LayoutQuestion(BackdropArt.BOX2D, false, true), BackdropArt.BOX3D, GameListArt.SCREENSHOT),
+            layoutQuestionText(LayoutQuestion(BackdropArt.BOX2D, GameListArt.BOX2D, false, true), BackdropArt.BOX3D, GameListArt.SCREENSHOT),
         )
         assertEquals(
             "Layouts → Backdrop art is set to Wheel. Switch it to 3D box art? List art too.",
-            layoutQuestionText(LayoutQuestion(BackdropArt.BOX3D, true, true), BackdropArt.WHEEL, GameListArt.BOX2D),
+            layoutQuestionText(LayoutQuestion(BackdropArt.BOX3D, GameListArt.BOX3D, true, true), BackdropArt.WHEEL, GameListArt.BOX2D),
         )
         // Backdrop art already matches: only List art is asked about.
         assertEquals(
             "Layouts → List art is set to 3D box art. Switch it to 2D box art?",
-            layoutQuestionText(LayoutQuestion(BackdropArt.BOX2D, true, true), BackdropArt.BOX2D, GameListArt.BOX3D),
+            layoutQuestionText(LayoutQuestion(BackdropArt.BOX2D, GameListArt.BOX2D, true, true), BackdropArt.BOX2D, GameListArt.BOX3D),
         )
+    }
+
+    @Test fun switchingAMixQuestionLeavesBackdropArt() = runTest {
+        val mix = opt(ArtSlot.MIX, SourceId.SS, "m1")
+        val s = Settings().apply { backdropArt = BackdropArt.WHEEL; gameListArt = GameListArt.SCREENSHOT }
+        val c = ArtPanelController(this, FakePort(listOf(mix)), s, onPicked = {})
+        c.open(game, fetchFirst = false)
+        advanceUntilIdle()
+        c.tap(0)
+        advanceUntilIdle()
+        assertEquals(LayoutQuestion(null, GameListArt.MIX, true, true), c.panel.value!!.question)
+        c.answer(true)
+        assertEquals(BackdropArt.WHEEL, s.backdropArt)
+        assertEquals(GameListArt.MIX, s.gameListArt)
     }
 
     @Test fun switchWritesSettings() = runTest {
@@ -328,7 +350,7 @@ class ArtPanelTest {
         // Keep: nothing changes, B too.
         c.tap(1)
         advanceUntilIdle()
-        assertEquals(LayoutQuestion(BackdropArt.BOX3D, alsoListArt = true, yesFocused = true), c.panel.value!!.question)
+        assertEquals(LayoutQuestion(BackdropArt.BOX3D, GameListArt.BOX3D, alsoListArt = true, yesFocused = true), c.panel.value!!.question)
         c.onButton(NxButton.UP); c.onButton(NxButton.DOWN)   // the question has the pad alone
         assertEquals(1, c.panel.value!!.focus)
         c.onButton(NxButton.RIGHT)

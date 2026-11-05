@@ -92,7 +92,7 @@ class LibraryScanner(
     private val chdSectors: com.nxredux.mobile.library.disc.ChdSectors? = null,
     /**
      * The Change art picks: per game ([GameEntry.path]) its picked file slots ([ArtSlot.SCREENSHOT], [ArtSlot.BOX_2D],
-     * [ArtSlot.BOX_3D], [ArtSlot.WHEEL]), read once per [scan] and [readArt]: an extra folder's game shows a picked
+     * [ArtSlot.BOX_3D], [ArtSlot.WHEEL], [ArtSlot.MIX]), read once per [scan] and [readArt]: an extra folder's game shows a picked
      * slot's file from its home mirror (where the pick is written) over the folder's own.
      */
     private val picks: suspend () -> Map<String, Set<ArtSlot>> = { emptyMap() },
@@ -143,7 +143,7 @@ class LibraryScanner(
             return ArtRefs(
                 boxart = slot(ArtSlot.BOX_3D, box3d, m?.box3d), box2d = slot(ArtSlot.BOX_2D, box2d, m?.box2d),
                 screenshot = mirrorName?.let { m?.screenshot?.get(it) }?.value ?: shotName?.let { screenshot[it] }?.value,
-                wheel = slot(ArtSlot.WHEEL, wheel, m?.wheel), mix = mix.of(),
+                wheel = slot(ArtSlot.WHEEL, wheel, m?.wheel), mix = slot(ArtSlot.MIX, mix, m?.mix),
                 heroShot = if (mirrorName != null) mirrorName in m?.heroes.orEmpty() else shotName != null && shotName in heroes,
             )
         }

@@ -48,7 +48,7 @@ class ArtworkController(
         /** Change art previews downloaded at once, at most. */
         const val PREVIEW_DOWNLOADS = 3
         /** The file slots an option is picked into ([ArtSlot.fileSlot] of [OPTION_SLOTS]). */
-        private val PICK_SLOTS = listOf(ArtSlot.SCREENSHOT, ArtSlot.BOX_2D, ArtSlot.BOX_3D, ArtSlot.WHEEL)
+        private val PICK_SLOTS = listOf(ArtSlot.SCREENSHOT, ArtSlot.BOX_2D, ArtSlot.BOX_3D, ArtSlot.WHEEL, ArtSlot.MIX)
     }
 
     private fun auth() = ScraperAuth(credentials.devId, credentials.devPassword, user = credentials.user, password = credentials.password)
@@ -388,6 +388,7 @@ class ArtworkController(
         ArtSlot.BOX_2D -> box2d
         ArtSlot.BOX_3D -> boxart
         ArtSlot.WHEEL -> wheel
+        ArtSlot.MIX -> mix
         else -> null
     }
 

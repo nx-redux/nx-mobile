@@ -30,6 +30,7 @@ class ArtworkControllerTest {
     private class Rig(
         scope: TestScope, games: List<LibraryGameRef>, val creds: FakeCredentials = FakeCredentials(), more: List<ArtSource> = emptyList(),
         jobClock: () -> Long = { scope.testScheduler.currentTime }, val fs: FakeRomsSource = Scrape.homeTree(),
+        pixels: PixelCodec? = null,
     ) {
         val http = FakeHttp().apply { clock = { scope.testScheduler.currentTime } }
         val host = FakeHost(games)
@@ -42,7 +43,7 @@ class ArtworkControllerTest {
             { auth, onArt, onWritten, _, logged, onOptions, picked ->
                 ssEngine(
                     http, FakeFitter(), FakeHasher(), fs, Scrape.home, auth, { scope.testScheduler.currentTime }, { delay(it) }, onArt, onWritten,
-                    art, { androidRefreshed++ }, more, logged, onOptions, picked,
+                    art, { androidRefreshed++ }, more, logged, onOptions, picked, pixels = pixels,
                 )
             },
             creds, runner, scope, clock = jobClock, optionCache = cache,
@@ -1199,6 +1200,27 @@ class ArtworkControllerTest {
         rig.controller.fetchAll(replaceExisting = true)
         advanceUntilIdle()
         assertContentEquals(gridBytes, rig.fs.bytesAt(box2dPath))
+    }
+
+    private val mixPath = "Home/Roms/GB/.media/mix/Tetris.png"
+
+    @Test fun pickingAMixWritesTheMixSlotAndProtectsIt() = runTest {
+        val mixes = FakeSource(SourceId.SS, slots = setOf(ArtSlot.MIX)).apply { offer("Tetris.gb", ArtSlot.MIX, "https://mx/Tetris-mix") }
+        val rig = Rig(this, listOf(tetris), FakeCredentials(devId = ""), more = listOf(shots("Tetris.gb"), mixes), pixels = FakePixels())
+        rig.http.on("https://", OK_PNG)
+        rig.controller.fetchConsole(setOf("GB"))
+        advanceUntilIdle()
+        val mix = listed(rig).options.single { it.slot == ArtSlot.MIX }
+        assertTrue(rig.controller.pickOption(tetris.gamePath, mix))
+        assertContentEquals(FakePixels.MIX_PNG, rig.fs.bytesAt(mixPath))   // placed on the mix canvas
+        assertEquals(setOf(ArtSlot.MIX), ArtOptionStore(rig.host).pickedSlots(tetris.gamePath))
+        assertEquals(mix.key, listed(rig).currentKeys[ArtSlot.MIX])
+        assertEquals(mixPath, rig.host.applied.last().second.mix)
+        assertEquals(mapOf(tetris.gamePath to setOf(ArtSlot.MIX)), rig.controller.picks())
+        rig.controller.fetchAll(replaceExisting = true)
+        advanceUntilIdle()
+        assertContentEquals(FakePixels.MIX_PNG, rig.fs.bytesAt(mixPath))
+        assertEquals(mix.key, listed(rig).currentKeys[ArtSlot.MIX])
     }
 
     @Test fun deadFullLinkKeepsArt() = runTest {

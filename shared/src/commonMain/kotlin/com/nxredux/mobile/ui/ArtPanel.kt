@@ -7,6 +7,7 @@ import com.nxredux.mobile.scraper.ArtOption
 import com.nxredux.mobile.scraper.ArtOptionsPort
 import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.scraper.ItemStatus
+import com.nxredux.mobile.scraper.MixCompositor
 import com.nxredux.mobile.scraper.OptionImage
 import com.nxredux.mobile.scraper.SourceId
 import com.nxredux.mobile.scraper.fileSlot
@@ -35,14 +36,15 @@ enum class ArtPanelPhase { FETCHING, LOADING, READY }
 data class ArtTile(val option: ArtOption, val label: String, val image: ContentRef?, val failed: Boolean)
 
 /**
- * One art kind's part of the panel: its file [slot] (SCREENSHOT, BOX_2D, BOX_3D or WHEEL), its heading [title], its
+ * One art kind's part of the panel: its file [slot] (SCREENSHOT, BOX_2D, BOX_3D, WHEEL or MIX), its heading [title], its
  * tiles in [columns] per row, each shaped to the art ([aspect]).
  */
 data class ArtSection(val slot: ArtSlot, val title: String, val columns: Int, val tiles: List<ArtTile>) {
-    /** A tile's picture box, width over height: a screenshot's 4:3, a box's 3:4, a wheel's 2:1. */
+    /** A tile's picture box, width over height: a screenshot's 4:3, a box's 3:4, a wheel's 2:1, a mix's 4:3. */
     val aspect: Float get() = when (slot) {
         ArtSlot.SCREENSHOT -> 4f / 3f
         ArtSlot.WHEEL -> 2f
+        ArtSlot.MIX -> MixCompositor.W.toFloat() / MixCompositor.H
         else -> 3f / 4f
     }
 }
@@ -53,6 +55,7 @@ private val SECTIONS = listOf(
     Triple(ArtSlot.BOX_2D, "2D box", 3),
     Triple(ArtSlot.BOX_3D, "3D box", 3),
     Triple(ArtSlot.WHEEL, "Wheel", 2),
+    Triple(ArtSlot.MIX, "Mix", 2),
 )
 
 /** [tiles] in their sections by file slot ([ArtSlot.fileSlot]: a grid is a 2D box, a hero a screenshot), each as found; empty ones left out. */
@@ -61,10 +64,11 @@ internal fun artSections(tiles: List<ArtTile>): List<ArtSection> = SECTIONS.mapN
 }
 
 /**
- * After a box or wheel pick: offers to switch Layouts → Backdrop art to the picked [kind], and List art too when
- * [alsoListArt]; [yesFocused] while Switch is lit (where it opens), else Keep.
+ * After a box, wheel or mix pick: offers to switch Layouts → Backdrop art to the picked [kind], and List art to
+ * [listKind] when [alsoListArt]; [yesFocused] while Switch is lit (where it opens), else Keep. A null [kind] (a mix
+ * pick: Backdrop art has no mix) asks about List art only.
  */
-data class LayoutQuestion(val kind: BackdropArt, val alsoListArt: Boolean, val yesFocused: Boolean)
+data class LayoutQuestion(val kind: BackdropArt?, val listKind: GameListArt, val alsoListArt: Boolean, val yesFocused: Boolean)
 
 /** The Backdrop art kind a pick in file slot [slot] shows as; null for a screenshot (or any other). */
 private fun backdropKindOf(slot: ArtSlot): BackdropArt? = when (slot) {
@@ -87,13 +91,16 @@ private fun listArtOf(kind: BackdropArt): GameListArt = when (kind) {
 /**
  * The question after a pick in file slot [pickSlot]: null for a screenshot, or when [backdrop] already shows the
  * picked kind and [listArt] is not a box/wheel kind or shows it too. [LayoutQuestion.alsoListArt] when List art is
- * 3D box, 2D box or wheel and not the picked kind.
+ * 3D box, 2D box or wheel and not the picked kind. A mix pick asks about List art alone: null when it is already Mix.
  */
 fun layoutQuestionFor(pickSlot: ArtSlot, backdrop: BackdropArt, listArt: GameListArt): LayoutQuestion? {
+    if (pickSlot.fileSlot == ArtSlot.MIX) {
+        return if (listArt == GameListArt.MIX) null else LayoutQuestion(null, GameListArt.MIX, alsoListArt = true, yesFocused = true)
+    }
     val kind = backdropKindOf(pickSlot.fileSlot) ?: return null
     val listDiffers = listArt in BOXED_LIST_ART && listArt != listArtOf(kind)
     if (backdrop == kind && !listDiffers) return null
-    return LayoutQuestion(kind, alsoListArt = listDiffers, yesFocused = true)
+    return LayoutQuestion(kind, listArtOf(kind), alsoListArt = listDiffers, yesFocused = true)
 }
 
 private val BOXED_LIST_ART = setOf(GameListArt.BOX3D, GameListArt.BOX2D, GameListArt.WHEEL)
@@ -109,7 +116,7 @@ const val LAYOUT_QUESTION_NO = "Keep"
  * kind, only List art is named.
  */
 fun layoutQuestionText(q: LayoutQuestion, backdrop: BackdropArt, listArt: GameListArt): String = when {
-    backdrop == q.kind && q.alsoListArt -> "Layouts → List art is set to ${listArt.label}. Switch it to ${listArtOf(q.kind).label}?"
+    q.kind == null || (backdrop == q.kind && q.alsoListArt) -> "Layouts → List art is set to ${listArt.label}. Switch it to ${q.listKind.label}?"
     else -> "Layouts → Backdrop art is set to ${backdrop.label}. Switch it to ${q.kind.label}?" + if (q.alsoListArt) " List art too." else ""
 }
 
@@ -278,8 +285,8 @@ class ArtPanelController(
         val p = _panel.value ?: return
         val q = p.question ?: return
         if (switch) {
-            settings.backdropArt = q.kind
-            if (q.alsoListArt) settings.gameListArt = listArtOf(q.kind)
+            q.kind?.let { settings.backdropArt = it }
+            if (q.alsoListArt) settings.gameListArt = q.listKind
             onLayoutSwitched()
         }
         _panel.value = p.copy(question = null)
