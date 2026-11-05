@@ -12,6 +12,13 @@ object DcGames {
     fun isArcadeSet(tag: String, fileName: String, sets: NaomiSets): Boolean =
         tag.uppercase() == "DC" && Names.isArchive(fileName) && !sets.isEmpty && sets.loadsAsIs(fileName)
 
-    /** A Dreamcast disc starts on the stick (most of its games steer with it); arcade sets and other consoles do not. */
-    fun stickFirst(baseTag: String, arcadeSet: Boolean): Boolean = baseTag.uppercase() == "DC" && !arcadeSet
+    /**
+     * A Dreamcast disc and an N64 game start on the stick (most of their games steer with it); arcade sets and other
+     * consoles do not.
+     */
+    fun stickFirst(baseTag: String, arcadeSet: Boolean): Boolean = when (baseTag.uppercase()) {
+        "DC" -> !arcadeSet
+        "N64" -> true
+        else -> false
+    }
 }

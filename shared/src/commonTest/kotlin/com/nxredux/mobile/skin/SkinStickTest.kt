@@ -142,6 +142,44 @@ class SkinStickTest {
         assertEquals(PadEvent.Up(NxButton.B), events.last())
     }
 
+    // the N64: the C buttons in the face diamond's places, B / A in their own well left of it
+    private fun n64(events: MutableList<PadEvent>) = SkinPadTouch({ events += it }, { _, _ -> }, {}, onStick = { _, _ -> }).apply {
+        placement = SkinPlacement(spec(), 1f, emptyList(), emptyList(), listOf(
+            ctl("STICK", ControlShape.STICK, 200f, 500f, 100f, travel = 60f),
+            ctl("CU", ControlShape.CIRCLE, 800f, 400f, 40f), ctl("CL", ControlShape.CIRCLE, 740f, 460f, 40f),
+            ctl("CR", ControlShape.CIRCLE, 860f, 460f, 40f), ctl("CD", ControlShape.CIRCLE, 800f, 520f, 40f),
+            ctl("B", ControlShape.CIRCLE, 640f, 560f, 50f), ctl("A", ControlShape.CIRCLE, 700f, 620f, 50f),
+            ctl("START", ControlShape.CIRCLE, 800f, 700f, 40f)))
+    }
+
+    @Test
+    fun theCCapsPressTheCButtons() {
+        val events = mutableListOf<PadEvent>()
+        val t = n64(events)
+        for ((x, y) in listOf(800f to 400f, 740f to 460f, 860f to 460f, 800f to 520f)) { t.press(1, x, y); t.release(1) }
+        assertEquals(listOf(NxButton.C_UP, NxButton.C_LEFT, NxButton.C_RIGHT, NxButton.C_DOWN),
+            events.filterIsInstance<PadEvent.Down>().map { it.button })
+    }
+
+    @Test
+    fun aCapUnderTheCDiamondPressesOnlyAlone() {   // as under every skin's face diamond
+        val events = mutableListOf<PadEvent>()
+        val t = n64(events)
+        t.press(1, 200f, 500f)   // the stick held
+        t.press(2, 800f, 700f)
+        assertTrue(events.none { it.button == NxButton.START })
+    }
+
+    @Test
+    fun aAndBPressWhileTheStickIsHeld() {
+        val events = mutableListOf<PadEvent>()
+        val t = n64(events)
+        t.press(1, 200f, 500f)
+        t.press(2, 700f, 620f); t.release(2)
+        t.press(2, 640f, 560f)
+        assertEquals(listOf<PadEvent>(PadEvent.Down(NxButton.A), PadEvent.Up(NxButton.A), PadEvent.Down(NxButton.B)), events)
+    }
+
     // the 3DS: the Circle Pad (STICK) and the C-stick nub (CSTICK), each its own finger, analog and knob
     private val cSticks = mutableListOf<Pair<Float, Float>>()
     private fun twoSticks() = SkinPadTouch({ pads += it }, { _, _ -> }, {}, onStick = { x, y -> sticks += x to y }, onCStick = { x, y -> cSticks += x to y }).apply {

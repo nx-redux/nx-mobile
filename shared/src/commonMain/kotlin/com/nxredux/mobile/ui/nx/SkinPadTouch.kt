@@ -235,13 +235,15 @@ class SkinPadTouch(
         const val ARM_CORNER = 10f
         /** The stick's touch area: its ring's radius times this. */
         const val STICK_SLOP = 1.25f
-        val FACE = setOf("A", "B", "X", "Y")
+        /** The face buttons: the diamond, and on the N64 its C buttons (in the diamond's places) with B / A beside them. */
+        val FACE = setOf("A", "B", "X", "Y", "CU", "CL", "CR", "CD")
         /** The stick control ids: the stick (the Circle Pad on a 3DS) and the 3DS C-stick nub. */
         const val STICK = "STICK"
         const val CSTICK = "CSTICK"
         val BUTTONS = mapOf(
             "A" to NxButton.A, "B" to NxButton.B, "X" to NxButton.X, "Y" to NxButton.Y, "L" to NxButton.L1, "R" to NxButton.R1, "L2" to NxButton.L2, "R2" to NxButton.R2,
             "DISK" to NxButton.L1,   // the FDS skin's DISK: fceumm's L, its one-press disk flip
+            "CU" to NxButton.C_UP, "CL" to NxButton.C_LEFT, "CR" to NxButton.C_RIGHT, "CD" to NxButton.C_DOWN,   // the N64's C buttons
             "START" to NxButton.START, "SELECT" to NxButton.SELECT, "MENU" to NxButton.MENU,
         )
         val ACTIONS = setOf("MIC", "SWAP", "SAVE", "LOAD", "REWIND", "FAST", "TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4", "TURBO_A", "TURBO_B", "STICK_SWAP")

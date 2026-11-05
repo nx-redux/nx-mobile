@@ -41,6 +41,7 @@ object SkinChoice {
         baseTag in ARCADE_TAGS -> SkinVariant.ARCADE
         baseTag == "FDS" -> SkinVariant.FDS
         baseTag == "3DS" -> SkinVariant.N3DS
+        baseTag == "N64" -> SkinVariant.N64
         // flycast: a NAOMI / Atomiswave set takes the arcade skin, a disc the Dreamcast one ([DcGames.isArcadeSet])
         baseTag == "DC" -> if (arcadeSet) SkinVariant.ARCADE else SkinVariant.DC
         baseTag in SINGLE_TAGS -> SkinVariant.SINGLE

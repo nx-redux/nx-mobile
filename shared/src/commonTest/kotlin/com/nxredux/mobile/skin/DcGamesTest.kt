@@ -26,4 +26,9 @@ class DcGamesTest {
         assertFalse(DcGames.stickFirst("DC", arcadeSet = true))
         assertFalse(DcGames.stickFirst("SFC", arcadeSet = false))
     }
+
+    @Test
+    fun n64GamesStartOnTheStick() {   // nearly every N64 game steers with it
+        assertTrue(DcGames.stickFirst("N64", arcadeSet = false))
+    }
 }

@@ -12,7 +12,7 @@ class SkinVariantForTest {
         for (t in listOf("GB", "GBC", "SGB")) assertEquals(SkinVariant.GB, SkinChoice.variantFor(t, false), t)
         for (t in listOf("GBA", "MGBA")) assertEquals(SkinVariant.GBA, SkinChoice.variantFor(t, false), t)
         for (t in listOf("FC", "SFC", "MD", "PCE")) assertEquals(SkinVariant.SINGLE, SkinChoice.variantFor(t, false), t)
-        for (t in listOf("N64", "PSP", "")) assertNull(SkinChoice.variantFor(t, false), t)
+        for (t in listOf("PSP", "")) assertNull(SkinChoice.variantFor(t, false), t)
     }
 
     @Test
@@ -35,5 +35,10 @@ class SkinVariantForTest {
     @Test
     fun n3dsGetsItsOwnLayout() {
         assertEquals(SkinVariant.N3DS, SkinChoice.variantFor("3DS", ds = false))
+    }
+
+    @Test
+    fun n64GetsItsOwnLayout() {
+        assertEquals(SkinVariant.N64, SkinChoice.variantFor("N64", ds = false))
     }
 }
