@@ -309,7 +309,7 @@ index a4ba964..52f5c30 100644
  
  } // namespace Input
 diff --git a/src/common/file_util.cpp b/src/common/file_util.cpp
-index 3168a26..510b7fd 100644
+index 3168a26..b6fbd13 100644
 --- a/src/common/file_util.cpp
 +++ b/src/common/file_util.cpp
 @@ -155,6 +155,21 @@ static void StripTailDirSlashes(std::string& fname) {
@@ -358,6 +358,17 @@ index 3168a26..510b7fd 100644
  
      LOG_ERROR(Common_Filesystem, "Stat failed {}: {}", filename, GetLastErrorMsg());
      return 0;
+@@ -1527,7 +1552,9 @@ std::size_t IOFile::WriteImpl(const void* data, std::size_t length, std::size_t
+ 
+     std::size_t written;
+ #if defined(HAVE_LIBRETRO_VFS)
+-    written = rfwrite(data, elem_size, length, m_file) / elem_size;
++    // nx-mobile: rfwrite already returns whole elements (filestream_write's bytes / elem_size, as fwrite); dividing
++    // again failed every write of elements over 1 byte (the GL shader disk cache never saved, recompiling each run).
++    written = static_cast<std::size_t>(rfwrite(data, elem_size, length, m_file));
+ #else
+     written = std::fwrite(data, elem_size, length, m_file);
+ #endif
 diff --git a/src/common/settings.h b/src/common/settings.h
 index c83f322..2c5a18e 100644
 --- a/src/common/settings.h
