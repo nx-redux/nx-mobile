@@ -6474,19 +6474,25 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     fun artworkDraftKey(text: String) { artworkScreens?.draftKey(text) }
 
     /**
-     * The page the left pane shows beside [screen] in the Artwork column browser ([artworkSplitView]): the Artwork page
-     * beside Fetch by console, Progress and Settings, Settings beside Reset, the row that opened it lit. Null otherwise.
-     */
-    fun artworkParent(screen: Screen): ArtworkParent? = artworkScreens?.parentOf(screen)
-
-    /**
-     * The art fetch job as it moves (null without a controller): the Artwork left pane is drawn again on each emission,
-     * so its counts and rows follow a running fetch while the right pane stays the same screen.
+     * The art fetch job as it moves (null without a controller): the Artwork stage is drawn again on each emission, so
+     * its words, status lines and previews follow a running fetch while the open page stays the same screen.
      */
     val artworkJob: StateFlow<com.nxredux.mobile.scraper.ScrapeState>? get() = artworkScreens?.job
 
-    /** A tap on row [index] of the dimmed Artwork left pane showing [parent] ([artworkParent]): that row opens in place of the right pane. */
-    fun artworkParentTap(parent: Screen, index: Int) { artworkScreens?.parentTap(parent, index) }
+    /** The Artwork page whose words and status lines the wide stage shows beside [screen] ([ArtworkScreenController.stagePage]). */
+    fun artworkStagePage(screen: Screen): Screen.Artwork = artworkScreens?.stagePage(screen) ?: Screen.Artwork(emptyList(), emptyList())
+
+    /** The stage's word lit for the open Artwork page [screen]; null on the Artwork page itself ([ArtworkScreenController.wordOf]). */
+    fun artworkWord(screen: Screen): ArtworkAction? = artworkScreens?.wordOf(screen)
+
+    /** A tap on the stage's word [index]: on the page, select and open it; on a page, that word's page in place ([ArtworkScreenController.wordTap]). */
+    fun artworkWordTap(index: Int) { artworkScreens?.wordTap(index) }
+
+    /** The page the root previews while [action] is highlighted; null for none ([ArtworkScreenController.preview]). */
+    fun artworkPreview(action: ArtworkAction): Screen? = artworkScreens?.preview(action)
+
+    /** A tap on [row] of the root's preview: opens that page on the row, a second tap acts ([ArtworkScreenController.previewTap]). */
+    fun artworkPreviewTap(row: Int) { artworkScreens?.previewTap(row) }
 
     // --- Context menu: hosted by a game list or the main menu (a pinned or recent row) ---
 

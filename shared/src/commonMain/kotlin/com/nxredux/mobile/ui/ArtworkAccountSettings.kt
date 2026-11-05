@@ -102,7 +102,7 @@ internal class ArtworkAccountSettings(
         add(ArtworkSettingRow(ArtworkSettingKind.RESET, "Reset artwork"))
     }
 
-    /** The Settings page as it would open now (no modal), for the left pane beside Reset ([ArtworkScreenController.parentOf]). */
+    /** The Settings page as it would open now (no modal), for the wide stage's preview ([ArtworkScreenController.preview]). */
     fun settingsPage(): Screen.ArtworkSettings = Screen.ArtworkSettings(settingRows())
 
     fun openSettings(on: ArtworkSettingKind? = null) {

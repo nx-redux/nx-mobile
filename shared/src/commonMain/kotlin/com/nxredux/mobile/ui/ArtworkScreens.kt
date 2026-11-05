@@ -11,7 +11,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import com.nxredux.mobile.scraper.JobPhase
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.ListSelection
@@ -35,7 +34,7 @@ internal const val ARTWORK_TITLE = "Artwork"
 /**
  * Tools → Artwork and its pages: the Artwork page in the Settings root's look ([SettingsRootScreen]), the pages under it
  * in the tool-page shape (title, detail lines, whole rows with scroll arrows). The state is in the screen ([ArtworkScreenController] republishes it). One page:
- * the body ([ArtworkPageBody]) with its dialogs ([ArtworkDialogs]) over it; the column browser draws them apart.
+ * the body ([ArtworkPageBody]) with its dialogs ([ArtworkDialogs]) over it; the wide stage draws them apart ([ArtworkStageScreen]).
  */
 @Composable
 fun ArtworkScreen(
@@ -53,8 +52,8 @@ fun ArtworkScreen(
 }
 
 /**
- * An Artwork page without its dialogs. [split]: a pane of the column browser ([ArtworkSplitScreen]), titled without
- * the tool's name; [focused] = false: its dimmed left pane, with no hints (Settings' controls take no taps there).
+ * An Artwork page without its dialogs. [split]: on the wide stage ([ArtworkStageScreen]), titled without the tool's
+ * name; [focused] = false: the root's preview, with no hints (Settings' controls take no taps there).
  * [onSetting], [onTruncated] and [truncated]: Settings' touch rows, as Settings' pages ([SettingsScreen]).
  */
 @Composable
@@ -76,7 +75,7 @@ internal fun ArtworkPageBody(
             selectedIndex = selectedIndex, hints = hints(listOf(Hint(NxButton.A, "Fetch"), Hint(NxButton.B, "Back"))),
             onSelect = onSelect, onOpen = onOpen, modifier = modifier, onHint = onHint, rowsAtTop = true,
         )
-        is Screen.ArtworkProgress -> ArtworkProgressBody(screen, selectedIndex, onSelect, onOpen, onHint, modifier, split)
+        is Screen.ArtworkProgress -> ArtworkProgressBody(screen, selectedIndex, onSelect, onOpen, onHint, modifier, split, focused)
         is Screen.ArtworkSettings -> {
             val rows = remember(screen.rows) { screen.rows.map(::artworkSettingTouchRow) }   // not per d-pad move
             val touch = rows.getOrNull(selectedIndex)
@@ -98,7 +97,7 @@ internal fun ArtworkPageBody(
 
 /**
  * An Artwork page's open dialog or prompt (Settings' sign-in, key prompt and logout confirm; Reset's and Progress's
- * confirms): over the page, or in a split over both panes ([SplitPanes]'s over).
+ * confirms): over the page, or over the whole wide stage ([SettingsStage]'s over).
  */
 @Composable
 internal fun ArtworkDialogs(screen: Screen, state: AppState, onHint: (NxButton) -> Unit) {
@@ -146,28 +145,31 @@ internal fun ArtworkDialogs(screen: Screen, state: AppState, onHint: (NxButton) 
 }
 
 /**
- * The Artwork column browser on a split window ([artworkSplitView]): the page the user is on focused on the right (its
- * title without the tool's name); on the left, dimmed, with no hints, the page it came from ([AppState.artworkParent])
- * with the row that opened it highlighted. A tap there opens that row in place of the right pane
- * ([AppState.artworkParentTap]); the left pane's select does nothing, so a tap acts once. The dialogs cover both panes.
+ * Artwork on Settings' wide stage ([artworkSplitView], [SettingsStage]): its words and status lines on the left (the
+ * page as it stands, [AppState.artworkStagePage]). On the Artwork page the words have the focus and the right frame
+ * previews the highlighted word's page ([AppState.artworkPreview]; empty for Fetch missing art and Resume), undimmed and
+ * without hints, a tap opening it on that row ([AppState.artworkPreviewTap]). On a page the right frame is that page
+ * and its word drops to the open grey with a "›" ([AppState.artworkWord]; Reset artwork's is Settings); a tap on a
+ * word opens it in place ([AppState.artworkWordTap]). The dialogs cover the whole stage.
  */
 @Composable
-internal fun ArtworkSplitScreen(state: AppState, s: Screen, selection: State<ListSelection>) {
-    // Keyed on the job too: beside a running fetch the right pane stays the same screen, the left pane's counts move on.
+internal fun ArtworkStageScreen(state: AppState, s: Screen, selection: State<ListSelection>) {
+    // Keyed on the job too: beside a running fetch the open page stays the same screen, the words' counts move on.
     val job = state.artworkJob?.collectAsState()?.value
-    val parent = remember(s, job) { state.artworkParent(s) }
-    SplitPanes(
-        left = {
-            parent?.let { p ->
-                val tap: (Int) -> Unit = remember(p.screen) { { i -> state.artworkParentTap(p.screen, i) } }
-                ArtworkPageBody(
-                    p.screen, p.row, onSelect = {}, onOpen = tap, onHint = {},
-                    modifier = Modifier.alpha(UNFOCUSED_ALPHA), split = true, focused = false,   // role: an unfocused pane, dimmed
-                )
-            }
+    val words = remember(s, job) { state.artworkStagePage(s) }
+    val root = s is Screen.Artwork
+    val current = if (root) selection.value.index else words.rows.indexOfFirst { it.action == state.artworkWord(s) }.coerceAtLeast(0)
+    val truncated by state.settingInfoTruncated.collectAsState()   // Settings' selected row's cut-off line: its X Info hint
+    SettingsStage(
+        title = ARTWORK_TITLE, words = words.rows.map { it.label }, lines = words.details, current = current, root = root,
+        onWordTap = state::artworkWordTap, blockPage = true, onHint = state::onButton,
+        preview = {
+            val action = words.rows.getOrNull(current)?.action
+            val preview = remember(s, action, job) { action?.let(state::artworkPreview) }
+            // No selection, undimmed, no hints: the highlighted word is the one accent word, as Settings' preview.
+            preview?.let { ArtworkPageBody(it, -1, onSelect = state::artworkPreviewTap, onOpen = state::artworkPreviewTap, onHint = {}, split = true, focused = false) }
         },
-        right = {
-            val truncated by state.settingInfoTruncated.collectAsState()
+        page = {
             WithIndex(selection) {
                 ArtworkPageBody(
                     s, it, state::select, { state.openSelected() }, state::onButton, split = true,
@@ -182,10 +184,10 @@ internal fun ArtworkSplitScreen(state: AppState, s: Screen, selection: State<Lis
 @Composable
 private fun ArtworkProgressBody(
     screen: Screen.ArtworkProgress, selectedIndex: Int,
-    onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onHint: (NxButton) -> Unit, modifier: Modifier, split: Boolean,
+    onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onHint: (NxButton) -> Unit, modifier: Modifier, split: Boolean, focused: Boolean,
 ) {
     val phase = screen.job.phase
-    val hints = artworkProgressHints(phase)
+    val hints = if (focused) artworkProgressHints(phase) else emptyList()   // the stage's preview: no hints, no touch buttons
     NxDetailListBody(
         title = toolPageTitle(screen, split).orEmpty(),
         details = listOfNotNull(progressHeader(screen.job, screen.starting), artworkSummary(screen.job).takeIf { it.isNotEmpty() && !screen.starting }),

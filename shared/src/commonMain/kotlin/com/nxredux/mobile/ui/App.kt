@@ -630,12 +630,14 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.RaGames, is Screen.RaGame, is Screen.RaAchievement, is Screen.RaSettings ->
                 if (raSplitView(LocalWindowSize.current, s)) RaSplitScreen(state, s) { RaLevelPage(state, s, selection, split = true) }
                 else RaLevelPage(state, s, selection, split = false)
-            // Artwork's pages: on a split window a column browser beside the page they came from (the RetroAchievements
-            // rule); the Artwork page itself, and every page on a narrow or portrait window, one page.
+            // Artwork and its pages: on a split window Settings' wide stage (its words on the left, the page or the
+            // highlighted word's preview on the right); on a narrow or portrait window one page. Either way the Settings
+            // look: the hint bar follows Layouts → Button hints and starts at the words' edge, as Settings'.
             is Screen.Artwork, is Screen.ArtworkConsoles, is Screen.ArtworkProgress, is Screen.ArtworkSettings,
             is Screen.ArtworkReset ->
-                if (artworkSplitView(LocalWindowSize.current, s)) ArtworkSplitScreen(state, s, selection)
-                // The Artwork page in the Settings root's look: its hint bar follows Layouts → Button hints, as Settings'.
+                if (artworkSplitView(LocalWindowSize.current, s)) CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
+                    ArtworkStageScreen(state, s, selection)
+                }
                 else if (s is Screen.Artwork) CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
                     WithIndex(selection) { ArtworkScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton) }
                 }
@@ -808,14 +810,15 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
         is Screen.StorageUpgrade, is Screen.CopySaves -> SettingsBackground()
         // The folder picker: the small mark only, so the large one never sits behind its names.
         is Screen.FilePicker -> SettingsBackground()
-        // Settings and the Artwork page (drawn as Settings' root): the small mark at the top right alone
-        // ([SettingsBackground]); the large centred mark is not drawn. Artwork's other pages keep it.
+        // Settings, the Artwork page (drawn as Settings' root) and every Artwork page on Settings' wide stage: the small
+        // mark at the top right alone ([SettingsBackground]); the large centred mark is not drawn. Artwork's other pages
+        // on a narrow window keep it.
         is Screen.Artwork -> SettingsBackground()
-        else -> if (settingsPane(s) != null) SettingsBackground() else MarkBackground(s)
+        else -> if (settingsPane(s) != null || artworkSplitView(LocalWindowSize.current, s)) SettingsBackground() else MarkBackground(s)
     }
 }
 
-/** The NX mark; two panes (the RetroAchievements column browser, Game Tracker, Artwork), centred on the right pane (same size), as the page it sits behind. */
+/** The NX mark; two panes (the RetroAchievements column browser, Game Tracker), centred on the right pane (same size), as the page it sits behind. */
 @Composable
 private fun MarkBackground(s: Screen) = NxScreenBackground(
     url = null, fallback = Res.drawable.background, fade = false, modifier = Modifier.fillMaxSize().clipToBounds(), centred = true,

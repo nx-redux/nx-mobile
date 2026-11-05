@@ -899,78 +899,120 @@ class ArtworkScreensTest {
         assertEquals("4 games · 1 with art · 3 missing", assertIs<Screen.Artwork>(r.state.screen.value).details[0])   // Zelda's own art stays
     }
 
-    @Test fun the_split_left_pane_is_the_page_or_settings_with_the_opening_row_lit() = runTest {
+    // The wide stage: the word lit on the left is the open page's (Reset is under Settings); on the root, the selection.
+    @Test fun the_stage_word_is_lit_for_the_open_page() = runTest {
         val r = rig()
         r.http.latency = 5_000
         r.state.openArtwork()
-        assertNull(r.state.artworkParent(r.state.screen.value))                           // the page: whole
-        fun pageRow(): ArtworkAction {
-            val p = assertNotNull(r.state.artworkParent(r.state.screen.value))
-            return assertIs<Screen.Artwork>(p.screen).rows[p.row].action
-        }
-        r.state.pick(ArtworkAction.FETCH_BY_CONSOLE); assertEquals(ArtworkAction.FETCH_BY_CONSOLE, pageRow())
-        r.state.onButton(NxButton.B); assertNull(r.state.artworkParent(r.state.screen.value))
-        r.state.pick(ArtworkAction.SETTINGS); assertEquals(ArtworkAction.SETTINGS, pageRow())
-        // The page beside Settings is the page as it stands (its counts and rows), not a stale copy.
-        assertEquals(assertIs<Screen.Artwork>(assertNotNull(r.state.artworkParent(r.state.screen.value)).screen).details[0], "4 games · 1 with art · 3 missing")
-        val rows = assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows
-        r.state.pickRow("Reset artwork", rows.map { it.label })
-        val beside = assertNotNull(r.state.artworkParent(assertIs<Screen.ArtworkReset>(r.state.screen.value)))
-        assertEquals(rows, assertIs<Screen.ArtworkSettings>(beside.screen).rows)        // Settings beside Reset, Reset lit
-        assertEquals(ArtworkSettingKind.RESET, rows[beside.row].kind)
+        assertNull(r.state.artworkWord(r.state.screen.value))                              // the root: the highlight is the word
+        r.state.pick(ArtworkAction.FETCH_BY_CONSOLE)
+        assertEquals(ArtworkAction.FETCH_BY_CONSOLE, r.state.artworkWord(r.state.screen.value))
+        r.state.onButton(NxButton.B)
+        r.state.pick(ArtworkAction.SETTINGS)
+        assertEquals(ArtworkAction.SETTINGS, r.state.artworkWord(r.state.screen.value))
+        // The words beside Settings are the page as it stands (its counts and rows), not a stale copy.
+        assertEquals("4 games · 1 with art · 3 missing", r.state.artworkStagePage(r.state.screen.value).details[0])
+        r.state.pickRow("Reset artwork", assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.label })
+        assertEquals(ArtworkAction.SETTINGS, r.state.artworkWord(assertIs<Screen.ArtworkReset>(r.state.screen.value)))
         r.state.onButton(NxButton.B); r.state.onButton(NxButton.B)
-        r.state.pick(ArtworkAction.FETCH_MISSING); assertIs<Screen.ArtworkProgress>(r.state.screen.value)
-        assertEquals(ArtworkAction.PROGRESS, pageRow())
+        r.state.pick(ArtworkAction.FETCH_MISSING)
+        assertEquals(ArtworkAction.PROGRESS, r.state.artworkWord(assertIs<Screen.ArtworkProgress>(r.state.screen.value)))
+        assertTrue(r.state.artworkStagePage(r.state.screen.value).rows.any { it.action == ArtworkAction.PROGRESS })
     }
 
-    @Test fun a_tap_on_the_dimmed_left_pane_opens_that_row_in_place() = runTest {
+    // On the root the right frame previews the highlighted word's page; Fetch missing art and Resume have none.
+    @Test fun the_root_previews_the_highlighted_word() = runTest {
+        val r = rig()
+        r.http.latency = 5_000
+        r.state.openArtwork()
+        val consoles = assertIs<Screen.ArtworkConsoles>(r.state.artworkPreview(ArtworkAction.FETCH_BY_CONSOLE))
+        val settings = assertIs<Screen.ArtworkSettings>(r.state.artworkPreview(ArtworkAction.SETTINGS))
+        assertNull(r.state.artworkPreview(ArtworkAction.FETCH_MISSING))
+        assertNull(r.state.artworkPreview(ArtworkAction.RESUME))
+        r.state.pick(ArtworkAction.FETCH_BY_CONSOLE)
+        assertEquals(assertIs<Screen.ArtworkConsoles>(r.state.screen.value).rows, consoles.rows)
+        r.state.onButton(NxButton.B)
+        r.state.pick(ArtworkAction.SETTINGS)
+        assertEquals(assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows, settings.rows)
+        r.state.onButton(NxButton.B)
+        r.state.pick(ArtworkAction.FETCH_MISSING)
+        val job = assertIs<Screen.ArtworkProgress>(r.state.screen.value).job
+        r.state.onButton(NxButton.B)
+        assertEquals(job, assertIs<Screen.ArtworkProgress>(r.state.artworkPreview(ArtworkAction.PROGRESS)).job)
+    }
+
+    // A tap on the preview: the first opens that page on the row (as Settings' preview), the second acts on it.
+    @Test fun a_preview_tap_opens_that_page_on_the_row_and_a_second_tap_acts() = runTest {
+        val r = rig()
+        r.state.openArtwork()
+        fun pageAt(action: ArtworkAction) = assertIs<Screen.Artwork>(r.state.screen.value).rows.indexOfFirst { it.action == action }
+        r.state.select(pageAt(ArtworkAction.SETTINGS))
+        val preview = assertIs<Screen.ArtworkSettings>(r.state.artworkPreview(ArtworkAction.SETTINGS))
+        val replace = preview.rows.indexOfFirst { it.kind == ArtworkSettingKind.REPLACE }
+        r.state.artworkPreviewTap(replace)
+        val settings = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
+        assertEquals(ArtworkSettingKind.REPLACE, settings.rows[r.state.selection.value.index].kind)
+        assertFalse(r.settings.artReplaceExisting)                                          // opened, not acted on
+        r.state.artworkPreviewTap(replace)
+        assertTrue(r.settings.artReplaceExisting)                                           // the second tap: A there
+        r.state.onButton(NxButton.B)                                                        // B: the page, on Settings
+        assertEquals(ArtworkAction.SETTINGS, assertIs<Screen.Artwork>(r.state.screen.value).rows[r.state.selection.value.index].action)
+        r.state.select(pageAt(ArtworkAction.FETCH_BY_CONSOLE))
+        r.state.artworkPreviewTap(1)
+        assertIs<Screen.ArtworkConsoles>(r.state.screen.value)
+        assertEquals(1, r.state.selection.value.index)
+    }
+
+    @Test fun a_word_tap_from_a_page_opens_that_word_in_place() = runTest {
         val r = rig()
         r.state.openArtwork()
         r.state.pick(ArtworkAction.SETTINGS)
-        /** A tap on the left pane's row [action] / [kind], as the split wires it: its select does nothing, its open taps. */
-        fun tapPage(action: ArtworkAction) {
-            val p = assertNotNull(r.state.artworkParent(r.state.screen.value))
-            val at = assertIs<Screen.Artwork>(p.screen).rows.indexOfFirst { it.action == action }
-            nxTap(at, selected = at == p.row, opens = true, {}) { i -> r.state.artworkParentTap(p.screen, i) }
+        /** A tap on the stage's word [action], as drawn beside the page open now. */
+        fun tapWord(action: ArtworkAction) {
+            val at = r.state.artworkStagePage(r.state.screen.value).rows.indexOfFirst { it.action == action }
+            assertTrue(at >= 0, "no $action")
+            r.state.artworkWordTap(at)
         }
-        fun tapSettings(kind: ArtworkSettingKind) {
-            val p = assertNotNull(r.state.artworkParent(r.state.screen.value))
-            val at = assertIs<Screen.ArtworkSettings>(p.screen).rows.indexOfFirst { it.kind == kind }
-            nxTap(at, selected = at == p.row, opens = true, {}) { i -> r.state.artworkParentTap(p.screen, i) }
-        }
-        tapPage(ArtworkAction.FETCH_BY_CONSOLE)                                            // Fetch by console in Settings' place
+        tapWord(ArtworkAction.FETCH_BY_CONSOLE)                                             // Fetch by console in Settings' place
         assertIs<Screen.ArtworkConsoles>(r.state.screen.value)
-        tapPage(ArtworkAction.FETCH_BY_CONSOLE)                                            // the lit one: already open
-        assertIs<Screen.ArtworkConsoles>(r.state.screen.value)
-        r.state.artworkParentTap(Screen.ArtworkSettings(emptyList()), 0)                  // a pane no longer beside it: nothing
-        assertIs<Screen.ArtworkConsoles>(r.state.screen.value)
-        tapPage(ArtworkAction.SETTINGS)
-        assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        r.state.onButton(NxButton.B)                                                      // B from there: the page, on Settings
+        r.state.select(1)
+        tapWord(ArtworkAction.FETCH_BY_CONSOLE)                                             // the lit word: already open, nothing
+        assertIs<Screen.ArtworkConsoles>(r.state.screen.value); assertEquals(1, r.state.selection.value.index)
+        tapWord(ArtworkAction.SETTINGS)
+        val settings = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
+        r.state.onButton(NxButton.B)                                                        // B from there: the page, on Settings
         assertEquals(ArtworkAction.SETTINGS, assertIs<Screen.Artwork>(r.state.screen.value).rows[r.state.selection.value.index].action)
         r.state.pick(ArtworkAction.SETTINGS)
-        r.state.pickRow("Reset artwork", assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows.map { it.label })
-        // Settings' Replace existing art beside Reset: Settings again on that row, acted on as A there would.
-        tapSettings(ArtworkSettingKind.REPLACE)
-        val settings = assertIs<Screen.ArtworkSettings>(r.state.screen.value)
-        assertTrue(r.settings.artReplaceExisting)
-        assertEquals(ArtworkSettingKind.REPLACE, settings.rows[r.state.selection.value.index].kind)
-        // An open dialog on the right takes the taps: the left pane does nothing under it.
         r.state.pickRow("Reset artwork", settings.rows.map { it.label })
+        tapWord(ArtworkAction.SETTINGS)                                                     // from Reset: back to the Settings rows, on Reset
+        assertEquals(ArtworkSettingKind.RESET, assertIs<Screen.ArtworkSettings>(r.state.screen.value).rows[r.state.selection.value.index].kind)
+        // An open dialog takes the taps: the words do nothing under it.
+        r.state.onButton(NxButton.A)
         r.state.onButton(NxButton.A)
         assertNotNull(assertIs<Screen.ArtworkReset>(r.state.screen.value).confirm)
-        tapSettings(ArtworkSettingKind.REPLACE)
+        tapWord(ArtworkAction.FETCH_BY_CONSOLE)
         assertNotNull(assertIs<Screen.ArtworkReset>(r.state.screen.value).confirm)
-        assertTrue(r.settings.artReplaceExisting)
-        r.state.onButton(NxButton.B); r.state.onButton(NxButton.B)                        // Settings
-        // A left-pane action that starts a job: one tap, one job, Progress on the right.
+        r.state.onButton(NxButton.B); r.state.onButton(NxButton.B)                          // Settings
+        // A word that starts a job: one tap, one job, Progress on the right.
         r.http.latency = 5_000
-        tapPage(ArtworkAction.FETCH_MISSING)
+        tapWord(ArtworkAction.FETCH_MISSING)
         val progress = assertIs<Screen.ArtworkProgress>(r.state.screen.value)
         assertEquals(JobPhase.RUNNING, progress.job.phase)
-        r.state.onButton(NxButton.X)                                                      // the cancel dialog blocks the left pane
-        tapPage(ArtworkAction.SETTINGS)
+        assertEquals(3, progress.job.total)
+        r.state.onButton(NxButton.X)                                                        // the cancel dialog blocks the words
+        tapWord(ArtworkAction.SETTINGS)
         assertTrue(assertIs<Screen.ArtworkProgress>(r.state.screen.value).confirmCancel)
+        r.state.onButton(NxButton.B)
+        // Resume gone since the words were drawn: its tap does nothing.
+        r.state.onButton(NxButton.Y); runCurrent()                                         // paused: Resume among the words
+        val drawn = r.state.artworkStagePage(r.state.screen.value).rows
+        val resume = drawn.indexOfFirst { it.action == ArtworkAction.RESUME }
+        assertTrue(resume >= 0, "$drawn")
+        r.state.onButton(NxButton.Y); runCurrent()                                         // running again: Resume is gone
+        r.state.select(1)
+        r.state.artworkWordTap(resume)                                                     // not the word now in its place either
+        assertEquals(JobPhase.RUNNING, assertIs<Screen.ArtworkProgress>(r.state.screen.value).job.phase)
+        assertEquals(1, r.state.selection.value.index)                                     // Progress not opened again
     }
 
     @Test fun the_context_menu_fetch_art_opens_the_panel_fetches_then_lists_the_options() = runTest {
@@ -1364,7 +1406,7 @@ class ArtworkScreensTest {
         assertTrue(page().rows.any { it.kind == ArtworkSettingKind.SS_LOGIN })
     }
 
-    @Test fun progress_opens_on_the_new_fetch_and_the_split_lights_progress() = runTest {
+    @Test fun progress_opens_on_the_new_fetch_and_the_stage_lights_progress() = runTest {
         val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
         val settings = Settings()
         val http = FakeHttp()
@@ -1396,9 +1438,11 @@ class ArtworkScreensTest {
             selection.value = com.nxredux.mobile.ui.nx.ListSelection(page.rows.indexOfFirst { it.action == ArtworkAction.FETCH_MISSING }, page.rows.size)
             screens.onButton(page, NxButton.A)
         }
+        /** The stage's lit word beside the open page, checked to be among its words. */
         fun parentRow(): ArtworkAction {
-            val p = assertNotNull(screens.parentOf(screen.value))
-            return assertIs<Screen.Artwork>(p.screen).rows[p.row].action
+            val word = assertNotNull(screens.wordOf(screen.value))
+            assertTrue(screens.stagePage(screen.value).rows.any { it.action == word })
+            return word
         }
         // No job yet: Progress opens starting, with Progress lit beside it (not row 0).
         fetchMissing()
@@ -1423,25 +1467,30 @@ class ArtworkScreensTest {
         assertEquals(listOf("Tetris", "Zelda"), assertIs<Screen.ArtworkProgress>(screen.value).job.items.map { it.name })
     }
 
-    @Test fun the_split_left_pane_and_consoles_follow_a_running_fetch() = runTest {
+    @Test fun the_stage_words_follow_a_running_fetch() = runTest {
         val r = rig()
         r.http.latency = 5_000
         r.http.on("romnom=Tetris.gb", Scrape.found("ss" to "https://m/t-ss.png", "box-2D" to "https://m/t-box.png"))
         r.http.on("https://m/", Scrape.OK_PNG)
         r.state.openArtwork()
+        fun gbMissing() = assertIs<Screen.ArtworkConsoles>(r.state.artworkPreview(ArtworkAction.FETCH_BY_CONSOLE)).rows.first { it.name == "Game Boy" }.missing
+        assertEquals(1, gbMissing())
         r.state.pick(ArtworkAction.FETCH_MISSING)
         r.state.onButton(NxButton.B)
         r.state.pick(ArtworkAction.FETCH_BY_CONSOLE)
         val job = assertNotNull(r.state.artworkJob)
         val before = job.value
-        fun parentDetails() = assertIs<Screen.Artwork>(assertNotNull(r.state.artworkParent(r.state.screen.value)).screen).details
-        assertTrue(parentDetails().any { it.startsWith("Fetching 0 / 3") }, "${parentDetails()}")
+        fun words() = r.state.artworkStagePage(r.state.screen.value)
+        assertTrue(words().rows.any { it.action == ArtworkAction.PROGRESS }, "${words().rows}")   // the words gain Progress
+        assertTrue(words().details.any { it.startsWith("Fetching 0 / 3") }, "${words().details}")
         advanceUntilIdle()   // the fetch runs to the end beside Fetch by console
-        assertTrue(job.value !== before)   // the left pane's key moved on, so it is drawn again
-        assertTrue(parentDetails().none { it.startsWith("Fetching") }, "${parentDetails()}")
-        assertEquals("4 games · 2 with art · 2 missing", parentDetails()[0])
-        // Fetch by console's own counts follow too: Tetris got its art.
+        assertTrue(job.value !== before)   // the stage's key moved on, so its words are drawn again
+        assertTrue(words().details.none { it.startsWith("Fetching") }, "${words().details}")
+        assertEquals("4 games · 2 with art · 2 missing", words().details[0])
+        // Fetch by console's own counts follow too: Tetris got its art; so does the root's preview of it.
         val consoles = assertIs<Screen.ArtworkConsoles>(r.state.screen.value).rows
         assertEquals(listOf("Game Boy" to 0, "Game Boy Advance" to 1, "Sega Genesis" to 1), consoles.map { it.name to it.missing })
+        r.state.onButton(NxButton.B)
+        assertEquals(0, gbMissing())
     }
 }
