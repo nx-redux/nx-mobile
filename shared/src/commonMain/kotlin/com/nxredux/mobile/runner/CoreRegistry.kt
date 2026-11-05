@@ -360,7 +360,7 @@ object CoreRegistry {
         rewind = false,
     )
 
-    // Nintendo 3DS on Azahar (azahar-emu/azahar 2126.1.2, src/citra_libretro, patched; cores/Makefile), GLES or Vulkan
+    // Nintendo 3DS on Azahar (azahar-emu/azahar 2126.2, src/citra_libretro, patched; cores/Makefile), GLES or Vulkan
     // (Graphics API). Content through the runner's VFS: the game is /rom/<name>, read from the SAF descriptor in place, not
     // a multi-GB copy into the cache. FileUtil's plain stat misses that file, so the patch asks the VFS when stat finds
     // nothing (cores/patches/azahar.patch). Decrypted games only; the AES keyblob and the open-source shared font are
