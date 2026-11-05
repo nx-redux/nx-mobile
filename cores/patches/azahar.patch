@@ -31,10 +31,22 @@ index 8a65f9d..ec47bbc 100644
          !!LibRetro::CheckInput(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3);
      if (screen_swap_btn != screen_swap_button_state) {
 diff --git a/src/citra_libretro/core_settings.cpp b/src/citra_libretro/core_settings.cpp
-index 53fb164..8e07396 100644
+index 53fb164..d87b460 100644
 --- a/src/citra_libretro/core_settings.cpp
 +++ b/src/citra_libretro/core_settings.cpp
-@@ -1043,6 +1043,21 @@ static void ParseLayoutOptions(void) {
+@@ -974,6 +974,11 @@ static void ParseGraphicsOptions(void) {
+         LibRetro::FetchVariable(config::graphics::use_disk_shader_cache, config::enabled) ==
+         config::enabled;
+ 
++    // nx-mobile: build new Vulkan pipelines on worker threads instead of stalling the frame, as the standalone
++    // Android app does by default (settings.cpp). A draw whose pipeline isn't ready yet is skipped for that frame.
++    // OpenGL ignores it.
++    Settings::values.async_shader_compilation = true;
++
+     auto resolution = LibRetro::FetchVariable(config::graphics::resolution_factor, "1");
+     Settings::values.resolution_factor = std::stoi(resolution);
+ 
+@@ -1043,6 +1048,21 @@ static void ParseLayoutOptions(void) {
      auto large_screen_proportion =
          LibRetro::FetchVariable(config::layout::large_screen_proportion, "4.00");
      Settings::values.large_screen_proportion = std::stof(large_screen_proportion);
@@ -56,7 +68,7 @@ index 53fb164..8e07396 100644
  }
  
  static void ParseStorageOptions(void) {
-@@ -1123,7 +1138,9 @@ static void ParseInputOptions(void) {
+@@ -1123,7 +1143,9 @@ static void ParseInputOptions(void) {
              "port:0,sensitivity:" + std::to_string(LibRetro::settings.motion_sensitivity) +
              ",engine:libretro";
      } else {
