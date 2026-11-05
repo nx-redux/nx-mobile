@@ -347,7 +347,7 @@ internal class DualScreenController(
         }
         // No window on the second display (it went before it showed): nothing is moved onto it, both screens stay here.
         val mode = if (display != null && presentation == null) DualMode.OFF else wanted
-        val picture = if (display == null || presentation == null) PictureOn.MAIN else pictureOnNow(display, geometry)
+        val picture = if (display == null || presentation == null) PictureOn.MAIN else pictureOnNow(display, geometry, mode)
         val old = dualMode
         val oldPicture = pictureOn
         val changed = mode != old
@@ -379,7 +379,8 @@ internal class DualScreenController(
      * against the display's real size as it is turned now, unless a bottom screen is chosen (the console's Bottom screen,
      * else Settings → Second screen's). [geometry]: the view's game geometry (null before the view).
      */
-    private fun pictureOnNow(display: Display, geometry: FloatArray?): PictureOn {
+    /** Where the picture goes in [mode] (the mode being set, not the last one: under a skin it decides Auto). */
+    private fun pictureOnNow(display: Display, geometry: FloatArray?, mode: DualMode = dualMode): PictureOn {
         val root = findViewById<View>(R.id.root)
         val dm = resources.displayMetrics
         val w = if (root.width > 0) root.width else dm.widthPixels
@@ -387,7 +388,7 @@ internal class DualScreenController(
         val real = android.graphics.Point().also { @Suppress("DEPRECATION") display.getRealSize(it) }
         val bottom = BottomScreen.resolve(frontendValues[BottomScreenOptions.KEY], appSettings.bottomScreen)
         // A core that turns its picture (SET_ROTATION): the second display's regions draw it unturned, so it stays on main.
-        return DualScreen.pictureOn(maxOf(w, h), minOf(w, h), real.x, real.y, GameGeometry.of(geometry).rotated, bottom, skin = padLayout.dualSkinWanted())
+        return DualScreen.pictureOn(maxOf(w, h), minOf(w, h), real.x, real.y, GameGeometry.of(geometry).rotated, bottom, skin = padLayout.dualSkinWanted(mode))
     }
 
     /**

@@ -21,6 +21,12 @@ object SkinN3ds {
         frameW > 0 && frameH > 0 && abs(frameW * 6 - frameH * 5) <= 6
 
     /**
+     * Whether a [frameW] x [frameH] frame is cut into the two screens: the plain stack while the core is [pinned] to it
+     * (unswapped); else (netplay keeps the player's layout, maybe swapped) the frame is drawn whole.
+     */
+    fun cutsStack(frameW: Int, frameH: Int, pinned: Boolean): Boolean = pinned && isPlainStack(frameW, frameH)
+
+    /**
      * The two screens: with a [stack] glass, the biggest 400:480 rect in it cut into an upper and a lower half; else the
      * [top] and [touch] glasses. [big] goes in the upper slot, its other in the lower; each fitted at its own shape and
      * centred there. The touch screen takes touches; the upper screen is shaded, the lower only when the two are one size

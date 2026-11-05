@@ -94,6 +94,8 @@ internal interface FrontendHost : LifecycleOwner {
     val dualMode: DualMode
     val pictureOn: PictureOn
     val n3dsPicture: com.nxredux.mobile.options.NdsScreen
+    /** Whether a 3DS skin's core is pinned to the plain unswapped stack (not under netplay, which keeps the player's layout). */
+    val n3dsStackPinned: Boolean
     fun isLandscape(): Boolean
     /** The DS/3DS screens cut for the second display, and what it draws ([GameActivity]'s second-screen block). */
     fun secondDsRegions(g: FloatArray): List<NdsRegion>?
@@ -806,7 +808,7 @@ internal class FrontendRenderer(
         val top = p.glass(GlassScreen.TOP)?.rect
         val fw = g[0].roundToInt()
         val fh = g[1].roundToInt()
-        val regions = if (SkinN3ds.isPlainStack(fw, fh)) {
+        val regions = if (SkinN3ds.cutsStack(fw, fh, pinned = host.n3dsStackPinned)) {
             SkinN3ds.regions(stack, top, p.glass(GlassScreen.TOUCH)?.rect, padLayout.n3dsTabletopBig) ?: return null
         } else {
             val whole = SkinN3ds.whole(stack, top, fw, fh) ?: return null

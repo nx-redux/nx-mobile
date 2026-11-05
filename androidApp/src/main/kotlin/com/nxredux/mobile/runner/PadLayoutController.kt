@@ -966,13 +966,13 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      * Dual screen mode allowing it and a layout set for the console. No window measure (decided before the turn to
      * landscape): the Bottom screen's Auto then means the phone ([DualScreen.pictureOn]'s skin).
      */
-    fun dualSkinWanted(): Boolean {
+    fun dualSkinWanted(mode: DualMode = host.dualMode): Boolean {
         skinPack ?: return false
         val tag = layoutTag()
         val ds = NdsOptions.appliesTo(tag)
         val n3ds = N3dsOptions.appliesTo(tag)
         if (!ds && !n3ds) return false
-        return layoutControllerNames().isEmpty() && SkinDual.skinAllowed(host.dualMode, ds, n3ds) &&
+        return layoutControllerNames().isEmpty() && SkinDual.skinAllowed(mode, ds, n3ds) &&
             SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet) != null
     }
 

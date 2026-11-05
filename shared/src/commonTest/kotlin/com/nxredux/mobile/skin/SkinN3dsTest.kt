@@ -57,4 +57,11 @@ class SkinN3dsTest {
         assertEquals(PxRect(0f, 225f, 500f, 150f), SkinN3ds.whole(PxRect(0f, 0f, 500f, 600f), null, 800, 240))
         assertNull(SkinN3ds.whole(null, null, 800, 240))
     }
+
+    @Test
+    fun theStackIsCutOnlyWhileTheCoreIsPinnedToIt() {   // netplay keeps the player's layout: maybe swapped, drawn whole
+        assertTrue(SkinN3ds.cutsStack(400, 480, pinned = true))
+        assertFalse(SkinN3ds.cutsStack(400, 480, pinned = false))
+        assertFalse(SkinN3ds.cutsStack(800, 240, pinned = true))
+    }
 }
