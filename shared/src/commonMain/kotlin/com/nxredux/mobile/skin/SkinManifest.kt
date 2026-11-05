@@ -200,6 +200,8 @@ data class PieceSpec(
     val grow: Int = 0,
     /** The stick's knob: drawn by the app at the thumb's offset from the stick's centre, not with the still pieces. */
     val knob: Boolean = false,
+    /** A [knob]'s stick: the stick control's id (`STICK`, or the 3DS C-stick's `CSTICK`). */
+    val knobOf: String = "STICK",
     /** As [ControlSpec.alt]: shown only with the stick ("stick") or the d-pad ("dpad"); null: always. */
     val alt: String? = null,
 )

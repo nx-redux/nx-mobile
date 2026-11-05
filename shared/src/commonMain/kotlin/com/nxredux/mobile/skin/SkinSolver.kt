@@ -43,7 +43,7 @@ fun skinTiles(c: SkinCell, k: Float, stretchMax: Float): List<SkinTile> {
 
 /** A piece of a layout built from pieces: [src] in its parts picture drawn at [dst] (scaled when the sizes differ). */
 /** [strip]: one of the frame strip's shortcut labels (hidden with the in-game menu open). */
-data class SkinPiece(val src: PxRect, val dst: PxRect, val strip: Boolean = false, val alt: String? = null, val knob: Boolean = false)
+data class SkinPiece(val src: PxRect, val dst: PxRect, val strip: Boolean = false, val alt: String? = null, val knob: Boolean = false, val knobOf: String = "STICK")
 
 /** A control's hit area placed in the window: its [spec] (id, shape, sizes scaled) at [x], [y]. */
 data class PlacedControl(val spec: ControlSpec, val x: Float, val y: Float)
@@ -223,7 +223,7 @@ object SkinSolver {
             if (gx > 0f || gy > 0f) {
                 pieces += nineSlice(p, p.grow.toFloat(), p.w + gx, p.h + gy) { x, y, w_, h_ -> win(px + x, py + y, w_, h_) }
             } else {
-                pieces += SkinPiece(PxRect(p.sx.toFloat(), p.sy.toFloat(), p.w.toFloat(), p.h.toFloat()), win(px, py, p.w * p.scale, p.h * p.scale), alt = p.alt, knob = p.knob)
+                pieces += SkinPiece(PxRect(p.sx.toFloat(), p.sy.toFloat(), p.w.toFloat(), p.h.toFloat()), win(px, py, p.w * p.scale, p.h * p.scale), alt = p.alt, knob = p.knob, knobOf = p.knobOf)
             }
             p.glass?.let { pg ->
                 val gameW = gameSize(pg.screen, picture)?.first ?: (pg.w + gx)

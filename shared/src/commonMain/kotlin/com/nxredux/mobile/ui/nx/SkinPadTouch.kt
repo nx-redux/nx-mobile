@@ -25,6 +25,8 @@ class SkinPadTouch(
      * stick, [normalizeStick]); (0, 0) when let go.
      */
     private val onStick: (Float, Float) -> Unit = { _, _ -> },
+    /** The 3DS C-stick nub (control `CSTICK`, the right analog), as [onStick]. */
+    private val onCStick: (Float, Float) -> Unit = { _, _ -> },
 ) {
     /** The layout hit-tested; a new one lets go of everything held on the old. */
     var placement: SkinPlacement? = null
@@ -54,18 +56,22 @@ class SkinPadTouch(
     /** Pointer id -> the buttons it holds (the d-pad holds up to two directions), or the action it holds. */
     private val held = HashMap<Long, Set<NxButton>>()
     private val heldAction = HashMap<Long, String>()
-    // The finger on the stick, where it landed (the stick's centre for it: first touch centres it) and the knob's offset.
-    private var stickId: Long? = null
-    private var stickCentre = 0f to 0f
-    private var knob = 0f to 0f
+    /** A held stick: its finger, where it landed (the stick's centre for it: first touch centres it), the knob's offset. */
+    private class StickHold(val finger: Long, val centre: Pair<Float, Float>, var knob: Pair<Float, Float> = 0f to 0f)
+    /** Stick control id (`STICK`, `CSTICK`) -> its hold; each stick its own finger. */
+    private val sticks = HashMap<String, StickHold>()
+    private fun stickOf(finger: Long): String? = sticks.entries.firstOrNull { it.value.finger == finger }?.key
+    private fun sendStick(stick: String, x: Float, y: Float) = if (stick == CSTICK) onCStick(x, y) else onStick(x, y)
 
     /** Whether [x], [y] (window px of the placement) is on one of the skin's controls. */
     fun hits(x: Float, y: Float): Boolean = hitAt(x, y) != null
 
     private fun hitAt(x: Float, y: Float): Hit? {
         val p = placement ?: return null
-        // the stick first, over a touch area a little larger than its ring: it wins a touch on the d-pad's edge
-        p.controls.firstOrNull { it.spec.shape == ControlShape.STICK && hypot(x - it.x, y - it.y) <= it.spec.r * STICK_SLOP }?.let { return Stick(it) }
+        // the sticks first, over a touch area a little larger than their rings: one wins a touch on the d-pad's edge (the
+        // nearest, if two reach)
+        p.controls.filter { it.spec.shape == ControlShape.STICK && hypot(x - it.x, y - it.y) <= it.spec.r * STICK_SLOP }
+            .minByOrNull { hypot(x - it.x, y - it.y) }?.let { return Stick(it) }
         val slop = 22f * p.k
         for (c in p.controls) {
             val hit = when (c.spec.shape) {
@@ -132,7 +138,7 @@ class SkinPadTouch(
         else -> false
     }
 
-    private fun anyHeld(): Boolean = held.isNotEmpty() || heldAction.isNotEmpty() || stickId != null
+    private fun anyHeld(): Boolean = held.isNotEmpty() || heldAction.isNotEmpty() || sticks.isNotEmpty()
 
     /** A finger down at [x], [y]: true when it landed on a control (it is then this pad's), false when on none. */
     fun press(id: Long, x: Float, y: Float): Boolean {
@@ -143,32 +149,34 @@ class SkinPadTouch(
             Dpad -> setHeld(id, dpadAt(x, y))
             is Act -> { heldAction[id] = h.id; onAction(h.id, true); tick(); onChange() }
             is Stick -> {
-                if (stickId != null) return true   // a second finger on the stick: the first keeps it
-                stickId = id; stickCentre = x to y; knob = 0f to 0f
-                onStick(0f, 0f); tick(); onChange()
+                val sid = h.c.spec.id
+                if (sid in sticks) return true   // a second finger on a held stick: the first keeps it
+                sticks[sid] = StickHold(id, x to y)
+                sendStick(sid, 0f, 0f); tick(); onChange()
             }
         }
         return true
     }
 
-    /** The stick's knob offset from its centre, window px (no longer than its travel); (0, 0) while not held. */
-    fun knobOffset(): Pair<Float, Float> = knob
+    /** [stick]'s knob offset from its centre, window px (no longer than its travel); (0, 0) while not held. */
+    fun knobOffset(stick: String = STICK): Pair<Float, Float> = sticks[stick]?.knob ?: (0f to 0f)
 
-    private fun moveStick(x: Float, y: Float) {
-        val c = placement?.controls?.firstOrNull { it.spec.shape == ControlShape.STICK } ?: return
+    private fun moveStick(stick: String, x: Float, y: Float) {
+        val hold = sticks[stick] ?: return
+        val c = placement?.controls?.firstOrNull { it.spec.shape == ControlShape.STICK && it.spec.id == stick } ?: return
         val travel = if (c.spec.travel > 0f) c.spec.travel else c.spec.r * 0.6f
         val drawn = if (c.spec.knobTravel > 0f) c.spec.knobTravel else travel   // the knob's own (shorter) way
-        val (nx, ny) = normalizeStick(x - stickCentre.first, y - stickCentre.second, travel)
-        knob = nx * drawn to ny * drawn
-        onStick(nx, ny); onChange()
+        val (nx, ny) = normalizeStick(x - hold.centre.first, y - hold.centre.second, travel)
+        hold.knob = nx * drawn to ny * drawn
+        sendStick(stick, nx, ny); onChange()
     }
 
     /** Whether the finger [id] went down on a control and is still held. */
-    fun holds(id: Long): Boolean = id in held || id in heldAction || id == stickId || id in ignored
+    fun holds(id: Long): Boolean = id in held || id in heldAction || stickOf(id) != null || id in ignored
 
     /** A held finger moved: the d-pad keeps steering; a finger on a button slides to the button it is over. */
     fun move(id: Long, x: Float, y: Float) {
-        if (id == stickId) { moveStick(x, y); return }
+        stickOf(id)?.let { moveStick(it, x, y); return }
         if (id in heldAction) return
         val cur = held[id] ?: return
         val onDpad = cur.isEmpty() || cur.all { it.isDirection }
@@ -179,13 +187,13 @@ class SkinPadTouch(
 
     fun release(id: Long) {
         ignored.remove(id)
-        if (id == stickId) { stickId = null; knob = 0f to 0f; onStick(0f, 0f); onChange() }
+        stickOf(id)?.let { sticks.remove(it); sendStick(it, 0f, 0f); onChange() }
         heldAction.remove(id)?.let { onAction(it, false); onChange() }
         held[id]?.let { setHeld(id, emptySet()) }
         held.remove(id)
     }
 
-    fun releaseAll() = (held.keys + heldAction.keys + ignored + listOfNotNull(stickId)).toList().forEach(::release)
+    fun releaseAll() = (held.keys + heldAction.keys + ignored + sticks.values.map { it.finger }).toList().forEach(::release)
 
     /**
      * The caps held now, as shapes in the placement's px, each shaded while held: a round cap, a rect's pill, the
@@ -195,13 +203,13 @@ class SkinPadTouch(
         val p = placement ?: return emptyList()
         val buttons = held.values.flatten().toSet()
         val actions = heldAction.values.toSet()
-        if (buttons.isEmpty() && actions.isEmpty() && stickId == null) return emptyList()
+        if (buttons.isEmpty() && actions.isEmpty() && sticks.isEmpty()) return emptyList()
         val out = ArrayList<SkinPressShape>()
         for (c in p.controls) {
             val s = c.spec
             when (s.shape) {
                 // the knob, where it is now
-                ControlShape.STICK -> if (stickId != null) out += SkinPressShape.Circle(c.x + knob.first, c.y + knob.second, if (s.capR > 0f) s.capR else s.r - (if (s.knobTravel > 0f) s.knobTravel else s.travel))
+                ControlShape.STICK -> sticks[s.id]?.let { hold -> val knob = hold.knob; out += SkinPressShape.Circle(c.x + knob.first, c.y + knob.second, if (s.capR > 0f) s.capR else s.r - (if (s.knobTravel > 0f) s.knobTravel else s.travel)) }
                 ControlShape.DPAD -> {
                     val a = if (s.arm > 0f) s.arm else s.r / 3f
                     val l = s.r
@@ -228,6 +236,9 @@ class SkinPadTouch(
         /** The stick's touch area: its ring's radius times this. */
         const val STICK_SLOP = 1.25f
         val FACE = setOf("A", "B", "X", "Y")
+        /** The stick control ids: the stick (the Circle Pad on a 3DS) and the 3DS C-stick nub. */
+        const val STICK = "STICK"
+        const val CSTICK = "CSTICK"
         val BUTTONS = mapOf(
             "A" to NxButton.A, "B" to NxButton.B, "X" to NxButton.X, "Y" to NxButton.Y, "L" to NxButton.L1, "R" to NxButton.R1, "L2" to NxButton.L2, "R2" to NxButton.R2,
             "DISK" to NxButton.L1,   // the FDS skin's DISK: fceumm's L, its one-press disk flip

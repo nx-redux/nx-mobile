@@ -34,6 +34,10 @@ class SkinStickTest {
         val p = json.decodeFromString(PieceSpec.serializer(),
             """{"sx":0,"sy":0,"w":10,"h":10,"x":0,"y":0,"anchor":"left","knob":true,"alt":"stick"}""")
         assertEquals(true, p.knob)
+        assertEquals("STICK", p.knobOf)   // a knob is the stick's unless it names another
+        val c3 = json.decodeFromString(PieceSpec.serializer(),
+            """{"sx":0,"sy":0,"w":10,"h":10,"x":0,"y":0,"anchor":"right","knob":true,"knobOf":"CSTICK"}""")
+        assertEquals("CSTICK", c3.knobOf)
         assertEquals("stick", p.alt)
         assertEquals(SkinVariant.DC, json.decodeFromString(SkinVariant.serializer(), "\"dc\""))
     }
@@ -136,5 +140,46 @@ class SkinStickTest {
         assertEquals(listOf(PadEvent.Down(NxButton.L1), PadEvent.Up(NxButton.L1), PadEvent.Down(NxButton.B)), events)
         t.release(1)
         assertEquals(PadEvent.Up(NxButton.B), events.last())
+    }
+
+    // the 3DS: the Circle Pad (STICK) and the C-stick nub (CSTICK), each its own finger, analog and knob
+    private val cSticks = mutableListOf<Pair<Float, Float>>()
+    private fun twoSticks() = SkinPadTouch({ pads += it }, { _, _ -> }, {}, onStick = { x, y -> sticks += x to y }, onCStick = { x, y -> cSticks += x to y }).apply {
+        placement = SkinPlacement(spec(), 1f, emptyList(), emptyList(), listOf(
+            ctl("STICK", ControlShape.STICK, 300f, 500f, 100f, travel = 60f),
+            ctl("CSTICK", ControlShape.STICK, 800f, 300f, 50f, travel = 30f)))
+    }
+
+    @Test
+    fun twoSticksAtOnce() {
+        val t = twoSticks()
+        t.press(1, 300f, 500f)
+        t.move(1, 330f, 500f)
+        t.press(2, 800f, 300f)
+        t.move(2, 800f, 285f)
+        assertTrue(near(sticks.last(), 0.5f, 0f), "$sticks")
+        assertTrue(near(cSticks.last(), 0f, -0.5f), "$cSticks")
+        assertTrue(near(t.knobOffset("STICK"), 30f, 0f), "${t.knobOffset("STICK")}")
+        assertTrue(near(t.knobOffset("CSTICK"), 0f, -15f), "${t.knobOffset("CSTICK")}")
+    }
+
+    @Test
+    fun aStickThumbNeverTakesTheOther() {
+        val t = twoSticks()
+        t.press(1, 300f, 500f)
+        t.move(1, 800f, 300f)   // the Circle Pad thumb over the nub
+        assertTrue(cSticks.isEmpty(), "$cSticks")
+        assertTrue(sticks.last().first > 0.9f, "$sticks")   // still the Circle Pad, full tilt toward the nub
+    }
+
+    @Test
+    fun releasingOneStickCentresOnlyIt() {
+        val t = twoSticks()
+        t.press(1, 300f, 500f); t.move(1, 330f, 500f)
+        t.press(2, 800f, 300f); t.move(2, 800f, 285f)
+        t.release(2)
+        assertTrue(near(cSticks.last(), 0f, 0f), "$cSticks")
+        assertTrue(near(t.knobOffset("CSTICK"), 0f, 0f))
+        assertTrue(near(t.knobOffset("STICK"), 30f, 0f), "${t.knobOffset("STICK")}")
     }
 }
