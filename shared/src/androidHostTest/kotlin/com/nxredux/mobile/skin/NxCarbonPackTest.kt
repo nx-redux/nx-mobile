@@ -300,6 +300,22 @@ class NxCarbonPackTest {
             val ds = at(SkinVariant.DS)
             val p = at(SkinVariant.N3DS)
             dump("3ds_$name", d.first, d.second, p)
+            dump("dsv_$name", d.first, d.second, ds)
+            run {   // the DS's small caps as the 3DS's (user: match the 3DS)
+                fun k(id: String) = ds.controls.first { it.spec.id == id }
+                fun row(vararg ids: String) { for (i in 1 until ids.size) {
+                    assertEquals(k(ids[0]).y, k(ids[i]).y, 1f, "ds $name ${ids[i]} in the row"); assertTrue(k(ids[i]).x > k(ids[i - 1]).x, "ds $name ${ids.toList()}") } }
+                when {
+                    name == "flip" -> row("MIC", "SWAP", "MENU")
+                    name in setOf("inner", "inner_half", "tablet") -> row("MIC", "SWAP", "MENU", "START", "SELECT")
+                    name == "cover" -> row("MIC", "MENU", "SWAP")
+                    else -> {   // landscape: SELECT START over SWAP on the right, MIC MENU side by side on the left
+                        row("MIC", "MENU"); row("SELECT", "START")
+                        assertEquals(k("SELECT").x, k("SWAP").x, 1f, "ds $name SWAP under SELECT"); assertTrue(k("SWAP").y > k("SELECT").y, "ds $name")
+                        assertTrue(k("MIC").x < d.first / 2f && k("SWAP").x > d.first / 2f, "ds $name sides")
+                    }
+                }
+            }
             assertEquals(SkinVariant.N3DS, p.spec.variant, name)
             assertEquals(ds.spec.family, p.spec.family, name)
             assertEquals(ds.glasses.map { it.screen }, p.glasses.map { it.screen }, name)
@@ -421,9 +437,10 @@ class NxCarbonPackTest {
         val t = p.glass(GlassScreen.TOUCH)!!.rect
         val c = p.controls.associateBy { it.spec.id }
         assertTrue(c.getValue("MENU").y - c.getValue("MENU").spec.r > t.y + t.height, "menu ${c.getValue("MENU").y} touch $t")
-        assertTrue(c.getValue("MIC").x == c.getValue("SWAP").x && c.getValue("MENU").x > t.x, "mic swap left, menu middle")
+        // MIC SWAP MENU START SELECT in one row under the bottom screen (user)
+        val five = listOf("MIC", "SWAP", "MENU", "START", "SELECT").map(c::getValue)
+        for (i in 1 until five.size) { assertEquals(five[0].y, five[i].y, 1f, "one row"); assertTrue(five[i].x > five[i - 1].x, "in order") }
         assertTrue(c.getValue("DPAD").x + c.getValue("DPAD").spec.r < t.x, "dpad")
-        assertTrue(c.getValue("START").x - c.getValue("START").spec.r > t.x + t.width, "start")
         // a tablet that does not fold takes the fold board too (the menu's board: a game never changes it)
         assertEquals("flex_ds_fold", assertNotNull(place("inner_size_tablet", 1848, 2448, tablet = true)).spec.id)
         // the main menu keeps the phone board, a foldable's inner screen too
