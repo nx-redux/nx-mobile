@@ -32,10 +32,21 @@ class SkinPadTouch(
             if (field == value) return
             releaseAll()
             field = value
+            under = value?.let(::underCaps) ?: emptySet()
         }
 
+    /**
+     * The ids of the caps under the d-pad, the stick or the face buttons (the fold board's and landscape's MENU, DISK,
+     * SELECT, START, swaps): they press only when no other touch is on the skin, and a finger never slides onto them, so a
+     * thumb slipping off a cluster doesn't open the menu or flip the disk. Touch only: a controller's buttons are untouched.
+     */
+    private var under: Set<String> = emptySet()
+
+    /** Fingers that landed on an under cap while something else was held: the pad's, but pressing nothing. */
+    private val ignored = HashSet<Long>()
+
     private sealed interface Hit
-    private data class Btn(val b: NxButton) : Hit
+    private data class Btn(val b: NxButton, val id: String) : Hit
     private data class Act(val id: String) : Hit
     private object Dpad : Hit
     private class Stick(val c: PlacedControl) : Hit
@@ -71,7 +82,23 @@ class SkinPadTouch(
     private fun hitOf(c: PlacedControl): Hit? = when (val id = c.spec.id) {
         "DPAD" -> Dpad
         in ACTIONS -> Act(id)
-        else -> BUTTONS[id]?.let(::Btn)
+        else -> BUTTONS[id]?.let { Btn(it, id) }
+    }
+
+    /**
+     * [p]'s caps under a cluster: below the d-pad's, the stick's or the face diamond's bottom edge, with the centre
+     * within that cluster's width.
+     */
+    private fun underCaps(p: SkinPlacement): Set<String> {
+        fun span(c: PlacedControl) = Triple(c.x - c.spec.r, c.x + c.spec.r, c.y + c.spec.r)
+        val clusters = p.controls.filter { it.spec.shape == ControlShape.DPAD || it.spec.shape == ControlShape.STICK }.map(::span).toMutableList()
+        p.controls.filter { it.spec.id in FACE }.map(::span).takeIf { it.isNotEmpty() }?.let { f ->
+            clusters += Triple(f.minOf { it.first }, f.maxOf { it.second }, f.maxOf { it.third })
+        }
+        return p.controls.filter { c ->
+            c.spec.shape != ControlShape.DPAD && c.spec.shape != ControlShape.STICK && c.spec.id !in FACE &&
+                clusters.any { (l, r, bottom) -> c.y > bottom && c.x in l..r }
+        }.map { it.spec.id }.toSet()
     }
 
     /** The d-pad's directions at [x], [y]: eight ways by angle, nothing in the dead centre. */
@@ -99,9 +126,19 @@ class SkinPadTouch(
         onChange()
     }
 
+    private fun isUnder(h: Hit?): Boolean = when (h) {
+        is Btn -> h.id in under
+        is Act -> h.id in under
+        else -> false
+    }
+
+    private fun anyHeld(): Boolean = held.isNotEmpty() || heldAction.isNotEmpty() || stickId != null
+
     /** A finger down at [x], [y]: true when it landed on a control (it is then this pad's), false when on none. */
     fun press(id: Long, x: Float, y: Float): Boolean {
-        when (val h = hitAt(x, y) ?: return false) {
+        val h = hitAt(x, y) ?: return false
+        if (isUnder(h) && anyHeld()) { ignored += id; return true }
+        when (h) {
             is Btn -> setHeld(id, setOf(h.b))
             Dpad -> setHeld(id, dpadAt(x, y))
             is Act -> { heldAction[id] = h.id; onAction(h.id, true); tick(); onChange() }
@@ -127,7 +164,7 @@ class SkinPadTouch(
     }
 
     /** Whether the finger [id] went down on a control and is still held. */
-    fun holds(id: Long): Boolean = id in held || id in heldAction || id == stickId
+    fun holds(id: Long): Boolean = id in held || id in heldAction || id == stickId || id in ignored
 
     /** A held finger moved: the d-pad keeps steering; a finger on a button slides to the button it is over. */
     fun move(id: Long, x: Float, y: Float) {
@@ -135,19 +172,20 @@ class SkinPadTouch(
         if (id in heldAction) return
         val cur = held[id] ?: return
         val onDpad = cur.isEmpty() || cur.all { it.isDirection }
-        val over = hitAt(x, y)
+        val over = hitAt(x, y).takeUnless(::isUnder)   // never slide onto an under cap: as if over nothing
         if (onDpad && (over == Dpad || over == null)) setHeld(id, dpadAt(x, y))
         else if (over is Btn) setHeld(id, setOf(over.b))
     }
 
     fun release(id: Long) {
+        ignored.remove(id)
         if (id == stickId) { stickId = null; knob = 0f to 0f; onStick(0f, 0f); onChange() }
         heldAction.remove(id)?.let { onAction(it, false); onChange() }
         held[id]?.let { setHeld(id, emptySet()) }
         held.remove(id)
     }
 
-    fun releaseAll() = (held.keys + heldAction.keys + listOfNotNull(stickId)).toList().forEach(::release)
+    fun releaseAll() = (held.keys + heldAction.keys + ignored + listOfNotNull(stickId)).toList().forEach(::release)
 
     /**
      * The caps held now, as shapes in the placement's px, each shaded while held: a round cap, a rect's pill, the
@@ -189,6 +227,7 @@ class SkinPadTouch(
         const val ARM_CORNER = 10f
         /** The stick's touch area: its ring's radius times this. */
         const val STICK_SLOP = 1.25f
+        val FACE = setOf("A", "B", "X", "Y")
         val BUTTONS = mapOf(
             "A" to NxButton.A, "B" to NxButton.B, "X" to NxButton.X, "Y" to NxButton.Y, "L" to NxButton.L1, "R" to NxButton.R1, "L2" to NxButton.L2, "R2" to NxButton.R2,
             "DISK" to NxButton.L1,   // the FDS skin's DISK: fceumm's L, its one-press disk flip
