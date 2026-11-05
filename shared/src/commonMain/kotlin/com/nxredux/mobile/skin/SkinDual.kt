@@ -14,12 +14,12 @@ enum class PanelSpot { NONE, SKIN_GLASS, WINDOW, SECOND_DISPLAY }
  */
 object SkinDual {
     /**
-     * The skin shows with no second display, with a one-screen game's panel (PANEL), and for a DS split (one DS screen
-     * on main, in the skin's glass). Never for a 3DS, nor with both DS screens side by side on main (PANEL_UP).
+     * The skin shows with no second display, with a one-screen game's panel (PANEL), and for a DS or 3DS split (one
+     * screen on main, in the skin's glass). Never with both screens side by side on main (PANEL_UP).
      */
-    fun skinAllowed(mode: DualMode, ds: Boolean, n3ds: Boolean): Boolean = !n3ds && when (mode) {
+    fun skinAllowed(mode: DualMode, ds: Boolean, n3ds: Boolean): Boolean = when (mode) {
         DualMode.OFF, DualMode.PANEL -> true
-        DualMode.SPLIT -> ds
+        DualMode.SPLIT -> ds || n3ds
         DualMode.PANEL_UP -> false
     }
 

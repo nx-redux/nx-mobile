@@ -853,7 +853,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 
     /**
      * The pad skin laid out for this window, or null where the drawn pads stay: no skin picked, a controller in the
-     * layout ([names]), the second screen in use, the 3DS or another console the skin doesn't draw, or a window none of
+     * layout ([names]), the second screen in use, a console the skin doesn't draw, or a window none of
      * its layouts fits ([SkinChoice]). Half-folded, the fold's middle is where the skin's hinge goes. A one-screen
      * console's glass takes its picture's aspect (4:3 until the first frame). Shows it in the skin's view as well.
      */
@@ -861,20 +861,21 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val pack = skinPack ?: return null
         val tag = layoutTag()
         val ds = NdsOptions.appliesTo(tag)
-        // with a second display: one-screen games and a DS split keep the skin (its screen the touch screen, [SkinDual])
-        if (names.isNotEmpty() || !SkinDual.skinAllowed(host.dualMode, ds, N3dsOptions.appliesTo(tag))) return null
+        val n3ds = N3dsOptions.appliesTo(tag)
+        // with a second display: one-screen games and a DS / 3DS split keep the skin (its screen the touch screen, [SkinDual])
+        if (names.isNotEmpty() || !SkinDual.skinAllowed(host.dualMode, ds, n3ds)) return null
         val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet) ?: return null
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null
         val tablet = activity.windowShape().screenClass.isTablet
         val hinge = (posture as? Posture.Tabletop)?.let { (it.hingeTop + it.hingeBottom) / 2f }
-        val aspect = if (ds) null else frame?.aspect?.takeIf { it > 0f } ?: (4f / 3f)
+        val aspect = if (ds || n3ds) null else frame?.aspect?.takeIf { it > 0f } ?: (4f / 3f)
         // the skin and its screen run under the top camera cutout too (the frame keeps its own margin; the picture is centred
         // in the glass, so it reaches the camera only when it fills the glass's height)
         val top = 0
         val key = SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, top)
         val placed = skinCache?.takeIf { it.first == key }?.second ?: SkinChoice.place(
-            pack.manifest, w, h, key.dpi, tablet, ds, aspect?.let { (it * 240f) to 240f }, hinge, top, DeviceTraits.canHalfFold, variant,
+            pack.manifest, w, h, key.dpi, tablet, ds || n3ds, aspect?.let { (it * 240f) to 240f }, hinge, top, DeviceTraits.canHalfFold, variant,
         ).also { skinCache = key to it }
         val moved = skinView != null && skinView?.placement != placed
         skinView?.placement = placed

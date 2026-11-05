@@ -23,8 +23,7 @@ object SkinChoice {
 
     /**
      * One-screen consoles a skin draws (its d-pad, A B X Y, L R, SELECT START cover their pads): no analog stick, no C
-     * buttons, no second pair of shoulders. Others keep the normal pad. The DS has its own layouts; the 3DS keeps the
-     * normal pad.
+     * buttons, no second pair of shoulders. Others keep the normal pad. The DS and the 3DS have their own layouts.
      */
     private val SINGLE_TAGS = setOf(
         "GB", "SGB", "GBC", "GBA", "MGBA", "FC", "FDS", "SFC", "SUPA", "MD", "GPGX", "SMS", "GG", "SG1000", "SEGACD", "32X",
@@ -41,6 +40,7 @@ object SkinChoice {
         baseTag in GBA_TAGS -> SkinVariant.GBA
         baseTag in ARCADE_TAGS -> SkinVariant.ARCADE
         baseTag == "FDS" -> SkinVariant.FDS
+        baseTag == "3DS" -> SkinVariant.N3DS
         // flycast: a NAOMI / Atomiswave set takes the arcade skin, a disc the Dreamcast one ([DcGames.isArcadeSet])
         baseTag == "DC" -> if (arcadeSet) SkinVariant.ARCADE else SkinVariant.DC
         baseTag in SINGLE_TAGS -> SkinVariant.SINGLE
@@ -125,8 +125,8 @@ object SkinChoice {
         val own = placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, v)
         // a console's own set the pack lacks for this screen (an older pack, or a player's partly made one): the shared
         // one-screen set, decided per screen, so a missing landscape layout never leaves the game without a skin
-        // (never for the Dreamcast: the shared set has no stick)
-        if (own != null || v == SkinVariant.DS || v == SkinVariant.SINGLE || v == SkinVariant.DC) return own
+        // (never for the Dreamcast or the 3DS: the shared set has no stick, nor two screens)
+        if (own != null || v == SkinVariant.DS || v == SkinVariant.SINGLE || v == SkinVariant.DC || v == SkinVariant.N3DS) return own
         return placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, SkinVariant.SINGLE)
     }
 

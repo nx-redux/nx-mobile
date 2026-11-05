@@ -62,6 +62,11 @@ enum class SkinVariant {
     @SerialName("dc") DC,
     /** Famicom Disk System: the GB set (d-pad, A B, TA TB, SELECT START MENU) and DISK (L: fceumm's one-press disk flip). */
     @SerialName("fds") FDS,
+    /**
+     * Nintendo 3DS: the DS set (two screens, A B X Y, L R, SELECT START, MENU MIC SWAP) with the Circle Pad (the stick,
+     * with the d-pad), a C-stick nub (`CSTICK`, the right analog) and ZL ZR (L2 R2).
+     */
+    @SerialName("3ds") N3DS,
 }
 
 /**

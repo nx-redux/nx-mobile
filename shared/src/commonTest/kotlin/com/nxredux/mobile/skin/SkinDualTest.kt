@@ -18,8 +18,14 @@ class SkinDualTest {
         assertTrue(SkinDual.skinAllowed(DualMode.SPLIT, ds = true, n3ds = false))
         assertFalse(SkinDual.skinAllowed(DualMode.SPLIT, ds = false, n3ds = false))
         assertFalse(SkinDual.skinAllowed(DualMode.PANEL_UP, ds = true, n3ds = false))
-        assertFalse(SkinDual.skinAllowed(DualMode.OFF, ds = true, n3ds = true))
-        assertFalse(SkinDual.skinAllowed(DualMode.PANEL, ds = false, n3ds = true))
+    }
+
+    @Test
+    fun n3dsSkinWithDualScreenOffAndSplit() {
+        assertTrue(SkinDual.skinAllowed(DualMode.OFF, ds = false, n3ds = true))
+        assertTrue(SkinDual.skinAllowed(DualMode.SPLIT, ds = false, n3ds = true))   // the bottom screen in the landscape skin
+        assertTrue(SkinDual.skinAllowed(DualMode.PANEL, ds = false, n3ds = true))
+        assertFalse(SkinDual.skinAllowed(DualMode.PANEL_UP, ds = false, n3ds = true))
     }
 
     @Test
