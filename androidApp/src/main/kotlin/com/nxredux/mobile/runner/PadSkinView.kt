@@ -98,6 +98,8 @@ internal class PadSkinView(
     private val onResized: () -> Unit,
     /** The skin's analog stick: x right, y down, -1..1 ([SkinPadTouch]). */
     private val onStick: (Float, Float) -> Unit = { _, _ -> },
+    /** The 3DS skin's C-stick nub (control `CSTICK`), as [onStick]. */
+    private val onCStick: (Float, Float) -> Unit = { _, _ -> },
 ) : FrameLayout(context) {
 
     /** The skin itself: its own view, so its drawing is kept and replayed while only the shades over it change. */
@@ -154,7 +156,7 @@ internal class PadSkinView(
     private val holes = Path()
     private val src = Rect()
     private val dst = Rect()
-    private val touch = SkinPadTouch(onPad, { id, down -> onAction(SkinAction.valueOf(id), down) }, ::tick, ::invalidate, onStick)
+    private val touch = SkinPadTouch(onPad, { id, down -> onAction(SkinAction.valueOf(id), down) }, ::tick, ::invalidate, onStick, onCStick)
     /** The labels under the buttons, written here (the picture has none there). */
     private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = SKIN_LABEL_GREY
@@ -228,13 +230,13 @@ internal class PadSkinView(
     /** The held caps' shades over the skin layer (a press redraws only these). */
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
-        // the stick's knob, where the thumb has it
+        // each stick's knob, where its thumb has it
         val p = shown
         val pp = parts
         if (p != null && pp != null) {
-            val (kx, ky) = touch.knobOffset()
             for (piece in p.pieces) {
                 if (!piece.knob) continue
+                val (kx, ky) = touch.knobOffset(piece.knobOf)
                 src.set(piece.src.x.roundToInt(), piece.src.y.roundToInt(), (piece.src.x + piece.src.width).roundToInt(), (piece.src.y + piece.src.height).roundToInt())
                 dst.set((piece.dst.x + kx).roundToInt(), (piece.dst.y + ky).roundToInt(), (piece.dst.x + kx + piece.dst.width).roundToInt(), (piece.dst.y + ky + piece.dst.height).roundToInt())
                 canvas.drawBitmap(pp, src, dst, paint)

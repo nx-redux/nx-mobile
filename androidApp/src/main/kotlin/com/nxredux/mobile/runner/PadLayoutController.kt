@@ -331,6 +331,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         skinView?.let { root.removeView(it) }
         skinView = null
         skinShownState.value = false
+        input.n3dsHotkeys.skinShown = false
         input.dpadHat.clear()
         overlayPadShown.value = false   // set again below where the landscape clusters are added
         clustersClear.value = false
@@ -888,7 +889,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         game.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         val pack = skinPack ?: return
         val view = PadSkinView(activity, pack, input::onPad, ::onSkinAction, haptics = padVibration != com.nxredux.mobile.settings.PadVibration.OFF,
-            onResized = { root.post { onSkinResized() } }, onStick = input::onStick)
+            onResized = { root.post { onSkinResized() } }, onStick = input::onStick, onCStick = input::onCStick)
         view.useStick = PadStickModes[padStickKey, stickDefault()]   // the drawn pad's choice, shared
         // under the menu and the notifications, over the game
         val below = listOfNotNull(menuView, notificationsView).map { root.indexOfChild(it) }.filter { it >= 0 }.minOrNull() ?: -1
@@ -897,7 +898,11 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         view.stripHidden = skinStripHidden
         view.shortcuts = host.padShortcuts
         skinShownState.value = true
-        if (input.ndsStylusOn.value) input.toggleNdsStylus()   // no stylus mode under a skin: a touch off its buttons is the touch screen
+        // no stylus mode under a skin: a touch off its buttons is the touch screen (DS and 3DS); nor the 3DS's SELECT + L
+        // / Left / Right chords ([N3dsHotkeys.skinShown])
+        if (input.ndsStylusOn.value) input.toggleNdsStylus()
+        if (input.n3dsStylusOn.value) input.toggleN3dsStylus()
+        input.n3dsHotkeys.skinShown = true
         skinPlacement()
         game.requestLayout()
         updatePadVisibility()
@@ -911,7 +916,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         action.slot?.let { host.onPadShortcut(it, down); return }   // a strip slot: the player's action, as the drawn pad's
         when (action) {
             SkinAction.MIC -> if (down) padMic()?.onTap?.invoke()
-            SkinAction.SWAP -> if (down) input.applyNdsAction(NdsAction.SwapScreens)
+            // the 3DS's swap (held as long as the cap, as the drawn pad's SWAP pill); the DS's on press
+            SkinAction.SWAP -> if (N3dsOptions.appliesTo(layoutTag())) input.onN3dsSwap(down) else if (down) input.applyNdsAction(NdsAction.SwapScreens)
             // the stick or the d-pad on a tight Dreamcast layout: the drawn pad's choice flipped (nothing held may stick;
             // the new placement lets go of the skin's own touches)
             SkinAction.STICK_SWAP -> if (down) {

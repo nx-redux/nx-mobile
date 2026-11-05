@@ -63,6 +63,12 @@ class N3dsHotkeys {
 
     var stylus = false
         private set
+    /**
+     * A pad skin shows (host-set): its touch screen is under the finger and it places the screens, so SELECT + L (stylus)
+     * and SELECT + Left / Right (layout) are kept from the core and do nothing; SELECT + R still swaps.
+     */
+    var skinShown = false
+
     /** The core's right-stick deadzone (0..1, [N3dsOptions.deadzone]), host-set. */
     var deadzone: Float = DEFAULT_DEADZONE
 
@@ -119,6 +125,7 @@ class N3dsHotkeys {
         var key: N3dsKey? = null
         val decision = when {
             chord && button == NxButton.R1 -> { key = N3dsKey.L3; N3dsDecision(false) }
+            chord && skinShown -> N3dsDecision(false)
             chord && button == NxButton.L1 -> N3dsDecision(false, toggleStylus())
             chord -> N3dsDecision(false, N3dsAction.CycleLayout(if (button == NxButton.RIGHT) 1 else -1))
             stylus && button.isDirection -> {
