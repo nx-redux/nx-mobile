@@ -833,6 +833,7 @@ void LibretroDroid::step() {
     // The frame sleep runs without the core lock, so achievements and the off-thread save calls aren't held up by it.
     lock.unlock();
     frameDeadlineNanos = 0;   // set below for a sleep-timer frame only
+    bool stamped = false;
     if (fastForward) {
         auto ahead = fastForwardPacer.sleepFor(std::chrono::steady_clock::now());
         if (ahead > Duration::zero()) std::this_thread::sleep_for(ahead);
@@ -842,12 +843,15 @@ void LibretroDroid::step() {
         // presentation deadline and a margin: no later than a frame queued then could show), not at the first refresh
         // after this step happened to end (8/25 ms frames of a 60 fps game on a 120 Hz screen).
         if (runs > 0) {
-            if (auto at = fpsSync->presentAt(std::chrono::microseconds(presentationLeadMicros.load()))) PresentTime::set(*at);
+            if (auto at = fpsSync->presentAt(std::chrono::microseconds(presentationLeadMicros.load()))) stamped = PresentTime::set(*at);
         }
         // The second surface stamps its frame from the same deadline with its own display's lead (SecondaryOutput).
         frameDeadlineNanos = (runs > 0 && fpsSync->presentAt(std::chrono::microseconds(0)))
             ? std::chrono::duration_cast<std::chrono::nanoseconds>(fpsSync->deadline().time_since_epoch()).count() : 0;
     }
+    // The surface keeps its last stamp for every later frame: an unstamped frame after a stamped one goes back to auto.
+    if (!stamped && presentStamped) PresentTime::clear();
+    presentStamped = stamped;
     hitchProbe.waited(HitchProbe::Clock::now());
     if (fastForward) hitchProbe.reset();
     lock.lock();
