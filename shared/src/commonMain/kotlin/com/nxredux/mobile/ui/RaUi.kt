@@ -9,6 +9,7 @@ import com.nxredux.mobile.achievements.RaDownloadPhase
 import com.nxredux.mobile.achievements.RaGameView
 import com.nxredux.mobile.achievements.RaItemStatus
 import com.nxredux.mobile.achievements.RaState
+import com.nxredux.mobile.achievements.RaStatus
 import com.nxredux.mobile.achievements.RaSyncStep
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.HintTouch
@@ -70,9 +71,12 @@ fun raSettingsHints(row: RaSettingsRow?, touch: NxSettingRow? = null, info: Bool
 fun raRows(state: RaState, download: RaDownload? = null): List<RaAction> =
     if (state is RaState.Idle || state is RaState.Prefetching) RaAction.entries.filter { it != RaAction.DOWNLOAD || download != null } else emptyList()
 
-/** A page row's label: the download's with its count, "Progress (12/340)". */
-fun raRowLabel(action: RaAction, download: RaDownload?): String =
-    if (action == RaAction.DOWNLOAD && download != null) "${action.label} (${download.finished}/${download.total})" else action.label
+/** A page word's label: the download's with its count, "Progress (12/340)"; Sync now with the [pending] unlocks, "Sync now (1)". */
+fun raRowLabel(action: RaAction, download: RaDownload?, pending: Int = 0): String = when {
+    action == RaAction.DOWNLOAD && download != null -> "${action.label} (${download.finished}/${download.total})"
+    action == RaAction.SYNC && pending > 0 -> "${action.label} ($pending)"
+    else -> action.label
+}
 
 /** The download page's first line: "d / t · ~M min left", or its phase when it is not running. */
 fun raDownloadHeader(d: RaDownload): String {
@@ -120,20 +124,23 @@ fun raDownloadHints(phase: RaDownloadPhase): List<Hint> = buildList {
 internal fun groupThousands(n: Int): String =
     if (n < 0) "-" + groupThousands(-n) else n.toString().reversed().chunked(3).joinToString(",").reversed()
 
-/** The details block on the RetroAchievements page: user, points, unsynced unlocks, last sync. */
+/** The page's status as it stands: the idle one, or the one a prefetch started from; null while busy. */
+private fun raStatus(state: RaState): RaStatus? = (state as? RaState.Idle)?.status ?: (state as? RaState.Prefetching)?.previous
+
+/** The RetroAchievements page's headline (its head, [SettingsWordHead]): the user, or "Not signed in". */
+fun raHeadline(state: RaState): String = raStatus(state)?.let { it.user ?: "Not signed in" } ?: (raProgressLine(state) ?: "…")
+
+/** The head's description: points (or where to sign in) and the last sync. The unlocks waiting are on Sync now ([raRowLabel]). */
 fun raDetails(state: RaState): List<String> {
-    val s = (state as? RaState.Idle)?.status ?: (state as? RaState.Prefetching)?.previous ?: return listOf(raProgressLine(state) ?: "…")
+    val s = raStatus(state) ?: return emptyList()
     return listOf(
-        s.user ?: "Not signed in",
         s.points?.let { "${groupThousands(it)} points" } ?: "Sign in under Settings",
-        when (s.pending) {
-            0 -> if (s.user == null) "0 unlocks waiting" else "Nothing waiting"
-            1 -> "1 unlock waiting"
-            else -> "${s.pending} unlocks waiting"
-        },
         "Last sync: " + (s.lastSync?.let(::formatDateTime) ?: "Never"),
     )
 }
+
+/** The unlocks waiting to be sent (Sync now's count). */
+fun raPending(state: RaState): Int = raStatus(state)?.pending ?: 0
 
 /** The progress body's line while busy (a download aside); null when idle. */
 fun raProgressLine(state: RaState): String? = when (state) {

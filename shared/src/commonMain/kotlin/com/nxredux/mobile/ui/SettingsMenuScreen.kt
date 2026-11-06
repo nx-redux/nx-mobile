@@ -33,10 +33,10 @@ fun SettingsMenuScreen(
  * A root page in the Settings style (Settings, Tools → Artwork): its word block ([SettingsWordBlock] with [title] and
  * [words]) anchored bottom-left at the gutter and [SETTINGS_BLOCK_BOTTOM] up; the status [lines] ([SettingsStatusLines])
  * at the top left, level with the mark ([SETTINGS_MARK_TOP] down) and kept clear of it while [clearMark] (the wide
- * stage's left pane never reaches it); on a short screen the lines push the block down, never draw over it. The rest
+ * stage's left pane never reaches it); [headline] and [description]: a tool's head in the block ([SettingsWordHead]). On a short screen the lines push the block down, never draw over it. The rest
  * of the screen is empty (the mark is the background's, [SettingsBackground]). A tap on a word calls [onTap];
  * A opens, B goes back to Tools. [rowsFocused]: the two-pane stage's left pane while its page has the focus (the current
- * word drops to the open grey with a "›"). [hintBar]: draw the root's A/B hints ([SETTINGS_ROOT_HINTS]) below the block
+ * word drops to the open grey with a "›"). [hintBar]: draw the page's [hints] (the root's A/B, [SETTINGS_ROOT_HINTS]) below the block
  * ([onHint] answers a tap on one); the wide stage draws its own bar, so it passes false.
  */
 @Composable
@@ -44,7 +44,8 @@ fun SettingsRootScreen(
     title: String, words: List<String>, lines: List<String>, selectedIndex: Int,
     onTap: (Int) -> Unit, modifier: Modifier = Modifier,
     rowsFocused: Boolean = false, hintBar: Boolean = false, onHint: ((NxButton) -> Unit)? = null,
-    clearMark: Boolean = true,
+    clearMark: Boolean = true, headline: String? = null, description: List<String> = emptyList(),
+    hints: List<Hint> = SETTINGS_ROOT_HINTS, extra: (@Composable () -> Unit)? = null,
 ) {
     Column(modifier.fillMaxSize()) {
         Column(Modifier.weight(1f).fillMaxWidth()) {
@@ -59,8 +60,9 @@ fun SettingsRootScreen(
             SettingsWordBlock(
                 title, words, selectedIndex, rowsFocused, onTap,
                 Modifier.padding(start = settingsSectionStart(), end = settingsPlateEnd(), bottom = SETTINGS_BLOCK_BOTTOM),
+                headline = headline, description = description, extra = extra,
             )
         }
-        if (hintBar) NxHintBar(SETTINGS_ROOT_HINTS, onHint = onHint)
+        if (hintBar) NxHintBar(hints, onHint = onHint)
     }
 }

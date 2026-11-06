@@ -1,5 +1,8 @@
 package com.nxredux.mobile.ui.nx
 
+import com.nxredux.mobile.ui.settingsRowsFade
+import com.nxredux.mobile.ui.SettingsRowsBlock
+import com.nxredux.mobile.ui.LocalSettingsBlock
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -41,6 +44,33 @@ fun NxRichListBody(
     // Touch only, the hints' icon stand-ins ([HintTouch.Icon]) sit at the title's right.
     val touch = touchOnly()
     val icons: (@Composable () -> Unit)? = if (touch && onHint != null) ({ NxTopIcons(hints.touchIcons(onHint)) }) else null
+    // The Settings rows block ([LocalSettingsBlock]): the title its first line (the touch icons at its right), the rich
+    // rows from the bottom at their own pitch, as many as there are, scrolling past the room under the block's fade.
+    LocalSettingsBlock.current?.let { block ->
+        Column(modifier.fillMaxSize()) {
+            val header: (@Composable () -> Unit)? = when {
+                rows.isEmpty() && emptyText != null -> ({
+                    Text(emptyText, color = colors.hint, fontFamily = font, fontSize = NxTextSizes.secondary(nxListLabelSize()), modifier = Modifier.padding(horizontal = nxListInset()))
+                })
+                icons != null -> ({ Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) { icons() } })
+                else -> null
+            }
+            SettingsRowsBlock(block, listOfNotNull(title.takeIf { it.isNotEmpty() }, titleSuffix).joinToString(" "), Modifier.weight(1f), header) {
+                if (rows.isNotEmpty()) BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val pitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)
+                    val count = nxRichRowCountFor(maxHeight, pitch)
+                    val height = maxHeight / count * minOf(rows.size, count)
+                    NxRichList(
+                        rows, selectedIndex, onSelect, onOpen,
+                        Modifier.fillMaxWidth().height(height).nxScrollFade(listState, height = settingsRowsFade(pitch * 1.5f, 56.dp), strong = true),
+                        listState = listState, onLongPress = onLongPress, labelSize = nxListLabelSize(pitch), edgeMargin = 1,
+                    )
+                }
+            }
+            NxHintBar(hints, onHint = onHint)
+        }
+        return
+    }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val pitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
         val label = nxListLabelSize(pitch)
