@@ -236,6 +236,10 @@ internal class DualScreenController(
     /** The panel fills the game's window on main (the picture is on the second display). */
     fun mainPanelShown(): Boolean = mainPanel.value != null
 
+    /** Main shows no game picture: the panel modes with the picture on the second display. */
+    fun mainShowsNoPicture(): Boolean =
+        presentation != null && pictureOn == PictureOn.SECOND && (dualMode == DualMode.PANEL || dualMode == DualMode.PANEL_UP)
+
     /**
      * The DS/3DS screens cut for the second display, in px of its surface: split, the screen not on main; with the picture
      * there, both DS screens side by side (panel up). Empty when it draws nothing, has no surface, or (split) the DS frame
@@ -504,6 +508,7 @@ internal class DualScreenController(
             padLayout.updatePadVisibility()
             if (mainPanelShown()) input.releaseAllGameInput()   // the pad went from under the fingers: nothing it held may stick
             menuView?.layoutParams = menuLayoutParams(resources.configuration.orientation, overPanel = mainPanelShown())
+            renderer.relayoutFrontend()   // the main picture stops or starts drawing; the 3D Resolution follows
         }
         // Re-read as it comes up; while up, each RA event, player, disc and setting change refreshes it.
         if (shown && !panelWasShown) {

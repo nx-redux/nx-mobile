@@ -204,7 +204,18 @@ class GLRetroView(
      */
     var pictureHeld: Boolean by Delegates.observable(false) { _, old, value ->
         if (old == value) return@observable
-        queueEvent { LibretroDroid.setPictureHeld(value) }
+        val held = value || mainCovered
+        queueEvent { LibretroDroid.setPictureHeld(held) }
+    }
+
+    /**
+     * nx-mobile: something opaque fills this view (the dual-screen panel with the picture on the second display), so it
+     * draws black instead of a picture nobody sees. The second display's picture is drawn apart and keeps going.
+     */
+    var mainCovered: Boolean by Delegates.observable(false) { _, old, value ->
+        if (old == value) return@observable
+        val held = value || pictureHeld
+        queueEvent { LibretroDroid.setPictureHeld(held) }
     }
 
     /**
@@ -407,7 +418,7 @@ class GLRetroView(
         val regions = ScreenRegions.pack(screenRegions)
         val secondary = ScreenRegions.pack(secondaryRegions)
         val sticky = stickyPointer
-        val held = pictureHeld
+        val held = pictureHeld || mainCovered
         val chain = shaderChain?.let { it.copy(params = it.params + shaderParameterOverrides) }
         queueEvent {
             LibretroDroid.setViewport(left, top, width, height)

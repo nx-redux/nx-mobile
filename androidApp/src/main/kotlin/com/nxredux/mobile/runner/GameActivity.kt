@@ -3195,6 +3195,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun secondRegions(g: FloatArray, ds: List<NdsRegion>?): List<ScreenRegion> = dual.secondRegions(g, ds)
     override fun onN3dsSwapPressed(down: Boolean): Boolean = dual.onN3dsSwapPressed(down) || renderer.onTabletopN3dsSwap(down)
     override fun mainPanelShown(): Boolean = dual.mainPanelShown()
+    override fun mainShowsNoPicture(): Boolean = dual.mainShowsNoPicture()
     override fun placeMainPanelHost() = dual.placeMainPanelHost()
 
     // The in-game menu's view, input and layout, owned by [menu].

@@ -317,6 +317,8 @@ protected:
 private:
     // UI thread (setFrameSpeed) and GL thread (step) both read it.
     std::atomic<unsigned> frameSpeed { 1 };
+    static constexpr std::chrono::milliseconds PAUSED_REDRAW_INTERVAL { 50 };
+    std::chrono::steady_clock::time_point pausedRedrawAt {};   // GL thread
     bool audioEnabled = true;
     bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
