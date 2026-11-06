@@ -25,6 +25,9 @@ object NotificationIds {
     /** What a downloaded update's install waits for, a plain notification (the github flavor's com.nxredux.mobile.update.AndroidUpdatePlatform). */
     const val APP_UPDATE_WAIT = 4106
 
+    /** Kids Mode's "Games close in 10 minutes" warning, while no game or menu is in front ([com.nxredux.mobile.kids.AndroidKids]). */
+    const val KIDS_WARN = 4107
+
     /** All of them, for the test that keeps them distinct. */
-    val all: List<Int> = listOf(SCRAPE, RA_DOWNLOAD, DEVICE_SYNC, APP_UPDATE, APP_UPDATED, APP_UPDATE_WAIT)
+    val all: List<Int> = listOf(SCRAPE, RA_DOWNLOAD, DEVICE_SYNC, APP_UPDATE, APP_UPDATED, APP_UPDATE_WAIT, KIDS_WARN)
 }

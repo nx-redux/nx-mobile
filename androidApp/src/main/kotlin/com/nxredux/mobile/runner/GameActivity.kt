@@ -3,7 +3,9 @@ package com.nxredux.mobile.runner
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.AlertDialog
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.IntentFilter
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -53,6 +55,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.round
 import com.nxredux.mobile.ui.nx.NxSpeedIndicator
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
@@ -151,6 +154,8 @@ import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.InputRouter
 import com.nxredux.mobile.ui.nx.MenuEffect
 import com.nxredux.mobile.ui.nx.NotificationQueue
+import com.nxredux.mobile.kids.KIDS_WARNING
+import com.nxredux.mobile.kids.kidsWarnAction
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxNotifications
 import com.nxredux.mobile.ui.nx.NxProgressPill
@@ -221,6 +226,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val KEY_RESUME_SLOT = "nx_resume_slot"
         private const val KEY_NETPLAY_LOCAL = "nx_netplay_local"   // netplay link: the session had ended ([netplayLocal])
         private const val KEY_NAME_HOLD_SHOWN_AT = "nx_name_hold_shown_at"   // the launch name's hold was up ([LaunchNameHold.shownAt])
+        /** Kids Mode's "Games close in 10 minutes" toast stays this long. */
+        private const val KIDS_WARNING_MS = 6000L
         private const val NETPLAY_NOTICE_MS = 5000L   // netplay: "Netplay ended ...", "Using <core> for this match ..."
         private const val NETPLAY_PILL_MS = 1000L     // netplay: a countdown pill outlives one 250 ms status tick
         /** Beside a real-path cache copy: what it was copied from ([realPathCopyStamp]). */
@@ -639,6 +646,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             it.registerInputDeviceListener(input.inputDeviceListener, Handler(Looper.getMainLooper()))
         }
         menu.menuRouter = InputRouter(lifecycleScope, menu::onMenuPress)
+        ContextCompat.registerReceiver(this, kidsWarn, IntentFilter(kidsWarnAction(this)), ContextCompat.RECEIVER_NOT_EXPORTED)
         lifecycleScope.launch { dual.secondScreens.current.collect { dual.syncDual(); menu.menuModel?.let(menu::publishSecondScreen) } }
         // The game's window resized (a rotation, a fold): the picture screen may be the other display now.
         findViewById<View>(R.id.root).addOnLayoutChangeListener { v, l, t, r, b, ol, ot, or_, ob ->
@@ -1079,6 +1087,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(kidsWarn) }   // not registered when onCreate stopped early
         renderer.cancelGeometryWatch()
         window?.decorView?.removeCallbacks(nds3dTick)
         rumbles.forEach { it.release() }
@@ -3115,6 +3124,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             else -> Unit
         }
         publishNotifications()
+    }
+
+    /** Kids Mode's 10-minute warning from the main process ([com.nxredux.mobile.kids.AndroidKids.warn]): the overlay's toast. */
+    private val kidsWarn = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            notifications.push(KIDS_WARNING, null, KIDS_WARNING_MS, SystemClock.elapsedRealtime())
+            publishNotifications()
+        }
     }
 
     /** Publishes the queue and keeps a 250 ms expiry tick running while anything is shown. */

@@ -93,6 +93,16 @@ class KidsController(private val settings: AppSettings, private val platform: Ki
         publish()
     }
 
+    /**
+     * Parent mode ends (the screen went off), a timed unlock and the play window still count; a change to Locked locks
+     * as any other does ([KidsPlatform.lockNow]). Nothing outside Parent mode.
+     */
+    fun endParent() {
+        if (!parent) return
+        parent = false
+        publish()
+    }
+
     /** Lock now: Parent mode ends and a timed unlock is dropped (a play window still counts). */
     fun lock() {
         parent = false

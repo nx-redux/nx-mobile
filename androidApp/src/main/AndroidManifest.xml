@@ -16,6 +16,11 @@
     <!-- 3b-1: All files access, for the sideloaded build (a Play build drops this line and stays on SAF): ROM sync,
          the library read as plain paths, and the app's own folder picker. Asked in first setup; optional. -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+    <!-- Kids Mode: the warning and the lock on the dot (Alarms & reminders, asked in its setup), the alarms set again
+         after a reboot, and the guard's view of the app in front (Usage access, granted on Android's own page). -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <!-- USB Cable netplay: the phone as USB host for a handheld or another phone (optional: the row hides without it). -->
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
     <!-- The on-screen pad and the pad layout editor are touch. Android already assumes a touchscreen; stated so it stays
@@ -116,6 +121,24 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="${applicationId}.END_GAME" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Kids Mode's warning and lock alarms (explicit PendingIntents from KidsAlarms), in the main process. -->
+        <receiver
+            android:name=".kids.KidsAlarmReceiver"
+            android:exported="false" />
+        <!-- Kids Mode: the mode and its alarms again after a boot, a clock or time zone change, an update or the exact
+             alarm grant. Exported for these system broadcasts, all protected: no other app can send them. -->
+        <receiver
+            android:name=".kids.KidsClockReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
 

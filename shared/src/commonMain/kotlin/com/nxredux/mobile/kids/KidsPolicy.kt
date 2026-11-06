@@ -106,6 +106,9 @@ private fun nextOpen(now: LocalNow, schedule: KidsSchedule): NextOpen? {
     return null
 }
 
+/** The kid-facing warning, 10 minutes before an end ([warnAtMs]): in a game, on the menu or as a notification. */
+const val KIDS_WARNING = "Games close in 10 minutes. Save your game now."
+
 /** The warning shows 10 minutes before an end. */
 fun warnAtMs(untilMs: Long): Long = untilMs - 600_000L
 

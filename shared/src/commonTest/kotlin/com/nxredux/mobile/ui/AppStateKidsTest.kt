@@ -328,6 +328,48 @@ class AppStateKidsTest {
         assertSame(Screen.KidsHome, st.screen.value)
     }
 
+    /** Screen off: Parent mode ends, a timed unlock the parent gave stays. */
+    @Test fun endParentKeepsTheTimedUnlock() = runTest {
+        val settings = MemorySettings()
+        val platform = Platform(MON, 10 * 60)
+        val kids = KidsController(settings, platform)
+        val st = state(settings, kids)
+        st.load()
+        kids.unlock(com.nxredux.mobile.kids.UnlockChip.HOUR1)
+        val until = platform.epochMs + 60 * 60_000L
+        kids.enterParent(platform.epochMs)
+        assertEquals(KidsMode.Parent, kids.mode.value)
+        kids.endParent()
+        assertEquals(until, settings.kidsUnlockUntil)
+        assertEquals(KidsMode.Open(until), kids.mode.value)
+        assertEquals(0, platform.locks)
+    }
+
+    /** Screen off in Parent on a locked day: Locked, and the lock runs as for any change to Locked. */
+    @Test fun endParentOnALockedDayLocks() = runTest {
+        val settings = MemorySettings()
+        val platform = Platform(MON, 10 * 60)
+        val kids = KidsController(settings, platform)
+        val st = state(settings, kids)
+        st.load()
+        kids.enterParent(platform.epochMs)
+        st.openSettingsMenu()
+        kids.endParent()
+        assertIs<KidsMode.Locked>(kids.mode.value)
+        assertEquals(1, platform.locks)
+        assertSame(Screen.KidsHome, st.screen.value)
+        kids.endParent()                                              // not in Parent: nothing more
+        assertEquals(1, platform.locks)
+    }
+
+    @Test fun kidsWarningShowsTheMenuNotice() = runTest {
+        val settings = MemorySettings()
+        val st = state(settings, KidsController(settings, Platform(SAT, 19 * 60 + 50)))
+        st.load()
+        st.kidsShowWarning()
+        assertEquals("Games close in 10 minutes. Save your game now.", st.notice.value)
+    }
+
     @Test fun lockedSecondScreenShowsTheBackdrop() {
         assertEquals(TopContent.Backdrop, DualMenu.top(Screen.KidsHome, null, emptyList(), tool = true))
         assertEquals(BottomContent.Normal, DualMenu.bottom(Screen.KidsHome, active = true, tool = true))

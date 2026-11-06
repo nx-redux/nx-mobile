@@ -1,6 +1,7 @@
 package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.sync.SyncLink
+import com.nxredux.mobile.kids.KIDS_WARNING
 import com.nxredux.mobile.kids.KidsController
 import com.nxredux.mobile.kids.KidsMode
 import com.nxredux.mobile.kids.KidsSchedule
@@ -7393,6 +7394,9 @@ class AppState(
 
     /** Kids Mode's clock (the tiles screen's clock, the PIN wait's count); null without Kids Mode. */
     fun kidsNow(): LocalNow? = kids?.now()
+
+    /** The 10-minute warning while the menu is in front: the menu's notice ([KIDS_WARNING]). */
+    fun kidsShowWarning() = showNotice(KIDS_WARNING)
 
     /** The installed apps listed again for the tiles; the selection keeps its place, the lock staying last. */
     private fun loadKidsTiles() {
