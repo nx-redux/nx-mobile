@@ -170,6 +170,16 @@ bit-identical. Only `ppsspp` differs, because it embeds a build timestamp: its b
 (`ext/libpng17/pngerror.c`) compiles `__DATE__`/`__TIME__` into the copyright string
 (e.g. `translated Sep 23 2026 00:59:43`). The other seven cores are byte-for-byte reproducible.
 
+## melonDS DS (DS): check save states on every pin bump
+
+melonDS refuses a save state whose format major version differs from its own (`SAVESTATE_MAJOR` in the melonDS
+dependency's `src/Savestate.h`), and melonDS DS also rejects one whose size differs from what the running core
+expects. v1.4.0 (melonDS major 14) cannot load v1.3.1 states (major 12): the load fails cleanly with a toast, the game
+keeps running, and in-game battery saves are unaffected. On every pin bump, compare `SAVESTATE_MAJOR` with the
+current pin's; if it changed, say in the release notes that DS save states from earlier versions won't load.
+
+Checked: v1.3.1 → v1.4.0 (2026-11-07, Nova): old states refused cleanly (major 12 → 14).
+
 ## Azahar (3DS): check save states on every pin bump
 
 Pin and build notes are in the `Makefile` above `azahar_HASH`. A 3DS save state records the git revision of the core
