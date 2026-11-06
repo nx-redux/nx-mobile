@@ -3,9 +3,10 @@ package com.nxredux.mobile.sync
 /** Device Sync's text, worded after the handheld's Device Sync tool. */
 object DeviceSyncText {
     const val TITLE = "Device Sync"
+    /** The Ready page's headline, in the tool and setup alike (a setup page's question). */
+    const val ASK = "Sync with your handheld"
     const val HEADLINE = "Sync saves, states, BIOS and collections between two devices."
     const val HEADLINE_ROMS = "Sync saves, states, BIOS, collections and ROMs between two devices."
-    fun romsHint(on: Boolean) = if (on) "ROMS: ON" else "ROMS: OFF"
     /** The ROMs toggle's notice (touch shows it as an icon only). */
     const val ROMS_ON_NOTICE = "ROMs will sync too"
     const val ROMS_OFF_NOTICE = "ROMs won't sync"

@@ -11,14 +11,13 @@ import com.nxredux.mobile.cheats.db.CheatDbController
 import com.nxredux.mobile.cheats.db.CheatDbState
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.NxButton
-import com.nxredux.mobile.ui.nx.NxDetailListBody
 import com.nxredux.mobile.ui.nx.NxDialog
 import com.nxredux.mobile.ui.nx.NxProgressBody
-import com.nxredux.mobile.ui.nx.NxRow
 
 /**
- * The Cheats & Patches tool (the cheat database), laid out like nx-redux's tool pages: while idle a grey title, a details
- * block (install state, size or counts, last update) and the action rows (Download / Check for updates / Remove);
+ * The Cheats & Patches tool (the cheat database), in the Settings root's look ([SettingsRootScreen]): while idle,
+ * bottom-left, the small label, its head (the install state bold, then size or counts and the last update) and the
+ * actions as large words (Download / Check for updates / Remove), a tap opening one;
  * a progress body while working (B cancels), and the remove confirm. State comes straight from the controller.
  */
 @Composable
@@ -35,13 +34,12 @@ fun CheatDbScreen(
             val hints = if (state is CheatDbState.Removing) emptyList() else listOf(Hint(NxButton.B, "Cancel"))
             NxProgressBody(ToolKind.CHEAT_DB.toolName!!, line, cheatDbProgressFraction(state), hints = hints, onHint = onHint)
         } else {
-            NxDetailListBody(
-                title = ToolKind.CHEAT_DB.toolName!!,
-                details = cheatDbDetails(state, CheatDatabase.rowsFor(CheatDatabase.installTags).size),
-                rows = cheatDbRows(state).map { NxRow(it.label) },
-                selectedIndex = selectedIndex,
-                hints = listOf(Hint(NxButton.A, "Select"), Hint(NxButton.B, "Back")),
-                onSelect = onSelect, onOpen = onOpen, onHint = onHint,
+            // The install state as the head's headline, its size or counts and last update the description.
+            val details = cheatDbDetails(state, CheatDatabase.rowsFor(CheatDatabase.installTags).size)
+            SettingsRootScreen(
+                ToolKind.CHEAT_DB.toolName!!, cheatDbRows(state).map { it.label }, emptyList(), selectedIndex,
+                onTap = { onSelect(it); onOpen(it) }, hintBar = true, onHint = onHint,
+                headline = details.firstOrNull(), description = details.drop(1),
             )
         }
         if (screen.confirmRemove) {

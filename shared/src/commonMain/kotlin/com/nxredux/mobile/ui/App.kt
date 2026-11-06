@@ -613,12 +613,16 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     if (settingsSplitView(LocalWindowSize.current, s)) SettingsSplitScreen(state, s, selection) { SettingsPage(state, s, selection, titled = true) }
                     else NarrowSettingsPage(state, s, selection)
                 }
-            is Screen.CheatDb -> state.cheatDb?.let { c -> WithIndex(selection) { CheatDbScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) } } ?: Box(Modifier.fillMaxSize())
+            // Cheats & Patches and RetroAchievements: the Settings root's look, so the Settings hint bar rules too.
+            is Screen.CheatDb -> state.cheatDb?.let { c -> SettingsHintBar { WithIndex(selection) { CheatDbScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) } } } ?: Box(Modifier.fillMaxSize())
             Screen.DeviceSync -> state.deviceSync?.let {
                 val setup by state.syncSetup.collectAsState()
-                DeviceSyncScreen(it, onHint = state::onButton, setup = setup, onSetupTap = state::syncSetupTap)
+                // The Settings root's look: its hints start at the words' edge (shown always: Retry and the like are hints alone).
+                CompositionLocalProvider(LocalNxHintBarStart provides settingsSectionStart()) {
+                    DeviceSyncScreen(it, onHint = state::onButton, setup = setup, onSetupTap = state::syncSetupTap)
+                }
             } ?: Box(Modifier.fillMaxSize())
-            is Screen.RetroAchievements -> state.achievements?.let { c -> WithIndex(selection) { RetroAchievementsScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) } } ?: Box(Modifier.fillMaxSize())
+            is Screen.RetroAchievements -> state.achievements?.let { c -> SettingsHintBar { WithIndex(selection) { RetroAchievementsScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) } } } ?: Box(Modifier.fillMaxSize())
             is Screen.RaDownload -> state.achievements?.let { c -> WithIndex(selection) { RaDownloadScreen(s, c, it, state::select, {}, onHint = state::onButton) } } ?: Box(Modifier.fillMaxSize())
             is Screen.GameTime -> WithIndex(selection) { GameTimeScreen(s, it, state::select, { state.openSelected() }, state::gameTimeSelectModal, onHint = state::onButton) }
             // A game's sessions: on a split window beside the tracker list (the RetroAchievements column browser's rule); else one page.
@@ -629,7 +633,8 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             // same rule as the two-pane Settings); else one page.
             is Screen.RaGames, is Screen.RaGame, is Screen.RaAchievement, is Screen.RaSettings ->
                 if (raSplitView(LocalWindowSize.current, s)) RaSplitScreen(state, s) { RaLevelPage(state, s, selection, split = true) }
-                else RaLevelPage(state, s, selection, split = false)
+                else if (s is Screen.RaAchievement) RaLevelPage(state, s, selection, split = false)   // its own detail page
+                else SettingsHintBar { NarrowRaPage(state, s, selection) }
             // Artwork and its pages: on a split window Settings' wide stage (its words on the left, the page or the
             // highlighted word's preview on the right); on a narrow or portrait window one page. Either way the Settings
             // look: the hint bar follows Layouts → Button hints and starts at the words' edge, as Settings'.
@@ -638,10 +643,10 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                 if (artworkSplitView(LocalWindowSize.current, s)) CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
                     ArtworkStageScreen(state, s, selection)
                 }
-                else if (s is Screen.Artwork) CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
-                    WithIndex(selection) { ArtworkScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton) }
+                else SettingsHintBar {
+                    if (s is Screen.Artwork) WithIndex(selection) { ArtworkScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton) }
+                    else NarrowArtworkPage(state, s, selection)
                 }
-                else WithIndex(selection) { ArtworkScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton) }
         }
         (page as? Screen.EmulatorOptions)?.takeIf(::gameSettingsModal)?.let { modal ->
             val rowEditModal by state.rowEdit.collectAsState()   // the row the pad is changing
@@ -721,6 +726,39 @@ private fun NarrowSettingsPage(state: AppState, s: Screen, selection: State<List
             SettingsPage(state, s, selection, titled = false)
         }
     }
+}
+
+/**
+ * An Artwork page below the root on a narrow window, as a narrow Settings page ([NarrowSettingsPage]): the rows block,
+ * "Artwork / page" its first line, at least the root's word block high so that line sits where "Artwork" does.
+ */
+@Composable
+private fun NarrowArtworkPage(state: AppState, s: Screen, selection: State<ListSelection>) {
+    val words = state.artworkStagePage(s).rows.map { it.label }
+    WithSettingsWordBlockSize(ARTWORK_TITLE, words) { size ->
+        val block = remember(size.height) { SettingsBlockMode(ARTWORK_TITLE, minHeight = size.height) }
+        CompositionLocalProvider(LocalSettingsBlock provides block) {
+            WithIndex(selection) { ArtworkScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton, split = true) }
+        }
+    }
+}
+
+/**
+ * A RetroAchievements level on a narrow window (its games, a game's achievements, its Settings), as a narrow Settings
+ * page: the rows block, "RetroAchievements / page" its first line, at least the tool page's word block high so that line
+ * sits where "RetroAchievements" does there; Settings' dialogs over it.
+ */
+@Composable
+private fun NarrowRaPage(state: AppState, s: Screen, selection: State<ListSelection>) {
+    val c = state.achievements
+    val ra = c?.state?.collectAsState()?.value
+    val download = c?.download?.collectAsState()?.value
+    val words = ra?.let { st -> raRows(st, download).map { raRowLabel(it, download, raPending(st)) } }.orEmpty()
+    WithSettingsWordBlockSize(RA_TITLE, words) { size ->
+        val block = remember(size.height) { SettingsBlockMode(RA_TITLE, minHeight = size.height) }
+        CompositionLocalProvider(LocalSettingsBlock provides block) { RaLevelPage(state, s, selection, split = true) }
+    }
+    if (s is Screen.RaSettings) RaSettingsDialogs(s, state, state::onButton)
 }
 
 /** A Settings screen drawn as one page (or as the two-pane Settings' focused right pane, [titled]: the split draws its dialog). */
@@ -810,11 +848,15 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
         is Screen.StorageUpgrade, is Screen.CopySaves -> SettingsBackground()
         // The folder picker: the small mark only, so the large one never sits behind its names.
         is Screen.FilePicker -> SettingsBackground()
-        // Settings, the Artwork page (drawn as Settings' root) and every Artwork page on Settings' wide stage: the small
-        // mark at the top right alone ([SettingsBackground]); the large centred mark is not drawn. Artwork's other pages
-        // on a narrow window keep it.
-        is Screen.Artwork -> SettingsBackground()
-        else -> if (settingsPane(s) != null || artworkSplitView(LocalWindowSize.current, s)) SettingsBackground() else MarkBackground(s)
+        // Settings and every Artwork page (the root drawn as Settings' root, the others as its rows block or on its wide
+        // stage): the small mark at the top right alone ([SettingsBackground]); the large centred mark is not drawn. RetroAchievements and Cheats & Patches (Settings' root too) and Device Sync (a
+        // setup page) have it as well.
+        is Screen.Artwork, is Screen.ArtworkConsoles, is Screen.ArtworkProgress, is Screen.ArtworkSettings, is Screen.ArtworkReset,
+        is Screen.RetroAchievements, is Screen.CheatDb, Screen.DeviceSync -> SettingsBackground()
+        // RetroAchievements' levels drawn as the rows block (a narrow window; its detail page keeps its own).
+        is Screen.RaGames, is Screen.RaGame, is Screen.RaSettings ->
+            if (raSplitView(LocalWindowSize.current, s)) MarkBackground(s) else SettingsBackground()
+        else -> if (settingsPane(s) != null) SettingsBackground() else MarkBackground(s)
     }
 }
 
@@ -900,3 +942,11 @@ private fun MainMenuBackground(bg: MenuBackground, listArt: GameListArt) {
         MenuBackground.Plain -> Box(Modifier.fillMaxSize().background(LocalNxColors.current.background))
     }
 }
+
+/**
+ * [content] under the Settings hint bar's rules: shown only while Layouts → Button hints is on, starting at the section
+ * words' edge (Settings, the tools drawn as its root).
+ */
+@Composable
+private fun SettingsHintBar(content: @Composable () -> Unit) =
+    CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart(), content = content)

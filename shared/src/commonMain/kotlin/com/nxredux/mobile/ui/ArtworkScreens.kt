@@ -40,11 +40,12 @@ internal const val ARTWORK_TITLE = "Artwork"
 fun ArtworkScreen(
     screen: Screen, state: AppState, selectedIndex: Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onHint: (NxButton) -> Unit, modifier: Modifier = Modifier,
+    split: Boolean = false,   // in the rows block ([LocalSettingsBlock]), whose first line names the tool
 ) {
     val truncated by state.settingInfoTruncated.collectAsState()   // Settings' selected row's cut-off line: its X Info hint
     Box(modifier.fillMaxSize()) {
         ArtworkPageBody(
-            screen, selectedIndex, onSelect, onOpen, onHint,
+            screen, selectedIndex, onSelect, onOpen, onHint, split = split,
             onSetting = state::settingEvent, onTruncated = state::onSettingInfoTruncated, truncated = truncated,
         )
         ArtworkDialogs(screen, state, onHint)

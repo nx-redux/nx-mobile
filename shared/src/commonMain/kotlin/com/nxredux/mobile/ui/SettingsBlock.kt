@@ -9,6 +9,8 @@ import com.nxredux.mobile.ui.nx.rememberNxRowSnapFling
 import com.nxredux.mobile.ui.nx.nxRowEdgeMask
 import com.nxredux.mobile.ui.nx.nxRowFade
 import com.nxredux.mobile.ui.nx.LocalNxFontWeights
+import com.nxredux.mobile.ui.nx.nxListLabel
+import com.nxredux.mobile.ui.nx.nxOptionsLabelSize
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -167,12 +169,14 @@ fun SettingsSectionBlock(
  * [inkOpen][com.nxredux.mobile.ui.nx.NxColors.inkOpen] ink and a "›" after it, [openedLabel]) and the rest inkDim. No Back
  * word: B (or the back gesture) goes back. No pill, no underline, no plate; it never scrolls. A tap on a word calls
  * [onTap] with its index. [markAll]: every word with its open mark (the size probe, [WithSettingsWordBlockSize], so the
- * block is as wide open).
+ * block is as wide open). [headline] and [description]: a tool's head between the title and the words, as a setup
+ * page's ([SettingsWordHead]); [extra] under it, above the words (Device Sync's Sync ROMs row).
  */
 @Composable
 fun SettingsWordBlock(
     title: String, words: List<String>, current: Int, rowsFocused: Boolean,
     onTap: (Int) -> Unit, modifier: Modifier = Modifier, markAll: Boolean = false,
+    headline: String? = null, description: List<String> = emptyList(), extra: (@Composable () -> Unit)? = null,
 ) {
     val colors = LocalNxColors.current
     val wordStyle = settingsWordStyle()
@@ -181,6 +185,8 @@ fun SettingsWordBlock(
             title, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = settingsSmallSize(),
             maxLines = 1, softWrap = false, modifier = Modifier.padding(bottom = SETTINGS_LABEL_GAP),
         )
+        if (headline != null || description.isNotEmpty()) SettingsWordHead(headline, description)
+        extra?.invoke()
         words.forEachIndexed { i, word ->
             val color = when {
                 i != current -> colors.inkDim
@@ -192,6 +198,33 @@ fun SettingsWordBlock(
         }
     }
 }
+
+/**
+ * A tool's head in its word block (RetroAchievements, Cheats & Patches): [headline] bold in ink at a setup page's title
+ * size ([SETUP_TITLE_SIZE], up to two lines), then [description] one line each in the hint grey at a row description's
+ * size, as a setup page's lines; [SETTINGS_HEAD_GAP] above the words.
+ */
+@Composable
+internal fun SettingsWordHead(headline: String?, description: List<String>) {
+    val colors = LocalNxColors.current
+    val scale = nxTextScale()
+    Column(Modifier.padding(bottom = SETTINGS_HEAD_GAP)) {
+        if (!headline.isNullOrEmpty()) Text(
+            headline, color = colors.listText, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Bold,
+            fontSize = SETUP_TITLE_SIZE.pinned() * scale, lineHeight = SETUP_TITLE_SIZE.pinned() * scale * 1.15f, maxLines = 2,
+        )
+        if (description.isNotEmpty()) {
+            val body = nxOptionsLabelSize(nxListLabel())
+            Text(
+                description.joinToString("\n"), color = colors.hint, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal,
+                fontSize = body, lineHeight = body * 1.45f, modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
+
+/** From a tool's head ([SettingsWordHead]) down to its words. */
+private val SETTINGS_HEAD_GAP = 16.dp
 
 /** The block's small text (its title, a root page's status lines): menuInfo under Appearance → Text size. */
 @Composable

@@ -8,7 +8,6 @@ import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.nav_icon_delete
 import com.nxredux.mobile.shared.res.nav_icon_filter
 import com.nxredux.mobile.shared.res.nav_icon_new_folder
-import com.nxredux.mobile.shared.res.nav_icon_roms
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.FooterAction
 import com.nxredux.mobile.ui.nx.Hint
@@ -32,11 +31,6 @@ class TouchStandInsTest {
         assertEquals(HintTouch.Icon(Res.drawable.nav_icon_filter, lit = false), raGameFilterHint(lockedOnly = false).touch)
     }
 
-    @Test fun device_sync_roms_icon_is_lit_while_roms_are_on() {
-        assertEquals(HintTouch.Icon(Res.drawable.nav_icon_roms, lit = true), deviceSyncRomsHint(on = true).touch)
-        assertEquals(HintTouch.Icon(Res.drawable.nav_icon_roms, lit = false), deviceSyncRomsHint(on = false).touch)
-        assertEquals(NxButton.X, deviceSyncRomsHint(on = false).button)
-    }
 
     @Test fun artwork_progress_pause_or_resume_then_cancel_as_buttons() {
         assertEquals(
