@@ -44,7 +44,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(77 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's in every family (its fold board and tall landscape always both)
+        assertEquals(83 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's and sideways Remote's in every family (the Nunchuk's fold board and tall landscape always both)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -332,6 +332,42 @@ class NxCarbonPackTest {
                     assertTrue(ok, "$name ${a.spec.id} ${b.spec.id}")
                 }
             }
+        }
+    }
+
+    @Test
+    fun wiiSidewaysLayoutsInEveryFamily() {
+        // the d-pad alone, the 1 2 B A diamond, B (the trigger) on the left shoulder too and SHAKE on the right, − +, HOME, MOTION, MENU
+        for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
+            val tablet = name.startsWith("tablet")
+            val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 640f to 480f,
+                d.third, foldable = name.startsWith("inner"), variant = SkinVariant.WII_SIDEWAYS), name)
+            dump("wiis_$name", d.first, d.second, p)
+            assertEquals(SkinVariant.WII_SIDEWAYS, p.spec.variant, name)
+            val cs = p.controls.filterNot { it.spec.id.startsWith("TOUCH_") }
+            assertEquals(setOf("DPAD", "A", "B", "X", "Y", "R2", "SELECT", "START", "MENU", "HOME", "MOTION"), cs.map { it.spec.id }.toSet(), name)
+            val ys = cs.filter { it.spec.id == "Y" }
+            assertEquals(2, ys.size, "$name B in the diamond and on the shoulder")
+            val shoulderB = ys.first { it.spec.shape == ControlShape.RECT }; val faceB = ys.first { it.spec.shape != ControlShape.RECT }
+            fun c(id: String) = cs.first { it.spec.id == id && (id != "Y" || it.spec.shape != ControlShape.RECT) }
+            assertTrue(shoulderB.x < c("R2").x && shoulderB.y < c("B").y, "$name B left shoulder, SHAKE right")
+            assertTrue(c("B").y < c("X").y && c("A").x < c("X").x && faceB.y > c("X").y, "$name 1 top, 2 left, B bottom, A right")
+            for (id in listOf("HOME", "MOTION")) assertTrue(cs.any { it.spec.id == id }, "$name $id")
+            fun box(pc: PlacedControl): FloatArray {
+                val r = when (pc.spec.shape) { ControlShape.STICK -> pc.spec.r * 1.25f; ControlShape.RECT -> 0f; else -> pc.spec.r }
+                val hw = if (r > 0f) r else pc.spec.hw; val hh = if (r > 0f) r else pc.spec.hh
+                return floatArrayOf(pc.x - hw, pc.y - hh, pc.x + hw, pc.y + hh)
+            }
+            fun apart(a: FloatArray, b: FloatArray) = a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1]
+            fun round(a: PlacedControl, b: PlacedControl) = kotlin.math.hypot(a.x - b.x, a.y - b.y) >= a.spec.r + b.spec.r - 1f
+            fun circle(pc: PlacedControl) = pc.spec.shape == ControlShape.CIRCLE
+            val face = setOf(c("B"), c("A"), c("X"), faceB)
+            for (i in cs.indices) for (j in i + 1 until cs.size) {
+                val a = cs[i]; val b = cs[j]
+                if (a in face && b in face) continue
+                assertTrue(if (circle(a) && circle(b)) round(a, b) else apart(box(a), box(b)), "$name ${a.spec.id} ${b.spec.id}")
+            }
+            for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
         }
     }
 

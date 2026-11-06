@@ -84,6 +84,8 @@ enum class SkinVariant {
     @SerialName("wii_classic") WII_CLASSIC,
     /** The Wii Remote with the Nunchuk: the stick, the Remote's 1 2 B A, SHAKE N Z / C SHAKE, − +, HOME, MOTION. */
     @SerialName("wii_nunchuk") WII_NUNCHUK,
+    /** The Wii Remote held sideways: the d-pad, the 1 2 B A diamond, B (the trigger) and SHAKE shoulders, − +, HOME, MOTION. */
+    @SerialName("wii_sideways") WII_SIDEWAYS,
 }
 
 /**
