@@ -1067,6 +1067,29 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVulkanS
     LibretroDroid::getInstance().setVulkanSwapchainFrames(enabled);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVideoViewsEnabled(
+    JNIEnv* env,
+    jclass obj,
+    jboolean enabled
+) {
+    LibretroDroid::getInstance().setVideoViewsEnabled(enabled);
+}
+
+JNIEXPORT jintArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getVideoViews(
+    JNIEnv* env,
+    jclass obj
+) {
+    auto views = LibretroDroid::getInstance().getVideoViews();
+    std::vector<jint> flat;
+    flat.reserve(views.size() * 6);
+    for (const auto& v : views) {
+        flat.insert(flat.end(), { (jint) v.x, (jint) v.y, (jint) v.width, (jint) v.height, (jint) v.screen, (jint) v.eye });
+    }
+    jintArray result = env->NewIntArray((jsize) flat.size());
+    env->SetIntArrayRegion(result, 0, (jsize) flat.size(), flat.data());
+    return result;
+}
+
 JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_isVulkanSupported(
     JNIEnv* env,
     jclass obj

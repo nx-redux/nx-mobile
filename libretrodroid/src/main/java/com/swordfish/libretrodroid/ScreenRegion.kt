@@ -38,6 +38,9 @@ data class ScreenRegion(
     val alpha: Float = 1f,
 )
 
+/** One view of the core's video view map: a screen's rectangle in its frame, in px from the top-left as displayed. */
+data class VideoView(val x: Int, val y: Int, val width: Int, val height: Int, val screen: Int, val eye: Int)
+
 /** A position in the core frame, 0..1 each way (y down): what the core receives as its pointer. */
 data class FramePoint(val x: Float, val y: Float)
 

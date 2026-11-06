@@ -17,6 +17,7 @@
 
 #define MODULE_NAME_CORE "Libretro Core"
 
+#include "debugprop.h"
 #include <utility>
 #include <vector>
 #include <string>
@@ -62,6 +63,10 @@ void Environment::deinitialize() {
     hasDiskControl = false;
     diskControl = {};
     core_options_update_display_callback = nullptr;
+
+    videoViewsEnabled = false;
+    if (!videoViews.empty()) videoViewsUpdated = true;
+    videoViews.clear();
 
     variables.clear();
     dirtyVariables = false;
@@ -523,8 +528,37 @@ bool Environment::callback_environment(unsigned cmd, void *data) {
     return Environment::getInstance().handle_callback_environment(cmd, data);
 }
 
+void Environment::setVideoViewsEnabled(bool enabled) {
+    videoViewsEnabled = enabled;
+}
+
+bool Environment::takeVideoViews(std::vector<libretrodroid::VideoView>& out) {
+    if (!videoViewsUpdated) return false;
+    videoViewsUpdated = false;
+    out = videoViews;
+    return true;
+}
+
 bool Environment::handle_callback_environment(unsigned cmd, void *data) {
     switch (cmd) {
+        case RETRO_ENVIRONMENT_GET_VIDEO_VIEWS_STATUS: {
+            if (data == nullptr) return false;
+            const bool presents = videoViewsEnabled && !libretrodroid::debugPropertyOff("debug.nx.videoviews");
+            *static_cast<unsigned*>(data) = presents ? RETRO_VIDEO_VIEWS_STATUS_PRESENTS : 0;
+            return true;
+        }
+
+        case RETRO_ENVIRONMENT_SET_VIDEO_VIEWS: {
+            if (data == nullptr) return false;
+            std::vector<libretrodroid::VideoView> views;
+            if (!libretrodroid::VideoViews::validate(*static_cast<const retro_video_views*>(data), views)) return false;
+            if (views != videoViews) {
+                videoViews = std::move(views);
+                videoViewsUpdated = true;
+            }
+            return true;
+        }
+
         case RETRO_ENVIRONMENT_GET_CAN_DUPE:
             *((bool*) data) = true;
             return true;

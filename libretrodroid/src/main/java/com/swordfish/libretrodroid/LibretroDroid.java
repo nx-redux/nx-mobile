@@ -126,6 +126,10 @@ public class LibretroDroid {
     public static native void setPreferVulkan(boolean enabled);
     /** The next core renders into a swapchain on the bridge's surface (Dolphin): its frames are bounded by that surface. Set before create(). */
     public static native void setVulkanSwapchainFrames(boolean enabled);
+    /** nx-mobile: offer libretro video views to the next core loaded. */
+    public static native void setVideoViewsEnabled(boolean enabled);
+    /** The core's video view map, 6 ints per view (x, y, width, height, screen, eye); empty when there is none. */
+    public static native int[] getVideoViews();
     /** Whether this device can run the Vulkan bridge (a Vulkan 1.1 GPU with AHardwareBuffer import). Cached; any thread. */
     public static native boolean isVulkanSupported();
     /** With Settings → System → Debug log on at launch: log GL driver messages (GL_KHR_debug, else glGetError) to tag NXGL. Set before create(). */

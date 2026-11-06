@@ -376,6 +376,7 @@ class GLRetroView(
         LibretroDroid.setGlDebugOutput(data.glDebugOutput)
         LibretroDroid.setPreferVulkan(data.preferVulkan)
         LibretroDroid.setVulkanSwapchainFrames(data.vulkanSwapchainFrames)
+        LibretroDroid.setVideoViewsEnabled(data.videoViews)
         LibretroDroid.setKeepCoreLoaded(data.keepCoreLoaded)
         LibretroDroid.create(
             openGLESVersion,
@@ -704,6 +705,11 @@ class GLRetroView(
      * zeros before it loads. Safe from any thread.
      */
     fun getGameGeometry(): FloatArray = LibretroDroid.getGameGeometry()
+
+    /** The core's video view map (where each of its screens sits in its frame); empty when it sends none. */
+    fun videoViews(): List<VideoView> = LibretroDroid.getVideoViews().toList().chunked(6).map {
+        VideoView(it[0], it[1], it[2], it[3], it[4], it[5])
+    }
 
     /** True once the running core's frames come from its own GL framebuffer (a hardware-rendered core). Safe from any thread. */
     fun isHardwareRendered(): Boolean = LibretroDroid.isHardwareRendered()

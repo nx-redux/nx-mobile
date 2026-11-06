@@ -407,6 +407,11 @@ void LibretroDroid::create(
     resetGlobalVariables();
 
     Environment::getInstance().initialize(systemDir, savesDir, &callback_get_current_framebuffer);
+    Environment::getInstance().setVideoViewsEnabled(videoViewsEnabled);
+    {
+        std::lock_guard<std::mutex> guard(videoViewsLock);
+        videoViews.clear();
+    }
     // A failed load never reaches destroy(); releaseCore() above deinitialised its core, drop its VFS files too.
     VFS::getInstance().deinitialize();
     // Again after releaseCore(): the old core may have set a memory map from retro_unload_game/retro_deinit, and a new
@@ -893,6 +898,15 @@ void LibretroDroid::step() {
         geometryChanged = true;
 
         dirtyVideo = true;
+    }
+
+    std::vector<VideoView> views;
+    if (Environment::getInstance().takeVideoViews(views)) {
+        {
+            std::lock_guard<std::mutex> guard(videoViewsLock);
+            videoViews = std::move(views);
+        }
+        geometryChanged = true;
     }
 
     if (video && Environment::getInstance().isScreenRotationUpdated()) {
@@ -1459,6 +1473,11 @@ void LibretroDroid::renderSecondary(unsigned width, unsigned height) {
     } catch (const std::exception& e) {
         LOGE("Error rendering the second screen: %s", e.what());
     }
+}
+
+std::vector<VideoView> LibretroDroid::getVideoViews() {
+    std::lock_guard<std::mutex> guard(videoViewsLock);
+    return videoViews;
 }
 
 std::array<float, 4> LibretroDroid::getGameGeometry() const {

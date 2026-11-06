@@ -188,6 +188,8 @@ internal const val TAG_LOG = "NXAPP"
 internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost, FrontendHost, DualScreenHost, InGameMenuHost {
 
     companion object {
+        /** Cores that send a video view map (melonds-ds#335, azahar#2718 in our patches). */
+        private val VIDEO_VIEW_CORES = setOf("melondsds", "azahar")
         const val EXTRA_CORE_FILE = "core_file"
         const val EXTRA_CORE_ID = "core_id"
         const val EXTRA_TAG = "tag"
@@ -1568,6 +1570,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     // Display → Graphics API ([graphics]): Vulkan frames are bridged into the GLES presentation.
                     preferVulkan = graphics.preferVulkan
                     vulkanSwapchainFrames = graphics.swapchainFrames
+                    // DS / 3DS: the core reports where each screen sits in its frame (video views), the layouts read it.
+                    videoViews = gameCoreId in VIDEO_VIEW_CORES
                     // gpsp: never unload the core between games, so its recompiler cache stays mapped near it.
                     keepCoreLoaded = descriptor?.keepLoaded == true
                     shader = renderer.shaderFor(frontend)

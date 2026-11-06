@@ -50,6 +50,8 @@ class GLRetroViewData(context: Context) {
     var preferVulkan: Boolean = false
     /** With [preferVulkan]: the core renders into a swapchain on the bridge's surface (Dolphin), so frames are bounded by it. */
     var vulkanSwapchainFrames: Boolean = false
+    /** nx-mobile: offer libretro video views to the core (melonDS DS, Azahar), which then report where each screen is. */
+    var videoViews: Boolean = false
     /**
      * Never unload the core's library after this session (RTLD_NODELETE): the next game on the same core reuses it at the
      * same address. For a core that maps memory near its own code once (gpsp's recompiler cache).
