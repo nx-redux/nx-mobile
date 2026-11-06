@@ -367,6 +367,31 @@ interface AppSettings {
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
+    /** Kids Mode (default off) and its state; all defaulted, like [debugLog]. */
+    var kidsEnabled: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** The weekly schedule, as stored text (null = the default schedule). */
+    var kidsSchedule: String?
+        get() = null
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** Apps the kid may open, as `pkg/activity` ids. */
+    var kidsAllowedApps: Set<String>
+        get() = emptySet()
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** Epoch millis the parent's timed unlock lasts to (0 = none). */
+    var kidsUnlockUntil: Long
+        get() = 0L
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** The home ref string the flag file was written in. */
+    var kidsFlagHome: String?
+        get() = null
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** Stores [pin] as a salted hash. */
+    fun setKidsPin(@Suppress("UNUSED_PARAMETER") pin: String) {}
+    fun kidsPinMatches(@Suppress("UNUSED_PARAMETER") pin: String): Boolean = false
+    val kidsPinSet: Boolean get() = false
+
     /**
      * Settings → Second screen → Enable (default on): a built-in or wired second screen shows part of the frame.
      * Defaulted, like [debugLog].

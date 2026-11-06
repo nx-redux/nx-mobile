@@ -1,5 +1,6 @@
 package com.nxredux.mobile.settings
 
+import com.nxredux.mobile.kids.KidsPin
 import android.content.Context
 import androidx.core.content.edit
 import com.nxredux.mobile.BuildConfig
@@ -262,6 +263,32 @@ class AndroidAppSettings(context: Context) : AppSettings {
             NxLog.enabled = value   // at once: the app, the runner and the cores in this process
         }
 
+    override var kidsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_KIDS_ENABLED, false)
+        set(value) = prefs.edit { putBoolean(KEY_KIDS_ENABLED, value) }
+
+    override var kidsSchedule: String?
+        get() = prefs.getString(KEY_KIDS_SCHEDULE, null)
+        set(value) = prefs.edit { if (value == null) remove(KEY_KIDS_SCHEDULE) else putString(KEY_KIDS_SCHEDULE, value) }
+
+    override var kidsAllowedApps: Set<String>
+        get() = prefs.getStringSet(KEY_KIDS_APPS, null)?.toSet() ?: emptySet()
+        set(value) = prefs.edit { putStringSet(KEY_KIDS_APPS, value.toSet()) }
+
+    override var kidsUnlockUntil: Long
+        get() = prefs.getLong(KEY_KIDS_UNLOCK_UNTIL, 0L)
+        set(value) = prefs.edit { putLong(KEY_KIDS_UNLOCK_UNTIL, value) }
+
+    override var kidsFlagHome: String?
+        get() = prefs.getString(KEY_KIDS_FLAG_HOME, null)
+        set(value) = prefs.edit { if (value == null) remove(KEY_KIDS_FLAG_HOME) else putString(KEY_KIDS_FLAG_HOME, value) }
+
+    override fun setKidsPin(pin: String) = prefs.edit { putString(KEY_KIDS_PIN, KidsPin.hash(pin)) }
+
+    override fun kidsPinMatches(pin: String): Boolean = prefs.getString(KEY_KIDS_PIN, null)?.let { KidsPin.matches(pin, it) } == true
+
+    override val kidsPinSet: Boolean get() = prefs.getString(KEY_KIDS_PIN, null) != null
+
     override var saveFormat: SaveFormat
         get() = SaveFormat.fromStored(prefs.getInt(KEY_SAVE_FORMAT, -1))
         set(value) = prefs.edit { putInt(KEY_SAVE_FORMAT, value.stored) }
@@ -361,6 +388,12 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_SYSTEM_BUTTONS = "system_buttons"
         private const val KEY_GAME_RUMBLE = "game_rumble"
         private const val KEY_DEBUG_LOG = "debug_log"
+        private const val KEY_KIDS_ENABLED = "kids_enabled"
+        private const val KEY_KIDS_SCHEDULE = "kids_schedule"
+        private const val KEY_KIDS_APPS = "kids_apps"
+        private const val KEY_KIDS_UNLOCK_UNTIL = "kids_unlock_until"
+        private const val KEY_KIDS_FLAG_HOME = "kids_flag_home"
+        private const val KEY_KIDS_PIN = "kids_pin"
         private const val KEY_SECOND_SCREEN = "second_screen"
         private const val KEY_BOTTOM_SCREEN = "bottom_screen"
         private const val KEY_PAUSE_UNFOCUSED = "pause_unfocused"
