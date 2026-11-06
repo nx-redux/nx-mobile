@@ -24,8 +24,11 @@ import com.swordfish.libretrodroid.NxLog
 
 /**
  * Kids Mode's guard (foreground service, type specialUse "parental controls"): while Locked and no menu is shown
- * ([guardRuns], driven by [AndroidKids]), it reads the app last resumed in the past [WINDOW_MS] once every [POLL_MS]
- * and sends one not allowed ([guardShouldBounce]) back to the tiles screen through [LaunchActivity], as the lock does.
+ * ([guardRuns], driven by [AndroidKids]), it finds the activity in front ([guardFront]) once every [POLL_MS] and sends
+ * one not allowed ([guardShouldBounce]) back to the tiles screen through [LaunchActivity], as the lock does. The first
+ * look goes back [FIRST_WINDOW_MS] (a cold lock alarm with an Android game or another app long in front); later looks
+ * go back [WINDOW_MS]. Our own game screen in front (resumed from Recents while Locked) is locked as the lock does it:
+ * the game quits first, then the menu comes forward ([AndroidKids.quitGameThenShowMenu]).
  *
  * The bounce is an activity start from the background. Android 10+ lets it through when NX Redux is the default home
  * app (the home app is always allowed to start activities); otherwise Android usually drops it and the kid stays where
@@ -41,6 +44,8 @@ class KidsGuardService : Service() {
     /** The resume event last sent back, so one event is bounced once (the next poll may still see it). */
     private var bouncedPkg: String? = null
     private var bouncedAt = 0L
+    /** The first look of this guard (a long one) is still to come. */
+    private var firstLook = true
 
     private val poll = object : Runnable {
         override fun run() {
@@ -93,31 +98,49 @@ class KidsGuardService : Service() {
 
     private fun check() {
         if (getSystemService(PowerManager::class.java)?.isInteractive == false) return   // nobody is using another app
-        val (pkg, at) = lastResumed() ?: return
+        val window = if (firstLook) FIRST_WINDOW_MS else WINDOW_MS
+        firstLook = false
+        val front = front(window) ?: return
+        val pkg = front.pkg
+        val at = front.at
         if (pkg == bouncedPkg && at == bouncedAt) return
         val ime = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
         val exempt = guardExempt(ime, kids.granting)
-        if (!guardShouldBounce(pkg, packageName, guardAllowedPackages(settings.kidsAllowedApps), exempt)) return
+        val game = com.nxredux.mobile.runner.GameActivity::class.java.name
+        if (!guardShouldBounce(pkg, front.cls, packageName, game, guardAllowedPackages(settings.kidsAllowedApps), exempt)) return
         bouncedPkg = pkg; bouncedAt = at
+        if (pkg == packageName) {   // our game screen while Locked: it quits as at the lock, then the tiles
+            NxLog.i(TAG, "guard: the game screen locked")
+            AndroidKids.quitGameThenShowMenu(this)
+            return
+        }
         NxLog.i(TAG, "guard: $pkg sent back")
         runCatching { startActivity(Intent(this, LaunchActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onFailure { NxLog.w(TAG, "guard: menu not brought forward (${it::class.java.simpleName})") }
     }
 
-    /** The package and time of the last activity resume in the past [WINDOW_MS]; null when none (or no Usage access). */
-    private fun lastResumed(): Pair<String, Long>? {
+    /** The activity in front from the usage events of the past [windowMs] ([guardFront]); null when none (or no Usage access). */
+    private fun front(windowMs: Long): GuardEvent? {
         val usm = getSystemService(UsageStatsManager::class.java) ?: return null
         val now = System.currentTimeMillis()
-        val events = runCatching { usm.queryEvents(now - WINDOW_MS, now) }.getOrNull() ?: return null
-        val resumed = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) UsageEvents.Event.ACTIVITY_RESUMED
-        else @Suppress("DEPRECATION") UsageEvents.Event.MOVE_TO_FOREGROUND
+        val events = runCatching { usm.queryEvents(now - windowMs, now) }.getOrNull() ?: return null
+        // ACTIVITY_RESUMED / _PAUSED are MOVE_TO_FOREGROUND / _BACKGROUND's values (1, 2) below API 29; STOPPED is 29+.
+        @Suppress("DEPRECATION") val resumed = UsageEvents.Event.MOVE_TO_FOREGROUND
+        @Suppress("DEPRECATION") val paused = UsageEvents.Event.MOVE_TO_BACKGROUND
+        val stopped = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) UsageEvents.Event.ACTIVITY_STOPPED else -1
         val e = UsageEvents.Event()
-        var last: Pair<String, Long>? = null
+        val list = ArrayList<GuardEvent>()
         while (events.hasNextEvent()) {
             if (!events.getNextEvent(e)) break
-            if (e.eventType == resumed) last = e.packageName to e.timeStamp
+            val type = when (e.eventType) {
+                resumed -> GuardEventType.RESUMED
+                paused -> GuardEventType.PAUSED
+                stopped -> GuardEventType.STOPPED
+                else -> continue
+            }
+            list += GuardEvent(type, e.packageName, e.className, e.timeStamp)
         }
-        return last
+        return guardFront(list)
     }
 
     private fun notice(): Notification {
@@ -137,6 +160,8 @@ class KidsGuardService : Service() {
         private const val TAG = "NXKIDS"
         const val POLL_MS = 1_000L
         const val WINDOW_MS = 5_000L
+        /** The first look: what has been in front since a lock long ago (a cold lock alarm), up to 6 hours back. */
+        const val FIRST_WINDOW_MS = 6 * 3_600_000L
 
         // Main thread only.
         private var wanted = false

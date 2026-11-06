@@ -31,6 +31,21 @@ fun warnRoute(menuResumed: Boolean, gameInFront: Boolean): WarnRoute = when {
  */
 fun lockAtBirth(mode: KidsMode, gameLive: Boolean): Boolean = mode is KidsMode.Locked && gameLive
 
+/**
+ * A lock alarm locks itself ([KidsPlatform.lockNow]) when the mode is Locked, no menu is shown (the menu shows the tiles
+ * on its own) and the refresh's change to Locked did not lock already: a cold process with an Android game or another
+ * app in front, which [lockAtBirth] (a live NX Redux game only) does not cover.
+ */
+fun lockOnAlarm(mode: KidsMode, menuShown: Boolean, lockedByRefresh: Boolean): Boolean =
+    mode is KidsMode.Locked && !menuShown && !lockedByRefresh
+
+/** An exact alarm comes on time, an inexact one late; this much early still counts as the warning's time. */
+const val KIDS_WARN_EARLY_MS = 60_000L
+
+/** The warning is due: Open, not given yet for this end, and the end at most 10 minutes away (a minute's slack). */
+fun warnDue(mode: KidsMode, nowMs: Long, warnedFor: Long): Boolean =
+    mode is KidsMode.Open && warnedFor != mode.untilMs && nowMs >= warnAtMs(mode.untilMs) - KIDS_WARN_EARLY_MS
+
 /** The game screen's answer on the ordered KIDS_WARN broadcast: it was resumed and showed the toast. */
 const val KIDS_WARN_SHOWN = 1
 
@@ -54,8 +69,19 @@ object KidsAlarms {
         }
     }
 
+    /**
+     * [plan] for a warning held back because the screen is off: only the lock, so a held warning is not set again for
+     * now (an alarm at once, a wake loop); the screen-on path gives it ([warnDue]).
+     */
+    fun planHeld(mode: KidsMode, nowMs: Long): List<Alarm> =
+        if (mode is KidsMode.Open) plan(mode, nowMs, warnedFor = mode.untilMs) else emptyList()
+
     const val ACTION_WARN = "com.nxredux.mobile.kids.WARN"
     const val ACTION_LOCK = "com.nxredux.mobile.kids.LOCK"
+    /** Parent mode's 5 minutes without input, while away from the menu ([setParentIdle]). */
+    const val ACTION_PARENT_IDLE = "com.nxredux.mobile.kids.PARENT_IDLE"
+    /** A game's input (at most every 30 s, [kidsInputDue]): Parent mode's idle time starts again. */
+    const val ACTION_GAME_INPUT = "com.nxredux.mobile.kids.GAME_INPUT"
     private const val KEY_WARNED_FOR = "kids_warned_for"
 
     /** The end whose warning was given (epoch ms; 0: none), kept across process deaths so it fires once per end. */
@@ -84,6 +110,25 @@ object KidsAlarms {
             }
         }
     }
+
+    /** Parent mode's idle end at [atMs] (null cancels it): the menu is away, so its own 5 s tick does not run. */
+    fun setParentIdle(context: Context, atMs: Long?) {
+        val app = context.applicationContext
+        val am = app.getSystemService(AlarmManager::class.java) ?: return
+        val pi = PendingIntent.getBroadcast(
+            app, PARENT_IDLE_REQUEST, Intent(app, KidsAlarmReceiver::class.java).setAction(ACTION_PARENT_IDLE),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        if (atMs == null) { am.cancel(pi); return }
+        try {
+            if (canExact(am)) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pi)
+            else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pi)
+        } catch (e: SecurityException) {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pi)
+        }
+    }
+
+    private const val PARENT_IDLE_REQUEST = 2   // after the kinds' ordinals (0, 1)
 
     /** Alarms & reminders: Android 12+ asks for it (denied by default on 14+); before 12 every app has it. */
     fun canExact(am: AlarmManager): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()

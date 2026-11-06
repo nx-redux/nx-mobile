@@ -130,9 +130,12 @@
             android:name=".kids.KidsAlarmReceiver"
             android:exported="false" />
         <!-- Kids Mode: the mode and its alarms again after a boot, a clock or time zone change, an update or the exact
-             alarm grant. Exported for these system broadcasts, all protected: no other app can send them. -->
+             alarm grant. Exported for these system broadcasts, all protected: no other app can send them. Off here: Kids
+             Mode turns it on while on (AndroidKids.setStartReceiver), and that setting outlives app updates, so a boot or
+             clock change never starts the app while Kids Mode is off. -->
         <receiver
             android:name=".kids.KidsClockReceiver"
+            android:enabled="false"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

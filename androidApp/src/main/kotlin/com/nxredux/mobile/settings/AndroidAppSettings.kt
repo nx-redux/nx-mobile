@@ -289,6 +289,8 @@ class AndroidAppSettings(context: Context) : AppSettings {
 
     override val kidsPinSet: Boolean get() = prefs.getString(KEY_KIDS_PIN, null) != null
 
+    override fun clearKidsPin() = prefs.edit { remove(KEY_KIDS_PIN) }
+
     override var saveFormat: SaveFormat
         get() = SaveFormat.fromStored(prefs.getInt(KEY_SAVE_FORMAT, -1))
         set(value) = prefs.edit { putInt(KEY_SAVE_FORMAT, value.stored) }

@@ -73,4 +73,30 @@ class KidsAlarmsTest {
         assertFalse(lockAtBirth(KidsMode.Parent, gameLive = true))
         assertFalse(lockAtBirth(KidsMode.Off, gameLive = true))
     }
+
+    /** A lock alarm locks whenever it finds Locked with no menu shown (a cold process, a game, another app), once. */
+    @Test fun lockAlarmLocksUnlessAMenuShowsOrItLockedAlready() {
+        val locked = KidsMode.Locked(null)
+        assertTrue(lockOnAlarm(locked, menuShown = false, lockedByRefresh = false))
+        assertFalse(lockOnAlarm(locked, menuShown = true, lockedByRefresh = false))   // the menu shows the tiles itself
+        assertFalse(lockOnAlarm(locked, menuShown = false, lockedByRefresh = true))   // the change to Locked did it
+        assertFalse(lockOnAlarm(KidsMode.Open(now + min), menuShown = false, lockedByRefresh = false))
+        assertFalse(lockOnAlarm(KidsMode.Parent, menuShown = false, lockedByRefresh = false))
+    }
+
+    /** The warning is due from end − 10 min (a minute early still counts), once per end, only while Open. */
+    @Test fun warningDueOncePerEndInItsLastTenMinutes() {
+        val until = now + 9 * min
+        assertTrue(warnDue(KidsMode.Open(until), now, warnedFor = 0L))
+        assertFalse(warnDue(KidsMode.Open(until), now, warnedFor = until))
+        assertFalse(warnDue(KidsMode.Open(now + 20 * min), now, warnedFor = 0L))
+        assertTrue(warnDue(KidsMode.Open(now + 11 * min), now, warnedFor = 0L))   // within the minute's slack
+        assertFalse(warnDue(KidsMode.Locked(null), now, warnedFor = 0L))
+    }
+
+    /** A warning held while the screen is off is set no more (no wake loop); the screen-on path gives it. */
+    @Test fun heldWarningPlansOnlyTheLock() {
+        val until = now + 5 * min
+        assertEquals(listOf(Alarm(Kind.LOCK, until)), KidsAlarms.planHeld(KidsMode.Open(until), now))
+    }
 }

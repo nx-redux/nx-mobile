@@ -721,6 +721,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (::kids.isInitialized) {
             AndroidKids.menuWarning = kidsWarning
             kids.refresh()   // the clock may have passed a boundary while away
+            AndroidKids.armParentIdle(this)   // resumed: the menu's own tick counts Parent mode's idle time, no alarm
             kidsTick?.cancel()
             kidsTick = scope.launch {
                 while (isActive) {
@@ -757,6 +758,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
         resumed = false
         kidsTick?.cancel(); kidsTick = null
         if (AndroidKids.menuWarning === kidsWarning) AndroidKids.menuWarning = null
+        // Parent mode away from the menu: its idle end comes by alarm (time elsewhere counts as idle).
+        if (::kids.isInitialized) AndroidKids.armParentIdle(this)
         super.onPause()
     }
 

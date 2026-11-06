@@ -157,6 +157,12 @@ import com.nxredux.mobile.ui.nx.NotificationQueue
 import com.nxredux.mobile.kids.KIDS_WARNING
 import com.nxredux.mobile.kids.KIDS_WARN_SHOWN
 import com.nxredux.mobile.kids.kidsWarnAction
+import com.nxredux.mobile.kids.AndroidKidsPlatform
+import com.nxredux.mobile.kids.KidsAlarmReceiver
+import com.nxredux.mobile.kids.KidsAlarms
+import com.nxredux.mobile.kids.KidsSchedule
+import com.nxredux.mobile.kids.kidsGameBlocked
+import com.nxredux.mobile.kids.kidsInputDue
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxNotifications
 import com.nxredux.mobile.ui.nx.NxProgressPill
@@ -689,7 +695,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             intent.getStringExtra(EXTRA_TAG) ?: "UNKNOWN", resumeSlot, netplay != null,
         ))
         launchRecords.keepSwitcherReturnFor(launchId)   // a switcher mark of another launch is not this game's to end on
+        kidsReportsInput = AndroidAppSettings(this).kidsEnabled
         lifecycleScope.launch {
+            // Kids Mode Locked (a recreation from Recents after Android killed this process, a launch that raced the
+            // lock): the game never starts, and its screen goes.
+            if (kidsLockedHere()) {
+                NxLog.i(TAG_LOG, "Kids Mode is locked: not starting ${intent.getStringExtra(EXTRA_TITLE)}")
+                finish()
+                return@launch
+            }
             if (claim.mustWait) {
                 // Also before the battery load and the RA prepare: the old game's quit writes the same saves and stops its client.
                 // The watchdog only informs: the emulator never starts before the old game's native destroy.
@@ -725,6 +739,34 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (isDestroyed) return
         NxLog.i(TAG_LOG, "another game takes over: quitting ${intent.getStringExtra(EXTRA_TITLE)}")
         quitWithAutoState(chosen = false)
+    }
+
+    /**
+     * Kids Mode's own check in the game process: the stored state (this process's copy of the settings, read at its
+     * start) says Locked, and the main process does not hold Parent mode (asked only then; no answer counts as none).
+     */
+    private suspend fun kidsLockedHere(): Boolean {
+        val s = AndroidAppSettings(this)
+        if (!s.kidsEnabled) return false
+        val app = applicationContext
+        return withContext(Dispatchers.IO) {
+            kidsGameBlocked(true, AndroidKidsPlatform.localNow(), KidsSchedule.decode(s.kidsSchedule), s.kidsUnlockUntil) {
+                runCatching { PrefsProvider.kidsParent(app) }.onFailure { NxLog.w(TAG_LOG, "Kids Mode: no answer on Parent mode", it) }.getOrDefault(false)
+            }
+        }
+    }
+
+    /** Kids Mode is on: input here is reported to the main process for Parent mode's idle time ([kidsInputSeen]). */
+    private var kidsReportsInput = false
+    private var kidsInputAt = -1L
+
+    /** Input in the game: at most every 30 s ([kidsInputDue]) the main process hears it, so a parent playing stays Parent. */
+    private fun kidsInputSeen() {
+        if (!kidsReportsInput) return
+        val now = SystemClock.elapsedRealtime()
+        if (!kidsInputDue(kidsInputAt, now)) return
+        kidsInputAt = now
+        runCatching { sendBroadcast(Intent(this, KidsAlarmReceiver::class.java).setAction(KidsAlarms.ACTION_GAME_INPUT)) }
     }
 
     private fun onKidsLock() {
@@ -3396,6 +3438,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * are swallowed too, even after the hold went; a release whose press went through goes through.
      */
     override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
+        kidsInputSeen()
         val event = SystemButtonKeys.translate(this, raw)   // a bound SELECT / START / MENU button as its role, first
         val code = event.keyCode
         when (event.action) {
@@ -3429,12 +3472,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /** Touches wait for the game while the launch name's hold is up ([HoldTouchGate]): the lit pad above it does nothing yet. */
-    override fun dispatchTouchEvent(event: MotionEvent): Boolean =
-        holdTouches.swallows(event.actionMasked, nameHold != null) || super.dispatchTouchEvent(event)
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        kidsInputSeen()
+        return holdTouches.swallows(event.actionMasked, nameHold != null) || super.dispatchTouchEvent(event)
+    }
 
     /** Sticks wait for the game while the launch name's hold is up. */
-    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
-        nameHold != null || super.dispatchGenericMotionEvent(event)
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        kidsInputSeen()
+        return nameHold != null || super.dispatchGenericMotionEvent(event)
+    }
 
     override fun onGenericMotionEvent(event: MotionEvent?): Boolean = input.onGenericMotionEvent(event)
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean = input.onKeyDown(keyCode, event)
