@@ -26,6 +26,17 @@ class ScreenMapTest {
         assertNull(ScreenMap.from(listOf(view(0, 0, 768, 576, 0), view(0, 576, 768, 576, 1)), 768, 1151))
     }
 
+    @Test fun staleMapInsideABiggerFrameIsNull() {
+        // 3D Resolution raised: the 2x map arrives with the 3x frame's first relayout, or the reverse; it fits but is wrong.
+        assertNull(ScreenMap.from(listOf(view(0, 0, 800, 480, 0), view(80, 480, 640, 480, 1)), 1200, 1440, byShape = true))
+        assertNull(ScreenMap.from(listOf(view(0, 0, 768, 576, 0), view(0, 576, 768, 576, 1)), 1024, 1536))
+    }
+
+    @Test fun sameMapResentIsEqual() {
+        val views = listOf(view(0, 0, 800, 480, 0), view(80, 480, 640, 480, 1))
+        assertEquals(ScreenMap.from(views, 800, 960, byShape = true), ScreenMap.from(views.toList(), 800, 960, byShape = true))
+    }
+
     @Test fun missingScreenIsNull() {
         assertNull(ScreenMap.from(listOf(view(0, 0, 768, 576, 0)), 768, 1152))
     }
