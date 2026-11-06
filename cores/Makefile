@@ -205,7 +205,7 @@ ppsspp_FLAGS = -DLIBRETRO=ON -DANDROID=ON -DUSING_GLES2=ON -DUSE_SYSTEM_FFMPEG=O
 # cloned once into src/melondsds-deps/<name>-src (FetchContent's layout under FETCHCONTENT_BASE_DIR), and configure
 # runs with FETCHCONTENT_FULLY_DISCONNECTED=ON, so a build never fetches by itself.
 melondsds_REPO = https://github.com/JesseTG/melonds-ds
-melondsds_HASH = bc4e4b67d2d470d7c682810a1e892cafd6f9082b
+melondsds_HASH = f394adbacb5722ee97c1b37c8064da9a25818310
 melondsds_KIND = cmake
 melondsds_BUILD_PATH = .
 melondsds_CMAKE_TARGET = melondsds_libretro
@@ -214,20 +214,20 @@ MELONDSDS_DEPS_DIR = $(abspath $(SRC_ROOT))/melondsds-deps
 melondsds_FLAGS = -DENABLE_JIT=ON -DENABLE_OPENGL=ON -DENABLE_OGLRENDERER=ON -DOPENGL_PROFILE=OpenGLES3 -DBUILD_TESTING=OFF \
   "-DCMAKE_MODULE_LINKER_FLAGS=$(PAGE_LDFLAGS)" \
   -DFETCHCONTENT_BASE_DIR=$(MELONDSDS_DEPS_DIR) -DFETCHCONTENT_FULLY_DISCONNECTED=ON
-# <FetchContent name, lowercased>@<repo>@<full SHA>, from cmake/FetchDependencies.cmake at the pin (resolved 2026-09-27;
-# fmt 11.2.0 and zlib v1.3.1 are tags there).
+# <FetchContent name, lowercased>@<repo>@<full SHA>, from cmake/FetchDependencies.cmake at the pin (resolved 2026-11-06;
+# fmt 12.2.0, date v3.0.5 and zlib v1.3.2 are tags there; melonDS is JesseTG's jtg/fix-uninitialized-opengl branch).
 MELONDSDS_DEPS = \
-  melonds@https://github.com/melonDS-emu/melonDS@7117178c2dd56df32b6534ba6a54ad1f8547e693 \
-  libretro-common@https://github.com/libretro/libretro-common@ad9124f1ecc5d0092fd285cbf9c4ffac317b1a65 \
+  melonds@https://github.com/JesseTG/melonDS@16f127dbb587a73371827ce79689c5d237c4b59b \
+  libretro-common@https://github.com/libretro/libretro-common@fa8a1b572a444fcb552007019f8caf68281108aa \
   embed-binaries@https://github.com/andoalon/embed-binaries@078b62beba97e8192c99bfb16d5e17220cfc7598 \
-  glm@https://github.com/g-truc/glm@e7970a8b26732f1b0df9690f7180546f8c30e48e \
-  zlib@https://github.com/madler/zlib@51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf \
+  glm@https://github.com/g-truc/glm@6f14f4792a0cde5d0cf2c910506724d61cb95834 \
+  zlib@https://github.com/madler/zlib@da607da739fa6047df13e66a2af6b8bec7c2a498 \
   libslirp@https://github.com/JesseTG/libslirp-mirror@e61dbd459c8c06607b3a84694489427e8ec60f17 \
-  pntr@https://github.com/robloach/pntr@922aed03c4c53803466100596211da7549945da7 \
-  fmt@https://github.com/fmtlib/fmt@40626af88bd7df9a5fb80be7b25ac85b122d6c21 \
+  pntr@https://github.com/robloach/pntr@a47fe167703b0ac3bfad00785b20b0dce6712509 \
+  fmt@https://github.com/fmtlib/fmt@1be298e1bd68957e4cd352e1f676f00e07dcfb57 \
   yamc@https://github.com/yohhoy/yamc@4e015a7e8eb0d61c34e6928676c8c78881a72d73 \
-  span-lite@https://github.com/martinmoene/span-lite@00afc281a8c3c7657bb9c5b000d6e7082c1bbc7f \
-  date@https://github.com/HowardHinnant/date@1ead6715dec030d340a316c927c877a3c4e5a00c
+  span-lite@https://github.com/martinmoene/span-lite@f63fe2974943b5f555b928b10d910e457fbb93d4 \
+  date@https://github.com/HowardHinnant/date@179a6b921ccd6179b5b04dce812a89f71a51b4df
 MELONDSDS_DEPS_STAMP := $(shell printf %s '$(MELONDSDS_DEPS)' | shasum | cut -c1-12)
 
 # ---- cores expansion (2026-09-25): nx-redux pins (workspace/tg5040/cores/Makefile), so states cross with the Brick.
