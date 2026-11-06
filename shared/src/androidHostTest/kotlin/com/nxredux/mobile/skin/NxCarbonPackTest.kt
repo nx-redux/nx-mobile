@@ -44,7 +44,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(122 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's in every family; a tablet twin of each game fold board without one (15: the clusters centred on the bottom screen, user)
+        assertEquals(129 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's and the Atari 5200's in every family; a tablet twin of each game fold board without one (16: the clusters centred on the bottom screen, user)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -299,6 +299,46 @@ class NxCarbonPackTest {
                     assertTrue(ok, "$name ${a.spec.id} ${b.spec.id}")
                 }
             }
+        }
+    }
+
+    @Test
+    fun atari5200LayoutsInEveryFamily() {
+        // the joystick (first; the d-pad by the swap cap, both on the fold board and the tall landscape), FIRE 1 (A) down left and
+        // FIRE 2 (B) up right, * (Y) / # (X) on the shoulders, PAUSE START, KEYPAD (L) by MENU
+        val roomy = setOf("inner", "inner_half", "tablet", "tablet_land", "inner_land")
+        for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
+            val tablet = name.startsWith("tablet")
+            val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 640f to 480f,
+                d.third, foldable = name.startsWith("inner"), variant = SkinVariant.A5200), name)
+            dump("a5200_$name", d.first, d.second, p)
+            assertEquals(SkinVariant.A5200, p.spec.variant, name)
+            val cs = p.controls.filterNot { it.spec.id.startsWith("TOUCH_") }
+            val base = setOf("STICK", "DPAD", "A", "B", "X", "Y", "SELECT", "START", "L", "MENU")
+            assertEquals(if (name in roomy) base else base + "STICK_SWAP", cs.map { it.spec.id }.toSet(), name)
+            fun c(id: String) = cs.first { it.spec.id == id }
+            assertTrue(c("A").x < c("B").x && c("A").y > c("B").y, "$name FIRE 1 down left of FIRE 2")
+            assertTrue(c("Y").spec.shape == ControlShape.RECT && c("X").spec.shape == ControlShape.RECT && c("Y").x < c("X").x, "$name * left, # right shoulders")
+            assertEquals("KEYPAD", c("L").spec.label, name)
+            if (name == "phone_land") { assertEquals(c("MENU").x, c("L").x, 1f, "$name MENU under KEYPAD"); assertTrue(c("MENU").y > c("L").y, name) }
+            else assertEquals(c("MENU").y, c("L").y, 1f, "$name KEYPAD beside MENU")
+            for (useStick in listOf(true, false)) {
+                val sc = p.forStick(useStick).controls.filterNot { it.spec.id.startsWith("TOUCH_") }
+                for (i in sc.indices) for (j in i + 1 until sc.size) {
+                    val a = sc[i]; val b = sc[j]
+                    fun reach(pc: PlacedControl) = when (pc.spec.shape) { ControlShape.STICK -> pc.spec.r * 1.25f; ControlShape.RECT -> 0f; else -> pc.spec.r }
+                    fun box(pc: PlacedControl): FloatArray { val r = reach(pc); val hw = if (r > 0f) r else pc.spec.hw; val hh = if (r > 0f) r else pc.spec.hh; return floatArrayOf(pc.x - hw, pc.y - hh, pc.x + hw, pc.y + hh) }
+                    val round = a.spec.shape != ControlShape.RECT && b.spec.shape != ControlShape.RECT
+                    val ok = if (round) kotlin.math.hypot(a.x - b.x, a.y - b.y) >= reach(a) + reach(b) - 1f
+                        else box(a).let { x -> box(b).let { y -> x[2] <= y[0] || y[2] <= x[0] || x[3] <= y[1] || y[3] <= x[1] } }
+                    assertTrue(ok, "$name ${a.spec.id} ${b.spec.id}")
+                }
+                for (x in sc) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
+            }
+            if (name in roomy) {
+                assertTrue(c("STICK").y < c("DPAD").y, "$name the stick above the d-pad")
+                assertEquals(c("STICK").y, (c("A").y + c("B").y) / 2f, 1f, "$name the pair level with the stick")
+            } else assertTrue(c("STICK").spec.r > c("DPAD").spec.r, "$name the swapped stick full size")
         }
     }
 

@@ -96,6 +96,8 @@ enum class SkinVariant {
     @SerialName("psp") PSP,
     /** PICO-8: the d-pad, O and X as a tilted pair, START (its pause). */
     @SerialName("p8") P8,
+    /** The Atari 5200: the analog joystick (first), FIRE 1 / 2, * #, PAUSE START, KEYPAD (the core's on-screen keypad). */
+    @SerialName("a5200") A5200,
 }
 
 /**
