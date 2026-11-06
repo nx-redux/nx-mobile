@@ -829,6 +829,9 @@ void LibretroDroid::step() {
             // shader and layout. GL cores otherwise draw only inside their video callback, leaving the picture stale.
             // An FF step that ran frames shows its last one like any step.
             video->renderPausedFrame();
+            // A hw core's second surface is drawn from inside its frame (frameDrawnHook); the paused redraw is that
+            // frame here, so a shader picked from the menu shows on the second display at once.
+            if (video->rendersInVideoCallback() && frameDrawnHook) frameDrawnHook();
         } else if (!video->rendersInVideoCallback()) {
             video->renderFrame();
         }

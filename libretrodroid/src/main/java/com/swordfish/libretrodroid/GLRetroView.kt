@@ -847,7 +847,7 @@ class GLRetroView(
                 }
                 // nx-mobile 2026-11-03: a hw core's frame went to the second surface from inside the frame
                 // (onCoreFrameDrawn); afterwards its framebuffer may already hold the next frame's first draws (Dolphin's
-                // dual core: the background missing, flicker), and while paused the second display keeps its last frame.
+                // dual core: the background missing, flicker). The paused redraw draws it the same way (native step).
                 if (LibretroDroid.rendersInVideoCallback()) secondaryOutput.swapPending() else secondaryOutput.draw()
             }
         }
