@@ -60,7 +60,7 @@ class AndroidKidsPlatform(context: Context) : KidsPlatform {
             .onFailure { NxLog.w(TAG, "settings page refused (${it::class.java.simpleName})") }
     }
 
-    override fun reschedule(mode: KidsMode) = KidsAlarms.reschedule(app, mode)
+    override fun reschedule(mode: KidsMode) = KidsAlarms.reschedule(app, mode, now().epochMs)
 
     /**
      * The game (if one is live) quits without its auto state, then the menu comes forward through [LaunchActivity],
@@ -92,9 +92,6 @@ object AndroidKids {
 
     val menuResumed: Boolean get() = menuWarning != null
 
-    /** The controller made already in this process, or null (an alarm then finds a process started just for it). */
-    fun peek(): KidsController? = controller
-
     fun get(context: Context): KidsController = controller ?: run {
         val app = context.applicationContext
         val p = AndroidKidsPlatform(app)
@@ -112,21 +109,26 @@ object AndroidKids {
         }
         val filter = IntentFilter(Intent.ACTION_SCREEN_OFF).apply { addAction(Intent.ACTION_SCREEN_ON) }
         ContextCompat.registerReceiver(app, screen, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        // Born Locked with a game live: the change to Locked happened while no controller was here to see it.
+        if (lockAtBirth(c.mode.value, LiveGameStore.of(app).current() != null)) p.lockNow()
         c
     }
 
-    /** The lock for a controller just made by a lock alarm: it started Locked, so its own change to Locked never came. */
-    fun lockNow(context: Context) { get(context); platform?.lockNow() }
-
-    /** The warning goes to one place: the live game, else a resumed menu, else a notification. */
+    /**
+     * The warning goes to one place ([warnRoute]). Without a resumed menu it is offered to the game screen as an ordered
+     * broadcast: only a resumed one shows it and answers [KIDS_WARN_SHOWN]; no answer (no game, or one suspended in its
+     * own task) posts the notification instead.
+     */
     fun warn(context: Context) {
         val app = context.applicationContext
-        if (LiveGameStore.of(app).current() != null) {
-            app.sendBroadcast(Intent(kidsWarnAction(app)).setPackage(app.packageName).addFlags(Intent.FLAG_RECEIVER_FOREGROUND))
-            return
+        if (warnRoute(menuResumed, gameInFront = false) == WarnRoute.MENU) { menuWarning?.invoke(); return }
+        val answer = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (warnRoute(menuResumed = false, gameInFront = resultCode == KIDS_WARN_SHOWN) == WarnRoute.NOTIFICATION) postWarning(app)
+            }
         }
-        menuWarning?.let { it(); return }
-        postWarning(app)
+        val offer = Intent(kidsWarnAction(app)).setPackage(app.packageName).addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+        app.sendOrderedBroadcast(offer, null, answer, null, 0, null, null)
     }
 
     private fun postWarning(app: Context) {

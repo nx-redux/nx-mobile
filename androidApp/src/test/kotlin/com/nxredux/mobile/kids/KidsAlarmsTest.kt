@@ -3,6 +3,7 @@ package com.nxredux.mobile.kids
 import com.nxredux.mobile.kids.KidsAlarms.Alarm
 import com.nxredux.mobile.kids.KidsAlarms.Kind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -55,5 +56,21 @@ class KidsAlarmsTest {
             assertEquals(until, alarms.last().atMs)
         }
         assertEquals(Alarm(Kind.WARN, now + 52 * min), KidsAlarms.plan(mode, now + 52 * min, 0L).first())
+    }
+
+    @Test fun warningGoesToExactlyOnePlace() {
+        assertEquals(WarnRoute.MENU, warnRoute(menuResumed = true, gameInFront = false))
+        assertEquals(WarnRoute.MENU, warnRoute(menuResumed = true, gameInFront = true))
+        assertEquals(WarnRoute.GAME, warnRoute(menuResumed = false, gameInFront = true))
+        // A game suspended in its own task (live, not in front) or another app in front: the notification.
+        assertEquals(WarnRoute.NOTIFICATION, warnRoute(menuResumed = false, gameInFront = false))
+    }
+
+    @Test fun bornLockedWithALiveGameLocks() {
+        assertTrue(lockAtBirth(KidsMode.Locked(null), gameLive = true))
+        assertFalse(lockAtBirth(KidsMode.Locked(null), gameLive = false))
+        assertFalse(lockAtBirth(KidsMode.Open(now + min), gameLive = true))
+        assertFalse(lockAtBirth(KidsMode.Parent, gameLive = true))
+        assertFalse(lockAtBirth(KidsMode.Off, gameLive = true))
     }
 }

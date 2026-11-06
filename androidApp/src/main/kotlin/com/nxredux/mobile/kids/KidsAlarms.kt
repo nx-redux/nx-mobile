@@ -12,6 +12,28 @@ import com.swordfish.libretrodroid.NxLog
 /** The warning's broadcast to the game process ([com.nxredux.mobile.runner.GameActivity] shows it in its overlay). */
 fun kidsWarnAction(context: Context): String = context.packageName + ".KIDS_WARN"
 
+/** Where the 10-minute warning goes: exactly one place. */
+enum class WarnRoute { MENU, GAME, NOTIFICATION }
+
+/**
+ * A resumed menu shows its notice; else a game screen in front (resumed) its overlay toast; else (the kid in another
+ * app, or a game suspended in its own task) a notification.
+ */
+fun warnRoute(menuResumed: Boolean, gameInFront: Boolean): WarnRoute = when {
+    menuResumed -> WarnRoute.MENU
+    gameInFront -> WarnRoute.GAME
+    else -> WarnRoute.NOTIFICATION
+}
+
+/**
+ * A controller made while a game is live and already Locked (a clock change past the end, a cold start, an alarm, with
+ * the main process gone meanwhile) never sees a change to Locked, so it locks once itself.
+ */
+fun lockAtBirth(mode: KidsMode, gameLive: Boolean): Boolean = mode is KidsMode.Locked && gameLive
+
+/** The game screen's answer on the ordered KIDS_WARN broadcast: it was resumed and showed the toast. */
+const val KIDS_WARN_SHOWN = 1
+
 /**
  * Kids Mode's two boundary alarms: the warning at end − 10 min (once per end, [warnedFor]) and the lock at the end.
  * [plan] is the pure part; [set] puts a plan on AlarmManager, replacing the alarms set before (an empty plan cancels
@@ -44,7 +66,7 @@ object KidsAlarms {
     private fun prefs(context: Context) = Prefs.open(context.applicationContext, AndroidAppSettings.PREFS_NAME)
 
     /** [mode]'s alarms from now, replacing the ones set before. */
-    fun reschedule(context: Context, mode: KidsMode) = set(context, plan(mode, System.currentTimeMillis(), warnedFor(context)))
+    fun reschedule(context: Context, mode: KidsMode, nowMs: Long) = set(context, plan(mode, nowMs, warnedFor(context)))
 
     fun set(context: Context, alarms: List<Alarm>) {
         val app = context.applicationContext

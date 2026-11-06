@@ -14,7 +14,7 @@ class KidsClockReceiver : BroadcastReceiver() {
         if (intent.action !in ACTIONS) return
         val kids = AndroidKids.get(context)
         kids.refresh()
-        KidsAlarms.reschedule(context, kids.mode.value)
+        KidsAlarms.reschedule(context, kids.mode.value, kids.now().epochMs)
     }
 
     private companion object {

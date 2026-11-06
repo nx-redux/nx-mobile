@@ -155,6 +155,7 @@ import com.nxredux.mobile.ui.nx.InputRouter
 import com.nxredux.mobile.ui.nx.MenuEffect
 import com.nxredux.mobile.ui.nx.NotificationQueue
 import com.nxredux.mobile.kids.KIDS_WARNING
+import com.nxredux.mobile.kids.KIDS_WARN_SHOWN
 import com.nxredux.mobile.kids.kidsWarnAction
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxNotifications
@@ -3126,9 +3127,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         publishNotifications()
     }
 
-    /** Kids Mode's 10-minute warning from the main process ([com.nxredux.mobile.kids.AndroidKids.warn]): the overlay's toast. */
+    /**
+     * Kids Mode's 10-minute warning from the main process ([com.nxredux.mobile.kids.AndroidKids.warn]), an ordered
+     * broadcast: only while this screen is resumed (in front) is it the overlay's toast, answered [KIDS_WARN_SHOWN];
+     * otherwise the main process posts a notification.
+     */
     private val kidsWarn = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+            resultCode = KIDS_WARN_SHOWN
             notifications.push(KIDS_WARNING, null, KIDS_WARNING_MS, SystemClock.elapsedRealtime())
             publishNotifications()
         }
