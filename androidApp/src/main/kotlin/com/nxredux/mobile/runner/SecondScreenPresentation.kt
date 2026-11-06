@@ -68,6 +68,7 @@ class SecondScreenPresentation(private val activity: ComponentActivity, display:
         }
 
     private var panel by mutableStateOf<(@Composable () -> Unit)?>(null)
+    private var menu by mutableStateOf<(@Composable () -> Unit)?>(null)
     private var panelPill by mutableStateOf(false)
 
     private var pointerId = MotionEvent.INVALID_POINTER_ID
@@ -98,7 +99,7 @@ class SecondScreenPresentation(private val activity: ComponentActivity, display:
                 override fun surfaceDestroyed(holder: SurfaceHolder) = onSurface(null, 0, 0)
             })
             // Under the panel the game gets no touches (taps on the panel's empty parts fall through to here).
-            setOnTouchListener { v, e -> if (panel == null) touch(v.width, v.height, e); true }
+            setOnTouchListener { v, e -> if (panel == null && menu == null) touch(v.width, v.height, e); true }
         }
         val composeView = ComposeView(context).apply {
             setContent {
@@ -111,7 +112,9 @@ class SecondScreenPresentation(private val activity: ComponentActivity, display:
                     theme {
                         Box(Modifier.fillMaxSize()) {
                             val content = panel
+                            val inGameMenu = menu
                             when {
+                                inGameMenu != null -> inGameMenu()
                                 content != null -> content()
                                 panelPill -> PanelPill("Panel", Modifier.align(Alignment.BottomEnd).padding(10.dp)) { onPanelPill() }
                             }
@@ -151,6 +154,12 @@ class SecondScreenPresentation(private val activity: ComponentActivity, display:
     override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean = activity.dispatchGenericMotionEvent(ev)
 
     /** Shows [content] over the whole display (the panel; the surface under it is not drawn on), or null to take it away. */
+    /** The in-game menu on this display, over the picture and the panel; null takes it away. */
+    fun showMenu(content: (@Composable () -> Unit)?) {
+        if (content != null) releaseTouch()
+        menu = content
+    }
+
     fun showPanel(content: (@Composable () -> Unit)?) {
         if (content != null) releaseTouch()   // the surface stops forwarding touches under the panel: a held finger lifts now
         panel = content

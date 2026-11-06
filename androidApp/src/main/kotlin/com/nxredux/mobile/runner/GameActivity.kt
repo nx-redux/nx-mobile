@@ -3373,6 +3373,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun handleMenuEffect(effect: MenuEffect) = menu.handle(effect)
     override fun publishMenuSecondScreen() { menu.menuModel?.let(menu::publishSecondScreen) }
+    override fun placeMenu() = menu.placeMenu()
     override fun withMenu(block: (InGameMenuModel) -> Unit) { menu.menuModel?.let { block(it); menu.menuState.value = it.state } }
 
     override fun publishMenuShaders() {

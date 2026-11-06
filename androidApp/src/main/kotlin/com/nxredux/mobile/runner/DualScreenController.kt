@@ -108,6 +108,8 @@ internal interface DualScreenHost : LifecycleOwner {
     fun publishMenuSecondScreen()
     /** Runs [block] on the open in-game menu, if any, and redraws it. */
     fun withMenu(block: (InGameMenuModel) -> Unit)
+    /** The open in-game menu moves to the display it belongs on now ([menuOnSecond]). */
+    fun placeMenu()
     /** The Fast forward / Rewind tiles' live state ([SpeedController.tiles]); null rewind: no Rewind tile. */
     fun speedTiles(): Pair<Boolean, Boolean?>
     /** The Mic tile's state: null where this isn't a mic console or a session is on. */
@@ -232,6 +234,15 @@ internal class DualScreenController(
     /** The GL thread draws on the second display: split, and the picture there with the panel on main ([pictureOn]). */
     private fun secondDraws(mode: DualMode = dualMode, picture: PictureOn = pictureOn): Boolean =
         mode == DualMode.SPLIT || (picture == PictureOn.SECOND && (mode == DualMode.PANEL || mode == DualMode.PANEL_UP))
+
+    /**
+     * On dual screen the in-game menu is on the top display: the one with the picture (the DS / 3DS picture screen while
+     * split). The other display is left to what it shows.
+     */
+    fun menuOnSecond(): Boolean = presentation != null && dualMode != DualMode.OFF && pictureOn == PictureOn.SECOND
+
+    /** Shows [content] as the in-game menu on the second display; null takes it away. */
+    fun showMenuOnSecond(content: (@Composable () -> Unit)?) { presentation?.showMenu(content) }
 
     /** The panel fills the game's window on main (the picture is on the second display). */
     fun mainPanelShown(): Boolean = mainPanel.value != null
@@ -367,6 +378,7 @@ internal class DualScreenController(
         // builds the other tabletop (the pad, the game area, the menu's bounds).
         if (changed && padLayout.tabletop() != null) padLayout.applyLayout(activity.resources.configuration.orientation)
         renderer.relayoutFrontend(geometry)
+        owner.placeMenu()
     }
 
     /**
@@ -483,6 +495,7 @@ internal class DualScreenController(
         presentationShape = null
         dropSecondSurface()
         p.releaseTouch()
+        owner.placeMenu()   // a menu that was on that display comes back here
     }
 
     /** The app's theme (accent, option text size) for the panel, on either display. */
@@ -588,7 +601,7 @@ internal class DualScreenController(
      */
     fun syncMainPanelHost() {
         val host = mainPanelHost ?: return
-        val shown = if (mainPanel.value != null) !menuOpen else mainPanelPill.value
+        val shown = if (mainPanel.value != null) !menuOpen || menuOnSecond() else mainPanelPill.value
         host.visibility = if (shown) View.VISIBLE else View.GONE
     }
 
