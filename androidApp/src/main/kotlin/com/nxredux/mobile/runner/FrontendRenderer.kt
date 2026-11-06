@@ -165,7 +165,7 @@ internal class FrontendRenderer(
     private fun screenMapFor(view: GLRetroView, g: FloatArray): ScreenMap? {
         if (!NdsOptions.appliesTo(gameTag) && !isN3ds) return null
         val views = view.videoViews().map { MapView(it.x, it.y, it.width, it.height, it.screen, it.eye) }
-        return ScreenMap.from(views, g[0].roundToInt(), g[1].roundToInt())
+        return ScreenMap.from(views, g[0].roundToInt(), g[1].roundToInt(), byShape = isN3ds)
     }
 
     /** The DS frame can be cut into its two screens: the core's map says where, or it is the plain 256 x 384 stack. */
@@ -845,7 +845,7 @@ internal class FrontendRenderer(
 
     /** 3DS split across the displays: the main display's screen alone, as a region of Azahar's fixed stacked frame; else null. */
     private fun n3dsSplitLayout(w: Float, h: Float): List<NdsRegion>? =
-        if (isN3ds && dualMode == DualMode.SPLIT) DualScreen.n3dsScreen(w, h, DualScreen.splitMain(n3dsPicture, pictureOn)) else null
+        if (isN3ds && dualMode == DualMode.SPLIT) DualScreen.n3dsScreen(w, h, DualScreen.splitMain(n3dsPicture, pictureOn)).withMap(screenMap) else null
 
     /** Split DS screens turn the overlay off and the menu shows it unavailable; both follow when that changes. */
     private fun setNdsSplit(split: Boolean) {

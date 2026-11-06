@@ -34,6 +34,13 @@ class ScreenMapTest {
         assertNull(ScreenMap.from(emptyList(), 768, 1152))
     }
 
+    @Test fun n3dsSwappedNumberingStillFindsTheTopScreen() {
+        // Azahar numbers by prominence: swapped, the bottom screen is screen 0.
+        val map = ScreenMap.from(listOf(view(80, 480, 640, 480, 0), view(0, 0, 800, 480, 1)), 800, 960, byShape = true)!!
+        assertEquals(FrameRect(0f, 0f, 1f, 0.5f), map.src(NdsScreen.TOP))
+        assertEquals(FrameRect(0.1f, 0.5f, 0.9f, 1f), map.src(NdsScreen.BOTTOM))
+    }
+
     @Test fun rightEyeIsIgnored() {
         val map = ScreenMap.from(
             listOf(view(0, 0, 400, 240, 0, 1), view(400, 0, 400, 240, 0, 2), view(40, 240, 320, 240, 1)), 800, 480,
