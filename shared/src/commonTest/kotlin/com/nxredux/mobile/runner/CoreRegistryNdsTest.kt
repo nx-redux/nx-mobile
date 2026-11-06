@@ -45,6 +45,7 @@ class CoreRegistryNdsTest {
                 "melonds_mic_input_active" to "always",
                 "melonds_show_mic_state" to "disabled",
                 "melonds_opengl_better_polygons" to "disabled",
+                "melonds_frontend_layout" to "auto",
             ),
             nds.defaultOptions,
         )
@@ -60,6 +61,11 @@ class CoreRegistryNdsTest {
         // On GLES it warps textures on large floor polygons (Mario Kart DS's start-line flyover); the standalone app keeps it off.
         assertEquals("disabled", nds.defaultOptions["melonds_opengl_better_polygons"])
         assertTrue("melonds_opengl_better_polygons" in nds.lockedOptions)
+    }
+
+    @Test fun lockedFrontendLayoutIsAuto() {
+        assertEquals("auto", nds.defaultOptions["melonds_frontend_layout"])
+        assertTrue("melonds_frontend_layout" in nds.lockedOptions)
     }
 
     @Test fun a_cfg_cannot_override_a_locked_key() {

@@ -1880,6 +1880,21 @@
      "default": "200"
     },
     {
+     "key": "melonds_frontend_layout",
+     "label": "Frontend Screen Layout",
+     "labelCategorized": "",
+     "info": "Lets the frontend arrange the emulated screens itself, with its own screen layout, stereo 3D mode, headset output, and a shader for each screen. Has no effect on a frontend that can't do this.\n\nAuto: The frontend arranges the screens where it can. It always does in its stereo 3D modes and on a headset. In its 2D mode it only does while the current screen layout is Top/Bottom or Bottom/Top (with no screen gap and a full-size secondary screen), Top Only, or Bottom Only; every other layout is shown the way it's configured here.\nOff: The screen layouts configured here always apply.\n\nWhile the frontend arranges the screens, the current screen layout still chooses which screens are shown, which one comes first, and how they're rotated.",
+     "values": [
+      "auto",
+      "disabled"
+     ],
+     "labels": [
+      "Auto",
+      "Off"
+     ],
+     "default": "auto"
+    },
+    {
      "key": "melonds_number_of_screen_layouts",
      "label": "# of Screen Layouts",
      "labelCategorized": "",
@@ -2270,7 +2285,7 @@
      "key": "melonds_hybrid_ratio",
      "label": "Hybrid/Largescreen Ratio",
      "labelCategorized": "",
-     "info": "The size of the larger screen relative to the smaller ones when using a hybrid or largescreen layout.",
+     "info": "The size of the larger screen relative to the smaller ones when using a hybrid or largescreen layout. Not used while the frontend arranges the screens (see Frontend Screen Layout).",
      "values": [
       "2",
       "3"
@@ -2285,7 +2300,7 @@
      "key": "melonds_hybrid_small_screen",
      "label": "Hybrid Small Screen Mode",
      "labelCategorized": "",
-     "info": "Choose which screens will be shown when using a hybrid layout.",
+     "info": "Choose which screens will be shown when using a hybrid layout. Not used while the frontend arranges the screens (see Frontend Screen Layout).",
      "values": [
       "one",
       "both"
@@ -2300,7 +2315,7 @@
      "key": "melonds_opengl_filtering",
      "label": "Hybrid/Largescreen Filtering",
      "labelCategorized": "",
-     "info": "Affects how the hybrid/largescreen screen is scaled up.\n\nNearest: No filtering. Graphics look blocky.\nLinear: Smooth scaling.\n",
+     "info": "Affects how the hybrid/largescreen screen is scaled up. Not used while the frontend arranges the screens (see Frontend Screen Layout).\n\nNearest: No filtering. Graphics look blocky.\nLinear: Smooth scaling.\n",
      "values": [
       "nearest",
       "linear"
@@ -2315,7 +2330,7 @@
      "key": "melonds_screen_gap",
      "label": "Screen Gap",
      "labelCategorized": "",
-     "info": "Choose how large the gap between the screens should be. Vertical layouts (including rotations) only. Dimensions exclude the effects of the frontend's scaling.",
+     "info": "Choose how large the gap between the screens should be. Vertical layouts (including rotations) only. Dimensions exclude the effects of the frontend's scaling. Not used while the frontend arranges the screens (see Frontend Screen Layout).",
      "values": [
       "0",
       "1",
@@ -2580,7 +2595,7 @@
      "key": "melonds_secondary_screen_scale",
      "label": "Secondary Screen Scale",
      "labelCategorized": "",
-     "info": "The size of the secondary screen relative to the primary screen. Applies to vertical layouts (Top/Bottom, Bottom/Top). At 100%, both screens are the same size. At 50%, the secondary screen is half the width and height of the primary screen.",
+     "info": "The size of the secondary screen relative to the primary screen. Applies to vertical layouts (Top/Bottom, Bottom/Top). At 100%, both screens are the same size. At 50%, the secondary screen is half the width and height of the primary screen. Not used while the frontend arranges the screens (see Frontend Screen Layout).",
      "values": [
       "50",
       "55",
@@ -2613,7 +2628,7 @@
      "key": "melonds_secondary_screen_filtering",
      "label": "Secondary Screen Filtering",
      "labelCategorized": "",
-     "info": "Affects how the secondary screen is scaled down.\n\nNearest: No filtering. Graphics look blocky.\nLinear: Smooth scaling. Recommended when using Secondary Screen Scale below 100%.\n",
+     "info": "Affects how the secondary screen is scaled down. Not used while the frontend arranges the screens (see Frontend Screen Layout).\n\nNearest: No filtering. Graphics look blocky.\nLinear: Smooth scaling. Recommended when using Secondary Screen Scale below 100%.\n",
      "values": [
       "nearest",
       "linear"
@@ -3373,6 +3388,6 @@
    ]
   }
  ],
- "soSha256": "108e2e32519ebc511276f8be2116d71e88dedaafe7d69b42819e7973c067b19c",
+ "soSha256": "7d5e365a58ee950a0d81bbf64499704b9de31ecb62295ff14e70dc7502df410b",
  "probedAt": "2026-11-06"
 }
