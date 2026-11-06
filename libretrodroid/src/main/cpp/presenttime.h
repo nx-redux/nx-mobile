@@ -14,6 +14,7 @@ public:
     // Stamps the current draw surface's next frame; false when the extension is missing, there is no current window
     // surface, or debug.nx.presenttime is "0" (A/B checks: adb shell setprop debug.nx.presenttime 0).
     static bool set(std::chrono::steady_clock::time_point when);
+    static void clear();
 };
 
 }

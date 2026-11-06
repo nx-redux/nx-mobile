@@ -2,6 +2,7 @@
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
+#include <cstdint>
 #include <cstring>
 
 #include "debugprop.h"
@@ -39,6 +40,15 @@ bool PresentTime::set(std::chrono::steady_clock::time_point when) {
     // steady_clock is CLOCK_MONOTONIC on Android, the clock the extension takes.
     const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(when.time_since_epoch()).count();
     return fn(display, surface, static_cast<EGLnsecsANDROID>(ns)) == EGL_TRUE;
+}
+
+void PresentTime::clear() {
+    PresentationTime fn = presentationTime();
+    if (fn == nullptr) return;
+    EGLDisplay display = eglGetCurrentDisplay();
+    EGLSurface surface = eglGetCurrentSurface(EGL_DRAW);
+    if (display == EGL_NO_DISPLAY || surface == EGL_NO_SURFACE) return;
+    fn(display, surface, static_cast<EGLnsecsANDROID>(INT64_MIN));   // NATIVE_WINDOW_TIMESTAMP_AUTO
 }
 
 }

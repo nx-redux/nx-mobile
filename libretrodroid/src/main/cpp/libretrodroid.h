@@ -353,6 +353,7 @@ private:
     float screenRefreshRate = 60.0;
     std::function<void()> frameDrawnHook;   // GL thread, for one step
     int64_t frameDeadlineNanos = 0;          // GL thread
+    bool presentStamped = false;             // GL thread
     int openglESVersion = 2;
     bool skipDuplicateFrames = false;
     bool immersiveModeEnabled = false;

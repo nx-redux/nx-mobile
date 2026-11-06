@@ -40,6 +40,7 @@ internal class SecondaryOutput {
     private var eglDisplay: EGLDisplay = EGL14.EGL_NO_DISPLAY
     private var eglSurface: EGLSurface = EGL14.EGL_NO_SURFACE
     private var swapIntervalSet = false
+    private var stamped = false
     private var presentationDeadlineNanos = 0L   // the second display's; 0 = unknown, frames are not stamped
 
     /** A surface is set and drawable. */
@@ -101,6 +102,7 @@ internal class SecondaryOutput {
             }
             eglDisplay = display
             swapIntervalSet = false
+            stamped = false
         }
 
         if (!EGL14.eglMakeCurrent(display, eglSurface, eglSurface, context)) {
@@ -157,9 +159,13 @@ internal class SecondaryOutput {
      */
     private fun stampAndSwap(display: EGLDisplay) {
         val deadline = LibretroDroid.getFrameDeadlineNanos()
-        if (deadline > 0 && presentationDeadlineNanos > 0) {
+        val stamp = deadline > 0 && presentationDeadlineNanos > 0
+        if (stamp) {
             EGLExt.eglPresentationTimeANDROID(display, eglSurface, deadline + presentationDeadlineNanos + STAMP_MARGIN_NANOS)
+        } else if (stamped) {
+            EGLExt.eglPresentationTimeANDROID(display, eglSurface, Long.MIN_VALUE)
         }
+        stamped = stamp
         if (!EGL14.eglSwapBuffers(display, eglSurface)) onEglError("eglSwapBuffers", drop = false)
     }
 
