@@ -316,6 +316,7 @@ void LibretroDroid::onSurfaceCreated() {
     video->updateScreenOffset(screenOffsetX, screenOffsetY);
     video->setPictureHeld(pictureHeld);
     video->updateScreenRegions(screenRegions);
+    video->setComposition(compositionWidth, compositionHeight, compositionParts);
     video->updateSecondaryRegions(secondaryRegions);
     video->setPresetChain(presetChain);
     geometryWidth = (float) system_av_info.geometry.base_width;
@@ -359,7 +360,8 @@ void LibretroDroid::onMotionEvent(
 void LibretroDroid::onTouchEvent(float xAxis, float yAxis) {
     LOGD("Received touch event: %.2f, %.2f", xAxis, yAxis);
     if (video) {
-        auto [x, y] = video->getLayout().getRelativePosition(xAxis, yAxis);
+        auto [rx, ry] = video->getLayout().getRelativePosition(xAxis, yAxis);
+        auto [x, y] = video->mapCompositionPoint(rx, ry);
         currentInput()->onMotionEvent(0, Input::MOTION_SOURCE_POINTER, x, y);
     }
 }
@@ -1438,6 +1440,13 @@ void LibretroDroid::setPictureHeld(bool held) {
     if (video) {
         video->setPictureHeld(held);
     }
+}
+
+void LibretroDroid::setComposition(int width, int height, std::vector<ScreenRegion> parts) {
+    compositionWidth = width;
+    compositionHeight = height;
+    compositionParts = std::move(parts);
+    if (video) video->setComposition(compositionWidth, compositionHeight, compositionParts);
 }
 
 void LibretroDroid::setScreenRegions(std::vector<ScreenRegion> regions) {

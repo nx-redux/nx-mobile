@@ -223,6 +223,18 @@ class GLRetroView(
      * [scaleMode] and [screenOffset] don't apply; dst is relative to [viewport]. Touches map through the topmost region
      * ([ScreenRegions.mapTouch]). Main thread; applied on the GL thread, and re-applied after create().
      */
+    /**
+     * nx-mobile: a frame composed from the core's ([FrameComposition]) that replaces the core frame for every draw and for
+     * touch (mapped back through its parts); null = the core frame as it is. Re-applied after create().
+     */
+    var composition: FrameComposition? by Delegates.observable(null) { _, old, value ->
+        if (old == value) return@observable
+        val w = value?.width ?: 0
+        val h = value?.height ?: 0
+        val packed = ScreenRegions.pack(value?.parts.orEmpty())
+        queueEvent { LibretroDroid.setComposition(w, h, packed) }
+    }
+
     var screenRegions: List<ScreenRegion> by Delegates.observable(emptyList()) { _, old, value ->
         if (old == value) return@observable
         val packed = ScreenRegions.pack(value)
@@ -417,6 +429,8 @@ class GLRetroView(
         val offsetX = screenOffset.x
         val offsetY = screenOffset.y
         val regions = ScreenRegions.pack(screenRegions)
+        val composed = composition
+        val composedParts = ScreenRegions.pack(composed?.parts.orEmpty())
         val secondary = ScreenRegions.pack(secondaryRegions)
         val sticky = stickyPointer
         val held = pictureHeld || mainCovered
@@ -427,6 +441,7 @@ class GLRetroView(
             LibretroDroid.setScreenOffset(offsetX, offsetY)
             LibretroDroid.setPictureHeld(held)
             LibretroDroid.setScreenRegions(regions)
+            LibretroDroid.setComposition(composed?.width ?: 0, composed?.height ?: 0, composedParts)
             LibretroDroid.setSecondaryRegions(secondary)
             setStickyPointers(sticky)
             pushShaderChain(chain)

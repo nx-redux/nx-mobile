@@ -1289,6 +1289,19 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPicture
     LibretroDroid::getInstance().setPictureHeld(held);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setComposition(
+    JNIEnv* env,
+    jclass obj,
+    jint width,
+    jint height,
+    jfloatArray packed
+) {
+    jsize count = packed != nullptr ? env->GetArrayLength(packed) : 0;
+    std::vector<float> data((size_t) count);
+    if (count > 0) env->GetFloatArrayRegion(packed, 0, count, data.data());
+    LibretroDroid::getInstance().setComposition(width, height, ScreenRegion::unpack(data.data(), data.size()));
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setScreenRegions(
     JNIEnv* env,
     jclass obj,

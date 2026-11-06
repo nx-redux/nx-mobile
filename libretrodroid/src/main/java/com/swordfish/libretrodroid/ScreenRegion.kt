@@ -44,7 +44,24 @@ data class VideoView(val x: Int, val y: Int, val width: Int, val height: Int, va
 /** A position in the core frame, 0..1 each way (y down): what the core receives as its pointer. */
 data class FramePoint(val x: Float, val y: Float)
 
+/**
+ * nx-mobile: a frame the frontend composes from the core's frame before drawing it like a core frame ([width] x [height]
+ * px): each part draws its [ScreenRegion.src] (0..1 of the core frame) at its [ScreenRegion.dst] (0..1 of the composed
+ * frame). Used to rebuild a core's own screen layout from its video view map.
+ */
+data class FrameComposition(val width: Int, val height: Int, val parts: List<ScreenRegion>)
+
 object ScreenRegions {
+    /** Where [p] (0..1 of the composed frame) lands in the core frame: through the touch part under it, else null. */
+    fun mapCompositionTouch(c: FrameComposition, p: FramePoint): FramePoint? {
+        val hit = c.parts.lastOrNull { it.dst.contains(p.x, p.y) } ?: return null
+        if (!hit.touch || hit.dst.width <= 0f || hit.dst.height <= 0f) return null
+        return FramePoint(
+            hit.src.left + (p.x - hit.dst.left) / hit.dst.width * hit.src.width,
+            hit.src.top + (p.y - hit.dst.top) / hit.dst.height * hit.src.height,
+        )
+    }
+
     const val PACKED_SIZE = 11
 
     /** For [LibretroDroid.setScreenRegions]: src l,t,r,b, dst l,t,r,b, shaded, touch (0/1), alpha per region, in order. */

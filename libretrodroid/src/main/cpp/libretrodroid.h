@@ -246,6 +246,8 @@ public:
     // Regions of the core frame drawn at places in the view (empty = one picture). Remembered, like the viewport, so a
     // Video created later (a new surface) gets them. GL thread.
     void setScreenRegions(std::vector<ScreenRegion> regions);
+    // nx-mobile: the frame composed from the core's (Video::setComposition); width 0 clears it. Remembered like the regions. GL thread.
+    void setComposition(int width, int height, std::vector<ScreenRegion> parts);
 
     // Regions drawn on a second surface (dst 0..1 of that whole surface). Remembered like setScreenRegions. GL thread.
     void setSecondaryRegions(std::vector<ScreenRegion> regions);
@@ -346,6 +348,9 @@ private:
     float screenOffsetY = 0.0F;
     bool pictureHeld = false;
     std::vector<ScreenRegion> screenRegions;
+    int compositionWidth = 0;
+    int compositionHeight = 0;
+    std::vector<ScreenRegion> compositionParts;
     std::vector<ScreenRegion> secondaryRegions;
 
     std::atomic<float> geometryWidth { 0.0F };

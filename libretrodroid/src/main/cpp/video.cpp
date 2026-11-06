@@ -277,6 +277,8 @@ void Video::drawFrame(bool force) {
     // Not placed yet: black, as the surface was, rather than the picture somewhere it is about to leave.
     if (pictureHeld) return;
 
+    composeFrame();
+
     // Immersive mode's blurred background samples the whole texture, not the frame's sub-rectangle (frameCoordinates).
     if (immersiveModeEnabled) {
         immersiveMode.renderBackground(
@@ -285,7 +287,7 @@ void Video::drawFrame(bool force) {
             videoLayout.getBackgroundVertices(),
             videoLayout.getRelativeForegroundBounds(),
             videoLayout.getFramebufferVertices().data(),
-            renderer->getTexture()
+            frameTexture()
         );
     }
 
@@ -297,7 +299,7 @@ void Video::drawFrame(bool force) {
     // those bindings. Unit 0 is rebound and cleared by the pass loop below anyway.
     GLint filter = linearTexture ? GL_LINEAR : GL_NEAREST;
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, renderer->getTexture());
+    glBindTexture(GL_TEXTURE_2D, frameTexture());
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -310,7 +312,7 @@ void Video::drawFrame(bool force) {
 
     if (presetRenderer) {
         presetRenderer->render(
-            renderer->getTexture(), (unsigned) getTextureStorageWidth(), (unsigned) getTextureStorageHeight(),
+            frameTexture(), (unsigned) getTextureStorageWidth(), (unsigned) getTextureStorageHeight(),
             (unsigned) getTextureWidth(), (unsigned) getTextureHeight(),
             frameCoordinates(videoLayout.getTextureCoordinates()), videoLayout.getForegroundVertices(),
             videoLayout.getFramebufferVertices(), videoLayout.getScreenWidth(), videoLayout.getScreenHeight(),
@@ -340,7 +342,7 @@ void Video::renderRegions(VideoLayout& layout, PresetChainRenderer* preset) {
             auto frameW = (unsigned) std::lround(quad.srcWidth * (float) texW);
             auto frameH = (unsigned) std::lround(quad.srcHeight * (float) texH);
             preset->render(
-                renderer->getTexture(), (unsigned) getTextureStorageWidth(), (unsigned) getTextureStorageHeight(),
+                frameTexture(), (unsigned) getTextureStorageWidth(), (unsigned) getTextureStorageHeight(),
                 frameW, frameH, frameCoordinates(quad.coordinates), quad.vertices, layout.getFramebufferVertices(),
                 (int) screenW, (int) screenH, linearTexture, frameCount);
         } else {
@@ -350,7 +352,7 @@ void Video::renderRegions(VideoLayout& layout, PresetChainRenderer* preset) {
             bool down = regionDownscales(quad, (float) texW, (float) texH, (float) screenW, (float) screenH);
             GLint filter = (linearTexture || down) ? GL_LINEAR : GL_NEAREST;
             glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, renderer->getTexture());
+            glBindTexture(GL_TEXTURE_2D, frameTexture());
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
             glBindTexture(GL_TEXTURE_2D, 0);
@@ -359,7 +361,7 @@ void Video::renderRegions(VideoLayout& layout, PresetChainRenderer* preset) {
     }
     GLint filter = linearTexture ? GL_LINEAR : GL_NEAREST;
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, renderer->getTexture());
+    glBindTexture(GL_TEXTURE_2D, frameTexture());
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -391,7 +393,7 @@ void Video::drawBuiltInChain(const std::array<float, 12>& vertices, const std::a
         glEnableVertexAttribArray(shader.gvCoordinateHandle);
 
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, renderer->getTexture());
+        glBindTexture(GL_TEXTURE_2D, frameTexture());
         glUniform1i(shader.gTextureHandle, 0);
 
         if (shader.gPreviousPassTextureHandle != -1 && passData.texture.has_value()) {
@@ -440,7 +442,7 @@ void Video::drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned scr
     // The unshaded (inset) screen samples nearest, or linearly when it is downscaled; the sharpness the other regions
     // use is put back afterwards.
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, renderer->getTexture());
+    glBindTexture(GL_TEXTURE_2D, frameTexture());
     GLint plainFilter = regionDownscales(quad, getTextureWidth(), getTextureHeight(),
                                          (float) screenWidth, (float) screenHeight) ? GL_LINEAR : GL_NEAREST;
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, plainFilter);
@@ -534,6 +536,100 @@ void Video::renderSecondary(unsigned width, unsigned height) {
     renderRegions(secondaryLayout, secondaryPresetRenderer.get());
 }
 
+void Video::setComposition(int width, int height, std::vector<ScreenRegion> parts) {
+    compositionWidth = width;
+    compositionHeight = height;
+    compositionParts = std::move(parts);
+    isDirty = true;
+}
+
+std::pair<float, float> Video::mapCompositionPoint(float x, float y) const {
+    if (!composing() || x < 0.0F || y < 0.0F) return { x, y };
+    for (auto it = compositionParts.rbegin(); it != compositionParts.rend(); ++it) {
+        const auto& p = *it;
+        if (x < p.dstLeft || x > p.dstRight || y < p.dstTop || y > p.dstBottom) continue;
+        const float w = p.dstRight - p.dstLeft;
+        const float h = p.dstBottom - p.dstTop;
+        if (!p.touch || w <= 0.0F || h <= 0.0F) break;
+        return { p.srcLeft + (x - p.dstLeft) / w * (p.srcRight - p.srcLeft), p.srcTop + (y - p.dstTop) / h * (p.srcBottom - p.srcTop) };
+    }
+    return { -10.0F, -10.0F };
+}
+
+GLuint Video::frameTexture() {
+    return composing() && compositionTexture != 0 ? compositionTexture : renderer->getTexture();
+}
+
+void Video::releaseComposition() {
+    if (compositionFramebuffer) glDeleteFramebuffers(1, &compositionFramebuffer);
+    if (compositionTexture) glDeleteTextures(1, &compositionTexture);
+    compositionFramebuffer = 0;
+    compositionTexture = 0;
+    compositionTextureWidth = 0;
+    compositionTextureHeight = 0;
+}
+
+void Video::composeFrame() {
+    if (!composing()) return;
+    if (compositionTextureWidth != compositionWidth || compositionTextureHeight != compositionHeight) {
+        releaseComposition();
+        glGenTextures(1, &compositionTexture);
+        glBindTexture(GL_TEXTURE_2D, compositionTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, compositionWidth, compositionHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glGenFramebuffers(1, &compositionFramebuffer);
+        glBindFramebuffer(GL_FRAMEBUFFER, compositionFramebuffer);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, compositionTexture, 0);
+        compositionTextureWidth = compositionWidth;
+        compositionTextureHeight = compositionHeight;
+    }
+    if (!plainShader) {
+        auto chain = ShaderManager::getShader({ ShaderManager::Type::SHADER_DEFAULT, { { "LINEAR", "0" } } });
+        plainShader = createShaderChainEntry(chain.passes.front());
+    }
+    const auto& s = *plainShader;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, compositionFramebuffer);
+    glViewport(0, 0, compositionWidth, compositionHeight);
+    glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glUseProgram(s.gProgram);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, renderer->getTexture());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glUniform1i(s.gTextureHandle, 0);
+    glUniform2f(s.gTextureSizeHandle, (float) renderer->getTextureSize().first, (float) renderer->getTextureSize().second);
+    glUniform1f(s.gScreenDensityHandle, 1.0F);
+
+    // The core frame sits in the bottom-left lastFrameSize texels of its storage (frameCoordinates' rule, for the core).
+    const float storageW = (float) renderer->getTextureSize().first;
+    const float storageH = (float) renderer->getTextureSize().second;
+    const float scaleX = storageW > 0.0F ? std::min(1.0F, renderer->lastFrameSize.first / storageW) : 1.0F;
+    const float scaleY = storageH > 0.0F ? std::min(1.0F, renderer->lastFrameSize.second / storageH) : 1.0F;
+    const bool bottomLeft = videoLayout.isBottomLeftOrigin();
+    for (const auto& part : compositionParts) {
+        RegionQuad quad = buildRegionQuad(part, 0.0F, 0.0F, 1.0F, 1.0F, bottomLeft);
+        // The composed frame keeps the core frame's row order, so later draws sample it as they sample the core's.
+        if (!bottomLeft) for (size_t i = 1; i < quad.vertices.size(); i += 2) quad.vertices[i] = -quad.vertices[i];
+        for (size_t i = 0; i < quad.coordinates.size(); i += 2) {
+            quad.coordinates[i] *= scaleX;
+            quad.coordinates[i + 1] *= scaleY;
+        }
+        glVertexAttribPointer(s.gvPositionHandle, 2, GL_FLOAT, GL_FALSE, 0, quad.vertices.data());
+        glEnableVertexAttribArray(s.gvPositionHandle);
+        glVertexAttribPointer(s.gvCoordinateHandle, 2, GL_FLOAT, GL_FALSE, 0, quad.coordinates.data());
+        glEnableVertexAttribArray(s.gvCoordinateHandle);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+    }
+    glDisableVertexAttribArray(s.gvPositionHandle);
+    glDisableVertexAttribArray(s.gvCoordinateHandle);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, videoLayout.getScreenWidth(), videoLayout.getScreenHeight());
+}
+
 void Video::renderPausedFrame() {
     renderFrame(true);
 }
@@ -543,18 +639,22 @@ float Video::getScreenDensity(float screenWidth, float screenHeight) {
 }
 
 float Video::getTextureWidth() {
+    if (composing()) return (float) compositionWidth;
     return renderer->lastFrameSize.first;
 }
 
 float Video::getTextureHeight() {
+    if (composing()) return (float) compositionHeight;
     return renderer->lastFrameSize.second;
 }
 
 float Video::getTextureStorageWidth() {
+    if (composing()) return (float) compositionWidth;
     return renderer->getTextureSize().first;
 }
 
 float Video::getTextureStorageHeight() {
+    if (composing()) return (float) compositionHeight;
     return renderer->getTextureSize().second;
 }
 
@@ -671,6 +771,7 @@ Video::~Video() {
         if (plainShader) glDeleteProgram(plainShader->gProgram);
         immersiveMode.releaseGlObjects();
         if (renderer) renderer->releaseGlObjects();
+        releaseComposition();
     } else {
         if (presetRenderer) presetRenderer->abandonGlObjects();
         if (secondaryPresetRenderer) secondaryPresetRenderer->abandonGlObjects();
