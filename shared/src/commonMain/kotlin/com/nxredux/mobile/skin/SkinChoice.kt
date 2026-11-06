@@ -50,7 +50,8 @@ object SkinChoice {
         baseTag == "FDS" -> SkinVariant.FDS
         baseTag == "3DS" -> if (n3dsNew) SkinVariant.N3DS else SkinVariant.N3DS_REGULAR   // the New 3DS controls (ZL ZR, C-stick) or not
         baseTag == "N64" -> SkinVariant.N64
-        baseTag == "PS" || baseTag == "PSX" -> SkinVariant.PS1   // pcsx_rearmed / SwanStation: a DualShock on port 1
+        // pcsx_rearmed / SwanStation (a DualShock on port 1) and ARMSX2 (its DualShock 2): the same skin (user)
+        baseTag == "PS" || baseTag == "PSX" || baseTag == "PS2" -> SkinVariant.PS1
         baseTag == "PSP" -> SkinVariant.PSP
         // flycast: a NAOMI / Atomiswave set takes the arcade skin, a disc the Dreamcast one ([DcGames.isArcadeSet])
         baseTag == "DC" -> if (arcadeSet) SkinVariant.ARCADE else SkinVariant.DC
