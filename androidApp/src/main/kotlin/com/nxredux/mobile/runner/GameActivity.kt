@@ -3194,7 +3194,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override val dualMode: DualMode get() = dual.dualMode
     override val pictureOn: PictureOn get() = dual.pictureOn
     override val n3dsPicture: NdsScreen get() = dual.n3dsPicture
-    override fun secondDsRegions(g: FloatArray): List<NdsRegion>? = dual.secondDsRegions(g)
+    override fun secondDsRegions(g: FloatArray, map: ScreenMap?): List<NdsRegion>? = dual.secondDsRegions(g, map)
     override fun secondWholeFrame(g: FloatArray): com.nxredux.mobile.options.PxRect? = dual.secondWholeFrame(g)
     override fun secondRegions(g: FloatArray, ds: List<NdsRegion>?): List<ScreenRegion> = dual.secondRegions(g, ds)
     override fun onN3dsSwapPressed(down: Boolean): Boolean = dual.onN3dsSwapPressed(down) || renderer.onTabletopN3dsSwap(down)

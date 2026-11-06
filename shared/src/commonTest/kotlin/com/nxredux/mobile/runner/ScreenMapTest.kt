@@ -41,3 +41,26 @@ class ScreenMapTest {
         assertEquals(FrameRect(0f, 0f, 0.5f, 0.5f), map.src(NdsScreen.TOP))
     }
 }
+
+class ScreenMapRegionsTest {
+    private val stack3x = ScreenMap.from(listOf(MapView(0, 0, 768, 576, 0, 0), MapView(0, 576, 768, 576, 1, 0)), 768, 1152)
+
+    @Test fun plainStackMapLeavesDsRegionsUnchanged() {
+        val regions = DualScreen.ndsPanelUp(1920f, 1080f, com.nxredux.mobile.options.NdsSettings.parse(emptyMap()))
+        assertEquals(regions, regions.withMap(stack3x))
+    }
+
+    @Test fun movedBottomViewMovesOnlyTheBottomSource() {
+        val gap = ScreenMap.from(listOf(MapView(0, 0, 768, 576, 0, 0), MapView(0, 624, 768, 576, 1, 0)), 768, 1200)!!
+        val regions = DualScreen.ndsPanelUp(1920f, 1080f, com.nxredux.mobile.options.NdsSettings.parse(emptyMap()))
+        val mapped = regions.withMap(gap)
+        assertEquals(regions.map { it.dst }, mapped.map { it.dst })
+        assertEquals(FrameRect(0f, 0.52f, 1f, 1f), mapped.first { it.screen == NdsScreen.BOTTOM }.src)
+        assertEquals(FrameRect(0f, 0f, 1f, 0.48f), mapped.first { it.screen == NdsScreen.TOP }.src)
+    }
+
+    @Test fun noMapLeavesRegionsUnchanged() {
+        val regions = DualScreen.ndsScreen(1280f, 960f, NdsScreen.BOTTOM)
+        assertEquals(regions, regions.withMap(null))
+    }
+}

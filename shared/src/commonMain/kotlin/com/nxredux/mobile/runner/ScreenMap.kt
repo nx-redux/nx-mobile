@@ -38,3 +38,7 @@ data class ScreenMap(
         }
     }
 }
+
+/** These regions with each screen's source taken from the core's [map]; unchanged without one. */
+fun List<NdsRegion>.withMap(map: ScreenMap?): List<NdsRegion> =
+    if (map == null) this else map { it.copy(src = map.src(it.screen)) }

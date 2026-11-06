@@ -93,7 +93,7 @@ internal interface FrontendHost : LifecycleOwner {
     val n3dsPicture: com.nxredux.mobile.options.NdsScreen
     fun isLandscape(): Boolean
     /** The DS/3DS screens cut for the second display, and what it draws ([GameActivity]'s second-screen block). */
-    fun secondDsRegions(g: FloatArray): List<NdsRegion>?
+    fun secondDsRegions(g: FloatArray, map: ScreenMap?): List<NdsRegion>?
     fun secondRegions(g: FloatArray, ds: List<NdsRegion>?): List<ScreenRegion>
     /** The open in-game menu's shader rows, and its frontend rows (overlay list, locks, overlay availability), again. */
     fun publishMenuShaders()
@@ -156,7 +156,20 @@ internal class FrontendRenderer(
     private val pictureOn get() = host.pictureOn
     private val n3dsPicture get() = host.n3dsPicture
     private fun isLandscape() = host.isLandscape()
-    private fun secondDsRegions(g: FloatArray) = host.secondDsRegions(g)
+    private fun secondDsRegions(g: FloatArray) = host.secondDsRegions(g, screenMap)
+
+    /** The core's video view map for the frame laid out last (DS / 3DS); null without one or when the frame doesn't fit it. */
+    var screenMap: ScreenMap? = null
+        private set
+
+    private fun screenMapFor(view: GLRetroView, g: FloatArray): ScreenMap? {
+        if (!NdsOptions.appliesTo(gameTag) && !isN3ds) return null
+        val views = view.videoViews().map { MapView(it.x, it.y, it.width, it.height, it.screen, it.eye) }
+        return ScreenMap.from(views, g[0].roundToInt(), g[1].roundToInt())
+    }
+
+    /** The DS frame can be cut into its two screens: the core's map says where, or it is the plain 256 x 384 stack. */
+    private fun dsScreensKnown(g: FloatArray): Boolean = screenMap != null || NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt())
     private fun secondRegions(g: FloatArray, ds: List<NdsRegion>?) = host.secondRegions(g, ds)
     private fun toast(msg: String) = host.toast(msg)
 
@@ -482,6 +495,7 @@ internal class FrontendRenderer(
         if (w <= 0f || h <= 0f) return
         val g = geometry ?: view.getGameGeometry()
         view.mainCovered = host.mainShowsNoPicture()
+        screenMap = screenMapFor(view, g)
         val origin = IntArray(2).also { game.getLocationInWindow(it) }
         val frame = coreFrame(g)   // null before the first frame (0x0)
         frame?.let(padLayout::onFrame)
@@ -729,7 +743,7 @@ internal class FrontendRenderer(
         if (!NdsOptions.appliesTo(gameTag)) return null
         val frameW = g[0].roundToInt()
         val frameH = g[1].roundToInt()
-        if (!NdsLayout.isDsFrame(frameW, frameH)) {
+        if (!dsScreensKnown(g)) {
             // Safety net (0x0 before the first frame; anything else is a core or option change): one picture, as for any core.
             if (frameW > 0 && frameH > 0 && !ndsFrameWarned) {
                 ndsFrameWarned = true
@@ -737,19 +751,19 @@ internal class FrontendRenderer(
             }
             return null
         }
-        if (dualMode == DualMode.SPLIT) return DualScreen.ndsScreen(w, h, DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn))
-        if (dualMode == DualMode.PANEL_UP) return DualScreen.ndsPanelUp(w, h, NdsSettings.parse(frontendValues))
+        if (dualMode == DualMode.SPLIT) return DualScreen.ndsScreen(w, h, DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn)).withMap(screenMap)
+        if (dualMode == DualMode.PANEL_UP) return DualScreen.ndsPanelUp(w, h, NdsSettings.parse(frontendValues)).withMap(screenMap)
         val landscape = isLandscape()
         val settings = NdsSettings.parse(frontendValues)
         val regions = NdsLayout.regions(
             space, settings.layoutShown(landscape, ndsControllerMode(), screen), landscape, screen, settings,
             NDS_INSET_MARGIN_DP * resources.displayMetrics.density,
         )
-        if (room != PadRoom.HIDDEN_BAND || regions.isEmpty()) return regions
+        if (room != PadRoom.HIDDEN_BAND || regions.isEmpty()) return regions.withMap(screenMap)
         // The band hidden: the screens as one picture, at the top when they reach into the overlay, else centred above it.
         val shown = regions.shownRect()
         val dy = (placedFor(room, shown, h, overlayH).y - shown.y).roundToInt().toFloat()
-        return regions.map { it.copy(dst = it.dst.copy(y = it.dst.y + dy)) }
+        return regions.map { it.copy(dst = it.dst.copy(y = it.dst.y + dy)) }.withMap(screenMap)
     }
 
     /** The half-folded DS / 3DS layout: the [placement] (game-area px), its screens as [regions], and the [pad] measures it used. */
@@ -766,7 +780,7 @@ internal class FrontendRenderer(
         if (dualMode != DualMode.OFF) return null
         val kind = when {
             isN3ds -> DsKind.N3DS
-            NdsOptions.appliesTo(gameTag) && NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt()) -> DsKind.DS
+            NdsOptions.appliesTo(gameTag) && dsScreensKnown(g) -> DsKind.DS
             else -> return null
         }
         val tt = padLayout.tabletop() ?: return null
@@ -776,7 +790,7 @@ internal class FrontendRenderer(
         val placement = p.copy(top = p.top.copy(y = p.top.y - dy), bottom = p.bottom.copy(y = p.bottom.y - dy))
         // The 3DS core's swap is pinned while half-folded (its frame stays unswapped under the cuts): SWAP is the app's.
         val big = if (kind == DsKind.DS) NdsSettings.parse(frontendValues).big else padLayout.n3dsTabletopBig
-        return HalfFolded(placement, tabletopRegions(placement, kind, big), pad)
+        return HalfFolded(placement, tabletopRegions(placement, kind, big).withMap(screenMap), pad)
     }
 
     /**
@@ -785,7 +799,7 @@ internal class FrontendRenderer(
      */
     private fun halfFoldedTopArea(shape: WindowShape, g: FloatArray, w: Float): PxRect? {
         if (dualMode != DualMode.OFF || !NdsOptions.appliesTo(gameTag)) return null
-        if (g[0] <= 0f || g[1] <= 0f || NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt())) return null
+        if (g[0] <= 0f || g[1] <= 0f || dsScreensKnown(g)) return null
         val tt = padLayout.tabletop() ?: return null
         if (tt.pad != TabletopPad.DS) return null   // the Flip's game view is already the area above the hinge
         val top = (shape.cutoutTop - tt.gameTop).toFloat()
@@ -802,7 +816,7 @@ internal class FrontendRenderer(
         if (isN3ds) return true
         if (!NdsOptions.appliesTo(gameTag)) return false
         val g = retroView?.getGameGeometry() ?: return true
-        return g[0] <= 0f || g[1] <= 0f || NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt())
+        return g[0] <= 0f || g[1] <= 0f || dsScreensKnown(g)
     }
 
     /**

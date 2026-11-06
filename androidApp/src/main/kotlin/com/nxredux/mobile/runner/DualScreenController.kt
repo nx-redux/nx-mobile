@@ -245,17 +245,17 @@ internal class DualScreenController(
      * there, both DS screens side by side (panel up). Empty when it draws nothing, has no surface, or (split) the DS frame
      * is not the plain stack; null when it draws the whole frame instead ([secondRegions]). [g]: the game geometry.
      */
-    fun secondDsRegions(g: FloatArray): List<NdsRegion>? {
+    fun secondDsRegions(g: FloatArray, map: ScreenMap?): List<NdsRegion>? {
         val surface = secondSurface
         if (!secondDraws() || surface == null || surface.width <= 0 || surface.height <= 0) return emptyList()
         val sw = surface.width.toFloat()
         val sh = surface.height.toFloat()
-        val dsFrame = isNds && NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt())
+        val dsFrame = isNds && (map != null || NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt()))
         return when {
             // Not the plain DS stack (no frame yet, or another layout): main draws it whole, so nothing is cut for here.
-            dualMode == DualMode.SPLIT && isNds -> if (!dsFrame) emptyList() else DualScreen.ndsScreen(sw, sh, DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn).other)
-            dualMode == DualMode.SPLIT && isN3ds -> DualScreen.n3dsScreen(sw, sh, DualScreen.splitMain(n3dsPicture, pictureOn).other)
-            dualMode == DualMode.PANEL_UP && dsFrame -> DualScreen.ndsPanelUp(sw, sh, NdsSettings.parse(frontendValues))
+            dualMode == DualMode.SPLIT && isNds -> if (!dsFrame) emptyList() else DualScreen.ndsScreen(sw, sh, DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn).other).withMap(map)
+            dualMode == DualMode.SPLIT && isN3ds -> DualScreen.n3dsScreen(sw, sh, DualScreen.splitMain(n3dsPicture, pictureOn).other).withMap(map)
+            dualMode == DualMode.PANEL_UP && dsFrame -> DualScreen.ndsPanelUp(sw, sh, NdsSettings.parse(frontendValues)).withMap(map)
             else -> null
         }
     }
@@ -298,7 +298,7 @@ internal class DualScreenController(
      */
     fun secondWholeFrame(g: FloatArray): PxRect? {
         val surface = secondSurface ?: return null
-        if (!secondDraws() || secondDsRegions(g) != null) return null
+        if (!secondDraws() || secondDsRegions(g, renderer.screenMap) != null) return null
         return wholeFrame(surface.width.toFloat(), surface.height.toFloat(), g)
     }
 
