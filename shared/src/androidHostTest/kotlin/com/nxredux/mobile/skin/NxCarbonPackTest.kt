@@ -44,7 +44,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(83 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's and sideways Remote's in every family (the Nunchuk's fold board and tall landscape always both)
+        assertEquals(89 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -353,6 +353,8 @@ class NxCarbonPackTest {
             assertTrue(shoulderB.x < c("R2").x && shoulderB.y < c("B").y, "$name B left shoulder, SHAKE right")
             assertTrue(c("B").y < c("X").y && c("A").x < c("X").x && faceB.y > c("X").y, "$name 1 top, 2 left, B bottom, A right")
             for (id in listOf("HOME", "MOTION")) assertTrue(cs.any { it.spec.id == id }, "$name $id")
+            if (name in setOf("inner", "inner_half", "tablet")) for (id in listOf("SELECT", "START"))
+                assertEquals(c("A").x, c(id).x, 1f, "$name $id on 2's (the diamond's left)")
             fun box(pc: PlacedControl): FloatArray {
                 val r = when (pc.spec.shape) { ControlShape.STICK -> pc.spec.r * 1.25f; ControlShape.RECT -> 0f; else -> pc.spec.r }
                 val hw = if (r > 0f) r else pc.spec.hw; val hh = if (r > 0f) r else pc.spec.hh
@@ -368,6 +370,22 @@ class NxCarbonPackTest {
                 assertTrue(if (circle(a) && circle(b)) round(a, b) else apart(box(a), box(b)), "$name ${a.spec.id} ${b.spec.id}")
             }
             for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
+        }
+    }
+
+    @Test
+    fun wiiUprightIsTheSidewaysPictureWiredToTheUprightBinds() {
+        // the same pieces and places as the sideways skin (user); the diamond's 1 2 B A and the shoulder's B on X Y B A, B
+        for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
+            val tablet = name.startsWith("tablet")
+            fun place(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 640f to 480f,
+                d.third, foldable = name.startsWith("inner"), variant = v), "$name $v")
+            val s = place(SkinVariant.WII_SIDEWAYS); val u = place(SkinVariant.WII_UPRIGHT)
+            assertEquals(SkinVariant.WII_UPRIGHT, u.spec.variant, name)
+            assertEquals(s.pieces.map { it.dst }, u.pieces.map { it.dst }, "$name the same picture")
+            val wire = mapOf("B" to "X", "A" to "Y", "Y" to "B", "X" to "A")   // sideways id -> upright id at the same place
+            assertEquals(s.controls.map { (wire[it.spec.id] ?: it.spec.id) to (it.x to it.y) },
+                u.controls.map { it.spec.id to (it.x to it.y) }, "$name the upright binds at the sideways places")
         }
     }
 

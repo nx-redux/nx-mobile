@@ -50,12 +50,12 @@ class SkinVariantForTest {
     }
 
     @Test
-    fun wiiPadsGetTheirOwnLayouts() {   // the upright Wiimote keeps the drawn pad for now
+    fun wiiPadsGetTheirOwnLayouts() {   // none until the pad resolves
         assertEquals(SkinVariant.WII_CLASSIC, SkinChoice.variantFor("WII", ds = false, wiiPad = com.nxredux.mobile.runner.WiiPad.CLASSIC))
         assertEquals(SkinVariant.WII_NUNCHUK, SkinChoice.variantFor("WII", ds = false, wiiPad = com.nxredux.mobile.runner.WiiPad.NUNCHUK))
         assertEquals(SkinVariant.WII_SIDEWAYS, SkinChoice.variantFor("WII", ds = false, wiiPad = com.nxredux.mobile.runner.WiiPad.SIDEWAYS))
-        for (pad in listOf(com.nxredux.mobile.runner.WiiPad.UPRIGHT, null))
-            assertNull(SkinChoice.variantFor("WII", ds = false, wiiPad = pad), "$pad")
+        assertEquals(SkinVariant.WII_UPRIGHT, SkinChoice.variantFor("WII", ds = false, wiiPad = com.nxredux.mobile.runner.WiiPad.UPRIGHT))
+        assertNull(SkinChoice.variantFor("WII", ds = false, wiiPad = null))
         assertEquals(SkinVariant.GC, SkinChoice.variantFor("WII", ds = false, gameCube = true, wiiPad = com.nxredux.mobile.runner.WiiPad.CLASSIC))
     }
 }
