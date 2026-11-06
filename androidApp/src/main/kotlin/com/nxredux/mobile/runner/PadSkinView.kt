@@ -79,6 +79,8 @@ internal enum class SkinAction(val slot: TouchSlot? = null) {
     TURBO_A, TURBO_B,
     /** A Dreamcast skin's swap between the stick and the d-pad on a tight layout. */
     STICK_SWAP,
+    /** The Wii Remote pads' MOTION: a tap turns the phone's motion on or off, a hold recentres it (the drawn pad's pill). */
+    MOTION,
 }
 
 /**
@@ -133,6 +135,13 @@ internal class PadSkinView(
             if (field == value) return
             field = value
             refresh()
+        }
+    /** Controls drawn shaded while their toggle is off (the Wii's MOTION), with a held cap's shade. */
+    var dimmed: Set<String> = emptySet()
+        set(value) {
+            if (field == value) return
+            field = value
+            invalidate()
         }
     /** On a layout that swaps them, the stick (true) or the d-pad is shown and pressed ([SkinPlacement.forStick]). */
     var useStick: Boolean = true
@@ -246,6 +255,8 @@ internal class PadSkinView(
                 canvas.drawBitmap(pp, src, dst, paint)
             }
         }
+        if (p != null) for (c in p.controls) if (c.spec.id in dimmed)   // a toggle that is off: shaded as a held cap
+            canvas.drawCircle(c.x, c.y, if (c.spec.capR > 0f) c.spec.capR else c.spec.r * 0.75f, shade)
         for (shape in touch.pressedShapes()) when (shape) {   // a held cap's shade, the one thing painted
             is SkinPressShape.Circle -> canvas.drawCircle(shape.x, shape.y, shape.r, shade)
             is SkinPressShape.Box -> canvas.drawRoundRect(shape.left, shape.top, shape.right, shape.bottom, shape.corner, shape.corner, shade)

@@ -917,6 +917,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             onCStick = { x, y -> if (input.gcPad || (isWii && wiiPad == WiiPad.CLASSIC)) input.onWiiRightStick(x, y) else input.onCStick(x, y) },
             onGlass = { x, y, down -> glassTouch(game, x, y, down) })
         view.useStick = PadStickModes[padStickKey, stickDefault()]   // the drawn pad's choice, shared
+        view.dimmed = motionDim()
         // under the menu and the notifications, over the game
         val below = listOfNotNull(menuView, notificationsView).map { root.indexOfChild(it) }.filter { it >= 0 }.minOrNull() ?: -1
         root.addView(view, below, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -937,6 +938,12 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         game.post { relayoutFrontend() }
     }
 
+    /** The skin's MOTION shaded while the phone's motion is off (the drawn pad dims its pill), or with no sensors to use. */
+    private fun motionDim(): Set<String> = if (padMotion()?.on == true) emptySet() else setOf("MOTION")
+    private var motionHeld = false   // the skin's MOTION held past the long-press time: recentred, so its release is no tap
+    private val motionHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val motionHold = Runnable { motionHeld = true; padMotion()?.onLongPress?.invoke() }
+
     /** MIC and SWAP are the pad's own (the DS mic toggle, swap screens); the rest are the game's ([PadLayoutHost.onSkinShortcut]). */
     private fun onSkinAction(action: SkinAction, down: Boolean) {
         action.slot?.let { host.onPadShortcut(it, down); return }   // a strip slot: the player's action, as the drawn pad's
@@ -951,6 +958,14 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 val next = !PadStickModes[padStickKey, stickDefault()]
                 PadStickModes[padStickKey] = next
                 skinView?.useStick = next
+            }
+            // the Wii's MOTION, as the drawn pad's pill: a tap flips the phone's motion, a hold recentres it (no tap then)
+            SkinAction.MOTION -> if (down) {
+                motionHeld = false
+                motionHandler.postDelayed(motionHold, android.view.ViewConfiguration.getLongPressTimeout().toLong())
+            } else {
+                motionHandler.removeCallbacks(motionHold)
+                if (!motionHeld) { padMotion()?.onTap?.invoke(); motionHandler.post { skinView?.dimmed = motionDim() } }
             }
             else -> host.onSkinShortcut(action, down)
         }

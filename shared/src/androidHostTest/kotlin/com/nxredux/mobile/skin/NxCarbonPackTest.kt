@@ -44,7 +44,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(71 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both)
+        assertEquals(77 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's in every family (its fold board and tall landscape always both)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -298,6 +298,94 @@ class NxCarbonPackTest {
                         else box(a).let { x -> box(b).let { y -> x[2] <= y[0] || y[2] <= x[0] || x[3] <= y[1] || y[3] <= x[1] } }
                     assertTrue(ok, "$name ${a.spec.id} ${b.spec.id}")
                 }
+            }
+        }
+    }
+
+    @Test
+    fun wiiNunchukPhonePortrait() {
+        // SHAKE N Z | − + | C SHAKE; the stick (the Remote's d-pad by the swap cap); the Remote's 1 2 B A diamond; the swap cap MENU HOME MOTION
+        for (name in listOf("flip", "cover")) {
+            val d = consoleDevices.toList().first { it.first == name }.second
+            val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, 420, false, false, 640f to 480f, d.third, variant = SkinVariant.WII_NUNCHUK), name)
+            dump("wiin_$name", d.first, d.second, p)
+            assertEquals(SkinVariant.WII_NUNCHUK, p.spec.variant, name)
+            val ids = p.controls.map { it.spec.id }.filterNot { it.startsWith("TOUCH_") }.toSet()
+            assertEquals(setOf("STICK", "DPAD", "A", "B", "START", "SELECT", "L2", "Y", "X", "R2", "L", "R", "STICK_SWAP", "MENU", "HOME", "MOTION"), ids, name)
+            fun c(id: String) = p.controls.first { it.spec.id == id }
+            assertTrue(c("L2").x < c("Y").x && c("Y").x < c("L").x && c("L").x < c("R").x && c("R").x < c("X").x && c("X").x < c("R2").x, "$name SHAKE N Z − + C SHAKE")
+            assertEquals(listOf("−", "+"), listOf(c("L").spec.label, c("R").spec.label), name)
+            assertTrue(c("START").y < c("A").y && c("SELECT").x < c("A").x && c("B").y > c("A").y, "$name 1 top, 2 left, B bottom, A right")
+            val row = listOf("STICK_SWAP", "MENU", "HOME", "MOTION").map(::c)
+            for (i in 1 until row.size) { assertEquals(row[0].y, row[i].y, 1f, "$name bottom row"); assertTrue(row[i].x > row[i - 1].x, "$name bottom row order") }
+            for (useStick in listOf(true, false)) {
+                val cs = p.forStick(useStick).controls.filterNot { it.spec.id.startsWith("TOUCH_") }
+                val face = setOf("A", "B", "START", "SELECT")
+                for (i in cs.indices) for (j in i + 1 until cs.size) {
+                    val a = cs[i]; val b = cs[j]
+                    if (a.spec.id in face && b.spec.id in face) continue
+                    fun reach(pc: PlacedControl) = when (pc.spec.shape) { ControlShape.STICK -> pc.spec.r * 1.25f; ControlShape.RECT -> 0f; else -> pc.spec.r }
+                    fun box(pc: PlacedControl): FloatArray { val r = reach(pc); val hw = if (r > 0f) r else pc.spec.hw; val hh = if (r > 0f) r else pc.spec.hh; return floatArrayOf(pc.x - hw, pc.y - hh, pc.x + hw, pc.y + hh) }
+                    val round = a.spec.shape != ControlShape.RECT && b.spec.shape != ControlShape.RECT
+                    val ok = if (round) kotlin.math.hypot(a.x - b.x, a.y - b.y) >= reach(a) + reach(b) - 1f
+                        else box(a).let { x -> box(b).let { y -> x[2] <= y[0] || y[2] <= x[0] || x[3] <= y[1] || y[3] <= x[1] } }
+                    assertTrue(ok, "$name ${a.spec.id} ${b.spec.id}")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun wiiNunchukLayoutsInEveryFamily() {
+        // the stick and the Remote's d-pad (both, the stick on top, on the fold board and the tall landscape; else swapped by a
+        // cap), the Remote's 1 2 B A diamond, SHAKE N Z | C SHAKE, − +, HOME, MOTION, MENU
+        val roomy = setOf("inner", "inner_half", "tablet", "tablet_land", "inner_land")
+        for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
+            val tablet = name.startsWith("tablet")
+            val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 640f to 480f,
+                d.third, foldable = name.startsWith("inner"), variant = SkinVariant.WII_NUNCHUK), name)
+            dump("wiin_$name", d.first, d.second, p)
+            assertEquals(SkinVariant.WII_NUNCHUK, p.spec.variant, name)
+            val ids = p.controls.map { it.spec.id }.filterNot { it.startsWith("TOUCH_") }.toSet()
+            val base = setOf("STICK", "DPAD", "A", "B", "START", "SELECT", "L2", "Y", "X", "R2", "L", "R", "MENU", "HOME", "MOTION")
+            assertEquals(if (name in roomy) base else base + "STICK_SWAP", ids, name)
+            fun c(id: String) = p.controls.first { it.spec.id == id }
+            fun box(pc: PlacedControl): FloatArray {
+                val r = when (pc.spec.shape) { ControlShape.STICK -> pc.spec.r * 1.25f; ControlShape.RECT -> 0f; else -> pc.spec.r }
+                val hw = if (r > 0f) r else pc.spec.hw; val hh = if (r > 0f) r else pc.spec.hh
+                return floatArrayOf(pc.x - hw, pc.y - hh, pc.x + hw, pc.y + hh)
+            }
+            fun apart(a: FloatArray, b: FloatArray) = a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1]
+            fun reach(pc: PlacedControl) = if (pc.spec.shape == ControlShape.STICK) pc.spec.r * 1.25f else pc.spec.r
+            fun round(a: PlacedControl, b: PlacedControl) = kotlin.math.hypot(a.x - b.x, a.y - b.y) >= reach(a) + reach(b) - 1f
+            fun circle(pc: PlacedControl) = pc.spec.shape == ControlShape.CIRCLE || pc.spec.shape == ControlShape.STICK
+            val face = setOf("A", "B", "START", "SELECT")
+            for (useStick in listOf(true, false)) {
+                val cs = p.forStick(useStick).controls.filterNot { it.spec.id.startsWith("TOUCH_") }
+                for (i in cs.indices) for (j in i + 1 until cs.size) {
+                    val a = cs[i]; val b = cs[j]
+                    if (a.spec.id in face && b.spec.id in face) continue
+                    assertTrue(if (circle(a) && circle(b)) round(a, b) else apart(box(a), box(b)), "$name ${a.spec.id} ${b.spec.id}")
+                }
+                for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
+            }
+            assertEquals(1, p.pieces.count { it.knob }, name)
+            assertTrue(c("L2").x < c("Y").x && c("X").x < c("R2").x, "$name SHAKE N Z on the left, C SHAKE on the right")
+            assertTrue(c("START").y < c("A").y && c("SELECT").x < c("A").x && c("B").y > c("A").y, "$name 1 top, 2 left, B bottom, A right")
+            val small = p.spec.family == SkinFamily.STACKED || (p.spec.family == SkinFamily.FLEX && !p.spec.id.contains("fold"))
+            if (small) assertEquals(listOf("−", "+"), listOf(c("L").spec.label, c("R").spec.label), name)
+            else assertTrue(c("L").spec.label.isNullOrEmpty() && c("R").spec.label.isNullOrEmpty(), "$name − + marked caps carry no word")
+            if (name in roomy) {   // the stick on top, the d-pad under it, both smaller
+                assertTrue(c("STICK").y < c("DPAD").y, "$name stick above the d-pad")
+                assertEquals(c("STICK").y, c("START").y, 1f, "$name 1 level with the stick (user)")
+                assertTrue(c("STICK").spec.r < c("DPAD").spec.r, "$name the stick scaled down")
+                val ring = 206f * p.k; val sring = ring * c("STICK").spec.r / (170f * p.k)
+                val lower = (c("DPAD").y - ring) - (c("STICK").y + sring)
+                assertEquals(28f * p.k, lower, 2f * p.k, "$name the d-pad close under the stick (user)")
+            } else assertTrue(c("STICK").spec.r > c("DPAD").spec.r, "$name the swapped stick full size")
+            if (name in setOf("inner", "inner_half", "tablet")) {   // the fold board: − + a column on 2's, MENU HOME MOTION one row
+                assertEquals(c("SELECT").x, c("L").x, 1f, "$name − on 2's"); assertEquals(c("SELECT").x, c("R").x, 1f, "$name + on 2's")
+                for (id in listOf("HOME", "MOTION")) assertEquals(c("MENU").y, c(id).y, 1f, "$name $id in MENU's row")
             }
         }
     }
