@@ -98,6 +98,8 @@ enum class SkinVariant {
     @SerialName("p8") P8,
     /** The Atari 5200: the analog joystick (first), FIRE 1 / 2, * #, PAUSE START, KEYPAD (the core's on-screen keypad). */
     @SerialName("a5200") A5200,
+    /** Doom (PrBoom's Classic pad): the d-pad, A B X Y, L R with L2 R2 (weapons), SELECT START, L3 R3. */
+    @SerialName("doom") DOOM,
 }
 
 /**

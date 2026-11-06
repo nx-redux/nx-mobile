@@ -44,7 +44,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(129 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's and the Atari 5200's in every family; a tablet twin of each game fold board without one (16: the clusters centred on the bottom screen, user)
+        assertEquals(136 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's, the Atari 5200's and Doom's in every family; a tablet twin of each game fold board without one (17: the clusters centred on the bottom screen, user)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -299,6 +299,34 @@ class NxCarbonPackTest {
                     assertTrue(ok, "$name ${a.spec.id} ${b.spec.id}")
                 }
             }
+        }
+    }
+
+    @Test
+    fun doomLayoutsInEveryFamily() {
+        // the standard pad (d-pad, A B X Y, L R, SELECT START) with L2 / R2 inside L / R and L3 / R3 by MENU (user)
+        for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
+            val tablet = name.startsWith("tablet")
+            val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 640f to 480f,
+                d.third, foldable = name.startsWith("inner"), variant = SkinVariant.DOOM), name)
+            dump("doom_$name", d.first, d.second, p)
+            assertEquals(SkinVariant.DOOM, p.spec.variant, name)
+            val cs = p.controls.filterNot { it.spec.id.startsWith("TOUCH_") }
+            assertEquals(setOf("DPAD", "A", "B", "X", "Y", "L", "R", "L2", "R2", "SELECT", "START", "L3", "R3", "MENU"), cs.map { it.spec.id }.toSet(), name)
+            fun c(id: String) = cs.first { it.spec.id == id }
+            assertTrue(c("L").x < c("L2").x && c("R2").x < c("R").x, "$name L2 / R2 inside L / R")
+            val face = setOf("A", "B", "X", "Y")
+            for (i in cs.indices) for (j in i + 1 until cs.size) {
+                val a = cs[i]; val b = cs[j]
+                if (a.spec.id in face && b.spec.id in face) continue
+                fun reach(pc: PlacedControl) = if (pc.spec.shape == ControlShape.RECT) 0f else pc.spec.r
+                fun box(pc: PlacedControl): FloatArray { val r = reach(pc); val hw = if (r > 0f) r else pc.spec.hw; val hh = if (r > 0f) r else pc.spec.hh; return floatArrayOf(pc.x - hw, pc.y - hh, pc.x + hw, pc.y + hh) }
+                val round = a.spec.shape == ControlShape.CIRCLE && b.spec.shape == ControlShape.CIRCLE
+                val ok = if (round) kotlin.math.hypot(a.x - b.x, a.y - b.y) >= a.spec.r + b.spec.r - 1f
+                    else box(a).let { x -> box(b).let { y -> x[2] <= y[0] || y[2] <= x[0] || x[3] <= y[1] || y[3] <= x[1] } }
+                assertTrue(ok, "$name ${a.spec.id} ${b.spec.id}")
+            }
+            for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
         }
     }
 
