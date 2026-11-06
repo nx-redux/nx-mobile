@@ -94,6 +94,8 @@ enum class SkinVariant {
     @SerialName("ps1") PS1,
     /** The PSP: △ ○ × □, L / R, its one analog nub (first; the d-pad by a swap cap), SELECT START. */
     @SerialName("psp") PSP,
+    /** PICO-8: the d-pad, O and X as a tilted pair, START (its pause). */
+    @SerialName("p8") P8,
 }
 
 /**

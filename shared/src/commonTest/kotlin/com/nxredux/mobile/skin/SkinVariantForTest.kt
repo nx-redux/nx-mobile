@@ -66,5 +66,6 @@ class SkinVariantForTest {
         assertEquals(SkinVariant.PS1, SkinChoice.variantFor("PSX", ds = false))
         assertEquals(SkinVariant.PSP, SkinChoice.variantFor("PSP", ds = false))
         assertEquals(SkinVariant.PS1, SkinChoice.variantFor("PS2", ds = false))   // the PS2: the PlayStation skin (user)
+        assertEquals(SkinVariant.P8, SkinChoice.variantFor("P8", ds = false))
     }
 }

@@ -53,6 +53,7 @@ object SkinChoice {
         // pcsx_rearmed / SwanStation (a DualShock on port 1) and ARMSX2 (its DualShock 2): the same skin (user)
         baseTag == "PS" || baseTag == "PSX" || baseTag == "PS2" -> SkinVariant.PS1
         baseTag == "PSP" -> SkinVariant.PSP
+        baseTag == "P8" -> SkinVariant.P8   // fake-08: O (B) and X (A), START its pause
         // flycast: a NAOMI / Atomiswave set takes the arcade skin, a disc the Dreamcast one ([DcGames.isArcadeSet])
         baseTag == "DC" -> if (arcadeSet) SkinVariant.ARCADE else SkinVariant.DC
         baseTag in SINGLE_TAGS -> SkinVariant.SINGLE

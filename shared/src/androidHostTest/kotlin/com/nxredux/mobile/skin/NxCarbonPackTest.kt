@@ -44,7 +44,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(115 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); a tablet twin of each game fold board without one (14: the clusters centred on the bottom screen, user)
+        assertEquals(122 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's in every family; a tablet twin of each game fold board without one (15: the clusters centred on the bottom screen, user)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -299,6 +299,31 @@ class NxCarbonPackTest {
                     assertTrue(ok, "$name ${a.spec.id} ${b.spec.id}")
                 }
             }
+        }
+    }
+
+    @Test
+    fun pico8LayoutsInEveryFamily() {
+        // the d-pad, O (B) down left and X (A) up right in the face's place, START beside MENU, no shoulders
+        for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
+            val tablet = name.startsWith("tablet")
+            val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 640f to 480f,
+                d.third, foldable = name.startsWith("inner"), variant = SkinVariant.P8), name)
+            dump("p8_$name", d.first, d.second, p)
+            assertEquals(SkinVariant.P8, p.spec.variant, name)
+            val cs = p.controls.filterNot { it.spec.id.startsWith("TOUCH_") }
+            assertEquals(setOf("DPAD", "B", "A", "START", "MENU"), cs.map { it.spec.id }.toSet(), name)
+            fun c(id: String) = cs.first { it.spec.id == id }
+            assertTrue(c("B").x < c("A").x && c("B").y > c("A").y, "$name O down left of X (user: rising to the right)")
+            assertEquals(c("MENU").y, c("START").y, 1f, "$name START beside MENU (user)"); assertTrue(c("START").x > c("MENU").x, "$name START right of MENU")
+            for (i in cs.indices) for (j in i + 1 until cs.size) {
+                val a = cs[i]; val b = cs[j]
+                if (a.spec.shape == ControlShape.DPAD || b.spec.shape == ControlShape.DPAD) {
+                    val dp = if (a.spec.shape == ControlShape.DPAD) a else b; val o = if (dp === a) b else a
+                    assertTrue(kotlin.math.abs(o.x - dp.x) > dp.spec.r + o.spec.r - 1f || kotlin.math.abs(o.y - dp.y) > dp.spec.r + o.spec.r - 1f, "$name d-pad ${o.spec.id}")
+                } else assertTrue(kotlin.math.hypot(a.x - b.x, a.y - b.y) >= a.spec.r + b.spec.r - 1f, "$name ${a.spec.id} ${b.spec.id}")
+            }
+            for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
         }
     }
 
