@@ -59,4 +59,10 @@ class SkinVariantForTest {
         assertNull(SkinChoice.variantFor("WII", ds = false, wiiPad = null))
         assertEquals(SkinVariant.GC, SkinChoice.variantFor("WII", ds = false, gameCube = true, wiiPad = com.nxredux.mobile.runner.WiiPad.CLASSIC))
     }
+
+    @Test
+    fun playStationGetsItsOwnLayout() {   // both PS1 cores; PSP and PS2 later
+        assertEquals(SkinVariant.PS1, SkinChoice.variantFor("PS", ds = false))
+        assertEquals(SkinVariant.PS1, SkinChoice.variantFor("PSX", ds = false))
+    }
 }

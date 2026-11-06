@@ -913,8 +913,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val pack = skinPack ?: return
         val view = PadSkinView(activity, pack, input::onPad, ::onSkinAction, haptics = padVibration != com.nxredux.mobile.settings.PadVibration.OFF,
             onResized = { root.post { onSkinResized() } }, onStick = input::onStick,
-            // the GameCube's C-stick and the Classic Controller's right stick: the right analog
-            onCStick = { x, y -> if (input.gcPad || (isWii && wiiPad == WiiPad.CLASSIC)) input.onWiiRightStick(x, y) else input.onCStick(x, y) },
+            // the GameCube's C-stick, the Classic Controller's and the PlayStation's right stick: the right analog
+            onCStick = { x, y -> if (input.gcPad || (isWii && wiiPad == WiiPad.CLASSIC) || psSkin()) input.onWiiRightStick(x, y) else input.onCStick(x, y) },
             onGlass = { x, y, down -> glassTouch(game, x, y, down) })
         view.useStick = PadStickModes[padStickKey, stickDefault()]   // the drawn pad's choice, shared
         view.dimmed = motionDim()
@@ -943,6 +943,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private var motionHeld = false   // the skin's MOTION held past the long-press time: recentred, so its release is no tap
     private val motionHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val motionHold = Runnable { motionHeld = true; padMotion()?.onLongPress?.invoke() }
+
+    /** A PlayStation game (its skin's right stick nub is the DualShock's right analog). */
+    private fun psSkin() = com.nxredux.mobile.runner.CoreRegistry.baseTag(layoutTag()) in setOf("PS", "PSX", "PSP", "PS2")
 
     /** MIC and SWAP are the pad's own (the DS mic toggle, swap screens); the rest are the game's ([PadLayoutHost.onSkinShortcut]). */
     private fun onSkinAction(action: SkinAction, down: Boolean) {

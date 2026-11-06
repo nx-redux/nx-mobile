@@ -90,6 +90,8 @@ enum class SkinVariant {
     @SerialName("wii_sideways") WII_SIDEWAYS,
     /** The Wii Remote held upright: the sideways picture, wired to the upright binds (1 2 B A on X Y B A). */
     @SerialName("wii_upright") WII_UPRIGHT,
+    /** The PlayStation: the d-pad (the left stick by a swap cap), △ ○ × □, L2 L1 / R1 R2, the right stick nub, L3 R3. */
+    @SerialName("ps1") PS1,
 }
 
 /**

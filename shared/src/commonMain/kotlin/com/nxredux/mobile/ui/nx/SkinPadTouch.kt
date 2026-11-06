@@ -246,6 +246,7 @@ class SkinPadTouch(
             "CU" to NxButton.C_UP, "CL" to NxButton.C_LEFT, "CR" to NxButton.C_RIGHT, "CD" to NxButton.C_DOWN,   // the N64's C buttons
             "START" to NxButton.START, "SELECT" to NxButton.SELECT, "MENU" to NxButton.MENU,
             "HOME" to NxButton.HOME,   // the Wii's HOME
+            "L3" to NxButton.L3, "R3" to NxButton.R3,   // the PlayStation's stick clicks
         )
         val ACTIONS = setOf("MIC", "SWAP", "SAVE", "LOAD", "REWIND", "FAST", "TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4", "TURBO_A", "TURBO_B", "STICK_SWAP", "MOTION")
     }
