@@ -3,6 +3,8 @@ package com.nxredux.mobile.ui
 import com.nxredux.mobile.sync.SyncLink
 import com.nxredux.mobile.kids.KidsController
 import com.nxredux.mobile.kids.KidsMode
+import com.nxredux.mobile.kids.KidsSchedule
+import com.nxredux.mobile.kids.PlayWindow
 import com.nxredux.mobile.kids.LocalNow
 import com.nxredux.mobile.kids.PinPurpose
 import com.nxredux.mobile.kids.PinResult
@@ -390,9 +392,27 @@ sealed interface Screen {
      * Kids Mode's PIN prompt for [purpose]: the digits [typed] so far, the [wrong] tries in a row and, after the fifth,
      * [waitUntil] (epoch ms) before another try counts.
      */
-    data class KidsPin(val purpose: PinPurpose, val typed: String = "", val wrong: Int = 0, val waitUntil: Long = 0) : Screen
+    data class KidsPin(
+        val purpose: PinPurpose, val typed: String = "", val wrong: Int = 0, val waitUntil: Long = 0,
+        /** A line under the dots until a digit is typed (setup's "PINs didn't match"). */
+        val message: String? = null,
+    ) : Screen
     /** After the right PIN on the tiles screen: Let them play's chips, Open full menu and Kids Mode settings. */
     data object KidsUnlock : Screen
+    /**
+     * Kids Mode's first switch-on, one [step] at a time ([KidsSetupStep]; its PIN step is [KidsPin]), or, not [setup],
+     * Settings → Kids Mode → Allowed apps (the APPS step alone, Done back to the page). [apps]: the installed apps (APPS;
+     * empty until listed), [allowed] the kid's, [schedule] the week's play times (TIMES).
+     */
+    data class KidsSetup(
+        val step: KidsSetupStep, val setup: Boolean = true, val apps: List<InstalledApp> = emptyList(), val allowed: Set<String> = emptySet(),
+        val schedule: KidsSchedule = KidsSchedule.DEFAULT,
+    ) : Screen
+    /**
+     * One day's play time ([day], ISO): [window] null when it is locked; [kept] the window Locked off brings back. [setup]:
+     * opened from setup's TIMES step (B returns there), else from the Kids Mode page.
+     */
+    data class KidsDayEdit(val day: Int, val window: PlayWindow?, val kept: PlayWindow, val setup: Boolean = false) : Screen
     /**
      * The main menu: [tabs] (see [buildMenuTabs]) on [tab]. [menu]: a game's or a tool's menu is open over its row.
      * [search]: START's search prompt is open with this text as typed. [pushed]: a tab Layouts hides, opened over the
@@ -510,6 +530,9 @@ sealed interface Screen {
     data class ArtworkReset(val scopes: List<ResetScope>, val confirm: ResetScope? = null) : Screen
 }
 
+/** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
+enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
+
 enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_THEME, PAD_BUTTONS, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, MENU_PAD, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
@@ -519,7 +542,10 @@ enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EM
     // A group's label and the space before it (System's General, Launcher, Developer, About, Licenses): never selected.
     SECTION, GAP,
     // System's Licenses group: a paragraph (never selected) and the row that opens the website's full list.
-    TEXT, LICENSES_LINK }
+    TEXT, LICENSES_LINK,
+    // Settings -> Kids Mode: the page itself, On / Off, Change PIN, a day's play time, Allowed apps, the two missing
+    // permissions' warnings and Forgot PIN?.
+    KIDS_MODE, KIDS_ENABLE, KIDS_PIN, KIDS_DAY, KIDS_APPS, KIDS_GUARD, KIDS_ALARMS, KIDS_FORGOT }
 
 /**
  * A Settings page. [parent] null: a section of the Tools -> Settings menu, in this order; else a sub-page of that
@@ -532,6 +558,8 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
     SECOND_SCREEN("Second screen"),
     // General, Launcher (with a launcher), Developer and About groups on one page; the last category.
     SYSTEM("System"),
+    // Kids Mode: only where the platform has it ([AppState.settingsSections]); a parent's page (Off or Parent mode).
+    KIDS("Kids Mode", opener = SettingsKind.KIDS_MODE),
     DEFAULT_EMULATORS("Default emulators", EMULATORS, SettingsKind.DEFAULTS),
     PAD_LAYOUT("Pad layout", CONTROLS, SettingsKind.PAD_LAYOUT), SAVES("Saves", LIBRARY, SettingsKind.SAVES),
     SHORTCUTS("Shortcuts", CONTROLS, SettingsKind.SHORTCUTS),
@@ -785,7 +813,9 @@ data class SettingInfoPopup(val title: String, val text: String, val scrollSeq: 
  * [warning]: its secondary is a problem (a folder not available), drawn in the warning colour. [shortcut] / [touchSlot]:
  * the action or touch button of a Shortcuts row; [note] on a bind row: it is waiting for a press, and what to do.
  */
-data class SettingsRow(val kind: SettingsKind, val label: String, val secondary: String? = null, val extra: ExtraFolder? = null, val consoleId: String? = null, val enabled: Boolean = true, val category: MenuCategory? = null, val shelf: HomeShelf? = null, val hint: NxButton? = null, val padShape: PadShape? = null, val warning: Boolean = false, val note: String? = null, val shortcut: ShortcutAction? = null, val touchSlot: TouchSlot? = null, val systemRole: SystemRole? = null)
+data class SettingsRow(val kind: SettingsKind, val label: String, val secondary: String? = null, val extra: ExtraFolder? = null, val consoleId: String? = null, val enabled: Boolean = true, val category: MenuCategory? = null, val shelf: HomeShelf? = null, val hint: NxButton? = null, val padShape: PadShape? = null, val warning: Boolean = false, val note: String? = null, val shortcut: ShortcutAction? = null, val touchSlot: TouchSlot? = null, val systemRole: SystemRole? = null,
+    /** A Kids Mode play-time row's ISO day. */
+    val day: Int? = null)
 
 /** A row the selection lands on: not a group label, the space before one, or a paragraph. */
 val SettingsRow.selectable: Boolean get() = kind != SettingsKind.SECTION && kind != SettingsKind.GAP && kind != SettingsKind.TEXT
@@ -4184,7 +4214,7 @@ class AppState(
     }
 
     /** The Settings root's categories on this platform ([settingsCategories]); the two-pane left pane lists the same. */
-    internal fun settingsSections(): List<SettingsSection> = settingsCategories(secondScreen = secondConnected)
+    internal fun settingsSections(): List<SettingsSection> = settingsCategories(secondScreen = secondConnected, kids = kids != null)
 
     private fun showSettingsMenu() {
         val sections = settingsSections()   // sub-pages open from their section
@@ -4532,6 +4562,7 @@ class AppState(
             SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
         )
         SettingsSection.SYSTEM -> systemRows()
+        SettingsSection.KIDS -> kidsRows()
     }
 
     /**
@@ -4742,6 +4773,10 @@ class AppState(
             SettingsKind.SECOND_SCREEN_ENABLE -> flip(s.secondScreen) { s.secondScreen = it }
             SettingsKind.BOTTOM_SCREEN -> cycle(BottomScreen.entries, s.bottomScreen, ::bottomScreenLabel) { s.bottomScreen = it }   // Auto, Main screen, Second screen
             SettingsKind.DEBUG_LOG -> flip(s.debugLog) { s.debugLog = it }
+            // Kids Mode On / Off: the first switch-on runs setup (another screen), so the page is republished only if still up.
+            SettingsKind.KIDS_ENABLE -> kids?.let {
+                flip(s.kidsEnabled, after = { if ((_screen.value as? Screen.Settings)?.section == SettingsSection.KIDS) refreshSettings() }) { on -> kidsSetEnabled(on) }
+            }
             else -> null
         }
     }
@@ -5613,6 +5648,7 @@ class AppState(
      * rebuild uses app-private reads only (recents, pins, resume markers, tool pins, the in-memory index), never the tree.
      */
     fun onForeground() {
+        kidsReturned()   // back from Usage access or Alarms & reminders: a setup step moves on once granted
         val switcherBack = switcherUnderGame && _screen.value is Screen.Switcher
         switcherUnderGame = false
         checkArt(reuse = true)   // art deleted or added while away (only changed art folders are listed)
@@ -6204,6 +6240,8 @@ class AppState(
             is Screen.RaGames, is Screen.RaGame -> ra.onRaBrowserButton(s, NxButton.A)
             is Screen.RaAchievement -> Unit   // a detail page: nothing to open
             Screen.KidsHome, Screen.KidsUnlock, is Screen.KidsPin -> kidsActivate(s)   // as A on the focused tile, key or row
+            is Screen.KidsSetup -> kidsSetupRow(_selection.value.index)
+            is Screen.KidsDayEdit -> kidsDayRow(_selection.value.index)
             is Screen.RaSettings -> ra.onRaSettingsButton(s, NxButton.A)
             // Hidden unhides at once, Minimal or not: nothing opens.
             is Screen.Games -> if (s.source == ListSource.Hidden) unhideSelected()
@@ -6252,6 +6290,12 @@ class AppState(
                     SettingsKind.RESET_DEFAULTS -> _screen.value = s.copy(confirmReset = true)   // asks first
                     SettingsKind.ALL_FILES -> deps.allFilesAccess?.openSettings()
                     SettingsKind.MIC_ACCESS -> deps.micAccess?.request()
+                    SettingsKind.KIDS_PIN -> kidsChangePin()
+                    SettingsKind.KIDS_DAY -> row.day?.let { kidsOpenDay(it, setup = false) }
+                    SettingsKind.KIDS_APPS -> kidsOpenApps(setup = false)
+                    SettingsKind.KIDS_GUARD -> kids?.openUsageAccess()   // the row goes on resume once granted
+                    SettingsKind.KIDS_ALARMS -> kids?.openExactAlarms()
+                    SettingsKind.KIDS_FORGOT -> showSettingInfo(_selection.value.index)   // where the flag is, and what deleting it does
                     else -> Unit   // a value row with nothing to step ([settingValue] null): as before, nothing
                 }
             }
@@ -6881,6 +6925,8 @@ class AppState(
         netplay?.takeIf { it.page.value != null }?.let { it.onButton(button); return }   // the Netplay sheet over a game list
         if (onRowEditButton(_screen.value, button)) return
         if (isKidsScreen(_screen.value)) return onKidsButton(_screen.value, button)
+        (_screen.value as? Screen.KidsSetup)?.let { onKidsSetupButton(it, button); return }
+        (_screen.value as? Screen.KidsDayEdit)?.let { onKidsDayButton(it, button); return }
         _screen.value.takeIf { it is Screen.Settings || it is Screen.SettingsMenu }?.let { onSettingsButton(it, button); return }
         (_screen.value as? Screen.ToolApps)?.takeIf { it.menu == null }?.let { androidApps.onToolAppsButton(it, button); return }
         _screen.value.contextMenu?.let { contextMenus.onMenuButton(it, button); return }
@@ -6999,6 +7045,8 @@ class AppState(
             Screen.KidsHome -> true
             is Screen.KidsPin -> { kidsPinLeave(s); true }
             Screen.KidsUnlock -> { showKidsHome(); true }
+            is Screen.KidsSetup -> { kidsSetupLeave(s); true }   // setup cancelled (or Allowed apps done): the Kids Mode page
+            is Screen.KidsDayEdit -> { kidsDayLeave(s); true }
             is Screen.Onboarding -> {
                 when {
                     s.prompt -> _screen.value = s.copy(prompt = false, draftPassword = "")
@@ -7400,7 +7448,8 @@ class AppState(
     fun kidsPinEnter() {
         val s = _screen.value as? Screen.KidsPin ?: return
         val k = kids ?: return
-        if (s.typed.length < KIDS_PIN_LENGTH || s.purpose != PinPurpose.UNLOCK) return   // setup's and Change PIN's come with Settings
+        if (s.typed.length < KIDS_PIN_LENGTH) return
+        if (s.purpose != PinPurpose.UNLOCK) return kidsNewPinEnter(s)   // setup's and Change PIN's: a new PIN, twice
         when (k.tryPin(s.typed, k.now().epochMs)) {
             PinResult.OK -> { _screen.value = Screen.KidsUnlock; _selection.value = ListSelection(0, KIDS_UNLOCK_ROWS) }
             PinResult.WRONG -> _screen.value = s.copy(typed = "", wrong = s.wrong + 1)
@@ -7408,9 +7457,16 @@ class AppState(
         }
     }
 
-    /** The PIN prompt closed: the unlock one back to the tiles. */
+    /**
+     * The PIN prompt closed: the unlock one back to the tiles; the confirmation back to the new PIN; setup's and Change
+     * PIN's new PIN back to the Kids Mode page (setup cancelled, Kids Mode still off).
+     */
     private fun kidsPinLeave(s: Screen.KidsPin) {
-        if (s.purpose == PinPurpose.UNLOCK) showKidsHome()
+        when (s.purpose) {
+            PinPurpose.UNLOCK -> showKidsHome()
+            PinPurpose.SETUP_CONFIRM -> kidsAskNewPin(null)
+            PinPurpose.SETUP_NEW, PinPurpose.CHANGE -> { kidsNewPin = null; kidsShowPage(if (kidsPinChange) SettingsKind.KIDS_PIN else SettingsKind.KIDS_ENABLE) }
+        }
     }
 
     /** Let them play's [chip]: the timed unlock starts, and the kid gets the menu (no Tools). The unlock sheet only. */
@@ -7435,7 +7491,7 @@ class AppState(
         if (_screen.value != Screen.KidsUnlock) return
         k.enterParent(k.now().epochMs)
         kidsLeaveSheet()
-        openSettingsMenu()
+        openSettings(SettingsSection.KIDS)
     }
 
     /** Off the sheet onto Home at once, unless the mode's collector ([onKidsMode]) has moved there already. */
@@ -7526,9 +7582,319 @@ class AppState(
         when {
             s == Screen.Loading -> Unit
             mode is KidsMode.Locked -> if (!isKidsScreen(s)) showKidsHome()
-            isKidsScreen(s) -> if (s !is Screen.KidsPin || s.purpose == PinPurpose.UNLOCK) showSystemsNow(MenuCategory.HOME)
+            // Setup's and Change PIN's PIN pad is a parent's page: it stays while Parent (or Off), and goes with them.
+            s is Screen.KidsPin && s.purpose != PinPurpose.UNLOCK -> if (!kidsToolsAllowed) showSystemsNow(MenuCategory.HOME)
+            isKidsScreen(s) -> showSystemsNow(MenuCategory.HOME)
             !kidsToolsAllowed && !kidsOpenScreen(s) -> showSystemsNow(MenuCategory.HOME)
             s is Screen.Systems -> showSystemsNow()
+        }
+    }
+
+
+    // --- Settings -> Kids Mode and the first switch-on's setup ([KidsSetupStep]) ---
+
+    /** The new PIN typed once, until it is confirmed (and, in setup, until setup finishes: a cancelled setup stores none). */
+    private var kidsNewPin: String? = null
+    /** The PIN steps are Change PIN's (stored at once, back to the page), else first setup's. */
+    private var kidsPinChange = false
+
+    /**
+     * Settings -> Kids Mode: On / Off, Change PIN (once there is one), a row per day, Allowed apps, the warnings for a
+     * missing permission (only while on), then Forgot PIN? with the flag file's path. Empty without Kids Mode.
+     */
+    private fun kidsRows(): List<SettingsRow> = buildList {
+        val k = kids ?: return@buildList
+        val s = deps.settings
+        add(SettingsRow(SettingsKind.KIDS_ENABLE, "Kids Mode", if (s.kidsEnabled) "On" else "Off"))
+        if (s.kidsPinSet) add(SettingsRow(SettingsKind.KIDS_PIN, "Change PIN"))   // before the first setup, setup sets it
+        add(SettingsRow(SettingsKind.GAP, ""))
+        add(SettingsRow(SettingsKind.SECTION, "Play times"))
+        val week = KidsSchedule.decode(s.kidsSchedule)
+        for (d in 1..7) add(SettingsRow(SettingsKind.KIDS_DAY, kidsDayName(d), kidsWindowLabel(week.days[d]), day = d))
+        add(SettingsRow(SettingsKind.GAP, ""))
+        add(SettingsRow(SettingsKind.KIDS_APPS, "Allowed apps", kidsAppsSummary(s.kidsAllowedApps)))
+        if (s.kidsEnabled && !k.hasUsageAccess()) add(SettingsRow(SettingsKind.KIDS_GUARD, "Guard off", "Usage access not granted", warning = true))
+        if (s.kidsEnabled && !k.canExactAlarms()) add(SettingsRow(SettingsKind.KIDS_ALARMS, "Exact timing off", "Alarms & reminders not allowed", warning = true))
+        add(SettingsRow(SettingsKind.KIDS_FORGOT, "Forgot PIN?", k.flagPath() ?: "$KIDS_FLAG_NAME in your home folder"))
+    }
+
+    /** Allowed apps' value: the installed ones' names, two at most and "+N" for the rest; None for none. */
+    private fun kidsAppsSummary(ids: Set<String>): String {
+        val labels = ids.mapNotNull { deps.launcher?.label(it) }.sortedBy { it.lowercase() }
+        return when {
+            labels.isEmpty() -> "None"
+            labels.size <= 2 -> labels.joinToString(", ")
+            else -> labels.take(2).joinToString(", ") + " +${labels.size - 2}"
+        }
+    }
+
+    /** The Kids Mode page on its row of [kind] (a day's: [day]). */
+    private fun kidsShowPage(kind: SettingsKind, day: Int? = null) {
+        val page = settingsPage(SettingsSection.KIDS)
+        _screen.value = page
+        val i = page.rows.indexOfFirst { it.kind == kind && (day == null || it.day == day) }.coerceAtLeast(0)
+        _selection.value = selectableOn(page, ListSelection(i, page.rows.size))
+    }
+
+    /** Kids Mode switched [on]: the first time (no PIN yet) runs setup; otherwise on at once, or off (its flag deleted). */
+    private fun kidsSetEnabled(on: Boolean) {
+        val k = kids ?: return
+        when {
+            !on -> k.turnOff()
+            deps.settings.kidsPinSet -> k.turnOn()
+            else -> { kidsPinChange = false; kidsNewPin = null; kidsAskNewPin(null) }
+        }
+    }
+
+    /** Change PIN: a new PIN twice (only a parent reaches the page, so the old one is not asked). */
+    private fun kidsChangePin() {
+        if (kids == null) return
+        kidsPinChange = true
+        kidsNewPin = null
+        kidsAskNewPin(null)
+    }
+
+    /** The new-PIN prompt (Change PIN's or setup's), with [message] under its dots. */
+    private fun kidsAskNewPin(message: String?) {
+        _screen.value = Screen.KidsPin(if (kidsPinChange) PinPurpose.CHANGE else PinPurpose.SETUP_NEW, message = message)
+        _selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
+    }
+
+    /** Enter on a new PIN: the first time asks again; the second must match, else both start over ([KIDS_PIN_MISMATCH]). */
+    private fun kidsNewPinEnter(s: Screen.KidsPin) {
+        if (s.purpose != PinPurpose.SETUP_CONFIRM) {
+            kidsNewPin = s.typed
+            _screen.value = Screen.KidsPin(PinPurpose.SETUP_CONFIRM)
+            _selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
+            return
+        }
+        val pin = kidsNewPin
+        if (pin == null || pin != s.typed) { kidsNewPin = null; return kidsAskNewPin(KIDS_PIN_MISMATCH) }
+        if (kidsPinChange) {
+            deps.settings.setKidsPin(pin)
+            kidsNewPin = null
+            kidsShowPage(SettingsKind.KIDS_PIN)
+            showNotice("PIN changed")
+        } else {
+            kidsSetupGo(KidsSetupStep.APPS)
+        }
+    }
+
+    /**
+     * Setup's [step], or the first one after it that applies: Usage access and Alarms & reminders only while missing
+     * (Alarms is always granted before Android 14), home only while NX Redux is not home; past the last, setup ends.
+     */
+    private fun kidsSetupGo(step: KidsSetupStep) {
+        val k = kids ?: return
+        val skip = when (step) {
+            KidsSetupStep.PIN -> return kidsAskNewPin(null)
+            KidsSetupStep.USAGE -> k.hasUsageAccess()
+            KidsSetupStep.ALARMS -> k.canExactAlarms()
+            KidsSetupStep.HOME -> deps.launcher?.isHome() ?: true
+            else -> false
+        }
+        if (skip) return kidsSetupAfter(step)
+        if (step == KidsSetupStep.APPS) return kidsOpenApps(setup = true)
+        kidsShowSetup(Screen.KidsSetup(step, schedule = KidsSchedule.decode(deps.settings.kidsSchedule)), 0)
+    }
+
+    private fun kidsSetupAfter(step: KidsSetupStep) {
+        val next = KidsSetupStep.entries.getOrNull(step.ordinal + 1) ?: return kidsSetupFinish()
+        kidsSetupGo(next)
+    }
+
+    /** Setup's end: the PIN stored, Kids Mode on with its flag ([KidsController.turnOn], the parent in Parent mode), the page. */
+    private fun kidsSetupFinish() {
+        val k = kids ?: return
+        kidsNewPin?.let(deps.settings::setKidsPin)
+        kidsNewPin = null
+        k.turnOn()
+        kidsShowPage(SettingsKind.KIDS_ENABLE)
+    }
+
+    private fun kidsShowSetup(screen: Screen.KidsSetup, selected: Int) {
+        _screen.value = screen
+        val rows = kidsSetupRows(screen).size
+        _selection.value = ListSelection(selected.coerceIn(0, (rows - 1).coerceAtLeast(0)), rows)
+    }
+
+    /** The allowed-apps picker: setup's APPS step, or Settings' Allowed apps; the installed apps listed off the main thread. */
+    private fun kidsOpenApps(setup: Boolean) {
+        val first = Screen.KidsSetup(KidsSetupStep.APPS, setup = setup, allowed = deps.settings.kidsAllowedApps)
+        kidsShowSetup(first, 0)
+        val l = deps.launcher ?: return
+        scope.launch {
+            val apps = try { l.installedApps() } catch (e: CancellationException) { throw e } catch (e: Exception) { return@launch }
+            val now = _screen.value as? Screen.KidsSetup ?: return@launch
+            if (now.step != KidsSetupStep.APPS || now.setup != setup) return@launch
+            kidsShowSetup(now.copy(apps = apps), _selection.value.index)
+        }
+    }
+
+    /** [app] on or off the kid's list, at once. */
+    private fun kidsToggleApp(s: Screen.KidsSetup, app: InstalledApp) {
+        val allowed = if (app.id in s.allowed) s.allowed - app.id else s.allowed + app.id
+        deps.settings.kidsAllowedApps = allowed
+        _screen.value = s.copy(allowed = allowed)
+    }
+
+    /** A on (or a tap on) setup row [index]. */
+    fun kidsSetupRow(index: Int) {
+        val s = _screen.value as? Screen.KidsSetup ?: return
+        val k = kids ?: return
+        select(index)
+        when (val row = kidsSetupRows(s).getOrNull(index) ?: return) {
+            is KidsSetupRow.App -> kidsToggleApp(s, row.app)
+            is KidsSetupRow.Day -> kidsOpenDay(row.day, setup = true)
+            KidsSetupRow.Next -> if (s.setup) kidsSetupAfter(s.step) else kidsShowPage(SettingsKind.KIDS_APPS)
+            KidsSetupRow.Grant -> if (s.step == KidsSetupStep.USAGE) k.openUsageAccess() else k.openExactAlarms()   // on with the step on resume
+            KidsSetupRow.UseHome -> { deps.launcher?.setHome(true); kidsSetupAfter(s.step) }   // Android asks; setup ends meanwhile
+            KidsSetupRow.Skip -> kidsSetupAfter(s.step)
+        }
+    }
+
+    /** A setup row's switch (an app's) set to [index] (0 off, 1 on), as a tap on it. */
+    fun kidsSetupSetting(event: NxSettingEvent) {
+        val s = _screen.value as? Screen.KidsSetup ?: return
+        val e = event as? NxSettingEvent.Choose ?: return
+        val row = kidsSetupRows(s).getOrNull(e.row) as? KidsSetupRow.App ?: return
+        select(e.row)
+        if (row.allowed != (e.index == 1)) kidsToggleApp(s, row.app)
+    }
+
+    /**
+     * The pad on a setup step: UP / DOWN along its rows, A or a side step on an app's switch, B out. B leaves setup for
+     * the Kids Mode page (Kids Mode stays off, nothing stored but the apps and times chosen); Allowed apps' B is its Done.
+     */
+    private fun onKidsSetupButton(s: Screen.KidsSetup, button: NxButton) {
+        val sel = _selection.value
+        val rows = kidsSetupRows(s)
+        when (button) {
+            NxButton.UP, NxButton.DOWN -> if (rows.isNotEmpty()) _selection.value = sel.copy(index = (sel.index + if (button == NxButton.UP) -1 else 1).mod(rows.size))
+            // An app's switch flips; the two buttons side by side (Grant / Skip, Use as home screen / Skip): LEFT the first, RIGHT the second.
+            NxButton.LEFT, NxButton.RIGHT -> when (val row = rows.getOrNull(sel.index)) {
+                is KidsSetupRow.App -> kidsToggleApp(s, row.app)
+                is KidsSetupRow.Day, KidsSetupRow.Next, null -> Unit
+                else -> _selection.value = sel.copy(index = if (button == NxButton.LEFT) 0 else 1)
+            }
+            NxButton.A -> kidsSetupRow(sel.index)
+            NxButton.B -> back()
+            else -> Unit
+        }
+    }
+
+    private fun kidsSetupLeave(s: Screen.KidsSetup) {
+        kidsNewPin = null
+        kidsShowPage(if (s.setup) SettingsKind.KIDS_ENABLE else SettingsKind.KIDS_APPS)
+    }
+
+    /** Day [day]'s play time page, from setup's TIMES step ([setup]) or the Kids Mode page. */
+    private fun kidsOpenDay(day: Int, setup: Boolean) {
+        val w = KidsSchedule.decode(deps.settings.kidsSchedule).days[day]
+        _screen.value = Screen.KidsDayEdit(day, w, w ?: KidsSchedule.DEFAULT.days[5]!!, setup)
+        _selection.value = ListSelection(0, kidsDayRows(_screen.value as Screen.KidsDayEdit).size)
+    }
+
+    /** The day's window set to [w] (null: locked), stored at once; the selection stays on [row]. */
+    private fun kidsDaySet(s: Screen.KidsDayEdit, w: PlayWindow?, row: KidsDayRow) {
+        val week = KidsSchedule.decode(deps.settings.kidsSchedule)
+        deps.settings.kidsSchedule = week.withDay(s.day, w).encode()
+        val next = s.copy(window = w, kept = w ?: s.kept)
+        _screen.value = next
+        val rows = kidsDayRows(next)
+        _selection.value = ListSelection(rows.indexOf(row).coerceAtLeast(0), rows.size)
+    }
+
+    /** Locked on or off: off brings back the window the day had. */
+    private fun kidsDayLocked(s: Screen.KidsDayEdit, locked: Boolean) {
+        if (locked == (s.window == null)) return
+        kidsDaySet(s, if (locked) null else s.kept, KidsDayRow.LOCKED)
+    }
+
+    /** From or To [by] half hours, From kept before To ([kidsDayStep]). */
+    private fun kidsDayStep(s: Screen.KidsDayEdit, row: KidsDayRow, by: Int) {
+        val w = s.window ?: return
+        val next = kidsDayStep(w, row == KidsDayRow.FROM, by)
+        if (next != w) kidsDaySet(s, next, row)
+    }
+
+    /** A on (or a tap on) day row [index]: Locked flips, From / To open their picker, Done goes back. */
+    fun kidsDayRow(index: Int) {
+        val s = _screen.value as? Screen.KidsDayEdit ?: return
+        select(index)
+        when (val row = kidsDayRows(s).getOrNull(index) ?: return) {
+            KidsDayRow.LOCKED -> kidsDayLocked(s, s.window != null)
+            KidsDayRow.FROM, KidsDayRow.TO -> kidsDayPicker(s, row)
+            KidsDayRow.DONE -> kidsDayLeave(s)
+        }
+    }
+
+    /** A touch on a day row's control: the Locked switch, or From / To's picker. */
+    fun kidsDaySetting(event: NxSettingEvent) {
+        val s = _screen.value as? Screen.KidsDayEdit ?: return
+        val rows = kidsDayRows(s)
+        when (event) {
+            is NxSettingEvent.Choose -> if (rows.getOrNull(event.row) == KidsDayRow.LOCKED) { select(event.row); kidsDayLocked(s, event.index == 1) }
+            is NxSettingEvent.OpenPicker -> rows.getOrNull(event.row)?.takeIf { it == KidsDayRow.FROM || it == KidsDayRow.TO }?.let { select(event.row); kidsDayPicker(s, it) }
+            is NxSettingEvent.Info -> Unit
+        }
+    }
+
+    private fun kidsDayPicker(s: Screen.KidsDayEdit, row: KidsDayRow) {
+        val w = s.window ?: return
+        val from = row == KidsDayRow.FROM
+        val times = kidsDayTimes(w, from)
+        openPicker(if (from) "From" else "To", times.map(::kidsTimeLabel), times.indexOf(if (from) w.fromMin else w.toMin)) { i ->
+            val now = _screen.value as? Screen.KidsDayEdit ?: return@openPicker
+            val cur = now.window ?: return@openPicker
+            val t = times.getOrNull(i) ?: return@openPicker
+            kidsDaySet(now, if (from) cur.copy(fromMin = t) else cur.copy(toMin = t), row)
+        }
+    }
+
+    /** The pad on a day: UP / DOWN along the rows, LEFT / RIGHT half an hour on From / To (or flip Locked), A as a tap, B back. */
+    private fun onKidsDayButton(s: Screen.KidsDayEdit, button: NxButton) {
+        val sel = _selection.value
+        val rows = kidsDayRows(s)
+        when (button) {
+            NxButton.UP, NxButton.DOWN -> _selection.value = sel.copy(index = (sel.index + if (button == NxButton.UP) -1 else 1).mod(rows.size))
+            NxButton.LEFT, NxButton.RIGHT -> when (val row = rows.getOrNull(sel.index)) {
+                KidsDayRow.FROM, KidsDayRow.TO -> kidsDayStep(s, row, if (button == NxButton.LEFT) -1 else 1)
+                KidsDayRow.LOCKED -> kidsDayLocked(s, s.window != null)
+                else -> Unit
+            }
+            NxButton.A -> kidsDayRow(sel.index)
+            NxButton.B -> back()
+            else -> Unit
+        }
+    }
+
+    /** Back to where the day was opened, on its row: setup's TIMES step or the Kids Mode page. */
+    private fun kidsDayLeave(s: Screen.KidsDayEdit) {
+        if (!s.setup) return kidsShowPage(SettingsKind.KIDS_DAY, s.day)
+        val times = Screen.KidsSetup(KidsSetupStep.TIMES, schedule = KidsSchedule.decode(deps.settings.kidsSchedule))
+        kidsShowSetup(times, kidsSetupRows(times).indexOfFirst { it is KidsSetupRow.Day && it.day == s.day })
+    }
+
+    /**
+     * Back in front ([onForeground]): a permission screen a setup step or a warning row opened has closed ([KidsController.granting]
+     * cleared); the step moves on once granted, and the Kids Mode page re-reads its warnings.
+     */
+    private fun kidsReturned() {
+        val k = kids ?: return
+        val granting = k.granting
+        k.returned()
+        when (val s = _screen.value) {
+            is Screen.KidsSetup -> if (granting) {
+                val granted = when (s.step) {
+                    KidsSetupStep.USAGE -> k.hasUsageAccess()
+                    KidsSetupStep.ALARMS -> k.canExactAlarms()
+                    else -> false
+                }
+                if (granted) kidsSetupAfter(s.step)
+            }
+            is Screen.Settings -> if (s.section == SettingsSection.KIDS) refreshSettings()
+            else -> Unit
         }
     }
 
@@ -7540,6 +7906,12 @@ class AppState(
 
 /** Tools' first row while a parent has the full menu: Lock Kids Mode ([AppState]'s withKidsLock). */
 private val KIDS_LOCK_ROW = MainRow.Tool(ToolRow(ToolKind.KIDS_LOCK, checkNotNull(ToolKind.KIDS_LOCK.toolName), null))
+
+/** Setup's line under the PIN dots when the second PIN was not the first. */
+internal const val KIDS_PIN_MISMATCH = "PINs didn't match"
+
+/** The flag file's name, as Forgot PIN? names it where the home has no plain path. */
+internal const val KIDS_FLAG_NAME = "kids-mode.flag"
 
 /** The screens Kids Mode itself shows: its tiles screen, PIN prompt and unlock sheet. */
 internal fun isKidsScreen(s: Screen): Boolean = s == Screen.KidsHome || s == Screen.KidsUnlock || s is Screen.KidsPin

@@ -10,6 +10,8 @@ interface KidsFlag {
     fun seen(): FlagSeen
     fun write(): Boolean
     fun delete()
+    /** Where the flag is (or would be), as Settings → Kids Mode → Forgot PIN? shows it; null when the home has no plain path. */
+    fun flagPath(): String? = null
 }
 
 sealed interface FlagAction {

@@ -578,6 +578,9 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                 })
             }
             Screen.KidsUnlock -> WithIndex(selection) { KidsUnlockScreen(it, state::kidsUnlockChip, state::kidsOpenFullMenu, state::kidsOpenSettings) }
+            // A parent's Kids Mode pages: setup's steps (and Allowed apps), a day's play time.
+            is Screen.KidsSetup -> WithIndex(selection) { KidsSetupScreen(s, it, state::select, state::kidsSetupRow, state::kidsSetupSetting, state::onButton) }
+            is Screen.KidsDayEdit -> WithIndex(selection) { KidsDayEditScreen(s, it, state::select, state::kidsDayRow, state::kidsDaySetting, state::onButton) }
             // layoutKey: the tab or list laid out, not the Screen: a republish of the same page (a context menu opening or
             // closing, another tab rebuilt) must not snap a carousel or backdrop mid-glide; its own tiles changing still do.
             is Screen.Systems -> {

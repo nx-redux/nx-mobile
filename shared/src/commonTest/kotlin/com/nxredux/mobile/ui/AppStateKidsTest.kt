@@ -447,7 +447,7 @@ class AppStateKidsTest {
         st.kidsLockPressed(); st.typePin("1234")
         st.kidsOpenSettings()
         assertEquals(KidsMode.Parent, kids.mode.value)
-        assertIs<Screen.SettingsMenu>(st.screen.value)
+        assertEquals(SettingsSection.KIDS, assertIs<Screen.Settings>(st.screen.value).section)   // the Kids Mode page
     }
 
     @Test fun kidsOpenAppLaunchesOnlyAllowed() = runTest {

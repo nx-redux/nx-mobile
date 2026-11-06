@@ -252,6 +252,33 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "are logged. It takes effect at once.",
     )
     SettingsKind.LICENSES_LINK -> quiet(row.secondary.orEmpty())   // the URL behind the icon; A opens it
+    // Settings -> Kids Mode.
+    SettingsKind.KIDS_ENABLE -> quiet(
+        "Big tiles of allowed apps outside play times",
+        "On, games open only in the play times; outside them your kid sees big tiles of the allowed apps, and Tools, " +
+            "Settings and the Apps drawer need your PIN. The first time you turn it on, a short setup asks for a PIN, the " +
+            "apps, the play times and two permissions.",
+    )
+    SettingsKind.KIDS_PIN -> quiet("Choose a new 4-digit PIN")
+    SettingsKind.KIDS_DAY -> quiet(
+        "When games open on this day",
+        "The hours games open on this day, in half-hour steps, or Locked to keep them closed all day. Ten minutes " +
+            "before the end your kid is told to save.",
+    )
+    SettingsKind.KIDS_APPS -> quiet("The apps your kid can open while games are closed")
+    SettingsKind.KIDS_GUARD -> SettingText(
+        row.secondary.orEmpty(),
+        "Without Usage access, NX Redux cannot send your kid back from an app that isn't allowed. Grant it here.",
+    )
+    SettingsKind.KIDS_ALARMS -> SettingText(
+        row.secondary.orEmpty(),
+        "Without Alarms & reminders, the warning and the lock can come a few minutes late. Allow it here.",
+    )
+    SettingsKind.KIDS_FORGOT -> SettingText(
+        row.secondary.orEmpty(),
+        "Kids Mode keeps a file named kids-mode.flag at this path. Delete it with a file manager or from a computer and " +
+            "Kids Mode turns off the next time NX Redux opens. The play times and allowed apps stay.",
+    )
     else -> SettingText("")
 }
 

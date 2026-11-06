@@ -25,6 +25,8 @@ class AndroidKidsFlag(private val locator: HomeLocator) : KidsFlag {
         runCatching { home()?.let { File(it, NAME).delete() } }
     }
 
+    override fun flagPath(): String? = home()?.let { File(it, NAME).path }
+
     private companion object {
         const val NAME = "kids-mode.flag"
     }

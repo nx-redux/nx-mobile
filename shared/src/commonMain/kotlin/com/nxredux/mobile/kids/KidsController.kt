@@ -66,6 +66,24 @@ class KidsController(private val settings: AppSettings, private val platform: Ki
         if (parent) parentInputAt = platform.now().epochMs
     }
 
+    /** Usage access, as the guard needs it; Settings shows "Guard off" while it is missing. */
+    fun hasUsageAccess(): Boolean = platform.hasUsageAccess()
+
+    /** Android's Usage access page; [granting] until the app is back ([returned]). */
+    fun openUsageAccess() { granting = true; platform.openUsageAccess() }
+
+    /** Alarms & reminders (true where Android needs no grant, before 14); Settings says "Exact timing off" while it is missing. */
+    fun canExactAlarms(): Boolean = platform.canExactAlarms()
+
+    /** Android's Alarms & reminders page; [granting] until the app is back ([returned]). */
+    fun openExactAlarms() { granting = true; platform.openExactAlarms() }
+
+    /** The app is back in front: a permission screen a setup step opened has closed. */
+    fun returned() { granting = false }
+
+    /** The flag file's path for Forgot PIN? ([KidsFlag.flagPath]). */
+    fun flagPath(): String? = platform.flag.flagPath()
+
     /** The platform's clock now: the tiles screen's clock and the PIN wait read it, as the mode does. */
     fun now(): LocalNow = platform.now()
 

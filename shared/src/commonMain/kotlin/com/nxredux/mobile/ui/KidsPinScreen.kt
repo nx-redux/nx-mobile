@@ -64,11 +64,12 @@ internal fun kidsPinTitle(purpose: PinPurpose): String = when (purpose) {
 
 /**
  * The line under the dots: the wait after five wrong tries ("Try again in 12 s", whole seconds up), "Wrong PIN" after a
- * wrong one until a digit is typed, else nothing.
+ * wrong one until a digit is typed, else the prompt's own [Screen.KidsPin.message] until then, or nothing.
  */
 internal fun kidsPinStatus(s: Screen.KidsPin, nowMs: Long): String? = when {
     nowMs < s.waitUntil -> "Try again in ${ceil((s.waitUntil - nowMs) / 1000.0).toInt()} s"
     s.wrong > 0 && s.typed.isEmpty() -> "Wrong PIN"
+    s.message != null && s.typed.isEmpty() -> s.message
     else -> null
 }
 
