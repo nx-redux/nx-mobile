@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,15 +42,31 @@ internal const val KIDS_UNLOCK_FULL_MENU = 4
 internal const val KIDS_UNLOCK_SETTINGS = 5
 internal const val KIDS_UNLOCK_ROWS = 6
 
-/** The d-pad on the unlock sheet from [index]: LEFT / RIGHT along the chips, DOWN to the rows below them, UP back. */
-internal fun kidsUnlockStep(index: Int, button: NxButton): Int {
+/** The chips per row on a sheet [widthDp] wide: a 2 x 2 grid below 480 dp, so no label wraps mid-word; else one row of four. */
+internal fun kidsUnlockChipColumns(widthDp: Float): Int = if (widthDp < 480f) 2 else UnlockChip.entries.size
+
+/**
+ * The d-pad on the unlock sheet from [index], the chips laid out [columns] per row: LEFT / RIGHT along a row of chips,
+ * UP / DOWN between their rows, DOWN from the last row to the rows below them, UP back to the first chip.
+ */
+internal fun kidsUnlockStep(index: Int, button: NxButton, columns: Int = UnlockChip.entries.size): Int {
     val lastChip = UnlockChip.entries.size - 1
+    val cols = columns.coerceIn(1, UnlockChip.entries.size)
     val chip = index <= lastChip
     return when (button) {
-        NxButton.LEFT -> if (chip) (index - 1).coerceAtLeast(0) else index
-        NxButton.RIGHT -> if (chip) (index + 1).coerceAtMost(lastChip) else index
-        NxButton.DOWN -> if (chip) KIDS_UNLOCK_FULL_MENU else KIDS_UNLOCK_SETTINGS
-        NxButton.UP -> when (index) { KIDS_UNLOCK_SETTINGS -> KIDS_UNLOCK_FULL_MENU; KIDS_UNLOCK_FULL_MENU -> 0; else -> index }
+        NxButton.LEFT -> if (chip && index % cols > 0) index - 1 else index
+        NxButton.RIGHT -> if (chip && index % cols < cols - 1 && index < lastChip) index + 1 else index
+        NxButton.DOWN -> when {
+            chip && index + cols <= lastChip -> index + cols
+            chip -> KIDS_UNLOCK_FULL_MENU
+            else -> KIDS_UNLOCK_SETTINGS
+        }
+        NxButton.UP -> when {
+            index == KIDS_UNLOCK_SETTINGS -> KIDS_UNLOCK_FULL_MENU
+            index == KIDS_UNLOCK_FULL_MENU -> 0
+            index - cols >= 0 -> index - cols
+            else -> index
+        }
         else -> index
     }
 }
@@ -60,12 +77,15 @@ internal fun kidsUnlockStep(index: Int, button: NxButton): Int {
  */
 @Composable
 internal fun KidsUnlockScreen(
-    selectedIndex: Int, onChip: (UnlockChip) -> Unit, onFullMenu: () -> Unit, onSettings: () -> Unit, modifier: Modifier = Modifier,
+    selectedIndex: Int, onChip: (UnlockChip) -> Unit, onFullMenu: () -> Unit, onSettings: () -> Unit,
+    onColumns: (Int) -> Unit = {}, modifier: Modifier = Modifier,
 ) {
     val colors = LocalNxColors.current
     val inset = nxPageInset()
     BoxWithConstraints(modifier.fillMaxSize().background(colors.background)) {
         val scroll = rememberScrollState()
+        val columns = kidsUnlockChipColumns(maxWidth.value)
+        LaunchedEffect(columns) { onColumns(columns) }
         Column(
             Modifier.fillMaxSize().nxScrollFade(scroll).verticalScroll(scroll).heightIn(min = maxHeight)
                 .padding(start = inset.start, end = inset.end, top = 16.dp, bottom = 16.dp),
@@ -73,9 +93,14 @@ internal fun KidsUnlockScreen(
         ) {
             Column(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
                 SheetHeading("Let them play")
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    UnlockChip.entries.forEachIndexed { i, chip ->
-                        SheetItem(chip.label, null, lit = i == selectedIndex, Modifier.weight(1f), centred = true) { onChip(chip) }
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    UnlockChip.entries.chunked(columns).forEachIndexed { r, line ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            line.forEachIndexed { c, chip ->
+                                val i = r * columns + c
+                                SheetItem(chip.label, null, lit = i == selectedIndex, Modifier.weight(1f), centred = true, oneLine = true) { onChip(chip) }
+                            }
+                        }
                     }
                 }
                 Spacer(Modifier.height(24.dp))
@@ -99,7 +124,8 @@ private fun SheetHeading(text: String) {
 /** A chip or a row: lit in the accent when selected, else a faint plate. */
 @Composable
 private fun SheetItem(
-    label: String, secondary: String?, lit: Boolean, modifier: Modifier, centred: Boolean = false, trailing: String? = null, onTap: () -> Unit,
+    label: String, secondary: String?, lit: Boolean, modifier: Modifier, centred: Boolean = false, trailing: String? = null,
+    oneLine: Boolean = false, onTap: () -> Unit,
 ) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
@@ -113,7 +139,12 @@ private fun SheetItem(
         horizontalArrangement = if (centred) Arrangement.Center else Arrangement.Start,
     ) {
         Column(if (centred) Modifier else Modifier.weight(1f)) {
-            Text(label, color = content, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, textAlign = if (centred) TextAlign.Center else TextAlign.Start)
+            Text(
+                label, color = content, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
+                textAlign = if (centred) TextAlign.Center else TextAlign.Start,
+                // A chip's label never wraps mid-word: one line, never broken (the grid gives it the room).
+                maxLines = if (oneLine) 1 else Int.MAX_VALUE, softWrap = !oneLine,
+            )
             if (secondary != null) Text(secondary, color = if (lit) colors.onAccentMuted else colors.hint, fontFamily = font, fontSize = 13.sp)
         }
         if (trailing != null) Box { Text(trailing, color = content, fontFamily = font, fontSize = 20.sp) }

@@ -88,6 +88,11 @@ data class NxSettingRow(
      * round its plate and `<` `>` round its control, so it reads apart from a row only selected.
      */
     val editing: Boolean = false,
+    /**
+     * A tap on the row's own area (its name, its line) acts as A does ([NxSettingRowTap.OPEN]) though it has a switch:
+     * a list of things picked one by one (Kids Mode's Allowed apps), where the whole row is the target.
+     */
+    val tapActs: Boolean = false,
 ) : NxDescribedRow
 
 /** What A does on a row with a pad ([padA]). */
@@ -388,6 +393,7 @@ internal enum class NxSettingRowTap {
  * picker value, a button) or a dimmed one; [NxSettingRowTap.OPEN] for every other row, whose whole area is its button.
  */
 internal val NxSettingRow.rowTap: NxSettingRowTap get() = when {
+    enabled && tapActs -> NxSettingRowTap.OPEN
     !enabled || choices.size >= 2 || button != null -> NxSettingRowTap.FOCUS
     else -> NxSettingRowTap.OPEN
 }

@@ -133,7 +133,22 @@ fun nextOpenLabel(n: NextOpen): String {
     val whenWord = when (n.daysAhead) {
         0 -> "Today"
         1 -> "Tomorrow"
+        7 -> "next " + DAY_NAMES[(n.isoDay - 1).coerceIn(0, 6)]   // only today's window, already past: a week from now
         else -> DAY_NAMES[(n.isoDay - 1).coerceIn(0, 6)]
     }
     return "Games open $whenWord ${timeLabel(n.fromMin)}"
 }
+
+/**
+ * The game process's own check as a game screen starts (a launch, or a recreation from Recents after Android killed
+ * `:game`): the stored state ([enabled], [schedule], [unlockUntilMs]) says Locked without Parent mode, and the main
+ * process, which alone holds Parent mode in memory, does not hold it ([mainParent], asked only then).
+ */
+fun kidsGameBlocked(enabled: Boolean, now: LocalNow, schedule: KidsSchedule, unlockUntilMs: Long, mainParent: () -> Boolean): Boolean =
+    kidsMode(enabled, parent = false, now = now, schedule = schedule, unlockUntilMs = unlockUntilMs) is KidsMode.Locked && !mainParent()
+
+/** How often at most a game reports input to the main process, for Parent mode's idle time. */
+const val KIDS_INPUT_EVERY_MS = 30_000L
+
+/** A game's input is reported now: none reported yet ([lastMs] < 0), or [KIDS_INPUT_EVERY_MS] since the last. */
+fun kidsInputDue(lastMs: Long, nowMs: Long): Boolean = lastMs < 0 || nowMs - lastMs >= KIDS_INPUT_EVERY_MS

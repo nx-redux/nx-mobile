@@ -92,6 +92,28 @@ class KidsPolicyTest {
         assertEquals("Games open Tomorrow 12:30 PM", nextOpenLabel(NextOpen(3, 750, 1)))
         assertEquals("Games open Friday 9:00 AM", nextOpenLabel(NextOpen(5, 540, 3)))
         assertEquals("Games open Sunday 12:05 AM", nextOpenLabel(NextOpen(7, 5, 5)))
+        // Only today's window, already past: the same weekday next week.
+        assertEquals("Games open next Monday 9:00 AM", nextOpenLabel(NextOpen(1, 540, 7)))
+    }
+
+    /** The game process's own check at its start: Locked by the stored state, unless the main process holds Parent. */
+    @Test fun gameStartBlockedOnlyWhileLockedAndNoParent() {
+        var asked = 0
+        val parentNo = { asked++; false }
+        assertEquals(true, kidsGameBlocked(true, at(2, "15:00"), KidsSchedule.DEFAULT, 0L, parentNo))
+        assertEquals(1, asked)
+        assertEquals(false, kidsGameBlocked(true, at(2, "15:00"), KidsSchedule.DEFAULT, 0L) { true })   // a parent's game
+        assertEquals(false, kidsGameBlocked(true, at(5, "10:00"), KidsSchedule.DEFAULT, 0L, parentNo))  // a play window
+        assertEquals(false, kidsGameBlocked(true, at(2, "15:00"), KidsSchedule.DEFAULT, end(2, "16:00"), parentNo))  // a timed unlock
+        assertEquals(false, kidsGameBlocked(false, at(2, "15:00"), KidsSchedule.DEFAULT, 0L, parentNo))  // Kids Mode off
+        assertEquals(1, asked)   // the main process is asked only when the stored state says Locked
+    }
+
+    /** The game's input reaches the main process (Parent mode's idle time) at most every 30 s. */
+    @Test fun gameInputReportedAtMostEvery30s() {
+        assertEquals(true, kidsInputDue(lastMs = -1L, nowMs = 0L))
+        assertEquals(false, kidsInputDue(lastMs = 1_000L, nowMs = 30_999L))
+        assertEquals(true, kidsInputDue(lastMs = 1_000L, nowMs = 31_000L))
     }
 
     @Test fun todaysLaterWindowComesFirstAndAllLockedIsNull() {

@@ -18,4 +18,10 @@ interface KidsPlatform {
 
     /** Quit the game without its auto state (its battery save is written), then bring the menu forward. */
     fun lockNow()
+
+    /**
+     * The receiver for boots and clock changes on while Kids Mode is on, off while it is off, so a boot or a clock
+     * change never starts the app for nothing. Nothing on a platform without one.
+     */
+    fun setStartReceiver(enabled: Boolean) {}
 }

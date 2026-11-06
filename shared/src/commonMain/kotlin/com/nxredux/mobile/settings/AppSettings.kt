@@ -391,6 +391,8 @@ interface AppSettings {
     fun setKidsPin(@Suppress("UNUSED_PARAMETER") pin: String) {}
     fun kidsPinMatches(@Suppress("UNUSED_PARAMETER") pin: String): Boolean = false
     val kidsPinSet: Boolean get() = false
+    /** Forgets the PIN (the flag file was deleted: a forgotten PIN), so switching Kids Mode on runs setup again. */
+    fun clearKidsPin() {}
 
     /**
      * Settings → Second screen → Enable (default on): a built-in or wired second screen shows part of the frame.

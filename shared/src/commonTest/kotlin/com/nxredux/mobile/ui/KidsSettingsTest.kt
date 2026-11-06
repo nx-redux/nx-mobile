@@ -99,6 +99,7 @@ class KidsSettingsTest {
         override fun setKidsPin(pin: String) { this.pin = pin }
         override fun kidsPinMatches(pin: String) = pin == this.pin
         override val kidsPinSet get() = pin != null
+        override fun clearKidsPin() { pin = null }
     }
 
     private class Runner : EmulatorRunner {
@@ -111,10 +112,10 @@ class KidsSettingsTest {
         override fun forget(ref: ContentRef) {}
     }
 
-    private class Flag(var seen: FlagSeen = FlagSeen.MISSING) : KidsFlag {
+    private class Flag(var seen: FlagSeen = FlagSeen.MISSING, var writes: Boolean = true) : KidsFlag {
         override fun homeKey() = "Home"
         override fun seen() = seen
-        override fun write(): Boolean { seen = FlagSeen.PRESENT; return true }
+        override fun write(): Boolean { if (writes) seen = FlagSeen.PRESENT; return writes }
         override fun delete() { seen = FlagSeen.MISSING }
         override fun flagPath() = "/storage/emulated/0/NXRedux/kids-mode.flag"
     }
@@ -191,6 +192,8 @@ class KidsSettingsTest {
 
     private fun AppState.next() = pressSetup { it == KidsSetupRow.Next }
     private fun AppState.skip() = pressSetup { it == KidsSetupRow.Skip }
+    /** Setup's Apps step: Alpha on the kid's list (Continue needs one). */
+    private fun AppState.pickAlpha() = pressSetup { it is KidsSetupRow.App && it.app.id == "a/A" }
 
     @Test fun firstEnableRunsSetupInOrder() = runTest {
         val t = setup(usage = false, alarms = false, home = false)
@@ -255,7 +258,7 @@ class KidsSettingsTest {
         assertFalse(st.page().rows.any { it.kind == SettingsKind.KIDS_GUARD })   // off: no warning yet
         st.pressRow(SettingsKind.KIDS_ENABLE)
         st.typePin("1234"); st.typePin("1234")
-        st.next(); st.next()
+        st.pickAlpha(); st.next(); st.next()
         assertEquals(KidsSetupStep.USAGE, st.setupStep())
         st.skip()                                                         // alarms allowed and already home: done
         assertTrue(t.settings.kidsEnabled)
@@ -301,7 +304,7 @@ class KidsSettingsTest {
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("1234"); st.typePin("1234"); st.next(); st.next()
+        st.typePin("1234"); st.typePin("1234"); st.pickAlpha(); st.next(); st.next()
         assertTrue(t.settings.kidsEnabled)
         assertEquals(FlagSeen.PRESENT, t.platform.flag.seen)
         st.pressRow(SettingsKind.KIDS_ENABLE)                              // Off
@@ -327,7 +330,7 @@ class KidsSettingsTest {
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("1234"); st.typePin("1234"); st.next(); st.next()
+        st.typePin("1234"); st.typePin("1234"); st.pickAlpha(); st.next(); st.next()
         st.pressRow(SettingsKind.KIDS_PIN)
         assertEquals(PinPurpose.CHANGE, assertIs<Screen.KidsPin>(st.screen.value).purpose)
         st.typePin("9999")
@@ -381,7 +384,7 @@ class KidsSettingsTest {
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("1234"); st.typePin("1234"); st.next(); st.next()
+        st.typePin("1234"); st.typePin("1234"); st.pickAlpha(); st.next(); st.next()
         assertEquals(KidsMode.Parent, t.kids.mode.value)
         st.pressRow(SettingsKind.KIDS_PIN)
         st.typePin("9999")                                                 // half way: the confirmation is up
@@ -415,11 +418,72 @@ class KidsSettingsTest {
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("1234"); st.typePin("1234"); st.next(); st.next()
+        st.typePin("1234"); st.typePin("1234"); st.pickAlpha(); st.next(); st.next()
         assertEquals(KidsSetupStep.USAGE, st.setupStep())
         st.kidsNewPin = null                                               // the PIN lost before the end
         st.skip()                                                          // the last step: setup would end here
         assertFalse(t.settings.kidsEnabled)
         assertEquals(PinPurpose.SETUP_NEW, assertIs<Screen.KidsPin>(st.screen.value).purpose)   // the PIN asked again
+    }
+
+    /** The flag deleted (a forgotten PIN): Kids Mode turns off and the PIN goes, so switching it on runs setup again. */
+    @Test fun flagDeletedThenReEnableAsksForANewPin() = runTest {
+        val t = setup()
+        t.settings.pin = "1234"; t.settings.kidsEnabled = true; t.settings.kidsFlagHome = "Home"
+        t.platform.flag.seen = FlagSeen.MISSING
+        t.kids.refresh()
+        assertFalse(t.settings.kidsEnabled)
+        assertNull(t.settings.pin)
+        val st = t.st
+        st.openSettings(SettingsSection.KIDS)
+        assertFalse(st.page().rows.any { it.kind == SettingsKind.KIDS_PIN })
+        st.pressRow(SettingsKind.KIDS_ENABLE)
+        assertEquals(PinPurpose.SETUP_NEW, assertIs<Screen.KidsPin>(st.screen.value).purpose)
+    }
+
+    /** Setup's Apps step says to pick one and refuses Continue with none; Settings' Allowed apps may be left empty. */
+    @Test fun setupNeedsAtLeastOneApp() = runTest {
+        val t = setup()
+        val st = t.st
+        st.openSettings(SettingsSection.KIDS)
+        st.pressRow(SettingsKind.KIDS_ENABLE)
+        st.typePin("1234"); st.typePin("1234")
+        assertEquals(KidsSetupStep.APPS, st.setupStep())
+        assertTrue(KIDS_PICK_ONE_APP in kidsSetupLines(assertIs(st.screen.value)))
+        st.next()
+        assertEquals(KidsSetupStep.APPS, st.setupStep())                   // refused
+        st.pickAlpha()
+        assertFalse(KIDS_PICK_ONE_APP in kidsSetupLines(assertIs(st.screen.value)))
+        st.next()
+        assertEquals(KidsSetupStep.TIMES, st.setupStep())
+        assertFalse(KIDS_PICK_ONE_APP in kidsSetupLines(Screen.KidsSetup(KidsSetupStep.APPS, setup = false)))
+    }
+
+    /** A tap on an app row's name toggles it, as A does: the row's tap opens ([kidsSetupRow]), not just focuses. */
+    @Test fun appRowTapToggles() = runTest {
+        val row = kidsSetupTouchRow(KidsSetupRow.App(InstalledApp("a/A", "Alpha"), allowed = false), setup = true)
+        var opened = -1
+        com.nxredux.mobile.ui.nx.nxSettingRowTap(row, 3, onSelect = {}, onOpen = { opened = it })
+        assertEquals(3, opened)
+        val t = setup()
+        val st = t.st
+        st.openSettings(SettingsSection.KIDS)
+        st.pressRow(SettingsKind.KIDS_APPS)
+        val i = kidsSetupRows(assertIs(st.screen.value)).indexOfFirst { it is KidsSetupRow.App && it.app.id == "a/A" }
+        st.kidsSetupRow(i)                                                 // the tap's open
+        assertEquals(setOf("a/A"), t.settings.kidsAllowedApps)
+    }
+
+    /** The flag could not be written (no All files access): Kids Mode still turns on, and Forgot PIN? says why. */
+    @Test fun flagWriteFailureShowsOnForgotPin() = runTest {
+        val t = setup()
+        t.platform.flag.writes = false
+        val st = t.st
+        st.openSettings(SettingsSection.KIDS)
+        st.pressRow(SettingsKind.KIDS_ENABLE)
+        st.typePin("1234"); st.typePin("1234"); st.pickAlpha(); st.next(); st.next()
+        assertTrue(t.settings.kidsEnabled)
+        assertEquals(KIDS_FLAG_FAILED, st.page().rows.first { it.kind == SettingsKind.KIDS_FORGOT }.secondary)
+        assertEquals("Flag file couldn't be created — check All files access", KIDS_FLAG_FAILED)
     }
 }

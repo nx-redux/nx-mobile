@@ -99,10 +99,18 @@ class AppStateKidsTest {
         override fun setKidsPin(pin: String) { this.pin = pin }
         override fun kidsPinMatches(pin: String) = pin == this.pin
         override val kidsPinSet get() = pin != null
+        override fun clearKidsPin() { pin = null }
     }
 
     private class Runner : EmulatorRunner {
-        override suspend fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) {}
+        val launched = mutableListOf<GameSession>()
+        override suspend fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) { launched += session }
+    }
+
+    /** [inner], with [child] (the launch's "still there" check) held at [gate] while one is set. */
+    private class GatedSource(private val inner: FakeRomsSource) : com.nxredux.mobile.library.RomsSource by inner {
+        var gate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+        override suspend fun child(dir: ContentRef, name: String) = gate.let { it?.await(); inner.child(dir, name) }
     }
 
     private class Picker : FolderPicker {
@@ -130,6 +138,9 @@ class AppStateKidsTest {
         override fun openExactAlarms() {}
         override fun reschedule(mode: KidsMode) {}
         override fun lockNow() { locks++ }
+        /** The boot / clock receiver's state as last set; null: never set. */
+        var startReceiver: Boolean? = null
+        override fun setStartReceiver(enabled: Boolean) { startReceiver = enabled }
         fun at(day: Int, min: Int) { isoDay = day; minute = min; extraMs = 0 }
     }
 
@@ -153,8 +164,11 @@ class AppStateKidsTest {
         override fun setHome(on: Boolean) {}
     }
 
-    private fun TestScope.state(settings: AppSettings, kids: KidsController?, launcher: AppLauncher? = null) = AppState(
-        AppDeps(settings, source, Runner(), Picker(), compute = UnconfinedTestDispatcher(testScheduler), launcher = launcher),
+    private fun TestScope.state(
+        settings: AppSettings, kids: KidsController?, launcher: AppLauncher? = null,
+        roms: com.nxredux.mobile.library.RomsSource = source, runner: EmulatorRunner = Runner(),
+    ) = AppState(
+        AppDeps(settings, roms, runner, Picker(), compute = UnconfinedTestDispatcher(testScheduler), launcher = launcher),
         CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
         kids,
     )
@@ -271,6 +285,103 @@ class AppStateKidsTest {
         assertFalse(settings.kidsEnabled)
         assertEquals(KidsMode.Off, kids.mode.value)
         assertTrue(MenuCategory.TOOLS in tabsOf(st))                  // the full menu again
+        assertFalse(settings.kidsPinSet)                               // the forgotten PIN goes: switching on asks for a new one
+        assertEquals(false, platform.startReceiver)                    // no boot or clock start while off
+    }
+
+    @Test fun startReceiverFollowsOnAndOff() = runTest {
+        val settings = MemorySettings().apply { kidsEnabled = false }
+        val platform = Platform(MON, 10 * 60)
+        val kids = KidsController(settings, platform)
+        kids.turnOn()
+        assertEquals(true, platform.startReceiver)
+        kids.turnOff()
+        assertEquals(false, platform.startReceiver)
+        assertTrue(settings.kidsPinSet)                                // a plain switch-off keeps the PIN
+    }
+
+    /** A launch already past its first check when the lock comes never reaches the runner. */
+    @Test fun launchInFlightAtTheLockNeverStarts() = runTest {
+        val settings = MemorySettings()
+        val platform = Platform(SAT, 19 * 60 + 59)
+        val kids = KidsController(settings, platform)
+        val roms = GatedSource(source)
+        val runner = Runner()
+        val st = state(settings, kids, roms = roms, runner = runner)
+        st.load()
+        val sys = assertIs<Screen.Systems>(st.screen.value).tabs.flatMap { it.rows }
+            .flatMap { (it as? MainRow.System)?.systems.orEmpty() }.first { it.tag == "GB" }
+        st.openSystem(sys)
+        val game = assertIs<Screen.Games>(st.screen.value).entries.single().game
+        roms.gate = kotlinx.coroutines.CompletableDeferred()
+        val job = st.play(game)
+        assertTrue(job != null && job.isActive)                        // in flight, held at its file check
+        platform.at(SAT, 20 * 60)
+        kids.tick(platform.epochMs)
+        assertIs<KidsMode.Locked>(kids.mode.value)
+        roms.gate!!.complete(Unit)
+        job.join()
+        assertTrue(runner.launched.isEmpty())
+    }
+
+    /** Away from the menu (a game, another app) Parent mode ends at its last input + 5 min ([KidsController.parentIdleAtMs]). */
+    @Test fun parentIdleAtFollowsTheLastInput() = runTest {
+        val settings = MemorySettings()
+        val platform = Platform(MON, 10 * 60)
+        val kids = KidsController(settings, platform)
+        assertEquals(null, kids.parentIdleAtMs)
+        val t0 = platform.epochMs
+        kids.enterParent(t0)
+        assertEquals(t0 + KidsController.PARENT_IDLE_MS, kids.parentIdleAtMs)
+        platform.extraMs = 90_000L
+        kids.parentInput()                                             // a game's reported input
+        assertEquals(t0 + 90_000L + KidsController.PARENT_IDLE_MS, kids.parentIdleAtMs)
+        kids.tick(t0 + 90_000L + KidsController.PARENT_IDLE_MS)       // the idle alarm
+        assertIs<KidsMode.Locked>(kids.mode.value)
+        assertEquals(1, platform.locks)                                // the parent's game quits as a kid's lock does
+        assertEquals(null, kids.parentIdleAtMs)
+    }
+
+    /** The unlock chips: a 2 x 2 grid on a narrow screen (no word wraps mid-way at 360 dp), one row of four from 480 dp. */
+    @Test fun unlockChipsGridOnNarrowScreens() {
+        assertEquals(2, kidsUnlockChipColumns(360f))
+        assertEquals(2, kidsUnlockChipColumns(479f))
+        assertEquals(4, kidsUnlockChipColumns(480f))
+        // 2 x 2: the d-pad moves in the grid, DOWN from the bottom row to Open full menu, UP from it to the first chip.
+        assertEquals(1, kidsUnlockStep(0, NxButton.RIGHT, columns = 2))
+        assertEquals(1, kidsUnlockStep(1, NxButton.RIGHT, columns = 2))
+        assertEquals(2, kidsUnlockStep(0, NxButton.DOWN, columns = 2))
+        assertEquals(KIDS_UNLOCK_FULL_MENU, kidsUnlockStep(3, NxButton.DOWN, columns = 2))
+        assertEquals(1, kidsUnlockStep(3, NxButton.UP, columns = 2))
+        assertEquals(2, kidsUnlockStep(3, NxButton.LEFT, columns = 2))
+        assertEquals(2, kidsUnlockStep(2, NxButton.LEFT, columns = 2))
+        assertEquals(0, kidsUnlockStep(KIDS_UNLOCK_FULL_MENU, NxButton.UP, columns = 2))
+        // One row: as before.
+        assertEquals(3, kidsUnlockStep(2, NxButton.RIGHT))
+        assertEquals(KIDS_UNLOCK_FULL_MENU, kidsUnlockStep(1, NxButton.DOWN))
+    }
+
+    @Test fun pinNeverInToString() {
+        val s = Screen.KidsPin(PinPurpose.UNLOCK, typed = "1234").toString()
+        assertFalse("1234" in s, s)
+        assertTrue("KidsPin" in s)
+    }
+
+    /** A picker or a row's description open over a parent's page goes when Kids Mode locks. */
+    @Test fun lockClosesOpenOverlays() = runTest {
+        val (st, kids, platform) = lockedState()
+        kids.enterParent(platform.epochMs)
+        st.openSettings(SettingsSection.KIDS)
+        val page = assertIs<Screen.Settings>(st.screen.value)
+        val day = page.rows.indexOfFirst { it.kind == SettingsKind.KIDS_DAY && it.day == SAT }
+        st.select(day); st.onButton(NxButton.A)                        // Saturday's play time
+        assertIs<Screen.KidsDayEdit>(st.screen.value)
+        st.kidsDayRow(1)                                               // From: its picker
+        assertTrue(st.chooser.value != null)
+        kids.lock()
+        assertSame(Screen.KidsHome, st.screen.value)
+        assertEquals(null, st.chooser.value)
+        assertEquals(null, st.settingInfo.value)
     }
 
     @Test fun flagUnreadableOrMovedKeepsKidsMode() = runTest {

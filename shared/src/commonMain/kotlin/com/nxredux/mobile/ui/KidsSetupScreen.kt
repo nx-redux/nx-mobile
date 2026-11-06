@@ -43,9 +43,18 @@ internal fun kidsSetupText(s: Screen.KidsSetup): Pair<String, String> = when (s.
         "With NX Redux as the home app, the Home button stays in NX Redux. Kids Mode works without it, but Home leaves the app."
 }
 
+/** A step's lines under its headline: [kidsSetupText]'s, and on setup's Apps step with none picked [KIDS_PICK_ONE_APP]. */
+internal fun kidsSetupLines(s: Screen.KidsSetup): List<String> = buildList {
+    add(kidsSetupText(s).second)
+    if (s.setup && s.step == KidsSetupStep.APPS && s.allowed.isEmpty()) add(KIDS_PICK_ONE_APP)
+}
+
 /** [row] as the setup page draws it: an app's switch (a game says so), a day's window, or a button. */
 internal fun kidsSetupTouchRow(row: KidsSetupRow, setup: Boolean): NxSettingRow = when (row) {
-    is KidsSetupRow.App -> NxSettingRow(row.app.label, info = if (row.app.game) "Game" else "", choices = KIDS_OFF_ON, index = if (row.allowed) 1 else 0)
+    is KidsSetupRow.App -> NxSettingRow(
+        row.app.label, info = if (row.app.game) "Game" else "", choices = KIDS_OFF_ON, index = if (row.allowed) 1 else 0,
+        tapActs = true,   // a tap on the name toggles too ([AppState.kidsSetupRow])
+    )
     is KidsSetupRow.Day -> NxSettingRow(kidsDayName(row.day), value = row.label, opens = true)
     KidsSetupRow.Next -> NxSettingRow(if (setup) "Continue" else "Done")
     KidsSetupRow.Grant -> NxSettingRow("Grant")
@@ -66,14 +75,15 @@ internal fun KidsSetupScreen(
     onHint: (NxButton) -> Unit, modifier: Modifier = Modifier,
 ) {
     val rows = kidsSetupRows(s)
-    val (headline, line) = kidsSetupText(s)
+    val headline = kidsSetupText(s).first
     val buttons = when (s.step) {
         KidsSetupStep.APPS, KidsSetupStep.TIMES -> 1
         else -> 2
     }
     val hints = listOf(Hint(NxButton.B, if (s.setup) "Cancel" else "Back"), Hint(NxButton.A, "Choose"))
     SetupBlockPage(
-        if (s.setup) "Kids Mode setup" else "Kids Mode", headline, listOf(line), rows.map { kidsSetupTouchRow(it, s.setup) }, buttons,
+        if (s.setup) "Kids Mode setup" else "Kids Mode", headline, kidsSetupLines(s), rows.map { kidsSetupTouchRow(it, s.setup) }, buttons,
         selected, hints, onSelect, onRow, onHint, modifier, onSetting = onSetting,
+        lineBreaks = true,   // the Apps step's "Pick at least one app" on its own line
     )
 }

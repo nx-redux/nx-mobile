@@ -24,6 +24,10 @@ class KidsController(private val settings: AppSettings, private val platform: Ki
     /** Set while a setup step has a system permission screen open, so the guard leaves it alone. */
     var granting: Boolean = false
 
+    /** The flag file could not be written at the last try (no All files access): Forgot PIN? says so. */
+    var flagWriteFailed: Boolean = false
+        private set
+
     /** After the fifth wrong PIN, no try counts until then (epoch ms; 0: no wait). */
     var waitUntil: Long = 0L
         private set
@@ -39,8 +43,16 @@ class KidsController(private val settings: AppSettings, private val platform: Ki
             val seen = if (home != null) flag.seen() else FlagSeen.UNREADABLE
             when (val a = flagAction(settings.kidsEnabled, settings.kidsFlagHome, home, seen)) {
                 FlagAction.Keep -> Unit
-                FlagAction.TurnOff -> { settings.kidsEnabled = false; parent = false }
-                is FlagAction.Rewrite -> if (flag.write()) settings.kidsFlagHome = a.home
+                // Deleting the flag is the forgotten-PIN way out: the PIN goes too, so switching on asks for a new one.
+                FlagAction.TurnOff -> {
+                    settings.kidsEnabled = false; parent = false
+                    settings.clearKidsPin()
+                    platform.setStartReceiver(false)
+                }
+                is FlagAction.Rewrite -> {
+                    flagWriteFailed = !flag.write()
+                    if (!flagWriteFailed) settings.kidsFlagHome = a.home
+                }
             }
         }
         publish()
@@ -61,10 +73,19 @@ class KidsController(private val settings: AppSettings, private val platform: Ki
         publish()
     }
 
-    /** A menu input (a press or a touch) while in Parent mode: its idle time starts again, on the platform's clock as [tick]'s. */
+    /**
+     * A menu input (a press or a touch), or a game's (reported at most every 30 s), while in Parent mode: its idle time
+     * starts again, on the platform's clock as [tick]'s.
+     */
     fun parentInput() {
         if (parent) parentInputAt = platform.now().epochMs
     }
+
+    /**
+     * When Parent mode ends without more input ([PARENT_IDLE_MS] after the last); null outside Parent mode. Away from the
+     * menu (a game, another app) the platform ticks at this time, so time spent elsewhere counts as idle.
+     */
+    val parentIdleAtMs: Long? get() = if (parent) parentInputAt + PARENT_IDLE_MS else null
 
     /** Usage access, as the guard needs it; Settings shows "Guard off" while it is missing. */
     fun hasUsageAccess(): Boolean = platform.hasUsageAccess()
@@ -113,8 +134,11 @@ class KidsController(private val settings: AppSettings, private val platform: Ki
     /** Kids Mode on, with its flag file; the parent who turned it on keeps the full menu (Parent) until they lock. */
     fun turnOn() {
         settings.kidsEnabled = true
+        platform.setStartReceiver(true)
         val flag = platform.flag
-        flag.homeKey()?.let { home -> if (flag.write()) settings.kidsFlagHome = home }
+        val home = flag.homeKey()
+        flagWriteFailed = home == null || !flag.write()   // still on: Forgot PIN? says the flag is missing
+        if (!flagWriteFailed && home != null) settings.kidsFlagHome = home
         parent = true
         parentInputAt = platform.now().epochMs
         publish()
@@ -126,6 +150,8 @@ class KidsController(private val settings: AppSettings, private val platform: Ki
         settings.kidsUnlockUntil = 0L
         settings.kidsFlagHome = null
         platform.flag.delete()
+        platform.setStartReceiver(false)
+        flagWriteFailed = false
         parent = false
         publish()
     }

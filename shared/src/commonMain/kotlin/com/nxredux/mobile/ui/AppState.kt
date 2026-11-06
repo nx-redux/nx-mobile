@@ -397,7 +397,11 @@ sealed interface Screen {
         val purpose: PinPurpose, val typed: String = "", val wrong: Int = 0, val waitUntil: Long = 0,
         /** A line under the dots until a digit is typed (setup's "PINs didn't match"). */
         val message: String? = null,
-    ) : Screen
+    ) : Screen {
+        /** The generated form, but the digits typed never reach a log or an assertion message. */
+        override fun toString(): String =
+            "KidsPin(purpose=$purpose, typed=${"*".repeat(typed.length)}, wrong=$wrong, waitUntil=$waitUntil, message=$message)"
+    }
     /** After the right PIN on the tiles screen: Let them play's chips, Open full menu and Kids Mode settings. */
     data object KidsUnlock : Screen
     /**
@@ -5570,6 +5574,7 @@ class AppState(
             // Checked last, right before the runner: a game started during an import or a Device Sync could later write over
             // a save that just arrived.
             SaveTransferRules.launchRefusal(deps.saveTransfer?.importing == true, deps.deviceSync?.running == true)?.let { showNotice(it); return@launch }
+            if (kidsLocked) return@launch   // Kids Mode locked while this launch was on its way (the file checks above)
             dropPushedTab()
             switcherReturn = fromSwitcher   // set only once the runner is called: a refused launch never gets here (the runner keeps it on disk)
             // A launch sequence's spread hands its name over; any other launch has none.
@@ -7413,6 +7418,11 @@ class AppState(
     /** The tiles screen laid out [columns] tiles per row. */
     fun onKidsColumns(columns: Int) { kidsColumns = columns.coerceAtLeast(1) }
 
+    private var kidsUnlockColumns = UnlockChip.entries.size   // the unlock sheet's chips per row ([kidsUnlockChipColumns])
+
+    /** The unlock sheet laid its chips out [columns] per row; the d-pad steps in that grid. */
+    fun onKidsUnlockColumns(columns: Int) { kidsUnlockColumns = columns.coerceAtLeast(1) }
+
     /** A touch anywhere on the menu: Parent mode's idle time starts again, as a press does. */
     fun onTouch() { kids?.parentInput() }
 
@@ -7558,7 +7568,7 @@ class AppState(
             Screen.KidsUnlock -> when {
                 button == NxButton.A -> kidsActivate(s)
                 button == NxButton.B -> showKidsHome()
-                button.isDirection -> move(kidsUnlockStep(sel.index, button))
+                button.isDirection -> move(kidsUnlockStep(sel.index, button, kidsUnlockColumns))
             }
             else -> Unit
         }
@@ -7583,6 +7593,8 @@ class AppState(
         if (allMenuTabs.isEmpty() || firstSetup || onboarding.step != null) return
         if ((was == KidsMode.Off || was == KidsMode.Parent) != kidsToolsAllowed) rebuildHomeTab()
         val s = _screen.value
+        // A parent's picker or a row's description over their page goes with the page.
+        if (mode is KidsMode.Locked) { closeChooser(); closeSettingInfo() }
         when {
             s == Screen.Loading -> Unit
             // A parent's PIN pad (setup's, Change PIN's) goes too, its half-typed PIN with it: only the unlock pad stays.
@@ -7631,7 +7643,8 @@ class AppState(
         add(SettingsRow(SettingsKind.KIDS_APPS, "Allowed apps", kidsAppsSummary(s.kidsAllowedApps)))
         if (s.kidsEnabled && !k.hasUsageAccess()) add(SettingsRow(SettingsKind.KIDS_GUARD, "Guard off", "Usage access not granted", warning = true))
         if (s.kidsEnabled && !k.canExactAlarms()) add(SettingsRow(SettingsKind.KIDS_ALARMS, "Exact timing off", "Alarms & reminders not allowed", warning = true))
-        add(SettingsRow(SettingsKind.KIDS_FORGOT, "Forgot PIN?", k.flagPath() ?: "$KIDS_FLAG_NAME in your home folder"))
+        val where = if (s.kidsEnabled && k.flagWriteFailed) KIDS_FLAG_FAILED else k.flagPath() ?: "$KIDS_FLAG_NAME in your home folder"
+        add(SettingsRow(SettingsKind.KIDS_FORGOT, "Forgot PIN?", where))
     }
 
     /** Allowed apps' value: the installed ones' names, two at most and "+N" for the rest; None for none. */
@@ -7771,7 +7784,11 @@ class AppState(
         when (val row = kidsSetupRows(s).getOrNull(index) ?: return) {
             is KidsSetupRow.App -> kidsToggleApp(s, row.app)
             is KidsSetupRow.Day -> kidsOpenDay(row.day, setup = true)
-            KidsSetupRow.Next -> if (s.setup) kidsSetupAfter(s.step) else kidsShowPage(SettingsKind.KIDS_APPS)
+            KidsSetupRow.Next -> when {
+                !s.setup -> kidsShowPage(SettingsKind.KIDS_APPS)
+                s.step == KidsSetupStep.APPS && s.allowed.isEmpty() -> showNotice(KIDS_PICK_ONE_APP)   // the tiles would be empty
+                else -> kidsSetupAfter(s.step)
+            }
             KidsSetupRow.Grant -> if (s.step == KidsSetupStep.USAGE) k.openUsageAccess() else k.openExactAlarms()   // on with the step on resume
             KidsSetupRow.UseHome -> { deps.launcher?.setHome(true); kidsSetupAfter(s.step) }   // Android asks; setup ends meanwhile
             KidsSetupRow.Skip -> kidsSetupAfter(s.step)
@@ -7939,6 +7956,12 @@ internal const val KIDS_PIN_MISMATCH = "PINs didn't match"
 
 /** The flag file's name, as Forgot PIN? names it where the home has no plain path. */
 internal const val KIDS_FLAG_NAME = "kids-mode.flag"
+
+/** Forgot PIN?'s line when Kids Mode is on but its flag file could not be written. */
+internal const val KIDS_FLAG_FAILED = "Flag file couldn't be created — check All files access"
+
+/** Setup's Apps step with none picked: its line, and the notice when Continue is refused. */
+internal const val KIDS_PICK_ONE_APP = "Pick at least one app"
 
 /** The screens Kids Mode itself shows: its tiles screen, PIN prompt and unlock sheet. */
 internal fun isKidsScreen(s: Screen): Boolean = s == Screen.KidsHome || s == Screen.KidsUnlock || s is Screen.KidsPin

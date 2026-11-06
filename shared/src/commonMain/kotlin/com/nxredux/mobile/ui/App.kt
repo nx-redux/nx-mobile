@@ -577,7 +577,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     }
                 })
             }
-            Screen.KidsUnlock -> WithIndex(selection) { KidsUnlockScreen(it, state::kidsUnlockChip, state::kidsOpenFullMenu, state::kidsOpenSettings) }
+            Screen.KidsUnlock -> WithIndex(selection) { KidsUnlockScreen(it, state::kidsUnlockChip, state::kidsOpenFullMenu, state::kidsOpenSettings, state::onKidsUnlockColumns) }
             // A parent's Kids Mode pages: setup's steps (and Allowed apps), a day's play time.
             is Screen.KidsSetup -> WithIndex(selection) { KidsSetupScreen(s, it, state::select, state::kidsSetupRow, state::kidsSetupSetting, state::onButton) }
             is Screen.KidsDayEdit -> WithIndex(selection) { KidsDayEditScreen(s, it, state::select, state::kidsDayRow, state::kidsDaySetting, state::onButton) }
