@@ -23,7 +23,7 @@ internal object RestartOnlyOptions {
         "virefresh",
     ).mapTo(mutableSetOf()) { "mupen64plus-$it" }
 
-    // melonds-ds v1.3.1 src/libretro: consumed only when the console is created (config/console.cpp GetNdsArgs and
+    // melonds-ds v1.4.0 src/libretro: consumed only when the console is created (config/console.cpp GetNdsArgs and
     // CreateConsole, core/core.cpp LoadGame) and their info texts don't say "restart" (the ones that do, such as
     // console mode, boot mode, firmware and time options, are already hidden by CoreOptionFilter.requiresRestart).
     // Audio bit depth and interpolation stay: UpdateConsole re-applies them live.
