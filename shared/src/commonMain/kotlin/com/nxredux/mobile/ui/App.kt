@@ -560,6 +560,8 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.FolderSummary -> WithIndex(selection) { val (t, _) = remember(s) { state.setupChrome() }; FolderSummaryScreen(s, t, it, state::select, state::setupStepRow, state::onButton, note = remember(s) { state.setupNote() }) }
             is Screen.AndroidGamesStep -> WithIndex(selection) { val (t, b) = remember(s) { state.setupChrome() }; AndroidGamesStepScreen(s.ask, t, b, it, state::select, state::setupStepRow, state::onButton) }
             Screen.Loading -> Box(Modifier.fillMaxSize())
+            // Kids Mode's pages: placeholders until their screens are built.
+            Screen.KidsHome, Screen.KidsUnlock, is Screen.KidsPin -> Box(Modifier.fillMaxSize())
             // layoutKey: the tab or list laid out, not the Screen: a republish of the same page (a context menu opening or
             // closing, another tab rebuilt) must not snap a carousel or backdrop mid-glide; its own tiles changing still do.
             is Screen.Systems -> {

@@ -35,10 +35,11 @@ internal fun homeTabRows(home: Home, style: MenuStyle = MenuStyle.GRID): List<Ma
 
 /**
  * The tabs the main menu shows: [tabs] ([buildMenuTabs]: Home and Tools always, Consoles and Collections when they have
- * content) whose category Layouts shows ([shown]), in their fixed order. With none left, Home shows anyway.
+ * content) whose category Layouts shows ([shown]), in their fixed order. With none left, Home shows anyway. [hideTools]:
+ * Kids Mode's play time, when Tools never shows whatever Layouts says.
  */
-internal fun visibleMenuTabs(tabs: List<MenuTab>, shown: Set<MenuCategory>): List<MenuTab> {
-    val visible = tabs.filter { it.category in shown }
+internal fun visibleMenuTabs(tabs: List<MenuTab>, shown: Set<MenuCategory>, hideTools: Boolean = false): List<MenuTab> {
+    val visible = tabs.filter { it.category in shown && !(hideTools && it.category == MenuCategory.TOOLS) }
     return visible.ifEmpty { tabs.filter { it.category == MenuCategory.HOME } }
 }
 
