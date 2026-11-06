@@ -377,6 +377,7 @@ object CoreRegistry {
     private val azahar = CoreDescriptor(
         "azahar", "libazahar_libretro_android.so", setOf("3ds", "3dsx", "z3dsx", "elf", "axf", "cci", "zcci", "cxi", "zcxi", "app"),
         defaultOptions = mapOf(
+            "citra_frontend_layout" to "auto",
             "citra_graphics_api" to "OpenGL",
             "citra_resolution_factor" to "3",
             "citra_use_disk_shader_cache" to "enabled",
@@ -394,6 +395,7 @@ object CoreRegistry {
             "citra_render_3d" to "off",
         ),
         lockedOptions = setOf(
+            "citra_frontend_layout",
             "citra_resolution_factor", "citra_large_screen_proportion", "citra_render_3d",
             "citra_graphics_api", "citra_use_libretro_save_path", "citra_enable_mouse_touchscreen", "citra_enable_motion",
             "citra_motion_sensitivity", "citra_input_type",

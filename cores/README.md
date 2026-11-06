@@ -192,6 +192,11 @@ game state.
 
 Checked: 2126.1.2 → 2126.2 (2026-11-05, Nova): old states load and play.
 
+The patch also carries azahar-emu/azahar#2718 (video views: the app lays out the 3DS screens from the core's map). On
+every pin bump, re-check it: the PR's commits re-apply, its Frontend Layout and 3D option is still `citra_frontend_layout`
+with `auto`, and a 3DS game sends a map (top and bottom views) in single display and Split. Drop the carried commits
+once the pin includes them.
+
 ## Link cores (netplay stage 2c, 2026-10-10)
 
 GB/GBC and GBA link as on the NX Redux handheld (nx-redux main 2f25643b):

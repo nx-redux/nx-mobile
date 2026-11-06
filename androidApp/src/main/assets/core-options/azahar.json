@@ -403,10 +403,25 @@
    "info": "Screen layout and display positioning options.",
    "items": [
     {
+     "key": "citra_frontend_layout",
+     "label": "Frontend Layout and 3D",
+     "labelCategorized": "Frontend Layout and 3D",
+     "info": "Let the frontend lay out the 3DS screens and show 3D, with its own screen layout, stereo 3D mode and a shader for each screen and eye. 'Auto' does this where the frontend can: always in its stereo 3D modes and on a headset, and in its 2D mode only while Screen Layout is Default Top-Bottom or Single Screen Only and Stereoscopic 3D Mode is Off. Otherwise, and always with 'Off', Screen Layout and Stereoscopic 3D Mode apply. Prominent 3DS Screen picks which screen the frontend shows first.",
+     "values": [
+      "auto",
+      "off"
+     ],
+     "labels": [
+      "Auto",
+      "Off"
+     ],
+     "default": "auto"
+    },
+    {
      "key": "citra_layout_option",
      "label": "Screen Layout",
      "labelCategorized": "Screen Layout",
-     "info": "Choose how the 3DS screens are arranged in the display.",
+     "info": "Choose how the 3DS screens are arranged in the display. While the frontend lays out the screens (Frontend Layout and 3D), Single Screen Only gives it the prominent screen alone, and every other layout gives it both screens.",
      "values": [
       "default",
       "single_screen",
@@ -425,7 +440,7 @@
      "key": "citra_swap_screen",
      "label": "Prominent 3DS Screen",
      "labelCategorized": "Prominent Screen",
-     "info": "Choose which screen is displayed prominently in single screen or large screen layouts.",
+     "info": "Choose which screen is displayed prominently in single screen or large screen layouts. While the frontend lays out the screens (Frontend Layout and 3D), this chooses which screen the frontend shows first.",
      "values": [
       "Top",
       "Bottom"
@@ -455,7 +470,7 @@
      "key": "citra_large_screen_proportion",
      "label": "Large Screen Proportion",
      "labelCategorized": "Large Screen Proportion",
-     "info": "How many times larger the main screen is compared to the small screen in the Large Screen layout.",
+     "info": "How many times larger the main screen is compared to the small screen in the Large Screen layout. Not used while the frontend lays out the screens (Frontend Layout and 3D).",
      "values": [
       "1.00",
       "1.25",
@@ -508,7 +523,7 @@
      "key": "citra_render_3d",
      "label": "Stereoscopic 3D Mode",
      "labelCategorized": "Stereo 3D Mode",
-     "info": "Stereoscopic 3D output, used when a game is rendering in 3D. 'Off' shows a single 2D image. 'Side by Side' places the left and right eye images beside each other in one frame, each at half width. 'Side by Side (Full)' does the same but keeps each eye at full width. 'Anaglyph' merges both eyes into a single red/cyan image for use with red/cyan glasses. 'Interlaced' alternates the eyes on odd and even scanlines for interlaced 3D displays, and 'Reverse Interlaced' swaps which eye is on which line. 'Cardboard VR' outputs side by side with lens-distortion correction for Cardboard-style viewers.",
+     "info": "Stereoscopic 3D output, used when a game is rendering in 3D. 'Off' shows a single 2D image. 'Side by Side' places the left and right eye images beside each other in one frame, each at half width. 'Side by Side (Full)' does the same but keeps each eye at full width. 'Anaglyph' merges both eyes into a single red/cyan image for use with red/cyan glasses. 'Interlaced' alternates the eyes on odd and even scanlines for interlaced 3D displays, and 'Reverse Interlaced' swaps which eye is on which line. 'Cardboard VR' outputs side by side with lens-distortion correction for Cardboard-style viewers. Not used while the frontend lays out the screens (Frontend Layout and 3D); its stereo mode applies instead.",
      "values": [
       "off",
       "side-by-side",
@@ -533,7 +548,7 @@
      "key": "citra_factor_3d",
      "label": "Stereoscopic 3D Depth",
      "labelCategorized": "Stereo 3D Depth",
-     "info": "Depth intensity of the stereoscopic 3D effect, as a percentage. Only used when a 3D mode is active.",
+     "info": "Depth intensity of the stereoscopic 3D effect, as a percentage. Used while both eyes are shown: in the frontend's stereo modes, or with a Stereoscopic 3D Mode other than Off.",
      "values": [
       "0",
       "10",
@@ -560,7 +575,7 @@
       "90%",
       "100%"
      ],
-     "default": "0"
+     "default": "50"
     }
    ]
   },
@@ -740,6 +755,6 @@
    ]
   }
  ],
- "soSha256": "710011b903663f13a93a807d4cbc54adef84dc3d72fcf8e3e676a5d997437697",
- "probedAt": "2026-10-14"
+ "soSha256": "d033e38b03909521865045484dc88e2af5392e4b1a2e53b610f745b66711f84d",
+ "probedAt": "2026-11-06"
 }
