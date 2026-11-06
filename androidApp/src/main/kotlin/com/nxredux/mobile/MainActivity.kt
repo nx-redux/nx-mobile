@@ -681,6 +681,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
 
     override fun onStart() {
         super.onStart()
+        if (::kids.isInitialized) AndroidKids.menuShown(this, this, shown = true)   // the tiles are in front: the guard stops
         AppUpdates.onAppOpened(this)   // the "updated" notice, if a self-update left one
         if (handOverToHome()) return   // made home (role dialog, Android's settings) while this drawer instance ran
         inputManager?.registerInputDeviceListener(inputDeviceListener, null)
@@ -760,6 +761,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
     }
 
     override fun onStop() {
+        if (::kids.isInitialized) AndroidKids.menuShown(this, this, shown = false)   // Locked with Usage access: the guard starts
         inFront = false
         cancelMenuRetry()
         launching = false   // the game has the screen, or never came: onStart shows the menu's second screen again

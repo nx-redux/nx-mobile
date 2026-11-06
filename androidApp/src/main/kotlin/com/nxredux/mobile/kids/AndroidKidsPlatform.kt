@@ -25,6 +25,10 @@ import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.storage.AndroidHomeLocator
 import com.swordfish.libretrodroid.NxLog
 import java.time.ZonedDateTime
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /** [KidsPlatform] on Android: the local clock, the flag file at the home root, the two grants, the alarms and the lock. */
 class AndroidKidsPlatform(context: Context) : KidsPlatform {
@@ -92,6 +96,25 @@ object AndroidKids {
 
     val menuResumed: Boolean get() = menuWarning != null
 
+    /** The menus between their onStart and onStop ([menuShown]): while one is shown the guard has nothing to watch. */
+    private val shownMenus = HashSet<Any>()
+
+    /**
+     * A menu (MainActivity) became shown (onStart) or stopped being shown (onStop): the guard follows ([syncGuard]).
+     * A start from onStop is allowed on Android 12+ (the app is just leaving a visible state).
+     */
+    fun menuShown(context: Context, menu: Any, shown: Boolean) {
+        if (shown) shownMenus.add(menu) else shownMenus.remove(menu)
+        syncGuard(context)
+    }
+
+    /** The guard on while [guardRuns] holds: Locked, Usage access, no menu shown. */
+    private fun syncGuard(context: Context) {
+        val c = controller ?: return
+        val p = platform ?: return
+        KidsGuardService.update(context, guardRuns(c.mode.value, p.hasUsageAccess(), shownMenus.isNotEmpty()))
+    }
+
     fun get(context: Context): KidsController = controller ?: run {
         val app = context.applicationContext
         val p = AndroidKidsPlatform(app)
@@ -109,6 +132,10 @@ object AndroidKids {
         }
         val filter = IntentFilter(Intent.ACTION_SCREEN_OFF).apply { addAction(Intent.ACTION_SCREEN_ON) }
         ContextCompat.registerReceiver(app, screen, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        // The guard follows the mode wherever it changes (an exact lock alarm with the kid in another app, whose
+        // receiver may start a foreground service), not only the menu's onStop; it stops when the mode leaves Locked.
+        // Posted, not immediate: built in a menu's onCreate, the first sync runs after its onStart has counted it shown.
+        CoroutineScope(SupervisorJob() + Dispatchers.Main).launch { c.mode.collect { syncGuard(app) } }
         // Born Locked with a game live: the change to Locked happened while no controller was here to see it.
         if (lockAtBirth(c.mode.value, LiveGameStore.of(app).current() != null)) p.lockNow()
         c
@@ -136,22 +163,12 @@ object AndroidKids {
             ContextCompat.checkSelfPermission(app, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) return
         val nm = app.getSystemService(NotificationManager::class.java) ?: return
-        if (nm.getNotificationChannel(CHANNEL_ID) == null) {
-            nm.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Kids Mode", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Says when games are about to close"
-                },
-            )
-        }
-        val open = PendingIntent.getActivity(
-            app, 0, Intent(app, LaunchActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+        ensureChannel(nm)
         val notice = NotificationCompat.Builder(app, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("Kids Mode")
             .setContentText(KIDS_WARNING)
-            .setContentIntent(open)
+            .setContentIntent(openMenu(app))
             .setAutoCancel(true)
             .build()
         try {
@@ -166,5 +183,24 @@ object AndroidKids {
         context.getSystemService(NotificationManager::class.java)?.cancel(NotificationIds.KIDS_WARN)
     }
 
-    private const val CHANNEL_ID = "kids"
+    /** Kids Mode's notification channel: the warning and the guard's ongoing notice. */
+    const val CHANNEL_ID = "kids"
+
+    fun ensureChannel(nm: NotificationManager) {
+        if (nm.getNotificationChannel(CHANNEL_ID) != null) return
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, "Kids Mode", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Says when games are about to close"
+            },
+        )
+    }
+
+    /** A notification's tap: the menu forward through [LaunchActivity]. */
+    fun openMenu(context: Context): PendingIntent {
+        val app = context.applicationContext
+        return PendingIntent.getActivity(
+            app, 0, Intent(app, LaunchActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+    }
 }

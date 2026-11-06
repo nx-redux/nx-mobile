@@ -28,6 +28,9 @@ object NotificationIds {
     /** Kids Mode's "Games close in 10 minutes" warning, while no game or menu is in front ([com.nxredux.mobile.kids.AndroidKids]). */
     const val KIDS_WARN = 4107
 
+    /** Kids Mode's guard: the ongoing "Kids Mode is on" while it watches the front app ([com.nxredux.mobile.kids.KidsGuardService]). */
+    const val KIDS_GUARD = 4108
+
     /** All of them, for the test that keeps them distinct. */
-    val all: List<Int> = listOf(SCRAPE, RA_DOWNLOAD, DEVICE_SYNC, APP_UPDATE, APP_UPDATED, APP_UPDATE_WAIT, KIDS_WARN)
+    val all: List<Int> = listOf(SCRAPE, RA_DOWNLOAD, DEVICE_SYNC, APP_UPDATE, APP_UPDATED, APP_UPDATE_WAIT, KIDS_WARN, KIDS_GUARD)
 }
