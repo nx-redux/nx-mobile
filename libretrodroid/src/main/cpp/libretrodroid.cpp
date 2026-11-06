@@ -745,6 +745,7 @@ void LibretroDroid::step() {
     unsigned int speed = frameSpeed;
     const bool lk = gbalink::active();               // nx-mobile GBA link: speed 1, held while either side pauses
     const bool np = !lk && netplay::active();        // nx-mobile netplay: one lockstep frame per step
+    const bool paused = speed == 0 && !np && !lk;
     if (np || lk) speed = 1;
 
     // Neither rewind nor fast forward runs in netplay or a link session: the peers would desync. Rewinding wins over
@@ -848,6 +849,11 @@ void LibretroDroid::step() {
         // The second surface stamps its frame from the same deadline with its own display's lead (SecondaryOutput).
         frameDeadlineNanos = (runs > 0 && fpsSync->presentAt(std::chrono::microseconds(0)))
             ? std::chrono::duration_cast<std::chrono::nanoseconds>(fpsSync->deadline().time_since_epoch()).count() : 0;
+    }
+    // nx-mobile: paused, the picture doesn't change; redrawing it at the screen's rate only burns GPU and battery.
+    if (paused) {
+        std::this_thread::sleep_until(pausedRedrawAt + PAUSED_REDRAW_INTERVAL);
+        pausedRedrawAt = std::chrono::steady_clock::now();
     }
     // The surface keeps its last stamp for every later frame: an unstamped frame after a stamped one goes back to auto.
     if (!stamped && presentStamped) PresentTime::clear();

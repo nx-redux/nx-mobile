@@ -112,6 +112,8 @@ internal interface FrontendHost : LifecycleOwner {
     fun onNds3dLayout(current: Int?, displayMax: Int, sizeChange: Boolean)
     /** Where the second display draws the whole frame (px of its surface; the 3DS picture there), else null. [g]: the game geometry. */
     fun secondWholeFrame(g: FloatArray): PxRect?
+    /** Main shows no game picture: the panel modes with the picture on the second display. */
+    fun mainShowsNoPicture(): Boolean
     /**
      * A 3DS game was laid out flat in [FrontendRenderer.n3dsPictureSpace]: Large screen in portrait sends the proportion
      * that space gives when it is not the one the core has.
@@ -479,6 +481,7 @@ internal class FrontendRenderer(
         val h = game.height.toFloat()
         if (w <= 0f || h <= 0f) return
         val g = geometry ?: view.getGameGeometry()
+        view.mainCovered = host.mainShowsNoPicture()
         val origin = IntArray(2).also { game.getLocationInWindow(it) }
         val frame = coreFrame(g)   // null before the first frame (0x0)
         frame?.let(padLayout::onFrame)
@@ -600,7 +603,8 @@ internal class FrontendRenderer(
      */
     private fun reportNds3d(w: Float, h: Float, screen: ScreenClass, halfFolded: Boolean) {
         val second = Nds3dResolution.currentScale(secondNdsRegions) ?: 1
-        report3d(w, h, screen, halfFolded, Nds3dResolution.currentScale(ndsRegions + secondNdsRegions), second) {
+        val shown = if (host.mainShowsNoPicture()) secondNdsRegions else ndsRegions + secondNdsRegions
+        report3d(w, h, screen, halfFolded, Nds3dResolution.currentScale(shown), second) {
             Nds3dResolution.displayMax(w, h, screen)
         }
     }
@@ -630,7 +634,11 @@ internal class FrontendRenderer(
         if (geometryWatch.active && watchIsLayoutSwitch) return
         N3ds3dResolution.frameFactor(g[0], g[1], n3dsProportion.toFloatOrNull())?.let { n3dsFactor = it }
         val factor = n3dsFactor
-        val main = if (flat != null) N3ds3dResolution.currentScale(flat.width, g[0], factor) else N3ds3dResolution.regionScale(ndsRegions)
+        val main = when {
+            host.mainShowsNoPicture() -> null
+            flat != null -> N3ds3dResolution.currentScale(flat.width, g[0], factor)
+            else -> N3ds3dResolution.regionScale(ndsRegions)
+        }
         val second = secondDs?.let(N3ds3dResolution::regionScale)
             ?: host.secondWholeFrame(g)?.let { N3ds3dResolution.currentScale(it.width, g[0], factor) }
         report3d(w, h, screen, halfFolded, listOfNotNull(main, second).maxOrNull(), second ?: 1) {
@@ -651,7 +659,8 @@ internal class FrontendRenderer(
         val area = Nds3dArea(w, h, screen, retroView?.display?.displayId, isLandscape(), halfFolded, dualMode)
         val sizeChange = area.isSizeChangeFrom(nds3dArea)
         nds3dArea = area
-        host.onNds3dLayout(current, maxOf(nds3dMainMax, second), sizeChange)
+        // Under the panel the main display shows no screen: only the second display's reach counts.
+        host.onNds3dLayout(current, if (host.mainShowsNoPicture()) second else maxOf(nds3dMainMax, second), sizeChange)
     }
 
     /** The 3DS game launched with internal resolution [factor]: what a frame of a size no layout explains is taken to carry. */
