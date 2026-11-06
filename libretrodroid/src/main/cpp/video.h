@@ -155,7 +155,17 @@ private:
     static ShaderChainEntry createShaderChainEntry(const ShaderManager::Pass& pass);
 
     // layout's region quads on framebuffer 0 at layout's screen size; preset (may be null) draws the shaded ones.
-    void renderRegions(VideoLayout& layout, PresetChainRenderer* preset);
+    // A screen cut from the frame, copied into its own texture so a preset sees it as a whole frame of its own.
+    struct RegionCrop { GLuint framebuffer = 0; GLuint texture = 0; unsigned width = 0; unsigned height = 0; };
+    void renderRegions(VideoLayout& layout, PresetChainRenderer* preset, std::vector<RegionCrop>& crops);
+    void renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layout, PresetChainRenderer* preset,
+                     std::vector<RegionCrop>& crops);
+    // While composing: a quad of the whole composed frame cut into its screens, each shaded as its part says.
+    std::vector<RegionQuad> splitByComposition(const RegionQuad& whole) const;
+    GLuint cropRegion(RegionCrop& crop, const std::array<float, 12>& coordinates, unsigned width, unsigned height);
+    void releaseCrops();
+    std::vector<RegionCrop> mainCrops;
+    std::vector<RegionCrop> secondaryCrops;
     void drawBuiltInChain(const std::array<float, 12>& vertices, const std::array<float, 12>& coordinates,
                           unsigned screenWidth, unsigned screenHeight);
     void drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned screenHeight);

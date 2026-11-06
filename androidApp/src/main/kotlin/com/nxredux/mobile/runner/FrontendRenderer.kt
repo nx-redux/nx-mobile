@@ -218,7 +218,7 @@ internal class FrontendRenderer(
             ScreenRegion(
                 ScreenRect(src.left, src.top, src.right, src.bottom),
                 ScreenRect(p.dst.x / w, p.dst.y / h, (p.dst.x + p.dst.width) / w, (p.dst.y + p.dst.height) / h),
-                shaded = false, touch = p.screen == NdsScreen.BOTTOM,
+                shaded = NdsLayout.takesShader(p.screen), touch = p.screen == NdsScreen.BOTTOM,
             )
         })
     }

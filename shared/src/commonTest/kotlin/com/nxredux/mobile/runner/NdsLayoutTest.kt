@@ -198,10 +198,10 @@ class NdsLayoutTest {
         assertEquals(listOf(true, false), r.map { it.touch })
     }
 
-    @Test fun large_with_equal_scales_shades_both() {
+    @Test fun large_with_equal_scales_shades_only_the_top() {
         val r = layout(256f, 384f, LARGE, false)
         assertScales(1f, 1f, actual = r)
-        assertEquals(listOf(true, true), r.map { it.shaded })
+        assertEquals(listOf(true, false), r.map { it.shaded })
     }
 
     @Test fun the_pair_is_centred_in_a_space_that_does_not_start_at_the_origin() {
@@ -277,7 +277,8 @@ class NdsLayoutTest {
                     near(4f / 3f, reg.dst.width / reg.dst.height, "$what aspect")
                     assertEquals(NdsLayout.src(reg.screen), reg.src, what)
                     assertEquals(reg.screen == NdsScreen.BOTTOM && !reg.inset, reg.touch, what)
-                    if (reg.inset) assertFalse(reg.shaded, what)
+                    // Only the top screen takes the shader: the touch screen stays flat where a finger lands.
+                    assertEquals(reg.screen == NdsScreen.TOP && !reg.inset, reg.shaded, what)
                 }
                 assertEquals(r.size, r.map { it.screen }.toSet().size, "$what: a screen twice")
                 val full = r.filter { !it.inset }
@@ -286,10 +287,10 @@ class NdsLayoutTest {
                     assertEquals(r.last(), inset, "$what: the inset is drawn last")
                     assertInside(inset.dst, full.single().dst, what)
                 }
-                // Shaded regions share one size and sit at whole pixels, so one preset chain serves them.
-                assertTrue(r.filter { it.shaded }.map { it.dst.width to it.dst.height }.distinct().size <= 1, what)
-                for (reg in r.filter { it.shaded }) for (v in listOf(reg.dst.x, reg.dst.y, reg.dst.width, reg.dst.height))
-                    assertEquals(kotlin.math.floor(v), v, "$what whole px")
+                // One shaded region at most; the big screen sits at whole pixels (Large's other screen may fill a fraction).
+                assertTrue(r.count { it.shaded } <= 1, what)
+                r.firstOrNull()?.let { reg -> for (v in listOf(reg.dst.x, reg.dst.y, reg.dst.width, reg.dst.height))
+                    assertEquals(kotlin.math.floor(v), v, "$what whole px") }
                 if (choice != LARGE) for (reg in full) near(kotlin.math.floor(reg.dst.width / 256f), reg.dst.width / 256f, "$what whole scale")
             }
     }

@@ -221,6 +221,15 @@ public:
         // Only a GL core (ES3 framebuffer renderer) can leave a vertex array object bound; a bound VAO would reject
         // the client-side attribute arrays (and the draw would clobber the core's VAO).
         glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
+        // A sampler object bound on a unit overrides the textures' own filtering: Azahar leaves one on unit 0 between
+        // frames (paused), and our textures (no mipmaps) then sample black.
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &activeTexture);
+        for (GLuint unit = 0; unit < SAMPLER_UNITS; ++unit) {
+            glActiveTexture(GL_TEXTURE0 + unit);
+            glGetIntegerv(GL_SAMPLER_BINDING, &samplers[unit]);
+            if (samplers[unit] != 0) glBindSampler(unit, 0);
+        }
+        glActiveTexture(static_cast<GLenum>(activeTexture));
 
         glDisable(GL_SCISSOR_TEST);
         glDisable(GL_BLEND);
@@ -238,6 +247,11 @@ public:
         auto savedVertexArray = static_cast<GLuint>(vertexArray);
         auto savedArrayBuffer = static_cast<GLuint>(arrayBuffer);
         glBindVertexArray(savedVertexArray != 0 && glIsVertexArray(savedVertexArray) ? savedVertexArray : 0);
+        for (GLuint unit = 0; unit < SAMPLER_UNITS; ++unit) {
+            auto sampler = static_cast<GLuint>(samplers[unit]);
+            if (sampler != 0 && glIsSampler(sampler)) glBindSampler(unit, sampler);
+        }
+        glActiveTexture(static_cast<GLenum>(activeTexture));
         glColorMask(colorMask[0], colorMask[1], colorMask[2], colorMask[3]);
         glBindBuffer(GL_ARRAY_BUFFER, savedArrayBuffer != 0 && glIsBuffer(savedArrayBuffer) ? savedArrayBuffer : 0);
         if (scissor) glEnable(GL_SCISSOR_TEST);
@@ -256,6 +270,9 @@ private:
     GLint arrayBuffer = 0;
     GLboolean colorMask[4] = { GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE };
     GLint vertexArray = 0;
+    static constexpr GLuint SAMPLER_UNITS = 16;   // the units our passes use (Texture, Orig, LUTs, pass outputs)
+    GLint samplers[SAMPLER_UNITS] = {};
+    GLint activeTexture = GL_TEXTURE0;
 };
 
 void Video::renderFrame(bool force) {
@@ -305,7 +322,14 @@ void Video::drawFrame(bool force) {
     glBindTexture(GL_TEXTURE_2D, 0);
 
     if (!videoLayout.getRegionQuads().empty()) {
-        renderRegions(videoLayout, presetRenderer.get());
+        renderRegions(videoLayout, presetRenderer.get(), mainCrops);
+        frameCount++;
+        return;
+    }
+
+    if (presetRenderer && composing()) {
+        RegionQuad whole{ videoLayout.getForegroundVertices(), videoLayout.getTextureCoordinates(), true, 1.0F, 1.0F, 1.0F };
+        renderQuads(splitByComposition(whole), videoLayout, presetRenderer.get(), mainCrops);
         frameCount++;
         return;
     }
@@ -326,25 +350,102 @@ void Video::drawFrame(bool force) {
     frameCount++;
 }
 
-void Video::renderRegions(VideoLayout& layout, PresetChainRenderer* preset) {
+void Video::renderRegions(VideoLayout& layout, PresetChainRenderer* preset, std::vector<RegionCrop>& crops) {
+    std::vector<RegionQuad> quads;
+    for (const auto& quad : layout.getRegionQuads()) {
+        if (quad.shaded && preset && composing() && quad.srcWidth > 0.999F && quad.srcHeight > 0.999F) {
+            for (auto& part : splitByComposition(quad)) quads.push_back(part);
+        } else {
+            quads.push_back(quad);
+        }
+    }
+    renderQuads(quads, layout, preset, crops);
+}
+
+std::vector<RegionQuad> Video::splitByComposition(const RegionQuad& whole) const {
+    // The whole composed frame drawn as one quad, cut into its screens: each part's place in the frame is found on the
+    // quad through its texture coordinates, so a rotated picture is cut the same way. The composed texture keeps the
+    // core frame's row order: with a bottom-left origin its row 0 is the picture's bottom row.
+    float u0 = whole.coordinates[0], u1 = u0, v0 = whole.coordinates[1], v1 = v0;
+    for (size_t i = 0; i < whole.coordinates.size(); i += 2) {
+        u0 = std::min(u0, whole.coordinates[i]); u1 = std::max(u1, whole.coordinates[i]);
+        v0 = std::min(v0, whole.coordinates[i + 1]); v1 = std::max(v1, whole.coordinates[i + 1]);
+    }
+    if (u1 <= u0 || v1 <= v0) return { whole };
+    // Corners of the frame on screen: (0,0), (1,0) and (0,1) of the frame give the frame -> vertex map.
+    std::array<float, 2> p00{}, p10{}, p01{};
+    bool f00 = false, f10 = false, f01 = false;
+    for (size_t i = 0; i < whole.coordinates.size(); i += 2) {
+        const bool left = whole.coordinates[i] == u0, top = whole.coordinates[i + 1] == v0;
+        const bool right = whole.coordinates[i] == u1, bottom = whole.coordinates[i + 1] == v1;
+        const std::array<float, 2> at = { whole.vertices[i], whole.vertices[i + 1] };
+        if (left && top) { p00 = at; f00 = true; }
+        if (right && top) { p10 = at; f10 = true; }
+        if (left && bottom) { p01 = at; f01 = true; }
+    }
+    if (!f00 || !f10 || !f01) return { whole };
+    const bool bottomLeft = videoLayout.isBottomLeftOrigin();
+    std::vector<RegionQuad> parts;
+    for (const auto& part : compositionParts) {
+        const float top = bottomLeft ? 1.0F - part.dstBottom : part.dstTop;
+        const float bottom = bottomLeft ? 1.0F - part.dstTop : part.dstBottom;
+        RegionQuad q = whole;
+        for (size_t i = 0; i < whole.coordinates.size(); i += 2) {
+            const float fx = (whole.coordinates[i] - u0) / (u1 - u0);
+            const float fy = (whole.coordinates[i + 1] - v0) / (v1 - v0);
+            const float x = part.dstLeft + fx * (part.dstRight - part.dstLeft);
+            const float y = top + fy * (bottom - top);
+            q.vertices[i] = p00[0] + x * (p10[0] - p00[0]) + y * (p01[0] - p00[0]);
+            q.vertices[i + 1] = p00[1] + x * (p10[1] - p00[1]) + y * (p01[1] - p00[1]);
+            q.coordinates[i] = u0 + x * (u1 - u0);
+            q.coordinates[i + 1] = v0 + y * (v1 - v0);
+        }
+        q.shaded = part.shaded;
+        q.srcWidth = whole.srcWidth * (part.dstRight - part.dstLeft);
+        q.srcHeight = whole.srcHeight * (part.dstBottom - part.dstTop);
+        parts.push_back(q);
+    }
+    return parts;
+}
+
+void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layout, PresetChainRenderer* preset,
+                        std::vector<RegionCrop>& crops) {
     auto screenW = (unsigned) layout.getScreenWidth();
     auto screenH = (unsigned) layout.getScreenHeight();
     auto texW = (unsigned) getTextureWidth();
     auto texH = (unsigned) getTextureHeight();
-    for (const auto& quad : layout.getRegionQuads()) {
+    if (crops.size() < quads.size()) crops.resize(quads.size());
+    for (size_t index = 0; index < quads.size(); ++index) {
+        const auto& quad = quads[index];
         if (!quad.shaded) {
             drawPlain(quad, screenW, screenH);
         } else if (preset) {
-            // One chain serves every shaded region in turn: it keeps no frame history, and it resizes its FBOs only
-            // when the region's size changes (the frontend gives shaded regions one size). Only pass 0 reads the
-            // region's texture coordinates: later passes that sample Original (or the source) use whole-texture
-            // coordinates, so they see the whole frame (both DS screens), not just this region.
+            // One chain serves every shaded region in turn: it keeps no frame history. A region that is part of the
+            // frame (one DS / 3DS screen) is copied into its own texture first: presets place their effect from
+            // texture coordinate 0 (crt-geom's curvature, a mask's edges) and later passes sample Original whole, so
+            // each screen gets the effect as if it were the frame.
             auto frameW = (unsigned) std::lround(quad.srcWidth * (float) texW);
             auto frameH = (unsigned) std::lround(quad.srcHeight * (float) texH);
-            preset->render(
-                frameTexture(), (unsigned) getTextureStorageWidth(), (unsigned) getTextureStorageHeight(),
-                frameW, frameH, frameCoordinates(quad.coordinates), quad.vertices, layout.getFramebufferVertices(),
-                (int) screenW, (int) screenH, linearTexture, frameCount);
+            auto coordinates = frameCoordinates(quad.coordinates);
+            if (frameW > 0 && frameH > 0 && (quad.srcWidth < 0.999F || quad.srcHeight < 0.999F)) {
+                GLuint cropped = cropRegion(crops[index], coordinates, frameW, frameH);
+                float u0 = coordinates[0], u1 = coordinates[0], v0 = coordinates[1], v1 = coordinates[1];
+                for (size_t i = 0; i < coordinates.size(); i += 2) {
+                    u0 = std::min(u0, coordinates[i]); u1 = std::max(u1, coordinates[i]);
+                    v0 = std::min(v0, coordinates[i + 1]); v1 = std::max(v1, coordinates[i + 1]);
+                }
+                for (size_t i = 0; i < coordinates.size(); i += 2) {
+                    coordinates[i] = u1 > u0 ? (coordinates[i] - u0) / (u1 - u0) : 0.0F;
+                    coordinates[i + 1] = v1 > v0 ? (coordinates[i + 1] - v0) / (v1 - v0) : 0.0F;
+                }
+                preset->render(cropped, frameW, frameH, frameW, frameH, coordinates, quad.vertices,
+                               layout.getFramebufferVertices(), (int) screenW, (int) screenH, linearTexture, frameCount);
+            } else {
+                preset->render(
+                    frameTexture(), (unsigned) getTextureStorageWidth(), (unsigned) getTextureStorageHeight(),
+                    frameW, frameH, coordinates, quad.vertices, layout.getFramebufferVertices(),
+                    (int) screenW, (int) screenH, linearTexture, frameCount);
+            }
         } else {
             // Built-in shaders: single-pass ones (the app only uses SHADER_DEFAULT) draw each region exactly; the
             // multi-pass upscalers are not region-aware.
@@ -419,6 +520,69 @@ void Video::drawBuiltInChain(const std::array<float, 12>& vertices, const std::a
         glBindTexture(GL_TEXTURE_2D, 0);
 
         glUseProgram(0);
+    }
+}
+
+GLuint Video::cropRegion(RegionCrop& crop, const std::array<float, 12>& coordinates, unsigned width, unsigned height) {
+    if (crop.width != width || crop.height != height || crop.texture == 0) {
+        if (crop.framebuffer) glDeleteFramebuffers(1, &crop.framebuffer);
+        if (crop.texture) glDeleteTextures(1, &crop.texture);
+        glGenTextures(1, &crop.texture);
+        glBindTexture(GL_TEXTURE_2D, crop.texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei) width, (GLsizei) height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glGenFramebuffers(1, &crop.framebuffer);
+        glBindFramebuffer(GL_FRAMEBUFFER, crop.framebuffer);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, crop.texture, 0);
+        crop.width = width;
+        crop.height = height;
+    }
+    if (!plainShader) {
+        auto chain = ShaderManager::getShader({ ShaderManager::Type::SHADER_DEFAULT, { { "LINEAR", "0" } } });
+        plainShader = createShaderChainEntry(chain.passes.front());
+    }
+    const auto& s = *plainShader;
+    float u0 = coordinates[0], u1 = coordinates[0], v0 = coordinates[1], v1 = coordinates[1];
+    for (size_t i = 0; i < coordinates.size(); i += 2) {
+        u0 = std::min(u0, coordinates[i]); u1 = std::max(u1, coordinates[i]);
+        v0 = std::min(v0, coordinates[i + 1]); v1 = std::max(v1, coordinates[i + 1]);
+    }
+    // Texel row order kept: the crop's row 0 is the region's first row in the source texture.
+    const std::array<float, 12> vertices = { -1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1 };
+    const std::array<float, 12> source = { u0, v0, u1, v0, u0, v1, u0, v1, u1, v0, u1, v1 };
+    glBindFramebuffer(GL_FRAMEBUFFER, crop.framebuffer);
+    glViewport(0, 0, (GLsizei) width, (GLsizei) height);
+    glUseProgram(s.gProgram);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, frameTexture());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glUniform1i(s.gTextureHandle, 0);
+    glUniform2f(s.gTextureSizeHandle, (float) getTextureStorageWidth(), (float) getTextureStorageHeight());
+    glUniform1f(s.gScreenDensityHandle, 1.0F);
+    glVertexAttribPointer(s.gvPositionHandle, 2, GL_FLOAT, GL_FALSE, 0, vertices.data());
+    glEnableVertexAttribArray(s.gvPositionHandle);
+    glVertexAttribPointer(s.gvCoordinateHandle, 2, GL_FLOAT, GL_FALSE, 0, source.data());
+    glEnableVertexAttribArray(s.gvCoordinateHandle);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glDisableVertexAttribArray(s.gvPositionHandle);
+    glDisableVertexAttribArray(s.gvCoordinateHandle);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUseProgram(0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    return crop.texture;
+}
+
+void Video::releaseCrops() {
+    for (auto* crops : { &mainCrops, &secondaryCrops }) {
+        for (auto& c : *crops) {
+            if (c.framebuffer) glDeleteFramebuffers(1, &c.framebuffer);
+            if (c.texture) glDeleteTextures(1, &c.texture);
+        }
+        crops->clear();
     }
 }
 
@@ -533,7 +697,7 @@ void Video::renderSecondary(unsigned width, unsigned height) {
     if (getTextureWidth() <= 0.0F || getTextureHeight() <= 0.0F) return;
 
     updateSecondaryPresetRenderer();
-    renderRegions(secondaryLayout, secondaryPresetRenderer.get());
+    renderRegions(secondaryLayout, secondaryPresetRenderer.get(), secondaryCrops);
 }
 
 void Video::setComposition(int width, int height, std::vector<ScreenRegion> parts) {
@@ -784,6 +948,7 @@ Video::~Video() {
         immersiveMode.releaseGlObjects();
         if (renderer) renderer->releaseGlObjects();
         releaseComposition();
+        releaseCrops();
     } else {
         if (presetRenderer) presetRenderer->abandonGlObjects();
         if (secondaryPresetRenderer) secondaryPresetRenderer->abandonGlObjects();

@@ -136,4 +136,13 @@ class DualScreenTest {
         assertNull(DualScreen.penOn(main = top, second = emptyList()))                     // top screen alone
         assertNull(DualScreen.penOn(emptyList(), emptyList()))                             // not split
     }
+
+    @Test fun onlyTheTopScreenIsShaded() {
+        val s = com.nxredux.mobile.options.NdsSettings.parse(emptyMap())
+        assertEquals(listOf(true, false), DualScreen.ndsPanelUp(1920f, 1080f, s).sortedBy { it.screen }.map { it.shaded })
+        for (which in NdsScreen.entries) {
+            assertEquals(which == NdsScreen.TOP, DualScreen.ndsScreen(1280f, 960f, which).single().shaded)
+            assertEquals(which == NdsScreen.TOP, DualScreen.n3dsScreen(1280f, 960f, which).single().shaded)
+        }
+    }
 }

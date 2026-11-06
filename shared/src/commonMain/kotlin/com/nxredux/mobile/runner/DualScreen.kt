@@ -120,7 +120,7 @@ object DualScreen {
         val x = NdsLayout.wholePx((areaW - 2f * size.width) / 2f)
         val y = NdsLayout.wholePx((areaH - size.height) / 2f)
         return listOf(settings.big, settings.big.other).mapIndexed { i, screen ->
-            NdsRegion(screen, NdsLayout.src(screen), PxRect(x + i * size.width, y, size.width, size.height), shaded = true, touch = screen == NdsScreen.BOTTOM)
+            NdsRegion(screen, NdsLayout.src(screen), PxRect(x + i * size.width, y, size.width, size.height), shaded = NdsLayout.takesShader(screen), touch = screen == NdsScreen.BOTTOM)
         }
     }
 
@@ -186,7 +186,7 @@ object DualScreen {
         val size = NdsLayout.ScreenSize(min(w, h * aspect), aspect)
         if (size.width <= 0f || size.height <= 0f) return emptyList()
         val dst = PxRect(NdsLayout.wholePx((w - size.width) / 2f), NdsLayout.wholePx((h - size.height) / 2f), size.width, size.height)
-        return listOf(NdsRegion(screen, src, dst, shaded = true, touch = screen == NdsScreen.BOTTOM))
+        return listOf(NdsRegion(screen, src, dst, shaded = NdsLayout.takesShader(screen), touch = screen == NdsScreen.BOTTOM))
     }
 }
 
