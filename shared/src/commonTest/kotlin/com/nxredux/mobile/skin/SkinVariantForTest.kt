@@ -34,7 +34,8 @@ class SkinVariantForTest {
 
     @Test
     fun n3dsGetsItsOwnLayout() {
-        assertEquals(SkinVariant.N3DS, SkinChoice.variantFor("3DS", ds = false))
+        assertEquals(SkinVariant.N3DS_REGULAR, SkinChoice.variantFor("3DS", ds = false))   // the regular 3DS unless New 3DS Controls
+        assertEquals(SkinVariant.N3DS, SkinChoice.variantFor("3DS", ds = false, n3dsNew = true))
     }
 
     @Test

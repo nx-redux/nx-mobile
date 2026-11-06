@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  */
 class NxCarbonPackTest {
     /** The 3DS's twins of the DS layouts (stacked, large and its wide, flex and its wide, the fold board, both landscapes), the fold board and the tall landscape with both sticks shown. */
-    private val N3DS_LAYOUTS = 8
+    private val N3DS_LAYOUTS = 16   // the New 3DS twins and the regular 3DS twins, 8 each
     private val dir = File("../androidApp/src/main/assets/skins/nx-carbon")
     private val pack = assertNotNull(SkinPackManifest.parse(File(dir, "skin.json").readText()))
 
@@ -601,6 +601,44 @@ class NxCarbonPackTest {
                 val r = p.glasses.single { it.screen == GlassScreen.PANEL }.rect
                 for (x in p.controls) assertTrue(apart(box(x), floatArrayOf(r.x, r.y, r.x + r.width, r.y + r.height)), "$name ${x.spec.id} on the panel")
             }
+        }
+    }
+
+    @Test
+    fun regular3dsIsThe3dsWithoutTheNewControls() {
+        // New 3DS Controls off (user: the default): the 3DS layouts without ZL / ZR and the C-stick nub, L / R the DS's pills
+        for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
+            val tablet = name.startsWith("tablet")
+            fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, true, null,
+                d.third, foldable = name.startsWith("inner"), variant = v), "$v $name")
+            val n = at(SkinVariant.N3DS); val p = at(SkinVariant.N3DS_REGULAR)
+            dump("3dsr_$name", d.first, d.second, p)
+            assertEquals(SkinVariant.N3DS_REGULAR, p.spec.variant, name)
+            assertEquals(n.spec.family, p.spec.family, name)
+            assertEquals(n.glasses.map { it.screen }, p.glasses.map { it.screen }, name)
+            val ids = p.controls.map { it.spec.id }.filterNot { it.startsWith("TOUCH_") }.toSet()
+            assertEquals(n.controls.map { it.spec.id }.filterNot { it.startsWith("TOUCH_") }.toSet() - setOf("L2", "R2", "CSTICK"), ids, name)
+            assertEquals(1, p.pieces.count { it.knob }, "$name the Circle Pad's knob only")
+            val cs = p.controls.filterNot { it.spec.id.startsWith("TOUCH_") }
+            fun box(pc: PlacedControl): FloatArray {
+                val r = when (pc.spec.shape) { ControlShape.STICK -> pc.spec.r * 1.25f; ControlShape.RECT -> 0f; ControlShape.DPAD -> pc.spec.r; else -> pc.spec.r }
+                val hw = if (r > 0f) r else pc.spec.hw; val hh = if (r > 0f) r else pc.spec.hh
+                return floatArrayOf(pc.x - hw, pc.y - hh, pc.x + hw, pc.y + hh)
+            }
+            fun apart(a: FloatArray, b: FloatArray) = a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1]
+            val face = setOf("A", "B", "X", "Y")
+            for (useStick in listOf(true, false)) {
+                val sc = p.forStick(useStick).controls.filterNot { it.spec.id.startsWith("TOUCH_") }
+                for (i in sc.indices) for (j in i + 1 until sc.size) {
+                    val a = sc[i]; val b = sc[j]
+                    if (a.spec.id in face && b.spec.id in face) continue
+                    if (a.spec.shape == ControlShape.DPAD || b.spec.shape == ControlShape.DPAD) continue   // the d-pad's corners: the 3DS test's own rule
+                    val round = a.spec.shape != ControlShape.RECT && b.spec.shape != ControlShape.RECT
+                    fun reach(pc: PlacedControl) = if (pc.spec.shape == ControlShape.STICK) pc.spec.r * 1.25f else pc.spec.r
+                    assertTrue(if (round) kotlin.math.hypot(a.x - b.x, a.y - b.y) >= reach(a) + reach(b) - 1f else apart(box(a), box(b)), "$name ${a.spec.id} ${b.spec.id}")
+                }
+            }
+            for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
         }
     }
 

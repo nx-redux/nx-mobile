@@ -67,6 +67,8 @@ enum class SkinVariant {
      * with the d-pad), a C-stick nub (`CSTICK`, the right analog) and ZL ZR (L2 R2).
      */
     @SerialName("3ds") N3DS,
+    /** The regular 3DS (New 3DS Controls off): the 3DS layouts without ZL / ZR and the C-stick nub. */
+    @SerialName("3ds_regular") N3DS_REGULAR,
     /**
      * Nintendo 64: the stick and d-pad (or a swap between them), the C buttons (`CU` `CL` `CR` `CD`) in the face diamond's
      * places, B / A in their own tilted well, Z (L2) and L beside or under each other, R, START with MENU beside it.
