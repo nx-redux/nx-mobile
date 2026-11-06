@@ -117,7 +117,8 @@ fun unlockUntil(now: LocalNow, chip: UnlockChip): Long {
 
 private val DAY_NAMES = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
-private fun timeLabel(minOfDay: Int): String {
+/** [minOfDay] as the kid-facing copy writes a time: "9:00 AM". */
+fun timeLabel(minOfDay: Int): String {
     val h24 = minOfDay / 60
     val m = minOfDay % 60
     val h12 = when (val h = h24 % 12) { 0 -> 12; else -> h }

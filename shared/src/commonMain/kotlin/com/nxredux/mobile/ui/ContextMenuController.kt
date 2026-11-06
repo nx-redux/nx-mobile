@@ -259,7 +259,8 @@ internal class ContextMenuController(
         is MainRow.Pin -> ContextMenu(row.entry, ContextMenus.pinRowItems(netplay = homeNetplay(row.entry), fromStart = fromStart))
         is MainRow.Shelf -> ContextMenu(row.entry, ContextMenus.homeGameItems(pinned = false, netplay = homeNetplay(row.entry), fromStart = fromStart))   // never a pinned game
         is MainRow.Continue -> ContextMenu(row.entry, ContextMenus.homeGameItems(pinned = host.pins.any { it.path in row.entry.game.lines }, netplay = homeNetplay(row.entry), fromStart = fromStart))
-        is MainRow.Tool -> ContextMenu(null, ContextMenus.toolItems(pinned = row.row.pinKey in host.toolPins, app = row.row.kind == ToolKind.APP), tool = row.row)
+        is MainRow.Tool -> if (row.row.kind == ToolKind.KIDS_LOCK) null   // Kids Mode's Lock: no pin, no menu
+            else ContextMenu(null, ContextMenus.toolItems(pinned = row.row.pinKey in host.toolPins, app = row.row.kind == ToolKind.APP), tool = row.row)
         is MainRow.PinnedTool -> ContextMenu(null, ContextMenus.toolItems(pinned = true), tool = row.row)
         is MainRow.MoreTools -> null   // Home's "+N": no menu
         else -> null

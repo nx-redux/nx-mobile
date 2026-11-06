@@ -11,7 +11,7 @@ object ToolPins {
     const val FILE = "tool-pins.txt"
     private const val APP = "APP:"
     private fun valid(key: String): Boolean =
-        if (key.startsWith(APP)) key.length > APP.length else ToolKind.entries.any { it != ToolKind.APP && it.name == key }
+        if (key.startsWith(APP)) key.length > APP.length else ToolKind.entries.any { it != ToolKind.APP && it != ToolKind.KIDS_LOCK && it.name == key }
     fun decode(text: String?): List<String> =
         text.orEmpty().lineSequence().map { it.trim() }.filter { it.isNotEmpty() && valid(it) }.distinct().toList()
     fun encode(keys: List<String>): String = keys.distinct().joinToString("\n")

@@ -61,10 +61,13 @@ class KidsController(private val settings: AppSettings, private val platform: Ki
         publish()
     }
 
-    /** A menu input while in Parent mode: its idle time starts again. */
-    fun parentInput(nowMs: Long) {
-        if (parent) parentInputAt = nowMs
+    /** A menu input (a press or a touch) while in Parent mode: its idle time starts again, on the platform's clock as [tick]'s. */
+    fun parentInput() {
+        if (parent) parentInputAt = platform.now().epochMs
     }
+
+    /** The platform's clock now: the tiles screen's clock and the PIN wait read it, as the mode does. */
+    fun now(): LocalNow = platform.now()
 
     /** Parent mode ends after [PARENT_IDLE_MS] without input; the schedule's mode is computed again either way. */
     fun tick(nowMs: Long) {

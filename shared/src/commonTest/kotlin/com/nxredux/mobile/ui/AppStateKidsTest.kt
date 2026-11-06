@@ -7,7 +7,12 @@ import com.nxredux.mobile.kids.KidsFlag
 import com.nxredux.mobile.kids.KidsMode
 import com.nxredux.mobile.kids.KidsPlatform
 import com.nxredux.mobile.kids.LocalNow
+import com.nxredux.mobile.kids.PinPurpose
 import com.nxredux.mobile.kids.PinResult
+import com.nxredux.mobile.kids.UnlockChip
+import com.nxredux.mobile.launcher.AppLauncher
+import com.nxredux.mobile.launcher.InstalledApp
+import androidx.compose.ui.graphics.ImageBitmap
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.EmulatorRunner
@@ -24,6 +29,7 @@ import com.nxredux.mobile.settings.PadButtons
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.settings.VerticalListAlignment
+import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.storage.SaveFormat
 import com.nxredux.mobile.storage.StateFormat
 import kotlinx.coroutines.CoroutineScope
@@ -137,8 +143,18 @@ class AppStateKidsTest {
         texts = mapOf("Home/Collections/Mix.txt" to "/Roms/Game Boy (GB)/Tetris.gb\n"),
     )
 
-    private fun TestScope.state(settings: AppSettings, kids: KidsController?) = AppState(
-        AppDeps(settings, source, Runner(), Picker(), compute = UnconfinedTestDispatcher(testScheduler)),
+    private class Launcher(val apps: List<InstalledApp>) : AppLauncher {
+        val launched = mutableListOf<String>()
+        override suspend fun installedApps() = apps
+        override fun label(id: String) = apps.firstOrNull { it.id == id }?.label
+        override suspend fun icon(id: String): ImageBitmap? = null
+        override fun launch(id: String): Boolean { launched += id; return true }
+        override fun isHome() = false
+        override fun setHome(on: Boolean) {}
+    }
+
+    private fun TestScope.state(settings: AppSettings, kids: KidsController?, launcher: AppLauncher? = null) = AppState(
+        AppDeps(settings, source, Runner(), Picker(), compute = UnconfinedTestDispatcher(testScheduler), launcher = launcher),
         CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
         kids,
     )
@@ -223,7 +239,8 @@ class AppStateKidsTest {
         val kids = KidsController(settings, platform)
         val t0 = platform.epochMs
         kids.enterParent(t0)
-        kids.parentInput(t0 + 4 * 60_000L)
+        platform.extraMs = 4 * 60_000L
+        kids.parentInput()                                              // the platform's clock, as tick's
         kids.tick(t0 + 8 * 60_000L)
         assertEquals(KidsMode.Parent, kids.mode.value)
         kids.tick(t0 + 9 * 60_000L)
@@ -314,6 +331,172 @@ class AppStateKidsTest {
     @Test fun lockedSecondScreenShowsTheBackdrop() {
         assertEquals(TopContent.Backdrop, DualMenu.top(Screen.KidsHome, null, emptyList(), tool = true))
         assertEquals(BottomContent.Normal, DualMenu.bottom(Screen.KidsHome, active = true, tool = true))
+    }
+
+    // --- The kid-facing screens: the tiles, the PIN pad and the unlock sheet ---
+
+    /** Locked on a Monday morning, on the tiles screen. */
+    private fun TestScope.lockedState(settings: MemorySettings = MemorySettings(), platform: Platform = Platform(MON, 10 * 60), launcher: AppLauncher? = null): Triple<AppState, KidsController, Platform> {
+        val kids = KidsController(settings, platform)
+        val st = state(settings, kids, launcher)
+        st.load()
+        assertSame(Screen.KidsHome, st.screen.value)
+        return Triple(st, kids, platform)
+    }
+
+    private fun AppState.typePin(pin: String) { pin.forEach { kidsPinDigit(it.digitToInt()) }; kidsPinEnter() }
+
+    @Test fun lockButtonOpensPin() = runTest {
+        val (st) = lockedState()
+        st.kidsLockPressed()
+        assertEquals(Screen.KidsPin(PinPurpose.UNLOCK), st.screen.value)
+        st.kidsPinDigit(1); st.kidsPinDigit(2)
+        assertEquals("12", assertIs<Screen.KidsPin>(st.screen.value).typed)
+        st.kidsPinBack()
+        assertEquals("1", assertIs<Screen.KidsPin>(st.screen.value).typed)
+        st.kidsPinBack(); st.kidsPinBack()                             // Back with nothing typed: the tiles again
+        assertSame(Screen.KidsHome, st.screen.value)
+    }
+
+    @Test fun pinTakesFourDigitsAndEnter() = runTest {
+        val (st) = lockedState()
+        st.kidsLockPressed()
+        "12345".forEach { st.kidsPinDigit(it.digitToInt()) }
+        assertEquals("1234", assertIs<Screen.KidsPin>(st.screen.value).typed)   // a fifth digit is ignored
+        st.kidsPinBack(); st.kidsPinEnter()                            // Enter with three digits does nothing
+        assertEquals("123", assertIs<Screen.KidsPin>(st.screen.value).typed)
+    }
+
+    @Test fun rightPinOpensUnlockSheet() = runTest {
+        val (st) = lockedState()
+        st.kidsLockPressed()
+        st.typePin("0000")
+        assertEquals(Screen.KidsPin(PinPurpose.UNLOCK, typed = "", wrong = 1), st.screen.value)   // wrong: cleared and counted
+        st.typePin("1234")
+        assertSame(Screen.KidsUnlock, st.screen.value)
+    }
+
+    @Test fun fifthWrongPinWaitsAndIgnoresDigits() = runTest {
+        val (st, kids, platform) = lockedState()
+        st.kidsLockPressed()
+        repeat(5) { st.typePin("0000") }
+        val s = assertIs<Screen.KidsPin>(st.screen.value)
+        assertEquals(platform.epochMs + 30_000L, s.waitUntil)
+        assertEquals(kids.waitUntil, s.waitUntil)
+        st.kidsPinDigit(1)
+        assertEquals("", assertIs<Screen.KidsPin>(st.screen.value).typed)   // no typing during the wait
+        st.back(); st.kidsLockPressed()                                // out and in again: the wait stays
+        assertEquals(kids.waitUntil, assertIs<Screen.KidsPin>(st.screen.value).waitUntil)
+        platform.extraMs = 30_000L
+        st.typePin("1234")
+        assertSame(Screen.KidsUnlock, st.screen.value)
+    }
+
+    @Test fun chipUnlocksAndReturnsToMenu() = runTest {
+        val settings = MemorySettings()
+        val (st, kids, platform) = lockedState(settings)
+        st.kidsLockPressed(); st.typePin("1234")
+        st.kidsUnlockChip(UnlockChip.HOUR1)
+        assertEquals(KidsMode.Open(platform.epochMs + 60 * 60_000L), kids.mode.value)
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS), tabsOf(st))   // no Tools
+    }
+
+    @Test fun unlockSheetActionsNeedTheSheet() = runTest {
+        val (st, kids) = lockedState()
+        st.kidsUnlockChip(UnlockChip.TODAY)                            // from the tiles, without the PIN: nothing
+        st.kidsOpenFullMenu()
+        st.kidsOpenSettings()
+        assertIs<KidsMode.Locked>(kids.mode.value)
+        assertSame(Screen.KidsHome, st.screen.value)
+    }
+
+    @Test fun fullMenuEntersParent() = runTest {
+        val (st, kids) = lockedState()
+        st.kidsLockPressed(); st.typePin("1234")
+        st.kidsOpenFullMenu()
+        assertEquals(KidsMode.Parent, kids.mode.value)
+        assertTrue(MenuCategory.TOOLS in tabsOf(st))
+    }
+
+    @Test fun lockRowFirstInToolsWhileParent() = runTest {
+        val (st, kids) = lockedState()
+        st.kidsLockPressed(); st.typePin("1234")
+        st.kidsOpenFullMenu()
+        st.selectTab(tabsOf(st).indexOf(MenuCategory.TOOLS))
+        val rows = assertIs<Screen.Systems>(st.screen.value).rows
+        val lock = assertIs<MainRow.Tool>(rows.first()).row
+        assertEquals(ToolKind.KIDS_LOCK, lock.kind)
+        assertEquals("Lock Kids Mode", lock.label)
+        assertEquals(1, rows.count { (it as? MainRow.Tool)?.row?.kind == ToolKind.KIDS_LOCK })
+        st.select(0); st.openSelected()
+        assertIs<KidsMode.Locked>(kids.mode.value)
+        assertSame(Screen.KidsHome, st.screen.value)
+        assertFalse(st.toolOnTop.value)
+    }
+
+    @Test fun noLockRowWhenKidsModeIsOff() = runTest {
+        val st = state(MemorySettings().apply { kidsEnabled = false }, null)
+        st.load()
+        st.selectTab(tabsOf(st).indexOf(MenuCategory.TOOLS))
+        val rows = assertIs<Screen.Systems>(st.screen.value).rows
+        assertTrue(rows.none { (it as? MainRow.Tool)?.row?.kind == ToolKind.KIDS_LOCK })
+    }
+
+    @Test fun kidsSettingsOpensSettingsInParent() = runTest {
+        val (st, kids) = lockedState()
+        st.kidsLockPressed(); st.typePin("1234")
+        st.kidsOpenSettings()
+        assertEquals(KidsMode.Parent, kids.mode.value)
+        assertIs<Screen.SettingsMenu>(st.screen.value)
+    }
+
+    @Test fun kidsOpenAppLaunchesOnlyAllowed() = runTest {
+        val launcher = Launcher(listOf(InstalledApp("a", "Alpha"), InstalledApp("b", "Beta"), InstalledApp("c", "Gamma")))
+        val settings = MemorySettings().apply { kidsAllowedApps = setOf("c", "a", "gone") }
+        val (st) = lockedState(settings, launcher = launcher)
+        assertEquals(listOf(KidsTile("a", "Alpha"), KidsTile("c", "Gamma")), st.kidsTiles.value)   // installed and allowed, by label
+        assertEquals(3, st.selection.value.count)                      // the tiles and the lock
+        st.kidsOpenApp("b")
+        assertEquals(emptyList(), launcher.launched)
+        st.kidsOpenApp("a")
+        assertEquals(listOf("a"), launcher.launched)
+    }
+
+    @Test fun backOnKidsScreensNeverLeaves() = runTest {
+        val (st) = lockedState()
+        assertTrue(st.back())                                          // consumed: the activity never finishes
+        assertSame(Screen.KidsHome, st.screen.value)
+        st.kidsLockPressed()
+        assertTrue(st.back())
+        assertSame(Screen.KidsHome, st.screen.value)
+        st.kidsLockPressed(); st.typePin("1234")
+        assertTrue(st.back())
+        assertSame(Screen.KidsHome, st.screen.value)
+    }
+
+    @Test fun padDrivesThePinPad() = runTest {
+        val (st) = lockedState()
+        st.onButton(NxButton.MENU)                                     // the lock's button
+        assertIs<Screen.KidsPin>(st.screen.value)
+        st.onButton(NxButton.A)                                        // the first key: 1
+        st.onButton(NxButton.RIGHT); st.onButton(NxButton.A)           // 2
+        st.onButton(NxButton.RIGHT); st.onButton(NxButton.A)           // 3
+        st.onButton(NxButton.DOWN); st.onButton(NxButton.LEFT); st.onButton(NxButton.LEFT); st.onButton(NxButton.A)   // 4
+        assertEquals("1234", assertIs<Screen.KidsPin>(st.screen.value).typed)
+        st.onButton(NxButton.START)                                    // Enter
+        assertSame(Screen.KidsUnlock, st.screen.value)
+        st.onButton(NxButton.B)
+        assertSame(Screen.KidsHome, st.screen.value)
+    }
+
+    @Test fun touchRestartsParentIdle() = runTest {
+        val (st, kids, platform) = lockedState()
+        st.kidsLockPressed(); st.typePin("1234"); st.kidsOpenFullMenu()
+        platform.extraMs = 4 * 60_000L
+        st.onTouch()
+        platform.extraMs = 8 * 60_000L
+        kids.tick(platform.epochMs)
+        assertEquals(KidsMode.Parent, kids.mode.value)
     }
 
     private companion object {

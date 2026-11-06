@@ -77,6 +77,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -207,7 +209,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
         onDispose { if (state.launchNameProvider === provider) state.launchNameProvider = null }
     }
     // Bars and the cutout above and below only (the side cutout is in each page's inset: [nxPageInset]), never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
-    Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).windowInsetsPadding(nxScreenInsets())) {
+    Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).onAnyTouch(state::onTouch).windowInsetsPadding(nxScreenInsets())) {
         HandheldShell(
             pad = { m -> NxTheme { PadVibrationProvider(padVibration) { PadThemeProvider(padTheme, padButtons) { VirtualPad(onPadEvent, m, layout = menuPortraitLayout) } } } },
             controllerConnected = controllerConnected,
@@ -560,8 +562,22 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.FolderSummary -> WithIndex(selection) { val (t, _) = remember(s) { state.setupChrome() }; FolderSummaryScreen(s, t, it, state::select, state::setupStepRow, state::onButton, note = remember(s) { state.setupNote() }) }
             is Screen.AndroidGamesStep -> WithIndex(selection) { val (t, b) = remember(s) { state.setupChrome() }; AndroidGamesStepScreen(s.ask, t, b, it, state::select, state::setupStepRow, state::onButton) }
             Screen.Loading -> Box(Modifier.fillMaxSize())
-            // Kids Mode's pages: placeholders until their screens are built.
-            Screen.KidsHome, Screen.KidsUnlock, is Screen.KidsPin -> Box(Modifier.fillMaxSize())
+            // Kids Mode's pages: the tiles while Locked, the parent's PIN and the unlock sheet after it.
+            Screen.KidsHome -> WithIndex(selection) {
+                val tiles by state.kidsTiles.collectAsState()
+                val mode by state.kidsModeState.collectAsState()
+                KidsHomeScreen(tiles, it, mode, state::kidsNow, state::kidsOpenApp, state::kidsLockPressed, state::onKidsColumns)
+            }
+            is Screen.KidsPin -> WithIndex(selection) {
+                KidsPinScreen(s, it, state::kidsNow, onKey = { k ->
+                    when (k) {
+                        is PinKey.Digit -> state.kidsPinDigit(k.d)
+                        PinKey.Back -> state.kidsPinBack()
+                        PinKey.Enter -> state.kidsPinEnter()
+                    }
+                })
+            }
+            Screen.KidsUnlock -> WithIndex(selection) { KidsUnlockScreen(it, state::kidsUnlockChip, state::kidsOpenFullMenu, state::kidsOpenSettings) }
             // layoutKey: the tab or list laid out, not the Screen: a republish of the same page (a context menu opening or
             // closing, another tab rebuilt) must not snap a carousel or backdrop mid-glide; its own tiles changing still do.
             is Screen.Systems -> {
@@ -952,3 +968,13 @@ private fun MainMenuBackground(bg: MenuBackground, listArt: GameListArt) {
 @Composable
 private fun SettingsHintBar(content: @Composable () -> Unit) =
     CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart(), content = content)
+
+/** [onTouch] on every finger down anywhere inside, seen before the children and never consumed (Kids Mode's Parent idle). */
+internal fun Modifier.onAnyTouch(onTouch: () -> Unit): Modifier = pointerInput(onTouch) {
+    awaitPointerEventScope {
+        while (true) {
+            val e = awaitPointerEvent(PointerEventPass.Initial)
+            if (e.type == PointerEventType.Press) onTouch()
+        }
+    }
+}
