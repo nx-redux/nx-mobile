@@ -7464,8 +7464,8 @@ class AppState(
     private fun kidsPinLeave(s: Screen.KidsPin) {
         when (s.purpose) {
             PinPurpose.UNLOCK -> showKidsHome()
-            PinPurpose.SETUP_CONFIRM -> kidsAskNewPin(null)
-            PinPurpose.SETUP_NEW, PinPurpose.CHANGE -> { kidsNewPin = null; kidsShowPage(if (kidsPinChange) SettingsKind.KIDS_PIN else SettingsKind.KIDS_ENABLE) }
+            PinPurpose.SETUP_CONFIRM -> if (kidsParentOnly()) kidsAskNewPin(null)
+            PinPurpose.SETUP_NEW, PinPurpose.CHANGE -> if (kidsParentOnly()) { kidsNewPin = null; kidsShowPage(if (kidsPinChange) SettingsKind.KIDS_PIN else SettingsKind.KIDS_ENABLE) }
         }
     }
 
@@ -7581,7 +7581,8 @@ class AppState(
         val s = _screen.value
         when {
             s == Screen.Loading -> Unit
-            mode is KidsMode.Locked -> if (!isKidsScreen(s)) showKidsHome()
+            // A parent's PIN pad (setup's, Change PIN's) goes too, its half-typed PIN with it: only the unlock pad stays.
+            mode is KidsMode.Locked -> if (!isKidsScreen(s) || (s is Screen.KidsPin && s.purpose != PinPurpose.UNLOCK)) { kidsNewPin = null; showKidsHome() }
             // Setup's and Change PIN's PIN pad is a parent's page: it stays while Parent (or Off), and goes with them.
             s is Screen.KidsPin && s.purpose != PinPurpose.UNLOCK -> if (!kidsToolsAllowed) showSystemsNow(MenuCategory.HOME)
             isKidsScreen(s) -> showSystemsNow(MenuCategory.HOME)
@@ -7594,7 +7595,18 @@ class AppState(
     // --- Settings -> Kids Mode and the first switch-on's setup ([KidsSetupStep]) ---
 
     /** The new PIN typed once, until it is confirmed (and, in setup, until setup finishes: a cancelled setup stores none). */
-    private var kidsNewPin: String? = null
+    internal var kidsNewPin: String? = null   // internal: a test drops it to check setup never ends without a PIN
+
+    /**
+     * The Kids Mode page and setup are a parent's: true while Kids Mode is off or in Parent mode. Otherwise the half-typed
+     * PIN goes and the kid's screen shows (the tiles while Locked, else Home), and the caller stops.
+     */
+    private fun kidsParentOnly(): Boolean {
+        if (kidsToolsAllowed) return true
+        kidsNewPin = null
+        if (kidsLocked) showKidsHome() else showSystemsNow(MenuCategory.HOME)
+        return false
+    }
     /** The PIN steps are Change PIN's (stored at once, back to the page), else first setup's. */
     private var kidsPinChange = false
 
@@ -7630,6 +7642,7 @@ class AppState(
 
     /** The Kids Mode page on its row of [kind] (a day's: [day]). */
     private fun kidsShowPage(kind: SettingsKind, day: Int? = null) {
+        if (!kidsParentOnly()) return
         val page = settingsPage(SettingsSection.KIDS)
         _screen.value = page
         val i = page.rows.indexOfFirst { it.kind == kind && (day == null || it.day == day) }.coerceAtLeast(0)
@@ -7638,6 +7651,7 @@ class AppState(
 
     /** Kids Mode switched [on]: the first time (no PIN yet) runs setup; otherwise on at once, or off (its flag deleted). */
     private fun kidsSetEnabled(on: Boolean) {
+        if (!kidsParentOnly()) return
         val k = kids ?: return
         when {
             !on -> k.turnOff()
@@ -7648,6 +7662,7 @@ class AppState(
 
     /** Change PIN: a new PIN twice (only a parent reaches the page, so the old one is not asked). */
     private fun kidsChangePin() {
+        if (!kidsParentOnly()) return
         if (kids == null) return
         kidsPinChange = true
         kidsNewPin = null
@@ -7662,6 +7677,7 @@ class AppState(
 
     /** Enter on a new PIN: the first time asks again; the second must match, else both start over ([KIDS_PIN_MISMATCH]). */
     private fun kidsNewPinEnter(s: Screen.KidsPin) {
+        if (!kidsParentOnly()) return
         if (s.purpose != PinPurpose.SETUP_CONFIRM) {
             kidsNewPin = s.typed
             _screen.value = Screen.KidsPin(PinPurpose.SETUP_CONFIRM)
@@ -7685,6 +7701,7 @@ class AppState(
      * (Alarms is always granted before Android 14), home only while NX Redux is not home; past the last, setup ends.
      */
     private fun kidsSetupGo(step: KidsSetupStep) {
+        if (!kidsParentOnly()) return
         val k = kids ?: return
         val skip = when (step) {
             KidsSetupStep.PIN -> return kidsAskNewPin(null)
@@ -7705,7 +7722,9 @@ class AppState(
 
     /** Setup's end: the PIN stored, Kids Mode on with its flag ([KidsController.turnOn], the parent in Parent mode), the page. */
     private fun kidsSetupFinish() {
+        if (!kidsParentOnly()) return
         val k = kids ?: return
+        if (kidsNewPin == null && !deps.settings.kidsPinSet) return kidsAskNewPin(null)   // never on without a PIN
         kidsNewPin?.let(deps.settings::setKidsPin)
         kidsNewPin = null
         k.turnOn()
@@ -7720,6 +7739,7 @@ class AppState(
 
     /** The allowed-apps picker: setup's APPS step, or Settings' Allowed apps; the installed apps listed off the main thread. */
     private fun kidsOpenApps(setup: Boolean) {
+        if (!kidsParentOnly()) return
         val first = Screen.KidsSetup(KidsSetupStep.APPS, setup = setup, allowed = deps.settings.kidsAllowedApps)
         kidsShowSetup(first, 0)
         val l = deps.launcher ?: return
@@ -7741,6 +7761,7 @@ class AppState(
     /** A on (or a tap on) setup row [index]. */
     fun kidsSetupRow(index: Int) {
         val s = _screen.value as? Screen.KidsSetup ?: return
+        if (!kidsParentOnly()) return
         val k = kids ?: return
         select(index)
         when (val row = kidsSetupRows(s).getOrNull(index) ?: return) {
@@ -7790,6 +7811,7 @@ class AppState(
 
     /** Day [day]'s play time page, from setup's TIMES step ([setup]) or the Kids Mode page. */
     private fun kidsOpenDay(day: Int, setup: Boolean) {
+        if (!kidsParentOnly()) return
         val w = KidsSchedule.decode(deps.settings.kidsSchedule).days[day]
         _screen.value = Screen.KidsDayEdit(day, w, w ?: KidsSchedule.DEFAULT.days[5]!!, setup)
         _selection.value = ListSelection(0, kidsDayRows(_screen.value as Screen.KidsDayEdit).size)
@@ -7797,6 +7819,7 @@ class AppState(
 
     /** The day's window set to [w] (null: locked), stored at once; the selection stays on [row]. */
     private fun kidsDaySet(s: Screen.KidsDayEdit, w: PlayWindow?, row: KidsDayRow) {
+        if (!kidsParentOnly()) return
         val week = KidsSchedule.decode(deps.settings.kidsSchedule)
         deps.settings.kidsSchedule = week.withDay(s.day, w).encode()
         val next = s.copy(window = w, kept = w ?: s.kept)

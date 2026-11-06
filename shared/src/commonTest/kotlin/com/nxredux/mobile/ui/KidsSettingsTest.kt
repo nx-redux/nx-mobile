@@ -368,4 +368,58 @@ class KidsSettingsTest {
         assertFalse(SettingsSection.KIDS in st.settingsSections())
         assertEquals(SettingsSection.KIDS, setup().st.settingsSections().last())
     }
+
+    /** The kid's presses on whatever shows: B, then a PIN typed twice. */
+    private fun AppState.kidTries() {
+        onButton(NxButton.B)
+        typePin("0000"); typePin("0000")
+        onButton(NxButton.B)
+    }
+
+    @Test fun changePinPadGoesWhenParentIdlesIntoLocked() = runTest {
+        val t = setup()
+        val st = t.st
+        st.openSettings(SettingsSection.KIDS)
+        st.pressRow(SettingsKind.KIDS_ENABLE)
+        st.typePin("1234"); st.typePin("1234"); st.next(); st.next()
+        assertEquals(KidsMode.Parent, t.kids.mode.value)
+        st.pressRow(SettingsKind.KIDS_PIN)
+        st.typePin("9999")                                                 // half way: the confirmation is up
+        assertEquals(PinPurpose.SETUP_CONFIRM, assertIs<Screen.KidsPin>(st.screen.value).purpose)
+        t.kids.tick(t.platform.now().epochMs + KidsController.PARENT_IDLE_MS)   // Monday: Parent idles into Locked
+        assertIs<KidsMode.Locked>(t.kids.mode.value)
+        assertEquals(Screen.KidsHome, st.screen.value)
+        st.kidTries()
+        assertEquals(Screen.KidsHome, st.screen.value)                     // never the Kids Mode page
+        assertEquals("1234", t.settings.pin)                               // and the PIN never changed
+        assertNull(st.kidsNewPin)
+    }
+
+    @Test fun setupPinPadGoesWhenKidsModeLocks() = runTest {
+        val t = setup()
+        val st = t.st
+        st.openSettings(SettingsSection.KIDS)
+        st.pressRow(SettingsKind.KIDS_ENABLE)
+        assertEquals(PinPurpose.SETUP_NEW, assertIs<Screen.KidsPin>(st.screen.value).purpose)
+        t.settings.kidsEnabled = true                                      // on from elsewhere, on a locked day
+        t.kids.refresh()
+        assertIs<KidsMode.Locked>(t.kids.mode.value)
+        assertEquals(Screen.KidsHome, st.screen.value)
+        st.kidTries()
+        assertEquals(Screen.KidsHome, st.screen.value)
+        assertNull(t.settings.pin)
+    }
+
+    @Test fun setupNeverEndsWithoutAPin() = runTest {
+        val t = setup(usage = false)
+        val st = t.st
+        st.openSettings(SettingsSection.KIDS)
+        st.pressRow(SettingsKind.KIDS_ENABLE)
+        st.typePin("1234"); st.typePin("1234"); st.next(); st.next()
+        assertEquals(KidsSetupStep.USAGE, st.setupStep())
+        st.kidsNewPin = null                                               // the PIN lost before the end
+        st.skip()                                                          // the last step: setup would end here
+        assertFalse(t.settings.kidsEnabled)
+        assertEquals(PinPurpose.SETUP_NEW, assertIs<Screen.KidsPin>(st.screen.value).purpose)   // the PIN asked again
+    }
 }
