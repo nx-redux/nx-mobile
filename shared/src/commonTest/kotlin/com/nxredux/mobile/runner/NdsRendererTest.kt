@@ -25,6 +25,8 @@ class NdsRendererTest {
     @Test fun the_notice_shows_only_when_opengl_did_not_start() {
         assertTrue(NdsRenderer.showFallbackNotice("opengl", hardwareRendered = false))
         assertFalse(NdsRenderer.showFallbackNotice("opengl", hardwareRendered = true))
+        assertTrue(NdsRenderer.showFallbackNotice("compute", hardwareRendered = false))
+        assertFalse(NdsRenderer.showFallbackNotice("compute", hardwareRendered = true))
         assertFalse(NdsRenderer.showFallbackNotice("software", hardwareRendered = false))
         assertFalse(NdsRenderer.showFallbackNotice(null, hardwareRendered = false))
     }
@@ -34,6 +36,8 @@ class NdsRendererTest {
         assertFalse(NdsRenderer.rendersSoftware(NdsRenderer.OPENGL, fellBack = false))
         assertTrue(NdsRenderer.rendersSoftware(NdsRenderer.OPENGL, fellBack = true))
         assertTrue(NdsRenderer.rendersSoftware(NdsRenderer.SOFTWARE, fellBack = false))
+        assertFalse(NdsRenderer.rendersSoftware(NdsRenderer.COMPUTE, fellBack = false))
+        assertTrue(NdsRenderer.rendersSoftware(NdsRenderer.COMPUTE, fellBack = true))
         assertTrue(NdsRenderer.rendersSoftware(null, fellBack = false))
     }
 }

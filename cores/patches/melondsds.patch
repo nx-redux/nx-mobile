@@ -19,6 +19,19 @@ index 30aefe1..be99ae4 100644
  
  if (APPLE)
      # Apple's OpenGL stops at 4.1, but melonDS's compute renderer needs 4.3
+diff --git a/cmake/ConfigureFeatures.cmake b/cmake/ConfigureFeatures.cmake
+index 0cff7ea..34a92c5 100644
+--- a/cmake/ConfigureFeatures.cmake
++++ b/cmake/ConfigureFeatures.cmake
+@@ -114,7 +114,7 @@ else()
+     set(ENABLE_OPENGL OFF CACHE BOOL "Enable OpenGL renderer" FORCE)
+ endif()
+ 
+-if (ENABLE_COMPUTE_RENDERER AND HAVE_OPENGL AND NOT HAVE_OPENGLES)
++if (ENABLE_COMPUTE_RENDERER AND ((HAVE_OPENGL AND NOT HAVE_OPENGLES) OR HAVE_OPENGLES3))
+     # melonDS always compiles GPU3D_Compute.cpp into its core target when ENABLE_OGLRENDERER is on,
+     # and GLRenderer's constructor refers to ComputeRenderer3D,
+     # so the compute renderer can't be left out of the binary without patching melonDS.
 diff --git a/src/libretro/PlatformOGLPrivate.h b/src/libretro/PlatformOGLPrivate.h
 index 8abec16..e3a2610 100644
 --- a/src/libretro/PlatformOGLPrivate.h
@@ -113,10 +126,22 @@ index b7a6e16..6f97f1e 100644
      fpos.w = 1.0;
      gl_Position = fpos;
 diff --git a/src/libretro/render/opengl.cpp b/src/libretro/render/opengl.cpp
-index d2aec34..7818363 100644
+index d2aec34..a2f1093 100644
 --- a/src/libretro/render/opengl.cpp
 +++ b/src/libretro/render/opengl.cpp
-@@ -180,7 +180,11 @@ MelonDsDs::OpenGLRenderState::OpenGLRenderState(RenderMode mode) : _mode(mode) {
+@@ -51,7 +51,11 @@ constexpr unsigned VERTEXES_PER_SCREEN = 6;
+ 
+ // The OpenGL core-profile versions each of melonDS's OpenGL-based renderers needs, as (major, minor)
+ constexpr std::pair<GLint, GLint> LEGACY_GL_VERSION {3, 2};
++#ifdef HAVE_OPENGLES
++constexpr std::pair<GLint, GLint> COMPUTE_GL_VERSION {3, 2};
++#else
+ constexpr std::pair<GLint, GLint> COMPUTE_GL_VERSION {4, 3};
++#endif
+ 
+ // How many shader storage buffer binding points melonDS's compute renderer uses
+ // (see the "layout (std430, binding = N)" declarations in its GPU3D_Compute_shaders.h)
+@@ -180,7 +184,11 @@ MelonDsDs::OpenGLRenderState::OpenGLRenderState(RenderMode mode) : _mode(mode) {
      // Its compute renderer's shaders are "#version 430 core", so that one needs 4.3.
      // The frontend gets exactly one version request per context,
      // which is why each render mode gets its own OpenGLRenderState.
@@ -128,7 +153,7 @@ index d2aec34..7818363 100644
      _hw_render.version_major = LEGACY_GL_VERSION.first;
      _hw_render.version_minor = LEGACY_GL_VERSION.second;
  #ifdef HAVE_COMPUTE_RENDERER
-@@ -247,6 +251,7 @@ void MelonDsDs::OpenGLRenderState::ContextReset(melonDS::NDS& nds, const CoreCon
+@@ -247,6 +255,7 @@ void MelonDsDs::OpenGLRenderState::ContextReset(melonDS::NDS& nds, const CoreCon
          throw opengl_not_initialized_exception();
      }
  
@@ -136,7 +161,7 @@ index d2aec34..7818363 100644
      // The core doesn't link against OpenGL,
      // so the OpenGL 1.0/1.1 functions that glsym doesn't cover
      // must be resolved before we make our first OpenGL call
-@@ -270,6 +275,7 @@ void MelonDsDs::OpenGLRenderState::ContextReset(melonDS::NDS& nds, const CoreCon
+@@ -270,6 +279,7 @@ void MelonDsDs::OpenGLRenderState::ContextReset(melonDS::NDS& nds, const CoreCon
          retro::error("Frontend couldn't resolve {} OpenGL functions, can't use the OpenGL renderer", missingSymbols);
          throw opengl_not_initialized_exception();
      }
@@ -144,7 +169,7 @@ index d2aec34..7818363 100644
  
      // Now resolve everything else that glsym knows about
      rglgen_resolve_symbols(_hw_render.get_proc_address);
-@@ -726,6 +732,7 @@ void MelonDsDs::OpenGLRenderState::BindState() noexcept {
+@@ -726,6 +736,7 @@ void MelonDsDs::OpenGLRenderState::BindState() noexcept {
      glDisable(GL_STENCIL_TEST);
      glDisable(GL_BLEND);
      glDisable(GL_SCISSOR_TEST);
@@ -152,7 +177,7 @@ index d2aec34..7818363 100644
      glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
      glDepthMask(GL_TRUE); // For the depth clears in InitFrameState and the closed-lid path
      glClearColor(0, 0, 0, 0);
-@@ -773,6 +780,7 @@ void MelonDsDs::OpenGLRenderState::UnbindState() noexcept {
+@@ -773,6 +784,7 @@ void MelonDsDs::OpenGLRenderState::UnbindState() noexcept {
      glDisable(GL_STENCIL_TEST);
      glDisable(GL_BLEND);
      glDisable(GL_SCISSOR_TEST);

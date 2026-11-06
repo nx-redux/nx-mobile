@@ -8,7 +8,9 @@ object NdsRenderer {
     const val CORE_ID_MELONDSDS = "melondsds"
     const val RENDER_MODE = "melonds_render_mode"
     const val OPENGL = "opengl"
+    const val COMPUTE = "compute"
     const val SOFTWARE = "software"
+    private val GPU_MODES = setOf(OPENGL, COMPUTE)
     /** `ConfigurationInfo.reqGlEsVersion` encoding: major in the high 16 bits. */
     const val GLES_3_2 = 0x30002
 
@@ -21,12 +23,12 @@ object NdsRenderer {
 
     fun defaults(glesVersion: Int): Map<String, String> = mapOf(RENDER_MODE to if (glesVersion >= GLES_3_2) OPENGL else SOFTWARE)
 
-    /** OpenGL was asked for but the core's frames are software ones: melonDS DS fell back (it can't start its GL renderer). */
-    fun showFallbackNotice(renderMode: String?, hardwareRendered: Boolean): Boolean = renderMode == OPENGL && !hardwareRendered
+    /** A GPU renderer was asked for but the core's frames are software ones: melonDS DS fell back (it can't start it). */
+    fun showFallbackNotice(renderMode: String?, hardwareRendered: Boolean): Boolean = renderMode in GPU_MODES && !hardwareRendered
 
     /**
-     * The running game draws in software: it started in a mode other than OpenGL, or OpenGL [fellBack] ([showFallbackNotice]).
+     * The running game draws in software: it started in a mode other than a GPU one, or that mode [fellBack] ([showFallbackNotice]).
      * A Render Mode changed since applies at the next launch, so it does not count.
      */
-    fun rendersSoftware(renderMode: String?, fellBack: Boolean): Boolean = renderMode != OPENGL || fellBack
+    fun rendersSoftware(renderMode: String?, fellBack: Boolean): Boolean = renderMode !in GPU_MODES || fellBack
 }

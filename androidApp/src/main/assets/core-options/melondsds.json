@@ -1562,14 +1562,16 @@
      "key": "melonds_render_mode",
      "label": "Render Mode",
      "labelCategorized": "",
-     "info": "Software is fastest and most accurate. OpenGL (Classic) can scale up 3D graphics, but some games don't render correctly.\n\nFalls back to software rendering if OpenGL can't be used. Changes take effect immediately but may require the frontend's video driver to be restarted.",
+     "info": "Software is fastest and most accurate. OpenGL (Classic) can scale up 3D graphics, but some games don't render correctly.\nOpenGL (Compute) is accurate and supports upscaling, but won't work on some older devices. Switching to it takes a few seconds to compile its shaders.\n\nFalls back to software rendering if OpenGL can't be used. Changes take effect immediately but may require the frontend's video driver to be restarted.",
      "values": [
       "software",
-      "opengl"
+      "opengl",
+      "compute"
      ],
      "labels": [
       "Software",
-      "OpenGL (Classic)"
+      "OpenGL (Classic)",
+      "OpenGL (Compute)"
      ],
      "default": "software"
     },
@@ -1605,6 +1607,21 @@
      "label": "Improved Polygon Splitting",
      "labelCategorized": "",
      "info": "Enable this if your game's 3D models are not rendering correctly. OpenGL (Classic) renderer only.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "enabled"
+    },
+    {
+     "key": "melonds_compute_hires_coordinates",
+     "label": "High-Resolution Coordinates",
+     "labelCategorized": "",
+     "info": "Positions 3D geometry at the upscaled resolution instead of snapping it to the DS's native pixel grid, which smooths out wobbling polygons. A few games rely on the native grid and look wrong with this enabled. OpenGL (Compute) renderer only. Changing this takes a few seconds while the shaders are recompiled.",
      "values": [
       "disabled",
       "enabled"
@@ -3373,6 +3390,6 @@
    ]
   }
  ],
- "soSha256": "108e2e32519ebc511276f8be2116d71e88dedaafe7d69b42819e7973c067b19c",
+ "soSha256": "2cd0aa4d3e9526970b9548bda5dd798777f8ceb651f1789c5c5d639eb7058603",
  "probedAt": "2026-11-06"
 }
