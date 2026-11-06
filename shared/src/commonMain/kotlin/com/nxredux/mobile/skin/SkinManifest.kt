@@ -77,6 +77,11 @@ enum class SkinVariant {
      * L R the analog triggers (L2 R2), Z (R: R1) beside or above R, the C-stick nub (`CSTICK`, the right analog), START.
      */
     @SerialName("gc") GC,
+    /**
+     * The Wii's Classic Controller: the left stick and d-pad (or a swap between them), A B X Y in the diamond, L ZL / ZR R
+     * (L R L2 R2), the right stick (`CSTICK`), − HOME + (SELECT HOME START).
+     */
+    @SerialName("wii_classic") WII_CLASSIC,
 }
 
 /**

@@ -872,7 +872,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val n3ds = N3dsOptions.appliesTo(tag)
         // with a second display: one-screen games and a DS / 3DS split keep the skin (its screen the touch screen, [SkinDual])
         if (names.isNotEmpty() || !SkinDual.skinAllowed(host.dualMode, ds, n3ds)) return null
-        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC) ?: return null
+        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, wiiPad) ?: return null
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null
         val tablet = activity.windowShape().screenClass.isTablet
@@ -913,7 +913,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val pack = skinPack ?: return
         val view = PadSkinView(activity, pack, input::onPad, ::onSkinAction, haptics = padVibration != com.nxredux.mobile.settings.PadVibration.OFF,
             onResized = { root.post { onSkinResized() } }, onStick = input::onStick,
-            onCStick = { x, y -> if (input.gcPad) input.onWiiRightStick(x, y) else input.onCStick(x, y) },   // the GameCube's C-stick: the right analog
+            // the GameCube's C-stick and the Classic Controller's right stick: the right analog
+            onCStick = { x, y -> if (input.gcPad || (isWii && wiiPad == WiiPad.CLASSIC)) input.onWiiRightStick(x, y) else input.onCStick(x, y) },
             onGlass = { x, y, down -> glassTouch(game, x, y, down) })
         view.useStick = PadStickModes[padStickKey, stickDefault()]   // the drawn pad's choice, shared
         // under the menu and the notifications, over the game
@@ -975,7 +976,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val n3ds = N3dsOptions.appliesTo(tag)
         if (!ds && !n3ds) return false
         return layoutControllerNames().isEmpty() && SkinDual.skinAllowed(mode, ds, n3ds) &&
-            SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC) != null
+            SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, wiiPad) != null
     }
 
     /** Whether the pad skin is the layout now. */
