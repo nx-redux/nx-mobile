@@ -274,6 +274,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             latest?.get()?.takeIf { !it.isFinishing }?.onSessionHandedOff()
             return true
         }
+
+        /** Kids Mode lock: as [endForHandoff], but the auto state is not written (the battery save still is). */
+        internal fun endForKidsLock(): Boolean {
+            if (screens == 0) return false
+            latest?.get()?.takeIf { !it.isFinishing }?.onKidsLock()
+            return true
+        }
     }
 
     private var sessionClaim: SessionHandoff.Claim? = null
@@ -709,6 +716,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (isDestroyed) return
         NxLog.i(TAG_LOG, "another game takes over: quitting ${intent.getStringExtra(EXTRA_TITLE)}")
         quitWithAutoState(chosen = false)
+    }
+
+    private fun onKidsLock() {
+        if (isDestroyed) return
+        NxLog.i(TAG_LOG, "Kids Mode lock: quitting ${intent.getStringExtra(EXTRA_TITLE)} without its auto state")
+        quitWithAutoState(chosen = false, autoState = false)
     }
 
     /**
