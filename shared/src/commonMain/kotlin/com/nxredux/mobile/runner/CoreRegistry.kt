@@ -38,9 +38,12 @@ object CoreRegistry {
             "melonds_mic_input" to "microphone",
             "melonds_mic_input_active" to "always",
             "melonds_show_mic_state" to "disabled",
+            // Improved Polygon Splitting warps textures on large floor polygons under GLES (Mario Kart DS's low flyover
+            // shots); the standalone melonDS app runs its GL renderer with it off too.
+            "melonds_opengl_better_polygons" to "disabled",
         ),
         lockedOptions = setOf(
-            "melonds_touch_mode", "melonds_number_of_screen_layouts", "melonds_screen_layout1",
+            "melonds_opengl_better_polygons", "melonds_touch_mode", "melonds_number_of_screen_layouts", "melonds_screen_layout1",
             "melonds_screen_gap", "melonds_show_cursor", "melonds_mic_input", "melonds_mic_input_active",
             "melonds_show_mic_state", "melonds_opengl_resolution", "melonds_secondary_screen_scale",
             "melonds_secondary_screen_filtering", "melonds_hybrid_ratio", "melonds_hybrid_small_screen",
