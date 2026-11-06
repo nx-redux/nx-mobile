@@ -12,7 +12,7 @@ class SkinVariantForTest {
         for (t in listOf("GB", "GBC", "SGB", "FC")) assertEquals(SkinVariant.GB, SkinChoice.variantFor(t, false), t)
         for (t in listOf("GBA", "MGBA")) assertEquals(SkinVariant.GBA, SkinChoice.variantFor(t, false), t)
         for (t in listOf("SFC", "MD", "PCE")) assertEquals(SkinVariant.SINGLE, SkinChoice.variantFor(t, false), t)
-        for (t in listOf("PSP", "")) assertNull(SkinChoice.variantFor(t, false), t)
+        for (t in listOf("PS2", "")) assertNull(SkinChoice.variantFor(t, false), t)   // the PS2 has no skin yet
     }
 
     @Test
@@ -61,8 +61,9 @@ class SkinVariantForTest {
     }
 
     @Test
-    fun playStationGetsItsOwnLayout() {   // both PS1 cores; PSP and PS2 later
+    fun playStationGetsItsOwnLayout() {   // both PS1 cores and the PSP; the PS2 later
         assertEquals(SkinVariant.PS1, SkinChoice.variantFor("PS", ds = false))
         assertEquals(SkinVariant.PS1, SkinChoice.variantFor("PSX", ds = false))
+        assertEquals(SkinVariant.PSP, SkinChoice.variantFor("PSP", ds = false))
     }
 }

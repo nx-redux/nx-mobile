@@ -13,12 +13,12 @@ object DcGames {
         tag.uppercase() == "DC" && Names.isArchive(fileName) && !sets.isEmpty && sets.loadsAsIs(fileName)
 
     /**
-     * A Dreamcast disc, an N64 and a GameCube game start on the stick (most of their games steer with it); arcade sets and other
-     * consoles do not.
+     * A Dreamcast disc, an N64, a GameCube and a PSP game start on the stick (most of their games steer with it); arcade sets
+     * and other consoles do not.
      */
     fun stickFirst(baseTag: String, arcadeSet: Boolean): Boolean = when (baseTag.uppercase()) {
         "DC" -> !arcadeSet
-        "N64", "GC" -> true
+        "N64", "GC", "PSP" -> true
         else -> false
     }
 }

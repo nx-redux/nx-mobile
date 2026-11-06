@@ -44,7 +44,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(95 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's in every family (its fold board and tall landscape always both)
+        assertEquals(115 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); a tablet twin of each game fold board without one (14: the clusters centred on the bottom screen, user)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -86,7 +86,7 @@ class NxCarbonPackTest {
     fun gameBoyLayoutsHaveTheirButtonsInEveryFamily() {
         for ((v, ids) in mapOf(SkinVariant.GB to gbSet, SkinVariant.GBA to gbaSet)) {
             val ls = pack.layouts.filter { it.variant == v }
-            assertEquals(6, ls.size, "$v")
+            assertEquals(7, ls.size, "$v")   // six families and the fold board's tablet twin
             for (l in ls) assertEquals(ids, l.controls.map { it.id }.toSet(), l.id)
         }
     }
@@ -115,7 +115,7 @@ class NxCarbonPackTest {
             val id = "$v $name"
             val p = consolePlace(v, name, consoleDevices.toMap().getValue(name))
             dump("fold_panel_${v.name.lowercase()}_$name", consoleDevices.toMap().getValue(name).first, consoleDevices.toMap().getValue(name).second, p)
-            assertEquals("flex_${if (v == SkinVariant.SINGLE) "single" else v.name.lowercase()}_fold", p.spec.id, id)
+            assertEquals("flex_${if (v == SkinVariant.SINGLE) "single" else v.name.lowercase()}_fold", p.spec.id.removeSuffix("_tab"), id)   // the tablet: its twin
             val panel = p.glasses.single { it.screen == GlassScreen.PANEL }
             assertEquals("panel", panel.id, id)
             val r = panel.rect
@@ -149,7 +149,7 @@ class NxCarbonPackTest {
     @Test
     fun foldBoardDsAndMenuAreUnchanged() {
         val ds = assertNotNull(place("fold_ds_kept", 1848, 2448, tablet = true, foldable = true))
-        assertEquals("flex_ds_fold", ds.spec.id)
+        assertEquals("flex_ds_fold", ds.spec.id.removeSuffix("_tab"))
         assertNotNull(ds.glass(GlassScreen.TOUCH))
         assertTrue(listOf("TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4").all { t -> ds.controls.any { it.spec.id == t } })
         val menu = assertNotNull(SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true, tablet = true))
@@ -299,6 +299,52 @@ class NxCarbonPackTest {
                     assertTrue(ok, "$name ${a.spec.id} ${b.spec.id}")
                 }
             }
+        }
+    }
+
+    @Test
+    fun pspLayoutsInEveryFamily() {
+        // △ ○ × □, L / R (no L2 R2), the one stick (swapped with the d-pad; both, the stick under the d-pad, on the fold board and
+        // the tall landscape), no right stick, no L3 R3, SELECT START, MENU
+        val roomy = setOf("inner", "inner_half", "tablet", "tablet_land", "inner_land")
+        for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
+            val tablet = name.startsWith("tablet")
+            val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 640f to 480f,
+                d.third, foldable = name.startsWith("inner"), variant = SkinVariant.PSP), name)
+            dump("psp_$name", d.first, d.second, p)
+            assertEquals(SkinVariant.PSP, p.spec.variant, name)
+            val ids = p.controls.map { it.spec.id }.filterNot { it.startsWith("TOUCH_") }.toSet()
+            val base = setOf("DPAD", "STICK", "A", "B", "X", "Y", "L", "R", "SELECT", "START", "MENU")
+            assertEquals(if (name in roomy) base else base + "STICK_SWAP", ids, name)
+            fun c(id: String) = p.controls.first { it.spec.id == id }
+            fun box(pc: PlacedControl): FloatArray {
+                val r = when (pc.spec.shape) { ControlShape.STICK -> pc.spec.r * 1.25f; ControlShape.RECT -> 0f; else -> pc.spec.r }
+                val hw = if (r > 0f) r else pc.spec.hw; val hh = if (r > 0f) r else pc.spec.hh
+                return floatArrayOf(pc.x - hw, pc.y - hh, pc.x + hw, pc.y + hh)
+            }
+            fun apart(a: FloatArray, b: FloatArray) = a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1]
+            fun reach(pc: PlacedControl) = if (pc.spec.shape == ControlShape.STICK) pc.spec.r * 1.25f else pc.spec.r
+            fun round(a: PlacedControl, b: PlacedControl) = kotlin.math.hypot(a.x - b.x, a.y - b.y) >= reach(a) + reach(b) - 1f
+            fun circle(pc: PlacedControl) = pc.spec.shape == ControlShape.CIRCLE || pc.spec.shape == ControlShape.STICK
+            val face = setOf("A", "B", "X", "Y")
+            for (useStick in listOf(true, false)) {
+                val cs = p.forStick(useStick).controls.filterNot { it.spec.id.startsWith("TOUCH_") }
+                for (i in cs.indices) for (j in i + 1 until cs.size) {
+                    val a = cs[i]; val b = cs[j]
+                    if (a.spec.id in face && b.spec.id in face) continue
+                    assertTrue(if (circle(a) && circle(b)) round(a, b) else apart(box(a), box(b)), "$name ${a.spec.id} ${b.spec.id}")
+                }
+                for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
+            }
+            assertEquals(1, p.pieces.count { it.knob }, name)
+            if (name in roomy) {   // the d-pad on top, the stick (smaller) close under it
+                assertTrue(c("DPAD").y < c("STICK").y, "$name d-pad above the stick")
+                assertEquals(c("DPAD").y, c("Y").y, 1f, "$name the face level with the d-pad")
+                assertTrue(c("STICK").spec.r < c("DPAD").spec.r, "$name the stick scaled down")
+                val ring = 206f * p.k
+                val lower = (c("STICK").y - ring * c("STICK").spec.r / (170f * p.k)) - (c("DPAD").y + ring)
+                assertEquals(28f * p.k, lower, 2f * p.k, "$name the stick close under the d-pad (user)")
+            } else assertTrue(c("STICK").spec.r > c("DPAD").spec.r, "$name the swapped stick full size")
         }
     }
 
@@ -859,7 +905,7 @@ class NxCarbonPackTest {
         // the inner screen: the fold board, split at its hinge flat and half-folded alike (folding changes nothing)
         for ((suffix, hinge) in listOf("flat" to null, "half" to 1224f)) {
             val ds = assertNotNull(place("fold_inner_$suffix", 1848, 2448, tablet = true, hinge = hinge, foldable = true))
-            assertEquals("flex_ds_fold", ds.spec.id)
+            assertEquals("flex_ds_fold", ds.spec.id.removeSuffix("_tab"))
             assertHalfFolded(ds, 1224f)
             assertEquals(3.5f, ds.glass(GlassScreen.TOUCH)!!.scale, 0.01f)   // as the old tablet render: touch 3.5x
             // the top screen: the frame filling the half above the hinge (the DS top screen centred in it), as the menu's,
@@ -869,7 +915,7 @@ class NxCarbonPackTest {
             assertTrue(top.y + top.height <= 1224f - 62f - 32f, "top $top: on the hinge")
             assertTrue(top.x >= 32f && top.x + top.width <= 1848f - 32f, "top $top: edge to edge")
             val gba = assertNotNull(place("fold_inner_${suffix}_gba", 1848, 2448, tablet = true, ds = false, picture = 240f to 160f, hinge = hinge, foldable = true))
-            assertEquals("flex_single_fold", gba.spec.id)
+            assertEquals("flex_single_fold", gba.spec.id.removeSuffix("_tab"))
             assertHalfFolded(gba, 1224f)
         }
         // the touch screen clear of SELECT START and the clusters
@@ -882,7 +928,7 @@ class NxCarbonPackTest {
         for (i in 1 until five.size) { assertEquals(five[0].y, five[i].y, 1f, "one row"); assertTrue(five[i].x > five[i - 1].x, "in order") }
         assertTrue(c.getValue("DPAD").x + c.getValue("DPAD").spec.r < t.x, "dpad")
         // a tablet that does not fold takes the fold board too (the menu's board: a game never changes it)
-        assertEquals("flex_ds_fold", assertNotNull(place("inner_size_tablet", 1848, 2448, tablet = true)).spec.id)
+        assertEquals("flex_ds_fold", assertNotNull(place("inner_size_tablet", 1848, 2448, tablet = true)).spec.id.removeSuffix("_tab"))
         // the main menu keeps the phone board, a foldable's inner screen too
         assertEquals("stacked_menu", assertNotNull(SkinChoice.placeMenu(pack, 1848, 2448, 420, foldable = true)).spec.id)
         assertEquals("stacked_menu", assertNotNull(SkinChoice.placeMenu(pack, 1848, 2448, 420)).spec.id)
@@ -1004,9 +1050,24 @@ class NxCarbonPackTest {
     }
 
     @Test
+    fun tabletClustersCentreOnTheBottomScreen() {
+        // the tablet twins (user): the side clusters' span centred on the bottom screen, within a cap's radius
+        for (v in listOf(SkinVariant.SINGLE, SkinVariant.GBA, SkinVariant.PSP, SkinVariant.WII_SIDEWAYS, SkinVariant.N3DS_REGULAR, SkinVariant.PS1)) {
+            val p = assertNotNull(SkinChoice.place(pack, 1440, 2304, 280, true, v == SkinVariant.N3DS_REGULAR, 640f to 480f, null, variant = v), "$v")
+            assertTrue(p.spec.id.endsWith("_fold_tab"), "$v ${p.spec.id}")
+            val screen = (p.glasses.firstOrNull { it.screen == GlassScreen.PANEL } ?: p.glass(GlassScreen.TOUCH)!!).rect
+            val side = p.controls.filter { it.spec.id != "MENU" && it.y > screen.y - 200f && (it.x < screen.x || it.x > screen.x + screen.width) }
+            fun ext(c: PlacedControl) = if (c.spec.shape == ControlShape.RECT) c.spec.hh else c.spec.r * (if (c.spec.shape == ControlShape.STICK) 1.07f else 1f)
+            val mid = (side.minOf { it.y - ext(it) } + side.maxOf { it.y + ext(it) }) / 2f
+            assertEquals(screen.y + screen.height / 2f, mid, 40f * p.k, "$v clusters centred on the bottom screen")
+        }
+    }
+
+    @Test
     fun tabletGamesTakeTheFoldBoard() {
-        assertEquals("flex_ds_fold", place("tab_two_ds", 1440, 2304, dpi = 280, tablet = true)?.spec?.id)
-        assertEquals("flex_single_fold", place("tab_two_gba", 1440, 2304, dpi = 280, tablet = true, ds = false, picture = 240f to 160f)?.spec?.id)
+        // the fold board's tablet twin (user: the clusters centred on the bottom screen there)
+        assertEquals("flex_ds_fold_tab", place("tab_two_ds", 1440, 2304, dpi = 280, tablet = true)?.spec?.id)
+        assertEquals("flex_single_fold_tab", place("tab_two_gba", 1440, 2304, dpi = 280, tablet = true, ds = false, picture = 240f to 160f)?.spec?.id)
     }
 
     @Test

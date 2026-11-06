@@ -92,6 +92,8 @@ enum class SkinVariant {
     @SerialName("wii_upright") WII_UPRIGHT,
     /** The PlayStation: the d-pad (the left stick by a swap cap), △ ○ × □, L2 L1 / R1 R2, the right stick nub, L3 R3. */
     @SerialName("ps1") PS1,
+    /** The PSP: △ ○ × □, L / R, its one analog nub (first; the d-pad by a swap cap), SELECT START. */
+    @SerialName("psp") PSP,
 }
 
 /**
