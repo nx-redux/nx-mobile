@@ -540,6 +540,14 @@ void Video::setComposition(int width, int height, std::vector<ScreenRegion> part
     compositionWidth = width;
     compositionHeight = height;
     compositionParts = std::move(parts);
+    // The layout fits the frame it draws: the composed one while composing, the core's again after.
+    if (composing()) {
+        videoLayout.updateContentSize((unsigned) compositionWidth, (unsigned) compositionHeight);
+        videoLayout.updateAspectRatio((float) compositionWidth / (float) compositionHeight);
+    } else if (coreContentWidth > 0 && coreContentHeight > 0) {
+        videoLayout.updateContentSize(coreContentWidth, coreContentHeight);
+        if (coreAspectRatio > 0.0F) videoLayout.updateAspectRatio(coreAspectRatio);
+    }
     isDirty = true;
 }
 
@@ -597,8 +605,6 @@ void Video::composeFrame() {
     glUseProgram(s.gProgram);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, renderer->getTexture());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glUniform1i(s.gTextureHandle, 0);
     glUniform2f(s.gTextureSizeHandle, (float) renderer->getTextureSize().first, (float) renderer->getTextureSize().second);
     glUniform1f(s.gScreenDensityHandle, 1.0F);
@@ -617,6 +623,8 @@ void Video::composeFrame() {
             quad.coordinates[i] *= scaleX;
             quad.coordinates[i + 1] *= scaleY;
         }
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glVertexAttribPointer(s.gvPositionHandle, 2, GL_FLOAT, GL_FALSE, 0, quad.vertices.data());
         glEnableVertexAttribArray(s.gvPositionHandle);
         glVertexAttribPointer(s.gvCoordinateHandle, 2, GL_FLOAT, GL_FALSE, 0, quad.coordinates.data());
@@ -705,7 +713,9 @@ void Video::updateViewportAlignment(unsigned int viewportAlignment) {
 void Video::updateRendererSize(unsigned int width, unsigned int height) {
     LOGD("Updating renderer size: %d x %d", width, height);
     renderer->updateRenderedResolution(width, height);
-    videoLayout.updateContentSize(width, height);
+    coreContentWidth = width;
+    coreContentHeight = height;
+    if (!composing()) videoLayout.updateContentSize(width, height);
 }
 
 void Video::updateScaleMode(unsigned int scaleMode) {
@@ -723,7 +733,9 @@ void Video::updateScreenOffset(float x, float y) {
 }
 
 void Video::updateContentSize(unsigned width, unsigned height) {
-    videoLayout.updateContentSize(width, height);
+    coreContentWidth = width;
+    coreContentHeight = height;
+    if (!composing()) videoLayout.updateContentSize(width, height);
 }
 
 void Video::updateRotation(float rotation) {
@@ -816,7 +828,8 @@ void Video::initializeRenderer(RenderingOptions renderingOptions) {
 }
 
 void Video::updateAspectRatio(float aspectRatio) {
-    videoLayout.updateAspectRatio(aspectRatio);
+    coreAspectRatio = aspectRatio;
+    if (!composing()) videoLayout.updateAspectRatio(aspectRatio);
 }
 
 } //namespace libretrodroid

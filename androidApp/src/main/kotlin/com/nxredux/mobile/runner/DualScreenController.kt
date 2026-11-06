@@ -358,9 +358,10 @@ internal class DualScreenController(
             // Split and panel up set Azahar's layout and swap options; the other modes put the user's back.
             val forcedBefore = DualScreen.n3dsCoreOptions(old) != null
             val forced = DualScreen.n3dsCoreOptions(mode) != null
-            if (forced && !forcedBefore) captureN3dsSwap()
+            // Under video views the core stays at its unswapped Default and SWAP is the app's: nothing to note or put back.
+            if (forced && !forcedBefore && !renderer.n3dsViews) captureN3dsSwap()
             syncN3dsCore()
-            if (forcedBefore && !forced) restoreN3dsScreen()
+            if (forcedBefore && !forced && !renderer.n3dsViews) restoreN3dsScreen()
         }
         // Half-folded, a DS / 3DS gets its own tabletop only without a second screen ([tabletopDualScreen]): a new mode
         // builds the other tabletop (the pad, the game area, the menu's bounds).

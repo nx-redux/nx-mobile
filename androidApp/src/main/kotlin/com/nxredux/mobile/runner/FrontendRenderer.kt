@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.swordfish.libretrodroid.FrameComposition
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -196,6 +197,42 @@ internal class FrontendRenderer(
      * against its shapes ([N3ds3dResolution.frameFactor]); a send's frame comes later, awaited by its [watchGeometry].
      */
     var n3dsProportion = "2"
+
+    /** 3DS under Azahar's video views: the core stays at Default, unswapped; the app draws the player's layout. */
+    var n3dsViews = false
+    /** The Azahar layout the player's row asks for ([N3dsOptions.coreLayoutFor]), drawn by the app under views. */
+    var n3dsComposeLayout = "default"
+    /** The app's 3DS swap under views ([N3dsSwap]). */
+    var n3dsSwapped = false
+
+    private fun n3dsComposition(): FrameComposition? {
+        val map = screenMap ?: return null
+        if (!isN3ds || !n3dsViews || dualMode == DualMode.SPLIT || padLayout.tabletop() != null) return null
+        val layout = if (dualMode == DualMode.PANEL_UP) "side_by_side" else n3dsComposeLayout
+        val factor = N3dsSwap.factorFromTopHeight(map.topSizePx.second)
+        val c = AzaharLayout.compose(layout, factor, n3dsProportion.toFloatOrNull() ?: 1f, n3dsSwapped)
+        val w = c.width.toFloat()
+        val h = c.height.toFloat()
+        return FrameComposition(c.width, c.height, c.placements.map { p ->
+            val src = map.src(p.screen)
+            ScreenRegion(
+                ScreenRect(src.left, src.top, src.right, src.bottom),
+                ScreenRect(p.dst.x / w, p.dst.y / h, (p.dst.x + p.dst.width) / w, (p.dst.y + p.dst.height) / h),
+                shaded = false, touch = p.screen == NdsScreen.BOTTOM,
+            )
+        })
+    }
+
+    /** 3DS SWAP under views on one display: the app's Toggle / Hold ([N3dsSwap]); false when another layout owns it. */
+    fun onN3dsViewsSwap(down: Boolean, mode: String): Boolean {
+        if (!isN3ds || !n3dsViews || screenMap == null || dualMode == DualMode.SPLIT || padLayout.tabletop() != null) return false
+        val next = N3dsSwap.next(n3dsSwapped, mode, down)
+        if (next != n3dsSwapped) {
+            n3dsSwapped = next
+            relayoutFrontend()
+        }
+        return true
+    }
 
     /**
      * The space the 3DS picture was last fitted in on the main display (Screen Scaling Auto, flat, the picture there); null
@@ -493,9 +530,14 @@ internal class FrontendRenderer(
         val w = game.width.toFloat()
         val h = game.height.toFloat()
         if (w <= 0f || h <= 0f) return
-        val g = geometry ?: view.getGameGeometry()
+        val packed = geometry ?: view.getGameGeometry()
         view.mainCovered = host.mainShowsNoPicture()
-        screenMap = screenMapFor(view, g)
+        screenMap = screenMapFor(view, packed)
+        // 3DS on one display (and the Panel Up frame) from the map: the app rebuilds Azahar's own layout from it, and
+        // that composed frame is the frame every later step lays out.
+        val composition = n3dsComposition()
+        view.composition = composition
+        val g = composition?.let { floatArrayOf(it.width.toFloat(), it.height.toFloat(), it.width / it.height.toFloat(), packed[3]) } ?: packed
         val origin = IntArray(2).also { game.getLocationInWindow(it) }
         val frame = coreFrame(g)   // null before the first frame (0x0)
         frame?.let(padLayout::onFrame)

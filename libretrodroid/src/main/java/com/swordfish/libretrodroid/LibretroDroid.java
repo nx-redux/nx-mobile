@@ -130,6 +130,8 @@ public class LibretroDroid {
     public static native void setVideoViewsEnabled(boolean enabled);
     /** The core's video view map, 6 ints per view (x, y, width, height, screen, eye); empty when there is none. */
     public static native int[] getVideoViews();
+    /** False while setprop debug.nx.videoviews 0 withholds video views from the cores (the frontend's A/B switch). */
+    public static native boolean videoViewsOffered();
     /** Whether this device can run the Vulkan bridge (a Vulkan 1.1 GPU with AHardwareBuffer import). Cached; any thread. */
     public static native boolean isVulkanSupported();
     /** With Settings → System → Debug log on at launch: log GL driver messages (GL_KHR_debug, else glGetError) to tag NXGL. Set before create(). */

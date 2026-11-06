@@ -184,6 +184,9 @@ private:
     // The nearest default shader for unshaded regions, built on first use.
     std::optional<ShaderChainEntry> plainShader;
 
+    unsigned coreContentWidth = 0;
+    unsigned coreContentHeight = 0;
+    float coreAspectRatio = 0.0F;
     int compositionWidth = 0;
     int compositionHeight = 0;
     std::vector<ScreenRegion> compositionParts;

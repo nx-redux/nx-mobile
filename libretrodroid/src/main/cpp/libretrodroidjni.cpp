@@ -15,6 +15,7 @@
  *     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "debugprop.h"
 #include <jni.h>
 
 #include <EGL/egl.h>
@@ -1073,6 +1074,13 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVideoVi
     jboolean enabled
 ) {
     LibretroDroid::getInstance().setVideoViewsEnabled(enabled);
+}
+
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_videoViewsOffered(
+    JNIEnv* env,
+    jclass obj
+) {
+    return debugPropertyOff("debug.nx.videoviews") ? JNI_FALSE : JNI_TRUE;
 }
 
 JNIEXPORT jintArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getVideoViews(

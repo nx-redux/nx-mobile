@@ -160,6 +160,18 @@ object DualScreen {
     /** The swap options [n3dsCoreOptions] overrides while split, which leaving it must put back. */
     val N3DS_SWAP_KEYS: Set<String> = setOf(SWAP_SCREEN, SWAP_SCREEN_MODE)
 
+    /** The player's Swap Screen Mode key (Toggle / Hold). */
+    const val N3DS_SWAP_MODE_KEY = SWAP_SCREEN_MODE
+
+    /**
+     * Azahar's options held while the app draws its screens from the video view map: the unswapped Default, the only
+     * layout its views stay on in, whatever the player's layout, swap or Dual screen mode ([N3dsSwap] does SWAP).
+     */
+    val N3DS_VIEWS_CORE: Map<String, String> = mapOf(
+        "citra_layout_option" to "default", "citra_stacked_small_proportion" to "1",
+        SWAP_SCREEN to "Top", SWAP_SCREEN_MODE to "Hold",
+    )
+
     /**
      * The swap values to put back when split ends: what the core was [running] before it began, else the user's [stored]
      * ones, else Azahar's defaults (Top / Toggle).
