@@ -130,8 +130,11 @@ object SkinSolver {
      * runs under it, and the frame starts right below it (the inset is its top margin, in place of the render's own).
      * [hingeY]: the fold's middle in window px while half-folded, for a frame made for it ([FrameSpec.hinge]): the frame's
      * room ends above the fold, and every piece must lie below it (else null).
+     * [topScreen]: the DS / 3DS top screen's game size (256 x 192, 400 x 240): a filling frame showing it, on a board
+     * with no fold, is cut to its shape (its border as thin above and below as at the sides), kept at the top, and the
+     * pieces with a screen (the touch screen) move up by the height that saves.
      */
-    fun placePieces(spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, picture: Pair<Float, Float>? = null, topInset: Float = 0f, hingeY: Float? = null): SkinPlacement? {
+    fun placePieces(spec: SkinLayoutSpec, windowW: Float, windowH: Float, k: Float, picture: Pair<Float, Float>? = null, topInset: Float = 0f, hingeY: Float? = null, topScreen: Pair<Float, Float>? = null): SkinPlacement? {
         val frame = spec.frame ?: return null
         if (k <= 0f || spec.refW <= 0 || spec.refH <= 0) return null
         // the background split at the fold too: each half takes its own side's room, the board's hinge on the fold
@@ -167,13 +170,20 @@ object SkinSolver {
         val (aw, ah) = gameSize(g.screen, picture) ?: (g.w.toFloat() to g.h.toFloat())   // the menu's: the glass's own
         val fit = minOf((roomW - bl - br) / aw, (roomH - bt - bb) / ah)
         if (fit <= 0f) return null
-        // a filling frame takes the whole room; its screen is all of it inside the border
-        val gw = if (frame.fill) roomW - bl - br else aw * fit
-        val gh = if (frame.fill) roomH - bt - bb else ah * fit
+        // a filling frame takes the whole room; its screen is all of it inside the border. Showing the DS / 3DS top
+        // screen on a board with no fold: its screen in the top picture's shape instead, the frame up at the top
+        // (only where the width limits it: the picture across the whole room, height to spare under it; a window short of
+        // height keeps the full-width frame, the picture between bars, as nothing below could move up)
+        val tight = frame.fill && g.screen == GlassScreen.TOP && frame.hinge < 0 && topScreen != null && topScreen.first > 0f && topScreen.second > 0f &&
+            (roomW - bl - br) * topScreen.second / topScreen.first < roomH - bt - bb
+        val tw = if (tight) roomW - bl - br else 0f
+        val gw = if (tight) tw else if (frame.fill) roomW - bl - br else aw * fit
+        val gh = if (tight) tw * topScreen!!.second / topScreen.first else if (frame.fill) roomH - bt - bb else ah * fit
         val fw = gw + bl + br
         val fh = gh + bt + bb
         val fx = left + (roomW - fw) / 2f
-        val fy = roomTop + (roomH - fh)   // down against what is under it: the spare height goes above
+        val fy = if (tight) roomTop else roomTop + (roomH - fh)   // down against what is under it: the spare height goes above
+        val lift = if (tight) roomH - fh else 0f   // the touch screen follows the shorter frame up
         val pieces = ArrayList<SkinPiece>()
         // the frame: corners as drawn, straight edges stretched from the 2 px slice at their middle (the glass, a hole, skipped).
         // Each drawn border reaches past the glass's edge by its corner radius, so the hole's rounded corners are drawn
@@ -209,7 +219,8 @@ object SkinSolver {
         val maxInward = spec.pieces.maxOfOrNull { it.inward } ?: 0
         for ((pi, p) in spec.pieces.withIndex()) {
             var px = p.x + across(p.anchor, p.inward)
-            var py = p.y + down(p.level)
+            // the touch screen follows the shorter frame up; the pad (d-pad, face) up to its own rise
+            var py = p.y + down(p.level) - (if (p.glass != null) lift else minOf(lift, p.rise.toFloat()))
             var gx = 0f; var gy = 0f   // a growing piece's growth, picture px
             val pg0 = p.glass
             if (p.grow > 0 && pg0 != null && dx > 0f) {
@@ -234,7 +245,10 @@ object SkinSolver {
                 // the piece's strip: an even share of its glass's width each (the whole piece's without one), under the
                 // grown glass when the piece grows (its border, the strip's band, keeps its size)
                 val sc = p.scale
-                val sx = px + (p.glass?.x ?: 0) * sc; val sw = ((p.glass?.w ?: p.w) + gx) * sc
+                // across the frame's inside (its border off each side): the glass's own width, or more where the frame is
+                // wider than its screen (the DS's large bottom screen, between black bars)
+                val inner = p.glass?.let { maxOf(it.w, p.w - 2 * 20) } ?: p.w
+                val sx = px + (p.glass?.let { (p.w - inner) / 2f } ?: 0f) * sc; val sw = (inner + gx) * sc
                 val share = sw / st.labels.size
                 st.labels.forEachIndexed { i, l ->
                     val cx = sx + share * (i + 0.5f)
@@ -244,7 +258,7 @@ object SkinSolver {
             }
         }
         controls += spec.controls.map { c ->
-            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k, knobTravel = c.knobTravel * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward)) * k, (c.y + down(c.level)) * k)
+            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k, knobTravel = c.knobTravel * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward)) * k, (c.y + down(c.level) - minOf(lift, c.rise.toFloat())) * k)
         }
         return SkinPlacement(spec, k, bg.cells, glasses, controls, pieces)
     }

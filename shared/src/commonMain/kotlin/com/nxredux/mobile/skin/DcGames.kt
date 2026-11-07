@@ -13,12 +13,12 @@ object DcGames {
         tag.uppercase() == "DC" && Names.isArchive(fileName) && !sets.isEmpty && sets.loadsAsIs(fileName)
 
     /**
-     * A Dreamcast disc, an N64, a GameCube, a PSP and an Atari 5200 game start on the stick (most of their games steer with it); arcade sets
+     * A Dreamcast disc, an N64, a GameCube, a PSP, a 3DS and an Atari 5200 game start on the stick (most of their games steer with it); arcade sets
      * and other consoles do not.
      */
     fun stickFirst(baseTag: String, arcadeSet: Boolean): Boolean = when (baseTag.uppercase()) {
         "DC" -> !arcadeSet
-        "N64", "GC", "PSP", "A5200" -> true   // the 5200: its joystick is analog
+        "N64", "GC", "PSP", "3DS", "A5200" -> true   // the 5200: its joystick is analog; the 3DS: its Circle Pad
         else -> false
     }
 }

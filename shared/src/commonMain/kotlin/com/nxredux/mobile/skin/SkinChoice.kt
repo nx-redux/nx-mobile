@@ -169,6 +169,8 @@ object SkinChoice {
         picture: Pair<Float, Float>?, hingeY: Float?, topInset: Int, foldable: Boolean, v: SkinVariant,
     ): SkinPlacement? {
         val k = scaleFor(pack, densityDpi)
+        // the top screen's game size: the large layout's top frame takes its shape
+        val top = when (v) { SkinVariant.N3DS, SkinVariant.N3DS_REGULAR -> 400f to 240f; SkinVariant.DS -> 256f to 192f; else -> null }
         val landscape = windowW > windowH
         // sideways: the main menu's landscape shell, the game in its screen frame (the strip under it; a DS's MIC, SWAP)
         if (landscape) return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset)
@@ -189,7 +191,7 @@ object SkinChoice {
         }
         for (family in families) {
             widest(pack, family, v, fold = false) { spec ->
-                if (spec.frame != null) SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat())
+                if (spec.frame != null) SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top)
                 else SkinSolver.place(spec, windowW.toFloat(), windowH.toFloat(), k, picture)
             }?.let { return it }
         }

@@ -226,6 +226,8 @@ data class PieceSpec(
     val level: PieceLevel = PieceLevel.BOTTOM,
     val scale: Float = 1f,
     val strip: StripSpec? = null,
+    /** Picture px it may move up where a shorter top frame frees that height ([SkinSolver.placePieces] topScreen). */
+    val rise: Int = 0,
     /**
      * More than 0: on a window wider than the render the piece grows with the room between the side clusters (its
      * glass's shape kept, upward, clear of the hinge), drawn nine-sliced with corners this many picture px.
@@ -356,6 +358,8 @@ data class ControlSpec(
     val labelDx: Float = 0f,
     val labelH: Float = 0f,
     val level: PieceLevel = PieceLevel.BOTTOM,
+    /** Picture px it may move up where a shorter top frame frees that height, with its piece ([PieceSpec.rise]). */
+    val rise: Int = 0,
     /** A [ControlShape.STICK]: how far (picture px) the thumb goes from where it landed for full tilt. */
     val travel: Float = 0f,
     /** A [ControlShape.STICK]: how far (picture px) the drawn knob moves at full tilt (a big knob in its hole: a little); 0: [travel]. */

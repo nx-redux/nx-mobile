@@ -61,6 +61,16 @@ object N3dsOptions {
     fun cursorVisible(stylus: Boolean): String = if (stylus) "enabled" else "disabled"
 
     /**
+     * Azahar's right analog job. Its default (C-Stick and Touchscreen Pointer) also moved its touch pointer, so in a game
+     * without the C-stick (most 3DS games) the on-screen nub only threw the pointer about: out of stylus mode the
+     * C-stick only; in stylus mode the pointer too, which stylus mode steers. The core reads it each frame (its pointer),
+     * and maps the C-stick at load from a value that includes it.
+     */
+    const val ANALOG_FUNCTION = "citra_analog_function"
+
+    fun analogFunction(stylus: Boolean): String = if (stylus) "c_stick_and_touchscreen" else "c_stick"
+
+    /**
      * SELECT + Right walks this order (Left the other way), wrapping: the DS's names. Large screen and Stacked are both the
      * core's top over bottom ("default"), the touch screen at half size or at the same size ([stackedSmallProportion]);
      * the core's own large screen (the touch screen beside) is left out, as on the DS.

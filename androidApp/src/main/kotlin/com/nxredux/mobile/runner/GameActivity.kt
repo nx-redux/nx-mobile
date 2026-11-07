@@ -1340,6 +1340,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 Variable(N3dsOptions.STACKED_SMALL_PROPORTION, n3dsProportion()),
                 Variable(N3dsOptions.TOUCH_MAIN_ONLY, N3dsOptions.TOUCH_MAIN_ONLY_OFF),
                 Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(false)),   // stylus mode is off at launch
+                Variable(N3dsOptions.ANALOG_FUNCTION, N3dsOptions.analogFunction(false)),   // the C-stick only until stylus mode (it maps the C-stick at load)
                 // The locked core layout ([N3dsOptions.LAYOUT]) from the row in use; the descriptor's default is replaced.
                 Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsSkinStack())),
             ).withN3dsSplit(n3dsSplit) else emptyList()
@@ -2098,6 +2099,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             // change updates it too.
             Variable(N3dsOptions.STACKED_SMALL_PROPORTION, n3dsProportion(screen = screen)),
             Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(input.n3dsHotkeys.stylus)),
+            Variable(N3dsOptions.ANALOG_FUNCTION, N3dsOptions.analogFunction(input.n3dsHotkeys.stylus)),
         ).withN3dsSplit(DualScreen.n3dsForcedOptions(dual.dualMode, n3dsSkinStack()))
         // Half-folded pins the swap (the app's SWAP moves the screens across the hinge): the user's values are noted as it
         // starts and put back when flat again. A second screen's split holds them meanwhile, and puts back none while

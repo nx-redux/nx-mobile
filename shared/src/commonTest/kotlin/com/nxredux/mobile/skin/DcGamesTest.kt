@@ -35,5 +35,6 @@ class DcGamesTest {
     @Test
     fun n64GamesStartOnTheStick() {   // nearly every N64 game steers with it
         assertTrue(DcGames.stickFirst("N64", arcadeSet = false))
+        assertTrue(DcGames.stickFirst("3DS", arcadeSet = false))   // the Circle Pad: most 3DS games steer with it (user)
     }
 }

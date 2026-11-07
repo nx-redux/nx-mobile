@@ -911,9 +911,13 @@ class NxCarbonPackTest {
             }
             val foldBoard = name in setOf("inner", "inner_half", "tablet")
             val tall = name in setOf("inner_land", "tablet_land")
-            assertTrue(c("CSTICK").y < c("X").y, "$name nub above X")
+            if (p.spec.id.startsWith("large_3ds")) {
+                // the large layout (user): the nub centred between the stick and the face, level with the face's middle row
+                assertTrue(c("CSTICK").x > c("STICK").x && c("CSTICK").x < c("Y").x, "$name nub between the stick and the face")
+                assertEquals(c("A").y, c("CSTICK").y, 1f, "$name nub level with A")
+            } else assertTrue(c("CSTICK").y < c("X").y, "$name nub above X")
             if (foldBoard || tall) assertEquals(c("Y").x, c("CSTICK").x, 20f * p.k, "$name nub over Y's column, as the console (user)")
-            else assertTrue(c("CSTICK").x > c("X").x && c("CSTICK").y < c("A").y - c("A").spec.r, "$name nub up-right of X, above A")
+            else if (!p.spec.id.startsWith("large_3ds")) assertTrue(c("CSTICK").x > c("X").x && c("CSTICK").y < c("A").y - c("A").spec.r, "$name nub up-right of X, above A")
             fun row(vararg want: String) {
                 val cs = want.map(::c)
                 for (x in cs) assertEquals(cs[0].y, x.y, 1f, "$name ${x.spec.id} in the row")
