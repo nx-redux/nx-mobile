@@ -42,8 +42,8 @@ fun skinTiles(c: SkinCell, k: Float, stretchMax: Float): List<SkinTile> {
 }
 
 /** A piece of a layout built from pieces: [src] in its parts picture drawn at [dst] (scaled when the sizes differ). */
-/** [strip]: one of the frame strip's shortcut labels (hidden with the in-game menu open). */
-data class SkinPiece(val src: PxRect, val dst: PxRect, val strip: Boolean = false, val alt: String? = null, val knob: Boolean = false, val knobOf: String = "STICK")
+/** [strip]: one of the frame strip's shortcut labels (hidden with the in-game menu open). [piece]: the layout's piece it draws (an index into [SkinLayoutSpec.pieces]); -1: the frame or a strip label. */
+data class SkinPiece(val src: PxRect, val dst: PxRect, val strip: Boolean = false, val alt: String? = null, val knob: Boolean = false, val knobOf: String = "STICK", val piece: Int = -1)
 
 /** A control's hit area placed in the window: its [spec] (id, shape, sizes scaled) at [x], [y]. */
 data class PlacedControl(val spec: ControlSpec, val x: Float, val y: Float)
@@ -207,7 +207,7 @@ object SkinSolver {
         }
         val glasses = arrayListOf(PlacedGlass(g.id, g.screen, win(fx + bl, fy + bt, gw, gh), fit * k, g.corner * k))
         val maxInward = spec.pieces.maxOfOrNull { it.inward } ?: 0
-        for (p in spec.pieces) {
+        for ((pi, p) in spec.pieces.withIndex()) {
             var px = p.x + across(p.anchor, p.inward)
             var py = p.y + down(p.level)
             var gx = 0f; var gy = 0f   // a growing piece's growth, picture px
@@ -221,9 +221,9 @@ object SkinSolver {
                 px -= gx / 2f; py -= gy
             }
             if (gx > 0f || gy > 0f) {
-                pieces += nineSlice(p, p.grow.toFloat(), p.w + gx, p.h + gy) { x, y, w_, h_ -> win(px + x, py + y, w_, h_) }
+                pieces += nineSlice(p, p.grow.toFloat(), p.w + gx, p.h + gy) { x, y, w_, h_ -> win(px + x, py + y, w_, h_) }.map { it.copy(piece = pi) }
             } else {
-                pieces += SkinPiece(PxRect(p.sx.toFloat(), p.sy.toFloat(), p.w.toFloat(), p.h.toFloat()), win(px, py, p.w * p.scale, p.h * p.scale), alt = p.alt, knob = p.knob, knobOf = p.knobOf)
+                pieces += SkinPiece(PxRect(p.sx.toFloat(), p.sy.toFloat(), p.w.toFloat(), p.h.toFloat()), win(px, py, p.w * p.scale, p.h * p.scale), alt = p.alt, knob = p.knob, knobOf = p.knobOf, piece = pi)
             }
             p.glass?.let { pg ->
                 val gameW = gameSize(pg.screen, picture)?.first ?: (pg.w + gx)

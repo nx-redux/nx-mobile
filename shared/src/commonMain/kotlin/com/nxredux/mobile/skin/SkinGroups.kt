@@ -63,11 +63,11 @@ object SkinGroups {
         return PxRect(l, t, rs.maxOf { it.x + it.width } - l, rs.maxOf { it.y + it.height } - t)
     }
 
-    /** The strip's place: the frame's bottom edge, as wide as the frame, [StripSpec.hh] each way tall. */
+    /** The strip's place in the render: [StripSpec.y] above the frame's bottom, across its glass (as the solver shares it out), [StripSpec.hh] each way tall. */
     private fun stripRef(spec: SkinLayoutSpec): PxRect {
         val f = spec.frame ?: return PxRect(0f, 0f, 0f, 0f)
         val s = f.strip ?: return PxRect(0f, 0f, 0f, 0f)
         val cy = f.y + f.h - s.y.toFloat()
-        return PxRect(f.x.toFloat(), cy - s.hh, f.w.toFloat(), s.hh * 2f)
+        return PxRect((f.x + f.glass.x).toFloat(), cy - s.hh, f.glass.w.toFloat(), s.hh * 2f)
     }
 }
