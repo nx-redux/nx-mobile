@@ -269,7 +269,7 @@ stella2014_ARTIFACT = libs/$(ABI)/libretro.so
 
 # nx-redux: a7800.
 prosystem_REPO = https://github.com/libretro/prosystem-libretro
-prosystem_HASH = acae250da8d98b8b9707cd499e2a0bf6d8500652
+prosystem_HASH = 8a88014287c7a01cd568067e5a557d0a2b2a051f
 prosystem_LICENSE = License.txt bupboop/License.txt
 prosystem_KIND = ndkbuild
 prosystem_BUILD_PATH = .
