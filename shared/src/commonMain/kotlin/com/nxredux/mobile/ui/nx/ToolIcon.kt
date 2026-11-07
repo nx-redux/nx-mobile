@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -21,9 +20,6 @@ import androidx.compose.ui.layout.ContentScale
 import com.nxredux.mobile.launcher.AppIcons
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
-
-/** Android apps' icons in full colour, untinted, as the Kids Mode tiles draw them (Kids Mode's Apps tab); else their tinted silhouette. */
-val LocalAppIconsInColour = compositionLocalOf { false }
 
 /** The session's Android app icons ([AppIcons]); null on a platform without a launcher (every app tile draws the glyph). */
 val LocalAppIcons = staticCompositionLocalOf<AppIcons?> { null }
@@ -46,7 +42,6 @@ internal fun rememberAppIcon(id: String?, mono: Boolean = false): ImageBitmap? {
  */
 @Composable
 internal fun ToolIcon(icon: DrawableResource, appId: String?, tint: Color, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Fit) {
-    if (LocalAppIconsInColour.current) rememberAppIcon(appId)?.let { return Image(it, contentDescription = null, modifier = modifier, contentScale = contentScale) }
     val app = rememberAppIcon(appId, mono = true)
     if (app != null) Image(app, contentDescription = null, modifier = modifier, contentScale = contentScale, colorFilter = ColorFilter.tint(tint))
     else Image(painterResource(icon), contentDescription = null, modifier = modifier, contentScale = contentScale, colorFilter = ColorFilter.tint(tint))
@@ -55,7 +50,6 @@ internal fun ToolIcon(icon: DrawableResource, appId: String?, tint: Color, modif
 /** [ToolIcon] tinted [tint] read while drawing, so a changing colour redraws the icon, never recomposes it. */
 @Composable
 internal fun ToolIcon(icon: DrawableResource, appId: String?, tint: () -> Color, modifier: Modifier = Modifier) {
-    if (LocalAppIconsInColour.current) rememberAppIcon(appId)?.let { return Image(it, contentDescription = null, modifier = modifier) }
     val app = rememberAppIcon(appId, mono = true)
     val glyph = painterResource(icon)
     val painter = remember(app, glyph) { app?.let { BitmapPainter(it) } ?: glyph }

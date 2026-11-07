@@ -63,7 +63,6 @@ fun NxTileGrid(
     games: Boolean = false,
     consoles: Boolean = false,
     topGap: Boolean = true,
-    centred: Boolean = false,   // a grid that fits sits in the box's middle, not on its bottom (Kids Mode's Apps tab)
 ) {
     val portrait = LocalPortrait.current
     val window = LocalWindowSize.current
@@ -131,11 +130,11 @@ fun NxTileGrid(
         // Roomy: as deep as List's two faded rows, not a whole Grid row; eased, so the dim tiles at the edge read faded.
         val listFade = homeListPitch() * SETTINGS_ROWS_FADE_ROWS
         LazyColumn(
-            Modifier.align(if (fits) (if (centred) Alignment.CenterStart else Alignment.BottomStart) else Alignment.TopStart)
-                .padding(top = if (fits) 0.dp else with(density) { topPx.toDp() }, bottom = if (fits && !centred) with(density) { tabGapPx.toDp() } else 0.dp)
+            Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart)
+                .padding(top = if (fits) 0.dp else with(density) { topPx.toDp() }, bottom = if (fits) with(density) { tabGapPx.toDp() } else 0.dp)
                 .fillMaxWidth().height(with(density) { viewport.toDp() })
                 .nxEdgeFade({ state.canScrollBackward }, { state.canScrollForward }, if (roomy) listFade else edgeFade, strong = roomy),
-            state = state, verticalArrangement = if (fits && centred) Arrangement.Center else Arrangement.Bottom,
+            state = state, verticalArrangement = Arrangement.Bottom,
             flingBehavior = if (roomy) rememberNxRowSnapFling(state) else rememberSnapFlingBehavior(state, SnapPosition.Center),
         ) {
             items(rows) { r ->

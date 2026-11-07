@@ -117,7 +117,6 @@ import com.nxredux.mobile.ui.nx.launcherChromeFor
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.nxScreenInsets
 import com.nxredux.mobile.ui.nx.LocalAppIcons
-import com.nxredux.mobile.ui.nx.LocalAppIconsInColour
 import com.nxredux.mobile.ui.nx.LocalDialogFocus
 import com.nxredux.mobile.ui.nx.LocalPadBelow
 import com.nxredux.mobile.ui.nx.LocalPortrait
@@ -587,8 +586,6 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             // closing, another tab rebuilt) must not snap a carousel or backdrop mid-glide; its own tiles changing still do.
             is Screen.Systems -> {
                 val listBand = mainMenuListBand(s.category)   // Consoles, Collections and Tools: no List band (no shade, no "N games")
-                // Kids Mode's Apps tab: the apps' own full-colour icons, as the tiles screen's.
-                CompositionLocalProvider(LocalAppIconsInColour provides (s.category == MenuCategory.APPS)) {
                 MainMenuScreen(
                     s, index, state::tapMainRow, { state.openSelected() }, state::selectTab,
                     onSwipeSelect = state::select, onTabSwipe = state::swipeTab, onHint = state::onButton, onLongPress = { state.openContextMenu(it) },
@@ -618,7 +615,6 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     // stands in for a hidden hint.
                     tabMenu = s.hidden.isNotEmpty(),
                 )
-                }
                 s.menu?.let { ContextMenuOverlay(it, onButton = state::onButton, onSelect = state::menuSelect, onOpen = state::menuOpen, onDraft = state::menuDraft, onColumns = state::onMenuLayout) }
                 s.search?.let { NxTextPrompt("Search", it, state::searchDraft, onConfirm = { state.onButton(NxButton.A) }, onCancel = { state.onButton(NxButton.B) }) }
             }

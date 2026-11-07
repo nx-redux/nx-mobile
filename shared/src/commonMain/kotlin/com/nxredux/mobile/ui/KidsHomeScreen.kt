@@ -107,44 +107,59 @@ internal fun KidsHomeScreen(
     val next = (mode as? KidsMode.Locked)?.next?.let(::nextOpenLabel)
     Box(modifier.fillMaxSize().background(colors.background)) {
         // The same room above and below (the clock and the lock sit in the top one), so the tiles centre on the screen.
-        BoxWithConstraints(Modifier.fillMaxSize().padding(vertical = 64.dp)) {
-            val columns = kidsTileColumns(maxWidth.value, (inset.start + inset.end).value)
-            LaunchedEffect(columns) { onColumns(columns) }
-            val scroll = rememberScrollState()
-            // Centred while it fits; taller (many apps on a small screen), it scrolls, its edges fading.
-            Column(
-                Modifier.fillMaxSize().nxScrollFade(scroll).verticalScroll(scroll).heightIn(min = maxHeight)
-                    .padding(start = inset.start, end = inset.end),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-            ) {
-                // When games open next, under the tiles, and its twin unseen above them: the tiles themselves centred.
-                val nextLine: @Composable (Modifier) -> Unit = { m ->
-                    Text(next.orEmpty(), color = colors.hint, fontFamily = font, fontSize = 16.sp, textAlign = TextAlign.Center, modifier = m)
-                }
-                if (next != null) {
-                    nextLine(Modifier.alpha(0f))   // role: an unseen spacer the size of the line below
-                    Spacer(Modifier.height(28.dp))
-                }
-                tiles.chunked(columns).forEachIndexed { r, row ->
-                    if (r > 0) Spacer(Modifier.height(KIDS_TILE_GAP.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(KIDS_TILE_GAP.dp)) {
-                        row.forEachIndexed { c, tile ->
-                            val i = r * columns + c
-                            KidsAppTile(tile, lit = i == selectedIndex) { onOpen(tile.id) }
-                        }
-                    }
-                }
-                if (next != null) {
-                    Spacer(Modifier.height(28.dp))
-                    nextLine(Modifier)
-                }
-            }
-        }
+        KidsTileGrid(tiles, selectedIndex, { onOpen(tiles[it].id) }, onColumns, Modifier.fillMaxSize().padding(vertical = 64.dp), below = next)
         Text(
             clock, color = colors.main, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = 22.sp,
             modifier = Modifier.align(Alignment.TopStart).padding(start = inset.start, top = 16.dp),
         )
         KidsLockButton(lit = selectedIndex >= tiles.size, onLock, Modifier.align(Alignment.TopEnd).padding(end = inset.end, top = 12.dp))
+    }
+}
+
+/**
+ * The tiles screen's grid, also Kids Mode's Apps tab: [tiles] as large tiles, centred and wrapping into rows ([onColumns]
+ * hears how many fit a row), the one at [selectedIndex] lit, a tap on one [onTap] with its index. [below]: a line under
+ * them (when games open next), balanced by an unseen twin above so the tiles themselves centre. Taller than the box, it
+ * scrolls, its edges fading.
+ */
+@Composable
+internal fun KidsTileGrid(
+    tiles: List<KidsTile>, selectedIndex: Int, onTap: (Int) -> Unit, onColumns: (Int) -> Unit, modifier: Modifier = Modifier,
+    below: String? = null,
+) {
+    val colors = LocalNxColors.current
+    val font = LocalNxFont.current
+    val inset = nxPageInset()
+    BoxWithConstraints(modifier) {
+        val columns = kidsTileColumns(maxWidth.value, (inset.start + inset.end).value)
+        LaunchedEffect(columns) { onColumns(columns) }
+        val scroll = rememberScrollState()
+        Column(
+            Modifier.fillMaxSize().nxScrollFade(scroll).verticalScroll(scroll).heightIn(min = maxHeight)
+                .padding(start = inset.start, end = inset.end),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+        ) {
+            val line: @Composable (Modifier) -> Unit = { m ->
+                Text(below.orEmpty(), color = colors.hint, fontFamily = font, fontSize = 16.sp, textAlign = TextAlign.Center, modifier = m)
+            }
+            if (below != null) {
+                line(Modifier.alpha(0f))   // role: an unseen spacer the size of the line below
+                Spacer(Modifier.height(28.dp))
+            }
+            tiles.chunked(columns).forEachIndexed { r, row ->
+                if (r > 0) Spacer(Modifier.height(KIDS_TILE_GAP.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(KIDS_TILE_GAP.dp)) {
+                    row.forEachIndexed { c, tile ->
+                        val i = r * columns + c
+                        KidsAppTile(tile, lit = i == selectedIndex) { onTap(i) }
+                    }
+                }
+            }
+            if (below != null) {
+                Spacer(Modifier.height(28.dp))
+                line(Modifier)
+            }
+        }
     }
 }
 

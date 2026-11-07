@@ -229,6 +229,18 @@ fun MainMenuScreen(
                     }
                     return@CompositionLocalProvider
                 }
+                // Kids Mode's Apps tab: the tiles screen's big tiles, whatever the style; a tap opens the app at once.
+                if (screen.category == MenuCategory.APPS) {
+                    val kidTiles = remember(rows) { rows.mapNotNull { r -> (r as? MainRow.Tool)?.row?.let { t -> t.appId?.let { KidsTile(it, t.label) } } } }
+                    val top = topIconsRoom(chrome.tabRow, topIcons.isNotEmpty())
+                    slot { m ->
+                        KidsTileGrid(
+                            kidTiles, selection(), { i -> onSelect(i); onOpen(i) }, onGridLayout,
+                            m.padding(top = top.pad, bottom = top.pad),   // as much room under as the icons' row takes over: centred
+                        )
+                    }
+                    return@CompositionLocalProvider
+                }
                 when (style) {
                     MenuStyle.GRID -> {
                         val tiles = remember(rows) { gridTiles(rows) }
@@ -255,7 +267,6 @@ fun MainMenuScreen(
                                     // Consoles' tiles show their logo alone ([GridTileKind.LOGO]).
                                     consoles = screen.category == MenuCategory.CONSOLES,
                                     topGap = screen.category != MenuCategory.TOOLS,   // nothing above Tools' tiles but the icons' row
-                                    centred = screen.category == MenuCategory.APPS,   // Kids Mode's few apps in the middle, as the tiles screen's
                                 )
                             }
                         }
