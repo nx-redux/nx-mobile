@@ -32,8 +32,8 @@ internal fun kidsSetupRows(s: Screen.KidsSetup): List<KidsSetupRow> = when (s.st
 internal fun kidsSetupText(s: Screen.KidsSetup): Pair<String, String> = when (s.step) {
     KidsSetupStep.PIN -> "Choose a PIN" to ""
     KidsSetupStep.APPS -> "Allowed apps" to
-        if (s.setup) "The apps your kid can open while games are closed. You can change them later in Settings."
-        else "The apps your kid can open while games are closed."
+        if (s.setup) "The apps your kid can open while games are closed. You can change them later in Settings. $KIDS_APPS_AVOID"
+        else "The apps your kid can open while games are closed. $KIDS_APPS_AVOID"
     KidsSetupStep.TIMES -> "Play times" to "Games open in these hours. Outside them, only the allowed apps can be opened."
     KidsSetupStep.USAGE -> "Usage access" to "It is how NX Redux sends your kid back from apps that aren't allowed."
     KidsSetupStep.ALARMS -> "Alarms & reminders" to "It lets the warning and the lock come on time. Without it they can come a few minutes late."
@@ -58,6 +58,10 @@ internal fun kidsSetupTouchRow(row: KidsSetupRow, setup: Boolean): NxSettingRow 
 }
 
 internal val KIDS_OFF_ON = listOf("Off", "On")
+
+/** The apps never to allow: each is a way out of Kids Mode, or to new games. */
+internal const val KIDS_APPS_AVOID =
+    "Don't allow Settings, a file manager or the Play Store: from them your kid could turn Kids Mode off or install games."
 
 /**
  * A Kids Mode setup step (or Settings' Allowed apps) in the setup pages' shape ([SetupBlockPage]): its headline and line,

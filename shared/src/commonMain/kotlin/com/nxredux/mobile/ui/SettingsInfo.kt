@@ -265,7 +265,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
         "The hours games open on this day, in half-hour steps, or Locked to keep them closed all day. Ten minutes " +
             "before the end your kid is told to save.",
     )
-    SettingsKind.KIDS_APPS -> quiet("The apps your kid can open while games are closed")
+    SettingsKind.KIDS_APPS -> quiet("The apps your kid can open while games are closed", "The apps your kid can open while games are closed. $KIDS_APPS_AVOID")
     SettingsKind.KIDS_GUARD -> SettingText(
         row.secondary.orEmpty(),
         "Without Usage access, NX Redux cannot send your kid back from an app that isn't allowed. Grant it here.",
