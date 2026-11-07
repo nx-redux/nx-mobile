@@ -151,21 +151,6 @@
      "default": "enabled"
     },
     {
-     "key": "ppsspp_cache_iso",
-     "label": "Cache Full ISO in RAM",
-     "labelCategorized": "",
-     "info": "",
-     "values": [
-      "disabled",
-      "enabled"
-     ],
-     "labels": [
-      "",
-      ""
-     ],
-     "default": "disabled"
-    },
-    {
      "key": "ppsspp_cheats",
      "label": "Internal Cheats Support",
      "labelCategorized": "",
@@ -434,58 +419,36 @@
      "info": "GL/Vulkan only, slower, less lag, restart.",
      "values": [
       "No buffer",
-      "Up to 1"
+      "Up to 1",
+      "Up to 2"
      ],
      "labels": [
+      "",
       "",
       ""
      ],
      "default": "Up to 1"
     },
     {
-     "key": "ppsspp_gpu_hardware_transform",
-     "label": "Hardware Transform",
+     "key": "ppsspp_depth_raster",
+     "label": "Lens Flare Occlusion",
      "labelCategorized": "",
-     "info": "",
+     "info": "Hides lens flares behind objects, in the games that do that by reading the depth buffer. 'Low' is faster and less exact. 'Default' picks per device.",
      "values": [
-      "disabled",
-      "enabled"
+      "default",
+      "auto",
+      "low",
+      "off",
+      "always_on"
      ],
      "labels": [
-      "",
-      ""
+      "Default",
+      "Auto",
+      "Low",
+      "Off",
+      "Always on"
      ],
-     "default": "enabled"
-    },
-    {
-     "key": "ppsspp_software_skinning",
-     "label": "Software Skinning",
-     "labelCategorized": "",
-     "info": "Combine skinned model draws on the CPU, faster in most games.",
-     "values": [
-      "disabled",
-      "enabled"
-     ],
-     "labels": [
-      "",
-      ""
-     ],
-     "default": "enabled"
-    },
-    {
-     "key": "ppsspp_hardware_tesselation",
-     "label": "Hardware Tesselation",
-     "labelCategorized": "",
-     "info": "Uses hardware to make curves.",
-     "values": [
-      "disabled",
-      "enabled"
-     ],
-     "labels": [
-      "",
-      ""
-     ],
-     "default": "disabled"
+     "default": "default"
     },
     {
      "key": "ppsspp_texture_scaling_type",
@@ -630,6 +593,23 @@
       ""
      ],
      "default": "disabled"
+    },
+    {
+     "key": "ppsspp_vr_mode",
+     "label": "VR Mode (OpenGL/GLES)",
+     "labelCategorized": "",
+     "info": "Stereoscopic presents a 3D screen. Immersive uses headset tracking and per-eye fields of view. Requires a frontend supporting stereo views and OpenGL 3 or OpenGL ES 3. Game compatibility varies.",
+     "values": [
+      "Off",
+      "Stereoscopic",
+      "Immersive"
+     ],
+     "labels": [
+      "",
+      "",
+      ""
+     ],
+     "default": "Off"
     }
    ]
   },
@@ -850,38 +830,6 @@
       ""
      ],
      "default": "disabled"
-    },
-    {
-     "key": "ppsspp_lazy_texture_caching",
-     "label": "Lazy Texture Caching (Speedup)",
-     "labelCategorized": "",
-     "info": "Faster, but can cause text problems in a few games.",
-     "values": [
-      "disabled",
-      "enabled"
-     ],
-     "labels": [
-      "",
-      ""
-     ],
-     "default": "disabled"
-    },
-    {
-     "key": "ppsspp_spline_quality",
-     "label": "Spline/Bezier Curves Quality",
-     "labelCategorized": "",
-     "info": "Only used by some games, controls smoothness of curves.",
-     "values": [
-      "Low",
-      "Medium",
-      "High"
-     ],
-     "labels": [
-      "",
-      "",
-      ""
-     ],
-     "default": "High"
     },
     {
      "key": "ppsspp_lower_resolution_for_effects",
@@ -2131,6 +2079,6 @@
    ]
   }
  ],
- "soSha256": "dd1192276697eb0adb0226e878188cdfa19ca85ed770e65fd371e7a9c3f4fb10",
- "probedAt": "2026-09-29"
+ "soSha256": "e918e81f46bb0338faf441cb193bb301f456907c27a786f8a94b05bf7d267e71",
+ "probedAt": "2026-11-07"
 }

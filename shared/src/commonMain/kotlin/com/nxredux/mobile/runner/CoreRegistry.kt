@@ -92,9 +92,9 @@ object CoreRegistry {
         biosFiles = listOf("PPSSPP/"),
         // The backend is locked to "auto", which asks GET_PREFERRED_HW_RENDER, so Graphics API picks GL or Vulkan; "none"
         // (software context) is hidden. retro_cheat_set only works with ppsspp_cheats enabled (off by default), so it is
-        // locked on: the in-game Cheats row is the switch.
-        defaultOptions = mapOf("ppsspp_backend" to "auto", "ppsspp_cheats" to "enabled"),
-        lockedOptions = setOf("ppsspp_cheats", "ppsspp_backend"),
+        // locked on: the in-game Cheats row is the switch. VR Mode needs stereo video views, which we never report.
+        defaultOptions = mapOf("ppsspp_backend" to "auto", "ppsspp_cheats" to "enabled", "ppsspp_vr_mode" to "Off"),
+        lockedOptions = setOf("ppsspp_cheats", "ppsspp_backend", "ppsspp_vr_mode"),
         hiddenValues = mapOf("ppsspp_backend" to setOf("vulkan", "none")),
         vulkan = VulkanSwitch(gles = mapOf("ppsspp_backend" to "auto"), vulkan = mapOf("ppsspp_backend" to "auto")),
         restartOnlyOptions = RestartOnlyOptions.ppsspp,
