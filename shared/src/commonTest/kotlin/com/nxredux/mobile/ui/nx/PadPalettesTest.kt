@@ -3,12 +3,10 @@ package com.nxredux.mobile.ui.nx
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import com.nxredux.mobile.settings.PadButtons
-import com.nxredux.mobile.settings.PadTheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** Pins every pad colour (themes x parts, console faces) to the literal it had before the palettes moved into one file. */
+/** Pins every pad colour (the drawn pad's parts, console faces) to the literal it had before the palettes moved into one file. */
 class PadPalettesTest {
     private fun c(argb: Long) = Color(argb)
     private fun v(vararg argb: Long): Brush = Brush.verticalGradient(argb.map { Color(it) })
@@ -38,16 +36,11 @@ class PadPalettesTest {
         assertEquals(want.engraveLitLip, got.engraveLitLip, "$label engraveLitLip")
         assertEquals(want.engraveInnerShadow, got.engraveInnerShadow, "$label engraveInnerShadow")
         assertEquals(want.engraveFloor, got.engraveFloor, "$label engraveFloor")
-        assertEquals(want.outline, got.outline, "$label outline")
     }
 
     private val charcoalFace = face(
         v(0xFF444B54, 0xFF2A2F36, 0xFF191D22), v(0x40FFFFFF, 0x00FFFFFF),
         v(0xFF141719, 0xFF23282E), v(0x80000000, 0x00000000),
-    )
-
-    private fun outline(stroke: Long, pressedFill: Long, pressedRim: Long) = face(
-        SolidColor(Color.Transparent), solid(stroke), solid(pressedFill), solid(pressedRim),
     )
 
     private val charcoal = PadColors(
@@ -58,55 +51,12 @@ class PadPalettesTest {
         label = c(0xFFB4BAC2), engraveLitLip = c(0xFF40464E), engraveInnerShadow = c(0xFF15181B), engraveFloor = c(0xFF181B1F),
     )
 
-    private val retro = PadColors(
-        surface = c(0xFFC9C5BE),
-        face = face(
-            v(0xFFB0426A, 0xFF8E2A4E, 0xFF6A1C39), v(0x4DFFFFFF, 0x00FFFFFF),
-            v(0xFF4E1229, 0xFF6E2040), v(0x80000000, 0x00000000),
-        ),
-        dpad = face(
-            v(0xFF3A3A3E, 0xFF1E1E21, 0xFF111113), v(0x33FFFFFF, 0x00FFFFFF),
-            v(0xFF08080A, 0xFF18181B), v(0x99000000, 0x00000000),
-        ),
-        pill = charcoalFace,
-        socketFill = c(0xFF5A5550), socketRim = v(0x40000000, 0xD9FFFFFF),
-        wellFill = v(0xFFA29E97, 0xFFB6B2AB, 0xFFCFCBC4), wellRim = v(0x40000000, 0x80FFFFFF),
-        knobShadow = Brush.radialGradient(0f to c(0x59000000), 0.8f to c(0x1F000000), 1f to c(0x00000000)),
-        label = c(0xFFEDE9E3), engraveLitLip = c(0xFFE2DED8), engraveInnerShadow = c(0xFFA6A29C), engraveFloor = c(0xFFB8B4AE),
-    )
-
-    private val blackGrey = PadColors(
-        surface = c(0xFF000000), face = charcoalFace, dpad = charcoalFace, pill = charcoalFace,
-        socketFill = c(0xFF000000), socketRim = charcoal.socketRim,
-        wellFill = v(0xFF000000, 0xFF0B0C0E, 0xFF15171A), wellRim = charcoal.wellRim, knobShadow = charcoal.knobShadow,
-        label = c(0xFFB4BAC2), engraveLitLip = Color.Transparent, engraveInnerShadow = Color.Transparent, engraveFloor = c(0xFF17191C),
-    )
-
-    private val blackOutline = PadColors(
-        surface = c(0xFF000000),
-        face = outline(0xFF5A5F66, 0x1FFFFFFF, 0xFF8A9098),
-        dpad = face(SolidColor(Color.Transparent), solid(0xFF5A5F66), solid(0x1FFFFFFF), SolidColor(Color.Transparent)),
-        pill = outline(0xFF5A5F66, 0x1FFFFFFF, 0xFF8A9098),
-        socketFill = Color.Transparent, socketRim = SolidColor(Color.Transparent), wellFill = SolidColor(Color.Transparent),
-        wellRim = solid(0xFF5A5F66), knobShadow = SolidColor(Color.Transparent),
-        label = c(0xFFB4BAC2), engraveLitLip = Color.Transparent, engraveInnerShadow = Color.Transparent, engraveFloor = c(0xFF17191C),
-        outline = true,
-    )
-
     private fun colored(top: Long, mid: Long, bottom: Long, pTop: Long, pBottom: Long) = face(
         v(top, mid, bottom), v(0x4DFFFFFF, 0x00FFFFFF), v(pTop, pBottom), v(0x80000000, 0x00000000), c(mid),
     )
 
     @Test fun every_pad_colour_is_unchanged() {
-        assertColors("charcoal", charcoal, padColorsFor(PadTheme.CHARCOAL))
-        assertColors("retro", retro, padColorsFor(PadTheme.RETRO))
-        assertColors("black grey", blackGrey, padColorsFor(PadTheme.BLACK, PadButtons.GREY))
-        assertColors("black outline", blackOutline, padColorsFor(PadTheme.BLACK, PadButtons.OUTLINE))
-        // Charcoal and Retro ignore the button set.
-        for (b in PadButtons.entries) {
-            assertColors("charcoal $b", charcoal, padColorsFor(PadTheme.CHARCOAL, b))
-            assertColors("retro $b", retro, padColorsFor(PadTheme.RETRO, b))
-        }
+        assertColors("charcoal", charcoal, CharcoalPadColors)
 
         assertFace("coloredFace", colored(1, 2, 3, 4, 5), coloredFace(c(1), c(2), c(3), c(4), c(5)))
 

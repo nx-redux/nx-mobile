@@ -13,33 +13,15 @@ import com.nxredux.mobile.storage.StateFormat
 fun <T> List<T>.stepFrom(current: T, by: Int): T = this[(indexOf(current) + by).mod(size)]
 
 /**
- * The portrait virtual pad's look: CHARCOAL (dark), RETRO (light-grey body, magenta face buttons) or BLACK (a pure black
- * body, its buttons the [PadButtons] set), all drawn by the app; or a pad skin ([skin]: its pack in the app's skins),
+ * The on-screen pad's look, a pad skin ([skin]: its pack in the app's skins):
  * NX_CARBON (the default, smoke grey), NX_ONYX (the same shell in smoked black) or one of its translucent colours
  * (NX_OBSIDIAN near-black; NX_PLASMA purple, NX_EMBER red, NX_VOLT green, NX_TIDE blue): in game and on the main menu it draws the whole device around the screen wherever the skin has a
  * layout for the window, and the pad is Charcoal everywhere else (a console or window the skin has no layout for).
  */
 enum class PadTheme(val skin: String? = null) {
-    NX_CARBON("nx-carbon"), NX_ONYX("nx-onyx"), NX_OBSIDIAN("nx-obsidian"), NX_PLASMA("nx-plasma"), NX_EMBER("nx-ember"), NX_VOLT("nx-volt"), NX_TIDE("nx-tide"),
-    CHARCOAL, RETRO, BLACK;
+    NX_CARBON("nx-carbon"), NX_ONYX("nx-onyx"), NX_OBSIDIAN("nx-obsidian"), NX_PLASMA("nx-plasma"), NX_EMBER("nx-ember"), NX_VOLT("nx-volt"), NX_TIDE("nx-tide");
 
     companion object { val DEFAULT = NX_CARBON }
-}
-
-/**
- * Appearance → Pad buttons, shown and used only while the [PadTheme] is BLACK: GREY (the default), Charcoal's domed
- * grey buttons, or OUTLINE, each button a thin outline and its label, filled faintly while held. Stored by [name]
- * ([fromStored]).
- */
-enum class PadButtons(val label: String) {
-    GREY("Grey"), OUTLINE("Outline");
-
-    companion object {
-        val DEFAULT = GREY
-
-        /** The set stored as [name]; missing or unknown reads as [DEFAULT]. */
-        fun fromStored(name: String?): PadButtons = entries.firstOrNull { it.name == name } ?: DEFAULT
-    }
 }
 
 /**
@@ -203,10 +185,8 @@ interface AppSettings {
     var extraFolders: List<ExtraFolder>
     /** Console id -> tag to use for files resolved by console; missing = the console's first tag. */
     var defaultTags: Map<String, String>
-    /** Palette of the portrait virtual pad (the landscape clusters always stay Charcoal). */
+    /** The pad skin (Appearance → Pad theme); the drawn pad, where a skin has no layout, is always Charcoal. */
     var padTheme: PadTheme
-    /** The Black pad theme's button set (Appearance → Pad buttons); the other themes ignore it. */
-    var padButtons: PadButtons
     /**
      * Each main menu tab's style (List, Grid or Carousel), Home's too (Layouts → Home layout); a category missing from
      * the map is its default ([MenuStyles.defaultStyleOf]: Grid for Tools, Minimal for Home and Collections, Carousel for Consoles) and a stored

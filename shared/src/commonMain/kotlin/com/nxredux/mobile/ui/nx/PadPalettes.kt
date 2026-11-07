@@ -40,56 +40,7 @@ internal object PadPalettes {
         val engraveFloor = Color(0xFF181B1F)
     }
 
-    /** Retro: a warm light-grey body, magenta A / B / X / Y, a near-black d-pad and knob, a warm dark socket. */
-    object Retro {
-        val surface = Color(0xFFC9C5BE)
-        val faceTop = Color(0xFFB0426A)
-        val faceMid = Color(0xFF8E2A4E)
-        val faceBottom = Color(0xFF6A1C39)
-        val facePressedTop = Color(0xFF4E1229)
-        val facePressedBottom = Color(0xFF6E2040)
-        val dpadTop = Color(0xFF3A3A3E)
-        val dpadMid = Color(0xFF1E1E21)
-        val dpadBottom = Color(0xFF111113)
-        val dpadRimTop = Color(0x33FFFFFF)
-        val dpadPressedTop = Color(0xFF08080A)
-        val dpadPressedBottom = Color(0xFF18181B)
-        val dpadPressedRimTop = Color(0x99000000)
-        val socketFill = Color(0xFF5A5550)
-        val socketRimTop = Color(0x40000000)
-        val socketRimBottom = Color(0xD9FFFFFF)
-        val wellTop = Color(0xFFA29E97)
-        val wellMid = Color(0xFFB6B2AB)
-        val wellBottom = Color(0xFFCFCBC4)
-        val wellRimTop = Color(0x40000000)
-        val wellRimBottom = Color(0x80FFFFFF)
-        val knobShadowCore = Color(0x59000000)
-        val knobShadowMid = Color(0x1F000000)
-        val label = Color(0xFFEDE9E3)
-        val engraveLitLip = Color(0xFFE2DED8)
-        val engraveInnerShadow = Color(0xFFA6A29C)
-        val engraveFloor = Color(0xFFB8B4AE)
-    }
 
-    /** Black (both button sets): a pure black body, Charcoal's caps, a faint well and flat NX mark; Outline adds grey strokes. */
-    object Black {
-        val surface = Color(0xFF000000)
-        val label = Color(0xFFB4BAC2)
-        /** The Outline set's stroke: a mid grey, quiet on black but clear of it. */
-        val stroke = Color(0xFF5A5F66)
-        /** The Outline set's held stroke: brighter, so a press shows without a glow. */
-        val strokePressed = Color(0xFF8A9098)
-        /** The Outline set's faint white fill while held. */
-        val pressedFill = Color(0x1FFFFFFF)
-        val wellTop = Color(0xFF000000)
-        val wellMid = Color(0xFF0B0C0E)
-        val wellBottom = Color(0xFF15171A)
-        val engraveFloor = Color(0xFF17191C)
-        /** The hairline along the body's top edge, so a black pad still parts from a black screen. */
-        val topEdge = Color(0x2EFFFFFF)
-        /** The shadow the body casts up onto the screen, at the edge; clear at its top. */
-        val topShadow = Color(0x99000000)
-    }
 
     /** A letter on a yellow face (N64 C arrows, Dreamcast X), dark so it reads. */
     val yellowFaceLabel = Color(0xFF2B2826)

@@ -120,7 +120,6 @@ import com.nxredux.mobile.settings.PadSlot
 import com.nxredux.mobile.settings.PadLayouts
 import com.nxredux.mobile.settings.PadShape
 import com.nxredux.mobile.layout.DeviceTraits
-import com.nxredux.mobile.settings.PadButtons
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.settings.PadVibration
 import com.nxredux.mobile.settings.GameRumble
@@ -491,7 +490,7 @@ sealed interface Screen {
     data class ArtworkReset(val scopes: List<ResetScope>, val confirm: ResetScope? = null) : Screen
 }
 
-enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_THEME, PAD_BUTTONS, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, MENU_PAD, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
+enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, MENU_PAD, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
@@ -646,7 +645,7 @@ private val ONBOARDING_VALUE_KINDS = mapOf(
     OnboardingStep.TEXT_SIZE to listOf(SettingsKind.TEXT_SIZE),
     OnboardingStep.SAVE_FORMATS to listOf(SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME),
     // Pad buttons is the third row only while the pad shows and Black is the theme; else Continue is there (never stepped).
-    OnboardingStep.PAD to listOf(SettingsKind.MENU_PAD, SettingsKind.PAD_THEME, SettingsKind.PAD_BUTTONS),
+    OnboardingStep.PAD to listOf(SettingsKind.MENU_PAD, SettingsKind.PAD_THEME),
     OnboardingStep.TITLE to listOf(SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS),
     OnboardingStep.ACCENT to listOf(SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT),
 )
@@ -2319,8 +2318,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             listOfNotNull(
                 NxRow("On-screen pad", secondary = if (deps.settings.menuPad) "Show" else "Hide", cycleable = true),
                 if (deps.settings.menuPad) NxRow("Pad theme", secondary = padThemeLabel(deps.settings.padTheme), cycleable = true) else null,
-                // Black's button set, as in Settings → Appearance: only while Black is picked.
-                if (deps.settings.menuPad && deps.settings.padTheme == PadTheme.BLACK) NxRow("Pad buttons", secondary = deps.settings.padButtons.label, cycleable = true) else null,
                 NxRow("Continue"),
             ),
         )
@@ -4490,8 +4487,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         SettingsSection.SYSTEM_BUTTONS -> systemButtonRows()
         SettingsSection.APPEARANCE -> listOf<SettingsRow?>(
             SettingsRow(SettingsKind.PAD_THEME, "Pad theme", padThemeLabel(deps.settings.padTheme)),
-            // The Black theme's button set: only Black has one, so the row shows only while it is the theme.
-            if (deps.settings.padTheme == PadTheme.BLACK) SettingsRow(SettingsKind.PAD_BUTTONS, "Pad buttons", deps.settings.padButtons.label) else null,
             SettingsRow(SettingsKind.ACCENT, "Accent", deps.settings.accent.label),
             SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", deps.settings.secondaryAccent.label),
             // The options lists' text (Settings, Game Settings, the in-game menu): Large or Small.
@@ -4573,9 +4568,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     private fun padThemeLabel(theme: PadTheme): String = when (theme) {
-        PadTheme.CHARCOAL -> "Charcoal"
-        PadTheme.RETRO -> "Retro"
-        PadTheme.BLACK -> "Black"
         PadTheme.NX_CARBON -> "NX Carbon"
         PadTheme.NX_ONYX -> "NX Onyx"
         PadTheme.NX_PLASMA -> "NX Plasma"
@@ -4661,7 +4653,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         return when (row.kind) {
             // Appearance: the pad theme, the accent presets, Auto and the presets, Large / Small.
             SettingsKind.PAD_THEME -> cycle(PadTheme.entries, s.padTheme, ::padThemeLabel) { s.padTheme = it }
-            SettingsKind.PAD_BUTTONS -> cycle(PadButtons.entries, s.padButtons, { it.label }) { s.padButtons = it }
             SettingsKind.ACCENT -> cycle(AccentPreset.entries, s.accent, { it.label }) { s.accent = it }
             SettingsKind.SECONDARY_ACCENT -> cycle(SecondaryAccent.entries, s.secondaryAccent, { it.label }) { s.secondaryAccent = it }
             SettingsKind.TEXT_SIZE -> cycle(OptionTextSize.entries, s.optionTextSize, { it.label }) { s.optionTextSize = it }
@@ -4815,7 +4806,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             currentPad()?.let { pad -> s.systemButtons = SystemButtons.encode(SystemButtons.reset(systemButtonMap(), pad.key)) }
         } else if (section == SettingsSection.APPEARANCE) {
             s.padTheme = PadTheme.DEFAULT
-            s.padButtons = PadButtons.DEFAULT
             s.accent = AccentPreset.DEFAULT
             s.secondaryAccent = SecondaryAccent.DEFAULT
             s.optionTextSize = OptionTextSize.DEFAULT

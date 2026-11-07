@@ -71,15 +71,10 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     )
     // Appearance.
     SettingsKind.PAD_THEME -> quiet(
-        "Colours of the on-screen pad in portrait",
-        "The colours of the on-screen pad in portrait, in the menus and in games. Charcoal is the dark pad; Retro has a " +
-            "light grey body with magenta face buttons; Black has a pure black body, its buttons set by Pad buttons. The " +
-            "landscape button clusters always stay Charcoal.",
-    )
-    SettingsKind.PAD_BUTTONS -> quiet(
-        "How the Black pad's buttons look",
-        "How the buttons look on the Black pad theme. Grey keeps Charcoal's grey buttons on the black body; Outline " +
-            "draws each button as a thin outline with its label, lit faintly while you hold it.",
+        "The skin of the on-screen pad",
+        "The skin drawn around the game and the menus: the whole handheld, its buttons and screens. NX Carbon is smoke " +
+            "grey, NX Onyx and NX Obsidian black, and Plasma, Ember, Volt and Tide translucent purple, red, green and blue. " +
+            "Where a skin has no layout for the window, the plain dark pad shows instead.",
     )
     SettingsKind.ACCENT -> quiet(
         "The selection colour: the selected row, tile or card",

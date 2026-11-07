@@ -136,7 +136,6 @@ import com.nxredux.mobile.ui.nx.GameDetailsPane
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxTextPrompt
 import com.nxredux.mobile.ui.nx.PadEvent
-import com.nxredux.mobile.ui.nx.PadThemeProvider
 import com.nxredux.mobile.ui.nx.PadVibrationProvider
 import com.nxredux.mobile.ui.nx.VirtualPad
 import com.nxredux.mobile.ui.nx.VirtualPadLeft
@@ -189,7 +188,6 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     LaunchedEffect(Unit) { state.loadOnce() }   // App may be composed again on the other display (the main menu there)
     // Settings are plain properties: every Pad theme change republishes the screen, so re-read it when the screen changes.
     val padTheme = remember(screen) { state.settings.padTheme }
-    val padButtons = remember(screen) { state.settings.padButtons }   // Appearance → Pad buttons (Black's set), likewise
     val padVibration = remember(screen) { state.settings.padVibration }   // Controls → Pad vibration, likewise
     // A pad skin theme (NX Carbon): its pack, for the menu's skin layout (the drawn pad where the skin has none).
     val skinPacks = LocalSkinPacks.current
@@ -217,7 +215,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     // Bars and the cutout above and below only (the side cutout is in each page's inset: [nxPageInset]), never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
     Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).windowInsetsPadding(nxScreenInsets())) {
         HandheldShell(
-            pad = { m -> NxTheme { PadVibrationProvider(padVibration) { PadThemeProvider(padTheme, padButtons) { VirtualPad(onPadEvent, m, layout = menuPortraitLayout) } } } },
+            pad = { m -> NxTheme { PadVibrationProvider(padVibration) { VirtualPad(onPadEvent, m, layout = menuPortraitLayout) } } },
             controllerConnected = controllerConnected,
             showPad = menuPad,
             skin = skin,

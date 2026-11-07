@@ -73,8 +73,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.nxredux.mobile.settings.PadGroup
 import com.nxredux.mobile.settings.PadLayout
-import com.nxredux.mobile.settings.PadButtons
-import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.pad_mic
@@ -102,7 +100,6 @@ private object PadStyle {
     val faceInset: Dp = 3.dp        // resting: how far the face sits inside the socket
     val pressedInset: Dp = 5.dp     // pressed: sink the face a little deeper
     val faceLift: Dp = 0.75.dp      // shift the face up slightly so the groove looks even top-to-bottom
-    val outlineWidth: Dp = 1.5.dp   // an outline button's stroke ([PadColors.outline]): thin, but not a hairline
 }
 
 /** The A / B / X / Y face buttons, which take the [PadColors.face] role; every other pad button is a [PadColors.pill]. */
@@ -118,13 +115,13 @@ private val PILL_BUTTONS = setOf(NxButton.L1, NxButton.L2, NxButton.R1, NxButton
 
 /**
  * One button role's raised face: a domed resting fill and rim, and the darker sunken fill and rim shown while held.
- * [tint]: a console's own face colour ([coloredFace]), which an outline pad strokes the button in ([PadColors.faceOf]).
+ * [tint]: a console's own face colour ([coloredFace]).
  */
 @Immutable
 internal class PadFace(val raisedFill: Brush, val raisedRim: Brush, val pressedFill: Brush, val pressedRim: Brush, val tint: Color? = null)
 
 /**
- * Every colour of the pad, per theme ([CharcoalPadColors], [RetroPadColors]). Buttons differ by role: [face] is
+ * Every colour of the drawn pad ([CharcoalPadColors]: the pad where a skin has no layout). Buttons differ by role: [face] is
  * A / B / X / Y, [dpad] the d-pad cross and joystick knob, [pill] the shoulders, SELECT / START / MENU and the
  * d-pad / stick toggle. The engrave colours are the NX mark cut into the body ([NxEmblem]).
  */
@@ -137,7 +134,7 @@ internal class PadColors(
     val pill: PadFace,
     /** The countersink groove around each button, kept an even tone so it reads as the same width all round. */
     val socketFill: Color,
-    /** The groove's rim: a lit lower edge (Retro also shades the top lip), so it catches light along its bottom like the joystick well. */
+    /** The groove's rim: a lit lower edge, so it catches light along its bottom like the joystick well. */
     val socketRim: Brush,
     /** The joystick's outer well: a shallow bowl lit from the top (shadowed top wall, lit bottom wall). */
     val wellFill: Brush,
@@ -148,43 +145,19 @@ internal class PadColors(
     val engraveLitLip: Color,       // lower edge of the NX mark's cut, catching the light
     val engraveInnerShadow: Color,  // upper wall of the cut, in shadow
     val engraveFloor: Color,        // bottom of the groove, darker than the surface
-    /**
-     * An outline pad (Black's Outline buttons): the faces, well and knob are strokes ([PadStyle.outlineWidth]) on no
-     * fill, with no socket, and sit centred (no [PadStyle.faceLift], which only evens out a groove).
-     */
-    val outline: Boolean = false,
-    /**
-     * A body as dark as the screen (Black): a hairline in this colour along its top edge, under a soft shadow it casts
-     * up onto the screen ([padTopEdge]); null, the body's own tone parts it.
-     */
-    val topEdge: Color? = null,
 )
 
 /** The width of a face's, the d-pad cross's and the well's rim. */
-private val PadColors.rimWidth: Dp get() = if (outline) PadStyle.outlineWidth else 1.dp
+private val PadColors.rimWidth: Dp get() = 1.dp
 
-/** How far a face sits up in its socket; none on an outline pad, which has no groove to even out. */
-private val PadColors.lift: Dp get() = if (outline) 0.dp else PadStyle.faceLift
+/** How far a face sits up in its socket. */
+private val PadColors.lift: Dp get() = PadStyle.faceLift
 
-/**
- * A console's own face colours ([override]: the N64's, Dreamcast's, GameCube's) on this pad: as they are, or on an
- * outline pad an outline in the face's [PadFace.tint] (the theme's own face if it has none), so the colours still tell
- * the buttons apart without a filled button on the outline pad.
- */
-internal fun PadColors.faceOf(override: PadFace): PadFace =
-    if (!outline) override else override.tint?.let { outlineFace(it, pressedFill = it.copy(alpha = 0.3f), pressedRim = it) } ?: face   // role: an outline pad button's pressed fill
+/** A console's own face colours ([override]: the N64's, Dreamcast's, GameCube's) on this pad. */
+internal fun PadColors.faceOf(override: PadFace): PadFace = override
 
-/** The label colour on a button drawn with [override]'s face and [labelColor]: on an outline pad, the face's tint (a dark letter meant for a filled yellow face would vanish on black). */
-internal fun PadColors.labelOf(override: PadFace?, labelColor: Color?): Color =
-    (if (outline) override?.tint else null) ?: labelColor ?: label
-
-/** An outline face: no fill at rest, a [stroke] rim; held, a faint [pressedFill] and a [pressedRim]. */
-private fun outlineFace(stroke: Color, pressedFill: Color, pressedRim: Color) = PadFace(
-    raisedFill = SolidColor(Color.Transparent),
-    raisedRim = SolidColor(stroke),
-    pressedFill = SolidColor(pressedFill),
-    pressedRim = SolidColor(pressedRim),
-)
+/** The label colour on a button drawn with [labelColor]; the pad's own caps otherwise. */
+internal fun PadColors.labelOf(@Suppress("UNUSED_PARAMETER") override: PadFace?, labelColor: Color?): Color = labelColor ?: label
 
 /** The Charcoal face: one domed, top-lit grey for every role (the pad's original look). */
 private val CharcoalFace = PadFace(
@@ -216,132 +189,8 @@ internal val CharcoalPadColors = PadColors(
     engraveFloor = PadPalettes.Charcoal.engraveFloor,
 )
 
-/**
- * Retro: a warm light-grey body, like a classic handheld's plastic, with a near-black d-pad and knob, deep magenta
- * A / B / X / Y and Charcoal-face pills. The sockets are a near-dark warm gap (the shadowed slit between button and
- * shell cut-out), not black, rimmed like the joystick well: a shadowed top lip and a lit lower edge.
- */
-internal val RetroPadColors = PadColors(
-    surface = PadPalettes.Retro.surface,
-    face = PadFace(
-        raisedFill = Brush.verticalGradient(listOf(PadPalettes.Retro.faceTop, PadPalettes.Retro.faceMid, PadPalettes.Retro.faceBottom)),
-        raisedRim = Brush.verticalGradient(listOf(PadPalettes.softRimTop, PadPalettes.whiteClear)),
-        pressedFill = Brush.verticalGradient(listOf(PadPalettes.Retro.facePressedTop, PadPalettes.Retro.facePressedBottom)),
-        pressedRim = Brush.verticalGradient(listOf(PadPalettes.pressedRimTop, PadPalettes.blackClear)),
-    ),
-    dpad = PadFace(
-        raisedFill = Brush.verticalGradient(listOf(PadPalettes.Retro.dpadTop, PadPalettes.Retro.dpadMid, PadPalettes.Retro.dpadBottom)),
-        raisedRim = Brush.verticalGradient(listOf(PadPalettes.Retro.dpadRimTop, PadPalettes.whiteClear)),
-        pressedFill = Brush.verticalGradient(listOf(PadPalettes.Retro.dpadPressedTop, PadPalettes.Retro.dpadPressedBottom)),
-        pressedRim = Brush.verticalGradient(listOf(PadPalettes.Retro.dpadPressedRimTop, PadPalettes.blackClear)),
-    ),
-    pill = CharcoalFace,            // the Charcoal theme's button face, shared so the two stay in sync
-    socketFill = PadPalettes.Retro.socketFill,
-    // The well's rim treatment (shadowed top lip, lit lower edge). The lit stop is stronger than the well's #80FFFFFF
-    // so that over the darker groove it lands on the same tone as the well's lit edge (about #E7E5E1).
-    socketRim = Brush.verticalGradient(listOf(PadPalettes.Retro.socketRimTop, PadPalettes.Retro.socketRimBottom)),
-    wellFill = Brush.verticalGradient(listOf(PadPalettes.Retro.wellTop, PadPalettes.Retro.wellMid, PadPalettes.Retro.wellBottom)),
-    wellRim = Brush.verticalGradient(listOf(PadPalettes.Retro.wellRimTop, PadPalettes.Retro.wellRimBottom)),
-    knobShadow = Brush.radialGradient(0f to PadPalettes.Retro.knobShadowCore, 0.8f to PadPalettes.Retro.knobShadowMid, 1f to PadPalettes.blackClear),
-    label = PadPalettes.Retro.label,      // light caps on the dark, magenta and grey buttons
-    engraveLitLip = PadPalettes.Retro.engraveLitLip,
-    engraveInnerShadow = PadPalettes.Retro.engraveInnerShadow,
-    engraveFloor = PadPalettes.Retro.engraveFloor,
-)
-
-/** Black's body, shared by both button sets. */
-private val BLACK_SURFACE = PadPalettes.Black.surface
-/** Black's caps: Charcoal's light grey, which reads on black without glaring. */
-private val BLACK_LABEL = PadPalettes.Black.label
-/** The Outline set's stroke: a mid grey, quiet on black but clear of it. */
-private val BLACK_STROKE = PadPalettes.Black.stroke
-/** The Outline set's held stroke: brighter, with a faint white fill, so a press shows without a glow. */
-private val BLACK_STROKE_PRESSED = PadPalettes.Black.strokePressed
-private val BLACK_PRESSED_FILL = PadPalettes.Black.pressedFill
-
-/**
- * Black, Grey buttons: Charcoal's domed grey buttons on a pure black body. Black has no darker tone for a groove, so
- * a socket is the body's black and shows only Charcoal's lit lower edge, with no grey halo; the joystick well is a
- * faint bowl rising out of black. The NX mark is a flat subtle grey, not cut: no lit lip or shadow, which read oddly on black.
- */
-internal val BlackGreyPadColors = PadColors(
-    surface = BLACK_SURFACE,
-    face = CharcoalFace,
-    dpad = CharcoalFace,
-    pill = CharcoalFace,
-    socketFill = BLACK_SURFACE,
-    socketRim = CharcoalPadColors.socketRim,
-    wellFill = Brush.verticalGradient(listOf(PadPalettes.Black.wellTop, PadPalettes.Black.wellMid, PadPalettes.Black.wellBottom)),
-    wellRim = CharcoalPadColors.wellRim,
-    knobShadow = CharcoalPadColors.knobShadow,
-    label = BLACK_LABEL,
-    engraveLitLip = Color.Transparent,
-    engraveInnerShadow = Color.Transparent,
-    engraveFloor = PadPalettes.Black.engraveFloor,
-    topEdge = PadPalettes.Black.topEdge,
-)
-
-/**
- * Black, Outline buttons: every button, the d-pad cross, the joystick well and knob only a thin mid-grey stroke with
- * its label, on a pure black body with no sockets; a held button lights its stroke and fills faintly. The d-pad's held
- * arm fills without a rim of its own (the cross's outline is its edge).
- */
-internal val BlackOutlinePadColors = PadColors(
-    surface = BLACK_SURFACE,
-    face = outlineFace(BLACK_STROKE, BLACK_PRESSED_FILL, BLACK_STROKE_PRESSED),
-    dpad = outlineFace(BLACK_STROKE, BLACK_PRESSED_FILL, Color.Transparent),
-    pill = outlineFace(BLACK_STROKE, BLACK_PRESSED_FILL, BLACK_STROKE_PRESSED),
-    socketFill = Color.Transparent,
-    socketRim = SolidColor(Color.Transparent),
-    wellFill = SolidColor(Color.Transparent),
-    wellRim = SolidColor(BLACK_STROKE),
-    knobShadow = SolidColor(Color.Transparent),
-    label = BLACK_LABEL,
-    engraveLitLip = BlackGreyPadColors.engraveLitLip,
-    engraveInnerShadow = BlackGreyPadColors.engraveInnerShadow,
-    engraveFloor = BlackGreyPadColors.engraveFloor,
-    outline = true,
-    topEdge = PadPalettes.Black.topEdge,
-)
-
-/** How far up the screen a black body's shadow reaches ([PadColors.topEdge]). */
-private val PAD_TOP_SHADOW = 16.dp
-
-/**
- * [edge] (a black body's): the hairline along the top edge over the body, and the shadow the body casts up onto the
- * screen above it ([PAD_TOP_SHADOW], drawn outside the pad's bounds); null draws nothing.
- */
-private fun Modifier.padTopEdge(edge: Color?): Modifier = if (edge == null) this else drawWithContent {
-    drawContent()
-    val reach = PAD_TOP_SHADOW.toPx()
-    drawRect(
-        Brush.verticalGradient(listOf(Color.Transparent, PadPalettes.Black.topShadow), startY = -reach, endY = 0f),
-        topLeft = Offset(0f, -reach), size = Size(size.width, reach),
-    )
-    drawRect(edge, size = Size(size.width, 1.dp.toPx()))
-}
-
-/** The pad colours in effect; Charcoal unless a [PadThemeProvider] says otherwise (so [NxEmblem] elsewhere stays Charcoal). */
+/** The pad colours in effect: Charcoal, the drawn pad's only look (the pad themes are skins now). */
 internal val LocalPadColors = staticCompositionLocalOf { CharcoalPadColors }
-
-/** [theme]'s colours; [buttons] picks Black's button set and is ignored by the other themes. */
-internal fun padColorsFor(theme: PadTheme, buttons: PadButtons = PadButtons.DEFAULT): PadColors = when (theme) {
-    PadTheme.CHARCOAL, PadTheme.NX_CARBON, PadTheme.NX_ONYX, PadTheme.NX_OBSIDIAN, PadTheme.NX_PLASMA, PadTheme.NX_EMBER, PadTheme.NX_VOLT, PadTheme.NX_TIDE -> CharcoalPadColors   // a skin's pad, where the skin has no layout, is Charcoal
-    PadTheme.RETRO -> RetroPadColors
-    PadTheme.BLACK -> when (buttons) {
-        PadButtons.GREY -> BlackGreyPadColors
-        PadButtons.OUTLINE -> BlackOutlinePadColors
-    }
-}
-
-/**
- * Draws the portrait [VirtualPad] in [content] with [theme]'s colours ([buttons]: Black's button set). The landscape
- * clusters ignore it (always Charcoal).
- */
-@Composable
-fun PadThemeProvider(theme: PadTheme, buttons: PadButtons = PadButtons.DEFAULT, content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalPadColors provides padColorsFor(theme, buttons), content = content)
-}
 
 /**
  * A "+"-shaped d-pad outline — a vertical and a horizontal rounded bar, each one-third the box wide —
@@ -372,7 +221,7 @@ private fun NeuSurface(
     val inset = if (pressed) PadStyle.pressedInset else PadStyle.faceInset
     Box(modifier, contentAlignment = Alignment.Center) {
         // Flat body: the countersink groove carries the depth, no outer halo.
-        if (!colors.outline) Box(Modifier.matchParentSize().background(colors.socketFill, shape).border(1.dp, colors.socketRim, shape))
+        Box(Modifier.matchParentSize().background(colors.socketFill, shape).border(1.dp, colors.socketRim, shape))
         // The raised face; on press it sinks deeper (larger inset) and darkens with an inner shadow.
         // The face sits [faceLift] higher in the socket so the groove looks even top-to-bottom.
         Box(
@@ -779,7 +628,7 @@ private fun NeuDpad(unit: Dp, onEvent: (PadEvent) -> Unit, modifier: Modifier = 
     ) {
         // The countersink groove (full cross), then the raised face — a uniform inset cross so the
         // groove is the same width on every side.
-        if (!colors.outline) Box(Modifier.matchParentSize().background(colors.socketFill, dpadCrossShape).border(1.dp, colors.socketRim, dpadCrossShape))
+        Box(Modifier.matchParentSize().background(colors.socketFill, dpadCrossShape).border(1.dp, colors.socketRim, dpadCrossShape))
         Box(Modifier.matchParentSize().offset(y = -colors.lift).background(colors.dpad.raisedFill, faceCross).border(colors.rimWidth, colors.dpad.raisedRim, faceCross))
         // The four arms; each held one presses in with its outer end rounded.
         DpadArm(NxButton.UP, unit, Alignment.TopCenter, RoundedCornerShape(topStart = armR, topEnd = armR), NxButton.UP in held)
@@ -1174,7 +1023,7 @@ fun VirtualPad(
     // block) is harmless: the router ignores an Up for a button it is not holding.
     val emit = rememberEmit(onEvent)
     val stick = rememberStickChoice(useJoystick, onUseJoystickChange)
-    BoxWithConstraints(modifier.fillMaxSize().padTopEdge(LocalPadColors.current.topEdge).background(LocalPadColors.current.surface).padding(16.dp)) {
+    BoxWithConstraints(modifier.fillMaxSize().background(LocalPadColors.current.surface).padding(16.dp)) {
         // Button size unit. The column stacks 6.12 units at a middle-row scale of 1 (shoulders 1 + cluster 3 +
         // NX mark 1.1 + gap 0.3 + MENU row 0.72), so divide the height by 6.2 to keep it inside a short band without clipping.
         val unit = minOf(maxWidth / 9f, maxHeight / 6.2f)

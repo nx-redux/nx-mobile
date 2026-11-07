@@ -15,7 +15,6 @@ import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.settings.MenuStyles
-import com.nxredux.mobile.settings.PadButtons
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.settings.VerticalListAlignment
@@ -58,7 +57,6 @@ class AppStateLaunchTest {
         override var stateFormat = StateFormat.DEFAULT
         override var useExtractedFileName = false
         override var padTheme: PadTheme = PadTheme.DEFAULT
-        override var padButtons: PadButtons = PadButtons.DEFAULT
         // Home Minimal (its default); the other tabs and the game lists too.
         override var menuStyles: Map<MenuCategory, MenuStyle> = MenuCategory.entries.associateWith { MenuStyle.MINIMAL }
         override var gameListStyle: MenuStyle = MenuStyle.MINIMAL
