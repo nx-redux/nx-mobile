@@ -10,7 +10,6 @@ class ColourRolesLockTest {
     private val literalHomes = setOf(
         "com/nxredux/mobile/ui/nx/NxTheme.kt",
         "com/nxredux/mobile/settings/Accent.kt",
-        "com/nxredux/mobile/ui/nx/PadPalettes.kt",
     )
     private val themeFile = "com/nxredux/mobile/ui/nx/NxTheme.kt"
 

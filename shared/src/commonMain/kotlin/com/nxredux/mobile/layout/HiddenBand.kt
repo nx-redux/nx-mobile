@@ -1,25 +1,14 @@
 package com.nxredux.mobile.layout
 
-import com.nxredux.mobile.ui.nx.midRowScale
-
 /**
- * Height in pixels of portrait's see-through pad overlay over the game: the portrait pad column's
- * fixed 2.42 units (equal to `portraitOverlayUnits` in ui/nx/VirtualPad.kt, pinned by PortraitOverlayTest) plus three times the middle row's scale ([midRowScale] for the window's band [bandWidthUnits] x
- * [bandHeightUnits]), times [bandUnitPx], plus the cluster padding top and bottom.
- */
-fun overlayHeightPx(bandUnitPx: Float, bandWidthUnits: Float, bandHeightUnits: Float, density: Float): Float =
-    (2.42f + 3f * midRowScale(bandWidthUnits, bandHeightUnits)) * bandUnitPx +
-        2f * LayoutConstants.CLUSTER_PADDING_DP * density
-
-/**
- * Height of the space the picture may use above portrait's overlay: the overlay of [overlayH] may cover the bottom [reach]
+ * Height of the space the picture may use above portrait's bare buttons: their band of [overlayH] may cover the bottom [reach]
  * of itself with the picture ([hiddenBandReach]), so only the rest is taken from [areaH].
  */
 fun hiddenSpaceHeight(areaH: Float, overlayH: Float, reach: Float = LayoutConstants.HIDDEN_BAND_REACH): Float =
     areaH - (1f - reach) * overlayH
 
 /**
- * How far into portrait's overlay a [ds] game's picture may reach, as a share of the overlay's height: a third
+ * How far into portrait's bare-button band a [ds] game's picture may reach, as a share of the band's height: a third
  * for the DS / 3DS ([LayoutConstants.DS_HIDDEN_BAND_REACH]), a quarter for the rest (tall arcade, WonderSwan, Lynx).
  */
 fun hiddenBandReach(ds: Boolean): Float =

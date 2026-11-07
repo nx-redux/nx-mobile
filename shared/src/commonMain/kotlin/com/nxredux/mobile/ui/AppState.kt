@@ -114,10 +114,6 @@ import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.settings.MenuStyles
-import com.nxredux.mobile.settings.PadLayoutMap
-import com.nxredux.mobile.settings.PadScreen
-import com.nxredux.mobile.settings.PadSlot
-import com.nxredux.mobile.settings.PadLayouts
 import com.nxredux.mobile.runner.WiiPad
 import com.nxredux.mobile.skin.SkinTweaks
 import com.nxredux.mobile.layout.DeviceTraits
@@ -314,12 +310,6 @@ data class SkinEditRequest(val consoleId: String, val landscape: Boolean, val wi
 
 /** Opens the button layout editor for a [SkinEditRequest], [title] naming it there. */
 interface SkinEditorLauncher { fun open(request: SkinEditRequest, title: String) }
-
-/**
- * The old overlay pad editor's request (PadLayoutActivity, no longer opened from Settings): edit [slot] of [consoleKey]
- * (a console id, or [PadLayouts.SHARED_KEY]). [tag] picks the pad drawn, [title] names it in the editor.
- */
-data class PadEditRequest(val consoleKey: String, val slot: PadSlot, val tag: String, val title: String)
 
 sealed interface Screen {
     /** First setup's first step, before the home pick, where All files access is declared and not granted. */
@@ -4299,20 +4289,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private fun settingsStep(rows: List<SettingsRow>, sel: ListSelection, delta: Int): ListSelection =
         sel.step(delta) { rows.getOrNull(it)?.selectable != false }
 
-    private val _padLayouts = MutableStateFlow(deps.settings.padLayouts)
-    /** The stored pad layouts, republished on every change (the main menu's pads follow Shared). */
-    val padLayouts: StateFlow<PadLayoutMap> = _padLayouts.asStateFlow()
-
-    private val _padScreen = MutableStateFlow(PadScreen.NARROW)
-    /** The screen the app is on ([onPadScreen]): the main menu's pad uses its layouts. */
-    val padScreen: StateFlow<PadScreen> = _padScreen.asStateFlow()
-
-    /** The platform reports the screen the app is on (a Fold's cover or inner screen), measured as a game measures it. */
-    fun onPadScreen(screen: PadScreen) {
-        if (_padScreen.value == screen) return
-        _padScreen.value = screen
-    }
-
     /** The Button layout page's consoles: every console, by name. */
     private val buttonLayoutConsoles: List<Console> by lazy { CoreRegistry.consoles.sortedBy { it.displayName.lowercase() } }
 
@@ -4818,7 +4794,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             s.accent = AccentPreset.DEFAULT
             s.secondaryAccent = SecondaryAccent.DEFAULT
             s.optionTextSize = OptionTextSize.DEFAULT
-            s.padLayouts = emptyMap(); _padLayouts.value = emptyMap()
             s.skinTweaks = ""
         } else if (section == SettingsSection.MAIN_MENU) {
             s.menuStyles = emptyMap()

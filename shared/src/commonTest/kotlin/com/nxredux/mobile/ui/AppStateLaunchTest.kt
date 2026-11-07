@@ -47,7 +47,6 @@ class AppStateLaunchTest {
     private class MemorySettings(override var treeRef: ContentRef? = null) : AppSettings {
         override var extraFolders: List<ExtraFolder> = emptyList()
         override var defaultTags: Map<String, String> = emptyMap()
-        override var padLayouts: com.nxredux.mobile.settings.PadLayoutMap = emptyMap()
         override var debugLog = false
         override var secondScreen = true
         override var pauseWhenUnfocused = true

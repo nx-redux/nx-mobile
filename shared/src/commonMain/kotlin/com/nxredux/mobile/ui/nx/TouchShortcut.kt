@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui.nx
 
-import com.nxredux.mobile.settings.PadGroup
 import com.nxredux.mobile.shortcuts.EffectiveShortcuts
 import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.shortcuts.SpeedOutput
@@ -44,13 +43,6 @@ fun visibleTouchShortcuts(
         }
         TouchShortcut(a, on)
     }
-}
-
-/** The pad layout piece of [slot]. */
-internal val TouchSlot.padGroup: PadGroup get() = when (this) {
-    TouchSlot.ONE -> PadGroup.SHORTCUT_1
-    TouchSlot.TWO -> PadGroup.SHORTCUT_2
-    TouchSlot.THREE, TouchSlot.FOUR -> error("$this is a pad skin's only ([TouchSlot.padDrawn])")
 }
 
 /** The editor's placeholder label for [slot]'s piece. */

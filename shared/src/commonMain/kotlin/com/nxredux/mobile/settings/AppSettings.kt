@@ -306,13 +306,6 @@ interface AppSettings {
     /** Controls → Pad vibration: the on-screen pad's press tick ([PadVibration.DEFAULT] Light). */
     var padVibration: PadVibration
     /**
-     * Controls → Pad layout: every stored pad layout, console id (or [PadLayouts.SHARED_KEY]) → slot → layout. Empty:
-     * the default pad everywhere. Defaulted so a platform or fake without it stores nothing.
-     */
-    var padLayouts: PadLayoutMap
-        get() = emptyMap()
-        set(@Suppress("UNUSED_PARAMETER") value) {}
-    /**
      * Controls → Shortcuts: the base bindings and touch buttons every console and game inherits, as
      * [com.nxredux.mobile.shortcuts.Shortcuts.encodeBase] writes them. Empty: nothing bound. Defaulted so a platform or
      * fake without it stores nothing.

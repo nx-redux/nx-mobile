@@ -211,11 +211,6 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = PadVibration.fromStored(prefs.getString(KEY_PAD_VIBRATION, null))
         set(value) = prefs.edit { putString(KEY_PAD_VIBRATION, value.name) }
 
-    override var padLayouts: PadLayoutMap
-        // The old key's landscape moves are dropped on read until the first save writes the versioned key ([PadLayouts.decodeStored]).
-        get() = PadLayouts.decodeStored(prefs.getString(KEY_PAD_LAYOUTS_V2, null), prefs.getString(KEY_PAD_LAYOUTS_V1, null))
-        set(value) = prefs.edit { putString(KEY_PAD_LAYOUTS_V2, PadLayouts.encode(value)) }
-
     override var shortcuts: String
         // never written: the defaults (Save / Load on the skin's slots); written empty (Clear all): none
         get() = prefs.getString(KEY_SHORTCUTS, null) ?: com.nxredux.mobile.shortcuts.Shortcuts.DEFAULT_BASE
@@ -346,12 +341,6 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_GAME_LIST_LAYOUT_OPTIONS = "game_list_layout_options"
         private const val KEY_GAME_LIST_ACHIEVEMENTS_PANEL = "game_list_achievements_panel"
         private const val KEY_PAD_VIBRATION = "pad_vibration"
-        /**
-         * Pad layouts before the landscape pad moved beside the picture: read until the first save writes
-         * [KEY_PAD_LAYOUTS_V2], then never again; kept, so a downgrade to an earlier build still finds its layouts.
-         */
-        private const val KEY_PAD_LAYOUTS_V1 = "pad_layouts"
-        private const val KEY_PAD_LAYOUTS_V2 = "pad_layouts_v2"
         private const val KEY_SHORTCUTS = "shortcuts"
         private const val KEY_SYSTEM_BUTTONS = "system_buttons"
         private const val KEY_SKIN_TWEAKS = "skin_tweaks"

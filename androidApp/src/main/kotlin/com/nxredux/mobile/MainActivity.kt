@@ -29,9 +29,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.window.layout.WindowMetricsCalculator
 import com.nxredux.mobile.runner.goImmersive
 import com.nxredux.mobile.runner.BiosImport
@@ -95,7 +93,6 @@ import com.nxredux.mobile.scraper.ArtworkService
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.AndroidDeviceInfo
 import com.nxredux.mobile.settings.FolderPicker
-import com.nxredux.mobile.settings.PadScreen
 import com.nxredux.mobile.storage.AndroidAllFilesAccess
 import com.nxredux.mobile.storage.AndroidLibraryIndexStore
 import com.nxredux.mobile.storage.AndroidPrivateFiles
@@ -469,10 +466,6 @@ class MainActivity : ComponentActivity(), FolderPicker {
             // As the home screen, Back on the main menu stays: there is nothing under a launcher. Another instance (the
             // drawer's, in its own task) still closes.
             BackHandler(enabled = true) { if (!state.back() && !(asHome && launcher.isHome())) finish() }
-            // The pad layouts' screen from the same measure the game and the editor use (the whole display, bars
-            // included), so the Pad layout page edits the layouts a game will draw.
-            val padScreen = PadScreen.of(LocalConfiguration.current.smallestScreenWidthDp.toFloat())
-            LaunchedEffect(padScreen) { state.onPadScreen(padScreen) }
             // One App at a time: with the menu on the second display ([syncMenuScreen]) this window has the top screen.
             // This window's root gets the insets unconsumed: the pages may pad for the bars at rest ([LocalRestingBars]).
             CompositionLocalProvider(LocalPosture provides posture.value, LocalRestingBars provides true, LocalSkinPacks provides ::menuSkinPack) { if (menuOnSecond.value) MenuTopScreen(state) else App(state, ::pad) }

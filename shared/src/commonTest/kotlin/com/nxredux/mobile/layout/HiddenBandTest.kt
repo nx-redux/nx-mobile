@@ -6,11 +6,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class HiddenBandTest {
-    @Test fun overlay_height_adds_padding() {
-        // Wide band: midRowScale = 1.25, so (2.42 + 3.75) units + 2 x 16 dp.
-        assertEquals((2.42f + 3.75f) * 10f + 2f * 16f * 2f, overlayHeightPx(10f, 20f, 20f, 2f), 0.001f)
-    }
-
     @Test fun quarter_rule_space() = assertEquals(1268f, hiddenSpaceHeight(1868f, 800f), 0.001f)
 
     @Test fun ds_and_3ds_reach_a_third() {

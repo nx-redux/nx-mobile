@@ -612,9 +612,9 @@ internal class DualScreenController(
     }
 
     /**
-     * Where the main panel's host sits among the root's children: the panel right above gameContainer (under the pads,
-     * which it hides anyway); the Panel pill alone right above the pads, whose right cluster would cover it in landscape,
-     * and still under the menu and the notifications. Moved only when its place changed.
+     * Where the main panel's host sits among the root's children: the panel right above gameContainer (under the pad,
+     * which it hides anyway); the Panel pill alone, or a panel in a skin's glass, right above the skin's view, and still
+     * under the menu and the notifications. Moved only when its place changed.
      */
     fun placeMainPanelHost() {
         val host = mainPanelHost ?: return
@@ -625,11 +625,10 @@ internal class DualScreenController(
         // The other children's places as if the host were out of the root.
         fun without(i: Int) = if (current in 0 until i) i - 1 else i
         val game = without(root.indexOfChild(findViewById(R.id.gameContainer)))
-        val lastPad = padLayout.padViews.maxOfOrNull { without(root.indexOfChild(it)) } ?: -1
         // in a skin's glass: right above the skin's view (which would take its touches), under the menu and the notifications
         val skin = padLayout.skinViewNow?.let { without(root.indexOfChild(it)) } ?: -1
         val target = when {
-            inGlass || pillOnly -> maxOf(game, lastPad, skin) + 1
+            inGlass || pillOnly -> maxOf(game, skin) + 1
             else -> game + 1
         }
         if (current == target) return

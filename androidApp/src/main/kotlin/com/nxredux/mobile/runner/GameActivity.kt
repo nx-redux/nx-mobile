@@ -162,7 +162,6 @@ import com.nxredux.mobile.ui.nx.NxProgressPill
 import com.nxredux.mobile.ui.nx.NxToast
 import com.nxredux.mobile.ui.nx.nxNotificationPlacement
 import com.nxredux.mobile.ui.nx.nxTopCentreMaxWidth
-import com.nxredux.mobile.ui.nx.topCentreMaxWidth
 import com.nxredux.mobile.ui.nx.map
 import com.nxredux.mobile.ui.nx.SlotUi
 import com.nxredux.mobile.ui.nx.PadMic
@@ -758,7 +757,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         mic?.setGranted(micAccess.granted())
         pushMicSource(foreground = true)
         dual.syncDual()   // Settings → Second screen may have changed meanwhile
-        padLayout.onResume()   // Controls → Pad layout may have changed meanwhile
     }
 
     /** API 29+: multi-resume keeps this activity resumed while another app has the focus; only the top one is told. */
@@ -3145,23 +3143,20 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     val band = config.orientation == Configuration.ORIENTATION_PORTRAIT && padLayout.portraitBandPx() > 0
                     val sides = if (band) WindowInsetsSides.Horizontal + WindowInsetsSides.Top
                         else WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical
-                    // Over the landscape overlay pad, top-centre (its system row holds the top corners, its d-pad
-                    // the bottom-left), and over a pad skin (its shell holds the corners), below any cutout; elsewhere
-                    // the corners.
+                    // Over the bare skin buttons and over a pad skin (their shoulders or shell hold the corners),
+                    // top-centre below any cutout; elsewhere the corners.
                     val placement = nxNotificationPlacement(padLayout.overlayPadShown.value || padLayout.skinShownState.value)
-                    // Between the clusters' system rows: the same screen, cutout inset and unit the clusters are laid out with.
+                    // Kept off the top corners ([nxTopCentreMaxWidth]) from the cutout inset and this view's size.
                     val density = LocalDensity.current
                     val dir = LocalLayoutDirection.current
                     val cutout = WindowInsets.displayCutout
                     val inset = with(density) {
                         symmetricCutoutInset(cutout.getLeft(density, dir).toFloat(), cutout.getRight(density, dir).toFloat()).toDp().value
                     }
-                    // This view's own size: in landscape the root's, which the clusters (MATCH_PARENT tall) fit their unit to.
+                    // This view's own size: in landscape the root's.
                     var origin by remember { mutableStateOf(IntOffset.Zero) }   // this view's top-left in the window
                     BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow().round() }) {
-                        // Beside the picture the top corners hold only the shoulders (the system rows sit lower): clear those.
-                        val shoulders = padLayout.shoulderReachPx.value?.let { with(density) { it.toDp().value } }
-                        val maxW = (if (shoulders != null) topCentreMaxWidth(maxWidth.value, shoulders) else nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset)).dp
+                        val maxW = nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset).dp
                         NxNotifications(toasts, pill, safeSides = sides, placement = placement, topCentreMaxWidth = maxW)
                         // Top-right of the picture (not the screen: the landscape pad's shoulders hold the screen's corners),
                         // kept inside the cutout; not under the menu.

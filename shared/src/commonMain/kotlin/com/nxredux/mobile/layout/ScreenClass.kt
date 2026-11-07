@@ -23,7 +23,6 @@ object LayoutConstants {
     const val BAND_CM = 5.8f
     const val BAND_MAX_SHARE = 0.6f
     const val CLUSTER_PADDING_DP = 16f
-    const val EDGE_NUDGE_UNITS = 0.2f
     const val REFERENCE_LINES = 224
     const val HIDDEN_BAND_REACH = 0.25f
     /** DS / 3DS: a third, so the Fold's Large screen reaches 6x + 3x; the touch screen sits between the pad's corners. */

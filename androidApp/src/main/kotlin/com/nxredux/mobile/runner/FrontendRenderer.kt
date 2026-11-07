@@ -30,7 +30,6 @@ import com.nxredux.mobile.layout.overlayClear
 import com.nxredux.mobile.layout.picture
 import com.nxredux.mobile.layout.pictureSpace
 import com.nxredux.mobile.layout.placedFor
-import com.nxredux.mobile.layout.setAsidePx
 import com.nxredux.mobile.options.BRICK_HEIGHT
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.NdsOptions
@@ -481,14 +480,14 @@ internal class FrontendRenderer(
     }
 
     /**
-     * Lays the picture out in the game area and the pad around it. The space the pad leaves ([PadRoom]: the set-aside
-     * width each side of landscape clusters, the portrait overlay's space, else the whole area) holds the picture: under Screen Scaling Auto at its console's scale ([picture]); Native, Aspect and Fullscreen
+     * Lays the picture out in the game area and the pad around it. The space the pad leaves ([PadRoom]: the space above
+     * portrait's bare buttons, else the whole area) holds the picture: under Screen Scaling Auto at its console's scale ([picture]); Native, Aspect and Fullscreen
      * size it in the whole area as before. DS games (a plain 256x384 frame) get their screens as regions of the view
      * ([NdsLayout], in that same space), with the viewport the whole area and no offsets or overlay: the fork ignores the
      * screen offset and the scaling mode for regions. Under a pad skin, DS / 3DS screens go in its glasses instead
      * ([skinDsLayout]). Other games: the picture (or its overlay box) becomes the GL
      * viewport and the overlay view's bounds; the offsets (scaled to the box) go to the view and move the picture after
-     * its placement. The pad is then fitted to the final picture ([PadLayoutController.placeClusters]). No-op until laid
+     * its placement. The bare buttons then follow the final picture ([PadLayoutController.setOverlayClear]). No-op until laid
      * out. [geometry]: the view's, when the caller has just read it.
      */
     fun relayoutFrontend(geometry: FloatArray? = null) {
@@ -505,12 +504,10 @@ internal class FrontendRenderer(
         frame?.let(padLayout::onFrame)
         val room = padLayout.padRoom()
         val shape = activity.windowShape()   // one window reading for this layout
-        val pad = padLayout.landscapePad(shape)
         val screen = shape.screenClass
         val overlayH = padLayout.hiddenOverlayHeightPx()
-        val setAside = pad?.let { setAsidePx(screen, it.reach) } ?: 0f
-        // The DS / 3DS may reach a third into the portrait overlay (the Fold's 6x + 3x), the rest a quarter.
-        val space = pictureSpace(room, w, h, setAside, overlayH, hiddenBandReach(NdsOptions.appliesTo(gameTag) || N3dsOptions.appliesTo(gameTag)))
+        // The DS / 3DS may reach a third into portrait's bare-button band (the Fold's 6x + 3x), the rest a quarter.
+        val space = pictureSpace(room, w, h, overlayH, hiddenBandReach(NdsOptions.appliesTo(gameTag) || N3dsOptions.appliesTo(gameTag)))
         val skinDs = skinDsLayout(g)
         val nds = skinDs?.regions ?: ndsLayout(w, h, g, space, room, overlayH, screen) ?: n3dsSplitLayout(w, h)
         // An area too small for one DS screen pixel (NdsLayout returns no regions) is only ever a transient mid-resize
@@ -519,12 +516,8 @@ internal class FrontendRenderer(
         if (nds != null && nds.isEmpty()) return
         // Likewise a skin glass with no pixel: keep what is drawn.
         if (skinDs != null && listOf(skinDs.top, skinDs.bottom).any { it.width <= 0f || it.height <= 0f }) return
-        // Before its first frame a DS game's frame size is unknown (0x0): it stays split as it started, overlay off. The
-        // clusters still take their unit and rows (hidden), so they are measured by the first frame.
-        if (nds == null && ndsSplit && !gameReady) {
-            pad?.let { padLayout.placeClusters(null, it) }
-            return
-        }
+        // Before its first frame a DS game's frame size is unknown (0x0): it stays split as it started, overlay off.
+        if (nds == null && ndsSplit && !gameReady) return
         ndsRegions = nds ?: emptyList()
         val secondDs = secondDsRegions(g)
         secondNdsRegions = secondDs.takeIf { isNds }.orEmpty()
@@ -546,12 +539,12 @@ internal class FrontendRenderer(
             shownPicture = null
             view.screenRegions = nds.map { it.toScreenRegion(w, h) }
             // Under a skin there is no drawn pad to place beside the screens.
-            fitPad(if (skinDs != null) PadRoom.NONE else room, pad, shown, frameKnown = true, h, overlayH)
+            fitPad(if (skinDs != null) PadRoom.NONE else room, shown, frameKnown = true, h, overlayH)
             val scales = nds.joinToString(" + ") { "${it.screen.value}${if (it.inset) " inset" else ""} %.2fx".format(java.util.Locale.US, it.dst.height / 192f) }
             if (skinDs != null) {
-                logLayout(w, h, shape, "SKIN_DS", null, 0f, "top=${skinDs.top.short()} bottom=${skinDs.bottom.short()}", "${if (isN3ds) "3ds" else "ds"} $scales")
+                logLayout(w, h, shape, "SKIN_DS", "top=${skinDs.top.short()} bottom=${skinDs.bottom.short()}", "${if (isN3ds) "3ds" else "ds"} $scales")
             } else {
-                logLayout(w, h, shape, room.name, pad, setAside, spaceAndPicture(space, shown), "ds $scales")
+                logLayout(w, h, shape, room.name, spaceAndPicture(space, shown), "ds $scales")
             }
             return
         }
@@ -610,9 +603,9 @@ internal class FrontendRenderer(
         }
         // A bezel counts as picture: the pad over its border is see-through. Under Auto the shown rect is that box (offset).
         val covered = if (s.scaling != ScreenScaling.AUTO && overlayAspect != null && overlayAspect > 0f) box else shown
-        fitPad(room, pad, covered, frameKnown = frame != null, h, overlayH)
+        fitPad(room, covered, frameKnown = frame != null, h, overlayH)
         val scale = frame?.let { shown.height / (if (it.rotated) it.width else it.height) }
-        logLayout(w, h, shape, room.name, pad, setAside, spaceAndPicture(space, shown), "${s.scaling} frame=${frame?.let { "${it.width.roundToInt()}x${it.height.roundToInt()}" }} scale=${scale?.let { "%.2f".format(java.util.Locale.US, it) }}")
+        logLayout(w, h, shape, room.name, spaceAndPicture(space, shown), "${s.scaling} frame=${frame?.let { "${it.width.roundToInt()}x${it.height.roundToInt()}" }} scale=${scale?.let { "%.2f".format(java.util.Locale.US, it) }}")
     }
 
     /**
@@ -691,16 +684,11 @@ internal class FrontendRenderer(
     }
 
     /**
-     * The pad fitted to the final [picture] (game-area px; the area is the window in landscape, where the clusters are):
-     * the clusters beside it, or the portrait overlay solid when the picture stops above it. A [frameKnown] picture
-     * lets the pads that waited for it show.
+     * The pad fitted to the final [picture] (game-area px): portrait's bare buttons solid when the picture stops above
+     * their band. A [frameKnown] picture lets the pads that waited for it show.
      */
-    private fun fitPad(room: PadRoom, pad: LandscapePad?, picture: PxRect, frameKnown: Boolean, areaH: Float, overlayH: Float) {
-        when (room) {
-            PadRoom.BESIDE -> pad?.let { padLayout.placeClusters(picture.takeIf { frameKnown }, it) }
-            PadRoom.HIDDEN_BAND -> padLayout.setOverlayClear(frameKnown && overlayClear(picture.y + picture.height, areaH, overlayH))
-            PadRoom.NONE -> Unit
-        }
+    private fun fitPad(room: PadRoom, picture: PxRect, frameKnown: Boolean, areaH: Float, overlayH: Float) {
+        if (room == PadRoom.HIDDEN_BAND) padLayout.setOverlayClear(frameKnown && overlayClear(picture.y + picture.height, areaH, overlayH))
         if (frameKnown) padLayout.onPictureKnown()
         // After the viewport and regions above: queued on the GL thread in order, so the first picture drawn is placed.
         // A fold's 3DS switch keeps it held until the core's new frame size is laid out ([watchGeometry]).
@@ -722,9 +710,8 @@ internal class FrontendRenderer(
     private fun spaceAndPicture(space: PxRect, picture: PxRect) = "space=${space.short()} picture=${picture.short()}"
 
     /** [rects]: where the picture went ([spaceAndPicture]; under a pad skin, the two screens' rects). */
-    private fun logLayout(w: Float, h: Float, shape: WindowShape, room: String, pad: LandscapePad?, setAside: Float, rects: String, what: String) {
-        val reach = pad?.let { "reach=${it.reach.edgePx.roundToInt()}+${it.reach.buttonsPx.roundToInt()}${if (it.measured) " measured" else " estimated"} unit=${"%.1f".format(java.util.Locale.US, it.unitPx)}" } ?: "no clusters"
-        val line = "relayout: window=${shape.widthPx}x${shape.heightPx} ${shape.screenClass} area=${w.roundToInt()}x${h.roundToInt()} room=$room $reach setAside=${setAside.roundToInt()} " +
+    private fun logLayout(w: Float, h: Float, shape: WindowShape, room: String, rects: String, what: String) {
+        val line = "relayout: window=${shape.widthPx}x${shape.heightPx} ${shape.screenClass} area=${w.roundToInt()}x${h.roundToInt()} room=$room " +
             "$rects $what"
         if (line == lastLayoutLog) return
         lastLayoutLog = line

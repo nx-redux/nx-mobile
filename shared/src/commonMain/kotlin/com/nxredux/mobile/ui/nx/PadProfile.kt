@@ -8,9 +8,6 @@ import com.nxredux.mobile.runner.PadMap
 import com.nxredux.mobile.runner.SegaPad
 import com.nxredux.mobile.runner.WiiPad
 
-/** Which face cluster a pad draws: the X/Y/B/A diamond, the Nintendo 64's A, B and C diamond, or the Sega 6-button pad. */
-enum class FaceCluster { DIAMOND, N64, SEGA }
-
 /**
  * A face-button symbol drawn as a shape instead of its text label (PlayStation ○ × △ □, whose font glyphs have uneven
  * weights). [label] is the text the symbol stands for, which [PadProfile.label] still returns.
@@ -34,8 +31,6 @@ class PadProfile private constructor(
     private val map: PadMap,
     private val n3dsNew: Boolean = false,
     val wiiPad: WiiPad? = null,
-    /** The layout editor's Wii pad ([forLayoutEditor]): the Classic Controller's groups and the Wiimote's MOTION. */
-    private val editorMotion: Boolean = false,
 ) {
     enum class Kind {
         /** The console's [PadMap] labels (the buttons' own letters where it has none): X top, Y left, A right, B bottom. */
@@ -74,45 +69,25 @@ class PadProfile private constructor(
 
         /**
          * The PlayStation 2's DualShock 2: the PlayStation labels of its [PadMap] (○ × △ □, × confirms), both sticks
-         * always drawn beside the d-pad and the face cluster ([dualSticks], no d-pad / stick toggle), and L3 / R3 as
-         * their own pills.
+         * and L3 / R3.
          */
         PS2,
     }
 
     /**
      * The pad draws a C-stick, the core's right analog (the New 3DS, the Wii Classic Controller, the GameCube): a small
-     * analog stick in the face cluster's top-left corner in landscape ([cStickLayout]), between the clusters in portrait.
+     * analog stick.
      */
     val cStick: Boolean get() = kind == Kind.N3DS && n3dsNew || wiiPad == WiiPad.CLASSIC || kind == Kind.GC
 
-    /**
-     * The pad draws the d-pad and the left stick together, and the face cluster with the right stick (the core's right
-     * analog), each stick with its click as a pill (L3 / R3): the PS2, whose games switch between d-pad and stick mid-play.
-     * No d-pad / stick toggle then ([padSystemRow]).
-     */
-    val dualSticks: Boolean get() = kind == Kind.PS2
-
-    /**
-     * The pad shows the MOTION button (tap toggles motion, long-press recentres): every Wii pad but the Classic
-     * Controller; the layout editor's Wii pad too when the phone has motion ([forLayoutEditor]).
-     */
-    val motionButton: Boolean get() = kind == Kind.WII && (wiiPad != WiiPad.CLASSIC || editorMotion)
-
-    /** The pad shows HOME between SELECT and START, as on a Wiimote: every Wii pad. */
-    val homeButton: Boolean get() = kind == Kind.WII
+    /** The pad has the MOTION button (tap toggles motion, long-press recentres): every Wii pad but the Classic Controller. */
+    val motionButton: Boolean get() = kind == Kind.WII && wiiPad != WiiPad.CLASSIC
 
     /**
      * The pad starts on its stick, not the d-pad, until the player chooses ([PadStickModes]): the Nunchuk's stick and the
      * Classic Controller's left stick are what those games move with.
      */
     val stickByDefault: Boolean get() = wiiPad == WiiPad.NUNCHUK || wiiPad == WiiPad.CLASSIC
-
-    val cluster: FaceCluster get() = when {
-        kind == Kind.N64 -> FaceCluster.N64
-        kind == Kind.TABLE && map.segaCluster -> FaceCluster.SEGA
-        else -> FaceCluster.DIAMOND
-    }
 
     fun label(button: NxButton): String = when (kind) {
         Kind.TABLE, Kind.PS2 -> map.label(button) ?: button.glyph()
@@ -201,15 +176,6 @@ class PadProfile private constructor(
         val N3DS_NEW = PadProfile(Kind.N3DS, PadMap.IDENTITY, n3dsNew = true)
         val GC = PadProfile(Kind.GC, PadMap.IDENTITY)
         val PS2 = PadProfile(Kind.PS2, PadMap.forTag("PS2"))
-
-        /**
-         * The pad the layout editor arranges for [tag]: the console's fullest, so every group it can show is placed (the
-         * New 3DS's C-stick; the Wii's Classic Controller, with its C-stick, every shoulder and HOME, plus the Wiimote's
-         * MOTION when [motion]: the phone has the sensors, so its Wiimote games draw it, [motionButton]).
-         */
-        fun forLayoutEditor(tag: String, motion: Boolean = false): PadProfile =
-            if (tag.trim().uppercase() == "WII") PadProfile(Kind.WII, PadMap.IDENTITY, wiiPad = WiiPad.CLASSIC, editorMotion = motion)
-            else forTag(tag, n3dsNew = true)
 
         /**
          * [sega]: the resolved Sega pad for the Sega pad tags (null = unknown: all six drawn). [n3dsNew]: the 3DS pad

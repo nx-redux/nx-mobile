@@ -1,8 +1,6 @@
 package com.nxredux.mobile.runner
 
-import com.nxredux.mobile.layout.Reach
 import com.nxredux.mobile.layout.ScreenClass
-import com.nxredux.mobile.layout.setAsidePx
 import com.nxredux.mobile.layout.ScreenClass.NEAR_SQUARE_TABLET
 import com.nxredux.mobile.layout.ScreenClass.REGULAR_PHONE
 import com.nxredux.mobile.layout.ScreenClass.STUBBY_PHONE
@@ -100,7 +98,7 @@ class NdsLayoutTest {
      * for the screens.
      */
     private val unfoldedLandscape: PxRect = run {
-        val side = setAsidePx(NEAR_SQUARE_TABLET, Reach(77f, 526f))
+        val side = (77f + 526f) / 2f   // half the reach a side, as the landscape pad beside the picture set aside
         PxRect(side, 0f, 2448f - 2f * side, 1848f)
     }
 

@@ -135,12 +135,6 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|locale|layoutDirection"
             android:theme="@style/Theme.NxMobile" />
-        <!-- Controls → Pad layout's editor: holds the edited shape's orientation (PadLayoutActivity). -->
-        <activity
-            android:name=".padlayout.PadLayoutActivity"
-            android:exported="false"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|locale|layoutDirection"
-            android:theme="@style/Theme.NxMobile" />
         <service
             android:name=".scraper.ScrapeService"
             android:foregroundServiceType="dataSync"

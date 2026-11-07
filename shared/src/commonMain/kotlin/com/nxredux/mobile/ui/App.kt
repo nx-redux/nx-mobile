@@ -102,9 +102,6 @@ import com.nxredux.mobile.settings.ConsoleArt
 import com.nxredux.mobile.settings.GameListArt
 import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuStyle
-import com.nxredux.mobile.settings.PadLayouts
-import com.nxredux.mobile.settings.PadShape
-import com.nxredux.mobile.settings.PadSlot
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.HandheldShell
@@ -137,8 +134,6 @@ import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxTextPrompt
 import com.nxredux.mobile.ui.nx.PadEvent
 import com.nxredux.mobile.ui.nx.PadVibrationProvider
-import com.nxredux.mobile.ui.nx.VirtualPadLeft
-import com.nxredux.mobile.ui.nx.VirtualPadRight
 import com.nxredux.mobile.ui.nx.footerModeFor
 import com.nxredux.mobile.ui.nx.LocalHasTouchscreen
 import com.nxredux.mobile.ui.nx.rememberHasTouchscreen
