@@ -204,6 +204,20 @@ object SkinTweaks {
         return dx * dx + dy * dy
     }
 
+    /** [consoleId]'s tweaks for [layoutId] in the [stored] text ([decode]); none when it has none. */
+    fun of(stored: String, consoleId: String, layoutId: String): Map<String, SkinTweak> =
+        decode(stored)[consoleId]?.get(layoutId).orEmpty()
+
+    /**
+     * The [stored] text with [tweaks] as [consoleId]'s for [layoutId]; its other layouts and every other console's stay.
+     * No tweaks drops the layout, and a console left with none goes too.
+     */
+    fun withLayout(stored: String, consoleId: String, layoutId: String, tweaks: Map<String, SkinTweak>): String {
+        val all = decode(stored)
+        val mine = all[consoleId].orEmpty().let { if (tweaks.isEmpty()) it - layoutId else it + (layoutId to tweaks) }
+        return encode(if (mine.isEmpty()) all - consoleId else all + (consoleId to mine))
+    }
+
     /** The tweaks as text: one line per group, `console layout group dx dy scale`. */
     fun encode(m: Map<String, ConsoleTweaks>): String = buildString {
         for ((console, layouts) in m) for ((layout, groups) in layouts) for ((group, t) in groups) {

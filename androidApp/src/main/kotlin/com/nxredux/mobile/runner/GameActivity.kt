@@ -147,6 +147,11 @@ import com.swordfish.libretrodroid.Variable
 import com.swordfish.libretrodroid.VirtualFile
 import com.nxredux.mobile.ui.nx.PadProfile
 import com.nxredux.mobile.ui.nx.NxTheme
+import com.nxredux.mobile.ui.nx.nxColorsFor
+import androidx.compose.ui.graphics.asImageBitmap
+import com.nxredux.mobile.ui.skinlayout.SkinEditorState
+import com.nxredux.mobile.ui.skinlayout.SkinLayoutEdit
+import com.nxredux.mobile.ui.skinlayout.SkinLayoutEditor
 import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.InputRouter
 import com.nxredux.mobile.ui.nx.MenuEffect
@@ -3229,7 +3234,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override val menuRouter: InputRouter get() = menu.menuRouter
     override fun menuLayoutParams(orientation: Int, overPanel: Boolean, glass: Boolean): FrameLayout.LayoutParams = menu.menuLayoutParams(orientation, overPanel, glass)
     override fun toggleMenu() = menu.toggleMenu()
-    override fun backPressed() = menu.backPressed()
+    override fun backPressed() = if (skinEditView != null) skinEditBack() else menu.backPressed()
 
     override fun onShortcut(action: ShortcutAction, down: Boolean) {
         if (action == ShortcutAction.TOGGLE_MIC) { if (down && mic != null) toggleMic(); return }
@@ -3375,6 +3380,82 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
+    /** The Adjust buttons editor over the paused game ([adjustButtons]) and its state; null while it isn't up. */
+    private var skinEditView: ComposeView? = null
+    private var skinEditState: SkinEditorState? = null
+
+    /**
+     * The menu's Adjust buttons: the paused frame grabbed, then the skin layout editor for the layout being played over
+     * everything, the menu hidden under it. The game stays paused; Save and Cancel both come back to the menu as it was.
+     */
+    override fun adjustButtons() {
+        if (quitting || skinEditView != null) return
+        val edit = padLayout.skinEdit() ?: run { toast("No button layout fits this screen"); return }
+        captureThumbnail { frame ->
+            // the menu closed, or the game quit, while the frame was read: nothing to edit over
+            if (!menuOpen || quitting || skinEditView != null) { frame?.recycle(); return@captureThumbnail }
+            showSkinEdit(edit, frame)
+        }
+    }
+
+    /** The editor for [edit], [frame] behind it (black without one). */
+    private fun showSkinEdit(edit: PadLayoutController.SkinEdit, frame: Bitmap?) {
+        val root = findViewById<FrameLayout>(R.id.root)
+        val settings = AndroidAppSettings(this)
+        val state = SkinLayoutEdit.state(settings, edit.consoleId, edit.placement, edit.w, edit.h)
+        val colors = nxColorsFor(settings.accent, settings.secondaryAccent)
+        val title = CoreRegistry.consoles.firstOrNull { it.id == edit.consoleId }?.displayName ?: "Adjust buttons"
+        val picture = edit.picture.asImageBitmap()
+        val parts = edit.parts?.asImageBitmap()
+        val backdrop = frame?.asImageBitmap()
+        val alpha = padLayout.padLandscapeAlpha.value   // the bare buttons at the overlay's opacity, as in the game
+        menu.menuRouter.releaseAll()
+        val view = ComposeView(this).apply {
+            setContent {
+                NxTheme(colors = colors) {
+                    BoxWithConstraints(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
+                        // a new window size (a turn, a fold) is another layout: the edit ends unsaved
+                        if (constraints.maxWidth != edit.w || constraints.maxHeight != edit.h) {
+                            androidx.compose.runtime.LaunchedEffect(Unit) { closeSkinEdit() }
+                            return@BoxWithConstraints
+                        }
+                        SkinLayoutEditor(
+                            state, picture, parts, edit.bare, backdrop, title,
+                            onSave = { tweaks ->
+                                SkinLayoutEdit.save(AndroidAppSettings(this@GameActivity), edit.consoleId, edit.placement.spec.id, tweaks)
+                                closeSkinEdit()
+                                padLayout.applyLayout(resources.configuration.orientation)
+                            },
+                            onClose = ::closeSkinEdit,
+                            bareAlpha = alpha,
+                        )
+                    }
+                }
+            }
+        }
+        skinEditView = view
+        skinEditState = state
+        menu.menuView?.visibility = View.INVISIBLE
+        // last: over the game, the pad, the menu and the notifications
+        root.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+    }
+
+    /** The editor goes (saved or not) and the menu shows again as it was. */
+    private fun closeSkinEdit() {
+        val view = skinEditView ?: return
+        skinEditView = null
+        skinEditState = null
+        val root = findViewById<FrameLayout>(R.id.root)
+        root.post { root.removeView(view) }   // not from inside its own touch or composition
+        menu.menuView?.visibility = View.VISIBLE
+    }
+
+    /** Back or B over the editor: while "Discard changes?" shows they keep editing; else a cancel (asking first when changed). */
+    private fun skinEditBack() {
+        val e = skinEditState ?: return closeSkinEdit()
+        if (e.confirmDiscard) e.keepEditing() else if (e.requestCancel()) closeSkinEdit()
+    }
+
     /**
      * netplay: DISCONNECT and shut the engine down (off main), then quit; saveStates is null: no auto state. A link
      * session ends the link instead and plays on, the menu open on the normal root.
@@ -3408,6 +3489,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
         val event = SystemButtonKeys.translate(this, raw)   // a bound SELECT / START / MENU button as its role, first
         val code = event.keyCode
+        // The Adjust buttons editor is touch-driven: Back / B leave it, every other key waits (the menu under it and the
+        // paused game get none).
+        if (skinEditView != null) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_BUTTON_B)) skinEditBack()
+            return true
+        }
         when (event.action) {
             KeyEvent.ACTION_UP -> if (heldDowns.remove(code)) return true
             KeyEvent.ACTION_DOWN -> {
@@ -3442,9 +3529,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun dispatchTouchEvent(event: MotionEvent): Boolean =
         holdTouches.swallows(event.actionMasked, nameHold != null) || super.dispatchTouchEvent(event)
 
-    /** Sticks wait for the game while the launch name's hold is up. */
+    /** Sticks wait for the game while the launch name's hold is up, and go nowhere under the Adjust buttons editor. */
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
-        nameHold != null || super.dispatchGenericMotionEvent(event)
+        nameHold != null || skinEditView != null || super.dispatchGenericMotionEvent(event)
 
     override fun onGenericMotionEvent(event: MotionEvent?): Boolean = input.onGenericMotionEvent(event)
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean = input.onKeyDown(keyCode, event)

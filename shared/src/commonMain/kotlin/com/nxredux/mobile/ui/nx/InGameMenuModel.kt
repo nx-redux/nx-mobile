@@ -38,7 +38,7 @@ import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 
-enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, CANCEL }
+enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, CANCEL, ADJUST_BUTTONS }
 enum class SlotAction { SAVE, LOAD }
 
 sealed interface PageKind {
@@ -234,6 +234,8 @@ sealed interface MenuEffect {
     data class SetMic(val on: Boolean) : MenuEffect
     /** The Reset dialog's Reset: restart the game, then close the menu. */
     data object ResetGame : MenuEffect
+    /** Adjust buttons: the host opens the skin layout editor over the paused game; the menu stays as it is under it. */
+    data object AdjustButtons : MenuEffect
 }
 
 /**
@@ -380,6 +382,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var shortcutMic = false
     /** A controller is connected ([setControllerConnected]): without one the page has no bind rows (the on-screen pad binds nothing). */
     private var controllerConnected = true
+    /** A pad skin or its bare buttons are drawn ([setPadDrawn]). */
+    private var padDrawn = false
     /** Press to bind on the Shortcuts page; the host hands it raw key codes ([takesKey], [captureKey]). */
     private var capture = ShortcutCapture(shortcutClaimed)
     private var capturing: ShortcutAction? = null
@@ -1262,6 +1266,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         MenuAction.QUIT_ONLY -> MenuEffect.QuitWithoutResume
         MenuAction.RESET -> { resetClosesOnCancel = false; popTo(PageKind.Root); MenuEffect.ResetGame }
         MenuAction.CANCEL -> cancelReset()
+        MenuAction.ADJUST_BUTTONS -> MenuEffect.AdjustButtons
         MenuAction.LEAVE_NETPLAY -> MenuEffect.LeaveNetplay
         MenuAction.SAVE_FOR_CONSOLE -> { popTo(PageKind.Options); MenuEffect.SaveForConsole }
         MenuAction.SAVE_FOR_GAME -> { popTo(PageKind.Options); MenuEffect.SaveForGame }
@@ -1533,6 +1538,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             add(MenuRow.Slot("Save", SlotAction.SAVE))
             add(MenuRow.Slot("Load", SlotAction.LOAD))
             add(MenuRow.Submenu("Options", PageKind.Options))
+            // the pad skin's buttons, only while they are drawn: a controller attached draws none
+            if (padDrawn && !controllerConnected) add(MenuRow.Action(ADJUST_BUTTONS_LABEL, MenuAction.ADJUST_BUTTONS))
             add(MenuRow.Action("Quit", MenuAction.QUIT))
         },
     )
@@ -1662,12 +1669,23 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         refreshShortcutsPage()
     }
 
+    /**
+     * A pad skin or its bare buttons are drawn ([drawn]): with no controller attached the root offers Adjust buttons
+     * (the editor for the layout being played). Rebuilds the root.
+     */
+    fun setPadDrawn(drawn: Boolean) {
+        if (drawn == padDrawn) return
+        padDrawn = drawn
+        refreshRoot()
+    }
+
     /** Whether a controller is [connected]; one going away ends a wait. Refreshes an open Shortcuts page. */
     fun setControllerConnected(connected: Boolean) {
         if (connected == controllerConnected) return
         controllerConnected = connected
         if (!connected) endWait()
         refreshShortcutsPage()
+        refreshRoot()   // Adjust buttons comes and goes with it
     }
 
     /**
@@ -1857,6 +1875,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         // Presses while the menu is open never claim a slot.
         const val PLAYERS_FOOTER = "Close the menu, then press a button\non a new controller to join."
         const val ACHIEVEMENTS_LABEL = "Achievements"
+        const val ADJUST_BUTTONS_LABEL = "Adjust buttons"
         const val NO_LOCKED = "Everything unlocked."
         const val ACH_KEY_PREFIX = "ach:"
         const val OVERLAY_UNAVAILABLE = "Unavailable"

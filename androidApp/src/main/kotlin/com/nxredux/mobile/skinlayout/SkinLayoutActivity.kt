@@ -30,17 +30,17 @@ import com.nxredux.mobile.runner.WiiPad
 import com.nxredux.mobile.runner.goImmersive
 import com.nxredux.mobile.runner.windowShape
 import com.nxredux.mobile.settings.AndroidAppSettings
+import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.skin.DcGames
 import com.nxredux.mobile.skin.SkinChoice
 import com.nxredux.mobile.skin.SkinPlacement
-import com.nxredux.mobile.skin.SkinTweak
-import com.nxredux.mobile.skin.SkinTweaks
 import com.nxredux.mobile.ui.SkinEditRequest
 import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.PadProfile
 import com.nxredux.mobile.ui.nx.nxColorsFor
 import com.nxredux.mobile.ui.skinlayout.SkinEditorState
+import com.nxredux.mobile.ui.skinlayout.SkinLayoutEdit
 import com.nxredux.mobile.ui.skinlayout.SkinLayoutEditor
 
 /**
@@ -78,13 +78,13 @@ class SkinLayoutActivity : ComponentActivity() {
                     // until the window has turned to the asked orientation, nothing to place
                     if (w <= 0 || h <= 0 || (w > h) != landscape) return@BoxWithConstraints
                     // a new window size (folded, unfolded) is another layout: start again on it
-                    val made = remember(w, h) { place(pack, console, tag, wiiPad, n3dsNew, w, h, settings.skinTweaks) }
+                    val made = remember(w, h) { place(pack, console, tag, wiiPad, n3dsNew, w, h, settings) }
                     if (made == null) { LaunchedEffect(Unit) { noLayout() }; return@BoxWithConstraints }
                     val (state, spec) = made
                     SideEffect { editor = state }
                     SkinLayoutEditor(
                         state, spec.picture, spec.parts, bare, backdrop = null, title = title,
-                        onSave = { tweaks -> save(console.id, spec.layoutId, tweaks); setResult(RESULT_OK); finish() },
+                        onSave = { tweaks -> SkinLayoutEdit.save(AndroidAppSettings(this@SkinLayoutActivity), console.id, spec.layoutId, tweaks); setResult(RESULT_OK); finish() },
                         onClose = ::finish,
                     )
                 }
@@ -100,7 +100,7 @@ class SkinLayoutActivity : ComponentActivity() {
      * opens), its stick or d-pad as the game starts it, with the stored tweaks for it; null when none fits or its picture
      * can't be read.
      */
-    private fun place(pack: PadSkinPack, console: Console, tag: String, wiiPad: WiiPad?, n3dsNew: Boolean, w: Int, h: Int, stored: String): Pair<SkinEditorState, Placed>? {
+    private fun place(pack: PadSkinPack, console: Console, tag: String, wiiPad: WiiPad?, n3dsNew: Boolean, w: Int, h: Int, settings: AppSettings): Pair<SkinEditorState, Placed>? {
         val base = CoreRegistry.baseTag(tag)
         val nds = NdsOptions.appliesTo(tag)
         val ds = nds || N3dsOptions.appliesTo(tag)
@@ -117,16 +117,7 @@ class SkinLayoutActivity : ComponentActivity() {
         val stick = profile.stickByDefault || DcGames.stickFirst(base, arcadeSet = false) || profile.kind == PadProfile.Kind.GC
         val image = pack.picture(placed.spec.image)?.asImageBitmap() ?: return null
         val parts = placed.spec.parts?.let { pack.picture(it) }?.asImageBitmap()
-        val initial = SkinTweaks.decode(stored)[console.id]?.get(placed.spec.id).orEmpty()
-        return SkinEditorState(placed.forStick(stick), initial, w.toFloat(), h.toFloat()) to Placed(placed.spec.id, image, parts)
-    }
-
-    /** [tweaks] as [consoleId]'s for [layoutId]; its other layouts and every other console's stay as stored. */
-    private fun save(consoleId: String, layoutId: String, tweaks: Map<String, SkinTweak>) {
-        val settings = AndroidAppSettings(this)
-        val all = SkinTweaks.decode(settings.skinTweaks)
-        val mine = all[consoleId].orEmpty().let { if (tweaks.isEmpty()) it - layoutId else it + (layoutId to tweaks) }
-        settings.skinTweaks = SkinTweaks.encode(if (mine.isEmpty()) all - consoleId else all + (consoleId to mine))
+        return SkinLayoutEdit.state(settings, console.id, placed.forStick(stick), w, h) to Placed(placed.spec.id, image, parts)
     }
 
     /** No layout fits this window (or the pack can't be read): say so and leave. */

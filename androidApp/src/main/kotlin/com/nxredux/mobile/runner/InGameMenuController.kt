@@ -150,6 +150,8 @@ internal interface InGameMenuHost : LifecycleOwner {
     fun setMic(on: Boolean)
     /** The Reset dialog's Reset: the game restarts ([GLRetroView.reset]); a toggled rewind ends, a toggled FF stays. */
     fun resetGame()
+    /** The menu's Adjust buttons: the skin layout editor over the paused game, back to the menu as it was after. */
+    fun adjustButtons()
     /** The biggest DS / 3DS 3D scale the displays in use reach (null: unknown, neither): the 3D Resolution rows' scales. */
     val nds3dDisplayMax: Int?
     /** How the running DS or 3DS game is shown (null: neither): Console Settings lists only the layout rows in use. */
@@ -315,6 +317,7 @@ internal class InGameMenuController(
         model.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams)
         model.setCheats(cheatSet.entries, cheatsFolder, cheatSet.expected)
         host.publishShortcuts(model)
+        model.setPadDrawn(padDrawn())   // Adjust buttons: only over a drawn skin or its bare buttons
         model.setControllerConnected(padLayout.controllerConnected.value)
         publishPlayers(model)
         publishSecondScreen(model)
@@ -347,8 +350,8 @@ internal class InGameMenuController(
                     val hintGlyphs = remember(connected, padProfileRevision.value) {
                         if (connected) HintGlyphs.STANDARD else HintGlyphs.forPad(padProfile())
                     }
-                    // Shortcuts' bind rows come and go with a controller (the on-screen pad binds nothing).
-                    LaunchedEffect(connected) { menuModel?.let { it.setControllerConnected(connected); menuState.value = it.state } }
+                    // Shortcuts' bind rows and Adjust buttons come and go with a controller (the on-screen pad binds nothing).
+                    LaunchedEffect(connected) { menuModel?.let { it.setPadDrawn(padDrawn()); it.setControllerConnected(connected); menuState.value = it.state } }
                     // The page title's gutter follows the app's: the narrow one in portrait, as HandheldShell sets it; a
                     // clip-on controller's empty room below the game counts as a pad below.
                     // In a pad skin's glass: laid out for the glass's shape, as the main menu in the skin (HandheldShell).
@@ -437,6 +440,9 @@ internal class InGameMenuController(
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         }
     }
+
+    /** A pad skin or its bare buttons are drawn now. */
+    private fun padDrawn(): Boolean = padLayout.skinShown || padLayout.bareShown
 
     /** The corner radius of the glass the menu sits in, window px. */
     private fun skinGlassCorner(): Float = menuGlass()?.corner ?: 0f
@@ -561,6 +567,7 @@ internal class InGameMenuController(
             is MenuEffect.SetSpeed -> { host.setSpeedToggle(effect.ff, effect.rewind); closeMenu() }
             is MenuEffect.SetMic -> { host.setMic(effect.on); closeMenu() }
             MenuEffect.ResetGame -> { host.resetGame(); closeMenu() }
+            MenuEffect.AdjustButtons -> host.adjustButtons()
             is MenuEffect.SetPlayer -> input.slots?.let { s ->
                 val benchedBefore = s.outOfPlay
                 s.assign(effect.slot, effect.key?.let(::DeviceKey)).forEach { port ->

@@ -676,9 +676,36 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             else SkinChoice.place(pack.manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, key.top, DeviceTraits.canHalfFold, variant)
         placed ?: return null
         val console = CoreRegistry.consoleOf(key.tag)?.id ?: return placed
-        val tweaks = SkinTweaks.decode(key.tweaks)[console]?.get(placed.spec.id).orEmpty()
-        return SkinTweaks.apply(placed, tweaks, key.w.toFloat(), key.h.toFloat())
+        return SkinTweaks.apply(placed, SkinTweaks.of(key.tweaks, console, placed.spec.id), key.w.toFloat(), key.h.toFloat())
     }
+
+    /**
+     * What the in-game Adjust buttons edits: the layout drawn now (the skin, or its bare buttons) as the game places it
+     * for this window before the player's tweaks, its stick or d-pad as shown; null with neither drawn, or no console.
+     */
+    class SkinEdit(
+        val consoleId: String, val placement: SkinPlacement, val w: Int, val h: Int,
+        val picture: android.graphics.Bitmap, val parts: android.graphics.Bitmap?, val bare: Boolean,
+    )
+
+    /** The layout being played, untweaked ([SkinEdit]). */
+    fun skinEdit(): SkinEdit? {
+        val view = skinView ?: bareView ?: return null
+        val bare = view === bareView
+        val pack = skinPack ?: return null
+        val tag = layoutTag()
+        val ds = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
+        val console = CoreRegistry.consoleOf(tag)?.id ?: return null
+        // the same window, picture aspect and layout set as the drawn one, with no tweaks (the editor adds the stored ones)
+        val key = skinKey(tag, ds)?.copy(tweaks = "") ?: return null
+        val placed = placeSkin(pack, key, ds, closest = bare) ?: return null
+        val picture = pack.picture(placed.spec.image) ?: return null
+        val parts = placed.spec.parts?.let { pack.picture(it) }
+        return SkinEdit(console, placed.forStick(view.useStick), key.w, key.h, picture, parts, bare)
+    }
+
+    /** The skin's bare buttons are the pad now ([addBareSkin]). */
+    val bareShown: Boolean get() = bareView != null
 
     /** The band [p]'s buttons take at the bottom of a window [windowH] tall: from the highest piece or hit area down, px. */
     private fun bandHeight(p: SkinPlacement, windowH: Int): Int {
