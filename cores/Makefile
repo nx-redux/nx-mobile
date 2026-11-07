@@ -276,7 +276,7 @@ prosystem_BUILD_PATH = .
 prosystem_ARTIFACT = libs/$(ABI)/libretro.so
 
 a5200_REPO = https://github.com/libretro/a5200
-a5200_HASH = 526404072821bb2021fab16f8c5dbbca300512c8
+a5200_HASH = 40c6f2f1ad4a3145b328d5baaf010fae6c7e752b
 a5200_LICENSE = License.txt
 a5200_KIND = ndkbuild
 a5200_BUILD_PATH = .
