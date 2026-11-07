@@ -576,13 +576,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                 KidsHomeScreen(tiles, it, mode, state::kidsNow, state::kidsOpenApp, state::kidsLockPressed, state::onKidsColumns)
             }
             is Screen.KidsPin -> WithIndex(selection) {
-                KidsPinScreen(s, it, state::kidsNow, onKey = { k ->
-                    when (k) {
-                        is PinKey.Digit -> state.kidsPinDigit(k.d)
-                        PinKey.Back -> state.kidsPinBack()
-                        PinKey.Enter -> state.kidsPinEnter()
-                    }
-                })
+                KidsPinScreen(s, it, state::kidsNow, onKey = state::kidsPinTap)
             }
             Screen.KidsUnlock -> WithIndex(selection) { KidsUnlockScreen(it, state::kidsUnlockChip, state::kidsOpenFullMenu, state::kidsOpenSettings, state::onKidsUnlockColumns) }
             // A parent's Kids Mode pages: setup's steps (and Allowed apps), a day's play time.

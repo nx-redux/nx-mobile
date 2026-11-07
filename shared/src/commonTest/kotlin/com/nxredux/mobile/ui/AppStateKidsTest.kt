@@ -668,6 +668,20 @@ class AppStateKidsTest {
         assertSame(Screen.KidsHome, st.screen.value)
     }
 
+    /** A tapped key takes the highlight, as the d-pad's would. */
+    @Test fun tapHighlightsTheKey() = runTest {
+        val (st) = lockedState()
+        st.kidsLockPressed()
+        st.kidsPinTap(PinKey.Digit(5))
+        assertEquals(KIDS_PIN_KEYS.indexOf(PinKey.Digit(5)), st.selection.value.index)
+        assertEquals("5", assertIs<Screen.KidsPin>(st.screen.value).typed)
+        st.kidsPinTap(PinKey.Digit(0))
+        assertEquals(KIDS_PIN_KEYS.indexOf(PinKey.Digit(0)), st.selection.value.index)
+        st.kidsPinTap(PinKey.Back)
+        assertEquals(KIDS_PIN_KEYS.indexOf(PinKey.Back), st.selection.value.index)
+        assertEquals("5", assertIs<Screen.KidsPin>(st.screen.value).typed)
+    }
+
     @Test fun padDrivesThePinPad() = runTest {
         val (st) = lockedState()
         st.onButton(NxButton.MENU)                                     // the lock's button

@@ -7465,6 +7465,17 @@ class AppState(
         if (s.typed.isEmpty()) kidsPinLeave(s) else _screen.value = s.copy(typed = s.typed.dropLast(1))
     }
 
+    /** A tap on PIN key [key]: the highlight moves onto it (as the d-pad's would), then the key acts. */
+    internal fun kidsPinTap(key: PinKey) {
+        if (_screen.value !is Screen.KidsPin) return
+        KIDS_PIN_KEYS.indexOf(key).takeIf { it >= 0 }?.let(::select)
+        when (key) {
+            is PinKey.Digit -> kidsPinDigit(key.d)
+            PinKey.Back -> kidsPinBack()
+            PinKey.Enter -> kidsPinEnter()
+        }
+    }
+
     /**
      * The PIN pad's Enter, with all six digits typed: the right PIN opens the unlock sheet; a wrong one clears the digits and
      * counts ([Screen.KidsPin.wrong]: the page shakes and says so); the fifth starts the wait ([KidsController.tryPin]).
