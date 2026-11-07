@@ -255,6 +255,7 @@ fun MainMenuScreen(
                                     // Consoles' tiles show their logo alone ([GridTileKind.LOGO]).
                                     consoles = screen.category == MenuCategory.CONSOLES,
                                     topGap = screen.category != MenuCategory.TOOLS,   // nothing above Tools' tiles but the icons' row
+                                    centred = screen.category == MenuCategory.APPS,   // Kids Mode's few apps in the middle, as the tiles screen's
                                 )
                             }
                         }
