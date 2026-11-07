@@ -398,7 +398,7 @@ gearcoleco_ARTIFACT = libs/$(ABI)/libretro.so
 # FB Neo licence: non-commercial, and no donation asks for any project using its source (README Constraints).
 # 7z support on, Neo Geo CD off (upstream Android.mk defaults). No rotation patch: the runner honours SET_ROTATION.
 fbneo_REPO = https://github.com/libretro/FBNeo
-fbneo_HASH = 6a5cc250c2db8d874a06ee86e302a2a78918b4c1
+fbneo_HASH = d15071abf14191eebb4a5d7c7147398edcf237c8
 fbneo_KIND = ndkbuild
 fbneo_BUILD_PATH = src/burner/libretro
 fbneo_ARTIFACT = libs/$(ABI)/libretro.so
