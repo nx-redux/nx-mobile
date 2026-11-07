@@ -118,7 +118,8 @@ import com.nxredux.mobile.settings.PadLayoutMap
 import com.nxredux.mobile.settings.PadScreen
 import com.nxredux.mobile.settings.PadSlot
 import com.nxredux.mobile.settings.PadLayouts
-import com.nxredux.mobile.settings.PadShape
+import com.nxredux.mobile.runner.WiiPad
+import com.nxredux.mobile.skin.SkinTweaks
 import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.settings.PadVibration
@@ -264,8 +265,8 @@ class AppDeps(
     val windowPx: () -> Pair<Int, Int>? = { null },
     /** The ".bin" names in Bios/PS2/ (Emulator Settings' PS2 BIOS row); blocking, called off the main thread. */
     val ps2BiosFiles: () -> List<String> = { emptyList() },
-    /** Opens the pad layout editor (Android: its own activity); it saves to the settings and ends with [AppState.onPadLayoutEdited]. Null: no editor. */
-    val padEditor: ((PadEditRequest) -> Unit)? = null,
+    /** Opens the skin's button layout editor (Android: its own activity); it saves to the settings and ends with [AppState.onSkinLayoutEdited]. Null: no editor. */
+    val skinEditor: SkinEditorLauncher? = null,
     /** Settings → Library → Saves: Export and Import (null: rows do nothing). */
     val saveTransfer: SaveTransfer? = null,
     /** Tools → Device Sync (null: a platform without it, so no Tools row). */
@@ -305,9 +306,17 @@ class AppDeps(
 )
 
 /**
- * Controls → Pad layout → a shape row: edit [slot] (the shape, on the screen the page is on) of
- * [consoleKey] (a console id, or [PadLayouts.SHARED_KEY]). [tag] picks the pad drawn (a console's first tag; "" for
- * Shared's standard pad), [title] names it in the editor.
+ * Appearance → Button layout → Portrait or Landscape: edit [consoleId]'s pad skin buttons in that orientation, on this
+ * screen. [wiiPad]: the Wii controller whose layout is edited (null for every other console).
+ */
+data class SkinEditRequest(val consoleId: String, val landscape: Boolean, val wiiPad: WiiPad?)
+
+/** Opens the button layout editor for a [SkinEditRequest], [title] naming it there. */
+interface SkinEditorLauncher { fun open(request: SkinEditRequest, title: String) }
+
+/**
+ * The old overlay pad editor's request (PadLayoutActivity, no longer opened from Settings): edit [slot] of [consoleKey]
+ * (a console id, or [PadLayouts.SHARED_KEY]). [tag] picks the pad drawn, [title] names it in the editor.
  */
 data class PadEditRequest(val consoleKey: String, val slot: PadSlot, val tag: String, val title: String)
 
@@ -490,7 +499,7 @@ sealed interface Screen {
     data class ArtworkReset(val scopes: List<ResetScope>, val confirm: ResetScope? = null) : Screen
 }
 
-enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
+enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
@@ -513,7 +522,7 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
     // General, Launcher (with a launcher), Developer and About groups on one page; the last category.
     SYSTEM("System"),
     DEFAULT_EMULATORS("Default emulators", EMULATORS, SettingsKind.DEFAULTS),
-    PAD_LAYOUT("Overlay pad layout", APPEARANCE, SettingsKind.PAD_LAYOUT), SAVES("Saves", LIBRARY, SettingsKind.SAVES),
+    BUTTON_LAYOUT("Button layout", APPEARANCE, SettingsKind.BUTTON_LAYOUT), SAVES("Saves", LIBRARY, SettingsKind.SAVES),
     SHORTCUTS("Shortcuts", CONTROLS, SettingsKind.SHORTCUTS),
     SYSTEM_BUTTONS("System buttons", CONTROLS, SettingsKind.SYSTEM_BUTTONS),
     IMPORT_SAVES("Import saves", SAVES, SettingsKind.IMPORT_SAVES),
@@ -560,6 +569,9 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
 
 /** The last row of Appearance, Layouts and Controls (NX Redux's label; its description has no place on a Settings page here). */
 internal const val RESET_DEFAULTS_LABEL = "Reset to defaults"
+
+/** The Wii's console id: Button layout's Controller row is its own. */
+private const val WII_CONSOLE = "wii"
 
 /** The global Shortcuts page's note on Toggle mic, which does nothing outside DS / 3DS. */
 internal const val MIC_ROW_NOTE = "DS / 3DS only"
@@ -762,7 +774,7 @@ data class SettingInfoPopup(val title: String, val text: String, val scrollSeq: 
  * [warning]: its secondary is a problem (a folder not available), drawn in the warning colour. [shortcut] / [touchSlot]:
  * the action or touch button of a Shortcuts row; [note] on a bind row: it is waiting for a press, and what to do.
  */
-data class SettingsRow(val kind: SettingsKind, val label: String, val secondary: String? = null, val extra: ExtraFolder? = null, val consoleId: String? = null, val enabled: Boolean = true, val category: MenuCategory? = null, val shelf: HomeShelf? = null, val hint: NxButton? = null, val padShape: PadShape? = null, val warning: Boolean = false, val note: String? = null, val shortcut: ShortcutAction? = null, val touchSlot: TouchSlot? = null, val systemRole: SystemRole? = null)
+data class SettingsRow(val kind: SettingsKind, val label: String, val secondary: String? = null, val extra: ExtraFolder? = null, val consoleId: String? = null, val enabled: Boolean = true, val category: MenuCategory? = null, val shelf: HomeShelf? = null, val hint: NxButton? = null, val landscape: Boolean? = null, val warning: Boolean = false, val note: String? = null, val shortcut: ShortcutAction? = null, val touchSlot: TouchSlot? = null, val systemRole: SystemRole? = null)
 
 /** A row the selection lands on: not a group label, the space before one, or a paragraph. */
 val SettingsRow.selectable: Boolean get() = kind != SettingsKind.SECTION && kind != SettingsKind.GAP && kind != SettingsKind.TEXT
@@ -4289,71 +4301,68 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** The stored pad layouts, republished on every change (the main menu's pads follow Shared). */
     val padLayouts: StateFlow<PadLayoutMap> = _padLayouts.asStateFlow()
 
-    /** The Pad layout page's console: [PadLayouts.SHARED_KEY] or a console id. */
-    private var padLayoutConsole: String = PadLayouts.SHARED_KEY
-
     private val _padScreen = MutableStateFlow(PadScreen.NARROW)
-    /** The screen the app is on ([onPadScreen]): the Pad layout page and the main menu's pad use its layouts. */
+    /** The screen the app is on ([onPadScreen]): the main menu's pad uses its layouts. */
     val padScreen: StateFlow<PadScreen> = _padScreen.asStateFlow()
 
-    /**
-     * The platform reports the screen the app is on (a Fold's cover or inner screen), measured as a game measures it;
-     * the Pad layout page follows it.
-     */
+    /** The platform reports the screen the app is on (a Fold's cover or inner screen), measured as a game measures it. */
     fun onPadScreen(screen: PadScreen) {
         if (_padScreen.value == screen) return
         _padScreen.value = screen
-        if ((_screen.value as? Screen.Settings)?.section == SettingsSection.PAD_LAYOUT) refreshSettings()
     }
 
-    /** The Pad layout page's consoles after Shared: the library's consoles with games, by name. */
-    private fun padLayoutConsoles(): List<Console> =
-        systemsCache.filter { !it.unassigned && it.gameCount > 0 }.mapNotNull { CoreRegistry.consoleOf(it.tag) }
-            .distinctBy { it.id }.sortedBy { it.displayName.lowercase() }
+    /** The Button layout page's consoles: every console, by name. */
+    private val buttonLayoutConsoles: List<Console> by lazy { CoreRegistry.consoles.sortedBy { it.displayName.lowercase() } }
 
-    /** The Pad layout page's console [key] by name: Shared, a console's name, or the key itself for an unknown one. */
-    private fun padLayoutConsoleName(key: String): String =
-        if (key == PadLayouts.SHARED_KEY) "Shared" else CoreRegistry.consoles.firstOrNull { it.id == key }?.displayName ?: key
+    /** The Button layout page's console (the last one picked, while the app runs) and, on the Wii, its controller. */
+    private var buttonLayoutConsole: Console? = null
+    private var buttonLayoutWiiPad: WiiPad = WiiPad.CLASSIC
 
-    private fun padLayoutRows(): List<SettingsRow> {
-        val all = deps.settings.padLayouts
-        val key = padLayoutConsole
-        return listOf(SettingsRow(SettingsKind.PAD_LAYOUT_CONSOLE, "Console", padLayoutConsoleName(key))) +
-            PadShape.offered.map { shape ->
-                val own = PadLayouts.own(all, key, PadSlot(shape, _padScreen.value))
-                val value = when {
-                    own != null -> if (own.tweaks.isEmpty()) "Default" else "Custom"   // empty: a console's explicit default
-                    key == PadLayouts.SHARED_KEY -> "Default"
-                    else -> "Shared"
-                }
-                SettingsRow(SettingsKind.PAD_LAYOUT_SHAPE, shape.label, value, padShape = shape)
-            } +
-            SettingsRow(SettingsKind.PAD_LAYOUT_RESET, "Reset console")
+    private fun buttonLayoutConsole(): Console = buttonLayoutConsole ?: buttonLayoutConsoles.first()
+
+    /** The Wii controllers in the page's order: the Wii's default pad first. */
+    private val wiiPads = listOf(WiiPad.CLASSIC, WiiPad.NUNCHUK, WiiPad.SIDEWAYS, WiiPad.UPRIGHT)
+
+    private fun wiiPadLabel(pad: WiiPad): String = when (pad) {
+        WiiPad.CLASSIC -> "Classic"; WiiPad.NUNCHUK -> "Nunchuk"; WiiPad.SIDEWAYS -> "Sideways"; WiiPad.UPRIGHT -> "Upright"
+    }
+
+    /** Any console has a tweak stored: Appearance's Button layout row reads Custom. */
+    private fun buttonLayoutCustom(): Boolean = SkinTweaks.decode(deps.settings.skinTweaks).values.any { c -> c.values.any { it.isNotEmpty() } }
+
+    private fun buttonLayoutRows(): List<SettingsRow> {
+        val console = buttonLayoutConsole()
+        return listOfNotNull(
+            SettingsRow(SettingsKind.BUTTON_LAYOUT_CONSOLE, "Console", console.displayName),
+            if (console.id == WII_CONSOLE) SettingsRow(SettingsKind.BUTTON_LAYOUT_WII_PAD, "Controller", wiiPadLabel(buttonLayoutWiiPad)) else null,
+            SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Portrait", landscape = false),
+            SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Landscape", landscape = true),
+            SettingsRow(SettingsKind.BUTTON_LAYOUT_RESET, "Reset console"),
+        )
     }
 
     /** An editor is opening or open: a second quick A / tap does not stack another over it (its Save would win). */
-    private var padEditorOpen = false
+    private var skinEditorOpen = false
 
-    private fun openPadEditor(shape: PadShape) {
-        val editor = deps.padEditor ?: return
-        if (padEditorOpen) return
-        padEditorOpen = true
-        val key = padLayoutConsole
-        val console = CoreRegistry.consoles.firstOrNull { it.id == key }
-        editor(PadEditRequest(key, PadSlot(shape, _padScreen.value), console?.tags?.firstOrNull().orEmpty(), console?.displayName ?: "Shared"))
+    private fun openSkinEditor(landscape: Boolean) {
+        val editor = deps.skinEditor ?: return
+        if (skinEditorOpen) return
+        skinEditorOpen = true
+        val console = buttonLayoutConsole()
+        val pad = buttonLayoutWiiPad.takeIf { console.id == WII_CONSOLE }
+        editor.open(SkinEditRequest(console.id, landscape, pad), pad?.let { "${console.displayName} · ${wiiPadLabel(it)}" } ?: console.displayName)
     }
 
-    /** The editor saved or left: re-read the layouts, and republish the page if Settings is still showing. */
-    fun onPadLayoutEdited() {
-        padEditorOpen = false
-        _padLayouts.value = deps.settings.padLayouts
+    /** The editor saved or left: republish the page if Settings is still showing (the activity wrote the settings). */
+    fun onSkinLayoutEdited() {
+        skinEditorOpen = false
         if (_screen.value is Screen.Settings) refreshSettings()
     }
 
-    private fun resetPadLayoutConsole() {
-        deps.settings.padLayouts = PadLayouts.withoutScreen(deps.settings.padLayouts, padLayoutConsole, _padScreen.value)
-        _padLayouts.value = deps.settings.padLayouts
-        showSettingsOn(SettingsSection.PAD_LAYOUT, SettingsKind.PAD_LAYOUT_RESET)
+    /** Reset console: the page's console's tweaks go, every layout of it; other consoles keep theirs. */
+    private fun resetButtonLayoutConsole() {
+        deps.settings.skinTweaks = SkinTweaks.encode(SkinTweaks.decode(deps.settings.skinTweaks) - buttonLayoutConsole().id)
+        showSettingsOn(SettingsSection.BUTTON_LAYOUT, SettingsKind.BUTTON_LAYOUT_RESET)
     }
 
     private fun shortcutSet(): ShortcutSet = shortcutDraft ?: Shortcuts.decodeBase(deps.settings.shortcuts)
@@ -4472,7 +4481,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             r.lines().map { SettingsRow(SettingsKind.INFO, it) } + r.skipped.map { SettingsRow(SettingsKind.INFO, it.name, it.reasonText()) }
         }.orEmpty() + SettingsRow(SettingsKind.IMPORT_DONE, "Done")
         SettingsSection.DEFAULT_EMULATORS -> defaultEmulatorRows()
-        SettingsSection.PAD_LAYOUT -> padLayoutRows()
+        SettingsSection.BUTTON_LAYOUT -> buttonLayoutRows()
         SettingsSection.SHORTCUTS -> shortcutRows()
         SettingsSection.SYSTEM_BUTTONS -> systemButtonRows()
         SettingsSection.APPEARANCE -> listOf<SettingsRow?>(
@@ -4483,8 +4492,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", deps.settings.secondaryAccent.label),
             // The options lists' text (Settings, Game Settings, the in-game menu): Large or Small.
             SettingsRow(SettingsKind.TEXT_SIZE, "Text size", deps.settings.optionTextSize.label),
-            // the see-through pad's arrangement (Pad skin Off, or where a skin has no layout), its own page
-            SettingsRow(SettingsKind.PAD_LAYOUT, "Overlay pad layout", if (PadLayouts.isCustom(deps.settings.padLayouts)) "Custom" else "Default"),
+            // the skin's buttons moved and resized per console (the bare overlay's too), its own page
+            SettingsRow(SettingsKind.BUTTON_LAYOUT, "Button layout", if (buttonLayoutCustom()) "Custom" else "Default"),
             SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
         ).filterNotNull()
         SettingsSection.MAIN_MENU -> layoutsRows()
@@ -4701,10 +4710,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             SettingsKind.SHORTCUT_TOUCH -> row.touchSlot?.let { slot ->
                 cycle(listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { it.touch }, shortcutSet().touch[slot], { it?.label ?: "None" }) { setTouch(slot, it) }
             }
-            SettingsKind.PAD_LAYOUT_CONSOLE -> {   // Shared, then the library's consoles; a gone console reads as Shared
-                val keys = listOf(PadLayouts.SHARED_KEY) + padLayoutConsoles().map { it.id }
-                cycle(keys, padLayoutConsole.takeIf { it in keys } ?: keys.first(), ::padLayoutConsoleName) { padLayoutConsole = it }
-            }
+            SettingsKind.BUTTON_LAYOUT_CONSOLE -> cycle(buttonLayoutConsoles, buttonLayoutConsole(), { it.displayName }) { buttonLayoutConsole = it }
+            SettingsKind.BUTTON_LAYOUT_WII_PAD -> cycle(wiiPads, buttonLayoutWiiPad, ::wiiPadLabel) { buttonLayoutWiiPad = it }
             // Emulators, Saves (the handheld's formats in its order), Second screen and Developer.
             SettingsKind.PAUSE_UNFOCUSED -> flip(s.pauseWhenUnfocused) { s.pauseWhenUnfocused = it }
             SettingsKind.SAVE_FORMAT -> cycle(SaveFormat.entries, s.saveFormat, { it.label }) { s.saveFormat = it }
@@ -4780,8 +4787,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /**
      * Appearance's, Layouts' or Controls' "Reset to defaults" (NX Redux settings.c): the page's own options back to their
-     * defaults. Appearance: Pad theme, Pad buttons, Accent, Secondary accent. Layouts: every tab's style and orientation
-     * unset (so [MenuStyles.styleOf] and [MenuStyles.orientationOf] give theirs), the game lists', the tabs', shelves'
+     * defaults. Appearance: Pad theme, Pad buttons, Accent, Secondary accent, Text size, Button layout. Layouts: every
+     * tab's style and orientation unset (so [MenuStyles.styleOf] and [MenuStyles.orientationOf] give theirs), the game lists', the tabs', shelves'
      * and hints' Show/Hide, Consoles background, List art, Backdrop art, Page title, Button hints, Extra info, Home stats,
      * Layout options, Achievements panel and Game Switcher layout. Controls: Pad vibration, Game rumble and every pad
      * layout. At once, no confirm, as NX Redux. Through the settings' own setters, then the page is republished like any
@@ -4801,6 +4808,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             s.secondaryAccent = SecondaryAccent.DEFAULT
             s.optionTextSize = OptionTextSize.DEFAULT
             s.padLayouts = emptyMap(); _padLayouts.value = emptyMap()
+            s.skinTweaks = ""
         } else if (section == SettingsSection.MAIN_MENU) {
             s.menuStyles = emptyMap()
             s.menuOrientations = emptyMap()
@@ -5020,7 +5028,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     /** Whether [a] and [b] are the same Settings row across a refresh: its kind and what it is for, not its value or label. */
     private fun sameSettingsRow(a: SettingsRow, b: SettingsRow): Boolean =
         a.kind == b.kind && a.category == b.category && a.shelf == b.shelf && a.hint == b.hint && a.consoleId == b.consoleId &&
-            a.shortcut == b.shortcut && a.touchSlot == b.touchSlot && a.systemRole == b.systemRole && a.padShape == b.padShape && a.extra?.id == b.extra?.id
+            a.shortcut == b.shortcut && a.touchSlot == b.touchSlot && a.systemRole == b.systemRole && a.landscape == b.landscape && a.extra?.id == b.extra?.id
 
     /**
      * B on a sub-page: its section on the row that opened it. Leaving Default emulators (under Emulators) with a changed
@@ -5107,11 +5115,11 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
     }
 
-    /** The confirmed reset of [page]'s selected row: Reset to defaults (Shortcuts' Clear all) or Pad layout's Reset console. */
+    /** The confirmed reset of [page]'s selected row: Reset to defaults (Shortcuts' Clear all) or Button layout's Reset console. */
     private fun runSettingsReset(page: Screen.Settings) {
         when (page.rows.getOrNull(_selection.value.index)?.kind) {
             SettingsKind.RESET_DEFAULTS -> resetToDefaults(page.section)
-            SettingsKind.PAD_LAYOUT_RESET -> resetPadLayoutConsole()
+            SettingsKind.BUTTON_LAYOUT_RESET -> resetButtonLayoutConsole()
             else -> Unit
         }
     }
@@ -6197,9 +6205,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                     SettingsKind.IMPORT_ZIP -> importSaves(ImportSource.ZIP)
                     SettingsKind.IMPORT_RETROARCH -> importSaves(ImportSource.RETROARCH)
                     SettingsKind.IMPORT_DONE -> leaveSubPage(SettingsSection.IMPORT_RESULT)
-                    SettingsKind.PAD_LAYOUT -> { sectionSelections[s.section] = _selection.value; padLayoutConsole = PadLayouts.SHARED_KEY; openSettings(SettingsSection.PAD_LAYOUT) }
-                    SettingsKind.PAD_LAYOUT_SHAPE -> row.padShape?.let { openPadEditor(it) }
-                    SettingsKind.PAD_LAYOUT_RESET -> _screen.value = s.copy(confirmReset = true)   // asks first
+                    SettingsKind.BUTTON_LAYOUT -> { sectionSelections[s.section] = _selection.value; openSettings(SettingsSection.BUTTON_LAYOUT) }
+                    SettingsKind.BUTTON_LAYOUT_ORIENTATION -> row.landscape?.let(::openSkinEditor)
+                    SettingsKind.BUTTON_LAYOUT_RESET -> _screen.value = s.copy(confirmReset = true)   // asks first
                     SettingsKind.SHORTCUTS -> { sectionSelections[s.section] = _selection.value; openSettings(SettingsSection.SHORTCUTS) }
                     SettingsKind.SYSTEM_BUTTONS -> { sectionSelections[s.section] = _selection.value; openSettings(SettingsSection.SYSTEM_BUTTONS) }
                     // Without a controller too: one plugged in next answers it (the row says to connect one).

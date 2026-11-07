@@ -11,7 +11,7 @@ private fun quiet(text: String, detail: String = "") = SettingText("", detail.if
 
 /** Reset to defaults' line on each page that has one, and the fuller text behind its info icon. */
 private fun resetText(section: SettingsSection?): SettingText = when (section) {
-    SettingsSection.APPEARANCE -> SettingText("Resets every setting on this page", "Put Pad theme, Pad buttons, Accent, Secondary accent and Text size back")
+    SettingsSection.APPEARANCE -> SettingText("Resets every setting on this page", "Put Pad theme, Pad buttons, Accent, Secondary accent, Text size and Button layout back")
     SettingsSection.MAIN_MENU -> SettingText("Resets every setting on this page", "Put every Layouts group and Extra info back to their defaults")
     SettingsSection.CONTROLS -> SettingText("Resets this page, pad layouts included", "Put vibration, Menu pad and every pad layout back to defaults")
     SettingsSection.SHORTCUTS -> SettingText("Sets every shortcut to None", "Unbind every action and take both touch buttons off the pad")
@@ -179,14 +179,15 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
         "The game's own rumble, on the controller you play with when it has a motor, else on the phone. Changing the " +
             "level plays a short pulse at that strength. In a multiplayer game it sets every player's strength.",
     )
-    SettingsKind.PAD_LAYOUT -> quiet("Move and resize the see-through pad's buttons")
-    SettingsKind.PAD_LAYOUT_CONSOLE -> SettingText(
-        "Whose layout you edit",
-        "Shared is the layout every console uses. A console you give a layout of its own uses that instead. Each screen " +
-            "size keeps its own layouts; the page edits the screen you are on.",
+    SettingsKind.BUTTON_LAYOUT -> quiet("Move and resize the buttons, per console")
+    SettingsKind.BUTTON_LAYOUT_CONSOLE -> SettingText(
+        "Whose buttons you edit",
+        "Each console keeps its own button layout, in portrait and in landscape. The editor shows the layout a game " +
+            "would show on this screen.",
     )
-    SettingsKind.PAD_LAYOUT_SHAPE -> quiet("Edit the buttons beside a landscape game")
-    SettingsKind.PAD_LAYOUT_RESET -> SettingText("Resets its layouts on this screen", "Put the chosen console's layouts on this screen back")
+    SettingsKind.BUTTON_LAYOUT_WII_PAD -> quiet("Each Wii controller has its own layout")
+    SettingsKind.BUTTON_LAYOUT_ORIENTATION -> quiet("Edit the buttons for this orientation")
+    SettingsKind.BUTTON_LAYOUT_RESET -> SettingText("Resets this console's buttons", "Put the chosen console's buttons back where the skin puts them")
     SettingsKind.SHORTCUTS -> quiet(
         "Controller buttons and touch buttons for fast forward, rewind and reset",
         "Bind a controller button or combo to fast forward, rewind or reset, and give the on-screen pad up to two touch " +

@@ -75,18 +75,14 @@ import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.settings.VerticalListAlignment
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.runner.WiiPad
+import com.nxredux.mobile.skin.SkinTweak
+import com.nxredux.mobile.skin.SkinTweaks
 import com.nxredux.mobile.settings.AccentPreset
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.settings.SecondaryPreset
 import com.nxredux.mobile.settings.MenuStyles
 import com.nxredux.mobile.settings.PadTheme
-import com.nxredux.mobile.settings.GroupTweak
-import com.nxredux.mobile.settings.PadGroup
-import com.nxredux.mobile.settings.PadLayout
-import com.nxredux.mobile.settings.PadLayouts
-import com.nxredux.mobile.settings.PadScreen
-import com.nxredux.mobile.settings.PadShape
-import com.nxredux.mobile.settings.PadSlot
 import com.nxredux.mobile.settings.PadVibration
 import com.nxredux.mobile.settings.GameRumble
 import com.nxredux.mobile.settings.ExtraFolder
@@ -167,6 +163,7 @@ class AppStateTest {
         override var extraFolders: List<ExtraFolder> = emptyList()
         override var defaultTags: Map<String, String> = emptyMap()
         override var padLayouts: com.nxredux.mobile.settings.PadLayoutMap = emptyMap()
+        override var skinTweaks = ""
         override var debugLog = false
         override var secondScreen = true
         override var pauseWhenUnfocused = true
@@ -2079,8 +2076,8 @@ class AppStateTest {
         assertEquals(2, runner.launched.size)
     }
 
-    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, padEditor: ((PadEditRequest) -> Unit)? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }) =
-        AppState(AppDeps(settings, src, runner, picker, data, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, padEditor = padEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }) =
+        AppState(AppDeps(settings, src, runner, picker, data, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, allFilesAccess = allFiles, micAccess = mic, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
 
     /** What a scan of [src] for [settings] stores, built without an AppState (so without the skeleton). */
     private suspend fun scannedIndex(settings: MemorySettings, src: RomsSource = source): LibraryIndex =
@@ -2547,7 +2544,7 @@ class AppStateTest {
         state.openSettingsMenu()
         assertEquals(true, state.menuPadShown())                           // Tools → Settings
         for (section in listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.MAIN_MENU, SettingsSection.LAYOUT_HOME, SettingsSection.SYSTEM,
-            SettingsSection.CONTROLS, SettingsSection.PAD_LAYOUT, SettingsSection.APPEARANCE)) {
+            SettingsSection.CONTROLS, SettingsSection.BUTTON_LAYOUT, SettingsSection.APPEARANCE)) {
             state.openSettings(section)
             assertEquals(true, state.menuPadShown(), "$section")
         }
@@ -5543,7 +5540,7 @@ class AppStateTest {
                 SettingsRow(SettingsKind.ACCENT, "Accent", "White"),
                 SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", "Auto"),
                 SettingsRow(SettingsKind.TEXT_SIZE, "Text size", "Large"),
-                SettingsRow(SettingsKind.PAD_LAYOUT, "Overlay pad layout", "Default"),
+                SettingsRow(SettingsKind.BUTTON_LAYOUT, "Button layout", "Default"),
                 SettingsRow(SettingsKind.RESET_DEFAULTS, "Reset to defaults"),
             ),
             assertIs<Screen.Settings>(state.screen.value).rows,
@@ -5607,7 +5604,7 @@ class AppStateTest {
         state.load()
         state.openSettings(SettingsSection.APPEARANCE)
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(listOf(SettingsKind.PAD_SKIN, SettingsKind.PAD_THEME, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.PAD_LAYOUT, SettingsKind.RESET_DEFAULTS), rows.map { it.kind })
+        assertEquals(listOf(SettingsKind.PAD_SKIN, SettingsKind.PAD_THEME, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.BUTTON_LAYOUT, SettingsKind.RESET_DEFAULTS), rows.map { it.kind })
     }
 
     @Test fun layouts_rows_follow_the_handheld_order() = runTest {
@@ -9797,7 +9794,7 @@ class AppStateTest {
         assertEquals(true, settingsNxRow(accent).cycleable)
         assertEquals(SettingsKind.SECONDARY_ACCENT, rows[3].kind)
         assertEquals(SettingsKind.TEXT_SIZE, rows[4].kind)
-        assertEquals(SettingsKind.PAD_LAYOUT, rows[5].kind)
+        assertEquals(SettingsKind.BUTTON_LAYOUT, rows[5].kind)
         assertEquals(SettingsKind.RESET_DEFAULTS, rows[6].kind)
         state.openSettings(SettingsSection.MAIN_MENU)
         assertTrue(assertIs<Screen.Settings>(state.screen.value).rows.none { it.kind == SettingsKind.ACCENT })   // not on Layouts
@@ -10091,173 +10088,133 @@ class AppStateTest {
         assertTrue(settingsNxRow(assertIs<Screen.Settings>(state.screen.value).rows[1]).cycleable)
     }
 
-    // Appearance → Overlay pad layout opens its page: Console, the Landscape shape, Reset console.
-    @Test fun appearance_overlay_pad_layout_row_opens_its_page() = runTest {
+    /** A [SkinEditorLauncher] that records what it was asked to open. */
+    private class RecordingSkinEditor : SkinEditorLauncher {
+        val opened = mutableListOf<Pair<SkinEditRequest, String>>()
+        override fun open(request: SkinEditRequest, title: String) { opened += request to title }
+    }
+
+    /** The Button layout page, its Console row cycled to [name]. */
+    private fun AppState.buttonLayoutOn(name: String) {
+        openSettings(SettingsSection.BUTTON_LAYOUT)
+        select(0)
+        var guard = 0
+        while (assertIs<Screen.Settings>(screen.value).rows[0].secondary != name) { onButton(NxButton.RIGHT); check(++guard < 200) { "no $name" } }
+    }
+
+    // Appearance → Button layout opens its page: Console, Portrait, Landscape, Reset console; B goes back to the row.
+    @Test fun appearance_button_layout_row_opens_its_page() = runTest {
         val settings = freshSettings()
         val state = state(settings)
         state.load()
         state.openSettings(SettingsSection.APPEARANCE)
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(SettingsRow(SettingsKind.PAD_LAYOUT, "Overlay pad layout", "Default"), rows[5])
+        assertEquals(SettingsRow(SettingsKind.BUTTON_LAYOUT, "Button layout", "Default"), rows[5])
         assertEquals(SettingsKind.RESET_DEFAULTS, rows.last().kind)
         state.select(5)
         state.onButton(NxButton.A)
-        val page = assertIs<Screen.Settings>(state.screen.value)
-        assertEquals(SettingsSection.PAD_LAYOUT, page.section)
+        assertEquals(SettingsSection.BUTTON_LAYOUT, assertIs<Screen.Settings>(state.screen.value).section)
+        state.buttonLayoutOn("Game Boy Advance")
         assertEquals(
             listOf(
-                SettingsRow(SettingsKind.PAD_LAYOUT_CONSOLE, "Console", "Shared"),
-                SettingsRow(SettingsKind.PAD_LAYOUT_SHAPE, "Landscape", "Default", padShape = PadShape.OVERLAY),
-                SettingsRow(SettingsKind.PAD_LAYOUT_RESET, "Reset console"),
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_CONSOLE, "Console", "Game Boy Advance"),
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Portrait", landscape = false),
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Landscape", landscape = true),
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_RESET, "Reset console"),
             ),
-            page.rows,
+            assertIs<Screen.Settings>(state.screen.value).rows,
         )
         state.onButton(NxButton.B)
         val back = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.APPEARANCE, back.section)
-        assertEquals(SettingsKind.PAD_LAYOUT, back.rows[state.selection.value.index].kind)
+        assertEquals(SettingsKind.BUTTON_LAYOUT, back.rows[state.selection.value.index].kind)
     }
 
-    @Test fun pad_layout_console_cycles_shared_then_library_consoles_and_values_follow() = runTest {
-        val gba = PadLayout(mapOf(PadGroup.FACE to GroupTweak(scale = 1.2f)))
-        val shared = PadLayout(mapOf(PadGroup.DPAD to GroupTweak(dy = -1f)))
-        val settings = freshSettings().apply {
-            padLayouts = mapOf(PadLayouts.SHARED_KEY to mapOf(PadSlot(PadShape.OVERLAY, PadScreen.NARROW) to shared), "gba" to mapOf(PadSlot(PadShape.OVERLAY, PadScreen.NARROW) to gba))
-        }
-        val state = state(settings)
+    // Every console, by name; the Wii adds its Controller row, which cycles Classic, Nunchuk, Sideways, Upright.
+    @Test fun button_layout_console_cycles_every_console_and_the_wii_picks_its_controller() = runTest {
+        val editor = RecordingSkinEditor()
+        val state = state(freshSettings(), skinEditor = editor)
         state.load()
-        state.openSettings(SettingsSection.PAD_LAYOUT)
+        state.openSettings(SettingsSection.BUTTON_LAYOUT)
         fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(listOf("Shared", "Custom"), rows().take(2).map { it.secondary })
         val seen = mutableListOf<String>()
         state.select(0)
-        repeat(5) { seen += rows()[0].secondary!!; state.onButton(NxButton.RIGHT) }
-        // The library's consoles with games (the fixture: GB, GBA, NDS; C64 is no console), by name, after Shared; wraps.
-        assertEquals(listOf("Shared", "Game Boy", "Game Boy Advance", "Nintendo DS", "Shared"), seen)
-        while (rows()[0].secondary != "Game Boy Advance") state.onButton(NxButton.RIGHT)
-        assertEquals("Custom", rows()[1].secondary)                 // its own
-        state.onButton(NxButton.LEFT)
-        assertEquals("Game Boy", rows()[0].secondary)
-        assertEquals("Shared", rows()[1].secondary)                 // inherits Shared's
-    }
-
-    @Test fun the_pad_layout_page_follows_the_screen_its_on() = runTest {
-        val l = PadLayout(mapOf(PadGroup.DPAD to GroupTweak(dx = 1f)))
-        val narrow = PadSlot(PadShape.OVERLAY, PadScreen.NARROW)
-        val wide = PadSlot(PadShape.OVERLAY, PadScreen.WIDE)
-        val requests = mutableListOf<PadEditRequest>()
-        val settings = freshSettings().apply { padLayouts = mapOf(PadLayouts.SHARED_KEY to mapOf(narrow to l)) }
-        val state = state(settings, padEditor = { requests += it })
-        state.load()
-        state.openSettings(SettingsSection.PAD_LAYOUT)
-        fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals("Custom", rows()[1].secondary)
-        state.onPadScreen(PadScreen.WIDE)                        // unfolded: the inner screen's layouts
-        assertEquals("Default", rows()[1].secondary)
-        state.select(1)
-        state.onButton(NxButton.A)
-        assertEquals(wide, requests.single().slot)
-        settings.padLayouts = PadLayouts.withLayout(settings.padLayouts, PadLayouts.SHARED_KEY, wide, l)
-        state.onPadLayoutEdited()
-        state.select(2)
-        state.onButton(NxButton.A); state.onButton(NxButton.A)   // Reset console (asks, then Reset): this screen's only
-        assertEquals(mapOf(PadLayouts.SHARED_KEY to mapOf(narrow to l)), settings.padLayouts)
-    }
-
-    @Test fun a_shape_row_opens_the_editor_for_the_chosen_console() = runTest {
-        val requests = mutableListOf<PadEditRequest>()
-        val state = state(freshSettings(), padEditor = { requests += it })
-        state.load()
-        state.openSettings(SettingsSection.PAD_LAYOUT)
-        state.select(1)
-        state.onButton(NxButton.A)
-        assertEquals(PadEditRequest(PadLayouts.SHARED_KEY, PadSlot(PadShape.OVERLAY, PadScreen.NARROW), "", "Shared"), requests.single())
-        state.onButton(NxButton.A)                               // a second quick press while it opens: no second editor
-        assertEquals(1, requests.size)
-        state.onPadLayoutEdited()
-        state.select(0)
-        while (assertIs<Screen.Settings>(state.screen.value).rows[0].secondary != "Game Boy Advance") state.onButton(NxButton.RIGHT)
-        state.select(1)
-        state.onButton(NxButton.A)
-        assertEquals(PadEditRequest("gba", PadSlot(PadShape.OVERLAY, PadScreen.NARROW), "GBA", "Game Boy Advance"), requests.last())
-    }
-
-    @Test fun an_edit_landing_republishes_the_page_and_the_pad_layouts() = runTest {
-        val settings = freshSettings()
-        val state = state(settings, padEditor = {})
-        state.load()
-        state.openSettings(SettingsSection.PAD_LAYOUT)
-        val edited = mapOf(PadLayouts.SHARED_KEY to mapOf(PadSlot(PadShape.OVERLAY, PadScreen.NARROW) to PadLayout(mapOf(PadGroup.DPAD to GroupTweak(dx = 1f)))))
-        settings.padLayouts = edited                    // the editor activity writes the settings itself
-        state.onPadLayoutEdited()
-        assertEquals("Custom", assertIs<Screen.Settings>(state.screen.value).rows[1].secondary)
-        assertEquals(edited, state.padLayouts.value)
-    }
-
-    @Test fun an_edit_landing_off_settings_updates_the_pad_layouts_and_keeps_the_screen() = runTest {
-        val settings = freshSettings()
-        val state = state(settings, padEditor = {})
-        state.load()
-        val menu = assertIs<Screen.Systems>(state.screen.value)
-        val edited = mapOf(PadLayouts.SHARED_KEY to mapOf(PadSlot(PadShape.OVERLAY, PadScreen.NARROW) to PadLayout(mapOf(PadGroup.DPAD to GroupTweak(dx = 1f)))))
-        settings.padLayouts = edited
-        state.onPadLayoutEdited()
-        assertEquals(menu, state.screen.value)
-        assertEquals(edited, state.padLayouts.value)
-    }
-
-    @Test fun a_consoles_explicit_default_shape_reads_default_and_reset_console_drops_it() = runTest {
-        val l = PadLayout(mapOf(PadGroup.DPAD to GroupTweak(dx = 1f)))
-        val settings = freshSettings().apply {
-            padLayouts = mapOf(PadLayouts.SHARED_KEY to mapOf(PadSlot(PadShape.OVERLAY, PadScreen.NARROW) to l), "gba" to mapOf(PadSlot(PadShape.OVERLAY, PadScreen.NARROW) to PadLayout.EMPTY))
-        }
-        val state = state(settings)
-        state.load()
-        state.openSettings(SettingsSection.PAD_LAYOUT)
-        fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
-        state.select(0)
-        while (rows()[0].secondary != "Game Boy Advance") state.onButton(NxButton.RIGHT)
-        assertEquals("Default", rows()[1].secondary)
-        state.select(2)
-        state.onButton(NxButton.A); state.onButton(NxButton.A)   // asks, then Reset
-        assertEquals(mapOf(PadLayouts.SHARED_KEY to mapOf(PadSlot(PadShape.OVERLAY, PadScreen.NARROW) to l)), settings.padLayouts)
-        assertEquals("Shared", rows()[1].secondary)
-    }
-
-    @Test fun reset_console_clears_only_that_consoles_layouts() = runTest {
-        val l = PadLayout(mapOf(PadGroup.DPAD to GroupTweak(dx = 1f)))
-        val settings = freshSettings().apply {
-            padLayouts = mapOf(PadLayouts.SHARED_KEY to mapOf(PadSlot(PadShape.OVERLAY, PadScreen.NARROW) to l), "gba" to mapOf(PadSlot(PadShape.OVERLAY, PadScreen.NARROW) to l, PadSlot(PadShape.OVERLAY, PadScreen.WIDE) to l))
-        }
-        val state = state(settings)
-        state.load()
-        state.openSettings(SettingsSection.PAD_LAYOUT)
-        state.select(0)
-        while (assertIs<Screen.Settings>(state.screen.value).rows[0].secondary != "Game Boy Advance") state.onButton(NxButton.RIGHT)
-        state.select(2)
-        state.onButton(NxButton.A)
-        assertEquals(l, settings.padLayouts["gba"]?.get(PadSlot(PadShape.OVERLAY, PadScreen.NARROW)))   // asked: nothing yet
-        assertEquals("Reset pad layouts?", settingsResetAsk(assertIs<Screen.Settings>(state.screen.value), 2)?.title)
-        state.onButton(NxButton.A)
-        assertEquals(   // this console on this screen only: Shared and the other screen's stay
-            mapOf(PadLayouts.SHARED_KEY to mapOf(PadSlot(PadShape.OVERLAY, PadScreen.NARROW) to l), "gba" to mapOf(PadSlot(PadShape.OVERLAY, PadScreen.WIDE) to l)),
-            settings.padLayouts,
+        repeat(CoreRegistry.consoles.size) { seen += rows()[0].secondary!!; state.onButton(NxButton.RIGHT) }
+        assertEquals(CoreRegistry.consoles.map { it.displayName }.sortedBy { it.lowercase() }, seen)
+        assertEquals(seen.first(), rows()[0].secondary)   // wraps
+        state.buttonLayoutOn("Nintendo Wii")
+        assertEquals(
+            listOf(
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_CONSOLE, "Console", "Nintendo Wii"),
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_WII_PAD, "Controller", "Classic"),
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Portrait", landscape = false),
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Landscape", landscape = true),
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_RESET, "Reset console"),
+            ),
+            rows(),
         )
-        assertEquals(settings.padLayouts, state.padLayouts.value)
-        assertEquals(SettingsKind.PAD_LAYOUT_RESET, assertIs<Screen.Settings>(state.screen.value).rows[state.selection.value.index].kind)
+        state.select(1)
+        val pads = mutableListOf<String>()
+        repeat(5) { pads += rows()[1].secondary!!; state.onButton(NxButton.RIGHT) }
+        assertEquals(listOf("Classic", "Nunchuk", "Sideways", "Upright", "Classic"), pads)
+        assertEquals("Nunchuk", rows()[1].secondary)                     // five steps: round once, then Nunchuk
+        state.select(3)
+        state.onButton(NxButton.A)
+        assertEquals(SkinEditRequest("wii", true, WiiPad.NUNCHUK) to "Nintendo Wii · Nunchuk", editor.opened.single())
     }
 
-    @Test fun appearance_reset_to_defaults_clears_every_pad_layout() = runTest {
-        val l = PadLayout(mapOf(PadGroup.DPAD to GroupTweak(dx = 1f)))
-        val settings = freshSettings().apply { padLayouts = mapOf("gba" to mapOf(PadSlot(PadShape.OVERLAY, PadScreen.NARROW) to l)) }
+    @Test fun portrait_opens_the_editor_for_the_chosen_console_once() = runTest {
+        val editor = RecordingSkinEditor()
+        val state = state(freshSettings(), skinEditor = editor)
+        state.load()
+        state.buttonLayoutOn("Game Boy Advance")
+        state.select(1)
+        state.onButton(NxButton.A)
+        assertEquals(SkinEditRequest("gba", false, null) to "Game Boy Advance", editor.opened.single())
+        state.onButton(NxButton.A)                                       // a second quick press while it opens: no second editor
+        assertEquals(1, editor.opened.size)
+        state.onSkinLayoutEdited()
+        state.select(2)
+        state.onButton(NxButton.A)
+        assertEquals(SkinEditRequest("gba", true, null), editor.opened.last().first)
+    }
+
+    @Test fun an_edit_landing_republishes_the_button_layout_row() = runTest {
+        val settings = freshSettings()
+        val state = state(settings, skinEditor = RecordingSkinEditor())
+        state.load()
+        state.openSettings(SettingsSection.APPEARANCE)
+        settings.skinTweaks = SkinTweaks.encode(mapOf("gba" to mapOf("grip" to mapOf("face" to SkinTweak(dx = 4f)))))   // the activity writes it
+        state.onSkinLayoutEdited()
+        assertEquals("Custom", assertIs<Screen.Settings>(state.screen.value).rows[5].secondary)
+    }
+
+    @Test fun reset_console_clears_only_that_consoles_tweaks() = runTest {
+        val t = mapOf("face" to SkinTweak(dx = 4f))
+        val settings = freshSettings().apply {
+            skinTweaks = SkinTweaks.encode(mapOf("gba" to mapOf("grip" to t, "stack" to t), "gb" to mapOf("grip" to t)))
+        }
+        val state = state(settings)
+        state.load()
+        state.buttonLayoutOn("Game Boy Advance")
+        state.select(3)
+        state.onButton(NxButton.A)
+        assertEquals(setOf("gba", "gb"), SkinTweaks.decode(settings.skinTweaks).keys)   // asked: nothing yet
+        assertEquals("Reset button layout?", settingsResetAsk(assertIs<Screen.Settings>(state.screen.value), 3)?.title)
+        state.onButton(NxButton.A)
+        assertEquals(mapOf("gb" to mapOf("grip" to t)), SkinTweaks.decode(settings.skinTweaks))   // every gba layout, gb kept
+        assertEquals(SettingsKind.BUTTON_LAYOUT_RESET, assertIs<Screen.Settings>(state.screen.value).rows[state.selection.value.index].kind)
+    }
+
+    @Test fun appearance_reset_to_defaults_clears_every_button_layout() = runTest {
+        val settings = freshSettings().apply { skinTweaks = SkinTweaks.encode(mapOf("gba" to mapOf("grip" to mapOf("face" to SkinTweak(scale = 1.1f))))) }
         val state = state(settings)
         state.load()
         state.openSettings(SettingsSection.APPEARANCE)
         assertEquals("Custom", assertIs<Screen.Settings>(state.screen.value).rows[5].secondary)
         state.select(6)
         state.onButton(NxButton.A); state.onButton(NxButton.A)   // asks, then Reset
-        assertEquals(emptyMap(), settings.padLayouts)
-        assertEquals(emptyMap(), state.padLayouts.value)
+        assertEquals("", settings.skinTweaks)
         assertEquals("Default", assertIs<Screen.Settings>(state.screen.value).rows[5].secondary)
     }
 
@@ -10701,7 +10658,7 @@ class AppStateTest {
         assertEquals(SettingChoices(listOf("List", "Grid", "Carousel", "Backdrop", "Minimal"), 0), choices(SettingsSection.LAYOUT_GAME_LISTS, SettingsKind.GAME_LIST_STYLE))
         assertEquals(SettingChoices(listOf("Full screen", "List"), 0), choices(SettingsSection.LAYOUT_SWITCHER, SettingsKind.SWITCHER_LAYOUT))
         assertEquals(SettingChoices(listOf("Off", "On"), 1), choices(SettingsSection.SYSTEM, SettingsKind.HOME_SCREEN))   // Android answers it
-        assertNull(choices(SettingsSection.APPEARANCE, SettingsKind.PAD_LAYOUT))                                          // a page, not a value
+        assertNull(choices(SettingsSection.APPEARANCE, SettingsKind.BUTTON_LAYOUT))                                          // a page, not a value
         // Default emulators: a console of several tags its emulators; one of a single tag none (dimmed).
         state.openSettings(SettingsSection.DEFAULT_EMULATORS)
         val d = assertIs<Screen.Settings>(state.screen.value)
@@ -10709,7 +10666,7 @@ class AppStateTest {
         assertNull(d.choices[d.rows.indexOfFirst { it.consoleId == "gb" }])
         // Every page with a value row draws touch rows, Library and System (its About rows too); Import saves and Emulators keep theirs.
         for (section in listOf(SettingsSection.IMPORT_SAVES, SettingsSection.EMULATORS)) assertFalse(settingsTouchPage(state.settingsPreview(section)), section.name)
-        for (section in listOf(SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.LAYOUT_HOME, SettingsSection.CONTROLS, SettingsSection.SAVES, SettingsSection.SYSTEM, SettingsSection.DEFAULT_EMULATORS, SettingsSection.PAD_LAYOUT, SettingsSection.LIBRARY))
+        for (section in listOf(SettingsSection.APPEARANCE, SettingsSection.MAIN_MENU, SettingsSection.LAYOUT_HOME, SettingsSection.CONTROLS, SettingsSection.SAVES, SettingsSection.SYSTEM, SettingsSection.DEFAULT_EMULATORS, SettingsSection.BUTTON_LAYOUT, SettingsSection.LIBRARY))
             assertTrue(settingsTouchPage(state.settingsPreview(section)), section.name)
     }
 

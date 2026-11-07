@@ -3,7 +3,6 @@ package com.nxredux.mobile.ui
 import com.nxredux.mobile.options.ConsoleRow
 import com.nxredux.mobile.options.CoreOption
 import com.nxredux.mobile.options.PadOptions
-import com.nxredux.mobile.settings.PadShape
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.HomeShelf
 import com.nxredux.mobile.settings.MenuCategory
@@ -65,7 +64,7 @@ class SettingsTouchRowsTest {
         // A dimmed row shows its value only; a page's opener its value and `›`; an action neither.
         val gb = settingsTouchRow(SettingsRow(SettingsKind.DEFAULT_TAG, "Game Boy", "Gambatte (GB)", consoleId = "gb", enabled = false), null)
         assertEquals(emptyList(), gb.choices); assertEquals("Gambatte (GB)", gb.value); assertFalse(gb.enabled)
-        val padLayout = settingsTouchRow(SettingsRow(SettingsKind.PAD_LAYOUT, "Pad layout", "Default"), null)
+        val padLayout = settingsTouchRow(SettingsRow(SettingsKind.BUTTON_LAYOUT, "Button layout", "Default"), null)
         assertTrue(padLayout.opens); assertEquals("Default", padLayout.value)
         val reset = settingsTouchRow(SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL), null, SettingsSection.APPEARANCE)
         assertFalse(reset.opens); assertEquals(null, reset.value)
@@ -160,7 +159,7 @@ class SettingsTouchRowsTest {
             SettingsRow(SettingsKind.MENU_STYLE, "x", category = MenuCategory.COLLECTIONS),
             SettingsRow(SettingsKind.SHELF_SHOWN, "x", shelf = HomeShelf.NOT_STARTED),
             SettingsRow(SettingsKind.HINT_SHOWN, "x", hint = NxButton.SELECT),
-            SettingsRow(SettingsKind.PAD_LAYOUT_SHAPE, "x", padShape = PadShape.OVERLAY),
+            SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "x", landscape = true),
             SettingsRow(SettingsKind.DEFAULT_TAG, "x", enabled = false),
         )
         for (r in rows) for (section in listOf(null, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS)) {

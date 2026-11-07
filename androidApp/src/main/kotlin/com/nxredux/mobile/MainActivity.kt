@@ -66,7 +66,7 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.AndroidNetplay
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.usb.UsbCables
-import com.nxredux.mobile.padlayout.PadLayoutActivity
+import com.nxredux.mobile.skinlayout.SkinLayoutActivity
 import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
 import com.nxredux.mobile.runner.AndroidMicAccess
 import com.nxredux.mobile.runner.CoreHangNotice
@@ -112,6 +112,8 @@ import com.nxredux.mobile.ui.App
 import com.nxredux.mobile.ui.MenuTopScreen
 import com.nxredux.mobile.ui.AppDeps
 import com.nxredux.mobile.ui.AppState
+import com.nxredux.mobile.ui.SkinEditRequest
+import com.nxredux.mobile.ui.SkinEditorLauncher
 import com.nxredux.mobile.ui.OnboardingStep
 import com.nxredux.mobile.ui.Screen
 import com.nxredux.mobile.ui.nx.BottomScreenButton
@@ -307,8 +309,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
         UsbCables.get(this).onConsent(r.resultCode == RESULT_OK)
     }
 
-    /** Controls → Pad layout's editor; the menu re-reads the layouts when it returns, saved or not. */
-    private val padLayoutEditor = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { state.onPadLayoutEdited() }
+    /** Appearance → Button layout's editor; the menu re-reads the tweaks when it returns, saved or not. */
+    private val skinLayoutEditor = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { state.onSkinLayoutEdited() }
 
     /** Artwork fetch and achievement download progress are notifications; the permission is asked when the first starts (the job runs either way). */
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -416,7 +418,9 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 netplay = AndroidNetplay(this) { DataRoot.of(this) }.also { np ->
                     np.screenOn = { on -> runOnUiThread { keepScreenOn(on) } }
                 },
-                padEditor = { request -> padLayoutEditor.launch(PadLayoutActivity.intent(this, request)) },
+                skinEditor = object : SkinEditorLauncher {
+                    override fun open(request: SkinEditRequest, title: String) = skinLayoutEditor.launch(SkinLayoutActivity.intent(this@MainActivity, request, title))
+                },
                 screenClass = { windowScreenClass },
                 windowPx = { windowPx },
                 ps2BiosFiles = { BiosImport.binFiles(applicationContext, settings.treeRef, "PS2") },

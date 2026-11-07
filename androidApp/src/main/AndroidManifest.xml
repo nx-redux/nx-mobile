@@ -129,6 +129,12 @@
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboard|keyboardHidden|navigation|uiMode"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Appearance → Button layout's editor: holds the asked orientation (SkinLayoutActivity). -->
+        <activity
+            android:name=".skinlayout.SkinLayoutActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|locale|layoutDirection"
+            android:theme="@style/Theme.NxMobile" />
         <!-- Controls → Pad layout's editor: holds the edited shape's orientation (PadLayoutActivity). -->
         <activity
             android:name=".padlayout.PadLayoutActivity"

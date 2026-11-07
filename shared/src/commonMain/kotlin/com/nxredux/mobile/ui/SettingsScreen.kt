@@ -176,7 +176,7 @@ internal fun settingsTouchPage(screen: Screen.Settings): Boolean =
 /** The Settings rows that open a page or an editor: their touch row ends in `›`. */
 private val OPENER_KINDS = setOf(
     SettingsKind.HOME, SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVES, SettingsKind.IMPORT_SAVES,
-    SettingsKind.PAD_LAYOUT, SettingsKind.PAD_LAYOUT_SHAPE, SettingsKind.SHORTCUTS, SettingsKind.SYSTEM_BUTTONS, SettingsKind.ANDROID_GAMES, SettingsKind.HIDDEN, SettingsKind.UNASSIGNED,
+    SettingsKind.BUTTON_LAYOUT, SettingsKind.BUTTON_LAYOUT_ORIENTATION, SettingsKind.SHORTCUTS, SettingsKind.SYSTEM_BUTTONS, SettingsKind.ANDROID_GAMES, SettingsKind.HIDDEN, SettingsKind.UNASSIGNED,
     SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER,
 )
@@ -225,7 +225,7 @@ internal fun settingsRowAction(row: SettingsRow, section: SettingsSection?): Str
     SettingsKind.COPY_INFO -> "Copy"
     SettingsKind.APP_UPDATE -> appUpdateHint(row.label)
     SettingsKind.RESET_DEFAULTS -> if (section == SettingsSection.SHORTCUTS) "Clear all" else "Reset"
-    SettingsKind.PAD_LAYOUT_RESET -> "Reset"
+    SettingsKind.BUTTON_LAYOUT_RESET -> "Reset"
     SettingsKind.EXTRA -> "Remove"
     else -> null
 }
@@ -235,20 +235,20 @@ internal data class SettingsResetAsk(val title: String, val text: String, val co
 
 /**
  * What [page]'s reset row at [selected] asks before it acts ([Screen.Settings.confirmReset]): Shortcuts' Clear all,
- * Pad layout's Reset console, every other page's Reset to defaults with that page's scope. Null for any other row.
+ * Button layout's Reset console, every other page's Reset to defaults with that page's scope. Null for any other row.
  */
 internal fun settingsResetAsk(page: Screen.Settings, selected: Int): SettingsResetAsk? = when (page.rows.getOrNull(selected)?.kind) {
     SettingsKind.RESET_DEFAULTS -> when (page.section) {
         SettingsSection.SHORTCUTS -> SettingsResetAsk("Clear all shortcuts?", "Every action goes back to None and both touch buttons come off the pad.", "Clear all")
         SettingsSection.SYSTEM_BUTTONS -> SettingsResetAsk("Reset this controller's buttons?", "SELECT, START and MENU go back to the controller's own buttons.", "Reset")
-        SettingsSection.APPEARANCE -> SettingsResetAsk("Reset to defaults?", "Pad theme, Pad buttons, Accent, Secondary accent and Text size go back to their defaults.", "Reset")
+        SettingsSection.APPEARANCE -> SettingsResetAsk("Reset to defaults?", "Pad theme, Pad buttons, Accent, Secondary accent, Text size and Button layout go back to their defaults.", "Reset")
         SettingsSection.MAIN_MENU -> SettingsResetAsk("Reset to defaults?", "Every Layouts group and Extra info go back to their defaults.", "Reset")
         SettingsSection.CONTROLS -> SettingsResetAsk("Reset to defaults?", "Vibration, Menu pad and every pad layout go back to their defaults.", "Reset")
         else -> SettingsResetAsk("Reset to defaults?", "This page's settings go back to their defaults.", "Reset")
     }
-    SettingsKind.PAD_LAYOUT_RESET -> {
-        val console = page.rows.firstOrNull { it.kind == SettingsKind.PAD_LAYOUT_CONSOLE }?.secondary ?: "This console"
-        SettingsResetAsk("Reset pad layouts?", "$console's pad layouts on this screen go back to their defaults.", "Reset")
+    SettingsKind.BUTTON_LAYOUT_RESET -> {
+        val console = page.rows.firstOrNull { it.kind == SettingsKind.BUTTON_LAYOUT_CONSOLE }?.secondary ?: "This console"
+        SettingsResetAsk("Reset button layout?", "$console's buttons go back to where the skin puts them, portrait and landscape.", "Reset")
     }
     else -> null
 }
@@ -317,7 +317,7 @@ internal fun settingsNxRow(row: SettingsRow): NxRow = NxRow(
         SettingsKind.PAD_SKIN, SettingsKind.PAD_THEME,
         SettingsKind.DEFAULT_TAG, SettingsKind.MENU_STYLE, SettingsKind.GAME_LIST_STYLE,
         SettingsKind.MENU_ORIENTATION, SettingsKind.GAME_LIST_ORIENTATION, SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT,
-        SettingsKind.CONTROLLER_ART, SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HINT_SHOWN, SettingsKind.LIST_ART, SettingsKind.BACKDROP_ART, SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS, SettingsKind.EXTRA_INFO, SettingsKind.HOME_STATS, SettingsKind.LAYOUT_OPTIONS, SettingsKind.ACHIEVEMENTS_PANEL, SettingsKind.SWITCHER_LAYOUT, SettingsKind.PAD_VIBRATION, SettingsKind.GAME_RUMBLE, SettingsKind.PAD_LAYOUT_CONSOLE, SettingsKind.SHORTCUT_TOUCH, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.DEBUG_LOG, SettingsKind.SECOND_SCREEN_ENABLE, SettingsKind.BOTTOM_SCREEN, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME -> true
+        SettingsKind.CONTROLLER_ART, SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HINT_SHOWN, SettingsKind.LIST_ART, SettingsKind.BACKDROP_ART, SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS, SettingsKind.EXTRA_INFO, SettingsKind.HOME_STATS, SettingsKind.LAYOUT_OPTIONS, SettingsKind.ACHIEVEMENTS_PANEL, SettingsKind.SWITCHER_LAYOUT, SettingsKind.PAD_VIBRATION, SettingsKind.GAME_RUMBLE, SettingsKind.BUTTON_LAYOUT_CONSOLE, SettingsKind.BUTTON_LAYOUT_WII_PAD, SettingsKind.SHORTCUT_TOUCH, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.DEBUG_LOG, SettingsKind.SECOND_SCREEN_ENABLE, SettingsKind.BOTTOM_SCREEN, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME -> true
         else -> false
     },
 )
