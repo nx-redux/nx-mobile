@@ -277,21 +277,17 @@ object CoreRegistry {
         "picodrive", "libpicodrive_libretro_android.so", setOf("32x", "bin", "md", "gen", "smd", "68k", "sms", "gg", "sg", "cue", "iso", "chd", "m3u"),
         // Its NDK build has no libretro VFS (plain fopen on the path): give it a real file.
         loadMode = LoadMode.REAL_PATH,
-        // The Brick's MD, SEGACD and 32X paks' values (the rest of theirs are the core's defaults); picodrive_input1 and
-        // picodrive_input2 are set at launch and on a change from Controls → Controller Type (SegaPadType).
-        defaultOptions = mapOf(
-            "picodrive_drc" to "enabled", "picodrive_sound_rate" to "44100",
-            "picodrive_input1" to "6 button pad", "picodrive_input2" to "6 button pad",
-        ),
-        lockedOptions = setOf("picodrive_input1", "picodrive_input2"),
+        // The Brick's MD, SEGACD and 32X paks' values (the rest of theirs are the core's defaults).
+        defaultOptions = mapOf("picodrive_drc" to "enabled", "picodrive_sound_rate" to "44100"),
+        // The 6-button pad on both ports; Controls → Controller Type replaces it at launch and live (SegaPadType).
+        controllerPort0 = SegaPadType.MDPAD_6B,
+        controllerPortCount = 2,
         players = 2,
         name = "PicoDrive",
     )
     // Tag views of picodrive for the 8-bit consoles (as mgbaSgb): the SMS, GG and SG1000 paks force the 3-button pad
     // (no Controller Type row there) and SMS and GG the Master System Type. Same id: states and configs stay <TAG>-picodrive.
-    private val picodrive8bit = picodrive.copy(
-        defaultOptions = picodrive.defaultOptions + mapOf("picodrive_input1" to "3 button pad", "picodrive_input2" to "3 button pad"),
-    )
+    private val picodrive8bit = picodrive.copy(controllerPort0 = SegaPadType.MDPAD_3B)
     private val picodriveSms = picodrive8bit.copy(defaultOptions = picodrive8bit.defaultOptions + ("picodrive_smstype" to "Master System"))
     private val picodriveGg = picodrive8bit.copy(defaultOptions = picodrive8bit.defaultOptions + ("picodrive_smstype" to "Game Gear"))
     private val GEARCOLECO_ADAM = mapOf(
