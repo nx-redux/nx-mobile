@@ -283,6 +283,10 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = prefs.getString(KEY_KIDS_FLAG_HOME, null)
         set(value) = prefs.edit { if (value == null) remove(KEY_KIDS_FLAG_HOME) else putString(KEY_KIDS_FLAG_HOME, value) }
 
+    override var kidsOnWhenHome: Boolean
+        get() = prefs.getBoolean(KEY_KIDS_ON_WHEN_HOME, false)
+        set(value) = prefs.edit { if (value) putBoolean(KEY_KIDS_ON_WHEN_HOME, true) else remove(KEY_KIDS_ON_WHEN_HOME) }
+
     override fun setKidsPin(pin: String) = prefs.edit { putString(KEY_KIDS_PIN, KidsPin.hash(pin)) }
 
     override fun kidsPinMatches(pin: String): Boolean = prefs.getString(KEY_KIDS_PIN, null)?.let { KidsPin.matches(pin, it) } == true
@@ -395,6 +399,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_KIDS_APPS = "kids_apps"
         private const val KEY_KIDS_UNLOCK_UNTIL = "kids_unlock_until"
         private const val KEY_KIDS_FLAG_HOME = "kids_flag_home"
+        private const val KEY_KIDS_ON_WHEN_HOME = "kids_on_when_home"
         private const val KEY_KIDS_PIN = "kids_pin"
         private const val KEY_SECOND_SCREEN = "second_screen"
         private const val KEY_BOTTOM_SCREEN = "bottom_screen"

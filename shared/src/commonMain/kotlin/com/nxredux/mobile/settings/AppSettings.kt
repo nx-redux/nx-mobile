@@ -390,6 +390,13 @@ interface AppSettings {
     var kidsFlagHome: String?
         get() = null
         set(@Suppress("UNUSED_PARAMETER") value) {}
+    /**
+     * Setup's last step asked Android to make NX Redux home: Kids Mode turns on once it is. Stored, since accepting the
+     * role restarts the menu as a new home instance.
+     */
+    var kidsOnWhenHome: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
     /** Stores [pin] as a salted hash. */
     fun setKidsPin(@Suppress("UNUSED_PARAMETER") pin: String) {}
     fun kidsPinMatches(@Suppress("UNUSED_PARAMETER") pin: String): Boolean = false

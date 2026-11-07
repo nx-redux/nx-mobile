@@ -96,6 +96,7 @@ class KidsSettingsTest {
         override var kidsAllowedApps: Set<String> = emptySet()
         override var kidsUnlockUntil = 0L
         override var kidsFlagHome: String? = null
+        override var kidsOnWhenHome = false
         var pin: String? = null   // a fake: the real one keeps a salted hash
         override fun setKidsPin(pin: String) { this.pin = pin }
         override fun kidsPinMatches(pin: String) = pin == this.pin
@@ -244,38 +245,63 @@ class KidsSettingsTest {
         assertEquals("On", st.page().rows.first { it.kind == SettingsKind.KIDS_ENABLE }.secondary)
     }
 
-    @Test fun enableAwayFromHomeAsksToBeHomeFirst() = runTest {
+    /** Away from home, setup runs as usual and home is its last step; on once NX Redux comes back as home. */
+    @Test fun homeIsSetupsLastStep() = runTest {
         val t = setup(home = false)
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        val page = st.page()                                               // no PIN pad: the page asks instead
-        assertTrue(page.confirmReset)
-        val i = page.rows.indexOfFirst { it.kind == SettingsKind.KIDS_ENABLE }
-        assertEquals("Use as home screen", assertNotNull(settingsResetAsk(page, i)).confirm)
-        assertFalse(t.settings.kidsEnabled)
-        st.onButton(NxButton.B)                                            // Cancel: nothing asked, still off
-        assertFalse(st.page().confirmReset)
-        assertEquals(0, t.launcher.homeAsked)
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.onButton(NxButton.A)                                            // Use as home screen: Android asks
+        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        assertEquals(KidsSetupStep.HOME, st.setupStep())
+        assertEquals(listOf(KidsSetupRow.UseHome, KidsSetupRow.Cancel), kidsSetupRows(assertIs(st.screen.value)))
+        st.pressSetup { it == KidsSetupRow.UseHome }
         assertEquals(1, t.launcher.homeAsked)
-        assertFalse(st.page().confirmReset)
+        assertEquals("123456", t.settings.pin)                             // kept before Android asks: the relaunch keeps it
+        assertTrue(t.settings.kidsOnWhenHome)
         assertFalse(t.settings.kidsEnabled)
-        t.launcher.homeNow = true                                          // home now: the switch runs setup
-        st.pressRow(SettingsKind.KIDS_ENABLE)
-        assertEquals(PinPurpose.SETUP_NEW, assertIs<Screen.KidsPin>(st.screen.value).purpose)
+        t.launcher.homeNow = true                                          // accepted
+        st.onForeground()
+        assertTrue(t.settings.kidsEnabled)
+        assertFalse(t.settings.kidsOnWhenHome)
+        assertEquals(Screen.KidsHome, st.screen.value)                     // Monday 10:00: locked
     }
 
-    @Test fun enableWithPinAwayFromHomeStaysOff() = runTest {
+    /** A new home instance (accepting restarts the menu) turns it on from the stored mark alone. */
+    @Test fun newHomeInstanceTurnsItOn() = runTest {
+        val t = setup(home = true)
+        t.settings.pin = "123456"; t.settings.kidsOnWhenHome = true
+        t.st.onForeground()
+        assertTrue(t.settings.kidsEnabled)
+        assertFalse(t.settings.kidsOnWhenHome)
+    }
+
+    @Test fun homeDeclinedLeavesItOff() = runTest {
         val t = setup(home = false)
-        t.settings.setKidsPin("123456")
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        assertTrue(st.page().confirmReset)
+        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.pressSetup { it == KidsSetupRow.UseHome }
+        st.onHomeRoleRefused()                                             // declined
         assertFalse(t.settings.kidsEnabled)
-        assertEquals(KidsMode.Off, t.kids.mode.value)
+        assertFalse(t.settings.kidsOnWhenHome)
+        assertEquals(SettingsSection.KIDS, st.page().section)
+        assertEquals(KIDS_HOME_REFUSED, st.notice.value)
+        st.pressRow(SettingsKind.KIDS_ENABLE)                              // again: the PIN is kept, home alone is asked
+        assertEquals(KidsSetupStep.HOME, st.setupStep())
+    }
+
+    @Test fun homeStepCancelKeepsItOff() = runTest {
+        val t = setup(home = false)
+        val st = t.st
+        st.openSettings(SettingsSection.KIDS)
+        st.pressRow(SettingsKind.KIDS_ENABLE)
+        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
+        st.pressSetup { it == KidsSetupRow.Cancel }
+        assertFalse(t.settings.kidsEnabled)
+        assertNull(t.settings.pin)                                         // nothing stored: a cancelled setup
+        assertEquals(0, t.launcher.homeAsked)
+        assertEquals(SettingsSection.KIDS, st.page().section)
     }
 
     @Test fun homeLostWhileOnShowsWarningRow() = runTest {
@@ -421,13 +447,13 @@ class KidsSettingsTest {
         assertEquals(Screen.KidsHome, t.st.screen.value)                   // Monday 10:00: locked, the tiles
     }
 
-    @Test fun myKidsAwayFromHomeAsksHomeFirst() = runTest {
+    @Test fun myKidsAwayFromHomeAsksHomeLast() = runTest {
         val t = atWhoStep(home = false)
         t.st.onboardingRow(1)
         t.st.pressStart()
-        val page = t.st.page()
-        assertEquals(SettingsSection.KIDS, page.section)
-        assertTrue(page.confirmReset)                                      // Make NX Redux your home screen?
+        assertEquals(PinPurpose.SETUP_NEW, assertIs<Screen.KidsPin>(t.st.screen.value).purpose)   // the PIN first
+        t.st.typePin("123456"); t.st.typePin("123456"); t.st.pickAlpha(); t.st.next(); t.st.next()
+        assertEquals(KidsSetupStep.HOME, t.st.setupStep())                 // home last
         assertFalse(t.settings.kidsEnabled)
     }
 
