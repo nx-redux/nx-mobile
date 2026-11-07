@@ -60,6 +60,7 @@ class SkinLayoutActivity : ComponentActivity() {
         window.goImmersive()
         val console = CoreRegistry.consoles.firstOrNull { it.id == intent.getStringExtra(EXTRA_CONSOLE) } ?: return finish()
         val wiiPad = WiiPad.entries.firstOrNull { it.name == intent.getStringExtra(EXTRA_WII_PAD) }
+        val n3dsNew = intent.getBooleanExtra(EXTRA_N3DS_NEW, false)
         val title = intent.getStringExtra(EXTRA_TITLE) ?: console.displayName
         val settings = AndroidAppSettings(this)
         // the pad theme's pack, as the game reads it; NX Carbon when the theme has none or it can't be read
@@ -77,7 +78,7 @@ class SkinLayoutActivity : ComponentActivity() {
                     // until the window has turned to the asked orientation, nothing to place
                     if (w <= 0 || h <= 0 || (w > h) != landscape) return@BoxWithConstraints
                     // a new window size (folded, unfolded) is another layout: start again on it
-                    val made = remember(w, h) { place(pack, console, tag, wiiPad, w, h, settings.skinTweaks) }
+                    val made = remember(w, h) { place(pack, console, tag, wiiPad, n3dsNew, w, h, settings.skinTweaks) }
                     if (made == null) { LaunchedEffect(Unit) { noLayout() }; return@BoxWithConstraints }
                     val (state, spec) = made
                     SideEffect { editor = state }
@@ -99,14 +100,15 @@ class SkinLayoutActivity : ComponentActivity() {
      * opens), its stick or d-pad as the game starts it, with the stored tweaks for it; null when none fits or its picture
      * can't be read.
      */
-    private fun place(pack: PadSkinPack, console: Console, tag: String, wiiPad: WiiPad?, w: Int, h: Int, stored: String): Pair<SkinEditorState, Placed>? {
+    private fun place(pack: PadSkinPack, console: Console, tag: String, wiiPad: WiiPad?, n3dsNew: Boolean, w: Int, h: Int, stored: String): Pair<SkinEditorState, Placed>? {
         val base = CoreRegistry.baseTag(tag)
         val nds = NdsOptions.appliesTo(tag)
         val ds = nds || N3dsOptions.appliesTo(tag)
-        // the 3DS: the New 3DS pad (ZL / ZR, the C-stick), the fullest one its games show
-        val profile = PadProfile.forTag(tag, n3dsNew = true, wii = wiiPad)
+        // the 3DS: the regular pad or the New 3DS's (ZL / ZR, the C-stick), as asked
+        val profile = PadProfile.forTag(tag, n3dsNew = n3dsNew, wii = wiiPad)
         val variant = SkinChoice.variantFor(base, nds, arcadeSet = false, gameCube = profile.kind == PadProfile.Kind.GC, wiiPad = wiiPad, n3dsNew = profile.cStick)
-        // a one-screen console's glass at 4:3, as the game places it before its first frame
+        // a one-screen console's glass at 4:3, as the game places it before its first frame (the shape never changes
+        // which layout a window gets, SkinPictureAspectTest)
         val picture = if (ds) null else (4f / 3f * 240f) to 240f
         val placed: SkinPlacement = SkinChoice.placeClosest(
             pack.manifest, w, h, resources.displayMetrics.densityDpi, windowShape().screenClass.isTablet, ds, picture,
@@ -152,12 +154,14 @@ class SkinLayoutActivity : ComponentActivity() {
         private const val EXTRA_CONSOLE = "console"
         private const val EXTRA_LANDSCAPE = "landscape"
         private const val EXTRA_WII_PAD = "wii_pad"
+        private const val EXTRA_N3DS_NEW = "n3ds_new"
         private const val EXTRA_TITLE = "title"
 
         fun intent(context: Context, request: SkinEditRequest, title: String): Intent = Intent(context, SkinLayoutActivity::class.java)
             .putExtra(EXTRA_CONSOLE, request.consoleId)
             .putExtra(EXTRA_LANDSCAPE, request.landscape)
             .putExtra(EXTRA_WII_PAD, request.wiiPad?.name)
+            .putExtra(EXTRA_N3DS_NEW, request.n3dsNew)
             .putExtra(EXTRA_TITLE, title)
     }
 }

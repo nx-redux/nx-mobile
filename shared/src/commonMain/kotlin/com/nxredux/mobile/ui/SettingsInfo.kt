@@ -186,6 +186,11 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "would show on this screen.",
     )
     SettingsKind.BUTTON_LAYOUT_WII_PAD -> quiet("Each Wii controller has its own layout")
+    SettingsKind.BUTTON_LAYOUT_N3DS_PAD -> quiet(
+        "Regular 3DS or New 3DS buttons",
+        "Regular 3DS and New 3DS buttons each have their own layout. New 3DS adds ZL, ZR and the C-stick; a game uses it " +
+            "when its New 3DS Controls setting turns them on.",
+    )
     SettingsKind.BUTTON_LAYOUT_ORIENTATION -> quiet("Edit the buttons for this orientation")
     SettingsKind.BUTTON_LAYOUT_RESET -> SettingText("Resets this console's buttons", "Put the chosen console's buttons back where the skin puts them")
     SettingsKind.SHORTCUTS -> quiet(

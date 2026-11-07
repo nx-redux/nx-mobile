@@ -10163,6 +10163,44 @@ class AppStateTest {
         assertEquals(SkinEditRequest("wii", true, WiiPad.NUNCHUK) to "Nintendo Wii · Nunchuk", editor.opened.single())
     }
 
+    // The 3DS's Controller row: Regular (what most games resolve to) or New, carried in the request.
+    @Test fun the_3ds_picks_regular_or_new_controls() = runTest {
+        val editor = RecordingSkinEditor()
+        val state = state(freshSettings(), skinEditor = editor)
+        state.load()
+        state.buttonLayoutOn("Nintendo 3DS")
+        fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
+        assertEquals(
+            listOf(
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_CONSOLE, "Console", "Nintendo 3DS"),
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_N3DS_PAD, "Controller", "Regular"),
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Portrait", landscape = false),
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Landscape", landscape = true),
+                SettingsRow(SettingsKind.BUTTON_LAYOUT_RESET, "Reset console"),
+            ),
+            rows(),
+        )
+        state.select(2)
+        state.onButton(NxButton.A)
+        assertEquals(SkinEditRequest("3ds", false, null, n3dsNew = false) to "Nintendo 3DS · Regular", editor.opened.last())
+        state.onSkinLayoutEdited()
+        state.select(1)
+        state.onButton(NxButton.RIGHT)
+        assertEquals("New", rows()[1].secondary)
+        state.onButton(NxButton.RIGHT)
+        assertEquals("Regular", rows()[1].secondary)                     // two values, wraps
+        state.onButton(NxButton.LEFT)
+        state.select(2)
+        state.onButton(NxButton.A)
+        assertEquals(SkinEditRequest("3ds", false, null, n3dsNew = true) to "Nintendo 3DS · New", editor.opened.last())
+        state.onSkinLayoutEdited()
+        state.buttonLayoutOn("Game Boy Advance")                          // another console: no Controller row, never New
+        assertTrue(rows().none { it.kind == SettingsKind.BUTTON_LAYOUT_N3DS_PAD })
+        state.select(1)
+        state.onButton(NxButton.A)
+        assertEquals(SkinEditRequest("gba", false, null, n3dsNew = false), editor.opened.last().first)
+    }
+
     @Test fun portrait_opens_the_editor_for_the_chosen_console_once() = runTest {
         val editor = RecordingSkinEditor()
         val state = state(freshSettings(), skinEditor = editor)
