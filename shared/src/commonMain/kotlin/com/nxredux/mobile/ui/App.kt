@@ -8,6 +8,7 @@ import coil3.PlatformContext
 import coil3.compose.AsyncImagePainter
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.request.addLastModifiedToFileCacheKey
+import com.nxredux.mobile.kids.KidsMode
 import com.nxredux.mobile.update.AppRelease
 import com.nxredux.mobile.ui.nx.LaunchOverlay
 import com.nxredux.mobile.ui.nx.LaunchTargets
@@ -50,6 +51,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -235,7 +237,11 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                     LaunchedEffect(portrait, separate) { state.onPadContext(portrait, separate) }
                     MenuLocals(state, look, footer, touchscreen) {
                         CompositionLocalProvider(LocalLaunchTargets provides launchTargets) {
-                        Box(m) {
+                        // A parent with the full menu while Kids Mode is on: the bar above every page, its button back to Kids Mode.
+                        val kidsMode by state.kidsModeState.collectAsState()
+                        Column(m) {
+                        if (kidsMode == KidsMode.Parent) KidsParentBar(state::kidsEndParent)
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
                             // A tool on the top screen ([MenuTopScreen]): this one keeps the menu, still.
                             val toolAbove = DualMenu.bottom(screen, dualMenu, toolOnTop) == BottomContent.Menu
                             // The window decides whether Settings splits; AppState needs it for RIGHT on a category. A tool on
@@ -291,6 +297,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                                     onCancel = { state.answerUpdate(false) }, cancelLabel = "Not now", scrimDismisses = false, scrollSteps = state.updateScroll)
                             }
                             PageOverlays(state, chooser, error, notice)
+                        }
                         }
                         }
                     }

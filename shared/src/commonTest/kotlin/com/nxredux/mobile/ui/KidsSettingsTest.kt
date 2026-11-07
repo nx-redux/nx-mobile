@@ -210,9 +210,9 @@ class KidsSettingsTest {
         assertEquals(SettingsSection.KIDS, st.page().section)
         st.pressRow(SettingsKind.KIDS_ENABLE)
         assertEquals(PinPurpose.SETUP_NEW, assertIs<Screen.KidsPin>(st.screen.value).purpose)
-        st.typePin("1234")
+        st.typePin("123456")
         assertEquals(PinPurpose.SETUP_CONFIRM, assertIs<Screen.KidsPin>(st.screen.value).purpose)
-        st.typePin("1234")
+        st.typePin("123456")
         assertNull(t.settings.pin)                                         // kept until setup finishes
         assertEquals(KidsSetupStep.APPS, st.setupStep())
         st.pressSetup { it is KidsSetupRow.App && it.app.id == "b/B" }     // Beta allowed
@@ -235,7 +235,7 @@ class KidsSettingsTest {
         st.skip()
         assertEquals(0, t.launcher.homeAsked)                              // already home: setup never asks
         // Done: the PIN stored, Kids Mode on with its flag, and straight into the schedule: Monday 10:00 is locked.
-        assertEquals("1234", t.settings.pin)
+        assertEquals("123456", t.settings.pin)
         assertTrue(t.settings.kidsEnabled)
         assertEquals(FlagSeen.PRESENT, t.platform.flag.seen)
         assertIs<KidsMode.Locked>(t.kids.mode.value)
@@ -269,7 +269,7 @@ class KidsSettingsTest {
 
     @Test fun enableWithPinAwayFromHomeStaysOff() = runTest {
         val t = setup(home = false)
-        t.settings.setKidsPin("1234")
+        t.settings.setKidsPin("123456")
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
@@ -283,7 +283,7 @@ class KidsSettingsTest {
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("1234"); st.typePin("1234")
+        st.typePin("123456"); st.typePin("123456")
         st.pickAlpha(); st.next(); st.next()
         assertTrue(t.settings.kidsEnabled)
         t.parentAgain()
@@ -299,13 +299,13 @@ class KidsSettingsTest {
         val st = setup().st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("1234")
-        st.typePin("5678")
+        st.typePin("123456")
+        st.typePin("567890")
         val pin = assertIs<Screen.KidsPin>(st.screen.value)
         assertEquals(PinPurpose.SETUP_NEW, pin.purpose)
         assertEquals("PINs didn't match", pin.message)
         assertEquals("", pin.typed)
-        st.typePin("4321"); st.typePin("4321")
+        st.typePin("654321"); st.typePin("654321")
         assertEquals(KidsSetupStep.APPS, st.setupStep())
     }
 
@@ -315,7 +315,7 @@ class KidsSettingsTest {
         st.openSettings(SettingsSection.KIDS)
         assertFalse(st.page().rows.any { it.kind == SettingsKind.KIDS_GUARD })   // off: no warning yet
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("1234"); st.typePin("1234")
+        st.typePin("123456"); st.typePin("123456")
         st.pickAlpha(); st.next(); st.next()
         assertEquals(KidsSetupStep.USAGE, st.setupStep())
         st.skip()                                                         // alarms allowed and already home: done
@@ -363,7 +363,7 @@ class KidsSettingsTest {
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("1234"); st.typePin("1234"); st.pickAlpha(); st.next(); st.next()
+        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
         assertTrue(t.settings.kidsEnabled)
         assertEquals(FlagSeen.PRESENT, t.platform.flag.seen)
         t.parentAgain()
@@ -390,14 +390,14 @@ class KidsSettingsTest {
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("1234"); st.typePin("1234"); st.pickAlpha(); st.next(); st.next()
+        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
         t.parentAgain()
         st.pressRow(SettingsKind.KIDS_PIN)
         assertEquals(PinPurpose.CHANGE, assertIs<Screen.KidsPin>(st.screen.value).purpose)
-        st.typePin("9999")
+        st.typePin("999999")
         assertEquals(PinPurpose.SETUP_CONFIRM, assertIs<Screen.KidsPin>(st.screen.value).purpose)
-        st.typePin("9999")
-        assertEquals("9999", t.settings.pin)
+        st.typePin("999999")
+        assertEquals("999999", t.settings.pin)
         assertEquals(SettingsSection.KIDS, st.page().section)
     }
 
@@ -436,7 +436,7 @@ class KidsSettingsTest {
     /** The kid's presses on whatever shows: B, then a PIN typed twice. */
     private fun AppState.kidTries() {
         onButton(NxButton.B)
-        typePin("0000"); typePin("0000")
+        typePin("000000"); typePin("000000")
         onButton(NxButton.B)
     }
 
@@ -445,18 +445,18 @@ class KidsSettingsTest {
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("1234"); st.typePin("1234"); st.pickAlpha(); st.next(); st.next()
+        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
         t.parentAgain()
         assertEquals(KidsMode.Parent, t.kids.mode.value)
         st.pressRow(SettingsKind.KIDS_PIN)
-        st.typePin("9999")                                                 // half way: the confirmation is up
+        st.typePin("999999")                                                 // half way: the confirmation is up
         assertEquals(PinPurpose.SETUP_CONFIRM, assertIs<Screen.KidsPin>(st.screen.value).purpose)
         t.kids.tick(t.platform.now().epochMs + KidsController.PARENT_IDLE_MS)   // Monday: Parent idles into Locked
         assertIs<KidsMode.Locked>(t.kids.mode.value)
         assertEquals(Screen.KidsHome, st.screen.value)
         st.kidTries()
         assertEquals(Screen.KidsHome, st.screen.value)                     // never the Kids Mode page
-        assertEquals("1234", t.settings.pin)                               // and the PIN never changed
+        assertEquals("123456", t.settings.pin)                               // and the PIN never changed
         assertNull(st.kidsNewPin)
     }
 
@@ -480,7 +480,7 @@ class KidsSettingsTest {
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("1234"); st.typePin("1234"); st.pickAlpha(); st.next(); st.next()
+        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
         assertEquals(KidsSetupStep.USAGE, st.setupStep())
         st.kidsNewPin = null                                               // the PIN lost before the end
         st.skip()                                                          // the last step: setup would end here
@@ -491,7 +491,7 @@ class KidsSettingsTest {
     /** The flag deleted (a forgotten PIN): Kids Mode turns off and the PIN goes, so switching it on runs setup again. */
     @Test fun flagDeletedThenReEnableAsksForANewPin() = runTest {
         val t = setup()
-        t.settings.pin = "1234"; t.settings.kidsEnabled = true; t.settings.kidsFlagHome = "Home"
+        t.settings.pin = "123456"; t.settings.kidsEnabled = true; t.settings.kidsFlagHome = "Home"
         t.platform.flag.seen = FlagSeen.MISSING
         t.kids.refresh()
         assertFalse(t.settings.kidsEnabled)
@@ -509,7 +509,7 @@ class KidsSettingsTest {
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("1234"); st.typePin("1234")
+        st.typePin("123456"); st.typePin("123456")
         assertEquals(KidsSetupStep.APPS, st.setupStep())
         assertTrue(KIDS_PICK_ONE_APP in kidsSetupLines(assertIs(st.screen.value)))
         st.next()
@@ -543,7 +543,7 @@ class KidsSettingsTest {
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
-        st.typePin("1234"); st.typePin("1234"); st.pickAlpha(); st.next(); st.next()
+        st.typePin("123456"); st.typePin("123456"); st.pickAlpha(); st.next(); st.next()
         assertTrue(t.settings.kidsEnabled)
         t.parentAgain()
         assertEquals(KIDS_FLAG_FAILED, st.page().rows.first { it.kind == SettingsKind.KIDS_FORGOT }.secondary)

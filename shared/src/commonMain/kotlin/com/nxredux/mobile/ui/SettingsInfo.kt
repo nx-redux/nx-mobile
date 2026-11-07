@@ -259,7 +259,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "Settings and the Apps drawer need your PIN. The first time you turn it on, a short setup asks for a PIN, the " +
             "apps, the play times and two permissions. It needs NX Redux as the home app.",
     )
-    SettingsKind.KIDS_PIN -> quiet("Choose a new 4-digit PIN")
+    SettingsKind.KIDS_PIN -> quiet("Choose a new 6-digit PIN")
     SettingsKind.KIDS_DAY -> quiet(
         "When games open on this day",
         "The hours games open on this day, in half-hour steps, or Locked to keep them closed all day. Ten minutes " +

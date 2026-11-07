@@ -53,7 +53,7 @@ internal sealed interface PinKey {
 /** The PIN pad's keys in reading order, three to a row: 1–9, then Back, 0, Enter. */
 internal val KIDS_PIN_KEYS: List<PinKey> = (1..9).map { PinKey.Digit(it) } + PinKey.Back + PinKey.Digit(0) + PinKey.Enter
 internal const val KIDS_PIN_COLUMNS = 3
-internal const val KIDS_PIN_LENGTH = 4
+internal const val KIDS_PIN_LENGTH = 6
 
 /** A PIN prompt's title for [purpose]. */
 internal fun kidsPinTitle(purpose: PinPurpose): String = when (purpose) {

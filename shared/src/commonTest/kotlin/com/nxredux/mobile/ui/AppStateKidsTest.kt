@@ -95,7 +95,7 @@ class AppStateKidsTest {
         override var kidsAllowedApps: Set<String> = emptySet()
         override var kidsUnlockUntil = 0L
         override var kidsFlagHome: String? = "Home"
-        private var pin: String? = "1234"   // a fake: the real one keeps a salted hash
+        private var pin: String? = "123456"   // a fake: the real one keeps a salted hash
         override fun setKidsPin(pin: String) { this.pin = pin }
         override fun kidsPinMatches(pin: String) = pin == this.pin
         override val kidsPinSet get() = pin != null
@@ -214,6 +214,34 @@ class AppStateKidsTest {
         assertIs<Screen.SettingsMenu>(st.screen.value)
     }
 
+    /** The parent bar's Back to Kids Mode: Parent ends; Monday locked, so the tiles. */
+    @Test fun parentBarBackToKidsModeLocks() = runTest {
+        val settings = MemorySettings()
+        val platform = Platform(MON, 10 * 60)
+        val kids = KidsController(settings, platform)
+        val st = state(settings, kids)
+        st.load()
+        kids.enterParent(platform.epochMs)
+        st.openSettingsMenu()
+        st.kidsEndParent()
+        assertIs<KidsMode.Locked>(kids.mode.value)
+        assertSame(Screen.KidsHome, st.screen.value)
+    }
+
+    /** In a play window it is the menu without Tools; a timed unlock the kid was given stays. */
+    @Test fun parentBarBackToKidsModeKeepsTimedUnlock() = runTest {
+        val settings = MemorySettings()
+        val platform = Platform(MON, 10 * 60)
+        val kids = KidsController(settings, platform)
+        val st = state(settings, kids)
+        st.load()
+        settings.kidsUnlockUntil = platform.epochMs + 3_600_000L          // an hour given earlier
+        kids.enterParent(platform.epochMs)
+        st.kidsEndParent()
+        assertIs<KidsMode.Open>(kids.mode.value)
+        assertFalse(MenuCategory.TOOLS in tabsOf(st))
+    }
+
     @Test fun settingsUnreachableWhileOpen() = runTest {
         val settings = MemorySettings()
         val st = state(settings, KidsController(settings, Platform(SAT, 10 * 60)))
@@ -265,12 +293,12 @@ class AppStateKidsTest {
         val settings = MemorySettings()
         val kids = KidsController(settings, Platform(MON, 10 * 60))
         val t = 1_000_000L
-        repeat(4) { assertEquals(PinResult.WRONG, kids.tryPin("0000", t + it)) }
-        assertEquals(PinResult.WAIT, kids.tryPin("0000", t + 4))
+        repeat(4) { assertEquals(PinResult.WRONG, kids.tryPin("000000", t + it)) }
+        assertEquals(PinResult.WAIT, kids.tryPin("000000", t + 4))
         assertEquals(t + 4 + 30_000L, kids.waitUntil)
-        assertEquals(PinResult.WAIT, kids.tryPin("1234", t + 4 + 29_999L))   // even the right one waits
-        assertEquals(PinResult.OK, kids.tryPin("1234", t + 4 + 30_000L))
-        assertEquals(PinResult.WRONG, kids.tryPin("0000", t + 40_000L))        // the count started again
+        assertEquals(PinResult.WAIT, kids.tryPin("123456", t + 4 + 29_999L))   // even the right one waits
+        assertEquals(PinResult.OK, kids.tryPin("123456", t + 4 + 30_000L))
+        assertEquals(PinResult.WRONG, kids.tryPin("000000", t + 40_000L))        // the count started again
     }
 
     @Test fun flagMissingTurnsOff() = runTest {
@@ -372,8 +400,8 @@ class AppStateKidsTest {
     }
 
     @Test fun pinNeverInToString() {
-        val s = Screen.KidsPin(PinPurpose.UNLOCK, typed = "1234").toString()
-        assertFalse("1234" in s, s)
+        val s = Screen.KidsPin(PinPurpose.UNLOCK, typed = "123456").toString()
+        assertFalse("123456" in s, s)
         assertTrue("KidsPin" in s)
     }
 
@@ -521,28 +549,31 @@ class AppStateKidsTest {
         assertSame(Screen.KidsHome, st.screen.value)
     }
 
-    @Test fun pinTakesFourDigitsAndEnter() = runTest {
+    @Test fun pinTakesSixDigitsAndEnter() = runTest {
         val (st) = lockedState()
         st.kidsLockPressed()
         "12345".forEach { st.kidsPinDigit(it.digitToInt()) }
-        assertEquals("1234", assertIs<Screen.KidsPin>(st.screen.value).typed)   // a fifth digit is ignored
-        st.kidsPinBack(); st.kidsPinEnter()                            // Enter with three digits does nothing
-        assertEquals("123", assertIs<Screen.KidsPin>(st.screen.value).typed)
+        st.kidsPinEnter()                                              // five digits: Enter does nothing yet
+        assertIs<Screen.KidsPin>(st.screen.value)
+        "67".forEach { st.kidsPinDigit(it.digitToInt()) }
+        assertEquals("123456", assertIs<Screen.KidsPin>(st.screen.value).typed)   // a seventh digit is ignored
+        st.kidsPinBack(); st.kidsPinEnter()                            // Enter with five digits does nothing
+        assertEquals("12345", assertIs<Screen.KidsPin>(st.screen.value).typed)
     }
 
     @Test fun rightPinOpensUnlockSheet() = runTest {
         val (st) = lockedState()
         st.kidsLockPressed()
-        st.typePin("0000")
+        st.typePin("000000")
         assertEquals(Screen.KidsPin(PinPurpose.UNLOCK, typed = "", wrong = 1), st.screen.value)   // wrong: cleared and counted
-        st.typePin("1234")
+        st.typePin("123456")
         assertSame(Screen.KidsUnlock, st.screen.value)
     }
 
     @Test fun fifthWrongPinWaitsAndIgnoresDigits() = runTest {
         val (st, kids, platform) = lockedState()
         st.kidsLockPressed()
-        repeat(5) { st.typePin("0000") }
+        repeat(5) { st.typePin("000000") }
         val s = assertIs<Screen.KidsPin>(st.screen.value)
         assertEquals(platform.epochMs + 30_000L, s.waitUntil)
         assertEquals(kids.waitUntil, s.waitUntil)
@@ -551,14 +582,14 @@ class AppStateKidsTest {
         st.back(); st.kidsLockPressed()                                // out and in again: the wait stays
         assertEquals(kids.waitUntil, assertIs<Screen.KidsPin>(st.screen.value).waitUntil)
         platform.extraMs = 30_000L
-        st.typePin("1234")
+        st.typePin("123456")
         assertSame(Screen.KidsUnlock, st.screen.value)
     }
 
     @Test fun chipUnlocksAndReturnsToMenu() = runTest {
         val settings = MemorySettings()
         val (st, kids, platform) = lockedState(settings)
-        st.kidsLockPressed(); st.typePin("1234")
+        st.kidsLockPressed(); st.typePin("123456")
         st.kidsUnlockChip(UnlockChip.HOUR1)
         assertEquals(KidsMode.Open(platform.epochMs + 60 * 60_000L), kids.mode.value)
         assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS), tabsOf(st))   // no Tools
@@ -575,7 +606,7 @@ class AppStateKidsTest {
 
     @Test fun fullMenuEntersParent() = runTest {
         val (st, kids) = lockedState()
-        st.kidsLockPressed(); st.typePin("1234")
+        st.kidsLockPressed(); st.typePin("123456")
         st.kidsOpenFullMenu()
         assertEquals(KidsMode.Parent, kids.mode.value)
         assertTrue(MenuCategory.TOOLS in tabsOf(st))
@@ -583,7 +614,7 @@ class AppStateKidsTest {
 
     @Test fun lockRowFirstInToolsWhileParent() = runTest {
         val (st, kids) = lockedState()
-        st.kidsLockPressed(); st.typePin("1234")
+        st.kidsLockPressed(); st.typePin("123456")
         st.kidsOpenFullMenu()
         st.selectTab(tabsOf(st).indexOf(MenuCategory.TOOLS))
         val rows = assertIs<Screen.Systems>(st.screen.value).rows
@@ -607,7 +638,7 @@ class AppStateKidsTest {
 
     @Test fun kidsSettingsOpensSettingsInParent() = runTest {
         val (st, kids) = lockedState()
-        st.kidsLockPressed(); st.typePin("1234")
+        st.kidsLockPressed(); st.typePin("123456")
         st.kidsOpenSettings()
         assertEquals(KidsMode.Parent, kids.mode.value)
         assertEquals(SettingsSection.KIDS, assertIs<Screen.Settings>(st.screen.value).section)   // the Kids Mode page
@@ -632,7 +663,7 @@ class AppStateKidsTest {
         st.kidsLockPressed()
         assertTrue(st.back())
         assertSame(Screen.KidsHome, st.screen.value)
-        st.kidsLockPressed(); st.typePin("1234")
+        st.kidsLockPressed(); st.typePin("123456")
         assertTrue(st.back())
         assertSame(Screen.KidsHome, st.screen.value)
     }
@@ -645,7 +676,9 @@ class AppStateKidsTest {
         st.onButton(NxButton.RIGHT); st.onButton(NxButton.A)           // 2
         st.onButton(NxButton.RIGHT); st.onButton(NxButton.A)           // 3
         st.onButton(NxButton.DOWN); st.onButton(NxButton.LEFT); st.onButton(NxButton.LEFT); st.onButton(NxButton.A)   // 4
-        assertEquals("1234", assertIs<Screen.KidsPin>(st.screen.value).typed)
+        st.onButton(NxButton.RIGHT); st.onButton(NxButton.A)           // 5
+        st.onButton(NxButton.RIGHT); st.onButton(NxButton.A)           // 6
+        assertEquals("123456", assertIs<Screen.KidsPin>(st.screen.value).typed)
         st.onButton(NxButton.START)                                    // Enter
         assertSame(Screen.KidsUnlock, st.screen.value)
         st.onButton(NxButton.B)
@@ -654,7 +687,7 @@ class AppStateKidsTest {
 
     @Test fun touchRestartsParentIdle() = runTest {
         val (st, kids, platform) = lockedState()
-        st.kidsLockPressed(); st.typePin("1234"); st.kidsOpenFullMenu()
+        st.kidsLockPressed(); st.typePin("123456"); st.kidsOpenFullMenu()
         platform.extraMs = 4 * 60_000L
         st.onTouch()
         platform.extraMs = 8 * 60_000L

@@ -7466,7 +7466,7 @@ class AppState(
     }
 
     /**
-     * The PIN pad's Enter, with four digits typed: the right PIN opens the unlock sheet; a wrong one clears the digits and
+     * The PIN pad's Enter, with all six digits typed: the right PIN opens the unlock sheet; a wrong one clears the digits and
      * counts ([Screen.KidsPin.wrong]: the page shakes and says so); the fifth starts the wait ([KidsController.tryPin]).
      */
     fun kidsPinEnter() {
@@ -7527,6 +7527,16 @@ class AppState(
     private fun kidsLockNow() {
         val k = kids ?: return
         k.lock()
+        if (kidsLocked && !isKidsScreen(_screen.value)) showKidsHome()
+    }
+
+    /**
+     * The parent bar's Back to Kids Mode ([KidsParentBar]): Parent ends, a timed unlock the kid was given stays; the
+     * tiles while Locked, else the menu without Tools.
+     */
+    fun kidsEndParent() {
+        val k = kids ?: return
+        k.endParent()
         if (kidsLocked && !isKidsScreen(_screen.value)) showKidsHome()
     }
 
