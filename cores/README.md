@@ -35,7 +35,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | core | repo | commit | kind | build time (M-series Mac, clean) |
 |---|---|---|---|---|
 | gambatte | libretro/gambatte-libretro | 77f2567d718b8973d02caa2daa8dce4953faf811 | ndk-build (patched: link) | 0:05 |
-| fceumm | libretro/libretro-fceumm | 236ccdfc911e84c60fea6b9d0699c2d440a8de14 | ndk-build (patched) | 0:06 |
+| fceumm | libretro/libretro-fceumm | e0f3086a8104f8fbbe49a2615b10401504a9533f | ndk-build | 0:06 |
 | snes9x | libretro/snes9x | fae2fea08f74180759ef540ee94259213f503480 | ndk-build | 0:15 |
 | genesis_plus_gx | libretro/Genesis-Plus-GX | f27655b592ef43f317272d79883bcaa10d3ac8ad | ndk-build | 0:07 |
 | mgba | libretro/mgba | 7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6 | cmake (patched: real link cable) | 0:09 |
@@ -112,10 +112,9 @@ Since 2026-11-03 it also holds each DirectSound FIFO sample until the next (zero
 do; upstream's linear interpolation cut 7-22 dB above 8 kHz and sounded dull), and reads the mix out x3/4, on mGBA's
 scale (the hardware's 10-bit output x48; upstream was 4/3 of it, 2.5 dB louder). States load.
 
-`patches/fceumm.patch` adds one `path_vfs_init` call next to its `filestream_vfs_init`, so the content check
-(`path_is_valid`) uses the runner's VFS v3 `stat` and a SAF file-descriptor ROM (`/rom/<name>`) loads without a cache
-copy; upstream fceumm only wires the file-stream callbacks. No emulation source is touched, so states still cross with
-the Brick.
+fceumm needs no patch since 2026-11-07: upstream's `path_vfs_init` call (libretro-fceumm #660) makes the content check
+(`path_is_valid`) use the runner's VFS v3 `stat`, so a SAF file-descriptor ROM (`/rom/<name>`) loads without a cache
+copy. The app carried that one line as `patches/fceumm.patch` until then.
 
 picodrive, gearcoleco and fbneo were added on 2026-09-26 (Brick pins). picodrive moved to 9c298c1f on 2026-11-07: its
 pad type is no longer the `picodrive_input1/2` options but the port device (`RETRO_DEVICE_MD_3BTN` / `_6BTN`, 257 / 513,
