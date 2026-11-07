@@ -12192,6 +12192,59 @@ class AppStateTest {
         assertFalse(state.toolOnTop.value)
     }
 
+    // Dual screen: Settings opened from Tools stays on the top screen through a Library rescan, the menu below on its row.
+    @Test fun a_rescan_from_settings_keeps_settings_on_the_top_screen() = runTest {
+        val state = state(MemorySettings(ContentRef("Home")))
+        state.load()
+        state.onDualMenu(true)
+        state.openTools()
+        val settingsAt = state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }
+        state.select(settingsAt); state.onButton(NxButton.A)
+        val row = openLibraryOn(state, SettingsKind.RESCAN)
+        assertTrue(state.toolOnTop.value)
+        state.onButton(NxButton.A)                                                                  // rescan
+        advanceUntilIdle()
+        assertEquals(SettingsSection.LIBRARY, assertIs<Screen.Settings>(state.screen.value).section)
+        assertEquals(row, state.selection.value.index)
+        assertTrue(state.toolOnTop.value)
+        val (menu, at) = assertNotNull(state.toolUnder())
+        assertEquals(MenuCategory.TOOLS, menu.category)
+        assertEquals(settingsAt, at.index)
+    }
+
+    // Dual screen: leaving a Settings page over a stale library reloads it; Settings stays on the top screen after.
+    @Test fun a_reload_on_leaving_a_settings_page_keeps_settings_on_the_top_screen() = runTest {
+        val state = state(MemorySettings(ContentRef("Home")))
+        state.load()
+        state.onDualMenu(true)
+        state.openTools()
+        val settingsAt = state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }
+        state.select(settingsAt); state.onButton(NxButton.A)
+        state.openSettings(SettingsSection.DEFAULT_EMULATORS)
+        state.cycleDefaultTag("gba")                                                             // the index no longer fits
+        state.openSettingsMenu(); state.openSettings(SettingsSection.EMULATORS)
+        assertTrue(state.toolOnTop.value)
+        state.onButton(NxButton.B)                                                               // reloads, back on Settings
+        advanceUntilIdle()
+        assertIs<Screen.SettingsMenu>(state.screen.value)
+        assertTrue(state.toolOnTop.value)
+        assertEquals(settingsAt, assertNotNull(state.toolUnder()).second.index)
+    }
+
+    // A scan that ends on the main menu leaves no tool on the top screen.
+    @Test fun a_rescan_that_ends_on_the_menu_takes_the_tool_off_the_top_screen() = runTest {
+        val state = state(MemorySettings(ContentRef("Home")))
+        state.load()
+        state.onDualMenu(true)
+        state.openTools()
+        state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }); state.onButton(NxButton.A)
+        assertTrue(state.toolOnTop.value)
+        state.rescan()
+        advanceUntilIdle()
+        assertIs<Screen.Systems>(state.screen.value)
+        assertFalse(state.toolOnTop.value)
+    }
+
     // Dual screen: the highlighted Apps tile previews the drawer on the top screen; a tap there opens it on that app.
     // An app added meanwhile sorts before Apps: the menu below still shows Apps highlighted, and B lands on it.
     @Test fun the_drawer_previews_on_the_top_screen_and_opens_there() = runTest {
