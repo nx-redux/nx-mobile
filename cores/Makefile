@@ -96,7 +96,7 @@ gambatte_ARTIFACT = libs/$(ABI)/libretro.so
 # transfer at once from the cached SB byte; without it link-heavy games stutter on both sides). The wire is unchanged.
 
 fceumm_REPO = https://github.com/libretro/libretro-fceumm
-fceumm_HASH = 236ccdfc911e84c60fea6b9d0699c2d440a8de14
+fceumm_HASH = e0f3086a8104f8fbbe49a2615b10401504a9533f
 fceumm_LICENSE = Copying src/ntsc/license.txt
 fceumm_KIND = ndkbuild
 # jni/Android.mk lives at the repo root for this pin (not src/drivers/libretro),
