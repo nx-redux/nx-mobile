@@ -294,9 +294,18 @@ object CoreRegistry {
     )
     private val picodriveSms = picodrive8bit.copy(defaultOptions = picodrive8bit.defaultOptions + ("picodrive_smstype" to "Master System"))
     private val picodriveGg = picodrive8bit.copy(defaultOptions = picodrive8bit.defaultOptions + ("picodrive_smstype" to "Game Gear"))
+    private val GEARCOLECO_ADAM = mapOf(
+        "gearcoleco_cartridge_hardware" to "ColecoVision",
+        "gearcoleco_adam_disk_drive" to "Loaded media",
+        "gearcoleco_adam_writable_media" to "Disabled",
+        "gearcoleco_adam_computer_reset" to "Idle",
+    )
     private val gearcoleco = CoreDescriptor(
         "gearcoleco", "libgearcoleco_libretro_android.so", setOf("col", "cv", "bin", "rom"),
         biosFiles = listOf("colecovision.rom", "coleco.rom"),
+        // Cartridges only: the ADAM computer (its disks, data packs and firmware) is not offered, so its rows stay at the defaults.
+        defaultOptions = GEARCOLECO_ADAM,
+        lockedOptions = GEARCOLECO_ADAM.keys,
         cheats = false, ramCheats = true,   // retro_cheat_set is a TODO; the database's ColecoVision files are RAM patches
         players = 2,
         name = "Gearcoleco",

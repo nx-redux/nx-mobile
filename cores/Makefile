@@ -389,7 +389,7 @@ picodrive_BUILD_PATH = .
 picodrive_ARTIFACT = libs/$(ABI)/libretro.so
 
 gearcoleco_REPO = https://github.com/drhelius/Gearcoleco
-gearcoleco_HASH = ed5095b3ce158ff0cf82395a61c2476505634894
+gearcoleco_HASH = 2805e70fd56c3bb6a0412a4ddaf210eefc8a5d7c
 gearcoleco_LICENSE = LICENSE
 gearcoleco_KIND = ndkbuild
 gearcoleco_BUILD_PATH = platforms/libretro

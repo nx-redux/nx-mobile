@@ -8,6 +8,72 @@
    "info": "Configure refresh rate and other system-level settings.",
    "items": [
     {
+     "key": "gearcoleco_cartridge_hardware",
+     "label": "Cartridge Hardware (restart)",
+     "labelCategorized": "",
+     "info": "Select hardware for cartridge ROMs only. Disks, data packs, playlists and no-content startup always use ADAM.",
+     "values": [
+      "ColecoVision",
+      "ADAM"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "ColecoVision"
+    },
+    {
+     "key": "gearcoleco_adam_disk_drive",
+     "label": "ADAM Disk Control Drive",
+     "labelCategorized": "",
+     "info": "Choose which drive the frontend Disk Control menu operates. Other drives remain mounted. Loaded media selects the primary content drive.",
+     "values": [
+      "Loaded media",
+      "Disk 1",
+      "Disk 2",
+      "Data Pack 1",
+      "Data Pack 2"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "Loaded media"
+    },
+    {
+     "key": "gearcoleco_adam_computer_reset",
+     "label": "ADAM Computer Reset",
+     "labelCategorized": "",
+     "info": "Select Reset to boot the computer from mounted media, or SmartWriter when none is bootable. To request it again, select Idle then Reset. Normal frontend Reset retains the current boot mode.",
+     "values": [
+      "Idle",
+      "Reset"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "Idle"
+    },
+    {
+     "key": "gearcoleco_adam_writable_media",
+     "label": "ADAM Writable Media (restart)",
+     "labelCategorized": "",
+     "info": "Disabled mounts ADAM media write protected. Save-directory working copy stores writes in complete images under the frontend save directory and never overwrites source content.",
+     "values": [
+      "Disabled",
+      "Save-directory working copy"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "Disabled"
+    },
+    {
      "key": "gearcoleco_timing",
      "label": "Refresh Rate (restart)",
      "labelCategorized": "",
@@ -16,6 +82,44 @@
       "Auto",
       "NTSC (60 Hz)",
       "PAL (50 Hz)"
+     ],
+     "labels": [
+      "",
+      "",
+      ""
+     ],
+     "default": "Auto"
+    },
+    {
+     "key": "gearcoleco_mapper",
+     "label": "Mapper (restart)",
+     "labelCategorized": "",
+     "info": "Select which mapper (memory bank controller) is emulated. 'Auto' automatically detects the appropriate mapper based on the loaded content. Only change this if a game does not work correctly with the default setting.",
+     "values": [
+      "Auto",
+      "Standard",
+      "MegaCart",
+      "Activision",
+      "OCM"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "Auto"
+    },
+    {
+     "key": "gearcoleco_video_chip",
+     "label": "Video Chip (restart)",
+     "labelCategorized": "",
+     "info": "Select the installed video chip. 'Auto' uses TMS9918A unless the loaded game database entry requires F18A. Changes take effect when content is restarted.",
+     "values": [
+      "Auto",
+      "TMS9918A",
+      "F18A"
      ],
      "labels": [
       "",
@@ -54,7 +158,7 @@
      "key": "gearcoleco_overscan",
      "label": "Overscan",
      "labelCategorized": "",
-     "info": "Select which overscan (borders) will be used in emulation. 'Disabled' shows no overscan. 'Top+Bottom' enables vertical overscan only. 'Full (284 width)' and 'Full (320 width)' enable full overscan with different horizontal widths.",
+     "info": "Select which overscan (borders) will be used in TMS9918A emulation. 'Disabled' shows no overscan. 'Top+Bottom' enables vertical overscan only. 'Full (284 width)' and 'Full (320 width)' enable full overscan with different horizontal widths. F18A output uses its active logical raster without TMS overscan.",
      "values": [
       "Disabled",
       "Top+Bottom",
@@ -159,6 +263,6 @@
    ]
   }
  ],
- "soSha256": "65cd66a293723552a58356515b979d75fb04a3910df3b82282ad06176f0230bd",
- "probedAt": "2026-09-29"
+ "soSha256": "d498e227f408fb89b69ca2330f64a807ce908e678dc7bf7ed3ca1d8f13e8256a",
+ "probedAt": "2026-11-07"
 }
