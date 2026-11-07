@@ -41,6 +41,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -240,6 +241,73 @@ class AppStateKidsTest {
         st.kidsEndParent()
         assertIs<KidsMode.Open>(kids.mode.value)
         assertFalse(MenuCategory.TOOLS in tabsOf(st))
+    }
+
+    private val kidApps = listOf(InstalledApp("a", "Alpha"), InstalledApp("b", "Beta"), InstalledApp("c", "Gamma"))
+
+    /** The Apps tab's app ids, or null with no Apps tab. */
+    private fun appsTab(st: AppState): List<String?>? =
+        assertIs<Screen.Systems>(st.screen.value).tabs.firstOrNull { it.category == MenuCategory.APPS }?.rows?.map { (it as MainRow.Tool).row.appId }
+
+    /** Games open: an Apps tab with the allowed apps installed (A to Z), no Tools; A on one opens it. */
+    @Test fun openShowsAppsTab() = runTest {
+        val settings = MemorySettings().apply { kidsAllowedApps = setOf("c", "a", "gone") }
+        val launcher = Launcher(kidApps)
+        val st = state(settings, KidsController(settings, Platform(SAT, 10 * 60)), launcher)
+        st.load(); st.onForeground()
+        assertEquals(listOf("a", "c"), appsTab(st))
+        assertFalse(MenuCategory.TOOLS in tabsOf(st))
+        st.selectTab(tabsOf(st).indexOf(MenuCategory.APPS))
+        assertEquals(MenuCategory.APPS, assertIs<Screen.Systems>(st.screen.value).category)
+        st.select(1); st.onButton(NxButton.A)
+        assertEquals(listOf("c"), launcher.launched)
+    }
+
+    @Test fun noAppsTabWhenOffOrLocked() = runTest {
+        val off = MemorySettings().apply { kidsEnabled = false; kidsAllowedApps = setOf("a") }
+        val st = state(off, KidsController(off, Platform(SAT, 10 * 60)), Launcher(kidApps))
+        st.load(); st.onForeground()
+        assertNull(appsTab(st))
+        val (locked, kids, platform) = lockedState(MemorySettings().apply { kidsAllowedApps = setOf("a") }, launcher = Launcher(kidApps))
+        kids.enterParent(platform.epochMs)                                 // a parent: Apps beside Tools
+        locked.onForeground()
+        assertEquals(listOf("a"), appsTab(locked))
+        val tabs = tabsOf(locked)
+        assertEquals(tabs.indexOf(MenuCategory.TOOLS) - 1, tabs.indexOf(MenuCategory.APPS))
+    }
+
+    /** Games open: the main menu's lock opens the PIN; Back returns to the menu; the right PIN opens the sheet. */
+    @Test fun lockIconWhileOpenAsksThePin() = runTest {
+        val settings = MemorySettings()
+        val kids = KidsController(settings, Platform(SAT, 10 * 60))
+        val st = state(settings, kids)
+        st.load()
+        st.kidsParentPressed()
+        assertEquals(PinPurpose.UNLOCK, assertIs<Screen.KidsPin>(st.screen.value).purpose)
+        st.onButton(NxButton.B)
+        assertIs<Screen.Systems>(st.screen.value)
+        st.kidsParentPressed(); st.typePin("123456")
+        assertSame(Screen.KidsUnlock, st.screen.value)
+        st.onButton(NxButton.B)                                            // the sheet without a choice: the menu again
+        assertIs<Screen.Systems>(st.screen.value)
+    }
+
+    @Test fun lockIconDoesNothingWhenLockedOrOff() = runTest {
+        val (st) = lockedState()
+        st.kidsParentPressed()
+        assertSame(Screen.KidsHome, st.screen.value)
+        val off = MemorySettings().apply { kidsEnabled = false }
+        val st2 = state(off, KidsController(off, Platform(SAT, 10 * 60)))
+        st2.load()
+        st2.kidsParentPressed()
+        assertIs<Screen.Systems>(st2.screen.value)
+    }
+
+    /** Kids Mode on: no menu offers Pin (Home's pins are hidden), Remove from Tools stays. */
+    @Test fun noPinItemsWhileKidsOn() {
+        assertEquals(listOf(ContextKind.REMOVE_FROM_TOOLS), ContextMenus.toolItems(pinned = false, app = true, pin = false).map { it.kind })
+        assertTrue(ContextMenus.toolItems(pinned = true, pin = false).isEmpty())
+        assertEquals(listOf(ContextKind.ADD_TO_TOOLS), ContextMenus.drawerItems(inTools = false, pinned = false, pin = false).map { it.kind })
     }
 
     @Test fun settingsUnreachableWhileOpen() = runTest {

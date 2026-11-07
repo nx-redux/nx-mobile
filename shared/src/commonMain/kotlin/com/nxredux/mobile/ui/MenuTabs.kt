@@ -63,4 +63,5 @@ internal val MenuCategory.label: String
         MenuCategory.CONSOLES -> "Consoles"
         MenuCategory.COLLECTIONS -> "Collections"
         MenuCategory.TOOLS -> "Tools"
+        MenuCategory.APPS -> "Apps"
     }

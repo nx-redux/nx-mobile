@@ -921,7 +921,7 @@ class AppState(
     private val collections = Collections(deps.source, deps.sidecarStore) { home() }
     private var allMenuTabs: List<MenuTab> = emptyList()   // every tab with content as last built, hidden ones too (no I/O to show it again)
     /** The tabs the main menu shows: [allMenuTabs] less the ones Layouts hides and, while Kids Mode hides it, Tools ([visibleMenuTabs]). */
-    private val menuTabs: List<MenuTab> get() = visibleMenuTabs(withKidsLock(allMenuTabs), shownTabs(), hideTools = !kidsToolsAllowed)
+    private val menuTabs: List<MenuTab> get() = visibleMenuTabs(withKidsApps(withKidsLock(allMenuTabs)), shownTabs(), hideTools = !kidsToolsAllowed)
     /** [allMenuTabs] less Tools while Kids Mode hides it: never offered as a hidden tab either. */
     private val kidsMenuTabs: List<MenuTab> get() = if (kidsToolsAllowed) withKidsLock(allMenuTabs) else allMenuTabs.filter { it.category != MenuCategory.TOOLS }
     private var pins: List<Shortcut> = emptyList()           // shortcuts.txt as last read
@@ -4732,6 +4732,7 @@ class AppState(
                         MenuCategory.CONSOLES -> s.showConsolesTab = on
                         MenuCategory.COLLECTIONS -> s.showCollectionsTab = on
                         MenuCategory.TOOLS -> s.showToolsTab = on
+                        MenuCategory.APPS -> Unit   // Kids Mode's: no Layouts row
                     }
                 }
             }
@@ -4940,7 +4941,7 @@ class AppState(
      */
     private fun layoutsRows(): List<SettingsRow> {
         val s = deps.settings
-        val tabs = MenuCategory.entries.map { c ->
+        val tabs = MenuCategory.entries.filter { it != MenuCategory.APPS }.map { c ->   // Kids Mode's Apps: no Layouts group
             val group = SettingsSection.entries.first { it.tab == c }
             SettingsRow(group.opener!!, group.label, if (tabSetting(c)) menuStyleLabel(MenuStyles.styleOf(s.menuStyles, c)) else "Hidden")
         }
@@ -5069,6 +5070,7 @@ class AppState(
         MenuCategory.CONSOLES -> deps.settings.showConsolesTab
         MenuCategory.COLLECTIONS -> deps.settings.showCollectionsTab
         MenuCategory.TOOLS -> deps.settings.showToolsTab
+        MenuCategory.APPS -> true   // shown whenever Kids Mode puts it in ([withKidsApps])
     }
 
     /** Whether Layouts shows [shelf] on Home: New and Not started by their settings; Pick up again always. */
@@ -5876,7 +5878,8 @@ class AppState(
     }
 
     private fun openToolNow(row: ToolRow) {
-        if (!kidsToolsAllowed) return   // Kids Mode: no tool (Settings, Apps, an app, Device Sync …) but for a parent
+        // Kids Mode: no tool (Settings, Apps, an app, Device Sync …) but for a parent; the Apps tab's allowed apps open for the kid.
+        if (!kidsToolsAllowed && !(row.kind == ToolKind.APP && row.appId in deps.settings.kidsAllowedApps)) return
         when (row.kind) {
             ToolKind.RETRO_ACHIEVEMENTS -> if (deps.achievements != null) ra.showRetroAchievements()
             ToolKind.GAME_TIME -> gameTimeScreen?.open(onCancel = ::showTools)
@@ -6596,6 +6599,7 @@ class AppState(
         host = object : ContextMenuHost {
             override val pins: List<Shortcut> get() = this@AppState.pins
             override val toolPins: List<String> get() = this@AppState.toolPins
+            override val kidsOn: Boolean get() = kidsMode != KidsMode.Off
             override suspend fun writeToolPins(keys: List<String>): Boolean = this@AppState.writeToolPins(keys)
             override fun select(index: Int) = this@AppState.select(index)
             override fun showNotice(text: String) = this@AppState.showNotice(text)
@@ -7060,7 +7064,7 @@ class AppState(
             // Kids Mode: Back never leaves the tiles screen (the app never closes under a kid); the PIN and the sheet go back to it.
             Screen.KidsHome -> true
             is Screen.KidsPin -> { kidsPinLeave(s); true }
-            Screen.KidsUnlock -> { showKidsHome(); true }
+            Screen.KidsUnlock -> { kidsBackToKid(); true }
             is Screen.KidsSetup -> { kidsSetupLeave(s); true }   // setup cancelled (or Allowed apps done): the Kids Mode page
             is Screen.KidsDayEdit -> { kidsDayLeave(s); true }
             is Screen.Onboarding -> {
@@ -7198,7 +7202,9 @@ class AppState(
     private suspend fun refreshAndroidConsole() {
         val l = deps.launcher ?: return
         val apps = try { l.installedApps() } catch (e: CancellationException) { throw e } catch (e: Exception) { return }
+        val appsTab = withKidsApps(emptyList())
         installedCache = apps
+        if (withKidsApps(emptyList()) != appsTab) swapMainRows()   // Kids Mode's Apps tab: an allowed app installed or removed
         onLauncherChanged()
         applyAndroidConsole()
         maybeAskAndroidGames()   // a game installed since the menu showed
@@ -7386,8 +7392,32 @@ class AppState(
     /** The mode [onKidsMode] last saw; null before its first value. */
     private var kidsModeSeen: KidsMode? = null
 
-    /** Home's pinned tools (and "+N") go while Tools is hidden: Home's rows and its view are built without them. */
-    private fun kidsHomeInputs(inputs: HomeInputs): HomeInputs = if (kidsToolsAllowed) inputs else inputs.copy(tools = emptyList())
+    /** Home's pinned tools and apps (and "+N") go while Kids Mode is on, a parent's full menu too: Home is built without them. */
+    private fun kidsHomeInputs(inputs: HomeInputs): HomeInputs = if (kidsMode == KidsMode.Off) inputs else inputs.copy(tools = emptyList())
+
+    /**
+     * Kids Mode's Apps tab, just before Tools: the allowed apps installed now ([kidsTilesOf]), while Kids Mode is on and not
+     * locked (a play window, a timed unlock, a parent's full menu). None allowed or installed: no tab.
+     */
+    private fun withKidsApps(tabs: List<MenuTab>): List<MenuTab> {
+        if (kidsMode == KidsMode.Off || kidsLocked) return tabs
+        val rows = kidsAppRows()
+        if (rows.isEmpty()) return tabs
+        val at = tabs.indexOfFirst { it.category == MenuCategory.TOOLS }.takeIf { it >= 0 } ?: tabs.size
+        return tabs.toMutableList().apply { add(at, MenuTab(MenuCategory.APPS, rows)) }
+    }
+
+    /** [withKidsApps]' rows, as last built from the same installed list and allowed set. */
+    private var kidsAppRowsMemo: Triple<List<InstalledApp>?, Set<String>, List<MainRow>>? = null
+
+    private fun kidsAppRows(): List<MainRow> {
+        val installed = installedCache
+        val allowed = deps.settings.kidsAllowedApps
+        kidsAppRowsMemo?.let { (i, a, rows) -> if (i === installed && a == allowed) return rows }
+        val rows = kidsTilesOf(installed.orEmpty(), allowed).map { MainRow.Tool(ToolRow(ToolKind.APP, it.label, null, appId = it.id)) }
+        kidsAppRowsMemo = Triple(installed, allowed, rows)
+        return rows
+    }
 
     /** The tiles screen; the second screen has no tool on it ([toolOnTop] off), so it shows the backdrop ([DualMenu]). */
     private fun showKidsHome() {
@@ -7451,7 +7481,23 @@ class AppState(
         _selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
     }
 
-    /** Digit [d] on the PIN pad: up to four, none while the wait after five wrong tries runs. */
+    /**
+     * The main menu's lock icon in a play window or a timed unlock ([KidsMode.Open]): the PIN prompt, as the tiles' lock
+     * is when locked; Back returns to the menu ([kidsBackToKid]). Nothing in any other mode or away from the main menu.
+     */
+    fun kidsParentPressed() {
+        val k = kids ?: return
+        if (kidsMode !is KidsMode.Open || _screen.value !is Screen.Systems) return
+        _screen.value = Screen.KidsPin(PinPurpose.UNLOCK, waitUntil = k.waitUntil)
+        _selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
+    }
+
+    /** Off the unlock PIN or the sheet without a choice: the tiles while Locked, else the main menu the lock was pressed on. */
+    private fun kidsBackToKid() {
+        if (kidsLocked) showKidsHome() else showSystemsNow()
+    }
+
+    /** Digit [d] on the PIN pad: up to six, none while the wait after five wrong tries runs. */
     fun kidsPinDigit(d: Int) {
         val s = _screen.value as? Screen.KidsPin ?: return
         val k = kids ?: return
@@ -7498,7 +7544,7 @@ class AppState(
      */
     private fun kidsPinLeave(s: Screen.KidsPin) {
         when (s.purpose) {
-            PinPurpose.UNLOCK -> showKidsHome()
+            PinPurpose.UNLOCK -> kidsBackToKid()
             PinPurpose.SETUP_CONFIRM -> if (kidsParentOnly()) kidsAskNewPin(null)
             PinPurpose.SETUP_NEW, PinPurpose.CHANGE -> if (kidsParentOnly()) { kidsNewPin = null; kidsShowPage(if (kidsPinChange) SettingsKind.KIDS_PIN else SettingsKind.KIDS_ENABLE) }
         }
@@ -7598,7 +7644,7 @@ class AppState(
             }
             Screen.KidsUnlock -> when {
                 button == NxButton.A -> kidsActivate(s)
-                button == NxButton.B -> showKidsHome()
+                button == NxButton.B -> kidsBackToKid()
                 button.isDirection -> move(kidsUnlockStep(sel.index, button, kidsUnlockColumns))
             }
             else -> Unit
@@ -7622,7 +7668,7 @@ class AppState(
         kidsModeSeen = mode
         if (was == null || was == mode) return
         if (allMenuTabs.isEmpty() || firstSetup || onboarding.step != null) return
-        if ((was == KidsMode.Off || was == KidsMode.Parent) != kidsToolsAllowed) rebuildHomeTab()
+        if ((was == KidsMode.Off) != (mode == KidsMode.Off)) rebuildHomeTab()   // Home's pinned tools come and go with Kids Mode
         val s = _screen.value
         // A parent's picker or a row's description over their page goes with the page.
         if (mode is KidsMode.Locked) { closeChooser(); closeSettingInfo() }

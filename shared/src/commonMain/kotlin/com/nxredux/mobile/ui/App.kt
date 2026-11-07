@@ -607,6 +607,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     minimalOpening = minimalOpening.value?.takeIf { s.category != null && it.page == s.category },
                     bandShade = listBand.shade, bandInfo = listBand.info,
                     canSearch = state.canSearch,
+                    onKidsLock = state::kidsParentPressed.takeIf { state.kidsModeState.collectAsState().value is KidsMode.Open },
                     // Per page (s, not the screen now: a sliding-out page keeps its own): the screen carries its hidden tabs
                     // (none over a pushed one), so both follow every rebuild. With none, a long press on a tab word is a plain tap.
                     onTabMenu = state::openTabMenu.takeIf { s.hidden.isNotEmpty() },

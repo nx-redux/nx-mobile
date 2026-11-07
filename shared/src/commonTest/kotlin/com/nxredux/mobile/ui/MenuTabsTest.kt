@@ -95,7 +95,7 @@ class MenuTabsTest {
     }
 
     @Test fun labels() {
-        assertEquals(listOf("Home", "Consoles", "Collections", "Tools"), MenuCategory.entries.map { it.label })
+        assertEquals(listOf("Home", "Consoles", "Collections", "Tools", "Apps"), MenuCategory.entries.map { it.label })
     }
 
     // The rows skip the Continue game when it is pinned too ([buildHome] leaves it out); the others keep their order.

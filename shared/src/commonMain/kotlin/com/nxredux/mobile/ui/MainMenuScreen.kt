@@ -112,6 +112,7 @@ fun MainMenuScreen(
     bandShade: Boolean = true,            // List: the info band's shade ([mainMenuListBand]: none on Consoles, Collections and Tools)
     bandInfo: Boolean = true,             // List: the band shows the row's info ([mainMenuListBand]: none on Consoles, Collections and Tools)
     canSearch: Boolean = false,           // the library has games: the Search icon
+    onKidsLock: (() -> Unit)? = null,     // Kids Mode while games are open: the lock icon after Search (the PIN, for a parent)
     canNetplay: () -> Boolean = { false },   // Home: the selected game has Netplay here (Y opens its sheet): its hint beside the tabs
     onTabMenu: (() -> Unit)? = null,      // a long press on the tab row or the single-tab title: the hidden-tab menu
     tabMenu: Boolean = false,             // a hidden tab can be opened from MENU: every row's MENU offers Options, every Home row takes a long press
@@ -150,7 +151,7 @@ fun MainMenuScreen(
         // is scrolled ([HomeScreen]); Carousel Home has no picture. With the tab row hidden, the Recent and Search icons
         // still get the band: here, behind a List's rows as the tab row's is, so its reach never dims the first row; over
         // the other styles' pages (below).
-        val topIcons = if (chrome.tabRow) emptyList() else launcherTopActions(onHint, canSearch)
+        val topIcons = if (chrome.tabRow) emptyList() else launcherTopActions(onHint, canSearch, onKidsLock = onKidsLock)
         val topCut = rememberNxListTopCut()
         val iconBand = topIcons.isNotEmpty() && !(home && style != MenuStyle.LIST)
         if (mainMenuTopBand(home, style, chrome.tabRow) || iconBand && style == MenuStyle.LIST) {
@@ -465,7 +466,7 @@ internal data class MainMenuListBand(val shade: Boolean, val info: Boolean)
 
 /** The List band for [category]'s tab ([MainMenuListBand]): none on Consoles, Collections and Tools, shaded with its info elsewhere. */
 internal fun mainMenuListBand(category: MenuCategory?): MainMenuListBand = when (category) {
-    MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS -> MainMenuListBand(shade = false, info = false)
+    MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS, MenuCategory.APPS -> MainMenuListBand(shade = false, info = false)
     MenuCategory.HOME, null -> MainMenuListBand(shade = true, info = true)
 }
 
