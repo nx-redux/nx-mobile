@@ -191,6 +191,13 @@ class KidsSettingsTest {
         select(i); onButton(NxButton.A)
     }
 
+    /** Setup just finished on a locked Monday: the tiles at once; the parent's PIN brings the Kids Mode page back. */
+    private fun Setup.parentAgain() {
+        assertEquals(Screen.KidsHome, st.screen.value)
+        kids.enterParent(platform.now().epochMs)
+        st.openSettings(SettingsSection.KIDS)
+    }
+
     private fun AppState.next() = pressSetup { it == KidsSetupRow.Next }
     private fun AppState.skip() = pressSetup { it == KidsSetupRow.Skip }
     /** Setup's Apps step: Alpha on the kid's list (Continue needs one). */
@@ -227,12 +234,13 @@ class KidsSettingsTest {
         assertFalse(t.settings.kidsEnabled)
         st.skip()
         assertEquals(0, t.launcher.homeAsked)                              // already home: setup never asks
-        // Done: the PIN stored, Kids Mode on with its flag, the parent still in the full menu, back on the page.
+        // Done: the PIN stored, Kids Mode on with its flag, and straight into the schedule: Monday 10:00 is locked.
         assertEquals("1234", t.settings.pin)
         assertTrue(t.settings.kidsEnabled)
         assertEquals(FlagSeen.PRESENT, t.platform.flag.seen)
-        assertEquals(KidsMode.Parent, t.kids.mode.value)
-        assertEquals(SettingsSection.KIDS, st.page().section)
+        assertIs<KidsMode.Locked>(t.kids.mode.value)
+        assertEquals(Screen.KidsHome, st.screen.value)
+        t.parentAgain()
         assertEquals("On", st.page().rows.first { it.kind == SettingsKind.KIDS_ENABLE }.secondary)
     }
 
@@ -278,6 +286,7 @@ class KidsSettingsTest {
         st.typePin("1234"); st.typePin("1234")
         st.pickAlpha(); st.next(); st.next()
         assertTrue(t.settings.kidsEnabled)
+        t.parentAgain()
         assertFalse(st.page().rows.any { it.kind == SettingsKind.KIDS_HOME })
         t.launcher.homeNow = false                                         // another launcher picked meanwhile
         st.onLauncherChanged()
@@ -311,6 +320,7 @@ class KidsSettingsTest {
         assertEquals(KidsSetupStep.USAGE, st.setupStep())
         st.skip()                                                         // alarms allowed and already home: done
         assertTrue(t.settings.kidsEnabled)
+        t.parentAgain()
         val rows = st.page().rows
         assertTrue(rows.any { it.kind == SettingsKind.KIDS_GUARD })
         assertFalse(rows.any { it.kind == SettingsKind.KIDS_ALARMS })
@@ -356,6 +366,7 @@ class KidsSettingsTest {
         st.typePin("1234"); st.typePin("1234"); st.pickAlpha(); st.next(); st.next()
         assertTrue(t.settings.kidsEnabled)
         assertEquals(FlagSeen.PRESENT, t.platform.flag.seen)
+        t.parentAgain()
         st.pressRow(SettingsKind.KIDS_ENABLE)                              // Off
         assertFalse(t.settings.kidsEnabled)
         assertEquals(FlagSeen.MISSING, t.platform.flag.seen)
@@ -363,7 +374,7 @@ class KidsSettingsTest {
         assertEquals("Off", st.page().rows.first { it.kind == SettingsKind.KIDS_ENABLE }.secondary)
         st.pressRow(SettingsKind.KIDS_ENABLE)                              // On again: the PIN is set, so no setup
         assertTrue(t.settings.kidsEnabled)
-        assertEquals(SettingsSection.KIDS, st.page().section)
+        assertEquals(Screen.KidsHome, st.screen.value)                     // and locked at once, as after setup
     }
 
     @Test fun setupNotInOnboarding() {
@@ -380,6 +391,7 @@ class KidsSettingsTest {
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
         st.typePin("1234"); st.typePin("1234"); st.pickAlpha(); st.next(); st.next()
+        t.parentAgain()
         st.pressRow(SettingsKind.KIDS_PIN)
         assertEquals(PinPurpose.CHANGE, assertIs<Screen.KidsPin>(st.screen.value).purpose)
         st.typePin("9999")
@@ -434,6 +446,7 @@ class KidsSettingsTest {
         st.openSettings(SettingsSection.KIDS)
         st.pressRow(SettingsKind.KIDS_ENABLE)
         st.typePin("1234"); st.typePin("1234"); st.pickAlpha(); st.next(); st.next()
+        t.parentAgain()
         assertEquals(KidsMode.Parent, t.kids.mode.value)
         st.pressRow(SettingsKind.KIDS_PIN)
         st.typePin("9999")                                                 // half way: the confirmation is up
@@ -532,6 +545,7 @@ class KidsSettingsTest {
         st.pressRow(SettingsKind.KIDS_ENABLE)
         st.typePin("1234"); st.typePin("1234"); st.pickAlpha(); st.next(); st.next()
         assertTrue(t.settings.kidsEnabled)
+        t.parentAgain()
         assertEquals(KIDS_FLAG_FAILED, st.page().rows.first { it.kind == SettingsKind.KIDS_FORGOT }.secondary)
         assertEquals("Flag file couldn't be created — check All files access", KIDS_FLAG_FAILED)
     }

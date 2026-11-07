@@ -131,7 +131,7 @@ class KidsController(private val settings: AppSettings, private val platform: Ki
         publish()
     }
 
-    /** Kids Mode on, with its flag file; the parent who turned it on keeps the full menu (Parent) until they lock. */
+    /** Kids Mode on, with its flag file, straight into the schedule's mode: outside a play window the tiles at once. */
     fun turnOn() {
         settings.kidsEnabled = true
         platform.setStartReceiver(true)
@@ -139,8 +139,7 @@ class KidsController(private val settings: AppSettings, private val platform: Ki
         val home = flag.homeKey()
         flagWriteFailed = home == null || !flag.write()   // still on: Forgot PIN? says the flag is missing
         if (!flagWriteFailed && home != null) settings.kidsFlagHome = home
-        parent = true
-        parentInputAt = platform.now().epochMs
+        parent = false
         publish()
     }
 

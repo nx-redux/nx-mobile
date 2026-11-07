@@ -289,6 +289,16 @@ class AppStateKidsTest {
         assertEquals(false, platform.startReceiver)                    // no boot or clock start while off
     }
 
+    /** Switching on goes straight to the schedule's mode, never the parent's full menu: Monday locked, Saturday open. */
+    @Test fun turnOnFollowsTheSchedule() = runTest {
+        val mon = KidsController(MemorySettings().apply { kidsEnabled = false }, Platform(MON, 10 * 60))
+        mon.turnOn()
+        assertIs<KidsMode.Locked>(mon.mode.value)
+        val sat = KidsController(MemorySettings().apply { kidsEnabled = false }, Platform(SAT, 10 * 60))
+        sat.turnOn()
+        assertIs<KidsMode.Open>(sat.mode.value)
+    }
+
     @Test fun startReceiverFollowsOnAndOff() = runTest {
         val settings = MemorySettings().apply { kidsEnabled = false }
         val platform = Platform(MON, 10 * 60)
