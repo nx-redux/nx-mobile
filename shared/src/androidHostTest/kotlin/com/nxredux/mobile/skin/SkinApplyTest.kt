@@ -216,4 +216,23 @@ class SkinApplyTest {
         val r0 = controls(p, g).first().spec.r
         near(controls(wild, g).first().spec.r, r0 * 1.25f, "r")
     }
+    @Test
+    fun a_group_never_slides_under_a_screen_piece() {
+        // the large DS layout draws the touch screen's frame as a piece bigger than the glass and its margin: a group
+        // pushed at it stops at the drawn frame
+        val p = assertNotNull(SkinChoice.place(carbon, 1248, 1972, 420, tablet = false, ds = true))
+        assertEquals("large_ds", p.spec.id)
+        val frames = p.pieces.filter { it.piece >= 0 && p.spec.pieces[it.piece].glass != null }.map { it.dst }
+        assertTrue(frames.isNotEmpty(), "large_ds draws a screen piece")
+        for (z in frames) assertTrue(SkinTweaks.noGo(p).any { it.x <= z.x && it.y <= z.y && it.x + it.width >= z.x + z.width && it.y + it.height >= z.y + z.height }, "$z in the no-go zone")
+        val ss = group(p, "SELECT", "START")
+        val before = box(p, ss)
+        val touch = frames.minBy { f -> abs(f.x + f.width / 2f - (before.x + before.width / 2f)) + abs(f.y + f.height / 2f - (before.y + before.height / 2f)) }
+        assertTrue(!hits(before, touch), "$before starts clear of $touch")
+        val ux = touch.x + touch.width / 2f - (before.x + before.width / 2f)
+        val uy = touch.y + touch.height / 2f - (before.y + before.height / 2f)
+        val out = SkinTweaks.apply(p, mapOf(ss.id to SkinTweak(dx = ux * 100f, dy = uy * 100f, scale = 1.25f)), 1248f, 1972f)
+        val after = box(out, ss)
+        assertTrue(!hits(after, touch), "$after under $touch")
+    }
 }

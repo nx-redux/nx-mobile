@@ -31,12 +31,14 @@ object SkinTweaks {
     const val SCREEN_CLEAR = 12f
 
     /**
-     * Where no group may go in [p] (window px): each screen with [SCREEN_CLEAR] round it, and on a layout made for
-     * half-folding the band from the screen frame's bottom past the fold (the pieces keep [FrameSpec.hinge] below it).
+     * Where no group may go in [p] (window px): each screen with [SCREEN_CLEAR] round it, each piece holding a screen as
+     * drawn (the large DS layout's touch-screen frame reaches past that margin), and on a layout made for half-folding
+     * the band from the screen frame's bottom past the fold (the pieces keep [FrameSpec.hinge] below it).
      */
     fun noGo(p: SkinPlacement): List<PxRect> {
         val m = SCREEN_CLEAR * p.k
         val out = p.glasses.mapTo(ArrayList()) { PxRect(it.rect.x - m, it.rect.y - m, it.rect.width + 2 * m, it.rect.height + 2 * m) }
+        for (piece in p.pieces) if (piece.piece >= 0 && p.spec.pieces.getOrNull(piece.piece)?.glass != null) out += piece.dst
         val f = p.spec.frame
         val g = p.glasses.firstOrNull()   // the frame's screen comes first
         if (f != null && f.hinge >= 0 && g != null) {
