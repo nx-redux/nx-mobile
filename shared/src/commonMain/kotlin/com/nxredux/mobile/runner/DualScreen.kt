@@ -1,9 +1,15 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.layout.ConsoleScale
+import com.nxredux.mobile.layout.CoreFrame
+import com.nxredux.mobile.layout.picture
+import com.nxredux.mobile.options.BRICK_HEIGHT
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.PxRect
+import com.nxredux.mobile.options.ScreenScaling
+import com.nxredux.mobile.options.frontendLayout
 import kotlin.math.min
 
 /**
@@ -52,6 +58,9 @@ object DualScreen {
     internal val N3DS_TOP_SRC = FrameRect(0f, 0f, 1f, 0.5f)
     internal val N3DS_BOTTOM_SRC = FrameRect(0.1f, 0.5f, 0.9f, 1f)
 
+    /** The DS / 3DS layout shortcut (SELECT + Left / Right): only on one display; a second one places the screens itself. */
+    fun layoutCycles(mode: DualMode): Boolean = mode == DualMode.OFF
+
     /** A DS/3DS game ([dualGame]) splits (or shows both screens with [panelUp]); any other game gets the panel. */
     fun mode(secondConnected: Boolean, settingOn: Boolean, dualGame: Boolean, panelUp: Boolean): DualMode = when {
         !secondConnected || !settingOn -> DualMode.OFF
@@ -92,6 +101,18 @@ object DualScreen {
         second.any { it.screen == NdsScreen.BOTTOM } -> PictureOn.SECOND
         main.any { it.screen == NdsScreen.BOTTOM } -> PictureOn.MAIN
         else -> null
+    }
+
+    /**
+     * The whole core [frame] placed on an [areaW] x [areaH] display by Screen Scaling, Auto at the console's [scale] as on
+     * the main display, moved by the screen offsets ([offsetX], [offsetY], in units of the display height / 768).
+     */
+    fun scaledFrame(areaW: Float, areaH: Float, frame: CoreFrame, scale: ConsoleScale, scaling: ScreenScaling, offsetX: Int = 0, offsetY: Int = 0): PxRect {
+        if (scaling != ScreenScaling.AUTO) return frontendLayout(areaW, areaH, frame.width.toInt(), frame.height.toInt(), frame.aspect, scaling, offsetX, offsetY, null).content
+        val placed = if (scale == ConsoleScale.WHOLE_HEIGHT || scale == ConsoleScale.NATIVE) picture(PxRect(0f, 0f, areaW, areaH), frame, scale, null)
+            else fullFrame(areaW, areaH, if (frame.aspect > 0f) frame.aspect else frame.width / frame.height)
+        val unit = areaH / BRICK_HEIGHT
+        return placed.copy(x = placed.x + offsetX * unit, y = placed.y + offsetY * unit)
     }
 
     /** The whole core frame fitted at [aspect] in the area, centred, in whole px; empty without an area or aspect. */

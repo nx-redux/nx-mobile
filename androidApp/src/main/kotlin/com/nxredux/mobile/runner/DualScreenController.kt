@@ -35,7 +35,10 @@ import com.nxredux.mobile.achievements.sortedBy
 import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.netplay.NetplaySession
+import com.nxredux.mobile.layout.CoreFrame
+import com.nxredux.mobile.layout.consoleScale
 import com.nxredux.mobile.options.BottomScreenOptions
+import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsScreen
@@ -70,6 +73,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
+import kotlin.math.sin
 import kotlin.math.roundToInt
 
 /**
@@ -297,10 +302,12 @@ internal class DualScreenController(
         )
     }
 
-    /** The whole core frame fitted at the game's aspect on a [w] x [h] surface (px of it); null before the first frame or with no room. */
+    /** The whole core frame placed on a [w] x [h] surface by Screen Scaling (px of it); null before the first frame or with no room. */
     private fun wholeFrame(w: Float, h: Float, g: FloatArray): PxRect? {
-        val aspect = g[2].takeIf { it > 0f } ?: if (g[0] > 0f && g[1] > 0f) g[0] / g[1] else return null
-        return DualScreen.fullFrame(w, h, aspect).takeIf { it.width > 0f && it.height > 0f }
+        if (g[0] <= 0f || g[1] <= 0f) return null
+        val frame = CoreFrame(g[0], g[1], g[2], rotated = abs(sin(g[3])) > 0.5f)
+        val s = FrontendSettings.parse(frontendValues)
+        return DualScreen.scaledFrame(w, h, frame, consoleScale(owner.layoutTag()), s.scaling, s.offsetX, s.offsetY).takeIf { it.width > 0f && it.height > 0f }
     }
 
     /**

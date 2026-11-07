@@ -3216,6 +3216,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun screenClass(): ScreenClass = windowShape().screenClass
     // Half-folded (no second screen's mode, which places the screens itself) the screens follow the fold.
     override fun layoutSetByFold(): Boolean = renderer.halfFoldedLayoutInUse()
+    override fun layoutSetByDual(): Boolean = !DualScreen.layoutCycles(dual.dualMode)
 
     // The second display's state, owned by [dual]: read by the input, layout and picture code.
     override val presentation: SecondScreenPresentation? get() = dual.presentation

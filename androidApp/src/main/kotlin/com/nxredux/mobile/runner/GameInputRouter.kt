@@ -90,6 +90,8 @@ internal interface GameInputHost : LifecycleOwner {
     fun screenClass(): ScreenClass
     /** Half-folded, the fold places the DS / 3DS screens: the layout cycle does nothing then. */
     fun layoutSetByFold(): Boolean
+    /** A second display places the DS / 3DS screens: the layout cycle does nothing, silently. */
+    fun layoutSetByDual(): Boolean
     /** The activity's own handling (super) of an event the router leaves to the system. */
     fun superGenericMotionEvent(event: MotionEvent?): Boolean
     fun superKeyDown(keyCode: Int, event: KeyEvent): Boolean
@@ -120,6 +122,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private val retroView get() = host.retroView
     private val menuOpen get() = host.menuOpen
     private val gameTag get() = host.gameTag
+    private val n3dsSwapKey = N3dsSwapKey()
     private val gameCoreId get() = host.gameCoreId
     private val frontendValues get() = host.frontendValues
     private val lockedOptions get() = host.lockedOptions
@@ -365,6 +368,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         when (action) {
             NdsAction.SwapScreens -> setNdsKey(NdsOptions.swapBigScreen(frontendValues))
             is NdsAction.CycleLayout -> {
+                if (host.layoutSetByDual()) return
                 if (host.layoutSetByFold()) { showNdsLabel(LAYOUT_SET_BY_FOLD); return }
                 // From the layout showing on this screen (an unset row steps from its default).
                 setNdsKey(NdsOptions.cycleLayout(
@@ -513,6 +517,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private fun applyN3dsAction(action: N3dsAction) {
         when (action) {
             is N3dsAction.CycleLayout -> {
+                if (host.layoutSetByDual()) return
                 if (host.layoutSetByFold()) { showNdsLabel(LAYOUT_SET_BY_FOLD); return }
                 // The row in use (orientation, controller), as the DS's; applyFrontend sets the core's layout from it.
                 val (key, value) = N3dsOptions.cycleLayout(frontendValues, isLandscape(), ndsControllerMode(), action.delta, host.screenClass())
@@ -960,7 +965,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         when (thumbKeyRoute(keyCode, isWii, isN3ds)) {
             ThumbKeyRoute.WII_RECENTER -> { if (first) recenterWiiMotion(); return true }
             ThumbKeyRoute.WII_HOME -> { if (first) pressWiiHome(); return true }
-            ThumbKeyRoute.N3DS_SWAP -> if (onN3dsSwapPressed(down = first)) return true
+            ThumbKeyRoute.N3DS_SWAP -> if (n3dsSwapKey.down(repeat = !first) { onN3dsSwapPressed(down = true) }) return true
             ThumbKeyRoute.CORE -> {}
         }
         noteRumbleDevice(event.device, port)
@@ -1035,6 +1040,15 @@ private val RELEASED_BUTTONS = listOf(
 private val RELEASED_THUMB_KEYS = listOf(KeyEvent.KEYCODE_BUTTON_THUMBL, KeyEvent.KEYCODE_BUTTON_THUMBR)
 
 /** Where a physical stick click goes ([thumbKeyRoute]). */
+/** The 3DS SWAP key's downs: a held key's repeats go where its first down went, never read as a release. */
+internal class N3dsSwapKey {
+    private var claimed = false
+    fun down(repeat: Boolean, press: () -> Boolean): Boolean {
+        if (!repeat) claimed = press()
+        return claimed
+    }
+}
+
 internal enum class ThumbKeyRoute { WII_RECENTER, WII_HOME, N3DS_SWAP, CORE }
 
 /**
