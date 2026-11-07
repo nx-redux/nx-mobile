@@ -53,7 +53,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | mednafen_supafaust | libretro/supafaust | e25f66765938d33f9ad5850e8d6cd597e55b7299 | ndk-build | 0:07 |
 | pokemini | libretro/PokeMini | 78656d4615691c393e65e48672ce5fff5b1f97d3 | ndk-build (patched) | 0:04 |
 | fake08 | jtothebell/fake-08 | f6bab5a7ba521ce440e45d1aeef6122674be6ee9 | ndk-build (`platform/libretro`, `libfake08.so`) | 0:09 |
-| prboom | libretro/libretro-prboom | 93c8e7a2074e4fd8410398e3d571c6d9afec1d84 | ndk-build (+ `prboom.wad`) | 0:05 |
+| prboom | libretro/libretro-prboom | 4849268e7342494193f2bbf2d0128a751cf58da7 | ndk-build (+ `prboom.wad`; 3.4 MB stripped) | 0:05 |
 | gpsp | libretro/gpsp | 5819380c2ffb0900219d700a382ee68c464ebb99 | ndk-build (dynarec, patched; link) | 0:12 |
 | pcsx_rearmed | libretro/pcsx_rearmed | 6eb679d064a1efe92af79fe9970c0591c8da02d4 | ndk-build (dynarec, `USE_LIBRETRO_VFS=1`, patched) | 0:05 |
 | swanstation | libretro/swanstation | dd4805619bbbfc6e0d1776372cb16377088b448e (the Brick's PSX.pak pin) | cmake (GLES HW renderer) | 0:12 |

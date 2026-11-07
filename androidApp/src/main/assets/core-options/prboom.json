@@ -11,7 +11,7 @@
      "key": "prboom-resolution",
      "label": "Internal resolution (Restart Required)",
      "labelCategorized": "",
-     "info": "Configure the resolution.",
+     "info": "Configure the resolution. 'Auto' fills the display at its native size when the frontend reports it, and uses 320x200 when it does not.",
      "values": [
       "320x200",
       "640x400",
@@ -20,7 +20,8 @@
       "1600x1000",
       "1920x1200",
       "2240x1400",
-      "2560x1600"
+      "2560x1600",
+      "auto"
      ],
      "labels": [
       "",
@@ -30,15 +31,105 @@
       "",
       "",
       "",
-      ""
+      "",
+      "Auto (display size)"
      ],
      "default": "320x200"
+    },
+    {
+     "key": "prboom-render_threads",
+     "label": "Threaded Rendering",
+     "labelCategorized": "",
+     "info": "Fill walls and floors/ceilings across several CPU threads. Scene traversal stays single-threaded and only the pixel filling is split, so the image is identical to the single-threaded renderer -- unlike the screenspace split used by other ports, this cannot split or drop a sprite at a thread boundary. Filling is the bulk of the frame at high internal resolutions, so the benefit grows with resolution; at 320x200 there is little to gain. 'Auto' uses up to 4 threads, which measured fastest and steadiest on a 16-core test system; higher counts spend more on handing out work than they save and vary more between runs. 8 is selectable if it suits your CPU.",
+     "values": [
+      "OFF",
+      "Auto",
+      "2",
+      "4",
+      "8"
+     ],
+     "labels": [
+      "Off (single-threaded)",
+      "",
+      "2 threads",
+      "4 threads",
+      "8 threads"
+     ],
+     "default": "OFF"
+    },
+    {
+     "key": "prboom-color_format",
+     "label": "Color Format (Restart Required)",
+     "labelCategorized": "",
+     "info": "Output colour depth. '16bits' is the classic RGB565 renderer. '24bits' renders in full 8-bit-per-channel truecolor, which removes the banding the 16-bit light ramp introduces in distance shading and smooth gradients. '30bits' outputs true HDR10 -- PQ-encoded Rec.2020 at 10 bits per channel, carrying absolute luminance -- so emissive content can be rendered brighter than SDR white on an HDR display. It requires a frontend that presents HDR10 natively; otherwise the core falls back to 24bits automatically.",
+     "values": [
+      "16bits",
+      "24bits (truecolor)",
+      "30bits (HDR)"
+     ],
+     "labels": [
+      "",
+      "",
+      "30bits (HDR10)"
+     ],
+     "default": "16bits"
+    },
+    {
+     "key": "prboom-hdr_emissive",
+     "label": "HDR Emissive Boost",
+     "labelCategorized": "",
+     "info": "How far above SDR white self-illuminated content (muzzle flashes, plasma, rockets, explosions, powerups and brightmapped texels) is rendered when the Color Format is 30bits. Higher values glow harder; highlights roll off smoothly toward the frontend's HDR peak instead of clipping. 'Auto' sets the boost from paper white and the peak so the brightest effects land just under the peak. Only affects HDR10 output; ignored in 16- and 24-bit modes.",
+     "values": [
+      "off",
+      "2x",
+      "4x",
+      "8x",
+      "auto"
+     ],
+     "labels": [
+      "Off",
+      "2x",
+      "4x",
+      "8x",
+      "Auto (display peak)"
+     ],
+     "default": "2x"
     },
     {
      "key": "prboom-mouse_on",
      "label": "Mouse Active When Using Gamepad",
      "labelCategorized": "",
      "info": "Allows you to use mouse inputs even when User 1's device type isn't set to 'RetroKeyboard/Mouse'.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "prboom-wall_decals",
+     "label": "Wall Bullet Decals",
+     "labelCategorized": "",
+     "info": "Stamp scuff marks on walls where hitscan shots land. Off by default, matching ZDoom mods that do not request bullet decals; enable for the classic wall-chip marks.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "prboom-dynlight_wall_falloff",
+     "label": "Dynamic Light Wall Falloff",
+     "labelCategorized": "",
+     "info": "Give GLDEFS point lights a vertical light pool on walls (brightest at the light's height, fading up and down) instead of a single level per wall column. Off by default; the per-band shading is noticeably heavier on tall, close, heavily-lit walls.",
      "values": [
       "disabled",
       "enabled"
@@ -80,6 +171,21 @@
      "default": "disabled"
     },
     {
+     "key": "prboom-mmap_wads",
+     "label": "Memory-Map WAD Files (Restart Required)",
+     "labelCategorized": "",
+     "info": "Load WAD data by memory-mapping the file instead of reading it fully into RAM. Lowers memory use and speeds up loading of large WADs, since only the lumps actually used are paged in. Falls back to a normal read for archives, if mapping fails, or on builds without memory-mapping support. Leave disabled to perform all WAD file I/O up front at load time.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
      "key": "prboom-analog_deadzone",
      "label": "Analog Deadzone (Percent)",
      "labelCategorized": "",
@@ -103,10 +209,63 @@
       ""
      ],
      "default": "15"
+    },
+    {
+     "key": "prboom-complevel",
+     "label": "Compatibility Level (Restart Required)",
+     "labelCategorized": "",
+     "info": "Forces a demo-compatibility level. 'Default' uses the engine's automatic choice. Set 'MBF21' to play MBF21 WADs that require complevel 21.",
+     "values": [
+      "-1",
+      "4",
+      "5",
+      "9",
+      "11",
+      "17",
+      "18"
+     ],
+     "labels": [
+      "Default (Auto)",
+      "Ultimate Doom",
+      "Final Doom",
+      "Boom",
+      "MBF",
+      "PrBoom latest",
+      "MBF21"
+     ],
+     "default": "-1"
+    }
+   ]
+  },
+  {
+   "key": "audio",
+   "label": "Audio",
+   "info": "Configure audio output, including the synthesis/output sample rate.",
+   "items": [
+    {
+     "key": "prboom-sound_samplerate",
+     "label": "Sound Samplerate (Hint)",
+     "labelCategorized": "Sound Samplerate (Hint)",
+     "info": "Audio output rate. prboom synthesizes MIDI and tracker music in real time, so it has no fixed native rate and can render directly at whichever rate you pick. Higher rates lower latency, push aliasing above the audible range, avoid the frontend resampler's low-pass smearing, and give the sound-effect and music-stream resamplers finer time resolution. 'Auto' queries the frontend's target rate and snaps to the nearest supported value.",
+     "values": [
+      "auto",
+      "32000",
+      "44100",
+      "48000",
+      "96000"
+     ],
+     "labels": [
+      "Auto",
+      "32 kHz",
+      "44 kHz",
+      "48 kHz",
+      "96 kHz"
+     ],
+     "default": "auto"
     }
    ]
   }
  ],
- "soSha256": "35f65e1a7d84d04607ba865619899581a189011948f50dcd45da1e2e661fbcac",
- "probedAt": "2026-09-29"
+ "soSha256": "72037453954e924437372a12fa721b70549218f20e3e631565e779e97830d3af",
+ "probedAt": "2026-11-07"
 }

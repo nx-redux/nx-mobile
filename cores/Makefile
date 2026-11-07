@@ -324,7 +324,7 @@ fake08_BUILD_PATH = platform/libretro
 fake08_ARTIFACT = libs/$(ABI)/libfake08.so
 
 prboom_REPO = https://github.com/libretro/libretro-prboom
-prboom_HASH = 93c8e7a2074e4fd8410398e3d571c6d9afec1d84
+prboom_HASH = 4849268e7342494193f2bbf2d0128a751cf58da7
 prboom_LICENSE = COPYING
 prboom_KIND = ndkbuild
 prboom_BUILD_PATH = .
