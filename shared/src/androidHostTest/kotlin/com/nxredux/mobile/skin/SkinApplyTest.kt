@@ -162,6 +162,27 @@ class SkinApplyTest {
     }
 
     @Test
+    fun a_group_moves_into_the_room_a_later_group_left() {
+        // the d-pad (earlier in the layout) and the face buttons (later) sit side by side: with the face buttons moved
+        // right to the window's edge, the d-pad pushed right reaches into where they were and stops against them there
+        val p = menu()
+        val dpad = group(p, "DPAD")
+        val face = group(p, "A", "B", "X", "Y")
+        assertTrue(SkinGroups.of(p.spec).indexOf(dpad) < SkinGroups.of(p.spec).indexOf(face), "the d-pad goes first")
+        val home = box(p, face)
+        val room = 1080f - (home.x + home.width)   // how far the face buttons can go right
+        assertTrue(room > 10f, "room $room")
+        for (faceDx in listOf(room / p.k, 1000f)) {   // just to the edge, or further (stopped by the window)
+            val out = SkinTweaks.apply(p, mapOf(dpad.id to SkinTweak(dx = 1000f), face.id to SkinTweak(dx = faceDx)), 1080f, 2520f)
+            val f = box(out, face); val d = box(out, dpad)
+            near(f.x, home.x + room, "face $faceDx moved to the edge")
+            assertTrue(d.x + d.width > home.x + 1f, "face $faceDx: the d-pad $d reaches the face buttons' home $home")
+            near(d.x + d.width, f.x, "face $faceDx: the d-pad stops against them")
+            assertTrue(!hits(d, f), "$d on $f")
+        }
+    }
+
+    @Test
     fun every_group_pushed_every_way_stays_clear() {
         // controls drawn beside their piece (START on the Dreamcast, N64, GameCube pads) count with their group
         val cases = listOf(SkinVariant.GBA, SkinVariant.DC, SkinVariant.N64, SkinVariant.GC).flatMap { v ->
@@ -179,6 +200,23 @@ class SkinApplyTest {
                 assertTrue(after.x >= minOf(before.x, 0f) - 0.01f && after.x + after.width <= maxOf(before.x + before.width, w.toFloat()) + 0.01f, "${p.spec.id} ${g.id} x $after")
                 assertTrue(after.y >= minOf(before.y, 0f) - 0.01f && after.y + after.height <= maxOf(before.y + before.height, h.toFloat()) + 0.01f, "${p.spec.id} ${g.id} y $after")
                 for (o in groups) if (o != g) assertTrue(overlap(after, box(out, o)) <= overlap(before, box(p, o)) + 0.5f, "${p.spec.id} ${g.id} on ${o.id}")
+            }
+        }
+    }
+
+    @Test
+    fun all_groups_pushed_at_once_stay_off_each_other() {
+        // every group moved and grown together, each way and toward each other: no two end on each other
+        val ways = listOf(-1f to 0f, 1f to 0f, 0f to -1f, 0f to 1f, -1f to -1f, 1f to 1f)
+        for (v in listOf(SkinVariant.GBA, SkinVariant.N64)) for ((w, h) in listOf(1080 to 2520, 2420 to 1080)) {
+            val p = assertNotNull(SkinChoice.place(carbon, w, h, 420, tablet = false, ds = false, picture = 320f to 240f, variant = v))
+            val groups = SkinGroups.of(p.spec)
+            val tweakSets = ways.map { (ux, uy) -> groups.associate { it.id to SkinTweak(ux * 5000f, uy * 5000f, 1.25f) } } +
+                // each half toward the other: the first groups one way, the rest the other
+                ways.map { (ux, uy) -> groups.withIndex().associate { (i, g) -> val s = if (i < groups.size / 2) 1f else -1f; g.id to SkinTweak(s * ux * 5000f, s * uy * 5000f, 1.25f) } }
+            for (t in tweakSets) {
+                val out = SkinTweaks.apply(p, t, w.toFloat(), h.toFloat())
+                for (a in groups) for (b in groups) if (a != b) assertTrue(overlap(box(out, a), box(out, b)) <= overlap(box(p, a), box(p, b)) + 0.5f, "${p.spec.id} $w ${a.id} on ${b.id}: $t")
             }
         }
     }

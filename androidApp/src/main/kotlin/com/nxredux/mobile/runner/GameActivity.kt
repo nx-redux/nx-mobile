@@ -539,7 +539,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** Bumped whenever [padProfileCache] is dropped, so Compose readers of [padProfile] (the menu's hint glyphs) redraw. */
     override val padProfileRevision = mutableStateOf(0)
     private fun dropPadProfile() { padProfileCache = null; padProfileRevision.value++; input.gcClearTriggers() }
-    /** The on-screen pad's profile for this game's system (cluster, face letters, hidden buttons); the intent's tag, for onCreate's layout. */
+    /** The on-screen pad's profile for this game's system (its kind, face letters, hidden buttons); the intent's tag, for onCreate's layout. */
     override fun padProfile(): PadProfile =
         padProfileCache ?: PadProfile.forTag(intent.getStringExtra(EXTRA_TAG) ?: gameTag, segaPad, n3dsNew, wiiPad, gameCube = wiiGameCube).also { padProfileCache = it }
 
@@ -818,6 +818,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /** The menu closed ([InGameMenuController.closeMenu]): the game plays on, unless the focus pause still holds it. */
     override fun resumeAfterMenu() {
+        // the menu can close under the Adjust buttons editor (the second screen's panel, netplay, a state load): it goes
+        // with it, unsaved, so the game never plays on under it and a menu opened again is not drawn beneath it
+        closeSkinEdit()
         syncKeepScreenOn()
         if (focusPaused) { syncMotionSensors(); pushMicSource(); return }   // another app has the focus: focusResume plays on later
         netplayGame?.takeIf { it.live }?.resume()   // netplay: input goes out again (see openMenu)
@@ -1847,8 +1850,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /**
      * The launch sequence's hold ([LaunchNameHold]) from this screen's first frame until the game's: on the root right
      * after the layout's own children (the game container, so its picture and the resume cover; the FPS line), so all the
-     * root gets later sits above it: the pads (the portrait band stays lit, identical to the menu's, never blinking; side
-     * and corner clusters over the black likewise), the notifications, the in-game menu. Without an on-screen pad it
+     * root gets later sits above it: the pads (the portrait band stays lit, identical to the menu's, never blinking; a
+     * landscape skin's bare buttons over the black likewise), the notifications, the in-game menu. Without an on-screen pad it
      * covers the whole window. Its input is held back by [dispatchKeyEvent], [dispatchGenericMotionEvent] and
      * [dispatchTouchEvent]. A recreation (the GLES relaunch) puts it back up with its first clock, so its minimum
      * is not counted twice and nothing fades in between; a restore after it had gone shows none.
@@ -2075,7 +2078,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /**
      * The one landscape test for the pad layout ([applyLayout]) and the DS layout ([ndsLayout], its hotkeys): anything not
-     * portrait, so the landscape pad clusters and the DS landscape layout (with its pad-over-game touch rule) always agree.
+     * portrait, so the landscape skin layout and the DS landscape layout (with its pad-over-game touch rule) always agree.
      */
     override fun isLandscape(orientation: Int): Boolean =
         orientation != Configuration.ORIENTATION_PORTRAIT
@@ -3384,17 +3387,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * everything, the menu hidden under it. The game stays paused; Save and Cancel both come back to the menu as it was.
      */
     override fun adjustButtons() {
-        if (quitting || skinEditView != null) return
+        if (!menuOpen || quitting || skinEditView != null) return
         val edit = padLayout.skinEdit() ?: run { toast("No button layout fits this screen"); return }
-        captureThumbnail { frame ->
-            // the menu closed, or the game quit, while the frame was read: nothing to edit over
-            if (!menuOpen || quitting || skinEditView != null) { frame?.recycle(); return@captureThumbnail }
-            showSkinEdit(edit, frame)
-        }
+        // the menu closed, or the game quit, while the frame was read: nothing to edit over ([showSkinEdit] refuses)
+        captureThumbnail { frame -> showSkinEdit(edit, frame) }
     }
 
-    /** The editor for [edit], [frame] behind it (black without one). */
+    /** The editor for [edit], [frame] behind it (black without one); only over the open menu (it closes with it). */
     private fun showSkinEdit(edit: PadLayoutController.SkinEdit, frame: Bitmap?) {
+        if (!menuOpen || quitting || skinEditView != null) { frame?.recycle(); return }
         val root = findViewById<FrameLayout>(R.id.root)
         val settings = AndroidAppSettings(this)
         val state = SkinLayoutEdit.state(settings, edit.consoleId, edit.placement, edit.w, edit.h)
@@ -3435,7 +3436,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         root.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
     }
 
-    /** The editor goes (saved or not) and the menu shows again as it was. */
+    /** The editor goes (saved or not) and the menu shows again as it was (none when the menu closed: [resumeAfterMenu]). */
     private fun closeSkinEdit() {
         val view = skinEditView ?: return
         skinEditView = null

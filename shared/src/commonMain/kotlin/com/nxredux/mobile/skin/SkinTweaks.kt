@@ -55,9 +55,11 @@ object SkinTweaks {
      * pieces and controls (their place and every size) scaled about the middle of its pieces and moved. A group's box
      * (its pieces and its controls' hit areas) may not go further into [noGo], into another group's box, or out of the
      * window than it started, nor pass over any of them on the way: the move stops short (and a growth likewise, toward
-     * its own size). Groups go in [SkinGroups.of]'s order, each against the others' boxes as they stand. The frame's
-     * strip ([SkinGroups.STRIP]) moves its labels and its buttons. Apply before [SkinPlacement.forStick] (both of a
-     * swap's sets move together).
+     * its own size). Groups go in [SkinGroups.of]'s order, each against the groups before it where they ended and the
+     * groups after it where they are going (so a group may move into the room a later one leaves); a later group that
+     * gets less far than that is tried again where it got to, and should that still leave two groups on each other, each
+     * group goes against the later ones where they stand. The frame's strip ([SkinGroups.STRIP]) moves its labels and its
+     * buttons. Apply before [SkinPlacement.forStick] (both of a swap's sets move together).
      */
     fun apply(p: SkinPlacement, tweaks: Map<String, SkinTweak>, windowW: Float, windowH: Float): SkinPlacement {
         // groups are made of a layout's pieces, and only a frame layout has pieces (every pack's piece layout has one)
@@ -66,44 +68,79 @@ object SkinTweaks {
         val groups = SkinGroups.of(p.spec)
         val zones = noGo(p)
         val window = PxRect(0f, 0f, windowW, windowH)
-        val pieces = p.pieces.toMutableList()
-        val controls = p.controls.toMutableList()
         val (pieceAt, controlAt) = members(p, groups)
-        fun boxOf(i: Int) = union(pieceAt[i].map { pieces[it].dst } + controlAt[i].map { hit(controls[it]) })
-        val boxes = groups.indices.mapTo(ArrayList()) { boxOf(it) }
-        for ((gi, g) in groups.withIndex()) {
-            val t = limit(tweaks[g.id] ?: continue, g)
-            if (t == SkinTweak()) continue
-            val box = boxes[gi] ?: continue
-            // the middle it scales about: its pieces' (the strip's: its whole box)
-            val mid = (if (g.id == SkinGroups.STRIP) null else union(pieceAt[gi].map { pieces[it].dst })) ?: box
-            val cx = mid.x + mid.width / 2f; val cy = mid.y + mid.height / 2f
-            fun moved(s: Float, ox: Float, oy: Float) = PxRect(cx + (box.x - cx) * s + ox, cy + (box.y - cy) * s + oy, box.width * s, box.height * s)
-            val obstacles = zones + boxes.filterIndexed { i, b -> i != gi && b != null }.map { it!! }
-            // how far the box is in each obstacle (its area there) and out of the window (its edges' distance past it):
-            // never more than where it started
-            fun cost(r: PxRect) = obstacles.map { overlap(r, it) } + outside(r, window)
-            val base = cost(box)
-            fun fits(r: PxRect) = cost(r).zip(base).all { (c, b) -> c <= b + 0.01f }   // px², over float noise
-            val ox = t.dx * p.k; val oy = t.dy * p.k
-            // a growth only adds to the box round its middle (no jumping), a move is walked from where it starts
-            val sc = 1f + (t.scale - 1f) * longest { fits(moved(1f + (t.scale - 1f) * it, 0f, 0f)) }
-            val f = reach(maxOf(abs(ox), abs(oy))) { fits(moved(sc, ox * it, oy * it)) }
-            val dx = ox * f; val dy = oy * f
-            fun mx(x: Float) = cx + (x - cx) * sc + dx
-            fun my(y: Float) = cy + (y - cy) * sc + dy
-            for (i in pieceAt[gi]) {
-                val d = pieces[i].dst
-                pieces[i] = pieces[i].copy(dst = PxRect(mx(d.x), my(d.y), d.width * sc, d.height * sc))
-            }
-            for (i in controlAt[gi]) {
-                val c = controls[i]
-                controls[i] = PlacedControl(c.spec.scaled(sc), mx(c.x), my(c.y))
-            }
-            boxes[gi] = boxOf(gi)
+        val ts = groups.map { g -> tweaks[g.id]?.let { limit(it, g) }?.takeIf { it != SkinTweak() } }
+        fun boxOf(gi: Int, pieces: List<SkinPiece>, controls: List<PlacedControl>) =
+            union(pieceAt[gi].map { pieces[it].dst } + controlAt[gi].map { hit(controls[it]) })
+        val home = groups.indices.map { boxOf(it, p.pieces, p.controls) }
+        // the middle a group scales about: its pieces' (the strip's: its whole box)
+        val mids = groups.indices.map { gi -> (if (groups[gi].id == SkinGroups.STRIP) null else union(pieceAt[gi].map { p.pieces[it].dst })) ?: home[gi] }
+
+        /** [r] scaled by [s] about [m]'s centre and moved [ox], [oy]. */
+        fun moved(r: PxRect, m: PxRect, s: Float, ox: Float, oy: Float): PxRect {
+            val cx = m.x + m.width / 2f; val cy = m.y + m.height / 2f
+            return PxRect(cx + (r.x - cx) * s + ox, cy + (r.y - cy) * s + oy, r.width * s, r.height * s)
         }
+
+        /** Every group placed in turn, each against [ahead]'s boxes for the groups after it: the pieces, controls and boxes. */
+        fun place(ahead: List<PxRect?>): Triple<List<SkinPiece>, List<PlacedControl>, List<PxRect?>> {
+            val pieces = p.pieces.toMutableList()
+            val controls = p.controls.toMutableList()
+            val boxes = home.toMutableList()
+            for (gi in groups.indices) {
+                val t = ts[gi] ?: continue
+                val box = home[gi] ?: continue
+                val mid = mids[gi] ?: box
+                val others = groups.indices.mapNotNull { i -> if (i < gi) boxes[i] else if (i > gi) ahead[i] else null }
+                val obstacles = zones + others
+                // how far the box is in each obstacle (its area there) and out of the window (its edges' distance past
+                // it): never more than where it started
+                fun cost(r: PxRect) = obstacles.map { overlap(r, it) } + outside(r, window)
+                val base = cost(box)
+                fun fits(r: PxRect) = cost(r).zip(base).all { (c, b) -> c <= b + 0.01f }   // px², over float noise
+                val ox = t.dx * p.k; val oy = t.dy * p.k
+                // a growth only adds to the box round its middle (no jumping), a move is walked from where it starts
+                val sc = 1f + (t.scale - 1f) * longest { fits(moved(box, mid, 1f + (t.scale - 1f) * it, 0f, 0f)) }
+                val f = reach(maxOf(abs(ox), abs(oy))) { fits(moved(box, mid, sc, ox * it, oy * it)) }
+                val dx = ox * f; val dy = oy * f
+                val cx = mid.x + mid.width / 2f; val cy = mid.y + mid.height / 2f
+                fun mx(x: Float) = cx + (x - cx) * sc + dx
+                fun my(y: Float) = cy + (y - cy) * sc + dy
+                for (i in pieceAt[gi]) {
+                    val d = pieces[i].dst
+                    pieces[i] = pieces[i].copy(dst = PxRect(mx(d.x), my(d.y), d.width * sc, d.height * sc))
+                }
+                for (i in controlAt[gi]) {
+                    val c = controls[i]
+                    controls[i] = PlacedControl(c.spec.scaled(sc), mx(c.x), my(c.y))
+                }
+                boxes[gi] = boxOf(gi, pieces, controls)
+            }
+            return Triple(pieces, controls, boxes)
+        }
+
+        /** No two groups more on each other in [boxes] than they started. */
+        fun clear(boxes: List<PxRect?>) = groups.indices.all { i ->
+            (i + 1 until groups.size).all { j ->
+                val a = boxes[i]; val b = boxes[j]
+                a == null || b == null || overlap(a, b) <= overlap(home[i]!!, home[j]!!) + 0.01f
+            }
+        }
+
+        // first where each group is going (its whole tweak, nothing in the way), then where it got to
+        var ahead = groups.indices.map { gi -> val b = home[gi]; val t = ts[gi]; if (b == null || t == null) b else moved(b, mids[gi] ?: b, t.scale, t.dx * p.k, t.dy * p.k) }
+        repeat(PASSES) {
+            val (pieces, controls, boxes) = place(ahead)
+            if (clear(boxes)) return p.copy(pieces = pieces, controls = controls)
+            ahead = boxes
+        }
+        // each against the later groups where they stand: never on each other
+        val (pieces, controls) = place(home)
         return p.copy(pieces = pieces, controls = controls)
     }
+
+    /** How many times [apply] tries the groups against where the later ones are going before it gives that up. */
+    private const val PASSES = 4
 
     /** Each group's pieces and controls in [p] (indexes into its lists), in [groups]' order: the strip's are its strip pieces and its first buttons. */
     private fun members(p: SkinPlacement, groups: List<SkinGroup>): Pair<List<List<Int>>, List<List<Int>>> {

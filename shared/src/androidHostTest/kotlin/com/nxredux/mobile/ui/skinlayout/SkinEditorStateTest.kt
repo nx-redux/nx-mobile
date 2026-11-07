@@ -91,6 +91,26 @@ class SkinEditorStateTest {
     }
 
     @Test
+    fun a_drag_moves_into_the_room_another_group_left() {
+        // the face buttons dragged right to the window's edge leave room: the d-pad (before them in the layout) dragged
+        // right goes into it, stops against them, reads back as far as it got and comes back at once
+        val p = menu()
+        val s = SkinEditorState(p, emptyMap(), 1080f, 2520f)
+        val face0 = box(p, "A+B+X+Y"); val dpad0 = box(p, "DPAD")
+        s.select(centre(face0)); s.drag(Offset(1000f, 0f))
+        val room = 1080f - (face0.x + face0.width)
+        near(assertNotNull(s.tweaks["A+B+X+Y"]).dx, room, "face at the edge")
+        s.select(centre(dpad0)); s.drag(Offset(1000f, 0f))
+        val reached = face0.x + room - (dpad0.x + dpad0.width)
+        assertTrue(reached > face0.x - (dpad0.x + dpad0.width) + 1f, "past the face buttons' home")
+        near(assertNotNull(s.tweaks["DPAD"]).dx, reached, "d-pad read back")
+        near(box(s.placed(), "DPAD").x + dpad0.width, box(s.placed(), "A+B+X+Y").x, "against the face buttons")
+        near(assertNotNull(s.tweaks["A+B+X+Y"]).dx, room, "face buttons stay")
+        s.drag(Offset(-20f, 0f))
+        near(assertNotNull(s.tweaks["DPAD"]).dx, reached - 20f, "back")
+    }
+
+    @Test
     fun resize_scales_the_selected_group() {
         val p = menu()
         val s = SkinEditorState(p, emptyMap(), 1080f, 2520f)
