@@ -63,9 +63,9 @@
     },
     {
      "key": "pcsx_rearmed_show_bios_bootlogo",
-     "label": "Show BIOS Boot Logo",
+     "label": "Show BIOS Name/Boot Logo",
      "labelCategorized": "",
-     "info": "When using an official BIOS file, specify whether to show the PlayStation logo upon starting or resetting content. Also enables the display of BIOS file name in OSD. Warning: Enabling the boot logo may reduce game compatibility.",
+     "info": "When using a custom BIOS file, enables the display of its file name in the OSD. Also specifies whether to show the BIOS logo when starting or selecting Reset. Warning: Enabling the logo may reduce game compatibility.",
      "values": [
       "disabled",
       "enabled",
@@ -79,19 +79,40 @@
      "default": "disabled"
     },
     {
-     "key": "pcsx_rearmed_memcard2",
-     "label": "Second Memory Card (Shared)",
+     "key": "pcsx_rearmed_memcard1",
+     "label": "Memory Card 1 Type (Restart)",
      "labelCategorized": "",
-     "info": "Emulate a second memory card in slot 2. This will be shared by all games.",
+     "info": "How to emulate the memory card in slot 1. 'Libretro' passes the card data to the frontend (usually saved as .srm). 'Game Code' saves it to a file named based on the serial, such as SCUS-00001_1.mcd, for compatibility with some other emulators.",
      "values": [
-      "disabled",
-      "enabled"
+      "libretro",
+      "serial",
+      "shared",
+      "none"
      ],
      "labels": [
-      "",
-      ""
+      "Libretro (Default)",
+      "Game Code (Serial)",
+      "Shared Between All Games",
+      "No Memory Card"
      ],
-     "default": "disabled"
+     "default": "libretro"
+    },
+    {
+     "key": "pcsx_rearmed_memcard2",
+     "label": "Memory Card 2 Type",
+     "labelCategorized": "",
+     "info": "Same as above, but card in slot 2.",
+     "values": [
+      "serial",
+      "shared",
+      "none"
+     ],
+     "labels": [
+      "Game Code (Serial)",
+      "Shared Between All Games",
+      "No Memory Card"
+     ],
+     "default": "shared"
     },
     {
      "key": "pcsx_rearmed_cd_readahead",
@@ -367,16 +388,18 @@
      "key": "pcsx_rearmed_gpu_thread_rendering",
      "label": "Threaded Rendering",
      "labelCategorized": "",
-     "info": "When enabled, runs GPU commands in a secondary thread.",
+     "info": "When enabled, runs GPU commands in a secondary thread. 'Auto' enables it if at least 2 CPU cores are detected.",
      "values": [
+      "auto",
       "disabled",
       "enabled"
      ],
      "labels": [
+      "Auto",
       "",
       ""
      ],
-     "default": "disabled"
+     "default": "auto"
     },
     {
      "key": "pcsx_rearmed_frameskip_type",
@@ -483,7 +506,7 @@
      "key": "pcsx_rearmed_display_fps_v2",
      "label": "Display Internal FPS",
      "labelCategorized": "",
-     "info": "Show the internal frame rate at which the emulated PlayStation system is rendering content. Note: Requires on-screen notifications to be enabled in the libretro frontend.",
+     "info": "Show the internal frame rate at which the emulated system is rendering content. Note: Requires on-screen notifications to be enabled in the libretro frontend.",
      "values": [
       "disabled",
       "enabled",
@@ -495,6 +518,21 @@
       ""
      ],
      "default": "disabled"
+    },
+    {
+     "key": "pcsx_rearmed_display_info",
+     "label": "Display Informational Notifications",
+     "labelCategorized": "",
+     "info": "Shows things like unsafe hack options that are enabled and the BIOS name that is booting.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "enabled"
     },
     {
      "key": "pcsx_rearmed_fractional_framerate",
@@ -510,6 +548,23 @@
       "Auto",
       "",
       ""
+     ],
+     "default": "auto"
+    },
+    {
+     "key": "pcsx_rearmed_alt_flip",
+     "label": "Framebuffer readout",
+     "labelCategorized": "",
+     "info": "Some games make changes to the framebuffer while it's being sent to the display, which is currently not emulated. However this option allows to choose if the emulator takes the video frame before the emulated PSX active display period ('Early') or after ('Late'). Normally this should be left at 'Auto'.",
+     "values": [
+      "auto",
+      "early",
+      "late"
+     ],
+     "labels": [
+      "Auto",
+      "Early",
+      "Late"
      ],
      "default": "auto"
     },
@@ -2149,6 +2204,21 @@
       ""
      ],
      "default": "disabled"
+    },
+    {
+     "key": "pcsx_rearmed_nolddelay",
+     "label": "(Hack) Disable Pipeline Delays",
+     "labelCategorized": "Disable Pipeline Delays",
+     "info": "For compatibility with older emulators and broken romhacks. Not what real console does, normally should be disabled.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
     }
    ]
   },
@@ -2235,6 +2305,6 @@
    ]
   }
  ],
- "soSha256": "ec3b12d3db44bc10ad8d373d898116641a752a894fbe7fbd5867da9e933f5568",
- "probedAt": "2026-09-29"
+ "soSha256": "8c6a21721341430f54b6430001de147e45911480e012e30db8dd9964d8f89ec0",
+ "probedAt": "2026-11-07"
 }

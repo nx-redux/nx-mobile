@@ -55,7 +55,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | fake08 | jtothebell/fake-08 | f6bab5a7ba521ce440e45d1aeef6122674be6ee9 | ndk-build (`platform/libretro`, `libfake08.so`) | 0:09 |
 | prboom | libretro/libretro-prboom | 4849268e7342494193f2bbf2d0128a751cf58da7 | ndk-build (+ `prboom.wad`; 3.4 MB stripped) | 0:05 |
 | gpsp | libretro/gpsp | 5819380c2ffb0900219d700a382ee68c464ebb99 | ndk-build (dynarec, patched; link) | 0:12 |
-| pcsx_rearmed | libretro/pcsx_rearmed | 6eb679d064a1efe92af79fe9970c0591c8da02d4 | ndk-build (dynarec, `USE_LIBRETRO_VFS=1`, patched) | 0:05 |
+| pcsx_rearmed | libretro/pcsx_rearmed | 7b0e8f8fadfbce3d170d195b9d9eecaabfa08c8e | ndk-build (dynarec, `USE_LIBRETRO_VFS=1`) | 0:10 |
 | swanstation | libretro/swanstation | dd4805619bbbfc6e0d1776372cb16377088b448e (the Brick's PSX.pak pin) | cmake (GLES HW renderer) | 0:12 |
 | picodrive | irixxxx/picodrive | 9c298c1fe7347a50b07a494cdb8c91d2f9b40c6a | ndk-build (SH2 dynarec, patched; 1.7 MB stripped) | 1:16 |
 | gearcoleco | drhelius/Gearcoleco | 2805e70fd56c3bb6a0412a4ddaf210eefc8a5d7c (1.7.6+11) | ndk-build (`platforms/libretro`; 0.9 MB stripped) | 0:10 |
@@ -168,9 +168,9 @@ sequentially), so each includes that core's shallow clone; ppsspp dominates beca
 submodule clone (ffmpeg, glslang, SPIRV-Cross, ...) and CMake build. `mgba` builds with CMake, not
 ndk-build, because upstream ships no libretro `Android.mk`. Patches: `patches/pokemini.patch` (nx-redux's resume-audio patch, verbatim so states cross with the Brick: the first state
 load after start is deferred 40 frames so audio resumes, and `source/PokeMini.c`'s state loader reads the audio chunk
-under `"AUD-"` instead of `"LCD-"`, an emulation-source fix; the only nx-redux source patch carried over) and
-`patches/pcsx_rearmed.patch` (build script only: the pin's `jni/Android.mk` names `encodings/compat_strl.c` instead of
-`compat/compat_strl.c` under `USE_LIBRETRO_VFS=1`; fixed upstream in 6f230b1, patched here to keep nx-redux's pin). Two staging
+under `"AUD-"` instead of `"LCD-"`, an emulation-source fix; the only nx-redux source patch carried over) (pcsx_rearmed's
+build-path patch went with the 2026-11-07 pin, which has upstream's fix 6f230b1; the Brick stays on 6eb679d0, patched there,
+until nx-redux is bumped to match). Two staging
 deviations: ppsspp's `assets/` as `system/PPSSPP/`, and prboom's `prboom.wad` (its own game data, in the repo) as
 `system/prboom.wad`. fake08 builds from `platform/libretro` and its module is `fake08`, so its artifact is `libfake08.so`.
 
