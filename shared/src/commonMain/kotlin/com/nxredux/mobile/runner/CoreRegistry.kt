@@ -156,7 +156,8 @@ object CoreRegistry {
     private val pcsxRearmed = CoreDescriptor(
         "pcsx_rearmed", "libpcsx_rearmed_libretro_android.so",
         setOf("bin", "cue", "img", "mdf", "pbp", "toc", "cbn", "m3u", "chd", "iso", "exe"),
-        defaultOptions = mapOf("pcsx_rearmed_dithering" to "enabled"),
+        // No second memory card unless picked, as before the 2026 pin (its default became a card shared by all games).
+        defaultOptions = mapOf("pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none"),
         biosFiles = listOf("psxonpsp660.bin", "scph101.bin", "scph5501.bin", "scph7001.bin", "scph1001.bin"),   // optional: HLE built in
         controllerPort0 = CoreDescriptor.PS_DUALSHOCK,
         players = 2,

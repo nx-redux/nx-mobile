@@ -350,7 +350,7 @@ gpsp_FLAGS = NX_SIOLS_DIR=$(CURDIR)/sio_lockstep
 gpsp_LICENSE_EXTRA = sio_lockstep/NOTICE.txt
 
 pcsx_rearmed_REPO = https://github.com/libretro/pcsx_rearmed
-pcsx_rearmed_HASH = 6eb679d064a1efe92af79fe9970c0591c8da02d4
+pcsx_rearmed_HASH = 7b0e8f8fadfbce3d170d195b9d9eecaabfa08c8e
 pcsx_rearmed_LICENSE = COPYING
 pcsx_rearmed_KIND = ndkbuild
 pcsx_rearmed_BUILD_PATH = .
@@ -360,7 +360,6 @@ pcsx_rearmed_SUBMODULES = frontend/libpicofe
 # jni/Android.mk defaults USE_LIBRETRO_VFS to 0, which makes the core fopen() paths itself and bypass the runner's
 # VFS (content arrives as /rom/<name> virtual files, never a real path).
 pcsx_rearmed_FLAGS = USE_LIBRETRO_VFS=1
-# patches/pcsx_rearmed.patch fixes the pin's Android.mk path to compat_strl.c, which the USE_LIBRETRO_VFS=1 build needs.
 
 # SwanStation (PSX folder), libretro's DuckStation fork: the Brick's PSX.pak pin (nx-redux workspace/tg5040/cores/Makefile),
 # so serialize sizes match a handheld's for netplay. CMake kind like mgba: src/libretro/CMakeLists.txt adds the SHARED
