@@ -34,10 +34,10 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 
 | core | repo | commit | kind | build time (M-series Mac, clean) |
 |---|---|---|---|---|
-| gambatte | libretro/gambatte-libretro | d9d6cd06382d1ced30de34d56d3609452323dab1 | ndk-build (patched: link) | 0:05 |
+| gambatte | libretro/gambatte-libretro | 77f2567d718b8973d02caa2daa8dce4953faf811 | ndk-build (patched: link) | 0:05 |
 | fceumm | libretro/libretro-fceumm | 236ccdfc911e84c60fea6b9d0699c2d440a8de14 | ndk-build (patched) | 0:06 |
 | snes9x | libretro/snes9x | fae2fea08f74180759ef540ee94259213f503480 | ndk-build | 0:15 |
-| genesis_plus_gx | libretro/Genesis-Plus-GX | c2838c7dc4236fc2fe94e5dbd08b41486067918e | ndk-build | 0:07 |
+| genesis_plus_gx | libretro/Genesis-Plus-GX | f27655b592ef43f317272d79883bcaa10d3ac8ad | ndk-build | 0:07 |
 | mgba | libretro/mgba | 7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6 | cmake (patched: real link cable) | 0:09 |
 | melondsds | JesseTG/melonds-ds | f394adbacb5722ee97c1b37c8064da9a25818310 (v1.4.0) | cmake (JIT, GLES 3.2 port of the new GL renderer, patched; 11 FetchContent deps pinned offline; 6.6 MB stripped) | 0:50 |
 | mupen64plus_next | libretro/mupen64plus-libretro-nx | 6752836de8b224febfd5708444755b77712ac939 | ndk-build (GLES3, patched: cheat code parts; hi-res packs read through the VFS) | 0:20 |
@@ -45,14 +45,14 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | race | libretro/race | 171950ea64c96ead503340ed60fa7ba18f56325c | ndk-build | 0:04 |
 | mednafen_pce_fast | libretro/beetle-pce-fast-libretro | 52675734da114a19b3705f03906b1455f3d76644 | ndk-build | 0:05 |
 | mednafen_vb | libretro/beetle-vb-libretro | 65debc7c4c7b85e2fd988d2be53496c2cf0b5f44 | ndk-build | 0:03 |
-| handy | libretro/libretro-handy | fca239207e9c111da3e85d2faf0b1b9d7524e498 | ndk-build | 0:03 |
+| handy | libretro/libretro-handy | bc55d462f0b2d6b073ea93dc552ebd73cec60fd1 | ndk-build | 0:03 |
 | stella2014 | libretro/stella2014-libretro | 3cc89f0d316d6c924a5e3f4011d17421df58e615 | ndk-build | 0:06 |
 | prosystem | libretro/prosystem-libretro | acae250da8d98b8b9707cd499e2a0bf6d8500652 | ndk-build | 0:03 |
 | a5200 | libretro/a5200 | 526404072821bb2021fab16f8c5dbbca300512c8 | ndk-build | 0:03 |
 | mednafen_wswan | libretro/beetle-wswan-libretro | 4b01295838ea89e3f1355bbe4cb5cf98aa6108cd (HEAD on 2026-09-25; no Brick pin) | ndk-build | 0:01 |
 | mednafen_supafaust | libretro/supafaust | e25f66765938d33f9ad5850e8d6cd597e55b7299 | ndk-build | 0:07 |
 | pokemini | libretro/PokeMini | 78656d4615691c393e65e48672ce5fff5b1f97d3 | ndk-build (patched) | 0:04 |
-| fake08 | jtothebell/fake-08 | f6bab5a7ba521ce440e45d1aeef6122674be6ee9 | ndk-build (`platform/libretro`, `libfake08.so`) | 0:09 |
+| fake08 | jtothebell/fake-08 | 814991a2571ad3970e386cef48f3b148aa1c27b9 | ndk-build (`platform/libretro`, `libfake08.so`) | 0:09 |
 | prboom | libretro/libretro-prboom | 4849268e7342494193f2bbf2d0128a751cf58da7 | ndk-build (+ `prboom.wad`; 3.4 MB stripped) | 0:05 |
 | gpsp | libretro/gpsp | 5819380c2ffb0900219d700a382ee68c464ebb99 | ndk-build (dynarec, patched; link) | 0:12 |
 | pcsx_rearmed | libretro/pcsx_rearmed | 7b0e8f8fadfbce3d170d195b9d9eecaabfa08c8e | ndk-build (dynarec, `USE_LIBRETRO_VFS=1`) | 0:10 |
