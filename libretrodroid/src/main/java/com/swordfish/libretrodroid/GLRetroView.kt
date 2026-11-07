@@ -280,7 +280,7 @@ class GLRetroView(
 
     /** Where a touch at ([x01], [y01], 0..1 of the second surface) lands in the core frame; null outside a touch region. */
     fun mapSecondaryTouch(x01: Float, y01: Float): FramePoint? =
-        ScreenRegions.mapTouch(secondaryRegions, ScreenRect(0f, 0f, 1f, 1f), x01, y01)
+        ScreenRegions.mapSecondTouch(secondaryRegions, composition, x01, y01)
 
     /**
      * Keeps the touch pointer where it was when the finger lifts or leaves the picture, instead of releasing it. Set for

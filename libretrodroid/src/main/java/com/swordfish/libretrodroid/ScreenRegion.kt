@@ -62,6 +62,12 @@ object ScreenRegions {
         )
     }
 
+    /** A touch at ([x01], [y01], 0..1 of the second surface) in the core frame: through [regions], then [composition] when the frame drawn is composed. */
+    fun mapSecondTouch(regions: List<ScreenRegion>, composition: FrameComposition?, x01: Float, y01: Float): FramePoint? {
+        val p = mapTouch(regions, ScreenRect(0f, 0f, 1f, 1f), x01, y01) ?: return null
+        return if (composition == null) p else mapCompositionTouch(composition, p)
+    }
+
     const val PACKED_SIZE = 11
 
     /** For [LibretroDroid.setScreenRegions]: src l,t,r,b, dst l,t,r,b, shaded, touch (0/1), alpha per region, in order. */

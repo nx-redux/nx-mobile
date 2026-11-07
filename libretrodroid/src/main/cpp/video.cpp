@@ -291,10 +291,11 @@ void Video::drawFrame(bool force) {
     glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    // Composed even while held: the second display draws the composed frame with main covered.
+    composeFrame();
+
     // Not placed yet: black, as the surface was, rather than the picture somewhere it is about to leave.
     if (pictureHeld) return;
-
-    composeFrame();
 
     // Immersive mode's blurred background samples the whole texture, not the frame's sub-rectangle (frameCoordinates).
     if (immersiveModeEnabled) {

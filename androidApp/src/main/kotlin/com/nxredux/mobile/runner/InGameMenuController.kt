@@ -575,9 +575,11 @@ internal class InGameMenuController(
         }
     }
 
-    /** The 3DS options the second-screen split (or half-folding) holds for the session: a save keeps their stored values. */
+    /** The 3DS options the second-screen split, half-folding or the video views hold for the session: a save keeps their stored values. */
     private fun dualForcedOptions(): Set<String> =
-        if (isN3ds) DualScreen.n3dsForcedOptions(dual.dualMode, padLayout.tabletop() != null)?.keys.orEmpty() else emptySet()
+        if (!isN3ds) emptySet()
+        else DualScreen.n3dsForcedOptions(dual.dualMode, padLayout.tabletop() != null)?.keys.orEmpty() +
+            if (renderer.n3dsViews) DualScreen.N3DS_VIEWS_CORE.keys else emptySet()
 
     /**
      * Reads the core's options on the emulation thread, then runs [then] on the main thread and redraws.
