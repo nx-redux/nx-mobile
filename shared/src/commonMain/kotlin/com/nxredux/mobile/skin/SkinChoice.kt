@@ -145,6 +145,25 @@ object SkinChoice {
         return placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, SkinVariant.SINGLE)
     }
 
+    /**
+     * [place], else the closest layout scaled down: [place] at [densityDpi] x 0.9^n (n = 1, 2, ...) until one fits, down
+     * to half the dpi (a window no layout fits: split screen, freeform); null when even that fits none.
+     */
+    fun placeClosest(
+        pack: SkinPackManifest, windowW: Int, windowH: Int, densityDpi: Int, tablet: Boolean, ds: Boolean,
+        picture: Pair<Float, Float>? = null, hingeY: Float? = null, topInset: Int = 0, foldable: Boolean = false,
+        variant: SkinVariant? = null,
+    ): SkinPlacement? {
+        place(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, variant)?.let { return it }
+        var dpi = densityDpi.toDouble()
+        while (true) {
+            dpi *= 0.9
+            val d = Math.round(dpi).toInt()
+            if (d < densityDpi / 2.0 || d <= 0) return null
+            place(pack, windowW, windowH, d, tablet, ds, picture, hingeY, topInset, foldable, variant)?.let { return it }
+        }
+    }
+
     private fun placeAs(
         pack: SkinPackManifest, windowW: Int, windowH: Int, densityDpi: Int, tablet: Boolean, ds: Boolean,
         picture: Pair<Float, Float>?, hingeY: Float?, topInset: Int, foldable: Boolean, v: SkinVariant,
