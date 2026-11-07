@@ -531,7 +531,8 @@ class KidsSettingsTest {
         )
         st.load()
         assertFalse(SettingsSection.KIDS in st.settingsSections())
-        assertEquals(SettingsSection.KIDS, setup().st.settingsSections().last())
+        val sections = setup().st.settingsSections()
+        assertEquals(sections.indexOf(SettingsSection.SYSTEM) - 1, sections.indexOf(SettingsSection.KIDS))   // just above System
     }
 
     /** The kid's presses on whatever shows: B, then a PIN typed twice. */
