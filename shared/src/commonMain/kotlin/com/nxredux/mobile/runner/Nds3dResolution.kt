@@ -154,6 +154,15 @@ object Ps2Resolution {
 
     /** The scale a picture [pictureHeightPx] px tall shows at (nearest whole, 1 to 4). */
     fun currentScale(pictureHeightPx: Int): Int = (pictureHeightPx / NATIVE_H.toDouble()).roundToInt().coerceIn(1, MAX)
+
+    /**
+     * The shown scale and the second display's reach for a picture [mainHeightPx] tall on main (null: none there) and
+     * [secondHeightPx] tall on the second display (null: none there; it then reaches only 1).
+     */
+    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> {
+        val second = secondHeightPx?.let(::currentScale)
+        return listOfNotNull(mainHeightPx?.let(::currentScale), second).maxOrNull() to (second ?: 1)
+    }
 }
 
 /** The 3DS (Azahar) 3D Resolution maths: the core draws both screens at a factor of their native size, so scales come from frame widths. */

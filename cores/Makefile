@@ -510,7 +510,7 @@ dolphin_NINJA = $(SDK)/cmake/3.30.3/bin/ninja
 dolphin_PLATFORM = android-24
 dolphin_FLAGS = -DLIBRETRO=ON -DENABLE_LTO=ON -DANDROID_STL=c++_static
 
-# ARMSX2 (PS2): ARMSX2/ARMSX2 at its 2.9 release tag, a PCSX2 fork with arm64 recompilers. Its libretro port is
+# ARMSX2 (PS2): ARMSX2/ARMSX2 at its 2.9.2 release tag, a PCSX2 fork with arm64 recompilers. Its libretro port is
 # pcsx2-libretro/ (SHARED pcsx2-libretro, OUTPUT_NAME armsx2_libretro, empty prefix), added only with ENABLE_LIBRETRO=ON;
 # the build tree's bin/ holds it. Flags follow upstream's Android libretro CI (.gitlab-ci.yml .core-defs-android, API 28:
 # bionic's posix_spawn). Its static dependencies (png, jpeg-turbo, zstd, lz4, webp, SDL3, freetype, plutovg,
@@ -524,7 +524,7 @@ dolphin_FLAGS = -DLIBRETRO=ON -DENABLE_LTO=ON -DANDROID_STL=c++_static
 # licence, so it stays out of the .so. The app's Cheats & Patches tool downloads PCSX2's patches.zip at runtime and
 # extracts it into Cheats/PS2/Patches/, which patches/armsx2/0005 points the core at (cheats from Cheats/PS2/).
 armsx2_REPO = https://github.com/ARMSX2/ARMSX2
-armsx2_HASH = 023224576867a3846faedc7640911772c7783529
+armsx2_HASH = ba6892742e357085897d0a151bd8e40485dda968
 armsx2_LICENSE = COPYING.GPLv3 3rdparty/cpuinfo/LICENSE 3rdparty/cubeb/LICENSE 3rdparty/discord-rpc/LICENSE \
   3rdparty/fast_float/LICENSE-MIT 3rdparty/fmt/LICENSE 3rdparty/imgui/LICENSE.txt 3rdparty/libchdr/LICENSE.txt \
   3rdparty/libzip/LICENSE 3rdparty/lzma/LICENSE.txt 3rdparty/plutosvg/LICENSE 3rdparty/plutovg/LICENSE \
