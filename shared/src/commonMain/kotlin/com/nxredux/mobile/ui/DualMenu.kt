@@ -25,6 +25,7 @@ object DualMenu {
      * menu the [preview] when it has one, else the drawer's [apps] when the Apps tile is highlighted; else the backdrop.
      */
     fun top(screen: Screen, preview: SecondList?, apps: List<ToolAppRow>? = null, tool: Boolean = false): TopContent = when {
+        isKidsScreen(screen) -> TopContent.Backdrop   // Kids Mode's tiles and PIN: nothing game-related up there
         screen is Screen.Games -> TopContent.GameList
         tool && screen !is Screen.Systems -> TopContent.Tool
         screen is Screen.Systems && preview != null -> TopContent.Preview(preview)
@@ -34,6 +35,7 @@ object DualMenu {
 
     /** While [active]: the game's details on a game list, the menu under a tool on top ([tool]); the usual menu otherwise. */
     fun bottom(screen: Screen, active: Boolean, tool: Boolean = false): BottomContent = when {
+        isKidsScreen(screen) -> BottomContent.Normal
         active && screen is Screen.Games -> BottomContent.Details
         active && tool && screen !is Screen.Systems -> BottomContent.Menu
         else -> BottomContent.Normal

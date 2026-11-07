@@ -21,7 +21,7 @@ class ToolsTest {
     }
 
     @Test fun retroachievements_is_the_first_tool() {
-        assertEquals(listOf(ToolKind.RETRO_ACHIEVEMENTS, ToolKind.GAME_TIME, ToolKind.ARTWORK, ToolKind.CHEAT_DB, ToolKind.DEVICE_SYNC, ToolKind.SETTINGS, ToolKind.APPS, ToolKind.APP), ToolKind.entries.toList())
+        assertEquals(listOf(ToolKind.RETRO_ACHIEVEMENTS, ToolKind.GAME_TIME, ToolKind.ARTWORK, ToolKind.CHEAT_DB, ToolKind.DEVICE_SYNC, ToolKind.SETTINGS, ToolKind.APPS, ToolKind.APP, ToolKind.KIDS_LOCK), ToolKind.entries.toList())
     }
 
     @Test fun sub_pages_name_their_tool() {

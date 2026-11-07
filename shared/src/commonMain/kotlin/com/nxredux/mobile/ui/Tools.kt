@@ -5,7 +5,8 @@ import com.nxredux.mobile.cheats.db.CheatDbSource
 import com.nxredux.mobile.cheats.db.CheatDbState
 
 /** [APPS]: the app drawer (every launchable app); [APP]: one Android app added to Tools or pinned on Home. */
-enum class ToolKind { RETRO_ACHIEVEMENTS, GAME_TIME, ARTWORK, CHEAT_DB, DEVICE_SYNC, SETTINGS, APPS, APP }
+/** [KIDS_LOCK]: Kids Mode's Lock row, first in Tools while a parent has the full menu; never pinned, no menu. */
+enum class ToolKind { RETRO_ACHIEVEMENTS, GAME_TIME, ARTWORK, CHEAT_DB, DEVICE_SYNC, SETTINGS, APPS, APP, KIDS_LOCK }
 
 /** A row on the Tools screen: the tool's name and a one-line status. [appId]: an Android app's id ([ToolKind.APP] only). */
 data class ToolRow(val kind: ToolKind, val label: String, val secondary: String?, val appId: String? = null)
@@ -24,6 +25,7 @@ val ToolKind.toolName: String?
         ToolKind.SETTINGS -> "Settings"
         ToolKind.APPS -> "Apps"
         ToolKind.APP -> null
+        ToolKind.KIDS_LOCK -> "Lock Kids Mode"
     }
 
 /**

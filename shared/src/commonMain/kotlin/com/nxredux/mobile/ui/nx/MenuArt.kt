@@ -45,4 +45,5 @@ fun toolIcon(kind: ToolKind): DrawableResource = when (kind) {
     ToolKind.DEVICE_SYNC -> Res.drawable.menu_icon_sync
     ToolKind.SETTINGS -> Res.drawable.menu_icon_settings
     ToolKind.APPS, ToolKind.APP -> Res.drawable.menu_icon_app
+    ToolKind.KIDS_LOCK -> Res.drawable.menu_icon_lock
 }

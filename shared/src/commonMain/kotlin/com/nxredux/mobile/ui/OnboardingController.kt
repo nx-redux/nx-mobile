@@ -11,7 +11,7 @@ package com.nxredux.mobile.ui
 enum class OnboardingStep {
     WELCOME, TEXT_SIZE, SYSTEM_BUTTONS, BOTTOM_SCREEN, HANDHELD, SAVE_FORMATS, IMPORT_SAVES, SYNC_OFFER, ARTWORK, RA_SIGN_IN, RA_DOWNLOAD,
     CUSTOMISE, PAD, TITLE, TAB_HOME, TAB_CONSOLES, TAB_COLLECTIONS, TAB_TOOLS, GAME_LISTS,
-    ACCENT, DONE,
+    ACCENT, KIDS, DONE,
 }
 
 /**
@@ -22,6 +22,8 @@ enum class OnboardingStep {
 data class OnboardingContext(
     val signedIn: Boolean = false, val handheld: Boolean? = null,
     val customise: Boolean? = null, val padPage: Boolean = false, val buttons: Boolean = false,
+    /** Kids Mode can run here (a launcher and its controller): Who's this for? is asked; My kids runs Kids Mode's setup there. */
+    val kidsOffered: Boolean = false,
 )
 
 /**
@@ -45,6 +47,7 @@ fun onboardingSteps(ctx: OnboardingContext): List<OnboardingStep> = buildList {
         add(OnboardingStep.GAME_LISTS)
     }
     add(OnboardingStep.ACCENT)
+    if (ctx.kidsOffered) add(OnboardingStep.KIDS)   // last but Done: My kids runs Kids Mode's setup, then Done
     add(OnboardingStep.DONE)
 }
 

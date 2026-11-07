@@ -28,6 +28,8 @@ class PrefsProvider : ContentProvider() {
                 else DataRoot.gameUseEnd(context, Binder.getCallingPid())
                 return encode(mapOf(RESULT_OK to true))
             }
+            // Kids Mode: Parent mode lives in this process's memory only; the game process asks before it refuses a game.
+            METHOD_KIDS_PARENT -> return encode(mapOf(RESULT_OK to com.nxredux.mobile.kids.AndroidKids.parentNow()))
             METHOD_USB_CABLE_STOP_IF -> {
                 (decode(extras ?: Bundle())[ARG_TOKEN] as? Long)?.let { UsbCables.get(context).stopIf(it) }
                 return encode(mapOf(RESULT_OK to true))
@@ -83,7 +85,13 @@ class PrefsProvider : ContentProvider() {
         const val METHOD_USB_CABLE_STOP_IF = "usbCableStopIf"
         const val ARG_TOKEN = "token"
 
+        /** Kids Mode: the main process holds Parent mode now; result [RESULT_OK]. The `arg` name is unused. */
+        const val METHOD_KIDS_PARENT = "kidsParent"
+
         fun authority(context: Context) = context.packageName + ".prefs"
+
+        /** From the game process: the main process holds Kids Mode's Parent mode. Blocking (a Binder call): off the main thread. */
+        fun kidsParent(context: Context): Boolean = channel(context).call(METHOD_KIDS_PARENT, "", emptyMap())[RESULT_OK] == true
 
         /** From the game process: [UsbCables]'s `stopIf(token)` in the main process, where the cable runs. Blocking. */
         fun usbCableStopIf(context: Context, token: Long) {

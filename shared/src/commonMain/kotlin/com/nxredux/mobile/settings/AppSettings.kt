@@ -76,8 +76,11 @@ enum class GameRumble(val label: String) {
 }
 
 
-/** A main menu tab, in the tab row's fixed order. Layouts can hide any; an empty Consoles or Collections tab is left out, and with none left Home shows. */
-enum class MenuCategory { HOME, CONSOLES, COLLECTIONS, TOOLS }
+/**
+ * A main menu tab, in the tab row's fixed order. Layouts can hide any; an empty Consoles or Collections tab is left out, and with none left Home shows.
+ * APPS is Kids Mode's (the allowed apps, while Kids Mode is on and not locked): drawn before Tools, never in Layouts.
+ */
+enum class MenuCategory { HOME, CONSOLES, COLLECTIONS, TOOLS, APPS }
 
 /**
  * How a main menu tab, or a game list, lays out its items (Appearance -> Layouts). BACKDROP is the game lists' only
@@ -366,6 +369,40 @@ interface AppSettings {
     var debugLog: Boolean
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /** Kids Mode (default off) and its state; all defaulted, like [debugLog]. */
+    var kidsEnabled: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** The weekly schedule, as stored text (null = the default schedule). */
+    var kidsSchedule: String?
+        get() = null
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** Apps the kid may open, as `pkg/activity` ids. */
+    var kidsAllowedApps: Set<String>
+        get() = emptySet()
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** Epoch millis the parent's timed unlock lasts to (0 = none). */
+    var kidsUnlockUntil: Long
+        get() = 0L
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** The home ref string the flag file was written in. */
+    var kidsFlagHome: String?
+        get() = null
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /**
+     * Setup's last step asked Android to make NX Redux home: Kids Mode turns on once it is. Stored, since accepting the
+     * role restarts the menu as a new home instance.
+     */
+    var kidsOnWhenHome: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** Stores [pin] as a salted hash. */
+    fun setKidsPin(@Suppress("UNUSED_PARAMETER") pin: String) {}
+    fun kidsPinMatches(@Suppress("UNUSED_PARAMETER") pin: String): Boolean = false
+    val kidsPinSet: Boolean get() = false
+    /** Forgets the PIN (the flag file was deleted: a forgotten PIN), so switching Kids Mode on runs setup again. */
+    fun clearKidsPin() {}
 
     /**
      * Settings → Second screen → Enable (default on): a built-in or wired second screen shows part of the frame.

@@ -120,7 +120,12 @@ import com.nxredux.mobile.ui.nx.InputRouter
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.PadEvent
 import com.swordfish.libretrodroid.NxLog
+import com.nxredux.mobile.kids.AndroidKids
+import com.nxredux.mobile.kids.KidsController
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -133,6 +138,11 @@ class MainActivity : ComponentActivity(), FolderPicker {
 
     private lateinit var settings: AndroidAppSettings
     private lateinit var state: AppState
+    private lateinit var kids: KidsController
+    /** While resumed: Parent mode's 5 minutes without menu input are counted ([KidsController.tick]). */
+    private var kidsTick: Job? = null
+    /** This instance's menu notice for Kids Mode's warning ([AndroidKids.menuWarning]), set while resumed. */
+    private val kidsWarning: () -> Unit = { if (::state.isInitialized) state.kidsShowWarning() }
     private lateinit var router: InputRouter
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -365,6 +375,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         // start; a game started meanwhile waits on SystemFiles' lock for this copy to finish.
         applicationContext.let { app -> thread(name = "nx-system-files") { SystemFiles.ensure(app) } }
         settings = AndroidAppSettings(this)
+        kids = AndroidKids.get(this)   // the process's one: the alarms and the screen on/off hook share its Parent mode
         // Launcher mode (this instance is the home task's): games get their own task; otherwise they share this one.
         val runner = LibretroRunner(this) { asHome }
         runner.beforeLaunch = { launching = true; syncMenuScreen() }   // GameActivity takes the display; nothing stays behind the game
@@ -430,6 +441,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 switcherReturns = LaunchRecords.of(this),
             ),
             scope,
+            kids,
         )
         // Settings shows the dual-screen rows only with a second screen. Only while started: stop() clears `current`, which is not a removal.
         scope.launch {
@@ -669,6 +681,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
 
     override fun onStart() {
         super.onStart()
+        if (::kids.isInitialized) AndroidKids.menuShown(this, this, shown = true)   // the tiles are in front: the guard stops
         AppUpdates.onAppOpened(this)   // the "updated" notice, if a self-update left one
         if (handOverToHome()) return   // made home (role dialog, Android's settings) while this drawer instance ran
         inputManager?.registerInputDeviceListener(inputDeviceListener, null)
@@ -705,6 +718,18 @@ class MainActivity : ComponentActivity(), FolderPicker {
         // Back from Android's All files access page (or a revoke meanwhile): setup moves on, the row and the refs follow.
         if (::state.isInitialized) state.onAllFilesAccessChanged()
         if (::state.isInitialized) state.padsChanged()   // a pad plugged in while away
+        if (::kids.isInitialized) {
+            AndroidKids.menuWarning = kidsWarning
+            kids.refresh()   // the clock may have passed a boundary while away
+            AndroidKids.armParentIdle(this)   // resumed: the menu's own tick counts Parent mode's idle time, no alarm
+            kidsTick?.cancel()
+            kidsTick = scope.launch {
+                while (isActive) {
+                    kids.tick(kids.now().epochMs)
+                    delay(KIDS_TICK_MS)
+                }
+            }
+        }
     }
 
     /**
@@ -731,10 +756,15 @@ class MainActivity : ComponentActivity(), FolderPicker {
 
     override fun onPause() {
         resumed = false
+        kidsTick?.cancel(); kidsTick = null
+        if (AndroidKids.menuWarning === kidsWarning) AndroidKids.menuWarning = null
+        // Parent mode away from the menu: its idle end comes by alarm (time elsewhere counts as idle).
+        if (::kids.isInitialized) AndroidKids.armParentIdle(this)
         super.onPause()
     }
 
     override fun onStop() {
+        if (::kids.isInitialized) AndroidKids.menuShown(this, this, shown = false)   // Locked with Usage access: the guard starts
         inFront = false
         cancelMenuRetry()
         launching = false   // the game has the screen, or never came: onStart shows the menu's second screen again
@@ -775,6 +805,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
         recents ?: RecentsRecorder(AndroidUserDataStore(applicationContext), processScope).also { recents = it }
 
     companion object {
+        /** How often Parent mode's idle time is looked at while the menu is resumed. */
+        private const val KIDS_TICK_MS = 5_000L
         // Process-lifetime, unlike [scope]: a game reports its start from GameActivity, maybe after this activity was
         // destroyed ("Don't keep activities", OEM reaping during a long unpack), and its recent must still be written.
         private val processScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
