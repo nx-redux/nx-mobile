@@ -47,7 +47,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | mednafen_vb | libretro/beetle-vb-libretro | 65debc7c4c7b85e2fd988d2be53496c2cf0b5f44 | ndk-build | 0:03 |
 | handy | libretro/libretro-handy | bc55d462f0b2d6b073ea93dc552ebd73cec60fd1 | ndk-build | 0:03 |
 | stella2014 | libretro/stella2014-libretro | 3cc89f0d316d6c924a5e3f4011d17421df58e615 | ndk-build | 0:06 |
-| prosystem | libretro/prosystem-libretro | acae250da8d98b8b9707cd499e2a0bf6d8500652 | ndk-build | 0:03 |
+| prosystem | libretro/prosystem-libretro | 8a88014287c7a01cd568067e5a557d0a2b2a051f | ndk-build | 0:03 |
 | a5200 | libretro/a5200 | 526404072821bb2021fab16f8c5dbbca300512c8 | ndk-build | 0:03 |
 | mednafen_wswan | libretro/beetle-wswan-libretro | 4b01295838ea89e3f1355bbe4cb5cf98aa6108cd (HEAD on 2026-09-25; no Brick pin) | ndk-build | 0:01 |
 | mednafen_supafaust | libretro/supafaust | e25f66765938d33f9ad5850e8d6cd597e55b7299 | ndk-build | 0:07 |
