@@ -66,16 +66,9 @@ object SkinTweaks {
         val groups = SkinGroups.of(p.spec)
         val zones = noGo(p)
         val window = PxRect(0f, 0f, windowW, windowH)
-        val stripN = frame.strip?.labels?.size ?: 0
         val pieces = p.pieces.toMutableList()
         val controls = p.controls.toMutableList()
-        val pieceAt = groups.map { g ->
-            val strip = g.id == SkinGroups.STRIP
-            pieces.indices.filter { if (strip) pieces[it].strip else pieces[it].piece in g.pieces }
-        }
-        val controlAt = groups.map { g ->
-            if (g.id == SkinGroups.STRIP) (0 until minOf(stripN, controls.size)).toList() else ownControls(p, groups, g, stripN)
-        }
+        val (pieceAt, controlAt) = members(p, groups)
         fun boxOf(i: Int) = union(pieceAt[i].map { pieces[it].dst } + controlAt[i].map { hit(controls[it]) })
         val boxes = groups.indices.mapTo(ArrayList()) { boxOf(it) }
         for ((gi, g) in groups.withIndex()) {
@@ -110,6 +103,35 @@ object SkinTweaks {
             boxes[gi] = boxOf(gi)
         }
         return p.copy(pieces = pieces, controls = controls)
+    }
+
+    /** Each group's pieces and controls in [p] (indexes into its lists), in [groups]' order: the strip's are its strip pieces and its first buttons. */
+    private fun members(p: SkinPlacement, groups: List<SkinGroup>): Pair<List<List<Int>>, List<List<Int>>> {
+        val stripN = p.spec.frame?.strip?.labels?.size ?: 0
+        val pieceAt = groups.map { g ->
+            val strip = g.id == SkinGroups.STRIP
+            p.pieces.indices.filter { if (strip) p.pieces[it].strip else p.pieces[it].piece in g.pieces }
+        }
+        val controlAt = groups.map { g ->
+            if (g.id == SkinGroups.STRIP) (0 until minOf(stripN, p.controls.size)).toList() else ownControls(p, groups, g, stripN)
+        }
+        return pieceAt to controlAt
+    }
+
+    /**
+     * Where each of [p]'s groups stands (window px), by group id: its [GroupBox.box] (pieces and controls' hit areas, as
+     * [apply] keeps clear) and the [GroupBox.mid] it scales about. A group with nothing placed is left out.
+     */
+    internal fun boxes(p: SkinPlacement): Map<String, GroupBox> {
+        val groups = SkinGroups.of(p.spec)
+        val (pieceAt, controlAt) = members(p, groups)
+        val out = LinkedHashMap<String, GroupBox>()
+        for ((gi, g) in groups.withIndex()) {
+            val box = union(pieceAt[gi].map { p.pieces[it].dst } + controlAt[gi].map { hit(p.controls[it]) }) ?: continue
+            val mid = (if (g.id == SkinGroups.STRIP) null else union(pieceAt[gi].map { p.pieces[it].dst })) ?: box
+            out[g.id] = GroupBox(box, mid)
+        }
+        return out
     }
 
     /** How far (window px) a move steps at most, so it never passes over a thinner obstacle. */
@@ -205,3 +227,6 @@ object SkinTweaks {
         return out
     }
 }
+
+/** A placed group's [box] (what may not overlap) and the [mid] it scales about (its pieces; the strip's: its box), window px. */
+internal data class GroupBox(val box: PxRect, val mid: PxRect)

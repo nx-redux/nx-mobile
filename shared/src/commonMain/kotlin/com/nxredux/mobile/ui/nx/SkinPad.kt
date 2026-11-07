@@ -70,9 +70,6 @@ fun SkinPad(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
     val touch = remember { SkinPadTouch({ emit(it) }, { _, _ -> }, haptic, onChange = { held.intValue++ }) }
     SideEffect { touch.placement = placement }
     DisposableEffect(touch) { onDispose { touch.releaseAll() } }
-    val semibold = Font(Res.font.misans_semibold, FontWeight.SemiBold)
-    val labelFont = remember(semibold) { FontFamily(semibold) }
-    val measurer = rememberTextMeasurer()
     Box(
         modifier.pointerInput(touch) {
             awaitEachGesture {
@@ -95,12 +92,29 @@ fun SkinPad(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
         },
     ) {
         // the skin in its own layer: recorded once per placement and replayed while only the shades over it change
-        val holes = remember(placement) {
-            Path().apply { for (g in placement.glasses) addRect(Rect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height)) }
+        SkinArt(placement, picture, parts, Modifier.fillMaxSize().graphicsLayer())
+        Canvas(Modifier.fillMaxSize()) {
+            held.intValue
+            for (shape in touch.pressedShapes()) drawPressShape(shape)
         }
-        Canvas(Modifier.fillMaxSize().graphicsLayer()) {
-          // the screens are holes: what is under them shows through (the background runs under them otherwise)
-          clipPath(holes, ClipOp.Difference) {
+    }
+}
+
+/**
+ * A [SkinPlacement] drawn in [modifier]'s box, nothing to touch: its slices from [picture], its pieces from [parts] and its
+ * buttons' labels, the screens left as holes (what is under them shows through). What [SkinPad] draws, without its shades.
+ */
+@Composable
+fun SkinArt(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?, modifier: Modifier = Modifier) {
+    val semibold = Font(Res.font.misans_semibold, FontWeight.SemiBold)
+    val labelFont = remember(semibold) { FontFamily(semibold) }
+    val measurer = rememberTextMeasurer()
+    val holes = remember(placement) {
+        Path().apply { for (g in placement.glasses) addRect(Rect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height)) }
+    }
+    Canvas(modifier) {
+        // the screens are holes: what is under them shows through (the background runs under them otherwise)
+        clipPath(holes, ClipOp.Difference) {
             for (c in placement.cells) drawCell(picture, c, placement.k)
             if (parts != null) for (p in placement.pieces) drawPiece(parts, p)
             // the labels under the buttons (written here, not in the picture): cap height labelH, centred labelDy below
@@ -115,11 +129,6 @@ fun SkinPad(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
                 val left = if (dx < 0f) c.x + dx - m.size.width else if (dx > 0f) c.x + dx else c.x - m.size.width / 2f
                 drawText(m, topLeft = Offset(left, capTop + c.spec.labelH - m.firstBaseline))
             }
-          }
-        }
-        Canvas(Modifier.fillMaxSize()) {
-            held.intValue
-            for (shape in touch.pressedShapes()) drawPressShape(shape)
         }
     }
 }
