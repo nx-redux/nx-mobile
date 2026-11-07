@@ -351,7 +351,7 @@ internal class DualScreenController(
      */
     fun syncDual() {
         val wanted = if (isFinishing || isDestroyed) DualMode.OFF else dualModeNow()
-        val geometry = retroView?.getGameGeometry()   // read once for the picture screen and the layout
+        val geometry = retroView?.getGameGeometry()
         val display = secondScreens.current.value.takeIf { wanted != DualMode.OFF }
         // A different display, or the same one at a new size or density: a new window.
         if (presentation?.display?.displayId != display?.displayId || (display != null && shapeOf(display) != presentationShape)) {
@@ -360,7 +360,7 @@ internal class DualScreenController(
         }
         // No window on the second display (it went before it showed): nothing is moved onto it, both screens stay here.
         val mode = if (display != null && presentation == null) DualMode.OFF else wanted
-        val picture = if (display == null || presentation == null) PictureOn.MAIN else pictureOnNow(display, geometry)
+        val picture = if (display == null || presentation == null) PictureOn.MAIN else pictureOnNow(display)
         val old = dualMode
         val oldPicture = pictureOn
         val changed = mode != old
@@ -391,27 +391,25 @@ internal class DualScreenController(
     /**
      * Which display is the picture screen for [display]: the game's window as landscape (it is locked so while dual)
      * against the display's real size as it is turned now, unless a bottom screen is chosen (the console's Bottom screen,
-     * else Settings → Second screen's). [geometry]: the view's game geometry (null before the view).
+     * else Settings → Second screen's).
      */
-    private fun pictureOnNow(display: Display, geometry: FloatArray?): PictureOn {
+    private fun pictureOnNow(display: Display): PictureOn {
         val root = findViewById<View>(R.id.root)
         val dm = resources.displayMetrics
         val w = if (root.width > 0) root.width else dm.widthPixels
         val h = if (root.height > 0) root.height else dm.heightPixels
         val real = android.graphics.Point().also { @Suppress("DEPRECATION") display.getRealSize(it) }
         val bottom = BottomScreen.resolve(frontendValues[BottomScreenOptions.KEY], appSettings.bottomScreen)
-        // A core that turns its picture (SET_ROTATION): the second display's regions draw it unturned, so it stays on main.
-        return DualScreen.pictureOn(maxOf(w, h), minOf(w, h), real.x, real.y, GameGeometry.of(geometry).rotated, bottom)
+        return DualScreen.pictureOn(maxOf(w, h), minOf(w, h), real.x, real.y, bottom)
     }
 
     /**
-     * Either display's size or the core's geometry changed: a new picture screen lays both out again ([syncDual]).
-     * [geometry]: the view's, when the caller has just read it.
+     * Either display's size changed: a new picture screen lays both out again ([syncDual]).
      */
-    fun recheckPictureOn(geometry: FloatArray? = null) {
+    fun recheckPictureOn() {
         if (dualMode == DualMode.OFF) return
         val display = presentation?.display ?: return
-        if (pictureOnNow(display, geometry ?: retroView?.getGameGeometry()) != pictureOn) syncDual()
+        if (pictureOnNow(display) != pictureOn) syncDual()
     }
 
     /** While the second screen is in use the main display stays landscape, either way up; then the previous orientation is back. */

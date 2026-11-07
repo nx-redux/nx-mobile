@@ -905,6 +905,7 @@ void Video::updateContentSize(unsigned width, unsigned height) {
 
 void Video::updateRotation(float rotation) {
     videoLayout.updateRotation(rotation);
+    secondaryLayout.updateRotation(rotation);
 }
 
 Video::Video(
@@ -923,7 +924,7 @@ Video::Video(
     immersiveModeEnabled(immersiveModeEnabled),
     immersiveMode(immersiveModeConfig),
     videoLayout(bottomLeftOrigin, rotation, viewportRect, viewportAlignment),
-    secondaryLayout(bottomLeftOrigin, 0.0F, Rect(0.0F, 0.0F, 1.0F, 1.0F), V_ALIGN_CENTER) {
+    secondaryLayout(bottomLeftOrigin, rotation, Rect(0.0F, 0.0F, 1.0F, 1.0F), V_ALIGN_CENTER) {
 
     glContext = eglGetCurrentContext();
 

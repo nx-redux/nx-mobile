@@ -100,8 +100,6 @@ internal interface FrontendHost : LifecycleOwner {
     fun publishMenuShaders()
     fun publishMenuFrontend()
     fun toast(msg: String): android.widget.Toast
-    /** The core's geometry changed to [g]: a dual mode checks which display the picture belongs on. */
-    fun recheckPictureOn(g: FloatArray)
     /** The core is held (the in-game menu, another app focused): it makes no new frame meanwhile. */
     fun corePaused(): Boolean
     /**
@@ -507,7 +505,6 @@ internal class FrontendRenderer(
     /** The one way a changed core geometry is laid out (the watch's and the flow's), once per distinct geometry. */
     private fun layOutFromCore(g: FloatArray) {
         if (!geometryWatch.shouldLayOut(g)) return
-        host.recheckPictureOn(g)
         relayoutFrontend(g)
     }
 

@@ -320,12 +320,10 @@ void VideoLayout::updateScreenRegions(std::vector<ScreenRegion> regions) {
 
 void VideoLayout::updateRegionQuads() {
     regionQuads.clear();
-    if (!screenRegions.empty() && std::fabs(rotation) > 0.001F) {
-        LOGW("Screen regions ignore the core's rotation (%f radians)", rotation);
-    }
+    const int quarterTurns = (int) std::lround(rotation / (float) (-M_PI / 2.0));
     for (const auto& region : screenRegions) {
         regionQuads.push_back(buildRegionQuad(
-            region, viewportRect.getX(), viewportRect.getY(), viewportRect.getWidth(), viewportRect.getHeight(), bottomLeftOrigin));
+            region, viewportRect.getX(), viewportRect.getY(), viewportRect.getWidth(), viewportRect.getHeight(), bottomLeftOrigin, quarterTurns));
     }
 }
 
