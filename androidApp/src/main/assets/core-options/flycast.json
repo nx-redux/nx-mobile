@@ -604,6 +604,21 @@
      "default": "enabled"
     },
     {
+     "key": "reicast_vblank_pacing",
+     "label": "Vblank Pacing",
+     "labelCategorized": "",
+     "info": "Each frame the frontend runs emulates exactly one vblank, whether or not the game drew. For frontends that pace the core by its frame rate rather than by blocking on audio; without it, loading screens that draw nothing run several vblanks per frame and their sound arrives in bursts. Needs Threaded Rendering disabled.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
      "key": "reicast_auto_skip_frame",
      "label": "Auto Skip Frame",
      "labelCategorized": "",
@@ -840,6 +855,21 @@
      "label": "Dump Textures",
      "labelCategorized": "",
      "info": "Every time a new texture is used by the game, it will be saved as a .png file in the 'system/dc/texdump/<game-id>/' folder.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "reicast_dump_unique_textures",
+     "label": "Discard Video and Animated Textures",
+     "labelCategorized": "",
+     "info": "Skip dumping video (YUV) and already updated textures.",
      "values": [
       "disabled",
       "enabled"
@@ -2233,6 +2263,6 @@
    ]
   }
  ],
- "soSha256": "3d5412958c471956b5d8a6bd2e52d0ff7e03ae18736e99afdd8b75e28b495ea0",
- "probedAt": "2026-09-29"
+ "soSha256": "8171df20da83569a5965b74c7e60a1b556941c6a69599da3143b61aafb5ad156",
+ "probedAt": "2026-11-07"
 }

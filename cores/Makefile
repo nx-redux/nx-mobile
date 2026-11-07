@@ -402,19 +402,20 @@ fbneo_KIND = ndkbuild
 fbneo_BUILD_PATH = src/burner/libretro
 fbneo_ARTIFACT = libs/$(ABI)/libretro.so
 
-# flycast (Dreamcast). v2.7 is a lightweight tag on 5aa091fde632fb332c8d8c34e280d62dc951954c. CMake kind like
+# flycast (Dreamcast). master 7adbf3ca (2026-10-31, 93 commits past v2.7; no release since). CMake kind like
 # mgba/ppsspp: the top-level CMakeLists.txt builds the SHARED target flycast_libretro (empty prefix, build root) when
 # LIBRETRO=ON. Flags follow flycast's own libretro Android CI recipe (.gitlab-ci.yml .core-defs-android: LIBRETRO=ON,
 # USE_OPENMP=OFF, Vulkan left at its default ON). USE_GLES=ON is a no-op next to ANDROID (the LIBRETRO+ANDROID branch
 # already defines GLES GLES3 HAVE_OPENGLES3 HAVE_OIT and compiles glsym_es3); it states the intent.
 # CMAKE_OSX_ARCHITECTURES=arm64: on a macOS host its CMakeLists caches "x86_64;arm64" before project(), and
 # DetectArchitecture then adds the x86 recompiler (xbyak). No FetchContent: the dependencies are git submodules pinned
-# by the tag's gitlinks. Only the six the Android libretro build uses are initialised, recursively for tinygettext's
+# by the pinned commit's gitlinks. Only the six the Android libretro build uses are initialised, recursively for tinygettext's
 # external/tinycmmc; SDL, breakpad, oboe, freetype, libjuice, gamesdk and the rest are standalone-app only. Licence
-# notices: LICENSES/flycast.txt (ships in the APK as licenses/flycast.txt). patches/flycast.patch has five hunks:
-# - CMakeLists.txt links libandroid into the libretro target (upstream links it for the standalone app only), so vmem's
-#   weak ASharedMemory_create resolves; else it falls back to /dev/ashmem (EACCES at targetSdk 29+), runs without
-#   fast-mem, and the dynarec's write-protect fault handler misses the heap-tagged RAM pointer and crashes.
+# notices: LICENSES/flycast.txt (ships in the APK as licenses/flycast.txt). patches/flycast.patch has five hunks
+# (upstream now links libandroid into the libretro target and reads 64 KB of awbios, so those two are gone):
+# - core/hw/maple/maple_devs.cpp flushes the VMU file after every write (block write and full save). flycast writes it
+#   through stdio and only flushed on close, so a process killed without unloading (crash, watchdog, force-stop) lost
+#   the last writes: a save listed in the directory whose FAT chain never landed, which games report as bad game data.
 # - shell/libretro/oslib.cpp getVmuPath names per-game VMUs after the content file (<content>.A1.bin) instead of the
 #   disc's game ID, so the app's saves mirror can tie a VMU to its game; an existing game-ID file is read once, then
 #   rewritten as <content>.A1.bin and deleted by flycast (maple_devs.cpp OnSetup). The shared VMUs (every port with
@@ -425,13 +426,13 @@ fbneo_ARTIFACT = libs/$(ABI)/libretro.so
 # - core/rend/gles/gles.h GlVertexArray::term no longer deletes vertex array name 0 (the post-processor's, never created
 #   on the blit path, on every render-size change). The spec ignores it, but the Android emulator's GLES stack then drops
 #   the default vertex array's client state and the frontend's presentation quad draws nothing (black screen).
-# - core/hw/naomi/naomi_roms.cpp + naomi_cart.cpp (from nx-redux 959dbfb7): awbios also accepts the modern MAME dump
-#   bios.ic23_l (64 KB, CRC e5693ce3) as an alternative to bios0.ic23 (128 KB); loadBios takes the first blob it finds
-#   by CRC or name, and mirrors a 64 KB awbios image into the upper half of the 128 KB window, as the hardware does.
+# - core/hw/naomi/naomi_roms.cpp (from nx-redux 959dbfb7): awbios also accepts the modern MAME dump bios.ic23_l (64 KB,
+#   CRC e5693ce3) beside bios0.ic23 (128 KB, of which flycast reads the first 64 KB); loadBios takes the first blob it
+#   finds by CRC or name.
 # - core/rend/vulkan/vk_context_lr.cpp VkCreateDevice also enables the frontend's required device extensions (its
 #   AHardwareBuffer bridge needs them; see CoreRegistry's flycast entry).
 flycast_REPO = https://github.com/flyinghead/flycast
-flycast_HASH = 5aa091fde632fb332c8d8c34e280d62dc951954c
+flycast_HASH = 7adbf3caef251b153e348df3f469a0f35878339d
 flycast_KIND = cmake
 flycast_BUILD_PATH = .
 flycast_CMAKE_TARGET = flycast_libretro
