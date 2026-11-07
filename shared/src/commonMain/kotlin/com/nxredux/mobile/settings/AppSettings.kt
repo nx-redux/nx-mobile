@@ -327,6 +327,14 @@ interface AppSettings {
     var systemButtons: String
         get() = ""
         set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /**
+     * Appearance → Pad skin: the player's nudges of each console's button groups, as
+     * [com.nxredux.mobile.skin.SkinTweaks.encode] writes them. Empty: none. Defaulted, like [systemButtons].
+     */
+    var skinTweaks: String
+        get() = ""
+        set(@Suppress("UNUSED_PARAMETER") value) {}
     /**
      * Settings → System → Debug log (default off): off, only errors reach logcat. Defaulted so a platform or fake
      * without it stores nothing.
