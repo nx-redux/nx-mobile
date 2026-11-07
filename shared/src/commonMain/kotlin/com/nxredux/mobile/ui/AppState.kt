@@ -4840,7 +4840,9 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private fun rescanFromSettings(section: SettingsSection = SettingsSection.LIBRARY, row: SettingsKind = SettingsKind.RESCAN) {
         val root = home() ?: run { showPickFolder(); return }
         dismissNotice()   // a tap reaches openSelected without onButton's dismissal; a notice raised by this scan still wins below
-        val backToRow = { showSettingsOn(section, row) }
+        // The scan shows the menu again, which takes a tool off the top screen: Settings goes back where it was.
+        val onTop = _toolOnTop.value
+        val backToRow = { showSettingsOn(section, row); _toolOnTop.value = onTop }
         loader.start(message = "Scanning library…", cancellable = false) {
             scanNow(
                 root,

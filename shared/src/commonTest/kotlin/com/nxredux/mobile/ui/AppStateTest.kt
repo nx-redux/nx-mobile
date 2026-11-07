@@ -12192,6 +12192,26 @@ class AppStateTest {
         assertFalse(state.toolOnTop.value)
     }
 
+    // Dual screen: Settings opened from Tools stays on the top screen through a Library rescan, the menu below on its row.
+    @Test fun a_rescan_from_settings_keeps_settings_on_the_top_screen() = runTest {
+        val state = state(MemorySettings(ContentRef("Home")))
+        state.load()
+        state.onDualMenu(true)
+        state.openTools()
+        val settingsAt = state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }
+        state.select(settingsAt); state.onButton(NxButton.A)
+        val row = openLibraryOn(state, SettingsKind.RESCAN)
+        assertTrue(state.toolOnTop.value)
+        state.onButton(NxButton.A)                                                                  // rescan
+        advanceUntilIdle()
+        assertEquals(SettingsSection.LIBRARY, assertIs<Screen.Settings>(state.screen.value).section)
+        assertEquals(row, state.selection.value.index)
+        assertTrue(state.toolOnTop.value)
+        val (menu, at) = assertNotNull(state.toolUnder())
+        assertEquals(MenuCategory.TOOLS, menu.category)
+        assertEquals(settingsAt, at.index)
+    }
+
     // Dual screen: the highlighted Apps tile previews the drawer on the top screen; a tap there opens it on that app.
     // An app added meanwhile sorts before Apps: the menu below still shows Apps highlighted, and B lands on it.
     @Test fun the_drawer_previews_on_the_top_screen_and_opens_there() = runTest {
