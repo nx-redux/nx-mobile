@@ -569,13 +569,13 @@ class MainActivity : ComponentActivity(), FolderPicker {
         runCatching { ownAppTask()?.moveToFront() }.onFailure { NxLog.w("NXAPP", "menu key focus: ${it.message}") }
     }
 
-    /** Whether the menu goes on [display] (the second): the main window as landscape against its real size, no core turning. */
+    /** Whether the menu goes on [display] (the second): the main window as landscape against its real size. */
     private fun menuOnSecondFor(display: Display): Boolean {
         val main = WindowMetricsCalculator.getOrCreate().computeCurrentWindowMetrics(this).bounds
         val real = android.graphics.Point().also { @Suppress("DEPRECATION") display.getRealSize(it) }
         return DualScreen.menuOnSecond(
             maxOf(main.width(), main.height()), minOf(main.width(), main.height()), real.x, real.y,
-            rotated = false, BottomScreen.resolve(null, settings.bottomScreen),
+            BottomScreen.resolve(null, settings.bottomScreen),
         )
     }
 

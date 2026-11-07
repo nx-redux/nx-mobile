@@ -2509,10 +2509,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun relayoutFrontend() = renderer.relayoutFrontend()
 
-    override fun recheckPictureOn(g: FloatArray) {
-        if (dual.dualMode != DualMode.OFF) dual.recheckPictureOn(g)
-    }
-
     override fun persistConsoleKey(key: String, value: String, failure: String) {
         val store = configStore ?: return
         lifecycleScope.launch {

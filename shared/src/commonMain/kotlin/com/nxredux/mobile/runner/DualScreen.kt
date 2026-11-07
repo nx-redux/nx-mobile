@@ -70,14 +70,12 @@ object DualScreen {
 
     /**
      * The picture screen: [PictureOn.SECOND] when the second display is at least as wide for its height as the main one
-     * (both in px, the main as landscape), else [PictureOn.MAIN]. No second size yet: the main display. A [rotated] core
-     * (SET_ROTATION: vertical arcade games, WonderSwan) stays on main, where the picture is drawn turned. A chosen
-     * [bottom] screen puts the picture on the other one, whatever the shapes.
+     * (both in px, the main as landscape), else [PictureOn.MAIN]. No second size yet: the main display. A chosen [bottom]
+     * screen puts the picture on the other one, whatever the shapes.
      */
     fun pictureOn(
-        mainW: Int, mainH: Int, secondW: Int, secondH: Int, rotated: Boolean = false, bottom: BottomScreen = BottomScreen.AUTO,
+        mainW: Int, mainH: Int, secondW: Int, secondH: Int, bottom: BottomScreen = BottomScreen.AUTO,
     ): PictureOn = when {
-        rotated -> PictureOn.MAIN
         secondW <= 0 || secondH <= 0 || mainW <= 0 || mainH <= 0 -> PictureOn.MAIN
         bottom == BottomScreen.MAIN -> PictureOn.SECOND
         bottom == BottomScreen.SECOND -> PictureOn.MAIN
@@ -87,8 +85,8 @@ object DualScreen {
 
     /** The main menu goes on the second display when the picture (the top screen) is on the main one. */
     fun menuOnSecond(
-        mainW: Int, mainH: Int, secondW: Int, secondH: Int, rotated: Boolean, bottom: BottomScreen,
-    ): Boolean = pictureOn(mainW, mainH, secondW, secondH, rotated, bottom) == PictureOn.MAIN
+        mainW: Int, mainH: Int, secondW: Int, secondH: Int, bottom: BottomScreen,
+    ): Boolean = pictureOn(mainW, mainH, secondW, secondH, bottom) == PictureOn.MAIN
 
     /** Split, the DS/3DS screen on the main display: the [picture] screen's own when the picture is on main, else the other. */
     fun splitMain(picture: NdsScreen, pictureOn: PictureOn): NdsScreen = if (pictureOn == PictureOn.MAIN) picture else picture.other

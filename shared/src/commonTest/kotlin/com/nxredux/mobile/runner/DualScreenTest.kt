@@ -26,11 +26,11 @@ class DualScreenTest {
 
     @Test fun menu_goes_on_the_second_display_when_the_main_one_is_the_picture() {
         // The wide monitor is the picture on AUTO, so the menu stays on the phone.
-        assertFalse(DualScreen.menuOnSecond(1248, 1972, 2560, 1600, rotated = false, BottomScreen.AUTO))
+        assertFalse(DualScreen.menuOnSecond(1248, 1972, 2560, 1600, BottomScreen.AUTO))
         // Bottom = main puts the picture on the second: menu stays on main.
-        assertFalse(DualScreen.menuOnSecond(1248, 1972, 2560, 1600, rotated = false, BottomScreen.MAIN))
+        assertFalse(DualScreen.menuOnSecond(1248, 1972, 2560, 1600, BottomScreen.MAIN))
         // Bottom = second puts the picture on main: the menu goes to the second.
-        assertTrue(DualScreen.menuOnSecond(1248, 1972, 2560, 1600, rotated = false, BottomScreen.SECOND))
+        assertTrue(DualScreen.menuOnSecond(1248, 1972, 2560, 1600, BottomScreen.SECOND))
     }
 
     @Test fun nds_split_top_main() {
@@ -95,8 +95,6 @@ class DualScreenTest {
     @Test fun picture_on_second_when_wider() = assertEquals(PictureOn.SECOND, DualScreen.pictureOn(1240, 1080, 1920, 1080))
     @Test fun picture_on_main_when_wider() = assertEquals(PictureOn.MAIN, DualScreen.pictureOn(1920, 1080, 1240, 1080))
     @Test fun picture_on_tie_goes_second() = assertEquals(PictureOn.SECOND, DualScreen.pictureOn(1920, 1080, 1280, 720))
-    @Test fun picture_on_main_for_a_rotated_core() =
-        assertEquals(PictureOn.MAIN, DualScreen.pictureOn(1240, 1080, 1920, 1080, rotated = true))
     // Bottom screen: the chosen one is the touch screen, so the picture goes on the other; Auto is the shape rule.
     @Test fun bottom_main_puts_the_picture_on_second() =
         assertEquals(PictureOn.SECOND, DualScreen.pictureOn(1920, 1080, 1240, 1080, bottom = BottomScreen.MAIN))
@@ -107,8 +105,6 @@ class DualScreenTest {
         assertEquals(DualScreen.pictureOn(1920, 1080, 1240, 1080), DualScreen.pictureOn(1920, 1080, 1240, 1080, bottom = BottomScreen.AUTO))
         assertEquals(PictureOn.SECOND, DualScreen.pictureOn(1280, 960, 1280, 960, bottom = BottomScreen.AUTO))   // same shape
     }
-    @Test fun a_rotated_core_wins_over_the_bottom_screen() =
-        assertEquals(PictureOn.MAIN, DualScreen.pictureOn(1920, 1080, 1240, 1080, rotated = true, bottom = BottomScreen.MAIN))
     @Test fun bottom_screen_parses_the_setting_and_the_override_wins() {
         assertEquals(BottomScreen.AUTO, BottomScreen.parse("auto"))
         assertEquals(BottomScreen.MAIN, BottomScreen.parse("main"))
