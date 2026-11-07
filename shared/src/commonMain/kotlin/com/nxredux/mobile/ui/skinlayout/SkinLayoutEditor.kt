@@ -1,6 +1,16 @@
 package com.nxredux.mobile.ui.skinlayout
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.WindowInsets
+import com.nxredux.mobile.skin.SkinPlacement
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -93,6 +103,8 @@ fun SkinLayoutEditor(
         }
         if (bare) SkinArt(remember(placed) { placed.bare() }, picture, parts, Modifier.fillMaxSize().graphicsLayer(alpha = bareAlpha))
         else SkinArt(placed, picture, parts, Modifier.fillMaxSize().graphicsLayer())
+        // the touch shortcut slots draw nothing until they have an action: dummy buttons, so the row can be seen and moved
+        StripPlaceholders(placed, Modifier.fillMaxSize().graphicsLayer(alpha = if (bare) bareAlpha else 1f))
         // the edit layer: takes every touch (taps select, drags move or resize)
         Canvas(
             Modifier.fillMaxSize()
@@ -155,12 +167,11 @@ fun SkinLayoutEditor(
                 drawCircle(Color.White, radius = HandleRadius.toPx(), center = h, style = Stroke(width = 2.dp.toPx()))
             }
         }
-        // the toolbar over the main screen's middle (the window's when there is none, or when bare)
-        val area = if (bare || main == null) window else main
-        Box(Modifier.placedPx(area)) {
+        // the toolbar at the top of the screen, clear of the camera cutout and bars, with a margin below them
+        Box(Modifier.placedPx(window)) {
             EditorToolbar(
                 title, state, Rect(origin, Size(size.width.toFloat(), size.height.toFloat())), onSave = { onSave(state.tweaks) }, onCancel = { if (state.requestCancel()) onClose() },
-                Modifier.align(Alignment.Center),
+                Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).padding(top = ToolbarTopMargin),
             )
         }
         if (state.confirmDiscard) {
@@ -244,3 +255,35 @@ private fun ToolbarButton(label: String, enabled: Boolean = true, primary: Boole
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) { Text(label, color = fg, fontFamily = LocalNxFont.current, fontSize = 13.sp) }
 }
+
+/** The strip's touch shortcut slots (TOUCH_1..4) as dummy buttons: each slot's touch area, its number written in it. */
+@Composable
+private fun StripPlaceholders(placed: SkinPlacement, modifier: Modifier = Modifier) {
+    val measurer = rememberTextMeasurer()
+    val ink = LocalNxColors.current.main
+    val slots = remember(placed) { placed.controls.filter { it.spec.id.startsWith(STRIP_SLOT_PREFIX) } }
+    if (slots.isEmpty()) return
+    Canvas(modifier) {
+        for (c in slots) {
+            val hw = c.spec.hw * 0.9f
+            val hh = c.spec.hh * 0.8f
+            if (hw <= 0f || hh <= 0f) continue
+            val corner = CornerRadius(hh, hh)
+            // role: a dummy shortcut button's faint fill, its outline and its word, in the pill ink
+            drawRoundRect(ink.copy(alpha = 0.15f), Offset(c.x - hw, c.y - hh), Size(hw * 2f, hh * 2f), corner)
+            drawRoundRect(ink.copy(alpha = 0.4f), Offset(c.x - hw, c.y - hh), Size(hw * 2f, hh * 2f), corner, style = Stroke(1.dp.toPx()))   // role: its outline
+            val text = "Shortcut " + c.spec.id.removePrefix(STRIP_SLOT_PREFIX)
+            // as large as fits the slot: about 0.6 of the size per letter across, 0.9 of the height up
+            val px = minOf(hh * 0.9f, hw * 2f * 0.85f / (text.length * 0.6f))
+            val m = measurer.measure(text, TextStyle(color = ink.copy(alpha = 0.7f),   // role: its word
+                 fontSize = (px / density).sp))
+            drawText(m, topLeft = Offset(c.x - m.size.width / 2f, c.y - m.size.height / 2f))
+        }
+    }
+}
+
+/** The touch shortcut slots' control ids: TOUCH_1..TOUCH_4. */
+private const val STRIP_SLOT_PREFIX = "TOUCH_"
+
+/** The toolbar's gap below the top bars and cutout. */
+private val ToolbarTopMargin = 24.dp

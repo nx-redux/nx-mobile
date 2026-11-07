@@ -114,8 +114,10 @@ class NxCarbonPackTest {
             }
             val pic = p.glass(GlassScreen.PICTURE)!!.rect
             assertTrue(pic.y + pic.height <= hinge - 62f, "$id picture $pic")
-            assertTrue(c.keys.none { it.startsWith("TOUCH_") || it == "MIC" || it == "SWAP" }, "$id ${c.keys}")
-            assertTrue(p.pieces.none { it.strip } && p.spec.frame?.strip == null, "$id strip")
+            // the touch shortcut strip under the panel, as every game layout has (user); no MIC or SWAP
+            assertTrue((1..4).all { "TOUCH_$it" in c } && c.keys.none { it == "MIC" || it == "SWAP" }, "$id ${c.keys}")
+            val strip = (1..4).map { c.getValue("TOUCH_$it") }
+            assertTrue(strip.all { it.y - it.spec.hh >= r.y + r.height && it.y + it.spec.hh <= menu.y - menu.spec.r }, "$id strip under the panel, over MENU")
         }
     }
 
@@ -1032,10 +1034,10 @@ class NxCarbonPackTest {
         if (ds) assertTrue(p.glass(GlassScreen.TOUCH)!!.rect.y > hinge)
         val below = p.controls.filter { it.spec.id in setOf("DPAD", "A", "L", "R", "START", "MENU") + if (ds) setOf("MIC", "SWAP", "TOUCH_1") else emptySet() }
         assertTrue(below.all { it.y > hinge }, "${p.spec.id} ${below.map { it.spec.id to it.y }}")
-        // the strip, but on the fold board's one-screen layouts: their panel's Shortcuts do its job (no strip)
+        // the touch shortcut strip on every game layout (the fold board's one-screen ones: under the panel, below the hinge)
         val panel = p.glass(GlassScreen.PANEL)
-        if (panel != null) assertTrue(panel.rect.y > hinge && p.controls.none { it.spec.id == "TOUCH_4" }, p.spec.id)
-        else assertTrue(p.controls.any { it.spec.id == "TOUCH_4" })
+        if (panel != null) assertTrue(panel.rect.y > hinge && p.controls.filter { it.spec.id.startsWith("TOUCH_") }.all { it.y > panel.rect.y + panel.rect.height }, p.spec.id)
+        assertTrue(p.controls.any { it.spec.id == "TOUCH_4" }, p.spec.id)
     }
 
     @Test

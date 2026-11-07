@@ -231,13 +231,14 @@ object SkinSolver {
                 glasses += PlacedGlass(pg.id, pg.screen, win(px + pg.x * sc, py + pg.y * sc, (pg.w + gx) * sc, (pg.h + gy) * sc), (pg.w + gx) * sc * k / gameW, pg.corner * sc * k)
             }
             p.strip?.let { st ->
-                // the piece's strip: an even share of its glass's width each (the whole piece's without one)
+                // the piece's strip: an even share of its glass's width each (the whole piece's without one), under the
+                // grown glass when the piece grows (its border, the strip's band, keeps its size)
                 val sc = p.scale
-                val sx = px + (p.glass?.x ?: 0) * sc; val sw = (p.glass?.w ?: p.w) * sc
+                val sx = px + (p.glass?.x ?: 0) * sc; val sw = ((p.glass?.w ?: p.w) + gx) * sc
                 val share = sw / st.labels.size
                 st.labels.forEachIndexed { i, l ->
                     val cx = sx + share * (i + 0.5f)
-                    val cy = py + (p.h - st.y) * sc
+                    val cy = py + (p.h + gy - st.y) * sc
                     controls += PlacedControl(ControlSpec(l.id, ControlShape.RECT, cx, cy, hw = share / 2f * k, hh = st.hh * sc * k), cx * k, cy * k)
                 }
             }
