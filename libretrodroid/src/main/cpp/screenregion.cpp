@@ -33,7 +33,7 @@ std::vector<ScreenRegion> ScreenRegion::unpack(const float* data, size_t count) 
     return out;
 }
 
-RegionQuad buildRegionQuad(const ScreenRegion& r, float vpX, float vpY, float vpW, float vpH, bool bottomLeftOrigin) {
+RegionQuad buildRegionQuad(const ScreenRegion& r, float vpX, float vpY, float vpW, float vpH, bool bottomLeftOrigin, int quarterTurns) {
     // View position (0..1, y down) to clip space (-1..1, y up).
     auto clipX = [&](float x) { return 2.0F * (vpX + x * vpW) - 1.0F; };
     auto clipY = [&](float y) { return 1.0F - 2.0F * (vpY + y * vpH); };
@@ -42,9 +42,16 @@ RegionQuad buildRegionQuad(const ScreenRegion& r, float vpX, float vpY, float vp
 
     float left = clipX(r.dstLeft), right = clipX(r.dstRight), top = clipY(r.dstTop), bottom = clipY(r.dstBottom);
     float u0 = r.srcLeft, u1 = r.srcRight, vTop = texV(r.srcTop), vBottom = texV(r.srcBottom);
+    // The frame's corners clockwise from its top-left; turned counterclockwise k quarters, view corner i shows corner i + k.
+    const float corners[4][2] = { { u0, vTop }, { u1, vTop }, { u1, vBottom }, { u0, vBottom } };
+    const int k = ((quarterTurns % 4) + 4) % 4;
+    const float* tl = corners[k];
+    const float* tr = corners[(1 + k) % 4];
+    const float* br = corners[(2 + k) % 4];
+    const float* bl = corners[(3 + k) % 4];
     return RegionQuad {
         { left, top,  left, bottom,  right, top,  right, top,  left, bottom,  right, bottom },
-        { u0, vTop,  u0, vBottom,  u1, vTop,  u1, vTop,  u0, vBottom,  u1, vBottom },
+        { tl[0], tl[1],  bl[0], bl[1],  tr[0], tr[1],  tr[0], tr[1],  bl[0], bl[1],  br[0], br[1] },
         r.shaded,
         r.alpha,
         r.srcRight - r.srcLeft,
