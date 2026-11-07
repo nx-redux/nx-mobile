@@ -269,6 +269,8 @@ class AppStateKidsTest {
         st.load(); st.onForeground()
         assertNull(appsTab(st))
         val (locked, kids, platform) = lockedState(MemorySettings().apply { kidsAllowedApps = setOf("a") }, launcher = Launcher(kidApps))
+        locked.onForeground()
+        assertSame(Screen.KidsHome, locked.screen.value)                   // locked: the tiles, no menu and no Apps tab
         kids.enterParent(platform.epochMs)                                 // a parent: Apps beside Tools
         locked.onForeground()
         assertEquals(listOf("a"), appsTab(locked))

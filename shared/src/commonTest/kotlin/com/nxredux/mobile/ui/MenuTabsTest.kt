@@ -94,6 +94,16 @@ class MenuTabsTest {
         assertEquals(listOf(cons), hiddenMenuTabs(all, tabs(tool)))    // a hidden Home is never offered
     }
 
+    /** Kids Mode's Apps tab alone is not enough: with every other tab hidden, Home still shows before it. */
+    @Test fun appsAloneStillShowsHome() {
+        val home = MenuTab(MenuCategory.HOME, emptyList())
+        val tools = MenuTab(MenuCategory.TOOLS, emptyList())
+        val apps = MenuTab(MenuCategory.APPS, emptyList())
+        val shown = setOf(MenuCategory.TOOLS, MenuCategory.APPS)
+        assertEquals(listOf(MenuCategory.HOME, MenuCategory.APPS), visibleMenuTabs(listOf(home, apps, tools), shown, hideTools = true).map { it.category })
+        assertEquals(listOf(MenuCategory.APPS, MenuCategory.TOOLS), visibleMenuTabs(listOf(home, apps, tools), shown).map { it.category })
+    }
+
     @Test fun labels() {
         assertEquals(listOf("Home", "Consoles", "Collections", "Tools", "Apps"), MenuCategory.entries.map { it.label })
     }

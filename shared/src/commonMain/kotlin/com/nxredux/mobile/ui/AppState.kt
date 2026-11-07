@@ -7824,7 +7824,7 @@ class AppState(
         kidsSetupGo(next)
     }
 
-    /** Setup's end: the PIN stored, Kids Mode on with its flag ([KidsController.turnOn], the parent in Parent mode), the page. */
+    /** Setup's end: the PIN stored, Kids Mode on with its flag ([KidsController.turnOn]), straight into the schedule's mode. */
     private fun kidsSetupFinish() {
         if (!kidsParentOnly()) return
         val k = kids ?: return

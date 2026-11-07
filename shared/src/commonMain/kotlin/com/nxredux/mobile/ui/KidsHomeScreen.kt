@@ -2,6 +2,8 @@ package com.nxredux.mobile.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -170,12 +172,15 @@ private fun KidsAppTile(tile: KidsTile, lit: Boolean, onTap: () -> Unit) {
     val colors = LocalNxColors.current
     val content = if (lit) colors.onAccent else colors.listText
     val icon = rememberAppIcon(tile.id)
+    // The d-pad's tile scrolled into view when the grid is taller than its box.
+    val inView = remember { BringIntoViewRequester() }
+    LaunchedEffect(lit) { if (lit) inView.bringIntoView() }
     val size = 14.sp
     val style = TextStyle(fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = size, lineHeight = size * 1.15f, textAlign = TextAlign.Center)
     val iconMod = Modifier.size(KIDS_ICON.dp)
     // Every tile as tall as a two-line name's; its icon and name centred in it, so a one-line name sits mid-tile too.
     Box(
-        Modifier.width(KIDS_TILE_W.dp).clip(RoundedCornerShape(NX_TILE_CORNER.dp))
+        Modifier.width(KIDS_TILE_W.dp).bringIntoViewRequester(inView).clip(RoundedCornerShape(NX_TILE_CORNER.dp))
             .then(if (lit) Modifier.background(nxHighlight()) else Modifier.tilePlate(colors.background, colors.inkEdge))
             .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onTap)
             .padding(horizontal = 8.dp, vertical = 12.dp),

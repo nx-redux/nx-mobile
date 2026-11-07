@@ -40,7 +40,9 @@ internal fun homeTabRows(home: Home, style: MenuStyle = MenuStyle.GRID): List<Ma
  */
 internal fun visibleMenuTabs(tabs: List<MenuTab>, shown: Set<MenuCategory>, hideTools: Boolean = false): List<MenuTab> {
     val visible = tabs.filter { it.category in shown && !(hideTools && it.category == MenuCategory.TOOLS) }
-    return visible.ifEmpty { tabs.filter { it.category == MenuCategory.HOME } }
+    // Kids Mode's Apps tab alone doesn't count: Home still shows, so the games stay in reach.
+    if (visible.any { it.category != MenuCategory.APPS }) return visible
+    return tabs.filter { it.category == MenuCategory.HOME } + visible
 }
 
 /**
