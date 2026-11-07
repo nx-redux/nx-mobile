@@ -15,11 +15,13 @@ fun <T> List<T>.stepFrom(current: T, by: Int): T = this[(indexOf(current) + by).
 /**
  * The portrait virtual pad's look: CHARCOAL (dark), RETRO (light-grey body, magenta face buttons) or BLACK (a pure black
  * body, its buttons the [PadButtons] set), all drawn by the app; or a pad skin ([skin]: its pack in the app's skins),
- * NX_CARBON (the default, smoke grey) or NX_ONYX (the same shell in smoked black): in game and on the main menu it draws the whole device around the screen wherever the skin has a
+ * NX_CARBON (the default, smoke grey), NX_ONYX (the same shell in smoked black) or one of its translucent colours
+ * (NX_OBSIDIAN near-black; NX_PLASMA purple, NX_EMBER red, NX_VOLT green, NX_TIDE blue): in game and on the main menu it draws the whole device around the screen wherever the skin has a
  * layout for the window, and the pad is Charcoal everywhere else (a console or window the skin has no layout for).
  */
 enum class PadTheme(val skin: String? = null) {
-    NX_CARBON("nx-carbon"), NX_ONYX("nx-onyx"), CHARCOAL, RETRO, BLACK;
+    NX_CARBON("nx-carbon"), NX_ONYX("nx-onyx"), NX_OBSIDIAN("nx-obsidian"), NX_PLASMA("nx-plasma"), NX_EMBER("nx-ember"), NX_VOLT("nx-volt"), NX_TIDE("nx-tide"),
+    CHARCOAL, RETRO, BLACK;
 
     companion object { val DEFAULT = NX_CARBON }
 }

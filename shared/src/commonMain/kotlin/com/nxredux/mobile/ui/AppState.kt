@@ -4578,6 +4578,11 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         PadTheme.BLACK -> "Black"
         PadTheme.NX_CARBON -> "NX Carbon"
         PadTheme.NX_ONYX -> "NX Onyx"
+        PadTheme.NX_PLASMA -> "NX Plasma"
+        PadTheme.NX_EMBER -> "NX Ember"
+        PadTheme.NX_VOLT -> "NX Volt"
+        PadTheme.NX_TIDE -> "NX Tide"
+        PadTheme.NX_OBSIDIAN -> "NX Obsidian"
     }
 
 
