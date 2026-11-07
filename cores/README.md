@@ -170,6 +170,16 @@ bit-identical. Only `ppsspp` differs, because it embeds a build timestamp: its b
 (`ext/libpng17/pngerror.c`) compiles `__DATE__`/`__TIME__` into the copyright string
 (e.g. `translated Sep 23 2026 00:59:43`). The other seven cores are byte-for-byte reproducible.
 
+## melonDS DS (DS): check save states on every pin bump
+
+melonDS refuses a save state whose format major version differs from its own (`SAVESTATE_MAJOR` in the melonDS
+dependency's `src/Savestate.h`), and melonDS DS also rejects one whose size differs from what the running core
+expects. v1.4.0 (melonDS major 14) cannot load v1.3.1 states (major 12): the load fails cleanly with a toast, the game
+keeps running, and in-game battery saves are unaffected. On every pin bump, compare `SAVESTATE_MAJOR` with the
+current pin's; if it changed, say in the release notes that DS save states from earlier versions won't load.
+
+Checked: v1.3.1 → v1.4.0 (2026-11-07, Nova): old states refused cleanly (major 12 → 14).
+
 ## Azahar (3DS): check save states on every pin bump
 
 Pin and build notes are in the `Makefile` above `azahar_HASH`. A 3DS save state records the git revision of the core
@@ -191,6 +201,11 @@ game state.
 3. If the format changed, say so in the release notes so players know older 3DS states will not load.
 
 Checked: 2126.1.2 → 2126.2 (2026-11-05, Nova): old states load and play.
+
+The patch also carries azahar-emu/azahar#2718 (video views: the app lays out the 3DS screens from the core's map). On
+every pin bump, re-check it: the PR's commits re-apply, its Frontend Layout and 3D option is still `citra_frontend_layout`
+with `auto`, and a 3DS game sends a map (top and bottom views) in single display and Split. Drop the carried commits
+once the pin includes them.
 
 ## Link cores (netplay stage 2c, 2026-10-10)
 

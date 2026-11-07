@@ -27,6 +27,7 @@
 #include <vector>
 #include <unordered_set>
 #include <mutex>
+#include "videoviews.h"
 #include <memory>
 #include <optional>
 #include <array>
@@ -167,6 +168,10 @@ public:
     // The next create() offers the core Vulkan (bridged into the GLES presentation). Set before create().
     void setPreferVulkan(bool value) { preferVulkan = value; }
     void setVulkanSwapchainFrames(bool value) { vulkanSwapchainFrames = value; }
+    // nx-mobile: offer video views to the next core loaded (GET_VIDEO_VIEWS_STATUS answers PRESENTS).
+    void setVideoViewsEnabled(bool value) { videoViewsEnabled = value; }
+    // The core's last accepted view map (empty: none), any thread. A change also raises takeGameGeometryChanged().
+    std::vector<VideoView> getVideoViews();
     void handleRumbleUpdates(const std::function<void(int, float, float)> &handler);
 
     void setFrameSpeed(unsigned int speed);
@@ -241,6 +246,8 @@ public:
     // Regions of the core frame drawn at places in the view (empty = one picture). Remembered, like the viewport, so a
     // Video created later (a new surface) gets them. GL thread.
     void setScreenRegions(std::vector<ScreenRegion> regions);
+    // nx-mobile: the frame composed from the core's (Video::setComposition); width 0 clears it. Remembered like the regions. GL thread.
+    void setComposition(int width, int height, std::vector<ScreenRegion> parts);
 
     // Regions drawn on a second surface (dst 0..1 of that whole surface). Remembered like setScreenRegions. GL thread.
     void setSecondaryRegions(std::vector<ScreenRegion> regions);
@@ -341,6 +348,9 @@ private:
     float screenOffsetY = 0.0F;
     bool pictureHeld = false;
     std::vector<ScreenRegion> screenRegions;
+    int compositionWidth = 0;
+    int compositionHeight = 0;
+    std::vector<ScreenRegion> compositionParts;
     std::vector<ScreenRegion> secondaryRegions;
 
     std::atomic<float> geometryWidth { 0.0F };
@@ -348,6 +358,9 @@ private:
     std::atomic<float> geometryAspect { 0.0F };
     std::atomic<float> geometryRotation { 0.0F };
     std::atomic<bool> geometryChanged { false };
+    bool videoViewsEnabled = false;
+    std::mutex videoViewsLock;
+    std::vector<VideoView> videoViews;   // guarded by videoViewsLock
     std::atomic<bool> hardwareFrame { false };
     // Set on the GL thread by handleVideoRefresh, rethrown by step() after retro_run returns.
     std::exception_ptr videoCallbackError = nullptr;

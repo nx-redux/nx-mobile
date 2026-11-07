@@ -94,8 +94,8 @@ class TabletopRegionsTest {
             assertTrue(bottom.dst.y + bottom.dst.height <= 1250f)
             assertTrue(bottom.touch)
         }
-        // DS stacked at one scale: both shaded.
-        assertTrue(tabletopRegions(flip(DsKind.DS), DsKind.DS, NdsScreen.TOP).all { it.shaded })
+        // DS stacked at one scale: still only the top screen shaded.
+        assertEquals(listOf(true, false), tabletopRegions(flip(DsKind.DS), DsKind.DS, NdsScreen.TOP).map { it.shaded })
     }
 
     /** Where window point ([x], [y]) in [r]'s screen lands in the 400 x 480 3DS frame, as the fork maps a touch. */

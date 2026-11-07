@@ -9,6 +9,11 @@ import kotlin.test.assertTrue
 class CoreRegistry3dsTest {
     private val n3ds get() = CoreRegistry.forTag("3DS")!!
 
+    @Test fun lockedFrontendLayoutIsAuto() {
+        assertEquals("auto", n3ds.defaultOptions["citra_frontend_layout"])
+        assertTrue("citra_frontend_layout" in n3ds.lockedOptions)
+    }
+
     @Test fun three_ds_runs_azahar() {
         assertEquals("azahar", n3ds.id)
         assertEquals("libazahar_libretro_android.so", n3ds.libraryFileName)
@@ -48,6 +53,7 @@ class CoreRegistry3dsTest {
                 "citra_graphics_api", "citra_use_libretro_save_path", "citra_enable_mouse_touchscreen", "citra_enable_motion",
                 "citra_motion_sensitivity", "citra_layout_option",   // the layout comes from the app's per-orientation rows
                 "citra_input_type",   // the mic, fed by the app's Mic toggle
+                "citra_frontend_layout",   // the app lays the screens out from the video views map
                 "citra_resolution_factor", "citra_large_screen_proportion", "citra_render_3d",
             ),
             n3ds.lockedOptions,

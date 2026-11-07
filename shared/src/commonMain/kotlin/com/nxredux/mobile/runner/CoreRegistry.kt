@@ -41,9 +41,10 @@ object CoreRegistry {
             // Improved Polygon Splitting warps textures on large floor polygons under GLES (Mario Kart DS's low flyover
             // shots); the standalone melonDS app runs its GL renderer with it off too.
             "melonds_opengl_better_polygons" to "disabled",
+            "melonds_frontend_layout" to "auto",
         ),
         lockedOptions = setOf(
-            "melonds_opengl_better_polygons", "melonds_touch_mode", "melonds_number_of_screen_layouts", "melonds_screen_layout1",
+            "melonds_frontend_layout", "melonds_opengl_better_polygons", "melonds_touch_mode", "melonds_number_of_screen_layouts", "melonds_screen_layout1",
             "melonds_screen_gap", "melonds_show_cursor", "melonds_mic_input", "melonds_mic_input_active",
             "melonds_show_mic_state", "melonds_opengl_resolution", "melonds_secondary_screen_scale",
             "melonds_secondary_screen_filtering", "melonds_hybrid_ratio", "melonds_hybrid_small_screen",
@@ -376,6 +377,7 @@ object CoreRegistry {
     private val azahar = CoreDescriptor(
         "azahar", "libazahar_libretro_android.so", setOf("3ds", "3dsx", "z3dsx", "elf", "axf", "cci", "zcci", "cxi", "zcxi", "app"),
         defaultOptions = mapOf(
+            "citra_frontend_layout" to "auto",
             "citra_graphics_api" to "OpenGL",
             "citra_resolution_factor" to "3",
             "citra_use_disk_shader_cache" to "enabled",
@@ -393,6 +395,7 @@ object CoreRegistry {
             "citra_render_3d" to "off",
         ),
         lockedOptions = setOf(
+            "citra_frontend_layout",
             "citra_resolution_factor", "citra_large_screen_proportion", "citra_render_3d",
             "citra_graphics_api", "citra_use_libretro_save_path", "citra_enable_mouse_touchscreen", "citra_enable_motion",
             "citra_motion_sensitivity", "citra_input_type",

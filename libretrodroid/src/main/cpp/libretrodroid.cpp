@@ -316,6 +316,7 @@ void LibretroDroid::onSurfaceCreated() {
     video->updateScreenOffset(screenOffsetX, screenOffsetY);
     video->setPictureHeld(pictureHeld);
     video->updateScreenRegions(screenRegions);
+    video->setComposition(compositionWidth, compositionHeight, compositionParts);
     video->updateSecondaryRegions(secondaryRegions);
     video->setPresetChain(presetChain);
     geometryWidth = (float) system_av_info.geometry.base_width;
@@ -359,7 +360,8 @@ void LibretroDroid::onMotionEvent(
 void LibretroDroid::onTouchEvent(float xAxis, float yAxis) {
     LOGD("Received touch event: %.2f, %.2f", xAxis, yAxis);
     if (video) {
-        auto [x, y] = video->getLayout().getRelativePosition(xAxis, yAxis);
+        auto [rx, ry] = video->getLayout().getRelativePosition(xAxis, yAxis);
+        auto [x, y] = video->mapCompositionPoint(rx, ry);
         currentInput()->onMotionEvent(0, Input::MOTION_SOURCE_POINTER, x, y);
     }
 }
@@ -407,6 +409,11 @@ void LibretroDroid::create(
     resetGlobalVariables();
 
     Environment::getInstance().initialize(systemDir, savesDir, &callback_get_current_framebuffer);
+    Environment::getInstance().setVideoViewsEnabled(videoViewsEnabled);
+    {
+        std::lock_guard<std::mutex> guard(videoViewsLock);
+        videoViews.clear();
+    }
     // A failed load never reaches destroy(); releaseCore() above deinitialised its core, drop its VFS files too.
     VFS::getInstance().deinitialize();
     // Again after releaseCore(): the old core may have set a memory map from retro_unload_game/retro_deinit, and a new
@@ -822,6 +829,9 @@ void LibretroDroid::step() {
             // shader and layout. GL cores otherwise draw only inside their video callback, leaving the picture stale.
             // An FF step that ran frames shows its last one like any step.
             video->renderPausedFrame();
+            // A hw core's second surface is drawn from inside its frame (frameDrawnHook); the paused redraw is that
+            // frame here, so a shader picked from the menu shows on the second display at once.
+            if (video->rendersInVideoCallback() && frameDrawnHook) frameDrawnHook();
         } else if (!video->rendersInVideoCallback()) {
             video->renderFrame();
         }
@@ -893,6 +903,15 @@ void LibretroDroid::step() {
         geometryChanged = true;
 
         dirtyVideo = true;
+    }
+
+    std::vector<VideoView> views;
+    if (Environment::getInstance().takeVideoViews(views)) {
+        {
+            std::lock_guard<std::mutex> guard(videoViewsLock);
+            videoViews = std::move(views);
+        }
+        geometryChanged = true;
     }
 
     if (video && Environment::getInstance().isScreenRotationUpdated()) {
@@ -1426,6 +1445,13 @@ void LibretroDroid::setPictureHeld(bool held) {
     }
 }
 
+void LibretroDroid::setComposition(int width, int height, std::vector<ScreenRegion> parts) {
+    compositionWidth = width;
+    compositionHeight = height;
+    compositionParts = std::move(parts);
+    if (video) video->setComposition(compositionWidth, compositionHeight, compositionParts);
+}
+
 void LibretroDroid::setScreenRegions(std::vector<ScreenRegion> regions) {
     screenRegions = std::move(regions);
 
@@ -1459,6 +1485,11 @@ void LibretroDroid::renderSecondary(unsigned width, unsigned height) {
     } catch (const std::exception& e) {
         LOGE("Error rendering the second screen: %s", e.what());
     }
+}
+
+std::vector<VideoView> LibretroDroid::getVideoViews() {
+    std::lock_guard<std::mutex> guard(videoViewsLock);
+    return videoViews;
 }
 
 std::array<float, 4> LibretroDroid::getGameGeometry() const {

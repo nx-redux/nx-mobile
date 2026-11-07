@@ -1,9 +1,15 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.layout.ConsoleScale
+import com.nxredux.mobile.layout.CoreFrame
+import com.nxredux.mobile.layout.picture
+import com.nxredux.mobile.options.BRICK_HEIGHT
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.PxRect
+import com.nxredux.mobile.options.ScreenScaling
+import com.nxredux.mobile.options.frontendLayout
 import kotlin.math.min
 
 /**
@@ -52,6 +58,9 @@ object DualScreen {
     internal val N3DS_TOP_SRC = FrameRect(0f, 0f, 1f, 0.5f)
     internal val N3DS_BOTTOM_SRC = FrameRect(0.1f, 0.5f, 0.9f, 1f)
 
+    /** The DS / 3DS layout shortcut (SELECT + Left / Right): only on one display; a second one places the screens itself. */
+    fun layoutCycles(mode: DualMode): Boolean = mode == DualMode.OFF
+
     /** A DS/3DS game ([dualGame]) splits (or shows both screens with [panelUp]); any other game gets the panel. */
     fun mode(secondConnected: Boolean, settingOn: Boolean, dualGame: Boolean, panelUp: Boolean): DualMode = when {
         !secondConnected || !settingOn -> DualMode.OFF
@@ -94,6 +103,18 @@ object DualScreen {
         else -> null
     }
 
+    /**
+     * The whole core [frame] placed on an [areaW] x [areaH] display by Screen Scaling, Auto at the console's [scale] as on
+     * the main display, moved by the screen offsets ([offsetX], [offsetY], in units of the display height / 768).
+     */
+    fun scaledFrame(areaW: Float, areaH: Float, frame: CoreFrame, scale: ConsoleScale, scaling: ScreenScaling, offsetX: Int = 0, offsetY: Int = 0): PxRect {
+        if (scaling != ScreenScaling.AUTO) return frontendLayout(areaW, areaH, frame.width.toInt(), frame.height.toInt(), frame.aspect, scaling, offsetX, offsetY, null).content
+        val placed = if (scale == ConsoleScale.WHOLE_HEIGHT || scale == ConsoleScale.NATIVE) picture(PxRect(0f, 0f, areaW, areaH), frame, scale, null)
+            else fullFrame(areaW, areaH, if (frame.aspect > 0f) frame.aspect else frame.width / frame.height)
+        val unit = areaH / BRICK_HEIGHT
+        return placed.copy(x = placed.x + offsetX * unit, y = placed.y + offsetY * unit)
+    }
+
     /** The whole core frame fitted at [aspect] in the area, centred, in whole px; empty without an area or aspect. */
     fun fullFrame(areaW: Float, areaH: Float, aspect: Float): PxRect {
         if (areaW <= 0f || areaH <= 0f || aspect <= 0f) return PxRect(0f, 0f, 0f, 0f)
@@ -120,7 +141,7 @@ object DualScreen {
         val x = NdsLayout.wholePx((areaW - 2f * size.width) / 2f)
         val y = NdsLayout.wholePx((areaH - size.height) / 2f)
         return listOf(settings.big, settings.big.other).mapIndexed { i, screen ->
-            NdsRegion(screen, NdsLayout.src(screen), PxRect(x + i * size.width, y, size.width, size.height), shaded = true, touch = screen == NdsScreen.BOTTOM)
+            NdsRegion(screen, NdsLayout.src(screen), PxRect(x + i * size.width, y, size.width, size.height), shaded = NdsLayout.takesShader(screen), touch = screen == NdsScreen.BOTTOM)
         }
     }
 
@@ -160,6 +181,18 @@ object DualScreen {
     /** The swap options [n3dsCoreOptions] overrides while split, which leaving it must put back. */
     val N3DS_SWAP_KEYS: Set<String> = setOf(SWAP_SCREEN, SWAP_SCREEN_MODE)
 
+    /** The player's Swap Screen Mode key (Toggle / Hold). */
+    const val N3DS_SWAP_MODE_KEY = SWAP_SCREEN_MODE
+
+    /**
+     * Azahar's options held while the app draws its screens from the video view map: the unswapped Default, the only
+     * layout its views stay on in, whatever the player's layout, swap or Dual screen mode ([N3dsSwap] does SWAP).
+     */
+    val N3DS_VIEWS_CORE: Map<String, String> = mapOf(
+        "citra_layout_option" to "default", "citra_stacked_small_proportion" to "1",
+        SWAP_SCREEN to "Top", SWAP_SCREEN_MODE to "Hold",
+    )
+
     /**
      * The swap values to put back when split ends: what the core was [running] before it began, else the user's [stored]
      * ones, else Azahar's defaults (Top / Toggle).
@@ -174,7 +207,7 @@ object DualScreen {
         val size = NdsLayout.ScreenSize(min(w, h * aspect), aspect)
         if (size.width <= 0f || size.height <= 0f) return emptyList()
         val dst = PxRect(NdsLayout.wholePx((w - size.width) / 2f), NdsLayout.wholePx((h - size.height) / 2f), size.width, size.height)
-        return listOf(NdsRegion(screen, src, dst, shaded = true, touch = screen == NdsScreen.BOTTOM))
+        return listOf(NdsRegion(screen, src, dst, shaded = NdsLayout.takesShader(screen), touch = screen == NdsScreen.BOTTOM))
     }
 }
 

@@ -126,6 +126,12 @@ public class LibretroDroid {
     public static native void setPreferVulkan(boolean enabled);
     /** The next core renders into a swapchain on the bridge's surface (Dolphin): its frames are bounded by that surface. Set before create(). */
     public static native void setVulkanSwapchainFrames(boolean enabled);
+    /** nx-mobile: offer libretro video views to the next core loaded. */
+    public static native void setVideoViewsEnabled(boolean enabled);
+    /** The core's video view map, 6 ints per view (x, y, width, height, screen, eye); empty when there is none. */
+    public static native int[] getVideoViews();
+    /** False while setprop debug.nx.videoviews 0 withholds video views from the cores (the frontend's A/B switch). */
+    public static native boolean videoViewsOffered();
     /** Whether this device can run the Vulkan bridge (a Vulkan 1.1 GPU with AHardwareBuffer import). Cached; any thread. */
     public static native boolean isVulkanSupported();
     /** With Settings → System → Debug log on at launch: log GL driver messages (GL_KHR_debug, else glGetError) to tag NXGL. Set before create(). */
@@ -176,6 +182,8 @@ public class LibretroDroid {
     public static native void setPictureHeld(boolean held);
     /** 11 floats per region: src l,t,r,b (0..1 of the frame), dst l,t,r,b (0..1 of the viewport), shaded, touch (0/1), alpha (0..1). */
     public static native void setScreenRegions(float[] packed);
+    /** nx-mobile: compose a width x height frame from the core's (parts packed like setScreenRegions); width 0 clears it. GL thread. */
+    public static native void setComposition(int width, int height, float[] packed);
     /** Same packing as setScreenRegions; dst is 0..1 of the whole second surface. GL thread. */
     public static native void setSecondaryRegions(float[] packed);
     /** Draws the last frame's secondary regions into the current default framebuffer (width x height); never runs the core. GL thread. */

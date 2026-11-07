@@ -15,6 +15,7 @@
  *     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "debugprop.h"
 #include <jni.h>
 
 #include <EGL/egl.h>
@@ -1067,6 +1068,36 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVulkanS
     LibretroDroid::getInstance().setVulkanSwapchainFrames(enabled);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVideoViewsEnabled(
+    JNIEnv* env,
+    jclass obj,
+    jboolean enabled
+) {
+    LibretroDroid::getInstance().setVideoViewsEnabled(enabled);
+}
+
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_videoViewsOffered(
+    JNIEnv* env,
+    jclass obj
+) {
+    return debugPropertyOff("debug.nx.videoviews") ? JNI_FALSE : JNI_TRUE;
+}
+
+JNIEXPORT jintArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getVideoViews(
+    JNIEnv* env,
+    jclass obj
+) {
+    auto views = LibretroDroid::getInstance().getVideoViews();
+    std::vector<jint> flat;
+    flat.reserve(views.size() * 6);
+    for (const auto& v : views) {
+        flat.insert(flat.end(), { (jint) v.x, (jint) v.y, (jint) v.width, (jint) v.height, (jint) v.screen, (jint) v.eye });
+    }
+    jintArray result = env->NewIntArray((jsize) flat.size());
+    env->SetIntArrayRegion(result, 0, (jsize) flat.size(), flat.data());
+    return result;
+}
+
 JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_isVulkanSupported(
     JNIEnv* env,
     jclass obj
@@ -1264,6 +1295,19 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPicture
     jboolean held
 ) {
     LibretroDroid::getInstance().setPictureHeld(held);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setComposition(
+    JNIEnv* env,
+    jclass obj,
+    jint width,
+    jint height,
+    jfloatArray packed
+) {
+    jsize count = packed != nullptr ? env->GetArrayLength(packed) : 0;
+    std::vector<float> data((size_t) count);
+    if (count > 0) env->GetFloatArrayRegion(packed, 0, count, data.data());
+    LibretroDroid::getInstance().setComposition(width, height, ScreenRegion::unpack(data.data(), data.size()));
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setScreenRegions(
