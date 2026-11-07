@@ -132,7 +132,8 @@ internal fun KidsTileGrid(
     val inset = nxPageInset()
     BoxWithConstraints(modifier) {
         val columns = kidsTileColumns(maxWidth.value, (inset.start + inset.end).value)
-        LaunchedEffect(columns) { onColumns(columns) }
+        // Again for new tiles or a new reporter: the Apps tab drawn beside before it shows reports once it is the page.
+        LaunchedEffect(tiles, columns, onColumns) { onColumns(columns) }
         val scroll = rememberScrollState()
         Column(
             Modifier.fillMaxSize().nxScrollFade(scroll).verticalScroll(scroll).heightIn(min = maxHeight)
