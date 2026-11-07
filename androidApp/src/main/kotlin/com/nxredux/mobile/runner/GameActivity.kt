@@ -1296,9 +1296,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // netplay: both devices run the console's default Sega pad (Auto), whatever this device's console or game setting;
         // the core then gets the handheld pak's pad for this tag and core (NetplayPads).
         if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to SegaPadType.AUTO)
-        // onCreate laid the pad out with the defaults: Portrait Pad as set now, so a tall game set Hidden keeps its band
-        // unseen through the copy and the load (applyFrontend, after the view is added, applies the rest).
-        padLayout.onFrontendValues()
         // Shortcuts: the base with this console's and game's overrides, less what a built-in hotkey owns. netplay: they
         // stay bound but do nothing, as fast forward, rewind and reset would desync the players. A link session's end
         // turns them back on ([playLocally]); a lockstep session's does not: the game played on alone after it keeps them
@@ -2188,8 +2185,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             syncN3dsCore()   // a layout row changed in the menu, or the hotkey's
         }
         if (isWii && wiiPad != null) applyWii(values)   // before the launch resolves it, the launch reads the values itself
-        // Portrait Pad changed (the menu, the corner icon, or the launch's values after onCreate's layout).
-        padLayout.onFrontendValues()
         speed.configure(SpeedSettings.parse(values, canRewind), canRewind)   // applied once the view exists, and on every row change
         val s = FrontendSettings.parse(values)
         padLayout.padLandscapeAlpha.value = s.padLandscapeAlpha

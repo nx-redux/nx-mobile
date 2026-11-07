@@ -490,7 +490,7 @@ sealed interface Screen {
     data class ArtworkReset(val scopes: List<ResetScope>, val confirm: ResetScope? = null) : Screen
 }
 
-enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, MENU_PAD, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
+enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
     SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
     // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
@@ -513,7 +513,7 @@ enum class SettingsSection(val label: String, val parent: SettingsSection? = nul
     // General, Launcher (with a launcher), Developer and About groups on one page; the last category.
     SYSTEM("System"),
     DEFAULT_EMULATORS("Default emulators", EMULATORS, SettingsKind.DEFAULTS),
-    PAD_LAYOUT("Pad layout", CONTROLS, SettingsKind.PAD_LAYOUT), SAVES("Saves", LIBRARY, SettingsKind.SAVES),
+    PAD_LAYOUT("Overlay pad layout", APPEARANCE, SettingsKind.PAD_LAYOUT), SAVES("Saves", LIBRARY, SettingsKind.SAVES),
     SHORTCUTS("Shortcuts", CONTROLS, SettingsKind.SHORTCUTS),
     SYSTEM_BUTTONS("System buttons", CONTROLS, SettingsKind.SYSTEM_BUTTONS),
     IMPORT_SAVES("Import saves", SAVES, SettingsKind.IMPORT_SAVES),
@@ -644,8 +644,7 @@ private const val ART_SKIP = "Skip"
 private val ONBOARDING_VALUE_KINDS = mapOf(
     OnboardingStep.TEXT_SIZE to listOf(SettingsKind.TEXT_SIZE),
     OnboardingStep.SAVE_FORMATS to listOf(SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME),
-    // Pad buttons is the third row only while the pad shows and Black is the theme; else Continue is there (never stepped).
-    OnboardingStep.PAD to listOf(SettingsKind.MENU_PAD, SettingsKind.PAD_THEME),
+    OnboardingStep.PAD to listOf(SettingsKind.PAD_SKIN, SettingsKind.PAD_THEME),
     OnboardingStep.TITLE to listOf(SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS),
     OnboardingStep.ACCENT to listOf(SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT),
 )
@@ -2006,7 +2005,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     }
 
     /**
-     * Whether the main menu's pad shows now: Controls → Menu pad, except during first setup and onboarding, which show it
+     * Whether the main menu's pad skin shows now: Appearance → Pad skin, except during first setup and onboarding, which show it
      * on the PAD page only (its value applies at once there) and give every other page, the folder steps and their
      * pickers too, the full height. The menu after setup follows the choice.
      */
@@ -2017,23 +2016,15 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         }
         // First setup between the welcome and HANDHELD (the folder steps and their pickers): not asked yet.
         // A tool opened from the menu while the skin shows two screens: it is on the top screen, the menu (and its pad) below.
-        val step = onboarding.step ?: return deps.settings.menuPad && deps.settings.onboardingDone != false &&
+        val step = onboarding.step ?: return deps.settings.padSkin && deps.settings.onboardingDone != false &&
             (padScreen(_screen.value) || (skinDualMenu && _toolOnTop.value))
         // Setup shows it on its own page only (the choice, live); every other page keeps the full height.
-        return step == OnboardingStep.PAD && deps.settings.menuPad
+        return step == OnboardingStep.PAD && deps.settings.padSkin
     }
 
-    /**
-     * The screens the portrait menu pad belongs to: the menu (its tabs, game lists, a game's Game Settings over its list,
-     * the Game Switcher). The tools' pages never show it, whatever Controls → Menu pad says, but Controls (and its Pad
-     * layout) and Appearance, which preview the pad and its theme.
-     */
-    private fun padScreen(s: Screen): Boolean = when (s) {
-        is Screen.Systems, is Screen.Games, is Screen.Switcher, is Screen.Loading -> true
-        is Screen.EmulatorOptions -> gameSettingsModal(s)
-        is Screen.Settings -> s.section == SettingsSection.CONTROLS || s.section.parent == SettingsSection.CONTROLS || s.section == SettingsSection.APPEARANCE
-        else -> false
-    }
+    /** The screens the pad skin is drawn round after setup: every one, the tools' pages too (user). */
+    @Suppress("UNUSED_PARAMETER")
+    private fun padScreen(s: Screen): Boolean = true
 
     /**
      * The page title onboarding's current step shows: its place in first setup's one count ([setupCounter]): Text size,
@@ -2210,7 +2201,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      */
     private fun refreshPadContext() {
         val padPage = !padController
-        onboarding.context = onboarding.context.copy(padPage = padPage, buttons = padController || (padPage && deps.settings.menuPad))
+        onboarding.context = onboarding.context.copy(padPage = padPage, buttons = padController || (padPage && deps.settings.padSkin))
     }
 
     private var secondConnected = false
@@ -2316,8 +2307,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 if (padPortrait) null else "Turn your phone upright to see the pad.",
             ),
             listOfNotNull(
-                NxRow("On-screen pad", secondary = if (deps.settings.menuPad) "Show" else "Hide", cycleable = true),
-                if (deps.settings.menuPad) NxRow("Pad theme", secondary = padThemeLabel(deps.settings.padTheme), cycleable = true) else null,
+                NxRow("Pad skin", secondary = if (deps.settings.padSkin) "On" else "Off", cycleable = true),
+                if (deps.settings.padSkin) NxRow("Pad theme", secondary = padThemeLabel(deps.settings.padTheme), cycleable = true) else null,
                 NxRow("Continue"),
             ),
         )
@@ -4486,11 +4477,15 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         SettingsSection.SHORTCUTS -> shortcutRows()
         SettingsSection.SYSTEM_BUTTONS -> systemButtonRows()
         SettingsSection.APPEARANCE -> listOf<SettingsRow?>(
-            SettingsRow(SettingsKind.PAD_THEME, "Pad theme", padThemeLabel(deps.settings.padTheme)),
+            SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", if (deps.settings.padSkin) "On" else "Off"),
+            // the skin's look: none to pick while the skin is Off (the full-screen overlay pad)
+            if (deps.settings.padSkin) SettingsRow(SettingsKind.PAD_THEME, "Pad theme", padThemeLabel(deps.settings.padTheme)) else null,
             SettingsRow(SettingsKind.ACCENT, "Accent", deps.settings.accent.label),
             SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", deps.settings.secondaryAccent.label),
             // The options lists' text (Settings, Game Settings, the in-game menu): Large or Small.
             SettingsRow(SettingsKind.TEXT_SIZE, "Text size", deps.settings.optionTextSize.label),
+            // the see-through pad's arrangement (Pad skin Off, or where a skin has no layout), its own page
+            SettingsRow(SettingsKind.PAD_LAYOUT, "Overlay pad layout", if (PadLayouts.isCustom(deps.settings.padLayouts)) "Custom" else "Default"),
             SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
         ).filterNotNull()
         SettingsSection.MAIN_MENU -> layoutsRows()
@@ -4503,10 +4498,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         SettingsSection.CONTROLS -> listOf(
             SettingsRow(SettingsKind.PAD_VIBRATION, "Pad vibration", deps.settings.padVibration.label),
             SettingsRow(SettingsKind.GAME_RUMBLE, "Game rumble", deps.settings.gameRumble.label),
-            // Portrait's main-menu pad below the screen; Off, the menu runs to the bottom (games keep theirs).
-            SettingsRow(SettingsKind.MENU_PAD, "Menu pad", if (deps.settings.menuPad) "On" else "Off"),
-            // The pad's arrangement, its own page (Pad layout).
-            SettingsRow(SettingsKind.PAD_LAYOUT, "Pad layout", if (PadLayouts.isCustom(deps.settings.padLayouts)) "Custom" else "Default"),
             // Fast forward, rewind and reset buttons, its own page (Shortcuts).
             SettingsRow(SettingsKind.SHORTCUTS, "Shortcuts"),
             // Which of the pad's buttons are SELECT, START and MENU, its own page (System buttons).
@@ -4652,6 +4643,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             cycle(listOf(false, true), on, { if (show) (if (it) "Show" else "Hide") else (if (it) "On" else "Off") }, after = after, set = set)
         return when (row.kind) {
             // Appearance: the pad theme, the accent presets, Auto and the presets, Large / Small.
+            SettingsKind.PAD_SKIN -> flip(s.padSkin) { s.padSkin = it }
             SettingsKind.PAD_THEME -> cycle(PadTheme.entries, s.padTheme, ::padThemeLabel) { s.padTheme = it }
             SettingsKind.ACCENT -> cycle(AccentPreset.entries, s.accent, { it.label }) { s.accent = it }
             SettingsKind.SECONDARY_ACCENT -> cycle(SecondaryAccent.entries, s.secondaryAccent, { it.label }) { s.secondaryAccent = it }
@@ -4706,7 +4698,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
             // Controls: Off, Light, Medium and Strong; Game rumble previews the new level. The menu pad: the shell follows.
             SettingsKind.PAD_VIBRATION -> cycle(PadVibration.entries, s.padVibration, { it.label }) { s.padVibration = it }
             SettingsKind.GAME_RUMBLE -> cycle(GameRumble.entries, s.gameRumble, { it.label }, after = { refreshSettings(); deps.rumblePreview(it) }) { s.gameRumble = it }
-            SettingsKind.MENU_PAD -> flip(s.menuPad) { s.menuPad = it }
             // A touch button: None, then every action a touch button can do ([ShortcutAction.touch]).
             SettingsKind.SHORTCUT_TOUCH -> row.touchSlot?.let { slot ->
                 cycle(listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { it.touch }, shortcutSet().touch[slot], { it?.label ?: "None" }) { setTouch(slot, it) }
@@ -4805,10 +4796,12 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         } else if (section == SettingsSection.SYSTEM_BUTTONS) {
             currentPad()?.let { pad -> s.systemButtons = SystemButtons.encode(SystemButtons.reset(systemButtonMap(), pad.key)) }
         } else if (section == SettingsSection.APPEARANCE) {
+            s.padSkin = true
             s.padTheme = PadTheme.DEFAULT
             s.accent = AccentPreset.DEFAULT
             s.secondaryAccent = SecondaryAccent.DEFAULT
             s.optionTextSize = OptionTextSize.DEFAULT
+            s.padLayouts = emptyMap(); _padLayouts.value = emptyMap()
         } else if (section == SettingsSection.MAIN_MENU) {
             s.menuStyles = emptyMap()
             s.menuOrientations = emptyMap()
@@ -4832,8 +4825,6 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         } else if (section == SettingsSection.CONTROLS) {
             s.padVibration = PadVibration.DEFAULT
             s.gameRumble = GameRumble.DEFAULT
-            s.menuPad = true
-            s.padLayouts = emptyMap(); _padLayouts.value = emptyMap()
         }
         showSettingsOn(section, SettingsKind.RESET_DEFAULTS)
     }

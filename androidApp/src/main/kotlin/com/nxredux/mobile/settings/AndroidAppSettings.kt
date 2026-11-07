@@ -30,6 +30,10 @@ class AndroidAppSettings(context: Context) : AppSettings {
             .toMap()
         set(value) = prefs.edit { putString(KEY_DEFAULT_TAGS, value.entries.joinToString("\n") { "${it.key}\t${it.value}" }) }
 
+    override var padSkin: Boolean
+        get() = prefs.getBoolean(KEY_PAD_SKIN, true)
+        set(value) = prefs.edit { putBoolean(KEY_PAD_SKIN, value) }
+
     override var padTheme: PadTheme
         get() = prefs.getString(KEY_PAD_THEME, null)?.let { runCatching { PadTheme.valueOf(it) }.getOrNull() } ?: PadTheme.DEFAULT
         set(value) = prefs.edit { putString(KEY_PAD_THEME, value.name) }
@@ -225,12 +229,6 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = GameRumble.fromStored(prefs.getString(KEY_GAME_RUMBLE, null))
         set(value) = prefs.edit { putString(KEY_GAME_RUMBLE, value.name) }
 
-    override var menuPad: Boolean
-        get() = prefs.getBoolean(KEY_MENU_PAD, true)
-        set(value) {
-            prefs.edit { putBoolean(KEY_MENU_PAD, value) }
-        }
-
     override var secondScreen: Boolean
         get() = prefs.getBoolean(KEY_SECOND_SCREEN, true)
         set(value) {
@@ -296,6 +294,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_TREE = "tree_uri"
         private const val KEY_EXTRAS = "extra_folders"
         private const val KEY_DEFAULT_TAGS = "default_tags"
+        private const val KEY_PAD_SKIN = "pad_skin"
         private const val KEY_PAD_THEME = "pad_theme"
         private const val KEY_MENU_STYLES = "menu_styles"
         private const val KEY_GAME_LIST_STYLE = "game_list_style"
@@ -356,7 +355,6 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_SECOND_SCREEN = "second_screen"
         private const val KEY_BOTTOM_SCREEN = "bottom_screen"
         private const val KEY_PAUSE_UNFOCUSED = "pause_unfocused"
-        private const val KEY_MENU_PAD = "menu_pad"
         private const val KEY_SAVE_FORMAT = "save_format"
         private const val KEY_STATE_FORMAT = "state_format"
         private const val KEY_USE_EXTRACTED_FILE_NAME = "use_extracted_file_name"

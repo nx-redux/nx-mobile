@@ -80,21 +80,16 @@ val LocalWindowSize = compositionLocalOf { DpSize.Zero }
 val LocalPosture = compositionLocalOf<Posture> { Posture.Flat }
 
 /**
- * Portrait: the screen fills the top and a [PAD_PORTRAIT_CM] pad band the bottom, sized from the display's real dpi
- * ([padBandPx]: the density bucket when the dpi is unknown, at most 60% of the height). Landscape: the screen fills the
- * display, no pad. Tabletop (Flex mode): the screen above the hinge, the pad or [clusters] below. [showPad] false
- * (Controls → Menu pad Off) drops the portrait band, the screen filling the area; tabletop keeps its controls below the
- * hinge. [skin] (a pad skin's pack, NX Carbon): with the pad shown, flat, the skin's menu layout instead (portrait or
- * landscape), the whole device drawn round the screen, which fills its glass ([skinPad] draws it and takes its buttons);
- * the drawn band (portrait) or no pad (landscape) where the skin has no menu layout or it does not fit. The caller wraps this in the safe-drawing insets.
+ * The main menu's frame. [skin] (a pad skin's pack, NX Carbon) with [showPad]: the skin's menu layout, the whole device
+ * drawn round the screen, which fills its glass ([skinPad] draws it and takes its buttons); half-folded only its
+ * two-screen layout, split at the hinge. Everywhere else (no skin, the pad off, or no menu layout fits) the screen fills
+ * the area, with no on-screen pad. The caller wraps this in the safe-drawing insets.
  */
 @Composable
 fun HandheldShell(
-    pad: @Composable (Modifier) -> Unit,
     screen: @Composable (modifier: Modifier) -> Unit,
     controllerConnected: Boolean = false,
     showPad: Boolean = true,
-    clusters: @Composable (left: Modifier, right: Modifier) -> Unit = { _, _ -> },
     skin: SkinPackSource? = null,
     skinPad: @Composable (Modifier, SkinPlacement, ImageBitmap, ImageBitmap?) -> Unit = { _, _, _, _ -> },
     tablet: Boolean = false,
@@ -110,9 +105,7 @@ fun HandheldShell(
     // The screen and pad move between the branches below rather than being rebuilt: a rotation or a fold keeps their
     // lazy states, glides, animations and focus. The latest lambdas are read through, so the movable content stays one.
     val currentScreen by rememberUpdatedState(screen)
-    val currentPad by rememberUpdatedState(pad)
     val movableScreen = remember { movableContentOf { m: Modifier -> currentScreen(m) } }
-    val movablePad = remember { movableContentOf { m: Modifier -> currentPad(m) } }
     var screenCentreY by remember { mutableStateOf<Float?>(null) }
     val screenSlot = Modifier.fillMaxSize().onGloballyPositioned { screenCentreY = it.positionInWindow().y + it.size.height / 2f }
     CompositionLocalProvider(LocalScreenCentreY provides screenCentreY) {
@@ -122,14 +115,11 @@ fun HandheldShell(
         ) {
             val portrait = maxHeight > maxWidth
             val window = DpSize(maxWidth, maxHeight)
-            val tt = topInWindow?.let { top ->
-                with(density) { tabletopInArea(posture, top, maxWidth.roundToPx(), maxHeight.roundToPx(), controllerConnected) }
-            }
             // The skin's menu layout for this area (flat, portrait or landscape, with the pad shown only), its picture and its pieces' picture.
             // Half-folded only the two-screen layout (a tablet-class window: the Fold's inner screen) keeps the skin, split at the hinge.
             val hingeY = (posture as? Posture.Tabletop)?.let { (it.hingeTop + it.hingeBottom) / 2f }
             val canTwo = top != null && tablet && twoScreens && portrait
-            val skinPlaced = if (skin != null && showPad && (canTwo || (tt == null && posture !is Posture.Tabletop))) {
+            val skinPlaced = if (skin != null && showPad && (canTwo || posture !is Posture.Tabletop)) {
                 val w = constraints.maxWidth
                 // the skin runs up under the cutout (the shell starts below it), its screen too: the frame keeps its own top
                 // margin and the glass reaches under the camera; the page inside clears it ([cutoutPad] below)
@@ -153,25 +143,6 @@ fun HandheldShell(
             if (posture is Posture.Tabletop && topInWindow == null) {
                 // The first frame in tabletop: the hinge split needs the shell's position, so compose nothing rather than a
                 // branch that is swapped out a frame later.
-            } else if (tt != null && skinPlaced == null) {
-                // Flex mode: the screen above the hinge, the controls (portrait pad, or the two clusters drawn solid) below it.
-                val screenH = with(density) { tt.gameBottom.toDp() }
-                val padH = maxHeight - with(density) { tt.padTop.toDp() }
-                Box(Modifier.fillMaxWidth().height(screenH)) {
-                    CompositionLocalProvider(LocalPortrait provides (tt.pad != TabletopPad.NONE), LocalPadBelow provides (tt.pad != TabletopPad.NONE), LocalWindowSize provides window) {
-                        movableScreen(screenSlot)
-                    }
-                }
-                when (tt.pad) {
-                    TabletopPad.PORTRAIT -> Box(Modifier.fillMaxWidth().height(padH).align(Alignment.BottomCenter)) { movablePad(Modifier.fillMaxSize()) }
-                    TabletopPad.CLUSTERS -> Box(Modifier.fillMaxWidth().height(padH).align(Alignment.BottomCenter)) {
-                        clusters(
-                            Modifier.fillMaxWidth(CLUSTER_MAX_WIDTH_SHARE).fillMaxHeight().align(Alignment.BottomStart),
-                            Modifier.fillMaxWidth(CLUSTER_MAX_WIDTH_SHARE).fillMaxHeight().align(Alignment.BottomEnd),
-                        )
-                    }
-                    TabletopPad.NONE, TabletopPad.DS -> Unit
-                }
             } else if (skinPlaced != null) {
                 // The skin round the screen: the screen exactly over the glass's hole.
                 // Placed for the window from its top: drawn that far up, over the bars' strip.
@@ -227,21 +198,9 @@ fun HandheldShell(
                         }
                     }
                 }
-            } else if (!portrait || !showPad) {
-                // Menu pad Off keeps the portrait layout, the screen filling the area.
-                CompositionLocalProvider(LocalPortrait provides portrait, LocalPadBelow provides false, LocalWindowSize provides window) { movableScreen(screenSlot) }
             } else {
-                // Same band the game reserves, measured the same way (window minus the top cutout).
-                val container = LocalWindowInfo.current.containerSize
-                val areaPx = container.height - WindowInsets.displayCutout.getTop(density)
-                val padHeight = with(density) { portraitBandPx(container.width.toFloat(), areaPx.toFloat(), ydpi, density.density).toDp() }
-                val screenH = maxHeight - padHeight
-                Column(Modifier.fillMaxSize()) {
-                    Box(Modifier.fillMaxWidth().height(screenH)) {
-                        CompositionLocalProvider(LocalPortrait provides true, LocalPadBelow provides true, LocalWindowSize provides window) { movableScreen(screenSlot) }
-                    }
-                    Box(Modifier.fillMaxWidth().height(padHeight)) { movablePad(Modifier.fillMaxSize()) }
-                }
+                // No skin here (Pad skin Off, Menu pad Off, or none of its menu layouts fits): the screen fills the area.
+                CompositionLocalProvider(LocalPortrait provides portrait, LocalPadBelow provides false, LocalWindowSize provides window) { movableScreen(screenSlot) }
             }
         }
     }

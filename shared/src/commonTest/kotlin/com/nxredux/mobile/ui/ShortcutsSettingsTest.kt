@@ -42,6 +42,7 @@ class ShortcutsSettingsTest {
         override var onboardingStep: String? = null
         override var extraFolders: List<ExtraFolder> = emptyList()
         override var defaultTags: Map<String, String> = emptyMap()
+        override var padSkin = true
         override var padTheme = PadTheme.DEFAULT
         override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap()
         override var gameListStyle: MenuStyle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_GAME_LIST_STYLE
@@ -110,7 +111,7 @@ class ShortcutsSettingsTest {
         val s = state()
         s.openSettings(SettingsSection.CONTROLS)
         val labels = s.page().rows.map { it.label }
-        assertEquals(labels.indexOf("Pad layout") + 1, labels.indexOf("Shortcuts"))
+        assertEquals(labels.indexOf("Game rumble") + 1, labels.indexOf("Shortcuts"))
         assertEquals(SettingsKind.SHORTCUTS, s.row("Shortcuts").kind)
     }
 

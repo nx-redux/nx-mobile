@@ -52,10 +52,10 @@ class AppStateLaunchTest {
         override var secondScreen = true
         override var pauseWhenUnfocused = true
         override var bottomScreen = com.nxredux.mobile.runner.BottomScreen.AUTO
-        override var menuPad = true
         override var saveFormat = SaveFormat.DEFAULT
         override var stateFormat = StateFormat.DEFAULT
         override var useExtractedFileName = false
+        override var padSkin: Boolean = true
         override var padTheme: PadTheme = PadTheme.DEFAULT
         // Home Minimal (its default); the other tabs and the game lists too.
         override var menuStyles: Map<MenuCategory, MenuStyle> = MenuCategory.entries.associateWith { MenuStyle.MINIMAL }

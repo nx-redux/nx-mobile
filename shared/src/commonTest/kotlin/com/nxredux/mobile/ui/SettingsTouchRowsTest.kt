@@ -32,7 +32,7 @@ class SettingsTouchRowsTest {
         assertEquals(NxSettingControl.SWITCH, nxSettingControl(listOf("Off", "On")))
         assertEquals(NxSettingControl.SWITCH, nxSettingControl(listOf("Hide", "Show")))
         assertEquals(NxSettingControl.SWITCH, nxSettingControl(listOf("enabled", "disabled")))
-        assertEquals(NxSettingControl.SEGMENTED, nxSettingControl(listOf("Charcoal", "Retro")))
+        assertEquals(NxSettingControl.SEGMENTED, nxSettingControl(listOf("NX Carbon", "NX Onyx")))
         assertEquals(NxSettingControl.SEGMENTED, nxSettingControl(listOf("Off", "Light", "Medium", "Strong")))
         assertEquals(NxSettingControl.PICKER, nxSettingControl(listOf("Full screen", "List")))   // a label too long for a segment
         assertEquals(NxSettingControl.PICKER, nxSettingControl(listOf("List", "Grid", "Carousel", "Backdrop", "Minimal")))   // five values
@@ -171,13 +171,13 @@ class SettingsTouchRowsTest {
     }
 
     @Test fun touchHintsFollowTheControl() {
-        val rows = listOf(SettingsRow(SettingsKind.MENU_PAD, "Menu pad", "On"), SettingsRow(SettingsKind.ACCENT, "Accent", "White"))
+        val rows = listOf(SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", "On"), SettingsRow(SettingsKind.ACCENT, "Accent", "White"))
         val back = Hint(NxButton.B, "Back")
         val change = Hint(NxButton.LEFT, "Change")
         assertEquals(listOf(back, change, Hint(NxButton.A, "Toggle"), Hint(NxButton.X, "Info")),
-            settingsHints(rows, 0, NxSettingRow("Menu pad", choices = listOf("Off", "On"), index = 1), info = true))
+            settingsHints(rows, 0, NxSettingRow("Pad skin", choices = listOf("Off", "On"), index = 1), info = true))
         assertEquals(listOf(back, change, Hint(NxButton.A, "Choose")), settingsHints(rows, 1, NxSettingRow("Accent", choices = List(9) { "c$it" }, index = 0)))
-        assertEquals(listOf(back, change), settingsHints(rows, 1, NxSettingRow("Pad theme", choices = listOf("Charcoal", "Retro"), index = 0)))   // segmented: A steps
+        assertEquals(listOf(back, change), settingsHints(rows, 1, NxSettingRow("Pad theme", choices = listOf("NX Carbon", "NX Onyx"), index = 0)))   // segmented: A steps
         assertEquals(listOf(back, Hint(NxButton.A, "Select")), settingsHints(rows, 1))   // no touch row: as before
     }
 
@@ -194,8 +194,6 @@ class SettingsTouchRowsTest {
         val console = emulatorTouchRow(EmulatorRow.Console(ConsoleRow(layout, PadOptions.AUTO)))
         assertEquals(layout.values.map(layout::labelOf), console.choices); assertEquals(layout.values.indexOf(PadOptions.AUTO), console.index)
         assertEquals("", console.info); assertEquals(layout.info, console.detail)
-        val pad = emulatorTouchRow(EmulatorRow.Console(ConsoleRow(PadOptions.portraitPadRow, PadOptions.SHOWN)))
-        assertEquals("Hidden: the pad goes see-through over the screens", pad.info); assertEquals(PadOptions.portraitPadRow.info, pad.detail)
         assertEquals(USE_EMULATOR_SETTINGS_INFO, emulatorTouchRow(EmulatorRow.UseEmulatorSettings).info)
     }
 

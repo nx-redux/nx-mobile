@@ -32,7 +32,7 @@ object SkinChoice {
 
     /**
      * The skin layout set for the console [baseTag] (upper case, GPGX prefix dropped; [ds]: a DS game): its own button
-     * set (the Game Boys, the GBA), the shared one-screen set ([SINGLE_TAGS]), the DS's, or null: no skin. [gameCube]: a
+     * set (the Game Boys, the GBA), the DS's, or the shared one-screen set ([SINGLE_TAGS], and any console with none of its own); null only for a Wii game whose pad has not resolved. [gameCube]: a
      * GameCube disc run under the Wii tag (its pad is the GameCube's). [wiiPad]: the Wii game's resolved controller (the
      * every Wii pad has its layout; none until it resolves). [n3dsNew]: the resolved New 3DS Controls (the 3DS skin with
      * ZL / ZR and the C-stick nub, else the regular 3DS's).
@@ -58,8 +58,8 @@ object SkinChoice {
         baseTag == "A5200" -> SkinVariant.A5200   // a5200: FIRE 1 / 2 (A / B), * # (Y / X), KEYPAD (L: its on-screen keypad)
         // flycast: a NAOMI / Atomiswave set takes the arcade skin, a disc the Dreamcast one ([DcGames.isArcadeSet])
         baseTag == "DC" -> if (arcadeSet) SkinVariant.ARCADE else SkinVariant.DC
-        baseTag in SINGLE_TAGS -> SkinVariant.SINGLE
-        else -> null
+        // every other console (an added core's tag too): the shared one-screen layout (user)
+        else -> SkinVariant.SINGLE
     }
 
     private val GB_TAGS = setOf("GB", "GBC", "SGB", "FC")   // the NES too (user): A B, fceumm's turbo on TA / TB, no DISK

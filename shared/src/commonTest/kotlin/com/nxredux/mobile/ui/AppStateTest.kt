@@ -171,10 +171,10 @@ class AppStateTest {
         override var secondScreen = true
         override var pauseWhenUnfocused = true
         override var bottomScreen = com.nxredux.mobile.runner.BottomScreen.AUTO
-        override var menuPad = true
         override var saveFormat = SaveFormat.DEFAULT
         override var stateFormat = StateFormat.DEFAULT
         override var useExtractedFileName = false
+        override var padSkin: Boolean = true
         override var padTheme: PadTheme = PadTheme.DEFAULT
         // Pinned to List, the default before Carousel: the walks below step Consoles, Collections and Tools as lists; Home
         // to Grid, its default before Minimal. The real defaults (a missing tab is its MenuStyles.defaultStyleOf) are tested with menuStyles = emptyMap() ([freshSettings]).
@@ -521,7 +521,7 @@ class AppStateTest {
 
     // The menu pad stays hidden through the welcome, the folder steps and onboarding up to its own step.
     @Test fun the_menu_pad_is_hidden_until_onboarding_asks_about_it() = runTest {
-        val settings = freshInstall().apply { menuPad = true }
+        val settings = freshInstall().apply { padSkin = true }
         val state = state(settings)
         state.load()
         assertEquals(false, state.menuPadShown())                          // welcome
@@ -816,7 +816,7 @@ class AppStateTest {
     // RetroAchievements comes right after artwork (its download runs while the layout is picked): no menu pad there yet.
     @Test fun retroachievements_follows_artwork_before_the_menu_pad_step() = runTest {
         val (state, settings) = atOnboardingStep(OnboardingStep.ARTWORK)
-        settings.menuPad = true
+        settings.padSkin = true
         state.select(1); state.onButton(NxButton.A)                       // Later
         assertEquals(OnboardingStep.RA_SIGN_IN, assertIs<Screen.Onboarding>(state.screen.value).step)
         assertEquals(false, state.menuPadShown())
@@ -904,10 +904,10 @@ class AppStateTest {
     // "Use the defaults" writes nothing, even over values an earlier run chose.
     @Test fun customise_no_goes_to_accent_and_writes_nothing() = runTest {
         val (state, settings) = atCustomise(yes = false)
-        settings.menuPageTitle = false; settings.gameListStyle = MenuStyle.BACKDROP; settings.menuPad = false
+        settings.menuPageTitle = false; settings.gameListStyle = MenuStyle.BACKDROP; settings.padSkin = false
         state.select(1); state.onButton(NxButton.A)                         // Use the defaults
         assertEquals(OnboardingStep.ACCENT, step(state))
-        assertEquals(false, settings.menuPageTitle); assertEquals(MenuStyle.BACKDROP, settings.gameListStyle); assertEquals(false, settings.menuPad)
+        assertEquals(false, settings.menuPageTitle); assertEquals(MenuStyle.BACKDROP, settings.gameListStyle); assertEquals(false, settings.padSkin)
     }
 
     @Test fun customise_walks_its_pages_and_writes_each() = runTest {
@@ -931,7 +931,7 @@ class AppStateTest {
         while (settings.gameListStyle != MenuStyle.BACKDROP) state.onButton(NxButton.RIGHT)
         state.select(state.selection.value.count - 1); state.onButton(NxButton.A)   // Continue
         assertEquals(OnboardingStep.ACCENT, step(state))
-        assertEquals(true, settings.menuPad); assertEquals(PadTheme.NX_OBSIDIAN, settings.padTheme)
+        assertEquals(true, settings.padSkin); assertEquals(PadTheme.NX_OBSIDIAN, settings.padTheme)
         assertEquals(false, settings.menuPageTitle); assertEquals(false, settings.menuButtonHints)
         for ((_, c) in tabs) assertEquals(MenuStyle.LIST, MenuStyles.styleOf(settings.menuStyles, c))
         assertEquals(MenuStyle.BACKDROP, settings.gameListStyle)
@@ -941,18 +941,18 @@ class AppStateTest {
     // The pad row flips in place (A, a tap, LEFT/RIGHT) so the pad can be compared; only Continue goes on.
     @Test fun the_pad_page_flips_in_place_and_off_skips_theme_title_and_hints() = runTest {
         val (state, settings) = atCustomise()
-        assertEquals(listOf("On-screen pad" to "Show", "Pad theme" to "NX Carbon", "Continue" to null), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label to it.secondary })
+        assertEquals(listOf("Pad skin" to "On", "Pad theme" to "NX Carbon", "Continue" to null), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label to it.secondary })
         assertEquals(true, state.menuPadShown())
         val total = assertIs<Screen.Onboarding>(state.screen.value).title
-        state.select(0); state.onButton(NxButton.A)                         // Hide: the pad goes at once, the page stays
+        state.select(0); state.onButton(NxButton.A)                         // Off: the skin goes at once, the page stays
         assertEquals(OnboardingStep.PAD, step(state))
-        assertEquals(false, settings.menuPad); assertEquals(false, state.menuPadShown())
+        assertEquals(false, settings.padSkin); assertEquals(false, state.menuPadShown())
         assertNotEquals(total, assertIs<Screen.Onboarding>(state.screen.value).title)   // the count follows at once
         state.onButton(NxButton.RIGHT)                                      // and back
-        assertEquals(true, settings.menuPad)
+        assertEquals(true, settings.padSkin)
         state.onButton(NxButton.LEFT)
-        assertEquals(false, settings.menuPad)
-        assertEquals(listOf("On-screen pad", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })   // no pad: no theme row
+        assertEquals(false, settings.padSkin)
+        assertEquals(listOf("Pad skin", "Continue"), assertIs<Screen.Onboarding>(state.screen.value).rows.map { it.label })   // no pad: no theme row
         state.select(1); state.onButton(NxButton.A)                         // Continue
         assertEquals(OnboardingStep.TAB_HOME, step(state))
     }
@@ -996,7 +996,7 @@ class AppStateTest {
     // Setup shows the menu pad on its own page only: every other page has the full height; the menu then follows the choice.
     @Test fun the_menu_pad_shows_only_on_the_pad_page_during_setup() = runTest {
         val (state, settings) = atCustomise()
-        assertEquals(true, settings.menuPad)
+        assertEquals(true, settings.padSkin)
         assertEquals(true, state.menuPadShown())                           // PAD
         state.select(2); state.onButton(NxButton.A)                         // Continue
         assertEquals(OnboardingStep.TITLE, step(state))
@@ -1090,11 +1090,11 @@ class AppStateTest {
     // each page opens on the value in use.
     @Test fun customise_pages_open_on_the_current_values() = runTest {
         val (state, settings) = atCustomise(yes = false)
-        settings.menuPad = false; settings.padTheme = PadTheme.NX_EMBER; settings.menuPageTitle = false
+        settings.padSkin = false; settings.padTheme = PadTheme.NX_EMBER; settings.menuPageTitle = false
         settings.menuStyles = MenuCategory.entries.associateWith { MenuStyle.LIST }; settings.gameListStyle = MenuStyle.CAROUSEL
         state.select(0); state.onButton(NxButton.A)                         // Yes
-        assertEquals("Hide", assertIs<Screen.Onboarding>(state.screen.value).rows[0].secondary)   // PAD shows the value in use
-        state.select(0); state.onButton(NxButton.A)                         // Show
+        assertEquals("Off", assertIs<Screen.Onboarding>(state.screen.value).rows[0].secondary)   // PAD shows the value in use
+        state.select(0); state.onButton(NxButton.A)                         // On
         assertEquals("NX Ember", assertIs<Screen.Onboarding>(state.screen.value).rows[1].secondary)
         state.select(2); state.onButton(NxButton.A)                         // Continue
         assertEquals("Hide", assertIs<Screen.Onboarding>(state.screen.value).rows[0].secondary)   // TITLE shows the value in use
@@ -2537,32 +2537,28 @@ class AppStateTest {
         assertIs<Screen.FolderSummary>(st.screen.value)           // setHome saw first setup: its next step (the home holds games)
     }
 
-    // The portrait menu pad belongs to the menu: tool pages (Settings among them) never show it, whatever Controls → Menu pad
-    // says, except Controls (and its Pad layout) and Appearance, where the pad and its theme are previewed.
-    @Test fun the_menu_pad_shows_on_the_menu_and_the_pad_settings_only() = runTest {
-        val settings = MemorySettings(ContentRef("Home")).apply { menuPad = true }
+    // Pad skin On: the skin is round every page after setup, the tools (Settings among them) too (user); Off: none anywhere.
+    @Test fun the_pad_skin_shows_on_the_menu_and_every_tool() = runTest {
+        val settings = MemorySettings(ContentRef("Home")).apply { padSkin = true }
         val state = state(settings)
         state.load()
         assertIs<Screen.Systems>(state.screen.value)
         assertEquals(true, state.menuPadShown())                           // the menu
         state.openSettingsMenu()
-        assertEquals(false, state.menuPadShown())                          // Tools → Settings
-        for (section in listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.MAIN_MENU, SettingsSection.LAYOUT_HOME, SettingsSection.SYSTEM)) {
-            state.openSettings(section)
-            assertEquals(false, state.menuPadShown(), "$section")
-        }
-        for (section in listOf(SettingsSection.CONTROLS, SettingsSection.PAD_LAYOUT, SettingsSection.APPEARANCE)) {
+        assertEquals(true, state.menuPadShown())                           // Tools → Settings
+        for (section in listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.MAIN_MENU, SettingsSection.LAYOUT_HOME, SettingsSection.SYSTEM,
+            SettingsSection.CONTROLS, SettingsSection.PAD_LAYOUT, SettingsSection.APPEARANCE)) {
             state.openSettings(section)
             assertEquals(true, state.menuPadShown(), "$section")
         }
-        settings.menuPad = false
+        settings.padSkin = false
         state.openSettings(SettingsSection.CONTROLS)
         assertEquals(false, state.menuPadShown())                          // off is off there too
     }
 
     // First setup's in-app folder picker is before onboarding asks about the menu pad: no pad there either.
     @Test fun the_menu_pad_stays_hidden_in_first_setups_folder_picker() = runTest {
-        val settings = MemorySettings().apply { allFilesAsked = true; onboardingDone = null; menuPad = true }
+        val settings = MemorySettings().apply { allFilesAsked = true; onboardingDone = null; padSkin = true }
         val st = state(settings, fileSource(), allFiles = FakeAllFilesAccess(isGranted = true), localFiles = localFiles())
         st.load()
         st.getStarted()                                   // Get started
@@ -5149,7 +5145,7 @@ class AppStateTest {
         assertEquals(ListSelection(3, 6), state.selection.value)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // Controls
         assertEquals(SettingsSection.CONTROLS, assertIs<Screen.Settings>(state.screen.value).section)
-        assertEquals(listOf("Pad vibration", "Game rumble", "Menu pad", "Pad layout", "Shortcuts", "System buttons", "Reset to defaults"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })
+        assertEquals(listOf("Pad vibration", "Game rumble", "Shortcuts", "System buttons", "Reset to defaults"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })
         state.onButton(NxButton.B)
         assertEquals(ListSelection(4, 6), state.selection.value)
         state.onButton(NxButton.DOWN); state.onButton(NxButton.A)       // System, the last
@@ -5542,10 +5538,12 @@ class AppStateTest {
         state.openSettings(SettingsSection.APPEARANCE)
         assertEquals(
             listOf(
+                SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", "On"),
                 SettingsRow(SettingsKind.PAD_THEME, "Pad theme", "NX Carbon"),
                 SettingsRow(SettingsKind.ACCENT, "Accent", "White"),
                 SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", "Auto"),
                 SettingsRow(SettingsKind.TEXT_SIZE, "Text size", "Large"),
+                SettingsRow(SettingsKind.PAD_LAYOUT, "Overlay pad layout", "Default"),
                 SettingsRow(SettingsKind.RESET_DEFAULTS, "Reset to defaults"),
             ),
             assertIs<Screen.Settings>(state.screen.value).rows,
@@ -5557,20 +5555,20 @@ class AppStateTest {
         val state = state(settings)
         state.load()
         state.openSettings(SettingsSection.APPEARANCE)
-        assertEquals(SettingsRow(SettingsKind.PAD_THEME, "Pad theme", "NX Carbon"), assertIs<Screen.Settings>(state.screen.value).rows[0])
-        state.select(0); state.onButton(NxButton.RIGHT)
+        assertEquals(SettingsRow(SettingsKind.PAD_THEME, "Pad theme", "NX Carbon"), assertIs<Screen.Settings>(state.screen.value).rows[1])
+        state.select(1); state.onButton(NxButton.RIGHT)
         assertEquals(PadTheme.NX_ONYX, settings.padTheme)
-        assertEquals("NX Onyx", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
+        assertEquals("NX Onyx", assertIs<Screen.Settings>(state.screen.value).rows[1].secondary)
         for ((theme, label) in listOf(PadTheme.NX_OBSIDIAN to "NX Obsidian", PadTheme.NX_PLASMA to "NX Plasma", PadTheme.NX_EMBER to "NX Ember", PadTheme.NX_VOLT to "NX Volt", PadTheme.NX_TIDE to "NX Tide")) {
             state.onButton(NxButton.RIGHT)
             assertEquals(theme, settings.padTheme)
-            assertEquals(label, assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
-            assertEquals(ListSelection(0, 5), state.selection.value)
+            assertEquals(label, assertIs<Screen.Settings>(state.screen.value).rows[1].secondary)
+            assertEquals(ListSelection(1, 7), state.selection.value)
         }
         state.onButton(NxButton.RIGHT)                                       // past the last: back to the first
         assertEquals(PadTheme.NX_CARBON, settings.padTheme)
-        assertEquals("NX Carbon", assertIs<Screen.Settings>(state.screen.value).rows[0].secondary)
-        assertEquals(ListSelection(0, 5), state.selection.value)
+        assertEquals("NX Carbon", assertIs<Screen.Settings>(state.screen.value).rows[1].secondary)
+        assertEquals(ListSelection(1, 7), state.selection.value)
     }
 
     // NX Redux: every value row is ITEM_CYCLE, LEFT/RIGHT step it (A still steps forward).
@@ -5579,10 +5577,28 @@ class AppStateTest {
         val state = state(settings)
         state.load()
         state.openSettings(SettingsSection.APPEARANCE)
-        state.select(0)
+        state.select(1)
         state.onButton(NxButton.LEFT); assertEquals(PadTheme.NX_TIDE, settings.padTheme)
         state.onButton(NxButton.RIGHT); assertEquals(PadTheme.NX_CARBON, settings.padTheme)
-        assertEquals(ListSelection(0, 5), state.selection.value)   // the row stays highlighted
+        assertEquals(ListSelection(1, 7), state.selection.value)   // the row stays highlighted
+    }
+
+    // Pad skin On / Off: Off is the full-screen overlay pad, no skin, so Pad theme goes while it is Off; Reset turns it On.
+    @Test fun the_pad_skin_row_turns_the_skin_off_and_hides_the_theme() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val state = state(settings)
+        state.load()
+        state.openSettings(SettingsSection.APPEARANCE)
+        fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
+        assertEquals(SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", "On"), rows()[0])
+        assertEquals(SettingsKind.PAD_THEME, rows()[1].kind)
+        state.select(0); state.onButton(NxButton.A)
+        assertEquals(false, settings.padSkin)
+        assertEquals(SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", "Off"), rows()[0])
+        assertEquals(null, rows().firstOrNull { it.kind == SettingsKind.PAD_THEME })
+        state.select(rows().indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }); state.onButton(NxButton.A); state.onButton(NxButton.A)   /* asks, then Reset */
+        assertEquals(true, settings.padSkin)
+        assertEquals(SettingsKind.PAD_THEME, rows()[1].kind)
     }
 
     @Test fun appearance_ends_with_reset_and_no_longer_opens_layouts() = runTest {
@@ -5591,7 +5607,7 @@ class AppStateTest {
         state.load()
         state.openSettings(SettingsSection.APPEARANCE)
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(listOf(SettingsKind.PAD_THEME, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.RESET_DEFAULTS), rows.map { it.kind })
+        assertEquals(listOf(SettingsKind.PAD_SKIN, SettingsKind.PAD_THEME, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.PAD_LAYOUT, SettingsKind.RESET_DEFAULTS), rows.map { it.kind })
     }
 
     @Test fun layouts_rows_follow_the_handheld_order() = runTest {
@@ -6052,8 +6068,8 @@ class AppStateTest {
         tap(state, 2)                                                   // Appearance, opened at once
         assertEquals(SettingsSection.APPEARANCE, assertIs<Screen.Settings>(state.screen.value).section)
         val size = settings.optionTextSize
-        tap(state, 3)                                                   // Text size: highlighted and stepped, as A does
-        assertEquals(3, state.selection.value.index)
+        tap(state, 4)                                                   // Text size: highlighted and stepped, as A does
+        assertEquals(4, state.selection.value.index)
         assertNotEquals(size, settings.optionTextSize)
     }
 
@@ -9774,14 +9790,15 @@ class AppStateTest {
         state.load()
         state.openSettings(SettingsSection.APPEARANCE)
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
-        val accent = rows[1]   // under the other value rows
+        val accent = rows[2]   // under the other value rows
         assertEquals(SettingsKind.ACCENT, accent.kind)
         assertEquals("Accent", accent.label)
         assertEquals("White", accent.secondary)   // the default
         assertEquals(true, settingsNxRow(accent).cycleable)
-        assertEquals(SettingsKind.SECONDARY_ACCENT, rows[2].kind)
-        assertEquals(SettingsKind.TEXT_SIZE, rows[3].kind)
-        assertEquals(SettingsKind.RESET_DEFAULTS, rows[4].kind)
+        assertEquals(SettingsKind.SECONDARY_ACCENT, rows[3].kind)
+        assertEquals(SettingsKind.TEXT_SIZE, rows[4].kind)
+        assertEquals(SettingsKind.PAD_LAYOUT, rows[5].kind)
+        assertEquals(SettingsKind.RESET_DEFAULTS, rows[6].kind)
         state.openSettings(SettingsSection.MAIN_MENU)
         assertTrue(assertIs<Screen.Settings>(state.screen.value).rows.none { it.kind == SettingsKind.ACCENT })   // not on Layouts
     }
@@ -9924,7 +9941,7 @@ class AppStateTest {
 
     /** Every Appearance and Layouts option moved off its default. */
     private fun MemorySettings.changeEveryAppearanceOption() {
-        padTheme = PadTheme.NX_EMBER; accent = AccentPreset.RED; secondaryAccent = SecondaryAccent.Auto
+        padSkin = false; padTheme = PadTheme.NX_EMBER; accent = AccentPreset.RED; secondaryAccent = SecondaryAccent.Auto
         menuStyles = mapOf(MenuCategory.CONSOLES to MenuStyle.LIST, MenuCategory.COLLECTIONS to MenuStyle.GRID, MenuCategory.TOOLS to MenuStyle.CAROUSEL)
         menuOrientations = mapOf(MenuCategory.CONSOLES to MenuOrientation.VERTICAL, MenuCategory.COLLECTIONS to MenuOrientation.VERTICAL, MenuCategory.TOOLS to MenuOrientation.VERTICAL)
         gameListStyle = MenuStyle.BACKDROP; gameListOrientation = MenuOrientation.VERTICAL
@@ -9935,6 +9952,7 @@ class AppStateTest {
     }
 
     private fun assertAppearanceAtDefaults(settings: AppSettings) {
+        assertEquals(true, settings.padSkin)
         assertEquals(PadTheme.NX_CARBON, settings.padTheme)
         assertEquals(AccentPreset.WHITE, settings.accent)
         assertEquals(SecondaryAccent.Auto, settings.secondaryAccent)
@@ -9965,7 +9983,7 @@ class AppStateTest {
         val state = state(settings)
         state.load()
         state.openSettings(SettingsSection.APPEARANCE)
-        assertEquals(listOf("NX Carbon", "White"), assertIs<Screen.Settings>(state.screen.value).rows.take(2).map { it.secondary })
+        assertEquals(listOf("On", "NX Carbon", "White"), assertIs<Screen.Settings>(state.screen.value).rows.take(3).map { it.secondary })
         fun page(section: SettingsSection) = state.openLayoutsPage(section).map { it.label to it.secondary }
         assertEquals(
             listOf(
@@ -10027,8 +10045,8 @@ class AppStateTest {
         assertEquals(false, settings.menuExtraInfo)
         val page = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.APPEARANCE, page.section); assertFalse(page.confirmReset)   // the question gone, no page change
-        assertEquals(listOf("NX Carbon", "White"), page.rows.take(2).map { it.secondary })   // the rows re-read
-        assertEquals(ListSelection(reset, page.rows.size), state.selection.value)       // still on the reset row
+        assertEquals(listOf("On", "NX Carbon", "White"), page.rows.take(3).map { it.secondary })   // the rows re-read
+        assertEquals(ListSelection(page.rows.lastIndex, page.rows.size), state.selection.value)   // still on the reset row (Pad theme back above it)
     }
 
     @Test fun layouts_reset_puts_only_the_layouts_options_back() = runTest {
@@ -10061,8 +10079,6 @@ class AppStateTest {
             listOf(
                 SettingsRow(SettingsKind.PAD_VIBRATION, "Pad vibration", "Light"),
                 SettingsRow(SettingsKind.GAME_RUMBLE, "Game rumble", "Medium"),
-                SettingsRow(SettingsKind.MENU_PAD, "Menu pad", "On"),
-                SettingsRow(SettingsKind.PAD_LAYOUT, "Pad layout", "Default"),
                 SettingsRow(SettingsKind.SHORTCUTS, "Shortcuts"),
                 SettingsRow(SettingsKind.SYSTEM_BUTTONS, "System buttons"),
                 SettingsRow(SettingsKind.RESET_DEFAULTS, "Reset to defaults"),
@@ -10076,15 +10092,15 @@ class AppStateTest {
     }
 
     // Controls → Pad layout opens its page: Console, the three shapes, Reset console.
-    @Test fun controls_pad_layout_row_opens_its_page() = runTest {
+    @Test fun appearance_overlay_pad_layout_row_opens_its_page() = runTest {
         val settings = freshSettings()
         val state = state(settings)
         state.load()
-        state.openSettings(SettingsSection.CONTROLS)
+        state.openSettings(SettingsSection.APPEARANCE)
         val rows = assertIs<Screen.Settings>(state.screen.value).rows
-        assertEquals(SettingsRow(SettingsKind.PAD_LAYOUT, "Pad layout", "Default"), rows[3])
+        assertEquals(SettingsRow(SettingsKind.PAD_LAYOUT, "Overlay pad layout", "Default"), rows[5])
         assertEquals(SettingsKind.RESET_DEFAULTS, rows.last().kind)
-        state.select(3)
+        state.select(5)
         state.onButton(NxButton.A)
         val page = assertIs<Screen.Settings>(state.screen.value)
         assertEquals(SettingsSection.PAD_LAYOUT, page.section)
@@ -10099,7 +10115,7 @@ class AppStateTest {
         )
         state.onButton(NxButton.B)
         val back = assertIs<Screen.Settings>(state.screen.value)
-        assertEquals(SettingsSection.CONTROLS, back.section)
+        assertEquals(SettingsSection.APPEARANCE, back.section)
         assertEquals(SettingsKind.PAD_LAYOUT, back.rows[state.selection.value.index].kind)
     }
 
@@ -10228,18 +10244,18 @@ class AppStateTest {
         assertEquals(SettingsKind.PAD_LAYOUT_RESET, assertIs<Screen.Settings>(state.screen.value).rows[state.selection.value.index].kind)
     }
 
-    @Test fun controls_reset_to_defaults_clears_every_pad_layout() = runTest {
+    @Test fun appearance_reset_to_defaults_clears_every_pad_layout() = runTest {
         val l = PadLayout(mapOf(PadGroup.DPAD to GroupTweak(dx = 1f)))
         val settings = freshSettings().apply { padLayouts = mapOf("gba" to mapOf(PadSlot(PadShape.PORTRAIT, PadScreen.NARROW) to l)) }
         val state = state(settings)
         state.load()
-        state.openSettings(SettingsSection.CONTROLS)
-        assertEquals("Custom", assertIs<Screen.Settings>(state.screen.value).rows[3].secondary)
+        state.openSettings(SettingsSection.APPEARANCE)
+        assertEquals("Custom", assertIs<Screen.Settings>(state.screen.value).rows[5].secondary)
         state.select(6)
         state.onButton(NxButton.A); state.onButton(NxButton.A)   // asks, then Reset
         assertEquals(emptyMap(), settings.padLayouts)
         assertEquals(emptyMap(), state.padLayouts.value)
-        assertEquals("Default", assertIs<Screen.Settings>(state.screen.value).rows[3].secondary)
+        assertEquals("Default", assertIs<Screen.Settings>(state.screen.value).rows[5].secondary)
     }
 
     @Test fun game_rumble_row_cycles_on_left_right_and_a_and_previews_each_level() = runTest {
@@ -10253,7 +10269,7 @@ class AppStateTest {
         state.onButton(NxButton.RIGHT)
         assertEquals(GameRumble.STRONG, settings.gameRumble)
         assertEquals("Strong", rows()[1].secondary)
-        assertEquals(ListSelection(1, 7), state.selection.value)
+        assertEquals(ListSelection(1, 5), state.selection.value)
         state.onButton(NxButton.A)                                   // wraps
         assertEquals(GameRumble.OFF, settings.gameRumble)
         assertEquals("Off", rows()[1].secondary)
@@ -10265,24 +10281,24 @@ class AppStateTest {
         assertEquals(PadVibration.LIGHT, settings.padVibration)      // the pad's row is its own
     }
 
-    // Settings → Controls → Menu pad, On by default; two values, so A, left and right each flip it.
-    @Test fun menu_pad_row_flips_on_a_left_and_right() = runTest {
+    // Settings → Appearance → Pad skin, On by default; two values, so A, left and right each flip it.
+    @Test fun pad_skin_row_flips_on_a_left_and_right() = runTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings)
         state.load()
-        state.openSettings(SettingsSection.CONTROLS)
-        fun row() = assertIs<Screen.Settings>(state.screen.value).rows[2]
-        assertEquals(SettingsRow(SettingsKind.MENU_PAD, "Menu pad", "On"), row())
+        state.openSettings(SettingsSection.APPEARANCE)
+        fun row() = assertIs<Screen.Settings>(state.screen.value).rows[0]
+        assertEquals(SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", "On"), row())
         assertTrue(settingsNxRow(row()).cycleable)
-        state.select(2)
+        state.select(0)
         state.onButton(NxButton.A)
-        assertEquals(false, settings.menuPad)
+        assertEquals(false, settings.padSkin)
         assertEquals("Off", row().secondary)
         state.onButton(NxButton.RIGHT)
-        assertEquals(true, settings.menuPad)
+        assertEquals(true, settings.padSkin)
         state.onButton(NxButton.LEFT)
-        assertEquals(false, settings.menuPad)
-        assertEquals(ListSelection(2, 7), state.selection.value)
+        assertEquals(false, settings.padSkin)
+        assertEquals(ListSelection(0, 6), state.selection.value)   // Pad theme gone with the skin
     }
 
     // Settings → System → Debug log (its Developer group), Off by default; two values, so A, left and right each flip it.
@@ -10592,7 +10608,7 @@ class AppStateTest {
         state.load()
         state.onFooterMode(FooterMode.BUTTONS)
         state.openSettings(SettingsSection.APPEARANCE)
-        state.settingEvent(NxSettingEvent.OpenPicker(2))                   // Secondary accent's picker
+        state.settingEvent(NxSettingEvent.OpenPicker(3))                   // Secondary accent's picker
         val chooser = state.chooser.value ?: error("no chooser")
         assertEquals("Secondary accent", chooser.title)
         assertEquals(SecondaryAccent.entries.map { it.label }, chooser.labels)
@@ -10602,7 +10618,7 @@ class AppStateTest {
         state.chooseValue(pick)
         assertEquals(SecondaryAccent.entries[pick], settings.secondaryAccent)
         assertNull(state.chooser.value)
-        assertEquals(chooser.labels[pick], assertIs<Screen.Settings>(state.screen.value).rows[2].secondary)
+        assertEquals(chooser.labels[pick], assertIs<Screen.Settings>(state.screen.value).rows[3].secondary)
     }
 
     @Test fun touch_the_chooser_moves_picks_with_a_and_b_closes_it_unchanged() = runTest {
@@ -10611,13 +10627,13 @@ class AppStateTest {
         state.load()
         state.onFooterMode(FooterMode.BUTTONS)
         state.openSettings(SettingsSection.APPEARANCE)
-        state.settingEvent(NxSettingEvent.OpenPicker(1))                   // Accent's picker
+        state.settingEvent(NxSettingEvent.OpenPicker(2))                   // Accent's picker
         val before = settings.accent
         state.onButton(NxButton.DOWN)
         assertEquals((state.chooser.value!!.labels.indexOf(before.label) + 1) % state.chooser.value!!.labels.size, state.chooser.value!!.selected)
         state.onButton(NxButton.B)
         assertNull(state.chooser.value); assertEquals(before, settings.accent)
-        state.settingEvent(NxSettingEvent.OpenPicker(1)); state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
+        state.settingEvent(NxSettingEvent.OpenPicker(2)); state.onButton(NxButton.DOWN); state.onButton(NxButton.A)
         assertEquals(before.step(1), settings.accent)
     }
 
@@ -10632,7 +10648,7 @@ class AppStateTest {
         state.onFooterMode(FooterMode.HINTS)
         state.openSettings(SettingsSection.APPEARANCE)
         val accent = settings.accent
-        state.select(1); state.openSelected()                              // Accent: its swatches step on A
+        state.select(2); state.openSelected()                              // Accent: its swatches step on A
         assertNull(state.chooser.value); assertEquals(accent.step(1), settings.accent)
     }
 
@@ -10682,7 +10698,7 @@ class AppStateTest {
         assertEquals(SettingChoices(listOf("List", "Grid", "Carousel", "Backdrop", "Minimal"), 0), choices(SettingsSection.LAYOUT_GAME_LISTS, SettingsKind.GAME_LIST_STYLE))
         assertEquals(SettingChoices(listOf("Full screen", "List"), 0), choices(SettingsSection.LAYOUT_SWITCHER, SettingsKind.SWITCHER_LAYOUT))
         assertEquals(SettingChoices(listOf("Off", "On"), 1), choices(SettingsSection.SYSTEM, SettingsKind.HOME_SCREEN))   // Android answers it
-        assertNull(choices(SettingsSection.CONTROLS, SettingsKind.PAD_LAYOUT))                                          // a page, not a value
+        assertNull(choices(SettingsSection.APPEARANCE, SettingsKind.PAD_LAYOUT))                                          // a page, not a value
         // Default emulators: a console of several tags its emulators; one of a single tag none (dimmed).
         state.openSettings(SettingsSection.DEFAULT_EMULATORS)
         val d = assertIs<Screen.Settings>(state.screen.value)
@@ -10710,11 +10726,12 @@ class AppStateTest {
         assertEquals(rumble, state.selection.value.index)
         state.chooseSetting(rumble, 3)
         assertEquals(1, previews.size)                                            // already the one: nothing
-        val pad = rows().indexOfFirst { it.kind == SettingsKind.MENU_PAD }
+        state.openSettings(SettingsSection.APPEARANCE)
+        val pad = rows().indexOfFirst { it.kind == SettingsKind.PAD_SKIN }
         state.settingEvent(NxSettingEvent.Choose(pad, 0))                         // the switch: Off
-        assertFalse(settings.menuPad); assertEquals("Off", rows()[pad].secondary)
+        assertFalse(settings.padSkin); assertEquals("Off", rows()[pad].secondary)
         state.chooseSetting(pad, 7)                                               // out of range
-        assertFalse(settings.menuPad)
+        assertFalse(settings.padSkin)
         state.openSettings(SettingsSection.SYSTEM)
         state.chooseSetting(assertIs<Screen.Settings>(state.screen.value).rows.indexOfFirst { it.kind == SettingsKind.HOME_SCREEN }, 1)
         assertEquals(listOf(true), launcher.homeRequests)                         // Android is asked, as A does
@@ -10730,7 +10747,7 @@ class AppStateTest {
         val state = state(settings)
         state.load()
         state.openSettings(SettingsSection.APPEARANCE)
-        state.settingEvent(NxSettingEvent.OpenPicker(1))                          // Accent
+        state.settingEvent(NxSettingEvent.OpenPicker(2))                          // Accent
         val picker = state.chooser.value ?: error("no picker")
         assertEquals("Accent", picker.title); assertEquals(0, picker.current); assertEquals(0, picker.selected)
         state.onButton(NxButton.UP)                                               // wraps to the last
@@ -10740,9 +10757,10 @@ class AppStateTest {
         state.openSettings(SettingsSection.CONTROLS)
         state.select(0); state.onButton(NxButton.A)                               // Pad vibration: segmented, A steps
         assertNull(state.chooser.value); assertEquals(PadVibration.DEFAULT.step(1), settings.padVibration)
-        val pad = assertIs<Screen.Settings>(state.screen.value).rows.indexOfFirst { it.kind == SettingsKind.MENU_PAD }
+        state.openSettings(SettingsSection.APPEARANCE)
+        val pad = assertIs<Screen.Settings>(state.screen.value).rows.indexOfFirst { it.kind == SettingsKind.PAD_SKIN }
         state.select(pad); state.onButton(NxButton.A)                             // a switch flips
-        assertFalse(settings.menuPad)
+        assertFalse(settings.padSkin)
     }
 
     /** Settings row [i] as the page draws it ([settingsTouchRow]). */
@@ -10759,19 +10777,20 @@ class AppStateTest {
         val settings = MemorySettings(ContentRef("Home"))
         val state = state(settings)
         state.load()
-        state.openSettings(SettingsSection.CONTROLS)
+        state.openSettings(SettingsSection.APPEARANCE)
         fun rows() = assertIs<Screen.Settings>(state.screen.value).rows
-        val pad = rows().indexOfFirst { it.kind == SettingsKind.MENU_PAD }
-        val before = settings.menuPad
+        val pad = rows().indexOfFirst { it.kind == SettingsKind.PAD_SKIN }
+        val before = settings.padSkin
         assertEquals(NxSettingRowTap.FOCUS, touchRowAt(state, pad).rowTap)
         labelTap(state, pad)                                                      // focus: the row, its value unchanged
-        assertEquals(pad, state.selection.value.index); assertEquals(before, settings.menuPad)
+        assertEquals(pad, state.selection.value.index); assertEquals(before, settings.padSkin)
         labelTap(state, pad)                                                      // again, on the focused row: still nothing
-        assertEquals(pad, state.selection.value.index); assertEquals(before, settings.menuPad)
+        assertEquals(pad, state.selection.value.index); assertEquals(before, settings.padSkin)
         assertIs<Screen.Settings>(state.screen.value)
         state.select(0)
         state.settingEvent(NxSettingEvent.Choose(pad, touchRowAt(state, pad).flipped))   // the switch itself: flips, focused
-        assertEquals(!before, settings.menuPad); assertEquals(pad, state.selection.value.index)
+        assertEquals(!before, settings.padSkin); assertEquals(pad, state.selection.value.index)
+        state.openSettings(SettingsSection.CONTROLS)
         val vibration = rows().indexOfFirst { it.kind == SettingsKind.PAD_VIBRATION }   // segmented: the label focuses only
         val vib = settings.padVibration
         labelTap(state, vibration); labelTap(state, vibration)
@@ -11105,7 +11124,7 @@ class AppStateTest {
         state.onButton(NxButton.RIGHT)
         assertEquals(PadVibration.MEDIUM, settings.padVibration)
         assertEquals("Medium", rows()[0].secondary)
-        assertEquals(ListSelection(0, 7), state.selection.value)
+        assertEquals(ListSelection(0, 5), state.selection.value)
         state.onButton(NxButton.A)
         assertEquals(PadVibration.STRONG, settings.padVibration)
         assertEquals("Strong", rows()[0].secondary)
@@ -11117,20 +11136,20 @@ class AppStateTest {
     }
 
     @Test fun controls_reset_puts_pad_vibration_back_and_leaves_the_others() = runTest {
-        val settings = MemorySettings(ContentRef("Home")).apply { changeEveryAppearanceOption(); padVibration = PadVibration.OFF; gameRumble = GameRumble.STRONG; menuPad = false }
+        val settings = MemorySettings(ContentRef("Home")).apply { changeEveryAppearanceOption(); padVibration = PadVibration.OFF; gameRumble = GameRumble.STRONG }
         val previews = mutableListOf<GameRumble>()
         val state = state(settings, rumblePreview = { previews += it })
         state.load()
         state.openSettings(SettingsSection.CONTROLS)
-        state.select(6); state.onButton(NxButton.A); state.onButton(NxButton.A)   // asks, then Reset
+        state.select(4); state.onButton(NxButton.A); state.onButton(NxButton.A)   // asks, then Reset
         assertEquals(PadVibration.LIGHT, settings.padVibration)
         assertEquals(GameRumble.MEDIUM, settings.gameRumble)
-        assertEquals(true, settings.menuPad)
+        assertEquals(false, settings.padSkin)                          // Appearance's stays
         assertEquals(emptyList(), previews)                          // a reset plays no preview
         assertEquals(PadTheme.NX_EMBER, settings.padTheme)              // Appearance's stays
         assertEquals(ConsoleArt.NONE, settings.consoleArt)             // Layouts' stays
         assertEquals(SettingsSection.CONTROLS, assertIs<Screen.Settings>(state.screen.value).section)
-        assertEquals(ListSelection(6, 7), state.selection.value)
+        assertEquals(ListSelection(4, 5), state.selection.value)
     }
 
     @Test fun appearance_and_layouts_resets_leave_pad_vibration() = runTest {
@@ -12163,7 +12182,7 @@ class AppStateTest {
     // The skin's two screens: a tool opened from the menu keeps the menu pad (the skin) shown, so it stays in the top glass
     // with the menu below, through its pages, until B.
     @Test fun a_tool_keeps_the_skin_two_screens_through_its_pages() = runTest {
-        val settings = MemorySettings(ContentRef("Home")).apply { menuPad = true; onboardingDone = true }
+        val settings = MemorySettings(ContentRef("Home")).apply { padSkin = true; onboardingDone = true }
         val state = state(settings, launcher = FakeLauncher(listOf(alpha, beta)))
         state.load()
         state.onSkinDualMenu(true)
@@ -12177,7 +12196,7 @@ class AppStateTest {
         state.onSkinDualMenu(false)
         state.openTools()
         state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }); state.onButton(NxButton.A)
-        assertFalse(state.menuPadShown())                                    // one screen: Settings' root as before
+        assertTrue(state.menuPadShown())                                     // one screen: the skin round the tool too (user)
     }
 
     // Dual screen: the highlighted Apps tile previews the drawer on the top screen; a tap there opens it on that app.

@@ -185,6 +185,8 @@ interface AppSettings {
     var extraFolders: List<ExtraFolder>
     /** Console id -> tag to use for files resolved by console; missing = the console's first tag. */
     var defaultTags: Map<String, String>
+    /** Appearance → Pad skin: On (the default) draws the [padTheme] skin; Off, the game full screen under the see-through overlay pad. */
+    var padSkin: Boolean
     /** The pad skin (Appearance → Pad theme); the drawn pad, where a skin has no layout, is always Charcoal. */
     var padTheme: PadTheme
     /**
@@ -324,14 +326,6 @@ interface AppSettings {
      */
     var systemButtons: String
         get() = ""
-        set(@Suppress("UNUSED_PARAMETER") value) {}
-    /**
-     * Settings → Controls → Menu pad (default on): off, portrait's main menu drops its bottom on-screen pad and the screen
-     * runs to the bottom (the menu is touch-driven). Games keep their own pad. Defaulted so a platform or fake without it
-     * stores nothing.
-     */
-    var menuPad: Boolean
-        get() = true
         set(@Suppress("UNUSED_PARAMETER") value) {}
     /**
      * Settings → System → Debug log (default off): off, only errors reach logcat. Defaulted so a platform or fake

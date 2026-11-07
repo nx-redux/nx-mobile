@@ -215,9 +215,8 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     // Bars and the cutout above and below only (the side cutout is in each page's inset: [nxPageInset]), never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
     Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).windowInsetsPadding(nxScreenInsets())) {
         HandheldShell(
-            pad = { m -> NxTheme { PadVibrationProvider(padVibration) { VirtualPad(onPadEvent, m, layout = menuPortraitLayout) } } },
             controllerConnected = controllerConnected,
-            showPad = menuPad,
+            showPad = menuPad,   // Pad skin Off: the menus full screen, no on-screen pad ([AppState.menuPadShown])
             skin = skin,
             skinPad = { m, placement, picture, parts -> PadVibrationProvider(padVibration) { SkinPad(placement, picture, parts, onPadEvent, m) } },
             // the Fold's inner screen and tablets upright: the menu below, the top screen in the skin's frame above the hinge
@@ -225,15 +224,6 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
             twoScreens = !displayDualMenu,
             top = { m -> Box(m) { MenuTopScreen(state, inSkin = true) } },
             onTwoScreens = state::onSkinDualMenu,
-            // Flex mode on a wide window: the two clusters below the hinge (the main app has no analog stick use).
-            clusters = { l, r ->
-                NxTheme {
-                    PadVibrationProvider(padVibration) {
-                        VirtualPadLeft(onPadEvent, { _, _ -> }, l)
-                        VirtualPadRight(onPadEvent, r)
-                    }
-                }
-            },
             screen = { m ->
                 NxTheme(colors = look.colors) {
                     val footer = footerModeFor(controllerConnected, LocalPadBelow.current)

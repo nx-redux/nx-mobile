@@ -70,6 +70,11 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "row under Display.",
     )
     // Appearance.
+    SettingsKind.PAD_SKIN -> quiet(
+        "The handheld drawn around the game, or full screen",
+        "On draws the Pad theme's handheld around the game and the menus. Off runs the game full screen with see-through " +
+            "buttons over it, and the menus without an on-screen pad.",
+    )
     SettingsKind.PAD_THEME -> quiet(
         "The skin of the on-screen pad",
         "The skin drawn around the game and the menus: the whole handheld, its buttons and screens. NX Carbon is smoke " +
@@ -175,12 +180,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
         "The game's own rumble, on the controller you play with when it has a motor, else on the phone. Changing the " +
             "level plays a short pulse at that strength. In a multiplayer game it sets every player's strength.",
     )
-    SettingsKind.MENU_PAD -> SettingText(
-        "The pad under the menus; games keep theirs",
-        "Off takes the pad away: the main menu, the game lists and the Game Switcher then run to the bottom of the " +
-            "screen, used by touch or a controller. Games keep their pad.",
-    )
-    SettingsKind.PAD_LAYOUT -> quiet("Move and resize the on-screen pad's buttons")
+    SettingsKind.PAD_LAYOUT -> quiet("Move and resize the see-through pad's buttons")
     SettingsKind.PAD_LAYOUT_CONSOLE -> SettingText(
         "Whose layout you edit",
         "Shared is the layout every console uses. A console you give a layout of its own uses that instead. Each screen " +

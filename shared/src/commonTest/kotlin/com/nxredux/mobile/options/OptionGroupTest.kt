@@ -10,7 +10,7 @@ class OptionGroupTest {
     @Test fun every_app_setting_is_in_the_group_it_is_for() {
         assertEquals(
             setOf(
-                "Controller Layout", "Controller Type", "Portrait Pad", "Pad Opacity (landscape)", "New 3DS Controls",
+                "Controller Layout", "Controller Type", "Pad Opacity (landscape)", "New 3DS Controls",
                 "Wii Controller", "Motion Controls", "Pointer Width", "Pointer Height", "Pointer Offset",
             ),
             labelsIn(OptionGroup.CONTROLS),

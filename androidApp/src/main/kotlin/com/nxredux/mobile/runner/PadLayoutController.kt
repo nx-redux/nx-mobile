@@ -207,6 +207,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     val padLandscapeAlpha = mutableStateOf(FrontendSettings().padLandscapeAlpha)
     // The portrait pad's palette (Settings → Appearance → Pad theme), read once per game: it is set from the menu, not in-game.
     private val padTheme by lazy { AndroidAppSettings(activity).padTheme }
+    /** Appearance → Pad skin: Off, no skin, the game full screen under the see-through overlay pad. */
+    private val padSkinOn by lazy { AndroidAppSettings(activity).padSkin }
     // Settings → Controls → Pad vibration, read once per game likewise; every pad ([composePad]) ticks at it.
     private val padVibration by lazy { AndroidAppSettings(activity).padVibration }
 
@@ -243,9 +245,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      * notifications move top-centre, clear of it.
      */
     val overlayPadShown = mutableStateOf(false)
-    // Whether the current layout was built with the portrait band hidden ([portraitPadHidden]): a change re-lays out.
-    var layoutPadHidden = false
-        private set
 
     // ---- The pad beside the picture (landscape) and the hidden band's overlay (portrait) ----
     /** Hides those pads after a layout until the renderer has placed the picture ([onPictureKnown]). */
@@ -255,7 +254,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     /** The half-folded DS / 3DS pad halves below the hinge, beside the touch screen; null without them. */
     private var tabletopDsViews: Pair<ComposeView, ComposeView>? = null
     /** The pad skin's pack (Pad theme NX Carbon...), read once per game; null for the drawn pads or a pack that can't be read. */
-    private val skinPack: PadSkinPack? by lazy { padTheme.skin?.let { PadSkinPack.builtIn(activity, it) } }
+    private val skinPack: PadSkinPack? by lazy { if (padSkinOn) padTheme.skin?.let { PadSkinPack.builtIn(activity, it) } else null }
     /** The skin's view while the skin is the layout ([applySkinLayout]), else null. */
     private var skinView: PadSkinView? = null
     /** The touch shortcuts changed ([PadLayoutHost.padShortcuts]): the skin's strip writes the new ones. */
@@ -269,8 +268,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     /** The portrait band hidden: its see-through overlay across the bottom, and that overlay's height, px. */
     private var overlayView: ComposeView? = null
     private var overlayHeight = 0
-    /** The portrait band's hide / show corner icon, while it is drawn ([syncPortraitToggle]). */
-    private var toggleView: ComposeView? = null
     /** Shows the pads that waited for the picture once [reveal]'s timeout has passed; one pending at a time. */
     private val revealTimeout = Runnable { updatePadVisibility() }
     /** The portrait band is shown in the current layout. */
@@ -337,11 +334,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         overlayPadShown.value = false   // set again below where the landscape clusters are added
         clustersClear.value = false
         overlayClear.value = false
-        layoutPadHidden = portraitPadHidden()
         clusterViews = null
         tabletopDsViews = null
         overlayView = null
-        toggleView = null
         overlayHeight = 0
         bandShown = false
         bandView = null
@@ -379,29 +374,15 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             return
         }
         if (portrait) {
-            // Portrait keeps the bottom pad band for a clip-on controller, so it has its placeholder and the game stays in
-            // the top area. Any other controller drops it (PadBandRule): no pad, and the game area runs to the screen bottom.
-            // Where hiding it is offered (DS, 3DS, a game taller than wide) the player can hide the band (Portrait Pad):
-            // the game runs to the bottom too, under the overlay pad.
+            // Portrait: the game full screen under the see-through overlay pad, no pad with a controller. A clip-on
+            // controller keeps the band's room empty below the game ([portraitBandPx]), so the game is not under it.
             val bandPx = portraitBandPx(names)
             game.layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
             ).apply { bottomMargin = bandPx; topMargin = cutoutTop }
-            if (bandPx > 0) {
-                val bandLayout = padLayout(PadShape.PORTRAIT)
-                val pad = composePad { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, stickDefault()], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = bandLayout, tools = padTools(), shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic()) }
-                addPad(root, pad, FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT, bandPx, Gravity.BOTTOM))
-                bandShown = true
-                bandView = pad
-                bandWaits = bandWaitsNow()
-            } else if (layoutPadHidden && names.isEmpty()) {
-                // One see-through pad across the bottom, its buttons the band's size. No touch cut-off under it: its buttons
-                // take their own touches and the gaps pass to the game, so a DS touch screen reaching into it still answers.
-                // A controller hides it, as in landscape.
-                addHiddenBandOverlay(root)
-            }
-            syncPortraitToggle(root, names, portrait = true)
+            // One see-through pad across the bottom. No touch cut-off under it: its buttons take their own touches and
+            // the gaps pass to the game, so a DS touch screen reaching into it still answers.
+            if (names.isEmpty()) addHiddenBandOverlay(root)
         } else {
             // Landscape: full-screen game. Show the transparent corner clusters only when no controller
             // is attached; a connected controller hides them for an unobstructed screen.
@@ -420,35 +401,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         // The DS layouts follow the new area (gameContainer's size listener does too, once it is laid out).
         game.post { relayoutFrontend() }
         host.onSkinPlaced()   // no skin now: a panel in its glass goes
-    }
-
-    /**
-     * [portrait]: the band's corner icon drawn where hiding is offered ([hideOfferedNow]) and the band rule keeps a pad
-     * ([names]), else taken away; nothing else is rebuilt, so a game's first frame can add it without a new layout.
-     */
-    private fun syncPortraitToggle(root: FrameLayout, names: List<String>, portrait: Boolean) {
-        val wanted = portrait && tabletop(names) == null &&
-            hideOfferedNow() && PadBandRule.keepPadBand(portrait = true, names)
-        val shown = toggleView
-        if (wanted == (shown != null)) return
-        if (shown != null) {
-            root.removeView(shown)
-            padViews -= shown
-            toggleView = null
-            return
-        }
-        val hidden = layoutPadHidden
-        val shape = activity.windowShape()
-        val unitDp = bandUnits(shape).unitPx / shape.density
-        val toggle = composePad {
-            // DS / 3DS: mirrors the mic button in the bottom-left corner (the band's, or the hidden band's overlay row),
-            // read in composition, so it moves once the game shows the button (after this layout) and back if it goes.
-            val inset = if (padMic() != null) portraitToggleInset(portraitMicEdge(unitDp, hidden), portraitMicCentre(unitDp, hidden)) else PortraitToggleInset.NONE
-            PortraitPadToggle(hidden, if (hidden) padLandscapeAlpha.value else 1f, ::togglePortraitPad, Modifier.padding(end = inset.endDp.dp, bottom = inset.bottomDp.dp))
-        }
-        addPad(root, toggle, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END))
-        toggleView = toggle
     }
 
     /**
@@ -714,25 +666,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         if (reveal.pending()) armRevealTimeout(findViewById(R.id.root))
     }
 
-    /** The band would wait unseen for the first frame now ([bandAwaitsFrame]). */
-    private fun bandWaitsNow(): Boolean =
-        bandAwaitsFrame(PadOptions.portraitPadHidden(layoutTag(), frontendValues), consoleScale(layoutTag()), frame)
-
-    /**
-     * The frontend values changed (the menu, the corner icon, or the launch's values after onCreate's layout, which had
-     * the defaults): a Portrait Pad flip lays out again (posted: the icon's own view is still dispatching its long
-     * press); else a shown band starts or stops waiting for the first frame ([bandGate]).
-     */
-    fun onFrontendValues() {
-        val root = findViewById<FrameLayout>(R.id.root)
-        when (bandGate(layoutPadHidden, portraitPadHidden(), bandView != null, bandWaits, bandWaitsNow())) {
-            BandGate.RELAYOUT -> root.post { applyLayout(resources.configuration.orientation) }
-            BandGate.START_WAIT -> { bandWaits = true; startReveal(root); updatePadVisibility() }
-            BandGate.STOP_WAIT -> { bandWaits = false; updatePadVisibility() }
-            BandGate.NONE -> Unit
-        }
-    }
-
     /**
      * The renderer placed the picture from the core's geometry: the pads waiting for it ([reveal]) show. The clusters wait
      * for their measured width too ([onMeasured] lays out again then), so the picture does not step once they show.
@@ -740,61 +673,23 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     fun onPictureKnown() {
         if (reveal.shouldShow(SystemClock.uptimeMillis())) return
         if ((clusterViews != null || tabletopDsViews != null) && measured.accepted == null) return
-        // The first frame flipped band / overlay in portrait ([onFrame]): the pads of this layout never show, the next do.
-        if (!isLandscape(resources.configuration.orientation) && portraitPadHidden() != layoutPadHidden) return
         reveal.onPictureKnown()
         updatePadVisibility()
     }
 
-    /**
-     * The running game's [next] frame (each layout with a known geometry): when it changes whether hiding the band is
-     * offered (a picture taller than wide) in portrait, the corner icon follows, and the band too when it is set hidden.
-     */
+    /** The running game's [next] frame (each layout with a known geometry): a one-screen console's skin glass follows its aspect. */
     fun onFrame(next: CoreFrame) {
-        val before = hideOfferedNow()
         val aspectBefore = frame?.aspect
         frame = next
-        // a one-screen console's skin glass follows the picture's aspect; a skin that no longer fits gives way to the pad
-        if (skinView != null) {
-            if (next.aspect != aspectBefore && skinPlacement() == null) findViewById<FrameLayout>(R.id.root).post { applyLayout(resources.configuration.orientation) }
-            return
-        }
-        // Landscape builds nothing from it; portrait rebuilds only when the band / overlay choice flips, else just the icon.
-        if (hideOfferedNow() == before || isLandscape(resources.configuration.orientation)) return
-        val root = findViewById<FrameLayout>(R.id.root)
-        root.post {
-            if (portraitPadHidden() != layoutPadHidden) applyLayout(resources.configuration.orientation)
-            else {
-                syncPortraitToggle(root, layoutControllerNames(), portrait = !isLandscape(resources.configuration.orientation))
-                updatePadVisibility()
-            }
-        }
+        // a skin that no longer fits gives way to the overlay pad
+        if (skinView != null && next.aspect != aspectBefore && skinPlacement() == null)
+            findViewById<FrameLayout>(R.id.root).post { applyLayout(resources.configuration.orientation) }
     }
-
-    /** Hiding the portrait band is offered for this game ([hideOffered]: DS / 3DS, or a picture taller than wide). */
-    private fun hideOfferedNow(): Boolean =
-        PadOptions.hasPortraitPadRow(layoutTag()) && hideOffered(consoleScale(layoutTag()), frame)
 
     /** Back in front: a pad layout changed in the editor meanwhile builds the pads again. */
     fun onResume() {
         val built = builtLayouts ?: return
         if (AndroidAppSettings(activity).padLayouts != built) applyLayout(resources.configuration.orientation)
-    }
-
-    /** Portrait Pad is Hidden and offered for this game ([hideOfferedNow]): portrait drops the band for the overlay pad. */
-    fun portraitPadHidden(): Boolean = PadOptions.portraitPadHidden(layoutTag(), frontendValues) && hideOfferedNow()
-
-    /**
-     * The corner icon's long press: the portrait band hidden or back, applied now and saved for the console (and the
-     * game's own file, when it has one, so the change is not hidden by it).
-     */
-    private fun togglePortraitPad() {
-        val key = PadOptions.PORTRAIT_PAD
-        if (key in lockedOptions) { toast("Portrait Pad is locked in the config"); return }
-        val next = if (portraitPadHidden()) PadOptions.SHOWN else PadOptions.HIDDEN
-        input.releaseAllGameInput()   // the pad goes away under the fingers: nothing it held may stick in the core
-        applyFrontend(frontendValues + (key to next))
-        host.persistConsoleKey(key, next, "Could not save Portrait Pad")
     }
 
     /**
@@ -845,17 +740,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      * The tabletop split for the current [posture] and root size ([rootSize]), or null (flat, no size yet, or a pad skin
      * drawing the fold itself: [skinPlacement]).
      */
-    fun tabletop(names: List<String> = layoutControllerNames()): TabletopLayout? {
-        if (posture == Posture.Flat) return null
-        val (w, h) = rootSize()
-        if (w <= 0 || h <= 0) return null
-        if (skinPlacement(names) != null) return null
-        val shape = activity.windowShape()
-        val tt = tabletopLayout(posture, w, h, shape.screenClass, cutoutTop, controllerConnected = names.isNotEmpty(), isDualScreenConsole = tabletopDualScreen(layoutTag(), host.dualMode))
-        // A hinge reading the Fold's split cannot fit is not used for the DS / 3DS: flat, with its pad ([usableTabletop]).
-        if (tt?.pad == TabletopPad.DS && !usableTabletop(spansHinge = true, tabletopDsPlacement(shape, tt))) return null
-        return tt
-    }
+    @Suppress("UNUSED_PARAMETER")
+    fun tabletop(names: List<String> = layoutControllerNames()): TabletopLayout? = null   // no Flex layouts: half-folded is laid out flat (a skin places its own hinge)
 
     /**
      * The pad skin laid out for this window, or null where the drawn pads stay: no skin picked, a controller in the
@@ -1075,12 +961,11 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     }
 
     /**
-     * The portrait pad band's height: the main menu's band for this window ([WindowShape.portraitBandPx]), or 0 when
-     * [PadBandRule] drops it (a non-clip-on controller, [names] from [layoutControllerNames]) or the player hid it
-     * ([portraitPadHidden]).
+     * The room kept empty below the game in portrait for a clip-on controller ([PadBandRule]: the band's height, nothing
+     * drawn in it), else 0: with no controller the game runs to the bottom under the overlay pad.
      */
     fun portraitBandPx(names: List<String> = layoutControllerNames()): Int {
-        if (!PadBandRule.keepPadBand(portrait = true, names) || portraitPadHidden()) return 0
+        if (names.isEmpty() || !PadBandRule.keepPadBand(portrait = true, names)) return 0
         return activity.windowShape().portraitBandPx.roundToInt()
     }
 
@@ -1116,7 +1001,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      */
     fun updatePadVisibility() {
         // Tabletop keeps its controls too: they sit below the hinge, under the menu's area.
-        val overGame = resources.configuration.orientation != Configuration.ORIENTATION_PORTRAIT || layoutPadHidden
+        val overGame = true   // the pad is always over the game now (the overlay)
         // The panel filling the game's window hides the pad too: it would cover the panel (dual-screen handhelds have buttons).
         val hide = (menuOpen && overGame && tabletop() == null) || mainPanelShown()
         // Waiting for the picture ([reveal]): invisible, not gone, so the clusters are still laid out and measured.
@@ -1178,55 +1063,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         !isWii -> input::onCStick
         wiiPad == WiiPad.CLASSIC -> input::onWiiRightStick
         else -> null
-    }
-}
-
-/** [PortraitPadToggle]'s circle: its 6 dp padding from its own edges, and half its 36 dp size above that. */
-private const val PORTRAIT_TOGGLE_EDGE_DP = 6f
-private const val PORTRAIT_TOGGLE_CENTRE_DP = 24f
-
-/** Extra room round [PortraitPadToggle], dp, past its own padding: [endDp] from the right, [bottomDp] from the bottom. */
-internal data class PortraitToggleInset(val endDp: Float, val bottomDp: Float) {
-    companion object { val NONE = PortraitToggleInset(0f, 0f) }
-}
-
-/**
- * The hide / show icon's inset that mirrors the mic button: its circle [micEdgeDp] from the right, as the mic's is from
- * the left, and its centre [micCentreDp] above the bottom, level with the mic's. Never past the corner.
- */
-internal fun portraitToggleInset(micEdgeDp: Float, micCentreDp: Float): PortraitToggleInset = PortraitToggleInset(
-    (micEdgeDp - PORTRAIT_TOGGLE_EDGE_DP).coerceAtLeast(0f), (micCentreDp - PORTRAIT_TOGGLE_CENTRE_DP).coerceAtLeast(0f),
-)
-
-/**
- * The DS / 3DS portrait pad's hide / show icon in the bottom-right corner: a long press flips the band; a tap does
- * nothing, so a thumb landing on it mid-game changes nothing. The chevron points where the band goes: down to hide it,
- * up (over the game, [hidden]) to bring it back.
- */
-@Composable
-private fun PortraitPadToggle(hidden: Boolean, alpha: Float, onLongPress: () -> Unit, modifier: Modifier = Modifier) {
-    val haptics = LocalHapticFeedback.current
-    val action by rememberUpdatedState(onLongPress)
-    val ink = LocalNxColors.current.main
-    Box(
-        modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Right + WindowInsetsSides.Bottom))
-            .padding(6.dp).size(36.dp).alpha(alpha)
-            .background(Color(0x66000000), CircleShape)
-            .pointerInput(Unit) {
-                detectTapGestures(onLongPress = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    action()
-                })
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(Modifier.size(width = 14.dp, height = 8.dp)) {
-            val (tip, ends) = if (hidden) 0f to size.height else size.height to 0f
-            val path = Path().apply {
-                moveTo(0f, ends); lineTo(size.width / 2f, tip); lineTo(size.width, ends)
-            }
-            drawPath(path, ink, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-        }
     }
 }
 

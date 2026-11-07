@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 class RaUnlocksSinceTest {
     private class Settings : AppSettings {
         override var treeRef: ContentRef? = null; override var extraFolders: List<ExtraFolder> = emptyList(); override var defaultTags: Map<String, String> = emptyMap()
+        override var padSkin = true
         override var padTheme = PadTheme.DEFAULT
         override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap(); override var gameListStyle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_GAME_LIST_STYLE; override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap(); override var gameListOrientation = com.nxredux.mobile.settings.MenuStyles.DEFAULT_ORIENTATION; override var gameListVerticalAlignment = com.nxredux.mobile.settings.VerticalListAlignment.DEFAULT; override var toolApps: List<String> = emptyList()
         override var androidConsoleApps: List<String> = emptyList(); override var androidGamesAsked = false; override var androidPins: List<String> = emptyList()

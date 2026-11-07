@@ -49,10 +49,10 @@ class StorageUpgradeTest {
         override var secondScreen = true
         override var pauseWhenUnfocused = true
         override var bottomScreen = com.nxredux.mobile.runner.BottomScreen.AUTO
-        override var menuPad = true
         override var saveFormat = SaveFormat.DEFAULT
         override var stateFormat = StateFormat.DEFAULT
         override var useExtractedFileName = false
+        override var padSkin: Boolean = true
         override var padTheme: PadTheme = PadTheme.DEFAULT
         override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap()
         override var gameListStyle: MenuStyle = MenuStyle.LIST
