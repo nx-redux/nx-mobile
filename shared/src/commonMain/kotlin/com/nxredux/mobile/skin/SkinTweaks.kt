@@ -1,6 +1,8 @@
 package com.nxredux.mobile.skin
 
 import com.nxredux.mobile.options.PxRect
+import kotlin.math.abs
+import kotlin.math.ceil
 
 /** A player's nudge of one button group: [dx], [dy] in picture px, and a [scale] about the group's centre. */
 data class SkinTweak(val dx: Float = 0f, val dy: Float = 0f, val scale: Float = 1f)
@@ -48,49 +50,82 @@ object SkinTweaks {
 
     /**
      * [p] with [tweaks] (group id to tweak, each held to [limit]) applied in a [windowW] x [windowH] window: each group's
-     * pieces and controls (their place and every size) scaled about the group's middle and moved. A move that would
-     * take a group further into [noGo] or out of the window is cut short toward none (and a growth likewise, toward its
-     * own size). The frame's strip ([SkinGroups.STRIP]) moves its labels and its buttons. Apply before
-     * [SkinPlacement.forStick] (both of a swap's sets move together).
+     * pieces and controls (their place and every size) scaled about the middle of its pieces and moved. A group's box
+     * (its pieces and its controls' hit areas) may not go further into [noGo], into another group's box, or out of the
+     * window than it started, nor pass over any of them on the way: the move stops short (and a growth likewise, toward
+     * its own size). Groups go in [SkinGroups.of]'s order, each against the others' boxes as they stand. The frame's
+     * strip ([SkinGroups.STRIP]) moves its labels and its buttons. Apply before [SkinPlacement.forStick] (both of a
+     * swap's sets move together).
      */
     fun apply(p: SkinPlacement, tweaks: Map<String, SkinTweak>, windowW: Float, windowH: Float): SkinPlacement {
+        // groups are made of a layout's pieces, and only a frame layout has pieces (every pack's piece layout has one)
         val frame = p.spec.frame
         if (tweaks.isEmpty() || frame == null) return p
         val groups = SkinGroups.of(p.spec)
-        val zones = noGo(p) + PxRect(0f, 0f, windowW, windowH)
+        val zones = noGo(p)
+        val window = PxRect(0f, 0f, windowW, windowH)
         val stripN = frame.strip?.labels?.size ?: 0
         val pieces = p.pieces.toMutableList()
         val controls = p.controls.toMutableList()
-        for (g in groups) {
+        val pieceAt = groups.map { g ->
+            val strip = g.id == SkinGroups.STRIP
+            pieces.indices.filter { if (strip) pieces[it].strip else pieces[it].piece in g.pieces }
+        }
+        val controlAt = groups.map { g ->
+            if (g.id == SkinGroups.STRIP) (0 until minOf(stripN, controls.size)).toList() else ownControls(p, groups, g, stripN)
+        }
+        fun boxOf(i: Int) = union(pieceAt[i].map { pieces[it].dst } + controlAt[i].map { hit(controls[it]) })
+        val boxes = groups.indices.mapTo(ArrayList()) { boxOf(it) }
+        for ((gi, g) in groups.withIndex()) {
             val t = limit(tweaks[g.id] ?: continue, g)
             if (t == SkinTweak()) continue
-            val strip = g.id == SkinGroups.STRIP
-            val pieceAt = pieces.indices.filter { if (strip) pieces[it].strip else pieces[it].piece in g.pieces }
-            val controlAt = if (strip) (0 until minOf(stripN, controls.size)).toList() else ownControls(p, groups, g, stripN)
-            // the group's box: its pieces (the strip's: its labels and its buttons, which span it)
-            val box = union(pieceAt.map { pieces[it].dst } + if (strip || pieceAt.isEmpty()) controlAt.map { hit(controls[it]) } else emptyList()) ?: continue
-            val cx = box.x + box.width / 2f; val cy = box.y + box.height / 2f
+            val box = boxes[gi] ?: continue
+            // the middle it scales about: its pieces' (the strip's: its whole box)
+            val mid = (if (g.id == SkinGroups.STRIP) null else union(pieceAt[gi].map { pieces[it].dst })) ?: box
+            val cx = mid.x + mid.width / 2f; val cy = mid.y + mid.height / 2f
             fun moved(s: Float, ox: Float, oy: Float) = PxRect(cx + (box.x - cx) * s + ox, cy + (box.y - cy) * s + oy, box.width * s, box.height * s)
-            // how far the box is in each no-go rect and out of the window: never more than where the layout put it
-            fun cost(r: PxRect) = zones.mapIndexed { i, z -> if (i == zones.lastIndex) r.width * r.height - overlap(r, z) else overlap(r, z) }
+            val obstacles = zones + boxes.filterIndexed { i, b -> i != gi && b != null }.map { it!! }
+            // how far the box is in each obstacle (its area there) and out of the window (its edges' distance past it):
+            // never more than where it started
+            fun cost(r: PxRect) = obstacles.map { overlap(r, it) } + outside(r, window)
             val base = cost(box)
-            fun fits(r: PxRect) = cost(r).withIndex().all { (i, c) -> c <= base[i] }
+            fun fits(r: PxRect) = cost(r).zip(base).all { (c, b) -> c <= b + 0.01f }   // px², over float noise
             val ox = t.dx * p.k; val oy = t.dy * p.k
+            // a growth only adds to the box round its middle (no jumping), a move is walked from where it starts
             val sc = 1f + (t.scale - 1f) * longest { fits(moved(1f + (t.scale - 1f) * it, 0f, 0f)) }
-            val f = longest { fits(moved(sc, ox * it, oy * it)) }
+            val f = reach(maxOf(abs(ox), abs(oy))) { fits(moved(sc, ox * it, oy * it)) }
             val dx = ox * f; val dy = oy * f
             fun mx(x: Float) = cx + (x - cx) * sc + dx
             fun my(y: Float) = cy + (y - cy) * sc + dy
-            for (i in pieceAt) {
+            for (i in pieceAt[gi]) {
                 val d = pieces[i].dst
                 pieces[i] = pieces[i].copy(dst = PxRect(mx(d.x), my(d.y), d.width * sc, d.height * sc))
             }
-            for (i in controlAt) {
+            for (i in controlAt[gi]) {
                 val c = controls[i]
                 controls[i] = PlacedControl(c.spec.scaled(sc), mx(c.x), my(c.y))
             }
+            boxes[gi] = boxOf(gi)
         }
         return p.copy(pieces = pieces, controls = controls)
+    }
+
+    /** How far (window px) a move steps at most, so it never passes over a thinner obstacle. */
+    private const val STEP = 2f
+
+    /**
+     * The most of a move [length] window px long (0..1) that is still [ok] all the way: walked in [STEP]s from none, the
+     * first step that is not, halved back to where it stops.
+     */
+    private fun reach(length: Float, ok: (Float) -> Boolean): Float {
+        val n = ceil(length / STEP).toInt().coerceIn(1, 4096)
+        for (i in 1..n) {
+            if (ok(i.toFloat() / n)) continue
+            var lo = (i - 1f) / n; var hi = i.toFloat() / n
+            repeat(16) { val m = (lo + hi) / 2f; if (ok(m)) lo = m else hi = m }
+            return lo
+        }
+        return 1f
     }
 
     /** The most of a change (0..1) that is still [ok]: all of it, else found by halving (none at worst). */
@@ -129,6 +164,10 @@ object SkinTweaks {
         val l = rs.minOf { it.x }; val t = rs.minOf { it.y }
         return PxRect(l, t, rs.maxOf { it.x + it.width } - l, rs.maxOf { it.y + it.height } - t)
     }
+
+    /** How far [r]'s edges lie past [w]'s, added up. */
+    private fun outside(r: PxRect, w: PxRect) = maxOf(0f, w.x - r.x) + maxOf(0f, w.y - r.y) +
+        maxOf(0f, r.x + r.width - (w.x + w.width)) + maxOf(0f, r.y + r.height - (w.y + w.height))
 
     private fun overlap(a: PxRect, b: PxRect): Float {
         val w = minOf(a.x + a.width, b.x + b.width) - maxOf(a.x, b.x)
