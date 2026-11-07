@@ -86,7 +86,7 @@ CORES = gambatte fceumm snes9x genesis_plus_gx mgba melondsds mupen64plus_next p
   swanstation picodrive gearcoleco fbneo flycast azahar dolphin armsx2
 
 gambatte_REPO = https://github.com/libretro/gambatte-libretro
-gambatte_HASH = d9d6cd06382d1ced30de34d56d3609452323dab1
+gambatte_HASH = 77f2567d718b8973d02caa2daa8dce4953faf811
 gambatte_LICENSE = COPYING
 gambatte_KIND = ndkbuild
 gambatte_BUILD_PATH = libgambatte/libretro
@@ -118,7 +118,7 @@ snes9x_ARTIFACT = libs/$(ABI)/libretro.so
 # patches/genesis_plus_gx/0001: retro_cheat_set heap-copies the code and stops at MAX_CHEATS parts; the 151st part
 # wrote past cheatlist[] and codes over 255 chars were cut.
 genesis_plus_gx_REPO = https://github.com/libretro/Genesis-Plus-GX
-genesis_plus_gx_HASH = c2838c7dc4236fc2fe94e5dbd08b41486067918e
+genesis_plus_gx_HASH = f27655b592ef43f317272d79883bcaa10d3ac8ad
 genesis_plus_gx_LICENSE = LICENSE.txt core/ntsc/license.txt
 genesis_plus_gx_KIND = ndkbuild
 genesis_plus_gx_BUILD_PATH = libretro
@@ -253,7 +253,7 @@ mednafen_vb_BUILD_PATH = .
 mednafen_vb_ARTIFACT = libs/$(ABI)/libretro.so
 
 handy_REPO = https://github.com/libretro/libretro-handy
-handy_HASH = fca239207e9c111da3e85d2faf0b1b9d7524e498
+handy_HASH = bc55d462f0b2d6b073ea93dc552ebd73cec60fd1
 handy_LICENSE = lynx/license.txt
 handy_KIND = ndkbuild
 handy_BUILD_PATH = .
@@ -314,7 +314,7 @@ pokemini_ARTIFACT = libs/$(ABI)/libretro.so
 # fake08's libretro build lives in platform/libretro/jni with LOCAL_MODULE := fake08, so the artifact is
 # libfake08.so; the default recursive submodule init pulls libs/z8lua.
 fake08_REPO = https://github.com/jtothebell/fake-08
-fake08_HASH = f6bab5a7ba521ce440e45d1aeef6122674be6ee9
+fake08_HASH = 814991a2571ad3970e386cef48f3b148aa1c27b9
 fake08_LICENSE = LICENSE.MD libs/miniz/LICENSE libs/lodepng/LICENSE
 fake08_KIND = ndkbuild
 fake08_BUILD_PATH = platform/libretro
