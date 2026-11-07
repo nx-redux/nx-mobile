@@ -377,12 +377,67 @@ class KidsSettingsTest {
         assertEquals(Screen.KidsHome, st.screen.value)                     // and locked at once, as after setup
     }
 
-    @Test fun setupNotInOnboarding() {
-        assertTrue(OnboardingStep.entries.none { it.name.contains("KIDS") })
+    /** Who's this for? only where Kids Mode can run, last before Done, whatever else was answered; never a permission step. */
+    @Test fun onboardingAsksWhoOnlyWhereOffered() {
         for (handheld in listOf(null, true, false)) for (signedIn in listOf(true, false)) for (customise in listOf(null, true, false)) {
-            val steps = onboardingSteps(OnboardingContext(signedIn = signedIn, handheld = handheld, customise = customise, padPage = true, buttons = true))
-            assertTrue(steps.none { it.name.contains("KIDS") }, steps.toString())
+            val ctx = OnboardingContext(signedIn = signedIn, handheld = handheld, customise = customise, padPage = true, buttons = true)
+            assertFalse(OnboardingStep.KIDS in onboardingSteps(ctx))
+            val offered = onboardingSteps(ctx.copy(kidsOffered = true))
+            assertEquals(listOf(OnboardingStep.KIDS, OnboardingStep.DONE), offered.takeLast(2), offered.toString())
         }
+    }
+
+    /** Onboarding resumed at Who's this for? ([OnboardingStep.KIDS]) on a fresh install. */
+    private fun TestScope.atWhoStep(home: Boolean): Setup {
+        val t = setup(home = home)
+        t.settings.onboardingDone = false
+        t.settings.onboardingStep = OnboardingStep.KIDS.name
+        t.st.load()
+        assertEquals(OnboardingStep.KIDS, assertIs<Screen.Onboarding>(t.st.screen.value).step)
+        return t
+    }
+
+    private fun AppState.pressStart() = onboardingRow(0)   // Done's Press Start
+
+    @Test fun justMeFinishesOnboardingAsBefore() = runTest {
+        val t = atWhoStep(home = true)
+        assertTrue(KIDS_ONBOARDING_LINE in assertIs<Screen.Onboarding>(t.st.screen.value).details)   // where Kids Mode is, either way
+        t.st.onboardingRow(0)                                              // Just me
+        assertEquals(OnboardingStep.DONE, assertIs<Screen.Onboarding>(t.st.screen.value).step)
+        t.st.pressStart()
+        assertIs<Screen.Systems>(t.st.screen.value)
+        assertFalse(t.settings.kidsEnabled)
+    }
+
+    @Test fun myKidsRunsKidsSetupAfterDone() = runTest {
+        val t = atWhoStep(home = true)
+        t.st.onboardingRow(1)                                              // My kids
+        assertEquals(OnboardingStep.DONE, assertIs<Screen.Onboarding>(t.st.screen.value).step)
+        t.st.pressStart()
+        assertEquals(true, t.settings.onboardingDone)
+        assertEquals(PinPurpose.SETUP_NEW, assertIs<Screen.KidsPin>(t.st.screen.value).purpose)   // setup's PIN, at once
+        t.st.typePin("123456"); t.st.typePin("123456"); t.st.pickAlpha(); t.st.next(); t.st.next()
+        assertTrue(t.settings.kidsEnabled)
+        assertEquals(Screen.KidsHome, t.st.screen.value)                   // Monday 10:00: locked, the tiles
+    }
+
+    @Test fun myKidsAwayFromHomeAsksHomeFirst() = runTest {
+        val t = atWhoStep(home = false)
+        t.st.onboardingRow(1)
+        t.st.pressStart()
+        val page = t.st.page()
+        assertEquals(SettingsSection.KIDS, page.section)
+        assertTrue(page.confirmReset)                                      // Make NX Redux your home screen?
+        assertFalse(t.settings.kidsEnabled)
+    }
+
+    @Test fun myKidsSetupCancelledLeavesItOff() = runTest {
+        val t = atWhoStep(home = true)
+        t.st.onboardingRow(1)
+        t.st.pressStart()
+        t.st.onButton(NxButton.B)                                          // the PIN pad's Back with nothing typed
+        assertFalse(t.settings.kidsEnabled)
+        assertEquals(SettingsSection.KIDS, t.st.page().section)           // on the Kids Mode page, its switch at hand
     }
 
     @Test fun changePinAsksTwiceAndStores() = runTest {

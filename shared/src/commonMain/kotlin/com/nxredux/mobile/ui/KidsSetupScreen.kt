@@ -59,6 +59,10 @@ internal fun kidsSetupTouchRow(row: KidsSetupRow, setup: Boolean): NxSettingRow 
 
 internal val KIDS_OFF_ON = listOf("Off", "On")
 
+/** Onboarding's Who's this for? line: what Kids Mode is, and where it is for later. */
+internal const val KIDS_ONBOARDING_LINE =
+    "Kids Mode lets a child open only the apps you choose, with games on a schedule. You can turn it on any time in Settings → Kids Mode."
+
 /** The apps never to allow: each is a way out of Kids Mode, or to new games. */
 internal const val KIDS_APPS_AVOID =
     "Don't allow Settings, a file manager or the Play Store: from them your kid could turn Kids Mode off or install games."

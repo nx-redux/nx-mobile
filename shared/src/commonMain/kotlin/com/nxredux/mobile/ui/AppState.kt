@@ -2021,7 +2021,7 @@ class AppState(
         if (onboarding.step != null) return true
         if (deps.settings.onboardingDone != false) return false
         if (firstSetup) return false   // the folder steps' scans: their own page follows, onboarding starts after them
-        onboarding.context = onboarding.context.copy(signedIn = deps.settings.raToken != null)
+        onboarding.context = onboarding.context.copy(signedIn = deps.settings.raToken != null, kidsOffered = kids != null && deps.launcher != null)
         refreshPadContext()   // the customise pages a resume can land on depend on it
         onboarding.startMain(resume = deps.settings.onboardingStep?.let { n -> OnboardingStep.entries.firstOrNull { it.name == n } })
         deps.settings.onboardingStep = onboarding.step?.name
@@ -2398,6 +2398,11 @@ class AppState(
                 NxRow("Continue"),
             ),
         )
+        // Who's this for: My kids runs Kids Mode's setup once onboarding is done ([kidsStartAfterOnboarding]); either way the line says where it is.
+        OnboardingStep.KIDS -> Triple(
+            "Who's this for?", listOf(KIDS_ONBOARDING_LINE),
+            listOf(NxRow("Just me"), NxRow("My kids")),
+        )
         OnboardingStep.DONE -> Triple("Ready, player one", listOf(
             "Your library is set up and the cartridges are blown clean.",
             "Every feature is explained at nxredux.com.",
@@ -2429,6 +2434,7 @@ class AppState(
                 else -> onboardingNext()
             }
             OnboardingStep.CUSTOMISE -> { onboarding.context = onboarding.context.copy(customise = index == 0); onboardingNext() }
+            OnboardingStep.KIDS -> { onboarding.context = onboarding.context.copy(kids = index == 1); onboardingNext() }
             OnboardingStep.PAD -> if (index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, index, 1) else onboardingNext()
             OnboardingStep.TITLE, OnboardingStep.ACCENT -> if (index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, index, 1) else onboardingNext()
             OnboardingStep.TAB_HOME, OnboardingStep.TAB_CONSOLES, OnboardingStep.TAB_COLLECTIONS, OnboardingStep.TAB_TOOLS,
@@ -3066,6 +3072,7 @@ class AppState(
 
     /** Onboarding done: the menu on Home, its tabs rebuilt for the layout and options picked. */
     private fun finishOnboarding() {
+        val kidsNext = onboarding.context.kids == true   // My kids: Kids Mode's setup once the menu is up
         onboarding.finish()
         resetOnboardingRun()
         deps.settings.onboardingDone = true
@@ -3076,6 +3083,7 @@ class AppState(
         scope.launch {
             rebuildMainRows()
             showSystemsNow(MenuCategory.HOME)
+            if (kidsNext) kidsStartAfterOnboarding()
         }
     }
 
@@ -7764,6 +7772,20 @@ class AppState(
 
     /** Kids Mode's switch was turned on away from home: the page asks to make NX Redux home ([settingsResetAsk]). */
     private var kidsAskHome = false
+
+    /**
+     * Onboarding's My kids: the Kids Mode page, then as its switch turned on: the home question while NX Redux is not
+     * home, else setup (a PIN first). A cancelled setup leaves Kids Mode off on this page.
+     */
+    private fun kidsStartAfterOnboarding() {
+        if (kids == null || deps.settings.kidsEnabled) return
+        kidsShowPage(SettingsKind.KIDS_ENABLE)
+        kidsSetEnabled(true)
+        if (kidsAskHome) {
+            kidsAskHome = false
+            (_screen.value as? Screen.Settings)?.takeIf { it.section == SettingsSection.KIDS }?.let { _screen.value = it.copy(confirmReset = true) }
+        }
+    }
 
     /** Change PIN: a new PIN twice (only a parent reaches the page, so the old one is not asked). */
     private fun kidsChangePin() {
