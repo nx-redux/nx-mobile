@@ -154,22 +154,28 @@ private fun KidsAppTile(tile: KidsTile, lit: Boolean, onTap: () -> Unit) {
     val colors = LocalNxColors.current
     val content = if (lit) colors.onAccent else colors.listText
     val icon = rememberAppIcon(tile.id)
-    Column(
+    val size = 14.sp
+    val style = TextStyle(fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = size, lineHeight = size * 1.15f, textAlign = TextAlign.Center)
+    val iconMod = Modifier.size(KIDS_ICON.dp)
+    // Every tile as tall as a two-line name's; its icon and name centred in it, so a one-line name sits mid-tile too.
+    Box(
         Modifier.width(KIDS_TILE_W.dp).clip(RoundedCornerShape(NX_TILE_CORNER.dp))
             .then(if (lit) Modifier.background(nxHighlight()) else Modifier.tilePlate(colors.background, colors.inkEdge))
             .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onTap)
             .padding(horizontal = 8.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        contentAlignment = Alignment.Center,
     ) {
-        val iconMod = Modifier.size(KIDS_ICON.dp)
-        if (icon != null) Image(icon, contentDescription = null, modifier = iconMod)
-        else Image(painterResource(Res.drawable.menu_icon_app), contentDescription = null, modifier = iconMod, colorFilter = ColorFilter.tint(content))
-        Spacer(Modifier.height(8.dp))
-        val size = 14.sp
-        Text(
-            tile.label, color = content, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(),
-            style = TextStyle(fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = size, lineHeight = size * 1.15f, textAlign = TextAlign.Center),
-        )
+        Column(Modifier.alpha(0f), horizontalAlignment = Alignment.CenterHorizontally) {   // role: the unseen two-line size
+            Spacer(iconMod)
+            Spacer(Modifier.height(8.dp))
+            Text("", minLines = 2, maxLines = 2, style = style, modifier = Modifier.fillMaxWidth())
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            if (icon != null) Image(icon, contentDescription = null, modifier = iconMod)
+            else Image(painterResource(Res.drawable.menu_icon_app), contentDescription = null, modifier = iconMod, colorFilter = ColorFilter.tint(content))
+            Spacer(Modifier.height(8.dp))
+            Text(tile.label, color = content, maxLines = 2, overflow = TextOverflow.Ellipsis, style = style, modifier = Modifier.fillMaxWidth())
+        }
     }
 }
 
