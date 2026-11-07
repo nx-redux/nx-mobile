@@ -257,7 +257,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
         "Big tiles of allowed apps outside play times",
         "On, games open only in the play times; outside them your kid sees big tiles of the allowed apps, and Tools, " +
             "Settings and the Apps drawer need your PIN. The first time you turn it on, a short setup asks for a PIN, the " +
-            "apps, the play times and two permissions.",
+            "apps, the play times and two permissions. It needs NX Redux as the home app.",
     )
     SettingsKind.KIDS_PIN -> quiet("Choose a new 4-digit PIN")
     SettingsKind.KIDS_DAY -> quiet(
@@ -273,6 +273,10 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.KIDS_ALARMS -> SettingText(
         row.secondary.orEmpty(),
         "Without Alarms & reminders, the warning and the lock can come a few minutes late. Allow it here.",
+    )
+    SettingsKind.KIDS_HOME -> SettingText(
+        row.secondary.orEmpty(),
+        "Without NX Redux as the home app, Home leaves it and the lock can't bring your kid back from other apps. Set it here.",
     )
     SettingsKind.KIDS_FORGOT -> SettingText(
         row.secondary.orEmpty(),

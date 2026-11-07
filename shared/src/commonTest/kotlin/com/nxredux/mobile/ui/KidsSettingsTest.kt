@@ -41,6 +41,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -196,7 +197,7 @@ class KidsSettingsTest {
     private fun AppState.pickAlpha() = pressSetup { it is KidsSetupRow.App && it.app.id == "a/A" }
 
     @Test fun firstEnableRunsSetupInOrder() = runTest {
-        val t = setup(usage = false, alarms = false, home = false)
+        val t = setup(usage = false, alarms = false, home = true)
         val st = t.st
         st.openSettings(SettingsSection.KIDS)
         assertEquals(SettingsSection.KIDS, st.page().section)
@@ -223,11 +224,9 @@ class KidsSettingsTest {
         st.onForeground()                                                  // back, granted: the next step
         assertFalse(t.kids.granting)
         assertEquals(KidsSetupStep.ALARMS, st.setupStep())
-        st.skip()
-        assertEquals(KidsSetupStep.HOME, st.setupStep())
         assertFalse(t.settings.kidsEnabled)
-        st.pressSetup { it == KidsSetupRow.UseHome }
-        assertEquals(1, t.launcher.homeAsked)
+        st.skip()
+        assertEquals(0, t.launcher.homeAsked)                              // already home: setup never asks
         // Done: the PIN stored, Kids Mode on with its flag, the parent still in the full menu, back on the page.
         assertEquals("1234", t.settings.pin)
         assertTrue(t.settings.kidsEnabled)
@@ -235,6 +234,56 @@ class KidsSettingsTest {
         assertEquals(KidsMode.Parent, t.kids.mode.value)
         assertEquals(SettingsSection.KIDS, st.page().section)
         assertEquals("On", st.page().rows.first { it.kind == SettingsKind.KIDS_ENABLE }.secondary)
+    }
+
+    @Test fun enableAwayFromHomeAsksToBeHomeFirst() = runTest {
+        val t = setup(home = false)
+        val st = t.st
+        st.openSettings(SettingsSection.KIDS)
+        st.pressRow(SettingsKind.KIDS_ENABLE)
+        val page = st.page()                                               // no PIN pad: the page asks instead
+        assertTrue(page.confirmReset)
+        val i = page.rows.indexOfFirst { it.kind == SettingsKind.KIDS_ENABLE }
+        assertEquals("Use as home screen", assertNotNull(settingsResetAsk(page, i)).confirm)
+        assertFalse(t.settings.kidsEnabled)
+        st.onButton(NxButton.B)                                            // Cancel: nothing asked, still off
+        assertFalse(st.page().confirmReset)
+        assertEquals(0, t.launcher.homeAsked)
+        st.pressRow(SettingsKind.KIDS_ENABLE)
+        st.onButton(NxButton.A)                                            // Use as home screen: Android asks
+        assertEquals(1, t.launcher.homeAsked)
+        assertFalse(st.page().confirmReset)
+        assertFalse(t.settings.kidsEnabled)
+        t.launcher.homeNow = true                                          // home now: the switch runs setup
+        st.pressRow(SettingsKind.KIDS_ENABLE)
+        assertEquals(PinPurpose.SETUP_NEW, assertIs<Screen.KidsPin>(st.screen.value).purpose)
+    }
+
+    @Test fun enableWithPinAwayFromHomeStaysOff() = runTest {
+        val t = setup(home = false)
+        t.settings.setKidsPin("1234")
+        val st = t.st
+        st.openSettings(SettingsSection.KIDS)
+        st.pressRow(SettingsKind.KIDS_ENABLE)
+        assertTrue(st.page().confirmReset)
+        assertFalse(t.settings.kidsEnabled)
+        assertEquals(KidsMode.Off, t.kids.mode.value)
+    }
+
+    @Test fun homeLostWhileOnShowsWarningRow() = runTest {
+        val t = setup()
+        val st = t.st
+        st.openSettings(SettingsSection.KIDS)
+        st.pressRow(SettingsKind.KIDS_ENABLE)
+        st.typePin("1234"); st.typePin("1234")
+        st.pickAlpha(); st.next(); st.next()
+        assertTrue(t.settings.kidsEnabled)
+        assertFalse(st.page().rows.any { it.kind == SettingsKind.KIDS_HOME })
+        t.launcher.homeNow = false                                         // another launcher picked meanwhile
+        st.onLauncherChanged()
+        assertTrue(st.page().rows.any { it.kind == SettingsKind.KIDS_HOME })
+        st.pressRow(SettingsKind.KIDS_HOME)
+        assertEquals(1, t.launcher.homeAsked)
     }
 
     @Test fun pinMismatchRestartsPinStep() = runTest {

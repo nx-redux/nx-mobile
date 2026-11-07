@@ -536,7 +536,7 @@ sealed interface Screen {
 }
 
 /** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
-enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
+enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS }
 
 enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_THEME, PAD_BUTTONS, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, MENU_PAD, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, PAD_LAYOUT, PAD_LAYOUT_CONSOLE, PAD_LAYOUT_SHAPE, PAD_LAYOUT_RESET, DEBUG_LOG, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE,
     // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
@@ -550,7 +550,7 @@ enum class SettingsKind { HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EM
     TEXT, LICENSES_LINK,
     // Settings -> Kids Mode: the page itself, On / Off, Change PIN, a day's play time, Allowed apps, the two missing
     // permissions' warnings and Forgot PIN?.
-    KIDS_MODE, KIDS_ENABLE, KIDS_PIN, KIDS_DAY, KIDS_APPS, KIDS_GUARD, KIDS_ALARMS, KIDS_FORGOT }
+    KIDS_MODE, KIDS_ENABLE, KIDS_PIN, KIDS_DAY, KIDS_APPS, KIDS_GUARD, KIDS_ALARMS, KIDS_HOME, KIDS_FORGOT }
 
 /**
  * A Settings page. [parent] null: a section of the Tools -> Settings menu, in this order; else a sub-page of that
@@ -4779,8 +4779,16 @@ class AppState(
             SettingsKind.BOTTOM_SCREEN -> cycle(BottomScreen.entries, s.bottomScreen, ::bottomScreenLabel) { s.bottomScreen = it }   // Auto, Main screen, Second screen
             SettingsKind.DEBUG_LOG -> flip(s.debugLog) { s.debugLog = it }
             // Kids Mode On / Off: the first switch-on runs setup (another screen), so the page is republished only if still up.
+            // Not the home app: nothing turns on, the page asks to make it home first ([kidsAskHome], [settingsResetAsk]).
             SettingsKind.KIDS_ENABLE -> kids?.let {
-                flip(s.kidsEnabled, after = { if ((_screen.value as? Screen.Settings)?.section == SettingsSection.KIDS) refreshSettings() }) { on -> kidsSetEnabled(on) }
+                flip(s.kidsEnabled, after = {
+                    val page = _screen.value as? Screen.Settings
+                    if (page?.section == SettingsSection.KIDS) {
+                        refreshSettings()
+                        if (kidsAskHome) (_screen.value as? Screen.Settings)?.let { _screen.value = it.copy(confirmReset = true) }
+                    }
+                    kidsAskHome = false
+                }) { on -> kidsSetEnabled(on) }
             }
             else -> null
         }
@@ -5181,6 +5189,7 @@ class AppState(
         when (page.rows.getOrNull(_selection.value.index)?.kind) {
             SettingsKind.RESET_DEFAULTS -> resetToDefaults(page.section)
             SettingsKind.PAD_LAYOUT_RESET -> resetPadLayoutConsole()
+            SettingsKind.KIDS_ENABLE -> deps.launcher?.setHome(true)   // Android asks; Kids Mode is turned on again after
             else -> Unit
         }
     }
@@ -6301,6 +6310,7 @@ class AppState(
                     SettingsKind.KIDS_APPS -> kidsOpenApps(setup = false)
                     SettingsKind.KIDS_GUARD -> kids?.openUsageAccess()   // the row goes on resume once granted
                     SettingsKind.KIDS_ALARMS -> kids?.openExactAlarms()
+                    SettingsKind.KIDS_HOME -> deps.launcher?.setHome(true)   // the row goes once home ([onLauncherChanged])
                     SettingsKind.KIDS_FORGOT -> showSettingInfo(_selection.value.index)   // where the flag is, and what deleting it does
                     else -> Unit   // a value row with nothing to step ([settingValue] null): as before, nothing
                 }
@@ -7152,7 +7162,7 @@ class AppState(
      */
     fun onLauncherChanged() {
         val section = (_screen.value as? Screen.Settings)?.section
-        if (section == SettingsSection.SYSTEM || section == SettingsSection.LIBRARY) refreshSettings()
+        if (section == SettingsSection.SYSTEM || section == SettingsSection.LIBRARY || section == SettingsSection.KIDS) refreshSettings()
     }
 
     /**
@@ -7643,6 +7653,7 @@ class AppState(
         add(SettingsRow(SettingsKind.KIDS_APPS, "Allowed apps", kidsAppsSummary(s.kidsAllowedApps)))
         if (s.kidsEnabled && !k.hasUsageAccess()) add(SettingsRow(SettingsKind.KIDS_GUARD, "Guard off", "Usage access not granted", warning = true))
         if (s.kidsEnabled && !k.canExactAlarms()) add(SettingsRow(SettingsKind.KIDS_ALARMS, "Exact timing off", "Alarms & reminders not allowed", warning = true))
+        if (s.kidsEnabled && kidsNeedsHome()) add(SettingsRow(SettingsKind.KIDS_HOME, "Not the home screen", "NX Redux isn't the home app", warning = true))
         val where = if (s.kidsEnabled && k.flagWriteFailed) KIDS_FLAG_FAILED else k.flagPath() ?: "$KIDS_FLAG_NAME in your home folder"
         add(SettingsRow(SettingsKind.KIDS_FORGOT, "Forgot PIN?", where))
     }
@@ -7672,10 +7683,20 @@ class AppState(
         val k = kids ?: return
         when {
             !on -> k.turnOff()
+            kidsNeedsHome() -> kidsAskHome = true   // the page asks to make NX Redux home first; Kids Mode stays off
             deps.settings.kidsPinSet -> k.turnOn()
             else -> { kidsPinChange = false; kidsNewPin = null; kidsAskNewPin(null) }
         }
     }
+
+    /**
+     * Kids Mode only turns on while NX Redux is the home app: otherwise Android keeps the lock and the guard from
+     * bringing the tiles screen forward, and Home leaves the app. False where there is no home to be (no launcher).
+     */
+    private fun kidsNeedsHome(): Boolean = deps.launcher?.isHome() == false
+
+    /** Kids Mode's switch was turned on away from home: the page asks to make NX Redux home ([settingsResetAsk]). */
+    private var kidsAskHome = false
 
     /** Change PIN: a new PIN twice (only a parent reaches the page, so the old one is not asked). */
     private fun kidsChangePin() {
@@ -7715,7 +7736,7 @@ class AppState(
 
     /**
      * Setup's [step], or the first one after it that applies: Usage access and Alarms & reminders only while missing
-     * (Alarms is always granted before Android 14), home only while NX Redux is not home; past the last, setup ends.
+     * (Alarms is always granted before Android 14); past the last, setup ends.
      */
     private fun kidsSetupGo(step: KidsSetupStep) {
         if (!kidsParentOnly()) return
@@ -7724,7 +7745,6 @@ class AppState(
             KidsSetupStep.PIN -> return kidsAskNewPin(null)
             KidsSetupStep.USAGE -> k.hasUsageAccess()
             KidsSetupStep.ALARMS -> k.canExactAlarms()
-            KidsSetupStep.HOME -> deps.launcher?.isHome() ?: true
             else -> false
         }
         if (skip) return kidsSetupAfter(step)
@@ -7790,7 +7810,6 @@ class AppState(
                 else -> kidsSetupAfter(s.step)
             }
             KidsSetupRow.Grant -> if (s.step == KidsSetupStep.USAGE) k.openUsageAccess() else k.openExactAlarms()   // on with the step on resume
-            KidsSetupRow.UseHome -> { deps.launcher?.setHome(true); kidsSetupAfter(s.step) }   // Android asks; setup ends meanwhile
             KidsSetupRow.Skip -> kidsSetupAfter(s.step)
         }
     }

@@ -189,7 +189,7 @@ private val SEGMENTED_KINDS = setOf(SettingsKind.GAME_LIST_STYLE, SettingsKind.S
 private val DESCRIBED_KINDS = setOf(SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.RESCAN, SettingsKind.UNASSIGNED, SettingsKind.HIDDEN)
 
 /** Rows whose secondary is their description line ([settingsInfo]), with more behind the info icon: Kids Mode's warnings and flag path. */
-private val LINE_KINDS = setOf(SettingsKind.KIDS_GUARD, SettingsKind.KIDS_ALARMS, SettingsKind.KIDS_FORGOT)
+private val LINE_KINDS = setOf(SettingsKind.KIDS_GUARD, SettingsKind.KIDS_ALARMS, SettingsKind.KIDS_HOME, SettingsKind.KIDS_FORGOT)
 
 /**
  * [row] as a touch row: its name, its description ([settingsInfo]; Library's [DESCRIBED_KINDS] their secondary, in the
@@ -233,6 +233,7 @@ internal fun settingsRowAction(row: SettingsRow, section: SettingsSection?): Str
     SettingsKind.PAD_LAYOUT_RESET -> "Reset"
     SettingsKind.EXTRA -> "Remove"
     SettingsKind.KIDS_GUARD, SettingsKind.KIDS_ALARMS -> "Grant"
+    SettingsKind.KIDS_HOME -> "Set"
     else -> null
 }
 
@@ -252,6 +253,13 @@ internal fun settingsResetAsk(page: Screen.Settings, selected: Int): SettingsRes
         SettingsSection.CONTROLS -> SettingsResetAsk("Reset to defaults?", "Vibration, Menu pad and every pad layout go back to their defaults.", "Reset")
         else -> SettingsResetAsk("Reset to defaults?", "This page's settings go back to their defaults.", "Reset")
     }
+    // Kids Mode's switch turned on while NX Redux is not the home app ([AppState]'s kidsAskHome).
+    SettingsKind.KIDS_ENABLE -> SettingsResetAsk(
+        "Make NX Redux your home screen?",
+        "Kids Mode needs NX Redux as the home app, so Home and the lock always bring your kid back here. " +
+            "Once it is, turn Kids Mode on again.",
+        "Use as home screen",
+    )
     SettingsKind.PAD_LAYOUT_RESET -> {
         val console = page.rows.firstOrNull { it.kind == SettingsKind.PAD_LAYOUT_CONSOLE }?.secondary ?: "This console"
         SettingsResetAsk("Reset pad layouts?", "$console's pad layouts on this screen go back to their defaults.", "Reset")
