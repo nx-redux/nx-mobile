@@ -605,7 +605,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val n3ds = N3dsOptions.appliesTo(tag)
         // with a second display: one-screen games and a DS / 3DS split keep the skin (its screen the touch screen, [SkinDual])
         if (names.isNotEmpty() || !SkinDual.skinAllowed(host.dualMode, ds, n3ds)) return null
-        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, wiiPad, padProfile().cStick) ?: return null
+        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, wiiPad, padProfile().cStick)
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null
         val tablet = activity.windowShape().screenClass.isTablet
@@ -726,8 +726,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val ds = NdsOptions.appliesTo(tag)
         val n3ds = N3dsOptions.appliesTo(tag)
         if (!ds && !n3ds) return false
-        return layoutControllerNames().isEmpty() && SkinDual.skinAllowed(mode, ds, n3ds) &&
-            SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, wiiPad, padProfile().cStick) != null
+        return layoutControllerNames().isEmpty() && SkinDual.skinAllowed(mode, ds, n3ds)
     }
 
     /** Whether the pad skin is the layout now. */

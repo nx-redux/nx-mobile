@@ -2,7 +2,6 @@ package com.nxredux.mobile.skin
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
 /** Which skin layout set a console's games get ([SkinChoice.variantFor]). */
 class SkinVariantForTest {
@@ -49,16 +48,16 @@ class SkinVariantForTest {
     fun gameCubeGetsItsOwnLayout() {   // a GC disc run under the Wii tag too
         assertEquals(SkinVariant.GC, SkinChoice.variantFor("GC", ds = false))
         assertEquals(SkinVariant.GC, SkinChoice.variantFor("WII", ds = false, gameCube = true))
-        assertNull(SkinChoice.variantFor("WII", ds = false))
+        assertEquals(SkinVariant.WII_CLASSIC, SkinChoice.variantFor("WII", ds = false))   // a Wii disc, its pad not resolved
     }
 
     @Test
-    fun wiiPadsGetTheirOwnLayouts() {   // none until the pad resolves
+    fun wiiPadsGetTheirOwnLayouts() {   // the Classic Controller's until the pad resolves (user)
         assertEquals(SkinVariant.WII_CLASSIC, SkinChoice.variantFor("WII", ds = false, wiiPad = com.nxredux.mobile.runner.WiiPad.CLASSIC))
         assertEquals(SkinVariant.WII_NUNCHUK, SkinChoice.variantFor("WII", ds = false, wiiPad = com.nxredux.mobile.runner.WiiPad.NUNCHUK))
         assertEquals(SkinVariant.WII_SIDEWAYS, SkinChoice.variantFor("WII", ds = false, wiiPad = com.nxredux.mobile.runner.WiiPad.SIDEWAYS))
         assertEquals(SkinVariant.WII_UPRIGHT, SkinChoice.variantFor("WII", ds = false, wiiPad = com.nxredux.mobile.runner.WiiPad.UPRIGHT))
-        assertNull(SkinChoice.variantFor("WII", ds = false, wiiPad = null))
+        assertEquals(SkinVariant.WII_CLASSIC, SkinChoice.variantFor("WII", ds = false, wiiPad = null))
         assertEquals(SkinVariant.GC, SkinChoice.variantFor("WII", ds = false, gameCube = true, wiiPad = com.nxredux.mobile.runner.WiiPad.CLASSIC))
     }
 
