@@ -294,8 +294,10 @@ mednafen_wswan_FLAGS = -C jni
 
 # patches/mednafen_supafaust/0001: retro_run tries every cheat format on each '+' part and skips one none accepts;
 # the Game Genie decoder threw on anything else, which aborted the app.
+# patches/mednafen_supafaust/0002: upstream b531176a sends Android to pthread_cond_timedwait_monotonic_np, which only
+# 32-bit bionic had; arm64 keeps the generic POSIX timed wait it used before, or the core doesn't compile.
 mednafen_supafaust_REPO = https://github.com/libretro/supafaust
-mednafen_supafaust_HASH = e25f66765938d33f9ad5850e8d6cd597e55b7299
+mednafen_supafaust_HASH = 642d1d1b6684aa7e306a02a89885f3f5456a5157
 mednafen_supafaust_LICENSE = COPYING
 mednafen_supafaust_KIND = ndkbuild
 mednafen_supafaust_BUILD_PATH = .
