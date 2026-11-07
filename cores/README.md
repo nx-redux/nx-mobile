@@ -60,7 +60,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | picodrive | irixxxx/picodrive | 9c298c1fe7347a50b07a494cdb8c91d2f9b40c6a | ndk-build (SH2 dynarec, patched; 1.7 MB stripped) | 1:16 |
 | gearcoleco | drhelius/Gearcoleco | 2805e70fd56c3bb6a0412a4ddaf210eefc8a5d7c (1.7.6+11) | ndk-build (`platforms/libretro`; 0.9 MB stripped) | 0:10 |
 | fbneo | libretro/FBNeo | d15071abf14191eebb4a5d7c7147398edcf237c8 | ndk-build (`src/burner/libretro`, + `system/fbneo/`; 69.9 MB stripped) | 0:28 |
-| flycast (DC) | flyinghead/flycast | 5aa091fde632fb332c8d8c34e280d62dc951954c (v2.7) | cmake (dynarec, GLES3, patched; 6 submodules; 23.1 MB stripped) | 1:15 |
+| flycast (DC) | flyinghead/flycast | 7adbf3caef251b153e348df3f469a0f35878339d (master, 93 past v2.7) | cmake (dynarec, GLES3, patched; 6 submodules; 17.2 MB stripped) | 1:15 |
 | dolphin | libretro/dolphin | 32c61f9d0e933331bb7087ba57e96883241b4960 | cmake 3.30.3 (LTO, GLES, patched; 34 submodules; + system/dolphin-emu/Sys 14 MB; ~15 MB stripped) | 4:09 |
 | armsx2 (PS2) | ARMSX2/ARMSX2 | ba6892742e357085897d0a151bd8e40485dda968 (2.9.2) | cmake 3.30.3 (upstream's dependency script into build/armsx2-deps; GLES/Vulkan; page size read at runtime, so 4 KB and 16 KB kernels; games open through the libretro VFS, no ISO copy; + system/pcsx2/resources 11 MB; 31.0 MB stripped) | 5:12 |
 
@@ -136,10 +136,12 @@ checks a save state's machine and cartridge identity, so states from the old pin
 flycast (tag DC) was added on 2026-09-28 from the Dreamcast GL spike. It builds the top-level CMake target
 `flycast_libretro` with flycast's own libretro Android CI flags and only the six submodules the Android libretro build
 uses; its 1:15 includes the clone. `LICENSES/flycast.txt` (flycast's GPL-2.0-or-later text, the core being GPL-3.0 as
-built because it links xBRZ, plus the notices of the dependencies linked into it) ships in the APK as `licenses/flycast.txt`. `patches/flycast.patch` has four hunks:
-- `CMakeLists.txt`: links libandroid into the libretro target (upstream links it for the standalone app only), so
-  vmem's weak `ASharedMemory_create` resolves. Without it vmem falls back to `/dev/ashmem`, which targetSdk 29+ apps
-  cannot open, runs without fast-mem, and the dynarec's write-protect fault handler crashes.
+built because it links xBRZ, plus the notices of the dependencies linked into it) ships in the APK as `licenses/flycast.txt`. `patches/flycast.patch` has five hunks (since the
+2026-11-07 bump upstream links libandroid into the libretro target itself):
+- `core/hw/maple/maple_devs.cpp`: the VMU file is flushed after every write (block write and full save). flycast writes
+  it through stdio and flushed only on close, so a process killed without unloading (a crash, the hang watchdog, a
+  force-stop) lost the last writes; Soulcalibur's new save then had a directory entry without its FAT chain, and the
+  game reported its data as unreadable.
 - `shell/libretro/oslib.cpp` `getVmuPath`: per-game VMUs are named after the content file (`<content>.A1.bin`) instead
   of the disc's game ID, so the app's saves mirror can tie a VMU to its game; an existing game-ID VMU from an earlier
   run is read once, then rewritten as `<content>.A1.bin` and deleted by flycast (`maple_devs.cpp` `OnSetup`). The
@@ -148,11 +150,12 @@ built because it links xBRZ, plus the notices of the dependencies linked into it
   created on the blit path, on every render-size change). The spec ignores that, but the Android emulator's GLES stack
   drops the default vertex array's client state, and the frontend's presentation quad then draws nothing (black screen
   after any resize: internal resolution 320x240, emulated framebuffer).
-- `core/hw/naomi/naomi_roms.cpp` and `naomi_cart.cpp` `loadBios` (from nx-redux 959dbfb7): the `awbios` entry also
-  accepts the modern MAME dump `bios.ic23_l` (64 KB, CRC `e5693ce3`) as an alternative to `bios0.ic23` (128 KB).
-  `loadBios` tries each listed blob by CRC, then by name, and maps the first one found; a 64 KB `awbios` image is
-  mirrored into the upper half of the 128 KB BIOS window, as the hardware's address decoding does. So an `awbios.zip`
-  holding only `bios.ic23_l` boots Atomiswave games.
+- `core/hw/naomi/naomi_roms.cpp` (from nx-redux 959dbfb7): the `awbios` entry also accepts the modern MAME dump
+  `bios.ic23_l` (64 KB, CRC `e5693ce3`) beside `bios0.ic23` (128 KB, of which flycast now reads only the first 64 KB;
+  the rest is writable). `loadBios` tries each listed blob by CRC, then by name, and maps the first one found, so an
+  `awbios.zip` holding only `bios.ic23_l` boots Atomiswave games.
+- `core/rend/vulkan/vk_context_lr.cpp` `VkCreateDevice`: also enables the frontend's required device extensions (its
+  AHardwareBuffer bridge needs them).
 
 The cores added on 2026-09-25 use nx-redux's pins (`workspace/tg5040/cores/Makefile`) so save states cross with the
 Brick where the core matches; a bump is one commit per core and needs that core's device pass again.
