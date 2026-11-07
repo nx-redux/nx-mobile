@@ -22,8 +22,8 @@ enum class OnboardingStep {
 data class OnboardingContext(
     val signedIn: Boolean = false, val handheld: Boolean? = null,
     val customise: Boolean? = null, val padPage: Boolean = false, val buttons: Boolean = false,
-    /** Kids Mode can run here (a launcher and its controller): Who's this for? is asked. [kids]: its answer, My kids. */
-    val kidsOffered: Boolean = false, val kids: Boolean? = null,
+    /** Kids Mode can run here (a launcher and its controller): Who's this for? is asked; My kids runs Kids Mode's setup there. */
+    val kidsOffered: Boolean = false,
 )
 
 /**
@@ -47,7 +47,7 @@ fun onboardingSteps(ctx: OnboardingContext): List<OnboardingStep> = buildList {
         add(OnboardingStep.GAME_LISTS)
     }
     add(OnboardingStep.ACCENT)
-    if (ctx.kidsOffered) add(OnboardingStep.KIDS)   // last: My kids runs Kids Mode's setup once onboarding is done
+    if (ctx.kidsOffered) add(OnboardingStep.KIDS)   // last but Done: My kids runs Kids Mode's setup, then Done
     add(OnboardingStep.DONE)
 }
 

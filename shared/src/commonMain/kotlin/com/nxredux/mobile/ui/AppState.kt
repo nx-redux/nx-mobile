@@ -2398,7 +2398,7 @@ class AppState(
                 NxRow("Continue"),
             ),
         )
-        // Who's this for: My kids runs Kids Mode's setup once onboarding is done ([kidsStartAfterOnboarding]); either way the line says where it is.
+        // Who's this for: My kids runs Kids Mode's setup here, then Done ([kidsStartInOnboarding]); either way the line says where it is.
         OnboardingStep.KIDS -> Triple(
             "Who's this for?", listOf(KIDS_ONBOARDING_LINE),
             listOf(NxRow("Just me"), NxRow("My kids")),
@@ -2434,7 +2434,7 @@ class AppState(
                 else -> onboardingNext()
             }
             OnboardingStep.CUSTOMISE -> { onboarding.context = onboarding.context.copy(customise = index == 0); onboardingNext() }
-            OnboardingStep.KIDS -> { onboarding.context = onboarding.context.copy(kids = index == 1); onboardingNext() }
+            OnboardingStep.KIDS -> if (index == 1) kidsStartInOnboarding() else onboardingNext()
             OnboardingStep.PAD -> if (index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, index, 1) else onboardingNext()
             OnboardingStep.TITLE, OnboardingStep.ACCENT -> if (index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, index, 1) else onboardingNext()
             OnboardingStep.TAB_HOME, OnboardingStep.TAB_CONSOLES, OnboardingStep.TAB_COLLECTIONS, OnboardingStep.TAB_TOOLS,
@@ -3072,7 +3072,6 @@ class AppState(
 
     /** Onboarding done: the menu on Home, its tabs rebuilt for the layout and options picked. */
     private fun finishOnboarding() {
-        val kidsNext = onboarding.context.kids == true   // My kids: Kids Mode's setup once the menu is up
         onboarding.finish()
         resetOnboardingRun()
         deps.settings.onboardingDone = true
@@ -3083,7 +3082,6 @@ class AppState(
         scope.launch {
             rebuildMainRows()
             showSystemsNow(MenuCategory.HOME)
-            if (kidsNext) kidsStartAfterOnboarding()
         }
     }
 
@@ -7549,7 +7547,10 @@ class AppState(
         when (s.purpose) {
             PinPurpose.UNLOCK -> kidsBackToKid()
             PinPurpose.SETUP_CONFIRM -> if (kidsParentOnly()) kidsAskNewPin(null)
-            PinPurpose.SETUP_NEW, PinPurpose.CHANGE -> if (kidsParentOnly()) { kidsNewPin = null; kidsShowPage(if (kidsPinChange) SettingsKind.KIDS_PIN else SettingsKind.KIDS_ENABLE) }
+            PinPurpose.SETUP_NEW, PinPurpose.CHANGE -> if (kidsParentOnly()) {
+                kidsNewPin = null
+                if (kidsPinChange) kidsShowPage(SettingsKind.KIDS_PIN) else kidsSetupExit(done = false)
+            }
         }
     }
 
@@ -7764,14 +7765,34 @@ class AppState(
      */
     private fun kidsNeedsHome(): Boolean = deps.launcher?.isHome() == false
 
+    /** Kids Mode's setup runs from onboarding's Who's this for?: it ends on Done, or back on that question when cancelled. */
+    private var kidsInOnboarding = false
+
     /**
-     * Onboarding's My kids: the Kids Mode page, then as its switch turned on: setup, home its last step. A cancelled
-     * setup leaves Kids Mode off on this page.
+     * Onboarding's My kids: Kids Mode's setup, as its switch would run it (home its last step). Onboarding is saved at
+     * Done first, so the new home instance that accepting the role starts resumes there, Kids Mode on ([kidsHomeCheck]).
      */
-    private fun kidsStartAfterOnboarding() {
-        if (kids == null || deps.settings.kidsEnabled) return
-        kidsShowPage(SettingsKind.KIDS_ENABLE)
+    private fun kidsStartInOnboarding() {
+        if (kids == null || deps.settings.kidsEnabled) return onboardingNext()
+        kidsInOnboarding = true
+        deps.settings.onboardingStep = OnboardingStep.DONE.name
         kidsSetEnabled(true)
+        if (deps.settings.kidsEnabled) kidsBackToOnboarding(done = true)   // a PIN already set and home: on at once
+    }
+
+    /** Off setup back into onboarding: Done once Kids Mode is on ([done]), else Who's this for? again. */
+    private fun kidsBackToOnboarding(done: Boolean) {
+        kidsInOnboarding = false
+        kidsNewPin = null
+        val step = if (done) OnboardingStep.DONE else OnboardingStep.KIDS
+        onboarding.startMain(resume = step)
+        deps.settings.onboardingStep = onboarding.step?.name
+        showOnboarding()
+    }
+
+    /** Setup's end or its cancel: back into onboarding when it ran from there, else the Kids Mode page. */
+    private fun kidsSetupExit(done: Boolean) {
+        if (kidsInOnboarding) kidsBackToOnboarding(done) else kidsShowPage(SettingsKind.KIDS_ENABLE)
     }
 
     /**
@@ -7797,9 +7818,10 @@ class AppState(
         deps.settings.kidsOnWhenHome = false
         if (deps.launcher?.isHome() == true) {
             if (!deps.settings.kidsEnabled) k.turnOn()
-            if (_screen.value is Screen.KidsSetup) kidsShowPage(SettingsKind.KIDS_ENABLE)   // not a parent now: the kid's screen
+            if (_screen.value is Screen.KidsSetup) kidsSetupExit(done = true)   // the kid's screen, or onboarding's Done
         } else {
-            if (_screen.value is Screen.KidsSetup) kidsShowPage(SettingsKind.KIDS_ENABLE)
+            // Declined: onboarding's setup stays on its home step (Cancel goes back); Settings' goes to the page.
+            if (_screen.value is Screen.KidsSetup && !kidsInOnboarding) kidsShowPage(SettingsKind.KIDS_ENABLE)
             showNotice(KIDS_HOME_REFUSED)
         }
     }
@@ -7872,7 +7894,7 @@ class AppState(
         kidsNewPin?.let(deps.settings::setKidsPin)
         kidsNewPin = null
         k.turnOn()
-        kidsShowPage(SettingsKind.KIDS_ENABLE)
+        kidsSetupExit(done = true)
     }
 
     private fun kidsShowSetup(screen: Screen.KidsSetup, selected: Int) {
@@ -7955,7 +7977,7 @@ class AppState(
 
     private fun kidsSetupLeave(s: Screen.KidsSetup) {
         kidsNewPin = null
-        kidsShowPage(if (s.setup) SettingsKind.KIDS_ENABLE else SettingsKind.KIDS_APPS)
+        if (s.setup) kidsSetupExit(done = false) else kidsShowPage(SettingsKind.KIDS_APPS)
     }
 
     /** Day [day]'s play time page, from setup's TIMES step ([setup]) or the Kids Mode page. */
