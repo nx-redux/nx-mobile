@@ -159,8 +159,8 @@ object N3dsOptions {
         layoutValue(values, layoutKey(landscape, controllerMode)) ?: defaultLayout(screen, landscape)
 
     /**
-     * The core's [LAYOUT] value for the row in use: Large screen and Stacked are its top over bottom ("default"). Half-folded
-     * ([tabletop]) it is always that, whatever the player saved: the app lays the two screens out itself, from a Stacked frame.
+     * The core's [LAYOUT] value for the row in use: Large screen and Stacked are its top over bottom ("default"). Under a pad
+     * skin ([tabletop]) it is always that, whatever the player saved: the app lays the two screens out itself, from a Stacked frame.
      */
     fun coreLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean): String =
         if (tabletop) "default" else when (val app = appLayoutFor(values, landscape, controllerMode, screen)) {
@@ -170,7 +170,7 @@ object N3dsOptions {
 
     /**
      * How many times smaller the core draws the touch screen in its top over bottom: for Large screen half, or in portrait
-     * with the picture's [space] known the [fillProportion] of it ([proportionText]); else alike. Half-folded ([tabletop])
+     * with the picture's [space] known the [fillProportion] of it ([proportionText]); else alike. Under a pad skin ([tabletop])
      * the screens are equal ("1") whatever the player saved.
      */
     fun stackedSmallProportion(

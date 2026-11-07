@@ -99,15 +99,4 @@ class PortraitOverlayTest {
         assertEquals(8.6f * u, 2 * (side + gap + w) + gap, 0.01f)
         assertEquals(0f, overlayTopShortcutWidth(100f, u, gap, side))
     }
-
-    @Test fun bottom_row_ends_before_the_show_hide_icon() {
-        // The mic, MENU, the toggle, SELECT and START (12 dp apart) from the 16 dp padding and 0.2-unit nudge, against the
-        // icon's 36 dp circle mirrored to the mic's edge from the right, on a width-bound phone (width 9 units + 32 dp).
-        for (u in listOf(34f, 36f, 40f, 42.1f, 45f, 54.7f)) {
-            val w = 9f * u + 32f
-            val rowEnd = CLUSTER_PADDING + u * OVERLAY_EDGE_NUDGE + u * OVERLAY_SYSTEM_UNITS + 4f * u + 4f * 12f
-            val iconStart = w - portraitMicEdge(u, hiddenBand = true) - 36f
-            assertTrue(rowEnd < iconStart, "unit $u: row ends at $rowEnd, icon starts at $iconStart")
-        }
-    }
 }

@@ -45,13 +45,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.layout.BesidePreview
-import com.nxredux.mobile.layout.DsKind
-import com.nxredux.mobile.layout.HalfFoldedPreview
-import com.nxredux.mobile.layout.halfFoldedPreview
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.layout.besidePreview
-import com.nxredux.mobile.layout.portraitSplit
 import com.nxredux.mobile.layout.rowsOnScreen
 import com.nxredux.mobile.layout.screenClass
 import com.nxredux.mobile.options.PxRect
@@ -68,7 +64,6 @@ import com.nxredux.mobile.ui.nx.PadMic
 import com.nxredux.mobile.ui.nx.PadMotion
 import com.nxredux.mobile.ui.nx.PadProfile
 import com.nxredux.mobile.ui.nx.PadTools
-import com.nxredux.mobile.ui.nx.VirtualPad
 import com.nxredux.mobile.ui.nx.VirtualPadLeft
 import com.nxredux.mobile.ui.nx.VirtualPadRight
 import com.nxredux.mobile.ui.nx.besideSecondRow
@@ -87,17 +82,15 @@ private val HandleHit = 28.dp   // a touch this near the handle resizes rather t
 data class PadEditorWindow(val screen: ScreenClass, val ydpi: Float, val cutoutTop: Float, val cutoutLeft: Float, val cutoutRight: Float)
 
 /**
- * Controls → Pad layout's editor for [shape]: a grey block for the game and the real pad ([profile]'s buttons) at
+ * Appearance → Overlay pad layout's editor for [shape]: a grey block for the game and the real pad ([profile]'s buttons) at
  * [state]'s layout, both touch shortcut pieces drawn as labelled stand-ins (in game each shows only once it has an
  * action). A tap selects a group, a drag moves it (clamped, snapping home), its corner handle resizes it and the toolbar
  * resets it; overlapping groups are outlined red. The pad's own buttons do not press here: the edit layer takes every
  * touch. [onClose] leaves without saving (after "Discard changes?" when something changed). A DS / 3DS [consoleTag]
  * (and Shared) draws the fixed mic button ([padLayoutShowsMic]) so the player sees its spot; it is no group, never selected.
- * Both shapes are laid out as the game lays them out on this [window] (null: from the editor's size alone): portrait's
- * band at the game's height under its game area ([portraitSplit]); landscape's halves beside the picture of [consoleTag]'s
- * console ([besidePreview]; a typical one for the Shared layout), with STYLUS / SWAP when the console has them ([tools]);
- * half-folded, the DS / 3DS top screen above a hinge line at the window's middle and the touch screen with the two halves
- * below it ([halfFoldedPreview]; the 3DS's screens for a 3DS [consoleTag], else the DS's).
+ * The pad is laid out as the game lays it out on this [window] (null: from the editor's size alone): landscape's halves
+ * beside the picture of [consoleTag]'s console ([besidePreview]; a typical one for the Shared layout), with STYLUS / SWAP
+ * when the console has them ([tools]).
  */
 @Composable
 fun PadLayoutEditor(
@@ -119,47 +112,17 @@ fun PadLayoutEditor(
         val h = constraints.maxHeight.toFloat()
         val d = LocalDensity.current.density
         val ydpi = window?.ydpi ?: 0f   // outside 40..1200: the density's dpi, as the game falls back
-        // The game area the toolbar sits in: portrait's above the band, landscape's console picture.
-        val gameArea: PxRect
-        when (shape) {
-            PadShape.PORTRAIT -> {
-                val split = portraitSplit(w, h, window?.cutoutTop ?: 0f, ydpi, d)
-                gameArea = PxRect(0f, split.gameTop, w, split.bandTop - split.gameTop)
-                Box(Modifier.placedPx(gameArea).background(colors.editorGameBlock))
-                Box(Modifier.placedPx(PxRect(0f, split.bandTop, w, split.bandPx))) {
-                    VirtualPad(noPad, Modifier.fillMaxSize(), profile = profile, onCStick = cStick, motion = motion, layout = state.layout, onGroupBounds = state, shortcutPlaceholders = true, mic = mic)
-                }
-            }
-            PadShape.OVERLAY -> {
-                val padTools = remember(tools) { if (tools) PadTools(stylusOn = false, onStylus = {}, onSwap = {}) else null }
-                val secondRow = besideSecondRow(padTools, emptyMap(), placeholders = true)
-                val preview = besidePreview(
-                    window?.screen ?: screenClass(w.roundToInt(), h.roundToInt(), (min(w, h) / d).toInt()), w, h, ydpi, d,
-                    window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, landscapeClusterUnits(profile), systemRowPills(profile, motion = motion != null),
-                    tag = consoleTag,
-                )
-                gameArea = preview.picture
-                Box(Modifier.placedPx(gameArea).background(colors.editorGameBlock))
-                BesidePad(profile, state, cStick, motion, padTools, secondRow, preview, mic)
-            }
-            PadShape.HALF_FOLDED -> {
-                val padTools = remember(tools) { if (tools) PadTools(stylusOn = false, onStylus = {}, onSwap = {}) else null }
-                val secondRow = besideSecondRow(padTools, emptyMap(), placeholders = true)
-                val kind = if (N3dsOptions.appliesTo(consoleTag)) DsKind.N3DS else DsKind.DS
-                val preview = halfFoldedPreview(
-                    w, h, window?.screen ?: screenClass(w.roundToInt(), h.roundToInt(), (min(w, h) / d).toInt()), window?.cutoutTop ?: 0f,
-                    ydpi, d, window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, landscapeClusterUnits(profile),
-                    systemRowPills(profile, motion = motion != null), kind,
-                )
-                gameArea = preview?.placement?.top ?: PxRect(0f, 0f, w, h / 2f)
-                if (preview != null) {
-                    Box(Modifier.placedPx(preview.placement.top).background(colors.editorGameBlock))
-                    Box(Modifier.placedPx(preview.placement.bottom).background(colors.editorGameBlock))
-                    Box(Modifier.placedPx(PxRect(0f, preview.hingeY - d, w, 2f * d)).background(colors.editorHinge))
-                    HalfFoldedPad(profile, state, cStick, motion, padTools, secondRow, preview, mic)
-                }
-            }
-        }
+        // The game area the toolbar sits in: the console picture between the pad halves.
+        val padTools = remember(tools) { if (tools) PadTools(stylusOn = false, onStylus = {}, onSwap = {}) else null }
+        val secondRow = besideSecondRow(padTools, emptyMap(), placeholders = true)
+        val preview = besidePreview(
+            window?.screen ?: screenClass(w.roundToInt(), h.roundToInt(), (min(w, h) / d).toInt()), w, h, ydpi, d,
+            window?.cutoutLeft ?: 0f, window?.cutoutRight ?: 0f, secondRow, landscapeClusterUnits(profile), systemRowPills(profile, motion = motion != null),
+            tag = consoleTag,
+        )
+        val gameArea = preview.picture
+        Box(Modifier.placedPx(gameArea).background(colors.editorGameBlock))
+        BesidePad(profile, state, cStick, motion, padTools, secondRow, preview, mic)
         // The edit layer: over the pads, takes every touch (taps select, drags move).
         Canvas(
             Modifier.fillMaxSize()
@@ -226,12 +189,11 @@ fun PadLayoutEditor(
                 drawCircle(Color.White, radius = HandleRadius.toPx(), center = h, style = Stroke(width = 2.dp.toPx()))
             }
         }
-        // OVERLAY's side columns hold its pad halves, so its toolbar sits over the game block's middle.
-        // PORTRAIT's sits at the game block's foot, just above the pad, clear of a top camera cutout.
+        // The side columns hold the pad halves, so the toolbar sits over the game block's middle.
         Box(Modifier.placedPx(gameArea)) {
             EditorToolbar(
                 title, shape, state, screenSize, onSave = { onSave(state.layout) }, onCancel = { if (state.requestCancel()) onClose() },
-                Modifier.align(if (shape == PadShape.PORTRAIT) Alignment.BottomCenter else Alignment.Center),
+                Modifier.align(Alignment.Center),
             )
         }
         state.confirmReset?.let { reset ->
@@ -279,32 +241,6 @@ private fun BoxScope.BesidePad(
         noPad, Modifier.align(Alignment.TopEnd).then(box).padding(end = inset), profile = profile, overGame = true, onCStick = cStick,
         layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
         besidePicture = true, unitOverride = unit, secondRow = secondRow, rowsOnScreen = rows,
-    )
-}
-
-/**
- * The half-folded pad as the game draws it below the hinge ([preview]): its cover-size unit, both halves in their boxes
- * at the side edges beside the touch screen, solid.
- */
-@Composable
-private fun BoxScope.HalfFoldedPad(
-    profile: PadProfile, state: PadEditorState, cStick: ((Float, Float) -> Unit)?, motion: PadMotion?, padTools: PadTools?, secondRow: Boolean, preview: HalfFoldedPreview, mic: PadMic?,
-) {
-    val noPad: (PadEvent) -> Unit = {}
-    val density = LocalDensity.current
-    val b = preview.boxes
-    val unit = with(density) { preview.unitPx.toDp() }
-    val inset = with(density) { b.insetPx.toDp() }
-    val box = Modifier.offset { IntOffset(0, b.topMarginPx) }.sizePx(b.widthPx, b.heightPx)
-    VirtualPadLeft(
-        noPad, { _, _ -> }, Modifier.align(Alignment.TopStart).then(box).padding(start = inset), profile = profile, overGame = true,
-        motion = motion, layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
-        besidePicture = true, unitOverride = unit, secondRow = secondRow, mic = mic,
-    )
-    VirtualPadRight(
-        noPad, Modifier.align(Alignment.TopEnd).then(box).padding(end = inset), profile = profile, overGame = true, onCStick = cStick,
-        layout = state.layout, onGroupBounds = state, tools = padTools, shortcutPlaceholders = true,
-        besidePicture = true, unitOverride = unit, secondRow = secondRow,
     )
 }
 

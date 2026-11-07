@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.settings.PadShape
 import com.nxredux.mobile.ui.nx.HomeShelf
 import com.nxredux.mobile.ui.nx.NxButton
 
@@ -186,13 +185,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
         "Shared is the layout every console uses. A console you give a layout of its own uses that instead. Each screen " +
             "size keeps its own layouts; the page edits the screen you are on.",
     )
-    SettingsKind.PAD_LAYOUT_SHAPE -> quiet(
-        when (row.padShape) {
-            PadShape.OVERLAY -> "Edit the buttons beside a landscape game"
-            PadShape.HALF_FOLDED -> "Edit the DS / 3DS buttons beside the touch screen half-folded"
-            else -> "Edit the pad below the screen in portrait"
-        },
-    )
+    SettingsKind.PAD_LAYOUT_SHAPE -> quiet("Edit the buttons beside a landscape game")
     SettingsKind.PAD_LAYOUT_RESET -> SettingText("Resets its layouts on this screen", "Put the chosen console's layouts on this screen back")
     SettingsKind.SHORTCUTS -> quiet(
         "Controller buttons and touch buttons for fast forward, rewind and reset",

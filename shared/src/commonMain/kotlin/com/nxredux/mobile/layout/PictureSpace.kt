@@ -7,13 +7,10 @@ enum class PadRoom {
     /** Landscape clusters beside the picture: the set-aside width ([setAsidePx]) stays free on each side. */
     BESIDE,
 
-    /** Portrait with the band shown: the game area already ends above it. */
-    BAND,
-
-    /** Portrait with the band hidden: the see-through overlay across the bottom of the game area. */
+    /** Portrait: the see-through overlay across the bottom of the game area. */
     HIDDEN_BAND,
 
-    /** No on-screen pad over the game (a controller, the tabletop halves below the hinge): the whole game area. */
+    /** No on-screen pad over the game (a controller, a pad skin): the whole game area. */
     NONE,
 }
 
@@ -30,11 +27,11 @@ fun pictureSpace(
         PxRect(side, 0f, areaW - 2f * side, areaH)
     }
     PadRoom.HIDDEN_BAND -> PxRect(0f, 0f, areaW, hiddenSpaceHeight(areaH, overlayH, reach).coerceAtLeast(0f))
-    PadRoom.BAND, PadRoom.NONE -> PxRect(0f, 0f, areaW, areaH)
+    PadRoom.NONE -> PxRect(0f, 0f, areaW, areaH)
 }
 
 /**
- * Where [picture], placed in its [pictureSpace], finally goes: with the band hidden its top follows [hiddenPictureTop]
+ * Where [picture], placed in its [pictureSpace], finally goes: under portrait's overlay its top follows [hiddenPictureTop]
  * (the top of the area when it reaches into the overlay, else centred above it); otherwise it stays as placed.
  */
 fun placedFor(room: PadRoom, picture: PxRect, areaH: Float, overlayH: Float): PxRect =

@@ -1,10 +1,8 @@
 package com.nxredux.mobile.settings
 
-import com.nxredux.mobile.options.N3dsOptions
-import com.nxredux.mobile.options.NdsOptions
 
 /**
- * Controls → Pad layout. The on-screen pad's button groups: each moves and resizes as one (the d-pad and
+ * Appearance → Overlay pad layout. The on-screen pad's button groups: each moves and resizes as one (the d-pad and
  * the stick share [DPAD]'s spot). [C_STICK] is the New 3DS C-stick of the portrait pad; in the landscape clusters it is
  * part of [FACE]. [SYSTEM_LEFT] is MENU and the d-pad / stick toggle, [SYSTEM_RIGHT] SELECT and START. [SHORTCUT_1] /
  * [SHORTCUT_2] are the touch shortcut buttons, drawn in game only while their slot has an action (the editor always shows
@@ -15,25 +13,15 @@ import com.nxredux.mobile.options.NdsOptions
 enum class PadGroup { DPAD, FACE, L_SHOULDERS, R_SHOULDERS, SYSTEM_LEFT, SYSTEM_RIGHT, C_STICK, SHORTCUT_1, SHORTCUT_2, L_STICK, R_STICK }
 
 /**
- * The pad's editable arrangements: the portrait band ([PORTRAIT], also flex mode's band and the main menu's pad), the
- * landscape halves beside the picture ([OVERLAY], named for the clusters once drawn over the game) and the half-folded
- * DS / 3DS halves beside the touch screen below the hinge ([HALF_FOLDED]; its own moves, starting at the default pad).
- * Flex mode's clusters below the hinge (wide foldables only) keep the default layout. A stored line for another shape
- * is skipped.
+ * The pad's editable arrangements: the landscape overlay's halves beside the picture ([OVERLAY]). A stored line for a
+ * retired shape (the portrait band, the half-folded DS halves) is skipped.
  */
 enum class PadShape(val label: String) {
-    PORTRAIT("Portrait band"), OVERLAY("Landscape"), HALF_FOLDED("Half-folded");
+    OVERLAY("Landscape");
 
     companion object {
-        /**
-         * The shapes Controls → Pad layout offers for a console of [consoleTags] (null: Shared) on [screen]: the
-         * half-folded one only for Shared and the DS / 3DS, on a wide (tablet-class) screen of a device that
-         * [canHalfFold], the one place the game draws it.
-         */
-        fun offered(consoleTags: List<String>?, screen: PadScreen, canHalfFold: Boolean): List<PadShape> {
-            val dualScreen = consoleTags == null || consoleTags.any { NdsOptions.appliesTo(it) || N3dsOptions.appliesTo(it) }
-            return if (canHalfFold && screen == PadScreen.WIDE && dualScreen) entries else entries - HALF_FOLDED
-        }
+        /** The shapes Appearance → Overlay pad layout offers: the landscape overlay (the portrait overlay is not edited). */
+        val offered: List<PadShape> get() = entries
     }
 }
 

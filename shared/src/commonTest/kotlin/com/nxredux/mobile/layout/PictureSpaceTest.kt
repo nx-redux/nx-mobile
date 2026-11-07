@@ -12,8 +12,7 @@ class PictureSpaceTest {
     @Test fun beside_never_passes_the_middle() =
         assertEquals(PxRect(500f, 0f, 0f, 400f), pictureSpace(PadRoom.BESIDE, 1000f, 400f, 900f, 0f))
 
-    @Test fun band_and_no_pad_take_the_whole_area() {
-        assertEquals(PxRect(0f, 0f, 1080f, 1300f), pictureSpace(PadRoom.BAND, 1080f, 1300f, 200f, 800f))
+    @Test fun no_pad_takes_the_whole_area() {
         assertEquals(PxRect(0f, 0f, 2400f, 1080f), pictureSpace(PadRoom.NONE, 2400f, 1080f, 200f, 800f))
     }
 
@@ -31,7 +30,7 @@ class PictureSpaceTest {
 
     @Test fun other_rooms_keep_the_placement() {
         val p = PxRect(10f, 20f, 30f, 40f)
-        assertEquals(p, placedFor(PadRoom.BAND, p, 1868f, 800f))
+        assertEquals(p, placedFor(PadRoom.NONE, p, 1868f, 800f))
         assertEquals(p, placedFor(PadRoom.BESIDE, p, 1868f, 800f))
     }
 }

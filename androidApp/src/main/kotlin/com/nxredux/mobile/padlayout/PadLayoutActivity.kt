@@ -47,9 +47,8 @@ class PadLayoutActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val shapeName = intent.getStringExtra(EXTRA_SHAPE)
-        val shape = PadShape.entries.firstOrNull { it.name == shapeName } ?: PadShape.PORTRAIT
-        // Half-folded like a laptop the Fold's inner screen is portrait (the hinge across it), as the game runs then.
-        requestedOrientation = if (shape == PadShape.OVERLAY) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+        val shape = PadShape.entries.firstOrNull { it.name == shapeName } ?: PadShape.OVERLAY
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         super.onCreate(savedInstanceState)
         // Full screen like the game (GameActivity): the pad is edited where it will be drawn, under no system bars.
         window.goImmersive()
@@ -64,9 +63,9 @@ class PadLayoutActivity : ComponentActivity() {
         val profile = if (tag.isEmpty()) PadProfile.STANDARD else PadProfile.forLayoutEditor(tag, motion)
         val screen = PadScreen.entries.firstOrNull { it.name == intent.getStringExtra(EXTRA_SCREEN) } ?: PadScreen.NARROW
         slot = PadSlot(shape, screen)
-        editor = PadEditorState(PadLayouts.startingLayout(settings.padLayouts, key, slot), besidePicture = shape != PadShape.PORTRAIT)
-        // STYLUS / SWAP: the DS and 3DS pads beside the picture draw them in game (the half-folded pad is only theirs).
-        val tools = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag) || shape == PadShape.HALF_FOLDED
+        editor = PadEditorState(PadLayouts.startingLayout(settings.padLayouts, key, slot), besidePicture = true)
+        // STYLUS / SWAP: the DS and 3DS pads beside the picture draw them in game.
+        val tools = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
         setContent {
             val colors = remember { nxColorsFor(settings.accent, settings.secondaryAccent) }
             // The window as the game reads it, again after each rotation (the cutout moves to another edge) and when the insets

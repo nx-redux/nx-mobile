@@ -633,7 +633,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         menuOnSecond.value = false
     }
 
-    /** Flex mode from launch: the folding feature (and the hinge angle where it hides half-open), in window px. */
+    /** The fold's posture from launch (a pad skin's hinge): the folding feature (and the hinge angle where it hides half-open), in window px. */
     private val posture = mutableStateOf<Posture>(Posture.Flat)
 
     private fun collectPosture() {

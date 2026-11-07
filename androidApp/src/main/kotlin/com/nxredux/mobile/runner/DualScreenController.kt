@@ -215,16 +215,15 @@ internal class DualScreenController(
     }
 
     /**
-     * 3DS leaving split (or unfolding): the swap values from before it ([captureN3dsSwap]) and the orientation's proportion
-     * are back. Still half-folded, the swap stays pinned and the noted values wait for the unfold.
+     * 3DS leaving split (or its pad skin): the swap values from before it ([captureN3dsSwap]) and the orientation's
+     * proportion are back.
      */
     fun restoreN3dsScreen() {
         val view = retroView ?: return
         if (netplayNow != null) return
-        if (padLayout.tabletop() != null && dualMode == DualMode.OFF) return
         val stored = storedValues
         val proportion = N3dsOptions.stackedSmallProportion(
-            frontendValues, isLandscape(), renderer.ndsControllerMode(), activity.screenClass(), padLayout.tabletop() != null, renderer.n3dsPictureSpace,
+            frontendValues, isLandscape(), renderer.ndsControllerMode(), activity.screenClass(), false, renderer.n3dsPictureSpace,
         )
         renderer.n3dsProportion = proportion
         view.queueEvent {
@@ -367,8 +366,6 @@ internal class DualScreenController(
             syncN3dsCore()
             if (forcedBefore && !forced) restoreN3dsScreen()
         }
-        // Half-folded, a DS / 3DS gets its own tabletop only without a second screen ([tabletopDualScreen]): a new mode
-        // builds the other tabletop (the pad, the game area, the menu's bounds).
         // A new mode builds the pad again too: the skin comes or goes with it ([SkinDual.skinAllowed]).
         if (changed) padLayout.applyLayout(activity.resources.configuration.orientation)
         renderer.relayoutFrontend(geometry)

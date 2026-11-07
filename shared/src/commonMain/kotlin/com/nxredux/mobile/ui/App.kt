@@ -137,7 +137,6 @@ import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxTextPrompt
 import com.nxredux.mobile.ui.nx.PadEvent
 import com.nxredux.mobile.ui.nx.PadVibrationProvider
-import com.nxredux.mobile.ui.nx.VirtualPad
 import com.nxredux.mobile.ui.nx.VirtualPadLeft
 import com.nxredux.mobile.ui.nx.VirtualPadRight
 import com.nxredux.mobile.ui.nx.footerModeFor
@@ -192,12 +191,8 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     // A pad skin theme (NX Carbon): its pack, for the menu's skin layout (the drawn pad where the skin has none).
     val skinPacks = LocalSkinPacks.current
     val skin = remember(padTheme, skinPacks) { padTheme.skin?.let(skinPacks) }
-    // Controls → Menu pad, likewise; hidden while first setup and onboarding have not asked yet, previewed on its step.
+    // Appearance → Pad skin, likewise; hidden while first setup and onboarding have not asked yet, previewed on its step.
     val menuPad = remember(screen, selection.value.index) { state.menuPadShown() }
-    // Controls → Pad layout: the main menu's pads draw the Shared layouts, live (a console's layout shows in its editor only).
-    val padLayouts by state.padLayouts.collectAsState()
-    val padScreen by state.padScreen.collectAsState()   // the screen this is on (a Fold's cover or inner): its own layouts
-    val menuPortraitLayout = remember(padLayouts, padScreen) { PadLayouts.resolve(padLayouts, null, PadSlot(PadShape.PORTRAIT, padScreen)) }
     val look = rememberMenuLook(state, screen)   // the accents and the launcher chrome's settings, likewise
     val controllerConnected = rememberControllerConnected()   // once, above the shell: survives rotation and pad/no-pad flips
     LaunchedEffect(controllerConnected) { state.onControllerConnected(controllerConnected) }   // a Shortcuts bind row's line

@@ -37,8 +37,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import com.nxredux.mobile.layout.portraitBandPx
 import com.nxredux.mobile.runner.Posture
-import com.nxredux.mobile.runner.TabletopPad
-import com.nxredux.mobile.runner.tabletopInArea
 import com.nxredux.mobile.skin.SkinChoice
 import com.nxredux.mobile.skin.SkinPlacement
 import kotlin.math.roundToInt
@@ -47,12 +45,12 @@ import kotlin.math.roundToInt
 const val PAD_PORTRAIT_CM = 5.8f
 
 /**
- * True for a portrait layout (the narrow gutters, portrait sizes and art): a portrait window, with or without its pad
- * band, or a tabletop with its controls below the hinge; false in landscape. Whether a pad is drawn is [LocalPadBelow].
+ * True for a portrait layout (the narrow gutters, portrait sizes and art): a portrait window (or a skin's portrait-shaped
+ * glass); false in landscape. Whether a pad is drawn below is [LocalPadBelow].
  */
 val LocalPortrait = compositionLocalOf { false }
 
-/** True while the on-screen pad is drawn below the screen (portrait with its band, or tabletop controls). */
+/** True while something sits below the screen: a pad skin round it, or a clip-on controller's room in game. */
 val LocalPadBelow = compositionLocalOf { false }
 
 /** True while the screen is inside a pad skin's frame: the frame is already a margin, so pages take the phone inset ([nxPageInset]). */
@@ -71,12 +69,12 @@ private const val TOP_GLASS = "menutop"
 val LocalScreenCentreY = compositionLocalOf<Float?> { null }
 
 /**
- * The measured app area (the whole window inside the safe insets, the pad included): the Grid's tablet-class test. In
- * tabletop it stays the whole area too (the controls below the hinge included); the screens lay out to their own body.
+ * The measured app area (the whole window inside the safe insets, the pad included): the Grid's tablet-class test; the
+ * screens lay out to their own body.
  */
 val LocalWindowSize = compositionLocalOf { DpSize.Zero }
 
-/** The device posture in window px (Flex mode), supplied by the host; [Posture.Flat] where there is no fold (and on iOS). */
+/** The device posture in window px (a skin's hinge), supplied by the host; [Posture.Flat] where there is no fold (and on iOS). */
 val LocalPosture = compositionLocalOf<Posture> { Posture.Flat }
 
 /**

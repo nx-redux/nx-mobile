@@ -19,7 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Flex mode detection for [activity]: follows WindowManager's folding feature while started and, while a feature is
+ * Fold posture detection for [activity] (a pad skin's hinge): follows WindowManager's folding feature while started and, while a feature is
  * present, the hinge angle sensor (for foldables that report the feature flat at a laptop angle, [postureFromHinge]).
  * [area] gives the laid-out area's top in window px and its height (null: not laid out yet); [onChange] gets each
  * posture change, debounced by [DEBOUNCE_MS], with the hinge angle it was decided at.
@@ -144,7 +144,7 @@ class PostureTracker(
 /**
  * The last posture a started [PostureTracker] decided, in window px for a [Seen.windowW] x [Seen.windowH] window; null
  * when none is started. Main thread only. The menu's tracker is still started while the game's activity is created
- * (the menu stops after it), so a game launched half-folded reads it and builds the tabletop layout first.
+ * (the menu stops after it), so a game launched half-folded reads it and places its skin at the hinge first.
  */
 object PostureHint {
     class Seen(val owner: PostureTracker, val posture: Posture, val windowW: Int, val windowH: Int)

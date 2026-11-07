@@ -645,7 +645,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         findViewById<View>(R.id.root).addOnLayoutChangeListener { v, l, t, r, b, ol, ot, or_, ob ->
             if (r - l != or_ - ol || b - t != ob - ot) v.post { dual.recheckPictureOn() }
         }
-        padLayout.seedPosture()   // half-folded from the menu: the first layout is already the tabletop one
+        padLayout.seedPosture()   // half-folded from the menu: the first layout already places a skin at the hinge
         padLayout.applyLayout(resources.configuration.orientation)
         padLayout.collectPosture()
         // Back as a gesture or a key on Android 16+ (targetSdk 36: predictive back, KEYCODE_BACK does not reach
@@ -1217,7 +1217,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val sessionDir = if (np?.onCopy == true) NetplaySessionDir.dir(filesDir) else null
         gameTag = tag
         gameCoreId = coreId
-        padLayout.onGameTagKnown()
         // MainActivity does it too, in the menu process; here for a game started before that copy is in place. Not
         // awaited: it is locked across both processes, and a first-run or post-update copy (~10 MB) must not hold up the
         // game. Re-read once it is done.
@@ -1322,7 +1321,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // values then, so leaving split (or unfolding) puts back the stored ones. Not under netplay: a session changes no
         // core option once it runs, so an unfold could never put them back; it runs the user's swap, as it launched.
         val launchDual = dual.dualModeNow()
-        val n3dsSplit = if (N3dsOptions.appliesTo(tag)) DualScreen.n3dsForcedOptions(launchDual, n3dsTabletop() && np == null) else null
+        val n3dsSplit = if (N3dsOptions.appliesTo(tag)) DualScreen.n3dsForcedOptions(launchDual, n3dsSkinStack() && np == null) else null
         if (n3dsSplit != null) dual.n3dsSwapBeforeSplit = DualScreen.n3dsSwapRestore(null, resolved.values)
         n3dsSwapPinnedHalfFolded = N3dsOptions.appliesTo(tag) && np == null && n3dsHalfFoldedPin(launchDual)
         val options = FrontendOptions.coreValues(resolved.values)
@@ -1336,7 +1335,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 Variable(N3dsOptions.TOUCH_MAIN_ONLY, N3dsOptions.TOUCH_MAIN_ONLY_OFF),
                 Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(false)),   // stylus mode is off at launch
                 // The locked core layout ([N3dsOptions.LAYOUT]) from the row in use; the descriptor's default is replaced.
-                Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsTabletop())),
+                Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsSkinStack())),
             ).withN3dsSplit(n3dsSplit) else emptyList()
         options.firstOrNull { it.key == N3dsOptions.STACKED_SMALL_PROPORTION }?.value?.let { renderer.n3dsProportion = it }
         // netplay link: gambatte gets its link options; a GBA link engine starts now, before the core loads, so
@@ -2088,12 +2087,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (!isN3ds) return
         val screen = screenClass()
         val options = listOf(
-            Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen, n3dsTabletop())),
+            Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen, n3dsSkinStack())),
             // Large screen halves the touch screen (portrait: fills the height left), Stacked keeps both alike: a layout
             // change updates it too.
             Variable(N3dsOptions.STACKED_SMALL_PROPORTION, n3dsProportion(screen = screen)),
             Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(input.n3dsHotkeys.stylus)),
-        ).withN3dsSplit(DualScreen.n3dsForcedOptions(dual.dualMode, n3dsTabletop()))
+        ).withN3dsSplit(DualScreen.n3dsForcedOptions(dual.dualMode, n3dsSkinStack()))
         // Half-folded pins the swap (the app's SWAP moves the screens across the hinge): the user's values are noted as it
         // starts and put back when flat again. A second screen's split holds them meanwhile, and puts back none while
         // half-folded ([DualScreenController.restoreN3dsScreen]).
@@ -2104,7 +2103,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Large screen and Stacked share the core layout and differ only in the touch screen's proportion, so either counts.
         // A fold or unfold moves the screens' regions at once, ahead of the new frame: the picture is held until it comes.
         val layout = options.filter { it.key == N3dsOptions.LAYOUT || it.key == N3dsOptions.STACKED_SMALL_PROPORTION }.associate { it.key to it.value }
-        val halfFolded = n3dsTabletop()
+        val halfFolded = n3dsSkinStack()
         if (lastN3dsLayout != null && layout != lastN3dsLayout) renderer.watchGeometry(holdPicture = halfFolded != lastN3dsHalfFolded)
         lastN3dsLayout = layout
         lastN3dsHalfFolded = halfFolded
@@ -2117,18 +2116,18 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * Half-folded with no second screen in use pins the core's swap ([DualScreen.n3dsForcedOptions]); never under netplay,
      * whose core options stay as the session launched them.
      */
-    private fun n3dsHalfFoldedPin(mode: DualMode): Boolean = n3dsTabletop() && mode == DualMode.OFF && netplayNow == null
+    private fun n3dsHalfFoldedPin(mode: DualMode): Boolean = n3dsSkinStack() && mode == DualMode.OFF && netplayNow == null
 
     /** The core's swap was last pinned by half-folding ([syncN3dsCore]): flat again puts the user's values back. */
     private var n3dsSwapPinnedHalfFolded = false
 
     /**
-     * Half-folded with a tabletop layout (the Fold's DS halves or the Flip's portrait one): the 3DS core is then Stacked with
-     * equal screens ([N3dsOptions.coreLayoutFor]), whatever layout the player saved. A posture change re-runs [PadLayoutController.applyLayout],
-     * which calls [syncN3dsCore]. A second screen's split still wins ([withN3dsSplit]).
+     * A 3DS under a pad skin cuts its screens from the Stacked frame: the core is then Stacked with equal screens
+     * ([N3dsOptions.coreLayoutFor]), whatever layout the player saved. Every layout ([PadLayoutController.applyLayout])
+     * calls [syncN3dsCore]. A second screen's split still wins ([withN3dsSplit]). Not under netplay, which keeps the
+     * player's layout (drawn whole in the skin).
      */
-    // a 3DS skin cuts the same stack; not under netplay, which keeps the player's layout (drawn whole in the skin)
-    private fun n3dsTabletop(): Boolean = padLayout.tabletop() != null || (isN3ds && padLayout.skinShown && netplayNow == null)
+    private fun n3dsSkinStack(): Boolean = isN3ds && padLayout.skinShown && netplayNow == null
     override val n3dsStackPinned: Boolean get() = netplayNow == null
 
     /**
@@ -2136,7 +2135,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * fills the height left in the picture's space when it is known ([FrontendRenderer.n3dsPictureSpace]).
      */
     private fun n3dsProportion(landscape: Boolean = isLandscape(), screen: ScreenClass = screenClass()): String =
-        N3dsOptions.stackedSmallProportion(frontendValues, landscape, renderer.ndsControllerMode(), screen, n3dsTabletop(), renderer.n3dsPictureSpace)
+        N3dsOptions.stackedSmallProportion(frontendValues, landscape, renderer.ndsControllerMode(), screen, n3dsSkinStack(), renderer.n3dsPictureSpace)
 
     /**
      * The 3DS was laid out flat: a Large screen in portrait whose space now gives another proportion than the core has
@@ -2145,7 +2144,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * nor under netplay (no option changes mid-session).
      */
     override fun onN3dsPictureSpace() {
-        if (!isN3ds || netplayNow != null || DualScreen.n3dsForcedOptions(dual.dualMode, n3dsTabletop()) != null) return
+        if (!isN3ds || netplayNow != null || DualScreen.n3dsForcedOptions(dual.dualMode, n3dsSkinStack()) != null) return
         val proportion = n3dsProportion()
         if (proportion == renderer.n3dsProportion) return
         lastN3dsLayout = lastN3dsLayout?.plus(N3dsOptions.STACKED_SMALL_PROPORTION to proportion)
@@ -3203,7 +3202,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun ndsControllerMode(): Boolean = renderer.ndsControllerMode()
     override fun screenClass(): ScreenClass = windowShape().screenClass
     // Half-folded (no second screen's mode, which places the screens itself) the screens follow the fold.
-    override fun layoutSetByFold(): Boolean = renderer.halfFoldedLayoutInUse()
 
     // The second display's state, owned by [dual]: read by the input, layout and picture code.
     override val presentation: SecondScreenPresentation? get() = dual.presentation
@@ -3213,7 +3211,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun secondDsRegions(g: FloatArray): List<NdsRegion>? = dual.secondDsRegions(g)
     override fun secondWholeFrame(g: FloatArray): com.nxredux.mobile.options.PxRect? = dual.secondWholeFrame(g)
     override fun secondRegions(g: FloatArray, ds: List<NdsRegion>?): List<ScreenRegion> = dual.secondRegions(g, ds)
-    override fun onN3dsSwapPressed(down: Boolean): Boolean = dual.onN3dsSwapPressed(down) || renderer.onTabletopN3dsSwap(down)
+    override fun onN3dsSwapPressed(down: Boolean): Boolean = dual.onN3dsSwapPressed(down) || renderer.onSkinN3dsSwap(down)
     override fun mainPanelCoversWindow(): Boolean = dual.mainPanelCoversWindow()
     /** A NAOMI / Atomiswave set (flycast's set table, the launcher's rule): read once, the table only for a DC archive. */
     override val dcArcadeSet: Boolean by lazy {

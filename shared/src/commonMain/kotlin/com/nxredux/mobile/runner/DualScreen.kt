@@ -47,7 +47,7 @@ object DualScreen {
 
     /**
      * The 3DS frame in Azahar's "default" layout at proportion 1, unswapped: 400s x 480s, the bottom screen centred. The
-     * half-folded layout runs the core the same way and cuts the same rects ([tabletopRegions]).
+     * pad skin's DS / 3DS glasses run the core the same way and cut the same rects ([dsScreenRegions]).
      */
     internal val N3DS_TOP_SRC = FrameRect(0f, 0f, 1f, 0.5f)
     internal val N3DS_BOTTOM_SRC = FrameRect(0.1f, 0.5f, 0.9f, 1f)
@@ -162,8 +162,8 @@ object DualScreen {
 
     /**
      * The Azahar options held for the session now: a second screen's mode's ([n3dsCoreOptions]) first; else, [halfFolded]
-     * with no second screen in use ([DualMode.OFF]: the screens are regions of the unswapped Stacked frame,
-     * [tabletopRegions]), the swap pinned to Top / Hold, so SWAP is the app's (the screens trade places across the hinge)
+     * (the screens drawn as regions of the unswapped Stacked frame in a pad skin's glasses, [dsScreenRegions]) with no
+     * second screen in use ([DualMode.OFF]), the swap pinned to Top / Hold, so SWAP is the app's (the screens trade glasses)
      * and the core never turns its frame under the cuts. Null: nothing held, the user's values apply (Azahar's own swap).
      */
     fun n3dsForcedOptions(mode: DualMode, halfFolded: Boolean): Map<String, String>? =

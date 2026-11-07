@@ -349,15 +349,12 @@ internal class InGameMenuController(
                     }
                     // Shortcuts' bind rows come and go with a controller (the on-screen pad binds nothing).
                     LaunchedEffect(connected) { menuModel?.let { it.setControllerConnected(connected); menuState.value = it.state } }
-                    // The page title's gutter follows the app's: the narrow one while the pad sits below (portrait, or a
-                    // tabletop pad under the hinge), as HandheldShell sets it; a controller-dropped band keeps it, with no pad below.
-                    // Half-folded with nothing under the hinge (a controller; on a DS / 3DS one leaves the touch screen alone
-                    // there) the menu above it is laid out as landscape, with no pad below.
+                    // The page title's gutter follows the app's: the narrow one in portrait, as HandheldShell sets it; a
+                    // clip-on controller's empty room below the game counts as a pad below.
                     // In a pad skin's glass: laid out for the glass's shape, as the main menu in the skin (HandheldShell).
                     val skinGlass = skinGlass()
-                    val portraitLayout = skinGlass?.let { it.height > it.width }
-                        ?: padLayout.tabletop()?.let(padLayout::tabletopPadDrawn) ?: (config.orientation == Configuration.ORIENTATION_PORTRAIT)
-                    val padBelow = skinGlass != null || portraitLayout && (padLayout.tabletop() != null || padLayout.portraitBandPx() > 0)
+                    val portraitLayout = skinGlass?.let { it.height > it.width } ?: (config.orientation == Configuration.ORIENTATION_PORTRAIT)
+                    val padBelow = skinGlass != null || portraitLayout && padLayout.portraitBandPx() > 0
                     // The window decides the two panes, as Settings' ([inGameMenuSplit]): portrait never splits.
                     val window = DpSize(config.screenWidthDp.dp, config.screenHeightDp.dp)
                     CompositionLocalProvider(
@@ -433,10 +430,8 @@ internal class InGameMenuController(
             val x = g.x.roundToInt(); val y = g.y.roundToInt()
             return FrameLayout.LayoutParams((g.x + g.width).roundToInt() - x, (g.y + g.height).roundToInt() - y, Gravity.TOP or Gravity.START).apply { leftMargin = x; topMargin = y }
         }
-        // Tabletop: confined above the hinge, the controls below still drive it.
-        padLayout.tabletop()?.let { tt -> return FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, tt.menuBottom, Gravity.TOP) }
         return if (orientation == Configuration.ORIENTATION_PORTRAIT) {
-            // Down to the band's top: the window's height less the band, both from the one window reading.
+            // Down to a clip-on controller's room (else the bottom): the window's height less it, from the one window reading.
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, activity.windowShape().heightPx - padLayout.portraitBandPx(), Gravity.TOP)
         } else {
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
@@ -588,9 +583,9 @@ internal class InGameMenuController(
         }
     }
 
-    /** The 3DS options the second-screen split (or half-folding) holds for the session: a save keeps their stored values. */
+    /** The 3DS options the second-screen split holds for the session: a save keeps their stored values. */
     private fun dualForcedOptions(): Set<String> =
-        if (isN3ds) DualScreen.n3dsForcedOptions(dual.dualMode, padLayout.tabletop() != null)?.keys.orEmpty() else emptySet()
+        if (isN3ds) DualScreen.n3dsForcedOptions(dual.dualMode, halfFolded = false)?.keys.orEmpty() else emptySet()
 
     /**
      * Reads the core's options on the emulation thread, then runs [then] on the main thread and redraws.

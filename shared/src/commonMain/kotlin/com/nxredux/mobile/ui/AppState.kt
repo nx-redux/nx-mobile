@@ -4318,9 +4318,8 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private fun padLayoutRows(): List<SettingsRow> {
         val all = deps.settings.padLayouts
         val key = padLayoutConsole
-        val tags = if (key == PadLayouts.SHARED_KEY) null else CoreRegistry.consoles.firstOrNull { it.id == key }?.tags.orEmpty()
         return listOf(SettingsRow(SettingsKind.PAD_LAYOUT_CONSOLE, "Console", padLayoutConsoleName(key))) +
-            PadShape.offered(tags, _padScreen.value, DeviceTraits.canHalfFold).map { shape ->
+            PadShape.offered.map { shape ->
                 val own = PadLayouts.own(all, key, PadSlot(shape, _padScreen.value))
                 val value = when {
                     own != null -> if (own.tweaks.isEmpty()) "Default" else "Custom"   // empty: a console's explicit default
