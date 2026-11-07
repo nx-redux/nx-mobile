@@ -13,7 +13,7 @@ private fun quiet(text: String, detail: String = "") = SettingText("", detail.if
 private fun resetText(section: SettingsSection?): SettingText = when (section) {
     SettingsSection.APPEARANCE -> SettingText("Resets every setting on this page", "Put Pad theme, Pad buttons, Accent, Secondary accent, Text size and Button layout back")
     SettingsSection.MAIN_MENU -> SettingText("Resets every setting on this page", "Put every Layouts group and Extra info back to their defaults")
-    SettingsSection.CONTROLS -> SettingText("Resets this page, pad layouts included", "Put vibration, Menu pad and every pad layout back to defaults")
+    SettingsSection.CONTROLS -> SettingText("Resets every setting on this page", "Put Pad vibration and Game rumble back to their defaults")
     SettingsSection.SHORTCUTS -> SettingText("Sets every shortcut to None", "Unbind every action and take both touch buttons off the pad")
     SettingsSection.SYSTEM_BUTTONS -> SettingText("Back to this controller's own buttons", "SELECT, START and MENU go back to the buttons that send them; other controllers keep theirs")
     else -> SettingText("Put this page back to its defaults")

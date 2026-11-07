@@ -10852,6 +10852,18 @@ class AppStateTest {
         assertFalse(page().confirmReset)
     }
 
+    // Controls' reset question names what it puts back: Pad vibration and Game rumble, no pad layouts.
+    @Test fun controls_reset_asks_with_its_settings() = runTest {
+        val state = state(MemorySettings(ContentRef("Home")))
+        state.load()
+        state.openSettings(SettingsSection.CONTROLS)
+        val page = assertIs<Screen.Settings>(state.screen.value)
+        val ask = assertNotNull(settingsResetAsk(page, page.rows.indexOfFirst { it.kind == SettingsKind.RESET_DEFAULTS }))
+        assertEquals("Reset to defaults?", ask.title)
+        assertTrue("Pad vibration" in ask.text && "Game rumble" in ask.text, ask.text)
+        assertFalse("layout" in ask.text, ask.text)
+    }
+
     @Test fun split_preview_tap_on_reset_asks_first() = runTest {
         val (state, settings) = splitSettings()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN)             // Appearance, previewed

@@ -463,7 +463,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val view = PadSkinView(activity, pack, input::onPad, ::onSkinAction, haptics = padVibration != com.nxredux.mobile.settings.PadVibration.OFF,
             onResized = { root.post(onResized) }, onStick = input::onStick,
             // the GameCube's C-stick, the Classic Controller's and the PlayStation's right stick: the right analog
-            onCStick = { x, y -> if (input.gcPad || (isWii && wiiPad == WiiPad.CLASSIC) || psSkin()) input.onWiiRightStick(x, y) else input.onCStick(x, y) },
+            onCStick = { x, y -> if (skinRightStickIsAnalog(input.gcPad, isWii, wiiPad, psSkin())) input.onWiiRightStick(x, y) else input.onCStick(x, y) },
             onGlass = { x, y, down -> glassTouch(game, x, y, down) }, bare = bare)
         view.useStick = PadStickModes[padStickKey, stickDefault()]   // the drawn pad's choice, shared
         view.dimmed = motionDim()
@@ -709,3 +709,11 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
  */
 internal fun cutoutNeedsRelayout(sdk: Int, portrait: Boolean, builtBandPx: Int, bandPx: Int): Boolean =
     sdk < 30 && portrait && bandPx != builtBandPx
+
+/**
+ * The skin's right stick goes to the game's right analog ([GameInputRouter.onWiiRightStick]): the GameCube's C-stick
+ * ([gcPad]), the Classic Controller's on a Wii ([wiiPad]) and the PlayStation's ([psSkin]); else it is the N64's C
+ * buttons. A Wii pad not yet known shows the Classic layout, so its right stick is the Classic Controller's too.
+ */
+internal fun skinRightStickIsAnalog(gcPad: Boolean, isWii: Boolean, wiiPad: WiiPad?, psSkin: Boolean): Boolean =
+    gcPad || (isWii && (wiiPad ?: WiiPad.CLASSIC) == WiiPad.CLASSIC) || psSkin

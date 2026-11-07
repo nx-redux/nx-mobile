@@ -243,7 +243,7 @@ internal fun settingsResetAsk(page: Screen.Settings, selected: Int): SettingsRes
         SettingsSection.SYSTEM_BUTTONS -> SettingsResetAsk("Reset this controller's buttons?", "SELECT, START and MENU go back to the controller's own buttons.", "Reset")
         SettingsSection.APPEARANCE -> SettingsResetAsk("Reset to defaults?", "Pad theme, Pad buttons, Accent, Secondary accent, Text size and Button layout go back to their defaults.", "Reset")
         SettingsSection.MAIN_MENU -> SettingsResetAsk("Reset to defaults?", "Every Layouts group and Extra info go back to their defaults.", "Reset")
-        SettingsSection.CONTROLS -> SettingsResetAsk("Reset to defaults?", "Vibration, Menu pad and every pad layout go back to their defaults.", "Reset")
+        SettingsSection.CONTROLS -> SettingsResetAsk("Reset to defaults?", "Pad vibration and Game rumble go back to their defaults.", "Reset")
         else -> SettingsResetAsk("Reset to defaults?", "This page's settings go back to their defaults.", "Reset")
     }
     SettingsKind.BUTTON_LAYOUT_RESET -> {

@@ -594,7 +594,7 @@ internal class DualScreenController(
 
     /**
      * The Panel pill alone under a pad skin (a DS split, its touch screen in the skin's screen): at that screen's
-     * bottom-right corner, not the window's (over the right cluster); else the window's, as without a skin.
+     * bottom-right corner, not the window's (over the skin's right-hand buttons); else the window's, as without a skin.
      */
     private fun placeMainPanelPill() {
         val host = mainPanelHost ?: return

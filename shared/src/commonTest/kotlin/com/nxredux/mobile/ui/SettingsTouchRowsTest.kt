@@ -71,6 +71,14 @@ class SettingsTouchRowsTest {
         assertEquals("Resets every setting on this page", reset.info); assertTrue("Text size" in reset.detail)
     }
 
+    // Controls' Reset to defaults puts back its two settings only (Button layout lives under Appearance).
+    @Test fun controlsResetNamesItsSettings() {
+        val reset = settingsTouchRow(SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL), null, SettingsSection.CONTROLS)
+        assertEquals("Resets every setting on this page", reset.info)
+        assertTrue("Pad vibration" in reset.detail && "Game rumble" in reset.detail, reset.detail)
+        assertFalse("layout" in reset.info + reset.detail, reset.detail)
+    }
+
     @Test fun aDroppedRowIsCompactWithItsTextBehindTheIcon() {
         val accent = settingsTouchRow(SettingsRow(SettingsKind.ACCENT, "Accent", "White"), null)
         assertEquals("", accent.info)
