@@ -1838,6 +1838,17 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
      * Shows [screen] with its tab's remembered row, clamped. Over START's open prompt (a rebuild in place: a foreground,
      * a new Home frame, counts landing) the prompt and its draft stay; closing it is the prompt's own keys.
      */
+    /**
+     * A load or scan shows the menu again ([showSystems]), which takes a tool off the top screen; when [block] goes back to
+     * a tool's page (Settings after a rescan, a reload or a folder change), that page stays on the top screen.
+     */
+    private inline fun keepingToolOnTop(block: () -> Unit) {
+        val onTop = _toolOnTop.value
+        block()
+        val s = _screen.value
+        if (onTop && s !is Screen.Systems && s !is Screen.Games && s !is Screen.Loading && s !is Screen.Switcher && !setupScreen(s)) _toolOnTop.value = true
+    }
+
     /** First setup's steps and onboarding (a folder change in Settings may resume them): never a tool on the top screen. */
     private fun setupScreen(s: Screen): Boolean = when (s) {
         is Screen.PermissionsStep, Screen.PickFolder, Screen.AddFirstExtra, is Screen.FolderSummary, is Screen.AndroidGamesStep, is Screen.Onboarding, is Screen.StorageUpgrade -> true
@@ -3195,8 +3206,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 refreshInstalled()   // the Android games console: its row joins the menu once the apps are listed
                 return@launch
             }
-            showSystems(usable.playableSystems(readHidden()))
-            then?.invoke(systemsCache)
+            keepingToolOnTop {
+                showSystems(usable.playableSystems(readHidden()))
+                then?.invoke(systemsCache)
+            }
             refreshInstalled()
             afterIndexStart(root)
         }
@@ -3278,8 +3291,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                 libraryDirty = false   // the index is this scan's
                 homeReadable()
                 refreshCollectionsFlag()   // the scan just walked the tree, so the first show can carry the row
-                showSystems(it.playableSystems(readHidden()))
-                then?.invoke(systemsCache)
+                keepingToolOnTop {
+                    showSystems(it.playableSystems(readHidden()))
+                    then?.invoke(systemsCache)
+                }
             }
             .onFailure { e ->
                 if (e is ListingUnavailable) {
@@ -3302,8 +3317,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
                     val index = fittingIndex(root)
                     if (index != null) {
                         _error.value = homeAwayError(root, "Insert it, then use Rescan in Settings → Library.")
-                        showSystems(index.playableSystems(readHidden()))
-                        kept?.invoke()
+                        keepingToolOnTop {
+                            showSystems(index.playableSystems(readHidden()))
+                            kept?.invoke()
+                        }
                         return
                     }
                     _error.value = homeAwayError(root, "Insert it, then reopen the app.")
@@ -3423,8 +3440,10 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
         skeletonFor = null   // a skeleton pass cut short by the same fault runs again next scan
         val index = fittingIndex(root)
         if (index != null) {
-            if (!indexShown) showSystems(index.playableSystems(readHidden()))
-            kept?.invoke()
+            keepingToolOnTop {
+                if (!indexShown) showSystems(index.playableSystems(readHidden()))
+                kept?.invoke()
+            }
             showNotice(LISTING_HIDDEN)
         } else {
             _error.value = LISTING_HIDDEN_NO_INDEX
@@ -4840,9 +4859,7 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
     private fun rescanFromSettings(section: SettingsSection = SettingsSection.LIBRARY, row: SettingsKind = SettingsKind.RESCAN) {
         val root = home() ?: run { showPickFolder(); return }
         dismissNotice()   // a tap reaches openSelected without onButton's dismissal; a notice raised by this scan still wins below
-        // The scan shows the menu again, which takes a tool off the top screen: Settings goes back where it was.
-        val onTop = _toolOnTop.value
-        val backToRow = { showSettingsOn(section, row); _toolOnTop.value = onTop }
+        val backToRow = { showSettingsOn(section, row) }
         loader.start(message = "Scanning library…", cancellable = false) {
             scanNow(
                 root,
