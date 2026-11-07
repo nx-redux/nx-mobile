@@ -89,6 +89,8 @@ internal enum class SkinAction(val slot: TouchSlot? = null) {
  * view under it (the DS touch screen). The picture is drawn as rendered: slices copied or tiled, then a layout's pieces
  * (if it is built from them) and the labels; the only thing painted is a held cap's shade. The skin is its own layer
  * ([layer], recorded once per placement), the shades drawn over it here: a press records a few shapes, not the skin again.
+ * [bare]: the overlay over a full-screen game, only the buttons drawn ([com.nxredux.mobile.skin.bare]), see-through at
+ * [bareAlpha]; the board's picture is not read.
  */
 @SuppressLint("ViewConstructor")
 internal class PadSkinView(
@@ -105,6 +107,7 @@ internal class PadSkinView(
     private val onCStick: (Float, Float) -> Unit = { _, _ -> },
     /** A finger on no cap after one on a cap: on to the game's touch screen (view px, [SkinGlassPass]). */
     onGlass: (Float, Float, Boolean) -> Unit = { _, _, _ -> },
+    private val bare: Boolean = false,
 ) : FrameLayout(context) {
     private val glass = SkinGlassPass(onGlass)
 
@@ -118,7 +121,7 @@ internal class PadSkinView(
         set(value) {
             if (field == value) return
             field = value
-            picture = value?.let { pack.picture(it.spec.image) }
+            picture = if (bare) null else value?.let { pack.picture(it.spec.image) }
             parts = value?.spec?.parts?.let { pack.picture(it) }
             refresh()
         }
@@ -149,6 +152,12 @@ internal class PadSkinView(
             if (field == value) return
             field = value
             refresh()
+        }
+    /** The [bare] overlay's opacity (Pad Opacity, or solid clear of the picture); a whole skin is always solid. */
+    var bareAlpha: Float = 1f
+        set(value) {
+            field = value
+            if (bare) alpha = value
         }
     /** [placement] as drawn and hit-tested now: without the strip's shortcuts while [stripHidden]. */
     private var shown: SkinPlacement? = null
@@ -203,15 +212,17 @@ internal class PadSkinView(
     /** The skin: slices, pieces, labels (the [layer]'s drawing). */
     private fun drawSkin(canvas: Canvas) {
         val p = shown ?: return
-        val pic = picture ?: return
-        // the screens are holes in the background (it runs under them otherwise), cut to the glasses' rounded corners; the
-        // frame and the other pieces are drawn whole over the game: their own holes are cut round, so they round its corners
-        canvas.save()
-        holes.reset()
-        for (g in p.glasses) holes.addRoundRect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height, g.corner, g.corner, Path.Direction.CW)
-        canvas.clipOutPath(holes)
-        for (c in p.cells) drawCell(canvas, pic, c, p.k)
-        canvas.restore()
+        if (!bare) {   // bare: no board, the game shows everywhere
+            val pic = picture ?: return
+            // the screens are holes in the background (it runs under them otherwise), cut to the glasses' rounded corners;
+            // the frame and the other pieces are drawn whole over the game: their own holes are cut round, so they round its corners
+            canvas.save()
+            holes.reset()
+            for (g in p.glasses) holes.addRoundRect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height, g.corner, g.corner, Path.Direction.CW)
+            canvas.clipOutPath(holes)
+            for (c in p.cells) drawCell(canvas, pic, c, p.k)
+            canvas.restore()
+        }
         canvas.save()
         parts?.let { pp ->
             for (piece in p.pieces) {

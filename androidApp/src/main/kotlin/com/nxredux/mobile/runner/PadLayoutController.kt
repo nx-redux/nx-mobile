@@ -45,7 +45,11 @@ import com.nxredux.mobile.R
 import com.nxredux.mobile.layout.CoreFrame
 import com.nxredux.mobile.skin.SkinDual
 import com.nxredux.mobile.skin.SkinChoice
+import com.nxredux.mobile.skin.OverlayMode
 import com.nxredux.mobile.skin.SkinPlacement
+import com.nxredux.mobile.skin.SkinTweaks
+import com.nxredux.mobile.skin.bare
+import com.nxredux.mobile.skin.overlayMode
 import com.nxredux.mobile.layout.LayoutConstants
 import com.nxredux.mobile.layout.PadRoom
 import com.nxredux.mobile.layout.Reach
@@ -195,7 +199,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     val padLandscapeAlpha = mutableStateOf(FrontendSettings().padLandscapeAlpha)
     // The portrait pad's palette (Settings → Appearance → Pad theme), read once per game: it is set from the menu, not in-game.
     private val padTheme by lazy { AndroidAppSettings(activity).padTheme }
-    /** Appearance → Pad skin: Off, no skin, the game full screen under the see-through overlay pad. */
+    /** Appearance → Pad skin: Off, no skin, the game full screen under the skin's see-through buttons ([bareView]). */
     private val padSkinOn by lazy { AndroidAppSettings(activity).padSkin }
     // Settings → Controls → Pad vibration, read once per game likewise; every pad ([composePad]) ticks at it.
     private val padVibration by lazy { AndroidAppSettings(activity).padVibration }
@@ -239,18 +243,26 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private val reveal = PadReveal()
     /** The landscape clusters beside the picture now; null without them (portrait, a controller, a skin). */
     private var clusterViews: Pair<ComposeView, ComposeView>? = null
-    /** The pad skin's pack (Pad theme NX Carbon...), read once per game; null for the drawn pads or a pack that can't be read. */
-    private val skinPack: PadSkinPack? by lazy { if (padSkinOn) padTheme.skin?.let { PadSkinPack.builtIn(activity, it) } else null }
+    /** The pad skin's pack (Pad theme NX Carbon...), read once per game (the whole skin or its bare buttons); null when it can't be read. */
+    private val skinPack: PadSkinPack? by lazy { padTheme.skin?.let { PadSkinPack.builtIn(activity, it) } }
     /** The skin's view while the skin is the layout ([applySkinLayout]), else null. */
     private var skinView: PadSkinView? = null
+    /** The skin's bare buttons over the full-screen game while they are the pad ([addBareSkin]), else null. */
+    private var bareView: PadSkinView? = null
+    private fun skinViews() = listOfNotNull(skinView, bareView)
     /** The touch shortcuts changed ([PadLayoutHost.padShortcuts]): the skin's strip writes the new ones. */
-    fun refreshSkinShortcuts() { skinView?.shortcuts = host.padShortcuts }
+    fun refreshSkinShortcuts() { skinViews().forEach { it.shortcuts = host.padShortcuts } }
     /** The in-game menu is open: the skin's strip shortcuts are hidden ([PadSkinView.stripHidden]). */
     var skinStripHidden: Boolean = false
-        set(value) { field = value; skinView?.stripHidden = value }
-    /** The last [skinPlacement] worked out, and what it was worked out for. */
+        set(value) { field = value; skinViews().forEach { it.stripHidden = value } }
+    /** The last [skinPlacement] / [barePlacement] worked out, and what it was worked out for. */
     private var skinCache: Pair<SkinKey, SkinPlacement?>? = null
-    private data class SkinKey(val w: Int, val h: Int, val dpi: Int, val tablet: Boolean, val tag: String, val aspect: Float?, val hinge: Float?, val top: Int)
+    private var bareCache: Pair<SkinKey, SkinPlacement?>? = null
+    /** [variant]: the layout set (a Wii pad resolving changes it); [tweaks]: the stored player tweaks ([SkinTweaks.decode]). */
+    private data class SkinKey(
+        val w: Int, val h: Int, val dpi: Int, val tablet: Boolean, val tag: String, val aspect: Float?, val hinge: Float?, val top: Int,
+        val variant: com.nxredux.mobile.skin.SkinVariant, val tweaks: String,
+    )
     /** Portrait's see-through overlay pad across the bottom, and its height, px. */
     private var overlayView: ComposeView? = null
     private var overlayHeight = 0
@@ -273,6 +285,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     /** Sets [overlayClear]. */
     fun setOverlayClear(clear: Boolean) {
         overlayClear.value = clear
+        syncBareAlpha()
     }
     /**
      * How far the clusters' shoulders reach in from each screen edge while they sit beside the picture, px; null
@@ -306,6 +319,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         padViews.clear()
         skinView?.let { root.removeView(it) }
         skinView = null
+        bareView?.let { root.removeView(it) }
+        bareView = null
         skinShownState.value = false
         input.n3dsHotkeys.skinShown = false
         input.dpadHat.clear()
@@ -334,32 +349,31 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             if (lastLayoutNames != null) root.post { host.onLayoutControllersChanged() }
             lastLayoutNames = names
         }
-        if (skinPlacement(names) != null) {
+        val mode = overlayMode(padSkinOn, placed = skinPlacement(names) != null, controller = names.isNotEmpty())
+        if (mode == OverlayMode.SKIN) {
             applySkinLayout(root, game, orientation)
             syncN3dsCore()
             host.onSkinPlaced()
             return
         }
         if (portrait) {
-            // Portrait: the game full screen under the see-through overlay pad, no pad with a controller. A clip-on
+            // Portrait: the game full screen under the skin's see-through buttons, no pad with a controller. A clip-on
             // controller keeps its room empty below the game ([portraitBandPx]), so the game is not under it.
             val bandPx = portraitBandPx(names)
             game.layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
             ).apply { bottomMargin = bandPx; topMargin = cutoutTop }
-            // One see-through pad across the bottom. No touch cut-off under it: its buttons take their own touches and
-            // the gaps pass to the game, so a DS touch screen reaching into it still answers.
-            if (names.isEmpty()) addPortraitOverlay(root)
         } else {
-            // Landscape: full-screen game. Show the transparent corner clusters only when no controller
-            // is attached; a connected controller hides them for an unobstructed screen.
+            // Landscape: full-screen game, the buttons over it only when no controller is attached.
             game.layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-            if (names.isEmpty()) addBesideClusters(root)
         }
+        // No touch cut-off under the buttons: they take their own touches and the gaps pass to the game, so a DS touch
+        // screen under them still answers.
+        if (mode == OverlayMode.BARE) addBareSkin(root, game)
         root.removeCallbacks(revealTimeout)
         // Hidden until the renderer places the picture; the timeout shows them for a game that never draws.
-        if (clusterViews != null || overlayView != null) startReveal(root)
+        if (clusterViews != null || overlayView != null || bareView != null) startReveal(root)
         game.requestLayout()
         updatePadVisibility()
         syncN3dsCore()
@@ -545,6 +559,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     fun padRoom(): PadRoom = when {
         clusterViews != null -> PadRoom.BESIDE
         overlayView != null -> PadRoom.HIDDEN_BAND
+        bareView != null && overlayHeight > 0 -> PadRoom.HIDDEN_BAND   // portrait's bare buttons: a band as the overlay's
         else -> PadRoom.NONE
     }
 
@@ -581,8 +596,10 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     fun onFrame(next: CoreFrame) {
         val aspectBefore = frame?.aspect
         frame = next
-        // a skin that no longer fits gives way to the overlay pad
+        // a skin that no longer fits gives way to its bare buttons; those are placed again for the picture
         if (skinView != null && next.aspect != aspectBefore && skinPlacement() == null)
+            findViewById<FrameLayout>(R.id.root).post { applyLayout(resources.configuration.orientation) }
+        if (bareView != null && next.aspect != aspectBefore && barePlacement() == null)
             findViewById<FrameLayout>(R.id.root).post { applyLayout(resources.configuration.orientation) }
     }
 
@@ -593,41 +610,87 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     }
 
     /**
-     * The pad skin laid out for this window, or null where the drawn pads stay: no skin picked, a controller in the
-     * layout ([names]), the second screen in use, a console the skin doesn't draw, or a window none of
-     * its layouts fits ([SkinChoice]). Half-folded, the fold's middle is where the skin's hinge goes. A one-screen
-     * console's glass takes its picture's aspect (4:3 until the first frame). Shows it in the skin's view as well.
+     * The pad skin laid out for this window, or null where its bare buttons are the pad instead ([barePlacement]): Pad
+     * skin Off, no skin picked, a controller in the layout ([names]), the second screen in use, or a window none of its
+     * layouts fits ([SkinChoice]). Half-folded, the fold's middle is where the skin's hinge goes. A one-screen
+     * console's glass takes its picture's aspect (4:3 until the first frame). The console's player tweaks applied
+     * ([SkinTweaks]). Shows it in the skin's view as well.
      */
     fun skinPlacement(names: List<String> = layoutControllerNames()): SkinPlacement? {
+        if (!padSkinOn) return null
         val pack = skinPack ?: return null
         val tag = layoutTag()
         val ds = NdsOptions.appliesTo(tag)
         val n3ds = N3dsOptions.appliesTo(tag)
         // with a second display: one-screen games and a DS / 3DS split keep the skin (its screen the touch screen, [SkinDual])
         if (names.isNotEmpty() || !SkinDual.skinAllowed(host.dualMode, ds, n3ds)) return null
-        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), ds, host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, wiiPad, padProfile().cStick)
-        val (w, h) = rootSize()
-        if (w <= 0 || h <= 0) return null
-        val tablet = activity.windowShape().screenClass.isTablet
-        val hinge = (posture as? Posture.Tabletop)?.let { (it.hingeTop + it.hingeBottom) / 2f }
-        val aspect = if (ds || n3ds) null else frame?.aspect?.takeIf { it > 0f } ?: (4f / 3f)
-        // the skin and its screen run under the top camera cutout too (the frame keeps its own margin; the picture is centred
-        // in the glass, so it reaches the camera only when it fills the glass's height)
-        val top = 0
-        val key = SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, top)
-        val placed = skinCache?.takeIf { it.first == key }?.second ?: SkinChoice.place(
-            pack.manifest, w, h, key.dpi, tablet, ds || n3ds, aspect?.let { (it * 240f) to 240f }, hinge, top, DeviceTraits.canHalfFold, variant,
-        ).also { skinCache = key to it }
+        val key = skinKey(tag, ds || n3ds) ?: return null
+        val placed = skinCache?.takeIf { it.first == key }?.second ?: placeSkin(pack, key, ds || n3ds, closest = false).also { skinCache = key to it }
         val moved = skinView != null && skinView?.placement != placed
         skinView?.placement = placed
         if (moved) host.onSkinPlaced()   // a new size: the panel follows its glass
         return placed
     }
 
+    /**
+     * The skin's bare buttons laid out for this window ([bare]): the closest layout ([SkinChoice.placeClosest]) with the
+     * console's tweaks, or null with a controller in the layout ([names]), no readable skin, or a window too small even
+     * for that. Shows it in the bare view as well, and in portrait sets the band it takes ([overlayHeight]).
+     */
+    fun barePlacement(names: List<String> = layoutControllerNames()): SkinPlacement? {
+        val pack = skinPack ?: return null
+        if (names.isNotEmpty()) return null
+        val tag = layoutTag()
+        val ds = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
+        val key = skinKey(tag, ds) ?: return null
+        val placed = bareCache?.takeIf { it.first == key }?.second ?: placeSkin(pack, key, ds, closest = true)?.bare().also { bareCache = key to it }
+        bareView?.let { v ->
+            v.placement = placed
+            overlayHeight = if (placed != null && !isLandscape(resources.configuration.orientation)) bandHeight(placed, key.h) else 0
+        }
+        return placed
+    }
+
+    /** What the skin is placed for now: the window, the fold, a one-screen console's picture aspect ([ds]: none), its layout set, the tweaks. */
+    private fun skinKey(tag: String, ds: Boolean): SkinKey? {
+        val (w, h) = rootSize()
+        if (w <= 0 || h <= 0) return null
+        val tablet = activity.windowShape().screenClass.isTablet
+        val hinge = (posture as? Posture.Tabletop)?.let { (it.hingeTop + it.hingeBottom) / 2f }
+        val aspect = if (ds) null else frame?.aspect?.takeIf { it > 0f } ?: (4f / 3f)
+        // the skin and its screen run under the top camera cutout too (the frame keeps its own margin; the picture is centred
+        // in the glass, so it reaches the camera only when it fills the glass's height)
+        val top = 0
+        val variant = SkinChoice.variantFor(com.nxredux.mobile.runner.CoreRegistry.baseTag(tag), NdsOptions.appliesTo(tag), host.dcArcadeSet, padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, wiiPad, padProfile().cStick)
+        return SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, top, variant, AndroidAppSettings(activity).skinTweaks)
+    }
+
+    /**
+     * [pack]'s layout for [key] ([SkinChoice.place], or [SkinChoice.placeClosest] when [closest]; [ds]: a DS or 3DS),
+     * the console's tweaks for it applied ([SkinTweaks.apply]).
+     */
+    private fun placeSkin(pack: PadSkinPack, key: SkinKey, ds: Boolean, closest: Boolean): SkinPlacement? {
+        val variant = key.variant
+        val picture = key.aspect?.let { (it * 240f) to 240f }
+        val placed = if (closest) SkinChoice.placeClosest(pack.manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, key.top, DeviceTraits.canHalfFold, variant)
+            else SkinChoice.place(pack.manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, key.top, DeviceTraits.canHalfFold, variant)
+        placed ?: return null
+        val console = CoreRegistry.consoleOf(key.tag)?.id ?: return placed
+        val tweaks = SkinTweaks.decode(key.tweaks)[console]?.get(placed.spec.id).orEmpty()
+        return SkinTweaks.apply(placed, tweaks, key.w.toFloat(), key.h.toFloat())
+    }
+
+    /** The band [p]'s buttons take at the bottom of a window [windowH] tall: from the highest piece or hit area down, px. */
+    private fun bandHeight(p: SkinPlacement, windowH: Int): Int {
+        val tops = p.pieces.map { it.dst.y } + p.controls.map { c -> c.y - if (c.spec.shape == com.nxredux.mobile.skin.ControlShape.RECT) c.spec.hh else c.spec.r }
+        val top = tops.minOrNull() ?: return 0
+        return (windowH - top).roundToInt().coerceIn(0, windowH)
+    }
+
     /** A finger the skin view passed on ([PadSkinView] px, the skin filling the root) to the game view in [game]. */
     private fun glassTouch(game: FrameLayout, x: Float, y: Float, down: Boolean) {
         val view = retroIn(game) ?: return
-        val skin = skinView ?: return
+        val skin = skinView ?: bareView ?: return
         val a = IntArray(2).also(skin::getLocationInWindow); val b = IntArray(2).also(view::getLocationInWindow)
         view.hostTouch(x + a[0] - b[0], y + a[1] - b[1], down)
     }
@@ -640,23 +703,65 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         return null
     }
 
-    /** The skin is the layout: the game view fills the window under the skin's view, which takes the pad's touches. */
-    private fun applySkinLayout(root: FrameLayout, game: FrameLayout, orientation: Int) {
-        game.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-        val pack = skinPack ?: return
+    /**
+     * A skin view over the game in [root] (under the menu and the notifications), its touches to the pad and off its
+     * buttons to the game in [game]; [bare]: only its buttons, see-through ([addBareSkin]).
+     */
+    private fun addSkinView(root: FrameLayout, game: FrameLayout, pack: PadSkinPack, bare: Boolean, onResized: () -> Unit): PadSkinView {
         val view = PadSkinView(activity, pack, input::onPad, ::onSkinAction, haptics = padVibration != com.nxredux.mobile.settings.PadVibration.OFF,
-            onResized = { root.post { onSkinResized() } }, onStick = input::onStick,
+            onResized = { root.post(onResized) }, onStick = input::onStick,
             // the GameCube's C-stick, the Classic Controller's and the PlayStation's right stick: the right analog
             onCStick = { x, y -> if (input.gcPad || (isWii && wiiPad == WiiPad.CLASSIC) || psSkin()) input.onWiiRightStick(x, y) else input.onCStick(x, y) },
-            onGlass = { x, y, down -> glassTouch(game, x, y, down) })
+            onGlass = { x, y, down -> glassTouch(game, x, y, down) }, bare = bare)
         view.useStick = PadStickModes[padStickKey, stickDefault()]   // the drawn pad's choice, shared
         view.dimmed = motionDim()
         // under the menu and the notifications, over the game
         val below = listOfNotNull(menuView, notificationsView).map { root.indexOfChild(it) }.filter { it >= 0 }.minOrNull() ?: -1
         root.addView(view, below, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        skinView = view
         view.stripHidden = skinStripHidden
         view.shortcuts = host.padShortcuts
+        return view
+    }
+
+    /**
+     * The skin's bare buttons over the full-screen game (Pad skin Off, or no skin layout fits): see-through at Pad
+     * Opacity like the drawn overlay was, solid while the picture clears them ([syncBareAlpha]); in portrait the picture
+     * keeps above their band as above that overlay ([padRoom]). Nothing when even the closest layout does not fit.
+     */
+    private fun addBareSkin(root: FrameLayout, game: FrameLayout) {
+        val pack = skinPack ?: return
+        bareView = addSkinView(root, game, pack, bare = true) { onBareResized() }
+        // no stylus mode: its pill was the drawn pad's, and a touch off the buttons is the touch screen anyway
+        if (input.ndsStylusOn.value) input.toggleNdsStylus()
+        if (input.n3dsStylusOn.value) input.toggleN3dsStylus()
+        if (barePlacement() == null) {
+            NxLog.w(TAG_LOG, "skin ${pack.manifest.id}: no layout fits ${rootSize()}, no pad")
+            bareView?.let { root.removeView(it) }
+            bareView = null
+            overlayHeight = 0
+            return
+        }
+        overlayClear.value = false
+        syncBareAlpha()
+        overlayPadShown.value = true   // the notifications move top-centre
+    }
+
+    /** The bare buttons' opacity: solid while the picture clears them ([overlayClear]), else Pad Opacity (landscape). */
+    private fun syncBareAlpha() {
+        bareView?.bareAlpha = if (overlayClear.value) 1f else padLandscapeAlpha.value
+    }
+
+    /** The bare view changed size: placed again for it, or laid out again whole if nothing fits now. */
+    private fun onBareResized() {
+        if (bareView == null) return
+        if (barePlacement() == null) applyLayout(resources.configuration.orientation) else relayoutFrontend()
+    }
+
+    /** The skin is the layout: the game view fills the window under the skin's view, which takes the pad's touches. */
+    private fun applySkinLayout(root: FrameLayout, game: FrameLayout, orientation: Int) {
+        game.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+        val pack = skinPack ?: return
+        skinView = addSkinView(root, game, pack, bare = false) { onSkinResized() }
         skinShownState.value = true
         // no stylus mode under a skin: a touch off its buttons is the touch screen (DS and 3DS); nor the 3DS's SELECT + L
         // / Left / Right chords ([N3dsHotkeys.skinShown])
@@ -693,7 +798,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 input.releaseAllGameInput()
                 val next = !PadStickModes[padStickKey, stickDefault()]
                 PadStickModes[padStickKey] = next
-                skinView?.useStick = next
+                skinViews().forEach { it.useStick = next }
             }
             // the Wii's MOTION, as the drawn pad's pill: a tap flips the phone's motion, a hold recentres it (no tap then)
             SkinAction.MOTION -> if (down) {
@@ -701,7 +806,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 motionHandler.postDelayed(motionHold, android.view.ViewConfiguration.getLongPressTimeout().toLong())
             } else {
                 motionHandler.removeCallbacks(motionHold)
-                if (!motionHeld) { padMotion()?.onTap?.invoke(); motionHandler.post { skinView?.dimmed = motionDim() } }
+                if (!motionHeld) { padMotion()?.onTap?.invoke(); motionHandler.post { skinViews().forEach { it.dimmed = motionDim() } } }
             }
             else -> host.onSkinShortcut(action, down)
         }
@@ -721,6 +826,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      * landscape): the Bottom screen's Auto then means the phone ([DualScreen.pictureOn]'s skin).
      */
     fun dualSkinWanted(mode: DualMode = host.dualMode): Boolean {
+        if (!padSkinOn) return false
         skinPack ?: return false
         val tag = layoutTag()
         val ds = NdsOptions.appliesTo(tag)
@@ -829,6 +935,13 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 else -> View.VISIBLE
             }
         }
+        // the bare buttons as the overlay pad: hidden likewise, and at the Pad Opacity the menu may have changed
+        bareView?.visibility = when {
+            hide -> View.GONE
+            waiting -> View.INVISIBLE
+            else -> View.VISIBLE
+        }
+        syncBareAlpha()
     }
 
     /** The non-virtual gamepads/joysticks currently attached (wired or Bluetooth); empty for none. */
