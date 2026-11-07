@@ -23,23 +23,7 @@ class NxCarbonPackTest {
 
     private fun dump(name: String, w: Int, h: Int, p: SkinPlacement?) {
         val out = System.getenv("SKIN_PREVIEW_DIR") ?: return
-        val sb = StringBuilder()
-        sb.append("{\"window\":[$w,$h],\"layout\":${p?.spec?.id?.let { "\"$it\"" }},\"image\":${p?.spec?.image?.let { "\"$it\"" }},\"cells\":[")
-        p?.cells?.forEachIndexed { i, c ->
-            if (i > 0) sb.append(',')
-            sb.append("[${c.src.x},${c.src.y},${c.src.width},${c.src.height},${c.dst.x},${c.dst.y},${c.dst.width},${c.dst.height},${c.tileX},${c.tileY},${p.k}]")
-        }
-        sb.append("],\"parts\":${p?.spec?.parts?.let { "\"$it\"" }},\"pieces\":[")
-        p?.pieces?.forEachIndexed { i, c ->
-            if (i > 0) sb.append(',')
-            sb.append("[${c.src.x},${c.src.y},${c.src.width},${c.src.height},${c.dst.x},${c.dst.y},${c.dst.width},${c.dst.height},${c.alt?.let { "\"$it\"" }}]")
-        }
-        sb.append("],\"glasses\":[")
-        p?.glasses?.forEachIndexed { i, g -> if (i > 0) sb.append(','); sb.append("[\"${g.screen}\",${g.rect.x},${g.rect.y},${g.rect.width},${g.rect.height},${g.scale}]") }
-        sb.append("],\"controls\":[")
-        p?.controls?.forEachIndexed { i, c -> if (i > 0) sb.append(','); sb.append("[\"${c.spec.id}\",${c.x},${c.y},${c.spec.r},${c.spec.hw},${c.spec.hh},${c.spec.label?.let { "\"$it\"" }},${c.spec.labelDy},${c.spec.labelH},${c.spec.labelDx}]") }
-        sb.append("]}")
-        File(out).mkdirs(); File(out, "$name.json").writeText(sb.toString())
+        File(out).mkdirs(); File(out, "$name.json").writeText(skinPreviewJson(w, h, p))
     }
 
     @Test
