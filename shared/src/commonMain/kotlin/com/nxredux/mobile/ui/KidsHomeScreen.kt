@@ -28,6 +28,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.text.TextStyle
@@ -105,7 +106,8 @@ internal fun KidsHomeScreen(
     val clock by produceState(kidsClockLabel(now()), now) { while (true) { delay(5_000); value = kidsClockLabel(now()) } }
     val next = (mode as? KidsMode.Locked)?.next?.let(::nextOpenLabel)
     Box(modifier.fillMaxSize().background(colors.background)) {
-        BoxWithConstraints(Modifier.fillMaxSize().padding(top = 64.dp, bottom = 16.dp)) {
+        // The same room above and below (the clock and the lock sit in the top one), so the tiles centre on the screen.
+        BoxWithConstraints(Modifier.fillMaxSize().padding(vertical = 64.dp)) {
             val columns = kidsTileColumns(maxWidth.value, (inset.start + inset.end).value)
             LaunchedEffect(columns) { onColumns(columns) }
             val scroll = rememberScrollState()
@@ -115,6 +117,14 @@ internal fun KidsHomeScreen(
                     .padding(start = inset.start, end = inset.end),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
             ) {
+                // When games open next, under the tiles, and its twin unseen above them: the tiles themselves centred.
+                val nextLine: @Composable (Modifier) -> Unit = { m ->
+                    Text(next.orEmpty(), color = colors.hint, fontFamily = font, fontSize = 16.sp, textAlign = TextAlign.Center, modifier = m)
+                }
+                if (next != null) {
+                    nextLine(Modifier.alpha(0f))   // role: an unseen spacer the size of the line below
+                    Spacer(Modifier.height(28.dp))
+                }
                 tiles.chunked(columns).forEachIndexed { r, row ->
                     if (r > 0) Spacer(Modifier.height(KIDS_TILE_GAP.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(KIDS_TILE_GAP.dp)) {
@@ -126,7 +136,7 @@ internal fun KidsHomeScreen(
                 }
                 if (next != null) {
                     Spacer(Modifier.height(28.dp))
-                    Text(next, color = colors.hint, fontFamily = font, fontSize = 16.sp, textAlign = TextAlign.Center)
+                    nextLine(Modifier)
                 }
             }
         }
