@@ -1498,12 +1498,12 @@ class InGameMenuModelTest {
         assertEquals("Display", m.state.page.title)
         assertEquals(
             ConsoleSettings.tableFor("NDS").filter { it != BottomScreenOptions.row && it.key != NdsOptions.SCALE_3D && OptionGroup.of(it.key) == OptionGroup.DISPLAY }.map { it.label },
-            m.state.page.rows.map { it.label }.dropLast(6),   // then the picture rows every console has
+            m.state.page.rows.map { it.label }.dropLast(3),   // then the picture rows the DS screens take
         )
         assertEquals(
             listOf(
                 "Layout (portrait)", "Layout (portrait, controller)", "Layout (landscape)", "3D Resolution", "Max Scale", "Big Screen", "Inset Corner", "Inset Size",
-                "Inset Opacity", "Screen Scaling", "Screen Sharpness", "Overlay", "Offset screen X", "Offset screen Y", "Debug HUD",
+                "Inset Opacity", "Screen Scaling", "Screen Sharpness", "Debug HUD",
             ),
             m.state.page.rows.map { it.label },
         )
@@ -1569,7 +1569,7 @@ class InGameMenuModelTest {
     @Test fun a_locked_console_row_is_hidden() {
         val m = model().openConsoleSettings(locked = setOf(NdsOptions.BIG_SCREEN))
         assertTrue(m.state.page.rows.none { it.label == "Big Screen" })
-        assertEquals(14, m.state.page.rows.size)
+        assertEquals(11, m.state.page.rows.size)
     }
 
     @Test fun other_consoles_have_only_the_picture_rows_on_display() {
@@ -1578,29 +1578,23 @@ class InGameMenuModelTest {
         assertEquals("Screen Scaling", m.state.page.rows.first().label)
     }
 
-    @Test fun the_overlay_row_is_unavailable_while_the_screens_are_split() {
+    @Test fun overlay_and_offsets_are_hidden_while_the_app_places_the_screens() {
         val m = model().openFrontend(values = FrontendOptions.defaults("NDS"), tag = "NDS", overlayAvailable = false)
-        val overlay = m.rowIndex("Overlay")
-        val row = m.optionRow(overlay)
-        assertEquals(InGameMenuModel.OVERLAY_UNAVAILABLE, row.valueLabel)
-        assertFalse(row.visual)
-        m.select(overlay)
-        assertNull(m.press(NxButton.RIGHT))
-        assertTrue(row.choices.isEmpty())
-        assertNull(m.press(NxButton.A))                                    // the row's text says why
-        assertNull(m.state.popup)
+        val shown = m.state.page.rows.map { it.label }
+        for (hidden in listOf("Overlay", "Offset screen X", "Offset screen Y")) assertTrue(hidden !in shown, hidden)
+        assertTrue("Screen Sharpness" in shown)
         m.setFrontend(FrontendOptions.defaults("NDS"), overlayNames, emptySet(), "NDS", overlayAvailable = true)
-        assertEquals("None", m.optionRow(overlay).valueLabel)
-        m.press(NxButton.A)                                                // its live preview, now that it is visual
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.OVERLAY, "Aspect.png"), m.press(NxButton.RIGHT))
+        val back = m.state.page.rows.map { it.label }
+        for (row in listOf("Overlay", "Offset screen X", "Offset screen Y")) assertTrue(row in back, row)
     }
 
-    @Test fun adjust_mode_steps_over_the_unavailable_overlay() {
+    @Test fun adjust_mode_steps_over_the_hidden_rows() {
         val m = model().openFrontend(values = FrontendOptions.defaults("NDS"), tag = "NDS", overlayAvailable = false)
         m.select(m.rowIndex("Screen Sharpness"))
         m.press(NxButton.A)
         m.press(NxButton.DOWN)
-        assertEquals(PageKind.Adjust(FrontendOptions.OFFSET_X), m.state.page.kind)
+        assertTrue(m.state.page.kind != PageKind.Adjust(FrontendOptions.OVERLAY))
+        assertTrue(m.state.page.kind != PageKind.Adjust(FrontendOptions.OFFSET_X))
     }
 
     @Test fun ndsResolutionRowsFollowTheMode() {
@@ -1784,21 +1778,21 @@ class InGameMenuModelTest {
     }
 
     @Test fun a_truncation_report_fits_and_counts_only_for_its_own_row() {
-        // NDS Display: Overlay (unavailable) and Debug HUD keep a short line.
         val m = model().openFrontend(values = FrontendOptions.defaults("NDS"), tag = "NDS", overlayAvailable = false)
         val hud = m.rowIndex("Debug HUD")
         m.select(hud)
         m.setInfoTruncated(m.optionRow(hud).info, true); m.setInfoTruncated(m.optionRow(hud).info, false)   // e.g. a rotation made it fit
         assertFalse(m.state.selectedInfoTruncated)
         m.setInfoTruncated(m.optionRow(hud).info, true)
-        m.select(m.rowIndex("Overlay"))                      // its own line was not reported yet
-        assertEquals(InGameMenuModel.OVERLAY_UNAVAILABLE_LINE, m.optionRow(m.rowIndex("Overlay")).info)
+        val other = m.state.page.rows.indices.first { it != hud && m.optionRow(it).info.isNotBlank() }
+        m.select(other)                                      // its own line was not reported yet
+        val line = m.optionRow(other).info
         assertFalse(m.state.selectedInfoTruncated)
         m.setInfoTruncated(m.optionRow(hud).info, false)     // a late report for the old row
-        m.setInfoTruncated(InGameMenuModel.OVERLAY_UNAVAILABLE_LINE, true)
+        m.setInfoTruncated(line, true)
         assertTrue(m.state.selectedInfoTruncated)
         m.press(NxButton.X)
-        assertEquals(MenuPopup.Info("Overlay", InGameMenuModel.OVERLAY_UNAVAILABLE_INFO), m.state.popup)
+        assertEquals(m.optionRow(other).label, (m.state.popup as MenuPopup.Info).title)
     }
 
     @Test fun x_shows_info_on_a_core_option_row_and_a_plain_frontend_row() {
