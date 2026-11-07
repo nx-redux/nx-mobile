@@ -75,10 +75,11 @@ class SegaPadTypeTest {
         assertEquals(257, SegaPadType.gpgxPort0("3")); assertEquals(513, SegaPadType.gpgxPort0("6"))
     }
 
-    @Test fun picodrive_input_defaults_to_six_when_unknown() {
-        assertEquals("3 button pad", SegaPadType.picodriveInput(SegaPad.THREE))
-        assertEquals("6 button pad", SegaPadType.picodriveInput(SegaPad.SIX))
-        assertEquals("6 button pad", SegaPadType.picodriveInput(null))
+    @Test fun picodrive_ports_default_to_six_when_unknown() {
+        assertEquals(mapOf(0 to 257, 1 to 257), SegaPadType.picodrivePorts("3", null, players = 2))
+        assertEquals(mapOf(0 to 513, 1 to 513), SegaPadType.picodrivePorts("auto", SegaPad.SIX, players = 2))
+        assertEquals(mapOf(0 to 257), SegaPadType.picodrivePorts("auto", SegaPad.THREE, players = 1))
+        assertEquals(mapOf(0 to 513, 1 to 513), SegaPadType.picodrivePorts("auto", null, players = 2))
     }
 
     @Test fun gpgx_live_port_hands_auto_back_to_the_core() {
@@ -95,23 +96,14 @@ class SegaPadTypeTest {
     @Test fun live_changes_reach_player_two() {
         assertEquals(listOf(SegaPadChange.Port(0, 513), SegaPadChange.Port(1, 513)), SegaPadType.liveChanges("genesis_plus_gx", "6", null, players = 2))
         assertEquals(listOf(SegaPadChange.Port(0, 1)), SegaPadType.liveChanges("genesis_plus_gx", "auto", null, players = 1))
-        assertEquals(
-            listOf(SegaPadChange.Option("picodrive_input1", "3 button pad"), SegaPadChange.Option("picodrive_input2", "3 button pad")),
-            SegaPadType.liveChanges("picodrive", "3", null, players = 2),
-        )
+        assertEquals(listOf(SegaPadChange.Port(0, 257), SegaPadChange.Port(1, 257)), SegaPadType.liveChanges("picodrive", "3", null, players = 2))
         assertEquals(emptyList(), SegaPadType.liveChanges("mednafen_psx_hw", "6", null, players = 2))
     }
 
     @Test fun live_changes_per_core() {
         assertEquals(listOf(SegaPadChange.Port(0, 1)), SegaPadType.liveChanges("genesis_plus_gx", "auto", SegaPad.THREE, players = 1))
         assertEquals(listOf(SegaPadChange.Port(0, 257)), SegaPadType.liveChanges("genesis_plus_gx", "3", null, players = 1))
-        assertEquals(
-            listOf(SegaPadChange.Option("picodrive_input1", "3 button pad"), SegaPadChange.Option("picodrive_input2", "3 button pad")),
-            SegaPadType.liveChanges("picodrive", "auto", SegaPad.THREE, players = 2),
-        )
-        assertEquals(
-            listOf(SegaPadChange.Option("picodrive_input1", "6 button pad"), SegaPadChange.Option("picodrive_input2", "6 button pad")),
-            SegaPadType.liveChanges("picodrive", "auto", null, players = 2),
-        )
+        assertEquals(listOf(SegaPadChange.Port(0, 257), SegaPadChange.Port(1, 257)), SegaPadType.liveChanges("picodrive", "auto", SegaPad.THREE, players = 2))
+        assertEquals(listOf(SegaPadChange.Port(0, 513), SegaPadChange.Port(1, 513)), SegaPadType.liveChanges("picodrive", "auto", null, players = 2))
     }
 }

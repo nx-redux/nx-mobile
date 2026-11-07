@@ -173,7 +173,7 @@
   {
    "key": "audio",
    "label": "Audio",
-   "info": "Configure sample rate / emulated audio devices / low pass filter / DAC noise.",
+   "info": "Configure sample rate / emulated audio devices / low pass filter / FM chip type.",
    "items": [
     {
      "key": "picodrive_sound_rate",
@@ -227,17 +227,17 @@
      "default": "off"
     },
     {
-     "key": "picodrive_dacnoise",
-     "label": "Mega Drive FM DAC noise",
+     "key": "picodrive_fmchip",
+     "label": "Mega Drive FM chip type",
      "labelCategorized": "",
-     "info": "Enable emulation of YM2612 DAC noise. This option generates a distortion which existed on most Model 1 Mega Drive/Genesis, but not on newer models.",
+     "info": "Select the Mega Drive/Genesis FM chip type. Model 1 Mega Drive/Genesis mostly used YM2612, which produced a distinct distortion. YM3438 was used in model 2 consoles.",
      "values": [
-      "off",
-      "on"
+      "ym2612",
+      "ym3438"
      ],
      "labels": [
-      "disabled",
-      "enabled"
+      "YM2612",
+      "YM3438"
      ],
      "default": "off"
     },
@@ -313,42 +313,35 @@
    "info": "Configure input devices.",
    "items": [
     {
-     "key": "picodrive_input1",
-     "label": "Input Device 1",
+     "key": "picodrive_mouse_speed",
+     "label": "Mouse Speed",
      "labelCategorized": "",
-     "info": "Choose which type of controller is plugged into slot 1. Note that a multiplayer adaptor uses both slots.",
+     "info": "Select the mouse sensivity. This setting is used by both the Sega Mouse and the Pico Pen. Higher values increase the mouse speed.",
      "values": [
-      "3 button pad",
-      "6 button pad",
-      "team player",
-      "4way play",
-      "None"
+      "0.1",
+      "0.2",
+      "0.3",
+      "0.5",
+      "0.7",
+      "1.0",
+      "1.3",
+      "1.6",
+      "2.0",
+      "2.5"
      ],
      "labels": [
-      "3 Button Pad",
-      "6 Button Pad",
-      "Sega 4 Player Adaptor",
-      "EA 4way Play Adaptor",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
       ""
      ],
-     "default": "3 button pad"
-    },
-    {
-     "key": "picodrive_input2",
-     "label": "Input Device 2",
-     "labelCategorized": "",
-     "info": "Choose which type of controller is plugged into slot 2. This setting is ignored when a multiplayer adaptor is plugged into slot 1.",
-     "values": [
-      "3 button pad",
-      "6 button pad",
-      "None"
-     ],
-     "labels": [
-      "3 Button Pad",
-      "6 Button Pad",
-      ""
-     ],
-     "default": "3 button pad"
+     "default": "1.0"
     }
    ]
   },
@@ -482,6 +475,6 @@
    ]
   }
  ],
- "soSha256": "9572dfa9a10d2e6a280323f01b120462e6a1ef0241d2641e681d1eab89e5d425",
- "probedAt": "2026-09-29"
+ "soSha256": "edd84a27185599471a69fbed54f12c338ad10c0c88de8918ac1d367b9612f3be",
+ "probedAt": "2026-11-07"
 }

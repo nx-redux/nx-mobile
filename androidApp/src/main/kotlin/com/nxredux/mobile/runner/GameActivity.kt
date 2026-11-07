@@ -1570,9 +1570,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     } else emptyMap()
                     val forced = netplayPad?.options.orEmpty() + linkOptions + wiiScreenOption() + nds3dLaunch + ps2BiosOption + n64Vram + graphics.forcedOptions
                     variables = (options.map { v ->
-                        forced[v.key]?.let { Variable(v.key, it) }
-                            ?: if (launchSega != null && (v.key == SegaPadType.PICODRIVE_INPUT1 || v.key == SegaPadType.PICODRIVE_INPUT2))
-                                Variable(v.key, SegaPadType.picodriveInput(launchSegaPad)) else v
+                        forced[v.key]?.let { Variable(v.key, it) } ?: v
                     } + forced.filterKeys { k -> options.none { it.key == k } }.map { (k, v) -> Variable(k, v) }).toTypedArray()
                     rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
                     preferLowLatencyAudio = true
@@ -1601,6 +1599,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     // them (connectDolphinPorts), or Dolphin connects Wiimotes 2-4 and the game shows a co-star cursor.
                     if (descriptor?.id == DOLPHIN_ID) controllerPorts = dolphinPorts(dolphinDevice(), claimedPorts(), players)
                     if (descriptor?.id == SegaPadType.GPGX) SegaPadType.gpgxPorts(launchSega, players)?.let { controllerPorts = it }
+                    if (descriptor?.id == SegaPadType.PICODRIVE && launchSega != null) controllerPorts = SegaPadType.picodrivePorts(launchSega, launchSegaPad, players)
                     netplayPad?.ports?.takeIf { it.isNotEmpty() }?.let { controllerPorts = controllerPorts + it }   // netplay: the pak's ports 0-1
                     if (inner != null) {
                         gameFilePath = inner.absolutePath
@@ -2503,8 +2502,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     .onFailure { NxLog.w(TAG_LOG, "setting the Sega pad failed", it) }
             }
         }
-        changes.filterIsInstance<SegaPadChange.Option>().takeIf { it.isNotEmpty() }
-            ?.let { opts -> applyOptions(opts.map { Variable(it.key, it.value) }) }
     }
 
     override fun relayoutFrontend() = renderer.relayoutFrontend()

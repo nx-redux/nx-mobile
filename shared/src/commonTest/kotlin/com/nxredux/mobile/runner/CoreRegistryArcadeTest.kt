@@ -32,7 +32,7 @@ class CoreRegistryArcadeTest {
         // The Sega consoles' default core: every extension their games use (valid_extensions at the pin, less sc, sgd, pco).
         assertEquals(setOf("32x", "bin", "md", "gen", "smd", "68k", "sms", "gg", "sg", "cue", "iso", "chd", "m3u"), pico.extensions)
         assertEquals("enabled", pico.defaultOptions["picodrive_drc"])
-        assertEquals("6 button pad", pico.defaultOptions["picodrive_input1"])
+        assertEquals(513, pico.controllerPortsFor(1)[0])
         val fbn = CoreRegistry.forTag("FBN")!!
         assertEquals(setOf("zip", "7z"), fbn.extensions)
         assertEquals(LoadMode.FILE_DESCRIPTOR, fbn.loadMode)

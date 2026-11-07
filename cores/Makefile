@@ -382,11 +382,14 @@ swanstation_ARTIFACT = swanstation_libretro_android.so
 # patches/picodrive/0001 (nx-redux's), after it: retro_cheat_set copies the code to the heap and each part into its
 # 12-byte field with a bound; long database codes and parts overflowed both.
 picodrive_REPO = https://github.com/irixxxx/picodrive
-picodrive_HASH = b0be121b7d58d6ee1ee2809974e62893c80a8264
+picodrive_HASH = 9c298c1fe7347a50b07a494cdb8c91d2f9b40c6a
 picodrive_LICENSE = COPYING
 picodrive_KIND = ndkbuild
 picodrive_BUILD_PATH = .
 picodrive_ARTIFACT = libs/$(ABI)/libretro.so
+# Non-recursive: dr_libs (from 2026) has its test suite's miniaudio as a nested submodule at an old dr-soft URL, which
+# hangs the clone; the build uses none of the nested ones.
+picodrive_SUBMODULES = cpu/cyclone pico/cd/libchdr pico/sound/emu2413 platform/common/dr_libs platform/libpicofe
 
 gearcoleco_REPO = https://github.com/drhelius/Gearcoleco
 gearcoleco_HASH = 2805e70fd56c3bb6a0412a4ddaf210eefc8a5d7c

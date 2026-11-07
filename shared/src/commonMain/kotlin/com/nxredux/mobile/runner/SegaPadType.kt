@@ -53,8 +53,8 @@ object SegaHeader {
 /**
  * Controls → Controller Type for the Sega pad tags ([PadMap.isSegaPadTag]): Auto reads the header, 3 and 6 force.
  * genesis_plus_gx takes it as its port 0 device, and port 1's for player 2 (Auto leaves the core's own header detection,
- * `core/input_hw/input.c:85`); picodrive has no auto, so it gets `picodrive_input1` (and `picodrive_input2` for player 2)
- * from the resolved type.
+ * `core/input_hw/input.c:85`); picodrive has no auto, so it gets the resolved type's pad as its port devices (its
+ * `RETRO_DEVICE_MD_3BTN` / `_6BTN`, the same subclasses).
  */
 object SegaPadType {
     const val AUTO = "auto"
@@ -67,8 +67,6 @@ object SegaPadType {
     const val JOYPAD = 1
     const val GPGX = "genesis_plus_gx"
     const val PICODRIVE = "picodrive"
-    const val PICODRIVE_INPUT1 = "picodrive_input1"
-    const val PICODRIVE_INPUT2 = "picodrive_input2"
 
     /** The pad the game gets: the forced setting, else the [header] result; null = unknown (the core decides). */
     fun resolve(setting: String?, header: SegaPad?): SegaPad? = when (setting) {
@@ -83,8 +81,11 @@ object SegaPadType {
         else -> null
     }
 
-    /** picodrive's `picodrive_input1` value; unknown keeps the default 6-button pad. */
-    fun picodriveInput(resolved: SegaPad?): String = if (resolved == SegaPad.THREE) "3 button pad" else "6 button pad"
+    /** picodrive's pad on each player's port (it reads ports 0–1) for [setting] and the [header]; unknown is the 6-button pad. */
+    fun picodrivePorts(setting: String?, header: SegaPad?, players: Int): Map<Int, Int> {
+        val pad = if (resolve(setting, header) == SegaPad.THREE) MDPAD_3B else MDPAD_6B
+        return (0 until players.coerceIn(1, 2)).associateWith { pad }
+    }
 
     /**
      * genesis_plus_gx's port 0 device for a change mid-game: Auto hands the choice back to the core ([JOYPAD]), since
@@ -99,9 +100,7 @@ object SegaPadType {
     /** What a mid-game Controller Type change sends to [coreId], for each of its [players]; empty for another core. */
     fun liveChanges(coreId: String, setting: String?, header: SegaPad?, players: Int): List<SegaPadChange> = when (coreId) {
         GPGX -> (0 until players.coerceIn(1, 2)).map { SegaPadChange.Port(it, gpgxPortLive(setting)) }
-        PICODRIVE -> picodriveInput(resolve(setting, header)).let { v ->
-            listOf(SegaPadChange.Option(PICODRIVE_INPUT1, v), SegaPadChange.Option(PICODRIVE_INPUT2, v))
-        }
+        PICODRIVE -> picodrivePorts(setting, header, players).map { (port, pad) -> SegaPadChange.Port(port, pad) }
         else -> emptyList()
     }
 }
@@ -110,6 +109,4 @@ object SegaPadType {
 sealed interface SegaPadChange {
     /** `retro_set_controller_port_device(port, device)`. */
     data class Port(val port: Int, val device: Int) : SegaPadChange
-    /** A core option set. */
-    data class Option(val key: String, val value: String) : SegaPadChange
 }
