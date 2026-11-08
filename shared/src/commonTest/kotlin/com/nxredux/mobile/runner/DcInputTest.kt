@@ -58,7 +58,7 @@ class DcInputTest {
         for (tag in letterTags) {
             assertEquals(listOf(a, b, x, y), listOf(a, b, x, y).map { PhysicalKeys.toRunner(tag, it, XBOX, XBOX) }, tag)
             assertEquals(listOf(a, b, x, y), listOf(a, b, x, y).map { PhysicalKeys.toRunner(tag, it, NINTENDO, NINTENDO) }, tag)
-            // The other label: an Xbox pad set to Nintendo has the console's own positions (bottom = B), the old behaviour.
+            // The other label: an Xbox pad set to Nintendo has the console's own positions (bottom = B).
             assertEquals(listOf(b, a, y, x), listOf(a, b, x, y).map { PhysicalKeys.toRunner(tag, it, XBOX, NINTENDO) }, tag)
             assertEquals(listOf(b, a, y, x), listOf(a, b, x, y).map { PhysicalKeys.toRunner(tag, it, NINTENDO, XBOX) }, tag)
         }
@@ -67,7 +67,7 @@ class DcInputTest {
     // flycast reads JOYPAD_B as the Dreamcast's A, JOYPAD_A as B, JOYPAD_Y as X, JOYPAD_X as Y; NGP's A is JOYPAD_B.
     @Test fun dc_and_ngp_get_the_printed_letter_through_their_core_swap() {
         for (tag in swappedTags) {
-            // Xbox pad, Auto: printed A (bottom) is DC A (bottom), as before.
+            // Xbox pad, Auto: printed A (bottom) is DC A (bottom).
             assertEquals(listOf(b, a, y, x), listOf(a, b, x, y).map { PhysicalKeys.toRunner(tag, it, XBOX, XBOX) }, tag)
             // Nintendo pad, Auto: printed A (right) is DC A too.
             assertEquals(listOf(b, a, y, x), listOf(a, b, x, y).map { PhysicalKeys.toRunner(tag, it, NINTENDO, NINTENDO) }, tag)

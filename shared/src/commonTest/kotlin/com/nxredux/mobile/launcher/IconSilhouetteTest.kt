@@ -123,7 +123,6 @@ class IconSilhouetteTest {
         assertEquals(255, alpha[50 * size + 50])
     }
 
-    // A one-colour logo: alpha alone, as before.
     @Test fun aOneColourLogoIsItsAlpha() {
         val argb = IntArray(size * size) { i -> if (disc(50f, 50f, 30f)(i % size, i / size)) red else 0 }
         assertEquals(255, IconSilhouette.layerAlpha(argb)[50 * size + 50])

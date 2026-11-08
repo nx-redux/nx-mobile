@@ -111,7 +111,7 @@ int main() {
     check(!rc_client_is_game_loaded(a.rawClient()), "the fresh client has no game from the old session");
     check(!a.memoryRegionsReady(), "the reset dropped the old region table");
     check(a.takeServerCalls().empty() && a.takeEvents().empty(), "the reset dropped the old queues");
-    a.onFrame(false);   // the step() that used to SIGSEGV
+    a.onFrame(false);   // the step() that would read the freed core memory
     a.onFrame(true);
 
     // The second session then works normally on the new core.

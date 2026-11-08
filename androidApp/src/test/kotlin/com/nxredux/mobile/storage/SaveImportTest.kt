@@ -77,7 +77,7 @@ class SaveImportTest {
         assertEquals("sms", File(sd, "Saves/SMS/Alex Kidd.srm").readText())
         assertEquals("gg", File(sd, "Saves/GG/Shinobi.srm").readText())
         assertEquals("md", File(sd, "Saves/MD/Sonic.srm").readText())
-        assertEquals("both", File(sd, "Saves/MD/Both.srm").readText())         // two consoles hold it: today's fallback
+        assertEquals("both", File(sd, "Saves/MD/Both.srm").readText())         // two consoles hold it: Genesis, the default
         assertEquals("unknown", File(sd, "Saves/MD/Unknown.srm").readText())   // held by none
     }
 
@@ -258,7 +258,7 @@ class SaveImportTest {
         assertEquals(listOf(SkippedFile("Game.srm", SkipReason.UNREADABLE)), summary.skipped)
     }
 
-    /** Follow-up 6: a Generic name under the MinUI format takes the ROM name from the phone's copy of the game. */
+    /** A Generic name under the MinUI format takes the ROM name from the phone's copy of the game. */
     @Test fun a_name_without_the_rom_extension_borrows_it_from_the_phones_copy() {
         val src = tmp.newFolder("home"); val sd = tmp.newFolder("sd")
         file(sd, "Saves/GBA/Game.srm", "older", t0 - 120_000)
@@ -273,7 +273,7 @@ class SaveImportTest {
         assertEquals("other", File(sd, "Saves/GBA/Other.sav").readText())
     }
 
-    /** Follow-up 6: folding two tag folders, the second name finds the ROM name the first one landed with. */
+    /** Folding two tag folders, the second name finds the ROM name the first one landed with. */
     @Test fun a_fold_of_tag_folders_lands_on_the_first_ones_rom_name() {
         val sd = tmp.newFolder("sd")
         val bytes = zipOf(Triple("Saves/GBA/Game.gba.sav", "old", t0 - 60_000), Triple("Saves/MGBA/Game.sav", "new", t0))

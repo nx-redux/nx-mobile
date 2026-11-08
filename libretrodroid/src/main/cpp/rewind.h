@@ -34,20 +34,20 @@
 namespace libretrodroid {
 
 /**
- * nx-mobile 2026-10-24: rewind, ported from the handheld's ma_rewind.c. The GL thread serializes the core into a free
+ * Rewind, ported from the handheld's ma_rewind.c. The GL thread serializes the core into a free
  * capture-pool slot after retro_run; one worker thread XORs it against the previous stored state, LZ4-compresses it
  * and writes it to the ring, in capture order. Every 60th entry is a keyframe (the whole state), so the ring can drop
  * its oldest entries without losing the chain; a keyframe also carries its delta to the state before it, so stepping
  * back always undoes one delta against the reference and never decodes forward from an older keyframe.
  * - Only the worker writes, FIFO: a capture that finds no free slot within 2 ms is skipped, never written from the GL
  *   thread, and the delta reference moves only after a stored write — a newer state committed ahead of an older one, or
- *   a reference moved past a failed write, breaks every later delta (the handheld's d10c2509).
+ *   a reference moved past a failed write, breaks every later delta.
  * - clear() bumps a generation before draining the queue, so captures still queued are dropped, not stored into the
  *   cleared ring. The worker sleeps on a condition variable; nothing spins.
  * - stepBack pops the newest entry and restores the one before it, which becomes the new delta reference: playing on
  *   after a rewind continues the chain from there (NextUI #577). A state the core refuses is dropped from the newest end
- *   (SKIPPED) and the next step restores the one before it, instead of retrying it forever (633c3937).
- * - configure rebuilds only when an effective value changed: the handheld reallocated many MB per config key (1ccc1030).
+ *   (SKIPPED) and the next step restores the one before it, instead of retrying it forever.
+ * - configure rebuilds only when an effective value changed: the handheld reallocated many MB per config key.
  * Not thread-safe across callers: LibretroDroid makes every call under its core lock (step(), reset, state load, disc
  * swap), so a clear() never runs beside a capture. The worker is internal.
  */

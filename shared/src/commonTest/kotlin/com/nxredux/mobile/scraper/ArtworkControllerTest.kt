@@ -908,7 +908,7 @@ class ArtworkControllerTest {
         val result = rig.controller.artOptions(tetris.gamePath, replaceExisting = false, searchAgain = true) { found += it }
         assertEquals(listOf(1, 5), found.map { it.size })   // the screenshot source's, then SteamGridDB's on top
         assertEquals(found.last().map { it.key }.toSet(), result.options.map { it.key }.toSet())
-        assertTrue(assertNotNull(ArtOptionStore(rig.host).get(tetris.gamePath)).wide)   // saved as before
+        assertTrue(assertNotNull(ArtOptionStore(rig.host).get(tetris.gamePath)).wide)   // saved
     }
 
     @Test fun a_pick_while_the_panels_fetch_runs_goes_through_at_once_and_wins_its_slot() = runTest {

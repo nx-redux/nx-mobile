@@ -104,7 +104,7 @@ public:
 private:
     std::vector<VFSFile> virtualFiles;
 
-    // nx-mobile 2026-10-14: a virtual file's handles are dups of one descriptor, so they share one file offset: two
+    // A virtual file's handles are dups of one descriptor, so they share one file offset: two
     // threads reading one game by seek + read (Dolphin's disc thread and a banner read) would move each other. Each
     // handle keeps its own offset here and reads with pread, which leaves the shared one alone.
     std::mutex virtualOffsetsMutex;

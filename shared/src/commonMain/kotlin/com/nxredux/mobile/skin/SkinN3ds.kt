@@ -40,7 +40,7 @@ object SkinN3ds {
     fun regions(stack: PxRect?, top: PxRect?, touch: PxRect?, big: NdsScreen, layout: String? = null): List<NdsRegion>? {
         if (stack != null && layout != null && layout != "large") return laidOut(stack, big, layout)
         val (upper, lower) = if (stack != null && stack.width > stack.height * STACK_ASPECT) {
-            // wider than the stack (landscape, user): the upper screen across the whole width at the top, at most
+            // wider than the stack (landscape): the upper screen across the whole width at the top, at most
             // [UPPER_MAX_SHARE] of the height; the lower one in the height left under it
             val upperH = minOf(stack.width / aspectOf(big), stack.height * UPPER_MAX_SHARE)
             stack.copy(height = upperH) to stack.copy(y = stack.y + upperH, height = stack.height - upperH)
@@ -57,7 +57,7 @@ object SkinN3ds {
     }
 
     /**
-     * The player's 3DS [layout] (N3dsOptions.LAYOUT_CYCLE, a regular phone's landscape, user) in the one [stack] glass:
+     * The player's 3DS [layout] (N3dsOptions.LAYOUT_CYCLE, a regular phone's landscape) in the one [stack] glass:
      * Side by side (one height, [big] on the left), Stacked (one scale, [big] over), Single screen ([big] alone), each
      * fitted and centred; null for a layout it does not know.
      */

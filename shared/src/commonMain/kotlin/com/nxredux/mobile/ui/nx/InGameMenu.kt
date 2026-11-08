@@ -569,8 +569,8 @@ private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit,
 }
 
 /**
- * The in-game menu's word lists' selected word: the accent while the list has the focus, else a grey ([OPEN_WORD_ALPHA] of the
- * ink, [NxColors.inkOpen]) a step lighter than the rest's ([NxColors.inkDim]), so the open row reads apart from the focused one even with a white accent.
+ * The in-game menu's word lists' selected word: the accent while the list has the focus, else a grey ([NxColors.inkOpen])
+ * a step lighter than the rest's ([NxColors.inkDim]), so the open row reads apart from the focused one even with a white accent.
  */
 @Composable
 private fun menuWordInk(focused: Boolean): Color =
@@ -597,7 +597,7 @@ internal fun wordListHeight(rowHeight: Dp, rows: Int, density: Density): Dp =
     with(density) { (rowHeight.roundToPx() * rows.coerceAtLeast(1)).toDp() }
 
 /**
- * The menu word lists' "more this way" fade: a sliver, not a row (user), so a list in a short glass (a 3DS top screen
+ * The menu word lists' "more this way" fade: a sliver, not a row, so a list in a short glass (a 3DS top screen
  * under a skin) keeps its rows readable while the cut edge still reads as continuing.
  */
 private val MENU_LIST_FADE = 14.dp
@@ -607,7 +607,7 @@ private const val MENU_WORD_PITCH = 1.4f
 
 /**
  * The in-game menu's words, the root list's and the Options page's alike (under Appearance → Text size only): a step
- * under Settings' section words ([SETTINGS_SECTION_SIZE]); the root read too big over the game at their size (user).
+ * under Settings' section words ([SETTINGS_SECTION_SIZE]); the root read too big over the game at their size.
  */
 @Composable
 internal fun menuWordSize(): TextUnit = MENU_WORD_SIZE.pinned() * nxTextScale()

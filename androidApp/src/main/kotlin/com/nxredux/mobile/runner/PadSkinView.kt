@@ -70,7 +70,6 @@ internal class PadSkinPack(val manifest: SkinPackManifest, private val open: (St
     }
 }
 
-/** What a skin's buttons do beyond the pad's own buttons. */
 /** A strip slot's written label: its cap height in picture px (MENU's is 17). */
 private const val STRIP_CAP = 17f
 
@@ -81,6 +80,7 @@ private val STRIP_PILL_RING = android.graphics.Color.argb(128, 255, 255, 255)   
 private val STRIP_PILL_OFF_INK = android.graphics.Color.argb(217, 255, 255, 255) // role: the word on the dark fill
 private val STRIP_PILL_ON_INK = android.graphics.Color.BLACK                      // role: the word on the lit fill
 
+/** What a skin's buttons do beyond the pad's own buttons. */
 internal enum class SkinAction(val slot: TouchSlot? = null) {
     MIC, SWAP, SAVE, LOAD, REWIND, FAST,
     /** The frame strip's touch shortcut slots: the player's actions for them ([PadSkinView.shortcuts]). */
@@ -89,7 +89,7 @@ internal enum class SkinAction(val slot: TouchSlot? = null) {
     TURBO_A, TURBO_B,
     /** A Dreamcast skin's swap between the stick and the d-pad on a tight layout. */
     STICK_SWAP,
-    /** The Wii Remote pads' MOTION: a tap turns the phone's motion on or off, a hold recentres it (the drawn pad's pill). */
+    /** The Wii Remote pads' MOTION: a tap turns the phone's motion on or off, a hold recentres it. */
     MOTION,
 }
 
@@ -270,7 +270,7 @@ internal class PadSkinView(
             canvas.drawText(text, c.x + dx, c.y + c.spec.labelDy + c.spec.labelH / 2f, label)   // the baseline: cap height centred
         }
         // the strip's touch slots: the action's short name, in the label grey (a running toggle in white); on the overlay
-        // (no frame under them, user) each on a see-through pill, as the corner shortcut buttons, lit while on
+        // (no frame under them) each on a see-through pill, as the corner shortcut buttons, lit while on
         for (c in p.controls) {
             val sc = slotOf(c.spec.id)?.let(shortcuts::get) ?: continue
             val cap = STRIP_CAP * p.k

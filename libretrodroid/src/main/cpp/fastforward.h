@@ -22,9 +22,9 @@
 namespace libretrodroid {
 
 /**
- * nx-mobile 2026-10-24: paces fast forward against game time, not against steps. The display decides how often step()
+ * Paces fast forward against game time, not against steps. The display decides how often step()
  * runs (60, 90 or 120 Hz, or FPSSync's sleep), so "N core frames per step" would make the speed follow the display —
- * the handheld measured 2.5–4x at a 2x cap that way (its PR #188). Instead each core frame has a due time on a clock
+ * the handheld measured 2.5–4x at a 2x cap that way. Instead each core frame has a due time on a clock
  * ticking at maxSpeed × contentFps, and a step runs the frames that are due.
  *
  * - At most maxSpeed frames per step: a step that finds more due (a stall, a slow device, the menu) runs maxSpeed and

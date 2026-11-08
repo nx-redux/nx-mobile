@@ -30,7 +30,7 @@ enum class MicSource : int { SILENCE = 0, LIVE = 1, NOISE = 2 };
 constexpr int MIC_NOISE_PEAK = 12000;
 
 /**
- * nx-mobile 2026-10-25: what a core's mic hears. Every read_mic gets samples: live ones while the source is LIVE and
+ * What a core's mic hears. Every read_mic gets samples: live ones while the source is LIVE and
  * the core has the mic running, else silence or noise. No Oboe here and no locking: the owner (Microphone) serialises
  * the calls and does the stream work in onStopLive.
  */

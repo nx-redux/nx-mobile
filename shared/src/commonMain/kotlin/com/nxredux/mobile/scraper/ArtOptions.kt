@@ -45,7 +45,6 @@ data class GameOptions(val options: List<ArtOption> = emptyList(), val wide: Boo
  */
 class ArtOptionStore(private val host: ArtworkHost, private val name: String = FILE) {
     companion object {
-        /** Part 1's `art_options.json` (one pick per game; never shipped) is not read. */
         const val FILE = "art_options2.json"
     }
 
@@ -95,7 +94,6 @@ class ArtOptionStore(private val host: ArtworkHost, private val name: String = F
         load().mapNotNull { (g, o) -> o.picks.keys.takeIf { it.isNotEmpty() }?.let { g to it.toSet() } }.toMap()
     }
 
-    /** The file slots the game has a pick in. */
     suspend fun pickedSlots(gamePath: String): Set<ArtSlot> = mutex.withLock { load()[gamePath]?.picks?.keys?.toSet().orEmpty() }
 
     /** True when the game has a pick in [slot]'s file slot. */

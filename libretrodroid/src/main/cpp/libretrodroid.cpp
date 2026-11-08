@@ -83,7 +83,6 @@ size_t LibretroDroid::callback_set_audio_sample_batch(const int16_t *data, size_
 }
 
 void LibretroDroid::callback_retro_set_input_poll() {
-    // Do nothing in here...
 }
 
 int16_t LibretroDroid::callback_set_input_state(
@@ -108,7 +107,6 @@ void LibretroDroid::updateFastForwardAudioSpeed() {
     if (audio) audio->setFastForwardSpeed(fastForwardPlaybackSpeed.load());
 }
 
-// TODO... Do we really need this?
 void LibretroDroid::resetGlobalVariables() {
     core = nullptr;
     audio = nullptr;
@@ -466,7 +464,7 @@ void LibretroDroid::create(
     geometryChanged = false;
     hardwareFrame.store(false);
 
-    gbalink::forgetCore();   // nx-mobile: the new core registers its netpacket interface itself (retro_init or load)
+    gbalink::forgetCore();   // the new core registers its netpacket interface itself (retro_init or load)
     core = std::make_unique<Core>(soFilePath);
 
     core->retro_set_video_refresh(&callback_hw_video_refresh);
@@ -485,7 +483,6 @@ void LibretroDroid::create(
 
     preferLowLatencyAudio = lowLatencyAudio;
 
-    // HW accelerated cores are only supported on opengles 3.
     if (Environment::getInstance().isUseHwAcceleration() && openglESVersion < 3) {
         throw LibretroDroidError("OpenGL ES 3 is required for this Core", ERROR_GL_NOT_COMPATIBLE);
     }
@@ -515,7 +512,7 @@ void LibretroDroid::loadGameFromPath(const std::string& gamePath) {
         game_info.size = file.size;
     }
 
-    threadsBeforeLoad = ThreadList::list();   // nx-mobile ADPF: the core's threads are the ones after this
+    threadsBeforeLoad = ThreadList::list();   // ADPF: the core's threads are the ones after this
     bool result = core->retro_load_game(&game_info);
     if (!result) {
         LOGE("Cannot load game. Leaving.");
@@ -544,7 +541,7 @@ void LibretroDroid::loadGameFromBytes(std::unique_ptr<int8_t[]> data, size_t siz
         game_info.size = size;
     }
 
-    threadsBeforeLoad = ThreadList::list();   // nx-mobile ADPF: the core's threads are the ones after this
+    threadsBeforeLoad = ThreadList::list();   // ADPF: the core's threads are the ones after this
     bool result = core->retro_load_game(&game_info);
     if (!result) {
         LOGE("Cannot load game. Leaving.");
@@ -591,7 +588,7 @@ void LibretroDroid::loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles) 
         virtualFiles[0].releaseFD();
     }
 
-    threadsBeforeLoad = ThreadList::list();   // nx-mobile ADPF: the core's threads are the ones after this
+    threadsBeforeLoad = ThreadList::list();   // ADPF: the core's threads are the ones after this
     bool result = core->retro_load_game(&game_info);
     if (!result) {
         LOGE("Cannot load game. Leaving.");
@@ -643,7 +640,7 @@ void LibretroDroid::destroy() {
     LOGD("Performing libretrodroid destroy");
 
     // GLSurfaceView paused first and left no context current: make the session's current again for the core's
-    // teardown and our deletes. Without one (GL thread gone) the core tears down without a context, as upstream did.
+    // teardown and our deletes. Without one (GL thread gone) the core tears down without a context.
     TeardownContext context;
     if (!context.isCurrent()) LOGW("Destroying the session without its GL context");
 
@@ -656,15 +653,15 @@ void LibretroDroid::destroy() {
 
     gbalink::stopCore();   // the core hears the link end (disconnected, stop) before retro_unload_game
     releaseCore();
-    SharedContexts::destroyAll();   // nx-mobile: worker contexts the core left, while the session's is still current
-    gbalink::forgetCore();   // nx-mobile: no netpacket callback may point into an unloaded core
+    SharedContexts::destroyAll();   // worker contexts the core left, while the session's is still current
+    gbalink::forgetCore();   // no netpacket callback may point into an unloaded core
 
     video = nullptr;
     rumble = nullptr;
     fpsSync = nullptr;
     audio = nullptr;
     input = nullptr;
-    perfHint.close();   // nx-mobile ADPF
+    perfHint.close();   // ADPF
     perfHintSteps = 0;
 
     Environment::getInstance().deinitialize();
@@ -675,7 +672,7 @@ void LibretroDroid::destroy() {
     TeardownContext::forget();
 }
 
-// nx-mobile 2026-11-03 (ADPF): two seconds in (the core has started its threads by then) open a session for the GL
+// ADPF: two seconds in (the core has started its threads by then) open a session for the GL
 // thread and the emulation threads started since the load (not audio, Java or binder ones), with one content frame
 // as the budget; then report each running step's work
 // (its run and draw, not the pacing sleep). A step that ran two frames reports both against one frame's budget, which is
@@ -722,9 +719,9 @@ void LibretroDroid::pause() {
 
 void LibretroDroid::step() {
     std::unique_lock<std::mutex> lock(coreLock);
-    // nx-mobile: timed once the core lock is held, so an off-thread save's hold on it never counts as the core's work.
+    // Timed once the core lock is held, so an off-thread save's hold on it never counts as the core's work.
     const auto stepStart = std::chrono::steady_clock::now();
-    // nx-mobile diag: a step that stayed on screen too long, split into its parts (Debug log only).
+    // Diag: a step that stayed on screen too long, split into its parts (Debug log only).
     if (hitchResetPending.exchange(false)) hitchProbe.reset();
     if (fpsSync) {
         const double frameMs = 1000.0 / fpsSync->getContentRefreshRate();
@@ -750,8 +747,8 @@ void LibretroDroid::step() {
 
     // Read once: the UI thread can change it mid-step, and the run loop and the paused redraw must agree.
     unsigned int speed = frameSpeed;
-    const bool lk = gbalink::active();               // nx-mobile GBA link: speed 1, held while either side pauses
-    const bool np = !lk && netplay::active();        // nx-mobile netplay: one lockstep frame per step
+    const bool lk = gbalink::active();               // GBA link: speed 1, held while either side pauses
+    const bool np = !lk && netplay::active();        // netplay: one lockstep frame per step
     const bool paused = speed == 0 && !np && !lk;
     if (np || lk) speed = 1;
 
@@ -781,7 +778,7 @@ void LibretroDroid::step() {
 
     // A stick-driven pointer moves once per emulated frame, so its speed is per second of game time.
     const float frameSeconds = fpsSync ? 1.0f / static_cast<float>(fpsSync->getContentRefreshRate()) : 1.0f / 60.0f;
-    // FF runs the frames its pacer has due, never fpsSync's catch-up × a speed: that let the speed follow the display.
+    // FF runs the frames its pacer has due, never fpsSync's catch-up × a speed, which would make the speed follow the display.
     unsigned runs = frames * speed;
     if (rewinding) {
         runs = stepRewinding(frameSeconds);
@@ -850,7 +847,7 @@ void LibretroDroid::step() {
         if (ahead > Duration::zero()) std::this_thread::sleep_for(ahead);
     } else if (fpsSync) {
         fpsSync->wait();
-        // nx-mobile 2026-11-03: the sleep timer's frame goes on screen at a steady time (its deadline + the display's
+        // The sleep timer's frame goes on screen at a steady time (its deadline + the display's
         // presentation deadline and a margin: no later than a frame queued then could show), not at the first refresh
         // after this step happened to end (8/25 ms frames of a 60 fps game on a 120 Hz screen).
         if (runs > 0) {
@@ -860,7 +857,7 @@ void LibretroDroid::step() {
         frameDeadlineNanos = (runs > 0 && fpsSync->presentAt(std::chrono::microseconds(0)))
             ? std::chrono::duration_cast<std::chrono::nanoseconds>(fpsSync->deadline().time_since_epoch()).count() : 0;
     }
-    // nx-mobile: paused, the picture doesn't change; redrawing it at the screen's rate only burns GPU and battery.
+    // Paused, the picture doesn't change; redrawing it at the screen's rate only burns GPU and battery.
     if (paused) {
         std::this_thread::sleep_until(pausedRedrawAt + PAUSED_REDRAW_INTERVAL);
         pausedRedrawAt = std::chrono::steady_clock::now();
@@ -1190,7 +1187,7 @@ void LibretroDroid::handleVideoRefresh(
             if (video->rendersInVideoCallback()) {
                 video->renderFrame();
                 if (vulkan) VulkanBridge::get().afterGlDraw();
-                // nx-mobile 2026-11-03: the second surface gets the frame now, while it is whole (see setFrameDrawnHook).
+                // The second surface gets the frame now, while it is whole (see setFrameDrawnHook).
                 if (frameDrawnHook && data != nullptr) frameDrawnHook();   // a duplicate leaves its last frame up
             }
         }
@@ -1316,7 +1313,7 @@ void LibretroDroid::applyMemoryCheats() {
                       fromMap ? "memory map" : "RETRO_MEMORY_SYSTEM_RAM");
             cheatMemLogged = true;
         }
-        cheatMemReady = fromMap;   // nx-redux #262: only a memory map's regions stay put
+        cheatMemReady = fromMap;   // only a memory map's regions stay put
         cheatMemMapVersion = achievements.memoryMapVersion();
     }
     CheatMem_apply(&cheatMem, memoryCheatList.data(), (int) memoryCheatList.size());

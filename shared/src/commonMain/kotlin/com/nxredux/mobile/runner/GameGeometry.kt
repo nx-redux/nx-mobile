@@ -16,7 +16,7 @@ data class GameGeometry(val width: Float, val height: Float, val aspect: Float, 
 
         val NONE = GameGeometry(0f, 0f, 0f, 0f)
 
-        /** From the view's array; missing fields (an older library's three) are 0. */
+        /** From the view's array; missing fields are 0. */
         fun of(g: FloatArray?): GameGeometry =
             if (g == null) NONE else GameGeometry(g.getOrElse(0) { 0f }, g.getOrElse(1) { 0f }, g.getOrElse(2) { 0f }, g.getOrElse(3) { 0f })
     }

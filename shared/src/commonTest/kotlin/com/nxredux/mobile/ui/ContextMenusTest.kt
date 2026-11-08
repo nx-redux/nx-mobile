@@ -106,7 +106,7 @@ class ContextMenusTest {
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(sfc, ListSource.Collection("RPGs")))
         assertEquals(ContextKind.NETPLAY, ContextMenus.itemsFor(ListSource.Console(sfc.system), sfc, false, netplay = true)
             .map { it.kind }.let { it[it.indexOf(ContextKind.GAME_SETTINGS) + 1] })   // right after Game Settings
-        assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(gba))   // GBA link (stage 2c)
+        assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(gba))   // GBA link
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(gg))   // GG lockstep, as the handheld's GG.pak
         assertTrue(netplay(n64).isEmpty())
         assertTrue(netplay(sfc, on = false).isEmpty())   // a platform without netplay

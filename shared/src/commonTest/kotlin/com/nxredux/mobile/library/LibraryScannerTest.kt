@@ -611,7 +611,7 @@ class LibraryScannerTest {
             texts = mapOf("H/Roms/Game Boy Advance (GBA)/systems.txt" to "Wario.7z\tMGBA\n"),
         )
         val gba = index.systems.single { it.tag == "GBA" }
-        assertEquals(setOf("Mario.gba", "Kirby.zip", "Metroid.7z"), gba.games.map { it.file }.toSet())   // no longer pushed to MGBA: unpacked at launch; a plain 7z stays too
+        assertEquals(setOf("Mario.gba", "Kirby.zip", "Metroid.7z"), gba.games.map { it.file }.toSet())   // not pushed to MGBA: unpacked at launch; a plain 7z stays too
         assertEquals("Roms/Game Boy Advance (GBA)", gba.games.single { it.file == "Kirby.zip" }.dir)
         assertEquals(listOf("Wario.7z"), index.systems.single { it.tag == "MGBA" }.games.map { it.file })   // the sidecar still wins
         assertEquals(listOf("Chrono.7z"), index.systems.single { it.tag == "SFC" }.games.map { it.file })

@@ -64,7 +64,7 @@ typedef size_t (*np_size_fn)(void);
 typedef bool (*np_ser_fn)(void*, size_t);
 typedef bool (*np_unser_fn)(const void*, size_t);
 
-/* Stick axes per player and frame: LX, LY, RX, RY, raw int16 in libretro's range (protocol 3, nx-redux b73f77ce). */
+/* Stick axes per player and frame: LX, LY, RX, RY, raw int16 in libretro's range (protocol 3). */
 #define NP_ANALOG_AXES 4
 
 /* 0 ok; spawns the engine thread. peer_ip is the other device's dotted IPv4 for both roles. Host: listens on port

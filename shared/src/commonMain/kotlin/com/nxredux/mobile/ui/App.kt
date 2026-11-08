@@ -187,7 +187,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     // Settings are plain properties: every Pad theme change republishes the screen, so re-read it when the screen changes.
     val padTheme = remember(screen) { state.settings.padTheme }
     val padVibration = remember(screen) { state.settings.padVibration }   // Controls → Pad vibration, likewise
-    // A pad skin theme (NX Carbon): its pack, for the menu's skin layout (the drawn pad where the skin has none).
+    // A pad skin theme (NX Carbon): its pack, for the menu's skin layout (the screen fills the area where it has none).
     val skinPacks = LocalSkinPacks.current
     val skin = remember(padTheme, skinPacks) { padTheme.skin?.let(skinPacks) }
     // Appearance → Pad skin, likewise; hidden while first setup and onboarding have not asked yet, previewed on its step.
@@ -612,7 +612,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                 s.search?.let { NxTextPrompt("Search", it, state::searchDraft, onConfirm = { state.onButton(NxButton.A) }, onCancel = { state.onButton(NxButton.B) }) }
             }
             is Screen.Games -> GamesPage(state, s, selection, resume, gameInfo, now)
-            // NX Redux PR #218: its info follows Extra info, as the menus'. List: a row tap selects, a second tap resumes.
+            // Its info follows Extra info, as the menus'. List: a row tap selects, a second tap resumes.
             is Screen.Switcher -> GameSwitcherScreen(
                 s, state::onButton, info = gameInfoFor(gameInfo, now, s.entries.getOrNull(s.index)?.game, full = true),
                 onSelect = state::selectSwitcherRow, onOpen = { state.selectSwitcherRow(it); state.openSelected() },

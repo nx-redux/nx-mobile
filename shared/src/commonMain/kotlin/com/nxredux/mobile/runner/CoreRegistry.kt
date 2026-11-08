@@ -146,8 +146,8 @@ object CoreRegistry {
     private val gpsp = CoreDescriptor(
         "gpsp", "libgpsp_libretro_android.so", setOf("gba", "bin", "agb", "gbz", "u1"),
         // The cartridge clock follows the device clock, so a resumed state keeps the real time (the core's
-        // "deterministic" counts it from the state's save time). Sound at 65536 Hz, as before the core's 32768 default
-        // (gpsp #288, for low-end devices' speed): 32768 is coarser, and its PSG ran at half speed before gpsp.patch.
+        // "deterministic" counts it from the state's save time). Sound at 65536 Hz rather than the core's 32768 default
+        // (gpsp #288, for low-end devices' speed), which is coarser.
         defaultOptions = mapOf("gpsp_rtc_time_source" to "system", "gpsp_sound_rate" to "65536"),
         // A live change sends SET_SYSTEM_AV_INFO with a new sample rate, which the runner's audio doesn't follow.
         restartOnlyOptions = setOf("gpsp_sound_rate"),
@@ -158,7 +158,7 @@ object CoreRegistry {
     private val pcsxRearmed = CoreDescriptor(
         "pcsx_rearmed", "libpcsx_rearmed_libretro_android.so",
         setOf("bin", "cue", "img", "mdf", "pbp", "toc", "cbn", "m3u", "chd", "iso", "exe"),
-        // No second memory card unless picked, as before the 2026 pin (its default became a card shared by all games).
+        // No second memory card unless picked (the core's default is a card shared by all games).
         defaultOptions = mapOf("pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none"),
         biosFiles = listOf("psxonpsp660.bin", "scph101.bin", "scph5501.bin", "scph7001.bin", "scph1001.bin"),   // optional: HLE built in
         controllerPort0 = CoreDescriptor.PS_DUALSHOCK,
@@ -185,7 +185,7 @@ object CoreRegistry {
         vulkan = VulkanSwitch(vulkan = mapOf("swanstation_GPU_Renderer" to "Auto"), lock = false),
         name = "SwanStation",
     )
-    // SPIKE: PS2 on ARMSX2 (ARMSX2/ARMSX2 2.9, cores/Makefile). Reads <system>/pcsx2/{bios,resources}. Opens the game
+    // PS2 on ARMSX2 (ARMSX2/ARMSX2 2.9, cores/Makefile). Reads <system>/pcsx2/{bios,resources}. Opens the game
     // through the runner's libretro VFS (/rom/<name>, need_fullpath), like Dolphin: no cache copy, so Play builds work.
     private val armsx2 = CoreDescriptor(
         "armsx2", "libarmsx2_libretro_android.so", setOf("iso", "chd", "cso", "zso", "bin", "elf", "gz", "m3u"),
@@ -425,16 +425,13 @@ object CoreRegistry {
         microphone = true,
     )
 
-    // Wii and GameCube on Dolphin (libretro/dolphin 3aac3f05, patched; cores/Makefile), GLES or Vulkan (Graphics API). It
+    // Wii and GameCube on Dolphin (libretro/dolphin, patched; cores/Makefile), GLES or Vulkan (Graphics API). It
     // opens the game by path (need_fullpath) through the runner's VFS (its Libretro::VFile): /rom/<name>, read from the SAF
     // descriptor in place, not a multi-GB copy into the cache. Its user dir is <save dir>/User/, so each console has its
     // own (Saves/WII/User, Saves/GC/User) and one's NAND (User/Wii) and memory cards (User/GC) are not seen by the other; a
     // GC disc played under WII (a loose GC image resolves to WII) uses WII's.
     // Defaults: hardware renderer; dual core with the GPU thread unsynced, as standalone Dolphin (no game in its
-    // GameSettings asks for SyncGPU). Synced it was ~3x the uneven frames in SMG2 on the Retroid Pocket Nova; the NSMB
-    // Wii FIFO desync after the opening airship that made us sync it (2026-10-13, an older pin) no longer happens: NSMB
-    // Wii past the airship and 1-1 and Paper Mario TTYD played unsynced on 3aac3f05, and NSMB Wii's resume point past the
-    // airship booted 15 times unsynced on b93001ed (2026-11-03; b93001ed adds only aspect and D3D11 changes). Synchronize
+    // GameSettings asks for SyncGPU); synced gives ~3x the uneven frames in SMG2 on the Retroid Pocket Nova. Synchronize
     // GPU Thread stays a Console Setting for a game that needs it; async with skip-rendering (shaders compile in the background on the runner's shared contexts and an effect
     // whose shader is not ready is skipped for a moment, not drawn with GPU-heavy ubershaders, which made SMG2 lag on the
     // Fold); on-screen messages off. The orientation hotkeys are off because the app sets the controller type itself

@@ -22,7 +22,7 @@ class NotificationQueue(private val max: Int = 4) {
     fun dismiss(id: Long) { toasts = toasts.filterNot { it.id == id } }
 
     companion object {
-        /** A duration that never runs out: the toast stays until closed ([dismiss]), as the layout tip (user). */
+        /** A duration that never runs out: the toast stays until closed ([dismiss]), as the layout tip. */
         const val UNTIL_CLOSED = Long.MAX_VALUE / 4
     }
 

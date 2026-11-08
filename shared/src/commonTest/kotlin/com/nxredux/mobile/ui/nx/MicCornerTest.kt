@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 class MicCornerTest {
     private val mic = PadMic(on = false, onTap = {})
 
-    @Test fun shownWithAMicAndNoPadDrawn() {   // a controller attached: no skin, no skin buttons (user)
+    @Test fun shownWithAMicAndNoPadDrawn() {   // a controller attached: no skin, no skin buttons
         assertTrue(micCornerShown(mic, padDrawn = false))
     }
 

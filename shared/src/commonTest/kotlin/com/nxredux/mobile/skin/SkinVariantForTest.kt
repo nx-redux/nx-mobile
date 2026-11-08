@@ -11,8 +11,8 @@ class SkinVariantForTest {
         for (t in listOf("GB", "GBC", "SGB", "FC")) assertEquals(SkinVariant.GB, SkinChoice.variantFor(t, false), t)
         for (t in listOf("GBA", "MGBA")) assertEquals(SkinVariant.GBA, SkinChoice.variantFor(t, false), t)
         for (t in listOf("SFC", "MD", "PCE")) assertEquals(SkinVariant.SINGLE, SkinChoice.variantFor(t, false), t)
-        assertEquals(SkinVariant.DOOM, SkinChoice.variantFor("PRBOOM", false))   // the standard pad with L2 R2 L3 R3 (user)
-        // a console with no layout of its own (an added core's tag) takes the shared one-screen layout (user)
+        assertEquals(SkinVariant.DOOM, SkinChoice.variantFor("PRBOOM", false))   // the standard pad with L2 R2 L3 R3
+        // a console with no layout of its own (an added core's tag) takes the shared one-screen layout
         for (t in listOf("", "XYZ", "SNES9X_CUSTOM")) assertEquals(SkinVariant.SINGLE, SkinChoice.variantFor(t, false), t)
     }
 
@@ -52,7 +52,7 @@ class SkinVariantForTest {
     }
 
     @Test
-    fun wiiPadsGetTheirOwnLayouts() {   // the Classic Controller's until the pad resolves (user)
+    fun wiiPadsGetTheirOwnLayouts() {   // the Classic Controller's until the pad resolves
         assertEquals(SkinVariant.WII_CLASSIC, SkinChoice.variantFor("WII", ds = false, wiiPad = com.nxredux.mobile.runner.WiiPad.CLASSIC))
         assertEquals(SkinVariant.WII_NUNCHUK, SkinChoice.variantFor("WII", ds = false, wiiPad = com.nxredux.mobile.runner.WiiPad.NUNCHUK))
         assertEquals(SkinVariant.WII_SIDEWAYS, SkinChoice.variantFor("WII", ds = false, wiiPad = com.nxredux.mobile.runner.WiiPad.SIDEWAYS))
@@ -66,7 +66,7 @@ class SkinVariantForTest {
         assertEquals(SkinVariant.PS1, SkinChoice.variantFor("PS", ds = false))
         assertEquals(SkinVariant.PS1, SkinChoice.variantFor("PSX", ds = false))
         assertEquals(SkinVariant.PSP, SkinChoice.variantFor("PSP", ds = false))
-        assertEquals(SkinVariant.PS1, SkinChoice.variantFor("PS2", ds = false))   // the PS2: the PlayStation skin (user)
+        assertEquals(SkinVariant.PS1, SkinChoice.variantFor("PS2", ds = false))   // the PS2: the PlayStation skin
         assertEquals(SkinVariant.P8, SkinChoice.variantFor("P8", ds = false))
         assertEquals(SkinVariant.A5200, SkinChoice.variantFor("A5200", ds = false))
     }

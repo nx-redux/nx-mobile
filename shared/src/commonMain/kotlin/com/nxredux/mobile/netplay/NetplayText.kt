@@ -79,7 +79,7 @@ object NetplayText {
     fun peerPaused(seconds: Int) = "Other player paused ($seconds s)"
     fun usingCopy(coreName: String) = "Using $coreName for this match - progress won't be saved."
     const val SAVES_NOT_COPIED = "Saves not copied - playing on empty saves."
-    /** The host runs another emulator (the handheld's #189 wording); [tag] is the host's folder, null when it sent none. */
+    /** The host runs another emulator (the handheld's wording); [tag] is the host's folder, null when it sent none. */
     fun coreMismatch(name: String, tag: String?): String =
         "The host is using\n${if (tag.isNullOrEmpty()) name else "$name ($tag folder)"}.\n\nPick the game from the same\nfolder on both devices."
     /** This device has the host's emulator, but its Emulator row pins another. */

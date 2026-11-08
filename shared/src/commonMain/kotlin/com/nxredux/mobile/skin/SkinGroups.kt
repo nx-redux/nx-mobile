@@ -16,7 +16,7 @@ data class SkinGroup(
 )
 
 object SkinGroups {
-    /** The id of the frame strip's group (SAVE LOAD REWIND FAST, or TOUCH_1..4 on a DS layout). */
+    /** The id of the frame strip's group (TOUCH_1..4). */
     const val STRIP = "STRIP"
 
     /** The groups of [spec]: its button pieces that overlap or touch, each with the controls it holds, and the frame strip. */

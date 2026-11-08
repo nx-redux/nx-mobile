@@ -37,7 +37,7 @@ fun List<NdsRegion>.shownRect(): PxRect = filterNot { it.inset }.ifEmpty { this 
 
 /**
  * These screens scaled evenly to fill [space] (the larger scale that fits its width or height), centred, each screen's
- * size in whole px: Side by side in a pad skin's glass (user: its whole-number scale left wide margins). Their
+ * size in whole px: Side by side in a pad skin's glass (its whole-number scale left wide margins). Their
  * arrangement and gap are kept, only scaled.
  */
 fun List<NdsRegion>.filledTo(space: PxRect): List<NdsRegion> {

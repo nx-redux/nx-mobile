@@ -16,7 +16,7 @@ fun <T> List<T>.stepFrom(current: T, by: Int): T = this[(indexOf(current) + by).
  * The on-screen pad's look, a pad skin ([skin]: its pack in the app's skins):
  * NX_CARBON (the default, smoke grey), NX_ONYX (the same shell in smoked black) or one of its translucent colours
  * (NX_OBSIDIAN near-black; NX_PLASMA purple, NX_EMBER red, NX_VOLT green, NX_TIDE blue): in game and on the main menu it draws the whole device around the screen wherever the skin has a
- * layout for the window, and the pad is Charcoal everywhere else (a console or window the skin has no layout for).
+ * layout for the window; where it has none (a console or window no layout fits), only its see-through buttons over the full-screen game.
  */
 enum class PadTheme(val skin: String? = null) {
     NX_CARBON("nx-carbon"), NX_ONYX("nx-onyx"), NX_OBSIDIAN("nx-obsidian"), NX_PLASMA("nx-plasma"), NX_EMBER("nx-ember"), NX_VOLT("nx-volt"), NX_TIDE("nx-tide");
@@ -148,10 +148,6 @@ enum class BackdropArt(val label: String) {
     }
 }
 
-/**
- * Layouts → Game Switcher layout (NX Redux PR #218): FULL (the default), one game's resume frame at a time; LIST, the
- * recent games as a game list's List, the selected one's resume frame behind it.
- */
 /** Appearance → Text size: an options row's label as a share of the list label ([ofListLabel]). */
 enum class OptionTextSize(val label: String, val ofListLabel: Float) {
     LARGE("Large", 0.8f), SMALL("Small", 0.6f);
@@ -167,6 +163,10 @@ enum class OptionTextSize(val label: String, val ofListLabel: Float) {
     }
 }
 
+/**
+ * Layouts → Game Switcher layout: FULL (the default), one game's resume frame at a time; LIST, the
+ * recent games as a game list's List, the selected one's resume frame behind it.
+ */
 enum class SwitcherLayout(val label: String) {
     FULL("Full screen"), LIST("List");
 
@@ -193,12 +193,12 @@ interface AppSettings {
     var defaultTags: Map<String, String>
     /** Appearance → Pad skin: On (the default) draws the [padTheme] skin; Off, the game full screen under the see-through overlay pad. */
     var padSkin: Boolean
-    /** The pad skin (Appearance → Pad theme); the drawn pad, where a skin has no layout, is always Charcoal. */
+    /** The pad skin (Appearance → Pad theme). */
     var padTheme: PadTheme
     /**
-     * Each main menu tab's style (List, Grid or Carousel), Home's too (Layouts → Home layout); a category missing from
-     * the map is its default ([MenuStyles.defaultStyleOf]: Grid for Tools, Minimal for Home and Collections, Carousel for Consoles) and a stored
-     * Backdrop reads as Carousel ([MenuStyles.styleOf]).
+     * Each main menu tab's style (one of [MenuStyles.MAIN_MENU_STYLES]), Home's too (Layouts → Home layout); a category
+     * missing from the map is its default ([MenuStyles.defaultStyleOf]: Grid for Tools and Apps, Minimal for Home and
+     * Collections, Carousel for Consoles), and a stored style a tab doesn't offer reads as none stored ([MenuStyles.decode]).
      */
     var menuStyles: Map<MenuCategory, MenuStyle>
     /** The style of every game list (a console's, a collection's, Recently Played); unset is [MenuStyles.DEFAULT_GAME_LIST_STYLE]. */
@@ -296,7 +296,7 @@ interface AppSettings {
      * where a pad's buttons exist ([com.nxredux.mobile.ui.nx.launcherChromeFor]); L1 / R1 still switch tabs.
      */
     var menuPageTitle: Boolean
-    /** Layouts → Button hints: the main menu's and game lists' hint bar (default on); hidden only where buttons exist, as [menuPageTitle]. */
+    /** Layouts → Button hints: the main menu's and game lists' hint bar (default off); hidden only where buttons exist, as [menuPageTitle]. */
     var menuButtonHints: Boolean
     /**
      * Layouts → Extra info: the launcher menus' game stats (the play time, achievements and next goal on cards, tiles,

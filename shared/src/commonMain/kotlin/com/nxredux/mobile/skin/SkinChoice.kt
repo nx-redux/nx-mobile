@@ -43,26 +43,26 @@ object SkinChoice {
     ): SkinVariant = when {
         ds -> SkinVariant.DS
         gameCube || baseTag == "GC" -> SkinVariant.GC
-        baseTag == "WII" -> when (wiiPad) { com.nxredux.mobile.runner.WiiPad.CLASSIC -> SkinVariant.WII_CLASSIC; com.nxredux.mobile.runner.WiiPad.NUNCHUK -> SkinVariant.WII_NUNCHUK; com.nxredux.mobile.runner.WiiPad.SIDEWAYS -> SkinVariant.WII_SIDEWAYS; com.nxredux.mobile.runner.WiiPad.UPRIGHT -> SkinVariant.WII_UPRIGHT; null -> SkinVariant.WII_CLASSIC }   // unresolved: the Wii's default pad (user)
+        baseTag == "WII" -> when (wiiPad) { com.nxredux.mobile.runner.WiiPad.CLASSIC -> SkinVariant.WII_CLASSIC; com.nxredux.mobile.runner.WiiPad.NUNCHUK -> SkinVariant.WII_NUNCHUK; com.nxredux.mobile.runner.WiiPad.SIDEWAYS -> SkinVariant.WII_SIDEWAYS; com.nxredux.mobile.runner.WiiPad.UPRIGHT -> SkinVariant.WII_UPRIGHT; null -> SkinVariant.WII_CLASSIC }   // unresolved: the Wii's default pad
         baseTag in GB_TAGS -> SkinVariant.GB
         baseTag in GBA_TAGS -> SkinVariant.GBA
         baseTag in ARCADE_TAGS -> SkinVariant.ARCADE
         baseTag == "FDS" -> SkinVariant.FDS
         baseTag == "3DS" -> if (n3dsNew) SkinVariant.N3DS else SkinVariant.N3DS_REGULAR   // the New 3DS controls (ZL ZR, C-stick) or not
         baseTag == "N64" -> SkinVariant.N64
-        // pcsx_rearmed / SwanStation (a DualShock on port 1) and ARMSX2 (its DualShock 2): the same skin (user)
+        // pcsx_rearmed / SwanStation (a DualShock on port 1) and ARMSX2 (its DualShock 2): the same skin
         baseTag == "PS" || baseTag == "PSX" || baseTag == "PS2" -> SkinVariant.PS1
         baseTag == "PSP" -> SkinVariant.PSP
         baseTag == "P8" -> SkinVariant.P8   // fake-08: O (B) and X (A), START its pause
-        baseTag == "PRBOOM" -> SkinVariant.DOOM   // PrBoom's Classic pad: the standard pad with L2 R2 L3 R3 (user)
+        baseTag == "PRBOOM" -> SkinVariant.DOOM   // PrBoom's Classic pad: the standard pad with L2 R2 L3 R3
         baseTag == "A5200" -> SkinVariant.A5200   // a5200: FIRE 1 / 2 (A / B), * # (Y / X), KEYPAD (L: its on-screen keypad)
         // flycast: a NAOMI / Atomiswave set takes the arcade skin, a disc the Dreamcast one ([DcGames.isArcadeSet])
         baseTag == "DC" -> if (arcadeSet) SkinVariant.ARCADE else SkinVariant.DC
-        // every other console (an added core's tag too): the shared one-screen layout (user)
+        // every other console (an added core's tag too): the shared one-screen layout
         else -> SkinVariant.SINGLE
     }
 
-    private val GB_TAGS = setOf("GB", "GBC", "SGB", "FC")   // the NES too (user): A B, fceumm's turbo on TA / TB, no DISK
+    private val GB_TAGS = setOf("GB", "GBC", "SGB", "FC")   // the NES too: A B, fceumm's turbo on TA / TB, no DISK
     private val GBA_TAGS = setOf("GBA", "MGBA")
     private val ARCADE_TAGS = setOf("FBN")
 
@@ -70,8 +70,8 @@ object SkinChoice {
      * The main menu's pad in a [windowW] x [windowH] px area at [densityDpi], built from pieces. Portrait: the stacked
      * menu layout, its buttons at their own size along the bottom and its screen frame (where the menu goes) over the
      * room above them. Landscape: the grip menu layout, one shell with the buttons in a column each side and the screen
-     * frame between them. Null when the pack has no such layout or the area is too small for it (the drawn pad, or
-     * none, then). [topInset]: window px at the top the screen frame keeps clear of ([SkinSolver.placePieces]).
+     * frame between them. Null when the pack has no such layout or the area is too small for it (the screen then fills the
+     * area). [topInset]: window px at the top the screen frame keeps clear of ([SkinSolver.placePieces]).
      * [foldable]: a device that half-folds. [tablet]: a tablet-class window (the Fold's inner screen too): upright, the
      * menu on two screens on the fold board (glasses `menutop` and `menu`), split at [hingeY] (window px; the window's
      * middle when null) when [twoScreens] (false while the menu already has a second display) and it fits.
@@ -140,7 +140,8 @@ object SkinChoice {
         val own = placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, v)
         // a console's own set the pack lacks for this screen (an older pack, or a player's partly made one): the shared
         // one-screen set, decided per screen, so a missing landscape layout never leaves the game without a skin
-        // (never for the Dreamcast, the 3DS or the GameCube: the shared set has no stick, nor two screens)
+        // (never for the Dreamcast, the 3DS, the GameCube, the Wii pads, the PlayStations or the PSP: the shared set has
+        // no stick, nor two screens)
         if (own != null || v == SkinVariant.DS || v == SkinVariant.SINGLE || v == SkinVariant.DC || v == SkinVariant.N3DS || v == SkinVariant.N3DS_REGULAR || v == SkinVariant.GC || v == SkinVariant.WII_CLASSIC || v == SkinVariant.WII_NUNCHUK || v == SkinVariant.WII_SIDEWAYS || v == SkinVariant.WII_UPRIGHT || v == SkinVariant.PS1 || v == SkinVariant.PSP) return own
         return placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, SkinVariant.SINGLE)
     }
@@ -174,11 +175,11 @@ object SkinChoice {
         val landscape = windowW > windowH
         // sideways: the main menu's landscape shell, the game in its screen frame (the strip under it; a DS's MIC, SWAP)
         if (landscape) return shell(pack, SkinFamily.GRIP, v, windowW, windowH, k, picture, topInset)
-        // half-folded: the screen frame above the fold, the pad below it (a DS's touch screen with it)
         // a foldable's inner screen or a tablet: the fold board, split at its hinge flat or not (the window's middle when flat)
         if (foldable || tablet) widest(pack, SkinFamily.FLEX, v, fold = true, refH = windowH / k) { spec ->
             SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), hingeY ?: (windowH / 2f))
         }?.let { return it }
+        // half-folded: the screen frame above the fold, the pad below it (a DS's touch screen with it)
         if (hingeY != null) return widest(pack, SkinFamily.FLEX, v, fold = false) { spec ->
             if (spec.frame?.hinge?.let { it >= 0 } != true) null
             else SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), hingeY)

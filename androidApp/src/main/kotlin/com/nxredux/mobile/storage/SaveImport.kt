@@ -16,7 +16,7 @@ import java.util.zip.ZipInputStream
 /** One file an import offers: its source-relative [path] (unchecked), modified time and size. */
 interface ImportEntry {
     val path: String
-    /** Null when the source has none: the copy then gets the import's time and never replaces a private file. */
+    /** Null when the source has none: the copy then gets the import's time and never replaces a phone file. */
     val mtime: Long?
     /** Null when unknown; when known, a copy of another length fails. */
     val size: Long?
@@ -74,9 +74,9 @@ class DirImportFiles(private val root: File, private val tops: List<String> = li
 }
 
 /**
- * Settings → Library → Saves → Import saves into private storage ([root] = `filesDir/sd`), copy only (a source is
+ * Settings → Library → Saves → Import saves into the data root ([root], [DataRoot.settled]), copy only (a source is
  * never deleted or changed), per [ImportRules]: new files are copied in, identical ones skipped, newer ones replace the
- * private file (kept as a `.bak`, [SaveCopyRules.freeBackupName]), older ones are skipped. Each file lands through a
+ * phone's file (kept as a `.bak`, [SaveCopyRules.freeBackupName]), older ones are skipped. Each file lands through a
  * `.tmp` and gets the source's modified time (or the import's, when it has none). The copy is verified against the
  * source's size when that is known (a zip's own CRC check covers its entries). Each entry is read to its end before the
  * next ([ZipImportFiles] streams). No logging: JVM-tested.
@@ -335,7 +335,7 @@ class SaveImporter(
             .filter { it.isFile }.sortedByDescending { it.lastModified() }
         // A Generic `<stem>.sav` under the MinUI format borrows the ROM name of a phone copy (`<rom.ext>.sav`, one this
         // import just wrote from another tag folder included) rather than keeping a name the format never uses. The
-        // library's Roms folders are out of this importer's reach (private storage only), so they are not asked. An
+        // library's Roms folders are out of this importer's reach (it sees only [root]), so they are not asked. An
         // incoming `X.gb.sav` may be ROM `X.gb.zip`'s Generic name, so it names nothing by itself: unless the phone's
         // copies settle the ROM it keeps its name ([SaveKeys.romOf], [SaveKeys.romAmbiguous]).
         val romName = rom ?: SaveKeys.romOf(incomingName, mine.map { it.name })

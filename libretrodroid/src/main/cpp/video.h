@@ -93,7 +93,7 @@ public:
     void setPictureHeld(bool held);
     void updateContentSize(unsigned width, unsigned height);
     void updateScreenRegions(std::vector<ScreenRegion> regions);
-    // nx-mobile: while set, the core frame is first composed into a width x height frame from its parts (src: 0..1 of
+    // While set, the core frame is first composed into a width x height frame from its parts (src: 0..1 of
     // the core frame, dst: 0..1 of the composed one), and that composed frame is what every draw samples.
     void setComposition(int width, int height, std::vector<ScreenRegion> parts);
     // A point (0..1) of the composed frame mapped back into the core frame through the touch part under it; outside

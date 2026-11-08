@@ -77,7 +77,7 @@ class InGameMenuModelTest {
         assertEquals(2, m.state.slotIndex)
     }
 
-    // The skin's touch strip holds the shortcuts now (user): Reset is a root row under Load, the panel has no shortcut tiles.
+    // The skin's touch strip holds the shortcuts: Reset is a root row under Load, the panel has no shortcut tiles.
     @Test fun reset_is_a_root_row_that_asks_first() {
         val m = model()
         m.select(m.state.page.rows.indexOfFirst { it.label == "Reset" })
@@ -92,7 +92,7 @@ class InGameMenuModelTest {
         assertTrue(m.panelState().shortcuts.isEmpty())
     }
 
-    // Adjust buttons lives in Options → Controls (user), only while a skin or its bare buttons are drawn and no controller is
+    // Adjust buttons lives in Options → Controls, only while a skin or its bare buttons are drawn and no controller is
     // attached (no pad is drawn then); Controls shows for it even with no settings rows of its own.
     @Test fun adjust_buttons_is_in_options_controls_while_the_pad_is_drawn_without_a_controller() {
         val m = model()
@@ -1449,7 +1449,7 @@ class InGameMenuModelTest {
         fold.press(NxButton.A); fold.press(NxButton.LEFT)                  // its live preview: Large screen back to the last one offered
         assertEquals("Picture in picture", fold.optionRow(0).valueLabel)   // in its live preview
         val phone = model().apply { screen = ScreenClass.REGULAR_PHONE }.openConsoleSettings()
-        assertEquals("Single screen", phone.optionRow(2).valueLabel)   // a regular phone's landscape default (user)
+        assertEquals("Single screen", phone.optionRow(2).valueLabel)   // a regular phone's landscape default
         assertTrue("Side by side" in phone.optionRow(2).choices)
     }
 
@@ -1567,7 +1567,7 @@ class InGameMenuModelTest {
         assertTrue("3D Resolution" in labels())
     }
 
-    // A layout row the pad skin ignores shows unavailable (user: the Fold's skin places the 3DS screens itself).
+    // A layout row the pad skin ignores shows unavailable (the Fold's skin places the 3DS screens itself).
     @Test fun aLayoutRowThePadSkinIgnoresIsUnavailable() {
         val m = model().apply { screen = ScreenClass.STUBBY_PHONE }
         m.ndsView = NdsView(landscape = true, controllerMode = false)

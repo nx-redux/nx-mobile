@@ -1,4 +1,4 @@
-// nx-mobile 2026-11-03: stamps the frame about to be swapped with the time it should reach the screen
+// Stamps the frame about to be swapped with the time it should reach the screen
 // (EGL_ANDROID_presentation_time). SurfaceFlinger then shows it at the first refresh from that time, instead of the first
 // refresh after its buffer happened to be queued: a sleep-timer game's frames stay on a steady slot whatever each step's
 // run time. GL thread, between the draw and the swap.

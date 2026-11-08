@@ -74,7 +74,7 @@ public:
     bool isUseVulkan() const { return useVulkan; }
     // The core's RETRO_ENVIRONMENT_SHUTDOWN since the last take (any thread), cleared on take.
     bool takeShutdownRequest() { return shutdownRequest.take(); }
-    // nx-mobile 2026-10-24: whether fast forward runs, for GET_FASTFORWARDING (flycast paces itself and only pushes
+    // Whether fast forward runs, for GET_FASTFORWARDING (flycast paces itself and only pushes
     // audio at FF speed once it can read it). Set by step() on the GL thread; cores read it from their own threads.
     void setFastForwarding(bool value) { fastForwarding.store(value); }
     // The core's last SET_FASTFORWARDING_OVERRIDE (mupen64plus asks for it). Stored only: the host's FF state wins.
@@ -127,7 +127,7 @@ public:
     bool isGameGeometryUpdated() const;
     void clearGameGeometryUpdated();
 
-    // nx-mobile: video views. Enabled per core before its load; the map is written on the core's thread inside retro_run
+    // Video views. Enabled per core before its load; the map is written on the core's thread inside retro_run
     // and taken by the GL thread after the step.
     void setVideoViewsEnabled(bool enabled);
     bool takeVideoViews(std::vector<libretrodroid::VideoView>& out);

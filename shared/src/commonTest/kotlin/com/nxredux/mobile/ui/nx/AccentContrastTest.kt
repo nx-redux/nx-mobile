@@ -19,8 +19,8 @@ class AccentContrastTest {
 
     @Test fun theDefaultAccentKeepsBlackTextAndItsMutedShade() {
         val c = NxColors()
-        assertEquals(c.secondarySelected, c.onAccentMuted)          // 55% black, as before
-        assertEquals(Color(0xFF006666), c.optionBar)               // the renamed teal
+        assertEquals(c.secondarySelected, c.onAccentMuted)          // 55% black
+        assertEquals(Color(0xFF006666), c.optionBar)               // NX teal
     }
 
     @Test fun aCopiedAccentKeepsBlackText() {

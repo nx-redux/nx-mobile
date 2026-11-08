@@ -35,7 +35,7 @@ class ShortcutKeysTest {
         val k = keys(ShortcutAction.TOGGLE_FF to ShortcutBinding(menu, r1))
         assertEquals(KeyVerdict.Swallow, k.onDown(menu))
         assertEquals(KeyVerdict.Fire(ShortcutAction.TOGGLE_FF, true), k.onDown(103))
-        // The modifier let go first: the trigger's release is still the shortcut's (L22), never the game's.
+        // The modifier let go first: the trigger's release is still the shortcut's, never the game's.
         assertEquals(KeyVerdict.Swallow, k.onUp(menu))
         assertEquals(KeyVerdict.Fire(ShortcutAction.TOGGLE_FF, false), k.onUp(103))
     }

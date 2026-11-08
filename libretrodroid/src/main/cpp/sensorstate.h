@@ -24,7 +24,7 @@
 namespace libretrodroid {
 
 /**
- * nx-mobile 2026-10-13: the phone's accelerometer (g) and gyroscope (rad/s), already in the core's frame, for
+ * The phone's accelerometer (g) and gyroscope (rad/s), already in the core's frame, for
  * RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE (Dolphin's Wiimote). Only port 0 (the phone's player) and only while the host
  * turned motion on; values arrive from the host's sensor thread, the core reads them on the GL thread.
  */

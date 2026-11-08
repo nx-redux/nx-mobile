@@ -109,7 +109,7 @@ object N3dsOptions {
 
     /**
      * The layout a screen starts with before the player picks one: Large screen on a Fold-shaped screen or tablet in
-     * landscape, Stacked in portrait (the controller row too), Single screen on a regular phone in landscape (user).
+     * landscape, Stacked in portrait (the controller row too), Single screen on a regular phone in landscape.
      */
     fun defaultLayout(screen: ScreenClass, landscape: Boolean): String = when {
         !landscape -> "stacked"
@@ -118,7 +118,7 @@ object N3dsOptions {
     }
 
     /**
-     * The layout rows a pad skin ([skinOn]) ignores on [screen], which the Display page shows unavailable (user): portrait's
+     * The layout rows a pad skin ([skinOn]) ignores on [screen], which the Display page shows unavailable: portrait's
      * (the skin's top and touch screen pieces place them), landscape's on the Fold or a tablet ([skinLayout] null there).
      * Portrait with a controller keeps its row: no skin is drawn then.
      */
@@ -176,7 +176,7 @@ object N3dsOptions {
     }
 
     /**
-     * The layout the app draws under a pad skin: on a regular phone in [landscape] (user: its skin's one glass is too
+     * The layout the app draws under a pad skin: on a regular phone in [landscape] (its skin's one glass is too
      * small for the top over touch screen) the player's ([appLayoutFor], Single screen unless picked); null elsewhere (the
      * Fold, a tablet, portrait), where the skin's own top over touch screen stays.
      */
@@ -224,7 +224,7 @@ object N3dsOptions {
         return ceil((top / bottom).coerceIn(1f, 2f) * 100f - 0.001f) / 100f
     }
 
-    /** [proportion] as the core option's text: two decimals, a whole one as before ("1", "2"). */
+    /** [proportion] as the core option's text: two decimals, a whole one without ("1", "2"). */
     fun proportionText(proportion: Float): String {
         val hundredths = (proportion * 100f).roundToInt()
         return if (hundredths % 100 == 0) "${hundredths / 100}" else "${hundredths / 100}.${(hundredths % 100).toString().padStart(2, '0')}"

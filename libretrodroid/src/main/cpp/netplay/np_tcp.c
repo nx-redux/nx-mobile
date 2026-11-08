@@ -15,11 +15,6 @@
  *     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/*
- * 2026-10-23: moved here from np_engine.c and np_link.c, which each carried a copy (the copies matched apart from the
- * link's queue cap, the engine's linger and the log prefix, which are parameters now).
- */
-
 #define _POSIX_C_SOURCE 200809L
 #if defined(__APPLE__)
 #define _DARWIN_C_SOURCE

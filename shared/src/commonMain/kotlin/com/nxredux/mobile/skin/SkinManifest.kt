@@ -45,7 +45,7 @@ enum class SkinFamily {
 
 /**
  * DS: two screens plus MIC and SWAP. SINGLE: one glass for any one-screen console, no MIC or SWAP. MENU: the main
- * menu's pad, one glass the menu fills and the pad buttons only (no MIC, SWAP or SAVE / LOAD / REWIND / FAST).
+ * menu's pad, one glass the menu fills and the pad buttons only (no MIC, SWAP or touch shortcut slots).
  */
 @Serializable
 enum class SkinVariant {
@@ -166,7 +166,7 @@ data class FrameSpec(
 )
 
 /**
- * The frame's on-screen buttons (SAVE LOAD REWIND FAST): an even share of the screen's width each, centred [y] px above
+ * The frame's on-screen buttons (the touch shortcut slots TOUCH_1..TOUCH_4): an even share of the screen's width each, centred [y] px above
  * the frame's bottom, [hh] each way tall; each one's label ([labels], in the parts picture) centred on its share.
  */
 @Serializable
@@ -337,7 +337,7 @@ enum class ControlShape {
 
 /**
  * A control centred at [x], [y] (picture px). [id] is the app's name for it: A B X Y L R START SELECT MENU, DPAD, MIC,
- * SWAP, SAVE, LOAD, REWIND, FAST. [r] / [hw] / [hh] are the touch area; the cap itself (shaded while held) is [capR]
+ * SWAP, TOUCH_1..TOUCH_4. [r] / [hw] / [hh] are the touch area; the cap itself (shaded while held) is [capR]
  * for a circle (0: three quarters of [r]), [hw] x [hh] for a rect, and arms [arm] each way across for the d-pad (0: a
  * third of [r]). In a layout built from pieces, [anchor], [inward] and [level] place it like its piece (else it is where its slice
  * lands). [label]: a word the app writes under it (the skin's picture has none there), its cap height [labelH] centred

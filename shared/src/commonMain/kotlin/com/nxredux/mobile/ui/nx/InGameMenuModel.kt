@@ -355,7 +355,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             refreshFrontendPages()
         }
 
-    /** The 3DS layout rows the pad skin ignores here (N3dsOptions.lockedLayoutRows, host-set): shown unavailable (user). */
+    /** The 3DS layout rows the pad skin ignores here (N3dsOptions.lockedLayoutRows, host-set): shown unavailable. */
     var layoutLocked: Set<String> = emptySet()
         set(value) {
             if (value == field) return
@@ -1118,7 +1118,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     )
 
     /**
-     * None: the skin's touch strip holds the shortcuts (user), Reset is a root row and the Disc row swaps discs. The
+     * None: the skin's touch strip holds the shortcuts, Reset is a root row and the Disc row swaps discs. The
      * second-screen panel keeps its own tiles ([GamePanelModel.shortcuts]).
      */
     private fun panelShortcuts(): List<ShortcutState> = emptyList()
@@ -1556,7 +1556,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             if (discCount > 1) add(MenuRow.Option(DISC_LABEL, DISC_KEY, "${discIndex + 1}/$discCount", choices = (1..discCount).map { "Disc $it" }, index = discIndex, detail = DISC_INFO))
             add(MenuRow.Slot("Save", SlotAction.SAVE))
             add(MenuRow.Slot("Load", SlotAction.LOAD))
-            add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage]); the panel's Reset tile before (user)
+            add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage]); the panel's Reset tile before
             add(MenuRow.Submenu("Options", PageKind.Options))
             add(MenuRow.Action("Quit", MenuAction.QUIT))
         },
@@ -1582,7 +1582,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun groupPage(group: OptionGroup) = MenuPage(
         PageKind.Settings(group), group.label,
         settingRows().filter { OptionGroup.of(it.key) == group }.map(::frontendRow) +
-            // Controls ends with Adjust buttons (user), only while the pad skin's buttons are drawn (a controller draws none)
+            // Controls ends with Adjust buttons, only while the pad skin's buttons are drawn (a controller draws none)
             (if (group == OptionGroup.CONTROLS && adjustable()) listOf(MenuRow.Action(ADJUST_BUTTONS_LABEL, MenuAction.ADJUST_BUTTONS)) else emptyList()),
     )
 

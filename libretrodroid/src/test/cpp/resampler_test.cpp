@@ -26,7 +26,7 @@ int main() {
     LinearResampler linear;
     SincResampler sinc(8);
 
-    // Speed 0: no input frames. Must not touch source (nullptr here; source[-2] before the fix) and must output silence.
+    // Speed 0: no input frames. Must not touch source (nullptr here) and must output silence.
     std::vector<int16_t> sink(200, 77);
     linear.resample(nullptr, 0, sink.data(), 100);
     check(allEqual(sink, 0), "linear: no input gives silence");

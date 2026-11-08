@@ -358,7 +358,7 @@ class ScrapeEngineTest {
         assertTrue(rig.hasher.asked.isEmpty() && rig.hasher.askedInZip.isEmpty())
     }
 
-    // An arcade set's zip is the game itself (several ROMs, and possibly a BIOS): hashed whole, as before.
+    // An arcade set's zip is the game itself (several ROMs, and possibly a BIOS): hashed whole.
     @Test fun anArcadeZipIsHashedWhole() = runTest {
         for ((file, tag) in listOf("mslug.zip" to "FBN", "mslug6.zip" to "DC")) {
             val rig = Rig(this)

@@ -16,8 +16,8 @@ sealed interface KeyVerdict {
 
 /**
  * The game's shortcut bindings over raw key codes (as press-to-bind captured them). A key that triggers a binding, alone
- * or with MENU held, fires it and never reaches the core, its release included, even when MENU let go first (L22:
- * MENU+Y must not also zoom the N64 camera). MENU is the only combo modifier ([ShortcutBinding.MODIFIERS]); SELECT is
+ * or with MENU held, fires it and never reaches the core, its release included, even when MENU let go first
+ * (MENU+Y must not also zoom the N64 camera). MENU is the only combo modifier ([ShortcutBinding.MODIFIERS]); SELECT is
  * the game's. MENU still opens the menu, except that with a MENU combo bound ([holdsMenu]) MENU waits for its release
  * and opens the menu only on a tap: released within [MENU_TAP_MS] ([now]) with no combo fired while it was held. Built-in
  * hotkeys never match: [EffectiveShortcuts.bindings] leaves them out ([EffectiveShortcuts.blocked]), and a key bound

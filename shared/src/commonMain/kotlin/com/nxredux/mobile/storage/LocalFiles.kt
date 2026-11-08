@@ -3,7 +3,6 @@ package com.nxredux.mobile.storage
 /** A mounted storage volume for the list-style picker: [name] as Android names it ("Internal storage"), [path] its root. */
 data class LocalVolume(val name: String, val path: String, val primary: Boolean = false)   // primary: the phone's own storage
 
-/** One entry of a local folder. */
 data class LocalEntry(val name: String, val isDir: Boolean)
 
 /** Local folders by absolute path, for the list-style picker and the SAF → file conversion ([com.nxredux.mobile.settings.SourceConversion]). Never throws. */

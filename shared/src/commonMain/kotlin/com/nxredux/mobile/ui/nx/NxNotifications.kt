@@ -95,7 +95,7 @@ fun NxNotifications(
     val toastsContent: @Composable () -> Unit = {
         toasts.forEach { toast ->
             if (toast.action != null) {
-                // a toast with buttons (the layout tip, user): its words wrapping, Close and its button on a row under them
+                // a toast with buttons (the layout tip): its words wrapping, Close and its button on a row under them
                 Column(Modifier.background(colors.scrimNotice, NotificationShape).then(padding)) {
                     Text(toast.text, color = colors.listText, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = text)
                     Spacer(Modifier.height(6.dp))

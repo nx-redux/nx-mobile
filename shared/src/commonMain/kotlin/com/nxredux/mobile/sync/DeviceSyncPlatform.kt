@@ -69,7 +69,7 @@ interface DeviceSyncPlatform {
      * `Saves/<T>/` for each `T` in [staged].
      */
     suspend fun runClientStep(step: SyncStep, peerIp: String, onLine: (String) -> Unit, staged: List<String>? = null): Int
-    /** Every file below this phone's private `Saves/` (relative paths, ms times). */
+    /** Every file below this phone's data root's `Saves/` (relative paths, ms times). */
     suspend fun listHomeSaves(): List<SaveFile>
     /** Settings → Default emulators (console id → tag), read once per sync. */
     fun defaultTags(): Map<String, String>
@@ -86,7 +86,7 @@ interface DeviceSyncPlatform {
     /** Every file in the receive staging tree (after step 4). */
     suspend fun listReceivedSaves(): List<SaveFile>
     /**
-     * Applies [plan] to the private `Saves/`: every write first (a battery save decoded, then encoded as the Save format
+     * Applies [plan] to the data root's `Saves/`: every write first (a battery save decoded, then encoded as the Save format
      * asks; times kept), then the removes, never those of a game whose write failed. False when anything failed.
      */
     suspend fun applySaveFold(plan: FoldPlan): Boolean

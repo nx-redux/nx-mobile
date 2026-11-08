@@ -82,7 +82,7 @@ class PadProfileTest {
     }
 
     @Test fun dreamcast_letters_unchanged() {
-        // The pad's bottom button is NxButton.B, right A, left Y, top X (the old FaceLabels.DREAMCAST).
+        // The pad's bottom button is NxButton.B, right A, left Y, top X.
         assertEquals("A", PadProfile.DREAMCAST.label(NxButton.B))
         assertEquals("B", PadProfile.DREAMCAST.label(NxButton.A))
         assertEquals("X", PadProfile.DREAMCAST.label(NxButton.Y))

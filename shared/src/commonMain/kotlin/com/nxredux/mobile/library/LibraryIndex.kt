@@ -15,8 +15,8 @@ import kotlinx.serialization.Serializable
  * ids of extras that were on unmounted storage at scan time: they are in [extras] (the index still fits the settings)
  * but none of their games are, and a start that finds one mounted again scans. [lateMount] is the subset whose volume
  * was mounted yet still did not list (the provider can lag the mount): kept for one more scan, then dropped.
- * [scannedAt]: when the scan that built it finished (epoch ms), for Settings -> Library; null when unknown (an index from
- * before the field, or a platform with no clock). Not part of the fit, so no version bump.
+ * [scannedAt]: when the scan that built it finished (epoch ms), for Settings -> Library; null on a platform with no
+ * clock. Not part of the fit.
  */
 @Serializable
 data class LibraryIndex(
@@ -37,10 +37,7 @@ data class LibraryIndex(
         /**
          * The stored format's version: an index of any other version decodes as null and the library is scanned again
          * ([LibraryIndexCodec]). It goes up when an older index would show the library wrongly, not for a field that
-         * defaults and fills on the next scan ([scannedAt], [IndexedGame.firstSeen]). An index without
-         * [IndexedGame.hiddenCopies] would list the extra copies the scan hides; one without `wheel` and `mix` would hide
-         * an extra folder's own handheld art from the scraper (which reads only the home mirror on disk), so it would
-         * write a second copy in `Roms/.sources/`. 12: `grid` and `hero` are gone (no longer read), `heroShot` added.
+         * defaults and fills on the next scan ([scannedAt], [IndexedGame.firstSeen]).
          */
         const val VERSION = 12
     }
@@ -106,8 +103,7 @@ data class IndexedGame(
     val subtitle: String? = null,
     /**
      * When the library first listed this game (epoch ms), for Home's New shelf: the previous index's date
-     * for the same (source, dir, file), else the file's date, else the scan's time ([withFirstSeen]). Null in an index
-     * from before the field (no version bump: it defaults) or with no clock.
+     * for the same (source, dir, file), else the file's date, else the scan's time ([withFirstSeen]). Null with no clock.
      */
     val firstSeen: Long? = null,
     /**
@@ -154,8 +150,8 @@ fun LibraryIndex.toSystems(hidden: Set<String> = emptySet()): List<SystemFolder>
 /**
  * This index with each game's [IndexedGame.firstSeen] settled after a scan: the date [previous] held for the same
  * (source, dir, file); for a game [previous] lacks, [now] (a copy keeps its file's old date, so a game just copied in
- * would never be New); else the scan's own (the file's date: the first scan, with no [previous], and a game an
- * undated index from before the field lists), else [now]. [now] null (no clock) leaves a missing one null.
+ * would never be New); else the scan's own (the file's date: the first scan, with no [previous], and a game [previous]
+ * lists undated), else [now]. [now] null (no clock) leaves a missing one null.
  */
 fun LibraryIndex.withFirstSeen(previous: LibraryIndex?, now: Long?): LibraryIndex {
     val known = HashMap<Triple<String, String, String>, Long?>()

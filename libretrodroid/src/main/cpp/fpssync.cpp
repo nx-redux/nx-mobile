@@ -25,8 +25,8 @@ unsigned FPSSync::advanceFrames() {
     return advanceFrames(std::chrono::steady_clock::now());
 }
 
-// nx-mobile 2026-11-03: a step that ends a frame or two late shows its frame late instead of running two frames at
-// once (upstream caught up at one frame late, skipping a frame and showing the other for 33 ms: SMG2's stutters on the
+// A step that ends a frame or two late shows its frame late instead of running two frames at
+// once (catching up at one frame late skips a frame and shows the other for 33 ms: SMG2's stutters on the
 // Nova). The clock stays behind, so the next steps skip their sleep until they catch up. Only past MAX_LAG_FRAMES (a
 // device that cannot keep up) does a step run two frames back to back to hold the game's speed.
 unsigned FPSSync::advanceFrames(TimePoint now) {
@@ -75,9 +75,9 @@ void FPSSync::reset() {
     lastFrame = MIN_TIME;
 }
 
-// nx-mobile 2026-10-31: vsync runs one core frame per screen refresh, so the core's audio comes screen / content times
-// faster than its sample rate. Upstream had it inverted (content / screen), which on a 60 Hz screen asked the FIFO for
-// about 0.9% less than a 59.73 fps GBA wrote: it overfilled and dropped frames until the PI integral caught up.
+// Vsync runs one core frame per screen refresh, so the core's audio comes screen / content times
+// faster than its sample rate. Inverted (content / screen), a 60 Hz screen would ask the FIFO for about 0.9% less
+// than a 59.73 fps GBA writes: it overfills and drops frames until the PI integral catches up.
 double FPSSync::getTimeStretchFactor() {
     return useVSync ? screenRefreshRate / contentRefreshRate : 1.0;
 }

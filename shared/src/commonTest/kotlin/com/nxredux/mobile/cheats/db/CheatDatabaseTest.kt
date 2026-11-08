@@ -27,7 +27,7 @@ class CheatDatabaseTest {
     @Test fun folders_for_the_registry_tags_only() {
         val folders = CheatDatabase.foldersFor(CoreRegistry.cheatTags)
         // Table order, route targets included (BS, PCECD); GPGX routes to the Sega folders. DC, A7800, LYNX, COLECO and
-        // FBN cores ignore codes but take the RAM patches their files hold (nx-redux #261); the cores of VB, A2600, A5200
+        // FBN cores ignore codes but take the RAM patches their files hold; the cores of VB, A2600, A5200
         // (no system RAM), NGP, NGPC, PKM, P8 and 3DS ignore cheats.
         assertEquals(
             listOf("FC", "FDS", "GB", "SGB", "GBC", "GBA", "SFC", "BS", "N64", "NDS", "SMS", "GG", "MD",

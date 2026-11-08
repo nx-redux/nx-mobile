@@ -154,7 +154,7 @@ public:
     std::vector<std::vector<struct Controller>> getControllers();
     void setControllerType(unsigned int port, unsigned int type);
 
-    // nx-mobile (Wii): GL thread (queued), like the other input setters.
+    // Wii: GL thread (queued), like the other input setters.
     void setStickyPointer(unsigned int port, bool sticky);
     void setPointerVelocity(unsigned int port, float vx, float vy);
 
@@ -168,31 +168,31 @@ public:
     // The next create() offers the core Vulkan (bridged into the GLES presentation). Set before create().
     void setPreferVulkan(bool value) { preferVulkan = value; }
     void setVulkanSwapchainFrames(bool value) { vulkanSwapchainFrames = value; }
-    // nx-mobile: offer video views to the next core loaded (GET_VIDEO_VIEWS_STATUS answers PRESENTS).
+    // Offer video views to the next core loaded (GET_VIDEO_VIEWS_STATUS answers PRESENTS).
     void setVideoViewsEnabled(bool value) { videoViewsEnabled = value; }
     // The core's last accepted view map (empty: none), any thread. A change also raises takeGameGeometryChanged().
     std::vector<VideoView> getVideoViews();
     void handleRumbleUpdates(const std::function<void(int, float, float)> &handler);
 
     void setFrameSpeed(unsigned int speed);
-    // nx-mobile 2026-11-03: Frame Skip (Auto true, Off false): see FPSSync::frameSkip. Any thread, live.
+    // Frame Skip (Auto true, Off false): see FPSSync::frameSkip. Any thread, live.
     void setFrameSkip(bool skip) { FPSSync::frameSkip = skip; }
     // Frame Skip Off: the game's achieved speed, which the audio plays at (SlowdownMeter). GL thread.
     SlowdownMeter slowdownMeter;
 
-    // nx-mobile 2026-11-03: the display's presentation deadline (how early a frame must be queued to show at a refresh);
+    // The display's presentation deadline (how early a frame must be queued to show at a refresh);
     // a sleep-timer frame is stamped to show at its deadline + this + 1.5 ms. 0 = unknown: one frame. Any thread.
     void setPresentationDeadline(int64_t nanos) { presentationLeadMicros = nanos > 0 ? nanos / 1000 + 1500 : 0; }
 
-    // nx-mobile 2026-10-24: fast forward up to maxSpeed × the content's rate (0 = off), with or without its audio.
+    // Fast forward up to maxSpeed × the content's rate (0 = off), with or without its audio.
     // Separate from frameSpeed, which stays pause (0) / run (1): a pause and resume never drop FF. Not applied in
     // netplay or a GBA link session. Any thread; step() picks it up.
     void setFastForward(unsigned maxSpeed, bool audible);
 
-    // nx-mobile 2026-10-30: the Audio Resampling Quality row, 0 Low to 3 Max (Audio::Quality). Any thread; step()
+    // The Audio Resampling Quality row, 0 Low to 3 Max (Audio::Quality). Any thread; step()
     // hands it to the audio, as afterGameLoad does a new one.
     void setResamplingQuality(int quality) { resamplingQuality.store(quality); }
-    // nx-mobile 2026-11-04: Audio Buffer (ms kept ready, 0 default), read when the game's audio starts; Fill Audio Gaps
+    // Audio Buffer (ms kept ready, 0 default), read when the game's audio starts; Fill Audio Gaps
     // (FILL_GAPS_*), live. Any thread.
     void setAudioBufferMs(int ms) { audioBufferMs.store(ms); }
     void setFillAudioGaps(int mode) { fillAudioGaps.store(mode); }
@@ -200,7 +200,7 @@ public:
     static constexpr int FILL_GAPS_ON = 1;
     static constexpr int FILL_GAPS_OFF = 2;
 
-    // nx-mobile 2026-10-24: rewind. Enabled, step() snapshots the game after each frame (once the core can serialize);
+    // Rewind. Enabled, step() snapshots the game after each frame (once the core can serialize);
     // rewinding, it steps back through those snapshots instead of playing, one per capture interval, and wins over
     // fast forward. Rewind audio off mutes the rewound frames. Never in netplay or a GBA link session. Any thread;
     // step() picks them up.
@@ -246,7 +246,7 @@ public:
     // Regions of the core frame drawn at places in the view (empty = one picture). Remembered, like the viewport, so a
     // Video created later (a new surface) gets them. GL thread.
     void setScreenRegions(std::vector<ScreenRegion> regions);
-    // nx-mobile: the frame composed from the core's (Video::setComposition); width 0 clears it. Remembered like the regions. GL thread.
+    // The frame composed from the core's (Video::setComposition); width 0 clears it. Remembered like the regions. GL thread.
     void setComposition(int width, int height, std::vector<ScreenRegion> parts);
 
     // Regions drawn on a second surface (dst 0..1 of that whole surface). Remembered like setScreenRegions. GL thread.
@@ -255,7 +255,7 @@ public:
     // Draws the last frame's secondary regions into the current default framebuffer, width x height, after step().
     // Never runs the core; errors are logged, never thrown (the second screen must not end the game). GL thread.
     void renderSecondary(unsigned width, unsigned height);
-    // nx-mobile 2026-11-03: the second surface drawn from inside the core's frame (hw cores): the view's hook runs right
+    // The second surface drawn from inside the core's frame (hw cores): the view's hook runs right
     // after the main draw in handleVideoRefresh, while the frame is whole and the step holds the core lock, so no lock.
     void renderSecondaryInFrame(unsigned width, unsigned height);
     // Set by the step's JNI call for its duration: runs after a hw core's frame is drawn (the view draws its second
@@ -264,7 +264,7 @@ public:
     // A hw core draws inside its video callback: its framebuffer is only whole then (Dolphin's dual core starts the next
     // frame before retro_run returns), so nothing may sample it after the step. False before a game.
     bool rendersInVideoCallback() { return video && video->rendersInVideoCallback(); }
-    // nx-mobile 2026-11-03: the last step's frame deadline on the sleep timer (CLOCK_MONOTONIC ns), 0 under vsync pacing,
+    // The last step's frame deadline on the sleep timer (CLOCK_MONOTONIC ns), 0 under vsync pacing,
     // fast forward or a step that ran no frame: the second surface stamps its frame from it. GL thread.
     int64_t getFrameDeadlineNanos() const { return frameDeadlineNanos; }
 
@@ -403,9 +403,9 @@ private:
     std::atomic<int> audioBufferMs { 0 };
     std::atomic<int> fillAudioGaps { FILL_GAPS_AUTO };
     FastForwardPacer fastForwardPacer;
-    HitchProbe hitchProbe;   // nx-mobile diag: GL thread
+    HitchProbe hitchProbe;   // diag: GL thread
     std::atomic<bool> hitchResetPending { false };   // resume() (UI thread) asks step() to restart it
-    // nx-mobile 2026-11-03 (ADPF): the threads before the game loaded, so the session can name the core's own; GL thread.
+    // ADPF: the threads before the game loaded, so the session can name the core's own; GL thread.
     std::vector<int> threadsBeforeLoad;
     PerfHint perfHint;
     std::atomic<long> presentationLeadMicros { 0 };

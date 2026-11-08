@@ -1346,7 +1346,6 @@ class DeviceSyncControllerTest {
         assertEquals(DeviceSyncPage.Done(SyncLink.WIFI, received = 0, sent = 0, notes = listOf(DeviceSyncText.BIOS_PEER_PHONE)), c.page.value)
     }
 
-    /** BIOS notes come before the ROM notes. */
     @Test fun bios_notes_come_before_rom_notes() = runTest {
         val p = FakeSyncPlatform().withBios().apply { remoteBios = 5 to listOf("@ERROR: Unknown module 'bios'") }
         val c = romClient(p)

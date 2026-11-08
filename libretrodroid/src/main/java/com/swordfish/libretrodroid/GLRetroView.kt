@@ -89,7 +89,7 @@ class GLRetroView(
      * re-applied after create().
      */
     /**
-     * nx-mobile 2026-11-03: Frame Skip: true (Auto) runs two frames in a step when the phone can't keep up, holding the
+     * Frame Skip: true (Auto) runs two frames in a step when the phone can't keep up, holding the
      * game's speed; false shows every frame and lets the game slow down. Applied live.
      */
     var frameSkip: Boolean = true
@@ -209,7 +209,7 @@ class GLRetroView(
     }
 
     /**
-     * nx-mobile: something opaque fills this view (the dual-screen panel with the picture on the second display), so it
+     * Something opaque fills this view (the dual-screen panel with the picture on the second display), so it
      * draws black instead of a picture nobody sees. The second display's picture is drawn apart and keeps going.
      */
     var mainCovered: Boolean by Delegates.observable(false) { _, old, value ->
@@ -224,7 +224,7 @@ class GLRetroView(
      * ([ScreenRegions.mapTouch]). Main thread; applied on the GL thread, and re-applied after create().
      */
     /**
-     * nx-mobile: a frame composed from the core's ([FrameComposition]) that replaces the core frame for every draw and for
+     * A frame composed from the core's ([FrameComposition]) that replaces the core frame for every draw and for
      * touch (mapped back through its parts); null = the core frame as it is. Re-applied after create().
      */
     var composition: FrameComposition? by Delegates.observable(null) { _, old, value ->
@@ -340,19 +340,19 @@ class GLRetroView(
     @Volatile
     private var emulationThreadGone = false
 
-    // nx-mobile: uptimeMillis when the GL thread entered the running step, 0 outside one. A core hung inside its frame
+    // UptimeMillis when the GL thread entered the running step, 0 outside one. A core hung inside its frame
     // never leaves it (and keeps the core's lock): see [stepStalledMillis].
     @Volatile
     private var stepStartedAt = 0L
 
-    /** nx-mobile: how long the GL thread has been inside the current step; 0 when it is not in one. Any thread. */
+    /** How long the GL thread has been inside the current step; 0 when it is not in one. Any thread. */
     fun stepStalledMillis(): Long {
         val t = stepStartedAt
         return if (t == 0L) 0L else SystemClock.uptimeMillis() - t
     }
 
     // Emitted with tryEmit from the GL thread every frame: no coroutine per frame, and a slow collector drops the oldest
-    // FrameRendered instead of piling up suspended emitters. Replays the last event to a new collector, as before.
+    // FrameRendered instead of piling up suspended emitters. Replays the last event to a new collector.
     private val retroGLEventsSubject = MutableSharedFlow<GLRetroEvents>(
         replay = 1,
         extraBufferCapacity = 16,
@@ -491,7 +491,7 @@ class GLRetroView(
 
     @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
     fun onDestroy() = catchExceptions {
-        LibretroNetplay.linkUnblock()   // nx-mobile: a held GBA link cable must not block the GL thread destroy waits on
+        LibretroNetplay.linkUnblock()   // a held GBA link cable must not block the GL thread destroy waits on
         destroyOnEmulationThread()
         lifecycle = null
     }
@@ -508,7 +508,7 @@ class GLRetroView(
      * retro_deinit run where the GL objects live (native makes the paused view's preserved context current) and no
      * queued GL-thread event uses the Video while it goes. The GL thread runs queued events while paused, and it
      * still exists at ON_DESTROY (the view detaches after). Falls back to this thread when it has exited, or after
-     * [DESTROY_TIMEOUT_SECONDS] if it is wedged (the old behaviour); the queued one then does nothing.
+     * [DESTROY_TIMEOUT_SECONDS] if it is wedged; the queued one then does nothing.
      */
     private fun destroyOnEmulationThread() {
         if (emulationThreadGone || Thread.currentThread().name.startsWith("GLThread")) {
@@ -841,7 +841,7 @@ class GLRetroView(
         @OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         private fun pause() = catchExceptions {
             isEmulationReady = false
-            LibretroNetplay.linkUnblock()   // nx-mobile: a held GBA link cable must not block the GL thread this pause waits on
+            LibretroNetplay.linkUnblock()   // a held GBA link cable must not block the GL thread this pause waits on
             onPause()
             LibretroDroid.pause()
         }
@@ -859,7 +859,7 @@ class GLRetroView(
                     shaderErrorPolled = true
                     reportShaderError()
                 }
-                // nx-mobile 2026-11-03: a hw core's frame went to the second surface from inside the frame
+                // A hw core's frame went to the second surface from inside the frame
                 // (onCoreFrameDrawn); afterwards its framebuffer may already hold the next frame's first draws (Dolphin's
                 // dual core: the background missing, flicker). The paused redraw draws it the same way (native step).
                 if (LibretroDroid.rendersInVideoCallback()) secondaryOutput.swapPending() else secondaryOutput.draw()

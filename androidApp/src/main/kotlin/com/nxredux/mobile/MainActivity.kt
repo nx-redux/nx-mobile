@@ -882,7 +882,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
 
     /**
      * Controls -> Shortcuts' press to bind: the raw key code goes to [AppState.captureKey] before [keyToButton], so a
-     * code no NxButton names (an extra paddle's BUTTON_1..16) binds, and MENU opens nothing while it waits (L23). An
+     * code no NxButton names (an extra paddle's BUTTON_1..16) binds, and MENU opens nothing while it waits. An
      * auto-repeat is dropped while it waits: the A held from starting it must not bind itself.
      */
     private fun captureKey(event: KeyEvent): Boolean {

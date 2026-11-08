@@ -148,7 +148,7 @@ class FrontendOptionsTest {
         assertEquals(0.6f, alpha("60"))
         assertEquals(0.4f, alpha("40"))
         assertEquals(0.25f, alpha("25"))
-        assertEquals(0.6f, alpha(null))   // the default (user: 60%)
+        assertEquals(0.6f, alpha(null))   // the default (60%)
         assertEquals(0.6f, alpha("50"))
         assertEquals(0.6f, alpha("abc"))
         assertEquals(0.6f, FrontendSettings().padLandscapeAlpha)

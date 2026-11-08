@@ -60,7 +60,7 @@ class MovedHeroes(private val host: ArtworkHost) {
 
 /**
  * The one-time move of a `.media` folder's old `grid/` files into `boxart2d/` and `hero/` files into `screenshot/`
- * (nothing reads `grid/` or `hero/` any more). A file moves only when its target folder has no file of its base name
+ * (nothing else reads `grid/` or `hero/`). A file moves only when its target folder has no file of its base name
  * (any of png, jpg, jpeg; for `boxart2d/`, nor in the legacy `box2d/`, whose cover would be hidden); the log entry
  * follows it. Where the target is taken, a logged file (the app's) is deleted and a hand-placed one stays where it is.
  * A hand-placed hero moved (home only) is listed in [heroes], unlogged, so it is still drawn as a hero and Reset keeps
@@ -146,8 +146,8 @@ class LegacyArtMove(
     companion object {
         /** App-private: the `.media` folders already moved. */
         const val MARKER_FILE = "art_moved.txt"
-        /** Each legacy folder and where its files go. */
         private const val HERO = "hero"
+        /** Each legacy folder and where its files go. */
         private val LEGACY = mapOf("grid" to "boxart2d", HERO to "screenshot")
         private val EXTS = listOf("png", "jpg", "jpeg")
 

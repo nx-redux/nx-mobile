@@ -81,7 +81,7 @@ class FilePickerControllerTest {
         assertEquals(listOf<ContentRef?>(null), h.results)
     }
 
-    // Two storages (a card): the storage list first, as before.
+    // Two storages (a card): the storage list first.
     @Test fun without_a_file_home_two_storages_start_at_the_storage_list() = runTest {
         val h = harness()
         h.open(FilePickMode.Home)
@@ -192,7 +192,7 @@ class FilePickerControllerTest {
         assertTrue(h.results.isEmpty())
     }
 
-    // Only folders (and the action rows) take the selection: UP and DOWN skip the files, wrapping as before.
+    // Only folders (and the action rows) take the selection: UP and DOWN skip the files, wrapping.
     @Test fun up_and_down_skip_the_files() = runTest {
         val h = harness()
         h.open(FilePickMode.Extra)

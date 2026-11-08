@@ -203,7 +203,7 @@ std::string AchievementsHash::hash(uint32_t consoleId, std::vector<std::pair<std
     DiscLibrary disc;   // loaded for this hash only: a Wii/GameCube console, and unloaded again on return
     if ((consoleId == 16 || consoleId == 19) && currentFiles[0].second >= 0 && disc.load()) {
         // The magic is read through the same reader, so a compressed image still tells GameCube from Wii. Without a
-        // disc magic (a WAD, an unreadable file) the plain fd reader hashes it, as it always has.
+        // disc magic (a WAD, an unreadable file) the plain fd reader hashes it.
         bool found = false;
         uint32_t console = discfile::consoleFor(currentFiles[0].second, consoleId, &found);
         if (found) {

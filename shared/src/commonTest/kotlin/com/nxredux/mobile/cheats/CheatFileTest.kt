@@ -36,7 +36,7 @@ class CheatFileTest {
     @Test fun count_line_can_come_anywhere_and_must_be_positive() {
         assertNull(CheatFile.parse(""))
         assertNull(CheatFile.parse("cheat0_desc = \"x\"\ncheat0_code = \"y\"\n"))
-        // RetroArch's cheat search writes the count last (nx-redux #261).
+        // RetroArch's cheat search writes the count last.
         assertEquals(listOf(Cheat("x", "y")), CheatFile.parse("cheat0_desc = \"x\"\ncheat0_code = \"y\"\ncheats = 1\n"))
         assertEquals(listOf(Cheat("x", "y")), CheatFile.parse("cheats_x = 9\ncheats = 1\ncheat0_desc = \"x\"\ncheat0_code = \"y\"\n"))
         assertNull(CheatFile.parse("cheats = 0\n"))
@@ -88,7 +88,7 @@ class CheatFileTest {
     }
 
     @Test fun a_cheat_without_a_desc_is_named_by_its_number() {
-        // 135 database files have one (Sonic 3 & Knuckles' cheat 59); the handheld names them too (nx-redux #262).
+        // 135 database files have one (Sonic 3 & Knuckles' cheat 59); the handheld names them too.
         val text = "cheats = 3\ncheat0_desc = \"\"\ncheat0_code = \"1\"\ncheat1_desc = \"b\"\ncheat1_code = \"2\"\ncheat2_code = \"3\"\n"
         assertEquals(listOf(Cheat("Cheat 1", "1"), Cheat("b", "2"), Cheat("Cheat 3", "3")), CheatFile.parse(text))
         val ram = "cheats = 1\ncheat0_handler = 1\ncheat0_value = 2\n"
@@ -109,7 +109,7 @@ class CheatFileTest {
     }
 
     @Test fun a_long_code_line_is_read_whole() {
-        // Database codes run to 15,000 chars (PSP); minarch's old 512-byte line buffer dropped them (nx-redux #260).
+        // Database codes run to 15,000 chars (PSP): no fixed-size line buffer may cut them.
         val code = "_L 0x20000000 0x00000000 ".repeat(600).trim()
         val text = "cheats = 1\ncheat0_desc = \"d\"\ncheat0_code = \"$code\"\n"
         assertEquals(listOf(Cheat("d", code)), CheatFile.parse(text))
@@ -125,7 +125,7 @@ class CheatFileTest {
         assertEquals(listOf(Cheat("d", "c")), CheatFile.parse(text))
     }
 
-    // RetroArch "handler 1" cheats (nx-redux #261): a RAM patch the frontend applies, no code. The FBNeo shape: quoted
+    // RetroArch "handler 1" cheats: a RAM patch the frontend applies, no code. The FBNeo shape: quoted
     // numbers, the count line last.
     private val ramCheats = """
         cheat0_desc = "Inf energy P1"

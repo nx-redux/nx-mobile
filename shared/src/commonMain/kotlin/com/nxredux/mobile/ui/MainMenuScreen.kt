@@ -86,7 +86,7 @@ import com.nxredux.mobile.ui.nx.nxHintLabelSize
 
 /**
  * The main menu: the tab row and the current tab in its [style]. The selection-dependent inputs ([selectedIndex],
- * [info], [canResume], [tileInfo]) are lambdas read only where they show (the row or list, the caption, the hints, the
+ * [info], [canNetplay], [tileInfo]) are lambdas read only where they show (the row or list, the caption, the hints, the
  * info band, the tab row's over-art look), so a selection change recomposes those and not the whole screen.
  */
 @Composable

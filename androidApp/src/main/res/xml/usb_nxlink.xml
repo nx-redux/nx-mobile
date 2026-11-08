@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- USB Cable netplay (spec 2b.2): an NX Redux handheld's nxlink interface on any VID/PID, and a phone that switched
+<!-- USB Cable netplay: an NX Redux handheld's nxlink interface on any VID/PID, and a phone that switched
      into Android Open Accessory mode for us (Google 0x18D1:0x2D00 / 0x2D01). -->
 <resources>
     <usb-device class="255" subclass="78" protocol="1" />

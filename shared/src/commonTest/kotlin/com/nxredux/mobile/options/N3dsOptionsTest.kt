@@ -50,7 +50,7 @@ class N3dsOptionsTest {
     @Test fun old_default_untouched_reads_no_pick() {
         val old = v("nx_3ds_layout_portrait" to "default", "nx_3ds_layout_portrait_controller" to "default", "nx_3ds_layout_landscape" to "default")
         for (key in N3dsOptions.NO_PICK_KEYS) assertNull(N3dsOptions.layoutValue(old, key))
-        assertEquals("single_screen", N3dsOptions.appLayoutFor(old, true, false, phone))   // a regular phone's landscape default (user)
+        assertEquals("single_screen", N3dsOptions.appLayoutFor(old, true, false, phone))   // a regular phone's landscape default
         assertEquals("large", N3dsOptions.appLayoutFor(old, true, false, fold))
         // The frontend config read leaves the unpicked keys out and keeps the picks, as for the DS.
         val cfg = FrontendOptions.fromConfig(v("nx_3ds_layout_portrait" to "default", "nx_3ds_layout_landscape" to "side_by_side"), "3DS")
@@ -201,7 +201,7 @@ class N3dsOptionsTest {
         assertEquals((1..3).map { it.toString() }, scale.values)
     }
 
-    // Under a pad skin the player's layout shows on a regular phone in landscape only (user): the Fold, a tablet and
+    // Under a pad skin the player's layout shows on a regular phone in landscape only: the Fold, a tablet and
     // portrait keep the skin's own top over touch screen.
     @Test fun aSkinTakesThePlayersLayoutOnARegularPhoneInLandscape() {
         assertEquals("single_screen", N3dsOptions.skinLayout(emptyMap(), landscape = true, controllerMode = false, screen = phone))   // the phone's default
@@ -211,7 +211,7 @@ class N3dsOptionsTest {
         assertEquals(null, N3dsOptions.skinLayout(emptyMap(), landscape = false, controllerMode = false, screen = phone))
     }
 
-    // A layout row the pad skin ignores is locked (user: the Display page greys it): portrait's under any skin (its top and
+    // A layout row the pad skin ignores is locked (the Display page greys it): portrait's under any skin (its top and
     // touch screen pieces), landscape's on the Fold or a tablet (the skin's own top over touch); none without a skin.
     @Test fun theRowsAPadSkinIgnoresAreLocked() {
         assertEquals(setOf(N3dsOptions.LAYOUT_PORTRAIT), N3dsOptions.lockedLayoutRows(skinOn = true, screen = phone))

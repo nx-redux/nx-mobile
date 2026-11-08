@@ -56,7 +56,7 @@ class AppStateHomeTest {
         override var useExtractedFileName = false
         override var padSkin: Boolean = true
         override var padTheme: PadTheme = PadTheme.DEFAULT
-        // Pinned to List, the default before Carousel: the walks below step Consoles, Collections and Tools as lists. The
+        // Pinned to List: the walks below step Consoles, Collections and Tools as lists. The
         // real defaults (a missing tab is its MenuStyles.defaultStyleOf) are tested with menuStyles = emptyMap() (AppStateTest).
         override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap()
         override var gameListStyle: MenuStyle = MenuStyle.LIST
@@ -162,7 +162,7 @@ class AppStateHomeTest {
             val st = state(settings, gone, homes = null)
             st.load()
             advanceTimeBy(LibraryScanner.REMOUNT_RETRY_MILLIS + 1); runCurrent()   // the one remount retry
-            if (FileRefs.isFile(home)) assertEquals(home, settings.treeRef) else assertNull(settings.treeRef)   // a SAF home: cleared, as before
+            if (FileRefs.isFile(home)) assertEquals(home, settings.treeRef) else assertNull(settings.treeRef)   // a SAF home: cleared
         }
     }
 

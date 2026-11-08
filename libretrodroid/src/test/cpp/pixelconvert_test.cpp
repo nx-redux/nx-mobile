@@ -36,8 +36,8 @@ int main() {
     convert0RGB1555ToRGB565(source16, 2, 2, 3 * sizeof(uint16_t), out16);
     check(out16[0] == expected, "1555 is idempotent on the source");
 
-    // XRGB8888 (B, G, R, X in memory) -> R, G, B, X; 3x1 frame with one pixel of padding. The last pixel is swapped
-    // too (the old in-place loop stopped one pixel short).
+    // XRGB8888 (B, G, R, X in memory) -> R, G, B, X; 3x1 frame with one pixel of padding.
+    // The last pixel is swapped too.
     const uint8_t source32[] = {
         1, 2, 3, 4,   5, 6, 7, 8,   9, 10, 11, 12,   0xEE, 0xEE, 0xEE, 0xEE,
     };

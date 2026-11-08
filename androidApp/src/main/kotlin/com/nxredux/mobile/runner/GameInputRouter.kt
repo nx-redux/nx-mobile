@@ -274,7 +274,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private var n3dsHwRight = 0f to 0f          // the hardware right stick as last read
     var n3dsPadRight = 0f to 0f         // the on-screen C-stick as last moved (New 3DS controls)
     private var n3dsSentRight = 0f to 0f        // the right stick as last sent to the core
-    val n3dsStylusOn = mutableStateOf(false)   // stylus mode, as the pad's STYLUS pill shows it
+    val n3dsStylusOn = mutableStateOf(false)   // stylus mode
     val ndsStylusOn = mutableStateOf(false)    // the DS's, likewise
     private var n3dsTickJob: Job? = null        // ticks the hotkeys while they ask ([N3dsHotkeys.ticking])
 
@@ -284,19 +284,19 @@ internal class GameInputRouter(private val host: GameInputHost) {
      */
     private val coreHasStick: Boolean get() = gameCoreId in STICK_CORES   // netplay too: sticks are synced
 
-    /** The DS STYLUS pill: L2's stylus toggle. */
+    /** The DS's stylus toggle, as L2's. */
     fun toggleNdsStylus() {
         applyNdsAction(ndsHotkeys.toggleStylus())
         syncPen()
     }
 
-    /** The STYLUS pill: SELECT + L1's stylus toggle. */
+    /** The 3DS's stylus toggle, as SELECT + L1's. */
     fun toggleN3dsStylus() {
         applyN3dsAction(n3dsHotkeys.toggleStylus())
         syncN3dsCursor()
     }
 
-    /** The SWAP pill: Azahar's swap-screens key (L3), held as long as the pill; split, it swaps the displays on press. */
+    /** The skin's SWAP: Azahar's swap-screens key (L3), held as long as the cap; split, it swaps the displays on press. */
     fun onN3dsSwap(down: Boolean) {
         if (onN3dsSwapPressed(down)) return
         retroView?.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_THUMBL)
@@ -309,7 +309,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private val gcGestures = mapOf(NxButton.L2 to TriggerGesture(), NxButton.R2 to TriggerGesture())
     private val gcStates = mutableMapOf(NxButton.L2 to TriggerGesture.State.OFF, NxButton.R2 to TriggerGesture.State.OFF)
     private val gcHoldTimers = mutableMapOf<NxButton, Job>()
-    /** The soft-pressed sides, which the pad draws lit. */
+    /** The GameCube triggers latched at a soft press. */
     val gcLatched = mutableStateOf(emptySet<NxButton>())
 
     /** An on-screen L or R ([btn]) touch: a tap latches a soft press, holding presses it fully while held. */
@@ -535,7 +535,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private fun sendN3dsKeys() {
         val view = retroView
         for (e in n3dsHotkeys.takeKeys()) {
-            if (e.key == N3dsKey.L3 && onN3dsSwapPressed(e.down)) continue   // split: SELECT + R swaps the displays, as the pill does
+            if (e.key == N3dsKey.L3 && onN3dsSwapPressed(e.down)) continue   // split: SELECT + R swaps the displays, as the skin's SWAP does
             val code = when (e.key) {
                 N3dsKey.L3 -> KeyEvent.KEYCODE_BUTTON_THUMBL
                 N3dsKey.R3 -> KeyEvent.KEYCODE_BUTTON_THUMBR
@@ -1069,7 +1069,6 @@ private val RELEASED_BUTTONS = listOf(
  */
 private val RELEASED_THUMB_KEYS = listOf(KeyEvent.KEYCODE_BUTTON_THUMBL, KeyEvent.KEYCODE_BUTTON_THUMBR)
 
-/** Where a physical stick click goes ([thumbKeyRoute]). */
 /** The 3DS SWAP key's downs: a held key's repeats go where its first down went, never read as a release. */
 internal class N3dsSwapKey {
     private var claimed = false
@@ -1079,6 +1078,7 @@ internal class N3dsSwapKey {
     }
 }
 
+/** Where a physical stick click goes ([thumbKeyRoute]). */
 internal enum class ThumbKeyRoute { WII_RECENTER, WII_HOME, N3DS_SWAP, CORE }
 
 /**

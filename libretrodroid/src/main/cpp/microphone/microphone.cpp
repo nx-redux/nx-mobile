@@ -125,7 +125,7 @@ int Microphone::read(int16_t* samples, int numSamples) {
         std::lock_guard<std::mutex> l(lock);
         fifoBuffer->setReadCounter(fifoBuffer->getWriteCounter());
     }
-    // Opened here, on the core's thread, as libretro mics always were; a failure falls back to noise.
+    // Opened here, on the core's thread; a failure falls back to noise.
     if (feed.wantsLive() && !inputStream && !openStream()) feed.onLiveFailed();
 
     if (feed.wantsLive() && inputStream) {

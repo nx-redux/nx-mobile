@@ -329,7 +329,7 @@ internal class DualScreenController(
     }
 
     /**
-     * 3DS SWAP (the pill, SELECT + R, a pad's left-stick click) [down] or up: split, a press swaps the displays and the core
+     * 3DS SWAP (the skin's SWAP, SELECT + R, a pad's left-stick click) [down] or up: split, a press swaps the displays and the core
      * never sees it (Azahar's own swap would turn its frame under the fixed cuts). False when not split: Azahar's key.
      */
     fun onN3dsSwapPressed(down: Boolean): Boolean {
@@ -398,9 +398,8 @@ internal class DualScreenController(
     /**
      * Which display is the picture screen for [display]: the game's window as landscape (it is locked so while dual)
      * against the display's real size as it is turned now, unless a bottom screen is chosen (the console's Bottom screen,
-     * else Settings → Second screen's).
+     * else Settings → Second screen's). [mode]: the mode being set, not the last one (under a skin it decides Auto).
      */
-    /** Where the picture goes in [mode] (the mode being set, not the last one: under a skin it decides Auto). */
     private fun pictureOnNow(display: Display, mode: DualMode = dualMode): PictureOn {
         val root = findViewById<View>(R.id.root)
         val dm = resources.displayMetrics

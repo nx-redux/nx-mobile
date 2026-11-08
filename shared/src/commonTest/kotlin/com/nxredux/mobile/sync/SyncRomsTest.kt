@@ -328,7 +328,7 @@ class SyncRomsTest {
             assertTrue(RomRun(SyncStep.SEND_ROMS, gbaFolder, RomEnd.Home("$gbaFolder/.retroachievements"),
                 RomEnd.Peer("roms", "${p.remote}/.retroachievements"), excludes = listOf("/hashes.json"), ignoreExisting = true, pair = p.key) in runs)
         }
-        // Pushes are as before: each game to its own emulator folder only.
+        // Pushes are unchanged: each game to its own emulator folder only.
         val before = SyncRoms.plan(mapped, ExtrasManifest(), ExtrasManifest(), mappedHome, lower, gameTags = mappedTags, mapped = true)
         assertEquals(before.filter { it.step == SyncStep.SEND_ROMS }, runs.filter { it.step == SyncStep.SEND_ROMS })
     }

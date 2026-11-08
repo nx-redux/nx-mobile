@@ -35,8 +35,7 @@ class BackdropShadeTest {
     }
 
     @Test fun hasNoKink() {
-        // The slope never jumps by more than 1 from one stop to the next, 2% apart (the old six linear stops turned from 2.1 to
-        // 0.44 at 82%, and from -2.75 to 0.65 at 32%).
+        // The slope never jumps by more than 1 from one stop to the next, 2% apart.
         val slopes = BACKDROP_SHADE.zipWithNext { a, b -> (b.second - a.second) / (b.first - a.first) }
         slopes.zipWithNext { a, b -> assertTrue(abs(b - a) <= 1f, "kink: $a to $b in $slopes") }
     }

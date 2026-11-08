@@ -551,7 +551,7 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setMemoryC
     jclass obj,
     jintArray fields
 ) {
-    // nx-mobile: 9 ints per patch, in CheatMemPatch order from address (MemoryPatch.packed()).
+    // 9 ints per patch, in CheatMemPatch order from address (MemoryPatch.packed()).
     constexpr jsize PER_PATCH = 9;
     try {
         jsize n = fields ? env->GetArrayLength(fields) : 0;
@@ -965,7 +965,7 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_step(
     jobject glRetroView
 ) {
     try {
-        // nx-mobile 2026-11-03: a hw core's finished frame goes to the view's second surface from inside the frame.
+        // A hw core's finished frame goes to the view's second surface from inside the frame.
         LibretroDroid::getInstance().setFrameDrawnHook([env, glRetroView]() {
             static jmethodID onFrame = nullptr;
             if (onFrame == nullptr) {

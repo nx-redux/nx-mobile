@@ -2108,7 +2108,7 @@ class AppState(
         return step == OnboardingStep.PAD && deps.settings.padSkin
     }
 
-    /** The screens the pad skin is drawn round after setup: every one, the tools' pages too (user). */
+    /** The screens the pad skin is drawn round after setup: every one, the tools' pages too. */
     @Suppress("UNUSED_PARAMETER")
     private fun padScreen(s: Screen): Boolean = true
 
@@ -4980,7 +4980,7 @@ class AppState(
         return tabs + listOf(
             SettingsRow(SettingsKind.LAYOUT_GAME_LISTS, SettingsSection.LAYOUT_GAME_LISTS.label, menuStyleLabel(s.gameListStyle)),
             SettingsRow(SettingsKind.LAYOUT_TITLE_HINTS, SettingsSection.LAYOUT_TITLE_HINTS.label, chrome),
-            SettingsRow(SettingsKind.LAYOUT_SWITCHER, SettingsSection.LAYOUT_SWITCHER.label, s.switcherLayout.label),   // NX Redux PR #218
+            SettingsRow(SettingsKind.LAYOUT_SWITCHER, SettingsSection.LAYOUT_SWITCHER.label, s.switcherLayout.label),
             SettingsRow(SettingsKind.EXTRA_INFO, "Extra info", if (s.menuExtraInfo) "Show" else "Hide"),
             SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
         )
@@ -8244,7 +8244,6 @@ internal fun storageUpgradeRows(s: Screen.StorageUpgrade): List<String> = when {
 /** [s]'s rows: Copy and Keep separate; OK once a copy failed. */
 internal fun copySavesRows(s: Screen.CopySaves): List<String> = if (s.error != null) listOf("OK") else listOf("Copy", "Keep separate")
 
-/** A Permissions page row. */
 internal enum class PermissionRow { ALL_FILES, NOTIFICATIONS, CONTINUE }
 
 /** [s]'s rows: a row per permission this device uses, then Continue. */
@@ -8265,7 +8264,6 @@ data class SyncSetup(val title: String, val synced: Boolean, val focus: SyncFocu
     val skipSelected: Boolean get() = focus == SyncFocus.SKIP
 }
 
-/** A row of setup's sync page. */
 sealed interface SyncSetupRow {
     data object Roms : SyncSetupRow
     data class Link(val link: SyncLink) : SyncSetupRow

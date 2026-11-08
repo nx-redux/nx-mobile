@@ -213,7 +213,7 @@ class SystemButtonsOnboardingTest {
         assertTrue(aya.key in SystemButtons.decode(settings.systemButtons).asked)
     }
 
-    // Review fix 1: closing the page over the menu brings back the menu's own selection.
+    // Closing the page over the menu brings back the menu's own selection.
     @Test fun standaloneRestoresTheMenuSelection() = runTest {
         val s = state()
         s.select(1)
@@ -225,7 +225,7 @@ class SystemButtonsOnboardingTest {
         assertEquals(before, s.selection.value)
     }
 
-    // Review fix 1: never over Settings (it would drop a Shortcuts draft or a wait); the menu asks instead.
+    // Never over Settings (it would drop a Shortcuts draft or a wait); the menu asks instead.
     @Test fun notOpenedOverSettings() = runTest {
         val s = state()
         s.openSettings(SettingsSection.CONTROLS)
@@ -234,7 +234,7 @@ class SystemButtonsOnboardingTest {
         assertIs<Screen.Settings>(s.screen.value)
     }
 
-    // Review fix 1: a page another screen replaced is abandoned, so the model is still asked later.
+    // A page another screen replaced is abandoned, so the model is still asked later.
     @Test fun aReplacedPageIsAskedAgain() = runTest {
         val s = state()
         pads = listOf(aya)
@@ -246,7 +246,7 @@ class SystemButtonsOnboardingTest {
         s.page()
     }
 
-    // Review fix 3: a pad already connected at launch (a handheld's own) is asked when the menu first shows.
+    // A pad already connected at launch (a handheld's own) is asked when the menu first shows.
     @Test fun coldStartAsksTheBuiltInPad() = runTest {
         pads = listOf(aya)
         val s = state()

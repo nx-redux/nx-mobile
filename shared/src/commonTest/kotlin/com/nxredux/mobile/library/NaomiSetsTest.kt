@@ -58,7 +58,7 @@ class NaomiSetsTest {
         assertTrue(table.loadsAsIs("MSlug6.7z"))
         assertFalse(table.loadsAsIs("Crazy Taxi (USA).zip"))   // a zipped disc: unpacked like any console's archive
         assertFalse(table.loadsAsIs("naomi.zip"))
-        assertTrue(NaomiSets.EMPTY.loadsAsIs("Crazy Taxi (USA).zip"))   // no table in the build: every archive as before
+        assertTrue(NaomiSets.EMPTY.loadsAsIs("Crazy Taxi (USA).zip"))   // no table in the build: every archive as is
     }
 
     @Test fun missing_bios_is_the_sets_archive_in_zip_or_7z() {

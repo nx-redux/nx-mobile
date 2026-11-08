@@ -102,7 +102,7 @@ class N3ds3dResolutionTest {
         // The other layouts' frames still read.
         assertEquals(5, N3ds3dResolution.frameFactor(2000f, 1200f, 1.71f))
         assertEquals(4, N3ds3dResolution.frameFactor(2880f, 960f, 1.71f))   // Side by side
-        // A late half-size frame reads as unknown (the factor last read stands); under 1 or 2 it reads as before.
+        // A late half-size frame reads as unknown (the factor last read stands); under 1 or 2 it reads normally.
         assertNull(N3ds3dResolution.frameFactor(800f, 720f, 1.71f))
         assertEquals(2, N3ds3dResolution.frameFactor(800f, 720f, 2f))
         assertEquals(3, N3ds3dResolution.frameFactor(1200f, 1440f, 1f))
