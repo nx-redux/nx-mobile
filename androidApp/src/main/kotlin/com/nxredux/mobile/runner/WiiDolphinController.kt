@@ -82,9 +82,7 @@ internal class WiiDolphinController(
         if (WiiOptions.appliesTo(tag) && !gameCube) {
             val id = wiiDisc?.id
             controls = withContext(Dispatchers.IO) { WiiControlsAsset.get(game).lookup(id) }
-            val sensors = motionSensors ?: MotionSensors(game) { a, g ->
-                LibretroDroid.setSensorValues(0, a.x, a.y, a.z, g.x, g.y, g.z)
-            }.also { motionSensors = it }
+            val sensors = sensors()
             LibretroDroid.setSensorAvailable(sensors.hasAccel, sensors.hasGyro)
             // The rotation the level starts in: only a real rotation recentres, not the first unrelated configuration
             // change (a pad attached, a fold posture).
@@ -231,12 +229,15 @@ internal class WiiDolphinController(
      * the tilt still comes through and the gyro reads still; without an accelerometer the console reads as a 3DS at rest.
      */
     fun offerN3dsMotion() {
-        val sensors = motionSensors ?: MotionSensors(game) { a, g ->
-            LibretroDroid.setSensorValues(0, a.x, a.y, a.z, g.x, g.y, g.z)
-        }.also { motionSensors = it }
+        val sensors = sensors()
         LibretroDroid.setSensorAvailable(sensors.hasAccel, sensors.hasGyro)
         LibretroDroid.setSensorEnabled(0, sensors.hasAccel)
     }
+
+    /** The phone's sensors feeding port 0, made on first use. */
+    private fun sensors(): MotionSensors = motionSensors ?: MotionSensors(game) { a, g ->
+        LibretroDroid.setSensorValues(0, a.x, a.y, a.z, g.x, g.y, g.z)
+    }.also { motionSensors = it }
 
     /** The display's rotation (Surface.ROTATION_*), which [MotionSensors] turns the phone's axes by. */
     @Suppress("DEPRECATION")

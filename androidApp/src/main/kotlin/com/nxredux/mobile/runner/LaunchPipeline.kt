@@ -280,10 +280,8 @@ internal class LaunchPipeline(private val game: GameActivity) {
             // the core then gets the handheld pak's pad for this tag and core (NetplayPads).
             if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to SegaPadType.AUTO)
             canRewind = descriptor?.rewind == true
+            speed.setSession(netplay = np != null)   // first: the touch buttons [ShortcutsMicController.launch] builds follow the session
             shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values))
-            speed.setSession(netplay = np != null)
-            shortcuts.applyMic()
-            shortcuts.refreshTouchShortcuts()
             val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id) else null
             renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
             renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(shaderRoots) }
@@ -438,12 +436,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
                 val headerName = inner?.name ?: romFileName
                 val header = if (!SegaHeader.readable(headerName)) null else withContext(Dispatchers.IO) {
                     runCatching {
-                        (inner?.inputStream() ?: refs.openInput(content))?.use { s ->
-                            val buf = ByteArray(SegaHeader.READ_LENGTH)
-                            var n = 0
-                            while (n < buf.size) { val r = s.read(buf, n, buf.size - n); if (r < 0) break; n += r }
-                            SegaHeader.padType(buf.copyOf(n))
-                        }
+                        (inner?.inputStream() ?: refs.openInput(content))?.use { SegaHeader.padType(readUpTo(it, SegaHeader.READ_LENGTH)) }
                     }.getOrNull()
                 }
                 segaHeader = header
@@ -1010,16 +1003,11 @@ private fun readUpTo(input: java.io.InputStream, max: Int): ByteArray {
  * partition 0's NCCH header (0x4000 on dumped carts), a few KB in all.
  */
 private fun readN3dsTitle(s: java.io.InputStream): N3dsTitle? {
-    fun readFully(buf: ByteArray, from: Int): Int {
-        var n = from
-        while (n < buf.size) { val r = s.read(buf, n, buf.size - n); if (r < 0) break; n += r }
-        return n
-    }
-    val head = ByteArray(N3dsTitle.HEADER)
-    if (readFully(head, 0) < head.size) return null
+    val head = readUpTo(s, N3dsTitle.HEADER)
+    if (head.size < N3dsTitle.HEADER) return null
     val offset = N3dsTitle.ncchOffset(head) ?: return N3dsTitle.parse(head)
-    val all = head.copyOf(offset.toInt() + N3dsTitle.HEADER)
-    return N3dsTitle.parse(all.copyOf(readFully(all, head.size)))
+    // On to the end of the NCCH header at [offset], which starts at or past the NCSD header's end.
+    return N3dsTitle.parse(head + readUpTo(s, offset.toInt()))
 }
 
 /**

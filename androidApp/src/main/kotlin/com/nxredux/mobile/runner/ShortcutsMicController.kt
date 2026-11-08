@@ -5,6 +5,7 @@ import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.R
 import com.nxredux.mobile.shortcuts.ClaimedInput
 import com.nxredux.mobile.shortcuts.ConsoleHotkeys
@@ -19,6 +20,9 @@ import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.PadMic
 import com.nxredux.mobile.ui.nx.TouchShortcut
 import com.nxredux.mobile.ui.nx.visibleTouchShortcuts
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The game's shortcuts (bound keys, the touch shortcut buttons, a pad skin's SAVE / LOAD / REWIND / FAST) and the DS / 3DS
@@ -83,6 +87,7 @@ internal class ShortcutsMicController(
         shortcutBase = Shortcuts.decodeBase(game.settings.shortcuts)
         shortcutClaimed = ConsoleHotkeys.claimed(tag)
         applyShortcuts(overrides)
+        applyMic()
     }
 
     /** A link session ended and the game is a local one: the Mic toggle shows again, off. */
@@ -112,8 +117,13 @@ internal class ShortcutsMicController(
     /** Save state / Load state from a shortcut: the save-state slot last used, as the in-game menu's. */
     private fun quickState(save: Boolean) {
         val ss = game.saveStates ?: run { game.toast("Save states are off here"); return }
-        val slot = game.lastSlotCache ?: ss.lastSlot()
-        if (save) game.saveToSlot(slot) else game.loadFromSlot(slot)
+        val go = { slot: Int -> if (save) game.saveToSlot(slot) else game.loadFromSlot(slot) }
+        game.lastSlotCache?.let { return go(it) }
+        // Cold cache (the launch's strip refresh has not landed): the pointer file is read off the main thread.
+        game.lifecycleScope.launch {
+            val slot = withContext(Dispatchers.IO) { ss.lastSlot() }
+            go(game.lastSlotCache ?: slot.also { game.lastSlotCache = it })
+        }
     }
 
     val padShortcuts: Map<TouchSlot, TouchShortcut> get() = touchShortcuts.value
