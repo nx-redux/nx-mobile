@@ -1302,6 +1302,7 @@ class AppState(
             override fun swapMainRows() = this@AppState.swapMainRows()
             override fun refreshResume() = this@AppState.refreshResume()
             override suspend fun refreshMainRows() = this@AppState.refreshMainRows()
+            override suspend fun rebuildMainRows() = this@AppState.rebuildMainRows()
             override val recentsLock: Mutex get() = this@AppState.recentsLock
         },
     )
@@ -4763,8 +4764,7 @@ class AppState(
     fun onForeground() {
         kidsUi.kidsReturned()   // back from Usage access or Alarms & reminders: a setup step moves on once granted
         kidsUi.kidsHomeCheck()  // back from setup's home question: on once home
-        val switcherBack = switcher.switcherUnderGame && _screen.value is Screen.Switcher
-        switcher.switcherUnderGame = false
+        val switcherBack = switcher.onForeground()
         checkArt(reuse = true)   // art deleted or added while away (only changed art folders are listed)
         launches.returnFromLaunch()   // back from a game or an app a Minimal launch handed off to
         if (!launches.minimalPending) launches.clearMinimalOpening()
@@ -4777,7 +4777,7 @@ class AppState(
         // ([SwitcherController.reopenSwitcher]): over the main menu after the rows rebuilt below (a swap would abandon an open under way).
         // Back on a list or a page: Home's rows are rebuilt all the same (the page stays as it is; [swapMainRows] only acts
         // on the menu), so B to the menu shows Continue's new resume frame, not the one read when the game launched.
-        if (switcherBack) { switcher.dropSwitcherReturn(); switcher.switcherRowsRebuilt = true; scope.launch { rebuildMainRows() }; switcher.refreshSwitcher(); return }
+        if (switcherBack) { switcher.backUnderGame(); return }
         val s = _screen.value as? Screen.Systems ?: run { scope.launch { refreshMainRows() }; switcher.reopenSwitcher(); return }
         if (s.menu != null) { switcher.dropSwitcherReturn(); return }
         if (!firstSetup) updaterOnMainMenu()   // back over the menu (from a game, or the install-permission screen)

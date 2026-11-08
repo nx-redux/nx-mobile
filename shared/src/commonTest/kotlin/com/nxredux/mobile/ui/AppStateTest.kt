@@ -3809,6 +3809,25 @@ class AppStateTest {
         assertEquals(listOf(Recent("/Roms/Game Boy (GB)/Gone.gb")), data.recents)
     }
 
+    // A switcher launch refused before the runner closes the switcher (the error lands on its page) and never arms the
+    // return: the next foreground stays on that page.
+    @Test fun a_refused_switcher_launch_closes_the_switcher_and_does_not_reopen_it() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val store = MemoryLibraryIndexStore(LibraryIndexCodec.encode(scannedIndex(settings, gbHome("Gone.gb", "Tetris.gb"))))
+        val data = FakeUserData(recents = listOf(Recent("/Roms/Game Boy (GB)/Gone.gb")), resumable = mapOf(("GB" to "Gone.gb") to ResumeInfo(9)))
+        val st = state(settings, gbHome("Tetris.gb"), runner = RecordingRunner(), data = data, store = store)
+        st.load(); advanceUntilIdle()
+        val menu = assertIs<Screen.Systems>(st.screen.value)
+        st.onButton(NxButton.SELECT); advanceUntilIdle()
+        assertIs<Screen.Switcher>(st.screen.value)
+        st.onButton(NxButton.A); advanceUntilIdle()
+        assertEquals(goneError, st.error.value)
+        assertEquals(menu.category, assertIs<Screen.Systems>(st.screen.value).category)
+        st.dismissError()
+        st.onForeground(); advanceUntilIdle()
+        assertIs<Screen.Systems>(st.screen.value)
+    }
+
     @Test fun a_revoked_extra_keeps_its_games_until_a_rescan_and_fails_at_launch() = runTest {
         val loose = ExtraFolder(Sources.idFor("Loose", ContentRef("sd/Loose")), ContentRef("sd/Loose"))
         val settings = MemorySettings(ContentRef("Home")).apply { extraFolders = listOf(loose) }

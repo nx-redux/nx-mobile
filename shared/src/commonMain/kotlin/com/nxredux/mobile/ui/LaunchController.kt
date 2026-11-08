@@ -59,7 +59,7 @@ internal class LaunchController(
     private val error: MutableStateFlow<String?>,
     private val deps: AppDeps,
     private val sidecars: Sidecars,
-    private val switcher: SwitcherController,
+    private val switcher: LaunchSwitcher,
     private val host: LaunchHost,
 ) {
     private val _minimalOpening = MutableStateFlow<MinimalOpening?>(null)
@@ -191,7 +191,7 @@ internal class LaunchController(
             SaveTransferRules.launchRefusal(deps.saveTransfer?.importing == true, deps.deviceSync?.running == true)?.let { host.showNotice(it); return@launch }
             if (host.kidsLocked()) return@launch   // Kids Mode locked while this launch was on its way (the file checks above)
             host.dropPushedTab()
-            switcher.switcherReturn = fromSwitcher   // set only once the runner is called: a refused launch never gets here (the runner keeps it on disk)
+            switcher.onRunnerCalled(fromSwitcher)   // a refused launch never gets here (the runner keeps the return on disk)
             // A launch sequence's spread hands its name over; any other launch has none.
             val launchName = if (_launchSequence.value?.phase == LaunchPhase.SPREAD) launchNameProvider?.invoke() else null
             launchHandedOff = true
