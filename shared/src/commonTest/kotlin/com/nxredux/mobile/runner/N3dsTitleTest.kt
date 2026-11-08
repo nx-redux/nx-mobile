@@ -72,7 +72,7 @@ class N3dsTitleTest {
     }
 
     @Test fun only_plain_cartridge_and_ncch_files_are_read() {
-        for (n in listOf("a.3ds", "a.CCI", "a.cxi")) assertEquals(true, N3dsTitle.readable(n), n)
+        for (n in listOf("a.3ds", "a.CCI", "a.cxi", ".3ds")) assertEquals(true, N3dsTitle.readable(n), n)
         for (n in listOf("a.zcci", "a.zcxi", "a.3dsx", "a.z3dsx", "a.elf", "a.axf", "a.app", "a.cia", "a")) {
             assertEquals(false, N3dsTitle.readable(n), n)
         }

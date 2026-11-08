@@ -1,7 +1,7 @@
 package com.nxredux.mobile.scraper
 
 import com.nxredux.mobile.library.DiscSheet
-import kotlinx.coroutines.CancellationException
+import com.nxredux.mobile.tryOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.concurrent.Volatile
@@ -238,7 +238,7 @@ class ScreenScraperSource(
     }
 
     /** [ref]'s ROM's CRC32 and size, reused while its [RomStamp] is unchanged; a failed hash is not kept. */
-    private suspend fun hash(ref: LibraryGameRef, inZip: Boolean): Pair<Long, Long>? = try {
+    private suspend fun hash(ref: LibraryGameRef, inZip: Boolean): Pair<Long, Long>? = tryOrNull {
         val key = (if (inZip) "zip:" else "") + ref.rom.value
         val stamp = hasher.stamp(ref.rom)
         stamp?.let { st -> hashLock.withLock { hashes[key]?.takeIf { it.first == st }?.second } }
@@ -248,7 +248,7 @@ class ScreenScraperSource(
                     while (hashes.size > HASHES_KEPT) hashes.remove(hashes.keys.first())
                 }
             }
-    } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+    }
 
     private fun found(r: HttpResult): GameLookup.Found? =
         ScraperResponse.parseGame(r.status, r.body?.decodeToString()) as? GameLookup.Found

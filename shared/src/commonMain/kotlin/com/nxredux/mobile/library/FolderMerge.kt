@@ -5,6 +5,8 @@ import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.storage.GameRef
 import com.nxredux.mobile.storage.Recents
+import com.nxredux.mobile.storage.TabLines
+import com.nxredux.mobile.storage.TextLines
 
 /**
  * A console whose home games lie in more than one `Roms/` folder (the handheld's split: `Game Boy Advance (GBA)` and
@@ -135,24 +137,21 @@ class FolderMerge(private val source: RomsSource, private val home: ContentRef) 
     /** [from]'s `file` lines (`name\tvalue`) for the moved [names] added to [to]'s, unless it has the name; [from]'s goes when nothing else is in it. */
     private suspend fun carryLines(from: ContentRef, to: ContentRef, file: String, names: Set<String>) {
         val text = source.child(from, file)?.let { source.readText(it.ref) } ?: return
-        val lines = text.lines().filter { it.isNotBlank() }
-        val (going, staying) = lines.partition { it.substringBefore('\t').lowercase() in names }
+        val lines = TextLines.split(text).filter { it.isNotBlank() }
+        val (going, staying) = lines.partition { TabLines.key(it).lowercase() in names }
         if (going.isEmpty()) return
         // Main's file there but unreadable is not an empty one: writing would replace it with only the carried lines, so
         // they stay in [from] (whose folder then keeps the file, and so is not removed).
         val mine = source.child(to, file)?.let { source.readText(it.ref) ?: return } ?: ""
-        val have = mine.lines().map { it.substringBefore('\t').lowercase() }.toSet()
-        val add = going.filter { it.substringBefore('\t').lowercase() !in have }
+        val have = TextLines.split(mine).map { TabLines.key(it).lowercase() }.toSet()
+        val add = going.filter { TabLines.key(it).lowercase() !in have }
         if (add.isNotEmpty() && !source.writeText(to, file, mine.trimEnd('\n').let { if (it.isEmpty()) "" else "$it\n" } + add.joinToString("\n") + "\n")) return
         if (staying.isEmpty()) source.delete(from, file) else source.writeText(from, file, staying.joinToString("\n") + "\n")
     }
 }
 
 /** [lines] with each naming a moved game (`path` or `path\t…`) moved too ([moved]: old path → new path). */
-fun rewriteLines(lines: List<String>, moved: Map<String, String>): List<String> = lines.map { l ->
-    val path = l.substringBefore('\t')
-    moved[path]?.let { it + l.substring(path.length) } ?: l
-}
+fun rewriteLines(lines: List<String>, moved: Map<String, String>): List<String> = lines.map { l -> TabLines.mapKey(l, moved::get) }
 
 /**
  * Removes the folder [name] in [parent] when it is empty, but only while [parent]'s listing still shows it: a provider

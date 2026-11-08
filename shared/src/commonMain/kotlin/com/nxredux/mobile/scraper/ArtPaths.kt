@@ -1,5 +1,6 @@
 package com.nxredux.mobile.scraper
 
+import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.storage.GamePath
 
 /** A game's `.media` folder ([mediaSegments], home-relative) and the base name of its art files. */
@@ -16,13 +17,11 @@ data class ArtTarget(val mediaSegments: List<String>, val base: String) {
 
 /** Where art for a library game goes (NX Redux `scraper_scan.c:50-61`; extras → the home mirror `Roms/.sources/<id>/`). */
 object ArtPaths {
-    fun base(fileName: String): String { val dot = fileName.lastIndexOf('.'); return if (dot <= 0) fileName else fileName.substring(0, dot) }
-
     fun target(sourceId: String, relativeDir: String, fileName: String, folderGame: Boolean): ArtTarget {
         val dirParts = relativeDir.split('/').filter { it.isNotEmpty() }
         require(!folderGame || dirParts.isNotEmpty()) { "a folder game needs its disc folder in relativeDir" }
         // A folder game's art is named by the whole folder name (no extension strip): the scanner looks it up that way.
-        val (ownerDir, base) = if (folderGame) dirParts.dropLast(1) to dirParts.last() else dirParts to base(fileName)
+        val (ownerDir, base) = if (folderGame) dirParts.dropLast(1) to dirParts.last() else dirParts to Names.stripExtension(fileName)
         val root = if (sourceId == GamePath.HOME) ownerDir else listOf("Roms", ".sources", sourceId) + ownerDir
         return ArtTarget(root + ".media", base)
     }

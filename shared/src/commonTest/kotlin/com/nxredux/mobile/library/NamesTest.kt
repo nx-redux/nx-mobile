@@ -36,6 +36,9 @@ class NamesTest {
         assertEquals("Mario Kart 64", Names.stripExtension("Mario Kart 64.z64"))
         assertEquals("z64", Names.extensionOf("Mario Kart 64.Z64"))
         assertEquals("", Names.extensionOf("README"))
+        assertEquals("", Names.extensionOf(".hidden"))
+        assertEquals("hidden", Names.extensionOf(".Hidden", dotFile = true))
+        assertEquals("", Names.extensionOf("README", dotFile = true))
         assertEquals("README", Names.stripExtension("README"))
     }
     @Test fun systems_txt_is_hidden_and_skeleton_folder_names_follow_the_console() {

@@ -29,20 +29,11 @@ class Collections(private val source: RomsSource, private val store: SidecarStor
 
     private suspend fun folder(create: Boolean = false): ContentRef? {
         val h = home() ?: return null
-        val existing = source.child(h, DIR)
-        return when {
-            existing == null -> if (create) source.createDirectory(h, DIR)?.ref else null
-            existing.isDirectory -> existing.ref
-            else -> null   // a file is in the way
-        }
+        return if (create) source.ensureDirs(h, listOf(DIR)) else source.findDir(h, listOf(DIR))
     }
 
     /** The real name of [name]'s file in [folder]: the child matching `<name>.txt` ignoring case (as [names] lists it), else `<name>.txt`. */
-    private suspend fun homeFile(folder: ContentRef, name: String): String = try {
-        source.listChildren(folder).firstOrNull { it.name.equals(file(name), ignoreCase = true) }?.name ?: file(name)
-    } catch (e: ListingUnavailable) {
-        source.child(folder, file(name))?.name ?: file(name)
-    }
+    private suspend fun homeFile(folder: ContentRef, name: String): String = spelled(folder, name, filesOnly = false) ?: file(name)
 
     /** The home `Collections/` folder's `.txt` files (case-insensitive extension, hidden files and `map.txt` skipped) plus the store's, distinct and sorted ignoring case. */
     suspend fun names(): List<String> = namesChecked().names
@@ -204,10 +195,16 @@ class Collections(private val source: RomsSource, private val store: SidecarStor
     }
 
     /** [name]'s file in the home [folder] as it is spelled there (any case of `<name>.txt`), or null when there is none. */
-    private suspend fun existingHomeFile(folder: ContentRef, name: String): String? = try {
-        source.listChildren(folder).firstOrNull { !it.isDirectory && it.name.equals(file(name), ignoreCase = true) }?.name
+    private suspend fun existingHomeFile(folder: ContentRef, name: String): String? = spelled(folder, name, filesOnly = true)
+
+    /**
+     * The listed child of [folder] named `<name>.txt` in any case (a folder too unless [filesOnly]), the listing's first;
+     * by its exact name when the provider will not list. Null when there is none.
+     */
+    private suspend fun spelled(folder: ContentRef, name: String, filesOnly: Boolean): String? = try {
+        source.listChildren(folder).firstOrNull { (!filesOnly || !it.isDirectory) && it.name.equals(file(name), ignoreCase = true) }?.name
     } catch (e: ListingUnavailable) {
-        source.child(folder, file(name))?.takeIf { !it.isDirectory }?.name
+        source.child(folder, file(name))?.takeIf { !filesOnly || !it.isDirectory }?.name
     }
 
     /**

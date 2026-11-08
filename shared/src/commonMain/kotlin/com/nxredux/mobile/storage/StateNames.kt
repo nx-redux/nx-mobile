@@ -24,7 +24,7 @@ object StateNames {
             Scheme.AUTO -> StateName(p.prefix, NxPaths.AUTO_SLOT)
             Scheme.RETROARCH_ISH -> StateName(p.prefix, p.n)
             Scheme.RETROARCH -> StateName(p.prefix, if (p.n >= NxPaths.SLOT_COUNT) p.n + RETROARCH_AUTO_OFFSET else p.n)
-            Scheme.MINUI -> StateName(stripExtension(p.prefix), p.n)
+            Scheme.MINUI -> StateName(minarchStem(p.prefix), p.n)
         }
     }
 
@@ -54,7 +54,7 @@ object StateNames {
         val m = PICTURE.matchEntire(fileName) ?: return null
         val slot = m.groupValues[2].toInt()
         if (slot !in 0 until NxPaths.SLOT_COUNT && slot != NxPaths.AUTO_SLOT) return null
-        return StateName(stripExtension(m.groupValues[1]), slot)
+        return StateName(minarchStem(m.groupValues[1]), slot)
     }
 
     /**

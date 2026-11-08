@@ -4,6 +4,7 @@ import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.GamePath
+import com.nxredux.mobile.tryQuietly
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -132,7 +133,7 @@ class ArtworkController(
                 .distinctBy { it.gamePath }.map { ScrapeItem(it.gamePath, it.tag, it.name) }
             lock.withLock {
                 if (job == null && _state.value.phase == JobPhase.IDLE) {
-                    try { restoreLocked() } catch (e: CancellationException) { throw e } catch (_: Exception) {}   // unreadable: a new job
+                    tryQuietly { restoreLocked() }   // unreadable: a new job
                 }
                 val s = _state.value
                 val queued = if (job != null || s.phase == JobPhase.PAUSED) s.items.mapTo(HashSet()) { it.gamePath } else HashSet()
@@ -234,7 +235,7 @@ class ArtworkController(
 
     private suspend fun persist(s: ScrapeState) {
         savedDone = s.done; savedAt = clock()
-        try { host.writePrivate(JOB_FILE, ScrapeJobCodec.encode(s, replace)) } catch (e: CancellationException) { throw e } catch (_: Exception) {}
+        tryQuietly { host.writePrivate(JOB_FILE, ScrapeJobCodec.encode(s, replace)) }
     }
 
     fun pause() { scope.launch(work) { halt(JobPhase.PAUSED) } }
@@ -623,14 +624,14 @@ class ArtworkController(
             val androidDeleted = if (android) engine.deleteAndroidArt() else 0
             // The scope's Change art lists, picks and previews go too; a failure there never fails the Reset. The Android
             // games are not in [games] (their art is outside the log): their picks would keep a fetch from storing again.
-            try {
+            tryQuietly {
                 val keys = store.forget(up?.let { u ->
                     val paths = games.filter { g -> g.tag.uppercase() in u }.mapTo(HashSet()) { it.gamePath }
                     if (android) host.libraryGames().filter { it.android }.mapTo(paths) { it.gamePath }
                     paths
                 })
                 if (up == null) optionCache.clear() else optionCache.remove(keys.flatMap { (g, ks) -> ks.map { cacheKey(g, it) } })
-            } catch (e: CancellationException) { throw e } catch (_: Exception) {}
+            }
             for ((g, was) in before) host.applyArt(g.gamePath, ScrapeEngine.indexArt(g, was, engine.artOnDisk(g)))
             flushArt()   // one index write and one refresh for every game reset
             ResetResult(deleted + androidDeleted, paused)

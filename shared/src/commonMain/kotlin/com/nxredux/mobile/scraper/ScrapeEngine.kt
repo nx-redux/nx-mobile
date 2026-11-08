@@ -4,8 +4,10 @@ import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.library.Entry
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.library.ensurePath
+import com.nxredux.mobile.library.findDir
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.GamePath
+import com.nxredux.mobile.tryOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -14,13 +16,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.concurrent.Volatile
 import kotlin.time.TimeSource
-
-/** The existing folder at [segments] below [home] (nothing created); null when any part is missing. */
-internal suspend fun RomsSource.findDir(home: ContentRef, segments: List<String>): ContentRef? {
-    var dir = home
-    for (s in segments) dir = child(dir, s)?.takeIf { it.isDirectory }?.ref ?: return null
-    return dir
-}
 
 /**
  * The per-game fetch flow: for each game, only the kinds it lacks (a box, a screenshot, and the optional extras of
@@ -317,7 +312,7 @@ class ScrapeEngine(
         suspend fun of(dir: ContentRef): List<Entry> {
             dropIfPicked()
             return map.getOrPut(dir.value) {
-                (try { source.listChildren(dir) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }).toMutableList()
+                (tryOrNull { source.listChildren(dir) } ?: emptyList()).toMutableList()
             }
         }
         // Ignoring case: on case-insensitive storage a write over `X.PNG` as `X.png` is the same file.

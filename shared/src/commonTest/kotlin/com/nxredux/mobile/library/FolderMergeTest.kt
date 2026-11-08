@@ -56,6 +56,20 @@ class FolderMergeTest {
         assertEquals("K.gba\tKirby\nT.gba\tTetris\n", src.textAt("$mgba/map.txt"))
     }
 
+    // A map.txt saved by a Windows editor starts with a byte order mark: the first line's name is still the game's.
+    @Test fun a_bom_on_the_other_folders_first_line_still_carries_it() = runTest {
+        val src = source().apply { writeText(ContentRef(mgba), "map.txt", "\uFEFFK.gba\tKirby\nT.gba\tTetris\n") }
+        FolderMerge(src, ContentRef("H")).merge(index, splitFolders(index), LinkedHashMap(), { _, _ -> }) { false }
+        assertEquals("A.gba\tAdvance\nK.gba\tKirby\n", src.textAt("$gba/map.txt"))
+        assertEquals("T.gba\tTetris\n", src.textAt("$mgba/map.txt"))
+    }
+
+    @Test fun a_bom_on_mains_first_line_still_keeps_its_name() = runTest {
+        val src = source().apply { writeText(ContentRef(gba), "map.txt", "\uFEFFK.gba\tMine\n") }
+        FolderMerge(src, ContentRef("H")).merge(index, splitFolders(index), LinkedHashMap(), { _, _ -> }) { false }
+        assertEquals("\uFEFFK.gba\tMine\n", src.textAt("$gba/map.txt"))
+    }
+
     // A plain subfolder of the other folder (no disc sheet) holding several games moves once, as a folder, and every game
     // in it gets its line.
     @Test fun a_subfolder_of_several_games_moves_once_and_each_game_gets_its_line() = runTest {

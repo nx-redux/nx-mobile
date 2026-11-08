@@ -36,19 +36,11 @@ object ArcadeCompanions {
 
     /** Each of [names] (lowercase sets) found in [folder] as `<set>.zip`, else `.7z`: by name, then case-insensitively in its listing. */
     private suspend fun beside(source: RomsSource, folder: ContentRef, names: List<String>): Map<String, Companion> {
-        // By name first: one query per candidate, and it still answers when the provider hides the folder's listing.
-        var byName: Map<String, Entry>? = null
-        suspend fun lookup(name: String): Entry? {
-            source.child(folder, name)?.takeIf { !it.isDirectory }?.let { return it }
-            val all = byName ?: try {
-                source.listChildren(folder).filter { !it.isDirectory }.associateBy { it.name.lowercase() }
-            } catch (e: ListingUnavailable) { emptyMap() }.also { byName = it }
-            return all[name]
-        }
+        val files = FileLookup(source, folder)
         val found = LinkedHashMap<String, Companion>()
         for (set in names) {
             for (ext in EXTENSIONS) {
-                val e = lookup("$set.$ext") ?: continue
+                val e = files.find("$set.$ext") ?: continue
                 found[set] = Companion("$set.$ext", e.ref)
                 break
             }

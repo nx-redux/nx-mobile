@@ -44,7 +44,7 @@ object NdsDsvSave {
      * of the padded size keeps the footer as it was, a size below the padded one included.
      */
     fun join(save: ByteArray, footer: ByteArray): ByteArray {
-        if (footer.size != DSV_FOOTER_SIZE || u32(footer, PAD_SIZE_AT) == save.size.toLong()) return save + footer
+        if (footer.size != DSV_FOOTER_SIZE || Bytes.le32(footer, PAD_SIZE_AT) == save.size.toLong()) return save + footer
         val fixed = footer.copyOf()
         putU32(fixed, SIZE_AT, save.size)
         putU32(fixed, PAD_SIZE_AT, save.size)
@@ -54,16 +54,12 @@ object NdsDsvSave {
     private const val SIZE_AT = 82
     private const val PAD_SIZE_AT = 86
 
-    private fun u32(b: ByteArray, at: Int): Long = (0 until 4).fold(0L) { acc, i -> acc or ((b[at + i].toLong() and 0xFF) shl (8 * i)) }
-
     private fun putU32(b: ByteArray, at: Int, v: Int) { for (i in 0 until 4) b[at + i] = (v ushr (8 * i)).toByte() }
 
     /** The last [DSV_FOOTER_SIZE] bytes of [bytes], or null when they do not end in [DSV_MAGIC] (or the file is shorter than a footer). */
     fun footerOf(bytes: ByteArray): ByteArray? {
         if (bytes.size < DSV_FOOTER_SIZE) return null
-        val magic = DSV_MAGIC.encodeToByteArray()
-        val start = bytes.size - magic.size
-        for (i in magic.indices) if (bytes[start + i] != magic[i]) return null
+        if (!Bytes.startsWithAscii(bytes, DSV_MAGIC, bytes.size - DSV_MAGIC.encodeToByteArray().size)) return null
         return bytes.copyOfRange(bytes.size - DSV_FOOTER_SIZE, bytes.size)
     }
 

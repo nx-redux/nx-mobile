@@ -8,6 +8,8 @@ data class DataTrack(val file: String, val start: Long, val sectorSize: Int, val
 
 /** Where a disc image keeps its data sectors: a bare iso or bin/img, a cue's first data track, a gdi's track 3. */
 object DiscImages {
+    private val SPACES = Regex("\\s+")
+
     /** An `.iso` is 2048-byte sectors; a `.bin`/`.img` is raw 2352 (MODE1 +16, MODE2 +24) when it opens with the sync pattern, else 2048. */
     fun rawTrack(fileName: String, head: ByteArray): DataTrack {
         if (Names.extensionOf(fileName) == "iso" || !isSync(head)) return DataTrack(fileName, 0, 2048, 0)
@@ -30,7 +32,7 @@ object DiscImages {
                 file = named
                 continue
             }
-            val words = line.split(Regex("\\s+"))
+            val words = line.split(SPACES)
             when {
                 track == null && words.size >= 3 && words[0].equals("TRACK", true) -> {
                     val (size, offset) = when (words[2].uppercase()) {
@@ -52,7 +54,7 @@ object DiscImages {
     /** [gdi]'s track 3 (the GD high-density area), else its first data track (type 4). */
     fun gdiTrack(gdi: String): DataTrack? {
         val tracks = gdi.lineSequence().drop(1).mapNotNull { line ->
-            val f = line.trim().split(Regex("\\s+"))
+            val f = line.trim().split(SPACES)
             val file = DiscSheet.gdiFile(line) ?: return@mapNotNull null
             val number = f.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
             val type = f.getOrNull(2)?.toIntOrNull() ?: return@mapNotNull null

@@ -92,5 +92,6 @@ class PspSerialTest {
     @Test fun readable_extensions() {
         assertTrue(PspSerial.readable("Tekken 6.ISO") && PspSerial.readable("x.cso") && PspSerial.readable("EBOOT.PBP"))
         assertTrue(!PspSerial.readable("x.chd"))
+        assertTrue(PspSerial.readable(".iso") && !PspSerial.readable("iso"))   // a dot file's name is its extension here
     }
 }

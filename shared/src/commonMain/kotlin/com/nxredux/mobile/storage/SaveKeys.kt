@@ -1,5 +1,6 @@
 package com.nxredux.mobile.storage
 
+import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.runner.CoreRegistry
 
 enum class SaveKind { BATTERY, CLOCK }
@@ -32,6 +33,8 @@ object SaveKeys {
     }
 
     internal val ARCHIVES = setOf("zip", "7z")
+    private val BATTERY = setOf("sav", "srm")
+    private val CARRIED = BATTERY + "rtc"
 
     /**
      * The game a ROM entry is named after: its extension dropped only when that extension is a known ROM or archive
@@ -47,19 +50,16 @@ object SaveKeys {
         return if (base.substringAfterLast('.').lowercase() in ARCHIVES) base else inner
     }
 
-    private fun dropRomExtension(name: String): String {
-        val dot = name.lastIndexOf('.')
-        return if (dot > 0 && name.substring(dot + 1).lowercase() in ROM_EXTENSIONS) name.substring(0, dot) else name
-    }
+    private fun dropRomExtension(name: String): String =
+        if (Names.extensionOf(name) in ROM_EXTENSIONS) Names.stripExtension(name) else name
 
     /**
      * True for a battery save named `<name>.<rom ext>.sav` / `.srm` whose ROM extension is no archive (`X.gb.sav`): ROM
      * `X.gb`'s MinUI name and ROM `X.gb.zip`'s (or `.7z`'s) Generic or Retroarch name alike, so it does not tell the ROM.
      */
     fun romAmbiguous(fileName: String): Boolean {
-        val dot = fileName.lastIndexOf('.')
-        if (dot <= 0 || fileName.substring(dot + 1).lowercase() !in setOf("sav", "srm")) return false
-        val stem = fileName.substring(0, dot)
+        if (Names.extensionOf(fileName) !in BATTERY) return false
+        val stem = Names.stripExtension(fileName)
         return dropRomExtension(stem) != stem && stem.substringAfterLast('.').lowercase() !in ARCHIVES
     }
 
@@ -83,16 +83,15 @@ object SaveKeys {
 
     /** The ROM file name a save or clock file name ends in (`Emerald.gba.sav` → `Emerald.gba`), else null. */
     private fun carriedRom(fileName: String): String? {
-        val dot = fileName.lastIndexOf('.')
-        if (dot <= 0 || fileName.substring(dot + 1).lowercase() !in setOf("sav", "srm", "rtc")) return null
-        return fileName.substring(0, dot).takeIf { romKey(it) != it }
+        if (Names.extensionOf(fileName) !in CARRIED) return null
+        return Names.stripExtension(fileName).takeIf { romKey(it) != it }
     }
 
     /** The battery-save file name [format] gives the ROM [romFileName] (minarch's `saveRam` name, no folder). */
     fun batteryName(format: SaveFormat, romFileName: String): String = when (format) {
         SaveFormat.MINUI -> "$romFileName.sav"
-        SaveFormat.GENERIC -> "${stripExtension(romFileName)}.sav"
-        SaveFormat.RETROARCH, SaveFormat.RETROARCH_COMPRESSED -> "${stripExtension(romFileName)}.srm"
+        SaveFormat.GENERIC -> "${minarchStem(romFileName)}.sav"
+        SaveFormat.RETROARCH, SaveFormat.RETROARCH_COMPRESSED -> "${minarchStem(romFileName)}.srm"
     }
 
     /**

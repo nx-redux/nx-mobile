@@ -1,5 +1,6 @@
 package com.nxredux.mobile.scraper
 
+import com.nxredux.mobile.library.Names
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -85,7 +86,7 @@ object Libretro {
      */
     fun candidates(ref: LibraryGameRef): List<String> {
         val first = ref.datTitle?.takeIf { it.isNotBlank() }
-            ?: if (ref.folderGame) ref.relativeDir.split('/').last { it.isNotEmpty() } else ArtPaths.base(ref.fileName)
+            ?: if (ref.folderGame) ref.relativeDir.split('/').last { it.isNotEmpty() } else Names.stripExtension(ref.fileName)
         val bare = first.replace(SQUARE, "").trim()
         val multiDisc = ref.folderGame || ref.fileName.lowercase().endsWith(".m3u")
         val disc1 = if (multiDisc && !DISC.containsMatchIn(bare)) "$bare (Disc 1)" else null

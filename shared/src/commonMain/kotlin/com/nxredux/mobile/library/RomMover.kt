@@ -83,8 +83,7 @@ class RomMover(private val source: RomsSource, private val home: ContentRef) {
         }
         for (dir in all.toSet().sortedByDescending { d -> d.count { it == '/' } }) {
             if (keep.any { it.equals(dir, true) || it.startsWith("$dir/", true) }) continue
-            val parent = dir.substringBeforeLast('/', "").split('/').filter { it.isNotEmpty() }
-                .fold<String, ContentRef?>(home) { at, seg -> at?.let { source.child(it, seg)?.ref } } ?: continue
+            val parent = source.findDir(home, dir.substringBeforeLast('/', "").split('/').filter { it.isNotEmpty() }) ?: continue
             source.deleteIfSurelyEmpty(parent, dir.substringAfterLast('/'))
         }
     }

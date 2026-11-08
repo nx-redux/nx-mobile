@@ -18,7 +18,7 @@ class NxPaths(
     val innerFileName: String? = null,
 ) {
     /** `<rom>` above: the launched file name with its short extension stripped (core-owned save folders, netplay). */
-    val stem: String = stripExtension(romFileName)
+    val stem: String = minarchStem(romFileName)
 
     /**
      * minarch's `alt_name`: the file inside an unpacked archive when Use extracted file name is on, else the launched
@@ -26,7 +26,7 @@ class NxPaths(
      */
     val saveName: String = innerFileName?.takeIf { naming.useExtractedFileName } ?: romFileName
     /** [saveName] minus a short extension: the stem battery saves are named after (the DS `.dsv` lookup, [NdsDsvSave], uses it). */
-    val saveStem: String = stripExtension(saveName)
+    val saveStem: String = minarchStem(saveName)
 
     /** One save folder per console, whichever emulator runs the game (`MGBA` → `Saves/GBA`); states stay per emulator. */
     val savesDir = "Saves/${CoreRegistry.consoleTag(tag)}"
@@ -64,7 +64,7 @@ class NxPaths(
     /** minarch `SavePaths_state` (ma_save_paths.c:14-41); disk slots 0..7, auto = [AUTO_SLOT]. */
     private fun stateName(format: StateFormat, slot: Int, alt: String = saveName): String {
         require(slot in 0 until SLOT_COUNT || slot == AUTO_SLOT) { "slot $slot" }
-        val stem = stripExtension(alt)
+        val stem = minarchStem(alt)
         return when (format) {
             StateFormat.MINUI -> "$alt.st$slot"
             StateFormat.RETROARCH_ISH, StateFormat.RETROARCH_ISH_COMPRESSED ->
@@ -102,7 +102,7 @@ class NxPaths(
 }
 
 /** minarch `stripExtension`: drop the last `.xxx` only when the suffix, dot included, is 3..5 chars. */
-internal fun stripExtension(name: String): String {
+internal fun minarchStem(name: String): String {
     val dot = name.lastIndexOf('.')
     return if (dot >= 0 && name.length - dot in 3..5) name.substring(0, dot) else name
 }
