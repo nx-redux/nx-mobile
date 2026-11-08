@@ -80,3 +80,21 @@ Menu:
 Kids Mode:
 - [ ] Locked: a disallowed app bounces about once a second, allowed apps stay, keyboard and Settings while granting
   are exempt, the Locked game screen from Recents still quits
+
+## Repetition extraction (PR #104): device checks still owed
+
+Already passed on the Nova: GBA, DS, PS smoke; GBA, PS2, GC, Wii, PSP, 3DS, DC and N64 run, hold under the menu,
+survive Home and return, quit, and load their auto state again (slot 9).
+
+- [ ] Pause when unfocused: with another app focused the game holds and the screen sleeps on Android's timeout; focus
+  back plays on and keeps it awake (stays on throughout under live netplay)
+- [ ] Held UP/DOWN on a long in-game message and on a setting's info popup keeps scrolling; touch scroll then a key
+- [ ] In-game menu portrait (words beside the panel, Save/Load slot card, Options preview), narrow window stacks
+  (Flip), split view on the Fold (dimmed parent pane, slot card, Options word list)
+- [ ] In-game Achievements page, Locked only toggle; panel Cheats (empty and full) and Players tabs
+- [ ] Home's Continue and Pick cards, box-art shadows, Carousel collection and console counts look unchanged
+- [ ] DS/3DS hat d-pad and L2/R2 as axes; GC and DC analog triggers; DS/3DS face and L2/R2 keys
+- [ ] Save/load SRAM and RTC (a GB/GBA game with a clock, and a core without one: no error log)
+- [ ] Multi-disc m3u and CUE+BIN load; RetroAchievements hashing, unlock toasts, core messages, rumble
+- [ ] Core options with categories (localized labels); controller type lists
+- [ ] A collection file or map.txt starting with a byte-order mark (from Windows): its first entry still works
