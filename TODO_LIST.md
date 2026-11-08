@@ -81,7 +81,7 @@ Kids Mode:
 - [ ] Locked: a disallowed app bounces about once a second, allowed apps stay, keyboard and Settings while granting
   are exempt, the Locked game screen from Recents still quits
 
-## Repetition extraction (PR #104): device checks still owed
+## Repetition extraction (PR #105): device checks still owed
 
 Already passed on the Nova: GBA, DS, PS smoke; GBA, PS2, GC, Wii, PSP, 3DS, DC and N64 run, hold under the menu,
 survive Home and return, quit, and load their auto state again (slot 9).
