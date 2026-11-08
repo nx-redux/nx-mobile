@@ -546,6 +546,7 @@ internal fun rootListTopPad(rowHeight: Dp): Dp = (menuTabWordCentre() - rowHeigh
 private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit, onActivate: (Int) -> Unit, onChange: (Int) -> Unit, focused: Boolean = true, opened: Boolean = false) {
     val onSlot = page.rows.getOrNull(page.selected) is MenuRow.Slot
     val rowHeight = menuWordPitch(nxOptionsRowHeight(pageRowHeight, LocalNxOptionText.current))   // Appearance → Text size, as the option pages
+    val listState = rememberLazyListState()
     CompositionLocalProvider(LocalNxTapOpens provides { i -> !inGameRowTakesTwoTaps(page.rows.getOrNull(i)) }) { NxList(
         rows = page.rows.mapIndexed { i, row ->
             val value = (row as? MenuRow.Option)?.valueLabel
@@ -555,8 +556,11 @@ private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit,
         onSelect = onSelect,
         onOpen = onActivate,
         // Level with the panel's tab row: its first pill centred on the tab words.
+        // All its rows where they fit; a short glass (a 3DS top screen under a skin) clips it, and it scrolls under a thin fade.
         modifier = Modifier.padding(top = wordListTopPad(rowHeight)).fillMaxWidth().height(rowHeight * page.rows.size.coerceAtLeast(1))
+            .nxScrollFade(listState, MENU_LIST_FADE)
             .then(if (onSlot) Modifier.slotSwipe(onChange) else Modifier),
+        listState = listState,
         rowHeightOverride = rowHeight,
         pillPaddingOverride = MenuPillPadding,
         textSizeOverride = menuWordSize(), restInk = LocalNxColors.current.inkDim, wordInk = menuWordInk(focused),
@@ -583,6 +587,12 @@ private const val OPENED_MARK = "›"
 /** A word list's row pitch: the menu's [base] pitch, or [MENU_WORD_PITCH] × the word size where that is more, so words keep air between them. */
 @Composable
 private fun menuWordPitch(base: Dp): Dp = maxOf(base, with(LocalDensity.current) { (menuWordSize() * MENU_WORD_PITCH).toDp() })
+
+/**
+ * The menu word lists' "more this way" fade: a sliver, not a row (user), so a list in a short glass (a 3DS top screen
+ * under a skin) keeps its rows readable while the cut edge still reads as continuing.
+ */
+private val MENU_LIST_FADE = 14.dp
 
 /** A word list row's least pitch as a share of its word size. */
 private const val MENU_WORD_PITCH = 1.4f
@@ -705,10 +715,12 @@ private fun RowsBody(
         contentAlignment = Alignment.TopStart,
     ) {
         val shown = minOf(page.rows.size, maxOf(1, (maxHeight / itemHeight).toInt()))
+        val listState = rememberLazyListState()
         NxList(
             rows = page.rows.mapIndexed { i, row -> NxRow(openedLabel(row.label, opened && i == page.selected)) },
             selectedIndex = page.selected, onSelect = onSelect, onOpen = onActivate,
-            modifier = Modifier.fillMaxWidth().height(itemHeight * shown.coerceAtLeast(1)),
+            modifier = Modifier.fillMaxWidth().height(itemHeight * shown.coerceAtLeast(1)).nxScrollFade(listState, MENU_LIST_FADE),
+            listState = listState,
             rowHeightOverride = itemHeight, pillPaddingOverride = MenuPillPadding,
             textSizeOverride = menuWordSize(), restInk = LocalNxColors.current.inkDim, wordInk = menuWordInk(focused),
         )
