@@ -327,6 +327,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val renderer = FrontendRenderer(this, input, padLayout)
     private val dual = DualScreenController(this, input, padLayout, renderer)
     private val menu = InGameMenuController(this, input, padLayout, renderer, dual)
+    private val shortcuts = ShortcutsMicController(this, padLayout, renderer, menu, dual)
     override var inputManager: InputManager? = null
         private set
 
@@ -394,7 +395,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * Settings → System → Pause when unfocused: another app took the top focus while this window stays visible (split
      * screen, a freeform window, an app on another display), so the game holds, as under the menu, until it is back.
      */
-    private var focusPaused = false
+    internal var focusPaused = false
+        private set
     override val slotsUi = mutableStateOf<List<SlotUi>>(emptyList())
     // openMenu reads no files on the main thread. The slot strip ([slotsUi]) and the last-used
     // slot are read on IO at start and after every write of them, so an open shows them at once; an open re-reads the
@@ -491,55 +493,24 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override var frontendValues: Map<String, String> = FrontendOptions.defaults()   // every frontend key, as in effect now
         private set
     /** The core can rewind ([com.nxredux.mobile.runner.CoreDescriptor.rewind]); false until the launch resolves the core. */
-    private var canRewind = false
+    internal var canRewind = false
+        private set
     /**
      * Fast forward and rewind on the view; the shortcuts drive it ([onShortcut]), the speed rows configure it ([applyFrontend]).
      * Off for a netplay session ([SpeedController.setSession]): a link session's end turns it back on ([playLocally]), a
      * lockstep session's does not, so a game played on alone after lockstep keeps it off, as it keeps save states off.
      */
-    private val speed by lazy {
+    internal val speed by lazy {
         // The panels' Fast forward / Rewind tiles follow whatever changed them (a shortcut, a tile, the buffer running out).
         // So do the touch shortcut buttons' toggled look and their Rewind rows.
-        SpeedController(lifecycleScope, lifecycle, onTiles = { dual.refreshDualPanel(); menu.menuModel?.let(menu::publishSpeed); refreshTouchShortcuts() }) { retroView }
+        SpeedController(lifecycleScope, lifecycle, onTiles = { dual.refreshDualPanel(); menu.menuModel?.let(menu::publishSpeed); shortcuts.refreshTouchShortcuts() }) { retroView }
     }
-    /** The core hears a mic ([CoreDescriptor.microphone]: DS, DSi, 3DS); false until the launch resolves the core. */
-    private var canMic = false
-    /**
-     * The session's Mic toggle ([MicControl]), made at launch for a mic core only; null for every other core, so every
-     * mic path (pad button, tile, binding, source) is inert. Off at every launch; [applyMic] pushes it everywhere.
-     */
-    private var mic: MicControl? = null
-    /** The pad's mic button, snapshot state read in the pads' composition ([padMic]): set by [applyMic]. */
-    private val padMicState = mutableStateOf<PadMic?>(null)
-    // RECORD_AUDIO, asked from the Mic toggle only ([setMic]): the answer is pushed at once, so a denial gives noise.
-    private val micPrompt = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        mic?.setGranted(granted)
-        applyMic()
-    }
-    private val micAccess by lazy { AndroidMicAccess(this) { micPrompt.launch(android.Manifest.permission.RECORD_AUDIO) } }
-    // What [applyShortcuts] last built: the touch buttons' actions ([refreshTouchShortcuts]).
-    private var effectiveShortcuts: EffectiveShortcuts? = null
-    /** The touch shortcut buttons the pads draw: snapshot state, read in the pads' composition. */
-    private val touchShortcuts = mutableStateOf<Map<TouchSlot, TouchShortcut>>(emptyMap())
-    // Each touch button's action while its press lasts: the release ends what the press started, even if the slot's
-    // action changed meanwhile.
-    private val touchHeld = HashMap<TouchSlot, ShortcutAction>()
-    /** Controls → Shortcuts with this console's and game's `nx_bind_*` over it, read at launch; null before. */
-    override var shortcutKeys: ShortcutKeys? = null
-        private set
-    // What [shortcutKeys] is built from ([applyShortcuts]): Controls → Shortcuts and the console's hotkeys, read at launch
-    // (neither can change while the game runs), and this console's or game's overrides, which the in-game Shortcuts page
-    // edits live and Save Changes writes.
-    private var shortcutBase = ShortcutSet.EMPTY
-    private var shortcutClaimed: List<ClaimedInput> = ConsoleHotkeys.always
-    override var shortcutOverrides: ShortcutOverrides = ShortcutOverrides.NONE
-        private set
     // Settings → Controls → Game rumble, read once per game: each port's rumble on its own pad; port 0 falls back to the phone.
     private val gameRumble by lazy { settings.gameRumble }
     private val intentTitle: String? get() = intent.getStringExtra(EXTRA_TITLE)
     private val intentTag: String? get() = intent.getStringExtra(EXTRA_TAG)
     // One instance per game: the game process's prefs refresh in place (Prefs.refreshGame), so reads stay current.
-    private val settings by lazy { AndroidAppSettings(this) }
+    internal val settings by lazy { AndroidAppSettings(this) }
     /** Each port's rumble (index = port); empty until [startEmulator] builds it, so every use must tolerate empty. */
     override var rumbles: Array<RumbleMotor> = emptyArray()
         private set
@@ -834,9 +805,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             netplayGame?.resume()   // netplay: input flows again; with the menu open it stays paused until Continue
         }
         syncMotionSensors(foreground = true)
-        // The permission may have been granted or revoked in Android's settings meanwhile: live or noise again.
-        mic?.setGranted(micAccess.granted())
-        pushMicSource(foreground = true)
+        shortcuts.onResume()
         dual.syncDual()   // Settings → Second screen may have changed meanwhile
     }
 
@@ -873,7 +842,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         netplayGame?.takeIf { it.live }?.pause() ?: run { retroView?.frameSpeed = 0 }
         retroView?.audioEnabled = false
         rumbles.forEach { it.pause() }
-        pushMicSource()
+        shortcuts.pushMicSource()
     }
 
     /** Plays the core on; a failed netplay start keeps the game paused behind its dialog. */
@@ -885,7 +854,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         if (!quitting) rumbles.forEach { it.resume() }
         renderer.onCoreResumed()
-        pushMicSource()
+        shortcuts.pushMicSource()
     }
 
     // Debug only: a GAME test hook's locked test device stays awake whatever the menu does.
@@ -915,7 +884,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // with it, unsaved, so the game never plays on under it and a menu opened again is not drawn beneath it
         closeSkinEdit()
         syncKeepScreenOn()
-        if (focusPaused) { syncMotionSensors(); pushMicSource(); return }   // another app has the focus: focusResume plays on later
+        if (focusPaused) { syncMotionSensors(); shortcuts.pushMicSource(); return }   // another app has the focus: focusResume plays on later
         syncMotionSensors()
         releaseCore()
     }
@@ -1333,24 +1302,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // netplay: both devices run the console's default Sega pad (Auto), whatever this device's console or game setting;
         // the core then gets the handheld pak's pad for this tag and core (NetplayPads).
         if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to SegaPadType.AUTO)
-        // Shortcuts: the base with this console's and game's overrides, less what a built-in hotkey owns. netplay: they
-        // stay bound but do nothing, as fast forward, rewind and reset would desync the players. A link session's end
-        // turns them back on ([playLocally]); a lockstep session's does not: the game played on alone after it keeps them
-        // off, as it has no save states.
         canRewind = descriptor?.rewind == true
-        // DS / 3DS: the Mic toggle, off; netplay hides it (as the speed shortcuts) until a link session's end.
-        canMic = descriptor?.microphone == true
-        mic = if (canMic) MicControl(micAccess.usable).apply {
-            setGranted(micAccess.granted())
-            setAsked(settings.micAsked)
-            setSession(netplay = np != null)
-        } else null
-        shortcutBase = Shortcuts.decodeBase(settings.shortcuts)
-        shortcutClaimed = ConsoleHotkeys.claimed(tag)
-        applyShortcuts(Shortcuts.fromConfig(resolved.values))
+        shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values))
         speed.setSession(netplay = np != null)
-        applyMic()
-        refreshTouchShortcuts()
+        shortcuts.applyMic()
+        shortcuts.refreshTouchShortcuts()
         val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id) else null
         renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
         renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(shaderRoots) }
@@ -1617,8 +1573,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     } + forced.filterKeys { k -> options.none { it.key == k } }.map { (k, v) -> Variable(k, v) }).toTypedArray()
                     rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
                     preferLowLatencyAudio = true
-                    // DS / 3DS: the frontend feeds the core's mic ([applyMic] picks silence, the phone mic or noise).
-                    enableMicrophone = canMic
+                    // DS / 3DS: the frontend feeds the core's mic ([ShortcutsMicController.applyMic] picks silence, the phone mic or noise).
+                    enableMicrophone = shortcuts.canMic
                     // GL driver messages and a frame probe to tag NXGL, with Settings → System → Debug log on at
                     // launch.
                     glDebugOutput = NxLog.enabled
@@ -1693,7 +1649,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         view.pictureHeld = true   // black until the first frame's layout places the picture ([PictureHold])
         retroView = view
         speed.apply()   // a speed set before the view existed (the launch's rows reach it again in applyFrontend)
-        pushMicSource()   // a Mic toggle tapped before the view existed
+        shortcuts.pushMicSource()   // a Mic toggle tapped before the view existed
         // Not in netplay: a link cable's step may wait out the peer's hold (sio_lockstep: up to 30 s), and the session
         // has its own timeouts.
         coreWatchdog = CoreWatchdog({ if (netplay == null) view.stepStalledMillis() else 0L }, onHung = ::onCoreHung)
@@ -2524,8 +2480,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun padMotion(): PadMotion? =
         if (isWii && padProfile().motionButton && motionSensors?.hasSensors == true) PadMotion(wiiMotionOn, ::toggleWiiMotion, ::recenterWiiMotion) else null
 
-    /** The pad's fixed mic button ([PadMic]): the session's Mic toggle on DS / 3DS, hidden in netplay; null otherwise. */
-    override fun padMic(): PadMic? = padMicState.value
+    override fun padMic(): PadMic? = shortcuts.padMic()
 
     /**
      * The keys the menu leaves out: the .cfg's locks, Motion Controls on a Wii game without both sensors, both Wii rows
@@ -2677,7 +2632,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         quitting = true
         GameHeartbeat.start(this)   // the menu may be waiting for this process to end: its saves can take a while
         rumbles.forEach { it.release() }
-        pushMicSource()   // silence now, so the phone's mic closes before the save, not at the pause
+        shortcuts.pushMicSource()   // silence now, so the phone's mic closes before the save, not at the pause
         endGameTime()
         val view = retroView
         val ss = saveStates
@@ -3039,9 +2994,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (netplayLocal) return
         netplayLocal = true
         speed.setSession(netplay = false)   // the shortcuts work again
-        mic?.setSession(netplay = false)   // the Mic toggle shows again, off
-        applyMic()
-        refreshTouchShortcuts()
+        shortcuts.onSessionEnded()
         saveStates = SaveStates(dataRoot, paths).also { ss ->
             // Read now, as openMenu does for a menu opened before the first read: an open menu shows this slot.
             lastSlotCache = ss.lastSlot()
@@ -3328,123 +3281,32 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun toggleMenu() = menu.toggleMenu()
     override fun backPressed() = if (skinEditView != null) skinEditBack() else menu.backPressed()
 
-    override fun onShortcut(action: ShortcutAction, down: Boolean) {
-        if (action == ShortcutAction.TOGGLE_MIC) { if (down && mic != null) toggleMic(); return }
-        when (speed.onAction(action, down)) {
-            SpeedEffect.AskReset -> askReset()
-            SpeedEffect.SaveAndQuit -> quitWithAutoState(chosen = true, autoState = true)   // the menu's Save & Quit
-            SpeedEffect.SaveState -> quickState(save = true)
-            SpeedEffect.LoadState -> quickState(save = false)
-            null -> Unit
-        }
-    }
-
-    /** Save state / Load state from a shortcut: the save-state slot last used, as the in-game menu's. */
-    private fun quickState(save: Boolean) {
-        if (saveStates == null) { toast("Save states are off here"); return }
-        val slot = lastSlotCache ?: saveStates?.lastSlot() ?: 1
-        if (save) saveToSlot(slot) else loadFromSlot(slot)
-    }
+    override fun onShortcut(action: ShortcutAction, down: Boolean) = shortcuts.onShortcut(action, down)
 
     override fun releaseShortcutHolds() = speed.releaseHolds()
 
-    override val padShortcuts: Map<TouchSlot, TouchShortcut> get() = touchShortcuts.value
+    override val padShortcuts: Map<TouchSlot, TouchShortcut> get() = shortcuts.padShortcuts
 
-    /** A pad skin's SAVE / LOAD (the last-used slot), REWIND (held) or FAST (toggled), as the touch shortcuts go. */
-    override fun onSkinShortcut(action: SkinAction, down: Boolean) {
-        if (down && menuOpen) return   // a release always goes through: a held REWIND must not stick
-        when (action) {
-            SkinAction.SAVE, SkinAction.LOAD -> if (down) quickState(save = action == SkinAction.SAVE)
-            SkinAction.REWIND -> onShortcut(ShortcutAction.HOLD_REWIND, down)
-            SkinAction.FAST -> onShortcut(ShortcutAction.TOGGLE_FF, down)
-            else -> Unit   // MIC, SWAP: the pad layout's own; the strip's slots go to [onPadShortcut]
-        }
-    }
+    override fun onSkinShortcut(action: SkinAction, down: Boolean) = shortcuts.onSkinShortcut(action, down)
 
-    /**
-     * A touch shortcut button goes through [onShortcut] as a bound button does: hold while down, toggle on the press.
-     * Not while the in-game menu is open (the portrait band stays up and drives it): the menu took the shortcuts.
-     */
-    override fun onPadShortcut(slot: TouchSlot, down: Boolean) {
-        if (down) {
-            if (menuOpen) return
-            val action = touchShortcuts.value[slot]?.action ?: return
-            touchHeld[slot] = action
-            onShortcut(action, true)
-        } else {
-            touchHeld.remove(slot)?.let { onShortcut(it, false) }
-        }
-    }
+    override fun onPadShortcut(slot: TouchSlot, down: Boolean) = shortcuts.onPadShortcut(slot, down)
 
-    /**
-     * The touch buttons to draw now: after the shortcuts are built ([applyShortcuts]), a session starts or ends, and the
-     * speed's tiles change (a toggle's look, the Rewind row).
-     */
-    private fun refreshTouchShortcuts() {
-        val before = touchShortcuts.value.keys
-        touchShortcuts.value = visibleTouchShortcuts(effectiveShortcuts, speed.output, speed.inSession, rewind = speed.rewindShown)
-        padLayout.refreshSkinShortcuts()
-        // A button coming or going changes the landscape pad's second row, so its height and reach: lay out again.
-        if (touchShortcuts.value.keys != before) findViewById<View?>(R.id.root)?.post { renderer.relayoutFrontend() }
-    }
+    override val shortcutKeys: ShortcutKeys? get() = shortcuts.shortcutKeys
 
-    /**
-     * This console's or game's shortcut [overrides] now (launch, the in-game Shortcuts page, Restore defaults): the keys
-     * are built again. Only while no shortcut key is held: the menu that changes them released them all as it opened.
-     */
-    override fun applyShortcuts(overrides: ShortcutOverrides) {
-        shortcutOverrides = overrides
-        val effective = Shortcuts.effective(shortcutBase, overrides, shortcutClaimed, canRewind, canMic = canMic)
-        effectiveShortcuts = effective
-        shortcutKeys = ShortcutKeys(effective, shortcutClaimed, SystemClock::uptimeMillis)
-        refreshTouchShortcuts()
-    }
+    override val shortcutOverrides: ShortcutOverrides get() = shortcuts.shortcutOverrides
 
-    override fun publishShortcuts(model: InGameMenuModel) = model.setShortcuts(shortcutBase, shortcutOverrides, shortcutClaimed, canRewind, canMic)
+    override fun applyShortcuts(overrides: ShortcutOverrides) = shortcuts.applyShortcuts(overrides)
+
+    override fun publishShortcuts(model: InGameMenuModel) = shortcuts.publishShortcuts(model)
 
     override fun menuCaptureKey(keyCode: Int, down: Boolean, repeat: Boolean): Boolean = menu.captureKey(keyCode, down, repeat)
 
     override fun speedTiles(): Pair<Boolean, Boolean?> = speed.tiles()
 
     override fun setSpeedToggle(ff: Boolean?, rewind: Boolean?) = speed.setToggle(ff, rewind)
-    /** The panels' Mic tile: the toggle while shown ([MicControl.shown]); null (no tile) off DS / 3DS and in netplay. */
-    override fun micTile(): Boolean? = mic?.takeIf { it.shown }?.on
+    override fun micTile(): Boolean? = shortcuts.micTile()
 
-    /**
-     * The one way the Mic toggle changes (the pad's mic button, the Mic tile in the menu or the dual-screen panel, the
-     * Toggle mic binding). The first turn on of the install asks for RECORD_AUDIO; meanwhile, and after a denial, the game
-     * hears noise. Ignored in netplay ([MicControl.setOn]).
-     */
-    override fun setMic(on: Boolean) {
-        val m = mic ?: return
-        if (m.setOn(on)) {
-            settings.micAsked = true
-            m.setAsked(true)
-            micPrompt.launch(android.Manifest.permission.RECORD_AUDIO)   // the prompt only: never the settings page
-        }
-        applyMic()
-    }
-
-    private fun toggleMic() { mic?.let { setMic(!it.on) } }
-
-    /**
-     * What the core hears now: the toggle's source while the game runs in front, else silence, which closes the phone
-     * mic ([GLRetroView.microphoneSource]). [foreground]: as [syncMotionSensors].
-     */
-    private fun pushMicSource(foreground: Boolean = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-        val m = mic ?: return
-        val run = !menuOpen && !focusPaused && !quitting && foreground
-        retroView?.microphoneSource = (if (run) m.source else MicSource.SILENCE).native
-    }
-
-    /** The Mic toggle changed (or its permission or session): the source, the pad's button and both panels' tiles. */
-    private fun applyMic() {
-        val m = mic ?: return
-        pushMicSource()
-        padMicState.value = if (m.shown) PadMic(m.on, ::toggleMic) else null
-        menu.menuModel?.let(menu::publishSpeed)
-        dual.refreshDualPanel()
-    }
+    override fun setMic(on: Boolean) = shortcuts.setMic(on)
 
     /**
      * A Reset shortcut or the dual-screen panel's Reset tile: reset always asks first, so the in-game menu opens on its
