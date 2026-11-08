@@ -119,17 +119,21 @@ internal class SwitcherController(
      * The menu came to the foreground: true when it is back from a game opened over the switcher that is still up
      * ([backUnderGame] then follows). Read once: a later foreground is not one from that game.
      */
-    fun onForeground(): Boolean {
+    /**
+     * Back in the foreground: when the switcher stayed up over the game, the action that takes it back (read now, run
+     * by the caller once its other returns are done); else null. The flag is used up either way.
+     */
+    fun onForeground(): (() -> Unit)? {
         val back = switcherUnderGame && screen.value is Screen.Switcher
         switcherUnderGame = false
-        return back
+        return if (back) ::backUnderGame else null
     }
 
     /**
      * Back from the game the switcher stayed up over: its return is used up, Home's rows are rebuilt behind it (swapped
      * in at its close), and its cards read again in place.
      */
-    fun backUnderGame() {
+    private fun backUnderGame() {
         dropSwitcherReturn()
         switcherRowsRebuilt = true
         scope.launch { host.rebuildMainRows() }

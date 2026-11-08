@@ -6475,6 +6475,15 @@ class AppStateTest {
         assertEquals(SettingsSection.DEFAULT_EMULATORS, assertIs<Screen.Settings>(state.screen.value).section)
     }
 
+    @Test fun split_held_left_on_a_sub_page_goes_up_one_level_only() = runTest {
+        val (state, _) = splitSettings()
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.RIGHT)  // Emulators
+        state.select(0); state.onButton(NxButton.A)                     // Default emulators
+        state.onButton(NxButton.LEFT)                                   // up to Emulators
+        repeat(3) { state.onButton(NxButton.LEFT, repeat = true) }      // the held press's repeats
+        assertEquals(SettingsSection.EMULATORS, assertIs<Screen.Settings>(state.screen.value).section)
+    }
+
     @Test fun split_sub_pages_open_in_the_right_pane_and_b_goes_up_one_level_then_left() = runTest {
         val (state, _) = splitSettings()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.RIGHT)  // Emulators

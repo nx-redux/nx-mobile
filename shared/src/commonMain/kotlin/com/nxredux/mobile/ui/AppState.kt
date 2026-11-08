@@ -4777,7 +4777,7 @@ class AppState(
         // ([SwitcherController.reopenSwitcher]): over the main menu after the rows rebuilt below (a swap would abandon an open under way).
         // Back on a list or a page: Home's rows are rebuilt all the same (the page stays as it is; [swapMainRows] only acts
         // on the menu), so B to the menu shows Continue's new resume frame, not the one read when the game launched.
-        if (switcherBack) { switcher.backUnderGame(); return }
+        if (switcherBack != null) { switcherBack(); return }
         val s = _screen.value as? Screen.Systems ?: run { scope.launch { refreshMainRows() }; switcher.reopenSwitcher(); return }
         if (s.menu != null) { switcher.dropSwitcherReturn(); return }
         if (!firstSetup) updaterOnMainMenu()   // back over the menu (from a game, or the install-permission screen)
@@ -5752,7 +5752,9 @@ class AppState(
         netplay?.takeIf { it.page.value != null }?.let { it.onButton(button); return }   // the Netplay sheet over a game list
         // A two-pane page's row edit takes the press, or has the page hear LEFT / RIGHT as its own B / A.
         val heard = settingsUi.onRowEditButton(_screen.value, button) ?: return
-        onPageButton(heard, repeat = repeat && heard == button)
+        // A held direction turned into B or A acts once: its repeats would climb or open one page per repeat.
+        if (repeat && heard != button) return
+        onPageButton(heard, repeat)
     }
 
     /** [button] as the screen itself hears it, once the dialogs, popups and row edit that come first ([onButton]) let it through. */

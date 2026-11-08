@@ -280,7 +280,7 @@ internal class SettingsController(
         // One tap opens the section, from the root or from another section's page.
         if (screen.value is Screen.SettingsMenu) {
             host.select(index)
-            openHighlightedSection()
+            if (!host.minimalPending()) openHighlightedSection()
             return
         }
         if (settingsPane(screen.value) != SettingsPane.RIGHT) return   // a stale tap from a page drawn whole: the root's row stays
@@ -289,16 +289,15 @@ internal class SettingsController(
         repeat(SETTINGS_MAX_DEPTH) {
             if (host.loaderActive()) return
             if (settingsPane(screen.value) != SettingsPane.RIGHT) {
-                if (screen.value is Screen.SettingsMenu) { host.select(index); openHighlightedSection() }
+                if (screen.value is Screen.SettingsMenu) { host.select(index); if (!host.minimalPending()) openHighlightedSection() }
                 return
             }
             host.back()
         }
     }
 
-    /** A on the section menu: its highlighted section opens. Input waits while a screen loads or a Minimal open is under way. */
+    /** The section menu's highlighted section opens; the caller has checked that input is not waiting. */
     fun openHighlightedSection() {
-        if (host.loaderActive() || host.minimalPending()) return
         (screen.value as? Screen.SettingsMenu)?.sections?.getOrNull(selection.value.index)?.let(::openSettings)
     }
 
