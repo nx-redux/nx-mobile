@@ -140,6 +140,8 @@ private:
     void updateProgram();
 
     float getScreenDensity(float screenWidth, float screenHeight);
+    float pictureDensity(const std::array<float, 12>& vertices, const std::array<float, 12>& coordinates,
+                         unsigned screenWidth, unsigned screenHeight);
     // The last frame's size: the part of the texture the core drew.
     float getTextureWidth();
     float getTextureHeight();

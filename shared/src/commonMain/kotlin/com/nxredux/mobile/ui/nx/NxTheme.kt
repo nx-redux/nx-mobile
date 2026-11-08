@@ -135,15 +135,11 @@ data class NxColors(
     val slotDotLit: Color = Color(0xFF111111)
     /** The save-slot card's dots for the other slots. */
     val slotDot: Color = Color(0xFF8C8C8C)
-    /** The pad layout editor (PadLayoutEditor): the game picture's stand-in. */
-    val editorGameBlock: Color = Color(0xFF3A3A3A)
-    /** The pad layout editor: a control overlapping another or the game. */
+    /** The button layout editor (SkinLayoutEditor): where no group may go. */
     val editorOverlap: Color = Color(0xFFE5484D)
-    /** The pad layout editor: the hinge between a foldable's two halves. */
-    val editorHinge: Color = Color(0xFF6A6A6A)
-    /** The pad layout editor's floating toolbar panel. */
+    /** The button layout editor's floating toolbar panel. */
     val editorPanel: Color = Color(0xE6121212)
-    /** The pad layout editor's toolbar buttons (not the primary one, on the accent). */
+    /** The button layout editor's toolbar buttons (not the primary one, on the accent). */
     val editorButton: Color = Color(0xFF2A2A2A)
 }
 

@@ -68,15 +68,13 @@ class InGameMenuSplitTest {
     }
 
     // A narrow portrait (the Flip): the Options words don't fit beside the root's, so the shortcuts stay and the page opens whole.
-    @Test fun inPortraitAnOptionsPageThatDoesNotFitBesideTheRootKeepsTheShortcutsAndOpensWhole() {
+    @Test fun inPortraitAnOptionsPageThatDoesNotFitBesideTheRootKeepsThePanelAndOpensWhole() {
         val m = model(split = false)
         m.optionsBeside = false
         m.onRow("Options")
         assertEquals(MenuPaneContent.Panel, menuPanes(m.state, split = false, optionsBeside = false)!!.right)
         assertTrue(menuTabsShown(m.state))
-        assertNull(m.press(NxButton.RIGHT))                  // the shortcuts beside the words, as from any other row
-        assertEquals(PanelFocus.Item(0), m.state.panelFocus)
-        m.press(NxButton.LEFT); m.press(NxButton.A)          // back on Options: A opens it
+        m.press(NxButton.A)                                  // A opens it
         assertEquals(PageKind.Options, m.state.page.kind)
         assertNull(menuPanes(m.state, split = false, optionsBeside = false))   // drawn whole
         // Split, the rule never applies.
@@ -106,13 +104,12 @@ class InGameMenuSplitTest {
         assertNull(menuPanes(m.state))
     }
 
-    @Test fun rightOnTheRootEntersTheShortcutsAndOpensARowThatOpensAPageDeeper() {
+    @Test fun rightOnTheRootOpensARowThatOpensAPageDeeper() {
         val m = model()
         m.onRow("Continue")
-        assertNull(m.press(NxButton.RIGHT))
+        assertNull(m.press(NxButton.RIGHT))                  // no shortcut tiles to enter: RIGHT stays on the words
         assertEquals(PageKind.Root, m.state.page.kind)
-        assertEquals(PanelFocus.Item(0), m.state.panelFocus)
-        m.press(NxButton.B)
+        assertNull(m.state.panelFocus)
         m.onRow("Options")
         m.press(NxButton.RIGHT)
         assertEquals(PageKind.Options, m.state.page.kind)

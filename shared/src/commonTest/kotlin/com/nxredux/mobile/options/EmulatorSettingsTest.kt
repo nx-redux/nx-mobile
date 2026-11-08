@@ -93,7 +93,7 @@ class EmulatorSettingsTest {
         val fold = landscape(com.nxredux.mobile.layout.ScreenClass.STUBBY_PHONE)
         assertEquals(NdsLayoutChoice.LARGE.value, fold.value)
         assertTrue(NdsLayoutChoice.SIDE_BY_SIDE.value !in fold.option.values)
-        assertEquals(NdsLayoutChoice.SIDE_BY_SIDE.value, landscape(com.nxredux.mobile.layout.ScreenClass.REGULAR_PHONE).value)
+        assertEquals(NdsLayoutChoice.SINGLE.value, landscape(com.nxredux.mobile.layout.ScreenClass.REGULAR_PHONE).value)
         val n3ds = com.nxredux.mobile.runner.CoreRegistry.forTag("3DS")!!
         val tablet = EmulatorSettings.page("3DS", n3ds, null, n3ds.defaultOptions, null, null, forGame = false, screen = com.nxredux.mobile.layout.ScreenClass.WIDE_TABLET)
         assertEquals("large", tablet.console.single { it.option.key == N3dsOptions.LAYOUT_LANDSCAPE }.value)

@@ -38,7 +38,7 @@ import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 
-enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, CANCEL }
+enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, ASK_RESET, CANCEL, ADJUST_BUTTONS }
 enum class SlotAction { SAVE, LOAD }
 
 sealed interface PageKind {
@@ -234,6 +234,8 @@ sealed interface MenuEffect {
     data class SetMic(val on: Boolean) : MenuEffect
     /** The Reset dialog's Reset: restart the game, then close the menu. */
     data object ResetGame : MenuEffect
+    /** Adjust buttons: the host opens the skin layout editor over the paused game; the menu stays as it is under it. */
+    data object AdjustButtons : MenuEffect
 }
 
 /**
@@ -353,6 +355,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             refreshFrontendPages()
         }
 
+    /** The 3DS layout rows the pad skin ignores here (N3dsOptions.lockedLayoutRows, host-set): shown unavailable (user). */
+    var layoutLocked: Set<String> = emptySet()
+        set(value) {
+            if (value == field) return
+            field = value
+            refreshFrontendPages()
+        }
+
     private var nds3dNow: Int? = null            // the DS 3D scale in use (null: unknown / not DS)
     private var nds3dSoftware = false            // the core renders in software: the 3D Resolution rows take no effect
 
@@ -380,6 +390,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var shortcutMic = false
     /** A controller is connected ([setControllerConnected]): without one the page has no bind rows (the on-screen pad binds nothing). */
     private var controllerConnected = true
+    /** A pad skin or its bare buttons are drawn ([setPadDrawn]). */
+    private var padDrawn = false
     /** Press to bind on the Shortcuts page; the host hands it raw key codes ([takesKey], [captureKey]). */
     private var capture = ShortcutCapture(shortcutClaimed)
     private var capturing: ShortcutAction? = null
@@ -540,9 +552,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 !root && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
                 !root -> if (stepsOnSide()) { intoAdjust(state.page.selected); change(1) } else null
                 visualRow(state.page.selected) != null -> { intoAdjust(state.page.selected); change(1) }
-                // The Disc row keeps RIGHT for its value; every other row enters the shortcuts (beside or below the words).
-                panelShown() && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Option -> {
-                    state = state.copy(panelFocus = if (panelShortcuts().isNotEmpty()) PanelFocus.Item(0) else PanelFocus.Tabs); null
+                // The Disc row keeps RIGHT for its value; every other row enters the shortcuts (beside or below the words),
+                // when there are any: none in the menu now (the skin's strip has them), so RIGHT stays on the words.
+                panelShown() && panelShortcuts().isNotEmpty() && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Option -> {
+                    state = state.copy(panelFocus = PanelFocus.Item(0)); null
                 }
                 // Options moves into its preview, as A, whether or not the menu splits.
                 (split || state.preview != null) && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
@@ -983,9 +996,15 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** Rebuilds the root page, keeping the selection on the row with the same label (root labels are unique), and the panel. */
     private fun refreshRoot() {
+        // the root, Options and Controls (Adjust buttons comes and goes on these), each keeping its selected row by label
         state = state.copy(stack = state.stack.map { p ->
-            if (p.kind != PageKind.Root) p else {
-                val fresh = rootPage()
+            val fresh = when (p.kind) {
+                PageKind.Root -> rootPage()
+                PageKind.Options -> optionsPage()
+                PageKind.Settings(OptionGroup.CONTROLS) -> groupPage(OptionGroup.CONTROLS)
+                else -> null
+            }
+            if (fresh == null) p else {
                 val label = p.rows.getOrNull(p.selected)?.label
                 fresh.copy(selected = fresh.rows.indexOfFirst { it.label == label }.coerceAtLeast(0))
             }
@@ -1098,8 +1117,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         cheats = cheatsAvailable && !netplay,
     )
 
-    private fun panelShortcuts(): List<ShortcutState> =
-        GamePanelModel.shortcuts(discCount, discIndex, secondConnected, secondOn, netplay, speedFf, speedRewind, micTile)
+    /**
+     * None: the skin's touch strip holds the shortcuts (user), Reset is a root row and the Disc row swaps discs. The
+     * second-screen panel keeps its own tiles ([GamePanelModel.shortcuts]).
+     */
+    private fun panelShortcuts(): List<ShortcutState> = emptyList()
 
     private fun panelAchievements(): List<RaAchievement> = achievements.orEmpty().sortedBy(achievementOrder)
 
@@ -1261,7 +1283,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         MenuAction.SAVE_AND_QUIT -> MenuEffect.Quit
         MenuAction.QUIT_ONLY -> MenuEffect.QuitWithoutResume
         MenuAction.RESET -> { resetClosesOnCancel = false; popTo(PageKind.Root); MenuEffect.ResetGame }
+        MenuAction.ASK_RESET -> { push(resetPage()); resetClosesOnCancel = false; null }
         MenuAction.CANCEL -> cancelReset()
+        MenuAction.ADJUST_BUTTONS -> MenuEffect.AdjustButtons
         MenuAction.LEAVE_NETPLAY -> MenuEffect.LeaveNetplay
         MenuAction.SAVE_FOR_CONSOLE -> { popTo(PageKind.Options); MenuEffect.SaveForConsole }
         MenuAction.SAVE_FOR_GAME -> { popTo(PageKind.Options); MenuEffect.SaveForGame }
@@ -1340,6 +1364,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             val current = shaderValue(key) ?: return null
             return ShaderOptions.cycle(key, current, delta, presets, params)?.let { setFrontendValue(key, it) }
         }
+        if (key in layoutLocked) return null
         if (softwareLocked(key)) return null
         // An unset DS layout row (no stored value) cycles from its shown default, like frontendRow shows it.
         val option = optionFor(key)
@@ -1369,6 +1394,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** The raw values a frontend or shader row offers, in [MenuRow.Option.choices]' order; null for an unknown key. */
     private fun settingValues(key: String): List<String>? = when {
         ShaderOptions.isShaderKey(key) -> ShaderOptions.choices(key, presets, params)
+        key in layoutLocked -> emptyList()
         key == FrontendOptions.OVERLAY -> FrontendOptions.choices(key, overlays)
         else -> optionFor(key)?.values
     }
@@ -1530,6 +1556,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             if (discCount > 1) add(MenuRow.Option(DISC_LABEL, DISC_KEY, "${discIndex + 1}/$discCount", choices = (1..discCount).map { "Disc $it" }, index = discIndex, detail = DISC_INFO))
             add(MenuRow.Slot("Save", SlotAction.SAVE))
             add(MenuRow.Slot("Load", SlotAction.LOAD))
+            add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage]); the panel's Reset tile before (user)
             add(MenuRow.Submenu("Options", PageKind.Options))
             add(MenuRow.Action("Quit", MenuAction.QUIT))
         },
@@ -1554,14 +1581,22 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      */
     private fun groupPage(group: OptionGroup) = MenuPage(
         PageKind.Settings(group), group.label,
-        settingRows().filter { OptionGroup.of(it.key) == group }.map(::frontendRow),
+        settingRows().filter { OptionGroup.of(it.key) == group }.map(::frontendRow) +
+            // Controls ends with Adjust buttons (user), only while the pad skin's buttons are drawn (a controller draws none)
+            (if (group == OptionGroup.CONTROLS && adjustable()) listOf(MenuRow.Action(ADJUST_BUTTONS_LABEL, MenuAction.ADJUST_BUTTONS)) else emptyList()),
     )
+
+    /** Adjust buttons is offered: the pad skin or its bare buttons are drawn and no controller is attached. */
+    private fun adjustable() = padDrawn && !controllerConnected
 
     /** Every app setting the running game shows: this console's rows, then the frontend's. */
     private fun settingRows(): List<FrontendOption> = consoleRows() + frontendRows()
 
     /** The groups with rows to show, in order. */
-    private fun shownGroups(): List<OptionGroup> = OptionGroup.grouped(settingRows()) { it.key }.map { it.first }
+    private fun shownGroups(): List<OptionGroup> = OptionGroup.grouped(settingRows()) { it.key }.map { it.first }.let { groups ->
+        // Controls for Adjust buttons alone too, in its place among the groups
+        if (!adjustable() || OptionGroup.CONTROLS in groups) groups else (groups + OptionGroup.CONTROLS).sortedBy { it.ordinal }
+    }
 
     /**
      * This console's own rows, locked ones and the ones read only at launch ([FrontendOption.atLaunch]: set in
@@ -1629,7 +1664,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     private fun frontendRow(o: FrontendOption): MenuRow.Option =
-        if (softwareLocked(o.key)) {
+        if (o.key in layoutLocked) {
+            MenuRow.Option(o.label, o.key, UNAVAILABLE, LAYOUT_SKIN_LINE, detail = LAYOUT_SKIN_INFO)
+        } else if (softwareLocked(o.key)) {
             val value = ConsoleSettings.fitted(o, frontend[o.key] ?: o.default).second
             MenuRow.Option(o.label, o.key, o.labelOf(value), NdsOptions.SOFTWARE_NOTE)
         } else {
@@ -1661,12 +1698,23 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         refreshShortcutsPage()
     }
 
+    /**
+     * A pad skin or its bare buttons are drawn ([drawn]): with no controller attached Options → Controls offers Adjust
+     * buttons (the editor for the layout being played). Rebuilds the pages it shows on.
+     */
+    fun setPadDrawn(drawn: Boolean) {
+        if (drawn == padDrawn) return
+        padDrawn = drawn
+        refreshRoot()
+    }
+
     /** Whether a controller is [connected]; one going away ends a wait. Refreshes an open Shortcuts page. */
     fun setControllerConnected(connected: Boolean) {
         if (connected == controllerConnected) return
         controllerConnected = connected
         if (!connected) endWait()
         refreshShortcutsPage()
+        refreshRoot()   // Adjust buttons comes and goes with it
     }
 
     /**
@@ -1773,10 +1821,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             }
         }
         val choices = touchChoices()
-        val touch = TouchSlot.entries.mapIndexed { i, t ->
+        val touch = TouchSlot.entries.map { t ->
             val action = effective.touch[t]
             MenuRow.Option(
-                "Touch button ${i + 1}", TOUCH_KEY_PREFIX + t.key, shown(action?.label ?: NONE_LABEL, t !in shortcutOverrides.touch),
+                t.label, TOUCH_KEY_PREFIX + t.key, shown(action?.label ?: NONE_LABEL, t !in shortcutOverrides.touch),
                 choices = choices.map { it?.label ?: NONE_LABEL }, index = choices.indexOf(action),
             )
         }
@@ -1856,8 +1904,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         // Presses while the menu is open never claim a slot.
         const val PLAYERS_FOOTER = "Close the menu, then press a button\non a new controller to join."
         const val ACHIEVEMENTS_LABEL = "Achievements"
+        const val ADJUST_BUTTONS_LABEL = "Adjust buttons"
         const val NO_LOCKED = "Everything unlocked."
         const val ACH_KEY_PREFIX = "ach:"
+        /** A layout row the pad skin ignores ([layoutLocked]): its line and its info. */
+        const val LAYOUT_SKIN_LINE = "The pad skin places the screens"
+        const val LAYOUT_SKIN_INFO = "The pad skin lays the two screens out here.\nTurn Pad skin off to use this layout."
         private const val RESET_TEXT = "Progress since your last save will be lost."
         private const val QUIT_TEXT = "Save & Quit keeps your place for next time. Quit keeps the last resume point."
         private val PLACED_SCREENS_HIDE = setOf(FrontendOptions.OVERLAY, FrontendOptions.OFFSET_X, FrontendOptions.OFFSET_Y)

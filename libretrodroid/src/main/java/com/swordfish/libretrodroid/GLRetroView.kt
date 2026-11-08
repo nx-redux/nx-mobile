@@ -368,6 +368,7 @@ class GLRetroView(
 
     // Buffered so tryEmit from the GL thread never suspends; the host collects promptly.
     private val achievementEvents = MutableSharedFlow<AchievementEvent>(extraBufferCapacity = 64)
+    private val coreMessages = MutableSharedFlow<String>(extraBufferCapacity = 16)
     // Unlimited channel: a server call must never be dropped, or rc_client waits for its answer forever.
     private val achievementServerCalls = Channel<AchievementServerCall>(Channel.UNLIMITED)
 
@@ -594,6 +595,16 @@ class GLRetroView(
         return true
     }
 
+    /**
+     * A finger the host's view on top owns, on the picture ([x], [y] in this view's px; lifted when not [down]): Android
+     * gives a gesture to the view its first finger landed on, so with a host's button held first the touch screen
+     * reaches this way. Ignored while this view's own finger drives the pointer. Main thread.
+     */
+    fun hostTouch(x: Float, y: Float, down: Boolean) {
+        if (touchPointerId != MotionEvent.INVALID_POINTER_ID) return
+        if (down) touchAt(x, y) else liftPointer()
+    }
+
     private fun touchAt(x: Float, y: Float) {
         if (y >= touchCutoffY) { liftPointer(); return }
         val regions = screenRegions
@@ -696,6 +707,9 @@ class GLRetroView(
      * so subscribe before calling `LibretroDroid.achievementsLogin`.
      */
     fun getAchievementEvents(): Flow<AchievementEvent> = achievementEvents
+
+    /** The core's on-screen messages (SET_MESSAGE), as it sends them; the app picks which to show. */
+    fun getCoreMessages(): Flow<String> = coreMessages
 
     /**
      * HTTP requests rc_client wants sent. Buffered until collected (single consumer); every call must be answered
@@ -1056,6 +1070,11 @@ class GLRetroView(
         lifecycle?.coroutineScope?.launch {
             rumbleEventsSubject.emit(RumbleEvent(port, strengthWeak, strengthStrong))
         }
+    }
+
+    /** Called from the jni side (emulation thread) after each step. */
+    private fun sendCoreMessage(msg: String) {
+        coreMessages.tryEmit(msg)   // a full buffer drops it: messages are only shown, never needed
     }
 
     /** Called from the jni side (emulation thread) after each step. */

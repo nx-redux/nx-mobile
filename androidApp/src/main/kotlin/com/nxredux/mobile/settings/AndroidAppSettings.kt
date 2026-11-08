@@ -31,13 +31,13 @@ class AndroidAppSettings(context: Context) : AppSettings {
             .toMap()
         set(value) = prefs.edit { putString(KEY_DEFAULT_TAGS, value.entries.joinToString("\n") { "${it.key}\t${it.value}" }) }
 
+    override var padSkin: Boolean
+        get() = prefs.getBoolean(KEY_PAD_SKIN, true)
+        set(value) = prefs.edit { putBoolean(KEY_PAD_SKIN, value) }
+
     override var padTheme: PadTheme
         get() = prefs.getString(KEY_PAD_THEME, null)?.let { runCatching { PadTheme.valueOf(it) }.getOrNull() } ?: PadTheme.DEFAULT
         set(value) = prefs.edit { putString(KEY_PAD_THEME, value.name) }
-
-    override var padButtons: PadButtons
-        get() = PadButtons.fromStored(prefs.getString(KEY_PAD_BUTTONS, null))
-        set(value) = prefs.edit { putString(KEY_PAD_BUTTONS, value.name) }
 
     override var menuStyles: Map<MenuCategory, MenuStyle>
         get() = MenuStyles.decode(prefs.getString(KEY_MENU_STYLES, null))
@@ -73,6 +73,9 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var micAsked: Boolean
         get() = prefs.getBoolean(KEY_MIC_ASKED, false)
         set(value) = prefs.edit { putBoolean(KEY_MIC_ASKED, value) }
+    override var layoutTipHidden: Boolean
+        get() = prefs.getBoolean(KEY_LAYOUT_TIP_HIDDEN, false)
+        set(value) = prefs.edit { putBoolean(KEY_LAYOUT_TIP_HIDDEN, value) }
 
     override var allFilesAsked: Boolean
         get() = prefs.getBoolean(KEY_ALL_FILES_ASKED, false)
@@ -215,28 +218,22 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = PadVibration.fromStored(prefs.getString(KEY_PAD_VIBRATION, null))
         set(value) = prefs.edit { putString(KEY_PAD_VIBRATION, value.name) }
 
-    override var padLayouts: PadLayoutMap
-        // The old key's landscape moves are dropped on read until the first save writes the versioned key ([PadLayouts.decodeStored]).
-        get() = PadLayouts.decodeStored(prefs.getString(KEY_PAD_LAYOUTS_V2, null), prefs.getString(KEY_PAD_LAYOUTS_V1, null))
-        set(value) = prefs.edit { putString(KEY_PAD_LAYOUTS_V2, PadLayouts.encode(value)) }
-
     override var shortcuts: String
-        get() = prefs.getString(KEY_SHORTCUTS, null).orEmpty()
-        set(value) = prefs.edit { if (value.isEmpty()) remove(KEY_SHORTCUTS) else putString(KEY_SHORTCUTS, value) }
+        // never written: the defaults (Save / Load on the skin's slots); written empty (Clear all): none
+        get() = prefs.getString(KEY_SHORTCUTS, null) ?: com.nxredux.mobile.shortcuts.Shortcuts.DEFAULT_BASE
+        set(value) = prefs.edit { putString(KEY_SHORTCUTS, value) }
 
     override var systemButtons: String
         get() = prefs.getString(KEY_SYSTEM_BUTTONS, null).orEmpty()
         set(value) = prefs.edit { if (value.isEmpty()) remove(KEY_SYSTEM_BUTTONS) else putString(KEY_SYSTEM_BUTTONS, value) }
 
+    override var skinTweaks: String
+        get() = prefs.getString(KEY_SKIN_TWEAKS, null).orEmpty()
+        set(value) = prefs.edit { if (value.isEmpty()) remove(KEY_SKIN_TWEAKS) else putString(KEY_SKIN_TWEAKS, value) }
+
     override var gameRumble: GameRumble
         get() = GameRumble.fromStored(prefs.getString(KEY_GAME_RUMBLE, null))
         set(value) = prefs.edit { putString(KEY_GAME_RUMBLE, value.name) }
-
-    override var menuPad: Boolean
-        get() = prefs.getBoolean(KEY_MENU_PAD, true)
-        set(value) {
-            prefs.edit { putBoolean(KEY_MENU_PAD, value) }
-        }
 
     override var secondScreen: Boolean
         get() = prefs.getBoolean(KEY_SECOND_SCREEN, true)
@@ -335,8 +332,8 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_TREE = "tree_uri"
         private const val KEY_EXTRAS = "extra_folders"
         private const val KEY_DEFAULT_TAGS = "default_tags"
+        private const val KEY_PAD_SKIN = "pad_skin"
         private const val KEY_PAD_THEME = "pad_theme"
-        private const val KEY_PAD_BUTTONS = "pad_buttons"
         private const val KEY_MENU_STYLES = "menu_styles"
         private const val KEY_GAME_LIST_STYLE = "game_list_style"
         private const val KEY_MENU_ORIENTATIONS = "menu_orientations"
@@ -347,6 +344,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_ANDROID_GAMES_ASKED = "android_games_asked"
         private const val KEY_ALL_FILES_ASKED = "all_files_asked"
         private const val KEY_MIC_ASKED = "mic_asked"
+        private const val KEY_LAYOUT_TIP_HIDDEN = "layout_tip_hidden"
         private const val KEY_ONBOARDING_DONE = "onboarding_done"
         private const val KEY_ONBOARDING_STEP = "onboarding_step"
         private const val KEY_ANDROID_PINS = "android_pins"
@@ -384,14 +382,9 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_GAME_LIST_LAYOUT_OPTIONS = "game_list_layout_options"
         private const val KEY_GAME_LIST_ACHIEVEMENTS_PANEL = "game_list_achievements_panel"
         private const val KEY_PAD_VIBRATION = "pad_vibration"
-        /**
-         * Pad layouts before the landscape pad moved beside the picture: read until the first save writes
-         * [KEY_PAD_LAYOUTS_V2], then never again; kept, so a downgrade to an earlier build still finds its layouts.
-         */
-        private const val KEY_PAD_LAYOUTS_V1 = "pad_layouts"
-        private const val KEY_PAD_LAYOUTS_V2 = "pad_layouts_v2"
         private const val KEY_SHORTCUTS = "shortcuts"
         private const val KEY_SYSTEM_BUTTONS = "system_buttons"
+        private const val KEY_SKIN_TWEAKS = "skin_tweaks"
         private const val KEY_GAME_RUMBLE = "game_rumble"
         private const val KEY_DEBUG_LOG = "debug_log"
         private const val KEY_KIDS_ENABLED = "kids_enabled"
@@ -404,7 +397,6 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_SECOND_SCREEN = "second_screen"
         private const val KEY_BOTTOM_SCREEN = "bottom_screen"
         private const val KEY_PAUSE_UNFOCUSED = "pause_unfocused"
-        private const val KEY_MENU_PAD = "menu_pad"
         private const val KEY_SAVE_FORMAT = "save_format"
         private const val KEY_STATE_FORMAT = "state_format"
         private const val KEY_USE_EXTRACTED_FILE_NAME = "use_extracted_file_name"

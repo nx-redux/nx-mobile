@@ -1,5 +1,8 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.skin.GlassScreen
+import com.nxredux.mobile.skin.SkinN3ds
+import com.nxredux.mobile.skin.SkinDual
 import com.swordfish.libretrodroid.FrameComposition
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -21,8 +24,6 @@ import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.R
 import com.nxredux.mobile.layout.CoreFrame
 import com.nxredux.mobile.layout.DsKind
-import com.nxredux.mobile.layout.TabletopDsMode
-import com.nxredux.mobile.layout.TabletopDsPlacement
 import com.nxredux.mobile.layout.PadRoom
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.layout.consoleScale
@@ -30,9 +31,9 @@ import com.nxredux.mobile.layout.overlayClear
 import com.nxredux.mobile.layout.picture
 import com.nxredux.mobile.layout.pictureSpace
 import com.nxredux.mobile.layout.placedFor
-import com.nxredux.mobile.layout.setAsidePx
 import com.nxredux.mobile.options.BRICK_HEIGHT
 import com.nxredux.mobile.options.FrontendSettings
+import com.nxredux.mobile.options.NdsLayoutChoice
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.layout.hiddenBandReach
 import com.nxredux.mobile.options.N3dsOptions
@@ -92,6 +93,8 @@ internal interface FrontendHost : LifecycleOwner {
     val dualMode: DualMode
     val pictureOn: PictureOn
     val n3dsPicture: com.nxredux.mobile.options.NdsScreen
+    /** Whether a 3DS skin's core is pinned to the plain unswapped stack (not under netplay, which keeps the player's layout). */
+    val n3dsStackPinned: Boolean
     fun isLandscape(): Boolean
     /** The DS/3DS screens cut for the second display, and what it draws ([GameActivity]'s second-screen block). */
     fun secondDsRegions(g: FloatArray, map: ScreenMap?): List<NdsRegion>?
@@ -205,7 +208,7 @@ internal class FrontendRenderer(
 
     private fun n3dsComposition(): FrameComposition? {
         val map = screenMap ?: return null
-        if (!isN3ds || !n3dsViews || dualMode == DualMode.SPLIT || padLayout.tabletop() != null) return null
+        if (!isN3ds || !n3dsViews || dualMode == DualMode.SPLIT || padLayout.skinShown) return null
         val layout = if (dualMode == DualMode.PANEL_UP) "side_by_side" else n3dsComposeLayout
         val factor = N3dsSwap.factorFromTopHeight(map.topSizePx.second)
         val c = AzaharLayout.compose(layout, factor, n3dsProportion.toFloatOrNull() ?: 1f, n3dsSwapped)
@@ -223,7 +226,7 @@ internal class FrontendRenderer(
 
     /** 3DS SWAP under views on one display: the app's Toggle / Hold ([N3dsSwap]); false when another layout owns it. */
     fun onN3dsViewsSwap(down: Boolean, mode: String): Boolean {
-        if (!isN3ds || !n3dsViews || screenMap == null || dualMode == DualMode.SPLIT || padLayout.tabletop() != null) return false
+        if (!isN3ds || !n3dsViews || screenMap == null || dualMode == DualMode.SPLIT || padLayout.skinShown) return false
         val next = N3dsSwap.next(n3dsSwapped, mode, down)
         if (next != n3dsSwapped) {
             n3dsSwapped = next
@@ -260,13 +263,34 @@ internal class FrontendRenderer(
     val pictureBox = androidx.compose.runtime.mutableStateOf<android.graphics.Rect?>(null)
     /** The single picture as last laid out (game-area px, offsets included); null while the DS screens are split. */
     private var shownPicture: PxRect? = null
+
+    /** What a save state's picture keeps (game-area px): the one picture, or the DS / 3DS top screen ([thumbnailPicture]). */
+    fun thumbnailPicture(): PxRect? = if (ndsRegions.isNotEmpty()) ndsRegions.thumbnailPicture() else shownPicture
     private var hudJob: Job? = null
 
     /** The overlay file names offered for this console (the Overlay setting's list). */
     fun overlayNames(): List<String> = OverlayResolver.names(overlaySets)
 
-    /** The Default shader with the chosen sharpness; a preset ([applyShader]) replaces it through [GLRetroView.shaderChain]. */
-    fun shaderFor(s: FrontendSettings): ShaderConfig = ShaderConfig.Default(linear = s.linear)
+    /**
+     * The built-in shader for sharpness [s]: SHARP, or NEAREST while a pad skin fills its screen at a fractional size
+     * ([skinFill]: nearest would make pixels uneven there), takes sharp bilinear; else the Default with the chosen
+     * sampling. A preset ([applyShader]) replaces it through [GLRetroView.shaderChain].
+     */
+    fun shaderFor(s: FrontendSettings): ShaderConfig =
+        if (s.sharp || (skinFill && !s.linear)) ShaderConfig.Sharp else ShaderConfig.Default(linear = s.linear)
+
+    /** A pad skin is shown and its screen is filled at the picture's shape (Auto / Aspect): see [shaderFor]. */
+    private var skinFill = false
+
+    /** [skinFill] for this layout, the view's shader following it when it changes. */
+    private fun syncSkinFill(view: GLRetroView, s: FrontendSettings) {
+        val fill = padLayout.skinShown && padLayout.skinPlacement() != null &&
+            (s.scaling == ScreenScaling.AUTO || s.scaling == ScreenScaling.ASPECT)
+        if (fill == skinFill) return
+        skinFill = fill
+        val shader = shaderFor(s)
+        if (view.shader != shader) view.shader = shader
+    }
 
     /**
      * Applies shader [values]: a changed preset is parsed and its LUTs decoded off the main thread, then handed to
@@ -509,15 +533,14 @@ internal class FrontendRenderer(
     }
 
     /**
-     * Lays the picture out in the game area and the pad around it. The space the pad leaves ([PadRoom]: the set-aside
-     * width each side of landscape clusters, the area above the portrait band, the hidden band's space, else the whole
-     * area) holds the picture: under Screen Scaling Auto at its console's scale ([picture]); Native, Aspect and Fullscreen
+     * Lays the picture out in the game area and the pad around it. The space the pad leaves ([PadRoom]: the space above
+     * portrait's bare buttons, else the whole area) holds the picture: under Screen Scaling Auto at its console's scale ([picture]); Native, Aspect and Fullscreen
      * size it in the whole area as before. DS games (a plain 256x384 frame) get their screens as regions of the view
      * ([NdsLayout], in that same space), with the viewport the whole area and no offsets or overlay: the fork ignores the
-     * screen offset and the scaling mode for regions. Half-folded, DS / 3DS screens follow the fold instead
-     * ([tabletopDsLayout]). Other games: the picture (or its overlay box) becomes the GL
+     * screen offset and the scaling mode for regions. Under a pad skin, DS / 3DS screens go in its glasses instead
+     * ([skinDsLayout]). Other games: the picture (or its overlay box) becomes the GL
      * viewport and the overlay view's bounds; the offsets (scaled to the box) go to the view and move the picture after
-     * its placement. The pad is then fitted to the final picture ([PadLayoutController.placeClusters]). No-op until laid
+     * its placement. The bare buttons then follow the final picture ([PadLayoutController.setOverlayClear]). No-op until laid
      * out. [geometry]: the view's, when the caller has just read it.
      */
     fun relayoutFrontend(geometry: FloatArray? = null) {
@@ -536,35 +559,30 @@ internal class FrontendRenderer(
         view.composition = composition
         val g = composition?.let { floatArrayOf(it.width.toFloat(), it.height.toFloat(), it.width / it.height.toFloat(), packed[3]) } ?: packed
         val origin = IntArray(2).also { game.getLocationInWindow(it) }
+        syncSkinFill(view, FrontendSettings.parse(frontendValues))
         val frame = coreFrame(g)   // null before the first frame (0x0)
         frame?.let(padLayout::onFrame)
         val room = padLayout.padRoom()
         val shape = activity.windowShape()   // one window reading for this layout
-        val pad = padLayout.landscapePad(shape)
         val screen = shape.screenClass
         val overlayH = padLayout.hiddenOverlayHeightPx()
-        val setAside = pad?.let { setAsidePx(screen, it.reach) } ?: 0f
-        // The DS / 3DS may reach a third into the hidden band's overlay (the Fold's 6x + 3x), the rest a quarter.
-        val space = pictureSpace(room, w, h, setAside, overlayH, hiddenBandReach(NdsOptions.appliesTo(gameTag) || N3dsOptions.appliesTo(gameTag)))
-        val tabletop = tabletopDsLayout(shape, g)
-        val nds = tabletop?.regions ?: ndsLayout(w, h, g, space, room, overlayH, screen) ?: n3dsSplitLayout(w, h)
+        // The DS / 3DS may reach a third into portrait's bare-button band (the Fold's 6x + 3x), the rest a quarter.
+        val space = pictureSpace(room, w, h, overlayH, hiddenBandReach(NdsOptions.appliesTo(gameTag) || N3dsOptions.appliesTo(gameTag)))
+        val skinDs = skinDsLayout(g)
+        val nds = skinDs?.regions ?: ndsLayout(w, h, g, space, room, overlayH, screen) ?: n3dsSplitLayout(w, h)
         // An area too small for one DS screen pixel (NdsLayout returns no regions) is only ever a transient mid-resize
         // size. Keep whatever is drawn now rather than letting an empty list flip a split game to the whole 256x384
         // frame (and the overlay back on) for that moment; the next size change lays it out again.
         if (nds != null && nds.isEmpty()) return
-        // Likewise a half-folded screen with no pixel (a hinge reading leaving no room above it): keep what is drawn.
-        if (tabletop != null && listOf(tabletop.placement.top, tabletop.placement.bottom).any { it.width <= 0f || it.height <= 0f }) return
-        // Before its first frame a DS game's frame size is unknown (0x0): it stays split as it started, overlay off. The
-        // clusters still take their unit and rows (hidden), so they are measured by the first frame.
-        if (nds == null && ndsSplit && !gameReady) {
-            pad?.let { padLayout.placeClusters(null, it) }
-            return
-        }
+        // Likewise a skin glass with no pixel: keep what is drawn.
+        if (skinDs != null && listOf(skinDs.top, skinDs.bottom).any { it.width <= 0f || it.height <= 0f }) return
+        // Before its first frame a DS game's frame size is unknown (0x0): it stays split as it started, overlay off.
+        if (nds == null && ndsSplit && !gameReady) return
         ndsRegions = nds ?: emptyList()
         val secondDs = secondDsRegions(g)
         secondNdsRegions = secondDs.takeIf { isNds }.orEmpty()
-        if (isNds) reportNds3d(w, h, screen, halfFolded = tabletop != null)
-        if (isN3ds && nds != null) reportN3ds3d(w, h, screen, halfFolded = tabletop != null, g, flat = null, secondDs)
+        if (isNds) reportNds3d(w, h, screen, halfFolded = skinDs != null)
+        if (isN3ds && nds != null) reportN3ds3d(w, h, screen, halfFolded = skinDs != null, g, flat = null, secondDs)
         input.positionPen()   // on whichever display shows the bottom screen
         setNdsSplit(nds != null)
         view.secondaryRegions = secondRegions(g, secondDs)
@@ -576,19 +594,17 @@ internal class FrontendRenderer(
             }
             view.screenOffset = PointF(0f, 0f)
             val shown = nds.shownRect()
-            // Half-folded split: the speed indicator goes on the screen above the hinge (the Flip stacks both there).
-            val splitTop = tabletop?.placement?.takeIf { it.mode == TabletopDsMode.SPLIT }?.top
-            pictureBox.value = windowRect(origin, splitTop ?: shown)
+            // Under a skin the speed indicator goes on the top glass's screen.
+            pictureBox.value = windowRect(origin, skinDs?.top ?: shown)
             shownPicture = null
             view.screenRegions = nds.map { it.toScreenRegion(w, h) }
-            // Half-folded, the pad below the hinge is placed from the placement, not beside the screens.
-            fitPad(if (tabletop != null) PadRoom.NONE else room, pad, shown, frameKnown = true, h, overlayH)
+            // Under a skin there is no drawn pad to place beside the screens.
+            fitPad(if (skinDs != null) PadRoom.NONE else room, shown, frameKnown = true, h, overlayH)
             val scales = nds.joinToString(" + ") { "${it.screen.value}${if (it.inset) " inset" else ""} %.2fx".format(java.util.Locale.US, it.dst.height / 192f) }
-            if (tabletop != null) {
-                val p = tabletop.placement
-                logLayout(w, h, shape, "TABLETOP_DS", tabletop.pad.takeIf { p.left != null }, 0f, "top=${p.top.short()} bottom=${p.bottom.short()}", "${p.mode} ${if (isN3ds) "3ds" else "ds"} $scales")
+            if (skinDs != null) {
+                logLayout(w, h, shape, "SKIN_DS", "top=${skinDs.top.short()} bottom=${skinDs.bottom.short()}", "${if (isN3ds) "3ds" else "ds"} $scales")
             } else {
-                logLayout(w, h, shape, room.name, pad, setAside, spaceAndPicture(space, shown), "ds $scales")
+                logLayout(w, h, shape, room.name, spaceAndPicture(space, shown), "ds $scales")
             }
             return
         }
@@ -598,15 +614,19 @@ internal class FrontendRenderer(
         val box: PxRect
         val shown: PxRect
         val offset: PointF
-        val foldTop = halfFoldedTopArea(shape, g, w)
+        val skinGlass = if (padLayout.skinShown) padLayout.skinPlacement()?.glass(GlassScreen.PICTURE)?.rect else null
         if (isN3ds) {
-            val auto = foldTop == null && s.scaling == ScreenScaling.AUTO && frame != null
+            val auto = s.scaling == ScreenScaling.AUTO && frame != null
             n3dsPictureSpace = space.takeIf { auto && (dualMode == DualMode.OFF || pictureOn == PictureOn.MAIN) }
         }
-        if (foldTop != null) {
-            // Half-folded with a DS frame that is not the plain stack: drawn whole above the hinge, not across it.
-            val fit = DualScreen.fullFrame(foldTop.width, foldTop.height, g[2])
-            box = fit.copy(y = fit.y + foldTop.y)
+        if (skinGlass != null) {
+            // A pad skin: the picture fills its glass at its shape (Auto, Aspect; drawn sharp bilinear, [shaderFor]),
+            // at the biggest whole multiple that fits (Native), or stretched over it (Fullscreen).
+            box = when (s.scaling) {
+                ScreenScaling.NATIVE -> wholeMultiple(skinGlass, fitAspect(skinGlass, g[2]), g)
+                ScreenScaling.FULLSCREEN -> skinGlass
+                else -> fitAspect(skinGlass, g[2])
+            }
             offset = PointF(0f, 0f)
             shown = box
         } else if (s.scaling == ScreenScaling.AUTO && frame != null) {
@@ -643,14 +663,14 @@ internal class FrontendRenderer(
         }
         // A bezel counts as picture: the pad over its border is see-through. Under Auto the shown rect is that box (offset).
         val covered = if (s.scaling != ScreenScaling.AUTO && overlayAspect != null && overlayAspect > 0f) box else shown
-        fitPad(room, pad, covered, frameKnown = frame != null, h, overlayH)
+        fitPad(room, covered, frameKnown = frame != null, h, overlayH)
         val scale = frame?.let { shown.height / (if (it.rotated) it.width else it.height) }
-        logLayout(w, h, shape, room.name, pad, setAside, spaceAndPicture(space, shown), "${s.scaling} frame=${frame?.let { "${it.width.roundToInt()}x${it.height.roundToInt()}" }} scale=${scale?.let { "%.2f".format(java.util.Locale.US, it) }}")
+        logLayout(w, h, shape, room.name, spaceAndPicture(space, shown), "${s.scaling} frame=${frame?.let { "${it.width.roundToInt()}x${it.height.roundToInt()}" }} scale=${scale?.let { "%.2f".format(java.util.Locale.US, it) }}")
     }
 
     /**
      * The DS 3D scale's inputs to the host ([FrontendHost.onNds3dLayout]) for the layout just made in the [w] x [h] game
-     * area: the shown scale of every DS screen (both displays', or both halves when half-folded), and the display maximum,
+     * area: the shown scale of every DS screen (both displays', or both glasses under a pad skin), and the display maximum,
      * the main display's (worked out once per area) or with a second display drawing DS screens, the bigger of it and
      * those screens' scale (one screen fills it, so that is the most it reaches).
      */
@@ -679,7 +699,7 @@ internal class FrontendRenderer(
     /**
      * The 3DS 3D scale's inputs to the host, as [reportNds3d]: flat, the [flat] picture's scale at the factor the frame
      * was rendered at, read from its size ([N3ds3dResolution.frameFactor]; an unknown frame keeps the last one read);
-     * half-folded or split ([flat] null), the screens' regions ([N3ds3dResolution.regionScale]). A second display drawing
+     * under a pad skin or split ([flat] null), the screens' regions ([N3ds3dResolution.regionScale]). A second display drawing
      * 3DS screens ([secondDs]) or the whole frame counts as for the DS. Nothing before the first frame (the launch's value
      * stands), nor while a layout switch's frame is awaited ([watchGeometry]): the old layout's frame laid out in the new
      * space would start a send for a scale never shown; the new frame (or the watch giving up) reports. [g]: the game
@@ -733,16 +753,11 @@ internal class FrontendRenderer(
     }
 
     /**
-     * The pad fitted to the final [picture] (game-area px; the area is the window in landscape, where the clusters are):
-     * the clusters beside it, or the hidden band's overlay solid when the picture stops above it. A [frameKnown] picture
-     * lets the pads that waited for it show.
+     * The pad fitted to the final [picture] (game-area px): portrait's bare buttons solid when the picture stops above
+     * their band. A [frameKnown] picture lets the pads that waited for it show.
      */
-    private fun fitPad(room: PadRoom, pad: LandscapePad?, picture: PxRect, frameKnown: Boolean, areaH: Float, overlayH: Float) {
-        when (room) {
-            PadRoom.BESIDE -> pad?.let { padLayout.placeClusters(picture.takeIf { frameKnown }, it) }
-            PadRoom.HIDDEN_BAND -> padLayout.setOverlayClear(frameKnown && overlayClear(picture.y + picture.height, areaH, overlayH))
-            PadRoom.BAND, PadRoom.NONE -> Unit
-        }
+    private fun fitPad(room: PadRoom, picture: PxRect, frameKnown: Boolean, areaH: Float, overlayH: Float) {
+        if (room == PadRoom.HIDDEN_BAND) padLayout.setOverlayClear(frameKnown && overlayClear(picture.y + picture.height, areaH, overlayH))
         if (frameKnown) padLayout.onPictureKnown()
         // After the viewport and regions above: queued on the GL thread in order, so the first picture drawn is placed.
         // A fold's 3DS switch keeps it held until the core's new frame size is laid out ([watchGeometry]).
@@ -763,10 +778,9 @@ internal class FrontendRenderer(
 
     private fun spaceAndPicture(space: PxRect, picture: PxRect) = "space=${space.short()} picture=${picture.short()}"
 
-    /** [rects]: where the picture went ([spaceAndPicture]; half-folded, the two screens' rects). */
-    private fun logLayout(w: Float, h: Float, shape: WindowShape, room: String, pad: LandscapePad?, setAside: Float, rects: String, what: String) {
-        val reach = pad?.let { "reach=${it.reach.edgePx.roundToInt()}+${it.reach.buttonsPx.roundToInt()}${if (it.measured) " measured" else " estimated"} unit=${"%.1f".format(java.util.Locale.US, it.unitPx)}" } ?: "no clusters"
-        val line = "relayout: window=${shape.widthPx}x${shape.heightPx} ${shape.screenClass} area=${w.roundToInt()}x${h.roundToInt()} room=$room $reach setAside=${setAside.roundToInt()} " +
+    /** [rects]: where the picture went ([spaceAndPicture]; under a pad skin, the two screens' rects). */
+    private fun logLayout(w: Float, h: Float, shape: WindowShape, room: String, rects: String, what: String) {
+        val line = "relayout: window=${shape.widthPx}x${shape.heightPx} ${shape.screenClass} area=${w.roundToInt()}x${h.roundToInt()} room=$room " +
             "$rects $what"
         if (line == lastLayoutLog) return
         lastLayoutLog = line
@@ -793,7 +807,12 @@ internal class FrontendRenderer(
             }
             return null
         }
-        if (dualMode == DualMode.SPLIT) return DualScreen.ndsScreen(w, h, DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn)).withMap(screenMap)
+        if (dualMode == DualMode.SPLIT) {
+            val main = DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn)
+            // under a pad skin (landscape with a second display): the main display's screen in the skin's screen
+            val glass = SkinDual.splitGlass(padLayout.skinPlacement()?.takeIf { padLayout.skinShown }, main)
+            return (if (glass != null) DualScreen.ndsScreenIn(SkinDual.dsScreenIn(glass), main) else DualScreen.ndsScreen(w, h, main)).withMap(screenMap)
+        }
         if (dualMode == DualMode.PANEL_UP) return DualScreen.ndsPanelUp(w, h, NdsSettings.parse(frontendValues)).withMap(screenMap)
         val landscape = isLandscape()
         val settings = NdsSettings.parse(frontendValues)
@@ -808,68 +827,84 @@ internal class FrontendRenderer(
         return regions.map { it.copy(dst = it.dst.copy(y = it.dst.y + dy)) }.withMap(screenMap)
     }
 
-    /** The half-folded DS / 3DS layout: the [placement] (game-area px), its screens as [regions], and the [pad] measures it used. */
-    private class HalfFolded(val placement: TabletopDsPlacement, val regions: List<NdsRegion>, val pad: LandscapePad)
-
     /**
-     * Half-folded DS / 3DS ([PadLayoutController.tabletop]): on a tablet-class window ([TabletopPad.DS], the game view
-     * spanning the window) the top screen above the hinge and the touch screen below it; on a phone-shaped one (the game
-     * view above the hinge) both screens stacked there. [PadLayoutController.tabletopDsPlacement] places them, in window
-     * px moved into the game view's; the player's flat layout choice does not apply. Null otherwise: not half-folded, another console, a Dual screen mode
-     * (its own layouts come first), or a DS frame that is not the plain 256x384 stack (one picture, as [ndsLayout] warns).
+     * A DS or 3DS under a pad skin: its screens in the skin's glass (the top and touch glasses, or the halves of one tall
+     * glass). Null without a skin, or for a DS frame that is not the plain stack.
+     * A 3DS ([SkinN3ds]): each screen at its own shape (SWAP trades them, [PadLayoutController.n3dsSkinBig]); a frame
+     * that isn't azahar's plain stack (netplay keeps the player's layout) is drawn whole in the top glass.
      */
-    private fun tabletopDsLayout(shape: WindowShape, g: FloatArray): HalfFolded? {
-        if (dualMode != DualMode.OFF) return null
-        val kind = when {
-            isN3ds -> DsKind.N3DS
-            NdsOptions.appliesTo(gameTag) && dsScreensKnown(g) -> DsKind.DS
-            else -> return null
+    private fun skinDsLayout(g: FloatArray): SkinDs? {
+        if (!padLayout.skinShown || dualMode != DualMode.OFF) return null
+        if (isN3ds) return skinN3dsLayout(g)
+        if (!NdsOptions.appliesTo(gameTag) || !dsScreensKnown(g)) return null
+        val p = padLayout.skinPlacement() ?: return null
+        // a regular phone's landscape: the player's layout in the skin's one glass (NdsOptions.skinLayout), as without a skin
+        val glass = p.glass(GlassScreen.STACK)?.rect
+        val choice = NdsOptions.skinLayout(frontendValues, isLandscape(), ndsControllerMode(), activity.windowShape().screenClass)
+        if (glass != null && choice != null) {
+            val laid = NdsLayout.regions(glass, choice, true, activity.windowShape().screenClass, NdsSettings.parse(frontendValues),
+                NDS_INSET_MARGIN_DP * resources.displayMetrics.density)
+            // Side by side fills the glass (user: its whole-number scale left wide margins); the others stay whole-number
+            val regions = (if (choice == NdsLayoutChoice.SIDE_BY_SIDE) laid.filledTo(glass) else laid).withMap(screenMap)
+            if (regions.isNotEmpty()) {
+                val top = regions.firstOrNull { it.screen == NdsScreen.TOP }?.dst ?: regions.first().dst
+                return SkinDs(top, regions.firstOrNull { it.screen == NdsScreen.BOTTOM }?.dst ?: top, regions)
+            }
         }
-        val tt = padLayout.tabletop() ?: return null
-        val pad = padLayout.tabletopDsPad(shape)
-        val p = padLayout.tabletopDsPlacement(shape, tt, pad)
-        val dy = tt.gameTop.toFloat()   // window px -> the game view's (it starts at gameTop)
-        val placement = p.copy(top = p.top.copy(y = p.top.y - dy), bottom = p.bottom.copy(y = p.bottom.y - dy))
-        // The 3DS core's swap is pinned while half-folded (its frame stays unswapped under the cuts): SWAP is the app's.
-        val big = if (kind == DsKind.DS) NdsSettings.parse(frontendValues).big else padLayout.n3dsTabletopBig
-        return HalfFolded(placement, tabletopRegions(placement, kind, big).withMap(screenMap), pad)
+        val stack = glass?.let { fitAspect(it, 256f / 384f) }   // the two screens' stack, centred in the glass
+        val top = stack?.copy(height = stack.height / 2f) ?: p.glass(GlassScreen.TOP)?.rect?.let { fitAspect(it, 256f / 192f) } ?: return null   // the top screen, centred in its glass
+        val bottom = stack?.copy(y = stack.y + stack.height / 2f, height = stack.height / 2f) ?: p.glass(GlassScreen.TOUCH)?.rect ?: return null
+        val big = NdsSettings.parse(frontendValues).big
+        return SkinDs(top, bottom, dsScreenRegions(top, bottom, DsKind.DS, big).withMap(screenMap))
     }
 
-    /**
-     * The area above the hinge (game-view px, [w] wide) while the Fold is half-folded with a DS frame that is not the
-     * plain 256 x 384 stack (another core layout): that frame is drawn whole there. Null otherwise.
-     */
-    private fun halfFoldedTopArea(shape: WindowShape, g: FloatArray, w: Float): PxRect? {
-        if (dualMode != DualMode.OFF || !NdsOptions.appliesTo(gameTag)) return null
-        if (g[0] <= 0f || g[1] <= 0f || dsScreensKnown(g)) return null
-        val tt = padLayout.tabletop() ?: return null
-        if (tt.pad != TabletopPad.DS) return null   // the Flip's game view is already the area above the hinge
-        val top = (shape.cutoutTop - tt.gameTop).toFloat()
-        return PxRect(0f, top, w, (tt.menuBottom - tt.gameTop).toFloat() - top)
+    private fun skinN3dsLayout(g: FloatArray): SkinDs? {
+        val p = padLayout.skinPlacement() ?: return null
+        val stack = p.glass(GlassScreen.STACK)?.rect
+        val top = p.glass(GlassScreen.TOP)?.rect
+        val fw = g[0].roundToInt()
+        val fh = g[1].roundToInt()
+        val regions = if (SkinN3ds.cutsStack(fw, fh, pinned = host.n3dsStackPinned)) {
+            // a regular phone's landscape: the player's layout in the skin's one glass (N3dsOptions.skinLayout)
+            val layout = N3dsOptions.skinLayout(frontendValues, isLandscape(), ndsControllerMode(), activity.windowShape().screenClass)
+            SkinN3ds.regions(stack, top, p.glass(GlassScreen.TOUCH)?.rect, padLayout.n3dsSkinBig, layout)?.withMap(screenMap) ?: return null
+        } else {
+            val whole = SkinN3ds.whole(stack, top, fw, fh) ?: return null
+            listOf(NdsRegion(NdsScreen.TOP, FrameRect(0f, 0f, 1f, 1f), whole, shaded = true, touch = false))
+        }
+        return SkinDs(regions[0].dst, regions.getOrNull(1)?.dst ?: regions[0].dst, regions)
     }
 
-    /**
-     * Whether the half-folded DS / 3DS layout places the screens now, so the layout shortcut does nothing: half-folded
-     * with no second screen in use, a 3DS, or a DS whose frame is the plain stack (or not known yet). A DS frame of
-     * another shape is drawn whole above the hinge instead ([halfFoldedTopArea]), and the shortcut works as flat.
-     */
-    fun halfFoldedLayoutInUse(): Boolean {
-        if (dualMode != DualMode.OFF || padLayout.tabletop() == null) return false
-        if (isN3ds) return true
-        if (!NdsOptions.appliesTo(gameTag)) return false
-        val g = retroView?.getGameGeometry() ?: return true
-        return g[0] <= 0f || g[1] <= 0f || dsScreensKnown(g)
+    /** The biggest [aspect] (width / height) rect centred in [r]; [r] itself for an unknown aspect. */
+    /** [fit] (the picture at its shape in [glass]) cut to the biggest whole multiple of the frame's height, centred. */
+    private fun wholeMultiple(glass: PxRect, fit: PxRect, g: FloatArray): PxRect {
+        val frameH = g[1]
+        if (frameH <= 0f) return fit
+        val n = kotlin.math.floor(fit.height / frameH).coerceAtLeast(1f)
+        val ph = frameH * n
+        val pw = fit.width * (ph / fit.height)
+        return PxRect(glass.x + (glass.width - pw) / 2f, glass.y + (glass.height - ph) / 2f, pw, ph)
     }
 
+    private fun fitAspect(r: PxRect, aspect: Float): PxRect {
+        if (aspect <= 0f || r.width <= 0f || r.height <= 0f) return r
+        val w = minOf(r.width, r.height * aspect)
+        val h = w / aspect
+        return PxRect(r.x + (r.width - w) / 2f, r.y + (r.height - h) / 2f, w, h)
+    }
+
+    /** A DS / 3DS under a pad skin: the [top] and [bottom] screens' rects (game-area px) and its screens as [regions]. */
+    private class SkinDs(val top: PxRect, val bottom: PxRect, val regions: List<NdsRegion>)
+
     /**
-     * 3DS SWAP (the pill, SELECT + R, a pad's left-stick click) [down] or up while half-folded with the screens as regions
-     * ([tabletopDsLayout]): a press trades the screens above and below the hinge (touch follows the bottom screen) and the
-     * core never sees it. False otherwise: the key is someone else's (split's, else Azahar's own).
+     * 3DS SWAP (the pill, SELECT + R, a pad's left-stick click) [down] or up under a pad skin with the screens as regions
+     * ([skinDsLayout]): a press trades the screens' glasses (touch follows the bottom screen) and the core never sees it.
+     * False otherwise: the key is someone else's (split's, else Azahar's own).
      */
-    fun onTabletopN3dsSwap(down: Boolean): Boolean {
-        if (!isN3ds || dualMode != DualMode.OFF || padLayout.tabletop() == null) return false
+    fun onSkinN3dsSwap(down: Boolean): Boolean {
+        if (!isN3ds || dualMode != DualMode.OFF || !padLayout.skinShown) return false
         if (down) {
-            padLayout.swapTabletopN3ds()   // the halves move with the screens' new sizes
+            padLayout.swapSkinN3ds()
             relayoutFrontend()
         }
         return true
@@ -886,8 +921,14 @@ internal class FrontendRenderer(
     }
 
     /** 3DS split across the displays: the main display's screen alone, as a region of Azahar's fixed stacked frame; else null. */
-    private fun n3dsSplitLayout(w: Float, h: Float): List<NdsRegion>? =
-        if (isN3ds && dualMode == DualMode.SPLIT) DualScreen.n3dsScreen(w, h, DualScreen.splitMain(n3dsPicture, pictureOn)).withMap(screenMap) else null
+    private fun n3dsSplitLayout(w: Float, h: Float): List<NdsRegion>? {
+        if (!isN3ds || dualMode != DualMode.SPLIT) return null
+        val main = DualScreen.splitMain(n3dsPicture, pictureOn)
+        // under a pad skin (landscape with a second display): the main display's screen in the skin's screen, at its shape
+        val glass = SkinDual.splitGlass(padLayout.skinPlacement()?.takeIf { padLayout.skinShown }, main)
+            ?: return DualScreen.n3dsScreen(w, h, main).withMap(screenMap)
+        return DualScreen.n3dsScreenIn(SkinDual.screenIn(glass, if (main == NdsScreen.TOP) 5f / 3f else 4f / 3f), main).withMap(screenMap)
+    }
 
     /** Split DS screens turn the overlay off and the menu shows it unavailable; both follow when that changes. */
     private fun setNdsSplit(split: Boolean) {

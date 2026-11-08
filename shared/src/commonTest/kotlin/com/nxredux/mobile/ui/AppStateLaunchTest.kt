@@ -15,7 +15,6 @@ import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.settings.MenuStyles
-import com.nxredux.mobile.settings.PadButtons
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.settings.VerticalListAlignment
@@ -48,17 +47,15 @@ class AppStateLaunchTest {
     private class MemorySettings(override var treeRef: ContentRef? = null) : AppSettings {
         override var extraFolders: List<ExtraFolder> = emptyList()
         override var defaultTags: Map<String, String> = emptyMap()
-        override var padLayouts: com.nxredux.mobile.settings.PadLayoutMap = emptyMap()
         override var debugLog = false
         override var secondScreen = true
         override var pauseWhenUnfocused = true
         override var bottomScreen = com.nxredux.mobile.runner.BottomScreen.AUTO
-        override var menuPad = true
         override var saveFormat = SaveFormat.DEFAULT
         override var stateFormat = StateFormat.DEFAULT
         override var useExtractedFileName = false
+        override var padSkin: Boolean = true
         override var padTheme: PadTheme = PadTheme.DEFAULT
-        override var padButtons: PadButtons = PadButtons.DEFAULT
         // Home Minimal (its default); the other tabs and the game lists too.
         override var menuStyles: Map<MenuCategory, MenuStyle> = MenuCategory.entries.associateWith { MenuStyle.MINIMAL }
         override var gameListStyle: MenuStyle = MenuStyle.MINIMAL

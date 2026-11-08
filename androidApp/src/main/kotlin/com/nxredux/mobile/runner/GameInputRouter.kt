@@ -88,8 +88,6 @@ internal interface GameInputHost : LifecycleOwner {
     fun ndsControllerMode(): Boolean
     /** The game window's screen class ([windowShape]): the DS and 3DS layout cycles skip what it does not offer. */
     fun screenClass(): ScreenClass
-    /** Half-folded, the fold places the DS / 3DS screens: the layout cycle does nothing then. */
-    fun layoutSetByFold(): Boolean
     /** A second display places the DS / 3DS screens: the layout cycle does nothing, silently. */
     fun layoutSetByDual(): Boolean
     /** The activity's own handling (super) of an event the router leaves to the system. */
@@ -108,8 +106,6 @@ internal class GameInputRouter(private val host: GameInputHost) {
     companion object {
         private const val NDS_LABEL_MS = 1500L   // a DS hotkey's label ("Bottom screen", "Stylus on")
         private const val PLAYER_NOTICE_MS = 2500L   // "Player 2: <pad>" when a pad takes a player slot
-        /** SELECT + Left/Right's notice while half-folded ([GameInputHost.layoutSetByFold]). */
-        const val LAYOUT_SET_BY_FOLD = "Layout is set by the fold"
         private const val PEN_TICK_MS = 16L
         /**
          * Cores that read the left stick as analog (N64, PSP, PS1 DualShock, PS2, Dreamcast, and Dolphin's GameCube stick
@@ -253,6 +249,18 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private val padNames = HashMap<DeviceKey, String>()
 
     private val ndsHotkeys = NdsHotkeys()        // a new activity, a new instance: stylus mode is off at every launch
+
+    /**
+     * A pad skin [shown] or gone, and whether it lays the DS / 3DS screens out by the player's layout ([layouts]: a regular
+     * phone's landscape): both consoles' chords follow (SELECT + Left / Right cycles only where the layout shows).
+     */
+    fun setSkinLayouts(shown: Boolean, layouts: Boolean) {
+        n3dsHotkeys.skinShown = shown; n3dsHotkeys.skinLayouts = shown && layouts
+        ndsHotkeys.skinShown = shown; ndsHotkeys.skinLayouts = shown && layouts
+    }
+
+    /** The skin lays the DS / 3DS screens out by the player's layout ([setSkinLayouts]). */
+    val skinLayouts: Boolean get() = n3dsHotkeys.skinLayouts
     private val ndsHat = DpadHat()               // hardware hat directions the core has been given (the forwarded ones)
     private var ndsHatX = 0
     private var ndsHatY = 0
@@ -369,7 +377,6 @@ internal class GameInputRouter(private val host: GameInputHost) {
             NdsAction.SwapScreens -> setNdsKey(NdsOptions.swapBigScreen(frontendValues))
             is NdsAction.CycleLayout -> {
                 if (host.layoutSetByDual()) return
-                if (host.layoutSetByFold()) { showNdsLabel(LAYOUT_SET_BY_FOLD); return }
                 // From the layout showing on this screen (an unset row steps from its default).
                 setNdsKey(NdsOptions.cycleLayout(
                     frontendValues, landscape, ndsControllerMode(), action.delta, host.screenClass(),
@@ -396,6 +403,30 @@ internal class GameInputRouter(private val host: GameInputHost) {
         applyFrontend(frontendValues + change)
         showNdsLabel(label)
         host.persistGameKey(key, value, "Could not save the screen layout")
+    }
+
+    /** The notices' buttons, by toast id: what a tap on one does ([showNotice]). */
+    private val noticeActions = HashMap<Long, () -> Unit>()
+
+    /** A notice over the picture for [ms] (a tip: [LayoutTip]), with a button [action] whose tap runs [onAction] and closes it. */
+    fun showNotice(text: String, ms: Long, action: String? = null, onAction: () -> Unit = {}) {
+        val id = notifications.push(text, null, ms, SystemClock.elapsedRealtime(), action)
+        if (action != null && id >= 0) noticeActions[id] = onAction
+        publishNotifications()
+    }
+
+    /** A notice's Close was tapped: it goes, its action not run. */
+    fun onNoticeDismiss(id: Long) {
+        noticeActions.remove(id)
+        notifications.dismiss(id)
+        publishNotifications()
+    }
+
+    /** A notice's button was tapped: its action, and the notice goes. */
+    fun onNoticeAction(id: Long) {
+        noticeActions.remove(id)?.invoke()
+        notifications.dismiss(id)
+        publishNotifications()
     }
 
     private fun showNdsLabel(text: String) {
@@ -518,7 +549,6 @@ internal class GameInputRouter(private val host: GameInputHost) {
         when (action) {
             is N3dsAction.CycleLayout -> {
                 if (host.layoutSetByDual()) return
-                if (host.layoutSetByFold()) { showNdsLabel(LAYOUT_SET_BY_FOLD); return }
                 // The row in use (orientation, controller), as the DS's; applyFrontend sets the core's layout from it.
                 val (key, value) = N3dsOptions.cycleLayout(frontendValues, isLandscape(), ndsControllerMode(), action.delta, host.screenClass())
                 if (key in lockedOptions) return

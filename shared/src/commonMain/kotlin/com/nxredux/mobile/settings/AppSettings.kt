@@ -13,29 +13,15 @@ import com.nxredux.mobile.storage.StateFormat
 fun <T> List<T>.stepFrom(current: T, by: Int): T = this[(indexOf(current) + by).mod(size)]
 
 /**
- * The portrait virtual pad's palette: CHARCOAL (the dark default), RETRO (light-grey body, magenta face buttons) or BLACK
- * (a pure black body, its buttons the [PadButtons] set).
+ * The on-screen pad's look, a pad skin ([skin]: its pack in the app's skins):
+ * NX_CARBON (the default, smoke grey), NX_ONYX (the same shell in smoked black) or one of its translucent colours
+ * (NX_OBSIDIAN near-black; NX_PLASMA purple, NX_EMBER red, NX_VOLT green, NX_TIDE blue): in game and on the main menu it draws the whole device around the screen wherever the skin has a
+ * layout for the window, and the pad is Charcoal everywhere else (a console or window the skin has no layout for).
  */
-enum class PadTheme {
-    CHARCOAL, RETRO, BLACK;
+enum class PadTheme(val skin: String? = null) {
+    NX_CARBON("nx-carbon"), NX_ONYX("nx-onyx"), NX_OBSIDIAN("nx-obsidian"), NX_PLASMA("nx-plasma"), NX_EMBER("nx-ember"), NX_VOLT("nx-volt"), NX_TIDE("nx-tide");
 
-    companion object { val DEFAULT = CHARCOAL }
-}
-
-/**
- * Appearance → Pad buttons, shown and used only while the [PadTheme] is BLACK: GREY (the default), Charcoal's domed
- * grey buttons, or OUTLINE, each button a thin outline and its label, filled faintly while held. Stored by [name]
- * ([fromStored]).
- */
-enum class PadButtons(val label: String) {
-    GREY("Grey"), OUTLINE("Outline");
-
-    companion object {
-        val DEFAULT = GREY
-
-        /** The set stored as [name]; missing or unknown reads as [DEFAULT]. */
-        fun fromStored(name: String?): PadButtons = entries.firstOrNull { it.name == name } ?: DEFAULT
-    }
+    companion object { val DEFAULT = NX_CARBON }
 }
 
 /**
@@ -205,10 +191,10 @@ interface AppSettings {
     var extraFolders: List<ExtraFolder>
     /** Console id -> tag to use for files resolved by console; missing = the console's first tag. */
     var defaultTags: Map<String, String>
-    /** Palette of the portrait virtual pad (the landscape clusters always stay Charcoal). */
+    /** Appearance → Pad skin: On (the default) draws the [padTheme] skin; Off, the game full screen under the see-through overlay pad. */
+    var padSkin: Boolean
+    /** The pad skin (Appearance → Pad theme); the drawn pad, where a skin has no layout, is always Charcoal. */
     var padTheme: PadTheme
-    /** The Black pad theme's button set (Appearance → Pad buttons); the other themes ignore it. */
-    var padButtons: PadButtons
     /**
      * Each main menu tab's style (List, Grid or Carousel), Home's too (Layouts → Home layout); a category missing from
      * the map is its default ([MenuStyles.defaultStyleOf]: Grid for Tools, Minimal for Home and Collections, Carousel for Consoles) and a stored
@@ -333,13 +319,6 @@ interface AppSettings {
     /** Controls → Pad vibration: the on-screen pad's press tick ([PadVibration.DEFAULT] Light). */
     var padVibration: PadVibration
     /**
-     * Controls → Pad layout: every stored pad layout, console id (or [PadLayouts.SHARED_KEY]) → slot → layout. Empty:
-     * the default pad everywhere. Defaulted so a platform or fake without it stores nothing.
-     */
-    var padLayouts: PadLayoutMap
-        get() = emptyMap()
-        set(@Suppress("UNUSED_PARAMETER") value) {}
-    /**
      * Controls → Shortcuts: the base bindings and touch buttons every console and game inherits, as
      * [com.nxredux.mobile.shortcuts.Shortcuts.encodeBase] writes them. Empty: nothing bound. Defaulted so a platform or
      * fake without it stores nothing.
@@ -354,13 +333,13 @@ interface AppSettings {
     var systemButtons: String
         get() = ""
         set(@Suppress("UNUSED_PARAMETER") value) {}
+
     /**
-     * Settings → Controls → Menu pad (default on): off, portrait's main menu drops its bottom on-screen pad and the screen
-     * runs to the bottom (the menu is touch-driven). Games keep their own pad. Defaulted so a platform or fake without it
-     * stores nothing.
+     * Appearance → Pad skin: the player's nudges of each console's button groups, as
+     * [com.nxredux.mobile.skin.SkinTweaks.encode] writes them. Empty: none. Defaulted, like [systemButtons].
      */
-    var menuPad: Boolean
-        get() = true
+    var skinTweaks: String
+        get() = ""
         set(@Suppress("UNUSED_PARAMETER") value) {}
     /**
      * Settings → System → Debug log (default off): off, only errors reach logcat. Defaulted so a platform or fake
@@ -432,6 +411,11 @@ interface AppSettings {
      * Library → Microphone access does not touch it. Defaulted, like [debugLog].
      */
     var micAsked: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /** The 3DS layout chord's tip ([com.nxredux.mobile.runner.LayoutTip]) hidden for good from its button. Defaulted, like [debugLog]. */
+    var layoutTipHidden: Boolean
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 

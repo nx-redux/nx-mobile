@@ -1,6 +1,5 @@
 package com.nxredux.mobile.runner
 
-import com.nxredux.mobile.layout.ScreenClass
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -29,86 +28,6 @@ class PostureTest {
         // the upper half would be 20% of the window: under the 25% minimum
         assertEquals(Posture.Flat, postureFrom(halfOpened = true, horizontal = true, top = 504, bottom = 540, windowH = 2520))
     }
-
-    @Test fun flipGetsGameAboveAndPortraitPadBelow() =
-        assertEquals(
-            TabletopLayout(gameTop = 90, gameBottom = 1260, padTop = 1260, pad = TabletopPad.PORTRAIT, menuBottom = 1260),
-            tabletopLayout(flip, windowW = 1080, windowH = 2520, screen = ScreenClass.REGULAR_PHONE, cutoutTop = 90, controllerConnected = false, isDualScreenConsole = false),
-        )
-
-    @Test fun wideWindowGetsClusters() {
-        // a wide window with a horizontal hinge (not the Fold's laptop pose, which is portrait-shaped: see foldLaptop below)
-        val fold = Posture.Tabletop(hingeTop = 900, hingeBottom = 948)
-        assertEquals(
-            TabletopLayout(gameTop = 0, gameBottom = 900, padTop = 948, pad = TabletopPad.CLUSTERS, menuBottom = 900),
-            tabletopLayout(fold, windowW = 2448, windowH = 1848, screen = ScreenClass.NEAR_SQUARE_TABLET, cutoutTop = 0, controllerConnected = false, isDualScreenConsole = false),
-        )
-    }
-
-    @Test fun controllerHidesPad() =
-        assertEquals(
-            TabletopPad.NONE,
-            tabletopLayout(flip, windowW = 1080, windowH = 2520, screen = ScreenClass.REGULAR_PHONE, cutoutTop = 90, controllerConnected = true, isDualScreenConsole = false)?.pad,
-        )
-
-    @Test fun flip_ds_half_folded_gets_portrait_tabletop() {
-        // a phone-shaped window: the DS case is today's portrait result (both screens are stacked in the game area later)
-        val expected = TabletopLayout(gameTop = 90, gameBottom = 1260, padTop = 1260, pad = TabletopPad.PORTRAIT, menuBottom = 1260)
-        assertEquals(expected, tabletopLayout(flip, windowW = 1080, windowH = 2520, screen = ScreenClass.REGULAR_PHONE, cutoutTop = 90, controllerConnected = false, isDualScreenConsole = true))
-        assertEquals(TabletopPad.NONE, tabletopLayout(flip, windowW = 1080, windowH = 2520, screen = ScreenClass.REGULAR_PHONE, cutoutTop = 90, controllerConnected = true, isDualScreenConsole = true)?.pad)
-    }
-
-    @Test fun ds_half_folded_on_a_tablet_gets_ds_tabletop() {
-        val expected = TabletopLayout(gameTop = 0, gameBottom = 2448, padTop = 1248, pad = TabletopPad.DS, menuBottom = 1200)
-        for (screen in listOf(ScreenClass.NEAR_SQUARE_TABLET, ScreenClass.WIDE_TABLET)) {
-            assertEquals(expected, tabletopLayout(Posture.Tabletop(1200, 1248), windowW = 1848, windowH = 2448, screen = screen, cutoutTop = 0, controllerConnected = false, isDualScreenConsole = true))
-        }
-        // a controller does not change the DS split: the regions still divide the window
-        assertEquals(TabletopPad.DS, tabletopLayout(Posture.Tabletop(1200, 1248), windowW = 1848, windowH = 2448, screen = ScreenClass.NEAR_SQUARE_TABLET, cutoutTop = 0, controllerConnected = true, isDualScreenConsole = true)?.pad)
-    }
-
-    @Test fun ds_flat_is_still_null() =
-        assertNull(tabletopLayout(Posture.Flat, windowW = 1848, windowH = 2448, screen = ScreenClass.NEAR_SQUARE_TABLET, cutoutTop = 0, controllerConnected = false, isDualScreenConsole = true))
-
-    @Test fun other_console_on_a_tablet_unchanged() =
-        assertEquals(
-            TabletopLayout(gameTop = 0, gameBottom = 1200, padTop = 1248, pad = TabletopPad.PORTRAIT, menuBottom = 1200),
-            tabletopLayout(Posture.Tabletop(1200, 1248), windowW = 1848, windowH = 2448, screen = ScreenClass.NEAR_SQUARE_TABLET, cutoutTop = 0, controllerConnected = false, isDualScreenConsole = false),
-        )
-
-    @Test fun flatHasNoTabletopLayout() =
-        assertNull(tabletopLayout(Posture.Flat, windowW = 1080, windowH = 2520, screen = ScreenClass.REGULAR_PHONE, cutoutTop = 90, controllerConnected = false, isDualScreenConsole = false))
-
-    // ---- the main app's shell: the posture (window px) seen from its content area, which starts below the status bar
-
-    @Test fun shellOnFlipGetsContentAboveAndPadBelow() =
-        // Flip: status bar 90 px, so the shell is 1080 x 2430 from window y 90; the hinge line at 1260 is 1170 in it
-        assertEquals(
-            TabletopLayout(gameTop = 0, gameBottom = 1170, padTop = 1170, pad = TabletopPad.PORTRAIT, menuBottom = 1170),
-            tabletopInArea(flip, areaTop = 90, areaW = 1080, areaH = 2430, controllerConnected = false),
-        )
-
-    @Test fun shellOnFoldLandscapeGetsClusters() =
-        assertEquals(
-            TabletopLayout(gameTop = 0, gameBottom = 900, padTop = 948, pad = TabletopPad.CLUSTERS, menuBottom = 900),
-            tabletopInArea(Posture.Tabletop(900, 948), areaTop = 0, areaW = 2448, areaH = 1848, controllerConnected = false),
-        )
-
-    @Test fun shellWithControllerHasNoPad() =
-        assertEquals(
-            TabletopPad.NONE,
-            tabletopInArea(flip, areaTop = 90, areaW = 1080, areaH = 2430, controllerConnected = true)?.pad,
-        )
-
-    @Test fun shellFlatHasNoTabletop() =
-        assertNull(tabletopInArea(Posture.Flat, areaTop = 90, areaW = 1080, areaH = 2430, controllerConnected = false))
-
-    @Test fun shellHingeAboveTheAreaIsFlat() =
-        assertNull(tabletopInArea(Posture.Tabletop(40, 40), areaTop = 90, areaW = 1080, areaH = 2430, controllerConnected = false))
-
-    @Test fun shellHingeNearTheAreaBottomIsFlat() =
-        // 2000 in the window is 1910 in a 2430 area: the lower part would be about 21%, under the 25% minimum
-        assertNull(tabletopInArea(Posture.Tabletop(2000, 2000), areaTop = 90, areaW = 1080, areaH = 2430, controllerConnected = false))
 
     // ---- the hinge angle fallback: the Fold reports its feature FLAT at a laptop angle (HALF_OPENED is not app-visible)
     // Measured: the Fold's laptop window is 1848 x 2448 with the hinge line at 1224.
@@ -139,13 +58,7 @@ class PostureTest {
 
     @Test fun flatFeatureWithoutASensorIsFlat() = assertEquals(Posture.Flat, hinge(angle = null))
 
-    @Test fun foldLaptopGetsThePortraitPad() =
-        assertEquals(
-            TabletopLayout(gameTop = 0, gameBottom = 1224, padTop = 1224, pad = TabletopPad.PORTRAIT, menuBottom = 1224),
-            tabletopLayout(foldLaptop, windowW = 1848, windowH = 2448, screen = ScreenClass.NEAR_SQUARE_TABLET, cutoutTop = 0, controllerConnected = false, isDualScreenConsole = false),
-        )
-
-    // A game launched while half-folded starts from the menu's reading, so its first layout is already tabletop.
+    // A game launched while half-folded starts from the menu's reading, so its first layout already has the hinge.
     @Test fun aSameSizeWindowKeepsTheMenusTabletop() =
         assertEquals(flip, seededPosture(flip, hintW = 1080, hintH = 2520, windowW = 1080, windowH = 2520))
 

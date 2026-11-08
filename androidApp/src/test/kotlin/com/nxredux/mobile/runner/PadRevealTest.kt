@@ -50,20 +50,6 @@ class PadRevealTest {
         assertFalse(reveal.pending())
     }
 
-    /** onCreate lays out with the defaults (Shown); the launch's values (Hidden) arrive before the first frame. */
-    @Test fun the_band_starts_waiting_when_the_launch_values_say_hidden() {
-        // Defaults: band shown, not waiting. The real values: Hidden, but not offered yet (no frame), so the band waits.
-        assertEquals(BandGate.START_WAIT, bandGate(builtHidden = false, hiddenNow = false, bandShown = true, waiting = false, waitsNow = true))
-        // The values again (an overlay sync): already waiting.
-        assertEquals(BandGate.NONE, bandGate(builtHidden = false, hiddenNow = false, bandShown = true, waiting = true, waitsNow = true))
-        // The first frame is tall: hidden now, the overlay is built.
-        assertEquals(BandGate.RELAYOUT, bandGate(builtHidden = false, hiddenNow = true, bandShown = true, waiting = true, waitsNow = false))
-        // Set back to Shown before the first frame: the band stops waiting.
-        assertEquals(BandGate.STOP_WAIT, bandGate(builtHidden = false, hiddenNow = false, bandShown = true, waiting = true, waitsNow = false))
-        // No band (a controller, landscape): nothing to wait.
-        assertEquals(BandGate.NONE, bandGate(builtHidden = false, hiddenNow = false, bandShown = false, waiting = false, waitsNow = true))
-    }
-
     @Test fun a_core_that_never_runs_still_shows_the_pads_after_the_load_cap() {
         // A hung copy, a netplay peer, a core stuck loading: MENU comes back for a touch-only player.
         val reveal = PadReveal(timeoutMs = 1500)

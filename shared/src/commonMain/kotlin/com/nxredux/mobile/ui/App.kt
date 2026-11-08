@@ -1,5 +1,7 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.LocalSkinPacks
+import com.nxredux.mobile.ui.nx.SkinPad
 import com.nxredux.mobile.ui.nx.nxPageInset
 import com.nxredux.mobile.ui.nx.LocalNxHintBarHidden
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
@@ -104,9 +106,6 @@ import com.nxredux.mobile.settings.ConsoleArt
 import com.nxredux.mobile.settings.GameListArt
 import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuStyle
-import com.nxredux.mobile.settings.PadLayouts
-import com.nxredux.mobile.settings.PadShape
-import com.nxredux.mobile.settings.PadSlot
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.HandheldShell
@@ -138,11 +137,7 @@ import com.nxredux.mobile.ui.nx.GameDetailsPane
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxTextPrompt
 import com.nxredux.mobile.ui.nx.PadEvent
-import com.nxredux.mobile.ui.nx.PadThemeProvider
 import com.nxredux.mobile.ui.nx.PadVibrationProvider
-import com.nxredux.mobile.ui.nx.VirtualPad
-import com.nxredux.mobile.ui.nx.VirtualPadLeft
-import com.nxredux.mobile.ui.nx.VirtualPadRight
 import com.nxredux.mobile.ui.nx.footerModeFor
 import com.nxredux.mobile.ui.nx.LocalHasTouchscreen
 import com.nxredux.mobile.ui.nx.rememberHasTouchscreen
@@ -184,18 +179,19 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     val gameInfo by state.gameInfo.collectAsState()
     val netplayPage = state.netplay?.page?.collectAsState()   // the Netplay sheet's page (null: closed); no controller, no sheet
     val dualMenu by state.dualMenu.collectAsState()   // the menu is on the second display: the game list's overlays go to the top screen
+    val displayDualMenu by state.displayDualMenu.collectAsState()   // a second display has the top screen: the skin keeps one
+    val windowSize = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+    val tabletWindow = remember(windowSize) { state.tabletWindow() }   // read again when the window changes (fold, unfold)
     val toolOnTop by state.toolOnTop.collectAsState()   // a tool has the focus: with the menu on the second display, it and its overlays are on the top screen
     LaunchedEffect(Unit) { state.loadOnce() }   // App may be composed again on the other display (the main menu there)
     // Settings are plain properties: every Pad theme change republishes the screen, so re-read it when the screen changes.
     val padTheme = remember(screen) { state.settings.padTheme }
-    val padButtons = remember(screen) { state.settings.padButtons }   // Appearance → Pad buttons (Black's set), likewise
     val padVibration = remember(screen) { state.settings.padVibration }   // Controls → Pad vibration, likewise
-    // Controls → Menu pad, likewise; hidden while first setup and onboarding have not asked yet, previewed on its step.
+    // A pad skin theme (NX Carbon): its pack, for the menu's skin layout (the drawn pad where the skin has none).
+    val skinPacks = LocalSkinPacks.current
+    val skin = remember(padTheme, skinPacks) { padTheme.skin?.let(skinPacks) }
+    // Appearance → Pad skin, likewise; hidden while first setup and onboarding have not asked yet, previewed on its step.
     val menuPad = remember(screen, selection.value.index) { state.menuPadShown() }
-    // Controls → Pad layout: the main menu's pads draw the Shared layouts, live (a console's layout shows in its editor only).
-    val padLayouts by state.padLayouts.collectAsState()
-    val padScreen by state.padScreen.collectAsState()   // the screen this is on (a Fold's cover or inner): its own layouts
-    val menuPortraitLayout = remember(padLayouts, padScreen) { PadLayouts.resolve(padLayouts, null, PadSlot(PadShape.PORTRAIT, padScreen)) }
     val look = rememberMenuLook(state, screen)   // the accents and the launcher chrome's settings, likewise
     val controllerConnected = rememberControllerConnected()   // once, above the shell: survives rotation and pad/no-pad flips
     LaunchedEffect(controllerConnected) { state.onControllerConnected(controllerConnected) }   // a Shortcuts bind row's line
@@ -213,18 +209,15 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     // Bars and the cutout above and below only (the side cutout is in each page's inset: [nxPageInset]), never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
     Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).onAnyTouch(state::onTouch).windowInsetsPadding(nxScreenInsets())) {
         HandheldShell(
-            pad = { m -> NxTheme { PadVibrationProvider(padVibration) { PadThemeProvider(padTheme, padButtons) { VirtualPad(onPadEvent, m, layout = menuPortraitLayout) } } } },
             controllerConnected = controllerConnected,
-            showPad = menuPad,
-            // Flex mode on a wide window: the two clusters below the hinge (the main app has no analog stick use).
-            clusters = { l, r ->
-                NxTheme {
-                    PadVibrationProvider(padVibration) {
-                        VirtualPadLeft(onPadEvent, { _, _ -> }, l)
-                        VirtualPadRight(onPadEvent, r)
-                    }
-                }
-            },
+            showPad = menuPad,   // Pad skin Off: the menus full screen, no on-screen pad ([AppState.menuPadShown])
+            skin = skin,
+            skinPad = { m, placement, picture, parts -> PadVibrationProvider(padVibration) { SkinPad(placement, picture, parts, onPadEvent, m) } },
+            // the Fold's inner screen and tablets upright: the menu below, the top screen in the skin's frame above the hinge
+            tablet = tabletWindow,
+            twoScreens = !displayDualMenu,
+            top = { m -> Box(m) { MenuTopScreen(state, inSkin = true) } },
+            onTwoScreens = state::onSkinDualMenu,
             screen = { m ->
                 NxTheme(colors = look.colors) {
                     val footer = footerModeFor(controllerConnected, LocalPadBelow.current)

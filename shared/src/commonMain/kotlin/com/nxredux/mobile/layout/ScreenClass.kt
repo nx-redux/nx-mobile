@@ -23,20 +23,10 @@ object LayoutConstants {
     const val BAND_CM = 5.8f
     const val BAND_MAX_SHARE = 0.6f
     const val CLUSTER_PADDING_DP = 16f
-    const val EDGE_NUDGE_UNITS = 0.2f
     const val REFERENCE_LINES = 224
     const val HIDDEN_BAND_REACH = 0.25f
     /** DS / 3DS: a third, so the Fold's Large screen reaches 6x + 3x; the touch screen sits between the pad's corners. */
     const val DS_HIDDEN_BAND_REACH = 1f / 3f
-
-    /** The half-folded DS pad unit: the Fold cover screen's (1248 - 2 x 16 dp x 2.625) / 9 = 129.3 px at 428 dpi, about 7.67 mm. */
-    const val TABLETOP_DS_UNIT_MM = 7.7f
-
-    /**
-     * The share of the pad's reach the half-folded touch screen leaves free on each side: it may overlap each half by at
-     * most a quarter of its reach.
-     */
-    const val TABLETOP_DS_SET_ASIDE = 0.75f
 }
 
 /**
@@ -62,6 +52,3 @@ private fun mmToPx(mm: Float, ydpi: Float, density: Float): Float {
     val dpi = if (ydpi in 40f..1200f) ydpi else density * 160f
     return mm / 25.4f * dpi
 }
-
-/** Pixels in one half-folded DS layout unit ([LayoutConstants.TABLETOP_DS_UNIT_MM]); ydpi as [unitPx]. */
-fun tabletopDsUnitPx(ydpi: Float, density: Float): Float = mmToPx(LayoutConstants.TABLETOP_DS_UNIT_MM, ydpi, density)

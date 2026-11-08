@@ -36,6 +36,25 @@ fun List<NdsRegion>.shownRect(): PxRect = filterNot { it.inset }.ifEmpty { this 
 }
 
 /**
+ * These screens scaled evenly to fill [space] (the larger scale that fits its width or height), centred, each screen's
+ * size in whole px: Side by side in a pad skin's glass (user: its whole-number scale left wide margins). Their
+ * arrangement and gap are kept, only scaled.
+ */
+fun List<NdsRegion>.filledTo(space: PxRect): List<NdsRegion> {
+    if (isEmpty()) return this
+    val shown = shownRect()
+    if (shown.width <= 0f || shown.height <= 0f) return this
+    val f = minOf(space.width / shown.width, space.height / shown.height)
+    val ox = space.x + (space.width - shown.width * f) / 2f
+    val oy = space.y + (space.height - shown.height * f) / 2f
+    return map { r ->
+        val d = r.dst
+        val w = kotlin.math.round(d.width * f); val h = kotlin.math.round(d.height * f)
+        r.copy(dst = PxRect(kotlin.math.round(ox + (d.x - shown.x) * f), kotlin.math.round(oy + (d.y - shown.y) * f), w, h))
+    }
+}
+
+/**
  * Where the two DS screens go. melonDS DS draws them stacked in one 256x384 frame (256N x 384N with the GL renderer);
  * each screen is 4:3 (256x192 at scale 1).
  * Every layout uses whole-number scales of the 256x192 screen, with the pair centred in the space it is given (the

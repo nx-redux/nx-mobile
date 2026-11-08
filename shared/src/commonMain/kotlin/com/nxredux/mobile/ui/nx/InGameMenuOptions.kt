@@ -150,7 +150,7 @@ private fun OptionTouchRow(
 @Composable
 private fun ActionWordRow(label: String, selected: Boolean, onTap: () -> Unit) {
     val colors = LocalNxColors.current
-    val size = menuWordSize(inner = true)
+    val size = menuWordSize()
     Box(
         Modifier.fillMaxWidth().nxTapOrHold(onTap, null).padding(vertical = ACTION_ROW_AIR),
         contentAlignment = Alignment.CenterStart,

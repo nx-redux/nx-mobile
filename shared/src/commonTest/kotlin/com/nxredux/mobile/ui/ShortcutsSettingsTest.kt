@@ -11,7 +11,6 @@ import com.nxredux.mobile.settings.FolderPicker
 import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
-import com.nxredux.mobile.settings.PadButtons
 import com.nxredux.mobile.settings.PadTheme
 import com.nxredux.mobile.shortcuts.KeyCodes
 import com.nxredux.mobile.shortcuts.ShortcutAction
@@ -43,8 +42,8 @@ class ShortcutsSettingsTest {
         override var onboardingStep: String? = null
         override var extraFolders: List<ExtraFolder> = emptyList()
         override var defaultTags: Map<String, String> = emptyMap()
+        override var padSkin = true
         override var padTheme = PadTheme.DEFAULT
-        override var padButtons: PadButtons = PadButtons.DEFAULT
         override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap()
         override var gameListStyle: MenuStyle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_GAME_LIST_STYLE
         override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap()
@@ -112,7 +111,7 @@ class ShortcutsSettingsTest {
         val s = state()
         s.openSettings(SettingsSection.CONTROLS)
         val labels = s.page().rows.map { it.label }
-        assertEquals(labels.indexOf("Pad layout") + 1, labels.indexOf("Shortcuts"))
+        assertEquals(labels.indexOf("Game rumble") + 1, labels.indexOf("Shortcuts"))
         assertEquals(SettingsKind.SHORTCUTS, s.row("Shortcuts").kind)
     }
 
@@ -124,7 +123,7 @@ class ShortcutsSettingsTest {
         assertEquals(ShortcutAction.entries.map { it.label }, binds.map { it.label })
         assertTrue(binds.all { it.secondary == "None" })
         val touch = rows.filter { it.kind == SettingsKind.SHORTCUT_TOUCH }
-        assertEquals(listOf("Touch button 1", "Touch button 2"), touch.map { it.label })
+        assertEquals(listOf("Touch button 1", "Touch button 2", "Touch button 3", "Touch button 4"), touch.map { it.label })
         assertTrue(touch.all { it.secondary == "None" })
         assertEquals(SettingsRow(SettingsKind.RESET_DEFAULTS, "Clear all"), rows.last())
         assertEquals(binds + touch + rows.last(), rows)
@@ -316,7 +315,7 @@ class ShortcutsSettingsTest {
         val rows = s.page().rows
         assertEquals(listOf(SettingsRow(SettingsKind.TEXT, SHORTCUTS_NO_CONTROLLER)), rows.filter { it.kind == SettingsKind.TEXT })
         assertTrue(rows.none { it.kind == SettingsKind.SHORTCUT_BIND })
-        assertEquals(listOf("Touch button 1", "Touch button 2", "Clear all"), rows.filter { it.selectable }.map { it.label })
+        assertEquals(listOf("Touch button 1", "Touch button 2", "Touch button 3", "Touch button 4", "Clear all"), rows.filter { it.selectable }.map { it.label })
         assertEquals("Touch button 1", s.page().rows[s.selection.value.index].label)   // never on the line
         s.onControllerConnected(true)   // the binding was kept
         assertEquals("R1", s.row("Toggle FF").secondary)

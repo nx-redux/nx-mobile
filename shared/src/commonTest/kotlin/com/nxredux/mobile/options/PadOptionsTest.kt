@@ -23,55 +23,15 @@ class PadOptionsTest {
         assertEquals("auto", PadOptions.segaPadRow.default)
     }
 
-    @Test fun nds_keeps_its_rows_and_gains_the_portrait_pad_and_layout_rows() {
-        assertEquals(NdsOptions.table + BottomScreenOptions.row + PadOptions.portraitPadRow + PadOptions.layoutRow + (SpeedOptions.table + AudioOptions.rows), ConsoleSettings.tableFor("NDS"))
+    @Test fun nds_keeps_its_rows_and_gains_the_layout_row() {
+        assertEquals(NdsOptions.table + BottomScreenOptions.row + PadOptions.layoutRow + (SpeedOptions.table + AudioOptions.rows), ConsoleSettings.tableFor("NDS"))
     }
 
-    @Test fun portrait_pad_row_only_for_ds_and_3ds() {
-        for (tag in listOf("NDS", "3DS", " nds ")) assertTrue(PadOptions.portraitPadRow in ConsoleSettings.tableFor(tag), tag)
-        for (tag in listOf("GBA", "MD", "PS", "WII", "")) assertFalse(PadOptions.portraitPadRow in ConsoleSettings.tableFor(tag), tag)
-        val row = PadOptions.portraitPadRow
-        assertEquals("nx_portrait_pad", row.key)
-        assertEquals("Portrait Pad", row.label)
-        assertEquals(listOf(PadOptions.SHOWN, PadOptions.HIDDEN), row.values)
-        assertEquals(PadOptions.SHOWN, row.default)
-        assertEquals(listOf("Shown", "Hidden"), row.valueLabels)
-        assertFalse(row.visual)
-        assertFalse(row.atLaunch)   // a change applies live in the running game's Console Settings
-        assertTrue(row.info.lines().all { it.length <= 48 }, row.info)
-        assertEquals(row, FrontendOptions.option(PadOptions.PORTRAIT_PAD))
-    }
-
-    @Test fun portrait_pad_hidden_only_when_set_on_a_two_screen_console() {
-        val hidden = mapOf(PadOptions.PORTRAIT_PAD to PadOptions.HIDDEN)
-        assertTrue(PadOptions.portraitPadHidden("NDS", hidden))
-        assertTrue(PadOptions.portraitPadHidden("3DS", hidden))
-        assertFalse(PadOptions.portraitPadHidden("GBA", hidden))   // a stray key on another console does nothing
-        assertFalse(PadOptions.portraitPadHidden("NDS", emptyMap()))
-        assertFalse(PadOptions.portraitPadHidden("NDS", mapOf(PadOptions.PORTRAIT_PAD to PadOptions.SHOWN)))
-        assertFalse(PadOptions.portraitPadHidden("NDS", mapOf(PadOptions.PORTRAIT_PAD to "junk")))
-    }
-
-    // Arcade offers it for its tall boards (the game decides per picture); its text says so.
-    @Test fun arcade_offers_portrait_pad_for_tall_games() {
-        val hidden = mapOf(PadOptions.PORTRAIT_PAD to PadOptions.HIDDEN)
-        assertTrue(PadOptions.portraitPadHidden("FBN", hidden))
-        assertTrue(PadOptions.portraitPadTallRow in PadOptions.tableFor("FBN"))
-        assertFalse(PadOptions.portraitPadRow in PadOptions.tableFor("FBN"))
-        assertTrue(PadOptions.portraitPadRow in PadOptions.tableFor("NDS"))
-        assertFalse(PadOptions.tableFor("GBA").any { it.key == PadOptions.PORTRAIT_PAD })
-        assertTrue(PadOptions.portraitPadTallRow.info.lines().all { it.length <= 48 }, PadOptions.portraitPadTallRow.info)
-    }
-
-    // The handhelds with upright games (WonderSwan, both tags; Lynx) offer it too; other handhelds do not.
-    @Test fun upright_handhelds_offer_portrait_pad_for_tall_games() {
-        val hidden = mapOf(PadOptions.PORTRAIT_PAD to PadOptions.HIDDEN)
-        for (tag in listOf("WSC", "LYNX")) {
-            assertTrue(PadOptions.hasPortraitPadRow(tag), tag)
-            assertTrue(PadOptions.portraitPadHidden(tag, hidden), tag)
-            assertTrue(PadOptions.portraitPadTallRow in PadOptions.tableFor(tag), tag)
-        }
-        for (tag in listOf("GBA", "GB", "GG", "NGPC")) assertFalse(PadOptions.hasPortraitPadRow(tag), tag)
+    // Portrait Pad is gone: portrait always lays the see-through overlay over the full-screen game (no band to hide).
+    @Test fun no_console_offers_portrait_pad() {
+        for (tag in listOf("NDS", "3DS", "FBN", "WSC", "LYNX", "GBA", "MD", ""))
+            assertFalse(ConsoleSettings.tableFor(tag).any { it.key == "nx_portrait_pad" }, tag)
+        assertNull(FrontendOptions.option("nx_portrait_pad"))
     }
 
     @Test fun keys_are_unique_and_findable() {

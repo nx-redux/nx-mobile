@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.settings.PadShape
 import com.nxredux.mobile.ui.nx.HomeShelf
 import com.nxredux.mobile.ui.nx.NxButton
 
@@ -12,9 +11,9 @@ private fun quiet(text: String, detail: String = "") = SettingText("", detail.if
 
 /** Reset to defaults' line on each page that has one, and the fuller text behind its info icon. */
 private fun resetText(section: SettingsSection?): SettingText = when (section) {
-    SettingsSection.APPEARANCE -> SettingText("Resets every setting on this page", "Put Pad theme, Pad buttons, Accent, Secondary accent and Text size back")
+    SettingsSection.APPEARANCE -> SettingText("Resets every setting on this page", "Put Pad theme, Pad buttons, Accent, Secondary accent, Text size and Button layout back")
     SettingsSection.MAIN_MENU -> SettingText("Resets every setting on this page", "Put every Layouts group and Extra info back to their defaults")
-    SettingsSection.CONTROLS -> SettingText("Resets this page, pad layouts included", "Put vibration, Menu pad and every pad layout back to defaults")
+    SettingsSection.CONTROLS -> SettingText("Resets every setting on this page", "Put Pad vibration and Game rumble back to their defaults")
     SettingsSection.SHORTCUTS -> SettingText("Sets every shortcut to None", "Unbind every action and take both touch buttons off the pad")
     SettingsSection.SYSTEM_BUTTONS -> SettingText("Back to this controller's own buttons", "SELECT, START and MENU go back to the buttons that send them; other controllers keep theirs")
     else -> SettingText("Put this page back to its defaults")
@@ -70,16 +69,16 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "row under Display.",
     )
     // Appearance.
-    SettingsKind.PAD_THEME -> quiet(
-        "Colours of the on-screen pad in portrait",
-        "The colours of the on-screen pad in portrait, in the menus and in games. Charcoal is the dark pad; Retro has a " +
-            "light grey body with magenta face buttons; Black has a pure black body, its buttons set by Pad buttons. The " +
-            "landscape button clusters always stay Charcoal.",
+    SettingsKind.PAD_SKIN -> quiet(
+        "The handheld drawn around the game, or full screen",
+        "On draws the Pad theme's handheld around the game and the menus. Off runs the game full screen with see-through " +
+            "buttons over it, and the menus without an on-screen pad.",
     )
-    SettingsKind.PAD_BUTTONS -> quiet(
-        "How the Black pad's buttons look",
-        "How the buttons look on the Black pad theme. Grey keeps Charcoal's grey buttons on the black body; Outline " +
-            "draws each button as a thin outline with its label, lit faintly while you hold it.",
+    SettingsKind.PAD_THEME -> quiet(
+        "The skin of the on-screen pad",
+        "The skin drawn around the game and the menus: the whole handheld, its buttons and screens. NX Carbon is smoke " +
+            "grey, NX Onyx and NX Obsidian black, and Plasma, Ember, Volt and Tide translucent purple, red, green and blue. " +
+            "Where a skin has no layout for the window, the plain dark pad shows instead.",
     )
     SettingsKind.ACCENT -> quiet(
         "The selection colour: the selected row, tile or card",
@@ -183,25 +182,20 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
         "The game's own rumble, on the controller you play with when it has a motor, else on the phone. Changing the " +
             "level plays a short pulse at that strength. In a multiplayer game it sets every player's strength.",
     )
-    SettingsKind.MENU_PAD -> SettingText(
-        "The pad under the menus; games keep theirs",
-        "Off takes the pad away: the main menu, the game lists and the Game Switcher then run to the bottom of the " +
-            "screen, used by touch or a controller. Games keep their pad.",
+    SettingsKind.BUTTON_LAYOUT -> quiet("Move and resize the buttons, per console")
+    SettingsKind.BUTTON_LAYOUT_CONSOLE -> SettingText(
+        "Whose buttons you edit",
+        "Each console keeps its own button layout, in portrait and in landscape. The editor shows the layout a game " +
+            "would show on this screen.",
     )
-    SettingsKind.PAD_LAYOUT -> quiet("Move and resize the on-screen pad's buttons")
-    SettingsKind.PAD_LAYOUT_CONSOLE -> SettingText(
-        "Whose layout you edit",
-        "Shared is the layout every console uses. A console you give a layout of its own uses that instead. Each screen " +
-            "size keeps its own layouts; the page edits the screen you are on.",
+    SettingsKind.BUTTON_LAYOUT_WII_PAD -> quiet("Each Wii controller has its own layout")
+    SettingsKind.BUTTON_LAYOUT_N3DS_PAD -> quiet(
+        "Regular 3DS or New 3DS buttons",
+        "Regular 3DS and New 3DS buttons each have their own layout. New 3DS adds ZL, ZR and the C-stick; a game uses it " +
+            "when its New 3DS Controls setting turns them on.",
     )
-    SettingsKind.PAD_LAYOUT_SHAPE -> quiet(
-        when (row.padShape) {
-            PadShape.OVERLAY -> "Edit the buttons beside a landscape game"
-            PadShape.HALF_FOLDED -> "Edit the DS / 3DS buttons beside the touch screen half-folded"
-            else -> "Edit the pad below the screen in portrait"
-        },
-    )
-    SettingsKind.PAD_LAYOUT_RESET -> SettingText("Resets its layouts on this screen", "Put the chosen console's layouts on this screen back")
+    SettingsKind.BUTTON_LAYOUT_ORIENTATION -> quiet("Edit the buttons for this orientation")
+    SettingsKind.BUTTON_LAYOUT_RESET -> SettingText("Resets this console's buttons", "Put the chosen console's buttons back where the skin puts them")
     SettingsKind.SHORTCUTS -> quiet(
         "Controller buttons and touch buttons for fast forward, rewind and reset",
         "Bind a controller button or combo to fast forward, rewind or reset, and give the on-screen pad up to two touch " +
@@ -229,7 +223,8 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     SettingsKind.SHORTCUT_TOUCH -> quiet(
         "What this on-screen touch button does; None hides it",
         "The action of a touch button on the on-screen pad. None, the default, leaves it off the pad. Hold actions work " +
-            "while your finger stays on it, toggles flip on each tap. Move it in Pad layout.",
+            "while your finger stays on it, toggles flip on each tap. Move it in Pad layout. A pad skin shows all four in " +
+            "the row under its screen; the drawn pad shows 1 and 2.",
     )
     // System's Launcher and Developer groups.
     SettingsKind.HOME_SCREEN -> quiet(

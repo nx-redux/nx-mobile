@@ -23,6 +23,47 @@ class N3dsHotkeysTest {
 
     // ---- SELECT, held back for chords
 
+    // ---- under a pad skin: the touch screen is under the finger and the skin places the screens
+
+    @Test fun under_a_skin_select_l_does_nothing() {
+        val h = N3dsHotkeys().apply { skinShown = true }
+        h.down(NxButton.SELECT)
+        assertEquals(keep, h.down(NxButton.L1))                                 // kept from the core, no Stylus action
+        assertFalse(h.stylus)
+        h.up(NxButton.L1); h.up(NxButton.SELECT); h.tick(N3dsHotkeys.SELECT_TAP_MS)
+        assertEquals(emptyList(), h.takeKeys())                                 // a chord: no SELECT tap
+    }
+
+    // A regular phone's landscape skin lays the screens out by the player's layout (user): SELECT + Left / Right cycles it
+    @Test fun under_a_skin_that_takes_the_layout_select_left_right_cycles_it() {
+        val h = N3dsHotkeys().apply { skinShown = true; skinLayouts = true }
+        h.down(NxButton.SELECT)
+        assertEquals(N3dsDecision(false, N3dsAction.CycleLayout(1)), h.down(NxButton.RIGHT))
+        h.up(NxButton.RIGHT)
+        assertEquals(N3dsDecision(false, N3dsAction.CycleLayout(-1)), h.down(NxButton.LEFT))
+        h.up(NxButton.LEFT)
+        assertEquals(keep, h.down(NxButton.L1))   // the stylus still not, under a skin
+        assertFalse(h.stylus)
+    }
+
+    @Test fun under_a_skin_select_left_right_does_nothing() {
+        val h = N3dsHotkeys().apply { skinShown = true }
+        h.down(NxButton.SELECT)
+        assertEquals(keep, h.down(NxButton.RIGHT))
+        h.up(NxButton.RIGHT)
+        assertEquals(keep, h.down(NxButton.LEFT))
+        h.up(NxButton.LEFT); h.up(NxButton.SELECT); h.tick(N3dsHotkeys.SELECT_TAP_MS)
+        assertEquals(emptyList(), h.takeKeys())
+    }
+
+    @Test fun under_a_skin_select_r_still_swaps() {
+        val h = N3dsHotkeys().apply { skinShown = true }
+        h.down(NxButton.SELECT)
+        assertEquals(keep, h.down(NxButton.R1))
+        h.up(NxButton.R1); h.up(NxButton.SELECT)
+        assertEquals(listOf(press(N3dsKey.L3), release(N3dsKey.L3)), h.takeKeys())
+    }
+
     @Test fun a_select_tap_reaches_the_core_as_a_short_tap_on_release() {
         val h = N3dsHotkeys()
         assertEquals(keep, h.down(NxButton.SELECT))

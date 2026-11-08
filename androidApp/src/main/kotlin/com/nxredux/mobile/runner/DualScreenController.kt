@@ -48,6 +48,9 @@ import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_ART_PATH
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_GAME_PATH
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_TITLE
 import com.nxredux.mobile.settings.AndroidAppSettings
+import com.nxredux.mobile.skin.PanelSpot
+import com.nxredux.mobile.skin.PlacedGlass
+import com.nxredux.mobile.skin.SkinDual
 import com.nxredux.mobile.ui.nx.GamePanel
 import com.nxredux.mobile.ui.nx.GamePanelEvent
 import com.nxredux.mobile.ui.nx.GamePanelHeader
@@ -103,7 +106,7 @@ internal interface DualScreenHost : LifecycleOwner {
     /** The in-game menu's view while it is open (the panel on main takes its place). */
     val menuView: ComposeView?
     fun layoutTag(): String
-    fun menuLayoutParams(orientation: Int, overPanel: Boolean): FrameLayout.LayoutParams
+    fun menuLayoutParams(orientation: Int, overPanel: Boolean, glass: Boolean): FrameLayout.LayoutParams
     fun isLandscape(): Boolean
     fun syncN3dsCore()
     fun toast(msg: String): android.widget.Toast
@@ -159,7 +162,7 @@ internal class DualScreenController(
     private val achievements get() = owner.achievements
     private val menuView get() = owner.menuView
     private fun layoutTag() = owner.layoutTag()
-    private fun menuLayoutParams(orientation: Int, overPanel: Boolean = false) = owner.menuLayoutParams(orientation, overPanel)
+    private fun menuLayoutParams(orientation: Int, overPanel: Boolean = false, glass: Boolean = false) = owner.menuLayoutParams(orientation, overPanel, glass)
     private fun isLandscape() = owner.isLandscape()
     private fun syncN3dsCore() = owner.syncN3dsCore()
     private fun toast(msg: String) = owner.toast(msg)
@@ -195,6 +198,9 @@ internal class DualScreenController(
     private var mainPanelHost: FrameLayout? = null
     val mainPanel = mutableStateOf<(@Composable () -> Unit)?>(null)
     private val mainPanelPill = mutableStateOf(false)
+    // Where the panel is ([SkinDual.panelSpot]), and the skin glass it fills on main ([PanelSpot.SKIN_GLASS]).
+    private var panelSpot = PanelSpot.NONE
+    private val mainPanelGlass = mutableStateOf<PlacedGlass?>(null)
     @Volatile var n3dsSwapBeforeSplit: Map<String, String>? = null   // 3DS swap values the split replaced (GL thread)
     private var presentationShape: DisplayShape? = null   // the second display's size and density the window was made for
 
@@ -216,16 +222,15 @@ internal class DualScreenController(
     }
 
     /**
-     * 3DS leaving split (or unfolding): the swap values from before it ([captureN3dsSwap]) and the orientation's proportion
-     * are back. Still half-folded, the swap stays pinned and the noted values wait for the unfold.
+     * 3DS leaving split (or its pad skin): the swap values from before it ([captureN3dsSwap]) and the orientation's
+     * proportion are back.
      */
     fun restoreN3dsScreen() {
         val view = retroView ?: return
         if (netplayNow != null) return
-        if (padLayout.tabletop() != null && dualMode == DualMode.OFF) return
         val stored = storedValues
         val proportion = N3dsOptions.stackedSmallProportion(
-            frontendValues, isLandscape(), renderer.ndsControllerMode(), activity.screenClass(), padLayout.tabletop() != null, renderer.n3dsPictureSpace,
+            frontendValues, isLandscape(), renderer.ndsControllerMode(), activity.screenClass(), false, renderer.n3dsPictureSpace,
         )
         renderer.n3dsProportion = proportion
         view.queueEvent {
@@ -251,6 +256,9 @@ internal class DualScreenController(
 
     /** The panel fills the game's window on main (the picture is on the second display). */
     fun mainPanelShown(): Boolean = mainPanel.value != null
+
+    /** The panel fills the game's whole window on main (not a skin's glass): it hides the pad, the menu opens over it. */
+    fun mainPanelCoversWindow(): Boolean = mainPanel.value != null && mainPanelGlass.value == null
 
     /** Main shows no game picture: the panel modes with the picture on the second display. */
     fun mainShowsNoPicture(): Boolean =
@@ -360,7 +368,7 @@ internal class DualScreenController(
         }
         // No window on the second display (it went before it showed): nothing is moved onto it, both screens stay here.
         val mode = if (display != null && presentation == null) DualMode.OFF else wanted
-        val picture = if (display == null || presentation == null) PictureOn.MAIN else pictureOnNow(display)
+        val picture = if (display == null || presentation == null) PictureOn.MAIN else pictureOnNow(display, mode)
         val old = dualMode
         val oldPicture = pictureOn
         val changed = mode != old
@@ -381,9 +389,8 @@ internal class DualScreenController(
             syncN3dsCore()
             if (forcedBefore && !forced && !renderer.n3dsViews) restoreN3dsScreen()
         }
-        // Half-folded, a DS / 3DS gets its own tabletop only without a second screen ([tabletopDualScreen]): a new mode
-        // builds the other tabletop (the pad, the game area, the menu's bounds).
-        if (changed && padLayout.tabletop() != null) padLayout.applyLayout(activity.resources.configuration.orientation)
+        // A new mode builds the pad again too: the skin comes or goes with it ([SkinDual.skinAllowed]).
+        if (changed) padLayout.applyLayout(activity.resources.configuration.orientation)
         renderer.relayoutFrontend(geometry)
         owner.placeMenu()
     }
@@ -393,14 +400,15 @@ internal class DualScreenController(
      * against the display's real size as it is turned now, unless a bottom screen is chosen (the console's Bottom screen,
      * else Settings → Second screen's).
      */
-    private fun pictureOnNow(display: Display): PictureOn {
+    /** Where the picture goes in [mode] (the mode being set, not the last one: under a skin it decides Auto). */
+    private fun pictureOnNow(display: Display, mode: DualMode = dualMode): PictureOn {
         val root = findViewById<View>(R.id.root)
         val dm = resources.displayMetrics
         val w = if (root.width > 0) root.width else dm.widthPixels
         val h = if (root.height > 0) root.height else dm.heightPixels
         val real = android.graphics.Point().also { @Suppress("DEPRECATION") display.getRealSize(it) }
         val bottom = BottomScreen.resolve(frontendValues[BottomScreenOptions.KEY], appSettings.bottomScreen)
-        return DualScreen.pictureOn(maxOf(w, h), minOf(w, h), real.x, real.y, bottom)
+        return DualScreen.pictureOn(maxOf(w, h), minOf(w, h), real.x, real.y, bottom, skin = padLayout.dualSkinWanted(mode))
     }
 
     /**
@@ -514,19 +522,31 @@ internal class DualScreenController(
      * The panel follows the mode, on the touch screen ([pictureOn]'s other display): the panel over it in PANEL and
      * PANEL_UP (its discs and play time re-read), the Panel pill over the DS/3DS screen in SPLIT.
      */
-    private fun syncPanel() {
+    fun syncPanel() {
         val p = presentation
-        val shown = panelShown()
         val onMain = pictureOn == PictureOn.SECOND
+        // A skin's glass holds it on main: the fold board's panel glass, or the landscape skin's screen ([SkinDual]).
+        val glass = SkinDual.panelGlass(padLayout.skinPlacement().takeIf { padLayout.skinShown }, dualMode, pictureOn)
+        val spot = SkinDual.panelSpot(dualMode, pictureOn, p != null, glass)
+        panelSpot = spot
+        val shown = panelShown()
         val content = if (shown) panelContent(gamePill = dualMode == DualMode.PANEL_UP) else null
         p?.showPanelPill(dualMode == DualMode.SPLIT && !onMain)
-        p?.showPanel(content.takeIf { !onMain })
-        val wasOnMain = mainPanelShown()
-        showMainPanel(content.takeIf { onMain }, pill = p != null && dualMode == DualMode.SPLIT && onMain)
-        if (wasOnMain != mainPanelShown()) {
+        p?.showPanel(content.takeIf { spot == PanelSpot.SECOND_DISPLAY })
+        val wasCovering = mainPanelCoversWindow()
+        val oldGlass = mainPanelGlass.value
+        showMainPanel(
+            content.takeIf { spot == PanelSpot.SKIN_GLASS || spot == PanelSpot.WINDOW },
+            pill = p != null && dualMode == DualMode.SPLIT && onMain, glass = glass.takeIf { spot == PanelSpot.SKIN_GLASS },
+        )
+        placeMainPanelPill()
+        val inGlass = mainPanelGlass.value
+        // The pad went from under the fingers (a panel over the window), or the panel came or moved in a glass beside it:
+        // nothing it held may stick.
+        if ((mainPanelCoversWindow() && !wasCovering) || (inGlass != null && inGlass.rect != oldGlass?.rect)) input.releaseAllGameInput()
+        if (wasCovering != mainPanelCoversWindow()) {
             padLayout.updatePadVisibility()
-            if (mainPanelShown()) input.releaseAllGameInput()   // the pad went from under the fingers: nothing it held may stick
-            menuView?.layoutParams = menuLayoutParams(resources.configuration.orientation, overPanel = mainPanelShown())
+            menuView?.layoutParams = menuLayoutParams(resources.configuration.orientation, overPanel = mainPanelCoversWindow(), glass = true)
             renderer.relayoutFrontend()   // the main picture stops or starts drawing; the 3D Resolution follows
         }
         // Re-read as it comes up; while up, each RA event, player, disc and setting change refreshes it.
@@ -539,15 +559,16 @@ internal class DualScreenController(
     }
 
     /** The panel is up, on either display (PANEL, PANEL_UP). */
-    fun panelShown(): Boolean = presentation != null && (dualMode == DualMode.PANEL || dualMode == DualMode.PANEL_UP)
+    fun panelShown(): Boolean = panelSpot != PanelSpot.NONE
 
     /**
      * The panel ([content]) over the whole game window on main, opaque and taking every touch there; or only the Panel
      * [pill] at the top, the game's touches passing it by. Above the game and the pad, below the in-game menu and the
      * notifications.
      */
-    private fun showMainPanel(content: (@Composable () -> Unit)?, pill: Boolean) {
+    private fun showMainPanel(content: (@Composable () -> Unit)?, pill: Boolean, glass: PlacedGlass? = null) {
         mainPanel.value = content
+        mainPanelGlass.value = glass.takeIf { content != null }
         mainPanelPill.value = pill && content == null
         if (content == null && !pill) { mainPanelHost?.visibility = View.GONE; return }
         val host = mainPanelHost ?: FrameLayout(activity).also { host ->
@@ -557,6 +578,9 @@ internal class DualScreenController(
                     theme {
                         val panel = mainPanel.value
                         when {
+                            // in a skin's glass: no cutout to keep clear of (the skin's frame does that)
+                            panel != null && mainPanelGlass.value != null ->
+                                Box(Modifier.fillMaxSize().background(LocalNxColors.current.background)) { panel() }
                             panel != null -> Box(Modifier.fillMaxSize().background(LocalNxColors.current.background)
                                 .windowInsetsPadding(WindowInsets.displayCutout)) { panel() }
                             // Bottom-right, where the panel's Game pill sits (clear of a cutout on those sides): the
@@ -571,7 +595,19 @@ internal class DualScreenController(
             mainPanelHost = host
         }
         host.isClickable = content != null   // the panel's empty parts swallow touches; the pill alone lets them through
-        host.layoutParams = if (content != null) {
+        val inGlass = mainPanelGlass.value
+        // a skin's glass: the panel fills it, clipped to its rounded corners
+        host.clipToOutline = inGlass != null
+        host.outlineProvider = inGlass?.let { g ->
+            object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) = outline.setRoundRect(0, 0, view.width, view.height, g.corner)
+            }
+        } ?: android.view.ViewOutlineProvider.BACKGROUND
+        host.layoutParams = if (inGlass != null) {
+            FrameLayout.LayoutParams(inGlass.rect.width.roundToInt(), inGlass.rect.height.roundToInt(), Gravity.TOP or Gravity.START).apply {
+                leftMargin = inGlass.rect.x.roundToInt(); topMargin = inGlass.rect.y.roundToInt()
+            }
+        } else if (content != null) {
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         } else {
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END)
@@ -581,20 +617,44 @@ internal class DualScreenController(
     }
 
     /**
-     * Where the main panel's host sits among the root's children: the panel right above gameContainer (under the pads,
-     * which it hides anyway); the Panel pill alone right above the pads, whose right cluster would cover it in landscape,
-     * and still under the menu and the notifications. Moved only when its place changed.
+     * The Panel pill alone under a pad skin (a DS split, its touch screen in the skin's screen): at that screen's
+     * bottom-right corner, not the window's (over the skin's right-hand buttons); else the window's, as without a skin.
+     */
+    private fun placeMainPanelPill() {
+        val host = mainPanelHost ?: return
+        if (mainPanel.value != null || !mainPanelPill.value) return
+        val root = findViewById<View>(R.id.root)
+        val main = DualScreen.splitMain(if (isN3ds) n3dsPicture else NdsSettings.parse(frontendValues).big, pictureOn)
+        val g = SkinDual.splitGlass(padLayout.skinPlacement()?.takeIf { padLayout.skinShown }, main)
+        host.layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
+            if (g != null && root.width > 0) {
+                rightMargin = (root.width - (g.x + g.width)).roundToInt().coerceAtLeast(0)
+                bottomMargin = (root.height - (g.y + g.height)).roundToInt().coerceAtLeast(0)
+            }
+        }
+        placeMainPanelHost()
+    }
+
+    /**
+     * Where the main panel's host sits among the root's children: the panel right above gameContainer (under the pad,
+     * which it hides anyway); the Panel pill alone, or a panel in a skin's glass, right above the skin's view, and still
+     * under the menu and the notifications. Moved only when its place changed.
      */
     fun placeMainPanelHost() {
         val host = mainPanelHost ?: return
         val root = findViewById<FrameLayout>(R.id.root)
         val pillOnly = mainPanel.value == null && mainPanelPill.value
+        val inGlass = mainPanel.value != null && mainPanelGlass.value != null
         val current = root.indexOfChild(host)
         // The other children's places as if the host were out of the root.
         fun without(i: Int) = if (current in 0 until i) i - 1 else i
         val game = without(root.indexOfChild(findViewById(R.id.gameContainer)))
-        val lastPad = padLayout.padViews.maxOfOrNull { without(root.indexOfChild(it)) } ?: -1
-        val target = if (pillOnly) maxOf(game, lastPad) + 1 else game + 1
+        // in a skin's glass: right above the skin's view (which would take its touches), under the menu and the notifications
+        val skin = padLayout.skinViewNow?.let { without(root.indexOfChild(it)) } ?: -1
+        val target = when {
+            inGlass || pillOnly -> maxOf(game, skin) + 1
+            else -> game + 1
+        }
         if (current == target) return
         if (current >= 0) root.removeView(host)
         root.addView(host, target)
@@ -705,8 +765,10 @@ internal class DualScreenController(
     }
 
     /** The Swap disc toast ("Disc N of M") on the picture's display. */
-    fun discToast(index: Int, count: Int) {
-        val text = GamePanelModel.discToast(index, count)
+    fun discToast(index: Int, count: Int) = pictureToast(GamePanelModel.discToast(index, count))
+
+    /** [text] as a toast on the display showing the game's picture. */
+    fun pictureToast(text: String) {
         val p = presentation
         if (p != null && pictureOn == PictureOn.SECOND) p.toast(text) else toast(text)
     }

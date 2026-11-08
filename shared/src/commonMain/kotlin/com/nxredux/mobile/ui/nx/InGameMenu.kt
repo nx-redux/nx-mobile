@@ -62,6 +62,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.TextUnit
@@ -221,6 +222,29 @@ private fun MenuTabs(panel: PanelUi, focused: Boolean) {
 /** The tab row is drawn over the menu's body ([menuTabsShown]): the lists start right under it, not level with its words. */
 private val LocalMenuTabsAbove = compositionLocalOf { false }
 
+/**
+ * No controller and no pad on screen (a game without a skin: the menu over the whole picture): the hint bar shows only
+ * [touchOnlyHints], the hints a tap cannot stand in for. The runner provides it ([footerModeFor] BUTTONS).
+ */
+val LocalInGameTouchOnly = compositionLocalOf { false }
+
+/**
+ * [hints] reduced to those a touch-only player has no other way to: the Achievements page's Locked only and Mute, a
+ * Shortcuts row's None and Default. The rest are a tap on the row (A), the row's value (LEFT / RIGHT) or Back (B).
+ */
+internal fun touchOnlyHints(page: MenuPage, hints: List<Hint>): List<Hint> = when (page.kind) {
+    PageKind.Achievements, PageKind.Shortcuts -> hints.filter { it.button == NxButton.X || it.button == NxButton.Y }
+    else -> emptyList()
+}
+
+/** The menu's hint bar: all [hints] with a pad to press them; touch only, [touchOnlyHints], and no bar (no room) without any. */
+@Composable
+private fun MenuHintBar(page: MenuPage, hints: List<Hint>, modifier: Modifier = Modifier, onHint: (NxButton) -> Unit) {
+    val shown = if (LocalInGameTouchOnly.current) touchOnlyHints(page, hints) else hints
+    if (shown.isEmpty() && LocalInGameTouchOnly.current) return
+    NxHintBar(shown, modifier, onHint = onHint)
+}
+
 /** The focused page's selected option row is being changed with the pad ([MenuState.editing]): [OptionsBody] marks it. */
 internal val LocalMenuEditing = compositionLocalOf { false }
 
@@ -299,8 +323,8 @@ private fun InGameMenuContent(
         } else {
             Modifier
         }
-        NxHintBar(
-            hintsFor(page, selectedRow, state.selectedShowsInfo, state.panelFocus ?: PanelFocus.Tabs.takeIf { offMenuTab }, state.panelTab, panel = beside != null, editing = state.editing, twoPane = split != null), hintModifier,
+        MenuHintBar(
+            page, hintsFor(page, selectedRow, state.selectedShowsInfo, state.panelFocus ?: PanelFocus.Tabs.takeIf { offMenuTab }, state.panelTab, panel = beside != null, editing = state.editing, twoPane = split != null), hintModifier,
             onHint = { onPress(menuHintButton(it)) },
         )
     }
@@ -395,7 +419,7 @@ private fun rememberOptionsBeside(state: MenuState, menuWidth: Dp): Boolean {
     val inset = nxPageInset()
     val body = menuWidth - inset.pillStart - inset.pillEnd - (nxListInset() - MenuPillPadding) - nxListInset()
     val right = body - rememberRootWordsColumn(state.stack.first(), body) - RootColumnGap
-    val need = rememberWordListWidth(options, menuWordSize(inner = true)) + (nxListInset() - MenuPillPadding) + 12.dp   // RowsBody's padding
+    val need = rememberWordListWidth(options, menuWordSize()) + (nxListInset() - MenuPillPadding) + 12.dp   // RowsBody's padding
     return right >= need
 }
 
@@ -523,6 +547,7 @@ internal fun rootListTopPad(rowHeight: Dp): Dp = (menuTabWordCentre() - rowHeigh
 private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit, onActivate: (Int) -> Unit, onChange: (Int) -> Unit, focused: Boolean = true, opened: Boolean = false) {
     val onSlot = page.rows.getOrNull(page.selected) is MenuRow.Slot
     val rowHeight = menuWordPitch(nxOptionsRowHeight(pageRowHeight, LocalNxOptionText.current))   // Appearance → Text size, as the option pages
+    val listState = rememberLazyListState()
     CompositionLocalProvider(LocalNxTapOpens provides { i -> !inGameRowTakesTwoTaps(page.rows.getOrNull(i)) }) { NxList(
         rows = page.rows.mapIndexed { i, row ->
             val value = (row as? MenuRow.Option)?.valueLabel
@@ -532,8 +557,11 @@ private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit,
         onSelect = onSelect,
         onOpen = onActivate,
         // Level with the panel's tab row: its first pill centred on the tab words.
-        modifier = Modifier.padding(top = wordListTopPad(rowHeight)).fillMaxWidth().height(rowHeight * page.rows.size.coerceAtLeast(1))
+        // All its rows where they fit; a short glass (a 3DS top screen under a skin) clips it, and it scrolls under a thin fade.
+        modifier = Modifier.padding(top = wordListTopPad(rowHeight)).fillMaxWidth().height(wordListHeight(rowHeight, page.rows.size, LocalDensity.current))
+            .nxScrollFade(listState, MENU_LIST_FADE)
             .then(if (onSlot) Modifier.slotSwipe(onChange) else Modifier),
+        listState = listState,
         rowHeightOverride = rowHeight,
         pillPaddingOverride = MenuPillPadding,
         textSizeOverride = menuWordSize(), restInk = LocalNxColors.current.inkDim, wordInk = menuWordInk(focused),
@@ -559,20 +587,32 @@ private const val OPENED_MARK = "›"
 
 /** A word list's row pitch: the menu's [base] pitch, or [MENU_WORD_PITCH] × the word size where that is more, so words keep air between them. */
 @Composable
-private fun menuWordPitch(base: Dp, inner: Boolean = false): Dp = maxOf(base, with(LocalDensity.current) { (menuWordSize(inner) * MENU_WORD_PITCH).toDp() })
+private fun menuWordPitch(base: Dp): Dp = maxOf(base, with(LocalDensity.current) { (menuWordSize() * MENU_WORD_PITCH).toDp() })
+
+/**
+ * A word list's box for [rows] rows (at least one) [rowHeight] apart, as the list lays them out: each row a whole number
+ * of px, so the box is never a fraction short (which would scroll it by a px and fade its last row).
+ */
+internal fun wordListHeight(rowHeight: Dp, rows: Int, density: Density): Dp =
+    with(density) { (rowHeight.roundToPx() * rows.coerceAtLeast(1)).toDp() }
+
+/**
+ * The menu word lists' "more this way" fade: a sliver, not a row (user), so a list in a short glass (a 3DS top screen
+ * under a skin) keeps its rows readable while the cut edge still reads as continuing.
+ */
+private val MENU_LIST_FADE = 14.dp
 
 /** A word list row's least pitch as a share of its word size. */
 private const val MENU_WORD_PITCH = 1.4f
 
 /**
- * The in-game menu's words at Settings' section size ([SETTINGS_SECTION_SIZE], under Appearance → Text size only); an
- * [inner] list (the Options page's) a step smaller ([MENU_INNER_WORD_SIZE]).
+ * The in-game menu's words, the root list's and the Options page's alike (under Appearance → Text size only): a step
+ * under Settings' section words ([SETTINGS_SECTION_SIZE]); the root read too big over the game at their size (user).
  */
 @Composable
-internal fun menuWordSize(inner: Boolean = false): TextUnit = (if (inner) MENU_INNER_WORD_SIZE else SETTINGS_SECTION_SIZE).pinned() * nxTextScale()
+internal fun menuWordSize(): TextUnit = MENU_WORD_SIZE.pinned() * nxTextScale()
 
-/** An inner word list's size (the Options page's), a step under the root list's [SETTINGS_SECTION_SIZE]. */
-private val MENU_INNER_WORD_SIZE = 22.sp
+private val MENU_WORD_SIZE = 22.sp
 
 /**
  * The two panes between the title and the hint bar ([SplitPanes], the Settings frame): the focused one takes the
@@ -677,18 +717,20 @@ private fun RowsBody(
     focused: Boolean = false,
     opened: Boolean = false,
 ) {
-    val itemHeight = menuWordPitch(nxOptionsRowHeight(rowHeight, LocalNxOptionText.current), inner = true)   // Appearance → Text size
+    val itemHeight = menuWordPitch(nxOptionsRowHeight(rowHeight, LocalNxOptionText.current))   // Appearance → Text size
     BoxWithConstraints(
         modifier.fillMaxWidth().padding(start = nxListInset() - MenuPillPadding, end = 12.dp, top = wordListTopPad(itemHeight)),
         contentAlignment = Alignment.TopStart,
     ) {
         val shown = minOf(page.rows.size, maxOf(1, (maxHeight / itemHeight).toInt()))
+        val listState = rememberLazyListState()
         NxList(
             rows = page.rows.mapIndexed { i, row -> NxRow(openedLabel(row.label, opened && i == page.selected)) },
             selectedIndex = page.selected, onSelect = onSelect, onOpen = onActivate,
-            modifier = Modifier.fillMaxWidth().height(itemHeight * shown.coerceAtLeast(1)),
+            modifier = Modifier.fillMaxWidth().height(wordListHeight(itemHeight, shown, LocalDensity.current)).nxScrollFade(listState, MENU_LIST_FADE),
+            listState = listState,
             rowHeightOverride = itemHeight, pillPaddingOverride = MenuPillPadding,
-            textSizeOverride = menuWordSize(inner = true), restInk = LocalNxColors.current.inkDim, wordInk = menuWordInk(focused),
+            textSizeOverride = menuWordSize(), restInk = LocalNxColors.current.inkDim, wordInk = menuWordInk(focused),
         )
     }
 }
@@ -863,7 +905,7 @@ private fun AdjustContent(
                     AdjustArrow(">", valueSize, selection.barText) { onChange(1) }
                 }
             }
-            NxHintBar(hintsFor(page, row), onHint = { hint ->
+            MenuHintBar(page, hintsFor(page, row), onHint = { hint ->
                 when (val b = adjustHintButton(hint)) {
                     null -> Unit
                     NxButton.B -> dismiss()
@@ -903,8 +945,7 @@ private fun AdjustArrow(text: String, size: TextUnit, color: Color, onClick: () 
 /**
  * The hint bar's hints for [page] with [row] highlighted; while the controller is in the root's game panel ([panelFocus],
  * on [panelTab]) the panel's: L1/R1 tabs, A on an item (Open on the Achievements or Players tab row), B back to the list.
- * With a [panel] drawn beside the root, a root row that shows it (not Save / Load, not Options with its preview, not the
- * Disc row's ◄► Change) leads with ◄► Panel (RIGHT enters it).
+ * [panel]: the game panel is drawn beside the root (its Menu tab has no shortcut tiles now, so no ◄► hint into it).
  */
 internal fun hintsFor(
     page: MenuPage, row: MenuRow?, infoTruncated: Boolean = false, panelFocus: PanelFocus? = null, panelTab: GamePanelTab? = null,
@@ -913,9 +954,7 @@ internal fun hintsFor(
     twoPane: Boolean = true,    // drawn as two panes ([inGameMenuSplit]); one page: LEFT / RIGHT change a value row at once
 ): List<Hint> {
     if (editing && panelFocus == null) return NX_EDIT_HINTS
-    val hints = pageHints(page, row, infoTruncated, panelFocus, panelTab, twoPane)
-    val entersPanel = panel && panelFocus == null && page.kind == PageKind.Root && row is MenuRow.Action
-    return if (entersPanel) listOf(Hint(NxButton.RIGHT, "Shortcuts")) + hints else hints
+    return pageHints(page, row, infoTruncated, panelFocus, panelTab, twoPane)
 }
 
 private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, panelFocus: PanelFocus?, panelTab: GamePanelTab?, twoPane: Boolean): List<Hint> = when {

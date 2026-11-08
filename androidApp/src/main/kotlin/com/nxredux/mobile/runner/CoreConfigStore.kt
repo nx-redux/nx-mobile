@@ -2,6 +2,7 @@ package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.options.ConfigFile
 import com.nxredux.mobile.options.CoreConfig
+import com.nxredux.mobile.options.FceummTurbo
 import com.nxredux.mobile.options.FrontendOptions
 import java.io.File
 import java.io.IOException
@@ -34,6 +35,19 @@ class CoreConfigStore(private val console: File, private val game: File) {
         game.writeAtomically(gameText.encodeToByteArray())
         return CoreConfig.parse(gameText)
     }
+    /**
+     * fceumm: [FceummTurbo.ON] written into the console and game files that still hold the old default from before
+     * [sinceMs] ([FceummTurbo.needsMigration]); each rewrite leaves the file newer, so it happens once.
+     */
+    fun migrateFceummTurbo(sinceMs: Long) {
+        val f = readFile(console)
+        if (FceummTurbo.needsMigration(f, console.lastModified(), sinceMs))
+            console.writeAtomically(CoreConfig.withKey(readFileStrict(console), null, FceummTurbo.KEY, FceummTurbo.ON).encodeToByteArray())
+        val g = readFile(game)
+        if (FceummTurbo.needsMigration(g, game.lastModified(), sinceMs))
+            game.writeAtomically(CoreConfig.withKey(null, readFileStrict(game), FceummTurbo.KEY, FceummTurbo.ON).encodeToByteArray())
+    }
+
     fun deleteGame() = delete(game)
     fun deleteConsole() = delete(console)
 

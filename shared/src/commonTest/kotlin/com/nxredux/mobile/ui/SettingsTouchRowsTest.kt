@@ -3,7 +3,6 @@ package com.nxredux.mobile.ui
 import com.nxredux.mobile.options.ConsoleRow
 import com.nxredux.mobile.options.CoreOption
 import com.nxredux.mobile.options.PadOptions
-import com.nxredux.mobile.settings.PadShape
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.HomeShelf
 import com.nxredux.mobile.settings.MenuCategory
@@ -32,7 +31,7 @@ class SettingsTouchRowsTest {
         assertEquals(NxSettingControl.SWITCH, nxSettingControl(listOf("Off", "On")))
         assertEquals(NxSettingControl.SWITCH, nxSettingControl(listOf("Hide", "Show")))
         assertEquals(NxSettingControl.SWITCH, nxSettingControl(listOf("enabled", "disabled")))
-        assertEquals(NxSettingControl.SEGMENTED, nxSettingControl(listOf("Charcoal", "Retro")))
+        assertEquals(NxSettingControl.SEGMENTED, nxSettingControl(listOf("NX Carbon", "NX Onyx")))
         assertEquals(NxSettingControl.SEGMENTED, nxSettingControl(listOf("Off", "Light", "Medium", "Strong")))
         assertEquals(NxSettingControl.PICKER, nxSettingControl(listOf("Full screen", "List")))   // a label too long for a segment
         assertEquals(NxSettingControl.PICKER, nxSettingControl(listOf("List", "Grid", "Carousel", "Backdrop", "Minimal")))   // five values
@@ -65,11 +64,19 @@ class SettingsTouchRowsTest {
         // A dimmed row shows its value only; a page's opener its value and `›`; an action neither.
         val gb = settingsTouchRow(SettingsRow(SettingsKind.DEFAULT_TAG, "Game Boy", "Gambatte (GB)", consoleId = "gb", enabled = false), null)
         assertEquals(emptyList(), gb.choices); assertEquals("Gambatte (GB)", gb.value); assertFalse(gb.enabled)
-        val padLayout = settingsTouchRow(SettingsRow(SettingsKind.PAD_LAYOUT, "Pad layout", "Default"), null)
+        val padLayout = settingsTouchRow(SettingsRow(SettingsKind.BUTTON_LAYOUT, "Button layout", "Default"), null)
         assertTrue(padLayout.opens); assertEquals("Default", padLayout.value)
         val reset = settingsTouchRow(SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL), null, SettingsSection.APPEARANCE)
         assertFalse(reset.opens); assertEquals(null, reset.value)
         assertEquals("Resets every setting on this page", reset.info); assertTrue("Text size" in reset.detail)
+    }
+
+    // Controls' Reset to defaults puts back its two settings only (Button layout lives under Appearance).
+    @Test fun controlsResetNamesItsSettings() {
+        val reset = settingsTouchRow(SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL), null, SettingsSection.CONTROLS)
+        assertEquals("Resets every setting on this page", reset.info)
+        assertTrue("Pad vibration" in reset.detail && "Game rumble" in reset.detail, reset.detail)
+        assertFalse("layout" in reset.info + reset.detail, reset.detail)
     }
 
     @Test fun aDroppedRowIsCompactWithItsTextBehindTheIcon() {
@@ -160,7 +167,7 @@ class SettingsTouchRowsTest {
             SettingsRow(SettingsKind.MENU_STYLE, "x", category = MenuCategory.COLLECTIONS),
             SettingsRow(SettingsKind.SHELF_SHOWN, "x", shelf = HomeShelf.NOT_STARTED),
             SettingsRow(SettingsKind.HINT_SHOWN, "x", hint = NxButton.SELECT),
-            SettingsRow(SettingsKind.PAD_LAYOUT_SHAPE, "x", padShape = PadShape.OVERLAY),
+            SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "x", landscape = true),
             SettingsRow(SettingsKind.DEFAULT_TAG, "x", enabled = false),
         )
         for (r in rows) for (section in listOf(null, SettingsSection.MAIN_MENU, SettingsSection.CONTROLS)) {
@@ -171,13 +178,13 @@ class SettingsTouchRowsTest {
     }
 
     @Test fun touchHintsFollowTheControl() {
-        val rows = listOf(SettingsRow(SettingsKind.MENU_PAD, "Menu pad", "On"), SettingsRow(SettingsKind.ACCENT, "Accent", "White"))
+        val rows = listOf(SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", "On"), SettingsRow(SettingsKind.ACCENT, "Accent", "White"))
         val back = Hint(NxButton.B, "Back")
         val change = Hint(NxButton.LEFT, "Change")
         assertEquals(listOf(back, change, Hint(NxButton.A, "Toggle"), Hint(NxButton.X, "Info")),
-            settingsHints(rows, 0, NxSettingRow("Menu pad", choices = listOf("Off", "On"), index = 1), info = true))
+            settingsHints(rows, 0, NxSettingRow("Pad skin", choices = listOf("Off", "On"), index = 1), info = true))
         assertEquals(listOf(back, change, Hint(NxButton.A, "Choose")), settingsHints(rows, 1, NxSettingRow("Accent", choices = List(9) { "c$it" }, index = 0)))
-        assertEquals(listOf(back, change), settingsHints(rows, 1, NxSettingRow("Pad theme", choices = listOf("Charcoal", "Retro"), index = 0)))   // segmented: A steps
+        assertEquals(listOf(back, change), settingsHints(rows, 1, NxSettingRow("Pad theme", choices = listOf("NX Carbon", "NX Onyx"), index = 0)))   // segmented: A steps
         assertEquals(listOf(back, Hint(NxButton.A, "Select")), settingsHints(rows, 1))   // no touch row: as before
     }
 
@@ -194,8 +201,6 @@ class SettingsTouchRowsTest {
         val console = emulatorTouchRow(EmulatorRow.Console(ConsoleRow(layout, PadOptions.AUTO)))
         assertEquals(layout.values.map(layout::labelOf), console.choices); assertEquals(layout.values.indexOf(PadOptions.AUTO), console.index)
         assertEquals("", console.info); assertEquals(layout.info, console.detail)
-        val pad = emulatorTouchRow(EmulatorRow.Console(ConsoleRow(PadOptions.portraitPadRow, PadOptions.SHOWN)))
-        assertEquals("Hidden: the pad goes see-through over the screens", pad.info); assertEquals(PadOptions.portraitPadRow.info, pad.detail)
         assertEquals(USE_EMULATOR_SETTINGS_INFO, emulatorTouchRow(EmulatorRow.UseEmulatorSettings).info)
     }
 

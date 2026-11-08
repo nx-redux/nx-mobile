@@ -104,6 +104,8 @@ fceumm_KIND = ndkbuild
 fceumm_BUILD_PATH = .
 # jni/Android.mk defines LOCAL_MODULE := retro -> libs/arm64-v8a/libretro.so
 fceumm_ARTIFACT = libs/$(ABI)/libretro.so
+# patches/fceumm.patch: the FDS disk in one L press (eject, then the next side in a second later; L with the drive empty
+# puts the next side in), its pending flip kept in save states. The VFS path hunk it once carried is upstream (#660).
 
 # patches/snes9x/0001 (nx-redux's): retro_cheat_set copies the code to the heap; database codes overflowed its 256-byte
 # stack buffer.

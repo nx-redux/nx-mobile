@@ -61,6 +61,16 @@ object N3dsOptions {
     fun cursorVisible(stylus: Boolean): String = if (stylus) "enabled" else "disabled"
 
     /**
+     * Azahar's right analog job. Its default (C-Stick and Touchscreen Pointer) also moved its touch pointer, so in a game
+     * without the C-stick (most 3DS games) the on-screen nub only threw the pointer about: out of stylus mode the
+     * C-stick only; in stylus mode the pointer too, which stylus mode steers. The core reads it each frame (its pointer),
+     * and maps the C-stick at load from a value that includes it.
+     */
+    const val ANALOG_FUNCTION = "citra_analog_function"
+
+    fun analogFunction(stylus: Boolean): String = if (stylus) "c_stick_and_touchscreen" else "c_stick"
+
+    /**
      * SELECT + Right walks this order (Left the other way), wrapping: the DS's names. Large screen and Stacked are both the
      * core's top over bottom ("default"), the touch screen at half size or at the same size ([stackedSmallProportion]);
      * the core's own large screen (the touch screen beside) is left out, as on the DS.
@@ -99,12 +109,23 @@ object N3dsOptions {
 
     /**
      * The layout a screen starts with before the player picks one: Large screen on a Fold-shaped screen or tablet in
-     * landscape, Stacked in portrait (the controller row too), Side by side on a regular phone in landscape.
+     * landscape, Stacked in portrait (the controller row too), Single screen on a regular phone in landscape (user).
      */
     fun defaultLayout(screen: ScreenClass, landscape: Boolean): String = when {
         !landscape -> "stacked"
         screen.isFoldShaped || screen.isTablet -> "large"
-        else -> "side_by_side"
+        else -> "single_screen"
+    }
+
+    /**
+     * The layout rows a pad skin ([skinOn]) ignores on [screen], which the Display page shows unavailable (user): portrait's
+     * (the skin's top and touch screen pieces place them), landscape's on the Fold or a tablet ([skinLayout] null there).
+     * Portrait with a controller keeps its row: no skin is drawn then.
+     */
+    fun lockedLayoutRows(skinOn: Boolean, screen: ScreenClass): Set<String> = when {
+        !skinOn -> emptySet()
+        screen.isFoldShaped || screen.isTablet -> setOf(LAYOUT_PORTRAIT, LAYOUT_LANDSCAPE)
+        else -> setOf(LAYOUT_PORTRAIT)
     }
 
     private const val LAYOUT_INFO_LIST = "Large screen: the top one big, the bottom one\nunder it at least half its size (in portrait it fills\nthe height left, up to the top's size).\n" +
@@ -154,13 +175,21 @@ object N3dsOptions {
         return rows.filter { it.key !in OLD_LAYOUT_KEYS || it.key == active }
     }
 
+    /**
+     * The layout the app draws under a pad skin: on a regular phone in [landscape] (user: its skin's one glass is too
+     * small for the top over touch screen) the player's ([appLayoutFor], Single screen unless picked); null elsewhere (the
+     * Fold, a tablet, portrait), where the skin's own top over touch screen stays.
+     */
+    fun skinLayout(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): String? =
+        if (!landscape || screen.isFoldShaped || screen.isTablet) null else appLayoutFor(values, landscape, controllerMode, screen)
+
     /** The app's layout for the row in use on [screen]: the pick (old keys read too), else the screen's [defaultLayout]. */
     fun appLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): String =
         layoutValue(values, layoutKey(landscape, controllerMode)) ?: defaultLayout(screen, landscape)
 
     /**
-     * The core's [LAYOUT] value for the row in use: Large screen and Stacked are its top over bottom ("default"). Half-folded
-     * ([tabletop]) it is always that, whatever the player saved: the app lays the two screens out itself, from a Stacked frame.
+     * The core's [LAYOUT] value for the row in use: Large screen and Stacked are its top over bottom ("default"). Under a pad
+     * skin ([tabletop]) it is always that, whatever the player saved: the app lays the two screens out itself, from a Stacked frame.
      */
     fun coreLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean): String =
         if (tabletop) "default" else when (val app = appLayoutFor(values, landscape, controllerMode, screen)) {
@@ -170,7 +199,7 @@ object N3dsOptions {
 
     /**
      * How many times smaller the core draws the touch screen in its top over bottom: for Large screen half, or in portrait
-     * with the picture's [space] known the [fillProportion] of it ([proportionText]); else alike. Half-folded ([tabletop])
+     * with the picture's [space] known the [fillProportion] of it ([proportionText]); else alike. Under a pad skin ([tabletop])
      * the screens are equal ("1") whatever the player saved.
      */
     fun stackedSmallProportion(

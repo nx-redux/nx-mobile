@@ -11,7 +11,7 @@ class FrontendOptionsTest {
         assertEquals(
             mapOf(
                 FrontendOptions.SCALING to "Auto", FrontendOptions.SHARPNESS to "NEAREST", FrontendOptions.OVERLAY to "None",
-                FrontendOptions.OFFSET_X to "0", FrontendOptions.OFFSET_Y to "0", FrontendOptions.PAD_LANDSCAPE_OPACITY to "40",
+                FrontendOptions.OFFSET_X to "0", FrontendOptions.OFFSET_Y to "0", FrontendOptions.PAD_LANDSCAPE_OPACITY to "60",
                 FrontendOptions.DEBUG_HUD to "Off", BottomScreenOptions.KEY to "default", PadOptions.LAYOUT to "auto",
                 SpeedOptions.MAX_FF to "4", SpeedOptions.FF_AUDIO to "Off", SpeedOptions.REWIND to "Off", SpeedOptions.REWIND_AUDIO to "Off",
                 AudioOptions.RESAMPLING to "High", AudioOptions.BUFFER to "auto", AudioOptions.FILL_GAPS to "auto",
@@ -58,6 +58,8 @@ class FrontendOptionsTest {
         }
         assertEquals(ScreenScaling.NATIVE, FrontendSettings.parse(mapOf(FrontendOptions.SCALING to "Native")).scaling)
         assertEquals(ScreenScaling.FULLSCREEN, FrontendSettings.parse(mapOf(FrontendOptions.SCALING to "Fullscreen")).scaling)
+        val sharp = FrontendSettings.parse(mapOf(FrontendOptions.SHARPNESS to "SHARP"))
+        assertTrue(sharp.sharp && !sharp.linear)
     }
 
     @Test fun table_order_labels_and_visual_flags() {
@@ -132,24 +134,24 @@ class FrontendOptionsTest {
         assertEquals("Pad Opacity (landscape)", row.label)
         assertEquals(listOf("100", "60", "40", "25"), row.values)
         assertEquals(listOf("100%", "60%", "40%", "25%"), row.valueLabels)
-        assertEquals("40", row.default)
+        assertEquals("60", row.default)
         assertEquals("How opaque the on-screen buttons are in landscape,\nwhere they sit over the game. Portrait keeps its own band.", row.info)
         assertEquals(false, row.visual)
         // Every console gets it, the DS included.
-        assertEquals("40", FrontendOptions.defaults("GBA")[FrontendOptions.PAD_LANDSCAPE_OPACITY])
-        assertEquals("40", FrontendOptions.defaults("NDS")[FrontendOptions.PAD_LANDSCAPE_OPACITY])
+        assertEquals("60", FrontendOptions.defaults("GBA")[FrontendOptions.PAD_LANDSCAPE_OPACITY])
+        assertEquals("60", FrontendOptions.defaults("NDS")[FrontendOptions.PAD_LANDSCAPE_OPACITY])
     }
 
-    @Test fun landscape_pad_opacity_maps_to_alpha_and_falls_back_to_40() {
+    @Test fun landscape_pad_opacity_maps_to_alpha_and_falls_back_to_60() {
         fun alpha(v: String?) = FrontendSettings.parse(if (v == null) emptyMap() else mapOf(FrontendOptions.PAD_LANDSCAPE_OPACITY to v)).padLandscapeAlpha
         assertEquals(1.0f, alpha("100"))
         assertEquals(0.6f, alpha("60"))
         assertEquals(0.4f, alpha("40"))
         assertEquals(0.25f, alpha("25"))
-        assertEquals(0.4f, alpha(null))
-        assertEquals(0.4f, alpha("50"))
-        assertEquals(0.4f, alpha("abc"))
-        assertEquals(0.4f, FrontendSettings().padLandscapeAlpha)
+        assertEquals(0.6f, alpha(null))   // the default (user: 60%)
+        assertEquals(0.6f, alpha("50"))
+        assertEquals(0.6f, alpha("abc"))
+        assertEquals(0.6f, FrontendSettings().padLandscapeAlpha)
     }
 
     @Test fun keys_use_the_nx_prefix() {

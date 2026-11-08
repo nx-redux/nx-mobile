@@ -41,12 +41,6 @@ class PadProfileTest {
         assertEquals("×", PadProfile.forTag("PS").label(NxButton.B))
     }
 
-    @Test fun sega_tags_draw_the_sega_cluster() {
-        for (tag in listOf("MD", "GPGX", "SEGACD", "32X")) for (sega in listOf(null, SegaPad.THREE, SegaPad.SIX))
-            assertEquals(FaceCluster.SEGA, PadProfile.forTag(tag, sega).cluster, "$tag $sega")
-        assertEquals(FaceCluster.DIAMOND, PadProfile.forTag("SMS").cluster)
-    }
-
     @Test fun sega_three_button_cluster_shows_only_abc_and_pills_keep_shoulders() {
         val p = PadProfile.forTag("32X", SegaPad.THREE)
         assertEquals(setOf(NxButton.B, NxButton.L1, NxButton.R1, NxButton.SELECT), NxButton.entries.filter { p.isHiddenInCluster(it) }.toSet())
@@ -80,33 +74,7 @@ class PadProfileTest {
             for (b in NxButton.entries) assertEquals(b, PadProfile.forTag(tag).menuButton(b), "$tag ${b.name}")
     }
 
-    @Test fun long_labels_shrink_short_ones_do_not() {
-        // Room is 0.7 of the button's diameter, the text line across its middle.
-        assertEquals(1f, faceLabelScale(textWidth = 30f, diameter = 100f))     // "II", "TA"
-        assertEquals(1f, faceLabelScale(textWidth = 70f, diameter = 100f))     // exactly fits: a word like "Fire" at full size, as a single letter is
-        assertEquals(0.7f, faceLabelScale(textWidth = 100f, diameter = 100f), 0.001f)
-        assertEquals(0.3f, faceLabelScale(textWidth = 1000f, diameter = 100f), 0.001f)   // floor
-    }
-
-    @Test fun only_shoulder_and_system_buttons_are_pills() {
-        for (b in listOf(NxButton.L1, NxButton.L2, NxButton.R1, NxButton.R2, NxButton.START, NxButton.SELECT, NxButton.MENU))
-            assertTrue(isPill(b), b.name)
-        for (b in listOf(NxButton.A, NxButton.B, NxButton.X, NxButton.Y, NxButton.C_UP, NxButton.C_DOWN, NxButton.C_LEFT, NxButton.C_RIGHT))
-            assertFalse(isPill(b), b.name)
-    }
-
-    @Test fun pill_labels_get_the_pill_width_as_room() {
-        // Room is the pill's width less its rounded ends (0.3 of its height); a wider pill fits a longer label.
-        assertEquals(1f, pillLabelScale(textWidth = 50f, pillWidth = 72f, pillHeight = 72f))     // "Coin" on a trigger
-        assertEquals(1f, pillLabelScale(textWidth = 70f, pillWidth = 100f, pillHeight = 100f))   // "Insert" on a bumper
-        assertEquals(1f, pillLabelScale(textWidth = 80f, pillWidth = 140f, pillHeight = 72f))    // "Option" on START
-        assertEquals(1f, pillLabelScale(textWidth = 50.4f, pillWidth = 72f, pillHeight = 72f))   // exactly fits
-        assertEquals(0.8f, pillLabelScale(textWidth = 63f, pillWidth = 72f, pillHeight = 72f), 0.001f)
-        assertEquals(0.3f, pillLabelScale(textWidth = 1000f, pillWidth = 72f, pillHeight = 72f), 0.001f)   // floor
-    }
-
     @Test fun standard_uses_the_button_glyphs_and_hides_nothing() {
-        assertEquals(FaceCluster.DIAMOND, PadProfile.STANDARD.cluster)
         for (b in NxButton.entries) {
             assertEquals(b.glyph(), PadProfile.STANDARD.label(b), b.name)
             assertFalse(PadProfile.STANDARD.isHidden(b), b.name)
@@ -115,7 +83,6 @@ class PadProfileTest {
 
     @Test fun dreamcast_letters_unchanged() {
         // The pad's bottom button is NxButton.B, right A, left Y, top X (the old FaceLabels.DREAMCAST).
-        assertEquals(FaceCluster.DIAMOND, PadProfile.DREAMCAST.cluster)
         assertEquals("A", PadProfile.DREAMCAST.label(NxButton.B))
         assertEquals("B", PadProfile.DREAMCAST.label(NxButton.A))
         assertEquals("X", PadProfile.DREAMCAST.label(NxButton.Y))
@@ -126,7 +93,6 @@ class PadProfileTest {
     }
 
     @Test fun n64_six_buttons_z_and_hidden_select() {
-        assertEquals(FaceCluster.N64, PadProfile.N64.cluster)
         assertEquals("Z", PadProfile.N64.label(NxButton.L2))
         assertEquals("A", PadProfile.N64.label(NxButton.A))
         assertEquals("B", PadProfile.N64.label(NxButton.B))
@@ -169,16 +135,6 @@ class PadProfileTest {
             assertNull(PadProfile.forTag(tag).icon(b), "$tag $b")
     }
 
-    @Test fun ps2HasDualSticksNoToggle() {
-        val ps2 = PadProfile.forTag("PS2")
-        assertEquals(PadProfile.Kind.PS2, ps2.kind)
-        assertTrue(ps2.dualSticks)
-        assertFalse(ps2.cStick)
-        assertFalse(ps2.stickByDefault)   // no toggle to start on
-        assertEquals(listOf(PadSystemKey.MENU), padSystemRow(PadSide.LEFT, ps2, motion = false))
-        assertTrue(PadProfile.forLayoutEditor("PS2").dualSticks)
-    }
-
     @Test fun ps2UsesPsLabels() {
         val ps2 = PadProfile.forTag("PS2")
         assertEquals("△", ps2.label(NxButton.X))
@@ -190,10 +146,5 @@ class PadProfileTest {
         assertEquals("L3", ps2.label(NxButton.L3))
         assertEquals("R3", ps2.label(NxButton.R3))
         for (b in NxButton.entries) assertFalse(ps2.isHidden(b), b.name)
-    }
-
-    @Test fun otherConsolesHaveNoDualSticks() {
-        for (p in listOf(PadProfile.forTag("PS"), PadProfile.forTag("3DS"), PadProfile.forTag("3DS", n3dsNew = true), PadProfile.forTag("GC"), PadProfile.forTag("N64"), PadProfile.STANDARD))
-            assertFalse(p.dualSticks, p.toString())
     }
 }

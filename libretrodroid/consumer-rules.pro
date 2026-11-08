@@ -1,5 +1,6 @@
 # Called from native code (JNI GetMethodID / FindClass): R8 in a consumer must not strip or rename these.
 -keepclassmembers class com.swordfish.libretrodroid.GLRetroView {
+    private void sendCoreMessage(...);
     private void sendAchievementEvent(...);
     private void sendAchievementServerCall(...);
     private void sendRumbleEvent(...);

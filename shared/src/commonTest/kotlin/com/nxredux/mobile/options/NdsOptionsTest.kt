@@ -20,7 +20,7 @@ class NdsOptionsTest {
             "nx_nds_pip_opacity"),
             NdsOptions.table.map { it.key })
         assertEquals(
-            mapOf(LAYOUT_PORTRAIT to "large", LAYOUT_PORTRAIT_CONTROLLER to "large", LAYOUT_LANDSCAPE to "side-by-side", NdsOptions.MODE_3D to "auto", NdsOptions.MAX_SCALE_3D to "4", NdsOptions.SCALE_3D to "2", BIG_SCREEN to "top", PIP_CORNER to "top-right", PIP_SIZE to "medium",
+            mapOf(LAYOUT_PORTRAIT to "large", LAYOUT_PORTRAIT_CONTROLLER to "large", LAYOUT_LANDSCAPE to "single", NdsOptions.MODE_3D to "auto", NdsOptions.MAX_SCALE_3D to "4", NdsOptions.SCALE_3D to "2", BIG_SCREEN to "top", PIP_CORNER to "top-right", PIP_SIZE to "medium",
                 PIP_OPACITY to "100"),
             NdsOptions.table.associate { it.key to it.default },
         )
@@ -81,7 +81,7 @@ class NdsOptionsTest {
 
     @Test fun only_nds_gets_the_ds_rows() {
         val pad = listOf(BottomScreenOptions.row, PadOptions.layoutRow) + (SpeedOptions.table + AudioOptions.rows)
-        val dsPad = listOf(BottomScreenOptions.row, PadOptions.portraitPadRow, PadOptions.layoutRow) + (SpeedOptions.table + AudioOptions.rows)
+        val dsPad = listOf(BottomScreenOptions.row, PadOptions.layoutRow) + (SpeedOptions.table + AudioOptions.rows)
         assertEquals(NdsOptions.table + dsPad + FrontendOptions.table, FrontendOptions.allFor("NDS"))
         assertEquals(NdsOptions.table + dsPad + FrontendOptions.table, FrontendOptions.allFor(" nds "))
         assertEquals(pad + FrontendOptions.table, FrontendOptions.allFor("GBA"))
@@ -143,7 +143,7 @@ class NdsOptionsTest {
     }
 
     @Test fun phone_landscape_default_side_by_side() {
-        assertEquals(NdsLayoutChoice.SIDE_BY_SIDE, ndsDefault(phone, landscape = true))
+        assertEquals(NdsLayoutChoice.SINGLE, ndsDefault(phone, landscape = true))   // a regular phone's landscape (user)
     }
 
     @Test fun phone_portrait_default_large() {
@@ -198,8 +198,8 @@ class NdsOptionsTest {
     @Test fun layout_cycle_steps_from_the_default_when_unset() {
         assertEquals(LAYOUT_PORTRAIT to "stacked", cycle(emptyMap(), phone))                     // large -> stacked
         assertEquals(LAYOUT_PORTRAIT to "side-by-side", cycle(emptyMap(), phone, delta = -1))    // large wraps back
-        assertEquals(LAYOUT_LANDSCAPE to "large", cycle(emptyMap(), phone, landscape = true))    // side-by-side wraps to large
-        assertEquals(LAYOUT_LANDSCAPE to "pip", cycle(emptyMap(), phone, landscape = true, delta = -1))
+        assertEquals(LAYOUT_LANDSCAPE to "pip", cycle(emptyMap(), phone, landscape = true))          // single -> pip
+        assertEquals(LAYOUT_LANDSCAPE to "stacked", cycle(emptyMap(), phone, landscape = true, delta = -1))
     }
 
     @Test fun layout_cycles_in_portrait_and_wraps() {
@@ -312,5 +312,19 @@ class NdsOptionsTest {
         // PiP set for landscape only: portrait shows no inset rows.
         assertEquals(emptyList(), insetShown(mapOf(LAYOUT_LANDSCAPE to "pip"), NdsView(landscape = false, controllerMode = false)))
         assertEquals(3, insetShown(mapOf(LAYOUT_PORTRAIT_CONTROLLER to "pip"), NdsView(landscape = false, controllerMode = true)).size)
+    }
+
+    // Under a pad skin the player's layout shows on a regular phone in landscape only (user, as the 3DS's).
+    @Test fun aSkinTakesThePlayersLayoutOnARegularPhoneInLandscape() {
+        assertEquals(NdsLayoutChoice.SINGLE, NdsOptions.skinLayout(emptyMap(), landscape = true, controllerMode = false, screen = phone))
+        assertEquals(NdsLayoutChoice.PIP, NdsOptions.skinLayout(mapOf(LAYOUT_LANDSCAPE to "pip"), landscape = true, controllerMode = false, screen = phone))
+        assertEquals(null, NdsOptions.skinLayout(emptyMap(), landscape = true, controllerMode = false, screen = fold))
+        assertEquals(null, NdsOptions.skinLayout(emptyMap(), landscape = false, controllerMode = false, screen = phone))
+    }
+
+    @Test fun theRowsAPadSkinIgnoresAreLocked() {
+        assertEquals(setOf(LAYOUT_PORTRAIT), NdsOptions.lockedLayoutRows(skinOn = true, screen = phone))
+        assertEquals(setOf(LAYOUT_PORTRAIT, LAYOUT_LANDSCAPE), NdsOptions.lockedLayoutRows(skinOn = true, screen = fold))
+        assertEquals(emptySet(), NdsOptions.lockedLayoutRows(skinOn = false, screen = fold))
     }
 }

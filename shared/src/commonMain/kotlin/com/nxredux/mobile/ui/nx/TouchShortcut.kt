@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui.nx
 
-import com.nxredux.mobile.settings.PadGroup
 import com.nxredux.mobile.shortcuts.EffectiveShortcuts
 import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.shortcuts.SpeedOutput
@@ -16,6 +15,8 @@ fun touchShortcutLabel(a: ShortcutAction): String = when (a) {
     ShortcutAction.TOGGLE_REWIND -> "RW"
     ShortcutAction.HOLD_REWIND -> "Hold RW"
     ShortcutAction.RESET -> "Reset"
+    ShortcutAction.SAVE_STATE -> "Save"
+    ShortcutAction.LOAD_STATE -> "Load"
     ShortcutAction.SAVE_AND_QUIT -> "Quit"   // never a touch button ([ShortcutAction.touch]); named for completeness
     ShortcutAction.TOGGLE_MIC -> "Mic"   // never drawn: not offered for the touch slots
 }
@@ -42,12 +43,6 @@ fun visibleTouchShortcuts(
         }
         TouchShortcut(a, on)
     }
-}
-
-/** The pad layout piece of [slot]. */
-internal val TouchSlot.padGroup: PadGroup get() = when (this) {
-    TouchSlot.ONE -> PadGroup.SHORTCUT_1
-    TouchSlot.TWO -> PadGroup.SHORTCUT_2
 }
 
 /** The editor's placeholder label for [slot]'s piece. */

@@ -54,19 +54,3 @@ internal class PadReveal(val timeoutMs: Long = 1500, val loadCapMs: Long = LOAD_
         return timeoutInMs(nowMs) == 0L
     }
 }
-
-/** What a frontend value change does to the portrait band's wait for the first frame ([bandGate]). */
-internal enum class BandGate { NONE, RELAYOUT, START_WAIT, STOP_WAIT }
-
-/**
- * The portrait layout after a change of Portrait Pad or of the frame ([builtHidden]: the layout was built with the band
- * hidden; [hiddenNow]: it would be now; [bandShown]: the band is laid out; [waiting]: it waits unseen for the first
- * frame; [waitsNow]: it would now, [com.nxredux.mobile.layout.bandAwaitsFrame]). A flip of hidden lays out again; else a
- * shown band starts or stops waiting (the launch's real values arrive after onCreate's layout, which had the defaults).
- */
-internal fun bandGate(builtHidden: Boolean, hiddenNow: Boolean, bandShown: Boolean, waiting: Boolean, waitsNow: Boolean): BandGate = when {
-    builtHidden != hiddenNow -> BandGate.RELAYOUT
-    !bandShown || waiting == waitsNow -> BandGate.NONE
-    waitsNow -> BandGate.START_WAIT
-    else -> BandGate.STOP_WAIT
-}

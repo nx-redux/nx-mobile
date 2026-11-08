@@ -15,9 +15,6 @@ import com.nxredux.mobile.runner.SegaPadType
 object PadOptions {
     const val LAYOUT = "nx_pad_layout"
     const val SEGA_PAD = "nx_sega_pad_type"
-    const val PORTRAIT_PAD = "nx_portrait_pad"
-    const val SHOWN = "shown"
-    const val HIDDEN = "hidden"
     const val AUTO = "auto"
     const val XBOX = "xbox"
     const val NINTENDO = "nintendo"
@@ -37,54 +34,11 @@ object PadOptions {
         visual = false, valueLabels = listOf("Auto", "3 buttons", "6 buttons"),
     )
 
-    /**
-     * DS and 3DS: the portrait band hidden for the clusters over the game, so the two screens get its room. The in-game
-     * corner icon's long press flips it and saves it for the console (GameActivity.togglePortraitPad).
-     */
-    val portraitPadRow = FrontendOption(
-        PORTRAIT_PAD, "Portrait Pad", listOf(SHOWN, HIDDEN), SHOWN,
-        "Hidden gives the two screens the pad's room\nin portrait, with the see-through pad over\n" +
-            "the game. Long-press the corner icon in game\nto switch.",
-        brief = "Hidden: the pad goes see-through over the screens",
-        visual = false, valueLabels = listOf("Shown", "Hidden"),
-    )
-
-    /**
-     * Arcade, WonderSwan and Lynx: the same setting, for the games whose picture is taller than wide (the game offers
-     * the corner icon only for those); a wide game keeps its band whatever this says.
-     */
-    val portraitPadTallRow = portraitPadRow.copy(
-        info = "Hidden gives a game taller than wide (a vertical\narcade board, a handheld game held upright)\n" +
-            "the pad's room in portrait, with the see-through\npad over the game. Wide games keep the pad.\n" +
-            "Long-press the corner icon in game to switch.",
-        brief = "Hidden: tall games get the pad's room",
-    )
-
-    /** The consoles with two screens. */
-    private fun twoScreens(tag: String): Boolean = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
-
-    /**
-     * The consoles some of whose games are taller than wide: arcade's vertical boards, and the handhelds whose cores
-     * turn an upright game's picture (Beetle WonderSwan: Rotate display, a 9:14 aspect; Handy: the cartridge's
-     * rotation, its width and height swapped).
-     */
-    private val TALL_GAME_CONSOLES = setOf("fbn", "wsc", "lynx")
-
-    private fun tallGames(tag: String): Boolean = CoreRegistry.consoleOf(tag)?.id in TALL_GAME_CONSOLES
-
-    /** The consoles that offer Portrait Pad: the two-screen ones ([portraitPadRow]) and those with tall games ([portraitPadTallRow]). */
-    fun hasPortraitPadRow(tag: String): Boolean = twoScreens(tag) || tallGames(tag)
-
-    /** The portrait band is hidden: [values] say so and [tag] offers the row. */
-    fun portraitPadHidden(tag: String, values: Map<String, String>): Boolean =
-        hasPortraitPadRow(tag) && values[PORTRAIT_PAD] == HIDDEN
-
     fun tableFor(tag: String): List<FrontendOption> =
         (if (PadMap.isSegaPadTag(tag)) listOf(segaPadRow) else emptyList()) +
-            (if (twoScreens(tag)) listOf(portraitPadRow) else if (tallGames(tag)) listOf(portraitPadTallRow) else emptyList()) +
             listOf(layoutRow)
 
-    val all: List<FrontendOption> = listOf(segaPadRow, portraitPadRow, layoutRow)
+    val all: List<FrontendOption> = listOf(segaPadRow, layoutRow)
 
     /**
      * The letters printed on a pad: the [values] setting when forced, else the [detected] layout. A null [detected]

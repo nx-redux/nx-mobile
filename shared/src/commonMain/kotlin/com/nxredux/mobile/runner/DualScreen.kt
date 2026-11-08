@@ -53,7 +53,7 @@ object DualScreen {
 
     /**
      * The 3DS frame in Azahar's "default" layout at proportion 1, unswapped: 400s x 480s, the bottom screen centred. The
-     * half-folded layout runs the core the same way and cuts the same rects ([tabletopRegions]).
+     * pad skin's DS / 3DS glasses run the core the same way and cut the same rects ([dsScreenRegions]).
      */
     internal val N3DS_TOP_SRC = FrameRect(0f, 0f, 1f, 0.5f)
     internal val N3DS_BOTTOM_SRC = FrameRect(0.1f, 0.5f, 0.9f, 1f)
@@ -75,10 +75,14 @@ object DualScreen {
      */
     fun pictureOn(
         mainW: Int, mainH: Int, secondW: Int, secondH: Int, bottom: BottomScreen = BottomScreen.AUTO,
+        skin: Boolean = false,
     ): PictureOn = when {
         secondW <= 0 || secondH <= 0 || mainW <= 0 || mainH <= 0 -> PictureOn.MAIN
         bottom == BottomScreen.MAIN -> PictureOn.SECOND
         bottom == BottomScreen.SECOND -> PictureOn.MAIN
+        // under a pad skin (no controller) AUTO means the phone is the bottom (touch) screen: by shape a wide phone in
+        // landscape would take the top screen (user)
+        skin -> PictureOn.SECOND
         secondW.toLong() * mainH >= mainW.toLong() * secondH -> PictureOn.SECOND
         else -> PictureOn.MAIN
     }
@@ -127,6 +131,10 @@ object DualScreen {
      */
     fun ndsScreen(areaW: Float, areaH: Float, which: NdsScreen): List<NdsRegion> = single(areaW, areaH, which, NdsLayout.src(which), DS_ASPECT)
 
+    /** [ndsScreen] in [area] (game-view px) instead of the whole view: a pad skin's screen (its glass) holds it. */
+    fun ndsScreenIn(area: PxRect, which: NdsScreen): List<NdsRegion> =
+        ndsScreen(area.width, area.height, which).map { it.copy(dst = it.dst.copy(x = it.dst.x + area.x, y = it.dst.y + area.y)) }
+
     /**
      * Both DS screens side by side on the main display (the panel is on the second one), edge to edge, fitted to the area
      * (whole pixels, not whole-number scales) and centred; touch on the bottom screen. Dual screen keeps its own layout,
@@ -150,6 +158,10 @@ object DualScreen {
     fun n3dsScreen(areaW: Float, areaH: Float, which: NdsScreen): List<NdsRegion> =
         single(areaW, areaH, which, n3dsSrc(which), if (which == NdsScreen.TOP) N3DS_TOP_ASPECT else DS_ASPECT)
 
+    /** [n3dsScreen] in [area] (game-view px) instead of the whole view: a pad skin's screen (its glass) holds it. */
+    fun n3dsScreenIn(area: PxRect, which: NdsScreen): List<NdsRegion> =
+        n3dsScreen(area.width, area.height, which).map { it.copy(dst = it.dst.copy(x = it.dst.x + area.x, y = it.dst.y + area.y)) }
+
     /**
      * The Azahar options a mode needs, or null to put back the usual ones ([DualMode.OFF], [DualMode.PANEL]: the caller
      * re-applies its layout and the user's stored swap values).
@@ -169,8 +181,8 @@ object DualScreen {
 
     /**
      * The Azahar options held for the session now: a second screen's mode's ([n3dsCoreOptions]) first; else, [halfFolded]
-     * with no second screen in use ([DualMode.OFF]: the screens are regions of the unswapped Stacked frame,
-     * [tabletopRegions]), the swap pinned to Top / Hold, so SWAP is the app's (the screens trade places across the hinge)
+     * (the screens drawn as regions of the unswapped Stacked frame in a pad skin's glasses, [dsScreenRegions]) with no
+     * second screen in use ([DualMode.OFF]), the swap pinned to Top / Hold, so SWAP is the app's (the screens trade glasses)
      * and the core never turns its frame under the cuts. Null: nothing held, the user's values apply (Azahar's own swap).
      */
     fun n3dsForcedOptions(mode: DualMode, halfFolded: Boolean): Map<String, String>? =

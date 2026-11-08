@@ -1,0 +1,283 @@
+package com.nxredux.mobile.skin
+
+import com.nxredux.mobile.options.PxRect
+import kotlin.math.abs
+import kotlin.math.ceil
+
+/** A player's nudge of one button group: [dx], [dy] in picture px, and a [scale] about the group's centre. */
+data class SkinTweak(val dx: Float = 0f, val dy: Float = 0f, val scale: Float = 1f)
+
+/** One console's tweaks: layout id, then group id. Keyed by layout, so every pack sharing the layout shares the tweak. */
+typealias ConsoleTweaks = Map<String, Map<String, SkinTweak>>
+
+object SkinTweaks {
+    const val MIN_SCALE = 0.8f
+    const val MAX_SCALE = 1.25f
+
+    /** How far a group may move from where its layout puts it, as a fraction of its larger side. */
+    const val MOVE_FRACTION = 0.5f
+
+    /** [t] held to the limits for [g]: scale within [MIN_SCALE]..[MAX_SCALE], a move within [MOVE_FRACTION] of its size (a free group is not capped). */
+    fun limit(t: SkinTweak, g: SkinGroup): SkinTweak {
+        val cap = MOVE_FRACTION * maxOf(g.ref.width, g.ref.height)
+        return SkinTweak(
+            dx = if (g.free) t.dx else t.dx.coerceIn(-cap, cap),
+            dy = if (g.free) t.dy else t.dy.coerceIn(-cap, cap),
+            scale = t.scale.coerceIn(MIN_SCALE, MAX_SCALE),
+        )
+    }
+
+    /** How far (picture px) a group keeps from every screen. */
+    const val SCREEN_CLEAR = 12f
+
+    /**
+     * Where no group may go in [p] (window px): each screen with [SCREEN_CLEAR] round it, each piece holding a screen as
+     * drawn (the large DS layout's touch-screen frame reaches past that margin), and on a layout made for half-folding
+     * the band from the screen frame's bottom past the fold (the pieces keep [FrameSpec.hinge] below it).
+     */
+    fun noGo(p: SkinPlacement): List<PxRect> {
+        val m = SCREEN_CLEAR * p.k
+        val out = p.glasses.mapTo(ArrayList()) { PxRect(it.rect.x - m, it.rect.y - m, it.rect.width + 2 * m, it.rect.height + 2 * m) }
+        for (piece in p.pieces) if (piece.piece >= 0 && p.spec.pieces.getOrNull(piece.piece)?.glass != null) out += piece.dst
+        val f = p.spec.frame
+        val g = p.glasses.firstOrNull()   // the frame's screen comes first
+        if (f != null && f.hinge >= 0 && g != null) {
+            val bottom = g.rect.y + g.rect.height + (f.h - f.glass.y - f.glass.h) * p.k
+            val l = minOf(0f, p.cells.minOfOrNull { it.dst.x } ?: 0f)
+            val r = maxOf(g.rect.x + g.rect.width, p.cells.maxOfOrNull { it.dst.x + it.dst.width } ?: 0f)
+            out += PxRect(l, bottom, r - l, 2f * f.hinge * p.k)
+        }
+        return out
+    }
+
+    /**
+     * [p] with [tweaks] (group id to tweak, each held to [limit]) applied in a [windowW] x [windowH] window: each group's
+     * pieces and controls (their place and every size) scaled about the middle of its pieces and moved. A group's box
+     * (its pieces and its controls' hit areas) may not go further into [noGo], into another group's box, or out of the
+     * window than it started, nor pass over any of them on the way: the move stops short (and a growth likewise, toward
+     * its own size). Groups go in [SkinGroups.of]'s order, each against the groups before it where they ended and the
+     * groups after it where they are going (so a group may move into the room a later one leaves); a later group that
+     * gets less far than that is tried again where it got to, and should that still leave two groups on each other, each
+     * group goes against the later ones where they stand. The frame's strip ([SkinGroups.STRIP]) moves its labels and its
+     * buttons. Apply before [SkinPlacement.forStick] (both of a swap's sets move together).
+     */
+    fun apply(p: SkinPlacement, tweaks: Map<String, SkinTweak>, windowW: Float, windowH: Float): SkinPlacement {
+        // groups are made of a layout's pieces, and only a frame layout has pieces (every pack's piece layout has one)
+        val frame = p.spec.frame
+        if (tweaks.isEmpty() || frame == null) return p
+        val groups = SkinGroups.of(p.spec)
+        val zones = noGo(p)
+        val window = PxRect(0f, 0f, windowW, windowH)
+        val (pieceAt, controlAt) = members(p, groups)
+        val ts = groups.map { g -> tweaks[g.id]?.let { limit(it, g) }?.takeIf { it != SkinTweak() } }
+        fun boxOf(gi: Int, pieces: List<SkinPiece>, controls: List<PlacedControl>) =
+            union(pieceAt[gi].map { pieces[it].dst } + controlAt[gi].map { hit(controls[it]) })
+        val home = groups.indices.map { boxOf(it, p.pieces, p.controls) }
+        // the middle a group scales about: its pieces' (the strip's: its whole box)
+        val mids = groups.indices.map { gi -> (if (groups[gi].id == SkinGroups.STRIP) null else union(pieceAt[gi].map { p.pieces[it].dst })) ?: home[gi] }
+
+        /** [r] scaled by [s] about [m]'s centre and moved [ox], [oy]. */
+        fun moved(r: PxRect, m: PxRect, s: Float, ox: Float, oy: Float): PxRect {
+            val cx = m.x + m.width / 2f; val cy = m.y + m.height / 2f
+            return PxRect(cx + (r.x - cx) * s + ox, cy + (r.y - cy) * s + oy, r.width * s, r.height * s)
+        }
+
+        /** Every group placed in turn, each against [ahead]'s boxes for the groups after it: the pieces, controls and boxes. */
+        fun place(ahead: List<PxRect?>): Triple<List<SkinPiece>, List<PlacedControl>, List<PxRect?>> {
+            val pieces = p.pieces.toMutableList()
+            val controls = p.controls.toMutableList()
+            val boxes = home.toMutableList()
+            for (gi in groups.indices) {
+                val t = ts[gi] ?: continue
+                val box = home[gi] ?: continue
+                val mid = mids[gi] ?: box
+                val others = groups.indices.mapNotNull { i -> if (i < gi) boxes[i] else if (i > gi) ahead[i] else null }
+                val obstacles = zones + others
+                // how far the box is in each obstacle (its area there) and out of the window (its edges' distance past
+                // it): never more than where it started
+                fun cost(r: PxRect) = obstacles.map { overlap(r, it) } + outside(r, window)
+                val base = cost(box)
+                fun fits(r: PxRect) = cost(r).zip(base).all { (c, b) -> c <= b + 0.01f }   // px², over float noise
+                val ox = t.dx * p.k; val oy = t.dy * p.k
+                // a growth only adds to the box round its middle (no jumping), a move is walked from where it starts
+                val sc = 1f + (t.scale - 1f) * longest { fits(moved(box, mid, 1f + (t.scale - 1f) * it, 0f, 0f)) }
+                val f = reach(maxOf(abs(ox), abs(oy))) { fits(moved(box, mid, sc, ox * it, oy * it)) }
+                val dx = ox * f; val dy = oy * f
+                val cx = mid.x + mid.width / 2f; val cy = mid.y + mid.height / 2f
+                fun mx(x: Float) = cx + (x - cx) * sc + dx
+                fun my(y: Float) = cy + (y - cy) * sc + dy
+                for (i in pieceAt[gi]) {
+                    val d = pieces[i].dst
+                    pieces[i] = pieces[i].copy(dst = PxRect(mx(d.x), my(d.y), d.width * sc, d.height * sc))
+                }
+                for (i in controlAt[gi]) {
+                    val c = controls[i]
+                    controls[i] = PlacedControl(c.spec.scaled(sc), mx(c.x), my(c.y))
+                }
+                boxes[gi] = boxOf(gi, pieces, controls)
+            }
+            return Triple(pieces, controls, boxes)
+        }
+
+        /** No two groups more on each other in [boxes] than they started. */
+        fun clear(boxes: List<PxRect?>) = groups.indices.all { i ->
+            (i + 1 until groups.size).all { j ->
+                val a = boxes[i]; val b = boxes[j]
+                a == null || b == null || overlap(a, b) <= overlap(home[i]!!, home[j]!!) + 0.01f
+            }
+        }
+
+        // first where each group is going (its whole tweak, nothing in the way), then where it got to
+        var ahead = groups.indices.map { gi -> val b = home[gi]; val t = ts[gi]; if (b == null || t == null) b else moved(b, mids[gi] ?: b, t.scale, t.dx * p.k, t.dy * p.k) }
+        repeat(PASSES) {
+            val (pieces, controls, boxes) = place(ahead)
+            if (clear(boxes)) return p.copy(pieces = pieces, controls = controls)
+            ahead = boxes
+        }
+        // each against the later groups where they stand: never on each other
+        val (pieces, controls) = place(home)
+        return p.copy(pieces = pieces, controls = controls)
+    }
+
+    /** How many times [apply] tries the groups against where the later ones are going before it gives that up. */
+    private const val PASSES = 4
+
+    /** Each group's pieces and controls in [p] (indexes into its lists), in [groups]' order: the strip's are its strip pieces and its first buttons. */
+    private fun members(p: SkinPlacement, groups: List<SkinGroup>): Pair<List<List<Int>>, List<List<Int>>> {
+        val stripN = p.spec.frame?.strip?.labels?.size ?: 0
+        val pieceAt = groups.map { g ->
+            val strip = g.id == SkinGroups.STRIP
+            p.pieces.indices.filter { if (strip) p.pieces[it].strip else p.pieces[it].piece in g.pieces }
+        }
+        val controlAt = groups.map { g ->
+            if (g.id == SkinGroups.STRIP) (0 until minOf(stripN, p.controls.size)).toList() else ownControls(p, groups, g, stripN)
+        }
+        return pieceAt to controlAt
+    }
+
+    /**
+     * Where each of [p]'s groups stands (window px), by group id: its [GroupBox.box] (pieces and controls' hit areas, as
+     * [apply] keeps clear) and the [GroupBox.mid] it scales about. A group with nothing placed is left out.
+     */
+    internal fun boxes(p: SkinPlacement): Map<String, GroupBox> {
+        val groups = SkinGroups.of(p.spec)
+        val (pieceAt, controlAt) = members(p, groups)
+        val out = LinkedHashMap<String, GroupBox>()
+        for ((gi, g) in groups.withIndex()) {
+            val box = union(pieceAt[gi].map { p.pieces[it].dst } + controlAt[gi].map { hit(p.controls[it]) }) ?: continue
+            val mid = (if (g.id == SkinGroups.STRIP) null else union(pieceAt[gi].map { p.pieces[it].dst })) ?: box
+            out[g.id] = GroupBox(box, mid)
+        }
+        return out
+    }
+
+    /** How far (window px) a move steps at most, so it never passes over a thinner obstacle. */
+    private const val STEP = 2f
+
+    /**
+     * The most of a move [length] window px long (0..1) that is still [ok] all the way: walked in [STEP]s from none, the
+     * first step that is not, halved back to where it stops.
+     */
+    private fun reach(length: Float, ok: (Float) -> Boolean): Float {
+        val n = ceil(length / STEP).toInt().coerceIn(1, 4096)
+        for (i in 1..n) {
+            if (ok(i.toFloat() / n)) continue
+            var lo = (i - 1f) / n; var hi = i.toFloat() / n
+            repeat(16) { val m = (lo + hi) / 2f; if (ok(m)) lo = m else hi = m }
+            return lo
+        }
+        return 1f
+    }
+
+    /** The most of a change (0..1) that is still [ok]: all of it, else found by halving (none at worst). */
+    private fun longest(ok: (Float) -> Boolean): Float {
+        if (ok(1f)) return 1f
+        var lo = 0f; var hi = 1f
+        repeat(20) { val mid = (lo + hi) / 2f; if (ok(mid)) lo = mid else hi = mid }
+        return lo
+    }
+
+    /**
+     * [g]'s controls in [p] (indexes into its controls, the frame strip's first [stripN] left out). Matched by id and
+     * picture place, so a control the layout draws twice (in two groups) moves with the group whose place holds it.
+     */
+    private fun ownControls(p: SkinPlacement, groups: List<SkinGroup>, g: SkinGroup, stripN: Int): List<Int> {
+        val mine = p.spec.controls.filter { c ->
+            c.id in g.controls && groups.filter { c.id in it.controls && it.id != SkinGroups.STRIP }.minByOrNull { gap(it.ref, c.x, c.y) } == g
+        }.map { Triple(it.id, it.x, it.y) }.toSet()
+        return p.controls.indices.filter { it >= stripN && Triple(p.controls[it].spec.id, p.controls[it].spec.x, p.controls[it].spec.y) in mine }
+    }
+
+    private fun ControlSpec.scaled(s: Float) = copy(
+        r = r * s, hw = hw * s, hh = hh * s, capR = capR * s, arm = arm * s, labelDy = labelDy * s, labelDx = labelDx * s,
+        labelH = labelH * s, travel = travel * s, knobTravel = knobTravel * s,
+    )
+
+    /** A placed control's hit box (window px). */
+    private fun hit(c: PlacedControl): PxRect {
+        val hw = if (c.spec.shape == ControlShape.RECT) c.spec.hw else c.spec.r
+        val hh = if (c.spec.shape == ControlShape.RECT) c.spec.hh else c.spec.r
+        return PxRect(c.x - hw, c.y - hh, 2f * hw, 2f * hh)
+    }
+
+    private fun union(rs: List<PxRect>): PxRect? {
+        if (rs.isEmpty()) return null
+        val l = rs.minOf { it.x }; val t = rs.minOf { it.y }
+        return PxRect(l, t, rs.maxOf { it.x + it.width } - l, rs.maxOf { it.y + it.height } - t)
+    }
+
+    /** How far [r]'s edges lie past [w]'s, added up. */
+    private fun outside(r: PxRect, w: PxRect) = maxOf(0f, w.x - r.x) + maxOf(0f, w.y - r.y) +
+        maxOf(0f, r.x + r.width - (w.x + w.width)) + maxOf(0f, r.y + r.height - (w.y + w.height))
+
+    private fun overlap(a: PxRect, b: PxRect): Float {
+        val w = minOf(a.x + a.width, b.x + b.width) - maxOf(a.x, b.x)
+        val h = minOf(a.y + a.height, b.y + b.height) - maxOf(a.y, b.y)
+        return if (w > 0f && h > 0f) w * h else 0f
+    }
+
+    private fun gap(r: PxRect, x: Float, y: Float): Float {
+        val dx = maxOf(r.x - x, 0f, x - (r.x + r.width)); val dy = maxOf(r.y - y, 0f, y - (r.y + r.height))
+        return dx * dx + dy * dy
+    }
+
+    /** [consoleId]'s tweaks for [layoutId] in the [stored] text ([decode]); none when it has none. */
+    fun of(stored: String, consoleId: String, layoutId: String): Map<String, SkinTweak> =
+        decode(stored)[consoleId]?.get(layoutId).orEmpty()
+
+    /**
+     * The [stored] text with [tweaks] as [consoleId]'s for [layoutId]; its other layouts and every other console's stay.
+     * No tweaks drops the layout, and a console left with none goes too.
+     */
+    fun withLayout(stored: String, consoleId: String, layoutId: String, tweaks: Map<String, SkinTweak>): String {
+        val all = decode(stored)
+        val mine = all[consoleId].orEmpty().let { if (tweaks.isEmpty()) it - layoutId else it + (layoutId to tweaks) }
+        return encode(if (mine.isEmpty()) all - consoleId else all + (consoleId to mine))
+    }
+
+    /** The tweaks as text: one line per group, `console layout group dx dy scale`. */
+    fun encode(m: Map<String, ConsoleTweaks>): String = buildString {
+        for ((console, layouts) in m) for ((layout, groups) in layouts) for ((group, t) in groups) {
+            if (isNotEmpty()) append('\n')
+            append("$console $layout $group ${t.dx} ${t.dy} ${t.scale}")
+        }
+    }
+
+    /** What [encode] wrote. Lines that do not read (wrong shape, a bad number) are skipped. */
+    fun decode(s: String): Map<String, ConsoleTweaks> {
+        val out = linkedMapOf<String, LinkedHashMap<String, LinkedHashMap<String, SkinTweak>>>()
+        for (line in s.lines()) {
+            val p = line.trim().split(' ')
+            if (p.size != 6) continue
+            val dx = p[3].toFloatOrNull() ?: continue
+            val dy = p[4].toFloatOrNull() ?: continue
+            val sc = p[5].toFloatOrNull() ?: continue
+            if (!dx.isFinite() || !dy.isFinite() || !sc.isFinite()) continue
+            out.getOrPut(p[0]) { linkedMapOf() }.getOrPut(p[1]) { linkedMapOf() }[p[2]] = SkinTweak(dx, dy, sc)
+        }
+        return out
+    }
+}
+
+/** A placed group's [box] (what may not overlap) and the [mid] it scales about (its pieces; the strip's: its box), window px. */
+internal data class GroupBox(val box: PxRect, val mid: PxRect)

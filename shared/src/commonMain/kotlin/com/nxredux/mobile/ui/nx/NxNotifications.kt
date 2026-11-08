@@ -1,10 +1,13 @@
 package com.nxredux.mobile.ui.nx
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -53,8 +56,9 @@ fun nxNotificationPlacement(overlayPadShown: Boolean): NxNotificationPlacement =
 
 /**
  * The in-game notification overlay: the progress [pill] and the [toasts] (newest at the bottom) where [placement] puts
- * them; a single anchor (top-centre) stacks them at most [topCentreMaxWidth] wide. Display only: it consumes no pointer
- * input, so touches reach the game and the virtual pad beneath it. The content keeps inside the safe area (cutout and
+ * them; a single anchor (top-centre) stacks them at most [topCentreMaxWidth] wide. Display only but a toast's button
+ * ([NxToast.action], its tap to [onAction] with the toast's id) and its Close ([onDismiss]): nothing else consumes pointer input, so touches reach the
+ * game and the virtual pad beneath it. The content keeps inside the safe area (cutout and
  * system bars) on [safeSides] before the 12 dp margin; a host whose overlay does not reach a screen edge leaves that
  * side out, so it is not inset twice. Sizes are physical, not a share of the screen height.
  */
@@ -64,6 +68,8 @@ fun NxNotifications(
     safeSides: WindowInsetsSides = WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical,
     placement: NxNotificationPlacement = NxNotificationPlacement.CORNERS,
     topCentreMaxWidth: Dp = Dp.Infinity,
+    onAction: (Long) -> Unit = {},
+    onDismiss: (Long) -> Unit = {},
 ) {
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
@@ -88,7 +94,17 @@ fun NxNotifications(
     }
     val toastsContent: @Composable () -> Unit = {
         toasts.forEach { toast ->
-            Row(
+            if (toast.action != null) {
+                // a toast with buttons (the layout tip, user): its words wrapping, Close and its button on a row under them
+                Column(Modifier.background(colors.scrimNotice, NotificationShape).then(padding)) {
+                    Text(toast.text, color = colors.listText, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = text)
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        NoticeButton(NOTICE_CLOSE, text) { onDismiss(toast.id) }
+                        NoticeButton(toast.action, text) { onAction(toast.id) }
+                    }
+                }
+            } else Row(
                 Modifier.background(colors.scrimNotice, NotificationShape).then(padding),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -121,3 +137,17 @@ fun NxNotifications(
         }
     }
 }
+
+/** A toast's button ([NxNotifications]): an outlined pill, its [word] at the notices' [size]; a tap calls [onTap]. */
+@Composable
+private fun NoticeButton(word: String, size: androidx.compose.ui.unit.TextUnit, onTap: () -> Unit) {
+    val colors = LocalNxColors.current
+    Text(
+        word, color = colors.listText, fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = size, maxLines = 1,
+        modifier = Modifier.border(1.dp, colors.listText.copy(alpha = 0.5f), NotificationShape)   // role: the button's edge
+            .clickable(onClick = onTap).padding(horizontal = 12.dp, vertical = 5.dp),
+    )
+}
+
+/** The word on a toast's Close button. */
+private const val NOTICE_CLOSE = "Close"

@@ -50,7 +50,7 @@ class N3dsOptionsTest {
     @Test fun old_default_untouched_reads_no_pick() {
         val old = v("nx_3ds_layout_portrait" to "default", "nx_3ds_layout_portrait_controller" to "default", "nx_3ds_layout_landscape" to "default")
         for (key in N3dsOptions.NO_PICK_KEYS) assertNull(N3dsOptions.layoutValue(old, key))
-        assertEquals("side_by_side", N3dsOptions.appLayoutFor(old, true, false, phone))
+        assertEquals("single_screen", N3dsOptions.appLayoutFor(old, true, false, phone))   // a regular phone's landscape default (user)
         assertEquals("large", N3dsOptions.appLayoutFor(old, true, false, fold))
         // The frontend config read leaves the unpicked keys out and keeps the picks, as for the DS.
         val cfg = FrontendOptions.fromConfig(v("nx_3ds_layout_portrait" to "default", "nx_3ds_layout_landscape" to "side_by_side"), "3DS")
@@ -101,14 +101,14 @@ class N3dsOptionsTest {
             assertEquals("stacked", N3dsOptions.appLayoutFor(emptyMap(), false, false, screen))
             assertEquals("stacked", N3dsOptions.appLayoutFor(emptyMap(), false, true, screen))
         }
-        assertEquals("side_by_side", N3dsOptions.appLayoutFor(emptyMap(), true, false, phone))
-        assertEquals("side_by_side", N3dsOptions.appLayoutFor(emptyMap(), true, false, ScreenClass.REGULAR_PHONE))
+        assertEquals("single_screen", N3dsOptions.appLayoutFor(emptyMap(), true, false, phone))
+        assertEquals("single_screen", N3dsOptions.appLayoutFor(emptyMap(), true, false, ScreenClass.REGULAR_PHONE))
         for (screen in listOf(ScreenClass.STUBBY_PHONE, ScreenClass.WIDE_TABLET, ScreenClass.NEAR_SQUARE_TABLET)) {
             assertEquals("large", N3dsOptions.appLayoutFor(emptyMap(), true, false, screen))
         }
         assertEquals("large", N3dsOptions.appLayoutFor(emptyMap(), true, true, fold))   // landscape has one row
         assertEquals(listOf("stacked", "stacked", "large"), N3dsOptions.layoutRowsFor(fold).map { it.default })
-        assertEquals(listOf("stacked", "stacked", "side_by_side"), N3dsOptions.layoutRowsFor(phone).map { it.default })
+        assertEquals(listOf("stacked", "stacked", "single_screen"), N3dsOptions.layoutRowsFor(phone).map { it.default })
     }
 
     @Test fun cycle_wraps() {
@@ -199,5 +199,24 @@ class N3dsOptionsTest {
         val (_, max, scale) = N3dsOptions.resolutionRows(6)
         assertEquals((1..6).map { it.toString() }, max.values)
         assertEquals((1..3).map { it.toString() }, scale.values)
+    }
+
+    // Under a pad skin the player's layout shows on a regular phone in landscape only (user): the Fold, a tablet and
+    // portrait keep the skin's own top over touch screen.
+    @Test fun aSkinTakesThePlayersLayoutOnARegularPhoneInLandscape() {
+        assertEquals("single_screen", N3dsOptions.skinLayout(emptyMap(), landscape = true, controllerMode = false, screen = phone))   // the phone's default
+        assertEquals("stacked", N3dsOptions.skinLayout(mapOf(N3dsOptions.LAYOUT_LANDSCAPE to "stacked"), landscape = true, controllerMode = false, screen = phone))
+        assertEquals(null, N3dsOptions.skinLayout(emptyMap(), landscape = true, controllerMode = false, screen = fold))
+        assertEquals(null, N3dsOptions.skinLayout(emptyMap(), landscape = true, controllerMode = false, screen = ScreenClass.WIDE_TABLET))
+        assertEquals(null, N3dsOptions.skinLayout(emptyMap(), landscape = false, controllerMode = false, screen = phone))
+    }
+
+    // A layout row the pad skin ignores is locked (user: the Display page greys it): portrait's under any skin (its top and
+    // touch screen pieces), landscape's on the Fold or a tablet (the skin's own top over touch); none without a skin.
+    @Test fun theRowsAPadSkinIgnoresAreLocked() {
+        assertEquals(setOf(N3dsOptions.LAYOUT_PORTRAIT), N3dsOptions.lockedLayoutRows(skinOn = true, screen = phone))
+        assertEquals(setOf(N3dsOptions.LAYOUT_PORTRAIT, N3dsOptions.LAYOUT_LANDSCAPE), N3dsOptions.lockedLayoutRows(skinOn = true, screen = fold))
+        assertEquals(setOf(N3dsOptions.LAYOUT_PORTRAIT, N3dsOptions.LAYOUT_LANDSCAPE), N3dsOptions.lockedLayoutRows(skinOn = true, screen = ScreenClass.WIDE_TABLET))
+        assertEquals(emptySet(), N3dsOptions.lockedLayoutRows(skinOn = false, screen = fold))
     }
 }

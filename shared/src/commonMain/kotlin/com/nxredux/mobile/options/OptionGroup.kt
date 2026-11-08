@@ -17,7 +17,7 @@ enum class OptionGroup(val label: String) {
 
     companion object {
         private val CONTROL_KEYS = setOf(
-            PadOptions.LAYOUT, PadOptions.SEGA_PAD, PadOptions.PORTRAIT_PAD, FrontendOptions.PAD_LANDSCAPE_OPACITY,
+            PadOptions.LAYOUT, PadOptions.SEGA_PAD, FrontendOptions.PAD_LANDSCAPE_OPACITY,
             N3dsOptions.NEW_CONTROLS,
             WiiOptions.CONTROLLER, WiiOptions.MOTION, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT, WiiOptions.POINTER_OFFSET,
         )

@@ -1,0 +1,24 @@
+package com.nxredux.mobile.skin
+
+import com.nxredux.mobile.library.Names
+import com.nxredux.mobile.library.NaomiSets
+
+/**
+ * flycast's games under the Dreamcast tag: discs (the Dreamcast skin, starting on the stick) and NAOMI / Atomiswave
+ * sets (the arcade skin, on the d-pad). A set is told apart as the launcher does ([NaomiSets.loadsAsIs]): an archive
+ * whose name is in flycast's set table; any other archive is a zipped disc.
+ */
+object DcGames {
+    fun isArcadeSet(tag: String, fileName: String, sets: NaomiSets): Boolean =
+        tag.uppercase() == "DC" && Names.isArchive(fileName) && !sets.isEmpty && sets.loadsAsIs(fileName)
+
+    /**
+     * A Dreamcast disc, an N64, a GameCube, a PSP, a 3DS and an Atari 5200 game start on the stick (most of their games steer with it); arcade sets
+     * and other consoles do not.
+     */
+    fun stickFirst(baseTag: String, arcadeSet: Boolean): Boolean = when (baseTag.uppercase()) {
+        "DC" -> !arcadeSet
+        "N64", "GC", "PSP", "3DS", "A5200" -> true   // the 5200: its joystick is analog; the 3DS: its Circle Pad
+        else -> false
+    }
+}

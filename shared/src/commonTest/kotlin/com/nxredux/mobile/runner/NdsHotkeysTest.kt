@@ -40,6 +40,17 @@ class NdsHotkeysTest {
         assertEquals(NdsDecision(true), h.down(NxButton.RIGHT))                 // SELECT up: Right is the game's again
     }
 
+    // Under a pad skin that places the screens itself (the Fold's, a tablet's, portrait) SELECT + Left / Right does
+    // nothing; where the skin takes the layout (a regular phone's landscape, user) it cycles it.
+    @Test fun under_a_skin_select_left_right_cycles_only_where_the_skin_takes_the_layout() {
+        val placed = NdsHotkeys().apply { skinShown = true; skinLayouts = false }
+        placed.onButton(NxButton.SELECT, true)
+        assertEquals(NdsDecision(false), placed.onButton(NxButton.RIGHT, true))
+        val takes = NdsHotkeys().apply { skinShown = true; skinLayouts = true }
+        takes.onButton(NxButton.SELECT, true)
+        assertEquals(NdsDecision(false, NdsAction.CycleLayout(1)), takes.onButton(NxButton.RIGHT, true))
+    }
+
     @Test fun select_up_down_cycle_the_corner() {
         val h = NdsHotkeys()
         h.down(NxButton.SELECT)

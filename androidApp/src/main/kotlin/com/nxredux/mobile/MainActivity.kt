@@ -29,10 +29,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.window.layout.WindowMetricsCalculator
+import com.nxredux.mobile.runner.goImmersive
 import com.nxredux.mobile.runner.BiosImport
 import com.nxredux.mobile.runner.LaunchRecords
 import com.nxredux.mobile.runner.LiveGameStore
@@ -48,6 +47,9 @@ import com.nxredux.mobile.ui.HOME_NOT_WRITABLE
 import com.nxredux.mobile.runner.PostureTracker
 import com.nxredux.mobile.runner.windowShape
 import com.nxredux.mobile.ui.nx.LocalPosture
+import com.nxredux.mobile.ui.nx.LocalSkinPacks
+import com.nxredux.mobile.ui.nx.SkinPackSource
+import com.nxredux.mobile.runner.PadSkinPack
 import com.nxredux.mobile.ui.nx.LocalRestingBars
 import com.nxredux.mobile.achievements.AchievementsService
 import com.nxredux.mobile.gametime.GameTimeService
@@ -62,7 +64,7 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.AndroidNetplay
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.usb.UsbCables
-import com.nxredux.mobile.padlayout.PadLayoutActivity
+import com.nxredux.mobile.skinlayout.SkinLayoutActivity
 import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
 import com.nxredux.mobile.runner.AndroidMicAccess
 import com.nxredux.mobile.runner.CoreHangNotice
@@ -91,7 +93,6 @@ import com.nxredux.mobile.scraper.ArtworkService
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.AndroidDeviceInfo
 import com.nxredux.mobile.settings.FolderPicker
-import com.nxredux.mobile.settings.PadScreen
 import com.nxredux.mobile.storage.AndroidAllFilesAccess
 import com.nxredux.mobile.storage.AndroidLibraryIndexStore
 import com.nxredux.mobile.storage.AndroidPrivateFiles
@@ -108,6 +109,8 @@ import com.nxredux.mobile.ui.App
 import com.nxredux.mobile.ui.MenuTopScreen
 import com.nxredux.mobile.ui.AppDeps
 import com.nxredux.mobile.ui.AppState
+import com.nxredux.mobile.ui.SkinEditRequest
+import com.nxredux.mobile.ui.SkinEditorLauncher
 import com.nxredux.mobile.ui.OnboardingStep
 import com.nxredux.mobile.ui.Screen
 import com.nxredux.mobile.ui.nx.BottomScreenButton
@@ -151,6 +154,10 @@ class MainActivity : ComponentActivity(), FolderPicker {
 
     // The top refresh rate while buttons (or, on Android 11-14, a finger) drive the menu; FrameRateBoost has the why.
     private val frameRateBoost by lazy { FrameRateBoost(this) }
+
+    /** The pad skin packs the menu draws (Pad theme NX Carbon), read from the assets once each. */
+    private val menuSkinPacks = HashMap<String, SkinPackSource?>()
+    private fun menuSkinPack(id: String): SkinPackSource? = menuSkinPacks.getOrPut(id) { PadSkinPack.builtIn(this, id)?.toSource() }
 
     /** Every pad event (keys, the hat and stick, the on-screen pad) on its way to the router. */
     private fun pad(event: PadEvent) {
@@ -309,8 +316,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
         UsbCables.get(this).onConsent(r.resultCode == RESULT_OK)
     }
 
-    /** Controls → Pad layout's editor; the menu re-reads the layouts when it returns, saved or not. */
-    private val padLayoutEditor = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { state.onPadLayoutEdited() }
+    /** Appearance → Button layout's editor; the menu re-reads the tweaks when it returns, saved or not. */
+    private val skinLayoutEditor = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { state.onSkinLayoutEdited() }
 
     /** Artwork fetch and achievement download progress are notifications; the permission is asked when the first starts (the job runs either way). */
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -419,7 +426,9 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 netplay = AndroidNetplay(this) { DataRoot.of(this) }.also { np ->
                     np.screenOn = { on -> runOnUiThread { keepScreenOn(on) } }
                 },
-                padEditor = { request -> padLayoutEditor.launch(PadLayoutActivity.intent(this, request)) },
+                skinEditor = object : SkinEditorLauncher {
+                    override fun open(request: SkinEditRequest, title: String) = skinLayoutEditor.launch(SkinLayoutActivity.intent(this@MainActivity, request, title))
+                },
                 screenClass = { windowScreenClass },
                 windowPx = { windowPx },
                 ps2BiosFiles = { BiosImport.binFiles(applicationContext, settings.treeRef, "PS2") },
@@ -464,17 +473,14 @@ class MainActivity : ComponentActivity(), FolderPicker {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
+        window.goImmersive()   // full screen like a game: the bars hidden, a swipe from the edge shows them for a moment
         setContent {
             // As the home screen, Back on the main menu stays: there is nothing under a launcher. Another instance (the
             // drawer's, in its own task) still closes.
             BackHandler(enabled = true) { if (!state.back() && !(asHome && launcher.isHome())) finish() }
-            // The pad layouts' screen from the same measure the game and the editor use (the whole display, bars
-            // included), so the Pad layout page edits the layouts a game will draw.
-            val padScreen = PadScreen.of(LocalConfiguration.current.smallestScreenWidthDp.toFloat())
-            LaunchedEffect(padScreen) { state.onPadScreen(padScreen) }
             // One App at a time: with the menu on the second display ([syncMenuScreen]) this window has the top screen.
             // This window's root gets the insets unconsumed: the pages may pad for the bars at rest ([LocalRestingBars]).
-            CompositionLocalProvider(LocalPosture provides posture.value, LocalRestingBars provides true) { if (menuOnSecond.value) MenuTopScreen(state) else App(state, ::pad) }
+            CompositionLocalProvider(LocalPosture provides posture.value, LocalRestingBars provides true, LocalSkinPacks provides ::menuSkinPack) { if (menuOnSecond.value) MenuTopScreen(state) else App(state, ::pad) }
         }
         collectPosture()
         // Dual mode: apps open on the top screen; one there takes our window on that display down until it leaves.
@@ -490,7 +496,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
      */
     private fun appTopDisplay(): Int? {
         val second = secondScreens.current.value
-        val dual = state.dualMenu.value || TopScreenHost.active
+        val dual = state.displayDualMenu.value || TopScreenHost.active   // the skin's two screens: an app opens here
         return topScreenDisplay(dual, second != null && menuOnSecondFor(second), currentDisplayId(), second?.displayId)
     }
 
@@ -560,7 +566,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         if (onSecond != menuOnSecond.value) {
             // The activity drops its App before the presentation composes one (and back): one App at a time.
             menuOnSecond.value = onSecond
-            shown.showPanel(if (onSecond) ({ App(state, ::pad) }) else ({ MenuTopScreen(state) }))
+            shown.showPanel(if (onSecond) ({ CompositionLocalProvider(LocalSkinPacks provides ::menuSkinPack) { App(state, ::pad) } }) else ({ MenuTopScreen(state) }))
         }
         // The focused screen: the top screen's list on a game list, the menu everywhere else.
         val screen = state.screen.value
@@ -636,7 +642,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         menuOnSecond.value = false
     }
 
-    /** Flex mode from launch: the folding feature (and the hinge angle where it hides half-open), in window px. */
+    /** The fold's posture from launch (a pad skin's hinge): the folding feature (and the hinge angle where it hides half-open), in window px. */
     private val posture = mutableStateOf<Posture>(Posture.Flat)
 
     private fun collectPosture() {
@@ -662,7 +668,10 @@ class MainActivity : ComponentActivity(), FolderPicker {
     /** The menu's window has focus again: [TopScreenHost.recheck], as on resume (no resume when only the focus moved). */
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) TopScreenHost.recheck(this)
+        if (hasFocus) {
+            window.goImmersive()   // the bars hidden again after a dialog, a swipe or another app showed them
+            TopScreenHost.recheck(this)
+        }
     }
 
     /** [windowScreenClass] and [windowPx] from one window reading. */

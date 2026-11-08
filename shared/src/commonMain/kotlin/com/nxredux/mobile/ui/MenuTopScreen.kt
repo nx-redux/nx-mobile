@@ -49,10 +49,11 @@ import org.jetbrains.compose.resources.painterResource
  * [TopContent.AppsPreview] (a tap opens it there on that app); a [TopContent.Tool] opened from the menu, with the focus,
  * its loading, dialogs and notices; else the [TopContent.Backdrop]. It has the
  * theme and the launcher locals [App] has ([MenuLocals]), from the same settings; the image loader is App's (process-wide).
- * There is no pad here, so the footer follows a connected controller alone.
+ * There is no pad here, so the footer follows a connected controller alone. [inSkin]: drawn in the menu skin's top glass
+ * (two screens in one window), already inside the shell's insets.
  */
 @Composable
-fun MenuTopScreen(state: AppState) {
+fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
     val screen by state.screen.collectAsState()
     val secondList by state.secondList.collectAsState()
     val drawerPreview by state.drawerPreview.collectAsState()
@@ -66,10 +67,10 @@ fun MenuTopScreen(state: AppState) {
     val controllerConnected = rememberControllerConnected()
     val touchscreen = rememberHasTouchscreen()
     NxTheme(colors = look.colors) {
-        MenuLocals(state, look, footerModeFor(controllerConnected, padVisible = false), touchscreen) {
+        MenuLocals(state, look, footerModeFor(controllerConnected, padVisible = inSkin), touchscreen) {
             BoxWithConstraints(
                 Modifier.fillMaxSize().background(LocalNxColors.current.background)
-                    .windowInsetsPadding(nxScreenInsets()).clipToBounds(),
+                    .let { if (inSkin) it else it.windowInsetsPadding(nxScreenInsets()) }.clipToBounds(),
             ) {
                 // No HandheldShell here: the screen's own shape and size, as the shell gives App's pages.
                 CompositionLocalProvider(LocalPortrait provides (maxHeight > maxWidth), LocalWindowSize provides DpSize(maxWidth, maxHeight)) {

@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 internal const val PAGE_INSET_UPRIGHT = 30f
 internal const val PAGE_INSET_SIDEWAYS = 38f
 internal const val PAGE_INSET_TABLET = 62f
+/** Inside a pad skin's frame: half the upright inset, the frame and its bezel being a margin already. */
+internal const val PAGE_INSET_SKIN = 15f
 
 /** The page inset, dp, before any camera cutout: [tablet], else [portrait] or not. */
 internal fun pageInset(portrait: Boolean, tablet: Boolean = false): Float = when {
@@ -46,19 +48,23 @@ internal data class PageInset(val start: Dp, val end: Dp) {
  * Every screen's side insets (the in-game menu's too, not the game screen's), from the screen's edge: [pageInset] on
  * each side, or the camera cutout on that side when deeper ([pageInsetSide]; the Fold cover held sideways: 40 dp on the
  * camera's side, 38 dp on the other; upright the hole is in the status bar, 30 dp both). The page roots pad only the
- * vertical cutout ([nxScreenInsets]), so the side cutout counts here, once. A 3-button navigation bar on a side is a
+ * vertical cutout ([nxScreenInsets]), so the side cutout counts here, once. Inside a pad skin's frame ([LocalInSkin]):
+ * [PAGE_INSET_SKIN], the frame being a margin already. A 3-button navigation bar on a side is a
  * visible edge the roots pad by: the inset is measured from it, and the cutout counts past it.
  */
 @Composable
 internal fun nxPageInset(): PageInset {
     val window = LocalWindowSize.current
-    val inset = pageInset(LocalPortrait.current, tablet = minOf(window.width, window.height) >= 600.dp)
+    // inside a pad skin the frame is already a margin: half the upright inset, whatever the window's size
+    val inset = if (LocalInSkin.current) PAGE_INSET_SKIN else pageInset(LocalPortrait.current, tablet = minOf(window.width, window.height) >= 600.dp)
     val density = LocalDensity.current
     val dir = LocalLayoutDirection.current
     val cutout = WindowInsets.displayCutout
     val bars = restingSystemBars()
-    val left = with(density) { (cutout.getLeft(this, dir) - bars.getLeft(this, dir)).coerceAtLeast(0).toDp().value }
-    val right = with(density) { (cutout.getRight(this, dir) - bars.getRight(this, dir)).coerceAtLeast(0).toDp().value }
+    // in a skin's glass a side cutout is under the shell beside it, never the page
+    val inSkin = LocalInSkin.current
+    val left = if (inSkin) 0f else with(density) { (cutout.getLeft(this, dir) - bars.getLeft(this, dir)).coerceAtLeast(0).toDp().value }
+    val right = if (inSkin) 0f else with(density) { (cutout.getRight(this, dir) - bars.getRight(this, dir)).coerceAtLeast(0).toDp().value }
     val (start, end) = if (dir == LayoutDirection.Ltr) left to right else right to left
     return PageInset(pageInsetSide(inset, start).dp, pageInsetSide(inset, end).dp)
 }

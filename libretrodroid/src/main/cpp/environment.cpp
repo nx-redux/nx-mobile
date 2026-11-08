@@ -55,6 +55,19 @@ void Environment::initialize(
     savesDirectory = requiredSavesDirectory;
 }
 
+void Environment::pushCoreMessage(const char* msg) {
+    std::lock_guard<std::mutex> lock(coreMessagesMutex);
+    if (coreMessages.size() >= CORE_MESSAGES_MAX) coreMessages.erase(coreMessages.begin());
+    coreMessages.emplace_back(msg);
+}
+
+std::vector<std::string> Environment::takeCoreMessages() {
+    std::lock_guard<std::mutex> lock(coreMessagesMutex);
+    std::vector<std::string> out;
+    out.swap(coreMessages);
+    return out;
+}
+
 void Environment::deinitialize() {
     callback_get_current_framebuffer = nullptr;
     hw_context_reset = nullptr;
@@ -693,13 +706,19 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
 
         case RETRO_ENVIRONMENT_SET_MESSAGE: {
             auto message = static_cast<const struct retro_message*>(data);
-            if (message && message->msg) LOGI("Core message: %s", message->msg);
+            if (message && message->msg) {
+                LOGI("Core message: %s", message->msg);
+                Environment::getInstance().pushCoreMessage(message->msg);
+            }
             return true;
         }
 
         case RETRO_ENVIRONMENT_SET_MESSAGE_EXT: {
             auto message = static_cast<const struct retro_message_ext*>(data);
-            if (message && message->msg) LOGI("Core message: %s", message->msg);
+            if (message && message->msg) {
+                LOGI("Core message: %s", message->msg);
+                Environment::getInstance().pushCoreMessage(message->msg);
+            }
             return true;
         }
 
