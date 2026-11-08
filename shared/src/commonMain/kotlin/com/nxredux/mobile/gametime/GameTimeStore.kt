@@ -17,13 +17,16 @@ class GameTimeStore(
 ) {
     private val q get() = db.gameTimeQueries
 
-    /** Writes this device's row (name refreshed), then closes the sessions a killed process left open. */
+    /**
+     * Writes this device's row (name refreshed), then closes the sessions a killed process left open. Every process opens
+     * the store, so only sessions untouched for [STALE_MS] count as left: a game playing in another process keeps its own.
+     */
     fun prepare() {
         db.transaction {
             q.insertDevice(deviceId, deviceName)
             q.renameDevice(deviceName, deviceId)
         }
-        closeStale()
+        closeStale(seenBefore = now() - STALE_MS)
     }
 
     /**
@@ -67,10 +70,13 @@ class GameTimeStore(
         }
     }
 
-    /** Sessions of this device still open close at their last touch (launch or last move to the background). */
-    fun closeStale() {
+    /**
+     * Sessions of this device still open, last touched at or before [seenBefore], close at their last touch (launch or
+     * last move to the background). [start] closes them all: only the game process records, one game at a time.
+     */
+    fun closeStale(seenBefore: Long = Long.MAX_VALUE) {
         db.transaction {
-            q.closeStaleSessions(deviceId)
+            q.closeStaleSessions(deviceId = deviceId, seenBefore = seenBefore)
             q.deleteImplausible(MIN_MS, MAX_MS)
         }
     }
@@ -173,6 +179,13 @@ class GameTimeStore(
     companion object {
         const val MIN_MS = 1_000L
         const val MAX_MS = 86_400_000L
+        /** How often a running game touches its open session. */
+        const val TOUCH_MS = 60_000L
+        /**
+         * An open session untouched this long belongs to a dead process. Well above [TOUCH_MS], so one process opening the
+         * database never closes a session a game in another process is still touching.
+         */
+        const val STALE_MS = 3 * TOUCH_MS
         /** How many top games [window] lists ([WindowTotals.tops]; Home's strip reads only the first, [WindowTotals.top], as Most played). */
         const val TOP_GAMES = 3
     }

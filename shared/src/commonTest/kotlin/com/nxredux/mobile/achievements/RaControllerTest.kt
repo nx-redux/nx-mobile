@@ -14,7 +14,9 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -295,6 +297,29 @@ class RaControllerTest {
         c.resetAccount()
         assertEquals(RaState.Idle(previous), c.state.value)
         assertEquals(RaMessage.Failure("Could not read status: RaStoreException"), messages.last())
+        assertFalse(c.busy)
+    }
+
+    // The store throws when the card is gone or All files access was revoked: a refresh, or cancel's follow-up read,
+    // keeps the last status with the error instead of failing the scope (on Android, the app).
+    @Test fun a_failed_status_read_on_refresh_or_cancel_keeps_the_status_with_the_error() = runTest {
+        val store = FakeRaStore(); val http = FakeRaHttp()
+        store.put(RaPaths.login(), """{"Success":true,"User":"me","Token":"tok","SoftcoreScore":7}""")
+        RaJournal(store, RaPaths.JOURNAL).append(RaUnlock("me", 1, "a".repeat(32), 5L))
+        http.responders["awardachievement"] = { CompletableDeferred<Unit>().await(); RaResponse(200, "{}") }
+        val uncaught = ArrayList<Throwable>()
+        val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler) + SupervisorJob() + CoroutineExceptionHandler { _, e -> uncaught += e })
+        val c = controller(fakePlatform(store, http), Settings().apply { raUsername = "me"; raToken = "tok" }, scope, ArrayList())
+        c.refresh()
+        val previous = assertIs<RaState.Idle>(c.state.value).status
+        store.failList = true
+        c.refresh()
+        assertEquals(RaState.Idle(previous.copy(lastError = "Could not read status: RaStoreException")), c.state.value)
+        c.syncNow()
+        assertIs<RaState.Syncing>(c.state.value)
+        c.cancel(); advanceUntilIdle()
+        assertEquals("Could not read status: RaStoreException", assertIs<RaState.Idle>(c.state.value).status.lastError)
+        assertTrue(uncaught.isEmpty(), uncaught.toString())
         assertFalse(c.busy)
     }
 

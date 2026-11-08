@@ -99,8 +99,14 @@ class RaController(
 
     fun refresh() {
         if (busy) return
-        scope.launch { val s = readStatus(idleStatus.lastError); if (!busy) _state.value = RaState.Idle(s) }
+        scope.launch { val s = readStatusOrKeep(idleStatus.lastError); if (!busy) _state.value = RaState.Idle(s) }
     }
+
+    /** [readStatus], or the status shown now with the read's failure: the store throws when its files go away. */
+    private suspend fun readStatusOrKeep(error: String? = null): RaStatus =
+        try { readStatus(error) } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            idleStatus.copy(lastError = "Could not read status: ${e::class.simpleName}")
+        }
 
     // The whole journal is parsed here (pending count), and the games folder listed: on [work], as the walks.
     private suspend fun readStatus(error: String? = null): RaStatus = withContext(work) {
@@ -292,7 +298,7 @@ class RaController(
         paused.value = false
         t?.let { _download.value = it.snapshot(RaDownloadPhase.CANCELLED) }
         _state.value = RaState.Idle(previous)
-        scope.launch { val s = readStatus(); if (!busy) _state.value = RaState.Idle(s) }
+        scope.launch { val s = readStatusOrKeep(); if (!busy) _state.value = RaState.Idle(s) }
     }
 
     // Every cached game's sets.json (up to ~2 MB each) and the library index are parsed here: never on the main thread.
