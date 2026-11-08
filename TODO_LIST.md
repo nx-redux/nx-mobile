@@ -39,3 +39,44 @@ Any device:
 - [ ] RetroAchievements: Sync now from the menu while a game earns an unlock (dual-screen menu): the unlock is kept
 - [ ] RetroAchievements page with the RA folder unreadable (All files access revoked): shows an error, no crash
 - [ ] Settings → touch button help text reads right (Adjust buttons in the in-game Controls)
+
+## Review performance fixes (PR #103): device checks still owed
+
+Already passed on the Nova:
+- PS2, GC, Wii, PSP, 3DS, DC and N64 run, hold still under the in-game menu, resume, survive Home and return, and
+  quit. Home's state serialize and write run off the main thread (serialize 0.1–3 s, 17–109 MB written).
+- GBA battery save: three menus and a Home leave an unchanged `.srm` alone; quit and relaunch load it.
+
+Art fetch (real library, a few hundred games):
+- [ ] Fetch missing advances smoothly; the game being fetched shows Searching / Downloading; Pause, Resume and Cancel
+  mid-job keep finished games finished
+- [ ] A console with no `.media` folder gets its folders and art on the first fetch
+- [ ] Change art pick for a game the running job hasn't reached yet is kept
+- [ ] Untagged ROMs still get libretro-thumbnails art through its name list
+- [ ] TheGamesDB: a multi-region or multi-disc set uses fewer requests (allowance before/after)
+- [ ] ScreenScraper: Fetch again on name-miss ROMs starts the hash lookup at once (no re-read of big ROMs)
+- [ ] Replace all: the written-art log only grows by appends; Reset artwork afterwards deletes exactly the app's files
+
+Game and video:
+- [ ] DS (melonDS) with a multi-pass shader preset: top shaded, bottom plain; Screen Sharpness, Large layout with a
+  translucent inset, screen swap
+- [ ] 3DS with a preset under video views: menu pause keeps the picture (no black), resume
+- [ ] GC/Wii and Flycast: change the shader preset mid-game; no black frames or broken textures
+- [ ] PSP on Vulkan and on GLES: play, pause/resume, fast forward
+- [ ] Save/load state on PSP, GC and PS2; a PPSSPP state is the same size as before and loads
+- [ ] Thumbnails for Home, slot save and Quit look sharp, incl. a DS/3DS top-screen crop; Adjust buttons backdrop sharp
+- [ ] Home then force-stop the game process: relaunch resumes from slot 9 and the switcher thumbnail matches
+- [ ] Two controllers on a 2-player core: P2 claims with a stick/trigger push, rumble per pad, replug keeps the slot
+- [ ] A System buttons binding works in game, also after changing it in Settings and returning to the running game
+- [ ] DS stylus mode: cursor moves smoothly with d-pad and stick, stops at edges, moves again after the menu closes
+
+Menu:
+- [ ] Return from a game: Continue's picture updates and the highlight stays put (also returning to the Game Switcher)
+- [ ] Menu pad shows/hides right on onboarding's Pad step, with a tool on top in two-screen skin mode, and after
+  toggling Appearance → Pad skin
+- [ ] Game Tracker shows box art right after a fetch
+- [ ] Dual screen: moving through large merged consoles feels smooth
+
+Kids Mode:
+- [ ] Locked: a disallowed app bounces about once a second, allowed apps stay, keyboard and Settings while granting
+  are exempt, the Locked game screen from Recents still quits
