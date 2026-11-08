@@ -247,27 +247,17 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         /** The Dolphin core's descriptor id (Wii and GameCube tags). */
         private const val DOLPHIN_ID = "dolphin"
         private const val MUPEN64PLUS_NEXT_ID = "mupen64plus_next"
-        // Instance-state key: the slot to resume from when the system recreates this activity after a process kill.
-        private const val KEY_RESUME_SLOT = "nx_resume_slot"
         private const val KEY_NAME_HOLD_SHOWN_AT = "nx_name_hold_shown_at"   // the launch name's hold was up ([LaunchNameHold.shownAt])
         /** Kids Mode's "Games close in 10 minutes" toast stays this long. */
         private const val KIDS_WARNING_MS = 6000L
         /** Beside a real-path cache copy: what it was copied from ([realPathCopyStamp]). */
         private const val REAL_PATH_STAMP = ".nxstamp"
-        // Process-wide, single thread: the Home auto state and its thumbnail are written off the main thread
-        // in submission order, and outlive the activity (a stopped one may be destroyed before they finish).
-        private val autoWriter = Executors.newSingleThreadExecutor { Thread(it, "nx-auto-state") }
         /** How long the Wii's HOME holds the core's Home (R3): a few frames, as a tap. */
         private const val WII_HOME_PRESS_MS = 150L
         /** [onCoreHung]: between the hung game's finish and the process kill. */
         private const val HUNG_FINISH_GRACE_MS = 500L
         /** [endProcess]: at most this long for the netplay engine's shutdown before the process goes anyway. */
         private const val PROCESS_END_WAIT_S = 5L
-        /** [writeAutoStateOnStop]: at most this long for the GL thread to start the serialize, and again to finish it. */
-        private const val AUTO_SERIALIZE_WAIT_MS = 10_000L
-
-        /** Blocks until every queued Home write has finished. Call off the main thread before touching slot 9. */
-        internal fun awaitAutoWrites() { runCatching { autoWriter.submit {}.get() } }
 
         /** Debug builds only: the latest game screen, for the adb GAME_STOP hook ([debugQuit]). Main thread. */
         private var debugGame: java.lang.ref.WeakReference<GameActivity>? = null
@@ -394,14 +384,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     internal var focusPaused = false
         private set
-    override val slotsUi = mutableStateOf<List<SlotUi>>(emptyList())
-    // openMenu reads no files on the main thread. The slot strip ([slotsUi]) and the last-used
-    // slot are read on IO at start and after every write of them, so an open shows them at once; an open re-reads the
-    // strip, the overlay sets and the presets on IO and publishes them when they land (the cached ones show meanwhile).
-    @Volatile override var lastSlotCache: Int? = null   // SaveStates.lastSlot(); null until the first read
-    private var slotsJob: Job? = null   // the newest strip refresh (main thread only); a newer one cancels it
-    override var saveStates: SaveStates? = null
-        private set
+    private val saves = SaveSession(this, renderer, menu)
+    override val slotsUi: androidx.compose.runtime.State<List<SlotUi>> get() = saves.slotsUi
+    override var lastSlotCache: Int?
+        get() = saves.lastSlotCache
+        set(value) { saves.lastSlotCache = value }
+    override val saveStates: SaveStates? get() = saves.saveStates
     /** Saves, states, configs and `.minui` markers: [DataRoot.settled] once per session. */
     private lateinit var dataRoot: File
     /** This screen holds off the data move ([DataRoot.useBegin]) until it is destroyed. */
@@ -411,8 +399,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override lateinit var shaderRoots: Shaders.Roots
         private set
     private lateinit var paths: NxPaths
-    private var batterySaves: BatterySaves? = null
-    private var clockSave: ClockSave? = null
     override var configStore: CoreConfigStore? = null
         private set
     override var configSource = ConfigSource.NONE
@@ -434,41 +420,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val launchRecords by lazy { LaunchRecords.of(this) }
     private val launchId by lazy { intent.getLongExtra(EXTRA_LAUNCH_ID, LaunchRecords.NONE) }
     private var failShown = false   // the could-not-start dialog is up (it only leaves by finishing)
-    private var resumeSlot: Int? = null   // disk slot to load once the game runs (EXTRA_RESUME_SLOT); null = fresh
     override var quitting = false   // set by quitWithAutoState: quit is single-shot, the menu freezes, onStop skips its auto state
         private set
-    // The quit's off-main native calls run under [coreLock] and only while ![coreGone]. An observer
-    // added after the view's (so ON_DESTROY reaches it first) sets it under the lock before LibretroDroid.destroy(): a
-    // quit cut short by a destroy never touches a destroyed core, nor the next game's once it loads.
-    private val coreLock = Any()
-    @Volatile private var coreGone = false
-    // True from start until the requested resume load has finished (or failed): until then the running state
-    // is the fresh boot, so it must not overwrite the resume point.
-    @Volatile override var resumePending = false
-        private set
+    override val resumePending: Boolean get() = saves.resumePending
     private var resumeCover: ResumeCover? = null   // the resume's screenshot over the game until its frame shows (main thread only)
     // The launch sequence's name (a Minimal launch; null: none, the screen opens without one) and its hold over the window.
     private val launchName by lazy { launchNameFrom(intent.extras) }
     private var nameHold: LaunchNameHold? = null   // main thread only; null once it has gone
     private val heldDowns = HashSet<Int>()   // key codes whose press the hold swallowed: their release is swallowed too
     private val holdTouches = HoldTouchGate()   // touches the hold swallows (the on-screen pad stays lit above it)
-    private var autoWrittenOnStop = false   // onStop queued an auto state's serialize and write since the last onStart
-    // Home screenshot for the switcher (main thread only): onPause starts a PixelCopy; its bitmap is written as
-    // the slot-9 thumb once onStop has queued the auto state. [homeThumbGen] drops callbacks from an older pause.
-    private var homeThumb: Bitmap? = null
-    private var homeThumbGen = 0
-    private var autoWriteOk: AtomicBoolean? = null   // this stop's queued auto-state write succeeded (set on autoWriter)
-    private var autoWriteFailed: AtomicBoolean? = null   // this stop's queued auto-state write threw (set on autoWriter)
-    // The last stop's serialize gave no state (a core that has none): the next stop's bundle keeps the previous resume
-    // point instead of naming a slot 9 that state will not replace.
-    @Volatile private var autoStateEmpty = false
-    // The newest resume point known to be on disk, for the instance state when this stop's own
-    // auto write has already failed: the slot this screen started from (onCreate), then slot 9 once a stop's write lands.
-    @Volatile private var lastResumePoint: Int? = null
-    // API 26–27 only: onSaveInstanceState runs before onStop there, so its bundle is kept to be updated
-    // after the onStop write (the framework parcels it only after onStop returns).
-    private var pendingOutState: Bundle? = null
-    private val slotJobs = mutableListOf<Job>()   // manual Save/Load in flight (main thread only); Quit joins them
     private var wiiHomeSaving = false   // [pressWiiHome]'s resume point being saved (main thread only)
     @Volatile private var wiiHomeSaved = false   // [pressWiiHome] saved this session's resume point
     // RomCache entries this game uses (its extraction, or its real-path copies): held so no sweep deletes them; released in onDestroy.
@@ -637,15 +597,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         gameNetplay.onCreate(intent, savedInstanceState)
         // Decided here, not after startEmulator's async setup, so a stop in between still records the slot.
         // A saved slot (recreated after a process kill) wins over the launch intent's.
-        val savedSlot = savedInstanceState?.getInt(KEY_RESUME_SLOT, -1)?.takeIf { it in 0..NxPaths.AUTO_SLOT }
-        resumeSlot = if (netplay != null) null else savedSlot ?: intent.getIntExtra(EXTRA_RESUME_SLOT, -1).takeIf { it in 0..NxPaths.AUTO_SLOT }
-        resumePending = resumeSlot != null
-        lastResumePoint = resumeSlot
+        val savedSlot = savedInstanceState?.getInt(SaveSession.KEY_RESUME_SLOT, -1)?.takeIf { it in 0..NxPaths.AUTO_SLOT }
+        saves.startFrom(if (netplay != null) null else savedSlot ?: intent.getIntExtra(EXTRA_RESUME_SLOT, -1).takeIf { it in 0..NxPaths.AUTO_SLOT })
         val claim = sessions.claim(::onSessionHandedOff).also { sessionClaim = it }
         // From the claim to the final release: the menu reads this as "a game screen is alive" (playing, suspended, closing).
         liveGameStore.write(LiveGame(
             Process.myPid(), launchId, intent.getStringExtra(EXTRA_GAME_PATH), intent.getStringExtra(EXTRA_CORE_ID) ?: "",
-            intentTag ?: "UNKNOWN", resumeSlot, netplay != null,
+            intentTag ?: "UNKNOWN", saves.resumeSlot, netplay != null,
         ))
         launchRecords.keepSwitcherReturnFor(launchId)   // a switcher mark of another launch is not this game's to end on
         kidsReportsInput = settings.kidsEnabled
@@ -742,7 +700,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         rumbles.forEach { it.pause() }   // no rumble in the background; onResume picks the core's state up again
         // The battery save is written synchronously (the process may be killed once backgrounded).
         // A quit writes it once itself, off the main thread (quitWithAutoState), so nothing here then.
-        if (!quitting) writeBatterySave(notify = false)
+        if (!quitting) saves.writeBatterySave(notify = false)
         gameNetplay.run?.pause()   // netplay: backgrounded: no input goes out; the other side stalls, 30 s ends the session
         syncMotionSensors(foreground = false)
         // Closes the phone mic at once (the paused core stops reading it); the toggle stays as it is for onResume.
@@ -829,7 +787,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         syncKeepScreenOn()
         syncMotionSensors()   // no motion while paused
         holdCore()   // the phone mic closes under the menu too
-        lifecycleScope.launch(Dispatchers.IO) { writeBatterySave(notify = true) }
+        lifecycleScope.launch(Dispatchers.IO) { saves.writeBatterySave(notify = true) }
     }
 
     /** The menu closed ([InGameMenuController.closeMenu]): the game plays on, unless the focus pause still holds it. */
@@ -849,17 +807,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun publishNds3d(model: InGameMenuModel) = res3d.publish(model)
 
-    /**
-     * Leaving via Home/recents: grab the frame for the switcher preview now. This runs before the pause,
-     * while the GL surface still holds a frame; by onPause GLRetroView has already paused it (no data).
-     */
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (!quitting && gameReady && !resumePending) {
-            val gen = ++homeThumbGen
-            homeThumb = null
-            captureThumbnail { bmp -> if (gen == homeThumbGen && bmp != null) onHomeThumb(bmp) }
-        }
+        saves.onUserLeaveHint()
     }
 
     /**
@@ -875,31 +825,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun onStart() {
         super.onStart()
-        autoWrittenOnStop = false   // a later Home must write (and record) a fresh auto state
-        autoWriteOk = null
-        autoWriteFailed = null
-        homeThumb = null
-        homeThumbGen++   // a capture still in flight belongs to the previous stop
-        pendingOutState = null
+        saves.onStart()
         if (isNds) input.syncPen()   // restarts the pen tick onStop stopped, if stylus mode is on
         if (isN3ds) input.syncN3dsCursor()
         dual.secondScreens.start()   // the collector shows the presentation again
         // onStop closed the session: back in the foreground, a new one on the same game (background time is not play)
         gameTime?.let { if (!isFinishing && !quitting) { it.resume(); startGameTimeTicker(it) } }
-    }
-
-    /** Main thread. Before onStop's auto state: keep it for onStop. After it: queue it behind that state. */
-    private fun onHomeThumb(bmp: Bitmap) {
-        if (autoWrittenOnStop) queueHomeThumb(bmp) else homeThumb = bmp
-    }
-
-    /** Writes the slot-9 thumb after this stop's auto state, and only if that write succeeded (they must match). */
-    private fun queueHomeThumb(bmp: Bitmap) {
-        val ss = saveStates ?: return
-        val ok = autoWriteOk ?: return
-        autoWriter.execute {
-            if (ok.get()) runCatching { ss.writeAutoThumb(bmp) }.onFailure { NxLog.w("GameActivity", "auto-resume thumb on stop failed", it) }
-        }
     }
 
     override fun onStop() {
@@ -911,10 +842,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // finishing without a quit: sharing the menu's task, a launch of the singleTask menu (app icon, notification)
         // clears this screen. A quit writes its own; a game that never got ready writes nothing (writeAutoStateOnStop);
         // one that failed after starting and leaves through its dialog keeps the last good resume point.
-        if (!quitting && !relaunching && !(isFinishing && failShown)) writeAutoStateOnStop()
-        // API 26–27: onSaveInstanceState already ran; record the outcome of the write in its bundle.
-        pendingOutState?.let(::putResumeSlot)
-        pendingOutState = null
+        // API 26–27: onSaveInstanceState already ran; the outcome of the write is recorded in its bundle.
+        saves.onStop(writeAuto = !quitting && !relaunching && !(isFinishing && failShown))
         if (isFinishing) { input.gcClearTriggers(); stopAchievements() }
         input.onStop()   // the pen and 3DS hotkey ticks stop; onStart restarts them
         // A Presentation stays up while its activity is stopped: no second screen in the background.
@@ -923,41 +852,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         super.onStop()
     }
 
-    /**
-     * After a process kill the system recreates this activity with its original intent, so the slot to
-     * resume from must travel in the instance state: the auto state onStop just wrote, or the requested
-     * slot while its load is still pending. On API 28+ this runs after onStop; on 26–27 before it, so the
-     * bundle is also updated from onStop (see [pendingOutState]).
-     */
+    /** After a process kill the system recreates this activity with its original intent: what it resumes travels here. */
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        putResumeSlot(outState)
+        saves.onSaveInstanceState(outState)
         gameNetplay.onSaveInstanceState(outState)
         nameHold?.let { outState.putLong(KEY_NAME_HOLD_SHOWN_AT, it.shownAt) }
-        pendingOutState = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) outState else null
     }
 
     /**
-     * [autoWrittenOnStop] means the auto state's serialize (GL thread) and write ([autoWriter]) were queued, not that they
-     * landed. When either is already known to have failed, or the last stop's core gave no state ([autoStateEmpty]), the
-     * bundle keeps the previous resume point ([lastResumePoint]) rather than naming a slot 9 this stop never replaced.
-     * Usually both are still in flight here (onSaveInstanceState follows onStop at once on API 28+) and the bundle is
-     * parcelled when this returns, so slot 9 is recorded optimistically. The write is an atomic rename, so a failure
-     * leaves the previous slot-9 file whole: a recreation resumes an older auto state (or toasts "Resume failed" when there
-     * was none), never a torn one. Blocking the main thread on the serialize or the write is not worth it for a rare failure.
-     */
-    private fun putResumeSlot(outState: Bundle) {
-        val slot = when {
-            autoWrittenOnStop && (autoWriteFailed?.get() == true || autoStateEmpty) -> lastResumePoint
-            autoWrittenOnStop -> NxPaths.AUTO_SLOT
-            resumePending -> resumeSlot
-            else -> null
-        }
-        if (slot != null) outState.putInt(KEY_RESUME_SLOT, slot) else outState.remove(KEY_RESUME_SLOT)
-    }
-
-    /**
-     * Debug builds: game.json "stopped" once this screen finishes, queued behind any auto-state write on [autoWriter]
+     * Debug builds: game.json "stopped" once this screen finishes, queued behind any auto-state write ([SaveSession.afterAutoWrites])
      * (a quit wrote its own before finish), with the slot-9 state file when this screen wrote it, else null.
      */
     private fun debugReportStopped() {
@@ -965,63 +869,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val app = applicationContext
         val auto = if (::dataRoot.isInitialized && ::paths.isInitialized) File(dataRoot, paths.state(NxPaths.AUTO_SLOT)) else null
         val since = debugStartedAt
-        autoWriter.execute {
+        SaveSession.afterAutoWrites {
             val written = auto?.takeIf { it.isFile && it.lastModified() >= since }?.absolutePath
             NxTestResults.write(app, "game", "state" to "stopped", "autoState" to written)
         }
-    }
-
-    private fun writeAutoStateOnStop() {
-        val view = retroView ?: return
-        val ss = saveStates ?: return
-        if (!gameReady || resumePending) return
-        // Serialized on the GL thread (paused, it still runs queued events, and native makes the paused view's context
-        // current: a core may run emulation and GL inside it, Azahar's RunLoop drain), but not waited for here: a PS2,
-        // GameCube, Wii or PSP state is tens of MB. The GL thread's queue keeps it after this frame and the FF/rewind
-        // pause around it, and ahead of a resumed frame, a quit's serialize and the native destroy. The write is queued
-        // on [autoWriter] now, so whatever awaits the auto writes (a quit, a resume, a slot load, the process end) waits
-        // for this state too; it waits there for the GL thread's result. The files are atomic renames, so a reader
-        // sees the previous state or the new one.
-        val t0 = SystemClock.elapsedRealtime()
-        val serialized = HandedOffResult<ByteArray>()
-        val queued = speed.aroundStateNow {
-            runCatching {
-                view.queueEvent {
-                    serialized.run {
-                        val bytes = runCatching { view.serializeState() }
-                            .onFailure { NxLog.e("GameActivity", "auto-resume state on stop failed", it) }.getOrNull()
-                        NxLog.i("GameActivity", "auto-state on stop: serialize=${SystemClock.elapsedRealtime() - t0}ms")
-                        bytes
-                    }
-                }
-            }.onFailure { NxLog.e("GameActivity", "auto-resume state on stop failed", it) }.isSuccess
-        }
-        if (!queued) return
-        autoWrittenOnStop = true
-        val ok = AtomicBoolean(false).also { autoWriteOk = it }
-        val failed = AtomicBoolean(false).also { autoWriteFailed = it }
-        autoWriter.execute {
-            val bytes = serialized.await(AUTO_SERIALIZE_WAIT_MS)
-            if (bytes == null || bytes.isEmpty()) {
-                // No state (the core has none yet, or the GL thread never ran it): the previous resume point stays.
-                autoStateEmpty = bytes != null
-                failed.set(true)
-                return@execute
-            }
-            autoStateEmpty = false
-            val t1 = SystemClock.elapsedRealtime()
-            runCatching {
-                ss.writeAuto(bytes)
-                ok.set(true)   // the state is replaced: its thumb must follow even if the slot pointer fails
-                lastResumePoint = NxPaths.AUTO_SLOT
-            }.onFailure { failed.set(true); NxLog.e("GameActivity", "auto-resume state on stop failed", it) }
-            if (ok.get()) runCatching { ss.markAuto(onlyIfNotManual = true) }
-                .onFailure { NxLog.e("GameActivity", "auto-resume slot pointer on stop failed", it) }
-            runCatching { lastSlotCache = ss.lastSlot() }   // the pointer may name slot 9 (shown as slot 1)
-            NxLog.i("GameActivity", "auto-state on stop: write=${SystemClock.elapsedRealtime() - t1}ms bytes=${bytes.size}")
-        }
-        homeThumb?.let { queueHomeThumb(it) }
-        homeThumb = null
     }
 
     /** Back to the menu the game fades to black over 150 ms: below Android 14 (no close override set in onCreate) set here. */
@@ -1080,7 +931,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * data use's end (the caller's).
      */
     private fun endProcess() {
-        awaitAutoWrites()
+        SaveSession.awaitAutoWrites()
         GameTimeService.flush()
         runCatching { NetplayEngine.executor.submit {}.get(PROCESS_END_WAIT_S, TimeUnit.SECONDS) }
         NxLog.i(TAG_LOG, "the game has ended: ending its process")
@@ -1355,8 +1206,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c:75-76): known only now.
         paths = paths.withInner(inner?.let { unpackedEntry })
-        saveStates = if (np == null) SaveStates(dataRoot, paths) else null   // netplay: no save states, no auto-resume
-        refreshSlots()   // warm for the first menu open
+        saves.open(if (np == null) SaveStates(dataRoot, paths) else null)   // netplay: no save states, no auto-resume
+        saves.refreshSlots()   // warm for the first menu open
         dropStaleNdsResume(tag, coreId, romFileName)
         np?.let { gameNetplay.prepareSaves(it, tag, romFileName, dataRoot, paths) }
         // netplay: on a copy the battery save is the session folder's (read only: writeBatterySave skips it), under the
@@ -1364,8 +1215,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val sessionPaths = if (sessionDir != null) NxPaths(tag, coreId, romFileName) else null
         // melonDS DS: a handheld Saves/NDS/<rom>.dsv that is the game's only save is played in place (not on a netplay copy).
         val dsvStem = if (coreId == NdsDsvSave.CORE_ID && sessionDir == null) paths.saveStem else null
-        val battery = BatterySaves(sessionDir ?: File(dataRoot, paths.savesDir), sessionPaths ?: paths, dsvStem).also { batterySaves = it }
-        val clock = if (sessionDir != null) null else ClockSave(File(dataRoot, paths.clock)).also { clockSave = it }
+        val battery = BatterySaves(sessionDir ?: File(dataRoot, paths.savesDir), sessionPaths ?: paths, dsvStem)
+        val clock = if (sessionDir != null) null else ClockSave(File(dataRoot, paths.clock))
+        saves.attachBattery(battery, clock)
         val (sram, rtc) = withContext(Dispatchers.IO) {
             battery.load() to clock?.load()
         }
@@ -1605,7 +1457,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             view.getShutdownRequests().first()
             // Left without HOME this session (a game's own "Wii Menu", a channel launch): the resume point on disk is an
             // older session's, behind the game's own save on the NAND. Dropped, so the next launch boots fresh.
-            if (!wiiHomeSaved) withContext(Dispatchers.IO) { saveStates?.let { ss -> autoWriter.submit { ss.dropAuto() }.get() } }
+            if (!wiiHomeSaved) saves.dropAutoInOrder()
             quitWithAutoState(chosen = true, autoState = false)
         }
         // Subscribed before the login (startSession, after the first frame): events are not replayed.
@@ -1628,7 +1480,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         lifecycle.addObserver(view)
         // Added after the view: LifecycleRegistry sends ON_DESTROY newest-first, so this runs before the view's
         // LibretroDroid.destroy(). It waits for a quit's serialize in flight (one call, milliseconds) and stops the next.
-        lifecycle.addObserver(LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_DESTROY) synchronized(coreLock) { coreGone = true } })
+        lifecycle.addObserver(LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_DESTROY) saves.onCoreDestroy() })
         renderer.ensureOverlayView()
         ensureNotificationsView()
         // Size changes (first layout, rotation, cutout margin) re-lay out the picture and the overlay box.
@@ -1730,8 +1582,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 sendBroadcast(Intent(LaunchRecords.action(this@GameActivity)).setPackage(packageName))   // the menu records it
             }
             if (np != null && !gameNetplay.onFirstFrame(np, descriptor?.name ?: coreId)) return@launch
-            val slot = resumeSlot
-            if (slot != null) resumeFrom(view, slot) else resumePending = false
+            saves.resumeAtFirstFrame(view, dataRoot, paths)
             dropResumeCover(view)
             // Cheats sit on top of the resumed state, as minarch applies them after load.
             cheatsLoad?.join()
@@ -1759,7 +1610,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private suspend fun dropStaleNdsResume(tag: String, coreId: String, romFileName: String) {
         if (tag != NdsResumeCleanup.TAG || coreId != NdsResumeCleanup.CORE_ID) return
         val dropped = withContext(Dispatchers.IO) {
-            awaitAutoWrites()   // a Home write of this game's auto state may still be landing
+            SaveSession.awaitAutoWrites()   // a Home write of this game's auto state may still be landing
             runCatching {
                 val marker = File(dataRoot, paths.lastSlot).takeIf { it.exists() }?.readText()
                 val victims = NdsResumeCleanup.victims(tag, coreId, romFileName, marker, paths.naming, paths.innerFileName) { File(dataRoot, it).exists() }
@@ -1767,10 +1618,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 victims.isNotEmpty()
             }.onFailure { NxLog.w("GameActivity", "stale NDS resume cleanup failed", it) }.getOrDefault(false)
         }
-        if (dropped) {
-            resumeSlot = null
-            resumePending = false
-        }
+        if (dropped) saves.dropResume()
     }
 
     /**
@@ -1797,11 +1645,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * Decoded off the main thread; nothing when the slot has none, or the resume already landed.
      */
     private fun showResumeCover() {
-        val slot = resumeSlot?.takeIf { resumePending && it != 8 } ?: return   // slot 8 has no screenshot in minarch's scheme
+        val slot = saves.resumeSlot?.takeIf { saves.resumePending && it != 8 } ?: return   // slot 8 has no screenshot in minarch's scheme
         val file = File(dataRoot, paths.thumb(slot))
         lifecycleScope.launch {
             val bmp = withContext(Dispatchers.IO) { ResumeCover.decode(file) } ?: return@launch
-            if (!resumePending || isFinishing) return@launch
+            if (!saves.resumePending || isFinishing) return@launch
             resumeCover = ResumeCover(this@GameActivity, findViewById(R.id.gameContainer)).also { cover ->
                 cover.show(bmp)
                 retroView?.let(cover::follow)   // the game view came first
@@ -1819,24 +1667,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             view.getGLRetroEvents().filter { it is GLRetroView.GLRetroEvents.FrameRendered }.take(ResumeCover.SETTLE_FRAMES).collect {}
             cover.fadeOut()
             if (resumeCover === cover) resumeCover = null
-        }
-    }
-
-    /** Loads [slot] right after start, like minarch's State_resume; a failure keeps the fresh boot. */
-    private suspend fun resumeFrom(view: GLRetroView, slot: Int) {
-        var ok = false
-        try {
-            val ss = saveStates ?: return
-            ok = withContext(Dispatchers.IO) {
-                awaitAutoWrites()   // a Home write of this game may still be landing
-                runCatching { ss.readSlotState(slot)?.let { speed.aroundState { view.unserializeState(it) } } ?: false }.getOrDefault(false)
-            }
-            if (!ok) toast("Resume failed")
-        } finally {
-            if (BuildConfig.DEBUG) {
-                NxTestResults.write(this, "resume", "slot" to slot, "ok" to ok, "path" to File(dataRoot, paths.state(slot)).absolutePath)
-            }
-            resumePending = false
         }
     }
 
@@ -2373,23 +2203,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val ss = saveStates
         if (ss == null || !gameReady || resumePending) { tapWiiHome(view); return }
         wiiHomeSaving = true
-        captureThumbnail { bmp ->
-            lifecycleScope.launch(Dispatchers.IO) {
-                runCatching {
-                    val bytes = speed.aroundState { view.serializeState() }
-                    check(bytes.isNotEmpty()) { "core returned no state" }
-                    // On [autoWriter], so it lands in order with an on-stop write of the same files.
-                    autoWriter.submit {
-                        if (bmp != null) ss.writeAutoThumb(bmp)
-                        ss.writeAuto(bytes)
-                        ss.markAuto(onlyIfNotManual = false)
-                        lastResumePoint = NxPaths.AUTO_SLOT
-                    }.get()
-                    wiiHomeSaved = true
-                }.onFailure { NxLog.w("GameActivity", "resume point before Wii HOME failed", it) }
-                withContext(Dispatchers.Main) { wiiHomeSaving = false; if (!quitting) tapWiiHome(view) }
-            }.also { trackSlotJob(it) }
-        }
+        saves.writeHomeResumePoint(view, ss, onSaved = { wiiHomeSaved = true }) { wiiHomeSaving = false; if (!quitting) tapWiiHome(view) }
     }
 
     private fun tapWiiHome(view: GLRetroView) {
@@ -2540,13 +2354,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /**
-     * minarch's Menu_autosaveQuit: screenshot + slot 9 + point the slot file at it, then leave. The battery save is
-     * written once, off the main thread, before finish() (so the write lands before the native destroy); on a handoff
-     * this runs inside the new screen's onCreate, which it never blocks (the new game waits for this screen's release).
-     * The core is read first (state, then SRAM, back to back under [coreLock]), and only then comes the wait (a queued
-     * Home write), so a destroy during the wait never finds the serialize still ahead of it. [chosen]: the player picked
-     * Quit, so the slot file points at the auto state as minarch does; a quit nobody chose (a newer game screen took the
-     * session) leaves the player's manual slot pointer alone, as leaving via Home does ([writeAutoStateOnStop]).
+     * Quit: single-shot, then the quit's saves ([SaveSession.writeOnQuit]) and finish. [chosen]: the player picked Quit
+     * (the slot file then points at the auto state); [autoState] false keeps the resume point as is.
      */
     private fun quitWithAutoState(chosen: Boolean, autoState: Boolean = true) {
         if (quitting) return   // single-shot: a second job could serialize after the core is destroyed
@@ -2556,231 +2365,17 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         shortcuts.pushMicSource()   // silence now, so the phone's mic closes before the save, not at the pause
         endGameTime()
         val view = retroView
-        val ss = saveStates
         input.gcClearTriggers()   // a latched soft press never outlives the game
         stopAchievements()
         if (view == null || !gameReady) { finish(); return }   // not running yet: no save to write
-        // While a resume is still loading, the running state is the fresh boot: keep the resume point as is. Without
-        // [autoState] (the core asked to end) the running state is not worth resuming: keep it as is too.
-        if (ss == null || resumePending || !autoState) {
-            lifecycleScope.launch {
-                withContext(Dispatchers.IO) {
-                    withLiveCore { writeBatterySave(notify = true) }
-                }
-                finish()
-            }
-            return
-        }
-        captureThumbnail { bmp ->
-            lifecycleScope.launch {
-                // A manual Save/Load still running must finish before the state is serialized.
-                slotJobs.toList().forEach { it.join() }
-                // true = written, null = skipped (the core can't save states), false = failed.
-                val ok: Boolean? = withContext(Dispatchers.IO) {
-                    // Both reads of the core before any wait; null = the core was already destroyed (nothing to write).
-                    val bytes = speed.aroundState {
-                        withLiveCore {
-                            // On the GL thread (a core may draw inside it: Azahar), waited for under the lock: the GL
-                            // thread never takes coreLock, so the destroy observer just waits for it.
-                            val state = runCatching { view.serializeState() }
-                                .onFailure { NxLog.e("GameActivity", "auto-resume state failed", it) }
-                            writeBatterySave(notify = true)   // local: always completes, before the native destroy
-                            state
-                        }
-                    }
-                    val ok = when {
-                        bytes == null || bytes.isFailure -> false
-                        bytes.getOrThrow().isEmpty() -> null
-                        else -> runCatching {
-                            // A queued Home write must land first: it writes the same files and is older.
-                            awaitAutoWrites()
-                            if (bmp != null) ss.writeAutoThumb(bmp)
-                            ss.writeAuto(bytes.getOrThrow())
-                            ss.markAuto(onlyIfNotManual = !chosen)
-                            true
-                        }.onFailure { NxLog.e("GameActivity", "auto-resume state failed", it) }.getOrDefault(false)
-                    }
-                    ok
-                }
-                if (ok == false) toast("Could not save resume point")
-                finish()
-            }
-        }
+        saves.writeOnQuit(view, chosen, autoState, ::finish)
     }
 
-    /**
-     * Runs [block] (off-main native calls) unless the core is destroyed; null when it is. Holding [coreLock] keeps the
-     * destroy (see its observer in startEmulator) from starting under the block. Not for the main thread's own calls:
-     * they cannot overlap onDestroy.
-     */
-    private fun <T> withLiveCore(block: () -> T): T? = synchronized(coreLock) { if (coreGone) null else block() }
+    override fun refreshSlots() = saves.refreshSlots()
 
-    /**
-     * Re-reads the slot strip (and the last-used slot) on IO and publishes it to [slotsUi]; main thread. The listing and
-     * the thumbnails' bounds stay off the main thread: the previous strip shows until this lands (it differs only after
-     * a write, which refreshes it too), and a newer refresh cancels an older one so a stale read never lands last.
-     */
-    override fun refreshSlots() {
-        val ss = saveStates ?: run { slotsUi.value = emptyList(); return }
-        slotsJob?.cancel()
-        slotsJob = lifecycleScope.launch {
-            val (slots, last) = withContext(Dispatchers.IO) {
-                runCatching { readSlots(ss) to ss.lastSlot() }
-                    .onFailure { NxLog.w("GameActivity", "could not list the slots", it) }.getOrNull()
-            } ?: return@launch
-            slotsUi.value = slots
-            lastSlotCache = last
-        }
-    }
+    override fun saveToSlot(slot: Int) = saves.saveToSlot(slot)
 
-    /** The slot strip for [ss]: file listings and thumbnail bounds. Blocking I/O. */
-    private fun readSlots(ss: SaveStates): List<SlotUi> = ss.slots().map { slotUi(it, "Slot ${it.index}") }
-
-    /**
-     * One slot as the strip shows it; the thumbnail's ref carries its stamp and the state's time, so a new save reloads
-     * it even when the screenshot kept its old modification time ([contentStamp]). Blocking I/O.
-     */
-    private fun slotUi(s: SaveStates.Slot, label: String): SlotUi {
-        val sub = if (s.occupied) formatSlotTime(s.timestampMillis) else "empty"
-        val thumb = s.thumb?.let { FileRefs.versioned(it.absolutePath, it.contentStamp() xor s.timestampMillis) }
-        return SlotUi(
-            label = label,
-            subtitle = sub,
-            thumbPath = thumb,
-            occupied = s.occupied,
-            aspect = s.thumb?.let { thumbAspect(it) } ?: (4f / 3f),
-        )
-    }
-
-    /** Reads a thumbnail's width/height (bounds only) to get its aspect, so the preview frame hugs it. */
-    private fun thumbAspect(file: File): Float {
-        val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        android.graphics.BitmapFactory.decodeFile(file.absolutePath, opts)
-        return if (opts.outWidth > 0 && opts.outHeight > 0) opts.outWidth.toFloat() / opts.outHeight else 4f / 3f
-    }
-
-    private fun formatSlotTime(ms: Long): String =
-        java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.US).format(java.util.Date(ms))
-
-    /**
-     * Refuses a manual Save / Load ([saveToSlot], [loadFromSlot]) before the first frame or while the Resume load is still
-     * to land, as pressWiiHome and swapDisc do: a Save would capture the fresh boot over the user's slot (and move the
-     * pointer to it), and a Load would be overwritten by the resume's unserialize while the pointer says the loaded slot.
-     */
-    private fun slotsBusy(): Boolean {
-        if (gameReady && !resumePending) return false
-        toast("Still loading")
-        return true
-    }
-
-    override fun saveToSlot(slot: Int) {
-        val view = retroView ?: return
-        val ss = saveStates ?: return
-        if (slotsBusy()) return
-        captureThumbnail { bmp ->
-            trackSlotJob(lifecycleScope.launch(Dispatchers.IO) {
-                val ok = runCatching {
-                    // Empty = the core refused (or is gone): keep the slot's old state and report the failure.
-                    val bytes = speed.aroundState { view.serializeState() }
-                    check(bytes.isNotEmpty()) { "core returned no state" }
-                    ss.writeState(slot, bytes)
-                    if (bmp != null) ss.writeThumb(slot, bmp)
-                }.isSuccess
-                withContext(Dispatchers.Main) {
-                    if (ok) { lastSlotCache = slot; refreshSlots(); toast("Saved to slot $slot") } else toast("Save failed")
-                }
-            })
-        }
-    }
-
-    /** Loads manual [slot] and records it as the last used one; the menu closes on success. */
-    override fun loadFromSlot(slot: Int) {
-        val view = retroView ?: return
-        val ss = saveStates ?: return
-        if (slotsBusy()) return
-        // The read is in the job too, not on main: a state file is up to tens of MB (PSP and DC).
-        trackSlotJob(lifecycleScope.launch(Dispatchers.IO) {
-            val read = runCatching { ss.readState(slot) }
-                .onFailure { NxLog.e("GameActivity", "could not read slot $slot", it) }
-            if (read.getOrNull() == null && read.isSuccess) return@launch   // empty slot: ignore (the menu stays open)
-            val ok = read.getOrNull()?.let { bytes -> runCatching { speed.aroundState { view.unserializeState(bytes) } }.getOrDefault(false) } ?: false
-            if (ok) runCatching { saveStates?.rememberSlot(slot) }
-                .onFailure { NxLog.e("GameActivity", "could not record last slot", it) }
-            // The loaded state's rumble may stay latched unreported: start from still rather than re-apply the old one.
-            withContext(Dispatchers.Main) {
-                if (ok) {
-                    rumbles.forEach { it.forget() }
-                    lastSlotCache = slot   // the pointer moved: a save or load right after follows it before the refresh lands
-                    refreshSlots()
-                    menu.closeMenu()
-                } else toast("Load failed")
-            }
-        })
-    }
-
-    /** Main thread only (menu handlers and the main-looper PixelCopy callback). */
-    private fun trackSlotJob(job: Job) {
-        slotJobs.removeAll { !it.isActive }
-        slotJobs += job
-    }
-
-    /**
-     * PixelCopy the current (paused) game frame, cut to the game's own picture ([thumbnailCrop]: no bars or anything drawn
-     * around it; a DS / 3DS game's top screen). Only that rect is copied, straight into a bitmap of the size the save
-     * state's thumbnail is stored at ([SaveStates.thumbSize]), so a large panel never needs a full-window bitmap; with
-     * [fullSize] (a backdrop drawn over the picture) it keeps the picture's own pixel size.
-     */
-    private fun captureThumbnail(fullSize: Boolean = false, cb: (Bitmap?) -> Unit) {
-        val view = retroView ?: return cb(null)
-        val w = view.width
-        val h = view.height
-        if (w <= 0 || h <= 0) return cb(null)
-        val crop = thumbnailCrop(renderer.thumbnailPicture(), w, h)   // taken now: the layout it was copied from
-        val src = crop?.let { Rect(it.x, it.y, it.x + it.width, it.y + it.height) } ?: Rect(0, 0, w, h)
-        val (bw, bh) = if (fullSize) src.width() to src.height() else SaveStates.thumbSize(src.width(), src.height())
-        val bmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888)
-        try {
-            PixelCopy.request(view, src, bmp, { result ->
-                if (result == PixelCopy.SUCCESS) cb(bmp)
-                else {
-                    bmp.recycle()
-                    cb(null)
-                }
-            }, Handler(Looper.getMainLooper()))
-        } catch (e: Exception) {
-            bmp.recycle()
-            cb(null)
-        }
-    }
-
-    /**
-     * Persists the battery save locally. Safe from any thread: the native side locks the core, and writes are
-     * serialized on the [BatterySaves] instance so they land in call order. [notify] toasts a failure. Returns true
-     * when the file changed (unchanged SRAM is not rewritten). Saves live in private storage only. The clock file
-     * ([clockSave]) is written with it; either changing returns true.
-     */
-    private fun writeBatterySave(notify: Boolean): Boolean {
-        val view = retroView ?: return false
-        val battery = batterySaves ?: return false
-        if (!gameReady) return false
-        // netplay: only a host on its folder's own core, with its saves served, writes its real saves; a copy never.
-        netplay?.let { if (it.onCopy) return false }
-        return runCatching {
-            synchronized(battery) {
-                val wrote = battery.write(view.serializeSRAM(useEmulationThread = false))
-                // The clock file alongside (minarch writes both together); its failure is logged, never toasted.
-                val clockWrote = clockSave?.let { c ->
-                    runCatching { c.write(view.serializeRTC(useEmulationThread = false)) }
-                        .onFailure { NxLog.e("GameActivity", "clock save failed", it) }.getOrDefault(false)
-                } ?: false
-                wrote || clockWrote
-            }
-        }
-            .onFailure {
-                NxLog.e("GameActivity", "battery save failed", it)
-                if (notify) runOnUiThread { toast("Battery save failed") }
-            }.getOrDefault(false)
-    }
+    override fun loadFromSlot(slot: Int) = saves.loadFromSlot(slot)
 
     // ------------------------------------------------------------------ netplay
 
@@ -2795,11 +2390,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     internal fun becomeLocal(localCheats: (() -> Job)?) {
         speed.setSession(netplay = false)   // the shortcuts work again
         shortcuts.onSessionEnded()
-        saveStates = SaveStates(dataRoot, paths).also { ss ->
-            // Read now, as openMenu does for a menu opened before the first read: an open menu shows this slot.
-            lastSlotCache = ss.lastSlot()
-        }
-        refreshSlots()
+        saves.openLocal(dataRoot, paths)
         localCheats?.let { load ->
             val job = load().also { cheatsLoad = it }
             lifecycleScope.launch {
@@ -3145,7 +2736,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (!menuOpen || quitting || skinEditView != null) return
         val edit = padLayout.skinEdit() ?: run { toast("No button layout fits this screen"); return }
         // the menu closed, or the game quit, while the frame was read: nothing to edit over ([showSkinEdit] refuses)
-        captureThumbnail(fullSize = true) { frame -> showSkinEdit(edit, frame) }
+        saves.captureThumbnail(fullSize = true) { frame -> showSkinEdit(edit, frame) }
     }
 
     /** The editor for [edit], [frame] behind it (black without one); only over the open menu (it closes with it). */

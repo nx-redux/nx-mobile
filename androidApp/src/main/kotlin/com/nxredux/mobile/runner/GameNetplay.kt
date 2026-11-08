@@ -126,7 +126,7 @@ internal class GameNetplay(private val game: GameActivity) {
             runCatching {
                 when {
                     !np.onCopy -> {
-                        GameActivity.awaitAutoWrites()   // a Home write of this game's auto state may still be landing
+                        SaveSession.awaitAutoWrites()   // a Home write of this game's auto state may still be landing
                         val marker = File(dataRoot, NxPaths(tag, np.folderCoreId, romFileName).lastSlot).takeIf { it.exists() }?.readText()
                         NetplaySaves.resumeVictims(tag, np.folderCoreId, romFileName, marker, paths.naming, paths.innerFileName) { File(dataRoot, it).exists() }
                             .forEach { File(dataRoot, it).delete() }
