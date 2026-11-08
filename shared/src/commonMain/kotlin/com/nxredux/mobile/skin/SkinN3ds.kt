@@ -15,6 +15,8 @@ object SkinN3ds {
     private const val TOP_ASPECT = 5f / 3f
     private const val BOTTOM_ASPECT = 4f / 3f
     private const val STACK_ASPECT = 400f / 480f
+    /** In a stack glass wider than the stack: the most of its height the upper screen takes. */
+    private const val UPPER_MAX_SHARE = 0.6f
 
     /** Whether a [frameW] x [frameH] frame is the plain stack: 400s x 480s (to a pixel). */
     fun isPlainStack(frameW: Int, frameH: Int): Boolean =
@@ -27,13 +29,19 @@ object SkinN3ds {
     fun cutsStack(frameW: Int, frameH: Int, pinned: Boolean): Boolean = pinned && isPlainStack(frameW, frameH)
 
     /**
-     * The two screens: with a [stack] glass, the biggest 400:480 rect in it cut into an upper and a lower half; else the
+     * The two screens: with a [stack] glass, the biggest 400:480 rect in it cut into an upper and a lower half (a glass
+     * wider than that: the upper screen across its width, the lower in the height left); else the
      * [top] and [touch] glasses. [big] goes in the upper slot, its other in the lower; each fitted at its own shape and
      * centred there. The touch screen takes touches; the upper screen is shaded, the lower only when the two are one size
      * (one shader chain). Null without the glasses.
      */
     fun regions(stack: PxRect?, top: PxRect?, touch: PxRect?, big: NdsScreen): List<NdsRegion>? {
-        val (upper, lower) = if (stack != null) {
+        val (upper, lower) = if (stack != null && stack.width > stack.height * STACK_ASPECT) {
+            // wider than the stack (landscape, user): the upper screen across the whole width at the top, at most
+            // [UPPER_MAX_SHARE] of the height; the lower one in the height left under it
+            val upperH = minOf(stack.width / aspectOf(big), stack.height * UPPER_MAX_SHARE)
+            stack.copy(height = upperH) to stack.copy(y = stack.y + upperH, height = stack.height - upperH)
+        } else if (stack != null) {
             val s = fit(stack, STACK_ASPECT)
             s.copy(height = s.height / 2f) to s.copy(y = s.y + s.height / 2f, height = s.height / 2f)
         } else (top ?: return null) to (touch ?: return null)

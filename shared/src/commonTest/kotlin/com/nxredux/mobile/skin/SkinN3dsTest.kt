@@ -33,6 +33,28 @@ class SkinN3dsTest {
         assertTrue(top.shaded); assertFalse(bottom.shaded)
     }
 
+    // A stack glass wider than the stack (landscape, user): the top screen across the glass's whole width at its top, the
+    // touch screen in the height left under it.
+    @Test
+    fun aWideStackGlassGivesTheTopItsWholeWidth() {
+        val r = SkinN3ds.regions(PxRect(0f, 0f, 976f, 1094f), null, null, NdsScreen.TOP)!!
+        val top = r.single { it.screen == NdsScreen.TOP }.dst
+        val bottom = r.single { it.screen == NdsScreen.BOTTOM }.dst
+        assertEquals(0f, top.x); assertEquals(0f, top.y); assertEquals(976f, top.width)
+        assertEquals(585.6f, top.height, 0.01f)
+        assertEquals(585.6f, bottom.y, 0.01f)
+        assertEquals(508.4f, bottom.height, 0.01f)
+        assertEquals(508.4f * 4f / 3f, bottom.width, 0.01f)
+        assertEquals((976f - bottom.width) / 2f, bottom.x, 0.01f)
+    }
+
+    @Test
+    fun aVeryWideStackGlassKeepsRoomForTheTouchScreen() {   // the top screen at most 60% of the height
+        val r = SkinN3ds.regions(PxRect(0f, 0f, 1200f, 600f), null, null, NdsScreen.TOP)!!
+        assertEquals(PxRect(300f, 0f, 600f, 360f), r.single { it.screen == NdsScreen.TOP }.dst)
+        assertEquals(PxRect(440f, 360f, 320f, 240f), r.single { it.screen == NdsScreen.BOTTOM }.dst)
+    }
+
     @Test
     fun topAndTouchGlasses() {
         val r = SkinN3ds.regions(null, PxRect(0f, 0f, 600f, 300f), PxRect(100f, 320f, 400f, 300f), NdsScreen.TOP)!!
