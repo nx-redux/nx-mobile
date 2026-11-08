@@ -30,7 +30,7 @@ object MenuStyles {
      * Collections, Carousel for Consoles.
      */
     fun defaultStyleOf(category: MenuCategory): MenuStyle = when (category) {
-        MenuCategory.TOOLS -> MenuStyle.GRID
+        MenuCategory.TOOLS, MenuCategory.APPS -> MenuStyle.GRID
         MenuCategory.HOME, MenuCategory.COLLECTIONS -> MenuStyle.MINIMAL
         MenuCategory.CONSOLES -> MenuStyle.CAROUSEL
     }

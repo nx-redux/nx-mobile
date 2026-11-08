@@ -22,9 +22,19 @@ private val SPLIT_MIN_WIDTH = 600.dp
 fun settingsSplit(window: DpSize): Boolean =
     window.width >= SPLIT_MIN_WIDTH && window.width.value >= window.height.value * SPLIT_MIN_ASPECT
 
-/** The Settings categories: the sections the Settings root lists (sub-pages open from them). Second screen only while one is connected. */
-fun settingsCategories(secondScreen: Boolean = false): List<SettingsSection> =
-    SettingsSection.entries.filter { it.parent == null && (it != SettingsSection.SECOND_SCREEN || secondScreen) }
+/**
+ * The Settings categories: the sections the Settings root lists (sub-pages open from them). Second screen only while one
+ * is connected; Kids Mode only where the platform has it ([kids]).
+ */
+fun settingsCategories(secondScreen: Boolean = false, kids: Boolean = false): List<SettingsSection> {
+    val shown = SettingsSection.entries.filter {
+        it.parent == null && it != SettingsSection.KIDS && (it != SettingsSection.SECOND_SCREEN || secondScreen)
+    }
+    if (!kids) return shown
+    // Kids Mode just above System, where a parent looks for it.
+    val at = shown.indexOf(SettingsSection.SYSTEM).takeIf { it >= 0 } ?: shown.size
+    return shown.toMutableList().apply { add(at, SettingsSection.KIDS) }
+}
 
 /**
  * The pane [screen] is drawn in when Settings splits: the Settings root is the left pane (focused there), a Settings

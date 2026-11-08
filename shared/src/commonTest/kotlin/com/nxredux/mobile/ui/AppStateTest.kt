@@ -7673,6 +7673,7 @@ class AppStateTest {
             MenuCategory.HOME -> tab.rows.filterIsInstance<MainRow.Pin>().map { "pin:${it.entry.game.shownName}" }
             MenuCategory.COLLECTIONS -> listOf("collections")
             MenuCategory.TOOLS -> listOf("tools")
+            MenuCategory.APPS -> listOf("apps")
             MenuCategory.CONSOLES -> tab.rows.map { (it as MainRow.System).system.tag }
         }
     }
@@ -9946,6 +9947,7 @@ class AppStateTest {
             MenuCategory.CONSOLES -> showConsolesTab = shown
             MenuCategory.COLLECTIONS -> showCollectionsTab = shown
             MenuCategory.TOOLS -> showToolsTab = shown
+            MenuCategory.APPS -> Unit   // Kids Mode's: no Layouts setting
         }
     }
 

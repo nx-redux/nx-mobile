@@ -8,6 +8,7 @@ import coil3.PlatformContext
 import coil3.compose.AsyncImagePainter
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.request.addLastModifiedToFileCacheKey
+import com.nxredux.mobile.kids.KidsMode
 import com.nxredux.mobile.update.AppRelease
 import com.nxredux.mobile.ui.nx.LaunchOverlay
 import com.nxredux.mobile.ui.nx.LaunchTargets
@@ -50,6 +51,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -77,6 +79,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -207,7 +211,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
         onDispose { if (state.launchNameProvider === provider) state.launchNameProvider = null }
     }
     // Bars and the cutout above and below only (the side cutout is in each page's inset: [nxPageInset]), never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
-    Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).windowInsetsPadding(nxScreenInsets())) {
+    Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).onAnyTouch(state::onTouch).windowInsetsPadding(nxScreenInsets())) {
         HandheldShell(
             pad = { m -> NxTheme { PadVibrationProvider(padVibration) { PadThemeProvider(padTheme, padButtons) { VirtualPad(onPadEvent, m, layout = menuPortraitLayout) } } } },
             controllerConnected = controllerConnected,
@@ -233,7 +237,11 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                     LaunchedEffect(portrait, separate) { state.onPadContext(portrait, separate) }
                     MenuLocals(state, look, footer, touchscreen) {
                         CompositionLocalProvider(LocalLaunchTargets provides launchTargets) {
-                        Box(m) {
+                        // A parent with the full menu while Kids Mode is on: the bar above every page, its button back to Kids Mode.
+                        val kidsMode by state.kidsModeState.collectAsState()
+                        Column(m) {
+                        if (kidsMode == KidsMode.Parent) KidsParentBar(state::kidsEndParent)
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
                             // A tool on the top screen ([MenuTopScreen]): this one keeps the menu, still.
                             val toolAbove = DualMenu.bottom(screen, dualMenu, toolOnTop) == BottomContent.Menu
                             // The window decides whether Settings splits; AppState needs it for RIGHT on a category. A tool on
@@ -289,6 +297,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                                     onCancel = { state.answerUpdate(false) }, cancelLabel = "Not now", scrimDismisses = false, scrollSteps = state.updateScroll)
                             }
                             PageOverlays(state, chooser, error, notice)
+                        }
                         }
                         }
                     }
@@ -560,6 +569,19 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.FolderSummary -> WithIndex(selection) { val (t, _) = remember(s) { state.setupChrome() }; FolderSummaryScreen(s, t, it, state::select, state::setupStepRow, state::onButton, note = remember(s) { state.setupNote() }) }
             is Screen.AndroidGamesStep -> WithIndex(selection) { val (t, b) = remember(s) { state.setupChrome() }; AndroidGamesStepScreen(s.ask, t, b, it, state::select, state::setupStepRow, state::onButton) }
             Screen.Loading -> Box(Modifier.fillMaxSize())
+            // Kids Mode's pages: the tiles while Locked, the parent's PIN and the unlock sheet after it.
+            Screen.KidsHome -> WithIndex(selection) {
+                val tiles by state.kidsTiles.collectAsState()
+                val mode by state.kidsModeState.collectAsState()
+                KidsHomeScreen(tiles, it, mode, state::kidsNow, state::kidsOpenApp, state::kidsLockPressed, state::onKidsColumns)
+            }
+            is Screen.KidsPin -> WithIndex(selection) {
+                KidsPinScreen(s, it, state::kidsNow, onKey = state::kidsPinTap)
+            }
+            Screen.KidsUnlock -> WithIndex(selection) { KidsUnlockScreen(it, state::kidsUnlockChip, state::kidsOpenFullMenu, state::kidsOpenSettings, state::onKidsUnlockColumns) }
+            // A parent's Kids Mode pages: setup's steps (and Allowed apps), a day's play time.
+            is Screen.KidsSetup -> WithIndex(selection) { KidsSetupScreen(s, it, state::select, state::kidsSetupRow, state::kidsSetupSetting, state::onButton) }
+            is Screen.KidsDayEdit -> WithIndex(selection) { KidsDayEditScreen(s, it, state::select, state::kidsDayRow, state::kidsDaySetting, state::onButton) }
             // layoutKey: the tab or list laid out, not the Screen: a republish of the same page (a context menu opening or
             // closing, another tab rebuilt) must not snap a carousel or backdrop mid-glide; its own tiles changing still do.
             is Screen.Systems -> {
@@ -585,6 +607,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     minimalOpening = minimalOpening.value?.takeIf { s.category != null && it.page == s.category },
                     bandShade = listBand.shade, bandInfo = listBand.info,
                     canSearch = state.canSearch,
+                    onKidsLock = state::kidsParentPressed.takeIf { state.kidsModeState.collectAsState().value is KidsMode.Open },
                     // Per page (s, not the screen now: a sliding-out page keeps its own): the screen carries its hidden tabs
                     // (none over a pushed one), so both follow every rebuild. With none, a long press on a tab word is a plain tap.
                     onTabMenu = state::openTabMenu.takeIf { s.hidden.isNotEmpty() },
@@ -950,3 +973,13 @@ private fun MainMenuBackground(bg: MenuBackground, listArt: GameListArt) {
 @Composable
 private fun SettingsHintBar(content: @Composable () -> Unit) =
     CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart(), content = content)
+
+/** [onTouch] on every finger down anywhere inside, seen before the children and never consumed (Kids Mode's Parent idle). */
+internal fun Modifier.onAnyTouch(onTouch: () -> Unit): Modifier = pointerInput(onTouch) {
+    awaitPointerEventScope {
+        while (true) {
+            val e = awaitPointerEvent(PointerEventPass.Initial)
+            if (e.type == PointerEventType.Press) onTouch()
+        }
+    }
+}

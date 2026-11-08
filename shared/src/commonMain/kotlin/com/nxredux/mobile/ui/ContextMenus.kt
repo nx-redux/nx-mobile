@@ -147,7 +147,7 @@ object ContextMenus {
             MenuCategory.CONSOLES -> ContextItem(ContextKind.OPEN_CONSOLES, "Consoles")
             MenuCategory.COLLECTIONS -> ContextItem(ContextKind.OPEN_COLLECTIONS, "Collections")
             MenuCategory.TOOLS -> ContextItem(ContextKind.OPEN_TOOLS, "Tools")
-            MenuCategory.HOME -> null
+            MenuCategory.HOME, MenuCategory.APPS -> null
         }
     }
 
@@ -191,14 +191,14 @@ object ContextMenus {
      * MENU on a tool row: Pin, or Unpin when [pinned] (tool pins live in the app-private `tool-pins.txt`); an app's
      * ([app]) also Remove from Tools (it stays in the app drawer).
      */
-    fun toolItems(pinned: Boolean, app: Boolean = false): List<ContextItem> =
-        listOf(if (pinned) ContextItem(ContextKind.UNPIN_TOOL, "Unpin") else ContextItem(ContextKind.PIN_TOOL, "Pin")) +
+    fun toolItems(pinned: Boolean, app: Boolean = false, pin: Boolean = true): List<ContextItem> =
+        listOfNotNull((if (pinned) ContextItem(ContextKind.UNPIN_TOOL, "Unpin") else ContextItem(ContextKind.PIN_TOOL, "Pin")).takeIf { pin }) +
             listOfNotNull(ContextItem(ContextKind.REMOVE_FROM_TOOLS, "Remove from Tools").takeIf { app })
 
-    /** MENU on an app in the drawer: in or out of Tools ([inTools]), then on or off Home ([pinned]); each on its own. */
-    fun drawerItems(inTools: Boolean, pinned: Boolean): List<ContextItem> = listOf(
+    /** MENU on an app in the drawer: in or out of Tools ([inTools]), then on or off Home ([pinned]; not while Kids Mode is on, [pin] false). */
+    fun drawerItems(inTools: Boolean, pinned: Boolean, pin: Boolean = true): List<ContextItem> = listOfNotNull(
         if (inTools) ContextItem(ContextKind.REMOVE_FROM_TOOLS, "Remove from Tools") else ContextItem(ContextKind.ADD_TO_TOOLS, "Add to Tools"),
-        if (pinned) ContextItem(ContextKind.UNPIN_TOOL, "Unpin from Home") else ContextItem(ContextKind.PIN_TOOL, "Pin to Home"),
+        (if (pinned) ContextItem(ContextKind.UNPIN_TOOL, "Unpin from Home") else ContextItem(ContextKind.PIN_TOOL, "Pin to Home")).takeIf { pin },
     )
 
     /** MENU on a Collections-tab row: Rename (the name prompt) and Delete (a confirm; the games are never touched). */

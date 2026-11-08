@@ -42,6 +42,9 @@ internal interface ContextMenuHost {
     /** tool-pins.txt as last read or written (app-private; never shortcuts.txt). */
     val toolPins: List<String>
 
+    /** Kids Mode is on: nothing is pinned on Home (its pinned tools are hidden), so no menu offers Pin. */
+    val kidsOn: Boolean get() = false
+
     /** Writes [keys] ([pinKey]s) as the tool pins off the main thread, then keeps them in memory; false (nothing changed) when the write fails. */
     suspend fun writeToolPins(keys: List<String>): Boolean
 
@@ -190,7 +193,7 @@ internal class ContextMenuController(
                 // tab) gets one holding just these. A pushed tab never offers them again.
                 val tabs = if (s.pushed) emptyList() else ContextMenus.hiddenTabItems(host.hiddenTabs())
                 fun show(fromStart: Boolean) {
-                    val own = rowMenu(row, fromStart)
+                    val own = rowMenu(row, fromStart, s.category)
                     val menu = when {
                         own != null -> own.copy(items = own.items + tabs)
                         tabs.isNotEmpty() -> ContextMenu(null, tabs, title = APP_NAME)
@@ -215,7 +218,7 @@ internal class ContextMenuController(
                 val app = s.apps.getOrNull(i) ?: return
                 if (index != null) host.select(i)
                 val tool = ToolRow(ToolKind.APP, app.label, null, appId = app.id)
-                _screen.value = s.copy(menu = ContextMenu(null, ContextMenus.drawerItems(inTools = app.shown, pinned = tool.pinKey in host.toolPins), tool = tool))
+                _screen.value = s.copy(menu = ContextMenu(null, ContextMenus.drawerItems(inTools = app.shown, pinned = tool.pinKey in host.toolPins, pin = !host.kidsOn), tool = tool))
             }
             else -> Unit
         }
@@ -253,13 +256,15 @@ internal class ContextMenuController(
     /** A hidden Netplay hint (alone or with the bar) puts Y's Netplay in a Home game's menu. */
     private fun homeNetplay(e: Listed): Boolean = host.netplayInMenu && host.netplayOffered(e) && ContextMenus.hasNetplay(e)
 
-    /** A main-menu row's menu; null for a row without one (a console, Pick a game, "+N"). */
-    private fun rowMenu(row: MainRow?, fromStart: Boolean): ContextMenu? = when (row) {
+    /** A main-menu row's menu on [category]'s tab; null for a row without one (a console, Pick a game, "+N", Kids Mode's Apps). */
+    private fun rowMenu(row: MainRow?, fromStart: Boolean, category: MenuCategory?): ContextMenu? = when (row) {
         is MainRow.Collection -> ContextMenu(null, ContextMenus.collectionItems(), collection = row.name)
         is MainRow.Pin -> ContextMenu(row.entry, ContextMenus.pinRowItems(netplay = homeNetplay(row.entry), fromStart = fromStart))
         is MainRow.Shelf -> ContextMenu(row.entry, ContextMenus.homeGameItems(pinned = false, netplay = homeNetplay(row.entry), fromStart = fromStart))   // never a pinned game
         is MainRow.Continue -> ContextMenu(row.entry, ContextMenus.homeGameItems(pinned = host.pins.any { it.path in row.entry.game.lines }, netplay = homeNetplay(row.entry), fromStart = fromStart))
-        is MainRow.Tool -> ContextMenu(null, ContextMenus.toolItems(pinned = row.row.pinKey in host.toolPins, app = row.row.kind == ToolKind.APP), tool = row.row)
+        is MainRow.Tool -> if (row.row.kind == ToolKind.KIDS_LOCK || category == MenuCategory.APPS) null   // Kids Mode's Lock and Apps: no menu
+            else ContextMenus.toolItems(pinned = row.row.pinKey in host.toolPins, app = row.row.kind == ToolKind.APP, pin = !host.kidsOn)
+                .takeIf { it.isNotEmpty() }?.let { ContextMenu(null, it, tool = row.row) }
         is MainRow.PinnedTool -> ContextMenu(null, ContextMenus.toolItems(pinned = true), tool = row.row)
         is MainRow.MoreTools -> null   // Home's "+N": no menu
         else -> null
