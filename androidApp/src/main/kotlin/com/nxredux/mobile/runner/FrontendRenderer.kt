@@ -915,7 +915,7 @@ internal class FrontendRenderer(
      * use the controller portrait layout then. [applyLayout] relays out on connect/disconnect, so this follows live.
      */
     fun ndsControllerMode(): Boolean {
-        val tag = intent.getStringExtra(EXTRA_TAG) ?: gameTag   // set before startEmulator's gameTag, for onCreate's layout
+        val tag = intent.getStringExtra(EXTRA_TAG) ?: gameTag   // set before the launch's gameTag, for onCreate's layout
         val portrait = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
         return PadBandRule.controllerLayout(tag, portrait, padLayout.layoutControllerNames())
     }

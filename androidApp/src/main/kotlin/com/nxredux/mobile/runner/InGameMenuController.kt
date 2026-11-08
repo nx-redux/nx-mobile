@@ -282,7 +282,7 @@ internal class InGameMenuController(
         val model = InGameMenuModel(
             gameTitle = intent.getStringExtra(EXTRA_TITLE) ?: "Paused",
             slotCount = SaveStates.SLOT_COUNT,
-            // The cached pointer. Only a menu opened before startEmulator's first read lands reads it here: a
+            // The cached pointer. Only a menu opened before the launch's first read lands reads it here: a
             // one-line file, and the model takes its slot only at construction.
             initialSlot = (lastSlotCache ?: saveStates?.lastSlot()?.also { lastSlotCache = it } ?: 1) - 1,
         ).also {

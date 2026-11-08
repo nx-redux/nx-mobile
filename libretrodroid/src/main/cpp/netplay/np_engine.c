@@ -106,12 +106,6 @@
 #define NETPLAY_FRAME_BUFFER_SIZE 64
 #define NETPLAY_FRAME_MASK (NETPLAY_FRAME_BUFFER_SIZE - 1)
 
-// The handheld's frame-counted stall constants (180 / 60 / 30 preFrame calls) are replaced by the wall-clock
-// timers below; kept for reference only.
-#define NETPLAY_STALL_TIMEOUT_FRAMES 180
-#define NETPLAY_STALL_WARNING_FRAMES 60
-#define NETPLAY_KEEPALIVE_INTERVAL_FRAMES 30
-
 // Input latency frames (to hide network jitter)
 #define NETPLAY_INPUT_LATENCY_FRAMES 2
 
