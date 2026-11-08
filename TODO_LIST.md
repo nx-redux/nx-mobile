@@ -115,3 +115,32 @@ Needs two devices. No protocol change: an older build on the other side still sy
   reverse): offer, download and install; no `digest` → "Update not verified: GitHub sent no checksum"; a LAN or other
   host → "Update not verified: not a GitHub download"; `"draft": true` or a `-rc` tag → up to date; a 302 to another
   host → "Update failed"
+
+## AppState and GameActivity splits: device checks still owed
+
+Already passed on the Nova (AppState split): the menu starts with Home and Continue; Continue launches the game; the
+in-game menu opens; quitting returns to Home with play time refreshed; the Tools tab opens the Apps drawer.
+
+Menu side (AppState split):
+- [ ] Minimal launch sequence: the spread, hand-off and return, a refused launch retreating with its error, Home while
+  handed off
+- [ ] Game Switcher: resume from it and come back to it; it reopens after the menu process restarts; Y Remove updates
+  Continue
+- [ ] Kids Mode: lock/unlock with the PIN, setup from onboarding incl. the home-role step, the day editor's From/To
+- [ ] Settings: chooser and info popup (pad and Back), row edit in two-pane, Reset on Appearance, Main menu, Shortcuts,
+  System buttons
+- [ ] First setup: the home page move with a stop mid-move, the ROMs folder summary move, the copy offer after a home
+  change
+- [ ] A large Fetch art run, then the menu and the open list refresh once after results stop
+
+Game side (GameActivity split):
+- [ ] Launches: PS1 from .cue/.chd, a zipped game (unpack toast), an arcade set with a missing BIOS (refusal), N64 with
+  a hi-res pack, Genesis (Sega pad type), one launch that fails (dialog and Back)
+- [ ] Swipe-kill while backgrounded, reopen: resumes from slot 9; launch with a resume slot (cover shows, then fades)
+- [ ] Quit from the menu, the Save & Quit shortcut, a quit during a manual save, Back before the first frame
+- [ ] Slot save/load from the menu and from the skin/touch SAVE/LOAD; "Still loading" before the first frame
+- [ ] Wii: controller change, Motion toggle and recentre, HOME then Wii Menu, a second pad claiming a port; GameCube
+  under the WII tag
+- [ ] DS 3D resolution: Auto follows rotation/fold, a fixed pick, the software-fallback notice
+- [ ] Touch shortcuts: FF and rewind (hold and toggle), the strip slots, Adjust buttons backdrop
+- [ ] Mic: first toggle asks permission (denied = noise); off under the menu and in the background, back on resume
