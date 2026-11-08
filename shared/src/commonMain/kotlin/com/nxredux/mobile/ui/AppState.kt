@@ -165,11 +165,9 @@ import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxSettingControl
 import com.nxredux.mobile.ui.nx.NxPadA
-import com.nxredux.mobile.ui.nx.padA
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.control
-import com.nxredux.mobile.ui.nx.fullInfo
 import com.nxredux.mobile.ui.nx.launcherChromeFor
 import com.nxredux.mobile.ui.nx.DialogFocus
 import com.nxredux.mobile.ui.nx.NxButton
@@ -650,9 +648,6 @@ internal const val MINIMAL_LEAVE_MS = 120L
  */
 data class MinimalOpening(val page: Any, val index: Int)
 
-/** The deepest a Settings right pane goes below its category (Library -> Emulator Settings -> consoles -> options), and some. */
-private const val SETTINGS_MAX_DEPTH = 6
-
 /** The first sentence of every "home on an unmounted card" error. */
 private const val HOME_OFFLINE = "The home folder's storage is not available."
 
@@ -796,7 +791,7 @@ internal fun verticalAlignmentLabel(a: VerticalListAlignment): String = when (a)
 data class ValueChooser(val title: String, val labels: List<String>, val selected: Int, val current: Int = -1)
 
 /** Use as home screen's values: it is not a [SettingValue] (Android answers it). */
-private val ON_OFF = listOf("Off", "On")
+internal val ON_OFF = listOf("Off", "On")
 
 /** A Settings value row's values as its touch control shows them: every value's [labels] in LEFT / RIGHT order, the current [index]. */
 data class SettingChoices(val labels: List<String>, val index: Int)
@@ -1023,7 +1018,7 @@ class AppState(
             override fun showNotice(text: String) = this@AppState.showNotice(text)
             override fun refreshInstalled() = this@AppState.refreshInstalled()
             override fun installedLoaded(apps: List<InstalledApp>) { installedCache = apps }
-            override fun rememberSettingsRow() { (_screen.value as? Screen.Settings)?.let { sectionSelections[it.section] = _selection.value } }
+            override fun rememberSettingsRow() { (_screen.value as? Screen.Settings)?.let { settingsUi.sectionSelections[it.section] = _selection.value } }
             override fun back(): Boolean = this@AppState.back()
             override fun openSelected() = this@AppState.openSelected()
             override fun openContextMenu() = this@AppState.openContextMenu()
@@ -1037,7 +1032,7 @@ class AppState(
     )
 
     /** Kids Mode's screens, setup and Settings page; declared early: the menu's tabs read its mode from the first build. */
-    private val kidsUi = KidsScreensController(
+    private val kidsUi: KidsScreensController = KidsScreensController(
         scope, _screen, _selection, deps.settings, deps.launcher, kids, onboarding,
         host = object : KidsHost {
             override fun showNotice(text: String) = this@AppState.showNotice(text)
@@ -1045,15 +1040,15 @@ class AppState(
             override fun clearMenuTop() { _toolOnTop.value = false; pushedTab = null }
             override fun select(index: Int) = this@AppState.select(index)
             override fun back(): Boolean = this@AppState.back()
-            override fun openSettings(section: SettingsSection) = this@AppState.openSettings(section)
-            override fun settingsPage(section: SettingsSection): Screen.Settings = this@AppState.settingsPage(section)
-            override fun selectableOn(page: Screen.Settings, sel: ListSelection): ListSelection = this@AppState.selectableOn(page, sel)
-            override fun refreshSettings() = this@AppState.refreshSettings()
-            override fun closeChooser() = this@AppState.closeChooser()
-            override fun closeSettingInfo() = this@AppState.closeSettingInfo()
+            override fun openSettings(section: SettingsSection) = settingsUi.openSettings(section)
+            override fun settingsPage(section: SettingsSection): Screen.Settings = settingsUi.settingsPage(section)
+            override fun selectableOn(page: Screen.Settings, sel: ListSelection): ListSelection = settingsUi.selectableOn(page, sel)
+            override fun refreshSettings() = settingsUi.refreshSettings()
+            override fun closeChooser() = settingsUi.closeChooser()
+            override fun closeSettingInfo() = settingsUi.closeSettingInfo()
             override fun rebuildHomeTab() = this@AppState.rebuildHomeTab()
             override fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit) =
-                this@AppState.openPicker(title, labels, current, apply)
+                settingsUi.openPicker(title, labels, current, apply)
             override fun onboardingNext() = this@AppState.onboardingNext()
             override fun showOnboarding() = this@AppState.showOnboarding()
             override val installedApps: List<InstalledApp>? get() = installedCache
@@ -1297,7 +1292,7 @@ class AppState(
             override fun refreshGameInfo() = this@AppState.refreshGameInfo()
             override fun raSignedIn(): Boolean = this@AppState.raSignedIn()
             override fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit) =
-                this@AppState.openPicker(title, labels, current, apply)
+                settingsUi.openPicker(title, labels, current, apply)
         },
     )
     /** The achievements panel over a game list; null while closed. */
@@ -1354,10 +1349,52 @@ class AppState(
     private var foregroundJob: Job? = null            // onForeground's check (and the scan it starts)
     private var homeCheck: Job? = null                // the index start's home probe in flight (shared, see afterIndexStart)
     private var homeCheckFor: ContentRef? = null
-    private val sectionSelections = HashMap<SettingsSection, ListSelection>()   // each section's row, remembered across visits
-    private var settingsMenuSelection = ListSelection(0, 0)
-    private var settingsSplit = false   // the UI draws Settings as two panes ([onSettingsSplit])
     /** The library changed since the last [load] (folders added or removed, games hidden, unhidden or reassigned): leaving Library reloads. */
+    /** Settings' pages, the chooser, a row's info popup and the row edit. */
+    private val settingsUi: SettingsController = SettingsController(
+        _screen, _selection, _rowEdit, deps, kidsAvailable = kids != null,
+        host = object : SettingsHost {
+            override fun kidsToolsAllowed(): Boolean = kidsUi.kidsToolsAllowed
+            override fun loaderActive(): Boolean = loader.active
+            override fun secondConnected(): Boolean = this@AppState.secondConnected
+            override fun select(index: Int) = this@AppState.select(index)
+            override fun openSelected() = this@AppState.openSelected()
+            override fun back(): Boolean = this@AppState.back()
+            override fun onButton(button: NxButton) = this@AppState.onButton(button)
+            override fun rememberMenuSelection() = this@AppState.rememberMenuSelection()
+            override fun refreshInstalled() = this@AppState.refreshInstalled()
+            override fun settingsRows(section: SettingsSection): List<SettingsRow> = this@AppState.settingsRows(section)
+            override fun settingValue(row: SettingsRow): SettingValue<*>? = this@AppState.settingValue(row)
+            override fun settingsDetails(section: SettingsSection): List<String> = this@AppState.settingsDetails(section)
+            override fun layoutShot(section: SettingsSection): LayoutShot? = this@AppState.layoutShot(section)
+            override fun settingsBanner(section: SettingsSection): String? = this@AppState.settingsBanner(section)
+            override fun syncArtLayout() = this@AppState.syncArtLayout()
+            override fun rebuildHomeTab() = this@AppState.rebuildHomeTab()
+            override fun clearShortcuts() { shortcutDraft = ShortcutSet.EMPTY }
+            override fun resetSystemButtons() {
+                currentPad()?.let { pad -> deps.settings.systemButtons = SystemButtons.encode(SystemButtons.reset(systemButtonMap(), pad.key)) }
+            }
+            override fun resetButtonLayoutConsole() = this@AppState.resetButtonLayoutConsole()
+        },
+    )
+    val chooser: StateFlow<ValueChooser?> get() = settingsUi.chooser
+    fun chooseValue(index: Int) = settingsUi.chooseValue(index)
+    fun closeChooser() = settingsUi.closeChooser()
+    fun chooseSetting(row: Int, index: Int) = settingsUi.chooseSetting(row, index)
+    fun openSettingPicker(row: Int) = settingsUi.openSettingPicker(row)
+    val settingInfo: StateFlow<SettingInfoPopup?> get() = settingsUi.settingInfo
+    val settingInfoTruncated: StateFlow<String?> get() = settingsUi.settingInfoTruncated
+    fun onSettingInfoTruncated(info: String, truncated: Boolean) = settingsUi.onSettingInfoTruncated(info, truncated)
+    fun showSettingInfo(row: Int) = settingsUi.showSettingInfo(row)
+    fun closeSettingInfo() = settingsUi.closeSettingInfo()
+    fun openSettingsMenu() = settingsUi.openSettingsMenu()
+    internal fun settingsSections(): List<SettingsSection> = settingsUi.settingsSections()
+    fun openSettings(section: SettingsSection) = settingsUi.openSettings(section)
+    fun onSettingsSplit(split: Boolean) = settingsUi.onSettingsSplit(split)
+    fun settingsPreview(section: SettingsSection): Screen.Settings = settingsUi.settingsPreview(section)
+    fun settingsCategoryTap(index: Int) = settingsUi.settingsCategoryTap(index)
+    fun settingsPreviewTap(row: Int) = settingsUi.settingsPreviewTap(row)
+
     private var libraryDirty = false
 
     /** The app's settings, exposed for the UI (deps stays private). */
@@ -1386,7 +1423,7 @@ class AppState(
                     val label = appUpdateLabel(st)
                     if (label == _updateLabel.value) return@collect
                     _updateLabel.value = label
-                    if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SYSTEM) refreshSettings()
+                    if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SYSTEM) settingsUi.refreshSettings()
                 }
             }
         }
@@ -1549,7 +1586,7 @@ class AppState(
     fun onBackground() {
         // The game (or app) a Minimal launch handed off to is in front: no give-up now, the next onForeground fades it.
         launches.onBackground()
-        if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) { closeShortcuts(); refreshSettings() }
+        if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) { closeShortcuts(); settingsUi.refreshSettings() }
         scope.launch { flushArt() }
     }
 
@@ -2236,7 +2273,7 @@ class AppState(
         }
         when (event) {
             is NxSettingEvent.Choose -> choose(event.index)
-            else -> { select(row); openPicker(s.rows[row].label, value.labels.orEmpty(), value.index, choose) }
+            else -> { select(row); settingsUi.openPicker(s.rows[row].label, value.labels.orEmpty(), value.index, choose) }
         }
     }
 
@@ -2280,10 +2317,10 @@ class AppState(
         if (secondConnected == connected) return
         secondConnected = connected
         when ((_screen.value as? Screen.Settings)?.section) {
-            SettingsSection.SECOND_SCREEN -> if (!connected) showSettingsMenu()   // its section is gone: back to the root
+            SettingsSection.SECOND_SCREEN -> if (!connected) settingsUi.showSettingsMenu()   // its section is gone: back to the root
             else -> Unit
         }
-        if (_screen.value is Screen.SettingsMenu) showSettingsMenu()   // the root's sections follow
+        if (_screen.value is Screen.SettingsMenu) settingsUi.showSettingsMenu()   // the root's sections follow
         emulatorSettings.refreshOpenPage()
     }
 
@@ -2821,7 +2858,7 @@ class AppState(
         if (keyCode != KeyCodes.BUTTON_B) {
             deps.settings.systemButtons = SystemButtons.encode(SystemButtons.bind(systemButtonMap(), pad.key, role, PhysicalKey.of(keyCode, scanCode)))
         }
-        refreshSettings()
+        settingsUi.refreshSettings()
         return true
     }
 
@@ -3650,12 +3687,12 @@ class AppState(
     fun onAllFilesAccessChanged() {
         deps.allFilesAccess ?: run {
             // No All files access here, but the Microphone access row follows the same resume.
-            if (deps.micAccess != null && (_screen.value as? Screen.Settings)?.section == SettingsSection.LIBRARY) refreshSettings()
+            if (deps.micAccess != null && (_screen.value as? Screen.Settings)?.section == SettingsSection.LIBRARY) settingsUi.refreshSettings()
             return
         }
         if (upgradeOn) { upgradeAccessChanged(); return }   // the upgrade screen answers it, never a library reload
         if (_screen.value is Screen.PermissionsStep) { showPermissions(keep = true); return }   // back from a prompt: the rows show its answer
-        if ((_screen.value as? Screen.Settings)?.section == SettingsSection.LIBRARY) refreshSettings()
+        if ((_screen.value as? Screen.Settings)?.section == SettingsSection.LIBRARY) settingsUi.refreshSettings()
         // Granted meanwhile: SAF folders on external storage become paths. The main menu reloads at once (rescanning, as the
         // index no longer fits); any other page leaves it to the next load. A load in flight converts first itself. The
         // same when the home itself changed with the access (the saved one back, or the media one in its place).
@@ -3685,7 +3722,7 @@ class AppState(
         }
         // First setup: no home yet, or a pick from the setup screen (a retry after a failed first load keeps treeRef).
         val first = (old == null && inFirstSetup()) || _screen.value is Screen.PickFolder
-        val fromLibrary = if (first) null else rememberLibraryPage()
+        val fromLibrary = if (first) null else settingsUi.rememberLibraryPage()
         // The data home this change leaves (the full-access folder, or the media one): its saves may be copied over.
         val copyFrom = home()?.takeIf { !first && copyOffered(it, ref) }
         deps.settings.treeRef = ref
@@ -3971,54 +4008,12 @@ class AppState(
         libraryDirty = true
         if (_screen.value is Screen.AddFirstExtra) { addedExtraId = id; rescan { showFolderSummary(id) }; return }   // the first-setup offer: its summary
 
-        val fromLibrary = rememberLibraryPage()
+        val fromLibrary = settingsUi.rememberLibraryPage()
         rescan {
-            fromLibrary?.let { showSettingsOn(it, SettingsKind.ADD_EXTRA) }   // still on Add ROM folder, below the new row
+            fromLibrary?.let { settingsUi.showSettingsOn(it, SettingsKind.ADD_EXTRA) }   // still on Add ROM folder, below the new row
             val left = libraryIndex.snapshot?.let { folderSummary(it, id).unassigned } ?: 0
             if (left > 0) showNotice(if (left == 1) "1 game needs a console: Library → Unassigned games." else "$left games need a console: Library → Unassigned games.")
         }
-    }
-
-    /** A pick made from Library returns there after its rescan: keeps the row and names the page. */
-    private fun rememberLibraryPage(): SettingsSection? {
-        val s = _screen.value as? Screen.Settings ?: return null
-        if (!s.section.library) return null
-        sectionSelections[s.section] = _selection.value
-        return s.section
-    }
-
-    /** Tools -> Settings: the section menu, on the section last opened. */
-    private val _chooser = MutableStateFlow<ValueChooser?>(null)
-    /**
-     * A value row's picker ([com.nxredux.mobile.ui.nx.NxSettingPicker]): every value, the current one marked; a pick
-     * applies it ([chooseValue]), B or a tap outside closes it ([closeChooser]).
-     */
-    val chooser: StateFlow<ValueChooser?> = _chooser.asStateFlow()
-    private var chooserApply: ((Int) -> Unit)? = null
-    /** The chooser's value [index] picked: it closes, then the value applies (unchanged when it was already the one). */
-    fun chooseValue(index: Int) {
-        val c = _chooser.value ?: return
-        val apply = chooserApply
-        closeChooser()
-        if (index in c.labels.indices) apply?.invoke(index)
-    }
-
-    fun closeChooser() { _chooser.value = null; chooserApply = null }
-
-    /** The chooser takes the pad while open: UP / DOWN move (wrapping), A picks, B closes. */
-    private fun onChooserButton(c: ValueChooser, button: NxButton) {
-        when (button) {
-            NxButton.UP, NxButton.DOWN -> _chooser.value = c.copy(selected = (c.selected + if (button == NxButton.UP) -1 else 1).mod(c.labels.size))
-            NxButton.A -> chooseValue(c.selected)
-            NxButton.B, NxButton.MENU -> closeChooser()
-            else -> Unit
-        }
-    }
-
-    /** A value row's picker ([ValueChooser]) titled [title]: [labels], [current] under the cursor (-1: none); [apply] takes a pick. */
-    private fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit) {
-        _chooser.value = ValueChooser(title, labels, current.coerceAtLeast(0), current = current)
-        chooserApply = apply
     }
 
     /**
@@ -4041,24 +4036,6 @@ class AppState(
             is NxSettingEvent.OpenPicker -> openSettingPicker(event.row)
             is NxSettingEvent.Info -> showSettingInfo(event.row)
         }
-    }
-
-    /**
-     * Settings row [row] set to its choice [index] ([Screen.Settings.choices]), selecting it: the value as LEFT / RIGHT
-     * would step it there, with the same side effects ([SettingValue.changeTo]); nothing when it is already the one or
-     * the row is dimmed. Use as home screen asks Android, as A does.
-     */
-    fun chooseSetting(row: Int, index: Int) {
-        val s = _screen.value as? Screen.Settings ?: return
-        val r = s.rows.getOrNull(row)?.takeIf { it.enabled } ?: return
-        select(row)
-        if (r.kind == SettingsKind.MIC_ACCESS) { deps.micAccess?.request(); return }   // the answer follows on resume
-        if (r.kind == SettingsKind.ALL_FILES) { deps.allFilesAccess?.openSettings(); return }   // Android's page; the switch follows on resume
-        if (r.kind == SettingsKind.HOME_SCREEN) {
-            deps.launcher?.takeIf { (index == 1) != it.isHome() }?.let { it.setHome(index == 1); refreshSettings() }
-            return
-        }
-        settingValue(r)?.changeTo(index)
     }
 
     /**
@@ -4086,8 +4063,7 @@ class AppState(
      */
     private fun openEmulatorPicker(s: Screen.EmulatorOptions): Boolean {
         val (title, labels, current) = emulatorSettings.choices(s)?.takeIf { it.second.size >= 2 } ?: return false
-        _chooser.value = ValueChooser(title, labels, current.coerceAtLeast(0), current = current)
-        chooserApply = { emulatorSettings.choose(it) }
+        settingsUi.openPicker(title, labels, current) { emulatorSettings.choose(it) }
         return true
     }
 
@@ -4096,169 +4072,11 @@ class AppState(
      * its picker, X shows the selected row's info when it has more to say. False for every other press.
      */
     private fun onEmulatorTouchButton(s: Screen.EmulatorOptions, button: NxButton): Boolean {
-        val touch = settingTouchRow(_selection.value.index) ?: return false
+        val touch = settingsUi.settingTouchRow(_selection.value.index) ?: return false
         return when {
             button == NxButton.A && touch.choices.size >= 2 && touch.control == NxSettingControl.PICKER -> openEmulatorPicker(s)
-            button == NxButton.X -> { if (selectedSettingShowsInfo()) showSettingInfo(_selection.value.index); true }
+            button == NxButton.X -> { if (settingsUi.selectedSettingShowsInfo()) showSettingInfo(_selection.value.index); true }
             else -> false
-        }
-    }
-
-    /** Settings row [row]'s picker ([ValueChooser]): every value, the current one under the cursor; a pick sets it ([chooseSetting]). */
-    fun openSettingPicker(row: Int) {
-        val s = _screen.value as? Screen.Settings ?: return
-        if (s.rows.getOrNull(row)?.enabled != true) return
-        val c = s.choices.getOrNull(row)?.takeIf { it.labels.size >= 2 } ?: return
-        select(row)
-        _chooser.value = ValueChooser(s.rows[row].label, c.labels, c.index.coerceAtLeast(0), current = c.index)
-        val label = s.rows[row].label
-        // By its label: a refresh while the picker is open can move the rows (a dependent row shown or hidden).
-        chooserApply = { i ->
-            ((_screen.value as? Screen.Settings)?.rows?.let { rows -> row.takeIf { rows.getOrNull(it)?.label == label } ?: rows.indexOfFirst { it.label == label } })
-                ?.takeIf { it >= 0 }?.let { chooseSetting(it, i) }
-        }
-    }
-
-    private val _settingInfo = MutableStateFlow<SettingInfoPopup?>(null)
-    /** A Settings row's full description over the page (its info icon, or X); A, B, X or a tap close it, UP / DOWN scroll it. */
-    val settingInfo: StateFlow<SettingInfoPopup?> = _settingInfo.asStateFlow()
-
-    private val _settingInfoTruncated = MutableStateFlow<String?>(null)
-    /** The selected Settings row's description the UI reported cut off on its row (keyed by its text): X and its hint read it. */
-    val settingInfoTruncated: StateFlow<String?> = _settingInfoTruncated.asStateFlow()
-
-    /** The UI laid out the selected row's description [info] and it did ([truncated]) or did not fit. */
-    fun onSettingInfoTruncated(info: String, truncated: Boolean) {
-        _settingInfoTruncated.value = if (truncated) info else _settingInfoTruncated.value.takeIf { it != info }
-    }
-
-    /** Row [row]'s touch row as the page draws it ([settingsTouchRow], [emulatorTouchRow]); null off those pages. */
-    private fun settingTouchRow(row: Int): NxSettingRow? = when (val s = _screen.value) {
-        is Screen.Settings -> s.rows.getOrNull(row)?.let { settingsTouchRow(it, s.choices.getOrNull(row), s.section) }
-        is Screen.EmulatorOptions -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::emulatorTouchRow)
-        is Screen.RaSettings -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::raSettingsTouchRow)
-        is Screen.ArtworkSettings -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::artworkSettingTouchRow)
-        else -> null
-    }
-
-    /**
-     * The pad on a page of setting rows ([rowEditKey]) drawn beside another ([rowEditTwoPane]); one page keeps LEFT /
-     * RIGHT for its values (the page's own handling). Two panes: LEFT and RIGHT go between pages (LEFT as B; RIGHT opens a `›`
-     * row, as A) and never change a value. A on a row of segments, swatches or a stepped value ([NxPadA.EDIT]) starts
-     * changing it: then LEFT / RIGHT step it (the page's own LEFT / RIGHT), A or B stop, UP / DOWN stop and move. A
-     * switch's A flips it and a picker's opens it, as before (the page's own A). True when the press is taken here.
-     */
-    private fun onRowEditButton(s: Screen, button: NxButton): Boolean {
-        val key = rowEditKey(s) ?: return false
-        if (rowEditBlocked(s)) return false
-        if (!rowEditTwoPane(s, settingsSplit)) { _rowEdit.value = null; return false }
-        val i = _selection.value.index
-        if (_rowEdit.value == RowEdit(key, i)) return when (button) {
-            NxButton.A, NxButton.B -> { _rowEdit.value = null; true }
-            NxButton.UP, NxButton.DOWN -> { _rowEdit.value = null; false }
-            else -> false   // LEFT / RIGHT: the page steps the value; X: its info
-        }
-        _rowEdit.value = null
-        val row = settingTouchRow(i)
-        return when (button) {
-            NxButton.A -> if (row?.padA == NxPadA.EDIT) { _rowEdit.value = RowEdit(key, i); true } else false
-            NxButton.LEFT -> { onButton(NxButton.B); true }
-            NxButton.RIGHT -> { if (row?.opens == true) onButton(NxButton.A); true }
-            else -> false
-        }
-    }
-
-    /** Whether X opens the selected Settings row's info: its line is cut off on the row, or a fuller text is behind it. */
-    private fun selectedSettingShowsInfo(): Boolean {
-        val r = settingTouchRow(_selection.value.index) ?: return false
-        return nxShowsInfo(r, _settingInfoTruncated.value)
-    }
-
-    /** Shows Settings row [row]'s full description ([fullInfo]), selecting it; nothing for a row without one. */
-    fun showSettingInfo(row: Int) {
-        val r = settingTouchRow(row) ?: return
-        if (r.fullInfo.isBlank()) return
-        select(row)
-        _settingInfo.value = SettingInfoPopup(r.label, r.fullInfo)
-    }
-
-    fun closeSettingInfo() { _settingInfo.value = null }
-
-    /** The info popup takes the pad while open: A, B and X close it, UP / DOWN scroll it. */
-    private fun onSettingInfoButton(p: SettingInfoPopup, button: NxButton) {
-        when (button) {
-            NxButton.A, NxButton.B, NxButton.X, NxButton.MENU -> closeSettingInfo()
-            NxButton.UP, NxButton.DOWN -> _settingInfo.value = p.copy(scrollSeq = p.scrollSeq + 1, scrollDir = if (button == NxButton.UP) -1 else 1)
-            else -> Unit
-        }
-    }
-
-    fun openSettingsMenu() {
-        if (!kidsUi.kidsToolsAllowed) return   // Kids Mode: Settings only for a parent
-        showSettingsMenu()
-    }
-
-    /** The Settings root's categories on this platform ([settingsCategories]); the two-pane left pane lists the same. */
-    internal fun settingsSections(): List<SettingsSection> = settingsCategories(secondScreen = secondConnected, kids = kids != null)
-
-    private fun showSettingsMenu() {
-        val sections = settingsSections()   // sub-pages open from their section
-        _screen.value = Screen.SettingsMenu(sections)
-        _selection.value = settingsMenuSelection.clampedTo(sections.size)
-    }
-
-    fun openSettings(section: SettingsSection) {
-        if (!kidsUi.kidsToolsAllowed) return   // Kids Mode: Settings only for a parent
-        when (_screen.value) {
-            is Screen.Systems -> rememberMenuSelection()
-            is Screen.SettingsMenu -> settingsMenuSelection = _selection.value
-            else -> Unit
-        }
-        val page = settingsPage(section)
-        _screen.value = page
-        _selection.value = selectableOn(page, sectionSelections[section] ?: ListSelection(0, 0))
-        if (section == SettingsSection.LIBRARY) refreshInstalled()   // the Android games count: the cached one until it lands
-    }
-
-    /** Opens [to] from [from], keeping [from]'s highlighted row for the return. */
-    private fun openSubPage(from: Screen.Settings, to: SettingsSection) {
-        sectionSelections[from.section] = _selection.value
-        openSettings(to)
-    }
-
-    /**
-     * The UI reports whether Settings is drawn as two panes ([settingsSplit] of the window). The screen and selection do
-     * not change: the Settings root is the left pane and its pages the right, so a rotation keeps the page and row.
-     */
-    fun onSettingsSplit(split: Boolean) { settingsSplit = split }
-
-    /** [section]'s page as the unfocused right pane shows it while its category is highlighted on the left. */
-    fun settingsPreview(section: SettingsSection): Screen.Settings = settingsPage(section)
-
-    /**
-     * A tap on the section list's [index]: one tap opens that section. From a right-pane page the pane's own back stack
-     * unwinds as B would (each page keeping its row; a Library reload or rescan lands on the root by itself), then the
-     * tapped section opens.
-     */
-    fun settingsCategoryTap(index: Int) {
-        if (loader.active) return
-        if ((_screen.value as? Screen.Settings)?.let { it.confirmRemove != null || it.confirmReset } == true) return   // a dialog answers first
-        // One tap opens the section, from the root or from another section's page.
-        if (_screen.value is Screen.SettingsMenu) {
-            select(index)
-            openSelected()
-            return
-        }
-        if (settingsPane(_screen.value) != SettingsPane.RIGHT) return   // a stale tap from a page drawn whole: the root's row stays
-        val count = settingsSections().size
-        settingsMenuSelection = ListSelection(index, count).clampedTo(count)
-        repeat(SETTINGS_MAX_DEPTH) {
-            if (loader.active) return
-            if (settingsPane(_screen.value) != SettingsPane.RIGHT) {
-                if (_screen.value is Screen.SettingsMenu) { select(index); openSelected() }
-                return
-            }
-            back()
         }
     }
 
@@ -4271,20 +4089,6 @@ class AppState(
         (_screen.value as? Screen.EmulatorOptions)?.takeIf(::gameSettingsModal)?.let(emulatorSettings::closeGame)
     }
 
-    /**
-     * A tap on [row] of the unfocused right pane: opens the highlighted category, focused on that row. A one-tap list
-     * ([com.nxredux.mobile.ui.nx.nxTap]) calls this twice: the second call, on the page it opened, acts on that row (A).
-     */
-    fun settingsPreviewTap(row: Int) {
-        if (loader.active) return
-        if (_screen.value is Screen.Settings && row == _selection.value.index) { openSelected(); return }
-        val s = _screen.value as? Screen.SettingsMenu ?: return
-        val section = s.sections.getOrNull(_selection.value.index) ?: return
-        openSettings(section)
-        select(row)
-    }
-
-    /** [section]'s page as it stands now; [confirm]: the remove dialog over it. */
     /** A page's note under its title ([Screen.Settings.banner]): Saves', where they live. */
     private fun settingsBanner(section: SettingsSection): String? {
         if (section != SettingsSection.SAVES) return null
@@ -4297,39 +4101,6 @@ class AppState(
             else -> "Saves are stored inside the app. Export them before uninstalling or clearing app data."   // a picker home: still private
         }
     }
-
-    private fun settingsPage(section: SettingsSection, confirm: ExtraFolder? = null): Screen.Settings {
-        val rows = settingsRows(section)
-        return Screen.Settings(section, rows, confirm, settingsDetails(section), layoutShot(section), settingsBanner(section), rows.map(::settingChoices))
-    }
-
-    /** [row]'s values for its touch control: its [settingValue]'s labels and current one; Use as home screen's and All files access's Off / On. */
-    private fun settingChoices(row: SettingsRow): SettingChoices? {
-        if (row.kind == SettingsKind.HOME_SCREEN) return deps.launcher?.let { SettingChoices(ON_OFF, if (it.isHome()) 1 else 0) }
-        if (row.kind == SettingsKind.ALL_FILES || row.kind == SettingsKind.MIC_ACCESS) return SettingChoices(ON_OFF, if (row.secondary == "On") 1 else 0)   // as granted when the row was built
-        val v = settingValue(row) ?: return null
-        return v.labels?.let { SettingChoices(it, v.index) }
-    }
-
-    /** Shows [section]'s page on its first row of [kind] (the first row when there is none). */
-    private fun showSettingsOn(section: SettingsSection, kind: SettingsKind) {
-        val page = settingsPage(section)
-        _screen.value = page
-        _selection.value = selectableOn(page, ListSelection(page.rows.indexOfFirst { it.kind == kind }.coerceAtLeast(0), page.rows.size))
-    }
-
-    /** [sel] on [page], clamped and moved off a group label or gap to the next row that takes it (else the one before). */
-    private fun selectableOn(page: Screen.Settings, sel: ListSelection): ListSelection {
-        val rows = page.rows
-        val at = sel.clampedTo(rows.size)
-        if (rows.getOrNull(at.index)?.selectable != false) return at
-        val i = (at.index until rows.size).firstOrNull { rows[it].selectable } ?: (at.index downTo 0).firstOrNull { rows[it].selectable } ?: at.index
-        return at.copy(index = i)
-    }
-
-    /** One selectable row up ([delta] -1) or down from [sel] on [rows], wrapping past group labels and gaps. */
-    private fun settingsStep(rows: List<SettingsRow>, sel: ListSelection, delta: Int): ListSelection =
-        sel.step(delta) { rows.getOrNull(it)?.selectable != false }
 
     /** The Button layout page's consoles: every console, by name. */
     private val buttonLayoutConsoles: List<Console> by lazy { CoreRegistry.consoles.sortedBy { it.displayName.lowercase() } }
@@ -4384,13 +4155,13 @@ class AppState(
     /** The editor saved or left: republish the page if Settings is still showing (the activity wrote the settings). */
     fun onSkinLayoutEdited() {
         skinEditorOpen = false
-        if (_screen.value is Screen.Settings) refreshSettings()
+        if (_screen.value is Screen.Settings) settingsUi.refreshSettings()
     }
 
     /** Reset console: the page's console's tweaks go, every layout of it; other consoles keep theirs. */
     private fun resetButtonLayoutConsole() {
         deps.settings.skinTweaks = SkinTweaks.encode(SkinTweaks.decode(deps.settings.skinTweaks) - buttonLayoutConsole().id)
-        showSettingsOn(SettingsSection.BUTTON_LAYOUT, SettingsKind.BUTTON_LAYOUT_RESET)
+        settingsUi.showSettingsOn(SettingsSection.BUTTON_LAYOUT, SettingsKind.BUTTON_LAYOUT_RESET)
     }
 
     private fun shortcutSet(): ShortcutSet = shortcutDraft ?: Shortcuts.decodeBase(deps.settings.shortcuts)
@@ -4449,7 +4220,7 @@ class AppState(
 
     private fun setTouch(slot: TouchSlot, action: ShortcutAction?) { shortcutDraft = shortcutSet().withTouch(slot, action) }
 
-    private fun refreshShortcuts() { if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) refreshSettings() }
+    private fun refreshShortcuts() { if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) settingsUi.refreshSettings() }
 
     /**
      * The Shortcuts page closes (any screen but it, [_screen]; the app backgrounded): a capture ends, and the draft is
@@ -4577,7 +4348,7 @@ class AppState(
     private fun queryGpu(): Job = gpuJob ?: scope.launch(start = CoroutineStart.LAZY) {
         val name = tryOrNull { deps.deviceGpu() }
         _gpu.value = name?.trim()?.ifEmpty { null } ?: UNKNOWN_INFO
-        if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SYSTEM) refreshSettings()
+        if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SYSTEM) settingsUi.refreshSettings()
     }.also { gpuJob = it; it.start() }
 
     /** Copy device info: the About rows as text on the clipboard (after the GPU query, which is quick), then a notice. */
@@ -4672,7 +4443,7 @@ class AppState(
      */
     private fun settingValue(row: SettingsRow): SettingValue<*>? {
         val s = deps.settings
-        val republish: (Any?) -> Unit = { refreshSettings() }
+        val republish: (Any?) -> Unit = { settingsUi.refreshSettings() }
         fun <T> cycle(values: List<T>, current: T, label: ((T) -> String)? = null, after: (T) -> Unit = republish, set: (T) -> Unit) =
             SettingValue(values, current, set, label, after = after)
         // Off / On, or Hide / Show for a row that shows or hides something (Layouts'): the touch row's switch reads either.
@@ -4690,7 +4461,7 @@ class AppState(
             SettingsKind.MENU_STYLE -> row.category?.let { c ->
                 cycle(MenuStyles.MAIN_MENU_STYLES, MenuStyles.styleOf(s.menuStyles, c), ::menuStyleLabel, after = {
                     if (c == MenuCategory.HOME) rebuildHomeTab()
-                    refreshSettings()
+                    settingsUi.refreshSettings()
                 }) { s.menuStyles = s.menuStyles + (c to it) }
             }
             SettingsKind.GAME_LIST_STYLE -> cycle(MenuStyles.GAME_LIST_STYLES, s.gameListStyle, ::menuStyleLabel) { s.gameListStyle = it }
@@ -4716,7 +4487,7 @@ class AppState(
             }
             // New shelf / Not started shelf: Home is rebuilt without (or with) it. Pick up again has no setting.
             SettingsKind.SHELF_SHOWN -> row.shelf?.let { shelf ->
-                flip(shelfShown(shelf), show = true, after = { rebuildHomeTab(); refreshSettings() }) { on ->
+                flip(shelfShown(shelf), show = true, after = { rebuildHomeTab(); settingsUi.refreshSettings() }) { on ->
                     when (shelf) {
                         HomeShelf.NEW -> s.showNewShelf = on
                         HomeShelf.NOT_STARTED -> s.showNotStartedShelf = on
@@ -4727,7 +4498,7 @@ class AppState(
             }
             // Netplay hint: the Show / Hide of Y's hint (Recent and Search are always icons).
             SettingsKind.HINT_SHOWN -> if (row.hint == NxButton.Y) flip(s.showNetplayHint, show = true) { s.showNetplayHint = it } else null
-            SettingsKind.PAGE_TITLE -> flip(s.menuPageTitle, show = true, after = { refreshSettings() }) { s.menuPageTitle = it }
+            SettingsKind.PAGE_TITLE -> flip(s.menuPageTitle, show = true, after = { settingsUi.refreshSettings() }) { s.menuPageTitle = it }
             SettingsKind.BUTTON_HINTS -> flip(s.menuButtonHints, show = true) { s.menuButtonHints = it }
             SettingsKind.EXTRA_INFO -> flip(s.menuExtraInfo, show = true) { s.menuExtraInfo = it }
             SettingsKind.HOME_STATS -> flip(s.menuHomeStats, show = true) { s.menuHomeStats = it }   // Home's board follows through its frame
@@ -4735,7 +4506,7 @@ class AppState(
             SettingsKind.ACHIEVEMENTS_PANEL -> flip(s.gameListAchievementsPanel, show = true) { s.gameListAchievementsPanel = it }   // X's hint
             // Controls: Off, Light, Medium and Strong; Game rumble previews the new level. The menu pad: the shell follows.
             SettingsKind.PAD_VIBRATION -> cycle(PadVibration.entries, s.padVibration, { it.label }) { s.padVibration = it }
-            SettingsKind.GAME_RUMBLE -> cycle(GameRumble.entries, s.gameRumble, { it.label }, after = { refreshSettings(); deps.rumblePreview(it) }) { s.gameRumble = it }
+            SettingsKind.GAME_RUMBLE -> cycle(GameRumble.entries, s.gameRumble, { it.label }, after = { settingsUi.refreshSettings(); deps.rumblePreview(it) }) { s.gameRumble = it }
             // A touch button: None, then every action a touch button can do ([ShortcutAction.touch]).
             SettingsKind.SHORTCUT_TOUCH -> row.touchSlot?.let { slot ->
                 cycle(listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { it.touch }, shortcutSet().touch[slot], { it?.label ?: "None" }) { setTouch(slot, it) }
@@ -4757,7 +4528,7 @@ class AppState(
             SettingsKind.DEBUG_LOG -> flip(s.debugLog) { s.debugLog = it }
             // Kids Mode On / Off: the first switch-on runs setup (another screen), so the page is republished only if still up.
             SettingsKind.KIDS_ENABLE -> kids?.let {
-                flip(s.kidsEnabled, after = { if ((_screen.value as? Screen.Settings)?.section == SettingsSection.KIDS) refreshSettings() }) { on -> kidsUi.kidsSetEnabled(on) }
+                flip(s.kidsEnabled, after = { if ((_screen.value as? Screen.Settings)?.section == SettingsSection.KIDS) settingsUi.refreshSettings() }) { on -> kidsUi.kidsSetEnabled(on) }
             }
             else -> null
         }
@@ -4789,7 +4560,7 @@ class AppState(
                 importResult = result.summary
                 if ((_screen.value as? Screen.Settings)?.section != SettingsSection.IMPORT_SAVES) return showNotice(result.summary.lines().joinToString("; "))
                 dismissNotice()
-                sectionSelections.remove(SettingsSection.IMPORT_RESULT)
+                settingsUi.sectionSelections.remove(SettingsSection.IMPORT_RESULT)
                 openSettings(SettingsSection.IMPORT_RESULT)
             }
             is ImportResult.Message -> showNotice(result.text)
@@ -4821,57 +4592,6 @@ class AppState(
     }
 
     /**
-     * Appearance's, Layouts' or Controls' "Reset to defaults" (NX Redux settings.c): the page's own options back to their
-     * defaults. Appearance: Pad theme, Pad buttons, Accent, Secondary accent, Text size, Button layout. Layouts: every
-     * tab's style and orientation unset (so [MenuStyles.styleOf] and [MenuStyles.orientationOf] give theirs), the game lists', the tabs', shelves'
-     * and hints' Show/Hide, Consoles background, List art, Backdrop art, Page title, Button hints, Extra info, Home stats,
-     * Layout options, Achievements panel and Game Switcher layout. Controls: Pad vibration, Game rumble and every pad
-     * layout. At once, no confirm, as NX Redux. Through the settings' own setters, then the page is republished like any
-     * cycled row's (App re-reads the theme, accent and scale with it), the highlight kept on the reset row, which the
-     * orientation rows coming or going may have moved.
-     */
-    private fun resetToDefaults(section: SettingsSection) {
-        val s = deps.settings
-        if (section == SettingsSection.SHORTCUTS) {
-            shortcutDraft = ShortcutSet.EMPTY   // Clear all: written with the rest when the page closes
-        } else if (section == SettingsSection.SYSTEM_BUTTONS) {
-            currentPad()?.let { pad -> s.systemButtons = SystemButtons.encode(SystemButtons.reset(systemButtonMap(), pad.key)) }
-        } else if (section == SettingsSection.APPEARANCE) {
-            s.padSkin = true
-            s.padTheme = PadTheme.DEFAULT
-            s.accent = AccentPreset.DEFAULT
-            s.secondaryAccent = SecondaryAccent.DEFAULT
-            s.optionTextSize = OptionTextSize.DEFAULT
-            s.skinTweaks = ""
-        } else if (section == SettingsSection.MAIN_MENU) {
-            s.menuStyles = emptyMap()
-            s.menuOrientations = emptyMap()
-            s.gameListStyle = MenuStyles.DEFAULT_GAME_LIST_STYLE
-            s.gameListOrientation = MenuStyles.DEFAULT_ORIENTATION
-            s.gameListVerticalAlignment = VerticalListAlignment.DEFAULT
-            s.showHomeTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showConsolesTab = MenuStyles.DEFAULT_TAB_SHOWN
-            s.showCollectionsTab = MenuStyles.DEFAULT_TAB_SHOWN; s.showToolsTab = MenuStyles.DEFAULT_TAB_SHOWN
-            s.showNewShelf = true; s.showNotStartedShelf = true; s.showMostPlayedShelf = true
-            s.showNetplayHint = true
-            s.consoleArt = ConsoleArt.DEFAULT; s.gameListArt = GameListArt.DEFAULT; s.backdropArt = BackdropArt.DEFAULT
-            syncArtLayout()
-            s.menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE
-            s.menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS
-            s.menuExtraInfo = MenuStyles.DEFAULT_EXTRA_INFO
-            s.menuHomeStats = MenuStyles.DEFAULT_HOME_STATS
-            s.gameListLayoutOptions = true
-            s.gameListAchievementsPanel = true
-            s.switcherLayout = SwitcherLayout.DEFAULT
-            // As the single rows do: Home's rows follow its style and shelves.
-            rebuildHomeTab()
-        } else if (section == SettingsSection.CONTROLS) {
-            s.padVibration = PadVibration.DEFAULT
-            s.gameRumble = GameRumble.DEFAULT
-        }
-        showSettingsOn(section, SettingsKind.RESET_DEFAULTS)
-    }
-
-    /**
      * Rescan (Library's counts row): a full scan under the loading overlay (Settings stays underneath), then [section] again on the
      * [row] (Library on Rescan, or Emulators on Default emulators after a changed default) with a one-line result. A
      * failed scan that keeps the index returns there too, its notice or error the result. No confirm: a scan is
@@ -4881,7 +4601,7 @@ class AppState(
     private fun rescanFromSettings(section: SettingsSection = SettingsSection.LIBRARY, row: SettingsKind = SettingsKind.RESCAN) {
         val root = home() ?: run { showPickFolder(); return }
         dismissNotice()   // a tap reaches openSelected without onButton's dismissal; a notice raised by this scan still wins below
-        val backToRow = { showSettingsOn(section, row) }
+        val backToRow = { settingsUi.showSettingsOn(section, row) }
         loader.start(message = "Scanning library…", cancellable = false) {
             scanNow(
                 root,
@@ -5048,46 +4768,26 @@ class AppState(
         HomeShelf.PICK_UP -> true
     }
 
-    /** Rebuilds the open page's rows in place (selection clamped). */
-    private fun refreshSettings(confirm: ExtraFolder? = null) {
-        syncArtLayout()
-        val old = _screen.value as? Screen.Settings
-        val section = old?.section ?: SettingsSection.LIBRARY
-        val page = settingsPage(section, confirm)
-        _screen.value = page
-        // The selected row moved (a row above it came or went, as Game lists' art row as its layout steps): the highlight follows it.
-        val sel = _selection.value
-        val moved = old?.rows?.getOrNull(sel.index)?.takeIf { old.section == section }?.let { was ->
-            page.rows.indices.filter { sameSettingsRow(page.rows[it], was) }.singleOrNull()
-        }
-        _selection.value = selectableOn(page, if (moved != null && moved != sel.index) sel.copy(index = moved) else sel)
-    }
-
-    /** Whether [a] and [b] are the same Settings row across a refresh: its kind and what it is for, not its value or label. */
-    private fun sameSettingsRow(a: SettingsRow, b: SettingsRow): Boolean =
-        a.kind == b.kind && a.category == b.category && a.shelf == b.shelf && a.hint == b.hint && a.consoleId == b.consoleId &&
-            a.shortcut == b.shortcut && a.touchSlot == b.touchSlot && a.systemRole == b.systemRole && a.landscape == b.landscape && a.extra?.id == b.extra?.id
-
     /**
      * B on a sub-page: its section on the row that opened it. Leaving Default emulators (under Emulators) with a changed
      * default (the index no longer fits) rescans first, under the overlay, so the library is the new one's. Import results
      * goes back to Saves on its Import saves row.
      */
     private fun leaveSubPage(section: SettingsSection) {
-        if (section == SettingsSection.IMPORT_RESULT) return showSettingsOn(SettingsSection.SAVES, SettingsKind.IMPORT_SAVES)   // past Import saves
+        if (section == SettingsSection.IMPORT_RESULT) return settingsUi.showSettingsOn(SettingsSection.SAVES, SettingsKind.IMPORT_SAVES)   // past Import saves
         val parent = section.parent ?: return
         val opener = section.opener ?: return
         val root = home()
         val stale = section == SettingsSection.DEFAULT_EMULATORS && root != null &&
             libraryIndex.snapshot?.fits(root, deps.settings.extraFolders, deps.settings.defaultTags) != true
-        if (stale) rescanFromSettings(parent, opener) else showSettingsOn(parent, opener)
+        if (stale) rescanFromSettings(parent, opener) else settingsUi.showSettingsOn(parent, opener)
     }
 
     fun removeExtra(extra: ExtraFolder) {
         deps.settings.extraFolders = deps.settings.extraFolders.filter { it.id != extra.id }
         libraryDirty = true
         deps.folderPicker.forget(extra.ref)
-        refreshSettings()
+        settingsUi.refreshSettings()
         val root = home() ?: return
         scope.launch {   // background re-index without Loading; Back then reads it (the lock orders the two)
             // A failed re-index leaves the old index: it no longer fits, so Back rescans.
@@ -5101,9 +4801,9 @@ class AppState(
                 refreshMainRows()   // the consoles and the collection counts follow the new index, names changed or not
                 // Still on a Library page: the rows were built before this scan, so refresh them (selection clamped).
                 (_screen.value as? Screen.Settings)?.takeIf { it.section.library }?.let { s ->
-                    val page = settingsPage(s.section, s.confirmRemove)
+                    val page = settingsUi.settingsPage(s.section, s.confirmRemove)
                     _screen.value = page
-                    _selection.value = selectableOn(page, _selection.value)
+                    _selection.value = settingsUi.selectableOn(page, _selection.value)
                 }
             }
         }
@@ -5118,7 +4818,7 @@ class AppState(
     private fun onSettingsButton(s: Screen, button: NxButton) {
         (s as? Screen.Settings)?.takeIf { it.confirmReset }?.let { page ->
             when (button) {
-                NxButton.A -> { _screen.value = page.copy(confirmReset = false); runSettingsReset(page) }
+                NxButton.A -> { _screen.value = page.copy(confirmReset = false); settingsUi.runSettingsReset(page) }
                 NxButton.B -> _screen.value = page.copy(confirmReset = false)
                 else -> Unit
             }
@@ -5127,38 +4827,29 @@ class AppState(
         (s as? Screen.Settings)?.confirmRemove?.let { extra ->
             when (button) {
                 NxButton.A -> removeExtra(extra)
-                NxButton.B -> refreshSettings()
+                NxButton.B -> settingsUi.refreshSettings()
                 else -> Unit
             }
             return
         }
         when (button) {
             // Past System's group labels and gaps.
-            NxButton.UP, NxButton.DOWN -> _selection.value = if (s is Screen.Settings) settingsStep(s.rows, _selection.value, if (button == NxButton.UP) -1 else 1)
+            NxButton.UP, NxButton.DOWN -> _selection.value = if (s is Screen.Settings) settingsUi.settingsStep(s.rows, _selection.value, if (button == NxButton.UP) -1 else 1)
                 else if (button == NxButton.UP) _selection.value.up() else _selection.value.down()
             NxButton.A -> openSelected()
             NxButton.B -> back()
             NxButton.X -> (s as? Screen.Settings)?.rows?.getOrNull(_selection.value.index)?.let { row ->
                 if (row.kind == SettingsKind.SHORTCUT_BIND) row.shortcut?.let { setShortcut(it, null) }   // back to None
-                else if (selectedSettingShowsInfo()) showSettingInfo(_selection.value.index)
+                else if (settingsUi.selectedSettingShowsInfo()) showSettingInfo(_selection.value.index)
             }
             // A value row being changed ([onRowEditButton]) steps on LEFT/RIGHT; a default emulator steps through its
             // console's tags. Otherwise LEFT / RIGHT go between pages there.
             NxButton.LEFT, NxButton.RIGHT -> if (s is Screen.SettingsMenu) {
                 // Two panes: RIGHT on a category moves into its page, like A. One page has no pane to go to.
-                if (settingsSplit && button == NxButton.RIGHT) openSelected()
+                if (settingsUi.settingsSplit && button == NxButton.RIGHT) openSelected()
             } else (s as? Screen.Settings)?.rows?.getOrNull(_selection.value.index)?.let { row ->
                 if (row.enabled) settingValue(row)?.change(if (button == NxButton.LEFT) -1 else 1)   // a dimmed row (one tag) stays
             }
-            else -> Unit
-        }
-    }
-
-    /** The confirmed reset of [page]'s selected row: Reset to defaults (Shortcuts' Clear all) or Button layout's Reset console. */
-    private fun runSettingsReset(page: Screen.Settings) {
-        when (page.rows.getOrNull(_selection.value.index)?.kind) {
-            SettingsKind.RESET_DEFAULTS -> resetToDefaults(page.section)
-            SettingsKind.BUTTON_LAYOUT_RESET -> resetButtonLayoutConsole()
             else -> Unit
         }
     }
@@ -5428,7 +5119,7 @@ class AppState(
     private fun rememberSelection() {
         when (val s = _screen.value) {
             is Screen.Systems -> rememberMenuSelection()
-            is Screen.Settings -> sectionSelections[s.section] = _selection.value
+            is Screen.Settings -> settingsUi.sectionSelections[s.section] = _selection.value
             else -> Unit
         }
     }
@@ -5808,35 +5499,35 @@ class AppState(
                 } else when (row.kind) {
                     SettingsKind.HOME -> pickHome()
                     SettingsKind.ADD_EXTRA -> pickExtra()
-                    SettingsKind.EXTRA -> refreshSettings(confirm = row.extra)
+                    SettingsKind.EXTRA -> settingsUi.refreshSettings(confirm = row.extra)
                     SettingsKind.RESCAN -> rescanFromSettings()
                     SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
                     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER ->
-                        SettingsSection.entries.firstOrNull { it.opener == row.kind }?.let { openSubPage(s, it) }
-                    SettingsKind.DEFAULTS -> openSubPage(s, SettingsSection.DEFAULT_EMULATORS)
-                    SettingsKind.SAVES -> openSubPage(s, SettingsSection.SAVES)
+                        SettingsSection.entries.firstOrNull { it.opener == row.kind }?.let { settingsUi.openSubPage(s, it) }
+                    SettingsKind.DEFAULTS -> settingsUi.openSubPage(s, SettingsSection.DEFAULT_EMULATORS)
+                    SettingsKind.SAVES -> settingsUi.openSubPage(s, SettingsSection.SAVES)
                     SettingsKind.EXPORT_SAVES -> deps.saveTransfer?.exportSaves(::showTransferNotice)
                     SettingsKind.LICENSES_LINK -> deps.openUrl(LICENSES_URL)
-                    SettingsKind.IMPORT_SAVES -> openSubPage(s, SettingsSection.IMPORT_SAVES)
+                    SettingsKind.IMPORT_SAVES -> settingsUi.openSubPage(s, SettingsSection.IMPORT_SAVES)
                     SettingsKind.IMPORT_FOLDER -> importSaves(ImportSource.FOLDER)
                     SettingsKind.IMPORT_ZIP -> importSaves(ImportSource.ZIP)
                     SettingsKind.IMPORT_RETROARCH -> importSaves(ImportSource.RETROARCH)
                     SettingsKind.IMPORT_DONE -> leaveSubPage(SettingsSection.IMPORT_RESULT)
-                    SettingsKind.BUTTON_LAYOUT -> openSubPage(s, SettingsSection.BUTTON_LAYOUT)
+                    SettingsKind.BUTTON_LAYOUT -> settingsUi.openSubPage(s, SettingsSection.BUTTON_LAYOUT)
                     SettingsKind.BUTTON_LAYOUT_ORIENTATION -> row.landscape?.let(::openSkinEditor)
                     SettingsKind.BUTTON_LAYOUT_RESET -> _screen.value = s.copy(confirmReset = true)   // asks first
-                    SettingsKind.SHORTCUTS -> openSubPage(s, SettingsSection.SHORTCUTS)
-                    SettingsKind.SYSTEM_BUTTONS -> openSubPage(s, SettingsSection.SYSTEM_BUTTONS)
+                    SettingsKind.SHORTCUTS -> settingsUi.openSubPage(s, SettingsSection.SHORTCUTS)
+                    SettingsKind.SYSTEM_BUTTONS -> settingsUi.openSubPage(s, SettingsSection.SYSTEM_BUTTONS)
                     // Without a controller too: one plugged in next answers it (the row says to connect one).
                     SettingsKind.SHORTCUT_BIND -> row.shortcut?.let(::startCapture)
-                    SettingsKind.SYSTEM_BUTTON_BIND -> row.systemRole?.let { systemButtonWaiting = it; refreshSettings() }
+                    SettingsKind.SYSTEM_BUTTON_BIND -> row.systemRole?.let { systemButtonWaiting = it; settingsUi.refreshSettings() }
                     SettingsKind.HIDDEN -> openList(ListSource.Hidden)
-                    SettingsKind.UNASSIGNED -> unassignedSystem()?.let { sectionSelections[s.section] = _selection.value; openSystem(it) }
-                    SettingsKind.EMULATORS -> { sectionSelections[s.section] = _selection.value; emulatorSettings.openList(systemsCache) }
+                    SettingsKind.UNASSIGNED -> unassignedSystem()?.let { settingsUi.sectionSelections[s.section] = _selection.value; openSystem(it) }
+                    SettingsKind.EMULATORS -> { settingsUi.sectionSelections[s.section] = _selection.value; emulatorSettings.openList(systemsCache) }
                     SettingsKind.INFO -> Unit   // About: read-only
                     SettingsKind.COPY_INFO -> copyDeviceInfo()
                     SettingsKind.APP_UPDATE -> deps.updater?.let(::appUpdateRowA)
-                    SettingsKind.HOME_SCREEN -> deps.launcher?.let { it.setHome(!it.isHome()); refreshSettings() }
+                    SettingsKind.HOME_SCREEN -> deps.launcher?.let { it.setHome(!it.isHome()); settingsUi.refreshSettings() }
                     SettingsKind.ANDROID_GAMES -> openToolApps(AppPick.GAMES)
                     SettingsKind.RESET_DEFAULTS -> _screen.value = s.copy(confirmReset = true)   // asks first
                     SettingsKind.ALL_FILES -> deps.allFilesAccess?.openSettings()
@@ -5899,7 +5590,7 @@ class AppState(
     internal val emulatorSettings = EmulatorSettingsController(
         scope, _screen, _selection, _error, deps.coreOptions, deps.emulatorConfigs, deps.coreDefaults,
         host = object : EmulatorSettingsHost {
-            override fun showEmulatorsSettings() = showSettingsOn(SettingsSection.EMULATORS, SettingsKind.EMULATORS)
+            override fun showEmulatorsSettings() = settingsUi.showSettingsOn(SettingsSection.EMULATORS, SettingsKind.EMULATORS)
             override fun restore(screen: Screen, selection: ListSelection) {
                 _screen.value = screen
                 homeTab.publishHomeView()   // a restored main menu: its Home rows' own view
@@ -6422,8 +6113,7 @@ class AppState(
         kids?.parentInput()   // Parent mode's idle time starts again
         if (launches.minimalPending) return   // a Minimal open is under way: the row opens in a moment
         launches.clearMinimalOpening()   // opened: the next press clears it
-        _chooser.value?.let { onChooserButton(it, button); return }   // a touch chooser takes the pad while open
-        _settingInfo.value?.let { onSettingInfoButton(it, button); return }   // a Settings row's info popup too
+        if (settingsUi.onPopupButton(button)) return   // a touch chooser or a Settings row's info popup takes the pad while open
         // Press to bind waits on the controller's raw keys ([captureKey]): a touch hint's or the on-screen pad's B cancels, the rest wait.
         if (_capturingShortcut.value != null) { if (button == NxButton.B) cancelCapture(); return }
         if (_error.value != null) { if (button == NxButton.A || button == NxButton.B) dismissError(); return }
@@ -6452,7 +6142,7 @@ class AppState(
         dismissNoticeOnPress()
         (_screen.value as? Screen.Onboarding)?.let { onOnboardingButton(it, button); return }
         netplay?.takeIf { it.page.value != null }?.let { it.onButton(button); return }   // the Netplay sheet over a game list
-        if (onRowEditButton(_screen.value, button)) return
+        if (settingsUi.onRowEditButton(_screen.value, button)) return
         if (isKidsScreen(_screen.value)) return kidsUi.onKidsButton(_screen.value, button)
         (_screen.value as? Screen.KidsSetup)?.let { kidsUi.onKidsSetupButton(it, button); return }
         (_screen.value as? Screen.KidsDayEdit)?.let { kidsUi.onKidsDayButton(it, button); return }
@@ -6471,7 +6161,7 @@ class AppState(
         if (emulatorSettings.onButton(_screen.value, button)) return
         if (gameTimeScreen?.onButton(_screen.value, button) == true) return   // B without a modal falls through to back()
         (_screen.value as? Screen.ArtworkSettings)?.takeIf { button == NxButton.X && !it.dialogOpen }?.let {   // X: the selected row's info
-            if (selectedSettingShowsInfo()) showSettingInfo(_selection.value.index); return
+            if (settingsUi.selectedSettingShowsInfo()) showSettingInfo(_selection.value.index); return
         }
         if (artworkScreens?.onButton(_screen.value, button) == true) return
         (_screen.value as? Screen.Switcher)?.let { switcher.onSwitcherButton(it, button, repeat); return }
@@ -6488,7 +6178,7 @@ class AppState(
         (_screen.value as? Screen.RetroAchievements)?.let { ra.onRaButton(it, button); return }   // same: UP/DOWN use the action-row count
         (_screen.value as? Screen.RaDownload)?.let { ra.onRaDownloadButton(it, button); return }
         (_screen.value as? Screen.RaSettings)?.let {   // LEFT/RIGHT change values; dialogs take the buttons; X the selected row's info
-            if (button == NxButton.X && !it.signingIn && it.confirm == null) { if (selectedSettingShowsInfo()) showSettingInfo(_selection.value.index); return }
+            if (button == NxButton.X && !it.signingIn && it.confirm == null) { if (settingsUi.selectedSettingShowsInfo()) showSettingInfo(_selection.value.index); return }
             ra.onRaSettingsButton(it, button); return
         }
         _screen.value.takeIf { it is Screen.RaGames || it is Screen.RaGame || it is Screen.RaAchievement }?.let { ra.onRaBrowserButton(it, button); return }
@@ -6559,10 +6249,9 @@ class AppState(
 
     /** Returns true when a screen was popped. */
     fun back(): Boolean {
-        if (_chooser.value != null) { closeChooser(); return true }   // a touch chooser: Back closes it
-        if (_settingInfo.value != null) { closeSettingInfo(); return true }   // and a Settings row's info popup
+        if (settingsUi.closePopup()) return true   // a touch chooser or a Settings row's info popup: Back closes it
         if (_capturingShortcut.value != null) { cancelCapture(); return true }   // press to bind: Back cancels it, the page stays
-        if (systemButtonWaiting != null) { systemButtonWaiting = null; refreshSettings(); return true }   // likewise System buttons' wait
+        if (systemButtonWaiting != null) { systemButtonWaiting = null; settingsUi.refreshSettings(); return true }   // likewise System buttons' wait
         if (_androidGamesAsk.value != null) { answerAndroidGames(false); return true }   // the dialog's B: Not now
         if (_updateConfirm.value != null) { answerUpdateConfirm(false); return true }   // About's confirm: Cancel
         if (updatePopupShows()) { answerUpdate(false); return true }   // the update dialog's B: Not now
@@ -6601,18 +6290,18 @@ class AppState(
                 else if (s.pushed) { popHiddenTab(); true }
                 else false
             is Screen.Settings -> if (s.confirmReset) { _screen.value = s.copy(confirmReset = false); true } else {   // Back keeps the settings
-                sectionSelections[s.section] = _selection.value
+                settingsUi.sectionSelections[s.section] = _selection.value
                 // A sub-page goes back to its section. Library or Emulators: after a change ([libraryDirty]), or an extra set
                 // or default tag changed behind the page's back (it fails the fit), it reloads (rescanning if needed); either
                 // way it ends on the menu.
                 if (s.section.parent != null) leaveSubPage(s.section)
-                else if (s.section.reloads && libraryStale()) load { showSettingsMenu() } else showSettingsMenu()
+                else if (s.section.reloads && libraryStale()) load { settingsUi.showSettingsMenu() } else settingsUi.showSettingsMenu()
                 true
             }
-            is Screen.SettingsMenu -> { settingsMenuSelection = _selection.value; showTools(); true }
+            is Screen.SettingsMenu -> { settingsUi.settingsMenuSelection = _selection.value; showTools(); true }
             is Screen.ToolApps -> {
                 if (s.menu != null) { if (!s.menu.busy) closeContextMenu() }
-                else if (s.pick == AppPick.GAMES) showSettingsOn(SettingsSection.LIBRARY, SettingsKind.ANDROID_GAMES)
+                else if (s.pick == AppPick.GAMES) settingsUi.showSettingsOn(SettingsSection.LIBRARY, SettingsKind.ANDROID_GAMES)
                 // The drawer: back on its tile, found by kind (an app added meanwhile may sort before it).
                 else if (menuCategory == MenuCategory.HOME) showTools()
                 else showSystemsNow(MenuCategory.TOOLS) { it is MainRow.Tool && it.row.kind == ToolKind.APPS }
@@ -6676,7 +6365,7 @@ class AppState(
     fun onLauncherChanged() {
         kidsUi.kidsHomeCheck()   // the role dialog's answer: Kids Mode on once home
         val section = (_screen.value as? Screen.Settings)?.section
-        if (section == SettingsSection.SYSTEM || section == SettingsSection.LIBRARY || section == SettingsSection.KIDS) refreshSettings()
+        if (section == SettingsSection.SYSTEM || section == SettingsSection.LIBRARY || section == SettingsSection.KIDS) settingsUi.refreshSettings()
     }
 
     /**
