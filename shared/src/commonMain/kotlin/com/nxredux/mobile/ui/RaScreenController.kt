@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.tryOr
 import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.achievements.RaDownloadPhase
 import com.nxredux.mobile.achievements.RaGameFetch
@@ -16,7 +17,6 @@ import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxSettingControl
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.control
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -154,8 +154,8 @@ internal class RaScreenController(
         val same = p.path == path && p.content is RaPanelContent.Game
         if (!same) target.value = keep(RaPanelContent.Loading)
         val job = scope.launch {
-            val list = try { c.achievements(hash).sortedBy(settings.raSortOrder) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
-            val badges = try { c.badgeListing(hash) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyMap() }
+            val list = tryOr({ emptyList() }) { c.achievements(hash).sortedBy(settings.raSortOrder) }
+            val badges = tryOr({ emptyMap() }) { c.badgeListing(hash) }
             val now = target.value ?: return@launch
             if (now.path != path) return@launch   // the selection moved on meanwhile
             val content = RaPanelContent.Game(hash, list, badges)
@@ -174,7 +174,7 @@ internal class RaScreenController(
             raFetches[path] = null
             var started = false   // set once this returns: a download ending before that is shown by the return instead
             scope.launch {
-                val o = try { c.fetchGame(path) } catch (e: CancellationException) { throw e } catch (e: Exception) { RaGameFetch.Failed(RaPrefetch.NO_REPLY) }
+                val o = tryOr({ RaGameFetch.Failed(RaPrefetch.NO_REPLY) }) { c.fetchGame(path) }
                 raFetches[path] = o
                 if (o is RaGameFetch.Cached) { raHashes = raHashes + (path to o.hash); host.refreshGameInfo() }   // its progress in the menus too
                 if (started && _raPanel.value?.path == path) followRaPanel(force = true)

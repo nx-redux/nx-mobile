@@ -20,11 +20,13 @@
 
 #include <optional>
 #include <memory>
+#include <vector>
 
 #include "GLES3/gl3.h"
 #include "GLES3/gl3ext.h"
 
 #include "../../shadermanager.h"
+#include "../renderer.h"
 
 namespace libretrodroid {
 
@@ -58,6 +60,9 @@ public:
     );
 
     static void deleteFramebuffer(std::unique_ptr<Framebuffer> data);
+
+    // Layer n draws into framebuffers[n] (none for the last, on-screen pass) and samples framebuffers[n - 1].
+    static Renderer::PassData passData(const Framebuffers& framebuffers, unsigned int layer);
 };
 
 }

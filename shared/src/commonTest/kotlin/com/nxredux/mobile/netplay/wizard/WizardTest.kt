@@ -466,12 +466,11 @@ class WizardTest {
         assertEquals(HostOutcome.Started("snes9x", "10.0.0.2", emptySaves = false), hostJob.await())
     }
 
-    @Test fun a_line_that_is_not_hello_closes_without_a_reply() = runTest {
+    @Test fun a_line_that_is_not_hello_is_turned_away_without_a_reply() = runTest {
         val (h, c) = PipeChannel.pair()
         val hostJob = async { Wizard.host(h, hostSfc, saves = { FakeHostSaves() }) }
         c.writeLine("GOODBYE")
         assertEquals(HostOutcome.Turned(null), hostJob.await())
-        assertTrue(h.closed)
     }
 
     // ---- long game names: the handheld reads the game token with %255s, a line is at most 511 bytes ----

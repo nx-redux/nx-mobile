@@ -1,13 +1,12 @@
 package com.nxredux.mobile.achievements
 
-import com.nxredux.mobile.library.ListingUnavailable
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.library.ensurePath
+import com.nxredux.mobile.library.findDir
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
-import com.nxredux.mobile.scraper.findDir
-import kotlinx.coroutines.CancellationException
+import com.nxredux.mobile.tryOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -118,6 +117,5 @@ class RaHomeTree(private val source: RomsSource, private val home: () -> Content
         source.writeText(dir, name, text).takeIf { it }
     } == true
 
-    private inline fun <T> guard(block: () -> T?): T? =
-        try { block() } catch (e: CancellationException) { throw e } catch (e: ListingUnavailable) { null } catch (e: Exception) { null }
+    private inline fun <T> guard(block: () -> T?): T? = tryOrNull(block)
 }

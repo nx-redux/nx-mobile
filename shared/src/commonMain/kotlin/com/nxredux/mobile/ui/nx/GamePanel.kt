@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -187,15 +188,6 @@ private fun rememberWidestShortcut(shortcuts: List<ShortcutState>): Dp {
 }
 
 /**
- * The least width the shortcut grid needs in one column: its widest pill uncut, inside the grid's gutters, and never
- * under [GP_SHORTCUT_COLUMN_MIN] (a narrower column reads as squeezed). The in-game menu's Menu tab puts the shortcuts
- * below its words when the room beside them is less.
- */
-@Composable
-internal fun rememberShortcutColumnMin(shortcuts: List<ShortcutState>): Dp =
-    maxOf(GP_SHORTCUT_COLUMN_MIN, rememberWidestShortcut(shortcuts) + GP_PILL_PAD * 2 + GP_GUTTER * 2)
-
-/**
  * A hollow pill ([nxButtonRing]): the label, its value under it; at 0.35 alpha and not clickable while disabled. A toggle
  * ([ShortcutState.on]) that is on is a filled quick-settings tile instead (the list text colour, dark words). The
  * controller's pill ([selected]) gets an accent ring a gap outside it, so it reads on an outlined and a filled pill
@@ -246,12 +238,7 @@ private fun DrawScope.focusRing(color: Color) {
 /** The achievements as [AchievementRow]s; they open nothing (the description is on the row). */
 @Composable
 private fun AchievementsTab(list: List<RaAchievement>, badges: Map<String, String>, focused: Int?, bottom: Dp) {
-    // The rows fade where more scrolls in (the lists' cue), the focus an item clear of the fades.
-    val state = rememberFocusedListState(focused, margin = 1)
-    LazyColumn(
-        Modifier.fillMaxSize().nxScrollFade(state, height = 56.dp, strong = true), state = state,
-        contentPadding = PaddingValues(start = GP_LIST_GUTTER, end = GP_LIST_GUTTER, top = 6.dp, bottom = bottom),
-    ) {
+    PanelLazyList(focused, bottom) {
         itemsIndexed(list, key = { _, a -> a.id }) { i, a ->
             AchievementRow(a.title, a, raBadgeModel(badges, a), focused == i, Modifier)
         }
@@ -275,10 +262,7 @@ internal fun AchievementRow(title: String, a: RaAchievement, badge: String?, sel
                 RowText(title, selected, Modifier.weight(1f, fill = false))
                 GamePanelModel.pointsBadge(a)?.let { NxCountPill(it, selected, GP_BADGE_TEXT_SIZE) }
             }
-            if (a.description.isNotEmpty()) Text(
-                a.description, color = if (selected) colors.onAccentMuted else colors.hint, fontFamily = LocalNxFont.current, fontSize = GP_SMALL_SIZE,
-                maxLines = 2, overflow = TextOverflow.Ellipsis,
-            )
+            if (a.description.isNotEmpty()) RowSubText(a.description, selected, maxLines = 2)
         }
     }
 }
@@ -289,19 +273,12 @@ internal fun AchievementRow(title: String, a: RaAchievement, badge: String?, sel
  */
 @Composable
 private fun CheatsTab(cheats: List<CheatRow>, empty: String, focused: Int?, bottom: Dp, onEvent: (GamePanelEvent) -> Unit) {
-    val colors = LocalNxColors.current
     if (cheats.isEmpty()) {
-        Box(Modifier.fillMaxSize().padding(start = GP_GUTTER, end = GP_GUTTER, bottom = bottom), contentAlignment = Alignment.Center) {
-            Text(empty, color = colors.hint, fontFamily = LocalNxFont.current, fontSize = GP_SMALL_SIZE, textAlign = TextAlign.Center)
-        }
+        CentredNote(empty, Modifier.fillMaxSize().padding(start = GP_GUTTER, end = GP_GUTTER, bottom = bottom), GP_SMALL_SIZE)
         return
     }
     // Item indices are the focus indices and the cheats' own (no header item).
-    val state = rememberFocusedListState(focused, margin = 1)   // fades as the Achievements tab's
-    LazyColumn(
-        Modifier.fillMaxSize().nxScrollFade(state, height = 56.dp, strong = true), state = state,
-        contentPadding = PaddingValues(start = GP_LIST_GUTTER, end = GP_LIST_GUTTER, top = 6.dp, bottom = bottom),
-    ) {
+    PanelLazyList(focused, bottom) {
         itemsIndexed(cheats) { i, c ->
             val flip = { GamePanelModel.cheatEvent(i, cheats)?.let(onEvent); Unit }
             val selected = focused == i
@@ -309,10 +286,7 @@ private fun CheatsTab(cheats: List<CheatRow>, empty: String, focused: Int?, bott
                 Column(Modifier.weight(1f)) {
                     RowText(c.name, selected)
                     // The file it came from, when several were merged (two can name a cheat alike).
-                    if (c.source.isNotEmpty()) Text(
-                        c.source, color = if (selected) colors.onAccentMuted else colors.hint, fontFamily = LocalNxFont.current, fontSize = GP_SMALL_SIZE,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
+                    if (c.source.isNotEmpty()) RowSubText(c.source, selected)
                 }
                 NxSwitch(c.on, onClick = flip, lit = selected)
             }
@@ -327,15 +301,27 @@ private fun CheatsTab(cheats: List<CheatRow>, empty: String, focused: Int?, bott
 @Composable
 private fun PlayersTab(players: List<PlayerSlotRow>, pads: List<PlayerPadRow>, focused: Int?, bottom: Dp, onEvent: (GamePanelEvent) -> Unit) {
     // Item indices are the focus indices: the slots (no header item).
-    val state = rememberFocusedListState(focused, margin = 1)   // fades as the Achievements tab's
-    LazyColumn(
-        Modifier.fillMaxSize().nxScrollFade(state, height = 56.dp, strong = true), state = state,
-        contentPadding = PaddingValues(start = GP_LIST_GUTTER, end = GP_LIST_GUTTER, top = 6.dp, bottom = bottom),
-    ) {
+    PanelLazyList(focused, bottom) {
         itemsIndexed(players) { i, s ->
             PlayerRow("Player ${i + 1}", GamePanelModel.playerValue(s), focused == i, Modifier.clickable { onEvent(GamePanelModel.nextPlayer(i, players, pads)) })
         }
     }
+}
+
+/**
+ * A panel list following the controller's [focused] item ([rememberFocusedListState]): the rows fade where more scrolls
+ * in (the lists' cue), the focus an item clear of the fades. By default the panel tabs' frame, its end [bottom] clear.
+ */
+@Composable
+internal fun PanelLazyList(
+    focused: Int?,
+    bottom: Dp = GP_LIST_END,
+    modifier: Modifier = Modifier.fillMaxSize(),
+    contentPadding: PaddingValues = PaddingValues(start = GP_LIST_GUTTER, end = GP_LIST_GUTTER, top = 6.dp, bottom = bottom),
+    content: LazyListScope.() -> Unit,
+) {
+    val state = rememberFocusedListState(focused, margin = 1)
+    LazyColumn(modifier.nxScrollFade(state, height = 56.dp, strong = true), state = state, contentPadding = contentPadding, content = content)
 }
 
 /**
@@ -377,10 +363,9 @@ internal fun PlainPanelRow(label: String, selected: Boolean, modifier: Modifier)
 
 @Composable
 private fun PlayerRow(label: String, value: String, selected: Boolean, modifier: Modifier) {
-    val colors = LocalNxColors.current
     PanelListRow(selected, modifier) {
         RowText(label, selected, Modifier.weight(1f))
-        Text(value, maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = LocalNxFont.current, fontSize = GP_SMALL_SIZE, color = if (selected) colors.onAccentMuted else colors.hint)
+        RowSubText(value, selected)
     }
 }
 
@@ -402,6 +387,16 @@ private fun RowText(text: String, selected: Boolean, modifier: Modifier = Modifi
     Text(
         text, modifier = modifier, maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = LocalNxFont.current, fontSize = GP_LABEL_SIZE,
         color = if (selected) colors.onAccent else colors.listText,
+    )
+}
+
+/** A row's second line or value, small, muted on the accent pill while [selected]. */
+@Composable
+private fun RowSubText(text: String, selected: Boolean, maxLines: Int = 1) {
+    val colors = LocalNxColors.current
+    Text(
+        text, color = if (selected) colors.onAccentMuted else colors.hint, fontFamily = LocalNxFont.current, fontSize = GP_SMALL_SIZE,
+        maxLines = maxLines, overflow = TextOverflow.Ellipsis,
     )
 }
 
@@ -446,7 +441,6 @@ private val GP_FOCUS_GAP = 3.dp      // between that ring and the pill
 private val GP_NARROW = 360.dp       // narrower: the shortcut grid goes to 2 columns (or 1)
 private val GP_CELL_GAP = 10.dp      // between shortcut pills
 private val GP_PILL_PAD = 10.dp      // a shortcut pill's label from its sides
-private val GP_SHORTCUT_COLUMN_MIN = 140.dp   // the Menu tab's shortcuts beside its words: a column at least this wide
 private val GP_TITLE_SIZE = 17.sp
 private val GP_LABEL_SIZE = 15.sp
 private val GP_SMALL_SIZE = 13.sp

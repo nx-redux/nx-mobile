@@ -1,5 +1,8 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.library.Names
+import com.nxredux.mobile.storage.Bytes
+
 /**
  * A disc read by [WiiDiscId.read]: its 6-character [id], and whether its header carries the GameCube magic ([gameCube]),
  * so a GameCube image under the WII tag keeps the plain pad.
@@ -22,7 +25,7 @@ object WiiDiscId {
     private const val WII_MAGIC = 0x5D1C9EA3L
     private const val GC_MAGIC = 0xC2339F3DL
 
-    fun readable(fileName: String): Boolean = fileName.substringAfterLast('.', "").lowercase() in READABLE
+    fun readable(fileName: String): Boolean = Names.extensionOf(fileName, dotFile = true) in READABLE
 
     /**
      * The disc in the image: its ID and platform. A header with the GameCube magic (and not the Wii one) is a GameCube
@@ -59,32 +62,24 @@ object WiiDiscId {
         if (header.size < 6) return null
         val id = header.decodeToString(0, 6).takeIf { ID.matches(it) } ?: return null
         val full = header.size >= DISC_HEADER
-        return WiiDisc(id, gameCube = full && be32(header, 0x1C) == GC_MAGIC && be32(header, 0x18) != WII_MAGIC)
+        return WiiDisc(id, gameCube = full && Bytes.be32(header, 0x1C) == GC_MAGIC && Bytes.be32(header, 0x18) != WII_MAGIC)
     }
 
     private fun gcz(read: (Long, Int) -> ByteArray?, inflate: (ByteArray, Int) -> ByteArray?): WiiDisc? {
         val h = read(0, GCZ_HEADER)?.takeIf { it.size == GCZ_HEADER } ?: return null
-        if (le32(h, 0) != GCZ_MAGIC) return null
-        val blockSize = le32(h, 24)
-        val blocks = le32(h, 28)
+        if (Bytes.le32(h, 0) != GCZ_MAGIC) return null
+        val blockSize = Bytes.le32(h, 24)
+        val blocks = Bytes.le32(h, 28)
         if (blockSize !in 1..(1L shl 24) || blocks !in 1..(1L shl 24)) return null
         val dataStart = GCZ_HEADER + blocks * 12
         val p = read(GCZ_HEADER.toLong(), 16)?.takeIf { it.size >= 8 } ?: return null
-        val raw0 = le64(p, 0)
+        val raw0 = Bytes.le64(p, 0)
         val uncompressed = raw0 < 0   // top bit set: stored
         val start = raw0 and Long.MAX_VALUE
-        val end = if (blocks > 1 && p.size >= 16) le64(p, 8) and Long.MAX_VALUE else le64(h, 8)
+        val end = if (blocks > 1 && p.size >= 16) Bytes.le64(p, 8) and Long.MAX_VALUE else Bytes.le64(h, 8)
         val size = (end - start).coerceIn(DISC_HEADER.toLong(), blockSize)
         val block = read(dataStart + start, size.toInt()) ?: return null
         val plain = if (uncompressed) block else inflate(block, DISC_HEADER) ?: return null
         return disc(plain.copyOf(minOf(plain.size, DISC_HEADER)))
     }
-
-    private fun be32(b: ByteArray, o: Int): Long =
-        ((b[o].toLong() and 0xFF) shl 24) or ((b[o + 1].toLong() and 0xFF) shl 16) or ((b[o + 2].toLong() and 0xFF) shl 8) or (b[o + 3].toLong() and 0xFF)
-
-    private fun le32(b: ByteArray, o: Int): Long =
-        (b[o].toLong() and 0xFF) or ((b[o + 1].toLong() and 0xFF) shl 8) or ((b[o + 2].toLong() and 0xFF) shl 16) or ((b[o + 3].toLong() and 0xFF) shl 24)
-
-    private fun le64(b: ByteArray, o: Int): Long = le32(b, o) or (le32(b, o + 4) shl 32)
 }

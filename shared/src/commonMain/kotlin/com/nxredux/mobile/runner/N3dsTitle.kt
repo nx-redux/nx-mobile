@@ -1,5 +1,8 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.library.Names
+import com.nxredux.mobile.storage.Bytes
+
 /**
  * A 3DS game's identity from the start of its file (3dbrew "NCSD" and "NCCH"): the title ID (an NCSD's media ID at 0x108,
  * an NCCH's program ID at 0x118, little-endian) and the NCCH's product code ("CTR-P-AJRE", 16 ASCII bytes at 0x150).
@@ -29,7 +32,7 @@ data class N3dsTitle(val titleId: Long?, val productCode: String?) {
         /** .3ds and .cci are NCSD (a cart image), .cxi an NCCH; compressed (z*), homebrew (.3dsx, .elf) and .app are not read. */
         private val READABLE = setOf("3ds", "cci", "cxi")
 
-        fun readable(fileName: String): Boolean = fileName.substringAfterLast('.', "").lowercase() in READABLE
+        fun readable(fileName: String): Boolean = Names.extensionOf(fileName, dotFile = true) in READABLE
 
         /**
          * Where partition 0's NCCH header starts in an NCSD whose header is [head] (its offset in media units of
@@ -37,7 +40,7 @@ data class N3dsTitle(val titleId: Long?, val productCode: String?) {
          */
         fun ncchOffset(head: ByteArray): Long? {
             if (!magic(head, "NCSD")) return null
-            val units = le32(head, NCSD_PARTITION_0)
+            val units = Bytes.le32(head, NCSD_PARTITION_0)
             val exp = head[NCSD_FLAGS + 6].toInt() and 0xFF
             if (units <= 0L || exp > 8) return null
             val offset = units * (0x200L shl exp)
@@ -51,7 +54,7 @@ data class N3dsTitle(val titleId: Long?, val productCode: String?) {
         fun parse(head: ByteArray): N3dsTitle? {
             if (magic(head, "NCCH")) return ncch(head, 0)
             if (!magic(head, "NCSD")) return null
-            val mediaId = le64(head, NCSD_MEDIA_ID)
+            val mediaId = Bytes.le64(head, NCSD_MEDIA_ID)
             val code = ncchOffset(head)?.toInt()?.let { at -> if (magic(head, "NCCH", at)) ncch(head, at).productCode else null }
             return N3dsTitle(mediaId, code)
         }
@@ -61,13 +64,10 @@ data class N3dsTitle(val titleId: Long?, val productCode: String?) {
                 b.copyOfRange(at + NCCH_PRODUCT_CODE, at + NCCH_PRODUCT_CODE + 16)
                     .takeWhile { it != 0.toByte() }.toByteArray().decodeToString().trim().ifEmpty { null }
             } else null
-            return N3dsTitle(le64(b, at + NCCH_PROGRAM_ID), code)
+            return N3dsTitle(Bytes.le64(b, at + NCCH_PROGRAM_ID), code)
         }
 
         private fun magic(b: ByteArray, m: String, at: Int = 0): Boolean =
-            b.size >= at + HEADER && (0 until 4).all { b[at + MAGIC + it] == m[it].code.toByte() }
-
-        private fun le32(b: ByteArray, at: Int): Long = (0 until 4).fold(0L) { acc, i -> acc or ((b[at + i].toLong() and 0xFF) shl (8 * i)) }
-        private fun le64(b: ByteArray, at: Int): Long = (0 until 8).fold(0L) { acc, i -> acc or ((b[at + i].toLong() and 0xFF) shl (8 * i)) }
+            b.size >= at + HEADER && Bytes.startsWithAscii(b, m, at + MAGIC)
     }
 }

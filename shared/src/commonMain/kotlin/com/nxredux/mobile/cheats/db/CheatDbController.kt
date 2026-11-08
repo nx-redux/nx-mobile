@@ -1,6 +1,7 @@
 package com.nxredux.mobile.cheats.db
 
-import kotlinx.coroutines.CancellationException
+import com.nxredux.mobile.tryOr
+import com.nxredux.mobile.tryOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -90,15 +91,8 @@ class CheatDbController(
         // Busy before launching, so a second tap can't slip in before the coroutine starts.
         _state.value = CheatDbState.Checking(current)
         job = scope.launch {
-            val remotes = tableSources.keys.associateWith { source ->
-                try {
-                    platform.remoteStamp(source)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    null   // unreachable either way; never leave the state stuck on Checking
-                }
-            }
+            // Unreachable either way: never leave the state stuck on Checking.
+            val remotes = tableSources.keys.associateWith { source -> tryOrNull { platform.remoteStamp(source) } }
             val commit = if (CheatDbSource.LIBRETRO in tableSources) latestCommit() else null
             _state.value = CheatDbState.Installed(current)
             val answered = remotes.filterValues { it != null }
@@ -123,16 +117,10 @@ class CheatDbController(
         val current = installedManifest ?: return
         _state.value = CheatDbState.Removing(current)
         job = scope.launch {
-            try {
+            tryOr({ e -> failed(current, e) }) {
                 platform.deleteInstalled(current.files)
                 _state.value = CheatDbState.NotInstalled
                 emit(CheatDbMessage.Notice("$NAME removed"))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: CheatDbException) {
-                restore(current); emit(CheatDbMessage.Failure(e.kind.message))
-            } catch (e: Exception) {
-                restore(current); emit(CheatDbMessage.Failure("$NAME failed: ${e::class.simpleName}"))
             }
         }
     }
@@ -165,18 +153,14 @@ class CheatDbController(
             // Asked before the zip, so a cheat committed meanwhile reads as new at the next check, never as already installed.
             val newest = if (CheatDbSource.LIBRETRO in tableSources) latestCommit() else null
             val missed = ArrayList<CheatDbSource>()   // best-effort sources that could not be downloaded or installed
-            try {
+            // A cancel passes through: cancel() already restored the state.
+            tryOr({ e -> failed(previous, e) }) {
                 try {
                     for (source in tableSources.keys) {
-                        try {
+                        tryOr({ e -> if (!bestEffort(source)) throw e; missed += source }) {
                             archives += withProgress { report ->
                                 platform.download(source) { done, total -> report(CheatDbState.Downloading(done, total, previous, source)) }
                             }
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            if (!bestEffort(source)) throw e
-                            missed += source
                         }
                     }
                     val result = withProgress { report ->
@@ -221,14 +205,14 @@ class CheatDbController(
                     // Also on cancellation: the archives must not linger in the cache.
                     withContext(NonCancellable) { archives.forEach { platform.discard(it) } }
                 }
-            } catch (e: CancellationException) {
-                throw e   // cancel() already restored the state
-            } catch (e: CheatDbException) {
-                restore(previous); emit(CheatDbMessage.Failure(e.kind.message))
-            } catch (e: Exception) {
-                restore(previous); emit(CheatDbMessage.Failure("$NAME failed: ${e::class.simpleName}"))
             }
         }
+    }
+
+    /** [previous] shown again, with [e]'s failure. */
+    private fun failed(previous: CheatDbManifest?, e: Exception) {
+        restore(previous)
+        emit(CheatDbMessage.Failure(if (e is CheatDbException) e.kind.message else "$NAME failed: ${e::class.simpleName}"))
     }
 
     /**
@@ -253,13 +237,7 @@ class CheatDbController(
     private fun bestEffort(source: CheatDbSource): Boolean = source == CheatDbSource.PCSX2 && CheatDbSource.LIBRETRO in tableSources
 
     /** GitHub's newest `cht` commit, or null when it did not answer: the checks then go by the zip's date alone. */
-    private suspend fun latestCommit(): CheatDbCommit? = try {
-        platform.latestChtCommit()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        null
-    }
+    private suspend fun latestCommit(): CheatDbCommit? = tryOrNull { platform.latestChtCommit() }
 
     private fun restore(previous: CheatDbManifest?) {
         _state.value = previous?.let { CheatDbState.Installed(it) } ?: CheatDbState.NotInstalled

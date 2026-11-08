@@ -7,16 +7,9 @@ data class Shortcut(val path: String, val name: String? = null)
 object Shortcuts {
     const val MAX = 12
 
-    fun parse(text: String): List<Shortcut> =
-        TextLines.split(text)
-            .filter { it.isNotBlank() }
-            .map { line ->
-                val tab = line.indexOf('\t')
-                if (tab < 0) Shortcut(line) else Shortcut(line.substring(0, tab), line.substring(tab + 1).ifEmpty { null })
-            }
+    fun parse(text: String): List<Shortcut> = TabLines.parseOptional(text).map { (path, name) -> Shortcut(path, name) }
 
-    fun render(list: List<Shortcut>): String =
-        sorted(list).joinToString(separator = "") { s -> s.path + (s.name?.let { "\t$it" } ?: "") + "\n" }
+    fun render(list: List<Shortcut>): String = sorted(list).joinToString(separator = "") { TabLines.line(it.path, it.name) }
 
     /** [list] with [shortcut] added (or its name replaced when the path is known), sorted; null when the list is full and the path is new. */
     fun add(list: List<Shortcut>, shortcut: Shortcut): List<Shortcut>? {

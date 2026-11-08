@@ -21,7 +21,6 @@
 #include <cstdlib>
 #include <string>
 #include <cmath>
-#include <limits>
 #include <algorithm>
 #include <utility>
 #include <sstream>
@@ -42,6 +41,20 @@ namespace libretrodroid {
 static void printGLString(const char *name, GLenum s) {
     const char *v = (const char *) glGetString(s);
     LOGI("GL %s = %s\n", name, v);
+}
+
+namespace {
+struct UvBounds { float u0, u1, v0, v1; };
+
+// coordinates holds (u, v) pairs.
+UvBounds uvBounds(const std::array<float, 12>& coordinates) {
+    UvBounds b { coordinates[0], coordinates[0], coordinates[1], coordinates[1] };
+    for (size_t i = 0; i < coordinates.size(); i += 2) {
+        b.u0 = std::min(b.u0, coordinates[i]); b.u1 = std::max(b.u1, coordinates[i]);
+        b.v0 = std::min(b.v0, coordinates[i + 1]); b.v1 = std::max(b.v1, coordinates[i + 1]);
+    }
+    return b;
+}
 }
 
 GLuint loadShader(GLenum shaderType, const char* pSource) {
@@ -387,11 +400,7 @@ void Video::appendComposition(const RegionQuad& whole, std::vector<RegionQuad>& 
     // The whole composed frame drawn as one quad, cut into its screens: each part's place in the frame is found on the
     // quad through its texture coordinates, so a rotated picture is cut the same way. The composed texture keeps the
     // core frame's row order: with a bottom-left origin its row 0 is the picture's bottom row.
-    float u0 = whole.coordinates[0], u1 = u0, v0 = whole.coordinates[1], v1 = v0;
-    for (size_t i = 0; i < whole.coordinates.size(); i += 2) {
-        u0 = std::min(u0, whole.coordinates[i]); u1 = std::max(u1, whole.coordinates[i]);
-        v0 = std::min(v0, whole.coordinates[i + 1]); v1 = std::max(v1, whole.coordinates[i + 1]);
-    }
+    const auto [u0, u1, v0, v1] = uvBounds(whole.coordinates);
     if (u1 <= u0 || v1 <= v0) { out.push_back(whole); return; }
     // Corners of the frame on screen: (0,0), (1,0) and (0,1) of the frame give the frame -> vertex map.
     std::array<float, 2> p00{}, p10{}, p01{};
@@ -448,11 +457,7 @@ void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layou
             auto coordinates = frameCoordinates(quad.coordinates);
             if (frameW > 0 && frameH > 0 && (quad.srcWidth < 0.999F || quad.srcHeight < 0.999F)) {
                 GLuint cropped = cropRegion(crops[index], coordinates, frameW, frameH);
-                float u0 = coordinates[0], u1 = coordinates[0], v0 = coordinates[1], v1 = coordinates[1];
-                for (size_t i = 0; i < coordinates.size(); i += 2) {
-                    u0 = std::min(u0, coordinates[i]); u1 = std::max(u1, coordinates[i]);
-                    v0 = std::min(v0, coordinates[i + 1]); v1 = std::max(v1, coordinates[i + 1]);
-                }
+                const auto [u0, u1, v0, v1] = uvBounds(coordinates);
                 for (size_t i = 0; i < coordinates.size(); i += 2) {
                     coordinates[i] = u1 > u0 ? (coordinates[i] - u0) / (u1 - u0) : 0.0F;
                     coordinates[i + 1] = v1 > v0 ? (coordinates[i + 1] - v0) / (v1 - v0) : 0.0F;
@@ -566,16 +571,8 @@ GLuint Video::cropRegion(RegionCrop& crop, const std::array<float, 12>& coordina
         crop.width = width;
         crop.height = height;
     }
-    if (!plainShader) {
-        auto chain = ShaderManager::getShader({ ShaderManager::Type::SHADER_DEFAULT, { { "LINEAR", "0" } } });
-        plainShader = createShaderChainEntry(chain.passes.front());
-    }
-    const auto& s = *plainShader;
-    float u0 = coordinates[0], u1 = coordinates[0], v0 = coordinates[1], v1 = coordinates[1];
-    for (size_t i = 0; i < coordinates.size(); i += 2) {
-        u0 = std::min(u0, coordinates[i]); u1 = std::max(u1, coordinates[i]);
-        v0 = std::min(v0, coordinates[i + 1]); v1 = std::max(v1, coordinates[i + 1]);
-    }
+    const auto& s = ensurePlainShader();
+    const auto [u0, u1, v0, v1] = uvBounds(coordinates);
     // Texel row order kept: the crop's row 0 is the region's first row in the source texture.
     const std::array<float, 12> vertices = { -1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1 };
     const std::array<float, 12> source = { u0, v0, u1, v0, u0, v1, u0, v1, u1, v0, u1, v1 };
@@ -611,12 +608,16 @@ void Video::releaseCrops() {
     }
 }
 
-void Video::drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned screenHeight) {
+const Video::ShaderChainEntry& Video::ensurePlainShader() {
     if (!plainShader) {
         auto chain = ShaderManager::getShader({ ShaderManager::Type::SHADER_DEFAULT, { { "LINEAR", "0" } } });
         plainShader = createShaderChainEntry(chain.passes.front());
     }
-    const auto& s = *plainShader;
+    return *plainShader;
+}
+
+void Video::drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned screenHeight) {
+    const auto& s = ensurePlainShader();
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, (GLsizei) screenWidth, (GLsizei) screenHeight);
@@ -779,11 +780,7 @@ void Video::composeFrame() {
         compositionTextureWidth = compositionWidth;
         compositionTextureHeight = compositionHeight;
     }
-    if (!plainShader) {
-        auto chain = ShaderManager::getShader({ ShaderManager::Type::SHADER_DEFAULT, { { "LINEAR", "0" } } });
-        plainShader = createShaderChainEntry(chain.passes.front());
-    }
-    const auto& s = *plainShader;
+    const auto& s = ensurePlainShader();
 
     glBindFramebuffer(GL_FRAMEBUFFER, compositionFramebuffer);
     glViewport(0, 0, compositionWidth, compositionHeight);
@@ -832,12 +829,7 @@ void Video::renderPausedFrame() {
 float Video::pictureDensity(const std::array<float, 12>& vertices, const std::array<float, 12>& coordinates,
                            unsigned screenWidth, unsigned screenHeight) {
     auto box = foregroundRect(vertices, (int) screenWidth, (int) screenHeight);
-    float minU = std::numeric_limits<float>::max(), maxU = std::numeric_limits<float>::lowest();
-    float minV = std::numeric_limits<float>::max(), maxV = std::numeric_limits<float>::lowest();
-    for (int i = 0; i < 12; i += 2) {
-        minU = std::min(minU, coordinates[i]); maxU = std::max(maxU, coordinates[i]);
-        minV = std::min(minV, coordinates[i + 1]); maxV = std::max(maxV, coordinates[i + 1]);
-    }
+    const auto [minU, maxU, minV, maxV] = uvBounds(coordinates);
     float texelsX = (maxU - minU) * getTextureStorageWidth();
     float texelsY = (maxV - minV) * getTextureStorageHeight();
     if (texelsX <= 0.0F || texelsY <= 0.0F) return getScreenDensity((float) screenWidth, (float) screenHeight);

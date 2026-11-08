@@ -45,7 +45,7 @@ object SyncCommands {
     fun clientArgs(
         binary: String, step: SyncStep, peerIp: String, root: String, savesDir: String? = null, onlyTags: List<String>? = null,
     ): List<String> {
-        require(SyncWire.ipv4(peerIp) == peerIp) { "not a dotted IPv4 address: $peerIp" }
+        requireIpv4(peerIp)
         val base = root.trimEnd('/')
         val shared = step.module == "shared"
         require(savesDir == null || noBreak(savesDir)) { "a path with a line break" }
@@ -69,7 +69,7 @@ object SyncCommands {
         binary: String, run: RomRun, peerIp: String, homeRoms: String, extraRoots: Map<Int, String>,
         filesFromFile: String?, excludeFile: String?, filterFile: String? = null, homeBios: String? = null,
     ): List<String> {
-        require(SyncWire.ipv4(peerIp) == peerIp) { "not a dotted IPv4 address: $peerIp" }
+        requireIpv4(peerIp)
         require(listOf(run.from, run.to).all { noBreak(endPath(it)) }) { "a path with a line break" }
         fun resolve(e: RomEnd): String = when (e) {
             is RomEnd.Home -> dir(homeRoms.trimEnd('/'), e.path)
@@ -134,12 +134,14 @@ object SyncCommands {
 
     private fun noBreak(s: String) = '\n' !in s && '\r' !in s
 
+    private fun requireIpv4(ip: String) = require(SyncWire.ipv4(ip) == ip) { "not a dotted IPv4 address: $ip" }
+
     /** `base/path/`, or `base/` when [path] is empty. */
     private fun dir(base: String, path: String) = if (path.isEmpty()) "$base/" else "$base/${path.trimEnd('/')}/"
 
     /** Lists the top level of the peer's [module]: `roms` (its console folders) or `bios` (its tag folders). */
     fun listArgs(binary: String, peerIp: String, module: String = "roms"): List<String> {
-        require(SyncWire.ipv4(peerIp) == peerIp) { "not a dotted IPv4 address: $peerIp" }
+        requireIpv4(peerIp)
         require(module == "roms" || module == "bios") { "not a listable module: $module" }
         // --8-bit-output: names raw, not with each non-ASCII byte as `\#ooo` (`Pokémon mini (PKM)` must pair by name).
         return listOf(binary, "--list-only", "--8-bit-output", "--timeout=30", "--contimeout=10", "rsync://$peerIp:${SyncWire.RSYNC_PORT}/$module/")
@@ -150,14 +152,14 @@ object SyncCommands {
      * folder). Exit 23 with nothing matching is a peer with none.
      */
     fun listHashesArgs(binary: String, peerIp: String): List<String> {
-        require(SyncWire.ipv4(peerIp) == peerIp) { "not a dotted IPv4 address: $peerIp" }
+        requireIpv4(peerIp)
         return listOf(binary, "--list-only", "--8-bit-output", "-R", "--timeout=30", "--contimeout=10",
             "rsync://$peerIp:${SyncWire.RSYNC_PORT}/roms/./*/.retroachievements/hashes.json")
     }
 
     /** Lists the top-level entries of the peer's `roms/<folder>/` (which games a sibling console folder holds). */
     fun listFolderArgs(binary: String, peerIp: String, folder: String): List<String> {
-        require(SyncWire.ipv4(peerIp) == peerIp) { "not a dotted IPv4 address: $peerIp" }
+        requireIpv4(peerIp)
         require(noBreak(folder)) { "a path with a line break" }
         return listOf(binary, "--list-only", "--8-bit-output", "--timeout=30", "--contimeout=10",
             dir("rsync://$peerIp:${SyncWire.RSYNC_PORT}/roms", folder))
@@ -170,7 +172,7 @@ object SyncCommands {
      * what lands.
      */
     fun collectionsArgs(binary: String, peerIp: String, localDir: String, push: Boolean): List<String> {
-        require(SyncWire.ipv4(peerIp) == peerIp) { "not a dotted IPv4 address: $peerIp" }
+        requireIpv4(peerIp)
         require(noBreak(localDir)) { "a path with a line break" }
         val local = localDir.trimEnd('/') + "/"
         val remote = "rsync://$peerIp:${SyncWire.RSYNC_PORT}/collections/"
@@ -181,13 +183,13 @@ object SyncCommands {
 
     /** Copies one file [path] of the peer's [module] to [localFile]. */
     fun fetchArgs(binary: String, peerIp: String, module: String, path: String, localFile: String): List<String> {
-        require(SyncWire.ipv4(peerIp) == peerIp) { "not a dotted IPv4 address: $peerIp" }
+        requireIpv4(peerIp)
         return listOf(binary, "-t", "--timeout=30", "--contimeout=10", "rsync://$peerIp:${SyncWire.RSYNC_PORT}/$module/$path", localFile)
     }
 
     /** Copies [localFile] into the peer's [module] folder [remoteDir]. */
     fun putArgs(binary: String, peerIp: String, module: String, remoteDir: String, localFile: String): List<String> {
-        require(SyncWire.ipv4(peerIp) == peerIp) { "not a dotted IPv4 address: $peerIp" }
+        requireIpv4(peerIp)
         return listOf(binary, "-t", "--no-perms", "--timeout=30", "--contimeout=10", localFile,
             "rsync://$peerIp:${SyncWire.RSYNC_PORT}/$module/$remoteDir/")
     }
@@ -205,7 +207,7 @@ object SyncCommands {
         peerIp: String, shared: String, saves: String, pidFile: String, logFile: String, roms: ServerRoms? = null, bios: String? = null,
         collections: String? = null,
     ): String {
-        require(SyncWire.ipv4(peerIp) == peerIp) { "not a dotted IPv4 address: $peerIp" }
+        requireIpv4(peerIp)
         val paths = listOf(shared, saves, pidFile, logFile) + (roms?.let { listOf(it.roms, it.manifestDir) + it.extras }.orEmpty()) +
             listOfNotNull(bios, collections)
         require(paths.none { '\n' in it || '\r' in it }) { "a path with a line break" }

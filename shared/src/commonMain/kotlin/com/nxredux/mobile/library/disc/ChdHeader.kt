@@ -1,5 +1,7 @@
 package com.nxredux.mobile.library.disc
 
+import com.nxredux.mobile.storage.Bytes
+
 /** What a CHD holds, by its metadata: a GD-ROM (Dreamcast), a DVD (PSP here), a CD, or something else. */
 enum class ChdMedia { GD, DVD, CD, OTHER }
 
@@ -9,8 +11,8 @@ enum class ChdMedia { GD, DVD, CD, OTHER }
  */
 object ChdHeader {
     fun media(head: ByteArray): ChdMedia? {
-        if (head.size < 124 || head.copyOfRange(0, 8).decodeToString() != "MComprHD" || u32(head, 12) != 5L) return null
-        var at = u64(head, 48)
+        if (head.size < 124 || !Bytes.startsWithAscii(head, "MComprHD") || Bytes.be32(head, 12) != 5L) return null
+        var at = Bytes.be64(head, 48)
         var found = ChdMedia.OTHER
         val seen = HashSet<Long>()
         while (at > 0 && at + 16 <= head.size && seen.add(at)) {
@@ -19,11 +21,8 @@ object ChdHeader {
                 "DVD " -> return ChdMedia.DVD
                 "CHT2", "CHTR", "CHCD" -> found = ChdMedia.CD
             }
-            at = u64(head, at.toInt() + 8)
+            at = Bytes.be64(head, at.toInt() + 8)
         }
         return found
     }
-
-    private fun u32(b: ByteArray, at: Int): Long = (0 until 4).fold(0L) { v, i -> (v shl 8) or (b[at + i].toLong() and 0xFF) }
-    private fun u64(b: ByteArray, at: Int): Long = (0 until 8).fold(0L) { v, i -> (v shl 8) or (b[at + i].toLong() and 0xFF) }
 }

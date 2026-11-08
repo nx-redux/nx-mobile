@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.tryOr
 import com.nxredux.mobile.ui.nx.homeShelfCap
 import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.gametime.GameTimeData
@@ -22,7 +23,6 @@ import com.nxredux.mobile.ui.nx.homeClamp
 import com.nxredux.mobile.ui.nx.homeRemember
 import com.nxredux.mobile.ui.nx.homeShape
 import com.nxredux.mobile.ui.nx.homeStep
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -234,7 +234,7 @@ internal class HomeController(
         val signedIn = host.raSignedIn()
         val data = gameTime ?: return HomeStats(null, null, signedIn, null, computed = true)
         val now = host.clockNow()
-        val computed = try {
+        val computed = tryOr({ return null }) {
             withContext(compute) {
                 val since = calendar.monthStart(now)   // local 00:00 on the 1st, DST-safe
                 val window = data.window(since, now)
@@ -242,10 +242,6 @@ internal class HomeController(
                 val unlocks = if (signedIn && window.totalMs > 0L) achievements?.unlocksSince(since, data.playedPaths(since, now)) else null
                 window to unlocks
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            return null
         }
         val (window, unlocks) = computed
         val named = { t: GameTotal -> host.resolveOne(t.romPath)?.let { t.copy(name = it.game.shownName) } ?: t }

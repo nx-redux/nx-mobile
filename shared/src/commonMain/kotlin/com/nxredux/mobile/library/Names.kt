@@ -26,9 +26,13 @@ object Names {
         return display to tag
     }
 
-    fun extensionOf(name: String): String {
+    /**
+     * [name]'s extension in lowercase, "" when it has none. A dot file (".iso") has none unless [dotFile]: a format check
+     * that reads such a name as its own extension keeps doing so.
+     */
+    fun extensionOf(name: String, dotFile: Boolean = false): String {
         val dot = name.lastIndexOf('.')
-        return if (dot <= 0) "" else name.substring(dot + 1).lowercase()
+        return if (dot < 0 || (dot == 0 && !dotFile)) "" else name.substring(dot + 1).lowercase()
     }
 
     fun stripExtension(name: String): String {

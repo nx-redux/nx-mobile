@@ -35,6 +35,7 @@ public:
     static ShaderManager::Config shaderFromJava(JNIEnv* env, jobject obj);
 
     static jint throwRetroException(JNIEnv* env, int errorCode);
+    // lambda gets each item as a local reference deleted once it returns: it must not keep the item.
     static void forEachOnJavaIterable(JNIEnv* env, jobject jList, const std::function<void(jobject)> &lambda);
     static std::unordered_map<std::string, std::string> stringMapFromJava(JNIEnv* env, jobject jMap);
 };

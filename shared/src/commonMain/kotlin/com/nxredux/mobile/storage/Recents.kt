@@ -8,16 +8,9 @@ object Recents {
     const val MAX = 24
     const val HOME = GamePath.HOME
 
-    fun parse(text: String): List<Recent> =
-        TextLines.split(text)
-            .filter { it.isNotBlank() }
-            .map { line ->
-                val tab = line.indexOf('\t')
-                if (tab < 0) Recent(line) else Recent(line.substring(0, tab), line.substring(tab + 1).ifEmpty { null })
-            }
+    fun parse(text: String): List<Recent> = TabLines.parseOptional(text).map { (path, alias) -> Recent(path, alias) }
 
-    fun render(list: List<Recent>): String =
-        list.joinToString(separator = "") { r -> r.path + (r.alias?.let { "\t$it" } ?: "") + "\n" }
+    fun render(list: List<Recent>): String = list.joinToString(separator = "") { TabLines.line(it.path, it.alias) }
 
     /** Moves [recent] to the top; a null alias keeps the existing entry's alias. */
     fun add(list: List<Recent>, recent: Recent): List<Recent> {

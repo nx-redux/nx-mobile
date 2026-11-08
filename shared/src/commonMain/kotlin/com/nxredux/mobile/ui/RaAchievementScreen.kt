@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.tryOr
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,7 +16,6 @@ import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxHintBar
 import com.nxredux.mobile.ui.nx.NxPageTitle
-import kotlinx.coroutines.CancellationException
 
 /**
  * One achievement in full under its game's page title, the same body as the in-game menu's detail page, over a Back hint.
@@ -29,7 +29,7 @@ fun RaAchievementScreen(
 ) {
     val a = screen.achievement
     val muted by produceState(false, screen.game.hash, a.id) {
-        value = try { a.id in controller.mutes.load(screen.game.hash) } catch (e: CancellationException) { throw e } catch (e: Exception) { false }
+        value = tryOr({ false }) { a.id in controller.mutes.load(screen.game.hash) }
     }
     Column(modifier.fillMaxSize()) {
         NxPageTitle(toolPageTitleHead(screen, split).orEmpty(), suffix = toolPageCount(screen))

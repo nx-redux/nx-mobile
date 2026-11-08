@@ -7,8 +7,9 @@ import kotlin.test.assertFailsWith
 
 class ArtPathsTest {
     @Test fun baseStripsLastExtensionOnly() {
-        assertEquals("Super Mario World (USA)", ArtPaths.base("Super Mario World (USA).sfc"))
-        assertEquals("game.v1", ArtPaths.base("game.v1.zip")); assertEquals(".hidden", ArtPaths.base(".hidden"))
+        fun base(file: String) = ArtPaths.target(GamePath.HOME, "Roms/GB", file, folderGame = false).base
+        assertEquals("Super Mario World (USA)", base("Super Mario World (USA).sfc"))
+        assertEquals("game.v1", base("game.v1.zip")); assertEquals(".hidden", base(".hidden"))
     }
     @Test fun homeGameEverySlotAndEncoding() {
         val t = ArtPaths.target(GamePath.HOME, "Roms/Game Boy (GB)", "Tetris.gb", folderGame = false)

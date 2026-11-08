@@ -70,7 +70,6 @@ class InGameMenuSplitTest {
     // A narrow portrait (the Flip): the Options words don't fit beside the root's, so the shortcuts stay and the page opens whole.
     @Test fun inPortraitAnOptionsPageThatDoesNotFitBesideTheRootKeepsThePanelAndOpensWhole() {
         val m = model(split = false)
-        m.optionsBeside = false
         m.onRow("Options")
         assertEquals(MenuPaneContent.Panel, menuPanes(m.state, split = false, optionsBeside = false)!!.right)
         assertTrue(menuTabsShown(m.state))

@@ -1,26 +1,15 @@
 package com.nxredux.mobile.library
 
-import com.nxredux.mobile.storage.TextLines
+import com.nxredux.mobile.storage.TabLines
 
 /**
  * NX Redux map.txt: one "<file name><TAB><display name>" per line. Lines without a tab are ignored. Keys are the
  * full file name (or a disc folder's name); the handheld looks the entry's basename up the same way.
  */
 object MapTxt {
-    fun parse(text: String): Map<String, String> =
-        TextLines.split(text).asSequence()
-            .mapNotNull { line ->
-                val tab = line.indexOf('\t')
-                if (tab <= 0) null else {
-                    val key = line.substring(0, tab).trim()
-                    val value = line.substring(tab + 1).trim()
-                    if (key.isEmpty() || value.isEmpty()) null else key to value
-                }
-            }
-            .toMap()
+    fun parse(text: String): Map<String, String> = TabLines.parsePairs(text, key = String::trim, value = String::trim)
 
-    fun render(entries: Map<String, String>): String =
-        entries.entries.sortedBy { it.key }.joinToString("") { "${it.key}\t${it.value}\n" }
+    fun render(entries: Map<String, String>): String = TabLines.render(entries)
 
     /** [text] (null when the file does not exist) with [key] set to [name]. A key or name with a tab or newline cannot be stored: [text] as is (or ""). */
     fun with(text: String?, key: String, name: String): String {

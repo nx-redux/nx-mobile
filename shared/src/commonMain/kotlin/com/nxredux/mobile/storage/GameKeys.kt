@@ -20,9 +20,7 @@ object GameKeys {
     /** [rewriteLines] the other way: the extra [extraId]'s keys back to home keys ([toHome]). */
     fun rewriteLinesToHome(text: String, extraId: String): String = rewrite(text) { toHome(it, extraId) }
 
-    private fun rewrite(text: String, key: (String) -> String?): String = text.split("\n").joinToString("\n") { line ->
-        val tab = line.indexOf('\t')
-        val path = if (tab < 0) line else line.substring(0, tab)
-        (key(path) ?: path) + if (tab < 0) "" else line.substring(tab)
-    }
+    // Only the BOM goes: line endings are kept as they are.
+    private fun rewrite(text: String, key: (String) -> String?): String =
+        TextLines.stripBom(text).split("\n").joinToString("\n") { TabLines.mapKey(it, key) }
 }

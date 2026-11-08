@@ -15,6 +15,8 @@ object SaveArchive {
     /** The folders an export (and a folder import) walks, under the card root. */
     val ROOTS = listOf("Saves", ".userdata/shared")
 
+    private val DRIVE = Regex("^[A-Za-z]:")
+
     fun areaOf(path: String): SaveArea? {
         val s = path.split('/')
         if (s.any { it.isEmpty() }) return null
@@ -29,7 +31,7 @@ object SaveArchive {
     /** A zip entry name as a card-root-relative path (`\` read as `/`), or null when it must be refused: absolute, a drive, `.`/`..` or empty segments. */
     fun safePath(entryName: String): String? {
         val p = entryName.replace('\\', '/')
-        if (p.startsWith("/") || Regex("^[A-Za-z]:").containsMatchIn(p)) return null
+        if (p.startsWith("/") || DRIVE.containsMatchIn(p)) return null
         val s = p.split('/')
         if (s.any { it.isEmpty() || it == "." || it == ".." }) return null
         return p

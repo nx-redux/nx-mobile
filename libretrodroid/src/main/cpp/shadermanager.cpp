@@ -1605,7 +1605,9 @@ ShaderManager::Chain ShaderManager::getShader(const ShaderManager::Config& confi
             false
         };
     }
-}
+    }
+    // A type number from Java outside the enum.
+    return getShader({ Type::SHADER_DEFAULT });
 }
 
 std::string ShaderManager::buildDefines(
@@ -1615,7 +1617,7 @@ std::string ShaderManager::buildDefines(
     customParams.insert(baseParams.begin(), baseParams.end());
 
     std::string result;
-    std::for_each(customParams.begin(), customParams.end(), [&result] (auto param) {
+    std::for_each(customParams.begin(), customParams.end(), [&result] (const auto& param) {
         result += "#define " + param.first + " " + param.second + "\n";
     });
 

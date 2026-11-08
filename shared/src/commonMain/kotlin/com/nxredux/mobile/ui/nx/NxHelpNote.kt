@@ -13,7 +13,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -143,9 +145,8 @@ fun NxSettingInfoPopup(note: NxHelpText?, onClose: () -> Unit) {
         val rise by transition.animateDp({ tween(120) }, label = "rise") { if (it == EnterExitState.Visible) 0.dp else HelpRise }
         val colors = LocalNxColors.current
         val density = LocalDensity.current
-        val scroll = rememberScrollState()
         val stepPx = with(density) { HelpScrollStep.toPx() }
-        LaunchedEffect(n.scrollSeq) { if (n.scrollSeq > 0) scroll.animateScrollBy(n.scrollDir * stepPx) }
+        val scroll = rememberStepScroll(n.scrollSeq, n.scrollDir, stepPx)
         val hintScope = rememberCoroutineScope()
         var origin by remember { mutableStateOf<Offset?>(null) }
         val anchor = NxHelpAnchor.row?.takeIf { it.label == n.title }
@@ -198,3 +199,34 @@ fun NxSettingInfoPopup(note: NxHelpText?, onClose: () -> Unit) {
         }
     }
 }
+
+/**
+ * A scroll that a controller's UP / DOWN step ([seq] counts the presses, [dir] -1 up, +1 down) by [step] px each. Each
+ * press restarts the effect and so cancels the last animation part-way: the steps go to a running target instead of
+ * from where that animation stopped, so a held key still moves a whole step a press. A touch drag drops the target, so
+ * the next press steps from where the finger left it.
+ */
+@Composable
+internal fun rememberStepScroll(seq: Int, dir: Int, step: Float): ScrollState {
+    val scroll = rememberScrollState()
+    val target = remember { StepTarget() }
+    LaunchedEffect(scroll) {
+        scroll.interactionSource.interactions.collect { if (it is DragInteraction.Start) target.px = null }
+    }
+    LaunchedEffect(seq) {
+        if (seq <= 0) return@LaunchedEffect
+        val to = stepScrollTarget(target.px ?: scroll.value, dir, step, scroll.maxValue)
+        target.px = to
+        scroll.animateScrollTo(to)
+        // Arrived: the next press starts from the scroll itself (its end may have moved meanwhile).
+        target.px = null
+    }
+    return scroll
+}
+
+/** Where a step scroll is headed; null while it rests. */
+private class StepTarget { var px: Int? = null }
+
+/** The scroll [step] px on from [from] toward [dir], within 0..[max]. */
+internal fun stepScrollTarget(from: Int, dir: Int, step: Float, max: Int): Int =
+    (from + (dir * step).roundToInt()).coerceIn(0, max.coerceAtLeast(0))

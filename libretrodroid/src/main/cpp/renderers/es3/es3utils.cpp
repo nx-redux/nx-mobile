@@ -99,10 +99,10 @@ std::unique_ptr<ES3Utils::Framebuffers> ES3Utils::buildShaderPasses(
     const libretrodroid::ShaderManager::Chain &shaders
 ) {
     auto result = std::make_unique<std::vector<std::unique_ptr<ES3Utils::Framebuffer>>>();
-    auto passes = shaders.passes;
+    const auto& passes = shaders.passes;
 
-    for (int i = 0; i < passes.size() - 1; ++i) {
-        auto pass = passes[i];
+    for (size_t i = 0; i + 1 < passes.size(); ++i) {
+        const auto& pass = passes[i];
         unsigned int passWidth = std::lround(width * pass.scale);
         unsigned int passHeight = std::lround(height * pass.scale);
 
@@ -117,6 +117,19 @@ std::unique_ptr<ES3Utils::Framebuffers> ES3Utils::buildShaderPasses(
         result->push_back(std::move(data));
     }
 
+    return result;
+}
+
+Renderer::PassData ES3Utils::passData(const Framebuffers& framebuffers, unsigned int layer) {
+    Renderer::PassData result;
+    if (layer < framebuffers.size()) {
+        result.framebuffer = framebuffers[layer]->framebuffer;
+        result.width = framebuffers[layer]->width;
+        result.height = framebuffers[layer]->height;
+    }
+    if (layer > 0 && layer < framebuffers.size() + 1) {
+        result.texture = framebuffers[layer - 1]->texture;
+    }
     return result;
 }
 

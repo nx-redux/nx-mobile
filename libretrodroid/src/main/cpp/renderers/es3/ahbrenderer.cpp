@@ -165,16 +165,7 @@ void AhbRenderer::setShaders(ShaderManager::Chain value) {
 }
 
 Renderer::PassData AhbRenderer::getPassData(unsigned int layer) {
-    PassData result;
-    if (layer < framebuffers->size()) {
-        result.framebuffer = framebuffers->at(layer)->framebuffer;
-        result.width = framebuffers->at(layer)->width;
-        result.height = framebuffers->at(layer)->height;
-    }
-    if (layer > 0 && layer < framebuffers->size() + 1) {
-        result.texture = framebuffers->at(layer - 1)->texture;
-    }
-    return result;
+    return ES3Utils::passData(*framebuffers, layer);
 }
 
 void AhbRenderer::deleteImport(Import& import) {

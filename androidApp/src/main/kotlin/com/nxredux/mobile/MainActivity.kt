@@ -136,6 +136,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.concurrent.thread
 import java.lang.ref.WeakReference
+import java.util.concurrent.Executors
 
 class MainActivity : ComponentActivity(), FolderPicker {
 
@@ -718,7 +719,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
         super.onResume()
         if (handOverToHome()) return
         val app = applicationContext
-        thread(name = "data-move-start") { DataRoot.startIfDue(app) }   // a move held off by a game since killed (cheap once done)
+        dataMoveStarter.execute { DataRoot.startIfDue(app) }   // a move held off by a game since killed (cheap once done)
         recordStartedLaunches()   // games that started while the menu was gone (or its process was)
         applyKeepScreenOn()
         resumed = true
@@ -820,6 +821,8 @@ class MainActivity : ComponentActivity(), FolderPicker {
         // destroyed ("Don't keep activities", OEM reaping during a long unpack), and its recent must still be written.
         private val processScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         private var recents: RecentsRecorder? = null
+        // One idle thread for the process: resumes come often, and back-to-back checks run in turn.
+        private val dataMoveStarter = Executors.newSingleThreadExecutor { Thread(it, "data-move-start") }
         /** Every created instance, for [closeOtherInstances] and Device Sync's screen-on; main thread only. */
         private val live = mutableListOf<WeakReference<MainActivity>>()
         /** [TopScreenHost.onChange]: an app took the top screen or left it; every live instance takes its window down or back. */

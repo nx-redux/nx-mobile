@@ -1,5 +1,8 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.library.Names
+import com.nxredux.mobile.storage.Bytes
+
 /**
  * A PSP game's serial ("ULUS-10466"), the id libretro's PSP cheat files carry in brackets (`Tekken 6 [US] [ULUS-10466].cht`).
  * A UMD image names it in `UMD_DATA.BIN` at the disc root ("ULUS-10466|…"), and `PSP_GAME/PARAM.SFO` holds it as
@@ -16,7 +19,7 @@ object PspSerial {
     /** Extensions the platform can hand a reader for: plain and CISO-compressed images, and EBOOTs. */
     val READABLE = setOf("iso", "cso", "pbp")
 
-    fun readable(fileName: String): Boolean = fileName.substringAfterLast('.', "").lowercase() in READABLE
+    fun readable(fileName: String): Boolean = Names.extensionOf(fileName, dotFile = true) in READABLE
 
     /** "ULUS10466" or "ulus-10466" → "ULUS-10466"; null when it is no serial. */
     fun normalise(raw: String): String? {
@@ -31,7 +34,7 @@ object PspSerial {
     fun fromIso(read: (offset: Long, length: Int) -> ByteArray?): String? {
         val pvd = read(PVD_LBA * SECTOR, SECTOR.toInt())?.takeIf { it.size >= 190 } ?: return null
         if (pvd[0].toInt() != 1 || pvd.decodeToString(1, 6) != "CD001") return null
-        val root = Extent(le32(pvd, 156 + 2), le32(pvd, 156 + 10))
+        val root = Extent(Bytes.le32(pvd, 156 + 2), Bytes.le32(pvd, 156 + 10))
         find(read, root, "UMD_DATA.BIN")?.let { umd ->
             val text = read(umd.lba * SECTOR, minOf(umd.size, 64L).toInt())?.decodeToString() ?: return@let
             normalise(text.substringBefore('|'))?.let { return it }
@@ -46,8 +49,8 @@ object PspSerial {
     fun fromPbp(read: (offset: Long, length: Int) -> ByteArray?): String? {
         val head = read(0, 0x28)?.takeIf { it.size >= 0x28 } ?: return null
         if (head[0].toInt() != 0 || head.decodeToString(1, 4) != "PBP") return null
-        val start = le32(head, 0x08)
-        val end = le32(head, 0x0C)
+        val start = Bytes.le32(head, 0x08)
+        val end = Bytes.le32(head, 0x0C)
         if (end <= start || end - start > 64 * 1024) return null
         return read(start, (end - start).toInt())?.let(::fromSfo)
     }
@@ -55,17 +58,17 @@ object PspSerial {
     /** DISC_ID from a PARAM.SFO (psdevwiki: a key table and a data table, entries of 16 bytes after a 20-byte header). */
     fun fromSfo(sfo: ByteArray): String? {
         if (sfo.size < 20 || sfo.decodeToString(1, 4) != "PSF" || sfo[0].toInt() != 0) return null
-        val keys = le32(sfo, 8).toInt()
-        val data = le32(sfo, 12).toInt()
-        val count = le32(sfo, 16).toInt()
+        val keys = Bytes.le32(sfo, 8).toInt()
+        val data = Bytes.le32(sfo, 12).toInt()
+        val count = Bytes.le32(sfo, 16).toInt()
         for (i in 0 until minOf(count, 256)) {
             val e = 20 + i * 16
             if (e + 16 > sfo.size) return null
-            val keyAt = keys + le16(sfo, e)
+            val keyAt = keys + Bytes.le16(sfo, e)
             val key = cString(sfo, keyAt) ?: continue
             if (key != "DISC_ID") continue
-            val len = le32(sfo, e + 4).toInt()
-            val at = data + le32(sfo, e + 12).toInt()
+            val len = Bytes.le32(sfo, e + 4).toInt()
+            val at = data + Bytes.le32(sfo, e + 12).toInt()
             if (at < 0 || len <= 0 || at + len > sfo.size) return null
             return normalise(sfo.decodeToString(at, at + len).trimEnd('\u0000'))
         }
@@ -88,7 +91,7 @@ object PspSerial {
                 val nameLen = block[p + 32].toInt() and 0xFF
                 if (p + 33 + nameLen <= block.size) {
                     val entry = block.decodeToString(p + 33, p + 33 + nameLen).substringBefore(';')
-                    if (entry.equals(name, ignoreCase = true)) return Extent(le32(block, p + 2), le32(block, p + 10))
+                    if (entry.equals(name, ignoreCase = true)) return Extent(Bytes.le32(block, p + 2), Bytes.le32(block, p + 10))
                 }
                 p += len
             }
@@ -102,10 +105,4 @@ object PspSerial {
         while (end < b.size && b[end].toInt() != 0) end++
         return b.decodeToString(at, end)
     }
-
-    private fun le16(b: ByteArray, at: Int): Int = (b[at].toInt() and 0xFF) or ((b[at + 1].toInt() and 0xFF) shl 8)
-
-    private fun le32(b: ByteArray, at: Int): Long =
-        (b[at].toLong() and 0xFF) or ((b[at + 1].toLong() and 0xFF) shl 8) or
-            ((b[at + 2].toLong() and 0xFF) shl 16) or ((b[at + 3].toLong() and 0xFF) shl 24)
 }

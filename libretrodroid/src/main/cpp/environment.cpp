@@ -121,12 +121,10 @@ void Environment::deinitialize() {
 }
 
 void Environment::updateVariable(const std::string& key, const std::string& value) {
-    auto current = variables[key];
-    current.key = key;
-
+    auto& current = variables[key];
     if (value != current.value) {
+        current.key = key;
         current.value = value;
-        variables[key] = current;
         dirtyVariables = true;
     }
 }
@@ -177,20 +175,15 @@ const Definition* findDefinition(const Definition* definitions, const std::strin
     return nullptr;
 }
 
-std::string categoryLabel(const struct retro_core_option_v2_category* categories, const std::string& key) {
-    if (categories == nullptr || key.empty()) return std::string();
-    for (int i = 0; categories[i].key != nullptr; i++) {
-        if (key == categories[i].key) return safeString(categories[i].desc);
-    }
-    return std::string();
-}
-
-std::string categoryInfo(const struct retro_core_option_v2_category* categories, const std::string& key) {
-    if (categories == nullptr || key.empty()) return std::string();
-    for (int i = 0; categories[i].key != nullptr; i++) {
-        if (key == categories[i].key) return safeString(categories[i].info);
-    }
-    return std::string();
+// field (desc or info) of the category key; empty when there is no such category.
+std::string categoryText(
+    const struct retro_core_option_v2_category* categories,
+    const std::string& key,
+    const char* retro_core_option_v2_category::* field
+) {
+    if (key.empty()) return std::string();
+    const auto* category = findDefinition(categories, key);
+    return category != nullptr ? safeString(category->*field) : std::string();
 }
 
 struct Variable optionFromV1(
@@ -226,18 +219,13 @@ struct Variable optionFromV2(
     );
     option.info = safeString(local != nullptr && local->info != nullptr ? local->info : definition.info);
     option.category = safeString(definition.category_key);
-    if (localOptions != nullptr) {
-        option.categoryLabel = categoryLabel(localOptions->categories, option.category);
-    }
-    if (option.categoryLabel.empty()) {
-        option.categoryLabel = categoryLabel(options.categories, option.category);
-    }
-    if (localOptions != nullptr) {
-        option.categoryInfo = categoryInfo(localOptions->categories, option.category);
-    }
-    if (option.categoryInfo.empty()) {
-        option.categoryInfo = categoryInfo(options.categories, option.category);
-    }
+    // The localized category's text when it has one, else the core's.
+    auto category = [&](const char* retro_core_option_v2_category::* field) {
+        std::string text = localOptions != nullptr ? categoryText(localOptions->categories, option.category, field) : "";
+        return text.empty() ? categoryText(options.categories, option.category, field) : text;
+    };
+    option.categoryLabel = category(&retro_core_option_v2_category::desc);
+    option.categoryInfo = category(&retro_core_option_v2_category::info);
     fillValues(option, definition.values);
     if (local != nullptr) localizeValues(option, local->values);
     option.defaultValue = safeString(definition.default_value);
@@ -921,7 +909,7 @@ const std::vector<struct Variable> Environment::getVariables() const {
     std::for_each(
         variables.begin(),
         variables.end(),
-        [&](std::pair<std::string, struct Variable> item) {
+        [&](const auto& item) {
             result.push_back(item.second);
         }
     );

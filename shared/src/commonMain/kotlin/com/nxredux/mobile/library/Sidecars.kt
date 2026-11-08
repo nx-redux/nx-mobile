@@ -31,22 +31,15 @@ class Sidecars(private val source: RomsSource, private val store: SidecarStore, 
     private fun copyPath(sourceId: String, relativeDir: String): List<String> =
         listOf(SOURCES, sourceId) + relativeDir.split('/').filter { it.isNotEmpty() }
 
-    private suspend fun homeRoms(): ContentRef? =
-        home()?.let { source.child(it, "Roms") }?.takeIf { it.isDirectory }?.ref
+    private suspend fun homeRoms(): ContentRef? = home()?.let { source.findDir(it, listOf("Roms")) }
 
-    /** The home folder at [relativeDir] ("Roms/Game Boy (GB)"), walked segment by segment; null when a segment is missing or a file. */
-    private suspend fun homeFolder(relativeDir: String): ContentRef? {
-        var dir = home() ?: return null
-        for (segment in relativeDir.split('/').filter { it.isNotEmpty() }) dir = source.child(dir, segment)?.takeIf { it.isDirectory }?.ref ?: return null
-        return dir
-    }
+    /** The home folder at [relativeDir] ("Roms/Game Boy (GB)"); null when a segment is missing or a file. */
+    private suspend fun homeFolder(relativeDir: String): ContentRef? =
+        home()?.let { source.findDir(it, relativeDir.split('/').filter { s -> s.isNotEmpty() }) }
 
     /** The existing home-copy folder of an extra folder, or null when any segment is missing. */
-    private suspend fun copyDir(sourceId: String, relativeDir: String): ContentRef? {
-        var dir = homeRoms() ?: return null
-        for (segment in copyPath(sourceId, relativeDir)) dir = source.child(dir, segment)?.takeIf { it.isDirectory }?.ref ?: return null
-        return dir
-    }
+    private suspend fun copyDir(sourceId: String, relativeDir: String): ContentRef? =
+        homeRoms()?.let { source.findDir(it, copyPath(sourceId, relativeDir)) }
 
     /**
      * Extras: in-extra file, then the home copy, then the store (later wins). Home: in-folder file, then the store.
@@ -146,16 +139,7 @@ class Sidecars(private val source: RomsSource, private val store: SidecarStore, 
         if (h == null || !source.canWrite(h)) {
             false
         } else {
-            var dir: ContentRef? = homeRoms()
-            for (segment in copyPath(sourceId, relativeDir)) {
-                val parent = dir ?: break
-                val existing = source.child(parent, segment)
-                dir = when {
-                    existing == null -> source.createDirectory(parent, segment)?.ref
-                    existing.isDirectory -> existing.ref
-                    else -> null   // a file is in the way
-                }
-            }
+            val dir = homeRoms()?.let { source.ensureDirs(it, copyPath(sourceId, relativeDir)) }
             dir != null && source.writeText(dir, file, text)
         }
     } catch (e: CancellationException) {

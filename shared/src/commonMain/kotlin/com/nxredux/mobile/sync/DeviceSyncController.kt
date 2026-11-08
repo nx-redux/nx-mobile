@@ -10,6 +10,9 @@ import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.usb.UsbLinkState
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.storage.SaveKeys
+import com.nxredux.mobile.tryOr
+import com.nxredux.mobile.tryOrNull
+import com.nxredux.mobile.tryQuietly
 import com.nxredux.mobile.ui.nx.NxButton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -128,18 +131,18 @@ class DeviceSyncController(
                 // On the live page, so a progress or file line landing in between is kept.
                 button == NxButton.B -> _page.update { if (it is DeviceSyncPage.Syncing) it.copy(confirmStop = !it.confirmStop) else it }
             }
-            is DeviceSyncPage.Done -> when (button) {
-                NxButton.A -> start(p.link)
-                NxButton.B -> _page.value = ready(p.link)
-                else -> Unit
-            }
-            is DeviceSyncPage.Failed -> when (button) {
-                NxButton.A -> start(p.link)
-                NxButton.B -> _page.value = ready(p.link)
-                else -> Unit
-            }
+            is DeviceSyncPage.Done -> onEnded(button, p.link)
+            is DeviceSyncPage.Failed -> onEnded(button, p.link)
         }
         return true
+    }
+
+    private fun onEnded(button: NxButton, link: SyncLink) {
+        when (button) {
+            NxButton.A -> start(link)
+            NxButton.B -> _page.value = ready(link)
+            else -> Unit
+        }
     }
 
     // The canceller's page is set after cancel(): from then on the run's show()/edit() see an inactive job and keep it.
@@ -264,12 +267,17 @@ class DeviceSyncController(
     private suspend fun sendFail(sock: SyncSocket, ip: String) {
         log("run failed or stopped; sending FAIL to $ip")
         try {
-            repeat(DONE_REPEATS) { i ->
-                sock.send(SyncWire.FAIL, ip)
-                if (i < DONE_REPEATS - 1) delay(DONE_GAP_MS)
-            }
+            sendRepeated(sock, SyncWire.FAIL, ip)
         } catch (e: Exception) {
             log("FAIL not sent: $e")
+        }
+    }
+
+    /** [text] to [ip] DONE_REPEATS times, DONE_GAP_MS apart: a datagram can be lost. */
+    private suspend fun sendRepeated(sock: SyncSocket, text: String, ip: String) {
+        repeat(DONE_REPEATS) { i ->
+            sock.send(text, ip)
+            if (i < DONE_REPEATS - 1) delay(DONE_GAP_MS)
         }
     }
 
@@ -383,10 +391,10 @@ class DeviceSyncController(
         val steps = when { withRoms -> 9; access -> 7; else -> 4 }
         var prep: RomPrep? = null
         if (withRoms) {
-            val r = try { romPrep(peer) } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            val r = tryOr({ e ->
                 log("ROM prep threw: $e")
                 PrepFailed(DeviceSyncText.stepError(SyncStep.SEND_ROMS))
-            }
+            }) { romPrep(peer) }
             when (r) {
                 is PrepFailed -> { log("ROM prep failed: ${r.reason} ${r.detail.orEmpty()}"); return DeviceSyncPage.Failed(link, r.reason, r.detail) }
                 is RomPrep -> { prep = r; notes += r.notes }
@@ -396,39 +404,33 @@ class DeviceSyncController(
         // A handheld keeps battery saves per emulator: steps 2 and 4 run against staging trees in its layout. A phone
         // peer has this phone's layout: the whole Saves/ as is.
         log("save plan")
-        val saves = if (peer.flags.clientOnly) null else try { savePlan(peer, prep?.consoles, access) } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            return DeviceSyncPage.Failed(link, DeviceSyncText.stepError(SyncStep.SEND_SAVES))
+        val saves = if (peer.flags.clientOnly) null else tryOr({ return DeviceSyncPage.Failed(link, DeviceSyncText.stepError(SyncStep.SEND_SAVES)) }) {
+            savePlan(peer, prep?.consoles, access)
         }
         try {
             if (saves != null) {
-                val staged = try {
+                val staged = tryOr({ false }) {
                     val mine = platform.listHomeSaves()
                     val (send, seeds) = planned { saves.send(mine) to saves.seeds(mine) }
                     platform.stageSaves(send, seeds)
-                } catch (e: CancellationException) { throw e } catch (e: Exception) { false }
+                }
                 if (!staged) return DeviceSyncPage.Failed(link, DeviceSyncText.stepError(SyncStep.SEND_SAVES))
             }
             for (step in SyncStep.entries.filter { it.module == "shared" || it.module == "saves" }) {
                 var error: String? = null
                 val tags = saves?.receiveTags?.takeIf { step.module == "saves" }
                 log("step ${step.number} ${step.name}")
-                val code = try {
+                // A throw here is rsync failing to run, not a socket's lost network.
+                val code = tryOr({ return DeviceSyncPage.Failed(link, DeviceSyncText.stepError(step)) }) {
                     runStep(me, link, peer, step, steps, null, tally, keep = { error = rsyncError(it) ?: error }) { platform.runClientStep(step, peer.ip, it, tags) }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {   // rsync could not run (not a socket's lost network)
-                    return DeviceSyncPage.Failed(link, DeviceSyncText.stepError(step))
                 }
                 if (code != 0) return DeviceSyncPage.Failed(link, DeviceSyncText.stepFailed(step, code), error)
             }
             if (saves != null) {
-                val fold = try {
+                val fold = tryOrNull {
                     val (received, home) = platform.listReceivedSaves() to platform.listHomeSaves()
                     planned { saves.fold(received, home) }.takeIf { platform.applySaveFold(it) }
-                } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
-                    ?: return DeviceSyncPage.Failed(link, DeviceSyncText.stepError(SyncStep.RECEIVE_SAVES))
+                } ?: return DeviceSyncPage.Failed(link, DeviceSyncText.stepError(SyncStep.RECEIVE_SAVES))
                 if (fold.skipped > 0) notes += DeviceSyncText.savesSkipped(fold.skipped)
             }
         } finally {
@@ -439,9 +441,7 @@ class DeviceSyncController(
         // Listed and paired only here, after step 4: a BIOS listing failure never keeps the saves from moving.
         if (access) {
             log("saves done; BIOS prep")
-            val r = try { biosPrep(peer) } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                PrepFailed(DeviceSyncText.stepError(SyncStep.SEND_BIOS))
-            }
+            val r = tryOr({ PrepFailed(DeviceSyncText.stepError(SyncStep.SEND_BIOS)) }) { biosPrep(peer) }
             when (r) {
                 is PrepFailed -> return DeviceSyncPage.Failed(link, r.reason, r.detail)
                 is BiosPrep -> {
@@ -460,10 +460,7 @@ class DeviceSyncController(
         val done = tally.value.let { DeviceSyncPage.Done(link, it.received, it.sent, biosNotes + collectionNotes + notes) }
         onFinished(done)
         log("done; sending DONE")
-        repeat(DONE_REPEATS) { i ->
-            sock.send(SyncWire.DONE, peer.ip)
-            if (i < DONE_REPEATS - 1) delay(DONE_GAP_MS)
-        }
+        sendRepeated(sock, SyncWire.DONE, peer.ip)
         return done
     }
 
@@ -485,42 +482,36 @@ class DeviceSyncController(
         edit(me) { it.copy(step = step, steps = steps, console = null, done = 0, total = 0) }
         platform.keepAlive(true, notification(peer.ip, link, step, steps, null, 0, 0))
         fun failed(reason: String, detail: String? = null) = CollectionsOutcome(DeviceSyncPage.Failed(link, reason, detail))
-        val pull = try { platform.pullCollections(peer.ip) } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            return failed(DeviceSyncText.stepError(step))
-        }
+        val pull = tryOr({ return failed(DeviceSyncText.stepError(step)) }) { platform.pullCollections(peer.ip) }
         if (pull.code == UNKNOWN_MODULE && pull.lines.any { UNKNOWN_MODULE_TEXT in it }) {
             return CollectionsOutcome(note = if (peer.flags.clientOnly) DeviceSyncText.COLLECTIONS_PEER_PHONE else DeviceSyncText.COLLECTIONS_OLD_HANDHELD)
         }
         if (pull.code != 0) return failed(DeviceSyncText.stepFailed(step, pull.code), errorDetail(pull.lines))
-        val list = consoles ?: try {
+        val list = consoles ?: tryOrNull {
             when (val r = listConsoles(peer)) {
                 is ConsolesListed -> r.list
                 is ConsolesFailed -> r.paired
             }
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+        }
         val mapped = !peer.flags.clientOnly
         // Tags that would not read only send a line held nowhere there to its console's default emulator folder.
         val tags = if (!mapped || list == null) emptyMap() else gameTags
-            ?: try { gameTags(list) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyMap() }
+            ?: tryOr({ emptyMap() }) { gameTags(list) }
         val paths = list?.let {
             CollectionPaths(it.pairing.pairs, it.localAll, it.remoteAll, it.own, it.theirs, it.homeNames, it.remoteNames, mapped, tags)
         } ?: CollectionPaths()
-        val own = try { platform.readCollections() } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            return failed(DeviceSyncText.stepError(step))
-        }
+        val own = tryOr({ return failed(DeviceSyncText.stepError(step)) }) { platform.readCollections() }
         val plan = planned { SyncCollections.plan(own, pull.files, paths, pull.unreadable) }
         var unsaved = false
         for ((name, lines) in plan.own) {
-            val ok = try { platform.writeCollection(name, lines, own[name]) } catch (e: CancellationException) { throw e } catch (e: Exception) { false }
+            val ok = tryOr({ false }) { platform.writeCollection(name, lines, own[name]) }
             if (ok) tally.update { it.copy(received = it.received + 1, collections = it.collections.copy(written = it.collections.written + name)) }
             else unsaved = true
         }
         // Accepted: a peer file edited on the peer between this pull and the push below is replaced by the merge of what
         // was pulled; the window is only the merge and this phone's writes (well under a second).
         if (plan.peer.isNotEmpty()) {
-            val (code, lines) = try { platform.pushCollections(peer.ip, plan.peer) } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                return failed(DeviceSyncText.stepError(step))
-            }
+            val (code, lines) = tryOr({ return failed(DeviceSyncText.stepError(step)) }) { platform.pushCollections(peer.ip, plan.peer) }
             if (code != 0) return failed(DeviceSyncText.stepFailed(step, code), errorDetail(lines))
             tally.update { it.copy(sent = it.sent + plan.peer.size) }
         }
@@ -576,7 +567,7 @@ class DeviceSyncController(
                     platform.keepAlive(true, notification(peer.ip, link, step, steps, console, pr.done, pr.total))
                 }
             } else {
-                SyncProgress.fileLine(line)?.let { f -> edit(me) { it.copy(lines = (it.lines + f).takeLast(MAX_LINES)) } }
+                SyncProgress.fileLine(line)?.let { f -> edit(me) { it.copy(lines = it.lines.plusCapped(f)) } }
             }
         }
     }
@@ -712,18 +703,17 @@ class DeviceSyncController(
      * Default emulators setting. The planner's callbacks don't suspend, so those folders are read up front, once per sync.
      */
     private suspend fun savePlan(peer: Peer, consoles: ConsoleList?, access: Boolean): SaveSyncPlan {
-        suspend fun <T> orNull(block: suspend () -> T): T? = try { block() } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
-        val listed = consoles?.remoteAll ?: orNull { platform.listRemoteRoms(peer.ip) }
+        val listed = consoles?.remoteAll ?: tryOrNull { platform.listRemoteRoms(peer.ip) }
             ?.takeIf { it.first == 0 }?.let { planned { SyncConsoles.parseListing(it.second) } }
         val folders = listed.orEmpty()
-        val phoneFolders = consoles?.localAll ?: if (access) orNull { platform.listHomeRoms(null) }.orEmpty() else emptyList()
+        val phoneFolders = consoles?.localAll ?: if (access) tryOrNull { platform.listHomeRoms(null) }.orEmpty() else emptyList()
         val roms = HashMap(consoles?.remoteEntries.orEmpty())
         for (folder in folders) {
             if (folder in roms || SyncMap.consoleOf(folder) == null) continue
-            val listed = orNull { timed("save prep listing of $folder") { platform.listRemoteFolder(peer.ip, folder) } }?.takeIf { it.first == 0 } ?: continue
+            val listed = tryOrNull { timed("save prep listing of $folder") { platform.listRemoteFolder(peer.ip, folder) } }?.takeIf { it.first == 0 } ?: continue
             roms[folder] = planned { SyncConsoles.parseEntries(listed.second).toSet() }
         }
-        val phoneGames = if (access) orNull { phoneGames(SyncMap.saveConsoles(folders).values.flatten().toSet()) }.orEmpty() else emptyMap()
+        val phoneGames = if (access) tryOrNull { phoneGames(SyncMap.saveConsoles(folders).values.flatten().toSet()) }.orEmpty() else emptyMap()
         val defaults = platform.defaultTags()
         val format = platform.saveFormat()
         return planned {
@@ -828,23 +818,19 @@ class DeviceSyncController(
                 val units = prep.units.getValue(run.pair)
                 val keep = if (peer.flags.clientOnly) null else hashNames(prep, pair, units)
                 log("hashes.json merge for ${pair.local} ← ${pair.remote}")
-                val failed = try { mergeHashes(peer.ip, pair, units, prep.raFolders, keep) } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                    DeviceSyncText.stepError(SyncStep.SEND_ROMS)
-                }
+                val failed = tryOr({ DeviceSyncText.stepError(SyncStep.SEND_ROMS) }) { mergeHashes(peer.ip, pair, units, prep.raFolders, keep) }
                 if (failed != null) { log("hashes.json merge failed: $failed"); return DeviceSyncPage.Failed(link, failed) }
             }
             val last = ArrayDeque<String>()
             log("${run.step} ${run.from} → ${run.to}…")
             val start = now()
-            val code = try {
+            val code = tryOr({ e ->
+                log("${run.step} could not run: $e")
+                return DeviceSyncPage.Failed(link, DeviceSyncText.stepError(run.step))
+            }) {
                 runStep(me, link, peer, run.step, steps, run.console, tally, keep = { last.addLast(it); if (last.size > KEPT_LINES) last.removeFirst() }) {
                     platform.runRom(run, peer.ip, it)
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                log("${run.step} could not run: $e")
-                return DeviceSyncPage.Failed(link, DeviceSyncText.stepError(run.step))
             }
             log("${run.step} ${run.from} → ${run.to}: exit $code, ${now() - start} ms")
             if (code != 0) return when {
@@ -866,7 +852,7 @@ class DeviceSyncController(
      * games on the Default emulators pick.
      */
     private suspend fun tagPulled(prep: RomPrep, pair: ConsolePair, seen: MutableMap<String, Set<String>>) {
-        try {
+        tryQuietly {
             val after = platform.listHomeRoms(pair.local)
             val known = seen.getOrPut(pair.local) { prep.consoles.homeNames[pair.local].orEmpty() }.mapTo(HashSet()) { it.lowercase() }
             seen[pair.local] = known + after.map { it.lowercase() }
@@ -885,10 +871,6 @@ class DeviceSyncController(
                 writeTags(dir, mapOf(sheet to tag))
             }
             writeTags(pair.local, SyncRoms.pulledGameTags(pair, files, platform.homeGameTags(pair.local), default))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Unit
         }
     }
 
@@ -897,6 +879,15 @@ class DeviceSyncController(
         if (entries.isEmpty()) return
         val path = "$dir/${SidecarTxt.FILE}"
         platform.writeHomeText(path, entries.entries.fold(platform.readHomeText(path).orEmpty()) { t, (name, tag) -> SidecarTxt.with(t, name, tag) })
+    }
+
+    /** These lines and [line], the oldest past MAX_LINES dropped: one copy, since it runs for every rsync file line. */
+    private fun List<String>.plusCapped(line: String): List<String> {
+        val from = (size + 1 - MAX_LINES).coerceIn(0, size)
+        val out = ArrayList<String>(size - from + 1)
+        out.addAll(subList(from, size))
+        out.add(line)
+        return out
     }
 
     /** [line] when it is one of rsync's own error lines (`rsync: …`), without the prefix; its closing `rsync error:` summary is not. */
@@ -927,13 +918,8 @@ class DeviceSyncController(
             is RemoteText.Failed -> return DeviceSyncText.stepFailed(SyncStep.SEND_ROMS, r.code)
         }
         // Our file exists but cannot be read: merging from nothing would overwrite it, so this pair's merge is skipped.
-        val own = try {
-            platform.readHomeText("${p.local}/$RA_DIR/$HASHES")
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            return null
-        }
+        val own = tryOr({ return null }) { platform.readHomeText("${p.local}/$RA_DIR/$HASHES") }
+
         val (m, peerOut) = planned {
             val m = RaFingerprintMerge.plan(
                 own = own, peer = peerText,
@@ -984,7 +970,7 @@ class DeviceSyncController(
                         else -> it.copy(received = it.received + 1, roms = it.roms || e.module == "roms")
                     }
                 }
-                edit(me) { it.copy(lines = (it.lines + e.path).takeLast(MAX_LINES)) }
+                edit(me) { it.copy(lines = it.lines.plusCapped(e.path)) }
             }
             if (!started) return DeviceSyncPage.Failed(link, DeviceSyncText.NO_SERVER)
             show(me, DeviceSyncPage.Syncing(link, peer.ip, SyncRole.SERVER, null, 0, 0, listOf(DeviceSyncText.WAITING_PEER)))

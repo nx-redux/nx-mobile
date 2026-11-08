@@ -1,6 +1,6 @@
 package com.nxredux.mobile.library
 
-import com.nxredux.mobile.storage.TextLines
+import com.nxredux.mobile.storage.TabLines
 
 /**
  * `systems.txt`: one "<file name><TAB><TAG>" per line, next to the ROMs. Says which tag (console + emulator)
@@ -11,20 +11,9 @@ import com.nxredux.mobile.storage.TextLines
 object SidecarTxt {
     const val FILE = "systems.txt"
 
-    fun parse(text: String): Map<String, String> =
-        TextLines.split(text).asSequence()
-            .mapNotNull { line ->
-                val tab = line.indexOf('\t')
-                if (tab <= 0) null else {
-                    val file = line.substring(0, tab)
-                    val tag = line.substring(tab + 1).trim().uppercase()
-                    if (tag.isEmpty()) null else file to tag
-                }
-            }
-            .toMap()
+    fun parse(text: String): Map<String, String> = TabLines.parsePairs(text) { it.trim().uppercase() }
 
-    fun render(entries: Map<String, String>): String =
-        entries.entries.sortedBy { it.key }.joinToString("") { "${it.key}\t${it.value}\n" }
+    fun render(entries: Map<String, String>): String = TabLines.render(entries)
 
     /** [text] (null when the file does not exist) with [file] set to [tag]. A file name with a tab cannot be stored: returns [text] as is (or ""). */
     fun with(text: String?, file: String, tag: String): String {

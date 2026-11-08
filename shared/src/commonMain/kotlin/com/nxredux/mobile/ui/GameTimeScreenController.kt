@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.tryOr
 import com.nxredux.mobile.gametime.GameTimeData
 import com.nxredux.mobile.gametime.GameTotal
 import com.nxredux.mobile.ui.nx.ListSelection
@@ -57,9 +58,7 @@ internal class GameTimeScreenController(
         val game = list.rows.getOrNull(row.index)?.total ?: return
         val here = screen.value
         loader.start {
-            val loaded = runCatching { data.sessions(game.gameId) }
-            loaded.exceptionOrNull()?.let { if (it is CancellationException) throw it }
-            val sessions = loaded.getOrElse { error.value = "Couldn't read game time"; return@start }
+            val sessions = tryOr({ error.value = "Couldn't read game time"; return@start }) { data.sessions(game.gameId) }
             if (screen.value !== here) return@start   // the user moved on meanwhile
             parent = list; parentRow = row
             screen.value = Screen.GameTimeSessions(game, sessions, canMerge = list.rows.size >= 2)
@@ -91,13 +90,11 @@ internal class GameTimeScreenController(
     }
 
     private suspend fun load() {
-        val loaded = runCatching {
+        val (rows, total) = tryOr({ error.value = "Couldn't read game time"; emptyList<GameTimeRow>() to 0L }) {
             val art = artFor()
             val totals = data.totals()
             totals.map { GameTimeRow(it, art(it.romPath)) } to totals.sumOf { it.totalMs }
         }
-        loaded.exceptionOrNull()?.let { if (it is CancellationException) throw it }   // B on the overlay: no error
-        val (rows, total) = loaded.getOrElse { error.value = "Couldn't read game time"; emptyList<GameTimeRow>() to 0L }
         if (screen.value !is Screen.GameTime) return
         screen.value = Screen.GameTime(rows, total)
         selection.value = selection.value.clampedTo(rows.size)

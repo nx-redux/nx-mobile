@@ -34,10 +34,14 @@ Variable JavaUtils::variableFromJava(JNIEnv *env, jobject obj) {
     jfieldID jKeyField = env->GetFieldID(variableClass, "key", "Ljava/lang/String;");
     jfieldID jValueField = env->GetFieldID(variableClass, "value", "Ljava/lang/String;");
 
-    auto key = JniString(env, (jstring) env->GetObjectField(obj, jKeyField));
-    auto value = JniString(env, (jstring) env->GetObjectField(obj, jValueField));
+    auto jKey = (jstring) env->GetObjectField(obj, jKeyField);
+    auto jValue = (jstring) env->GetObjectField(obj, jValueField);
+    Variable result { JniString(env, jKey).stdString(), JniString(env, jValue).stdString() };
 
-    return Variable { key.stdString(), value.stdString() };
+    env->DeleteLocalRef(jKey);
+    env->DeleteLocalRef(jValue);
+    env->DeleteLocalRef(variableClass);
+    return result;
 }
 
 void JavaUtils::forEachOnJavaIterable(
@@ -56,9 +60,16 @@ void JavaUtils::forEachOnJavaIterable(
     jmethodID nextMethodID = env->GetMethodID(jIteratorClass, "next", "()Ljava/lang/Object;");
     jmethodID hasNextMethodID = env->GetMethodID(jIteratorClass, "hasNext", "()Z");
 
+    // Dropped per item so a long list cannot fill the local reference table.
     while (env->CallBooleanMethod(jIterator, hasNextMethodID)) {
-        lambda(env->CallObjectMethod(jIterator, nextMethodID));
+        jobject item = env->CallObjectMethod(jIterator, nextMethodID);
+        lambda(item);
+        env->DeleteLocalRef(item);
     }
+
+    env->DeleteLocalRef(jIteratorClass);
+    env->DeleteLocalRef(jIterator);
+    env->DeleteLocalRef(jIterableClass);
 }
 
 std::unordered_map<std::string, std::string> JavaUtils::stringMapFromJava(JNIEnv *env, jobject jMap) {
@@ -82,8 +93,12 @@ std::unordered_map<std::string, std::string> JavaUtils::stringMapFromJava(JNIEnv
             std::string key = JniString(env, (jstring) jKey).stdString();
             std::string value = JniString(env, (jstring) objValue).stdString();
             result[key] = value;
+            env->DeleteLocalRef(objValue);
         }
     );
+
+    env->DeleteLocalRef(jKeySet);
+    env->DeleteLocalRef(jMapClass);
 
     return result;
 }
@@ -98,6 +113,9 @@ ShaderManager::Config JavaUtils::shaderFromJava(JNIEnv *env, jobject obj) {
 
     int type = env->GetIntField(obj, jTypeField);
     std::unordered_map<std::string, std::string> params = stringMapFromJava(env, jParams);
+
+    env->DeleteLocalRef(jParams);
+    env->DeleteLocalRef(jShaderClass);
 
     return ShaderManager::Config { ShaderManager::Type(type), params };
 }

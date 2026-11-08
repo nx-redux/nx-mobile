@@ -1,6 +1,6 @@
 package com.nxredux.mobile.update
 
-import kotlinx.coroutines.CancellationException
+import com.nxredux.mobile.tryOr
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -172,7 +172,11 @@ class UpdateController(
         _state.value = UpdateState.Downloading(release, 0L, release.apkSize)
         platform.keepAlive(true, downloadingText(0L, release.apkSize))
         job = scope.launch {
-            try {
+            // A cancel passes through: cancel() already restored the state.
+            tryOr({
+                dropFile()
+                finish(UpdateState.Failed("Update failed", release))
+            }) {
                 var shown = 0
                 val downloaded = platform.download(release) { done, total ->
                     _state.value = UpdateState.Downloading(release, done, total)
@@ -186,11 +190,6 @@ class UpdateController(
                     return@launch
                 }
                 gate(release, downloaded)
-            } catch (e: CancellationException) {
-                throw e   // cancel() already restored the state
-            } catch (e: Exception) {
-                dropFile()
-                finish(UpdateState.Failed("Update failed", release))
             }
         }
     }
@@ -233,13 +232,8 @@ class UpdateController(
     private fun check(automatic: Boolean) {
         _state.value = UpdateState.Checking
         job = scope.launch {
-            val latest = try {
-                readLatestRelease(platform.fetchLatest(), platform.dev)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                LatestRelease.Unusable   // offline, rate-limited or a portal page: all the same to the user
-            }
+            // Offline, rate-limited or a portal page: all the same to the user.
+            val latest = tryOr({ LatestRelease.Unusable }) { readLatestRelease(platform.fetchLatest(), platform.dev) }
             if (latest == LatestRelease.Unusable) {
                 // An update left by a dead process retries on the failure backoff, not every menu.
                 if (platform.pendingUpdate != null) { platform.pendingUpdate = null; platform.lastSuccess = 0L }

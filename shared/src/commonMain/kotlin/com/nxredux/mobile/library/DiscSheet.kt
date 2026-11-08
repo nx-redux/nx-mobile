@@ -195,24 +195,17 @@ object DiscSheet {
 
     private suspend fun resolve(source: RomsSource, folder: ContentRef, fileName: String): Resolved {
         if (!isSheet(fileName)) return Resolved(emptyList(), null)
-        var listing: Listing? = null
-        suspend fun find(name: String): Entry? {
-            source.child(folder, name)?.takeIf { !it.isDirectory }?.let { return it }
-            val all = listing ?: Listing(try {
-                source.listChildren(folder).filter { !it.isDirectory }
-            } catch (e: ListingUnavailable) { emptyList() }).also { listing = it }
-            return all.find(name)
-        }
+        val files = FileLookup(source, folder)
         val out = ArrayList<Pair<String, Entry>>()
         if (Names.extensionOf(fileName) in IMPLIED) {
-            for (name in references(fileName, "")) find(name)?.let { out += name to it }
+            for (name in references(fileName, "")) files.find(name)?.let { out += name to it }
             val image = out.any { Names.extensionOf(it.first) == "img" || Names.extensionOf(it.first) == "bin" }
             return Resolved(out, if (image) null else SheetRef("${Names.stripExtension(fileName)}.img", fileName))
         }
-        val read: suspend (String) -> String? = { name -> find(name)?.let { source.readHead(it.ref, HEAD_BYTES) }?.let(::decode) }
+        val read: suspend (String) -> String? = { name -> files.find(name)?.let { source.readHead(it.ref, HEAD_BYTES) }?.let(::decode) }
         for (r in expand(fileName, read)) {
             if (r.name.equals(fileName, ignoreCase = true)) continue
-            val entry = find(r.name)
+            val entry = files.find(r.name)
             if (entry == null) {
                 if (Names.extensionOf(r.sheet) in IMPLIED) continue
                 return Resolved(out, r)

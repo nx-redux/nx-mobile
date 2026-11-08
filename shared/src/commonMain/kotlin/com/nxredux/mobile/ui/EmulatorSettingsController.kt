@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.tryOrNull
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.options.ConfigFile
@@ -389,7 +390,7 @@ internal class EmulatorSettingsController(
                         throw e
                     } catch (e: Throwable) {
                         error.value = "Could not save the setting"
-                        runCatching { readPage(tag, d, game) }.getOrNull()
+                        tryOrNull { readPage(tag, d, game) }
                     }
                 }
                 page?.let { show(s, it) }
@@ -406,7 +407,7 @@ internal class EmulatorSettingsController(
         val d = descriptorOf(s) ?: return
         scope.launch {
             lock.withLock {
-                val page = withContext(work) { runCatching { readPage(s.page.tag, d, s.game) }.getOrNull() } ?: return@withLock
+                val page = withContext(work) { tryOrNull { readPage(s.page.tag, d, s.game) } } ?: return@withLock
                 val cur = screen.value as? Screen.EmulatorOptions
                 if (cur != null && samePage(cur, s) && EmulatorRows.build(page, null).isEmpty()) back(cur.copy(category = null))
                 else show(s, page)
@@ -428,7 +429,7 @@ internal class EmulatorSettingsController(
                     } catch (e: Throwable) {
                         error.value = "Could not save the setting"
                     }
-                    runCatching { readPage(s.page.tag, d, game) }.getOrNull()
+                    tryOrNull { readPage(s.page.tag, d, game) }
                 }
                 page?.let { show(s, it) }
             }

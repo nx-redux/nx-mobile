@@ -88,6 +88,7 @@ class WiiDiscIdTest {
 
     @Test fun readableExtensions() {
         assertTrue(WiiDiscId.readable("Game (USA).WBFS"))
+        assertTrue(WiiDiscId.readable(".rvz"))
         assertEquals(setOf("iso", "wbfs", "wia", "rvz", "ciso", "gcz"), WiiDiscId.READABLE)
     }
 }

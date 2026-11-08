@@ -205,6 +205,7 @@ private:
     unsigned frameCount = 0;
     // The nearest default shader for unshaded regions, built on first use.
     std::optional<ShaderChainEntry> plainShader;
+    const ShaderChainEntry& ensurePlainShader();
 
     unsigned coreContentWidth = 0;
     unsigned coreContentHeight = 0;

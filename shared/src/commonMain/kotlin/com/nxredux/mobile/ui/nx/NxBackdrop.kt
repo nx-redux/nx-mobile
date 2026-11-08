@@ -54,7 +54,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
@@ -137,6 +139,10 @@ private val SHADOW_DROP = 4.dp          // the copy's offset down
 private val SHADOW_BLUR = 8.dp          // the copy's blur (a no-op below Android 12: a hard offset shadow there)
 /** How far a box's drop shadow draws past the box: its drop and the blur's tail (about twice its radius). */
 internal val BOX_SHADOW_REACH = SHADOW_DROP + SHADOW_BLUR * 2
+
+/** The box art's drop shadow layer: [SHADOW_DROP] down, blurred [SHADOW_BLUR] unbounded (nothing clips it), at [SHADOW_ALPHA]. */
+private fun Modifier.boxDropShadow(): Modifier =
+    offset(y = SHADOW_DROP).blur(SHADOW_BLUR, BlurredEdgeTreatment.Unbounded).graphicsLayer { alpha = SHADOW_ALPHA }
 
 /**
  * The factor a Backdrop slot's content (the 60 dp tool icon, the 17 / 24 / 30 sp names) scales by: the slot's width
@@ -569,8 +575,7 @@ internal fun BoxArt(game: BackdropGame) {
             AsyncImage(
                 model = url, contentDescription = null, contentScale = ContentScale.Fit,
                 colorFilter = ColorFilter.tint(colors.background),
-                modifier = Modifier.fillMaxSize().offset(y = SHADOW_DROP)
-                    .blur(SHADOW_BLUR, BlurredEdgeTreatment.Unbounded).graphicsLayer { alpha = SHADOW_ALPHA },
+                modifier = Modifier.fillMaxSize().boxDropShadow(),
             )
             AsyncImage(
                 model = url, contentDescription = game.title, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
@@ -633,6 +638,12 @@ internal fun itemCompositing(marks: Boolean): CompositingStrategy = if (marks) C
 /** The extra scale a count takes inside an item drawn at [itemScale]: back up to [MIN_COUNT_SP] as drawn, never shrunk. */
 internal fun countGrowth(itemScale: Float): Float = if (itemScale <= 0f) 1f else max(1f, MIN_COUNT_SP / COUNT_SP / itemScale)
 
+/** A count's layer grown by [countGrowth] of the item's [scale] (read while drawing), from its top centre so it stays under its logo or name. */
+private fun Modifier.countGrowthLayer(scale: () -> Float): Modifier = graphicsLayer {
+    val c = countGrowth(scale())
+    scaleX = c; scaleY = c; transformOrigin = TransformOrigin(0.5f, 0f)
+}
+
 /** A console count's line height at full size, dp: "N games" as [SlotTile] draws it (the font's real metrics). */
 @Composable
 internal fun countLineDp(): Float {
@@ -658,9 +669,7 @@ internal fun BoxCase(w: Float, h: Float, content: @Composable () -> Unit) {
     val shape = RoundedCornerShape(PLACEHOLDER_CORNER)
     Box(Modifier.size(w.dp, h.dp)) {
         Box(
-            Modifier.fillMaxSize().offset(y = SHADOW_DROP)
-                .blur(SHADOW_BLUR, BlurredEdgeTreatment.Unbounded).graphicsLayer { alpha = SHADOW_ALPHA }
-                .background(colors.background, shape),
+            Modifier.fillMaxSize().boxDropShadow().background(colors.background, shape),
         )
         Box(Modifier.fillMaxSize().clip(shape).background(colors.background.copy(alpha = 0.85f))) {   // role: the placeholder case's ground, the picture faint through it
             content()
@@ -763,10 +772,7 @@ internal fun SlotTile(tile: GridTile, k: Float, slotW: Float, scale: () -> Float
                     Text(
                         gamesLabel(count),
                         Modifier.align(Alignment.TopCenter).offset { IntOffset(0, top.dp.roundToPx()) }.wrapContentWidth(unbounded = true)
-                            .graphicsLayer {
-                                val c = countGrowth(scale())
-                                scaleX = c; scaleY = c; transformOrigin = TransformOrigin(0.5f, 0f)
-                            },
+                            .countGrowthLayer(scale),
                         color = colors.listText, maxLines = 1, softWrap = false,
                         style = TextStyle(fontFamily = LocalNxFont.current, fontSize = COUNT_SP.sp, textAlign = TextAlign.Center),
                     )
@@ -776,25 +782,16 @@ internal fun SlotTile(tile: GridTile, k: Float, slotW: Float, scale: () -> Float
         is GridTile.Collection -> Column(
             Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // The longest word measured at the full size (the font's real widths: the name is user text).
             val measurer = rememberTextMeasurer()
             val font = LocalNxFont.current
             val density = LocalDensity.current
-            val size = remember(tile.name, k, font, slotW, density) {
-                val word = backdropLongestWord(tile.name)
-                val style = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = COLLECTION_NAME.sp * k)
-                val wordW = if (word.isEmpty()) 0f else with(density) { measurer.measure(word, style, softWrap = false, maxLines = 1).size.width.toDp().value }
-                backdropCollectionNameSp(wordW, slotW - 2 * BACKDROP_COLLECTION_PAD, k)
-            }
+            val size = remember(tile.name, k, font, slotW, density) { collectionNameSp(tile.name, k, slotW, measurer, font, density) }
             SlotText(tile.name, size.sp, maxLines = BACKDROP_COLLECTION_LINES, pad = BACKDROP_COLLECTION_PAD, color = markColor)
             val count = tile.count
             if (count != null) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    gamesLabel(count), Modifier.padding(horizontal = BACKDROP_COLLECTION_PAD.dp).graphicsLayer {
-                        val c = countGrowth(scale())
-                        scaleX = c; scaleY = c; transformOrigin = TransformOrigin(0.5f, 0f)
-                    },
+                    gamesLabel(count), Modifier.padding(horizontal = BACKDROP_COLLECTION_PAD.dp).countGrowthLayer(scale),
                     color = colors.listText, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     style = TextStyle(fontFamily = LocalNxFont.current, fontSize = COUNT_SP.sp, textAlign = TextAlign.Center),
                 )
@@ -827,6 +824,17 @@ internal fun SlotText(text: String, size: TextUnit, maxLines: Int, modifier: Mod
 
 /** How far an item [distance] items from the selection is into it: 1 at the centre, 0 a whole item or more away. */
 internal fun slotLitness(distance: Float): Float = (1f - abs(distance)).coerceIn(0f, 1f)
+
+/**
+ * A collection name's size, sp, in a slot [slotW] dp wide ([backdropCollectionNameSp]): its longest word measured at the
+ * full size in the font's real widths, since the name is user text.
+ */
+private fun collectionNameSp(name: String, k: Float, slotW: Float, measurer: TextMeasurer, font: FontFamily, density: Density): Float {
+    val word = backdropLongestWord(name)
+    val style = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = COLLECTION_NAME.sp * k)
+    val wordW = if (word.isEmpty()) 0f else with(density) { measurer.measure(word, style, softWrap = false, maxLines = 1).size.width.toDp().value }
+    return backdropCollectionNameSp(wordW, slotW - 2 * BACKDROP_COLLECTION_PAD, k)
+}
 
 /** [SlotText]'s style at [scaled]. */
 private fun slotTextStyle(font: FontFamily, scaled: TextUnit) = TextStyle(
@@ -868,10 +876,7 @@ private fun rememberSlotWidths(tiles: List<GridTile>, slot: BackdropSlot, look: 
                 }
                 is GridTile.Collection -> {
                     val pad = BACKDROP_COLLECTION_PAD
-                    val word = backdropLongestWord(tile.name)
-                    val wordStyle = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = COLLECTION_NAME.sp * look.k)
-                    val wordW = if (word.isEmpty()) 0f else with(density) { measurer.measure(word, wordStyle, softWrap = false, maxLines = 1).size.width.toDp().value }
-                    val sp = backdropCollectionNameSp(wordW, slotW - 2 * pad, look.k)
+                    val sp = collectionNameSp(tile.name, look.k, slotW, measurer, font, density)
                     val name = widest(tile.name, slotTextStyle(font, sp.sp), BACKDROP_COLLECTION_LINES, slotW - 2 * pad)
                     val count = widest(gamesLabel(999), TextStyle(fontFamily = font, fontSize = COUNT_SP.sp), 1, slotW - 2 * pad)
                     max(name, count) + 2 * pad
