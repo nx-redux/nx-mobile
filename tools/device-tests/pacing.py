@@ -11,7 +11,8 @@ then SurfaceFlinger timestats over the measured window. A/B runs alternate one o
 
 Per run it prints: frames shown, uneven frames (any frame not shown for exactly one content frame at the screen's
 rate), frames held 33 ms or more, the core's average/worst work per frame (NXHITCH summaries; --work turns the Debug
-log on for the run), and the device temperature. Per-game option files and the Debug log are put back afterwards.
+log on for the run), and the device temperature. Each run ends with the game's Quit (its saves written), then a
+force-stop. Per-game option files, the Debug log and the game's auto state are put back afterwards.
 """
 import argparse
 import os
@@ -99,6 +100,15 @@ class Pacing:
             self.write_private(PREFS, prefs)
         if self.a.state:
             self.dev.push(self.a.state, "%s/%s" % (self.states_dir, state_name(self.a.rom, self.a.slot)))
+        self.sh("; ".join("if [ -e %s ]; then mv %s %s; fi" % (q(f), q(f), q(f + ".nxpacing"))
+                          for f in self.auto_files()))
+
+    def auto_files(self):
+        """What a Quit writes for the game (auto state, its thumbnail, the last slot): set aside for the runs."""
+        rom = os.path.basename(self.a.rom)
+        minui = "%s/.userdata/shared/.minui/%s" % (self.home, self.a.tag)
+        return ["%s/%s.state.auto" % (self.states_dir, rom_stem(self.a.rom)), "%s/%s.st9" % (self.states_dir, rom),
+                "%s/%s.9.bmp" % (minui, rom), "%s/%s.txt" % (minui, rom)]
 
     def write_private(self, rel, text):
         tmp = "/data/local/tmp/nxtest-pacing.txt"
@@ -112,6 +122,8 @@ class Pacing:
 
     def restore(self):
         self.sh("am force-stop com.nxredux.mobile.dev")
+        self.sh("; ".join("rm -f %s; if [ -e %s ]; then mv %s %s; fi" % (q(f), q(f + ".nxpacing"), q(f + ".nxpacing"), q(f))
+                          for f in self.auto_files()))
         if self.saved_cfg is None:
             self.sh("rm -f %s; rmdir %s 2>/dev/null; true" % (q(self.cfg), q(self.cfg_dir)))
         else:
@@ -155,6 +167,12 @@ class Pacing:
             log = self.sh("logcat -d | grep -E 'NXHITCH summary|SET_HW_RENDER: Vulkan accepted'", timeout=60)
             temp = self.sh("cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null").strip()
         finally:
+            try:
+                quit_ok = self.dev.game_stop(timeout=60)
+            except Exception:
+                quit_ok = None
+            if not quit_ok:
+                print("the game did not quit: force-stopped", flush=True)
             self.sh("am force-stop com.nxredux.mobile.dev; settings put global stay_on_while_plugged_in 0")
         frame_ms = 1000.0 / self.a.content_fps
         result = parse_timestats(stats, frame_ms) or {"frames": None, "uneven": None, "held33": None}
