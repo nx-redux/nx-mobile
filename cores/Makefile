@@ -230,8 +230,11 @@ MELONDSDS_DEPS_STAMP := $(shell printf %s '$(MELONDSDS_DEPS)' | shasum | cut -c1
 # ---- cores expansion (2026-09-25): nx-redux pins (workspace/tg5040/cores/Makefile), so states cross with the Brick.
 # Most build unpatched from jni/Android.mk at the repo root (LOCAL_MODULE := retro -> libs/arm64-v8a/libretro.so); the
 # exceptions (a patch, build flags or a different module/artifact name) are commented on their own entries.
+# patches/race.patch: c7810dd7 appends the real-time clock to its save state and retro_unserialize rejects anything
+# shorter, so every state from the pin before failed to load; one that ends at ldcRegs is restored with the clock started
+# afresh (state_restore_mem_compat).
 race_REPO = https://github.com/libretro/race
-race_HASH = 171950ea64c96ead503340ed60fa7ba18f56325c
+race_HASH = c7810dd7f172827bfa2004813bc000b13786636b
 race_LICENSE = license.txt
 race_KIND = ndkbuild
 race_BUILD_PATH = .

@@ -114,10 +114,59 @@
       ""
      ],
      "default": "33"
+    },
+    {
+     "key": "race_rtc_mode",
+     "label": "Real-Time Clock",
+     "labelCategorized": "",
+     "info": "Selects how the emulated real-time clock advances. 'Deterministic' counts emulated frames from a fixed base, so RTC reads are reproducible and safe for netplay, rewind and run-ahead. 'Real Time' reads the host clock directly (a live clock, but non-deterministic).",
+     "values": [
+      "deterministic",
+      "realtime"
+     ],
+     "labels": [
+      "Deterministic",
+      "Real Time"
+     ],
+     "default": "deterministic"
+    },
+    {
+     "key": "race_audio_quality",
+     "label": "Audio Quality (Restart)",
+     "labelCategorized": "",
+     "info": "Selects the sound synthesis method. 'Fast' uses a lightweight per-sample mixer (default). 'Accurate' uses band-limited Blip synthesis that matches the Mednafen reference and removes high-frequency aliasing. The CPU cost of the accurate path is small (the audio is a minor fraction of total emulation time), but it is left off by default for maximum performance headroom on low-end hardware.",
+     "values": [
+      "fast",
+      "accurate"
+     ],
+     "labels": [
+      "Fast",
+      "Accurate (Band-limited)"
+     ],
+     "default": "fast"
+    },
+    {
+     "key": "race_audio_samplerate",
+     "label": "Sound Samplerate (Hint) (Restart)",
+     "labelCategorized": "",
+     "info": "Selects the output sample rate of the real-time sound synthesis. The NGPC has no sample-based sound hardware, so there is no single 'native' rate; higher rates reduce latency, eliminate aliasing, avoid low-pass smearing and give better time-domain resolution, at a small increase in CPU cost. 'Auto' queries the frontend's target rate and picks the closest supported value.",
+     "values": [
+      "auto",
+      "32000",
+      "44100",
+      "48000"
+     ],
+     "labels": [
+      "Auto",
+      "32KHz",
+      "44KHz",
+      "48KHz"
+     ],
+     "default": "auto"
     }
    ]
   }
  ],
- "soSha256": "47f297d7e5d3f12e6ebebb51eab14f1e727ed1c6911a4fe6fde971daa17b1969",
- "probedAt": "2026-09-29"
+ "soSha256": "50b3be204a715f5e8b35693e7cb8f059ce34a7a58dd9efe663f0ef10ac1748ec",
+ "probedAt": "2026-11-08"
 }
