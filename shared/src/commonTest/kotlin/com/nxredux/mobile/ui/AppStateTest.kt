@@ -6462,6 +6462,19 @@ class AppStateTest {
         assertEquals(2, state.selection.value.index)                    // on Appearance
     }
 
+    @Test fun split_right_on_a_page_opens_a_sub_page_row_and_leaves_any_other_row() = runTest {
+        val (state, _) = splitSettings()
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.DOWN); state.onButton(NxButton.A)   // Appearance
+        state.select(3)                                                 // Reset to defaults: no value, opens nothing
+        state.onButton(NxButton.RIGHT)
+        assertEquals(SettingsSection.APPEARANCE, assertIs<Screen.Settings>(state.screen.value).section)
+        assertFalse(assertIs<Screen.Settings>(state.screen.value).confirmReset)   // not A
+        state.onButton(NxButton.B)
+        state.onButton(NxButton.UP); state.onButton(NxButton.A)         // Emulators
+        state.select(0); state.onButton(NxButton.RIGHT)                 // Default emulators' ›: as A
+        assertEquals(SettingsSection.DEFAULT_EMULATORS, assertIs<Screen.Settings>(state.screen.value).section)
+    }
+
     @Test fun split_sub_pages_open_in_the_right_pane_and_b_goes_up_one_level_then_left() = runTest {
         val (state, _) = splitSettings()
         state.onButton(NxButton.DOWN); state.onButton(NxButton.RIGHT)  // Emulators

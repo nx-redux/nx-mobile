@@ -1341,11 +1341,11 @@ class AppState(
         host = object : SettingsHost {
             override fun kidsToolsAllowed(): Boolean = kidsUi.kidsToolsAllowed
             override fun loaderActive(): Boolean = loader.active
+            override fun minimalPending(): Boolean = launches.minimalPending
             override fun secondConnected(): Boolean = this@AppState.secondConnected
             override fun select(index: Int) = this@AppState.select(index)
             override fun openSelected() = this@AppState.openSelected()
             override fun back(): Boolean = this@AppState.back()
-            override fun onButton(button: NxButton) = this@AppState.onButton(button)
             override fun rememberMenuSelection() = this@AppState.rememberMenuSelection()
             override fun refreshInstalled() = this@AppState.refreshInstalled()
             override fun settingsRows(section: SettingsSection): List<SettingsRow> = this@AppState.settingsRows(section)
@@ -5081,7 +5081,7 @@ class AppState(
         when (val s = _screen.value) {
             is Screen.Onboarding -> onboardingRow(_selection.value.index)
             is Screen.Systems -> if (styleOf(s) == MenuStyle.MINIMAL) launches.openMinimal(s) else openMainRow(s, _selection.value.index)
-            is Screen.SettingsMenu -> s.sections.getOrNull(_selection.value.index)?.let(::openSettings)
+            is Screen.SettingsMenu -> settingsUi.openHighlightedSection()
             is Screen.ToolApps -> if (s.pick == AppPick.GAMES) androidApps.toggleAndroidGame(s) else androidApps.launchDrawerApp(s)
             is Screen.CheatDb -> onCheatDbButton(s, NxButton.A)
             Screen.DeviceSync -> onDeviceSyncButton(NxButton.A)
@@ -5750,7 +5750,13 @@ class AppState(
         dismissNoticeOnPress()
         (_screen.value as? Screen.Onboarding)?.let { onOnboardingButton(it, button); return }
         netplay?.takeIf { it.page.value != null }?.let { it.onButton(button); return }   // the Netplay sheet over a game list
-        if (settingsUi.onRowEditButton(_screen.value, button)) return
+        // A two-pane page's row edit takes the press, or has the page hear LEFT / RIGHT as its own B / A.
+        val heard = settingsUi.onRowEditButton(_screen.value, button) ?: return
+        onPageButton(heard, repeat = repeat && heard == button)
+    }
+
+    /** [button] as the screen itself hears it, once the dialogs, popups and row edit that come first ([onButton]) let it through. */
+    private fun onPageButton(button: NxButton, repeat: Boolean) {
         if (isKidsScreen(_screen.value)) return kidsUi.onKidsButton(_screen.value, button)
         (_screen.value as? Screen.KidsSetup)?.let { kidsUi.onKidsSetupButton(it, button); return }
         (_screen.value as? Screen.KidsDayEdit)?.let { kidsUi.onKidsDayButton(it, button); return }
