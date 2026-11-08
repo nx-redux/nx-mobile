@@ -412,8 +412,8 @@ internal class LaunchPipeline(private val game: GameActivity) {
             // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c:75-76): known only now.
             paths = paths.withInner(inner?.let { unpackedEntry })
             saves.open(if (np == null) SaveStates(dataRoot, paths) else null)   // netplay: no save states, no auto-resume
-            saves.refreshSlots()   // warm for the first menu open
             dropStaleNdsResume(tag, coreId, romFileName)
+            saves.refreshSlots()   // warm for the first menu open; after the cleanup, so it never lists a deleted state
             np?.let { gameNetplay.prepareSaves(it, tag, romFileName, dataRoot, paths) }
             // netplay: on a copy the battery save is the session folder's (read only: writeBatterySave skips it), under the
             // default names (the folder is mobile's own), with no clock file.
@@ -603,14 +603,21 @@ internal class LaunchPipeline(private val game: GameActivity) {
                                 gameFilePath = copyToCache(content, fileName).absolutePath
                             }
                         } else {
-                            val pfd = refs.openFd(content, "r")
-                                ?: throw IOException("Cannot open file descriptor")
                             // With more than one virtual file the runner serves the core through its VFS (libretrodroid.cpp:391),
                             // so the core opens /rom/<track>.bin by the name its cue gives.
-                            val extra = companions.map { (name, ref) ->
-                                VirtualFile("/rom/$name", refs.openFd(ref, "r") ?: throw IOException("Cannot open $name"))
+                            val opened = ArrayList<VirtualFile>(companions.size + 1)
+                            try {
+                                val pfd = refs.openFd(content, "r") ?: throw IOException("Cannot open file descriptor")
+                                opened += VirtualFile("/rom/$fileName", pfd)
+                                for ((name, ref) in companions) {
+                                    opened += VirtualFile("/rom/$name", refs.openFd(ref, "r") ?: throw IOException("Cannot open $name"))
+                                }
+                            } catch (e: Exception) {
+                                // The view never gets them: nothing else would close the ones already open.
+                                opened.forEach { f -> runCatching { f.fileDescriptor.close() } }
+                                throw e
                             }
-                            gameVirtualFiles = listOf(VirtualFile("/rom/$fileName", pfd)) + extra
+                            gameVirtualFiles = opened
                         }
                         if (descriptor?.id == MUPEN64PLUS_NEXT_ID) {
                             val values = variables.mapNotNull { v -> v.key?.let { k -> v.value?.let { k to it } } }.toMap()

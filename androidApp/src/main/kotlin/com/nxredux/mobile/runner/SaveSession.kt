@@ -317,6 +317,9 @@ internal class SaveSession(
         // [autoState] (the core asked to end) the running state is not worth resuming: keep it as is too.
         if (ss == null || resumePending || !autoState) {
             game.lifecycleScope.launch {
+                // A manual Save/Load or a Wii HOME write still running reads the core off the main thread: it must end
+                // before the destroy, which waits only for the auto writes.
+                joinSlotJobs(slotJobs)
                 withContext(Dispatchers.IO) {
                     withLiveCore { writeBatterySave(notify = true) }
                 }
@@ -327,7 +330,7 @@ internal class SaveSession(
         captureThumbnail { bmp ->
             game.lifecycleScope.launch {
                 // A manual Save/Load still running must finish before the state is serialized.
-                slotJobs.toList().forEach { it.join() }
+                joinSlotJobs(slotJobs)
                 // true = written, null = skipped (the core can't save states), false = failed.
                 val ok: Boolean? = withContext(Dispatchers.IO) {
                     // Both reads of the core before any wait; null = the core was already destroyed (nothing to write).
@@ -544,5 +547,17 @@ internal class SaveSession(
                 NxLog.e("GameActivity", "battery save failed", it)
                 if (notify) game.runOnUiThread { game.toast("Battery save failed") }
             }.getOrDefault(false)
+    }
+}
+
+/**
+ * Waits for every job in [jobs], also one added while it waits (a Wii HOME write is tracked only once its screenshot
+ * lands). Call on the thread that owns [jobs].
+ */
+internal suspend fun joinSlotJobs(jobs: List<Job>) {
+    while (true) {
+        val running = jobs.filter { it.isActive }
+        if (running.isEmpty()) return
+        running.forEach { it.join() }
     }
 }

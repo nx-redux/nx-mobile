@@ -137,8 +137,8 @@ internal class WiiDolphinController(
     }
 
     fun onDestroy() {
-        motionSensors?.stop()
-        if (game.isWii) LibretroDroid.setSensorEnabled(0, false)   // a next Wii game sets its own on its first frame
+        // Created only by the Wii and 3DS paths, which both enable sensor 0; a next game sets its own on its first frame.
+        motionSensors?.let { it.stop(); LibretroDroid.setSensorEnabled(0, false) }
     }
 
     /**
