@@ -362,8 +362,11 @@ internal class InGameMenuController(
                     val skinGlass = skinGlass()
                     val portraitLayout = skinGlass?.let { it.height > it.width } ?: (config.orientation == Configuration.ORIENTATION_PORTRAIT)
                     val padBelow = skinGlass != null || portraitLayout && padLayout.portraitBandPx() > 0
-                    // The window decides the two panes, as Settings' ([inGameMenuSplit]): portrait never splits.
-                    val window = DpSize(config.screenWidthDp.dp, config.screenHeightDp.dp)
+                    // The window decides the two panes, as Settings' ([inGameMenuSplit]): portrait never splits. In a pad
+                    // skin's glass the glass is the menu's window (a landscape skin's tall glass: one column, not two panes).
+                    val density = LocalDensity.current
+                    val window = skinGlass?.let { g -> with(density) { DpSize(g.width.toDp(), g.height.toDp()) } }
+                        ?: DpSize(config.screenWidthDp.dp, config.screenHeightDp.dp)
                     CompositionLocalProvider(
                         LocalHintGlyphs provides hintGlyphs, LocalPortrait provides portraitLayout, LocalPadBelow provides padBelow,
                         LocalWindowSize provides window, LocalInSkin provides (skinGlass != null),
@@ -373,7 +376,6 @@ internal class InGameMenuController(
                     ) {
                     // In the glass: the camera cutout reaches into it only as far as it runs past the glass's top (and
                     // a bottom one past its bottom), so the part outside is taken off before the menu pads by it.
-                    val density = LocalDensity.current
                     val outside = skinGlass?.let { g ->
                         val windowH = (root.height.takeIf { it > 0 } ?: activity.windowShape().heightPx).toFloat()
                         with(density) { PaddingValues(top = g.y.coerceAtLeast(0f).toDp(), bottom = (windowH - g.y - g.height).coerceAtLeast(0f).toDp()) }

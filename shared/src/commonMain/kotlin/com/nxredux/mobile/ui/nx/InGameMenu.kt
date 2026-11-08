@@ -62,6 +62,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.TextUnit
@@ -557,7 +558,7 @@ private fun RootList(page: MenuPage, pageRowHeight: Dp, onSelect: (Int) -> Unit,
         onOpen = onActivate,
         // Level with the panel's tab row: its first pill centred on the tab words.
         // All its rows where they fit; a short glass (a 3DS top screen under a skin) clips it, and it scrolls under a thin fade.
-        modifier = Modifier.padding(top = wordListTopPad(rowHeight)).fillMaxWidth().height(rowHeight * page.rows.size.coerceAtLeast(1))
+        modifier = Modifier.padding(top = wordListTopPad(rowHeight)).fillMaxWidth().height(wordListHeight(rowHeight, page.rows.size, LocalDensity.current))
             .nxScrollFade(listState, MENU_LIST_FADE)
             .then(if (onSlot) Modifier.slotSwipe(onChange) else Modifier),
         listState = listState,
@@ -587,6 +588,13 @@ private const val OPENED_MARK = "›"
 /** A word list's row pitch: the menu's [base] pitch, or [MENU_WORD_PITCH] × the word size where that is more, so words keep air between them. */
 @Composable
 private fun menuWordPitch(base: Dp): Dp = maxOf(base, with(LocalDensity.current) { (menuWordSize() * MENU_WORD_PITCH).toDp() })
+
+/**
+ * A word list's box for [rows] rows (at least one) [rowHeight] apart, as the list lays them out: each row a whole number
+ * of px, so the box is never a fraction short (which would scroll it by a px and fade its last row).
+ */
+internal fun wordListHeight(rowHeight: Dp, rows: Int, density: Density): Dp =
+    with(density) { (rowHeight.roundToPx() * rows.coerceAtLeast(1)).toDp() }
 
 /**
  * The menu word lists' "more this way" fade: a sliver, not a row (user), so a list in a short glass (a 3DS top screen
@@ -719,7 +727,7 @@ private fun RowsBody(
         NxList(
             rows = page.rows.mapIndexed { i, row -> NxRow(openedLabel(row.label, opened && i == page.selected)) },
             selectedIndex = page.selected, onSelect = onSelect, onOpen = onActivate,
-            modifier = Modifier.fillMaxWidth().height(itemHeight * shown.coerceAtLeast(1)).nxScrollFade(listState, MENU_LIST_FADE),
+            modifier = Modifier.fillMaxWidth().height(wordListHeight(itemHeight, shown, LocalDensity.current)).nxScrollFade(listState, MENU_LIST_FADE),
             listState = listState,
             rowHeightOverride = itemHeight, pillPaddingOverride = MenuPillPadding,
             textSizeOverride = menuWordSize(), restInk = LocalNxColors.current.inkDim, wordInk = menuWordInk(focused),
