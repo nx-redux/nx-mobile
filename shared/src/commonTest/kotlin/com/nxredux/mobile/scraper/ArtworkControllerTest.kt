@@ -96,7 +96,8 @@ class ArtworkControllerTest {
         rig.controller.fetchMissing()
         advanceUntilIdle()
         val saves = jobSaves(rig)
-        assertEquals(listOf(0, 1, 2, 3, 3), saves.map { it.done })   // the start, each game, then the end
+        // The start, each game once the next one is fetched, then the end (the last game's finish is shown with it).
+        assertEquals(listOf(0, 1, 2, 3), saves.map { it.done })
         assertEquals(JobPhase.PAUSED, saves[1].phase)   // saved running: decoded as paused
         assertEquals(JobPhase.DONE, saves.last().phase)
     }

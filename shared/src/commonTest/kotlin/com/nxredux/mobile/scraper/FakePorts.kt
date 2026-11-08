@@ -99,13 +99,16 @@ fun ssEngine(
     extras: () -> ArtExtras = { ArtExtras() }, pixels: PixelCodec? = null, warn: (String) -> Unit = {},
 ) = ScrapeEngine(
     http, fitter, source, home, listOf(ScreenScraperSource(http, hasher, auth, now, sleep)) + more, onArt, onWritten, androidArt, onAndroidArt, logged,
-    extras = extras, pixels = pixels, warn = warn, onOptions = onOptions, picked = picked,
+    extras = extras, pixels = pixels, warn = warn, onOptions = onOptions, picked = picked, clock = now,
 )
 
 /** The written-art log as a set of paths; [origins]: each path's origin ([LoggedArt.origin]), a rig's writes recorded there. */
 class FakeLoggedArt(private val paths: MutableSet<String>, val origins: MutableMap<String, ArtOrigin> = mutableMapOf()) : LoggedArt {
+    /** Each removal call's paths, in order. */
+    val removals = mutableListOf<List<String>>()
     override suspend fun contains(path: String) = path in paths
-    override suspend fun remove(path: String) { paths -= path; origins -= path }
+    override suspend fun remove(path: String) = remove(listOf(path))
+    override suspend fun remove(paths: Collection<String>) { removals += paths.toList(); this.paths -= paths.toSet(); origins -= paths.toSet() }
     override suspend fun origin(path: String): ArtOrigin? = origins[path]
     /** Records [written] origins (an engine's onWritten), as the app's log does before each write. */
     fun record(written: List<Pair<String, ArtOrigin?>>) { for ((p, o) in written) if (o != null) origins[p] = o }
@@ -114,6 +117,9 @@ class FakeLoggedArt(private val paths: MutableSet<String>, val origins: MutableM
 class FakeHasher(var result: Pair<Long, Long>? = 0x1234L to 100L, var inZip: Pair<Long, Long>? = 0x5678L to 200L) : RomHasher {
     val asked = mutableListOf<ContentRef>()
     val askedInZip = mutableListOf<ContentRef>()
+    /** Each ROM's size and modified time by ref; none = the provider reports none. */
+    val stamps = mutableMapOf<String, RomStamp>()
+    override suspend fun stamp(rom: ContentRef): RomStamp? = stamps[rom.value]
     override suspend fun crc32AndSize(rom: ContentRef): Pair<Long, Long>? { asked += rom; return result }
     override suspend fun crc32AndSizeInZip(zip: ContentRef): Pair<Long, Long>? { askedInZip += zip; return inZip }
 }

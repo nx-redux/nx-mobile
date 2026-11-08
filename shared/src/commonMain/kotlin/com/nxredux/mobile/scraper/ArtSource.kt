@@ -74,6 +74,30 @@ class PacedGet(
 }
 
 /**
+ * A job's API answers by request, so games that send the same one (regional variants and a multi-disc set's discs share
+ * a search term, and often the match) ask once: an allowance is spent per request. Only 200 bodies are kept (a failed
+ * or empty answer is asked again), at most [max], the oldest dropped first: a job's games come in library order, so
+ * the requests that repeat come close together. Cleared when a job starts.
+ */
+class JobAnswers(private val max: Int = 128) {
+    private val lock = Mutex()
+    private val map = LinkedHashMap<String, String>()
+
+    suspend fun clear() { lock.withLock { map.clear() } }
+
+    /** The kept answer to the request [key] (true: it was kept), else [fetch]'s answer to it (false), kept when it has a body. */
+    suspend fun get(key: String, fetch: suspend (String) -> String?): Pair<String?, Boolean> {
+        lock.withLock { map[key] }?.let { return it to true }
+        val body = fetch(key) ?: return null to false
+        lock.withLock {
+            map.remove(key); map[key] = body
+            while (map.size > max) map.remove(map.keys.first())
+        }
+        return body to false
+    }
+}
+
+/**
  * A stop met on a game's later call once its earlier calls found art (TheGamesDB's screenshot call after the box,
  * SteamGridDB's hero or logo call after the grid): that game keeps what it found, the source's next call stops.
  */

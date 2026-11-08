@@ -92,11 +92,13 @@ interface ArtOptionsPort {
 data class ResetResult(val deleted: Int, val pausedJob: Boolean = false)
 
 /**
- * The [WrittenArtLog] kept in the app-private file [name], loaded once. New entries are appended
- * ([ArtworkHost.appendPrivate]); the file is rewritten whole on a removal, an [edit], a host that cannot append, or once
- * the appended lines outnumber the log ([COMPACT_MIN] at least), which folds a path's repeated lines back into one. A
- * torn last line (a crash or failure mid-append) is an entry whose file was never written: dropped on load, and the
- * next change rewrites the file. An absent file is an empty log; a failed read ([ArtworkHost.readPrivate] throws) is
+ * The [WrittenArtLog] kept in the app-private file [name], loaded once. New entries and removals are appended
+ * ([ArtworkHost.appendPrivate]; a removal as [WrittenArtLog.removedLine]): under Replace a removal comes per game, and
+ * rewriting a large log each time would wear the flash. The file is rewritten whole on a [move], an [edit], a host that
+ * cannot append, or once the appended lines outnumber the log ([COMPACT_MIN] at least), which folds a path's repeated
+ * lines and removals away. A torn last line (a crash or failure mid-append) is dropped on load: an entry whose file
+ * was never written, or a removal not recorded (its path stays logged, as when the crash came between the delete and
+ * the log's write), and the next change rewrites the file. An absent file is an empty log; a failed read ([ArtworkHost.readPrivate] throws) is
  * neither cached nor saved over: the call fails and the next one reads again.
  */
 class ArtLogStore(private val host: ArtworkHost, private val name: String) : LoggedArt, MovedArtLog {
@@ -120,15 +122,19 @@ class ArtLogStore(private val host: ArtworkHost, private val name: String) : Log
         val lines = StringBuilder()
         var changed = 0
         for ((path, origin) in entries) if (l.add(path, origin)) { lines.append(WrittenArtLog.line(path, l.origin(path))); changed++ }
-        if (changed == 0) return@withLock
-        if (rewrite || appended + changed > maxOf(COMPACT_MIN, l.size)) { save(l); return@withLock }
+        if (changed > 0) append(l, lines.toString(), changed)
+    }
+
+    /** [lines] ([count] of them, already applied to [l]) appended, or the file rewritten when it is due or the host cannot append. */
+    private suspend fun append(l: WrittenArtLog, lines: String, count: Int) {
+        if (rewrite || appended + count > maxOf(COMPACT_MIN, l.size)) { save(l); return }
         val ok = try {
-            host.appendPrivate(name, lines.toString())
+            host.appendPrivate(name, lines)
         } catch (e: Throwable) {
             rewrite = true   // a part may have landed
             throw e
         }
-        if (ok) appended += changed else save(l)
+        if (ok) appended += count else save(l)
     }
 
     override suspend fun contains(path: String): Boolean = mutex.withLock { path in load() }
@@ -136,9 +142,14 @@ class ArtLogStore(private val host: ArtworkHost, private val name: String) : Log
     /** Where the logged file at [path] came from; null when unknown or not logged. */
     override suspend fun origin(path: String): ArtOrigin? = mutex.withLock { load().origin(path) }
 
-    override suspend fun remove(path: String) = mutex.withLock {
+    override suspend fun remove(path: String) = remove(listOf(path))
+
+    override suspend fun remove(paths: Collection<String>) = mutex.withLock {
         val l = load()
-        if (path in l) { l.remove(listOf(path)); save(l) }
+        val gone = paths.filter { it in l }.distinct()
+        if (gone.isEmpty()) return@withLock
+        l.remove(gone)
+        append(l, gone.joinToString("") { WrittenArtLog.removedLine(it) }, gone.size)
     }
 
     /** The entry at [from] now at [to], its origin kept, in one save; nothing when [from] is not logged. */

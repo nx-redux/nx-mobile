@@ -32,7 +32,15 @@ interface PixelCodec {
     suspend fun encodePng(image: ArgbImage): ByteArray?
 }
 
+/** A ROM file's size and modified time (epoch millis) as the provider reports them. */
+data class RomStamp(val size: Long, val modified: Long)
+
 interface RomHasher {
+    /**
+     * [rom]'s size and modified time, cheaply (no read); null when the provider reports either as unknown. A hash is
+     * reused while they are unchanged, so null means it is never reused (a rewrite of the same size would go unseen).
+     */
+    suspend fun stamp(rom: ContentRef): RomStamp? = null
     /** CRC32 and size of [rom]; null when unreadable or larger than [ScreenScraperSource.HASH_LIMIT]. */
     suspend fun crc32AndSize(rom: ContentRef): Pair<Long, Long>?
     /**

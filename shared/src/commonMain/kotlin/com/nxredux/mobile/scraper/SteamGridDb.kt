@@ -112,7 +112,7 @@ object Sgdb {
  * then `grids/game` when [ArtSlot.GRID] is wanted, `heroes/game` when [ArtSlot.HERO] is (the engine's want rule) and
  * `logos/game` when [ArtSlot.WHEEL] is. 401 / 403 (the key refused) stop the source for the job, as 429 and 5xx do
  * when asked again once after [BUSY_WAIT_MS]; no connection pauses the job. The API publishes no rate limit: paced
- * [RATE_MS] like TheGamesDB.
+ * [RATE_MS] like TheGamesDB. A job asks each request once ([answers]): regional variants share the search and the game.
  */
 class SteamGridDbSource(
     private val http: ScraperHttp, private val key: () -> String?, now: () -> Long, private val sleep: suspend (Long) -> Unit,
@@ -139,8 +139,9 @@ class SteamGridDbSource(
     private val calls = PacedGet(pacer, http, sleep, TRIES, BACKOFF, BUSY_WAIT_MS)
     /** A stop met on a game's hero or logo call after other assets were in hand: that game keeps them, the next call stops. */
     private val pendingStop = PendingStop()
+    private val answers = JobAnswers()
 
-    override suspend fun startJob() { pendingStop.clear() }
+    override suspend fun startJob() { pendingStop.clear(); answers.clear() }
 
     override suspend fun find(ref: LibraryGameRef, wanted: Set<ArtSlot>): List<ArtHit> {
         val k = key()?.ifEmpty { null } ?: return emptyList()
@@ -169,9 +170,11 @@ class SteamGridDbSource(
         }
     }
 
-    /** A paced call with the key's header: the body of a 200, null for a not-found or other answer. */
-    private suspend fun api(url: String, k: String): String? = calls.get(
-        url, Sgdb.auth(k), busyNote = { if (it == 429) TOO_MANY else UNAVAILABLE },
-        stop = { if (it == 401 || it == 403) KEY_REFUSED else null },
-    )?.decodeToString()
+    /** A paced call with the key's header (once per job: [answers]): the body of a 200, null for a not-found or other answer. */
+    private suspend fun api(url: String, k: String): String? = answers.get("$k $url") {
+        calls.get(
+            url, Sgdb.auth(k), busyNote = { if (it == 429) TOO_MANY else UNAVAILABLE },
+            stop = { if (it == 401 || it == 403) KEY_REFUSED else null },
+        )?.decodeToString()
+    }.first
 }

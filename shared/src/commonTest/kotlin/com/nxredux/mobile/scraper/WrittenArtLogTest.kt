@@ -84,8 +84,50 @@ class WrittenArtLogTest {
         assertEquals(setOf("Roms/GB/.media/box2d/Zelda.png", tetris), back.entries)
         assertEquals(ArtOrigin("screenscraper", "1", "box-2D/eu"), back.origin(tetris))
         assertTrue(store.contains(tetris))
-        store.remove(tetris)   // a removal rewrites the file without it
-        assertEquals("Roms/GB/.media/box2d/Zelda.png\n", host.files["log"])
+        store.remove(tetris)   // a removal is appended too
+        assertTrue(host.writes.isEmpty()); assertEquals(3, host.appends.size)
+        assertEquals(setOf("Roms/GB/.media/box2d/Zelda.png"), WrittenArtLog.decode(host.files["log"]).entries)
+        assertFalse(ArtLogStore(host, "log").contains(tetris))
+    }
+
+    @Test fun aGamesRemovalsAreOneAppend() = runTest {
+        val a = "Roms/GB/.media/boxart/Tetris.png"; val b = "Roms/GB/.media/boxart/Tetris.jpg"; val c = "Roms/GB/.media/box2d/Zelda.png"
+        val host = FakeHost(emptyList()).apply { appendable = true; files["log"] = "$a\tscreenscraper\t1\tbox\n$b\n$c\n" }
+        val store = ArtLogStore(host, "log")
+        store.remove(listOf(a, b, "Roms/GB/.media/boxart/Absent.png"))
+        assertEquals(1, host.appends.size); assertTrue(host.writes.isEmpty())
+        assertEquals(setOf(c), WrittenArtLog.decode(host.files["log"]).entries)
+        store.remove(listOf("Roms/GB/.media/boxart/Absent.png"))   // nothing logged: nothing written
+        assertEquals(1, host.appends.size)
+    }
+
+    @Test fun aPathAddedAgainAfterItsRemovalIsLogged() {
+        val log = WrittenArtLog.decode("a.png\tscreenscraper\t1\tbox\n" + WrittenArtLog.removedLine("a.png") + "a.png\tlibretro\t\t\n")
+        assertEquals(ArtOrigin("libretro", null, null), log.origin("a.png"))
+        assertFalse("b.png" in WrittenArtLog.decode("b.png\n" + WrittenArtLog.removedLine("b.png")))
+    }
+
+    @Test fun removalsCountTowardCompaction() = runTest {
+        val host = FakeHost(emptyList()).apply { appendable = true }
+        val store = ArtLogStore(host, "log")
+        val keep = "Roms/GB/.media/box2d/Keep.png"
+        store.add(listOf(keep to null))
+        var n = 1
+        while (host.writes.isEmpty()) {
+            val p = "Roms/GB/.media/box2d/G$n.png"
+            store.add(listOf(p to null)); store.remove(listOf(p)); n++
+        }
+        assertTrue(n <= ArtLogStore.COMPACT_MIN, "$n")
+        // Compacted: the removed paths and their removal lines are gone (the path just added, if any, stays).
+        val lines = host.files.getValue("log").lines().filter { it.isNotEmpty() }
+        assertTrue(lines.size <= 2 && lines.first() == keep, lines.toString())
+    }
+
+    @Test fun aHostThatCannotAppendRewritesOnRemoval() = runTest {
+        val host = FakeHost(emptyList()).apply { files["log"] = "a.png\nb.png\n" }
+        val store = ArtLogStore(host, "log")
+        store.remove(listOf("a.png", "b.png"))
+        assertEquals(listOf("log" to ""), host.writes)
     }
 
     @Test fun appendedLinesAreCompactedOnceTheyOutnumberTheLog() = runTest {

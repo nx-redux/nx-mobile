@@ -392,4 +392,31 @@ class TheGamesDbTest {
         assertFalse(Rig().src.knows(Scrape.homeGame("x.tic", "TIC80")))
         assertFalse(Rig().src.knows(Scrape.androidGame("com.x", "X")))
     }
+    @Test fun regionalVariantsShareOneSearchPerJob() = runTest {
+        val r = Rig()
+        r.http.on("Games/ByGameName", ok(TgdbFixtures.byName(left = 249)))
+        r.http.on("Games/Images", ok(TgdbFixtures.images(left = 248)))
+        val usa = Scrape.homeGame("Sonic the Hedgehog (USA).md", "MD").copy(name = "Sonic the Hedgehog (USA)")
+        val eur = Scrape.homeGame("Sonic the Hedgehog (Europe).md", "MD").copy(name = "Sonic the Hedgehog (Europe)")
+        r.src.startJob()
+        val first = r.src.find(usa, setOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT))
+        val second = r.src.find(eur, setOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT))
+        assertEquals(first.map { it.url }, second.map { it.url })
+        assertEquals(1, r.http.count("Games/ByGameName"))
+        assertEquals(1, r.http.count("Games/Images"))
+        assertEquals(248, r.src.left())   // an answer read again is not a newer allowance
+        // A new job asks again.
+        r.src.startJob()
+        r.src.find(eur, setOf(ArtSlot.BOX_2D))
+        assertEquals(2, r.http.count("Games/ByGameName"))
+    }
+
+    @Test fun aFailedSearchIsNotKept() = runTest {
+        val r = Rig()
+        r.http.on("Games/ByGameName", HttpResult(404, null), ok(TgdbFixtures.byName()))
+        r.src.startJob()
+        assertEquals(emptyList(), r.src.find(sonic, setOf(ArtSlot.BOX_2D)))
+        assertTrue(r.src.find(sonic, setOf(ArtSlot.BOX_2D)).isNotEmpty())
+        assertEquals(2, r.http.count("Games/ByGameName"))
+    }
 }

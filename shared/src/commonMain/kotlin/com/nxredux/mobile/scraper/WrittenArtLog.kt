@@ -7,6 +7,8 @@ package com.nxredux.mobile.scraper
 interface LoggedArt {
     suspend fun contains(path: String): Boolean
     suspend fun remove(path: String)
+    /** As [remove] for each of [paths], in one write where the log can. */
+    suspend fun remove(paths: Collection<String>) { for (p in paths) remove(p) }
     suspend fun origin(path: String): ArtOrigin? = null
     /**
      * The screenshot at [path] is a SteamGridDB hero: its logged origin says so (the controller adds the hand-placed
@@ -30,7 +32,7 @@ interface LoggedArt {
  *
  * One line per file: `<path>\t<source>\t<game id>\t<asset id>` (an unknown id is empty); a path-only line (an older
  * log's, legacy mixes included) has no origin. A path may appear again further down (an appended [add]): the later line
- * wins, as [add] would.
+ * wins, as [add] would. `<path>\t-` ([removedLine]) drops the path, until a later line adds it again.
  */
 class WrittenArtLog(entries: Map<String, ArtOrigin?>) {
     private val map = LinkedHashMap(entries)
@@ -58,6 +60,12 @@ class WrittenArtLog(entries: Map<String, ArtOrigin?>) {
         fun line(path: String, origin: ArtOrigin?): String =
             (if (origin == null) path else listOf(path, origin.source, origin.gameId.orEmpty(), origin.assetId.orEmpty()).joinToString("\t")) + "\n"
 
+        /** The source field of a removal line; no source is named so. */
+        private const val REMOVED = "-"
+
+        /** An appended removal of [path], newline included ([decode] drops the path there). */
+        fun removedLine(path: String): String = "$path\t$REMOVED\n"
+
         fun decode(text: String?): WrittenArtLog {
             val entries = LinkedHashMap<String, ArtOrigin?>()
             for (line in text.orEmpty().lineSequence()) {
@@ -66,6 +74,7 @@ class WrittenArtLog(entries: Map<String, ArtOrigin?>) {
                 if (path.isEmpty()) continue
                 val source = parts.getOrNull(1)?.trim().orEmpty()
                 if (source.isEmpty()) { if (path !in entries) entries[path] = null; continue }   // as [add]: keeps a known origin
+                if (source == REMOVED) { entries.remove(path); continue }
                 entries[path] = ArtOrigin(
                     source, parts.getOrNull(2)?.trim()?.ifEmpty { null }, parts.getOrNull(3)?.trim()?.ifEmpty { null },
                 )

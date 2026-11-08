@@ -345,6 +345,35 @@ class ScrapeEngineTest {
         assertTrue(lookups[1].contains("&crc=00001234&romtaille=100"))
     }
 
+    @Test fun anUnchangedRomIsHashedOnceAcrossRuns() = runTest {
+        val rig = Rig(this)
+        rig.http.on("romnom=Tetris.gb", Scrape.json(ScraperFixtures.GARBAGE))
+        rig.hasher.stamps[tetris.rom.value] = RomStamp(100, 5_000)
+        rig.run(listOf(tetris))
+        rig.run(listOf(tetris))   // Resume / Fetch again: a new run
+        assertEquals(1, rig.hasher.asked.size)
+        assertEquals(2, rig.http.calls.count { it.contains("&crc=00001234&romtaille=100") })
+        // Rewritten since: hashed again.
+        rig.hasher.stamps[tetris.rom.value] = RomStamp(100, 6_000)
+        rig.run(listOf(tetris))
+        assertEquals(2, rig.hasher.asked.size)
+        // A provider without modified times: never kept.
+        rig.hasher.stamps.clear()
+        rig.run(listOf(tetris)); rig.run(listOf(tetris))
+        assertEquals(4, rig.hasher.asked.size)
+    }
+
+    @Test fun aFailedHashIsNotKept() = runTest {
+        val rig = Rig(this, hasher = FakeHasher(null))
+        rig.http.on("romnom=Tetris.gb", Scrape.json(ScraperFixtures.GARBAGE))
+        rig.hasher.stamps[tetris.rom.value] = RomStamp(100, 5_000)
+        rig.run(listOf(tetris))
+        rig.hasher.result = 0x1234L to 100L
+        rig.run(listOf(tetris))
+        assertEquals(2, rig.hasher.asked.size)
+        assertEquals(1, rig.http.calls.count { it.contains("&crc=") })
+    }
+
     @Test fun bigRomSkipsTryTwo() = runTest {
         val rig = Rig(this, hasher = FakeHasher(null))
         rig.http.on("romnom=Tetris.gb", Scrape.json(ScraperFixtures.GARBAGE))

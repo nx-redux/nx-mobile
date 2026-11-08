@@ -159,7 +159,8 @@ object Tgdb {
  * ([last]), so that ask repeats neither the search nor a logo read. The allowance (per IP for a public key) is read
  * at job start with the free `API/Limit` and from every answer; at [STOP_AT] or fewer left, or on a 403 (bad key or
  * cap), the source stops for the job; 429 / 5xx stop it too when asked again once after [BUSY_WAIT_MS]; no
- * connection pauses the job. [left] is shared by the job and a single-game fetch: every read and write is under one
+ * connection pauses the job. A job asks each `Games/ByGameName` and `Games/Images` request once ([answers]): regional
+ * variants and a multi-disc set's discs send the same ones. [left] is shared by the job and a single-game fetch: every read and write is under one
  * lock, and it belongs to the key it was read with (a changed key reads as unknown until its own read).
  */
 class TheGamesDbSource(
@@ -190,6 +191,7 @@ class TheGamesDbSource(
     private var leftKey: String? = null
     /** A stop met on a game's screenshot call after its box was found: that game keeps its box, the next call stops. */
     private val pendingStop = PendingStop()
+    private val answers = JobAnswers()
 
     /** The last game asked about: its key and path, its match (null = none) and its logos once read (null = not read). */
     private class Last(val key: String, val gamePath: String, val game: TgdbGame?, val logos: List<ArtHit>?)
@@ -217,6 +219,7 @@ class TheGamesDbSource(
     /** The free allowance read at the start of a job; a failed read leaves the last known value. */
     override suspend fun startJob() {
         pendingStop.clear()
+        answers.clear()
         lock.withLock { last = null }
         allowance()
     }
@@ -241,8 +244,9 @@ class TheGamesDbSource(
                 return logos(k, ref, game)
             }
         }
-        val games = Tgdb.parseGames(api(Tgdb.byName(k, TitleMatch.searchTerm(ref.name), platforms)))
-        setLeft(games.left)
+        val (body, kept) = answers.get(Tgdb.byName(k, TitleMatch.searchTerm(ref.name), platforms)) { api(it) }
+        val games = Tgdb.parseGames(body)
+        if (!kept) setLeft(games.left)
         val game = Tgdb.match(games.games, ref.name, platforms)
         lock.withLock { last = Last(k, ref.gamePath, game, null) }
         if (game == null) return emptyList()
@@ -255,9 +259,9 @@ class TheGamesDbSource(
         val withLogos = ArtSlot.SCREENSHOT in wanted && ArtSlot.WHEEL in wanted
         val types = listOfNotNull("screenshot".takeIf { ArtSlot.SCREENSHOT in wanted }, "clearlogo".takeIf { withLogos })
         if (types.isNotEmpty()) {
-            val body = try { api(Tgdb.images(k, game.id, types)) } catch (e: SourceStop) { pendingStop.hold(e, hits); return hits }
+            val (body, kept) = try { answers.get(Tgdb.images(k, game.id, types)) { api(it) } } catch (e: SourceStop) { pendingStop.hold(e, hits); return hits }
             val images = Tgdb.parseImages(body)
-            setLeft(images.left)
+            if (!kept) setLeft(images.left)
             val mine = images.images[game.id].orEmpty()
             if (ArtSlot.SCREENSHOT in wanted) Tgdb.rankScreens(mine).mapTo(hits) { hit(ArtSlot.SCREENSHOT, images.baseUrl, images.thumbBase, game, it) }
             if (withLogos) {
@@ -271,8 +275,9 @@ class TheGamesDbSource(
 
     /** [game]'s clear logos with one `Games/Images` call of their own (the wheel asked for alone), kept in [last]. */
     private suspend fun logos(k: String, ref: LibraryGameRef, game: TgdbGame): List<ArtHit> {
-        val images = Tgdb.parseImages(api(Tgdb.images(k, game.id, listOf("clearlogo"))))
-        setLeft(images.left)
+        val (body, kept) = answers.get(Tgdb.images(k, game.id, listOf("clearlogo"))) { api(it) }
+        val images = Tgdb.parseImages(body)
+        if (!kept) setLeft(images.left)
         return Tgdb.rankLogos(images.images[game.id].orEmpty()).map { hit(ArtSlot.WHEEL, images.baseUrl, images.thumbBase, game, it) }
             .also { remember(k, ref, game, it) }
     }

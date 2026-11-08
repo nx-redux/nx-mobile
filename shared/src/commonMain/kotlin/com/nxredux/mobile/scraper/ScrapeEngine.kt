@@ -12,6 +12,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.concurrent.Volatile
+import kotlin.time.TimeSource
 
 /** The existing folder at [segments] below [home] (nothing created); null when any part is missing. */
 internal suspend fun RomsSource.findDir(home: ContentRef, segments: List<String>): ContentRef? {
@@ -64,6 +66,8 @@ class ScrapeEngine(
      * included) writes, replaces or removes a picked slot's file.
      */
     private val picked: suspend (gamePath: String) -> Set<ArtSlot> = { emptySet() },
+    /** Milliseconds on a monotonic clock: the pacing of [run]'s state emissions (a test's virtual clock). */
+    private val clock: () -> Long = TimeSource.Monotonic.markNow().let { start -> { start.elapsedNow().inWholeMilliseconds } },
 ) {
     companion object {
         const val NO_CONNECTION = "No connection"
@@ -107,6 +111,12 @@ class ScrapeEngine(
         const val OFFLINE_RETRY_MS = 2_000L
         /** An image download answered 429 or 5xx is tried again once after this; a second one skips that image. */
         const val BUSY_RETRY_MS = 5_000L
+        /**
+         * [run] emits a status change at most this often while games finish without a request (a skip or a local mix):
+         * each emission copies the whole job, so one per such game is quadratic in a large library. Before a source
+         * call or a download the state is always emitted, so the game being fetched is shown while it waits.
+         */
+        const val EMIT_EVERY_MS = 150L
         /** The extensions a typed file is read with, as the scanner does (any case; `.png`, then `.jpg`, then `.jpeg`). */
         private val DISK_EXTS = listOf("png", "jpg", "jpeg")
 
@@ -159,7 +169,8 @@ class ScrapeEngine(
     }
 
     /**
-     * Runs items from the first WAITING one; emits state via [update]; returns the final state. Without [replace], a
+     * Runs items from the first WAITING one; emits state via [update] ([EMIT_EVERY_MS]: an item's change may be shown
+     * with a later one); returns the final state, which is emitted too. Without [replace], a
      * game that has art by its turn ([ArtHave.complete]; art appeared since it was queued) is skipped. The sources
      * named in [ScrapeState.notes] of [start] stay stopped (a chained run of the same job); a new job or Resume clears
      * them. [startSources] false: the sources' [ArtSource.startJob] is not called (a single-game fetch while a job runs
@@ -177,23 +188,30 @@ class ScrapeEngine(
         update: suspend (ScrapeState) -> Unit,
     ): ScrapeState {
         var s = start.inFlightToWaiting().copy(phase = JobPhase.RUNNING, pauseReason = null)
+        // The items change here; [s.items] is only brought up to date when the state is emitted.
+        val items = ArrayList(s.items)
         val stopped = HashSet(s.notes.keys)
         fun quota() = ss?.lastQuota ?: s.quota
         suspend fun tgdbLeft() = tgdb?.left() ?: s.tgdbLeft
+        var unshown = false
+        var shownAt = 0L
+        suspend fun current(): ScrapeState = s.copy(items = items.toList(), quota = quota(), tgdbLeft = tgdbLeft()).also { s = it }
+        suspend fun show() { update(current()); unshown = false; shownAt = clock() }
+        val flush: suspend () -> Unit = { if (unshown) show() }
         suspend fun set(i: Int, status: ItemStatus, reason: String? = null) {
-            s = s.copy(items = s.items.toMutableList().also { it[i] = it[i].copy(status = status, reason = reason) }, quota = quota(), tgdbLeft = tgdbLeft())
-            update(s)
+            items[i] = items[i].copy(status = status, reason = reason)
+            unshown = true
+            if (clock() - shownAt >= EMIT_EVERY_MS) show()
         }
-        val stop: (ArtSource, SourceStop) -> Unit = { src, e -> stopped += src.id; s = s.copy(notes = s.notes + (src.id to e.note)) }
-        update(s)
+        val stop: (ArtSource, SourceStop) -> Unit = { src, e -> stopped += src.id; s = s.copy(notes = s.notes + (src.id to e.note)); unshown = true }
+        show()
         var blocked = false
         val listings = Listings()
         try {
             if (startSources) for (src in sources) if (src.enabled && src.id !in stopped) try { src.startJob() } catch (e: SourceStop) { stop(src, e) }
-            s = s.copy(tgdbLeft = tgdbLeft())
-            for (i in s.items.indices) {
-                if (s.items[i].status != ItemStatus.WAITING) continue
-                val ref = games(s.items[i].gamePath)
+            for (i in items.indices) {
+                if (items[i].status != ItemStatus.WAITING) continue
+                val ref = games(items[i].gamePath)
                 if (ref == null) { set(i, ItemStatus.SKIPPED, "Not in the library"); continue }
                 // An Android game lacking only its mix is made one from its stored pictures (no request), ScreenScraper
                 // stopped, or not there at all.
@@ -209,13 +227,17 @@ class ScrapeEngine(
                 if (known.all { it.id in stopped } && !(mixOnlyLocal(ref, known) && !replace)) { blocked = true; continue }
                 set(i, ItemStatus.SEARCHING)
                 val downloading: suspend () -> Unit = { set(i, ItemStatus.DOWNLOADING) }
-                val result = if (ref.android) scrapeAndroid(ref, stopped, replace, wide, downloading, stop, found) else scrape(ref, known, stopped, replace, wide, listings, downloading, stop, found)
+                val result = if (ref.android) scrapeAndroid(ref, stopped, replace, wide, downloading, stop, found, flush) else scrape(ref, known, stopped, replace, wide, listings, downloading, stop, found, flush)
                 if (result == null) { blocked = true; set(i, ItemStatus.WAITING); continue }   // every source stopped: Resume retries it
                 set(i, result.first, result.second)
             }
-            s = s.copy(phase = if (blocked) JobPhase.PAUSED else JobPhase.DONE, pauseReason = if (blocked) ALL_STOPPED else null, quota = quota(), tgdbLeft = tgdbLeft())
+            s = current().copy(phase = if (blocked) JobPhase.PAUSED else JobPhase.DONE, pauseReason = if (blocked) ALL_STOPPED else null)
         } catch (p: JobPause) {
-            s = s.inFlightToWaiting().copy(phase = JobPhase.PAUSED, pauseReason = p.reason, quota = quota(), tgdbLeft = tgdbLeft())
+            s = current().inFlightToWaiting().copy(phase = JobPhase.PAUSED, pauseReason = p.reason)
+        } catch (e: CancellationException) {
+            // A game finished within the last emit interval is still unshown: emit it, or Resume would fetch it again.
+            if (unshown) withContext(NonCancellable) { update(current().inFlightToWaiting()) }
+            throw e
         }
         update(s)
         return s
@@ -271,18 +293,65 @@ class ScrapeEngine(
      */
     private val pickWrites = Mutex()
 
+    /** Bumped by each pick's write: a run's [Listings] made before it may not know the folders or files it made. */
+    @Volatile private var pickGeneration = 0
+
     /**
-     * One run's slot-folder listings: each folder is listed at most once per run (a console's games share them), then
-     * kept in step with the run's own writes and deletes. Per call of [run] (or of a public read), never shared.
+     * One run's slot folders and their listings: each folder is found (a provider query per path segment) and listed at
+     * most once per run (a console's games share them), then kept in step with the run's own writes, deletes and
+     * folders made. A pick's write since ([pickGeneration]) drops what was kept. Per call of [run] (or of a public read),
+     * never shared.
      */
     private inner class Listings {
         private val map = HashMap<String, MutableList<Entry>>()
-        suspend fun of(dir: ContentRef): List<Entry> = map.getOrPut(dir.value) {
-            (try { source.listChildren(dir) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }).toMutableList()
+        /** Folders below the home by their segments; null = not there when looked up. */
+        private val dirs = HashMap<List<String>, ContentRef?>()
+        private var writable = false
+        private var picks = pickGeneration
+
+        private fun dropIfPicked() {
+            if (picks == pickGeneration) return
+            map.clear(); dirs.clear(); picks = pickGeneration
+        }
+
+        suspend fun of(dir: ContentRef): List<Entry> {
+            dropIfPicked()
+            return map.getOrPut(dir.value) {
+                (try { source.listChildren(dir) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }).toMutableList()
+            }
         }
         // Ignoring case: on case-insensitive storage a write over `X.PNG` as `X.png` is the same file.
         fun wrote(dir: ContentRef, e: Entry) { map[dir.value]?.let { l -> l.removeAll { it.name.equals(e.name, ignoreCase = true) }; l += e } }
         fun deleted(dir: ContentRef, name: String) { map[dir.value]?.removeAll { it.name == name } }
+
+        /** The existing folder at [segments] below the home ([findDir]), or null; nothing created. */
+        suspend fun dir(segments: List<String>): ContentRef? {
+            dropIfPicked()
+            if (segments.isEmpty()) return home
+            if (dirs.containsKey(segments)) return dirs[segments]
+            val parent = dir(segments.dropLast(1)) ?: return null
+            return source.child(parent, segments.last())?.takeIf { it.isDirectory }?.ref.also { dirs[segments] = it }
+        }
+
+        /** The folder at [segments] below the home, made as needed ([ensurePath]); null when it cannot be. */
+        suspend fun ensure(segments: List<String>): ContentRef? {
+            dropIfPicked()
+            dirs[segments]?.let { return it }
+            if (!writable) { if (!source.canWrite(home)) return null; writable = true }
+            var dir = home
+            for (i in segments.indices) {
+                val key = segments.subList(0, i + 1).toList()
+                dir = dirs[key] ?: run {
+                    val existing = source.child(dir, segments[i])
+                    when {
+                        existing == null -> source.createDirectory(dir, segments[i])?.takeIf { it.isDirectory }?.ref
+                        existing.isDirectory -> existing.ref
+                        else -> null   // a file is in the way
+                    }
+                }?.also { dirs[key] = it } ?: return null
+            }
+            return dir
+        }
     }
 
     /**
@@ -291,9 +360,9 @@ class ScrapeEngine(
      * SteamGridDB, or a moved hand-placed hero); not looked up without [heroes].
      */
     private suspend fun artOnDisk(t: ArtTarget, ls: Listings, heroes: Boolean = true): ArtRefs {
-        val media = guard { source.findDir(home, t.mediaSegments) } ?: return ArtRefs()
+        guard { ls.dir(t.mediaSegments) } ?: return ArtRefs()
         suspend fun entry(folder: String): Entry? = guard {
-            val dir = source.child(media, folder)?.takeIf { it.isDirectory }?.ref ?: return@guard null
+            val dir = ls.dir(t.mediaSegments + folder) ?: return@guard null
             filesIn(dir, t.base, ls).firstOrNull()
         }
         suspend fun slot(folder: String): String? = entry(folder)?.ref?.value
@@ -351,8 +420,10 @@ class ScrapeEngine(
     private suspend fun scrape(
         ref: LibraryGameRef, known: List<ArtSource>, stopped: Set<String>, replace: Boolean, wide: Boolean, ls: Listings,
         downloading: suspend () -> Unit, stop: (ArtSource, SourceStop) -> Unit,
-        found: suspend (gamePath: String, options: List<ArtOption>) -> Unit,
+        found: suspend (gamePath: String, options: List<ArtOption>) -> Unit, flush: suspend () -> Unit,
     ): Pair<ItemStatus, String?>? {
+        /** A source's answer; the job's state is shown first, as the call may take a while. */
+        suspend fun ask(src: ArtSource, slots: Set<ArtSlot>): List<ArtHit> { flush(); return src.find(ref, slots) }
         val target = guard { ArtPaths.target(ref.sourceId, ref.relativeDir, ref.fileName, ref.folderGame) }
             ?: return ItemStatus.ERROR to "No place for its art"
         val ex = extras()
@@ -455,7 +526,7 @@ class ScrapeEngine(
         suspend fun firstWritten(all: List<ArtHit>, over: Boolean = replace): ArtSlot? {
             val hits = pickedSince(all)
             for (hit in hits) {
-                val image = hit.bytes?.takeIf { it.isNotEmpty() } ?: download(hit.url) ?: continue
+                val image = hit.bytes?.takeIf { it.isNotEmpty() } ?: run { flush(); download(hit.url) } ?: continue
                 val fitted = fitFor(hit.slot, image) ?: continue
                 attempted = true
                 // Read again right before the write (the download may have taken a while): a pick made meanwhile wins.
@@ -502,7 +573,7 @@ class ScrapeEngine(
                 val counts = usual.isNotEmpty()
                 if (src.id in stopped) { if (counts) stoppedBefore++; continue }
                 if (counts) asked++
-                val hits = try { src.find(ref, wanted) } catch (e: SourceStop) { stop(src, e); if (counts) stoppedHere++; continue }
+                val hits = try { ask(src, wanted) } catch (e: SourceStop) { stop(src, e); if (counts) stoppedHere++; continue }
                 askedSlots[src.id] = wanted   // only once answered: a stop here leaves the wide pass to find it stopped
                 if (hits.isEmpty()) continue
                 record(hits)
@@ -553,7 +624,7 @@ class ScrapeEngine(
             for (src in known) {
                 if (storageFailed || !wantWheel) break
                 if (!src.wheelLast || ArtSlot.WHEEL !in src.slots || src.id in stopped || src.id in wheelsOffered) continue
-                val hits = try { src.find(ref, setOf(ArtSlot.WHEEL)) } catch (e: SourceStop) { stop(src, e); continue }
+                val hits = try { ask(src, setOf(ArtSlot.WHEEL)) } catch (e: SourceStop) { stop(src, e); continue }
                 val wheels = hits.filter { it.slot == ArtSlot.WHEEL }
                 if (wheels.isNotEmpty() && !notified) { notified = true; downloading() }
                 if (firstWritten(wheels) != null) { wantWheel = false; writers += src.shortLabel }
@@ -566,7 +637,7 @@ class ScrapeEngine(
                     val slots = (src.slots intersect OPTION_SLOTS) - askedSlots[src.id].orEmpty()
                     if (slots.isEmpty()) continue
                     if (src.id in stopped) { complete = false; continue }
-                    record(try { src.find(ref, slots) } catch (e: SourceStop) { stop(src, e); complete = false; continue })
+                    record(try { ask(src, slots) } catch (e: SourceStop) { stop(src, e); complete = false; continue })
                 }
                 wideDone = complete
             }
@@ -639,7 +710,8 @@ class ScrapeEngine(
         return pickWrites.withLock {
             val ls = Listings()
             val before = artOnDisk(target, ls)
-            if (!writeSlot(target, option.slot, fitted, option.origin, replace = true, ls)) return@withLock null
+            val wrote = try { writeSlot(target, option.slot, fitted, option.origin, replace = true, ls) } finally { pickGeneration++ }
+            if (!wrote) return@withLock null
             if (slot in MIX_INPUTS && extras().mix && pixels != null && appMix(target, ls)) makeMix(ref, target, before, mapOf(slot to fitted.bytes), ls)
             indexArt(ref, before, artOnDisk(target, ls), picked = setOf(slot))
         }
@@ -709,7 +781,7 @@ class ScrapeEngine(
      */
     private suspend fun appMix(t: ArtTarget, ls: Listings): Boolean = guard {
         val segments = t.segments(ArtSlot.MIX)
-        val dir = source.findDir(home, segments) ?: return@guard null
+        val dir = ls.dir(segments) ?: return@guard null
         val e = filesIn(dir, t.base, ls).firstOrNull() ?: return@guard null
         logged.origin((segments + e.name).joinToString("/"))?.source == MIX_ORIGIN
     } ?: false
@@ -801,7 +873,7 @@ class ScrapeEngine(
     private suspend fun scrapeAndroid(
         ref: LibraryGameRef, stopped: Set<String>, replace: Boolean, wide: Boolean,
         downloading: suspend () -> Unit, stop: (ArtSource, SourceStop) -> Unit,
-        found: suspend (gamePath: String, options: List<ArtOption>) -> Unit,
+        found: suspend (gamePath: String, options: List<ArtOption>) -> Unit, flush: suspend () -> Unit,
     ): Pair<ItemStatus, String?>? {
         val store = androidArt ?: return ItemStatus.SKIPPED to NO_SOURCE
         val ss = ss ?: return ItemStatus.SKIPPED to NO_SOURCE
@@ -812,6 +884,7 @@ class ScrapeEngine(
         /** Records [hits] and reports the options so far ([found]) when they added any. */
         suspend fun record(hits: List<ArtHit>) { if (recordOptions(hits, options)) found(ref.gamePath, options.toList()) }
         try {
+            flush()
             val hit = try { ss.androidScreenshot(ref.name) } catch (e: SourceStop) { stop(ss, e); return null }
             when (hit) {
                 is AndroidHit.Screenshot -> record(ss.androidHits(hit.medias, hit.gameId))
@@ -823,7 +896,7 @@ class ScrapeEngine(
                 wideDone = when {
                     sg == null -> true
                     sg.id in stopped -> false
-                    else -> try { record(sg.find(ref, sg.slots)); true } catch (e: SourceStop) { stop(sg, e); false }
+                    else -> try { flush(); record(sg.find(ref, sg.slots)); true } catch (e: SourceStop) { stop(sg, e); false }
                 }
             }
             val picked = ArtSlot.SCREENSHOT in picked(ref.gamePath)
@@ -832,7 +905,7 @@ class ScrapeEngine(
                 hit == AndroidHit.None -> ItemStatus.NOT_FOUND to null
                 // Nothing to write: the stored one stays, and gets its mix when it has none.
                 picked || (has && !replace) -> { ensureAndroidMix(ref); ItemStatus.DONE to null }
-                hit is AndroidHit.Screenshot -> writeAndroidShot(store, ref, hit.url, downloading, ss)
+                hit is AndroidHit.Screenshot -> writeAndroidShot(store, ref, hit.url, { downloading(); flush() }, ss)
                 else -> ItemStatus.NOT_FOUND to "No artwork"
             }
         } catch (p: JobPause) { paused = p }
@@ -894,17 +967,17 @@ class ScrapeEngine(
     private suspend fun writeSlot(t: ArtTarget, kind: ArtSlot, img: FittedImage, origin: ArtOrigin, replace: Boolean, ls: Listings): Boolean {
         val slot = kind.fileSlot
         val segments = t.segments(slot)
-        if (!replace && guard { source.findDir(home, segments)?.let { fileIn(it, t.base, ls) } } != null) return true
+        if (!replace && guard { ls.dir(segments)?.let { fileIn(it, t.base, ls) } } != null) return true
         val name = t.name(img.encoding)
         onWritten(listOf(t.path(slot, img.encoding) to origin))
-        val (dir, written) = writeOne(segments, name, img.bytes) ?: return false
+        val (dir, written) = writeOne(segments, name, img.bytes, ls) ?: return false
         ls.wrote(dir, written)
         if (replace) guard {
             // A name differing only in case may be the file just written (case-insensitive /sdcard, exFAT cards).
             for (e in filesIn(dir, t.base, ls)) if (!e.name.equals(name, ignoreCase = true) && source.delete(dir, e.name)) ls.deleted(dir, e.name)
         }
         // A 2D box replaced in `boxart2d/`: the app's own file in the legacy `box2d/` goes too (hand-placed ones stay).
-        if (replace && slot == ArtSlot.BOX_2D) removeLogged(t.mediaSegments + LEGACY_BOX2D_FOLDER, t.base, ls)
+        if (replace && slot == ArtSlot.BOX_2D) removeLogged(listOf(t.mediaSegments + LEGACY_BOX2D_FOLDER), t.base, ls)
         return true
     }
 
@@ -914,27 +987,34 @@ class ScrapeEngine(
      * new box is the one drawn. A file the log does not have (hand-placed) and a [picked] slot's are never removed.
      */
     private suspend fun removeStaleHigherBoxes(t: ArtTarget, slot: ArtSlot, wrote: Set<ArtSlot>, picked: Set<ArtSlot>, ls: Listings) {
-        for (higher in BOX_CHAIN.takeWhile { it != slot }) {
-            if (higher in wrote || higher in picked) continue
-            val folders = if (higher == ArtSlot.BOX_2D) listOf(t.segments(higher), t.mediaSegments + LEGACY_BOX2D_FOLDER) else listOf(t.segments(higher))
-            for (segments in folders) removeLogged(segments, t.base, ls)
+        val folders = BOX_CHAIN.takeWhile { it != slot }.filter { it !in wrote && it !in picked }.flatMap { higher ->
+            if (higher == ArtSlot.BOX_2D) listOf(t.segments(higher), t.mediaSegments + LEGACY_BOX2D_FOLDER) else listOf(t.segments(higher))
         }
+        if (folders.isNotEmpty()) removeLogged(folders, t.base, ls)
     }
 
-    /** Deletes [base]'s files under [segments] that the written-art log has (dropping them from it); others stay. */
-    private suspend fun removeLogged(segments: List<String>, base: String, ls: Listings) {
-        guard {
-            val dir = source.findDir(home, segments) ?: return@guard null
-            for (e in filesIn(dir, base, ls)) {
-                val path = (segments + e.name).joinToString("/")
-                if (logged.contains(path) && source.delete(dir, e.name)) { ls.deleted(dir, e.name); logged.remove(path) }
+    /**
+     * Deletes [base]'s files under each of [folders] that the written-art log has, then drops them from it in one
+     * change (each its own would rewrite or append to the log per file); others stay.
+     */
+    private suspend fun removeLogged(folders: List<List<String>>, base: String, ls: Listings) {
+        val gone = ArrayList<String>()
+        try {
+            for (segments in folders) guard {
+                val dir = ls.dir(segments) ?: return@guard null
+                for (e in filesIn(dir, base, ls)) {
+                    val path = (segments + e.name).joinToString("/")
+                    if (logged.contains(path) && source.delete(dir, e.name)) { ls.deleted(dir, e.name); gone += path }
+                }
             }
+        } finally {
+            if (gone.isNotEmpty()) withContext(NonCancellable) { guard { logged.remove(gone) } }
         }
     }
 
     /** Writes [name] under [segments] (created as needed); its folder and its entry, or null when the write failed. */
-    private suspend fun writeOne(segments: List<String>, name: String, bytes: ByteArray): Pair<ContentRef, Entry>? = guard {
-        val dir = source.ensurePath(home, segments) ?: return@guard null
+    private suspend fun writeOne(segments: List<String>, name: String, bytes: ByteArray, ls: Listings): Pair<ContentRef, Entry>? = guard {
+        val dir = ls.ensure(segments) ?: return@guard null
         if (!source.writeBytes(dir, name, bytes)) return@guard null
         source.child(dir, name)?.takeIf { !it.isDirectory }?.let { dir to it }
     }
