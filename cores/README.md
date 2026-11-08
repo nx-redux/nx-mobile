@@ -46,7 +46,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | mednafen_pce_fast | libretro/beetle-pce-fast-libretro | 2de1ce1c3f237b161c126c54ba407990bb86d1e9 | ndk-build | 0:05 |
 | mednafen_vb | libretro/beetle-vb-libretro | d5ae54c8e23b573a3b34e888b2d48a588027e92c | ndk-build | 0:03 |
 | handy | libretro/libretro-handy | bc55d462f0b2d6b073ea93dc552ebd73cec60fd1 | ndk-build | 0:03 |
-| stella2014 | libretro/stella2014-libretro | 3cc89f0d316d6c924a5e3f4011d17421df58e615 | ndk-build | 0:06 |
+| stella2014 | libretro/stella2014-libretro | 7d1361e407e63f29e52892655069e5fb4096e691 | ndk-build (patched: old states) | 0:06 |
 | prosystem | libretro/prosystem-libretro | 8a88014287c7a01cd568067e5a557d0a2b2a051f | ndk-build | 0:03 |
 | a5200 | libretro/a5200 | 40c6f2f1ad4a3145b328d5baaf010fae6c7e752b | ndk-build | 0:03 |
 | mednafen_wswan | libretro/beetle-wswan-libretro | 4b01295838ea89e3f1355bbe4cb5cf98aa6108cd (HEAD on 2026-09-25; no Brick pin) | ndk-build | 0:01 |

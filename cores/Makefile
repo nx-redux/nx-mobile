@@ -266,7 +266,7 @@ handy_ARTIFACT = libs/$(ABI)/libretro.so
 
 # nx-redux names this make target a2600 (its clone dir); ours is the core id so the output is stella2014_libretro_android.so.
 stella2014_REPO = https://github.com/libretro/stella2014-libretro
-stella2014_HASH = 3cc89f0d316d6c924a5e3f4011d17421df58e615
+stella2014_HASH = 7d1361e407e63f29e52892655069e5fb4096e691
 stella2014_LICENSE = stella/license.txt
 stella2014_KIND = ndkbuild
 stella2014_BUILD_PATH = .
