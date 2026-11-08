@@ -44,6 +44,12 @@ internal object ZipRomCrc {
  * [ScreenScraperSource.HASH_LIMIT]. A zip's ROM is unpacked on the fly ([ZipRomCrc]), never written anywhere.
  */
 class AndroidRomHasher(private val refs: AndroidRefs) : RomHasher {
+    override suspend fun stamp(rom: ContentRef): RomStamp? = withContext(Dispatchers.IO) {
+        val size = refs.size(rom) ?: return@withContext null
+        val modified = refs.lastModified(rom) ?: return@withContext null
+        RomStamp(size, modified)
+    }
+
     override suspend fun crc32AndSize(rom: ContentRef): Pair<Long, Long>? = withContext(Dispatchers.IO) {
         val declared = refs.size(rom)
         if (declared != null && declared > ScreenScraperSource.HASH_LIMIT) return@withContext null

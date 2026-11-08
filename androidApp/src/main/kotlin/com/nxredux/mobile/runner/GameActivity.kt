@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Rect
 import android.hardware.input.InputManager
 import android.media.AudioManager
 import android.os.Build
@@ -265,6 +266,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val HUNG_FINISH_GRACE_MS = 500L
         /** [endProcess]: at most this long for the netplay engine's shutdown before the process goes anyway. */
         private const val PROCESS_END_WAIT_S = 5L
+        /** [writeAutoStateOnStop]: at most this long for the GL thread to start the serialize, and again to finish it. */
+        private const val AUTO_SERIALIZE_WAIT_MS = 10_000L
 
         /** Blocks until every queued Home write has finished. Call off the main thread before touching slot 9. */
         private fun awaitAutoWrites() { runCatching { autoWriter.submit {}.get() } }
@@ -450,13 +453,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var nameHold: LaunchNameHold? = null   // main thread only; null once it has gone
     private val heldDowns = HashSet<Int>()   // key codes whose press the hold swallowed: their release is swallowed too
     private val holdTouches = HoldTouchGate()   // touches the hold swallows (the on-screen pad stays lit above it)
-    private var autoWrittenOnStop = false   // onStop serialized an auto state (its write is queued) since the last onStart
+    private var autoWrittenOnStop = false   // onStop queued an auto state's serialize and write since the last onStart
     // Home screenshot for the switcher (main thread only): onPause starts a PixelCopy; its bitmap is written as
     // the slot-9 thumb once onStop has queued the auto state. [homeThumbGen] drops callbacks from an older pause.
     private var homeThumb: Bitmap? = null
     private var homeThumbGen = 0
     private var autoWriteOk: AtomicBoolean? = null   // this stop's queued auto-state write succeeded (set on autoWriter)
     private var autoWriteFailed: AtomicBoolean? = null   // this stop's queued auto-state write threw (set on autoWriter)
+    // The last stop's serialize gave no state (a core that has none): the next stop's bundle keeps the previous resume
+    // point instead of naming a slot 9 that state will not replace.
+    @Volatile private var autoStateEmpty = false
     // The newest resume point known to be on disk, for the instance state when this stop's own
     // auto write has already failed: the slot this screen started from (onCreate), then slot 9 once a stop's write lands.
     @Volatile private var lastResumePoint: Int? = null
@@ -1091,17 +1097,17 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /**
-     * [autoWrittenOnStop] means the auto state was serialized and its write queued, not that it landed. When the write
-     * is already known to have failed, the bundle keeps the previous resume point ([lastResumePoint]) rather than naming
-     * a slot 9 this stop never replaced. Usually the write is still in flight here (onSaveInstanceState follows onStop at
-     * once on API 28+, the write takes tens of ms on [autoWriter]) and the bundle is parcelled when this returns, so slot
-     * 9 is recorded optimistically. The write is an atomic rename, so a failure leaves the previous slot-9 file whole: a
-     * recreation resumes an older auto state (or toasts "Resume failed" when there was none), never a torn one. Blocking
-     * the main thread on the write is not worth it for a rare failure.
+     * [autoWrittenOnStop] means the auto state's serialize (GL thread) and write ([autoWriter]) were queued, not that they
+     * landed. When either is already known to have failed, or the last stop's core gave no state ([autoStateEmpty]), the
+     * bundle keeps the previous resume point ([lastResumePoint]) rather than naming a slot 9 this stop never replaced.
+     * Usually both are still in flight here (onSaveInstanceState follows onStop at once on API 28+) and the bundle is
+     * parcelled when this returns, so slot 9 is recorded optimistically. The write is an atomic rename, so a failure
+     * leaves the previous slot-9 file whole: a recreation resumes an older auto state (or toasts "Resume failed" when there
+     * was none), never a torn one. Blocking the main thread on the serialize or the write is not worth it for a rare failure.
      */
     private fun putResumeSlot(outState: Bundle) {
         val slot = when {
-            autoWrittenOnStop && autoWriteFailed?.get() == true -> lastResumePoint
+            autoWrittenOnStop && (autoWriteFailed?.get() == true || autoStateEmpty) -> lastResumePoint
             autoWrittenOnStop -> NxPaths.AUTO_SLOT
             resumePending -> resumeSlot
             else -> null
@@ -1128,19 +1134,40 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val view = retroView ?: return
         val ss = saveStates ?: return
         if (!gameReady || resumePending) return
-        // Serialize synchronously on the GL thread: paused, it still runs queued events, and native makes the paused
-        // view's context current for the call. A core may run emulation and GL inside it (Azahar's RunLoop drain), which
-        // crashes on a thread without the context. The file writes go to [autoWriter] to keep them off the
-        // main thread; they are atomic renames, so a reader sees the previous state or the new one.
+        // Serialized on the GL thread (paused, it still runs queued events, and native makes the paused view's context
+        // current: a core may run emulation and GL inside it, Azahar's RunLoop drain), but not waited for here: a PS2,
+        // GameCube, Wii or PSP state is tens of MB. The GL thread's queue keeps it after this frame and the FF/rewind
+        // pause around it, and ahead of a resumed frame, a quit's serialize and the native destroy. The write is queued
+        // on [autoWriter] now, so whatever awaits the auto writes (a quit, a resume, a slot load, the process end) waits
+        // for this state too; it waits there for the GL thread's result. The files are atomic renames, so a reader
+        // sees the previous state or the new one.
         val t0 = SystemClock.elapsedRealtime()
-        val bytes = speed.aroundStateNow { runCatching { view.serializeState() } }
-            .onFailure { NxLog.e("GameActivity", "auto-resume state on stop failed", it) }.getOrNull()
-        val serializeMs = SystemClock.elapsedRealtime() - t0
-        if (bytes == null || bytes.isEmpty()) return
+        val serialized = HandedOffResult<ByteArray>()
+        val queued = speed.aroundStateNow {
+            runCatching {
+                view.queueEvent {
+                    serialized.run {
+                        val bytes = runCatching { view.serializeState() }
+                            .onFailure { NxLog.e("GameActivity", "auto-resume state on stop failed", it) }.getOrNull()
+                        NxLog.i("GameActivity", "auto-state on stop: serialize=${SystemClock.elapsedRealtime() - t0}ms")
+                        bytes
+                    }
+                }
+            }.onFailure { NxLog.e("GameActivity", "auto-resume state on stop failed", it) }.isSuccess
+        }
+        if (!queued) return
         autoWrittenOnStop = true
         val ok = AtomicBoolean(false).also { autoWriteOk = it }
         val failed = AtomicBoolean(false).also { autoWriteFailed = it }
         autoWriter.execute {
+            val bytes = serialized.await(AUTO_SERIALIZE_WAIT_MS)
+            if (bytes == null || bytes.isEmpty()) {
+                // No state (the core has none yet, or the GL thread never ran it): the previous resume point stays.
+                autoStateEmpty = bytes != null
+                failed.set(true)
+                return@execute
+            }
+            autoStateEmpty = false
             val t1 = SystemClock.elapsedRealtime()
             runCatching {
                 ss.writeAuto(bytes)
@@ -1150,7 +1177,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             if (ok.get()) runCatching { ss.markAuto(onlyIfNotManual = true) }
                 .onFailure { NxLog.e("GameActivity", "auto-resume slot pointer on stop failed", it) }
             runCatching { lastSlotCache = ss.lastSlot() }   // the pointer may name slot 9 (shown as slot 1)
-            NxLog.i("GameActivity", "auto-state on stop: serialize=${serializeMs}ms write=${SystemClock.elapsedRealtime() - t1}ms bytes=${bytes.size}")
+            NxLog.i("GameActivity", "auto-state on stop: write=${SystemClock.elapsedRealtime() - t1}ms bytes=${bytes.size}")
         }
         homeThumb?.let { queueHomeThumb(it) }
         homeThumb = null
@@ -2902,28 +2929,30 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /**
-     * PixelCopy the current (paused) game frame for a screenshot at the view's native pixel size (no scaling), cut to the
-     * game's own picture ([thumbnailCrop]: no bars or anything drawn around it; a DS / 3DS game's top screen).
+     * PixelCopy the current (paused) game frame, cut to the game's own picture ([thumbnailCrop]: no bars or anything drawn
+     * around it; a DS / 3DS game's top screen). Only that rect is copied, straight into a bitmap of the size the save
+     * state's thumbnail is stored at ([SaveStates.thumbSize]), so a large panel never needs a full-window bitmap; with
+     * [fullSize] (a backdrop drawn over the picture) it keeps the picture's own pixel size.
      */
-    private fun captureThumbnail(cb: (Bitmap?) -> Unit) {
+    private fun captureThumbnail(fullSize: Boolean = false, cb: (Bitmap?) -> Unit) {
         val view = retroView ?: return cb(null)
         val w = view.width
         val h = view.height
         if (w <= 0 || h <= 0) return cb(null)
         val crop = thumbnailCrop(renderer.thumbnailPicture(), w, h)   // taken now: the layout it was copied from
-        val full = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val src = crop?.let { Rect(it.x, it.y, it.x + it.width, it.y + it.height) } ?: Rect(0, 0, w, h)
+        val (bw, bh) = if (fullSize) src.width() to src.height() else SaveStates.thumbSize(src.width(), src.height())
+        val bmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888)
         try {
-            PixelCopy.request(view, full, { result ->
-                if (result == PixelCopy.SUCCESS) {
-                    if (crop == null) cb(full)
-                    else cb(Bitmap.createBitmap(full, crop.x, crop.y, crop.width, crop.height).also { if (it !== full) full.recycle() })
-                } else {
-                    full.recycle()
+            PixelCopy.request(view, src, bmp, { result ->
+                if (result == PixelCopy.SUCCESS) cb(bmp)
+                else {
+                    bmp.recycle()
                     cb(null)
                 }
             }, Handler(Looper.getMainLooper()))
         } catch (e: Exception) {
-            full.recycle()
+            bmp.recycle()
             cb(null)
         }
     }
@@ -3538,7 +3567,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (!menuOpen || quitting || skinEditView != null) return
         val edit = padLayout.skinEdit() ?: run { toast("No button layout fits this screen"); return }
         // the menu closed, or the game quit, while the frame was read: nothing to edit over ([showSkinEdit] refuses)
-        captureThumbnail { frame -> showSkinEdit(edit, frame) }
+        captureThumbnail(fullSize = true) { frame -> showSkinEdit(edit, frame) }
     }
 
     /** The editor for [edit], [frame] behind it (black without one); only over the open menu (it closes with it). */

@@ -24,9 +24,19 @@ import java.util.Locale
  * With [dsvStem] set (melonDS DS) and no save under any candidate name, a non-empty `<dsvStem>.dsv` from the handheld
  * is the save ([NdsDsvSave]): loaded without its footer, written back in place with the footer it was read with (none
  * when it had none), never as an `.srm`; the unchanged-skip and atomic write apply as for the others.
+ * Not thread-safe: the caller serializes [load] and [write] (GameActivity locks on the instance).
  */
-class BatterySaves(private val dir: File, private val paths: NxPaths, private val dsvStem: String? = null) {
+class BatterySaves internal constructor(
+    private val dir: File,
+    private val paths: NxPaths,
+    private val dsvStem: String?,
+    private val readFile: (File) -> ByteArray,
+) {
+    constructor(dir: File, paths: NxPaths, dsvStem: String? = null) : this(dir, paths, dsvStem, File::readBytes)
+
     private var dsv: NdsDsvSave.Plan? = null
+    /** What the file being written holds, decoded, while its stamp still matches: an unchanged save needs no read. */
+    private val known = KnownContent()
     private val target = File(dir, paths.saveRam.substringAfterLast('/'))
     var writable = true
         private set
@@ -47,7 +57,7 @@ class BatterySaves(private val dir: File, private val paths: NxPaths, private va
     fun load(): ByteArray? {
         if (dsvStem != null) {
             val names = paths.saveRamCandidates().map { it.substringAfterLast('/') }
-            val plan = NdsDsvSave.plan(dsvStem, names, dir.list()?.toSet() ?: emptySet()) { n -> runCatching { File(dir, n).readBytes() }.getOrNull() }
+            val plan = NdsDsvSave.plan(dsvStem, names, dir.list()?.toSet() ?: emptySet()) { n -> runCatching { readFile(File(dir, n)) }.getOrNull() }
             if (plan != null) {
                 dsv = plan
                 loadedFrom = plan.name
@@ -57,7 +67,9 @@ class BatterySaves(private val dir: File, private val paths: NxPaths, private va
         val names = paths.saveRamCandidates().map { it.substringAfterLast('/') }
         for (name in SaveLookup.ordered(names) { n -> File(dir, n).takeIf { it.isFile }?.lastModified() }) {
             val file = File(dir, name)
-            val raw = runCatching { file.readBytes() }.getOrNull() ?: continue
+            // Taken before the read: a change between the two then shows as a stale stamp, never as a stale cache.
+            val stamp = KnownContent.stampOf(file)
+            val raw = runCatching { readFile(file) }.getOrNull() ?: continue
             val bytes = Rzip.decode(raw)
             if (bytes == null) {
                 // A malformed file under another name is not ours to touch: the next write creates the configured name.
@@ -65,6 +77,7 @@ class BatterySaves(private val dir: File, private val paths: NxPaths, private va
                 continue
             }
             if (bytes.isEmpty()) continue
+            if (file == target) known.remember(stamp, bytes)
             loadedFrom = name
             return bytes
         }
@@ -74,14 +87,20 @@ class BatterySaves(private val dir: File, private val paths: NxPaths, private va
     /**
      * Returns true when written ([BatterySaveRules], on decoded bytes). Empty data (no SRAM, or a core that keeps its own
      * save files) is skipped, as is data equal to the file's content (its mtime stays, so nothing is exported; a
-     * compression-only setting change rewrites the file the next time the bytes change). Throws IOException when the
-     * write fails.
+     * compression-only setting change rewrites the file the next time the bytes change). The file's content is read
+     * and decoded only when it changed on disk since this instance last loaded or wrote it ([KnownContent]). Throws
+     * IOException when the write fails.
      */
     fun write(bytes: ByteArray): Boolean = dsv?.let { writeDsv(it, bytes) } ?:
         when (BatterySaveRules.decide(writable, bytes) { if (damaged) null else existingDecoded() }) {
             BatteryWrite.WRITE -> {
                 if (damaged && !backUpDamaged()) false
-                else { target.writeAtomically(if (paths.saveCompressed) Rzip.encode(bytes) else bytes); true }
+                else {
+                    known.forget()   // a failed write leaves the file unknown
+                    target.writeAtomically(if (paths.saveCompressed) Rzip.encode(bytes) else bytes)
+                    known.remember(KnownContent.stampOf(target), bytes.copyOf())
+                    true
+                }
             }
             BatteryWrite.UNCHANGED, BatteryWrite.SKIP -> false
         }
@@ -90,10 +109,14 @@ class BatterySaves(private val dir: File, private val paths: NxPaths, private va
     private fun writeDsv(plan: NdsDsvSave.Plan, bytes: ByteArray): Boolean {
         val file = File(dir, plan.name)
         val decision = BatterySaveRules.decide(writable, bytes) {
-            runCatching { file.readBytes() }.getOrNull()?.let { NdsDsvSave.stripDsvFooter(it) ?: it }
+            known.current(KnownContent.stampOf(file)) {
+                runCatching { readFile(file) }.getOrNull()?.let { NdsDsvSave.stripDsvFooter(it) ?: it }
+            }
         }
         if (decision != BatteryWrite.WRITE) return false
+        known.forget()
         file.writeAtomically(NdsDsvSave.join(bytes, plan.footer))
+        known.remember(KnownContent.stampOf(file), bytes.copyOf())
         return true
     }
 
@@ -117,6 +140,6 @@ class BatterySaves(private val dir: File, private val paths: NxPaths, private va
     }
 
     private fun existingDecoded(): ByteArray? =
-        runCatching { target.takeIf { it.isFile }?.readBytes() }.getOrNull()?.let(Rzip::decode)
+        known.current(KnownContent.stampOf(target)) { runCatching { readFile(target) }.getOrNull()?.let(Rzip::decode) }
 
 }

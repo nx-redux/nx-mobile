@@ -107,6 +107,12 @@ internal class GameInputRouter(private val host: GameInputHost) {
         private const val NDS_LABEL_MS = 1500L   // a DS hotkey's label ("Bottom screen", "Stylus on")
         private const val PLAYER_NOTICE_MS = 2500L   // "Player 2: <pad>" when a pad takes a player slot
         private const val PEN_TICK_MS = 16L
+        private val CENTRED = 0f to 0f
+        // The right stick (AXIS_Z/RZ) is not here: some pads rest those at -1.
+        private val CLAIM_AXES = intArrayOf(
+            MotionEvent.AXIS_HAT_X, MotionEvent.AXIS_HAT_Y, MotionEvent.AXIS_X, MotionEvent.AXIS_Y,
+            MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_BRAKE, MotionEvent.AXIS_GAS,
+        )
         /**
          * Cores that read the left stick as analog (N64, PSP, PS1 DualShock, PS2, Dreamcast, and Dolphin's GameCube stick
          * and Wii Nunchuk and Classic sticks): a gamepad's stick is analog only there. melonDS DS has its own routing (the NDS
@@ -167,7 +173,11 @@ internal class GameInputRouter(private val host: GameInputHost) {
             if (!menuOpen) { if (slots == null) releaseAllGameInput() else port?.let(::releasePort) }
             onInputDevicesChanged()
         }
-        override fun onInputDeviceChanged(deviceId: Int) { padLayouts.remove(deviceId); onInputDevicesChanged() }
+        override fun onInputDeviceChanged(deviceId: Int) {
+            padLayouts.remove(deviceId)
+            keysById[deviceId]?.let { k -> inputManager?.getInputDevice(deviceId)?.let { padNames[k] = it.name } }
+            onInputDevicesChanged()
+        }
     }
 
     /** Each pad's detected face layout by device id ([PadFaceLayout.detect]); null for an id with no device. */
@@ -227,7 +237,8 @@ internal class GameInputRouter(private val host: GameInputHost) {
     val stickRouter = VirtualStickRouter(
         onAnalog = { x, y ->
             if (isN3ds && n3dsHotkeys.onStick(x, y)) syncN3dsCursor()
-            else if (!(isNds && ndsHotkeys.onStick(x, y))) retroView?.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, x, y, 0)
+            else if (isNds && ndsHotkeys.onStick(x, y)) wakePen()
+            else retroView?.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, x, y, 0)
         },
         onMenu = { menuRouter.onEvent(it) },
     )
@@ -458,14 +469,24 @@ internal class GameInputRouter(private val host: GameInputHost) {
             penJob = null
             return
         }
-        if (penJob?.isActive == true) return
+        wakePen()
+    }
+
+    /**
+     * Ticks the pen while it moves. Only a held direction or stick moves it, and taking or changing either is an event that
+     * wakes this ([routeNds] through [syncPen], or [ndsHotkeys]'s onStick), so the tick ends at the first step that moves
+     * nothing (nothing held, or pushed against an edge) and while the menu is open (it lets go of everything).
+     */
+    private fun wakePen() {
+        if (!ndsHotkeys.stylus || menuOpen || penJob?.isActive == true) return
         penJob = lifecycleScope.launch {
             var last = SystemClock.elapsedRealtime()
             while (true) {
                 delay(PEN_TICK_MS)
                 val now = SystemClock.elapsedRealtime()
-                if (!menuOpen && ndsHotkeys.tick(now - last)) syncPen()
+                if (menuOpen || !ndsHotkeys.tick(now - last)) break
                 last = now
+                syncPen()
             }
         }
     }
@@ -576,7 +597,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         sendN3dsKeys()
         val view = retroView ?: return
         // The on-screen C-stick while it is off centre, else the hardware stick.
-        val right = n3dsHotkeys.cursor ?: n3dsPadRight.takeIf { it != (0f to 0f) } ?: n3dsHwRight
+        val right = n3dsHotkeys.cursor ?: n3dsPadRight.takeIf { it != CENTRED } ?: n3dsHwRight
         if (right != n3dsSentRight) {
             view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, right.first, right.second, 0)
             n3dsSentRight = right
@@ -716,8 +737,8 @@ internal class GameInputRouter(private val host: GameInputHost) {
             n3dsHotkeys.releaseAll()   // sends up what it held in the core (L3, R3, a tapping SELECT); a held-back SELECT is dropped
             n3dsHatX = 0
             n3dsHatY = 0
-            n3dsHwRight = 0f to 0f
-            n3dsPadRight = 0f to 0f
+            n3dsHwRight = CENTRED
+            n3dsPadRight = CENTRED
             syncN3dsCursor()
         }
     }
@@ -809,7 +830,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
 
     fun onGenericMotionEvent(event: MotionEvent?): Boolean {
         // The rumble follows the pad in use, on its own port (a one-player core: port 0); a pad with no slot yet claims below.
-        if (event != null && event.isFromSource(InputDevice.SOURCE_JOYSTICK)) portFor(event.device, claim = false)?.let { noteRumbleDevice(event.device, it) }
+        // One lookup per event: this is the hot path.
+        val joystick = event != null && event.isFromSource(InputDevice.SOURCE_JOYSTICK)
+        val padPort = if (joystick) portFor(event?.device, claim = false)?.also { noteRumbleDevice(event?.device, it) } else null
         if (menuOpen) { event?.let { routeMenuMotion(it) }; return true }
         val view = retroView ?: return host.superGenericMotionEvent(event)
         if (event != null && isN3ds) {
@@ -819,7 +842,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
                 val sx = event.getAxisValue(MotionEvent.AXIS_X)
                 val sy = event.getAxisValue(MotionEvent.AXIS_Y)
                 if (!n3dsHotkeys.onStick(sx, sy)) view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, sx, sy, 0)
-                n3dsHwRight = event.getAxisValue(MotionEvent.AXIS_Z) to event.getAxisValue(MotionEvent.AXIS_RZ)
+                val rx = event.getAxisValue(MotionEvent.AXIS_Z)
+                val ry = event.getAxisValue(MotionEvent.AXIS_RZ)
+                if (rx != n3dsHwRight.first || ry != n3dsHwRight.second) n3dsHwRight = rx to ry
                 syncN3dsCursor()
                 return true   // consumed, as for the DS: no synthesised d-pad keys passing routeN3ds twice
             }
@@ -833,7 +858,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
                 routeTriggerAxes(event)
                 val sx = event.getAxisValue(MotionEvent.AXIS_X)
                 val sy = event.getAxisValue(MotionEvent.AXIS_Y)
-                if (!ndsHotkeys.onStick(sx, sy)) view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, sx, sy, 0)
+                if (ndsHotkeys.onStick(sx, sy)) wakePen() else view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, sx, sy, 0)
                 view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, event.getAxisValue(MotionEvent.AXIS_Z), event.getAxisValue(MotionEvent.AXIS_RZ), 0)
                 // Consumed: unhandled, Android would synthesise d-pad keys from the hat and stick, and they would pass
                 // routeNds a second time (a SELECT chord firing twice). routeNdsHat sends those directions itself.
@@ -848,17 +873,12 @@ internal class GameInputRouter(private val host: GameInputHost) {
         // pad: its AXIS_X/Y are pointer coordinates and its hat reads 0 (it would release a held hat), so it goes to the
         // system.
         if (event != null && event.isFromSource(InputDevice.SOURCE_JOYSTICK)) {
-            // A pad with no player slot claims one only with an axis pushed past half (not its resting report on connect).
-            // The right stick (AXIS_Z/RZ) never claims: some pads rest those at -1.
-            // A one-player core (no slots) builds nothing: portFor gives port 0 whatever the claim.
-            val claims = slots != null && axesClaim(floatArrayOf(
-                event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y),
-                event.getAxisValue(MotionEvent.AXIS_X), event.getAxisValue(MotionEvent.AXIS_Y),
-                event.getAxisValue(MotionEvent.AXIS_LTRIGGER), event.getAxisValue(MotionEvent.AXIS_RTRIGGER),
-                event.getAxisValue(MotionEvent.AXIS_BRAKE), event.getAxisValue(MotionEvent.AXIS_GAS),
-            ))
-            val port = portFor(event.device, claim = claims) ?: return true   // no slot: dropped
-            noteRumbleDevice(event.device, port)
+            // A pad with no player slot claims one only with an axis pushed past half (not its resting report on connect);
+            // one in a slot (or any pad on a one-player core: port 0) already has its port from the lookup above.
+            val port = padPort ?: run {
+                if (slots == null || !axesClaim(claimAxes(event))) return true   // no slot: dropped
+                portFor(event.device, claim = true)?.also { noteRumbleDevice(event.device, it) } ?: return true
+            }
             val inp = inputs[port]
             // Dreamcast triggers are analog (flycast reads RETRO_DEVICE_INDEX_ANALOG_BUTTON).
             if (isDc || gcPad) {   // GameCube triggers too: Dolphin reads them as analog buttons
@@ -882,13 +902,14 @@ internal class GameInputRouter(private val host: GameInputHost) {
                 view.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, hatOrStick(hatX, inp.stickDpadX).toFloat(), hatOrStick(hatY, inp.stickDpadY).toFloat(), port)
             }
             view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, sx, sy, port)
-            val rz = event.getAxisValue(MotionEvent.AXIS_Z) to event.getAxisValue(MotionEvent.AXIS_RZ)
+            val rx = event.getAxisValue(MotionEvent.AXIS_Z)
+            val ry = event.getAxisValue(MotionEvent.AXIS_RZ)
             if (isWii && wiiPad != null && wiiPad != WiiPad.CLASSIC) {
                 // Wiimote types: the right stick aims the IR pointer (Dolphin's pointer reads POINTER, ir_mode 2).
-                val (vx, vy) = WiiPointer.velocity(rz.first, rz.second)
+                val (vx, vy) = WiiPointer.velocity(rx, ry)
                 view.setPointerVelocity(port, vx, vy)
             } else {
-                view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, rz.first, rz.second, port)
+                view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, rx, ry, port)
             }
             return true
         }
@@ -917,14 +938,22 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private fun portFor(device: InputDevice?, claim: Boolean): Int? {
         val s = slots ?: return 0
         if (device == null || !isPad(device)) return 0
-        val key = DeviceKey(device.descriptor)
-        keysById[device.id] = key
-        padNames[key] = device.name
+        // A device id is never reused for another device, and its descriptor never changes: one key per id.
+        val key = keysById[device.id] ?: DeviceKey(device.descriptor).also {
+            keysById[device.id] = it
+            padNames[it] = device.name
+        }
         if (!claim) return s.portOf(key)
         val c = s.claim(key) ?: return null
         if (c.joined) { onPlayerJoined(c.port, device); connectDolphinPorts() }
         return c.port
     }
+
+    /** The axes a slotless pad claims with ([axesClaim]), into one reused array: this runs for every joystick event. */
+    private fun claimAxes(event: MotionEvent): FloatArray = claimValues.also { v ->
+        for (i in CLAIM_AXES.indices) v[i] = event.getAxisValue(CLAIM_AXES[i])
+    }
+    private val claimValues = FloatArray(CLAIM_AXES.size)
 
     /** A pad took (or came back to) player slot [port]: a notice says who is who. */
     private fun onPlayerJoined(port: Int, device: InputDevice) {
