@@ -461,52 +461,42 @@ internal class LaunchPipeline(private val host: LaunchHost) {
 
     private suspend fun prepareContent(cfg: LaunchConfig): PreparedContent? {
         with(host) {
-            val np = cfg.np
-            val tag = cfg.tag
-            val title = cfg.title
-            val coreId = cfg.coreId
-            val descriptor = cfg.descriptor
-            val content = cfg.content
-            val romFileName = cfg.romFileName
-            val home = cfg.home
-            val sessionDir = cfg.sessionDir
-            val netplayPad = cfg.netplayPad
             // An arcade set's BIOS that was not beside it must be in the system dir (Bios/FBN/ is copied there); a missing parent is
             // not refused (a non-merged clone carries its parent's ROMs), so only BIOS sets arrive here.
             val systemSets = activity.intent.getStringArrayExtra(EXTRA_SYSTEM_SETS)?.toList() ?: emptyList()
             // flycast's set table: a DC zip/7z named after one of its NAOMI/Atomiswave sets is loaded as is and needs its BIOS
             // archive (naomi.zip, awbios.zip ...) in <system>/dc/; any other DC zip/7z (a zipped disc) is unpacked below.
-            val naomiSets = if (descriptor?.id == "flycast" && Names.isArchive(romFileName)) {
+            val naomiSets = if (cfg.descriptor?.id == "flycast" && Names.isArchive(cfg.romFileName)) {
                 withContext(Dispatchers.IO) { NaomiSetsAsset.get(host.activity) }
             } else NaomiSets.EMPTY
-            val archiveAsIs = CoreRegistry.loadsArchive(tag, romFileName, naomiSets)
-            val naomiBios = if (archiveAsIs) naomiSets.biosFor(Names.stripExtension(romFileName)) else null
+            val archiveAsIs = CoreRegistry.loadsArchive(cfg.tag, cfg.romFileName, naomiSets)
+            val naomiBios = if (archiveAsIs) naomiSets.biosFor(Names.stripExtension(cfg.romFileName)) else null
             // The files this launch needs, looked up by name when a Bios folder will not list.
-            val biosNames = CoreRegistry.requiredBios(tag).flatMap { it.anyOf } +
+            val biosNames = CoreRegistry.requiredBios(cfg.tag).flatMap { it.anyOf } +
                 (systemSets + listOfNotNull(naomiBios)).flatMap { listOf("$it.zip", "$it.7z") }
             // Usually a stamp check: MainActivity pre-warms the copy after an update; if it is still running, this waits on its lock.
             val systemDir = withContext(Dispatchers.IO) { SystemFiles.ensure(host.activity) }
             // Bios/<TAG>/ lands in the core's BIOS folder: the system dir, or a subfolder of it (flycast's <system>/dc/).
-            val biosDir = BiosFolders.subdir(tag).let { if (it.isEmpty()) systemDir else File(systemDir, it) }
-            withContext(Dispatchers.IO) { BiosImport.sync(host.activity, home, BiosFolders.forTag(tag), biosDir, biosNames) }
+            val biosDir = BiosFolders.subdir(cfg.tag).let { if (it.isEmpty()) systemDir else File(systemDir, it) }
+            withContext(Dispatchers.IO) { BiosImport.sync(host.activity, cfg.home, BiosFolders.forTag(cfg.tag), biosDir, biosNames) }
             // An archive is unpacked into the cache first; the core gets the inner file by real path, and everything keyed by
             // romFileName (config, cheats, thumbnails; saves and states unless Use extracted file name is on) keeps the archive
             // name, as on the Brick; unless the tag's core loads the archive as is (fbneo's romsets and flycast's known sets:
             // the zip is the game).
             // Only a real unpack outlasts the delay and shows the toast; it is taken down with the unpack, not left over the host.
-            val unpacked: Unpacked? = if (!Names.isArchive(romFileName) || archiveAsIs) null else {
+            val unpacked: Unpacked? = if (!Names.isArchive(cfg.romFileName) || archiveAsIs) null else {
                 var unpackToast: android.widget.Toast? = null
-                val unpacking = lifecycleScope.launch { delay(400); unpackToast = toast("Unpacking $romFileName…") }
+                val unpacking = lifecycleScope.launch { delay(400); unpackToast = toast("Unpacking ${cfg.romFileName}…") }
                 try {
-                    val romExtensions = descriptor?.extensions ?: CoreRegistry.coreExtensions
+                    val romExtensions = cfg.descriptor?.extensions ?: CoreRegistry.coreExtensions
                     withContext(Dispatchers.IO) {
                         // flycast names the VMU after the file it is given: unpacked as <archive stem>.<ext>, the VMU is <stem>.A1.bin.
-                        Archives.extract(host.activity, content, romFileName, romExtensions, descriptor?.savesNamedAfterContent == true)
+                        Archives.extract(host.activity, cfg.content, cfg.romFileName, romExtensions, cfg.descriptor?.savesNamedAfterContent == true)
                             .also { keepCacheHold(it.file.parentFile!!.name) }
                     }
                 } catch (e: ArchiveException) {
                     NxLog.w(TAG_LOG, "unpack failed: ${e.kind}", e)
-                    return refuse(e.message ?: "Could not unpack $romFileName")
+                    return refuse(e.message ?: "Could not unpack ${cfg.romFileName}")
                 } finally {
                     unpacking.cancel()
                     unpackToast?.cancel()
@@ -514,30 +504,30 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             val inner: File? = unpacked?.file
             val unpackedEntry = unpacked?.entryName
-            cfg.dolphinContent.complete(inner?.name ?: romFileName)   // Dolphin names its cheat file after the inner disc, not the archive
-            if (inner != null && descriptor != null && Names.extensionOf(inner.name) !in descriptor.extensions) {
+            cfg.dolphinContent.complete(inner?.name ?: cfg.romFileName)   // Dolphin names its cheat file after the inner disc, not the archive
+            if (inner != null && cfg.descriptor != null && Names.extensionOf(inner.name) !in cfg.descriptor.extensions) {
                 // Name a tag of the same console whose core runs the file only when one exists; otherwise the file is in the wrong folder.
-                val alt = CoreRegistry.consoleOf(tag)?.tags?.firstOrNull { t ->
-                    t != tag && CoreRegistry.forTag(t)?.let { Names.extensionOf(inner.name) in it.extensions } == true
+                val alt = CoreRegistry.consoleOf(cfg.tag)?.tags?.firstOrNull { t ->
+                    t != cfg.tag && CoreRegistry.forTag(t)?.let { Names.extensionOf(inner.name) in it.extensions } == true
                 }
                 return refuse(
-                    "$romFileName holds ${inner.name}, which ${descriptor.id} does not run. " +
+                    "${cfg.romFileName} holds ${inner.name}, which ${cfg.descriptor.id} does not run. " +
                         if (alt != null) "Pick ${CoreRegistry.handheldTag(alt)} from the game's Emulator menu." else "Move it to the folder of the console it belongs to.",
                 )
             }
             // minarch names saves after the unpacked file when Use extracted file name is on (ma_host.c:75-76): known only now.
             paths = paths.withInner(inner?.let { unpackedEntry })
-            saves.open(if (np == null) SaveStates(dataRoot, paths) else null)   // netplay: no save states, no auto-resume
-            dropStaleNdsResume(tag, coreId, romFileName)
+            saves.open(if (cfg.np == null) SaveStates(dataRoot, paths) else null)   // netplay: no save states, no auto-resume
+            dropStaleNdsResume(cfg.tag, cfg.coreId, cfg.romFileName)
             saves.refreshSlots()   // warm for the first menu open; after the cleanup, so it never lists a deleted state
-            np?.let { gameNetplay.prepareSaves(it, tag, romFileName, dataRoot, paths) }
+            cfg.np?.let { gameNetplay.prepareSaves(it, cfg.tag, cfg.romFileName, dataRoot, paths) }
             // netplay: on a copy the battery save is the session folder's (read only: writeBatterySave skips it), under the
             // default names (the folder is mobile's own), with no clock file.
-            val sessionPaths = if (sessionDir != null) NxPaths(tag, coreId, romFileName) else null
+            val sessionPaths = if (cfg.sessionDir != null) NxPaths(cfg.tag, cfg.coreId, cfg.romFileName) else null
             // melonDS DS: a handheld Saves/NDS/<rom>.dsv that is the game's only save is played in place (not on a netplay copy).
-            val dsvStem = if (coreId == NdsDsvSave.CORE_ID && sessionDir == null) paths.saveStem else null
-            val battery = BatterySaves(sessionDir ?: File(dataRoot, paths.savesDir), sessionPaths ?: paths, dsvStem)
-            val clock = if (sessionDir != null) null else ClockSave(File(dataRoot, paths.clock))
+            val dsvStem = if (cfg.coreId == NdsDsvSave.CORE_ID && cfg.sessionDir == null) paths.saveStem else null
+            val battery = BatterySaves(cfg.sessionDir ?: File(dataRoot, paths.savesDir), sessionPaths ?: paths, dsvStem)
+            val clock = if (cfg.sessionDir != null) null else ClockSave(File(dataRoot, paths.clock))
             saves.attachBattery(battery, clock)
             val (sram, rtc) = withContext(Dispatchers.IO) {
                 battery.load() to clock?.load()
@@ -546,27 +536,27 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             if (BuildConfig.DEBUG) NxTestResults.write(activity, "battery", "loadedFrom" to battery.loadedFrom, "bytes" to (sram?.size ?: 0))
             // A damaged configured file is set aside as a .bak at the first save, then the game saves again. Not said for a
             // netplay copy: it is never written, so the file stays as it is.
-            if (battery.damaged && sessionDir == null) toast("Save file is damaged — it will be kept as a .bak when the game saves")
+            if (battery.damaged && cfg.sessionDir == null) toast("Save file is damaged — it will be kept as a .bak when the game saves")
             if (!battery.writable) toast(if (battery.loadedFrom == null) "Save file is damaged — not loaded" else "Save file is damaged — loaded ${battery.loadedFrom}, not saving")
             // Sega Controller Type (Console Settings): the cart header's I/O field under Auto, else the forced pad.
-            val segaSetting = if (PadMap.isSegaPadTag(tag)) frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO else null
+            val segaSetting = if (PadMap.isSegaPadTag(cfg.tag)) frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO else null
             if (segaSetting != null) {
-                val headerName = inner?.name ?: romFileName
+                val headerName = inner?.name ?: cfg.romFileName
                 val header = if (!SegaHeader.readable(headerName)) null else withContext(Dispatchers.IO) {
                     runCatching {
-                        (inner?.inputStream() ?: refs.openInput(content))?.use { SegaHeader.padType(readUpTo(it, SegaHeader.READ_LENGTH)) }
+                        (inner?.inputStream() ?: refs.openInput(cfg.content))?.use { SegaHeader.padType(readUpTo(it, SegaHeader.READ_LENGTH)) }
                     }.getOrNull()
                 }
                 segaHeader = header
                 // The current value, not segaSetting: the menu may have changed it while the header was read.
-                segaPad = netplayPad?.pad ?: SegaPadType.resolve(frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO, header)
+                segaPad = cfg.netplayPad?.pad ?: SegaPadType.resolve(frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO, header)
                 dropPadProfile()   // the profile follows the resolved pad
             }
             // New 3DS Controls (Console Settings): Auto reads the title from the file's NCSD / NCCH header, off the main thread.
-            if (N3dsOptions.appliesTo(tag)) {
-                val headerName = inner?.name ?: romFileName
+            if (N3dsOptions.appliesTo(cfg.tag)) {
+                val headerName = inner?.name ?: cfg.romFileName
                 n3dsTitle = if (!N3dsTitle.readable(headerName)) null else withContext(Dispatchers.IO) {
-                    runCatching { (inner?.inputStream() ?: refs.openInput(content))?.use(::readN3dsTitle) }
+                    runCatching { (inner?.inputStream() ?: refs.openInput(cfg.content))?.use(::readN3dsTitle) }
                         .onFailure { NxLog.w(TAG_LOG, "reading the 3DS header failed", it) }
                         .getOrNull()
                 }
@@ -580,100 +570,79 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 }
             }
             // Wii Controller and Motion Controls (Console Settings): Auto reads the disc ID and looks it up in GameTDB's table.
-            val wiiDisc = if (!WiiOptions.appliesTo(tag) || !WiiDiscId.readable(inner?.name ?: romFileName)) null else withContext(Dispatchers.IO) {
-                inner?.let(WiiDiscIdReader::read) ?: WiiDiscIdReader.read(refs, content, romFileName)
+            val wiiDisc = if (!WiiOptions.appliesTo(cfg.tag) || !WiiDiscId.readable(inner?.name ?: cfg.romFileName)) null else withContext(Dispatchers.IO) {
+                inner?.let(WiiDiscIdReader::read) ?: WiiDiscIdReader.read(refs, cfg.content, cfg.romFileName)
             }
-            wii.resolveAtLaunch(tag, wiiDisc)
-            padMap = if (isDc) PadMap.IDENTITY else PadMap.forTag(tag, segaPad)
+            wii.resolveAtLaunch(cfg.tag, wiiDisc)
+            padMap = if (isDc) PadMap.IDENTITY else PadMap.forTag(cfg.tag, segaPad)
             // Only 3-button draws differently from the six the pad was composed with in onCreate: recompose it.
             if (segaPad == SegaPad.THREE) relayoutPad()
-            val contentExtension = Names.extensionOf(inner?.name ?: romFileName)
+            val contentExtension = Names.extensionOf(inner?.name ?: cfg.romFileName)
             // A missing required BIOS: say which file goes where instead of letting the core fail silently.
             val present = withContext(Dispatchers.IO) { systemDir.list()?.toSet() ?: emptySet() }
             val biosPresent = if (biosDir == systemDir) present else withContext(Dispatchers.IO) { biosDir.list()?.toSet() ?: emptySet() }
-            BiosCheck.missing(CoreRegistry.requiredBios(tag), contentExtension, biosPresent).firstOrNull()?.let {
-                return refuse(BiosCheck.message(tag, it))
+            BiosCheck.missing(CoreRegistry.requiredBios(cfg.tag), contentExtension, biosPresent).firstOrNull()?.let {
+                return refuse(BiosCheck.message(cfg.tag, it))
             }
             // A NAOMI/Atomiswave set's BIOS archive (flycast opens <system>/dc/<bios>.zip or .7z); an unknown set is not checked.
-            if (archiveAsIs) naomiSets.missingBios(romFileName, biosPresent)?.let { return refuse(NaomiSets.biosMessage(title, it)) }
+            if (archiveAsIs) naomiSets.missingBios(cfg.romFileName, biosPresent)?.let { return refuse(NaomiSets.biosMessage(cfg.title, it)) }
             // A missing arcade BIOS set (systemSets, read above) is refused here.
             if (systemSets.isNotEmpty()) {
                 val fbneoFiles = withContext(Dispatchers.IO) { File(systemDir, "fbneo").list()?.toSet() ?: emptySet() }
                 ArcadeCompanions.missing(systemSets, present, fbneoFiles)?.let { set ->
-                    return refuse("$title needs $set.zip: put it next to the game or in Bios/FBN/")
+                    return refuse("${cfg.title} needs $set.zip: put it next to the game or in Bios/FBN/")
                 }
             }
-            val savesDir = (sessionDir ?: File(dataRoot, paths.savesDir)).apply { mkdirs() }
+            val savesDir = (cfg.sessionDir ?: File(dataRoot, paths.savesDir)).apply { mkdirs() }
             // netplay: a link session's game is the player's own, so it gets achievements as a normal launch; lockstep has none.
-            if (np == null || np.allowsAchievements) prepareAchievements(tag, romFileName, content, inner)
+            if (cfg.np == null || cfg.np.allowsAchievements) prepareAchievements(cfg.tag, cfg.romFileName, cfg.content, inner)
             return PreparedContent(inner, systemDir, savesDir, sram, rtc, segaSetting, biosPresent, archiveAsIs, naomiSets, naomiBios)
         }
     }
 
     private suspend fun buildViewData(cfg: LaunchConfig, prepared: PreparedContent): GLRetroViewData? {
         with(host) {
-            val coreFile = cfg.coreFile
-            val tag = cfg.tag
-            val title = cfg.title
-            val descriptor = cfg.descriptor
-            val players = cfg.players
-            val content = cfg.content
-            val romFileName = cfg.romFileName
-            val home = cfg.home
-            val realPath = cfg.realPath
-            val companions = cfg.companions
-            val netplayPad = cfg.netplayPad
-            val options = cfg.options
-            val linkOptions = cfg.linkOptions
-            val frontend = cfg.frontend
-            val inner = prepared.inner
-            val segaSetting = prepared.segaSetting
-            val biosPresent = prepared.biosPresent
-            val systemDir = prepared.systemDir
-            val savesDir = prepared.savesDir
-            val sram = prepared.sram
-            val rtc = prepared.rtc
             // A REAL_PATH core's copy into the cache gets the unpack's toast: only one that outlasts the delay shows it.
             var copyToast: android.widget.Toast? = null
-            val copying = if (realPath && inner == null) lifecycleScope.launch { delay(400); copyToast = toast("Copying $romFileName…") } else null
+            val copying = if (cfg.realPath && prepared.inner == null) lifecycleScope.launch { delay(400); copyToast = toast("Copying ${cfg.romFileName}…") } else null
             // What the core is launched with, read now (a change during the header read or the BIOS checks included); a
             // change after this reaches the core at the first frame.
-            val launchSega = if (segaSetting != null) frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO else null
+            val launchSega = if (prepared.segaSetting != null) frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO else null
             val launchSegaPad = segaPad
             launchedSegaSetting = launchSega
             val nds3dLaunch = res3d.launchOption()   // read on the main thread: the window's size
             // PS2 BIOS row: the pick while its file is still in the folder, else Auto (the core's own choice).
-            val ps2BiosOption = if (Ps2Options.appliesTo(tag)) {
-                Ps2Options.biosOption(frontendValues[Ps2Options.BIOS], biosPresent.filter { it.endsWith(".bin", ignoreCase = true) })
+            val ps2BiosOption = if (Ps2Options.appliesTo(cfg.tag)) {
+                Ps2Options.biosOption(frontendValues[Ps2Options.BIOS], prepared.biosPresent.filter { it.endsWith(".bin", ignoreCase = true) })
             } else emptyMap()
             val data = try {
                 withContext(Dispatchers.IO) {
                     // The name the core sees: an arcade zip in lowercase (fbneo matches the driver name case-sensitively).
-                    val fileName = CoreRegistry.contentName(tag, romFileName)
+                    val fileName = CoreRegistry.contentName(cfg.tag, cfg.romFileName)
                     // Display → Graphics API: the core options for the API and whether the runner offers Vulkan.
                     // Vulkan that could not start here before, or this is the relaunch after it did: OpenGL ES (VulkanFallback).
                     val vulkanFailed = activity.intent.getBooleanExtra(EXTRA_FORCE_GLES, false) ||
-                        descriptor?.id in settings.vulkanFailedCores
-                    val graphics = GraphicsApiOptions.resolve(frontendValues[GraphicsApiOptions.KEY], descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, vulkanFailed)
+                        cfg.descriptor?.id in settings.vulkanFailedCores
+                    val graphics = GraphicsApiOptions.resolve(frontendValues[GraphicsApiOptions.KEY], cfg.descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, vulkanFailed)
                     launchedOnVulkan = graphics.preferVulkan
                     launchEnv = graphics.env
                     // netplay link: the link options are this launch's too (a session's port, mode and peer): never saved.
-                    graphicsForcedOptions = graphics.forcedOptions.keys + linkOptions.keys
+                    graphicsForcedOptions = graphics.forcedOptions.keys + cfg.linkOptions.keys
                     GLRetroViewData(host.activity).apply {
-                        coreFilePath = coreFile
-                        systemDirectory = systemDir.absolutePath
-                        savesDirectory = savesDir.absolutePath
+                        coreFilePath = cfg.coreFile
+                        systemDirectory = prepared.systemDir.absolutePath
+                        savesDirectory = prepared.savesDir.absolutePath
                         // netplay: the handheld pak's pad options (NetplayPads) replace the Controller Type's, and a link
                         // session's (NetplayLinkOptions) the user's, set even when absent.
                         // N64: Max High-Res VRAM Limit's Auto becomes a number for this device's memory (N64HiresPack.vramLimit).
-                        val n64Vram = if (descriptor?.id == MUPEN64PLUS_NEXT_ID) {
+                        val n64Vram = if (cfg.descriptor?.id == MUPEN64PLUS_NEXT_ID) {
                             val total = ActivityManager.MemoryInfo().also { activity.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }.totalMem
-                            val limit = N64HiresPack.vramLimit(options.firstOrNull { it.key == N64HiresPack.VRAM_KEY }?.value, total)
+                            val limit = N64HiresPack.vramLimit(cfg.options.firstOrNull { it.key == N64HiresPack.VRAM_KEY }?.value, total)
                             NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
                             mapOf(N64HiresPack.VRAM_KEY to limit)
                         } else emptyMap()
-                        val forced = netplayPad?.options.orEmpty() + linkOptions + wii.screenOption() + nds3dLaunch + ps2BiosOption + n64Vram + graphics.forcedOptions
-                        variables = withForced(options, forced).toTypedArray()
+                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + ps2BiosOption + n64Vram + graphics.forcedOptions
+                        variables = withForced(cfg.options, forced).toTypedArray()
                         rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
                         preferLowLatencyAudio = true
                         // DS / 3DS: the frontend feeds the core's mic ([ShortcutsMicController.applyMic] picks silence, the phone mic or noise).
@@ -687,40 +656,40 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         // DS / 3DS: the core reports where each screen sits in its frame (video views), the layouts read it.
                         videoViews = gameCoreId in VIDEO_VIEW_CORES
                         // gpsp: never unload the core between games, so its recompiler cache stays mapped near it.
-                        keepCoreLoaded = descriptor?.keepLoaded == true
-                        shader = renderer.shaderFor(frontend)
-                        saveRAMState = sram
-                        rtcState = rtc   // the clock file, applied after the battery save
+                        keepCoreLoaded = cfg.descriptor?.keepLoaded == true
+                        shader = renderer.shaderFor(cfg.frontend)
+                        saveRAMState = prepared.sram
+                        rtcState = prepared.rtc   // the clock file, applied after the battery save
                         // Set after load and before the first frame: pcsx_rearmed's DualShock (a gamepad's sticks reach the
                         // core), flycast's joypad (its ports start empty, so the BIOS and game would see no controller) with
                         // its unused ports set to none, which completes its device setup (the VMU in slot 1). Player 2+
                         // ports get the same device, as does a forced genesis_plus_gx Controller Type.
-                        descriptor?.let { controllerPorts = it.controllerPortsFor(players) }
-                        if (descriptor?.id == WiiDolphinController.DOLPHIN_ID) controllerPorts = wii.launchPorts(players)
-                        if (descriptor?.id == SegaPadType.GPGX) SegaPadType.gpgxPorts(launchSega, players)?.let { controllerPorts = it }
-                        if (descriptor?.id == SegaPadType.PICODRIVE && launchSega != null) controllerPorts = SegaPadType.picodrivePorts(launchSega, launchSegaPad, players)
-                        netplayPad?.ports?.takeIf { it.isNotEmpty() }?.let { controllerPorts = controllerPorts + it }   // netplay: the pak's ports 0-1
-                        if (inner != null) {
-                            gameFilePath = inner.absolutePath
-                        } else if (realPath) {
+                        cfg.descriptor?.let { controllerPorts = it.controllerPortsFor(cfg.players) }
+                        if (cfg.descriptor?.id == WiiDolphinController.DOLPHIN_ID) controllerPorts = wii.launchPorts(cfg.players)
+                        if (cfg.descriptor?.id == SegaPadType.GPGX) SegaPadType.gpgxPorts(launchSega, cfg.players)?.let { controllerPorts = it }
+                        if (cfg.descriptor?.id == SegaPadType.PICODRIVE && launchSega != null) controllerPorts = SegaPadType.picodrivePorts(launchSega, launchSegaPad, cfg.players)
+                        cfg.netplayPad?.ports?.takeIf { it.isNotEmpty() }?.let { controllerPorts = controllerPorts + it }   // netplay: the pak's ports 0-1
+                        if (prepared.inner != null) {
+                            gameFilePath = prepared.inner.absolutePath
+                        } else if (cfg.realPath) {
                             // A file ref (All files access) is opened in place when it and its companions are readable there;
                             // a SAF game is copied: a disc set's files go next to its sheet in the cache, under the names the sheet uses.
-                            val inPlace = RealPathLaunch.inPlace(content, fileName, companions)
-                                ?.takeIf { p -> File(p).canRead() && companions.all { (name, _) -> File(File(p).parentFile, name).canRead() } }
+                            val inPlace = RealPathLaunch.inPlace(cfg.content, fileName, cfg.companions)
+                                ?.takeIf { p -> File(p).canRead() && cfg.companions.all { (name, _) -> File(File(p).parentFile, name).canRead() } }
                             if (inPlace != null) {
                                 gameFilePath = inPlace
                             } else {
-                                for ((name, ref) in companions) copyToCache(ref, name)
-                                gameFilePath = copyToCache(content, fileName).absolutePath
+                                for ((name, ref) in cfg.companions) copyToCache(ref, name)
+                                gameFilePath = copyToCache(cfg.content, fileName).absolutePath
                             }
                         } else {
                             // With more than one virtual file the runner serves the core through its VFS (libretrodroid.cpp:391),
                             // so the core opens /rom/<track>.bin by the name its cue gives.
-                            val opened = ArrayList<VirtualFile>(companions.size + 1)
+                            val opened = ArrayList<VirtualFile>(cfg.companions.size + 1)
                             try {
-                                val pfd = refs.openFd(content, "r") ?: throw IOException("Cannot open file descriptor")
+                                val pfd = refs.openFd(cfg.content, "r") ?: throw IOException("Cannot open file descriptor")
                                 opened += VirtualFile("/rom/$fileName", pfd)
-                                for ((name, ref) in companions) {
+                                for ((name, ref) in cfg.companions) {
                                     opened += VirtualFile("/rom/$name", refs.openFd(ref, "r") ?: throw IOException("Cannot open $name"))
                                 }
                             } catch (e: Exception) {
@@ -730,16 +699,16 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             }
                             gameVirtualFiles = opened
                         }
-                        if (descriptor?.id == MUPEN64PLUS_NEXT_ID) {
+                        if (cfg.descriptor?.id == MUPEN64PLUS_NEXT_ID) {
                             val values = variables.mapNotNull { v -> v.key?.let { k -> v.value?.let { k to it } } }.toMap()
-                            extraVirtualFiles = n64HiresPack(values, graphics.preferVulkan, content, inner, home)
+                            extraVirtualFiles = n64HiresPack(values, graphics.preferVulkan, cfg.content, prepared.inner, cfg.home)
                         }
                     }
                 }
             } catch (e: CancellationException) {
                 throw e   // lifecycleScope cancelled mid-copy (a back-out, a destroy): not a launch failure to report
             } catch (e: Exception) {
-                return refuse("Cannot open $title: ${e.javaClass.simpleName}: ${e.message}")
+                return refuse("Cannot open ${cfg.title}: ${e.javaClass.simpleName}: ${e.message}")
             } finally {
                 copying?.cancel()
                 copyToast?.cancel()
@@ -750,10 +719,6 @@ internal class LaunchPipeline(private val host: LaunchHost) {
 
     private suspend fun attachView(cfg: LaunchConfig, prepared: PreparedContent, data: GLRetroViewData) {
         with(host) {
-            val coreId = cfg.coreId
-            val tag = cfg.tag
-            val extraction = cfg.extraction
-            val shaderExtraction = cfg.shaderExtraction
             // Graphics API's process environment for the core (ParaLLEl-RDP's switches), before it loads; unset otherwise.
             launchEnv.forEach { (k, v) ->
                 runCatching { if (v != null) android.system.Os.setenv(k, v, true) else android.system.Os.unsetenv(k) }
@@ -789,7 +754,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 lifecycleScope.launch { b.events.collect { onAchievementEvent(it) } }
             }
             // The core's on-screen messages: the few worth showing (CoreMessages: the FDS disk side) as a toast on the picture.
-            lifecycleScope.launch { view.getCoreMessages().collect { m -> CoreMessages.toast(coreId, m)?.let(dual::pictureToast) } }
+            lifecycleScope.launch { view.getCoreMessages().collect { m -> CoreMessages.toast(cfg.coreId, m)?.let(dual::pictureToast) } }
             // The core loads the game on the GL thread once the view is added (SurfaceCreated follows): the waiting pads'
             // timeout counts from then, not through the load.
             lifecycleScope.launch {
@@ -815,12 +780,12 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             view.onShaderError = { msg -> toast("Shader: $msg"); renderer.dropShaderChain() }
             // A stored preset reads the extracted files: on a first run or after an update, wait for the (~0.5 MB)
             // copy and swap rather than fail or read the tree mid-swap.
-            if (ShaderOptions.preset(renderer.shaderValues) != null) shaderExtraction.join()
+            if (ShaderOptions.preset(renderer.shaderValues) != null) cfg.shaderExtraction.join()
             renderer.applyShader(renderer.shaderValues)
             // First run or after an update: the bundled sets may still be copying; pick them up once swapped in.
             lifecycleScope.launch {
-                val synced = extraction.await()
-                val found = withContext(Dispatchers.IO) { Overlays.sets(privateRoot, tag) }
+                val synced = cfg.extraction.await()
+                val found = withContext(Dispatchers.IO) { Overlays.sets(privateRoot, cfg.tag) }
                 // After a sync, re-apply even with the same names: an overlay decoded mid-swap may have failed.
                 if (synced || found != renderer.overlaySets) {
                     renderer.overlaySets = found   // the Overlay value is unchanged (its default is None whatever the files)
@@ -828,7 +793,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 }
             }
             lifecycleScope.launch {
-                shaderExtraction.join()
+                cfg.shaderExtraction.join()
                 renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(shaderRoots) }
                 publishMenuShaders()
             }
@@ -853,9 +818,6 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     private suspend fun onFirstFrame(cfg: LaunchConfig, view: GLRetroView) {
         with(host) {
             onGameReady()
-            val np = cfg.np
-            val descriptor = cfg.descriptor
-            val coreId = cfg.coreId
             if (BuildConfig.DEBUG) NxTestResults.write(host.activity, "game", "state" to "running", "tag" to gameTag, "core" to gameCoreId)
             activity.intent.getStringExtra(EXTRA_GAME_PATH)?.let { path ->
                 val tag = gameTag
@@ -905,7 +867,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             if (launchRecords.started(launchId)) {
                 activity.sendBroadcast(Intent(LaunchRecords.action(activity)).setPackage(activity.packageName))   // the menu records it
             }
-            if (np != null && !gameNetplay.onFirstFrame(np, descriptor?.name ?: coreId)) return
+            if (cfg.np != null && !gameNetplay.onFirstFrame(cfg.np, cfg.descriptor?.name ?: cfg.coreId)) return
             saves.resumeAtFirstFrame(view, dataRoot, paths)
             dropResumeCover(view)
             // Cheats sit on top of the resumed state, as minarch applies them after load.
