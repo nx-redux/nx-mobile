@@ -219,7 +219,12 @@ object CoreRegistry {
     )
     private val vb = CoreDescriptor(
         "mednafen_vb", "libmednafen_vb_libretro_android.so", setOf("vb", "vboy", "bin"),
-        defaultOptions = mapOf("vb_3dmode" to "anaglyph"),
+        // VR needs stereo video views or a headset, which the frontend never reports; head-locked would take a GL context.
+        defaultOptions = mapOf(
+            "vb_3dmode" to "anaglyph",
+            "vb_vr" to "disabled", "vb_vr_screen_distance" to "1.0", "vb_vr_screen_width" to "1.1",
+        ),
+        lockedOptions = setOf("vb_vr", "vb_vr_screen_distance", "vb_vr_screen_width"),
         cheats = false,   // retro_cheat_set is empty
         name = "Beetle VB",
     )

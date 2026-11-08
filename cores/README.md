@@ -44,7 +44,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | ppsspp | hrydgard/ppsspp | d4e3c7eb2bf0ec9241621b3752cd3e5406178c78 | cmake (patched: cheat slots) | 16:24 |
 | race | libretro/race | 171950ea64c96ead503340ed60fa7ba18f56325c | ndk-build | 0:04 |
 | mednafen_pce_fast | libretro/beetle-pce-fast-libretro | 52675734da114a19b3705f03906b1455f3d76644 | ndk-build | 0:05 |
-| mednafen_vb | libretro/beetle-vb-libretro | 65debc7c4c7b85e2fd988d2be53496c2cf0b5f44 | ndk-build | 0:03 |
+| mednafen_vb | libretro/beetle-vb-libretro | d5ae54c8e23b573a3b34e888b2d48a588027e92c | ndk-build | 0:03 |
 | handy | libretro/libretro-handy | bc55d462f0b2d6b073ea93dc552ebd73cec60fd1 | ndk-build | 0:03 |
 | stella2014 | libretro/stella2014-libretro | 3cc89f0d316d6c924a5e3f4011d17421df58e615 | ndk-build | 0:06 |
 | prosystem | libretro/prosystem-libretro | 8a88014287c7a01cd568067e5a557d0a2b2a051f | ndk-build | 0:03 |

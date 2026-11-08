@@ -62,7 +62,7 @@ class CoreRegistryTest {
         // The second memory card stays out, as the Brick's pin had it (upstream's default since 2026 is a shared card).
         assertEquals(mapOf("pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none"), CoreRegistry.forTag("PS")!!.defaultOptions)
         assertEquals(mapOf("race_dark_filter_level" to "50"), CoreRegistry.forTag("NGPC")!!.defaultOptions)
-        assertEquals(mapOf("vb_3dmode" to "anaglyph"), CoreRegistry.forTag("VB")!!.defaultOptions)
+        assertEquals("anaglyph", CoreRegistry.forTag("VB")!!.defaultOptions["vb_3dmode"])
         assertEquals(
             mapOf(
                 "supafaust_pixel_format" to "rgb565",

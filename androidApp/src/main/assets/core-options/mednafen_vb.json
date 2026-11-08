@@ -9,9 +9,9 @@
    "items": [
     {
      "key": "vb_3dmode",
-     "label": "3D mode",
+     "label": "3D mode (requires restart)",
      "labelCategorized": "",
-     "info": "Select the 3D mode. Anaglyph - used in conjunction with classic dual-lens-color glasses. Cyberscope - intended for use with the CyberScope 3D device. sidebyside - the left-eye image is displayed on the left, and the right-eye image is displayed on the right. vli - Vertical lines alternate between left and right view. hli - Horizontal lines alternate between left and right view.",
+     "info": "Select the 3D mode. Anaglyph - used in conjunction with classic dual-lens-color glasses. Cyberscope - intended for use with the CyberScope 3D device. sidebyside - the left-eye image is displayed on the left, and the right-eye image is displayed on the right. vli - Vertical lines alternate between left and right view. hli - Horizontal lines alternate between left and right view. Does not apply to VR mode.",
      "values": [
       "anaglyph",
       "cyberscope",
@@ -241,6 +241,21 @@
      "default": "disabled"
     },
     {
+     "key": "vb_opposite_directions",
+     "label": "Allow Opposite Directions",
+     "labelCategorized": "",
+     "info": "Allow pressing up and down or left and right directions at the same time. This may cause glitches.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
      "key": "vb_cpu_emulation",
      "label": "CPU emulation  (Restart)",
      "labelCategorized": "",
@@ -254,10 +269,81 @@
       ""
      ],
      "default": "fast"
+    },
+    {
+     "key": "vb_vr",
+     "label": "VR",
+     "labelCategorized": "",
+     "info": "Enabled shows both eyes as a stereo screen whenever the frontend presents them, in a headset or a stereo display mode. Disabled keeps the chosen 3D mode. Head-locked holds the screen in front of the eyes in a headset (requires restart).",
+     "values": [
+      "disabled",
+      "enabled",
+      "head-locked"
+     ],
+     "labels": [
+      "",
+      "",
+      ""
+     ],
+     "default": "enabled"
+    },
+    {
+     "key": "vb_vr_screen_distance",
+     "label": "VR screen distance",
+     "labelCategorized": "",
+     "info": "Head-locked VR only. Apparent distance of the Virtual Boy screen from the viewer in metres. Closer values also pull the stereo image in.",
+     "values": [
+      "0.5",
+      "0.75",
+      "1.0",
+      "1.25",
+      "1.5",
+      "2.0",
+      "2.5",
+      "3.0"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "1.0"
+    },
+    {
+     "key": "vb_vr_screen_width",
+     "label": "VR screen width",
+     "labelCategorized": "",
+     "info": "Head-locked VR only. Width of the Virtual Boy screen in metres, at the chosen distance. Larger values fill more of your view, up to the edge of the headset's field of view.",
+     "values": [
+      "0.5",
+      "0.75",
+      "1.0",
+      "1.1",
+      "1.5",
+      "2.0",
+      "2.5",
+      "3.0"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "1.1"
     }
    ]
   }
  ],
- "soSha256": "f96cde930287e041e112bb003137d1c157df919cfff2e4d192655e3a89c739bd",
- "probedAt": "2026-09-29"
+ "soSha256": "51cab1889d64e981c27b67dcb02fd576a505daa3441a20cf93e074c4818e6a4c",
+ "probedAt": "2026-11-08"
 }
