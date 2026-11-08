@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.widget.FrameLayout
+import androidx.activity.ComponentActivity
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -13,6 +15,7 @@ import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.R
 import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.cheats.DolphinCheats
+import com.nxredux.mobile.gametime.GameTimeRecorder
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.Names
@@ -24,6 +27,8 @@ import com.nxredux.mobile.netplay.NetplayPads
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.NetplayText
+import com.nxredux.mobile.layout.ScreenClass
+import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.FrontendSettings
@@ -49,10 +54,12 @@ import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_LOAD_MODE
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_NETPLAY_ROLE
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_OPTIONS
 import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_SYSTEM_SETS
+import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.GameRumble
 import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.shortcuts.Shortcuts
 import com.nxredux.mobile.storage.AndroidHomeLocator
+import com.nxredux.mobile.storage.AndroidRefs
 import com.nxredux.mobile.storage.AndroidRomsSources
 import com.nxredux.mobile.storage.DataRoot
 import com.nxredux.mobile.storage.NdsDsvSave
@@ -60,6 +67,7 @@ import com.nxredux.mobile.storage.NdsResumeCleanup
 import com.nxredux.mobile.storage.NxPaths
 import com.nxredux.mobile.test.NxTestResults
 import com.nxredux.mobile.tools.CheatsRoot
+import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.GLRetroViewData
 import com.swordfish.libretrodroid.LibretroDroid
@@ -81,14 +89,124 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
+ * What [LaunchPipeline] needs from [GameActivity]: its controllers, what the launch reads, and the state the launch
+ * settles. Built by the activity for the pipeline alone, so these setters stay out of every other class's reach. Each
+ * stage sets them in place, not at its end: later reads in the same stage, and a menu opened mid-load, rely on them.
+ */
+internal interface LaunchHost : LifecycleOwner {
+    val activity: ComponentActivity
+    val input: GameInputRouter
+    val padLayout: PadLayoutController
+    val renderer: FrontendRenderer
+    val dual: DualScreenController
+    val shortcuts: ShortcutsMicController
+    val saves: SaveSession
+    val wii: WiiDolphinController
+    val res3d: Res3dController
+    val gameNetplay: GameNetplay
+    val speed: SpeedController
+    val settings: AndroidAppSettings
+    val refs: AndroidRefs
+    val gameRumble: GameRumble
+    val launchRecords: LaunchRecords
+    val launchId: Long
+    val intentTag: String?
+    val intentTitle: String?
+    val netplay: NetplaySession?
+    val achievements: AchievementsBridge?
+    val focusPaused: Boolean
+    val quitting: Boolean
+    val isDolphin: Boolean
+    val isDc: Boolean
+    val isN3ds: Boolean
+    val retroView: GLRetroView?
+
+    var usingData: Boolean
+    var dataRoot: File
+    var privateRoot: File
+    var shaderRoots: Shaders.Roots
+    var paths: NxPaths
+    var gameTag: String
+    var gameCoreId: String
+    var playerCount: Int
+    var rumbles: Array<RumbleMotor>
+    var canRewind: Boolean
+    var padMap: PadMap
+    var segaPad: SegaPad?
+    var segaHeader: SegaPad?
+    var launchedSegaSetting: String?
+    var n3dsTitle: N3dsTitle?
+    var n3dsNew: Boolean
+    var n3dsSwapMode: String
+    var n3dsSwapPinnedHalfFolded: Boolean
+    var ndsRenderMode: String?
+    var ndsFellBack: Boolean
+    var launchedOnVulkan: Boolean
+    var launchEnv: Map<String, String?>
+    var graphicsForcedOptions: Set<String>
+    var frontendValues: Map<String, String>
+    var configStore: CoreConfigStore?
+    var configSource: ConfigSource
+    var lockedOptions: Set<String>
+    var storedValues: Map<String, String>
+    var restartOnlyOptions: Set<String>
+    var forcedOptions: Set<String>
+    var hiddenValues: Map<String, Set<String>>
+    var descriptorDefaults: Map<String, String>
+    var cheatsSupported: Boolean
+    var cheatsFolder: String
+    var cheatSet: CheatSet
+    var cheatsLoad: Job?
+    var dolphinPlayerCheats: CheatSet?
+    var dolphinSavedCheats: List<String>
+    var dolphinBuiltInPath: String?
+
+    /** The game's view exists: from here the saves, the quit and every controller act on it. */
+    fun onViewCreated(view: GLRetroView)
+    /** The first frame rendered: the battery save and the auto state may be written from here. */
+    fun onGameReady()
+    /** The core's stall watch, from the view's creation to the end of onDestroy. */
+    fun startCoreWatchdog(stalledMillis: () -> Long)
+    /** Game time's session for this launch, as onStart and onStop keep it from here. */
+    fun startGameTime(rec: GameTimeRecorder)
+    /** The launch name's hold fades now, or once its minimum is up. */
+    fun releaseNameHold()
+
+    fun fail(message: String, title: String)
+    fun relaunchOnGles()
+    fun quitGame(chosen: Boolean, autoState: Boolean)
+    fun toast(msg: String): android.widget.Toast
+    fun isLandscape(): Boolean
+    fun screenClass(): ScreenClass
+    fun n3dsSkinStack(): Boolean
+    fun n3dsHalfFoldedPin(mode: DualMode): Boolean
+    fun n3dsProportion(): String
+    fun relayoutPad()
+    fun dropPadProfile()
+    fun applyFrontend(values: Map<String, String>)
+    fun sendSegaPad(setting: String)
+    fun offerLayoutTip()
+    fun ensureNotificationsView()
+    fun publishMenuShaders()
+    fun withMenu(block: (InGameMenuModel) -> Unit)
+    fun publishNds3d(model: InGameMenuModel)
+    fun publishCheats()
+    fun applyCheats(view: GLRetroView)
+    suspend fun readDolphinBuiltIn(): String?
+    suspend fun refreshDolphinCheats()
+    fun prepareAchievements(tag: String, romFileName: String, content: ContentRef, inner: File?)
+    fun onAchievementEvent(e: RaEvent)
+}
+
+/**
  * The game's start, from the launch intent to its first frame, in stages run in order on the main thread:
  * [resolveConfig] (the core, the config, the frontend values, the shortcuts, the 3DS layout options, a link session's
  * engine), [prepareContent] (the data root's saves, an archive's unpack, the BIOS checks, the headers read from the
  * content), [buildViewData] (the runner's data, a real-path copy), [attachView] (the view, its flows and observers) and
  * [onFirstFrame]. A refusal shows the could-not-start dialog ([GameActivity.fail]) and ends the run. Holds the RomCache
- * entries the launch took until the screen is destroyed ([onDestroy]). The state it sets is [game]'s.
+ * entries the launch took until the screen is destroyed ([onDestroy]). The state it sets is [host]'s.
  */
-internal class LaunchPipeline(private val game: GameActivity) {
+internal class LaunchPipeline(private val host: LaunchHost) {
     companion object {
         /** Cores that send a video view map (melonds-ds#335, azahar#2718 in our patches). */
         private val VIDEO_VIEW_CORES = setOf("melondsds", "azahar")
@@ -151,20 +269,20 @@ internal class LaunchPipeline(private val game: GameActivity) {
         attachView(cfg, prepared, data)
     }
 
-    private fun refuse(message: String): Nothing? { game.fail(message, GameActivity.START_FAILED); return null }
+    private fun refuse(message: String): Nothing? { host.fail(message, GameActivity.START_FAILED); return null }
 
-    private fun refuse(message: String, title: String): Nothing? { game.fail(message, title); return null }
+    private fun refuse(message: String, title: String): Nothing? { host.fail(message, title); return null }
 
     private suspend fun resolveConfig(): LaunchConfig? {
-        with(game) {
-            val coreFile = intent.getStringExtra(EXTRA_CORE_FILE) ?: return refuse("No core given")
+        with(host) {
+            val coreFile = activity.intent.getStringExtra(EXTRA_CORE_FILE) ?: return refuse("No core given")
             // netplay: extras that make no session must not start an ordinary game on the real saves; a recreated session is over.
-            if (intent.hasExtra(EXTRA_NETPLAY_ROLE) && netplay == null && !gameNetplay.local) return refuse(NetplayText.FAILED, NetplayText.FAILED)
+            if (activity.intent.hasExtra(EXTRA_NETPLAY_ROLE) && netplay == null && !gameNetplay.local) return refuse(NetplayText.FAILED, NetplayText.FAILED)
             if (gameNetplay.restored) return refuse(NetplayText.ENDED, NetplayText.FAILED)
             val np = netplay
             val tag = intentTag ?: "UNKNOWN"
             val title = intentTitle ?: "game"
-            val coreId = intent.getStringExtra(EXTRA_CORE_ID) ?: coreFile.removePrefix("lib").substringBefore("_libretro")
+            val coreId = activity.intent.getStringExtra(EXTRA_CORE_ID) ?: coreFile.removePrefix("lib").substringBefore("_libretro")
             // The tag's own descriptor: a tag view (SGB) carries its own extensions and defaults; the id alone would give plain mgba.
             val descriptor = CoreRegistry.forTag(tag)?.takeIf { it.id == coreId } ?: CoreRegistry.forId(coreId)
             val players = CoreRegistry.playersFor(tag, descriptor)
@@ -176,22 +294,22 @@ internal class LaunchPipeline(private val game: GameActivity) {
             if (padLayout.layoutControllerNames() != padLayout.controllerNames()) relayoutPad()
             // Kept for one player: a key held through the load keeps its recorded send.
             if (input.inputs.count != players) input.inputs = PortInputs(players)
-            rumbles = Array(players) { RumbleMotor(this, gameRumble, phoneFallback = it == 0) }
+            rumbles = Array(players) { RumbleMotor(activity, gameRumble, phoneFallback = it == 0) }
             // A core that ignores codes still takes RAM patches (ramCheats).
             val cheatsOk = descriptor?.let { it.cheats || it.ramCheats } ?: true
             cheatsSupported = np == null && cheatsOk   // netplay: cheats would desync the other device
             // A SAF document URI, or a file ref with All files access: opened only through [refs], never Uri.parse.
-            val content = ContentRef(intent.getStringExtra(EXTRA_CONTENT_URI) ?: return refuse("No content given"))
-            val romFileName = intent.getStringExtra(EXTRA_FILE_NAME)
+            val content = ContentRef(activity.intent.getStringExtra(EXTRA_CONTENT_URI) ?: return refuse("No content given"))
+            val romFileName = activity.intent.getStringExtra(EXTRA_FILE_NAME)
                 ?: withContext(Dispatchers.IO) { runCatching { refs.displayName(content) }.getOrNull() } ?: title
             // Binder calls to the menu process, so off the main thread; a menu process that cannot answer fails the launch, not the app.
             dataRoot = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (!usingData) { DataRoot.useBegin(game); usingData = true }   // no move starts under the session
-                    DataRoot.settled(game)   // waits for a move still running
+                    if (!usingData) { DataRoot.useBegin(host.activity); usingData = true }   // no move starts under the session
+                    DataRoot.settled(host.activity)   // waits for a move still running
                 }.onFailure { NxLog.w(TAG_LOG, "data root unavailable", it) }.getOrNull()
             } ?: return refuse("The game's storage could not be reached. Try again.")
-            privateRoot = DataRoot.private(this)
+            privateRoot = DataRoot.private(activity)
             shaderRoots = Shaders.Roots.of(privateRoot, dataRoot)
             cheatsFolder = Cheats.folder(tag, romFileName)
             // The battery-save, clock and state names follow the handheld's save settings. The save setup waits
@@ -199,35 +317,35 @@ internal class LaunchPipeline(private val game: GameActivity) {
             // archive's inner file; the config and marker names never depend on the settings.
             paths = NxPaths(tag, coreId, romFileName, settings.saveNaming)
             showResumeCover()   // the screenshot's name depends on the tag and ROM name only: up long before the core loads
-            val home = AndroidHomeLocator(this).current()   // a SAF tree or a file ref (the media home without access): BiosImport picks the tree
+            val home = AndroidHomeLocator(activity).current()   // a SAF tree or a file ref (the media home without access): BiosImport picks the tree
             // netplay: a session on a copy never touches the real saves: its session folder is its own.
-            val sessionDir = if (np?.onCopy == true) NetplaySessionDir.dir(filesDir) else null
+            val sessionDir = if (np?.onCopy == true) NetplaySessionDir.dir(activity.filesDir) else null
             gameTag = tag
             gameCoreId = coreId
             // MainActivity does it too, in the menu process; here for a game started before that copy is in place. Not
             // awaited: it is locked across both processes, and a first-run or post-update copy (~10 MB) must not hold up the
-            // game. Re-read once it is done.
-            val extraction = lifecycleScope.async(Dispatchers.IO) { Overlays.extractBundled(game) }
-            val shaderExtraction = lifecycleScope.launch(Dispatchers.IO) { Shaders.extractBundled(game) }
+            // host. Re-read once it is done.
+            val extraction = lifecycleScope.async(Dispatchers.IO) { Overlays.extractBundled(host.activity) }
+            val shaderExtraction = lifecycleScope.launch(Dispatchers.IO) { Shaders.extractBundled(host.activity) }
             restartOnlyOptions = descriptor?.restartOnlyOptions ?: emptySet()
             forcedOptions = descriptor?.lockedOptions ?: emptySet()
             hiddenValues = descriptor?.hiddenValues ?: emptyMap()
-            val realPath = intent.getStringExtra(EXTRA_LOAD_MODE) == "REAL_PATH"
-            val companionNames = intent.getStringArrayExtra(EXTRA_COMPANION_NAMES) ?: emptyArray()
-            val companionUris = intent.getStringArrayExtra(EXTRA_COMPANION_URIS) ?: emptyArray()
+            val realPath = activity.intent.getStringExtra(EXTRA_LOAD_MODE) == "REAL_PATH"
+            val companionNames = activity.intent.getStringArrayExtra(EXTRA_COMPANION_NAMES) ?: emptyArray()
+            val companionUris = activity.intent.getStringArrayExtra(EXTRA_COMPANION_URIS) ?: emptyArray()
             val companions = companionNames.zip(companionUris).map { (name, ref) -> name to ContentRef(ref) }
-            descriptorDefaults = optionExtras(intent.getStringArrayExtra(EXTRA_OPTIONS) ?: emptyArray())
+            descriptorDefaults = optionExtras(activity.intent.getStringArrayExtra(EXTRA_OPTIONS) ?: emptyArray())
             // melonDS DS: GPU where the device has GLES 3.2, as a lowest-priority default; a stored value wins, none is written.
             if (coreId == NdsRenderer.CORE_ID_MELONDSDS) {
-                val gles = (getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).deviceConfigurationInfo.reqGlEsVersion
+                val gles = (activity.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).deviceConfigurationInfo.reqGlEsVersion
                 descriptorDefaults = NdsRenderer.defaults(gles) + descriptorDefaults
             }
             val store = CoreConfigStore(File(dataRoot, paths.consoleConfig), File(dataRoot, paths.gameConfig)).also { configStore = it }
             val resolved = withContext(Dispatchers.IO) {
                 // fceumm's turbo default (Player 1): a cfg saved before it holds the old None as if picked ([FceummTurbo])
                 if (coreId == "fceumm") store.migrateFceummTurbo(fceummTurboSince())
-                val (console, game) = store.read()
-                CoreConfig.resolve(descriptorDefaults, console, game, forcedOptions, hiddenValues)
+                val (console, perGame) = store.read()
+                CoreConfig.resolve(descriptorDefaults, console, perGame, forcedOptions, hiddenValues)
             }
             configSource = resolved.source
             lockedOptions = resolved.locked
@@ -243,11 +361,11 @@ internal class LaunchPipeline(private val game: GameActivity) {
                 val resolvedSet = withContext(Dispatchers.IO) {
                     // PSP cheat files are named by serial ("[ULUS-10466]"), which the disc knows and the file name rarely does.
                     val serial = if (descriptor?.id == "ppsspp" && PspSerial.readable(romFileName)) PspSerialReader.read(refs, content, romFileName) else null
-                    Cheats.resolve(CheatsRoot.of(game), tag, romFileName, title, extensions, serial)
+                    Cheats.resolve(CheatsRoot.of(host.activity), tag, romFileName, title, extensions, serial)
                         .let { if (descriptor?.cheats == false) it.ramPatchesOnly() else it }   // its codes would do nothing
                 }
                 val combined = if (isDolphin) {
-                    dolphinBuiltInPath = DolphinCheats.builtInFile(filesDir.absolutePath, CoreRegistry.contentName(tag, dolphinContent.await()))
+                    dolphinBuiltInPath = DolphinCheats.builtInFile(activity.filesDir.absolutePath, CoreRegistry.contentName(tag, dolphinContent.await()))
                     val builtIn = readDolphinBuiltIn()
                     // Dolphin writes its list at boot, only if absent: a first launch has none yet (see the first-frame re-resolve).
                     if (builtIn == null) { dolphinPlayerCheats = resolvedSet; dolphinSavedCheats = savedCheats.orEmpty() }
@@ -263,7 +381,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
             // with none stored the default is None).
             // A DS game starts split (every DS layout draws its screens as regions), which shows no overlay: none is
             // preloaded, and it counts as split until its first frame says otherwise, so the configured one never flashes.
-            val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+            val landscape = activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             val ndsAtStart = NdsOptions.appliesTo(tag)
             val (sets, preloaded) = withContext(Dispatchers.IO) {
                 val found = Overlays.sets(privateRoot, tag)
@@ -342,7 +460,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
     }
 
     private suspend fun prepareContent(cfg: LaunchConfig): PreparedContent? {
-        with(game) {
+        with(host) {
             val np = cfg.np
             val tag = cfg.tag
             val title = cfg.title
@@ -355,11 +473,11 @@ internal class LaunchPipeline(private val game: GameActivity) {
             val netplayPad = cfg.netplayPad
             // An arcade set's BIOS that was not beside it must be in the system dir (Bios/FBN/ is copied there); a missing parent is
             // not refused (a non-merged clone carries its parent's ROMs), so only BIOS sets arrive here.
-            val systemSets = intent.getStringArrayExtra(EXTRA_SYSTEM_SETS)?.toList() ?: emptyList()
+            val systemSets = activity.intent.getStringArrayExtra(EXTRA_SYSTEM_SETS)?.toList() ?: emptyList()
             // flycast's set table: a DC zip/7z named after one of its NAOMI/Atomiswave sets is loaded as is and needs its BIOS
             // archive (naomi.zip, awbios.zip ...) in <system>/dc/; any other DC zip/7z (a zipped disc) is unpacked below.
             val naomiSets = if (descriptor?.id == "flycast" && Names.isArchive(romFileName)) {
-                withContext(Dispatchers.IO) { NaomiSetsAsset.get(game) }
+                withContext(Dispatchers.IO) { NaomiSetsAsset.get(host.activity) }
             } else NaomiSets.EMPTY
             val archiveAsIs = CoreRegistry.loadsArchive(tag, romFileName, naomiSets)
             val naomiBios = if (archiveAsIs) naomiSets.biosFor(Names.stripExtension(romFileName)) else null
@@ -367,15 +485,15 @@ internal class LaunchPipeline(private val game: GameActivity) {
             val biosNames = CoreRegistry.requiredBios(tag).flatMap { it.anyOf } +
                 (systemSets + listOfNotNull(naomiBios)).flatMap { listOf("$it.zip", "$it.7z") }
             // Usually a stamp check: MainActivity pre-warms the copy after an update; if it is still running, this waits on its lock.
-            val systemDir = withContext(Dispatchers.IO) { SystemFiles.ensure(game) }
+            val systemDir = withContext(Dispatchers.IO) { SystemFiles.ensure(host.activity) }
             // Bios/<TAG>/ lands in the core's BIOS folder: the system dir, or a subfolder of it (flycast's <system>/dc/).
             val biosDir = BiosFolders.subdir(tag).let { if (it.isEmpty()) systemDir else File(systemDir, it) }
-            withContext(Dispatchers.IO) { BiosImport.sync(game, home, BiosFolders.forTag(tag), biosDir, biosNames) }
+            withContext(Dispatchers.IO) { BiosImport.sync(host.activity, home, BiosFolders.forTag(tag), biosDir, biosNames) }
             // An archive is unpacked into the cache first; the core gets the inner file by real path, and everything keyed by
             // romFileName (config, cheats, thumbnails; saves and states unless Use extracted file name is on) keeps the archive
             // name, as on the Brick; unless the tag's core loads the archive as is (fbneo's romsets and flycast's known sets:
             // the zip is the game).
-            // Only a real unpack outlasts the delay and shows the toast; it is taken down with the unpack, not left over the game.
+            // Only a real unpack outlasts the delay and shows the toast; it is taken down with the unpack, not left over the host.
             val unpacked: Unpacked? = if (!Names.isArchive(romFileName) || archiveAsIs) null else {
                 var unpackToast: android.widget.Toast? = null
                 val unpacking = lifecycleScope.launch { delay(400); unpackToast = toast("Unpacking $romFileName…") }
@@ -383,7 +501,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
                     val romExtensions = descriptor?.extensions ?: CoreRegistry.coreExtensions
                     withContext(Dispatchers.IO) {
                         // flycast names the VMU after the file it is given: unpacked as <archive stem>.<ext>, the VMU is <stem>.A1.bin.
-                        Archives.extract(game, content, romFileName, romExtensions, descriptor?.savesNamedAfterContent == true)
+                        Archives.extract(host.activity, content, romFileName, romExtensions, descriptor?.savesNamedAfterContent == true)
                             .also { keepCacheHold(it.file.parentFile!!.name) }
                     }
                 } catch (e: ArchiveException) {
@@ -407,7 +525,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
                         if (alt != null) "Pick ${CoreRegistry.handheldTag(alt)} from the game's Emulator menu." else "Move it to the folder of the console it belongs to.",
                 )
             }
-            // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c:75-76): known only now.
+            // minarch names saves after the unpacked file when Use extracted file name is on (ma_host.c:75-76): known only now.
             paths = paths.withInner(inner?.let { unpackedEntry })
             saves.open(if (np == null) SaveStates(dataRoot, paths) else null)   // netplay: no save states, no auto-resume
             dropStaleNdsResume(tag, coreId, romFileName)
@@ -425,7 +543,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
                 battery.load() to clock?.load()
             }
             NxLog.i(TAG_LOG, "battery save: ${battery.loadedFrom ?: "none"}")
-            if (BuildConfig.DEBUG) NxTestResults.write(this, "battery", "loadedFrom" to battery.loadedFrom, "bytes" to (sram?.size ?: 0))
+            if (BuildConfig.DEBUG) NxTestResults.write(activity, "battery", "loadedFrom" to battery.loadedFrom, "bytes" to (sram?.size ?: 0))
             // A damaged configured file is set aside as a .bak at the first save, then the game saves again. Not said for a
             // netplay copy: it is never written, so the file stays as it is.
             if (battery.damaged && sessionDir == null) toast("Save file is damaged — it will be kept as a .bak when the game saves")
@@ -493,7 +611,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
     }
 
     private suspend fun buildViewData(cfg: LaunchConfig, prepared: PreparedContent): GLRetroViewData? {
-        with(game) {
+        with(host) {
             val coreFile = cfg.coreFile
             val tag = cfg.tag
             val title = cfg.title
@@ -534,14 +652,14 @@ internal class LaunchPipeline(private val game: GameActivity) {
                     val fileName = CoreRegistry.contentName(tag, romFileName)
                     // Display → Graphics API: the core options for the API and whether the runner offers Vulkan.
                     // Vulkan that could not start here before, or this is the relaunch after it did: OpenGL ES (VulkanFallback).
-                    val vulkanFailed = intent.getBooleanExtra(EXTRA_FORCE_GLES, false) ||
+                    val vulkanFailed = activity.intent.getBooleanExtra(EXTRA_FORCE_GLES, false) ||
                         descriptor?.id in settings.vulkanFailedCores
                     val graphics = GraphicsApiOptions.resolve(frontendValues[GraphicsApiOptions.KEY], descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, vulkanFailed)
                     launchedOnVulkan = graphics.preferVulkan
                     launchEnv = graphics.env
                     // netplay link: the link options are this launch's too (a session's port, mode and peer): never saved.
                     graphicsForcedOptions = graphics.forcedOptions.keys + linkOptions.keys
-                    GLRetroViewData(game).apply {
+                    GLRetroViewData(host.activity).apply {
                         coreFilePath = coreFile
                         systemDirectory = systemDir.absolutePath
                         savesDirectory = savesDir.absolutePath
@@ -549,7 +667,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
                         // session's (NetplayLinkOptions) the user's, set even when absent.
                         // N64: Max High-Res VRAM Limit's Auto becomes a number for this device's memory (N64HiresPack.vramLimit).
                         val n64Vram = if (descriptor?.id == MUPEN64PLUS_NEXT_ID) {
-                            val total = ActivityManager.MemoryInfo().also { getSystemService(ActivityManager::class.java).getMemoryInfo(it) }.totalMem
+                            val total = ActivityManager.MemoryInfo().also { activity.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }.totalMem
                             val limit = N64HiresPack.vramLimit(options.firstOrNull { it.key == N64HiresPack.VRAM_KEY }?.value, total)
                             NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
                             mapOf(N64HiresPack.VRAM_KEY to limit)
@@ -631,7 +749,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
     }
 
     private suspend fun attachView(cfg: LaunchConfig, prepared: PreparedContent, data: GLRetroViewData) {
-        with(game) {
+        with(host) {
             val coreId = cfg.coreId
             val tag = cfg.tag
             val extraction = cfg.extraction
@@ -642,15 +760,14 @@ internal class LaunchPipeline(private val game: GameActivity) {
                     .onFailure { NxLog.w("GameActivity", "could not set $k", it) }
             }
             if (isN3ds) wii.offerN3dsMotion()
-            val view = GLRetroView(this, data)
+            val view = GLRetroView(activity, data)
             view.pictureHeld = true   // black until the first frame's layout places the picture ([PictureHold])
-            retroView = view
+            onViewCreated(view)
             speed.apply()   // a speed set before the view existed (the launch's rows reach it again in applyFrontend)
             shortcuts.pushMicSource()   // a Mic toggle tapped before the view existed
             // Not in netplay: a link cable's step may wait out the peer's hold (sio_lockstep: up to 30 s), and the session
             // has its own timeouts.
-            coreWatchdog = CoreWatchdog({ if (netplay == null) view.stepStalledMillis() else 0L }, onHung = { onCoreHung(it) })
-                .also { it.start() }
+            startCoreWatchdog { if (netplay == null) view.stepStalledMillis() else 0L }
             if (focusPaused) { view.frameSpeed = 0; view.audioEnabled = false }   // focus went to another app while loading
             // Collected before the view is added (its ON_CREATE) and long before the first frame: the runner reports a
             // change only, from an unbuffered flow, so a missed event would leave the motor wrong until the next one.
@@ -664,7 +781,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
                 // Left without HOME this session (a game's own "Wii Menu", a channel launch): the resume point on disk is an
                 // older session's, behind the game's own save on the NAND. Dropped, so the next launch boots fresh.
                 if (!wii.homeSaved) saves.dropAutoInOrder()
-                quitWithAutoState(chosen = true, autoState = false)
+                quitGame(chosen = true, autoState = false)
             }
             // Subscribed before the login (startSession, after the first frame): events are not replayed.
             achievements?.let { b ->
@@ -680,7 +797,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
                 padLayout.onCoreRunning()
                 offerLayoutTip()
             }
-            val container = findViewById<FrameLayout>(R.id.gameContainer)
+            val container = activity.findViewById<FrameLayout>(R.id.gameContainer)
             container.addView(view)
             resumeCover?.follow(view)
             lifecycle.addObserver(view)
@@ -726,7 +843,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
             }
             // Debug builds: a file named simulate_vulkan_fail in the app's files dir makes a Vulkan launch take the fallback
             // as a failed bridge setup would (no phone at hand fails it): `adb shell run-as <package> touch files/simulate_vulkan_fail`.
-            if (BuildConfig.DEBUG && launchedOnVulkan && (!intent.hasExtra(EXTRA_NETPLAY_ROLE) || gameNetplay.local) && File(filesDir, SIMULATE_VULKAN_FAIL).exists()) {
+            if (BuildConfig.DEBUG && launchedOnVulkan && (!activity.intent.hasExtra(EXTRA_NETPLAY_ROLE) || gameNetplay.local) && File(activity.filesDir, SIMULATE_VULKAN_FAIL).exists()) {
                 relaunchOnGles()
             }
         }
@@ -734,22 +851,19 @@ internal class LaunchPipeline(private val game: GameActivity) {
 
     /** The first rendered frame: the game runs; what waited for it (game time, a resume, the cheats, netplay) goes now. */
     private suspend fun onFirstFrame(cfg: LaunchConfig, view: GLRetroView) {
-        with(game) {
-            gameReady = true
+        with(host) {
+            onGameReady()
             val np = cfg.np
             val descriptor = cfg.descriptor
             val coreId = cfg.coreId
-            if (BuildConfig.DEBUG) NxTestResults.write(game, "game", "state" to "running", "tag" to gameTag, "core" to gameCoreId)
-            intent.getStringExtra(EXTRA_GAME_PATH)?.let { path ->
+            if (BuildConfig.DEBUG) NxTestResults.write(host.activity, "game", "state" to "running", "tag" to gameTag, "core" to gameCoreId)
+            activity.intent.getStringExtra(EXTRA_GAME_PATH)?.let { path ->
                 val tag = gameTag
                 val name = intentTitle ?: path.substringAfterLast('/')
                 lifecycleScope.launch {
-                    val rec = withContext(Dispatchers.IO) { GameTimeService.recorder(game) }
+                    val rec = withContext(Dispatchers.IO) { GameTimeService.recorder(host.activity) }
                     rec.start(path, tag, name)
-                    gameTime = rec
-                    // Ready while stopped (onStop already ran): close it at once, as onStop would; onStart resumes it.
-                    if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) rec.pause()
-                    startGameTimeTicker(rec)
+                    startGameTime(rec)
                 }
             }
             // A Controller Type change made while the game loaded was held back (applySegaPad): send it now.
@@ -786,10 +900,10 @@ internal class LaunchPipeline(private val game: GameActivity) {
                 }
             }
             // The launch name's hold fades now (or once its minimum is up); the resume cover under it goes on its own frames.
-            nameHold?.release { nameHold = null }
+            releaseNameHold()
             // A frame means the core loaded the game (a load error aborts the view before any): the launcher may record it.
             if (launchRecords.started(launchId)) {
-                sendBroadcast(Intent(LaunchRecords.action(game)).setPackage(packageName))   // the menu records it
+                activity.sendBroadcast(Intent(LaunchRecords.action(activity)).setPackage(activity.packageName))   // the menu records it
             }
             if (np != null && !gameNetplay.onFirstFrame(np, descriptor?.name ?: coreId)) return
             saves.resumeAtFirstFrame(view, dataRoot, paths)
@@ -809,8 +923,8 @@ internal class LaunchPipeline(private val game: GameActivity) {
      */
     private suspend fun dropStaleNdsResume(tag: String, coreId: String, romFileName: String) {
         if (tag != NdsResumeCleanup.TAG || coreId != NdsResumeCleanup.CORE_ID) return
-        val dataRoot = game.dataRoot
-        val paths = game.paths
+        val dataRoot = host.dataRoot
+        val paths = host.paths
         val dropped = withContext(Dispatchers.IO) {
             SaveSession.awaitAutoWrites()   // a Home write of this game's auto state may still be landing
             runCatching {
@@ -820,7 +934,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
                 victims.isNotEmpty()
             }.onFailure { NxLog.w("GameActivity", "stale NDS resume cleanup failed", it) }.getOrDefault(false)
         }
-        if (dropped) game.saves.dropResume()
+        if (dropped) host.saves.dropResume()
     }
 
     /**
@@ -829,15 +943,15 @@ internal class LaunchPipeline(private val game: GameActivity) {
      * Decoded off the main thread; nothing when the slot has none, or the resume already landed.
      */
     private fun showResumeCover() {
-        val saves = game.saves
+        val saves = host.saves
         val slot = saves.resumeSlot?.takeIf { saves.resumePending && it != 8 } ?: return   // slot 8 has no screenshot in minarch's scheme
-        val file = File(game.dataRoot, game.paths.thumb(slot))
-        game.lifecycleScope.launch {
+        val file = File(host.dataRoot, host.paths.thumb(slot))
+        host.lifecycleScope.launch {
             val bmp = withContext(Dispatchers.IO) { ResumeCover.decode(file) } ?: return@launch
-            if (!saves.resumePending || game.isFinishing) return@launch
-            resumeCover = ResumeCover(game, game.findViewById(R.id.gameContainer)).also { cover ->
+            if (!saves.resumePending || host.activity.isFinishing) return@launch
+            resumeCover = ResumeCover(host.activity, host.activity.findViewById(R.id.gameContainer)).also { cover ->
                 cover.show(bmp)
-                game.retroView?.let(cover::follow)   // the game view came first
+                host.retroView?.let(cover::follow)   // the game view came first
             }
         }
     }
@@ -848,7 +962,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
      */
     private fun dropResumeCover(view: GLRetroView) {
         val cover = resumeCover ?: return
-        game.lifecycleScope.launch {
+        host.lifecycleScope.launch {
             view.getGLRetroEvents().filter { it is GLRetroView.GLRetroEvents.FrameRendered }.take(ResumeCover.SETTLE_FRAMES).collect {}
             cover.fadeOut()
             if (resumeCover === cover) resumeCover = null
@@ -856,11 +970,11 @@ internal class LaunchPipeline(private val game: GameActivity) {
     }
 
     private fun observeErrors(view: GLRetroView, coreFile: String, loadFailure: (List<String>) -> String?) {
-        game.lifecycleScope.launch {
-            view.getGLRetroErrors().flowWithLifecycle(game.lifecycle, Lifecycle.State.STARTED).collect { code ->
+        host.lifecycleScope.launch {
+            view.getGLRetroErrors().flowWithLifecycle(host.lifecycle, Lifecycle.State.STARTED).collect { code ->
                 if (code == GLRetroView.ERROR_LOAD_LIBRARY) {
                     val lines = runCatching { view.getRecentCoreErrors() }.getOrDefault(emptyList())
-                    game.fail(CoreLoadFailure.message(coreFile, lines), GameActivity.START_FAILED)
+                    host.fail(CoreLoadFailure.message(coreFile, lines), GameActivity.START_FAILED)
                     return@collect
                 }
                 val name = when (code) {
@@ -873,19 +987,19 @@ internal class LaunchPipeline(private val game: GameActivity) {
                 if (code == GLRetroView.ERROR_LOAD_GAME) {
                     val lines = runCatching { view.getRecentCoreErrors() }.getOrDefault(emptyList())
                     lines.forEach { NxLog.i(TAG_LOG, "core said: $it") }
-                    loadFailure(lines)?.let { game.fail(it, GameActivity.START_FAILED); return@collect }
+                    loadFailure(lines)?.let { host.fail(it, GameActivity.START_FAILED); return@collect }
                 }
-                if (code == GLRetroView.ERROR_GL_NOT_COMPATIBLE && VulkanFallback.relaunchOnGles(game.launchedOnVulkan)) {
+                if (code == GLRetroView.ERROR_GL_NOT_COMPATIBLE && VulkanFallback.relaunchOnGles(host.launchedOnVulkan)) {
                     // netplay: a relaunch would start without the session (it is gone), so the dialog says what to do. An
                     // ended link session's relaunch ([GameNetplay.local]) is a plain launch, which relaunches as any other.
-                    if (game.intent.hasExtra(GameActivity.EXTRA_NETPLAY_ROLE) && !game.gameNetplay.local) {
-                        game.fail("Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES.", GameActivity.START_FAILED)
+                    if (host.activity.intent.hasExtra(GameActivity.EXTRA_NETPLAY_ROLE) && !host.gameNetplay.local) {
+                        host.fail("Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES.", GameActivity.START_FAILED)
                     } else {
-                        game.relaunchOnGles()
+                        host.relaunchOnGles()
                     }
                     return@collect
                 }
-                game.fail("The core reported $name", GameActivity.START_FAILED)
+                host.fail("The core reported $name", GameActivity.START_FAILED)
             }
         }
     }
@@ -907,7 +1021,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
     }
 
     private fun releaseCacheHolds() {
-        while (true) RomCache.release(game, cacheHolds.poll() ?: break)
+        while (true) RomCache.release(host.activity, cacheHolds.poll() ?: break)
     }
 
     /**
@@ -917,14 +1031,14 @@ internal class LaunchPipeline(private val game: GameActivity) {
      * and is renamed into place, the old stamp dropped first, so a kill mid-copy leaves no torn copy that passes for whole.
      */
     private fun copyToCache(ref: ContentRef, fileName: String): File {
-        val refs = game.refs
-        val root = RomCache.root(game).apply { mkdirs() }
+        val refs = host.refs
+        val root = RomCache.root(host.activity).apply { mkdirs() }
         val target = File(root, fileName)
         val stampFile = File(root, cacheSiblingName(fileName, REAL_PATH_STAMP))
         val part = File(root, cacheSiblingName(fileName, ".part"))
         RomCache.withEntryLock(root, target.name) {
-            RomCache.hold(game, target.name); keepCacheHold(target.name)
-            RomCache.hold(game, stampFile.name); keepCacheHold(stampFile.name)   // a swept stamp would only cost a recopy, but keep it
+            RomCache.hold(host.activity, target.name); keepCacheHold(target.name)
+            RomCache.hold(host.activity, stampFile.name); keepCacheHold(stampFile.name)   // a swept stamp would only cost a recopy, but keep it
             val size = refs.size(ref) ?: -1L
             val stamp = realPathCopyStamp(size, refs.lastModified(ref))
             val stored = runCatching { stampFile.takeIf { it.isFile }?.readText() }.getOrNull()
@@ -933,7 +1047,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
                 return target.also { RomCache.touch(it) }
             }
             // The .part is its own top-level name to the sweep: held while it grows, so a big ISO's is never trimmed mid-copy.
-            RomCache.hold(game, part.name)
+            RomCache.hold(host.activity, part.name)
             try {
                 val input = refs.openInput(ref) ?: throw IOException("Cannot open input stream")
                 input.use { source -> part.outputStream().use { source.copyTo(it, 1 shl 20) } }
@@ -944,7 +1058,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
                     .onFailure { NxLog.w("GameActivity", "could not stamp the cache copy of $fileName", it) }
             } finally {
                 part.delete()
-                RomCache.release(game, part.name)
+                RomCache.release(host.activity, part.name)
             }
             return target
         }
@@ -958,18 +1072,18 @@ internal class LaunchPipeline(private val game: GameActivity) {
      */
     private suspend fun n64HiresPack(values: Map<String, String>, onVulkan: Boolean, content: ContentRef, inner: File?, home: ContentRef?): List<VirtualFile> {
         if (!N64HiresPack.wanted(values, onVulkan)) return emptyList()
-        val refs = game.refs
+        val refs = host.refs
         val head = runCatching { (inner?.inputStream() ?: refs.openInput(content))?.use { readUpTo(it, N64HiresPack.HEADER_BYTES) } }.getOrNull()
         val name = head?.let(N64HiresPack::headerName)
             ?: return emptyList<VirtualFile>().also { NxLog.w(TAG_LOG, "N64 hi-res pack: no ROM header name") }
-        val source = AndroidRomsSources.of(game)
+        val source = AndroidRomsSources.of(host.activity)
         val fileName = N64HiresPack.fileName(name)
         suspend fun under(root: ContentRef?, path: List<String>) = runCatching {
             var dir = root ?: return@runCatching null
             for (part in path) dir = source.child(dir, part)?.takeIf { it.isDirectory }?.ref ?: return@runCatching null
             source.child(dir, fileName)?.takeIf { !it.isDirectory }
         }.getOrNull()
-        val folder = game.intent.getStringExtra(GameActivity.EXTRA_FOLDER_URI)?.takeIf { it.isNotEmpty() }?.let(::ContentRef)
+        val folder = host.activity.intent.getStringExtra(GameActivity.EXTRA_FOLDER_URI)?.takeIf { it.isNotEmpty() }?.let(::ContentRef)
         val pack = under(home, N64HiresPack.HOME_PATH) ?: under(folder, listOf(N64HiresPack.FOLDER))
             ?: return emptyList<VirtualFile>().also {
                 NxLog.i(TAG_LOG, "N64 hi-res pack: no $fileName in ${N64HiresPack.HOME_PATH.joinToString("/")}/ or ${N64HiresPack.FOLDER}/")
@@ -985,7 +1099,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
      * ([CoreConfigStore.migrateFceummTurbo]). Kept in its own prefs file, written once.
      */
     private fun fceummTurboSince(): Long {
-        val prefs = Prefs.open(game, "nx-migrations")
+        val prefs = Prefs.open(host.activity, "nx-migrations")
         prefs.getLong(KEY_FCEUMM_TURBO_SINCE, 0L).takeIf { it > 0L }?.let { return it }
         return System.currentTimeMillis().also { prefs.edit().putLong(KEY_FCEUMM_TURBO_SINCE, it).commit() }
     }

@@ -261,49 +261,49 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val liveGameStore by lazy { LiveGameStore.of(this) }
 
     override var retroView: GLRetroView? = null
-        internal set
-    internal val input = GameInputRouter(this)
-    internal val padLayout = PadLayoutController(this, input)
-    internal val renderer = FrontendRenderer(this, input, padLayout)
-    internal val dual = DualScreenController(this, input, padLayout, renderer)
-    internal val menu = InGameMenuController(this, input, padLayout, renderer, dual)
-    internal val shortcuts = ShortcutsMicController(this, padLayout, renderer, menu, dual)
+        private set
+    private val input = GameInputRouter(this)
+    private val padLayout = PadLayoutController(this, input)
+    private val renderer = FrontendRenderer(this, input, padLayout)
+    private val dual = DualScreenController(this, input, padLayout, renderer)
+    private val menu = InGameMenuController(this, input, padLayout, renderer, dual)
+    private val shortcuts = ShortcutsMicController(this, padLayout, renderer, menu, dual)
     override var inputManager: InputManager? = null
         private set
 
     /** The pad table for this game (Sega pad type resolved at launch and on a Controller Type change; [PadMap.IDENTITY] for DC). */
     override var padMap: PadMap = PadMap.IDENTITY
-        internal set
+        private set
     /** The resolved Sega pad (Sega pad tags only; null = unknown or another console). */
-    internal var segaPad: SegaPad? = null
+    private var segaPad: SegaPad? = null
     /** The cart header's pad type read at launch (null = none read), kept so Auto can be resolved again mid-game. */
-    internal var segaHeader: SegaPad? = null
+    private var segaHeader: SegaPad? = null
     /** The Controller Type the core was launched with (Sega pad tags only), to catch up a change made during load. */
-    internal var launchedSegaSetting: String? = null
+    private var launchedSegaSetting: String? = null
     /** The 3DS game's title read from its file at launch (null = not read: compressed, homebrew, unreadable). */
-    internal var n3dsTitle: N3dsTitle? = null
+    private var n3dsTitle: N3dsTitle? = null
     /** The 3DS pad draws the New 3DS controls (ZL, ZR, the C-stick): New 3DS Controls resolved ([N3dsNewControls]). */
-    internal var n3dsNew = false
+    private var n3dsNew = false
     override val wiiPad: WiiPad? get() = wii.pad
     /** Ends the game if its core hangs inside a frame ([onCoreHung]); from the view's creation to the end of onDestroy. */
-    internal var coreWatchdog: CoreWatchdog? = null
+    private var coreWatchdog: CoreWatchdog? = null
     override val isWii: Boolean get() = WiiOptions.appliesTo(gameTag) && !wii.gameCube
     override val isDolphin: Boolean get() = gameCoreId == WiiDolphinController.DOLPHIN_ID
     /** This launch asked the core for Vulkan (Display → Graphics API): a failure to start it relaunches on GLES. */
-    @Volatile internal var launchedOnVulkan = false
+    @Volatile private var launchedOnVulkan = false
     /**
      * This screen is being recreated to start the game again on OpenGL ES ([relaunchOnGles]): it writes no auto state
      * and shows no failure dialog.
      */
     private var relaunching = false
-    @Volatile internal var launchEnv: Map<String, String?> = emptyMap()   // Graphics API's core environment for this launch
+    @Volatile private var launchEnv: Map<String, String?> = emptyMap()   // Graphics API's core environment for this launch
     /**
      * The core options this launch's Graphics API forced (SwanStation's renderer on Vulkan), and a netplay link session's
      * (NetplayLinkOptions, still set once the game is local): locked for the session, so hidden from Core Options, never
      * applied by a restore, and saved with their stored value ([CoreConfig.valuesToSave]).
      */
     @Volatile override var graphicsForcedOptions: Set<String> = emptySet()
-        internal set
+        private set
 
     override fun onInputDevicesChanged() {
         relayoutPad()
@@ -322,71 +322,71 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     override var focusPaused = false
         private set
-    internal val saves = SaveSession(this, renderer, menu)
-    internal val wii = WiiDolphinController(this, input, saves)
-    private val launchPipeline = LaunchPipeline(this)
+    private val saves = SaveSession(this, renderer, menu)
+    private val wii = WiiDolphinController(this, input, saves)
+    private val launchPipeline = LaunchPipeline(LaunchState())
     override val slotsUi: androidx.compose.runtime.State<List<SlotUi>> get() = saves.slotsUi
     override var lastSlotCache: Int?
         get() = saves.lastSlotCache
         set(value) { saves.lastSlotCache = value }
     override val saveStates: SaveStates? get() = saves.saveStates
     /** Saves, states, configs and `.minui` markers: [DataRoot.settled] once per session. */
-    internal lateinit var dataRoot: File
+    private lateinit var dataRoot: File
     /** This screen holds off the data move ([DataRoot.useBegin]) until it is destroyed. */
-    internal var usingData = false
+    private var usingData = false
     /** Overlays and shaders: app-private for good ([DataRoot.private]). */
     override lateinit var privateRoot: File
     override lateinit var shaderRoots: Shaders.Roots
-        internal set
-    internal lateinit var paths: NxPaths
+        private set
+    private lateinit var paths: NxPaths
     override var configStore: CoreConfigStore? = null
-        internal set
+        private set
     override var configSource = ConfigSource.NONE
     override var lockedOptions: Set<String> = emptySet()
     override var restartOnlyOptions: Set<String> = emptySet()   // hidden from Core Options; applied only at game start
-        internal set
+        private set
     override var forcedOptions: Set<String> = emptySet()   // the descriptor's lockedOptions: defaults a .cfg cannot change
-        internal set
+        private set
     override var hiddenValues: Map<String, Set<String>> = emptyMap()   // the descriptor's values never offered nor read from a .cfg
-        internal set
+        private set
     override var descriptorDefaults: Map<String, String> = emptyMap()
-        internal set
+        private set
     override var storedValues: Map<String, String> = emptyMap()   // the config's resolved values (launch, or the last restore)
     override var cheatsSupported = true   // false for a core that ignores cheats (the panels hide their Cheats tab); set at launch
-        internal set
+        private set
     @Volatile override var gameReady = false   // set on the first rendered frame; SRAM is only valid after load
-        internal set
+        private set
     // This launch's record: marked started on the first frame (the game is recent), dropped on a refusal or finish.
-    internal val launchRecords by lazy { LaunchRecords.of(this) }
-    internal val launchId by lazy { intent.getLongExtra(EXTRA_LAUNCH_ID, LaunchRecords.NONE) }
+    private val launchRecords by lazy { LaunchRecords.of(this) }
+    private val launchId by lazy { intent.getLongExtra(EXTRA_LAUNCH_ID, LaunchRecords.NONE) }
     private var failShown = false   // the could-not-start dialog is up (it only leaves by finishing)
     override var quitting = false   // set by quitWithAutoState: quit is single-shot, the menu freezes, onStop skips its auto state
         private set
     override val resumePending: Boolean get() = saves.resumePending
     // The launch sequence's name (a Minimal launch; null: none, the screen opens without one) and its hold over the window.
     private val launchName by lazy { launchNameFrom(intent.extras) }
-    internal var nameHold: LaunchNameHold? = null   // main thread only; null once it has gone
+    private var nameHold: LaunchNameHold? = null   // main thread only; null once it has gone
     private val heldDowns = HashSet<Int>()   // key codes whose press the hold swallowed: their release is swallowed too
     private val holdTouches = HoldTouchGate()   // touches the hold swallows (the on-screen pad stays lit above it)
     /** Game time for this activity's game (null until the first frame, or when the launch had no library path). */
-    internal var gameTime: GameTimeRecorder? = null
+    private var gameTime: GameTimeRecorder? = null
     private var gameTimeTicker: Job? = null
 
     // ---- frontend (display) settings ----
     override var gameTag = "UNKNOWN"
-        internal set
+        private set
     override var gameCoreId = ""
-        internal set
+        private set
     /** Debug builds: when this screen was created; game.json's autoState names only a slot 9 written since. */
     private var debugStartedAt = 0L
     /** Players this game's core gives ([CoreRegistry.playersFor]); 1 until launch. */
     override var playerCount = 1
-        internal set
+        private set
     override var frontendValues: Map<String, String> = FrontendOptions.defaults()   // every frontend key, as in effect now
-        internal set
+        private set
     /** The core can rewind ([com.nxredux.mobile.runner.CoreDescriptor.rewind]); false until the launch resolves the core. */
     override var canRewind = false
-        internal set
+        private set
     /**
      * Fast forward and rewind on the view; the shortcuts drive it ([onShortcut]), the speed rows configure it ([applyFrontend]).
      * Off for a netplay session ([SpeedController.setSession]): a link session's end turns it back on ([becomeLocal]), a
@@ -398,25 +398,25 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         SpeedController(lifecycleScope, lifecycle, onTiles = { dual.refreshDualPanel(); menu.menuModel?.let(menu::publishSpeed); shortcuts.refreshTouchShortcuts() }) { retroView }
     }
     // Settings → Controls → Game rumble, read once per game: each port's rumble on its own pad; port 0 falls back to the phone.
-    internal val gameRumble by lazy { settings.gameRumble }
-    internal val intentTitle: String? get() = intent.getStringExtra(EXTRA_TITLE)
-    internal val intentTag: String? get() = intent.getStringExtra(EXTRA_TAG)
+    private val gameRumble by lazy { settings.gameRumble }
+    private val intentTitle: String? get() = intent.getStringExtra(EXTRA_TITLE)
+    private val intentTag: String? get() = intent.getStringExtra(EXTRA_TAG)
     // One instance per game: the game process's prefs refresh in place (Prefs.refreshGame), so reads stay current.
     override val settings by lazy { AndroidAppSettings(this) }
     /** Each port's rumble (index = port); empty until the launch ([LaunchPipeline]) builds it, so every use must tolerate empty. */
     override var rumbles: Array<RumbleMotor> = emptyArray()
-        internal set
+        private set
 
     // ---- Nintendo DS screens (NdsLayout regions) ----
     override val ndsRegions: List<NdsRegion> get() = renderer.ndsRegions
     override val secondNdsRegions: List<NdsRegion> get() = renderer.secondNdsRegions
     override var ndsRenderMode: String? = null              // melonds_render_mode this game started with (the notice's)
-        internal set
+        private set
     override var ndsFellBack = false                        // OpenGL was asked for, the core draws in software ([NdsRenderer.showFallbackNotice])
-        internal set
+        private set
 
     // ---- DS / 3DS 3D resolution (Nds3dResolution, N3ds3dResolution): melonDS's GL scale, Azahar's factor follow the layout ----
-    internal val res3d = Res3dController(this, renderer)
+    private val res3d = Res3dController(this, renderer)
     override val ndsView: com.nxredux.mobile.options.NdsView?
         get() = if (isNds || isN3ds) com.nxredux.mobile.options.NdsView(isLandscape(), renderer.ndsControllerMode()) else null
     override val nds3dDisplayMax: Int? get() = res3d.displayMax
@@ -440,16 +440,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     // ---- cheats ----
     override var cheatSet: CheatSet = CheatSet.EMPTY   // resolved on IO after start; toggles live here until Save Changes
-    internal var dolphinPlayerCheats: CheatSet? = null  // the player's own set; kept while Dolphin's built-in file is not written yet
-    internal var dolphinSavedCheats: List<String> = emptyList()
-    internal var dolphinBuiltInPath: String? = null     // named after the ROM-cache copy Dolphin loads
+    private var dolphinPlayerCheats: CheatSet? = null  // the player's own set; kept while Dolphin's built-in file is not written yet
+    private var dolphinSavedCheats: List<String> = emptyList()
+    private var dolphinBuiltInPath: String? = null     // named after the ROM-cache copy Dolphin loads
     override var cheatsLoad: Job? = null               // done once cheatSet holds the resolved (and saved-state-applied) set
-        internal set
+        private set
     override var cheatsFolder = ""                     // the folder the empty Cheats tab names (Cheats.folder), set at start
-        internal set
+        private set
 
     // ---- netplay (Wi-Fi lockstep, see the "netplay" block) ----
-    internal val gameNetplay = GameNetplay(this)
+    private val gameNetplay = GameNetplay(this)
     override val netplay: NetplaySession? get() = gameNetplay.session
     override val netplayEnded: Boolean get() = gameNetplay.ended
     override val netplayNow: NetplaySession? get() = gameNetplay.now
@@ -879,7 +879,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * ([CoreHangNotice]). The battery save was written when the menu last opened and with the last auto state; play time
      * keeps its last minute ([startGameTimeTicker]).
      */
-    internal fun onCoreHung(stalledMillis: Long) {
+    private fun onCoreHung(stalledMillis: Long) {
         val title = intentTitle ?: "The game"
         NxLog.e("GameActivity", "the core has been stuck in one frame for ${stalledMillis / 1000} s: closing $title")
         runCatching { CoreHangNotice.record(applicationContext, title) }
@@ -889,7 +889,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /** A foreground kill (crash, OOM) closes the session at the last touch: keep it at most a minute old while started. */
-    internal fun startGameTimeTicker(rec: GameTimeRecorder) {
+    private fun startGameTimeTicker(rec: GameTimeRecorder) {
         gameTimeTicker?.cancel()
         if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) { gameTimeTicker = null; return }   // onStart restarts it
         gameTimeTicker = lifecycleScope.launch { while (true) { delay(GameTimeStore.TOUCH_MS); rec.touch() } }
@@ -926,7 +926,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * live one the intent. The old screen's onDestroy (the core's native destroy, the session release) runs before the
      * new onCreate; not finishing, it keeps the launch for it.
      */
-    internal fun relaunchOnGles() {
+    private fun relaunchOnGles() {
         if (isFinishing || relaunching || failShown) return
         relaunching = true
         settings.recordVulkanFailure(gameCoreId)
@@ -977,7 +977,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /** Opens the game's content and companions, SAF documents or file refs. */
-    internal val refs by lazy { AndroidRefs(contentResolver) }
+    private val refs by lazy { AndroidRefs(contentResolver) }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
@@ -1050,12 +1050,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * Half-folded with no second screen in use pins the core's swap ([DualScreen.n3dsForcedOptions]); never under netplay,
      * whose core options stay as the session launched them.
      */
-    internal fun n3dsHalfFoldedPin(mode: DualMode): Boolean = n3dsSkinStack() && mode == DualMode.OFF && netplayNow == null
+    private fun n3dsHalfFoldedPin(mode: DualMode): Boolean = n3dsSkinStack() && mode == DualMode.OFF && netplayNow == null
 
     /** The core's swap was last pinned by half-folding ([syncN3dsCore]): flat again puts the user's values back. */
-    internal var n3dsSwapPinnedHalfFolded = false
+    private var n3dsSwapPinnedHalfFolded = false
     /** The player's Swap Screen Mode (Toggle / Hold), which the app's SWAP follows under video views. */
-    internal var n3dsSwapMode = "Toggle"
+    private var n3dsSwapMode = "Toggle"
 
     /**
      * A 3DS under a pad skin cuts its screens from the Stacked frame: the core is then Stacked with equal screens
@@ -1063,10 +1063,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * calls [syncN3dsCore]. A second screen's split still wins ([withN3dsSplit]). Not under netplay, which keeps the
      * player's layout (drawn whole in the skin).
      */
-    internal fun n3dsSkinStack(): Boolean = isN3ds && padLayout.skinShown && netplayNow == null
+    private fun n3dsSkinStack(): Boolean = isN3ds && padLayout.skinShown && netplayNow == null
 
     /** On a DS or 3DS game where SELECT + Left / Right changes the layout: the tip saying so, until hidden from its button ([LayoutTip]). */
-    internal fun offerLayoutTip() {
+    private fun offerLayoutTip() {
         if (!LayoutTip.due((isN3ds || isNds) && netplayNow == null, padLayout.skinShown, input.skinLayouts, settings.layoutTipHidden)) return
         // up until closed: Close, or its button to hide it for good
         input.showNotice(LayoutTip.text(ds = isNds), com.nxredux.mobile.ui.nx.NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) { settings.layoutTipHidden = true }
@@ -1077,7 +1077,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * The 3DS touch screen's proportion for the row in use ([N3dsOptions.stackedSmallProportion]): Large screen in portrait
      * fills the height left in the picture's space when it is known ([FrontendRenderer.n3dsPictureSpace]).
      */
-    internal fun n3dsProportion(landscape: Boolean = isLandscape(), screen: ScreenClass = screenClass()): String =
+    private fun n3dsProportion(landscape: Boolean = isLandscape(), screen: ScreenClass = screenClass()): String =
         N3dsOptions.stackedSmallProportion(frontendValues, landscape, renderer.ndsControllerMode(), screen, n3dsSkinStack(), renderer.n3dsPictureSpace)
 
     /**
@@ -1222,7 +1222,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /** Sends Controller Type [setting] to the running core on the emulation thread (each player's port device or core option). */
-    internal fun sendSegaPad(setting: String) {
+    private fun sendSegaPad(setting: String) {
         if (netplayNow != null) return   // netplay: the pad type is fixed for the session (set at launch)
         val view = retroView
         val changes = SegaPadType.liveChanges(gameCoreId, setting, segaHeader, playerCount)
@@ -1281,13 +1281,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         view.queueEvent { runCatching { view.updateVariables(*vars.toTypedArray()) }.onFailure { NxLog.w("GameActivity", "setting options failed", it) } }
     }
 
-    internal suspend fun readDolphinBuiltIn(): String? = withContext(Dispatchers.IO) {
+    private suspend fun readDolphinBuiltIn(): String? = withContext(Dispatchers.IO) {
         val file = File(dolphinBuiltInPath ?: return@withContext null)
         if (file.isFile) runCatching { file.readText() }.onFailure { NxLog.w("GameActivity", "cannot read Dolphin's cheats", it) }.getOrNull() else null
     }
 
     /** First launch of a Wii/GameCube game: Dolphin has written its built-in list by the first frame, so combine again. */
-    internal suspend fun refreshDolphinCheats() {
+    private suspend fun refreshDolphinCheats() {
         val player = dolphinPlayerCheats ?: return
         val builtIn = readDolphinBuiltIn() ?: return
         dolphinPlayerCheats = null
@@ -1295,7 +1295,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         publishCheats()
     }
 
-    internal fun publishCheats() {
+    private fun publishCheats() {
         withMenu { it.setCheats(cheatSet.entries, cheatsFolder, cheatSet.expected) }
         dual.refreshDualPanel()
     }
@@ -1323,7 +1323,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * Quit: single-shot, then the quit's saves ([SaveSession.writeOnQuit]) and finish. [chosen]: the player picked Quit
      * (the slot file then points at the auto state); [autoState] false keeps the resume point as is.
      */
-    internal fun quitWithAutoState(chosen: Boolean, autoState: Boolean = true) {
+    private fun quitWithAutoState(chosen: Boolean, autoState: Boolean = true) {
         if (quitting) return   // single-shot: a second job could serialize after the core is destroyed
         quitting = true
         GameHeartbeat.start(this)   // the menu may be waiting for this process to end: its saves can take a while
@@ -1376,7 +1376,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * Before the view exists: an RA console, signed in and enabled, gets a bridge and a background hash. An archive's
      * unpacked [inner] ROM is what is hashed, and its name refines the console.
      */
-    internal fun prepareAchievements(tag: String, romFileName: String, content: ContentRef, inner: File?) {
+    private fun prepareAchievements(tag: String, romFileName: String, content: ContentRef, inner: File?) {
         if (!settings.raEnabled || settings.raToken == null) return
         val consoleId = RaConsoles.consoleId(tag, inner?.name ?: romFileName) ?: return
         val controller = AchievementsService.controller(this, settings, AndroidLibraryIndexStore(this))
@@ -1435,7 +1435,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
-    internal fun onAchievementEvent(e: RaEvent) {
+    private fun onAchievementEvent(e: RaEvent) {
         val b = achievements ?: return
         val now = SystemClock.elapsedRealtime()
         val toastMs = settings.raNotificationSeconds * 1000L
@@ -1495,7 +1495,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /** Display-only overlay over the game area (portrait: above the pad band while it is shown), below the menu; takes no input. */
-    internal fun ensureNotificationsView() {
+    private fun ensureNotificationsView() {
         if (notificationsView != null) return
         val view = ComposeView(this).apply {
             isClickable = false
@@ -1801,6 +1801,120 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun superGenericMotionEvent(event: MotionEvent?): Boolean = super.onGenericMotionEvent(event)
     override fun superKeyDown(keyCode: Int, event: KeyEvent): Boolean = super.onKeyDown(keyCode, event)
     override fun superKeyUp(keyCode: Int, event: KeyEvent): Boolean = super.onKeyUp(keyCode, event)
+
+    /**
+     * [LaunchPipeline]'s view of this screen: the only way in to the state the launch settles, so those setters stay
+     * private here. Every member reads or writes this activity's own, so nothing is copied or applied later.
+     */
+    private inner class LaunchState : LaunchHost {
+        private val game = this@GameActivity
+        override val lifecycle: Lifecycle get() = game.lifecycle
+        override val activity: ComponentActivity get() = game
+        override val input get() = game.input
+        override val padLayout get() = game.padLayout
+        override val renderer get() = game.renderer
+        override val dual get() = game.dual
+        override val shortcuts get() = game.shortcuts
+        override val saves get() = game.saves
+        override val wii get() = game.wii
+        override val res3d get() = game.res3d
+        override val gameNetplay get() = game.gameNetplay
+        override val speed get() = game.speed
+        override val settings get() = game.settings
+        override val refs get() = game.refs
+        override val gameRumble get() = game.gameRumble
+        override val launchRecords get() = game.launchRecords
+        override val launchId get() = game.launchId
+        override val intentTag get() = game.intentTag
+        override val intentTitle get() = game.intentTitle
+        override val netplay get() = game.netplay
+        override val achievements get() = game.achievements
+        override val focusPaused get() = game.focusPaused
+        override val quitting get() = game.quitting
+        override val isDolphin get() = game.isDolphin
+        override val isDc get() = game.isDc
+        override val isN3ds get() = game.isN3ds
+        override val retroView get() = game.retroView
+
+        override var usingData by game::usingData
+        override var dataRoot by game::dataRoot
+        override var privateRoot by game::privateRoot
+        override var shaderRoots by game::shaderRoots
+        override var paths by game::paths
+        override var gameTag by game::gameTag
+        override var gameCoreId by game::gameCoreId
+        override var playerCount by game::playerCount
+        override var rumbles by game::rumbles
+        override var canRewind by game::canRewind
+        override var padMap by game::padMap
+        override var segaPad by game::segaPad
+        override var segaHeader by game::segaHeader
+        override var launchedSegaSetting by game::launchedSegaSetting
+        override var n3dsTitle by game::n3dsTitle
+        override var n3dsNew by game::n3dsNew
+        override var n3dsSwapMode by game::n3dsSwapMode
+        override var n3dsSwapPinnedHalfFolded by game::n3dsSwapPinnedHalfFolded
+        override var ndsRenderMode by game::ndsRenderMode
+        override var ndsFellBack by game::ndsFellBack
+        override var launchedOnVulkan by game::launchedOnVulkan
+        override var launchEnv by game::launchEnv
+        override var graphicsForcedOptions by game::graphicsForcedOptions
+        override var frontendValues by game::frontendValues
+        override var configStore by game::configStore
+        override var configSource by game::configSource
+        override var lockedOptions by game::lockedOptions
+        override var storedValues by game::storedValues
+        override var restartOnlyOptions by game::restartOnlyOptions
+        override var forcedOptions by game::forcedOptions
+        override var hiddenValues by game::hiddenValues
+        override var descriptorDefaults by game::descriptorDefaults
+        override var cheatsSupported by game::cheatsSupported
+        override var cheatsFolder by game::cheatsFolder
+        override var cheatSet by game::cheatSet
+        override var cheatsLoad by game::cheatsLoad
+        override var dolphinPlayerCheats by game::dolphinPlayerCheats
+        override var dolphinSavedCheats by game::dolphinSavedCheats
+        override var dolphinBuiltInPath by game::dolphinBuiltInPath
+
+        override fun onViewCreated(view: GLRetroView) { game.retroView = view }
+        override fun onGameReady() { game.gameReady = true }
+        override fun startCoreWatchdog(stalledMillis: () -> Long) {
+            game.coreWatchdog = CoreWatchdog(stalledMillis, onHung = { onCoreHung(it) }).also { it.start() }
+        }
+        override fun startGameTime(rec: GameTimeRecorder) {
+            game.gameTime = rec
+            // Ready while stopped (onStop already ran): close it at once, as onStop would; onStart resumes it.
+            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) rec.pause()
+            startGameTimeTicker(rec)
+        }
+        override fun releaseNameHold() { game.nameHold?.release { game.nameHold = null } }
+
+        override fun fail(message: String, title: String) = game.fail(message, title)
+        override fun relaunchOnGles() = game.relaunchOnGles()
+        override fun quitGame(chosen: Boolean, autoState: Boolean) = game.quitWithAutoState(chosen, autoState)
+        override fun toast(msg: String) = game.toast(msg)
+        override fun isLandscape() = game.isLandscape()
+        override fun screenClass() = game.screenClass()
+        override fun n3dsSkinStack() = game.n3dsSkinStack()
+        override fun n3dsHalfFoldedPin(mode: DualMode) = game.n3dsHalfFoldedPin(mode)
+        override fun n3dsProportion() = game.n3dsProportion()
+        override fun relayoutPad() = game.relayoutPad()
+        override fun dropPadProfile() = game.dropPadProfile()
+        override fun applyFrontend(values: Map<String, String>) = game.applyFrontend(values)
+        override fun sendSegaPad(setting: String) = game.sendSegaPad(setting)
+        override fun offerLayoutTip() = game.offerLayoutTip()
+        override fun ensureNotificationsView() = game.ensureNotificationsView()
+        override fun publishMenuShaders() = game.publishMenuShaders()
+        override fun withMenu(block: (InGameMenuModel) -> Unit) = game.withMenu(block)
+        override fun publishNds3d(model: InGameMenuModel) = game.publishNds3d(model)
+        override fun publishCheats() = game.publishCheats()
+        override fun applyCheats(view: GLRetroView) = game.applyCheats(view)
+        override suspend fun readDolphinBuiltIn() = game.readDolphinBuiltIn()
+        override suspend fun refreshDolphinCheats() = game.refreshDolphinCheats()
+        override fun prepareAchievements(tag: String, romFileName: String, content: ContentRef, inner: File?) =
+            game.prepareAchievements(tag, romFileName, content, inner)
+        override fun onAchievementEvent(e: RaEvent) = game.onAchievementEvent(e)
+    }
 }
 
 /** These options with a second-screen [split]'s fixed ones in place of the same keys; unchanged without one. */
