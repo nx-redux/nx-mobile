@@ -42,7 +42,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | melondsds | JesseTG/melonds-ds | f394adbacb5722ee97c1b37c8064da9a25818310 (v1.4.0) | cmake (JIT, GLES 3.2 port of the new GL renderer, patched; 11 FetchContent deps pinned offline; 6.6 MB stripped) | 0:50 |
 | mupen64plus_next | libretro/mupen64plus-libretro-nx | 6752836de8b224febfd5708444755b77712ac939 | ndk-build (GLES3, patched: cheat code parts; hi-res packs read through the VFS) | 0:20 |
 | ppsspp | hrydgard/ppsspp | d4e3c7eb2bf0ec9241621b3752cd3e5406178c78 | cmake (patched: cheat slots) | 16:24 |
-| race | libretro/race | 171950ea64c96ead503340ed60fa7ba18f56325c | ndk-build | 0:04 |
+| race | libretro/race | c7810dd7f172827bfa2004813bc000b13786636b | ndk-build (patched: old states) | 0:04 |
 | mednafen_pce_fast | libretro/beetle-pce-fast-libretro | 52675734da114a19b3705f03906b1455f3d76644 | ndk-build | 0:05 |
 | mednafen_vb | libretro/beetle-vb-libretro | d5ae54c8e23b573a3b34e888b2d48a588027e92c | ndk-build | 0:03 |
 | handy | libretro/libretro-handy | bc55d462f0b2d6b073ea93dc552ebd73cec60fd1 | ndk-build | 0:03 |
