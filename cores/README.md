@@ -51,7 +51,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | a5200 | libretro/a5200 | 40c6f2f1ad4a3145b328d5baaf010fae6c7e752b | ndk-build | 0:03 |
 | mednafen_wswan | libretro/beetle-wswan-libretro | 4b01295838ea89e3f1355bbe4cb5cf98aa6108cd (HEAD on 2026-09-25; no Brick pin) | ndk-build | 0:01 |
 | mednafen_supafaust | libretro/supafaust | 642d1d1b6684aa7e306a02a89885f3f5456a5157 | ndk-build (patched: cheats, arm64 timed wait) | 0:07 |
-| pokemini | libretro/PokeMini | 78656d4615691c393e65e48672ce5fff5b1f97d3 | ndk-build (patched) | 0:04 |
+| pokemini | libretro/PokeMini | 132111b76343559860532a1ccc094f93f1ed5650 | ndk-build (patched) | 0:04 |
 | fake08 | jtothebell/fake-08 | 814991a2571ad3970e386cef48f3b148aa1c27b9 | ndk-build (`platform/libretro`, `libfake08.so`) | 0:09 |
 | prboom | libretro/libretro-prboom | 4849268e7342494193f2bbf2d0128a751cf58da7 | ndk-build (+ `prboom.wad`; 3.4 MB stripped) | 0:05 |
 | gpsp | libretro/gpsp | 5819380c2ffb0900219d700a382ee68c464ebb99 | ndk-build (dynarec, patched; link) | 0:12 |
@@ -168,9 +168,9 @@ Deviations (build flags only, no source patch): `mednafen_wswan_FLAGS = -C jni`,
 run 2026-09-23. Per-core times are from `output/*.so` mtimes relative to the run start (cores build
 sequentially), so each includes that core's shallow clone; ppsspp dominates because of its recursive
 submodule clone (ffmpeg, glslang, SPIRV-Cross, ...) and CMake build. `mgba` builds with CMake, not
-ndk-build, because upstream ships no libretro `Android.mk`. Patches: `patches/pokemini.patch` (nx-redux's resume-audio patch, verbatim so states cross with the Brick: the first state
-load after start is deferred 40 frames so audio resumes, and `source/PokeMini.c`'s state loader reads the audio chunk
-under `"AUD-"` instead of `"LCD-"`, an emulation-source fix; the only nx-redux source patch carried over) (pcsx_rearmed's
+ndk-build, because upstream ships no libretro `Android.mk`. Patches: `patches/pokemini.patch` (nx-redux's resume-audio patch, its libretro.c part: the first state
+load after start is deferred 40 frames so audio resumes; since the 2026-11-08 bump its `source/PokeMini.c` part, the
+state loader reading the audio chunk under `"AUD-"` instead of `"LCD-"`, is upstream) (pcsx_rearmed's
 build-path patch went with the 2026-11-07 pin, which has upstream's fix 6f230b1; the Brick stays on 6eb679d0, patched there,
 until nx-redux is bumped to match). Two staging
 deviations: ppsspp's `assets/` as `system/PPSSPP/`, and prboom's `prboom.wad` (its own game data, in the repo) as
