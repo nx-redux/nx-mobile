@@ -44,7 +44,10 @@ data class CheatDbManifest(
         /** Stored when the server sent no Last-Modified: an update check then always downloads. */
         const val UNKNOWN_STAMP = "installed"
 
-        /** Null when the header line is missing or names another version. Blank and `#` lines are skipped. */
+        /**
+         * Null when the header line is missing or names another version. Blank and `#` lines are skipped, and so is a
+         * path the tool never writes ([isInstalledPath]).
+         */
         fun parse(text: String): CheatDbManifest? {
             val lines = text.replace("\r\n", "\n").replace('\r', '\n').split('\n')
             if (lines.firstOrNull()?.trim() != HEADER) return null
@@ -70,10 +73,17 @@ data class CheatDbManifest(
                     }
                     continue
                 }
-                files += line
+                if (isInstalledPath(line)) files += line
             }
             return CheatDbManifest(stamp, installedAt, files, tags, patchesStamp, chtCommit)
         }
+
+        /**
+         * Whether [path] is one a source writes ([CheatDbSource.owns]) with no `.`/`..` segment: the manifest is a plain
+         * file on shared storage, and Remove deletes what it lists.
+         */
+        fun isInstalledPath(path: String): Boolean =
+            path.split('/').none { it.isEmpty() || it == "." || it == ".." } && CheatDbSource.entries.any { it.owns(path) }
 
         private fun tagOf(path: String): String = path.split('/').getOrNull(1) ?: ""
     }

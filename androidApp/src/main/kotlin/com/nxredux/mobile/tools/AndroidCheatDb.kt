@@ -141,14 +141,7 @@ class AndroidCheatDb(context: Context) : CheatDbPlatform {
         Unit
     }
 
-    override suspend fun deleteFiles(files: List<String>) = withContext(Dispatchers.IO) {
-        val root = sdRoot
-        val targets = files.map { File(root, it) }
-        for ((rel, f) in files.zip(targets)) {
-            if (f.exists() && !f.delete()) NxLog.w(TAG, "could not delete $rel")
-        }
-        CheatDbFiles.pruneFolders(targets, root)
-    }
+    override suspend fun deleteFiles(files: List<String>) = withContext(Dispatchers.IO) { CheatDbFiles.delete(sdRoot, files) }
 
     /** GitHub's release link answers with a redirect to its asset host (https to https, followed); buildbot answers directly. */
     private fun open(method: String, source: CheatDbSource): HttpURLConnection = (URL(source.url).openConnection() as HttpURLConnection).apply {
@@ -261,6 +254,24 @@ internal object CheatDbFiles {
                 }
             }
         }
+    }
+
+    /**
+     * Deletes the manifest's [files] (relative to [sdRoot]), then the folders under `Cheats/` they emptied. A path that
+     * is not one the tool writes, or that resolves (links followed) outside `Cheats/`, is refused: the manifest is a plain
+     * file on shared storage.
+     */
+    fun delete(sdRoot: File, files: List<String>) {
+        val cheats = File(sdRoot, "Cheats").canonicalFile
+        val targets = ArrayList<File>()
+        for (rel in files) {
+            val f = File(sdRoot, rel)
+            val inside = CheatDbManifest.isInstalledPath(rel) && runCatching { f.canonicalFile.path.startsWith(cheats.path + File.separator) }.getOrDefault(false)
+            if (!inside) { NxLog.w(TAG, "refused to delete $rel"); continue }
+            targets += f
+            if (f.exists() && !f.delete()) NxLog.w(TAG, "could not delete $rel")
+        }
+        pruneFolders(targets, sdRoot)
     }
 
     /** Best-effort delete of [files], then the folders under `Cheats/` they emptied. */

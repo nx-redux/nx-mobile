@@ -280,7 +280,8 @@ class ScrapeEngine(
         suspend fun of(dir: ContentRef): List<Entry> = map.getOrPut(dir.value) {
             (try { source.listChildren(dir) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }).toMutableList()
         }
-        fun wrote(dir: ContentRef, e: Entry) { map[dir.value]?.let { l -> l.removeAll { it.name == e.name }; l += e } }
+        // Ignoring case: on case-insensitive storage a write over `X.PNG` as `X.png` is the same file.
+        fun wrote(dir: ContentRef, e: Entry) { map[dir.value]?.let { l -> l.removeAll { it.name.equals(e.name, ignoreCase = true) }; l += e } }
         fun deleted(dir: ContentRef, name: String) { map[dir.value]?.removeAll { it.name == name } }
     }
 
@@ -887,7 +888,7 @@ class ScrapeEngine(
      * encoding; logs its path (with [origin]) first, so a write cut short is still
      * resettable. Without [replace] a slot that already has a file (any extension, any case) is never written (the
      * has-art rule keeps such a slot from being asked for; this holds it here too) and counts as written. Under [replace],
-     * a successful write removes the slot's file in the other extensions (and cases), so a stale one cannot win the scan.
+     * a successful write removes the slot's file in the other extensions, so a stale one cannot win the scan.
      * False when the write failed.
      */
     private suspend fun writeSlot(t: ArtTarget, kind: ArtSlot, img: FittedImage, origin: ArtOrigin, replace: Boolean, ls: Listings): Boolean {
@@ -899,7 +900,8 @@ class ScrapeEngine(
         val (dir, written) = writeOne(segments, name, img.bytes) ?: return false
         ls.wrote(dir, written)
         if (replace) guard {
-            for (e in filesIn(dir, t.base, ls)) if (e.name != name && source.delete(dir, e.name)) ls.deleted(dir, e.name)
+            // A name differing only in case may be the file just written (case-insensitive /sdcard, exFAT cards).
+            for (e in filesIn(dir, t.base, ls)) if (!e.name.equals(name, ignoreCase = true) && source.delete(dir, e.name)) ls.deleted(dir, e.name)
         }
         // A 2D box replaced in `boxart2d/`: the app's own file in the legacy `box2d/` goes too (hand-placed ones stay).
         if (replace && slot == ArtSlot.BOX_2D) removeLogged(t.mediaSegments + LEGACY_BOX2D_FOLDER, t.base, ls)

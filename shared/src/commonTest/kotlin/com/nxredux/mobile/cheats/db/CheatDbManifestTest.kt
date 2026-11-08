@@ -87,4 +87,11 @@ class CheatDbManifestTest {
         assertEquals(mapOf("FC" to 1, "PS2" to 2), m.countsByTag)
         assertEquals(m, CheatDbManifest.parse(m.render()))
     }
+
+    @Test fun only_paths_the_tool_installs_are_files() {
+        // The manifest sits on shared storage: a line naming anything else must never reach Remove.
+        val text = "# nx-mobile cheatdb 1\nCheats/GB/x.cht\nSaves/GBA/game.srm\n../x\nCheats/../Saves/GBA/game.cht\n/sdcard/Cheats/GB/y.cht\n" +
+            "Cheats/GB/../GBA/z.cht\nCheats/./GB.cht\nCheats/GB/readme.txt\nCheats/GB/sub/deep.cht\nCheats/PS2/Patches/SLUS.pnach\nCheats/PS2/Patches/../../../x.pnach\n"
+        assertEquals(listOf("Cheats/GB/x.cht", "Cheats/PS2/Patches/SLUS.pnach"), CheatDbManifest.parse(text)!!.files)
+    }
 }

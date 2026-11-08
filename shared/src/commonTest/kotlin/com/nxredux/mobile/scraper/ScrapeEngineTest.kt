@@ -1,8 +1,11 @@
 package com.nxredux.mobile.scraper
 
 import com.nxredux.mobile.library.ArtRefs
+import com.nxredux.mobile.library.Entry
 import com.nxredux.mobile.library.FakeRomsSource
+import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.library.ensurePath
+import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.scraper.Scrape.OK_PNG
 import com.nxredux.mobile.scraper.Scrape.found
 import kotlinx.coroutines.delay
@@ -20,6 +23,7 @@ class ScrapeEngineTest {
         scope: TestScope, val fs: FakeRomsSource = Scrape.homeTree(), val hasher: FakeHasher = FakeHasher(), more: List<ArtSource> = emptyList(),
         logged: MutableSet<String> = mutableSetOf(), picked: Set<ArtSlot> = emptySet(),
         pickedBy: suspend (String) -> Set<ArtSlot> = { picked }, var extras: ArtExtras = ArtExtras(),
+        source: RomsSource = fs,
     ) {
         val options = mutableListOf<Triple<String, List<ArtOption>, Boolean>>()
         /** Each early report ([ScrapeEngine.run]'s found) with the full-size downloads made by then. */
@@ -30,7 +34,7 @@ class ScrapeEngineTest {
         val written = mutableListOf<Pair<String, ArtOrigin?>>()
         val fitter = FakeFitter()
         val engine = ssEngine(
-            http, fitter, hasher, fs, Scrape.home, { auth }, { scope.testScheduler.currentTime }, { delay(it) },
+            http, fitter, hasher, source, Scrape.home, { auth }, { scope.testScheduler.currentTime }, { delay(it) },
             onArt = { p, a -> arts += p to a }, onWritten = { written += it }, more = more, logged = FakeLoggedArt(logged),
             onOptions = { p, o, w -> options += Triple(p, o, w) }, picked = pickedBy, extras = { extras },
         )
@@ -287,6 +291,26 @@ class ScrapeEngineTest {
         assertNull(fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.jpg"))
         assertEquals(listOf<Pair<String, ArtOrigin?>>("Roms/GB/.media/screenshot/Tetris.png" to origin), rig.written)
         assertEquals("Home/Roms/GB/.media/screenshot/Tetris.png", refs?.screenshot)
+    }
+
+    /** Case-insensitive names over [fs], as /sdcard (FUSE) and exFAT cards are: a write over another case keeps the old name. */
+    private class CaseFoldingSource(val fs: FakeRomsSource) : RomsSource by fs {
+        private suspend fun real(dir: ContentRef, name: String) = fs.listChildren(dir).firstOrNull { it.name.equals(name, ignoreCase = true) }?.name
+        override suspend fun child(dir: ContentRef, name: String): Entry? = real(dir, name)?.let { fs.child(dir, it) }
+        override suspend fun writeBytes(dir: ContentRef, name: String, bytes: ByteArray): Boolean = fs.writeBytes(dir, real(dir, name) ?: name, bytes)
+        override suspend fun delete(dir: ContentRef, name: String): Boolean = real(dir, name)?.let { fs.delete(dir, it) } ?: false
+    }
+
+    @Test fun write_pick_over_another_case_keeps_the_file_on_case_insensitive_storage() = runTest {
+        val fs = Scrape.homeTree()
+        val shot = fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "screenshot"))!!
+        fs.writeBytes(shot, "Tetris.PNG", byteArrayOf(7))
+        fs.writeBytes(shot, "Tetris.jpg", byteArrayOf(8))
+        val rig = Rig(this, fs = fs, source = CaseFoldingSource(fs))
+        val refs = rig.engine.writePick(tetris, ArtSlot.SCREENSHOT, OK_PNG.body!!, ArtOption(ArtSlot.SCREENSHOT, "https://x/shot", "x"))
+        assertContentEquals(OK_PNG.body, fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.PNG"))
+        assertNull(fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.jpg"))
+        assertEquals("Home/Roms/GB/.media/screenshot/Tetris.PNG", refs?.screenshot)
     }
 
     @Test fun write_pick_of_garbage_is_null() = runTest {

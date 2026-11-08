@@ -12,6 +12,17 @@ object SyncProgress {
     private val TO_CHECK = Regex("""to-che?c?k=(\d+)/(\d+)""")
     private val DAEMON = Regex("""^\d{4}/\d\d/\d\d \d\d:\d\d:\d\d \[\d+] (shared|saves|bios|collections|roms|extra-\d+|nx-art|nx-extras) (recv|send) (.+)$""")
 
+    private val SESSION = Regex("""^\d{4}/\d\d/\d\d \d\d:\d\d:\d\d \[(\d+)] (connect from |sent \d|rsync error: )""")
+
+    /**
+     * A daemon log line that opens (`[pid] connect from …`) or closes (its exit: `[pid] sent N bytes  received …`, or
+     * `[pid] rsync error: …`) one connection: its pid and true for an open; else null.
+     */
+    fun daemonSession(line: String): Pair<String, Boolean>? {
+        val m = SESSION.find(line) ?: return null
+        return m.groupValues[1] to (m.groupValues[2] == "connect from ")
+    }
+
     /** A `--info=progress2` line with `to-chk=`, else null. */
     fun progress(line: String): StepProgress? {
         val (left, total) = TO_CHECK.find(line)?.destructured ?: return null

@@ -49,7 +49,7 @@ class DiscProbe(private val source: RomsSource, private val chd: ChdSectors? = n
         "gdi" -> sheet(file, dir) { DiscImages.gdiTrack(it) }
         "chd" -> chdResult(file.ref)
         "m3u" -> {
-            val text = if (followM3u) source.readText(file.ref) ?: return UNREAD else return ProbeResult(null, read = true)
+            val text = if (followM3u) DiscSheet.readSheet(source, file.ref) ?: return UNREAD else return ProbeResult(null, read = true)
             val first = DiscSheet.references(file.name, text).firstOrNull()?.let { named(dir, it) } ?: return UNREAD
             resultOf(first, dir, followM3u = false).let { it.copy(data = it.data ?: first) }
         }
@@ -58,7 +58,7 @@ class DiscProbe(private val source: RomsSource, private val chd: ChdSectors? = n
 
     /** A cue or gdi: its [track] file, found in [dir], read from the track's start. */
     private suspend fun sheet(file: Entry, dir: List<Entry>, track: (String) -> DataTrack?): ProbeResult {
-        val text = source.readText(file.ref) ?: return UNREAD
+        val text = DiscSheet.readSheet(source, file.ref) ?: return UNREAD
         val t = track(text) ?: return ProbeResult(null, read = true)   // no data track: an answer
         val data = named(dir, t.file) ?: return UNREAD                 // its file is not there (yet)
         return sectorsOf(data.ref, t, data)
@@ -90,7 +90,8 @@ class DiscProbe(private val source: RomsSource, private val chd: ChdSectors? = n
         return if (failed && kind == null) UNREAD.copy(data = data) else ProbeResult(kind?.consoleId, read = true, data = data)
     }
 
-    private fun named(dir: List<Entry>, name: String): Entry? = dir.firstOrNull { !it.isDirectory && it.name.equals(name, ignoreCase = true) }
+    /** [name] in [dir] as a launch finds it ([DiscSheet.Listing]: any case, or another code page's spelling). */
+    private fun named(dir: List<Entry>, name: String): Entry? = DiscSheet.Listing(dir.filter { !it.isDirectory }).find(name)
 
     private companion object {
         /** A CHD's header and the metadata chained from it (chdman writes it right after the 124-byte header). */

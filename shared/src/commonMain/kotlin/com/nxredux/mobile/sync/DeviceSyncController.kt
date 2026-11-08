@@ -221,8 +221,11 @@ class DeviceSyncController(
             val end = watchingCable(drops) {
                 show(me, DeviceSyncPage.Searching(link, ownIp))
                 log("searching on $link as $ownIp, roms $roms")
-                val peer = discover(sock, ownIp, cablePeer, roms)
-                if (peer == null) { log("no ACK, only READY: failed"); return@watchingCable DeviceSyncPage.Failed(link, DeviceSyncText.MISSED_ACK) }
+                val peer = when (val found = discover(sock, ownIp, cablePeer, roms)) {
+                    is Peer -> found
+                    Unpaired.MISSED_ACK -> { log("no ACK, only READY: failed"); return@watchingCable DeviceSyncPage.Failed(link, DeviceSyncText.MISSED_ACK) }
+                    Unpaired.NONE -> { log("no device found"); return@watchingCable DeviceSyncPage.Failed(link, DeviceSyncText.NO_DEVICE) }
+                }
                 if (!peer.filters) return@watchingCable DeviceSyncPage.Failed(link, DeviceSyncText.OLD_FIRMWARE)   // latest firmware only
                 val isServer = SyncRoles.isServer(ownClientOnly = true, peerClientOnly = peer.flags.clientOnly, ownIp = ownIp, peerIp = peer.ip)
                 failTo = peer.ip
@@ -302,21 +305,26 @@ class DeviceSyncController(
         if (message is SyncMessage.Hello && message.ip == peer.ip && d.sourceIp == peer.ip) sock.send(SyncWire.ack(ownIp, roms), peer.ip)
     }
 
-    private class Peer(val ip: String, val flags: SyncFlags, val filters: Boolean)
+    private sealed interface Discovery
+    private class Peer(val ip: String, val flags: SyncFlags, val filters: Boolean) : Discovery
+    private enum class Unpaired : Discovery { MISSED_ACK, NONE }
 
     /**
      * HELLO each second (unicast to [cablePeer] on the cable, broadcast on Wi-Fi) until a fitting HELLO or ACK comes.
      * Null when one device keeps sending READY instead ([MISSED_ACK_READIES] in a row): it paired with our HELLO and
      * serves, but its one ACK never arrived, and a handheld answers no further HELLO (nx-redux `discovery_thread_func`
      * stops at its first peer), so searching on would never end. A READY says nothing of the sender's flags, so it never
-     * pairs; a phone server re-ACKs our next HELLO ([reAck]) long before that count.
+     * pairs; a phone server re-ACKs our next HELLO ([reAck]) long before that count. [Unpaired.NONE] after
+     * [SEARCH_MS] with no peer: the run holds the keep-alive service and keeps the screen on.
      */
-    private suspend fun discover(sock: SyncSocket, ownIp: String, cablePeer: String?, roms: Boolean): Peer? {
+    private suspend fun discover(sock: SyncSocket, ownIp: String, cablePeer: String?, roms: Boolean): Discovery {
         val hello = SyncWire.hello(ownIp, roms)
         var nextHello = now()
+        val deadline = now() + SEARCH_MS
         var readyFrom: String? = null
         var readies = 0
         while (true) {
+            if (now() >= deadline) return Unpaired.NONE
             if (now() >= nextHello) {
                 if (cablePeer != null) sock.send(hello, cablePeer) else sock.broadcast(hello)
                 nextHello = now() + INTERVAL_MS
@@ -327,7 +335,7 @@ class DeviceSyncController(
                 readies = if (d.sourceIp == readyFrom) readies + 1 else 1
                 readyFrom = d.sourceIp
                 log("READY from ${d.sourceIp} while searching ($readies)")
-                if (readies >= MISSED_ACK_READIES) return null
+                if (readies >= MISSED_ACK_READIES) return Unpaired.MISSED_ACK
                 continue
             }
             val (ip, flags, filters) = when (m) {
@@ -958,9 +966,12 @@ class DeviceSyncController(
     ): DeviceSyncPage {
         try {
             serverActivity = now()
+            // The daemon's open connections, by pid: while one is open the peer is mid-step and says nothing.
+            val sessions = MutableStateFlow(emptySet<String>())
             if (!platform.checkSaveFileTimes()) return DeviceSyncPage.Failed(link, DeviceSyncText.NO_SAVE_FILE_TIMES)
             val started = platform.startServer(peer.ip, roms || peer.flags.romsOn) { line ->
                 serverActivity = now()   // any daemon line, counted or not: the peer is still working with it
+                SyncProgress.daemonSession(line)?.let { (pid, open) -> sessions.update { if (open) it + pid else it - pid } }
                 val e = SyncProgress.daemonLine(line) ?: return@startServer
                 tally.update {
                     when {
@@ -979,11 +990,19 @@ class DeviceSyncController(
             show(me, DeviceSyncPage.Syncing(link, peer.ip, SyncRole.SERVER, null, 0, 0, listOf(DeviceSyncText.WAITING_PEER)))
             platform.keepAlive(true, DeviceSyncText.syncingWith(peer.ip, link))
             // An idle timeout, not a deadline from the start: a phone-to-phone run with ROMs over Wi-Fi can take well over
-            // an hour, its daemon logging all the way. Only SERVER_WAIT_MS with neither a daemon line nor a peer message ends it.
+            // an hour, its daemon logging all the way. Silence (neither a daemon line nor a peer message) ends it: after
+            // SERVER_WAIT_MS while a connection is open (a big file logs only once complete), else after PEER_SILENCE_MS,
+            // since a peer that vanished without FAIL would hold the daemon, the service and the screen.
             var peerHeard = now()
             var nextReady = now()
             while (true) {
-                if (now() - maxOf(peerHeard, serverActivity) >= SERVER_WAIT_MS) return DeviceSyncPage.Failed(link, DeviceSyncText.SERVER_TIMEOUT)
+                val quiet = now() - maxOf(peerHeard, serverActivity)
+                if (sessions.value.isNotEmpty()) {
+                    if (quiet >= SERVER_WAIT_MS) return DeviceSyncPage.Failed(link, DeviceSyncText.SERVER_TIMEOUT)
+                } else if (quiet >= PEER_SILENCE_MS) {
+                    log("nothing from ${peer.ip} and no connection open: gave up")
+                    return DeviceSyncPage.Failed(link, DeviceSyncText.PEER_SILENT)
+                }
                 if (now() >= nextReady) { sock.send(SyncWire.READY, peer.ip); nextReady = now() + INTERVAL_MS }
                 val d = sock.receive(POLL_MS) ?: continue
                 if (d.sourceIp == peer.ip) peerHeard = now()
@@ -1032,6 +1051,10 @@ class DeviceSyncController(
          * (SERVER_TIMEOUT) and stops its daemon. An idle limit: a long transfer that keeps logging never reaches it.
          */
         const val SERVER_WAIT_MS = 3_600_000L
+        /** A serving phone's silence limit while no rsync connection is open (between steps, or a peer gone). */
+        const val PEER_SILENCE_MS = 300_000L
+        /** How long the search runs with no device answering. */
+        const val SEARCH_MS = 300_000L
         const val DONE_REPEATS = 5
         const val DONE_GAP_MS = 200L
         const val MAX_LINES = 200

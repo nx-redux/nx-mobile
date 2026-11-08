@@ -112,7 +112,7 @@ class FolderMergeTest {
             "H/Roms/Misc (MISC)" to listOf("X.chd"),
         ),
         texts = mapOf("$swan/G.cue" to cue, "$swan/FF7/FF7.m3u" to "FF7 (Disc 1).chd\n"),
-        bytes = mapOf("$swan/G.bin" to ByteArray(4), "$swan/G.cue" to ByteArray(4), "$swan/FF7/FF7 (Disc 1).chd" to ByteArray(4)),
+        bytes = mapOf("$swan/G.bin" to ByteArray(4), "$swan/FF7/FF7 (Disc 1).chd" to ByteArray(4)),
     )
 
     private val psIndex = LibraryIndex(
@@ -164,5 +164,33 @@ class FolderMergeTest {
         }
         assertFailsWith<IllegalStateException> { FolderMerge(failing, ContentRef("H")).merge(index, splitFolders(index), moved, { _, _ -> }) { false } }
         assertEquals(mapOf("/Roms/Game Boy Advance (MGBA)/K.gba" to "/Roms/Game Boy Advance (GBA)/K.gba"), moved)
+    }
+
+    /**
+     * A cue written in Windows-1252 that names its second track in another case: [FakeRomsSource.readText] gives what a
+     * UTF-8 read makes of it (U+FFFD for each Latin-1 byte), its head the bytes as they are.
+     */
+    private val legacyCue = "FILE \"Pok\u00e9mon (Track 1).bin\" BINARY\n TRACK 01 MODE2/2352\nFILE \"pok\u00e9mon (track 2).BIN\" BINARY\n TRACK 02 AUDIO\n"
+    private val legacyCueBytes = ByteArray(legacyCue.length) { legacyCue[it].code.toByte() }
+    private val legacyCueUtf8 = legacyCue.replace('\u00e9', '\uFFFD')
+
+    @Test fun a_legacy_cue_merges_with_its_bins() = runTest {
+        val bins = listOf("Pok\u00e9mon (Track 1).bin", "Pok\u00e9mon (Track 2).bin")
+        val ps = "H/Roms/Sony PlayStation (PS)"
+        val other = "H/Roms/Sony PlayStation (PSX)"
+        val src = FakeRomsSource(
+            mapOf("H" to listOf("Roms"), "H/Roms" to listOf("Sony PlayStation (PS)", "Sony PlayStation (PSX)"), ps to listOf("A.chd"), other to listOf("P.cue") + bins),
+            texts = mapOf("$other/P.cue" to legacyCueUtf8),
+            bytes = mapOf("$ps/A.chd" to ByteArray(4), "$other/P.cue" to legacyCueBytes, "$other/${bins[0]}" to ByteArray(10), "$other/${bins[1]}" to ByteArray(20)),
+        )
+        val idx = LibraryIndex(
+            LibraryIndex.VERSION, "H", emptyList(), emptyMap(),
+            listOf(IndexedSystem("PS", "Sony PlayStation", folderName = "Sony PlayStation (PS)", games = listOf(
+                game("Roms/Sony PlayStation (PS)", "A.chd"), game("Roms/Sony PlayStation (PSX)", "P.cue"),
+            ))),
+        )
+        val (result, _) = FolderMerge(src, ContentRef("H")).merge(idx, splitFolders(idx), LinkedHashMap(), { _, _ -> }) { false }
+        assertEquals(MoveResult(moved = 1), result)
+        assertEquals(setOf("A.chd", "P.cue") + bins, names(src, ps).toSet())
     }
 }

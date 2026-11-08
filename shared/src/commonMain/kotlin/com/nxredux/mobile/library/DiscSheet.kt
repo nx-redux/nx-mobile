@@ -133,7 +133,7 @@ object DiscSheet {
      * (each run of non-ASCII characters counted as one): a sheet written in another code page than it is read in still
      * finds its files. Two names sharing a shape are never guessed between.
      */
-    private class Listing(files: List<Entry>) {
+    internal class Listing(files: List<Entry>) {
         private val byName = files.associateBy { it.name.lowercase() }
         private val byShape = files.groupBy { shape(it.name) }
 
@@ -172,7 +172,29 @@ object DiscSheet {
      * `Found(emptyList())`.
      */
     suspend fun companions(source: RomsSource, folder: ContentRef, fileName: String): CompanionLookup {
-        if (!isSheet(fileName)) return CompanionLookup.Found(emptyList())
+        val r = resolve(source, folder, fileName)
+        return r.missing?.let { CompanionLookup.Missing(it.name, it.sheet) } ?: CompanionLookup.Found(r.found.map { (name, e) -> Companion(name, e.ref) })
+    }
+
+    /**
+     * What [fileName] loads, found as [companions] finds it, under each file's name in [folder] (once each): what a move
+     * of the set takes along. A file the sheet needs that is not there stays in as spelled, so the set never moves
+     * without it.
+     */
+    suspend fun loadedNames(source: RomsSource, folder: ContentRef, fileName: String): List<String> {
+        val r = resolve(source, folder, fileName)
+        return (r.found.map { it.second.name } + listOfNotNull(r.missing?.name)).filter { !it.equals(fileName, ignoreCase = true) }.distinctBy { it.lowercase() }
+    }
+
+    /** A sheet's text as the scanner and a launch read it: its head, [decode]d. */
+    suspend fun readSheet(source: RomsSource, file: ContentRef): String? =
+        source.readHead(file, HEAD_BYTES)?.let(::decode) ?: source.readText(file)
+
+    /** [companions]'s lookup: each name as spelled with the entry found for it, and the first needed one not found. */
+    private class Resolved(val found: List<Pair<String, Entry>>, val missing: SheetRef?)
+
+    private suspend fun resolve(source: RomsSource, folder: ContentRef, fileName: String): Resolved {
+        if (!isSheet(fileName)) return Resolved(emptyList(), null)
         var listing: Listing? = null
         suspend fun find(name: String): Entry? {
             source.child(folder, name)?.takeIf { !it.isDirectory }?.let { return it }
@@ -181,11 +203,11 @@ object DiscSheet {
             } catch (e: ListingUnavailable) { emptyList() }).also { listing = it }
             return all.find(name)
         }
-        val out = ArrayList<Companion>()
+        val out = ArrayList<Pair<String, Entry>>()
         if (Names.extensionOf(fileName) in IMPLIED) {
-            for (name in references(fileName, "")) find(name)?.let { out += Companion(name, it.ref) }
-            val image = out.any { Names.extensionOf(it.fileName) == "img" || Names.extensionOf(it.fileName) == "bin" }
-            return if (image) CompanionLookup.Found(out) else CompanionLookup.Missing("${Names.stripExtension(fileName)}.img", fileName)
+            for (name in references(fileName, "")) find(name)?.let { out += name to it }
+            val image = out.any { Names.extensionOf(it.first) == "img" || Names.extensionOf(it.first) == "bin" }
+            return Resolved(out, if (image) null else SheetRef("${Names.stripExtension(fileName)}.img", fileName))
         }
         val read: suspend (String) -> String? = { name -> find(name)?.let { source.readHead(it.ref, HEAD_BYTES) }?.let(::decode) }
         for (r in expand(fileName, read)) {
@@ -193,11 +215,11 @@ object DiscSheet {
             val entry = find(r.name)
             if (entry == null) {
                 if (Names.extensionOf(r.sheet) in IMPLIED) continue
-                return CompanionLookup.Missing(r.name, r.sheet)
+                return Resolved(out, r)
             }
-            out += Companion(r.name, entry.ref)
+            out += r.name to entry
         }
-        return CompanionLookup.Found(out)
+        return Resolved(out, null)
     }
 
     private suspend fun referencesOf(sheet: String, read: suspend (String) -> String?): List<String> {

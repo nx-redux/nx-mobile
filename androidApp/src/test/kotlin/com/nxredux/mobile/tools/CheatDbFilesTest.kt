@@ -114,4 +114,16 @@ class CheatDbFilesTest {
         assertTrue(File(sd, "Cheats/GBA/mine.cht").exists())  // the user's file keeps its folder
         assertTrue(File(sd, "Cheats").isDirectory)            // never Cheats/ itself
     }
+
+    @Test fun deleteRemovesOnlyFilesInsideCheats() {
+        File(sd, "Cheats/GB").mkdirs(); File(sd, "Saves/GBA").mkdirs()
+        val cheat = File(sd, "Cheats/GB/x.cht").apply { writeText("c") }
+        val save = File(sd, "Saves/GBA/game.srm").apply { writeText("s") }
+        val outside = File(base, "outside.cht").apply { writeText("o") }
+        CheatDbFiles.delete(sd, listOf("Cheats/GB/x.cht", "Saves/GBA/game.srm", "Cheats/../Saves/GBA/game.srm", "../outside.cht", outside.path))
+        assertFalse(cheat.exists())
+        assertTrue(save.exists())
+        assertTrue(outside.exists())
+    }
 }
+
