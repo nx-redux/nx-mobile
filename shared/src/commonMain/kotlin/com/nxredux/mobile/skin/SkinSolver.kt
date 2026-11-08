@@ -148,7 +148,7 @@ object SkinSolver {
             PieceAnchor.CENTRE -> dx / 2f
             PieceAnchor.RIGHT -> dx - inwardShare(inward, dx)
         }
-        fun down(l: PieceLevel) = when (l) {
+        fun down(l: PieceLevel, drop: Float = -1f) = if (drop >= 0f) dy * drop else when (l) {
             PieceLevel.TOP -> 0f
             PieceLevel.MIDDLE -> dy / 2f
             PieceLevel.BOTTOM -> dy
@@ -166,7 +166,7 @@ object SkinSolver {
         val roomH = if (folded) hingeY!! / k - frame.hinge - roomTop
             else h - roomTop - (if (frame.bottom >= 0) frame.bottom.toFloat() else (spec.refH - frame.y - frame.h).toFloat())
         // half-folded, the pad's pieces all go below the fold
-        if (folded && spec.pieces.any { it.y + down(it.level) < hingeY!! / k + frame.hinge }) return null
+        if (folded && spec.pieces.any { it.y + down(it.level, it.drop) < hingeY!! / k + frame.hinge }) return null
         val (aw, ah) = gameSize(g.screen, picture) ?: (g.w.toFloat() to g.h.toFloat())   // the menu's: the glass's own
         val fit = minOf((roomW - bl - br) / aw, (roomH - bt - bb) / ah)
         if (fit <= 0f) return null
@@ -220,7 +220,7 @@ object SkinSolver {
         for ((pi, p) in spec.pieces.withIndex()) {
             var px = p.x + across(p.anchor, p.inward)
             // the touch screen follows the shorter frame up; the pad (d-pad, face) up to its own rise
-            var py = p.y + down(p.level) - (if (p.glass != null) lift else minOf(lift, p.rise.toFloat()))
+            var py = p.y + down(p.level, p.drop) - (if (p.glass != null) lift else minOf(lift, p.rise.toFloat()))
             var gx = 0f; var gy = 0f   // a growing piece's growth, picture px
             val pg0 = p.glass
             if (p.grow > 0 && pg0 != null && dx > 0f) {
@@ -258,7 +258,7 @@ object SkinSolver {
             }
         }
         controls += spec.controls.map { c ->
-            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k, knobTravel = c.knobTravel * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward)) * k, (c.y + down(c.level) - minOf(lift, c.rise.toFloat())) * k)
+            PlacedControl(c.copy(r = c.r * k, hw = c.hw * k, hh = c.hh * k, capR = c.capR * k, arm = c.arm * k, labelDy = c.labelDy * k, labelDx = c.labelDx * k, labelH = c.labelH * k, travel = c.travel * k, knobTravel = c.knobTravel * k), (c.x + across(c.anchor ?: PieceAnchor.LEFT, c.inward)) * k, (c.y + down(c.level, c.drop) - minOf(lift, c.rise.toFloat())) * k)
         }
         return SkinPlacement(spec, k, bg.cells, glasses, controls, pieces)
     }

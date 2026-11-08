@@ -15,6 +15,7 @@ import kotlin.test.assertTrue
 class NxCarbonPackTest {
     /** The 3DS's twins of the DS layouts (stacked, large and its wide, flex and its wide, the fold board, both landscapes), the fold board and the tall landscape with both sticks shown. */
     private val N3DS_LAYOUTS = 16   // the New 3DS twins and the regular 3DS twins, 8 each
+    private val GRIP_COLUMNS = 3   // the DS / 3DS landscape twins with the small caps in a column (the Fold cover)
     private val dir = File("../androidApp/src/main/assets/skins/nx-carbon")
     private val pack = assertNotNull(SkinPackManifest.parse(File(dir, "skin.json").readText()))
 
@@ -28,7 +29,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(136 + N3DS_LAYOUTS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's, the Atari 5200's and Doom's in every family; a tablet twin of each game fold board without one (17: the clusters centred on the bottom screen, user)
+        assertEquals(136 + N3DS_LAYOUTS + GRIP_COLUMNS, pack.layouts.size)   // 6 one-screen layouts, each with its gb, gba, arcade, fds, dc, n64, gc and Wii Classic twins, dc / n64 both-shown on the tall boards (fold, landscape tall), gc's on the fold board (its tall landscape always both; the Wii's fold board and tall landscape always both); the Wii Nunchuk's, sideways and upright Remote's in every family (the Nunchuk's fold board and tall landscape always both); the PlayStation's and the PSP's in every family (their fold board and tall landscape always both); PICO-8's, the Atari 5200's and Doom's in every family; a tablet twin of each game fold board without one (17: the clusters centred on the bottom screen, user)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit
@@ -811,6 +812,88 @@ class NxCarbonPackTest {
         }
     }
 
+    // The DS / 3DS phone landscape on a window taller than the layout (a phone's, user): the rows of small caps under the
+    // pads drop further into the extra height than the pads, so the rows spread apart and the room under MENU is used.
+    @Test
+    fun dsAnd3dsLandscapeRowsSpreadIntoTheExtraHeight() {
+        for (v in listOf(SkinVariant.DS, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) {
+            val p = assertNotNull(SkinChoice.place(pack, 2400, 1080, 420, false, true, null, null, variant = v), "$v")
+            val spec = pack.layouts.single { it.id == p.spec.id }
+            fun placed(id: String) = p.controls.first { it.spec.id == id }.y
+            fun ref(id: String) = spec.controls.first { it.id == id }.y
+            val pad = "DPAD"
+            val row1 = listOf("MIC", "MENU", "SELECT", "START", "SWAP").filter { id -> spec.controls.any { it.id == id } }
+                .minBy { ref(it) }
+            val row2 = listOf("MIC", "MENU", "SELECT", "START", "SWAP").filter { id -> spec.controls.any { it.id == id } }
+                .maxBy { ref(it) }
+            assertTrue(placed(row1) - placed(pad) > (ref(row1) - ref(pad)) * p.k + 20f, "$v ${p.spec.id}: pads to the first row")
+            assertTrue(placed(row2) - placed(row1) > (ref(row2) - ref(row1)) * p.k + 20f, "$v ${p.spec.id}: between the rows")
+            val last = p.controls.first { it.spec.id == row2 }
+            assertTrue(last.y + last.spec.r + last.spec.labelDy + last.spec.labelH < 1080f, "$v ${p.spec.id}: its word on the window")
+        }
+    }
+
+    // The New 3DS's landscape rows where the DS's and the regular 3DS's are (user): the nub needs no room down there.
+    @Test
+    fun new3dsLandscapeRowsSitWithTheDsOnes() {
+        fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, 2400, 1080, 420, false, true, null, null, variant = v), "$v")
+        val n = at(SkinVariant.N3DS); val r = at(SkinVariant.N3DS_REGULAR)
+        for (id in listOf("MIC", "MENU", "SELECT", "START", "SWAP")) {
+            assertEquals(r.controls.first { it.spec.id == id }.y, n.controls.first { it.spec.id == id }.y, 0.5f, id)
+        }
+    }
+
+    // DS / 3DS landscape with the height for it (the Fold cover, user): each side one column, top to bottom the shoulders,
+    // the pad, then its small caps one above the other on the screen's side of the pad, their words on the outer side.
+    @Test
+    fun dsAnd3dsLandscapeSmallCapsStackInAColumnWhereTheHeightAllows() {
+        // the Fold cover, the unfolded Fold and a tablet in landscape (user)
+        val windows = listOf(Triple(1972, 1248, 420), Triple(2448, 1848, 420), Triple(2304, 1440, 280))
+        for ((win, v) in windows.flatMap { w -> listOf(SkinVariant.DS, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR).map { w to it } }) {
+            val (ww, wh, dpi) = win
+            val p = assertNotNull(SkinChoice.place(pack, ww, wh, dpi, dpi == 280, true, null, null, variant = v), "$v $win")
+            fun c(id: String) = p.controls.first { it.spec.id == id }
+            val left = listOfNotNull(p.controls.firstOrNull { it.spec.id == "STICK_SWAP" }, c("MIC"), c("MENU"))
+            val right = listOf(c("SELECT"), c("START"), c("SWAP"))
+            val pad = c("DPAD")
+            val stick = p.controls.firstOrNull { it.spec.id == "STICK" }
+            val padFoot = maxOf(pad.y + pad.spec.r, stick?.let { it.y + it.spec.r } ?: 0f)
+            val face = listOf(c("Y"), c("A")).map { it.x }.average().toFloat()
+            for ((side, caps) in listOf("left" to left, "right" to right)) {
+                val id = "$v $win ${p.spec.id} $side"
+                assertTrue(caps.all { kotlin.math.abs(it.x - caps[0].x) < 1f }, "$id: one column")
+                assertTrue(caps.zipWithNext().all { (a, b) -> b.y - a.y >= a.spec.r + b.spec.r }, "$id: top to bottom, apart")
+                assertTrue(caps[0].y - caps[0].spec.r > padFoot, "$id: under the pad")
+                assertTrue(caps.last().y + caps.last().spec.r < wh - 20f, "$id: on the window")
+                for (k in caps) assertTrue(k.spec.labelH > 0f && (if (side == "left") k.spec.labelDx < 0f else k.spec.labelDx > 0f), "$id ${k.spec.id}: its word outside")
+            }
+            // the columns level at the foot (user): MENU with SWAP, MIC with START (the left's fewer caps start lower)
+            for (i in 1..left.size) assertEquals(right[right.size - i].y, left[left.size - i].y, 1f, "$v $win ${left[left.size - i].spec.id} level with ${right[right.size - i].spec.id}")
+            assertTrue(left[0].x > pad.x, "$v: the left column on the screen's side of the pad")
+            assertTrue(right[0].x < face, "$v: the right column on the screen's side of the face")
+            val b = c("B")
+            assertTrue(right[0].y - right[0].spec.r - (b.y + b.spec.r) >= 20f * p.k, "$v $win: the column clear of B (user)")
+            if (ww != 1972) continue
+            // a phone's lower landscape keeps the rows
+            val phone = assertNotNull(SkinChoice.place(pack, 2520, 1080, 420, false, true, null, null, variant = v), "$v phone")
+            assertEquals(phone.controls.first { it.spec.id == "SELECT" }.y, phone.controls.first { it.spec.id == "START" }.y, 0.5f, "$v phone: SELECT START in a row")
+        }
+    }
+
+    // The New 3DS's tall landscape (the unfolded Fold, a tablet, user): the face lower than the regular 3DS's, away from
+    // the C-stick nub over it.
+    @Test
+    fun new3dsTallLandscapeFaceSitsLowerThanTheRegularOnes() {
+        for ((w, h, dpi) in listOf(Triple(2448, 1848, 420), Triple(2304, 1440, 280))) {
+            fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, w, h, dpi, dpi == 280, true, null, null, variant = v), "$v $w")
+            val n = at(SkinVariant.N3DS); val r = at(SkinVariant.N3DS_REGULAR)
+            for (id in listOf("X", "Y", "A", "B")) {
+                val down = n.controls.first { it.spec.id == id }.y - r.controls.first { it.spec.id == id }.y
+                assertEquals(40f * n.k, down, 1f, "$w $id")
+            }
+        }
+    }
+
     @Test
     fun regular3dsIsThe3dsWithoutTheNewControls() {
         // New 3DS Controls off (user: the default): the 3DS layouts without ZL / ZR and the C-stick nub, L / R the DS's pills
@@ -871,6 +954,12 @@ class NxCarbonPackTest {
                     name == "flip" -> row("MIC", "SWAP", "MENU")
                     name in setOf("inner", "inner_half", "tablet") -> row("MIC", "SWAP", "MENU", "START", "SELECT")
                     name == "cover" -> row("MIC", "MENU", "SWAP")
+                    name in setOf("inner_land", "tablet_land") -> {   // tall landscape: each side's caps in one column (user)
+                        fun column(vararg ids: String) { for (i in 1 until ids.size) {
+                            assertEquals(k(ids[0]).x, k(ids[i]).x, 1f, "ds $name ${ids[i]} in the column"); assertTrue(k(ids[i]).y > k(ids[i - 1]).y, "ds $name ${ids.toList()}") } }
+                        column("MIC", "MENU"); column("SELECT", "START", "SWAP")
+                        assertTrue(k("MIC").x < d.first / 2f && k("SWAP").x > d.first / 2f, "ds $name sides")
+                    }
                     else -> {   // landscape: SELECT START over SWAP on the right, MIC MENU side by side on the left
                         row("MIC", "MENU"); row("SELECT", "START")
                         assertEquals(k("SELECT").x, k("SWAP").x, 1f, "ds $name SWAP under SELECT"); assertTrue(k("SWAP").y > k("SELECT").y, "ds $name")
@@ -950,11 +1039,14 @@ class NxCarbonPackTest {
                 assertEquals(c("R").x, c("R2").x, 1f, "$name ZR over R"); assertTrue(c("R2").y < c("R").y, "$name ZR above R")
             } else { assertEquals(c("L").y, c("L2").y, 1f, "$name ZL beside L"); assertEquals(c("R").y, c("R2").y, 1f, "$name ZR beside R") }
             if (name == "cover") row("STICK_SWAP", "MIC", "MENU", "SWAP")   // one group of four (user)
-            if (tall) {   // MIC MENU side by side on the left, level with SWAP; SELECT START over SWAP on the right (user)
-                row("SELECT", "START"); row("MIC", "MENU")
-                assertEquals(c("SELECT").x, c("SWAP").x, 1f, name); assertTrue(c("SWAP").y > c("SELECT").y, name)
-                assertEquals(c("MIC").y, c("SWAP").y, 1f, "$name MIC MENU level with SWAP")
-                assertTrue(c("MIC").y - c("DPAD").y > (c("MIC").spec.r + c("DPAD").spec.r + 60f) * p.k, "$name MIC MENU clear of the d-pad")
+            if (tall) {   // each side's caps in one column under its pad (user): MIC over MENU; SELECT over START over SWAP
+                fun column(vararg want: String) {
+                    val cs = want.map(::c)
+                    for (x in cs) assertEquals(cs[0].x, x.x, 1f, "$name ${x.spec.id} in the column")
+                    for (i in 1 until cs.size) assertTrue(cs[i].y > cs[i - 1].y, "$name ${want.toList()} in order")
+                }
+                column("MIC", "MENU"); column("SELECT", "START", "SWAP")
+                assertTrue(c("MIC").y - c("DPAD").y > (c("MIC").spec.r + c("DPAD").spec.r) * p.k, "$name MIC clear of the d-pad")
             }
             if (name == "phone_land") {   // SWAP on the right with SELECT START, the switch cap on the left (user)
                 assertTrue(c("SWAP").x > d.first / 2f, "$name SWAP right")
