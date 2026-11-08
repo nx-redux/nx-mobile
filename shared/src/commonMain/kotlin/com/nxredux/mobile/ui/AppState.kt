@@ -56,14 +56,11 @@ import com.nxredux.mobile.gametime.systemLocalCalendar
 import com.nxredux.mobile.launcher.AppIcons
 import com.nxredux.mobile.launcher.AppLauncher
 import com.nxredux.mobile.launcher.InstalledApp
-import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.ArcadeSets
 import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.library.CollectionCountCache
 import com.nxredux.mobile.library.Collections
 import com.nxredux.mobile.library.CountStamps
-import com.nxredux.mobile.library.CompanionLookup
-import com.nxredux.mobile.library.DiscSheet
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.LibraryIndex
 import com.nxredux.mobile.library.LibraryIndexCodec
@@ -90,10 +87,8 @@ import com.nxredux.mobile.options.EmulatorPage
 import com.nxredux.mobile.options.NoCoreOptions
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.runner.BottomScreen
-import com.nxredux.mobile.runner.ClassicNes
 import com.nxredux.mobile.runner.Console
 import com.nxredux.mobile.runner.ContentRef
-import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.EmulatorRunner
 import com.nxredux.mobile.runner.GameSession
@@ -116,7 +111,6 @@ import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.settings.ImportResult
 import com.nxredux.mobile.settings.ImportSource
 import com.nxredux.mobile.settings.SaveTransfer
-import com.nxredux.mobile.settings.SaveTransferRules
 import com.nxredux.mobile.settings.BackdropArt
 import com.nxredux.mobile.settings.SwitcherLayout
 import com.nxredux.mobile.settings.ConsoleArt
@@ -164,7 +158,6 @@ import com.nxredux.mobile.storage.SidecarStore
 import com.nxredux.mobile.storage.ToolPins
 import com.nxredux.mobile.storage.UserDataStore
 import com.nxredux.mobile.ui.nx.HomeFrame
-import com.nxredux.mobile.ui.nx.LaunchTimeline
 import com.nxredux.mobile.ui.nx.HomeShelf
 import com.nxredux.mobile.ui.nx.FooterMode
 import com.nxredux.mobile.ui.nx.LauncherChrome
@@ -644,7 +637,6 @@ internal const val ANDROID_ASK_GUARD_MILLIS = 300L
  * clears this long after. A game or a tool runs the launch sequence instead ([AppState.launchSequence]).
  */
 internal const val MINIMAL_LEAVE_MS = 120L
-private const val MINIMAL_CLEAR_MS = 1_000L
 
 /**
  * Art results are written and shown once they stop coming for [ART_QUIET_MS], or every [ART_MAX_WAIT_MS] while they keep
@@ -1239,7 +1231,7 @@ class AppState(
     fun openSecondListGame(index: Int) {
         val list = _secondList.value ?: return
         val s = _screen.value as? Screen.Systems ?: return
-        if (loader.active || minimalPending || highlightedSecondSource() != list.source) return   // a stale preview: ignore the tap
+        if (loader.active || launches.minimalPending || highlightedSecondSource() != list.source) return   // a stale preview: ignore the tap
         when (val row = s.rows.getOrNull(_selection.value.index)) {
             is MainRow.System -> { intendNav(NavMotion.FORWARD); openSystem(row.system, select = list.entries.getOrNull(index)?.game?.path) }
             else -> { intendNav(NavMotion.FORWARD); rememberSelection(); showList(list.source, list.entries, index) }
@@ -1261,35 +1253,12 @@ class AppState(
         if (opens) openSelected()
     }
 
-    private val _minimalOpening = MutableStateFlow<MinimalOpening?>(null)
-    /**
-     * A Minimal page's folder being opened, while the other names fade and a moment after ([openMinimal]); null otherwise.
-     * Input waits until the row opens ([minimalPending]). A game or a tool runs [launchSequence] instead.
-     */
-    val minimalOpening: StateFlow<MinimalOpening?> = _minimalOpening.asStateFlow()
-    /** A Minimal open is under way (a folder's names fading, a launch's spread and hand-off): input waits till it lands. */
-    private var minimalPending = false
-    private var minimalJob: Job? = null
-
-    private val _launchSequence = MutableStateFlow<LaunchSequence?>(null)
-    /**
-     * A Minimal game's or tool's launch ([openMinimal]): black spreads from its name for [LaunchTimeline.SPREAD_MS] (a
-     * [LaunchTimeline.REDUCED_FADE_MS] fade under [reducedMotion]) and the row opens at its end; a game or an app then has
-     * the screen ([LaunchPhase.HANDED_OFF]) until [onForeground] fades the overlay out ([LaunchPhase.RETURNING]), an
-     * in-app tool comes up under it fading out at once, and a refusal retreats ([LaunchPhase.RETREAT]) before its Problem
-     * shows. Null otherwise, and [LaunchTimeline.GIVE_UP_MS] after a hand-off that never came back.
-     */
-    val launchSequence: StateFlow<LaunchSequence?> = _launchSequence.asStateFlow()
     /** The system's reduced motion, as the platform reports it now ([AppDeps.reducedMotion]). */
     val reducedMotion: () -> Boolean = deps.reducedMotion
     /** The UI's capture of the selected name (set by the menu): a launch sequence's game carries it ([GameSession.launchName]). */
-    var launchNameProvider: (() -> LaunchName?)? = null
-    private var launchSeqJob: Job? = null
-    private var launchSeqIds = 0L
-    /** The runner (or an app's start) was called since the sequence's open: a hand-off, not a refusal. */
-    private var launchHandedOff = false
-    /** A launch's Problem met during the spread: shown once the black has retreated. */
-    private var heldLaunchError: String? = null
+    var launchNameProvider: (() -> LaunchName?)?
+        get() = launches.launchNameProvider
+        set(v) { launches.launchNameProvider = v }
 
     /** The screen's footer mode as App last reported it ([onFooterMode]); HINTS until then, as [LocalFooterMode]'s default. */
     private var footerMode = FooterMode.HINTS
@@ -1310,10 +1279,9 @@ class AppState(
 
     private val _nav = MutableStateFlow(NavStep())
     val nav: StateFlow<NavStep> = _nav.asStateFlow()
+    val resumeInfo: StateFlow<ResumeInfo> get() = launches.resumeInfo
     private var pendingNav: Pair<NavMotion, Screen>? = null   // a user's A/B into or out of a list, and the screen it was made on
 
-    private val _resumeInfo = MutableStateFlow(ResumeInfo.NONE)
-    val resumeInfo: StateFlow<ResumeInfo> = _resumeInfo.asStateFlow()
     private val _gameInfo = MutableStateFlow<Map<String, GameInfo>>(emptyMap())
     /** Every game's play time and RetroAchievements progress by library path (menus show the selected one's). */
     val gameInfo: StateFlow<Map<String, GameInfo>> = _gameInfo.asStateFlow()
@@ -1342,13 +1310,13 @@ class AppState(
     private var lastTimes: Map<String, GameTotal> = emptyMap()   // the last play time read that worked ([refreshGameInfo])
     private var lastRa: Map<String, RaProgress> = emptyMap()      // likewise RetroAchievements progress
     /** The Game Switcher: its cards, its return after a game resumed from it, and Y Remove. */
-    private val switcher = SwitcherController(
+    private val switcher: SwitcherController = SwitcherController(
         scope, _screen, _selection, deps.settings, deps.userData, deps.switcherReturns,
         host = object : SwitcherHost {
             override fun kidsLocked(): Boolean = kidsUi.kidsLocked
             override fun navStep(motion: NavMotion) = this@AppState.navStep(motion)
             override fun resolveOne(path: String): Listed? = this@AppState.resolveOne(path)
-            override fun launch(entry: Listed, resumeSlot: Int?, fromSwitcher: Boolean): Job? = this@AppState.launch(entry, resumeSlot, fromSwitcher = fromSwitcher)
+            override fun launch(entry: Listed, resumeSlot: Int?, fromSwitcher: Boolean): Job? = launches.launch(entry, resumeSlot, fromSwitcher = fromSwitcher)
             override fun menuWithItsRow(): Pair<Screen, ListSelection> =
                 menuScreen().let { m -> m to (m.category?.let(tabSelections::get) ?: ListSelection(0, 0)).clampedTo(m.rows.size) }
             override fun publishHomeView() = homeTab.publishHomeView()
@@ -1358,8 +1326,25 @@ class AppState(
             override val recentsLock: Mutex get() = this@AppState.recentsLock
         },
     )
-    private var resumeJob: Job? = null     // highlighted game's resume-marker read
-    private var launchJob: Job? = null     // pre-launch checks + runner launch in flight
+    /** Game launches, resume and a Minimal page's open and launch sequence. */
+    private val launches: LaunchController = LaunchController(
+        scope, _screen, _selection, _error, deps, sidecars, switcher,
+        host = object : LaunchHost {
+            override fun kidsLocked(): Boolean = kidsUi.kidsLocked
+            override fun dropPushedTab() = this@AppState.dropPushedTab()
+            override fun launchApp(entry: Listed): Boolean = androidApps.launchApp(entry)
+            override fun showNotice(text: String) = this@AppState.showNotice(text)
+            override fun rememberMenuSelection() = this@AppState.rememberMenuSelection()
+            override suspend fun moveInIndex(game: GameEntry, from: SystemFolder, toTag: String): Boolean = this@AppState.moveInIndex(game, from, toTag)
+            override suspend fun refreshOpenList(select: String?) = this@AppState.refreshOpenList(select)
+            override fun openMainRow(s: Screen.Systems, index: Int, forward: NavMotion): Job? = this@AppState.openMainRow(s, index, forward)
+            override fun clockNow(): Long = this@AppState.clockNow()
+        },
+    )
+    /** A Minimal page's folder being opened ([LaunchController.openMinimal]); null otherwise. */
+    val minimalOpening: StateFlow<MinimalOpening?> get() = launches.minimalOpening
+    /** A Minimal game's or tool's launch sequence ([LaunchController.launchSequence]); null otherwise. */
+    val launchSequence: StateFlow<LaunchSequence?> get() = launches.launchSequence
     private var hideJob: Job? = null       // A-in-the-hidden-list unhide in flight
     private val recents = deps.recents ?: RecentsRecorder(deps.userData, scope)
     private val recentsLock get() = recents.lock   // serialises recent.txt read-modify-writes, process-wide
@@ -1563,7 +1548,7 @@ class AppState(
     /** The app left the foreground: art results still waiting are written now, not left to a debounce a kill would lose. */
     fun onBackground() {
         // The game (or app) a Minimal launch handed off to is in front: no give-up now, the next onForeground fades it.
-        if (_launchSequence.value?.phase == LaunchPhase.HANDED_OFF) launchSeqJob?.cancel()
+        launches.onBackground()
         if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) { closeShortcuts(); refreshSettings() }
         scope.launch { flushArt() }
     }
@@ -3178,7 +3163,7 @@ class AppState(
         // A Minimal morph needs a Minimal page on both sides: else the plain slide.
         val minimal = motion != motion.slide && styleOf(from) == MenuStyle.MINIMAL && styleOf(to) == MenuStyle.MINIMAL
         navStep(if (minimal) motion else motion.slide)
-        if (minimal) _minimalOpening.value = null   // the faded page is gone: nothing to clear later
+        if (minimal) launches.forgetMinimalOpening()   // the faded page is gone: nothing to clear later
     }
 
     /** Called just before the new page's screen is set, so the UI never sees the new screen under the old step. */
@@ -5469,171 +5454,6 @@ class AppState(
 
     // --- Launching ---
 
-    private fun listed(game: GameEntry): Listed? = (_screen.value as? Screen.Games)?.entries?.firstOrNull { it.game == game }
-
-    fun play(game: GameEntry): Job? = listed(game)?.let { launch(it, resumeSlot = null) }
-
-    /** The context menu's Play from start (a game with a save state, which A resumes): [entry] from the start. */
-    private fun playFromStart(entry: Listed) {
-        rememberMenuSelection()   // Home's game, as A on it (a game list has none to remember)
-        launch(entry, resumeSlot = null)
-    }
-
-    /**
-     * Continues [entry] from its last save, read now (never a slot read earlier); without one it plays [entry] when
-     * [orPlay] (A on a game), else does nothing. An Unassigned game never launches; an Android game has no save.
-     */
-    private fun resumeFromSave(entry: Listed, orPlay: Boolean = false): Job? {
-        val e = entry.takeIf { !it.system.unassigned && !it.system.android } ?: return null
-        return scope.launch {   // ends with the launch's own job (a launch sequence waits on it)
-            val info = deps.userData.resumeInfo(e.system.tag, e.game.fileName)
-            (if (info.canResume) launch(e, info.slot) else if (orPlay) launch(e, resumeSlot = null) else null)?.join()
-        }
-    }
-
-    /**
-     * A netplay launch ([NetplayController]'s agreement): [entry] under the agreed core (which may not be its folder's),
-     * never resumed, with [session] for the runner. Everything else is [launch]'s.
-     */
-    fun launchNetplay(entry: Listed, session: NetplaySession) {
-        val core = CoreRegistry.forId(session.coreId) ?: return
-        launch(entry, resumeSlot = null, coreOverride = core, netplay = session)
-    }
-
-    /** Starts [entry] (see the steps inside); the start's job, or null when none began (an app, no core, one in flight). */
-    private fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null, fromSwitcher: Boolean = false): Job? {
-        if (kidsUi.kidsLocked) return null   // Kids Mode: no game (nor Android game) while Locked
-        val listed = entry.system
-        val game = entry.game
-        // After a game the menu is its own tab again (the pushed one is not restored): dropped only for a launch that
-        // happens (an app's start, or the runner's call), so a coreless, in-flight, vanished or unreadable game leaves the
-        // push for B to return to.
-        if (listed.android) { dropPushedTab(); if (androidApps.launchApp(entry)) launchHandedOff = true; return null }
-        if (coreOverride == null && listed.core == null) return null
-        if (launchJob?.isActive == true) return null   // a launch is already in flight
-        switcher.cancelLoad()   // a switcher still loading must not open over the launched game
-        val job = scope.launch {
-            val gone = "Could not find ${game.fileName}. If it was moved or deleted, use Rescan in Settings → Library."
-            if (!stillThere(game)) {   // the index can be older than the tree: no recents entry, no runner call
-                launchError(gone)
-                return@launch
-            }
-            // A netplay launch keeps the agreed core.
-            val sys = (if (coreOverride == null) classicNesSystem(entry) else null) ?: listed
-            val core = coreOverride ?: sys.core ?: return@launch
-            // A .cue/.m3u/.ccd/.toc loads the files it names from the same folder; all must be there before the core starts.
-            val lookup = companionsOrNull { DiscSheet.companions(deps.source, game.folder, game.fileName) }
-            val companions = when (lookup) {
-                null -> { launchError(gone); return@launch }
-                is CompanionLookup.Missing -> { launchError("Missing ${lookup.name} next to ${lookup.sheet}"); return@launch }
-                is CompanionLookup.Found -> lookup.companions
-            }
-            // An fbneo set also loads its parent and BIOS sets: the ones beside it go along, a BIOS not beside it is checked in the system dir.
-            // The set table is fbneo's: flycast's NAOMI/Atomiswave zips, loaded as is too, take none of it.
-            var systemSets = emptyList<String>()
-            val fbneoSet = core.id == "fbneo" && CoreRegistry.loadsArchive(sys.tag, game.fileName)
-            // A NAOMI/Atomiswave clone takes its parent set from beside it (flycast opens /rom/<parent>.zip); its BIOS is GameActivity's check.
-            val naomiArchive = core.id == "flycast" && CoreRegistry.loadsArchive(sys.tag, game.fileName)
-            val all = if (fbneoSet) {
-                val arcade = companionsOrNull {
-                    // The set table's first read parses it (hundreds of KB): off the main thread.
-                    val sets = withContext(deps.compute) { deps.arcadeSets() }
-                    ArcadeCompanions.find(deps.source, game.folder, game.fileName, sets)
-                } ?: run { launchError(gone); return@launch }
-                systemSets = arcade.systemSets
-                companions + arcade.companions
-            } else if (naomiArchive) {
-                val parent = companionsOrNull {
-                    val sets = withContext(deps.compute) { deps.naomiSets() }
-                    // A zipped disc (not one of flycast's sets) is unpacked at launch and takes no parent.
-                    if (!CoreRegistry.loadsArchive(sys.tag, game.fileName, sets)) emptyList()
-                    else ArcadeCompanions.findParent(deps.source, game.folder, game.fileName, sets)
-                } ?: run { launchError(gone); return@launch }
-                companions + parent
-            } else companions
-            // The Brick records the shown name on every open (launcher.c Recents_setAlias(self->name)), replacing a stale one.
-            val recent = Recent(game.path, game.shownName)
-            // Only a game the core actually loaded is recent: the runner can still refuse it (bad archive, BIOS, load error),
-            // so it keeps a launch record the game marks started, and the menu records it then.
-            // Checked last, right before the runner: a game started during an import or a Device Sync could later write over
-            // a save that just arrived.
-            SaveTransferRules.launchRefusal(deps.saveTransfer?.importing == true, deps.deviceSync?.running == true)?.let { showNotice(it); return@launch }
-            if (kidsUi.kidsLocked) return@launch   // Kids Mode locked while this launch was on its way (the file checks above)
-            dropPushedTab()
-            switcher.switcherReturn = fromSwitcher   // set only once the runner is called: a refused launch never gets here (the runner keeps it on disk)
-            // A launch sequence's spread hands its name over; any other launch has none.
-            val launchName = if (_launchSequence.value?.phase == LaunchPhase.SPREAD) launchNameProvider?.invoke() else null
-            launchHandedOff = true
-            deps.runner.launch(GameSession(sys.tag, game.shownName, core, game.ref, game.folder, game.fileName, resumeSlot, all, systemSets = systemSets, gamePath = game.path,
-                artPath = panelArt(settings.backdropArt, game), netplay = netplay, launchName = launchName, fromSwitcher = fromSwitcher), recent)
-        }
-        launchJob = job
-        job.invokeOnCompletion { if (launchJob === job) launchJob = null }
-        return job
-    }
-
-    /** [load]'s companion lookup, or null when it fails: any failure, an Error too, is a game not found. */
-    private inline fun <T : Any> companionsOrNull(load: () -> T): T? =
-        try { load() } catch (e: CancellationException) { throw e } catch (e: Throwable) { null }
-
-    /** [launch]'s Problem: held during a launch sequence's spread (shown after its retreat, [openMinimal]), else shown now. */
-    private fun launchError(text: String) {
-        if (_launchSequence.value?.phase == LaunchPhase.SPREAD) heldLaunchError = text else _error.value = text
-    }
-
-    /**
-     * A Classic NES Series cart ([ClassicNes]) that would run gpSP only as the console's default runs mGBA:
-     * mGBA is recorded as its Emulator pick, as the Emulator menu would ([Sidecars.set], then [moveInIndex]), so its
-     * states, Game Settings, resume and menus all follow MGBA from this launch on; the user can still pick GBA there,
-     * which this never overrides. The MGBA system to launch under; null: launch as listed. The header is read only
-     * here, never by a scan: a bare ROM's first bytes, or an archive's ROM entry's ([AppDeps.archiveHead]).
-     */
-    private suspend fun classicNesSystem(entry: Listed): SystemFolder? {
-        val sys = entry.system
-        val game = entry.game
-        if (sys.tag != ClassicNes.GPSP_TAG) return null
-        val picked = try {
-            sidecars.read(game.sourceId, game.folder, game.relativeDir)[game.fileName]
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            return null
-        }?.takeIf { CoreRegistry.consoleTag(it) == CoreRegistry.consoleTag(sys.tag) }   // another console's tag is ignored, as by the scan
-        // Only a ROM mGBA's core takes (a .gba): a .bin would list under GBA again on the next scan, and mGBA's unpack would refuse it.
-        val mgba = CoreRegistry.forTag(ClassicNes.MGBA_TAG) ?: return null
-        val tag = ClassicNes.launchTag(sys.tag, picked) {
-            try {
-                if (Names.isArchive(game.fileName)) deps.archiveHead(game.ref, game.fileName, mgba.extensions, ClassicNes.HEAD_BYTES)
-                else if (Names.extensionOf(game.fileName) in mgba.extensions) deps.source.readHead(game.ref, ClassicNes.HEAD_BYTES)
-                else null
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                null
-            }
-        }
-        if (tag == sys.tag) return null
-        // A failed write still runs mGBA now; the next launch reads the header again.
-        val recorded = try {
-            sidecars.set(game.sourceId, game.folder, game.relativeDir, game.fileName, tag)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            false
-        }
-        if (recorded && moveInIndex(game, sys, tag)) refreshOpenList(select = game.path)
-        return sys.copy(tag = tag, core = mgba)
-    }
-
-    /** The file is still where the index says: a non-directory child of its folder. Any failure (a revoked tree) counts as gone. */
-    private suspend fun stillThere(game: GameEntry): Boolean = try {
-        deps.source.child(game.folder, game.fileName)?.isDirectory == false
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Throwable) {
-        false
-    }
-
     /**
      * The app came to the foreground (a card may have been inserted meanwhile). Only on the main menu with nothing open,
      * so a list or a page never changes under the user: an extra recorded offline that is mounted again rescans (as
@@ -5647,8 +5467,8 @@ class AppState(
         val switcherBack = switcher.switcherUnderGame && _screen.value is Screen.Switcher
         switcher.switcherUnderGame = false
         checkArt(reuse = true)   // art deleted or added while away (only changed art folders are listed)
-        returnFromLaunch()   // back from a game or an app a Minimal launch handed off to
-        if (!minimalPending) _minimalOpening.value?.let { minimalJob?.cancel(); _minimalOpening.value = null }
+        launches.returnFromLaunch()   // back from a game or an app a Minimal launch handed off to
+        if (!launches.minimalPending) launches.clearMinimalOpening()
         onLauncherChanged()   // back from Android's home settings or the role dialog: System re-reads its state
         refreshInstalled()    // apps may have been installed or removed meanwhile
         refreshGameInfo()   // back from a game (or another app): its time and unlocks may have moved
@@ -5677,27 +5497,13 @@ class AppState(
         }
     }
 
-    /** Re-reads the highlighted game's resume marker: a list's, Home's Continue card's, pinned or shelf game's (after returning from a game). */
-    fun refreshResume() {
-        resumeJob?.cancel()
-        val s = _screen.value
-        val index = _selection.value.index
-        val e = when (s) {
-            is Screen.Games -> s.entries.getOrNull(index)?.takeIf { s.source != ListSource.Hidden }   // hidden games are not resumed from here
-            // Continue and Home's pinned and shelf games (their A Resume or A Play): the focused one only, read off the main thread.
-            is Screen.Systems -> when (val row = s.rows.getOrNull(index)) {
-                is MainRow.Continue -> row.entry
-                is MainRow.Pin -> row.entry.takeIf { s.category == MenuCategory.HOME }
-                is MainRow.Shelf -> row.entry.takeIf { s.category == MenuCategory.HOME }
-                else -> null
-            }
-            else -> null
-        }?.takeIf { !it.system.unassigned && !it.system.android } ?: run { _resumeInfo.value = ResumeInfo.NONE; return }
-        resumeJob = scope.launch {
-            val info = deps.userData.resumeInfo(e.system.tag, e.game.fileName)
-            if (_screen.value === s && _selection.value.index == index) _resumeInfo.value = info   // drop stale reads
-        }
-    }
+    fun play(game: GameEntry): Job? = launches.play(game)
+
+    /** A netplay launch ([NetplayController]'s agreement): [LaunchController.launchNetplay]. */
+    fun launchNetplay(entry: Listed, session: NetplaySession) = launches.launchNetplay(entry, session)
+
+    /** Re-reads the highlighted game's resume marker ([LaunchController.refreshResume]). */
+    fun refreshResume() = launches.refreshResume()
 
     fun openSwitcher() = switcher.openSwitcher()
 
@@ -5851,7 +5657,7 @@ class AppState(
             }
             ToolKind.SETTINGS -> openSettingsMenu()
             ToolKind.APPS -> openToolApps(AppPick.TOOLS)
-            ToolKind.APP -> if (androidApps.openApp(row)) launchHandedOff = true
+            ToolKind.APP -> if (androidApps.openApp(row)) launches.launchHandedOff = true
             ToolKind.KIDS_LOCK -> kidsUi.kidsLockNow()
         }
     }
@@ -5944,15 +5750,15 @@ class AppState(
             // Home's pinned game, as Continue: its save read now resumes, none plays. An Android game opens its app.
             is MainRow.Pin -> {
                 rememberMenuSelection()
-                if (!row.entry.system.android) return resumeFromSave(row.entry, orPlay = true)
-                if (androidApps.launchApp(row.entry)) launchHandedOff = true
+                if (!row.entry.system.android) return launches.resumeFromSave(row.entry, orPlay = true)
+                if (androidApps.launchApp(row.entry)) launches.launchHandedOff = true
             }
             // A shelf game, as a pin (never an Android game).
-            is MainRow.Shelf -> { rememberMenuSelection(); return resumeFromSave(row.entry, orPlay = true) }
+            is MainRow.Shelf -> { rememberMenuSelection(); return launches.resumeFromSave(row.entry, orPlay = true) }
             is MainRow.Collection -> { intendNav(forward); openList(ListSource.Collection(row.name)) }
             is MainRow.Tool -> { rememberMenuSelection(); openTool(row.row) }
             // Its save is read again now: one made since the row was built resumes, one deleted since plays.
-            is MainRow.Continue -> { rememberMenuSelection(); return resumeFromSave(row.entry, orPlay = true) }
+            is MainRow.Continue -> { rememberMenuSelection(); return launches.resumeFromSave(row.entry, orPlay = true) }
             is MainRow.PinnedTool -> { rememberMenuSelection(); openTool(row.row) }
             // Home's "+N" and Pick a game: the Tools / Consoles tab, pushed over Home while Layouts hides it.
             is MainRow.MoreTools -> if (kidsUi.kidsToolsAllowed) showTab(MenuCategory.TOOLS)
@@ -5962,129 +5768,8 @@ class AppState(
         return null
     }
 
-    /**
-     * Opens game list row [index] of [s]: its save state resumes (its menu has Play from start), none plays; an Android
-     * game opens its app. The start's job, as [openMainRow]'s.
-     */
-    private fun openGameRow(s: Screen.Games, index: Int): Job? =
-        s.entries.getOrNull(index)?.let { if (it.system.android || it.system.unassigned) play(it.game) else resumeFromSave(it, orPlay = true) }
-
-    /** The page a Minimal open belongs to ([MinimalOpening.page]): a tab's category, a game list's source; null for any other screen. */
-    private fun minimalPage(s: Screen): Any? = when (s) {
-        is Screen.Systems -> s.category
-        is Screen.Games -> s.source
-        else -> null
-    }
-
-    /** [s]'s row [index] as a Minimal open checks it is still there: a tab's row, a game list's game. */
-    private fun minimalRow(s: Screen, index: Int): Any? = when (s) {
-        is Screen.Systems -> s.rows.getOrNull(index)
-        is Screen.Games -> s.entries.getOrNull(index)
-        else -> null
-    }
-
-    /**
-     * A on a Minimal page (a tab, Home's too, or a game list). A game or a tool runs the launch sequence
-     * ([launchMinimal]). A folder (a console, a collection, Home's "+N" and Pick a game) fades the other names out
-     * ([minimalOpening]) and opens as they have ([MINIMAL_LEAVE_MS]) if its page still shows it: a console or collection
-     * whose list is Minimal too by its name morphing into the list's title ([NavMotion.MINIMAL_FORWARD]), else sliding in;
-     * the opening clears a moment later (sooner on the next press: [onButton]).
-     */
-    private fun openMinimal(s: Screen) {
-        if (minimalPending) return
-        val page = minimalPage(s) ?: return
-        val index = _selection.value.index
-        val row = minimalRow(s, index) ?: return
-        val game = row !is MainRow || row is MainRow.Pin || row is MainRow.Shelf || row is MainRow.Continue
-        val tool = (row as? MainRow.Tool)?.row ?: (row as? MainRow.PinnedTool)?.row
-        if (game || tool != null) return launchMinimal(page, index, row, tool)
-        val list = (row is MainRow.System || row is MainRow.Collection) && deps.settings.gameListStyle == MenuStyle.MINIMAL
-        minimalJob?.cancel()
-        _minimalOpening.value = MinimalOpening(page, index)
-        minimalPending = true
-        minimalJob = scope.launch {
-            delay(MINIMAL_LEAVE_MS)
-            minimalPending = false
-            val now = _screen.value
-            if (now is Screen.Systems && minimalPage(now) == page && minimalRow(now, index) == row)
-                openMainRow(now, index, if (list) NavMotion.MINIMAL_FORWARD else NavMotion.FORWARD)
-            delay(MINIMAL_CLEAR_MS)
-            _minimalOpening.value = null
-        }
-    }
-
-    /**
-     * [openMinimal]'s game or [tool] ([row], [index] on [page]): [LaunchPhase.SPREAD] for [LaunchTimeline.SPREAD_MS]
-     * ([LaunchTimeline.REDUCED_FADE_MS] under [reducedMotion]), input waiting ([minimalPending]); then the row opens if its
-     * page still shows it. A runner call or an app's start hands off ([LaunchPhase.HANDED_OFF], till [onForeground] or
-     * [LaunchTimeline.GIVE_UP_MS]); an in-app tool is up under the black, which fades ([LaunchPhase.RETURNING]); anything
-     * else (the row gone, a refused or coreless game, an app that would not start) retreats, its Problem held till after.
-     */
-    private fun launchMinimal(page: Any, index: Int, row: Any, tool: ToolRow?) {
-        minimalJob?.cancel(); _minimalOpening.value = null
-        launchSeqJob?.cancel()
-        val id = ++launchSeqIds
-        _launchSequence.value = LaunchSequence(id, page, index, LaunchPhase.SPREAD, clockNow(), tool != null)
-        minimalPending = true
-        heldLaunchError = null
-        launchSeqJob = scope.launch {
-            delay(if (reducedMotion()) LaunchTimeline.REDUCED_FADE_MS else LaunchTimeline.SPREAD_MS)
-            val now = _screen.value
-            if (minimalPage(now) != page || minimalRow(now, index) != row) return@launch retreatLaunch(id)
-            launchHandedOff = false
-            val start = when (now) {
-                is Screen.Systems -> openMainRow(now, index)
-                is Screen.Games -> openGameRow(now, index)
-                else -> null
-            }
-            start?.join()   // a game's checks and runner call (or refusal)
-            when {
-                launchHandedOff -> {
-                    setLaunchPhase(id, LaunchPhase.HANDED_OFF)
-                    delay(LaunchTimeline.GIVE_UP_MS)   // the app never left ([onBackground] cancels this): stop covering the menu
-                    endLaunch(id)
-                }
-                tool != null && tool.kind != ToolKind.APP -> {
-                    setLaunchPhase(id, LaunchPhase.RETURNING)
-                    minimalPending = false
-                    delay(LaunchTimeline.RETURN_FADE_MS)
-                    endLaunch(id)
-                }
-                else -> retreatLaunch(id)
-            }
-        }
-    }
-
-    /** Sequence [id]'s black retreats into its name over [LaunchTimeline.RETREAT_MS]; then the held Problem shows. */
-    private suspend fun retreatLaunch(id: Long) {
-        setLaunchPhase(id, LaunchPhase.RETREAT)
-        delay(LaunchTimeline.RETREAT_MS)
-        endLaunch(id)
-        heldLaunchError?.let { heldLaunchError = null; _error.value = it }
-    }
-
-    private fun setLaunchPhase(id: Long, phase: LaunchPhase) {
-        _launchSequence.value?.takeIf { it.id == id }?.let { _launchSequence.value = it.copy(phase = phase) }
-    }
-
-    /** Sequence [id] is over (a newer one keeps its state): the overlay gone, input free. */
-    private fun endLaunch(id: Long) {
-        if (_launchSequence.value?.id != id) return
-        _launchSequence.value = null
-        minimalPending = false
-    }
-
-    /** Back in front over a handed-off launch: the overlay fades out over [LaunchTimeline.RETURN_FADE_MS], input free now. */
-    private fun returnFromLaunch() {
-        val seq = _launchSequence.value?.takeIf { it.phase == LaunchPhase.HANDED_OFF } ?: return
-        launchSeqJob?.cancel()
-        _launchSequence.value = seq.copy(phase = LaunchPhase.RETURNING)
-        minimalPending = false
-        launchSeqJob = scope.launch { delay(LaunchTimeline.RETURN_FADE_MS); endLaunch(seq.id) }
-    }
-
     fun select(index: Int) {
-        if (minimalPending) return   // a Minimal open is under way: the selection stays on the row opening
+        if (launches.minimalPending) return   // a Minimal open is under way: the selection stays on the row opening
         if (index != _selection.value.index) cancelCapture()   // a tap on another Shortcuts row ends a wait for a press
         _selection.value = _selection.value.copy(index = index).clampedTo(_selection.value.count)
         (_screen.value as? Screen.Systems)?.takeIf { it.category == MenuCategory.HOME }?.let { homeTab.noteHomeFocus(_selection.value.index, it.rows) }
@@ -6093,10 +5778,10 @@ class AppState(
 
     fun openSelected() {
         if (loader.active) return   // a screen is loading: only B (cancel) acts
-        if (minimalPending) return   // a Minimal open is under way: a tap waits too
+        if (launches.minimalPending) return   // a Minimal open is under way: a tap waits too
         when (val s = _screen.value) {
             is Screen.Onboarding -> onboardingRow(_selection.value.index)
-            is Screen.Systems -> if (styleOf(s) == MenuStyle.MINIMAL) openMinimal(s) else openMainRow(s, _selection.value.index)
+            is Screen.Systems -> if (styleOf(s) == MenuStyle.MINIMAL) launches.openMinimal(s) else openMainRow(s, _selection.value.index)
             is Screen.SettingsMenu -> s.sections.getOrNull(_selection.value.index)?.let(::openSettings)
             is Screen.ToolApps -> if (s.pick == AppPick.GAMES) androidApps.toggleAndroidGame(s) else androidApps.launchDrawerApp(s)
             is Screen.CheatDb -> onCheatDbButton(s, NxButton.A)
@@ -6111,7 +5796,7 @@ class AppState(
             is Screen.RaSettings -> ra.onRaSettingsButton(s, NxButton.A)
             // Hidden unhides at once, Minimal or not: nothing opens.
             is Screen.Games -> if (s.source == ListSource.Hidden) unhideSelected()
-                else if (styleOf(s) == MenuStyle.MINIMAL) openMinimal(s) else openGameRow(s, _selection.value.index)
+                else if (styleOf(s) == MenuStyle.MINIMAL) launches.openMinimal(s) else launches.openGameRow(s, _selection.value.index)
             is Screen.Switcher -> switcher.onSwitcherButton(s, NxButton.A)
             is Screen.Settings -> s.rows.getOrNull(_selection.value.index)?.let { row ->
                 val value = settingValue(row)
@@ -6467,7 +6152,7 @@ class AppState(
             override val achievementsInMenu: Boolean get() = hasAchievements && !deps.settings.gameListAchievementsPanel && !_dualMenu.value
             override fun openAchievements() = ra.openRaPanel()
             override suspend fun canResume(entry: Listed): Boolean = deps.userData.resumeInfo(entry.system.tag, entry.game.fileName).canResume
-            override fun playFromStart(entry: Listed) = this@AppState.playFromStart(entry)
+            override fun playFromStart(entry: Listed) = launches.playFromStart(entry)
             override fun hiddenTabs(): List<MenuCategory> = this@AppState.hiddenTabs()
             override fun openHiddenTab(category: MenuCategory) = this@AppState.openHiddenTab(category)
         },
@@ -6735,8 +6420,8 @@ class AppState(
         // An open confirm dialog takes LEFT and RIGHT for its buttons and turns A on Cancel into B ([DialogFocus]).
         val button = dialogFocus.press(pressed) ?: return
         kids?.parentInput()   // Parent mode's idle time starts again
-        if (minimalPending) return   // a Minimal open is under way: the row opens in a moment
-        _minimalOpening.value?.let { minimalJob?.cancel(); _minimalOpening.value = null }   // opened: the next press clears it
+        if (launches.minimalPending) return   // a Minimal open is under way: the row opens in a moment
+        launches.clearMinimalOpening()   // opened: the next press clears it
         _chooser.value?.let { onChooserButton(it, button); return }   // a touch chooser takes the pad while open
         _settingInfo.value?.let { onSettingInfoButton(it, button); return }   // a Settings row's info popup too
         // Press to bind waits on the controller's raw keys ([captureKey]): a touch hint's or the on-screen pad's B cancels, the rest wait.
