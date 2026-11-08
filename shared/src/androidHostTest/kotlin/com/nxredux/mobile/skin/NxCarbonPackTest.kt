@@ -15,7 +15,15 @@ import kotlin.test.assertTrue
 class NxCarbonPackTest {
     /** The 3DS's twins of the DS layouts (stacked, large and its wide, flex and its wide, the fold board, both landscapes), the fold board and the tall landscape with both sticks shown. */
     private val N3DS_LAYOUTS = 16   // the New 3DS twins and the regular 3DS twins, 8 each
-    private val GRIP_COLUMNS = 3   // the DS / 3DS landscape twins with the small caps in a column (the Fold cover)
+    private val GRIP_COLUMNS = 21   // each landscape shell's twin with the small caps in a column (the Fold cover)
+
+    /** A landscape layout with each side's small caps in one column (a `_col` twin, or a tall shell: all of them now). */
+    private fun SkinPlacement.columns() = spec.family == SkinFamily.GRIP && (spec.id.endsWith("_col") || spec.id.contains("_tall"))
+
+    /** [top] over [under], one column. */
+    private fun stacked(top: PlacedControl, under: PlacedControl, what: String) {
+        assertEquals(top.x, under.x, 1f, "$what one column"); assertTrue(under.y > top.y, "$what in order")
+    }
     private val dir = File("../androidApp/src/main/assets/skins/nx-carbon")
     private val pack = assertNotNull(SkinPackManifest.parse(File(dir, "skin.json").readText()))
 
@@ -71,7 +79,7 @@ class NxCarbonPackTest {
     fun gameBoyLayoutsHaveTheirButtonsInEveryFamily() {
         for ((v, ids) in mapOf(SkinVariant.GB to gbSet, SkinVariant.GBA to gbaSet)) {
             val ls = pack.layouts.filter { it.variant == v }
-            assertEquals(7, ls.size, "$v")   // six families and the fold board's tablet twin
+            assertEquals(8, ls.size, "$v")   // six families, the fold board's tablet twin and the landscape column twin
             for (l in ls) assertEquals(ids, l.controls.map { it.id }.toSet(), l.id)
         }
     }
@@ -167,7 +175,8 @@ class NxCarbonPackTest {
                 assertEquals(menu.y, disk.y, 1f, name); assertTrue(disk.x < menu.x, name)
                 val r = p.glasses.single { it.screen == GlassScreen.PANEL }.rect
                 for (c in p.controls) assertTrue(apart(box(c), floatArrayOf(r.x, r.y, r.x + r.width, r.y + r.height)), "$name ${c.spec.id} on the panel")
-            } else {
+            } else if (p.columns()) stacked(disk, menu, "$name DISK over MENU")
+            else {
                 assertEquals(menu.y, disk.y, 1f, name); assertTrue(disk.x < menu.x, name)
             }
         }
@@ -213,7 +222,7 @@ class NxCarbonPackTest {
     @Test
     fun n64LayoutsInEveryFamily() {
         // the stick as Dreamcast's (both only with real extra height); the C diamond, B / A in their own well, Z L R, START MENU
-        val roomy = setOf("tablet", "tablet_land")
+        val roomy = setOf("tablet", "tablet_land", "inner_land")   // the unfolded Fold's landscape: the d-pad over a small stick (user)
         for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
             val tablet = name.startsWith("tablet")
             val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, false, 640f to 480f,
@@ -247,7 +256,8 @@ class NxCarbonPackTest {
                 }
                 for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
             }
-            if (name in roomy) assertTrue(c("STICK").y < c("DPAD").y, "$name stick above the d-pad")
+            if (name == "inner_land") assertTrue(c("DPAD").y < c("STICK").y, "$name the d-pad over the small stick (user)")
+            else if (name in roomy) assertTrue(c("STICK").y < c("DPAD").y, "$name stick above the d-pad")
             // B up left of A; Z nearer the thumb than L (outside it, or under it)
             assertTrue(c("B").x < c("A").x && c("B").y < c("A").y, "$name B up left of A")
             assertTrue(c("L2").x < c("L").x || c("L2").y > c("L").y, "$name Z outside or under L")
@@ -336,6 +346,7 @@ class NxCarbonPackTest {
             assertTrue(c("Y").spec.shape == ControlShape.RECT && c("X").spec.shape == ControlShape.RECT && c("Y").x < c("X").x, "$name * left, # right shoulders")
             assertEquals("KEYPAD", c("L").spec.label, name)
             if (name == "phone_land") { assertEquals(c("MENU").x, c("L").x, 1f, "$name MENU under KEYPAD"); assertTrue(c("MENU").y > c("L").y, name) }
+            else if (p.columns()) stacked(c("L"), c("MENU"), "$name KEYPAD over MENU")
             else assertEquals(c("MENU").y, c("L").y, 1f, "$name KEYPAD beside MENU")
             for (useStick in listOf(true, false)) {
                 val sc = p.forStick(useStick).controls.filterNot { it.spec.id.startsWith("TOUCH_") }
@@ -370,7 +381,8 @@ class NxCarbonPackTest {
             assertEquals(setOf("DPAD", "B", "A", "START", "MENU"), cs.map { it.spec.id }.toSet(), name)
             fun c(id: String) = cs.first { it.spec.id == id }
             assertTrue(c("B").x < c("A").x && c("B").y > c("A").y, "$name O down left of X (user: rising to the right)")
-            assertEquals(c("MENU").y, c("START").y, 1f, "$name START beside MENU (user)"); assertTrue(c("START").x > c("MENU").x, "$name START right of MENU")
+            if (p.columns()) stacked(c("MENU"), c("START"), "$name MENU over START")
+            else { assertEquals(c("MENU").y, c("START").y, 1f, "$name START beside MENU (user)"); assertTrue(c("START").x > c("MENU").x, "$name START right of MENU") }
             for (i in cs.indices) for (j in i + 1 until cs.size) {
                 val a = cs[i]; val b = cs[j]
                 if (a.spec.shape == ControlShape.DPAD || b.spec.shape == ControlShape.DPAD) {
@@ -687,7 +699,8 @@ class NxCarbonPackTest {
                 for (x in cs) assertTrue(x.x >= 0f && x.x <= d.first && x.y >= 0f && x.y <= d.second, "$name ${x.spec.id} off the window")
             }
             assertEquals(2, p.pieces.count { it.knob }, name)
-            assertEquals(c("MENU").y, c("HOME").y, 1f, "$name HOME beside MENU"); assertTrue(c("HOME").x > c("MENU").x, "$name HOME right of MENU")
+            if (p.columns()) stacked(c("MENU"), c("HOME"), "$name MENU over HOME")
+            else { assertEquals(c("MENU").y, c("HOME").y, 1f, "$name HOME beside MENU"); assertTrue(c("HOME").x > c("MENU").x, "$name HOME right of MENU") }
             val small = p.spec.family == SkinFamily.STACKED || (p.spec.family == SkinFamily.FLEX && !p.spec.id.contains("fold"))
             assertEquals(if (small) listOf("−", "+") else listOf("SELECT", "START"), listOf(c("SELECT").spec.label, c("START").spec.label), name)
             if (name in roomy) {   // the original controller's order (user): the d-pad and the face on top, both full sticks under them
@@ -866,6 +879,10 @@ class NxCarbonPackTest {
                 assertTrue(caps[0].y - caps[0].spec.r > padFoot, "$id: under the pad")
                 assertTrue(caps.last().y + caps.last().spec.r < wh - 20f, "$id: on the window")
                 for (k in caps) assertTrue(k.spec.labelH > 0f && (if (side == "left") k.spec.labelDx < 0f else k.spec.labelDx > 0f), "$id ${k.spec.id}: its word outside")
+                // the top two in an upright pair well (user: two grouped; of three, the top two)
+                val mx = caps[0].x; val my = (caps[0].y + caps[1].y) / 2f
+                assertTrue(p.pieces.any { w -> w.dst.height > w.dst.width * 1.5f && kotlin.math.abs(w.dst.x + w.dst.width / 2f - mx) < 2f &&
+                    kotlin.math.abs(w.dst.y + w.dst.height / 2f - my) < 2f }, "$id: the top two in a well")
             }
             // the columns level at the foot (user): MENU with SWAP, MIC with START (the left's fewer caps start lower)
             for (i in 1..left.size) assertEquals(right[right.size - i].y, left[left.size - i].y, 1f, "$v $win ${left[left.size - i].spec.id} level with ${right[right.size - i].spec.id}")
@@ -892,6 +909,39 @@ class NxCarbonPackTest {
                 assertEquals(40f * n.k, down, 1f, "$w $id")
             }
         }
+    }
+
+    // Every stick's knob sits in its ring, the small ones too (user: the PlayStation's showed the nub alone).
+    @Test
+    fun everyStickKnobHasItsRing() {
+        for (l in pack.layouts) for (k in l.pieces.filter { it.knob }) {
+            val cx = k.x + k.w * k.scale / 2f; val cy = k.y + k.h * k.scale / 2f
+            assertTrue(l.pieces.any { r -> !r.knob && r.w * r.scale > k.w * k.scale && kotlin.math.abs(r.x + r.w * r.scale / 2f - cx) < 3f &&
+                kotlin.math.abs(r.y + r.h * r.scale / 2f - cy) < 3f }, "${l.id} ${k.knobOf}: its ring")
+        }
+    }
+
+    // The N64 on the unfolded Fold in landscape (user): the d-pad on top, a small stick (the PlayStation's) under it, both
+    // shown (no switch), with room between; MENU and START in the right's column under the face.
+    @Test
+    fun n64UnfoldedLandscapeHasTheDpadOverASmallStick() {
+        val p = assertNotNull(SkinChoice.place(pack, 2448, 1848, 420, false, false, 320f to 240f, null, foldable = true, variant = SkinVariant.N64))
+        fun c(id: String) = p.controls.first { it.spec.id == id }
+        assertTrue(p.controls.none { it.spec.id == "STICK_SWAP" }, "no switch")
+        assertTrue(p.pieces.none { it.alt != null } && p.controls.none { it.spec.alt != null }, "both shown")
+        val dp = c("DPAD"); val st = c("STICK")
+        assertEquals(dp.x, st.x, 1f)
+        // room between them (user: too tight): the d-pad, a gap, the stick's ring (r x 208 / 170)
+        assertTrue(st.y - dp.y >= dp.spec.r + st.spec.r * 208f / 170f + 60f * p.k, "a gap between the d-pad and the stick")
+        val shoulders = listOf(c("L"), c("L2")).maxOf { it.y + it.spec.hh }
+        assertTrue(dp.y - dp.spec.r - shoulders >= 60f * p.k, "a gap under Z / L")
+        assertEquals(136f * p.k, st.spec.r, 1f, "the small stick")
+        // MENU and START on the right, under the face (user: the left for the d-pad and the stick)
+        assertTrue(c("MENU").x > 2448f / 2f && c("START").x > 2448f / 2f, "MENU START right")
+        assertTrue(c("MENU").y - c("MENU").spec.r > listOf(c("A"), c("B")).maxOf { it.y + it.spec.r }, "under the face")
+        assertTrue(c("MENU").spec.labelDx > 0f, "their words outward")
+        stacked(c("MENU"), c("START"), "MENU over START")
+        assertTrue(c("START").y + c("START").spec.r < 1848f - 20f, "on the window")
     }
 
     @Test
@@ -1389,7 +1439,8 @@ class NxCarbonPackTest {
         )) {
             val p = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi), name)
             dump(name, w, h, p)
-            assertEquals(if (h / p.k >= 1500f) "grip_menu_tall" else "grip_menu", p.spec.id, name)
+            val colH = pack.layouts.single { it.id == "grip_menu_col" }.minRefH
+            assertEquals(if (h / p.k >= 1500f) "grip_menu_tall" else if (h / p.k >= colH) "grip_menu_col" else "grip_menu", p.spec.id, name)
             val g = p.glasses.single().rect
             val c = p.controls.associateBy { it.spec.id }
             assertEquals(setOf("DPAD", "A", "B", "X", "Y", "L", "R", "START", "SELECT", "MENU"), c.keys)
