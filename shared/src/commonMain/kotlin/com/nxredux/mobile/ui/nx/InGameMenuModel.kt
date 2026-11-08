@@ -38,7 +38,7 @@ import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 
-enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, CANCEL, ADJUST_BUTTONS }
+enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, ASK_RESET, CANCEL, ADJUST_BUTTONS }
 enum class SlotAction { SAVE, LOAD }
 
 sealed interface PageKind {
@@ -544,9 +544,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 !root && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
                 !root -> if (stepsOnSide()) { intoAdjust(state.page.selected); change(1) } else null
                 visualRow(state.page.selected) != null -> { intoAdjust(state.page.selected); change(1) }
-                // The Disc row keeps RIGHT for its value; every other row enters the shortcuts (beside or below the words).
-                panelShown() && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Option -> {
-                    state = state.copy(panelFocus = if (panelShortcuts().isNotEmpty()) PanelFocus.Item(0) else PanelFocus.Tabs); null
+                // The Disc row keeps RIGHT for its value; every other row enters the shortcuts (beside or below the words),
+                // when there are any: none in the menu now (the skin's strip has them), so RIGHT stays on the words.
+                panelShown() && panelShortcuts().isNotEmpty() && state.page.rows.getOrNull(state.page.selected) !is MenuRow.Option -> {
+                    state = state.copy(panelFocus = PanelFocus.Item(0)); null
                 }
                 // Options moves into its preview, as A, whether or not the menu splits.
                 (split || state.preview != null) && opensPage(state.page.rows.getOrNull(state.page.selected)) -> activate(state.page.selected)
@@ -1108,8 +1109,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         cheats = cheatsAvailable && !netplay,
     )
 
-    private fun panelShortcuts(): List<ShortcutState> =
-        GamePanelModel.shortcuts(discCount, discIndex, secondConnected, secondOn, netplay, speedFf, speedRewind, micTile)
+    /**
+     * None: the skin's touch strip holds the shortcuts (user), Reset is a root row and the Disc row swaps discs. The
+     * second-screen panel keeps its own tiles ([GamePanelModel.shortcuts]).
+     */
+    private fun panelShortcuts(): List<ShortcutState> = emptyList()
 
     private fun panelAchievements(): List<RaAchievement> = achievements.orEmpty().sortedBy(achievementOrder)
 
@@ -1271,6 +1275,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         MenuAction.SAVE_AND_QUIT -> MenuEffect.Quit
         MenuAction.QUIT_ONLY -> MenuEffect.QuitWithoutResume
         MenuAction.RESET -> { resetClosesOnCancel = false; popTo(PageKind.Root); MenuEffect.ResetGame }
+        MenuAction.ASK_RESET -> { push(resetPage()); resetClosesOnCancel = false; null }
         MenuAction.CANCEL -> cancelReset()
         MenuAction.ADJUST_BUTTONS -> MenuEffect.AdjustButtons
         MenuAction.LEAVE_NETPLAY -> MenuEffect.LeaveNetplay
@@ -1543,6 +1548,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             if (discCount > 1) add(MenuRow.Option(DISC_LABEL, DISC_KEY, "${discIndex + 1}/$discCount", choices = (1..discCount).map { "Disc $it" }, index = discIndex, detail = DISC_INFO))
             add(MenuRow.Slot("Save", SlotAction.SAVE))
             add(MenuRow.Slot("Load", SlotAction.LOAD))
+            add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage]); the panel's Reset tile before (user)
             add(MenuRow.Submenu("Options", PageKind.Options))
             add(MenuRow.Action("Quit", MenuAction.QUIT))
         },
