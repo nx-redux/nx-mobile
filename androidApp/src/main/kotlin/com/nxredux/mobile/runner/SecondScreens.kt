@@ -44,13 +44,28 @@ object SecondScreenRule {
         qualifies(f, debug = debugInternal) && f.type in BUILT_IN_TYPES   // overlay and virtual qualify only with the switch
 
     private val BUILT_IN_TYPES = setOf(DisplayFacts.INTERNAL, DisplayFacts.OVERLAY, DisplayFacts.VIRTUAL)
+
+    /**
+     * The second screen's display id for a window on display [hostId]: the first qualifying [presentation] display that
+     * is neither the window's own nor the default one, else [default] (the default display's facts, null: unreadable)
+     * when the window is elsewhere (a monitor, DeX) and it qualifies. Null: none.
+     */
+    fun pick(presentation: List<DisplayFacts>, default: DisplayFacts?, hostId: Int, debug: Boolean): Int? {
+        presentation.firstOrNull { it.id != hostId && it.id != Display.DEFAULT_DISPLAY && qualifies(it, debug) }?.let { return it.id }
+        return default?.takeIf { hostId != Display.DEFAULT_DISPLAY && qualifies(it, debug) }?.id
+    }
 }
 
 /**
- * The display a second-screen Presentation should go to: [current] is the first qualifying non-default presentation
- * display, kept up to date between [start] and [stop]. Every display's facts are logged once, for device reports.
+ * The display a second-screen Presentation should go to: [current] is [SecondScreenRule.pick]'s for a window on
+ * [hostDisplay] (the display the game is on now), kept up to date between [start] and [stop]; a move of that window to
+ * another display calls [refresh]. Every display's facts are logged once, for device reports.
  */
-class SecondScreens(context: Context, private val debug: Boolean = BuildConfig.DEBUG) {
+class SecondScreens(
+    context: Context,
+    private val debug: Boolean = BuildConfig.DEBUG,
+    private val hostDisplay: () -> Int = { Display.DEFAULT_DISPLAY },
+) {
     private val app = context.applicationContext
     private val manager = app.getSystemService(DisplayManager::class.java)
     private val logged = HashSet<Int>()
@@ -93,14 +108,21 @@ class SecondScreens(context: Context, private val debug: Boolean = BuildConfig.D
             .firstOrNull { it.displayId != Display.DEFAULT_DISPLAY && SecondScreenRule.builtIn(facts(it), debugInternal) }
     }
 
-    private fun refresh() {
+    /** Picks again; nothing while stopped. Main thread. */
+    fun refresh() {
+        if (!started) return
         val shown = manager.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
             .filter { it.displayId != Display.DEFAULT_DISPLAY }
-        for (d in shown) {
-            val f = facts(d)
+        val host = hostDisplay()
+        // The default display is no presentation display: it is a candidate only for a window elsewhere.
+        val default = if (host != Display.DEFAULT_DISPLAY) manager.getDisplay(Display.DEFAULT_DISPLAY) else null
+        val all = shown + listOfNotNull(default)
+        val facts = all.associateWith(::facts)
+        for (f in facts.values) {
             if (logged.add(f.id)) NxLog.i(TAG, "display $f qualifies=${SecondScreenRule.qualifies(f, debug)}")
         }
-        _current.value = shown.firstOrNull { SecondScreenRule.qualifies(facts(it), debug) }
+        val id = SecondScreenRule.pick(shown.map { facts.getValue(it) }, default?.let { facts.getValue(it) }, host, debug)
+        _current.value = all.firstOrNull { it.displayId == id }
     }
 
     private companion object {

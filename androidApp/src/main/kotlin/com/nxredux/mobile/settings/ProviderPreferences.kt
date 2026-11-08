@@ -12,9 +12,10 @@ fun interface PrefsChannel {
 }
 
 /**
- * A [SharedPreferences] for the game process. Reads come from [local], this process's own instance of the file: the
- * game process is new for every game, so it reads the file as it stood at launch (a setting changed in the menu meanwhile
- * reaches the next game), never calling the menu process, so a key event never waits on it. Writes go to the owner, the
+ * A [SharedPreferences] for the game process. Reads come from [local], this process's own instance of the file as it
+ * stood at launch, until a [refresh] replaces it with the owner's current entries: a setting changed in the menu while
+ * the game was away (launcher mode's Home) reaches it when it comes back. A read never calls the menu process, so a key
+ * event never waits on it. Writes go to the owner, the
  * main process ([PrefsProvider]), so its cached copy never writes over them later; once applied there they are kept in
  * memory here ([written]) and read back at once. They are never written to the file from this process: [local]'s copy
  * may be older than the owner's, and saving it would undo the menu's changes. Change listeners are not supported:
@@ -28,30 +29,57 @@ class ProviderPreferences(
     private val lock = Any()
     /** This process's applied writes: a value, or [REMOVED]. */
     private val written = HashMap<String, Any>()
-    /** A clear was applied: [local]'s entries are gone. */
+    /** A clear was applied: [local]'s (or [fetched]'s) entries are gone. */
     private var cleared = false
+    /** The owner's entries as the last [refresh] read them; null: none yet, [local] stands. */
+    private var fetched: Map<String, Any?>? = null
+    /** Counts this process's applied writes: a [refresh] tells whether one landed while it was asking. */
+    private var writes = 0L
 
-    /** [key] as this process sees it: its own write, else nothing after a clear, else [local]'s (a lookup, no copy). */
+    /**
+     * [key] as this process sees it: its own write, else nothing after a clear, else [fetched]'s, else [local]'s (a
+     * lookup, no copy).
+     */
     @Suppress("UNCHECKED_CAST")
     private inline fun <T> read(key: String, def: T, fromLocal: () -> T): T = synchronized(lock) {
         val mine = written[key]
+        val owners = fetched
         when {
             mine === REMOVED -> def
             mine != null -> mine as T
             cleared -> def
+            owners != null -> (owners[key] ?: def) as T
             else -> fromLocal()
         }
     }
 
+    /**
+     * Reads the owner's current entries (one call into the main process) and reads from them from now on. Blocking:
+     * never on the key-event path. A failed call keeps the view as it was. This process's own writes stay in front only
+     * if one landed while the call ran (the owner's answer may predate it); otherwise the owner's entries already hold
+     * them, and a later change there wins.
+     */
+    fun refresh() {
+        val startedAt = synchronized(lock) { writes }
+        @Suppress("UNCHECKED_CAST")
+        val entries = runCatching { channel.call(PrefsProvider.METHOD_GET_ALL, name, emptyMap())[PrefsProvider.RESULT_ENTRIES] as Map<String, Any?> }
+            .onFailure { NxLog.w("NXAPP", "settings read ($name): ${it.message}") }
+            .getOrNull() ?: return
+        synchronized(lock) {
+            fetched = HashMap(entries)
+            if (writes == startedAt) { written.clear(); cleared = false }
+        }
+    }
+
     override fun getAll(): MutableMap<String, *> = synchronized(lock) {
-        val out = HashMap<String, Any?>(if (cleared) emptyMap() else local.all)
+        val out = HashMap<String, Any?>(if (cleared) emptyMap() else fetched ?: local.all)
         for ((k, v) in written) if (v === REMOVED) out.remove(k) else out[k] = v
         out
     }
 
     override fun contains(key: String) = synchronized(lock) {
         val mine = written[key]
-        if (mine != null) mine !== REMOVED else !cleared && local.contains(key)
+        if (mine != null) mine !== REMOVED else !cleared && (fetched?.containsKey(key) ?: local.contains(key))
     }
     override fun getString(key: String, defValue: String?) = read(key, defValue) { local.getString(key, defValue) }
     override fun getInt(key: String, defValue: Int) = read(key, defValue) { local.getInt(key, defValue) }
@@ -91,6 +119,7 @@ class ProviderPreferences(
                 .onFailure { NxLog.w("NXAPP", "settings write ($name): ${it.message}") }
                 .getOrDefault(false)
             if (ok) synchronized(lock) {
+                writes++
                 if (clear) { cleared = true; written.clear() }
                 remove.forEach { written[it] = REMOVED }
                 put.forEach { (k, v) -> if (v != null) written[k] = v }

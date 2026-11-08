@@ -63,6 +63,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.AppProcess
+import com.nxredux.mobile.lowLatencyWifiLock
 import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.R
 import com.nxredux.mobile.achievements.AchievementsService
@@ -79,6 +80,7 @@ import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.cheats.DolphinCheats
 import com.nxredux.mobile.gametime.GameTimeRecorder
 import com.nxredux.mobile.gametime.GameTimeService
+import com.nxredux.mobile.gametime.GameTimeStore
 import com.nxredux.mobile.launcher.bringHomeTaskToFront
 import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.NaomiSets
@@ -114,6 +116,7 @@ import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.SpeedOptions
 import com.nxredux.mobile.options.SpeedSettings
 import com.nxredux.mobile.options.VulkanFallback
+import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.GameRumble
 import com.nxredux.mobile.settings.PrefsProvider
@@ -590,6 +593,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var netplayUsbToken: Long? = null
     /** netplay: the engine session; set just before it starts, so onDestroy always shuts down what was started. */
     private var netplayGame: NetplayRun? = null
+    /** A Wi-Fi session's radio out of power save for the screen's life: a delayed frame's input stalls both players. */
+    private var netplayWifi: android.net.wifi.WifiManager.WifiLock? = null
     private var netplayPillShown = false   // the countdown pill is the session's (hidden again on Clear)
     /** netplay: the session ended and the game plays on alone (the menu is then Continue / Quit). */
     override var netplayEnded = false
@@ -673,7 +678,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         findViewById<View>(R.id.root).addOnLayoutChangeListener { v, l, t, r, b, ol, ot, or_, ob ->
             if (r - l != or_ - ol || b - t != ob - ot) v.post { dual.recheckPictureOn() }
         }
-        padLayout.seedPosture()   // half-folded from the menu: the first layout already places a skin at the hinge
+        // Half-folded from the menu: the first layout already places a skin at the hinge. A re-creation (rotation, process
+        // kill) leaves the launch's posture out: it may be long gone.
+        padLayout.seedPosture(if (savedInstanceState == null) postureSeedFrom(intent.extras) else null)
         padLayout.applyLayout(resources.configuration.orientation)
         padLayout.collectPosture()
         // Back as a gesture or a key on Android 16+ (targetSdk 36: predictive back, KEYCODE_BACK does not reach
@@ -696,6 +703,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         netplayRestored = netplay != null && savedInstanceState != null
         // The cable is the menu process's: never instantiated here (a fresh, unstarted one would stop the menu's VPN).
         if (netplay?.overUsb == true) netplayUsbToken = intent.getLongExtra(EXTRA_NETPLAY_USB_TOKEN, -1L).takeIf { it >= 0 }
+        if (netplay?.overUsb == false) netplayWifi = lowLatencyWifiLock(this, "nxredux:netplay")?.also { runCatching { it.acquire() } }
         // Decided here, not after startEmulator's async setup, so a stop in between still records the slot.
         // A saved slot (recreated after a process kill) wins over the launch intent's.
         val savedSlot = savedInstanceState?.getInt(KEY_RESUME_SLOT, -1)?.takeIf { it in 0..NxPaths.AUTO_SLOT }
@@ -1007,6 +1015,17 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
+    /**
+     * Back from the background (launcher mode's Home, the menu over a shared task): Settings may have changed in the menu
+     * meanwhile, and onStart / onResume read them (Second screen, Bottom screen, System buttons, Pause when unfocused).
+     * One call per settings file into the menu's process, here and not on the key-event path. A first start reads the
+     * file as the launch left it.
+     */
+    override fun onRestart() {
+        super.onRestart()
+        Prefs.refreshGame()
+    }
+
     override fun onStart() {
         super.onStart()
         autoWrittenOnStop = false   // a later Home must write (and record) a fresh auto state
@@ -1164,6 +1183,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // ON_DESTROY goes to the lifecycle observers before this body (API 29+, onActivityPreDestroyed) or from within
         // super.onDestroy() (older): either way GLRetroView's LibretroDroid.destroy() has run by the release below.
         super.onDestroy()
+        netplayWifi?.let { runCatching { if (it.isHeld) it.release() } }
+        netplayWifi = null
         // netplay: after the native destroy (above), off the main thread: the engine shut down, a session copy deleted.
         // Only this screen's own claim is deleted: a newer launch's copy (committed before this teardown) is kept.
         netplay?.let { np ->
@@ -1234,7 +1255,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun startGameTimeTicker(rec: GameTimeRecorder) {
         gameTimeTicker?.cancel()
         if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) { gameTimeTicker = null; return }   // onStart restarts it
-        gameTimeTicker = lifecycleScope.launch { while (true) { delay(60_000); rec.touch() } }
+        gameTimeTicker = lifecycleScope.launch { while (true) { delay(GameTimeStore.TOUCH_MS); rec.touch() } }
     }
 
     private fun endGameTime() {
@@ -2147,6 +2168,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        // A move to another display arrives as a configuration change: the second screen is never the game's own display.
+        dual.secondScreens.refresh()
         // 3DS: the picture's space was the other orientation's, so the layout's sync below ([syncN3dsCore]) sends Large
         // screen's half size (and watches for its frame) until the relayout fills the new space ([onN3dsPictureSpace]).
         if (isN3ds) renderer.forgetN3dsPictureSpace()

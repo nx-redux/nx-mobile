@@ -1,7 +1,9 @@
 package com.nxredux.mobile.runner
 
 import android.view.Display
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -54,5 +56,27 @@ class SecondScreensTest {
         assertTrue(SecondScreenRule.builtIn(facts(DisplayFacts.OVERLAY), debugInternal = true))
         assertTrue(SecondScreenRule.builtIn(facts(DisplayFacts.VIRTUAL), debugInternal = true))
         assertFalse(SecondScreenRule.builtIn(facts(DisplayFacts.EXTERNAL), debugInternal = true))
+    }
+
+    private fun at(id: Int, type: Int? = DisplayFacts.EXTERNAL) = DisplayFacts(id = id, type = type, flags = 0, on = true, name = "Display $id")
+    private val main = at(Display.DEFAULT_DISPLAY, DisplayFacts.INTERNAL)
+
+    // The game on the phone's own screen: the first qualifying other display.
+    @Test fun on_the_default_display_the_first_qualifying_other_display_is_picked() {
+        assertEquals(3, SecondScreenRule.pick(listOf(at(2, DisplayFacts.WIFI), at(3)), main, hostId = Display.DEFAULT_DISPLAY, debug = false))
+        assertNull(SecondScreenRule.pick(emptyList(), main, hostId = Display.DEFAULT_DISPLAY, debug = false))
+    }
+
+    // The game moved to a monitor (DeX, a desktop window): that monitor is never its own second screen.
+    @Test fun the_games_own_display_is_never_its_second_screen() {
+        assertNull(SecondScreenRule.pick(listOf(at(2)), null, hostId = 2, debug = false))
+        assertEquals(3, SecondScreenRule.pick(listOf(at(2), at(3)), main, hostId = 2, debug = false))
+    }
+
+    // The game on a monitor: the phone's own screen is the free one.
+    @Test fun off_the_default_display_the_default_display_is_offered() {
+        assertEquals(Display.DEFAULT_DISPLAY, SecondScreenRule.pick(listOf(at(2)), main, hostId = 2, debug = false))
+        // An off default display does not qualify.
+        assertNull(SecondScreenRule.pick(listOf(at(2)), main.copy(on = false), hostId = 2, debug = false))
     }
 }
