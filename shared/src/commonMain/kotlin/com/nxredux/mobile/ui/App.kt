@@ -176,7 +176,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     val loading by state.loading.collectAsState()
     val loadingMessage by state.loadingMessage.collectAsState()
     val nav by state.nav.collectAsState()
-    val gameInfo by state.gameInfo.collectAsState()
+    val gameInfo = state.gameInfo.collectAsState()   // read in each page ([PageContent]): a refresh recomposes the pages, not the shell
     val netplayPage = state.netplay?.page?.collectAsState()   // the Netplay sheet's page (null: closed); no controller, no sheet
     val dualMenu by state.dualMenu.collectAsState()   // the menu is on the second display: the game list's overlays go to the top screen
     val displayDualMenu by state.displayDualMenu.collectAsState()   // a second display has the top screen: the skin keeps one
@@ -191,7 +191,9 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
     val skinPacks = LocalSkinPacks.current
     val skin = remember(padTheme, skinPacks) { padTheme.skin?.let(skinPacks) }
     // Appearance → Pad skin, likewise; hidden while first setup and onboarding have not asked yet, previewed on its step.
-    val menuPad = remember(screen, selection.value.index) { state.menuPadShown() }
+    // Keyed on what it reads, never the selection: a selection key would recompose this whole root on every step.
+    val skinDualMenu by state.skinDualMenu.collectAsState()
+    val menuPad = remember(screen, toolOnTop, skinDualMenu) { state.menuPadShown() }
     val look = rememberMenuLook(state, screen)   // the accents and the launcher chrome's settings, likewise
     val controllerConnected = rememberControllerConnected()   // once, above the shell: survives rotation and pad/no-pad flips
     LaunchedEffect(controllerConnected) { state.onControllerConnected(controllerConnected) }   // a Shortcuts bind row's line
@@ -411,7 +413,7 @@ private fun tabPaged(s: Screen.Systems): Boolean = !s.pushed && s.tabs.size > 1
 @Composable
 private fun TabPager(
     state: AppState, screen: Screen.Systems, selection: State<ListSelection>, resume: State<ResumeInfo>,
-    gameInfo: Map<String, GameInfo>, live: State<Boolean>, swipe: TabSwipe, targets: LaunchTargets,
+    gameInfo: State<Map<String, GameInfo>>, live: State<Boolean>, swipe: TabSwipe, targets: LaunchTargets,
 ) {
     val n = screen.tabs.size
     val scope = rememberCoroutineScope()
@@ -501,7 +503,8 @@ internal fun BoxScope.PageOverlays(state: AppState, chooser: ValueChooser?, erro
  * the bottom screen's stand-ins (the menu under it, a game's details).
  */
 @Composable
-internal fun PageContent(state: AppState, page: Screen, pageSelection: State<ListSelection>, resume: State<ResumeInfo>, allInfo: Map<String, GameInfo>, live: State<Boolean>, onTop: Boolean = false) {
+internal fun PageContent(state: AppState, page: Screen, pageSelection: State<ListSelection>, resume: State<ResumeInfo>, info: State<Map<String, GameInfo>>, live: State<Boolean>, onTop: Boolean = false) {
+    val allInfo by info
     // The menu on the second display, on a game list: the list and its overlays are on the top screen ([MenuTopScreen]);
     // this screen has the highlighted game's details alone, full screen (no title, no hints).
     val dualMenu by state.dualMenu.collectAsState()
@@ -511,7 +514,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
     if (!onTop && DualMenu.bottom(page, dualMenu, toolOnTop) == BottomContent.Menu) {
         state.toolUnder()?.let { (menu, at) ->
             val still = remember(menu, at) { mutableStateOf(at) }
-            PageContent(state, menu, still, resume, allInfo, live)
+            PageContent(state, menu, still, resume, info, live)
         }
         Box(Modifier.fillMaxSize().background(LocalNxColors.current.scrimUnder).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } })
         return

@@ -455,6 +455,23 @@ class ArtworkScreensTest {
         assertEquals(writes + 1, store.writes)   // the scan's write; the waiting art is not written over it afterwards
     }
 
+    @Test fun art_lands_on_its_own_game_only_and_still_does_after_a_rescan() = runTest {
+        var host: com.nxredux.mobile.scraper.ArtworkHost? = null
+        val r = rig(onHost = { host = it })
+        val h = assertNotNull(host)
+        val games = h.allLibraryGames()
+        assertTrue(games.size >= 2)
+        h.applyArt(games.last().gamePath, com.nxredux.mobile.library.ArtRefs(boxart = "last.png"))
+        h.applyArt("not/a/game.gb", com.nxredux.mobile.library.ArtRefs(boxart = "none.png"))
+        assertEquals(mapOf(games.last().gamePath to "last.png"), h.allLibraryGames().filter { it.art.boxart in setOf("last.png", "none.png") }.associate { it.gamePath to it.art.boxart })
+        r.state.rescan()
+        advanceUntilIdle()
+        h.applyArt(games.first().gamePath, com.nxredux.mobile.library.ArtRefs(boxart = "first.png"))
+        val after = h.allLibraryGames().associate { it.gamePath to it.art.boxart }
+        assertEquals("first.png", after[games.first().gamePath])
+        assertEquals(1, after.values.count { it == "first.png" })
+    }
+
     @Test fun fetch_by_console_starts_that_console_and_shows_progress() = runTest {
         val r = rig()
         r.http.latency = 5_000

@@ -2032,6 +2032,32 @@ class AppStateTest {
 
     private val tetrisResumable = mapOf(("GB" to "Tetris.gb") to ResumeInfo(9))
 
+    /** Counts the main menu's row builds: each one reads the pins once, and the read takes a while. */
+    private class CountingPinsData(val recents: List<Recent> = emptyList()) : UserDataStore {
+        var pinReads = 0
+        override suspend fun readRecents(): List<Recent> = recents
+        override suspend fun writeRecents(list: List<Recent>) {}
+        override suspend fun readPins(): List<Shortcut> { pinReads++; delay(100); return emptyList() }
+        override suspend fun writePins(list: List<Shortcut>) = true
+        override suspend fun readHidden(): List<String> = emptyList()
+        override suspend fun writeHidden(list: List<String>) = true
+        override suspend fun resumeInfo(tag: String, fileName: String) = ResumeInfo.NONE
+    }
+
+    @Test fun a_burst_of_returns_rebuilds_the_main_rows_once_plus_one_for_those_mid_build() = runTest {
+        val data = CountingPinsData(listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")))
+        val runner = RecordingRunner()
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+        val state = AppState(AppDeps(MemorySettings(ContentRef("Home")), source, runner, NoopPicker(), data, compute = scope.coroutineContext[ContinuationInterceptor]!!), scope)
+        state.load(); advanceUntilIdle()
+        assertIs<Screen.Systems>(state.screen.value)
+        val before = data.pinReads
+        repeat(5) { state.onForeground() }
+        advanceUntilIdle()
+        assertEquals(before + 2, data.pinReads)   // the first trigger's build, then one for the four that came during it
+        assertIs<Screen.Systems>(state.screen.value)
+    }
+
     @Test fun select_twice_while_loading_opens_one_switcher() = runTest {
         val data = SlowUserData(listOf(Recent("/Roms/Game Boy (GB)/Tetris.gb")), tetrisResumable)
         val state = slowState(data, RecordingRunner(), CoroutineScope(StandardTestDispatcher(testScheduler)))
@@ -6197,6 +6223,52 @@ class AppStateTest {
         state.onButton(NxButton.A); advanceUntilIdle()
         advanceUntilIdle()   // the art map decodes on deps.compute, the test scheduler
         return state
+    }
+
+    // The index in memory is the one shown: a write that failed must not leave Game Tracker without the library's art.
+    @Test fun game_tracker_art_comes_from_the_index_in_memory_even_when_it_was_not_stored() = runTest {
+        val media = "Home/Roms/Game Boy (GB)/.media"
+        val src = FakeRomsSource(dirs = mapOf(
+            "Home" to listOf("Roms"),
+            "Home/Roms" to listOf("Game Boy (GB)"),
+            "Home/Roms/Game Boy (GB)" to listOf("Tetris.gb", ".media"),
+            media to listOf("boxart"),
+            "$media/boxart" to listOf("Tetris.png"),
+        ))
+        val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        val files = MemoryPrivateFiles().apply { this.files[ToolPins.FILE] = "GAME_TIME" }
+        val store = MemoryLibraryIndexStore().apply { failWrites = true }
+        val data = object : GameTimeData by NoGameTime { override suspend fun totals() = listOf(total(tetris, "Tetris", 60_000L)) }
+        val state = AppState(AppDeps(MemorySettings(ContentRef("Home")), src, RecordingRunner(), NoopPicker(), FakeUserData(),
+            indexStore = store, gameTime = data, privateFiles = files, compute = UnconfinedTestDispatcher(testScheduler)), scope)
+        state.load(); advanceUntilIdle()
+        assertNull(store.text)
+        state.selectHome { it is MainRow.PinnedTool }
+        state.onButton(NxButton.A); advanceUntilIdle()
+        assertEquals("$media/boxart/Tetris.png", assertIs<Screen.GameTime>(state.screen.value).rows.single().art)
+    }
+
+    // A console's list (for a merged console, sorted and labelled over all its games) is built once per library, not on
+    // every open or, in dual screen, every highlight.
+    @Test fun a_consoles_list_is_built_once_per_library() = runTest {
+        val src = FakeRomsSource(dirs = mapOf(
+            "Home" to listOf("Roms"),
+            "Home/Roms" to listOf("Game Boy Advance (GBA)", "Game Boy (GB)"),
+            "Home/Roms/Game Boy Advance (GBA)" to listOf("Zelda.gba", "Mario.gba"),
+            "Home/Roms/Game Boy (GB)" to listOf("Tetris.gb"),
+        ))
+        val st = state(MemorySettings(ContentRef("Home")), src)
+        st.load(); advanceUntilIdle()
+        fun open(): List<Listed> {
+            st.openSystem(assertIs<Screen.Systems>(st.screen.value).systems.first { it.tag == "GBA" })
+            return assertIs<Screen.Games>(st.screen.value).entries.also { st.onButton(NxButton.B) }
+        }
+        val first = open()
+        assertEquals(listOf("Mario.gba", "Zelda.gba"), first.map { it.game.fileName })
+        assertSame(first, open())
+        src.delete("Home/Roms/Game Boy Advance (GBA)/Zelda.gba")
+        st.rescan(); advanceUntilIdle()
+        assertEquals(listOf("Mario.gba"), open().map { it.game.fileName })   // the new library's list
     }
 
     private fun AppState.sessionsOf(): String = assertIs<Screen.GameTimeSessions>(screen.value).game.name
