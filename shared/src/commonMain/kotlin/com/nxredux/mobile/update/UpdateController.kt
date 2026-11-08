@@ -13,6 +13,11 @@ import kotlinx.coroutines.launch
 interface UpdatePlatform {
     /** The dev flavor, which installs the `-dev` APK. */
     val dev: Boolean
+    /**
+     * A debug build reading a feed on this device's loopback (`-PnxUpdateFeed` through adb reverse): its APK may come
+     * from there too ([downloadUrlAllowed]). False everywhere else.
+     */
+    val localFeed: Boolean get() = false
     val installedCode: Long
     /** The installed versionName, for `Up to date (<version>)` when the feed's release is older than the install. */
     val installedVersion: String
@@ -72,7 +77,10 @@ sealed interface UpdateState {
     /** Downloaded and verified; [reason] says what the install waits for. */
     data class Waiting(val release: AppRelease, val file: UpdateFile, val reason: String) : UpdateState
     data class Installing(val release: AppRelease) : UpdateState
-    /** [text]: "Couldn't reach GitHub" or "Update failed"; [release]: what Update downloads again, null after a failed check. */
+    /**
+     * [text]: "Couldn't reach GitHub", "Update failed" or an [UpdateController.NO_CHECKSUM_TEXT] / [UpdateController.NOT_GITHUB_TEXT]
+     * refusal; [release]: what Update downloads again, null after a failed or refused check.
+     */
     data class Failed(val text: String, val release: AppRelease?) : UpdateState
 }
 
@@ -184,7 +192,7 @@ class UpdateController(
                     if (percent != shown) { shown = percent; platform.keepAlive(true, downloadingText(done, total)) }
                 }
                 file = downloaded
-                if (release.sha256 != null && platform.sha256(downloaded) != release.sha256) {
+                if (release.sha256 == null || platform.sha256(downloaded) != release.sha256) {
                     dropFile()
                     finish(UpdateState.Failed("Update failed", release))
                     return@launch
@@ -250,6 +258,16 @@ class UpdateController(
                 return@launch
             }
             if (release.versionCode > platform.installedCode) {
+                // Refused before it is offered: nothing verifies the APK beyond Android's same-signer rule without these.
+                val refusal = when {
+                    !downloadUrlAllowed(release.apkUrl, platform.localFeed) -> NOT_GITHUB_TEXT
+                    release.sha256 == null -> NO_CHECKSUM_TEXT
+                    else -> null
+                }
+                if (refusal != null) {
+                    _state.value = UpdateState.Failed(refusal, null)
+                    return@launch
+                }
                 _state.value = UpdateState.Available(release)
                 if (automatic && UpdatePolicy.shouldPopup(release, platform.installedCode, platform.silenced)) _popup.value = release
             } else {
@@ -339,5 +357,7 @@ class UpdateController(
         const val GAME_REASON = "Close your game to install"
         const val PERMISSION_REASON = "Allow installs from NX Redux to update"
         const val READY_REASON = "Ready to install"
+        const val NO_CHECKSUM_TEXT = "Update not verified: GitHub sent no checksum"
+        const val NOT_GITHUB_TEXT = "Update not verified: not a GitHub download"
     }
 }

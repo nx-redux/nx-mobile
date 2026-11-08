@@ -26,8 +26,12 @@ import kotlin.test.assertTrue
 class DeviceSyncControllerTest {
     // Every run goes through the parse and plan hops ([DeviceSyncController]'s work context): named, on the test's
     // dispatcher, so the pages, files and virtual time are what they are with no hop at all.
-    private fun TestScope.rig(p: FakeSyncPlatform = FakeSyncPlatform()) =
-        DeviceSyncController(backgroundScope as CoroutineScope, p, work = kotlinx.coroutines.CoroutineName("work")) { testScheduler.currentTime }.also { it.open() }
+    // [confirm]: A is pressed on the confirm page as soon as it shows, so a test about what follows pairing need not.
+    private fun TestScope.rig(p: FakeSyncPlatform = FakeSyncPlatform(), confirm: Boolean = true) =
+        DeviceSyncController(backgroundScope as CoroutineScope, p, work = kotlinx.coroutines.CoroutineName("work")) { testScheduler.currentTime }.also { c ->
+            c.open()
+            if (confirm) backgroundScope.launch { c.page.collect { if (it is DeviceSyncPage.Confirm) c.onButton(NxButton.A) } }
+        }
 
     private fun DeviceSyncController.press(vararg b: NxButton) = b.forEach { onButton(it) }
     private val handheld = "192.168.1.10"
@@ -156,13 +160,16 @@ class DeviceSyncControllerTest {
         assertFalse(p.socket.sent.any { it.first.startsWith(SyncWire.ACK) })   // no ACK for an ACK
     }
 
-    @Test fun no_ready_in_30_s_fails() = runTest {
+    /** The serving side's user may still be deciding: the wait for READY outlasts any confirm, up to an hour. */
+    @Test fun no_ready_in_an_hour_fails() = runTest {
         val p = FakeSyncPlatform()
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
         p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
         p.socket.from("192.168.1.99", SyncWire.READY)   // not the peer
         advanceTimeBy(30_500); runCurrent()
+        assertIs<DeviceSyncPage.Syncing>(c.page.value)
+        advanceTimeBy(3_570_000); runCurrent()
         assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.noReady(handheld)), c.page.value)
         assertTrue(p.stepsRun.isEmpty())
     }
@@ -1742,5 +1749,126 @@ class DeviceSyncControllerTest {
         val d = romClient(q, toggle = false)
         assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.stepError(SyncStep.RECEIVE_SAVES)), d.page.value)
         assertEquals(1, q.stagingCleared)
+    }
+
+    /** Pairs over Wi-Fi as [ownIp] with a device at [handheld] sending [hello]'s flag, A not pressed. */
+    private fun TestScope.confirming(ownIp: String = phone, hello: String = "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"): Pair<FakeSyncPlatform, DeviceSyncController> {
+        val p = FakeSyncPlatform().apply { wifi = ownIp }
+        val c = rig(p, confirm = false)
+        c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
+        p.socket.from(handheld, hello); runCurrent()
+        assertEquals(DeviceSyncPage.Confirm(SyncLink.WIFI, handheld, ownIp), c.page.value)
+        return p to c
+    }
+
+    private val server = "192.168.1.5"
+    private val phonePeer = "HELLO_TRIMUI_SYNC:$handheld:c"
+
+    /** An old or already confirmed server sends READY at once: as client, nothing runs before this side's A. */
+    @Test fun as_client_nothing_runs_before_a_on_the_confirm_page() = runTest {
+        val (p, c) = confirming()
+        repeat(10) { p.socket.from(handheld, SyncWire.READY); advanceTimeBy(1_000); runCurrent() }
+        assertIs<DeviceSyncPage.Confirm>(c.page.value)
+        assertTrue(p.stepsRun.isEmpty())
+        assertTrue(p.calls.isEmpty())
+        assertTrue(p.folderListings.isEmpty())
+        c.press(NxButton.A); runCurrent()
+        assertIs<DeviceSyncPage.Syncing>(c.page.value)
+        p.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
+        assertEquals(saveSteps, p.stepsRun)
+        assertIs<DeviceSyncPage.Done>(c.page.value)
+    }
+
+    /** As server, the daemon and READY wait for this side's A; then READY goes out at once, as an old client expects. */
+    @Test fun as_server_the_daemon_starts_only_after_a() = runTest {
+        val (p, c) = confirming(server, phonePeer)
+        advanceTimeBy(10_000); runCurrent()
+        assertNull(p.serverStarted)
+        assertFalse(p.socket.sent.any { it.first == SyncWire.READY })
+        c.press(NxButton.A); runCurrent()
+        assertEquals(handheld, p.serverStarted)
+        assertEquals(1, p.socket.sent.count { it == SyncWire.READY to handheld })
+        assertEquals(SyncRole.SERVER, assertIs<DeviceSyncPage.Syncing>(c.page.value).role)
+        p.socket.from(handheld, SyncWire.DONE); runCurrent()
+        assertIs<DeviceSyncPage.Done>(c.page.value)
+    }
+
+    @Test fun b_on_the_confirm_page_sends_fail_and_goes_back_to_ready() = runTest {
+        for ((ownIp, hello) in listOf(phone to "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2", server to phonePeer)) {
+            val (p, c) = confirming(ownIp, hello)
+            c.press(NxButton.B); runCurrent()
+            assertEquals(DeviceSyncPage.Ready(SyncLink.WIFI), c.page.value)
+            advanceTimeBy(1_000); runCurrent()
+            assertEquals(5, p.socket.fails(handheld))
+            assertFalse(c.running)
+            assertTrue(p.socket.closed)
+            assertNull(p.serverStarted)
+            assertTrue(p.stepsRun.isEmpty())
+            assertEquals(DeviceSyncPage.Ready(SyncLink.WIFI), c.page.value)
+        }
+    }
+
+    @Test fun the_notifications_cancel_on_the_confirm_page_stops_and_sends_fail() = runTest {
+        val (p, c) = confirming()
+        c.cancel(); advanceTimeBy(1_000); runCurrent()
+        assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.STOPPED), c.page.value)
+        assertEquals(5, p.socket.fails(handheld))
+        assertFalse(c.running)
+    }
+
+    @Test fun the_peer_cancelling_while_the_confirm_page_shows_says_so_without_an_echo() = runTest {
+        for ((ownIp, hello) in listOf(phone to "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2", server to phonePeer)) {
+            val (p, c) = confirming(ownIp, hello)
+            p.socket.from("192.168.1.99", SyncWire.FAIL); runCurrent()   // not the peer
+            assertIs<DeviceSyncPage.Confirm>(c.page.value)
+            p.socket.from(handheld, SyncWire.FAIL); advanceTimeBy(1_000); runCurrent()
+            assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.PEER_CANCELLED), c.page.value)
+            assertEquals(0, p.socket.fails(handheld))
+            assertFalse(c.running)
+            assertNull(p.serverStarted)
+            assertTrue(p.stepsRun.isEmpty())
+        }
+    }
+
+    /** The peer's ACK was lost and it keeps saying HELLO: the confirm page answers it again, so it pairs too. */
+    @Test fun a_hello_from_the_peer_while_confirming_is_acked_again() = runTest {
+        val (p, c) = confirming()
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
+        assertEquals(2, p.socket.sent.count { it == SyncWire.ack(phone) to handheld })
+        assertIs<DeviceSyncPage.Confirm>(c.page.value)
+    }
+
+    @Test fun a_slow_confirm_never_times_out_on_either_side() = runTest {
+        val (p, c) = confirming()
+        advanceTimeBy(30 * 60_000L); runCurrent()
+        assertIs<DeviceSyncPage.Confirm>(c.page.value)
+        c.press(NxButton.A); runCurrent()
+        advanceTimeBy(10 * 60_000L); runCurrent()   // the server's user still deciding
+        assertIs<DeviceSyncPage.Syncing>(c.page.value)
+        p.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
+        assertIs<DeviceSyncPage.Done>(c.page.value)
+
+        val (q, d) = confirming(server, phonePeer)
+        advanceTimeBy(30 * 60_000L); runCurrent()
+        assertIs<DeviceSyncPage.Confirm>(d.page.value)
+        assertNull(q.serverStarted)
+        d.press(NxButton.A); runCurrent()
+        advanceTimeBy(60_000); runCurrent()
+        assertIs<DeviceSyncPage.Syncing>(d.page.value)
+        q.socket.from(handheld, SyncWire.DONE); runCurrent()
+        assertIs<DeviceSyncPage.Done>(d.page.value)
+    }
+
+    /** The server's user pressed B after this side's A: its FAIL ends the wait for READY at once. */
+    @Test fun the_servers_fail_before_ready_ends_the_clients_wait() = runTest {
+        val p = FakeSyncPlatform()
+        val c = rig(p)
+        c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
+        assertIs<DeviceSyncPage.Syncing>(c.page.value)
+        p.socket.from(handheld, SyncWire.FAIL); advanceTimeBy(1_000); runCurrent()
+        assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.PEER_FAILED), c.page.value)
+        assertEquals(0, p.socket.fails(handheld))
+        assertTrue(p.stepsRun.isEmpty())
     }
 }

@@ -39,12 +39,16 @@ object DeviceSyncText {
     const val NO_DEVICE = "No device found. Open Device Sync on the other device, then sync again."
     /** The paired peer sent FAIL: its run failed or was stopped. */
     const val PEER_FAILED = "The other device's sync failed. Check it, then sync again."
+    /** The peer sent FAIL while the confirm page showed: its user pressed Cancel there. */
+    const val PEER_CANCELLED = "The other device cancelled the sync."
     /** A on Done/Failed while the ended run still cleans up (a stopped server stopping its daemon). */
     const val FINISHING = "Device Sync is finishing… please wait"
     fun linkName(link: SyncLink) = if (link == SyncLink.CABLE) "cable" else "Wi-Fi"
     fun linkLabel(link: SyncLink) = if (link == SyncLink.CABLE) CABLE else WIFI
     fun hint(link: SyncLink) = if (link == SyncLink.CABLE) CABLE_HINT else WIFI_HINT
     fun ownIp(ip: String, link: SyncLink) = "IP: $ip (${linkName(link)})"
+    fun confirmPeer(ip: String) = "Sync with the device at $ip?"
+    fun thisDevice(ip: String, link: SyncLink) = "This device: $ip (${linkName(link)})"
     fun syncingWith(ip: String, link: SyncLink) = "Syncing with $ip via ${linkName(link)}"
     const val NO_FILE_TIMES = "This phone can't set file times in Roms, so ROM sync can't run."
     const val NO_SAVE_FILE_TIMES = "This phone can't set file times in Saves, so saves can't sync."
@@ -67,7 +71,7 @@ object DeviceSyncText {
     fun files(done: Int, total: Int) = "$done/$total files"
     /** The other device paired with this phone's HELLO, but its answer never arrived, so it only sends READY. */
     const val MISSED_ACK = "The other device paired, but its answer never reached this phone. Stop the sync on it, then start again on both."
-    fun noReady(ip: String) = "No answer from $ip (no READY in 30 s)."
+    fun noReady(ip: String) = "No answer from $ip (no READY in 1 h)."
     fun stepFailed(step: SyncStep, code: Int) = "rsync step ${step.number} failed (exit $code)."
     /** The step threw before an exit code (rsync could not be started). */
     fun stepError(step: SyncStep) = "rsync step ${step.number} could not run."

@@ -458,6 +458,14 @@ class Brick:
         self.press("A")
         return pid
 
+    def confirm_device_sync(self):
+        """A on the confirm screen (B Cancel / A Sync): call it once the phone's sync.json shows state 'confirm', since
+        A on another Device Sync screen does something else. The Brick reaches its confirm screen a moment after the
+        phone does, so the press waits for it."""
+        self.wake()
+        time.sleep(2)
+        self.press("A")
+
     def stop_device_sync(self, timeout=15):
         """B backs out of Waiting to Ready, B on Ready quits; kill -9 sync.elf
         as a fallback. Waits for nextui to come back."""

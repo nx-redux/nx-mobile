@@ -66,12 +66,13 @@ internal fun appUpdateLabel(state: UpdateState): String = when (state) {
 }
 
 /**
- * The A hint for About's update row, from its [label] ([appUpdateLabel]): Check before a check found a release (a failed
+ * The A hint for About's update row, from its [label] ([appUpdateLabel]): Check before a check found a release (a failed or refused
  * check included), Update once one did (a failed download included), Install for a download held only off the main menu;
  * null while a check, download or install runs.
  */
 internal fun appUpdateHint(label: String): String? = when {
-    label == CHECK_LABEL || label.startsWith("Up to date (") || label == "Couldn't reach GitHub" -> "Check"
+    label == CHECK_LABEL || label.startsWith("Up to date (") || label == "Couldn't reach GitHub" ||
+        label == UpdateController.NO_CHECKSUM_TEXT || label == UpdateController.NOT_GITHUB_TEXT -> "Check"
     label.startsWith("Update to ") || label == "Update failed" -> "Update"
     label == UpdateController.READY_REASON -> "Install"
     else -> null

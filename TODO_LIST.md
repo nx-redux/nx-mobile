@@ -98,3 +98,20 @@ survive Home and return, quit, and load their auto state again (slot 9).
 - [ ] Multi-disc m3u and CUE+BIN load; RetroAchievements hashing, unlock toasts, core messages, rumble
 - [ ] Core options with categories (localized labels); controller type lists
 - [ ] A collection file or map.txt starting with a byte-order mark (from Windows): its first entry still works
+
+## Security fixes (Device Sync confirm, update check): device checks still owed
+
+Needs two devices. No protocol change: an older build on the other side still syncs.
+
+- [ ] Phone ↔ phone (Wi-Fi and cable): each confirm page shows the other's IP, matching the IP that device shows for
+  itself ("This device: …")
+- [ ] Phone ↔ Brick (Wi-Fi and cable): the same, both ways
+- [ ] A on both, in either order, syncs; B on either side cancels both (the other says "The other device cancelled the
+  sync." while its confirm page shows, "The other device's sync failed…" once it pressed A)
+- [ ] An old build on the other side still syncs, in both roles (old server: A here, then it runs; old client: A here
+  within its 30 s wait for READY)
+- [ ] Unattended `sync_test.py` against the Brick presses A on the Brick's confirm screen and finishes
+- [ ] In-app update with the dev build's local feed (`-PnxUpdateFeed=http://localhost:<port>/latest.json` + adb
+  reverse): offer, download and install; no `digest` → "Update not verified: GitHub sent no checksum"; a LAN or other
+  host → "Update not verified: not a GitHub download"; `"draft": true` or a `-rc` tag → up to date; a 302 to another
+  host → "Update failed"
