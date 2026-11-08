@@ -1249,12 +1249,13 @@ class AppStateTest {
         val systems = assertIs<Screen.Systems>(state.screen.value).systems
         val controller = assertNotNull(state.netplay)
 
-        state.openSystem(systems.first { it.tag == "MGBA" })   // MGBA is the cable only, and there is none: Y does nothing
+        // An MGBA game without a Wi-Fi link mode and no cable: the sheet opens on the USB-cable-only page.
+        state.openSystem(systems.first { it.tag == "MGBA" })
         state.onButton(NxButton.Y)
+        assertEquals(com.nxredux.mobile.netplay.NetplayText.cableOnly("mGBA"), assertIs<NetplayPage.Error>(controller.page.value).text)
+        state.onButton(NxButton.B)
         assertNull(controller.page.value)
         assertIs<Screen.Games>(state.screen.value)
-        assertTrue(ContextKind.NETPLAY !in run { state.onButton(NxButton.MENU); menuKinds(state) })
-        state.onButton(NxButton.B)
         state.back()
 
         state.openSystem(systems.first { it.tag == "N64" })   // no netplay for Nintendo 64 at all: Y does nothing

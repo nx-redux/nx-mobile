@@ -118,17 +118,14 @@ class NetplayController(
     private var cableOn = false
 
     /**
-     * [entry] can be played over netplay here: its tag has netplay, and MGBA has a cable (most of its games link over the
-     * real cable alone; which ones do not is known only once the sheet has read the game).
+     * [entry]'s tag has netplay. An MGBA game without a Wi-Fi link mode needs the cable, which is known only once the
+     * sheet has read the game: without one the sheet then says so.
      */
-    fun offers(entry: Listed): Boolean {
-        val tag = entry.system.tag
-        return NetplayCores.supported(tag) && (tag.trim().uppercase() != "MGBA" || platform.usb?.available == true)
-    }
+    fun offers(entry: Listed): Boolean = NetplayCores.supported(entry.system.tag)
 
     /**
      * Opens the sheet on [entry]'s Role page; nothing for a game [offers] refuses. A GBA game's link mode is read first,
-     * on [work] (the whole ROM), so its caps, offers and session all use that one value.
+     * through the platform (the whole ROM), so its caps, offers and session all use that one value.
      */
     fun open(entry: Listed) {
         if (!offers(entry)) return
@@ -140,9 +137,14 @@ class NetplayController(
         }
         _page.value = NetplayPage.Progress(entry.shown, NetplayText.READING_GAME)
         probeJob = scope.launch {
-            val mode = withContext(work) { GbaWifiLink.token(tryOrNull { platform.gbaLinkMode(entry.game.fileName, entry.game.ref) }) }
+            val mode = GbaWifiLink.token(tryOrNull { platform.gbaLinkMode(entry.game.fileName, entry.game.ref) })
             if (this@NetplayController.entry !== entry) return@launch
             wl = mode
+            if (NetplayCores.usbOnly(entry.system.tag, mode) && platform.usb?.available != true) {
+                val name = NetplayCores.name(NetplayCores.defaultCore(entry.system.tag).orEmpty())
+                _page.value = NetplayPage.Error(NetplayText.cableOnly(name), null)
+                return@launch
+            }
             showFirstRole(entry)
         }
     }

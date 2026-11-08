@@ -84,12 +84,15 @@ class NetplayUsbControllerTest {
 
     private val emerald = entry("MGBA", "Pokemon Emerald (USA).gba")
 
-    @Test fun mgba_offers_the_cable_only() = runTest {
+    @Test fun mgba_offers_the_cable_only_for_a_game_without_a_wifi_mode() = runTest {
         val noCable = controller(FakeNetplayPlatform().apply { usbCable = FakeUsbCable(availableNow = false) })
-        assertFalse(noCable.offers(emerald))
+        assertTrue(noCable.offers(emerald))
         assertTrue(noCable.offers(kart))
-        noCable.open(emerald)
-        assertNull(noCable.page.value)                                    // no sheet at all
+        noCable.open(emerald); runCurrent()
+        val err = assertIs<NetplayPage.Error>(noCable.page.value)         // read first: then the cable-only page
+        assertEquals(NetplayText.cableOnly("mGBA"), err.text)
+        noCable.onButton(NxButton.B)
+        assertNull(noCable.page.value)
 
         val p = FakeNetplayPlatform().apply { usbCable = FakeUsbCable(); lastLink = NetplayLink.WIFI }
         val c = controller(p)
@@ -102,6 +105,16 @@ class NetplayUsbControllerTest {
         c.press(NxButton.UP, NxButton.A, NxButton.RIGHT)
         assertEquals(NetplayLink.USB, assertIs<NetplayPage.Role>(c.page.value).connection)   // nothing to switch to
         assertEquals(NetplayLink.WIFI, p.lastLink)                         // the remembered choice is left alone
+    }
+
+    @Test fun without_a_cable_an_mgba_wifi_mode_game_still_reaches_the_role_page() = runTest {
+        val p = FakeNetplayPlatform().apply { usbCable = FakeUsbCable(availableNow = false); gbaMode = "poke" }
+        val c = controller(p)
+        c.open(emerald); runCurrent()
+        val role = assertIs<NetplayPage.Role>(c.page.value)
+        assertNull(role.connection)                                        // Wi-Fi only
+        c.press(NxButton.A); runCurrent()                                  // Host on Auto: mGBA over Wi-Fi
+        assertIs<NetplayPage.Hosting>(c.page.value)
     }
 
     @Test fun mgba_offers_wifi_too_for_a_wifi_mode_game() = runTest {

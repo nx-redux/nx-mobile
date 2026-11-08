@@ -57,6 +57,7 @@ object Caps {
         val withWl = if (wl != null && NetplayCores.link(core) == NetplayLinkKind.NETPACKET) "$base,wl=$wl" else base
         if (auto) "$withWl,auto=1".takeIf { isValid(it) }?.let { return it }
         withWl.takeIf { isValid(it) }?.let { return it }
+        // Only a core or tag with characters outside the grammar gets here; gpSP and mGBA with a GBA tag always fit.
         return base.takeIf { isValid(it) } ?: ""
     }
 }

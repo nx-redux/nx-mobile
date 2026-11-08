@@ -43,9 +43,10 @@ interface NetplayPlatform {
     suspend fun hostSaves(tag: String, romFileName: String, content: ContentRef): HostSaves
     /**
      * The GBA game's own link mode as a caps token ([GbaWifiLink]), read from [content] (the game file [romFileName]);
-     * "none" when it cannot be read as a ROM (an archive, a document that will not open). Blocking: reads the whole ROM.
+     * "none" when it cannot be read as a ROM (an archive, a document that will not open). Reads the whole ROM, on the
+     * platform's I/O threads.
      */
-    fun gbaLinkMode(romFileName: String, content: ContentRef): String
+    suspend fun gbaLinkMode(romFileName: String, content: ContentRef): String
     /** Where a joiner's pulls land (a fresh session copy per join). */
     fun clientSink(romFileName: String): SaveSink
     fun keepScreenOn(on: Boolean)
@@ -55,7 +56,7 @@ interface NetplayPlatform {
  * Handed to the runner with the launch (GameSession.netplay). [emptySaves]: a save copy was due but did not happen (this
  * device has no usable rsync), so this side plays on an empty isolated copy, as the other side does.
  * [overUsb]: the session runs over the USB cable; the game screen stops the cable when it releases the session.
- * [mixed]: a GBA link with the other side on the other core (gpSP with mGBA); [peerWl]: the other side's game link mode
+ * [mixed]: a GBA link whose caps named gpSP on one side and mGBA on the other ([com.nxredux.mobile.netplay.wizard.HostOutcome.Started.mixed]); [peerWl]: the other side's game link mode
  * from its caps (null: it sent none, a build without the Wi-Fi modes).
  */
 data class NetplaySession(

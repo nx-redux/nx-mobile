@@ -86,7 +86,7 @@ class FakeNetplayPlatform(
         hostSavesCalls += Triple(tag, romFileName, content)
         return hostSavesFor().also { served += it }
     }
-    override fun gbaLinkMode(romFileName: String, content: ContentRef): String {
+    override suspend fun gbaLinkMode(romFileName: String, content: ContentRef): String {
         probes += romFileName
         return gbaMode
     }

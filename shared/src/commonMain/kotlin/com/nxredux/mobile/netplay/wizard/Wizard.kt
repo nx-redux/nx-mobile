@@ -1,5 +1,6 @@
 package com.nxredux.mobile.netplay.wizard
 
+import com.nxredux.mobile.netplay.GbaWifiLink
 import com.nxredux.mobile.netplay.NetplayChannel
 import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.netplay.NetplayIoException
@@ -45,10 +46,7 @@ object Wizard {
                 ch.writeLine(Reject(RejectReason.CORE, offer.core, offer.tag.trim().uppercase()).format())
                 return HostOutcome.Turned(RejectReason.CORE.wire, hello.core)
             }
-            // The joiner ends on another core unless it names this one or switches to it on this HELLO.
-            val joinerCore = hello.core
-            val mixed = joinerCore != null && joinerCore != run &&
-                !NetplayCores.joinerSwitches(run, hello.tag, hello.auto, offer.usb, hello.wl)
+            val mixed = mixedCaps(run, hello.core, offer.wl, hello.wl, offer.usb)
             ch.writeLine(HelloCodec.format(Hello.host(wireGame(offer.game), 2, Caps.of(run, offer.tag, wl = offer.wl))))
             // A link session (GB/GBC/GBA) copies no saves: each player keeps their own, which a trade needs (the
             // handheld's NETPLAY_SYNC_SAVES=0). START follows the HELLO at once.
@@ -113,7 +111,7 @@ object Wizard {
         // A host that names another core (one that predates the check, or a phone): switch on Auto, else stop, sending nothing.
         val core = NetplayCores.joinerRun(offer.tag, offer.core, offer.pick, h.core, offer.usb, offer.wl, h.wl)
             ?: return ClientOutcome.Refused(NetplayCores.refusal(offer.tag, offer.pick, h.core.orEmpty(), h.tag, offer.usb, offer.wl))
-        val mixed = h.core != null && h.core != core
+        val mixed = mixedCaps(offer.core, h.core, offer.wl, h.wl, offer.usb)
         var syncing = false
         try {
             var line: String? = null
@@ -197,6 +195,14 @@ object Wizard {
             return ClientOutcome.Refused(NetplayText.COPY_FAILED)
         }
     }
+
+    /**
+     * gbalink_mixed, from the caps the two sides traded ([sentCore] this side's, [peerCore] the other's), not the cores
+     * that end up running: a handheld decides from the caps alone, so a phone that switches on Auto must still run the
+     * mixed rules it does. [GbaWifiLink.mixedOk] keeps a peer without the Wi-Fi modes on today's rules.
+     */
+    private fun mixedCaps(sentCore: String, peerCore: String?, ourWl: String?, peerWl: String?, usb: Boolean): Boolean =
+        peerCore != null && peerCore != sentCore && GbaWifiLink.mixedOk(ourWl, peerWl, usb)
 
     /** Each pull within 15 s and all of them within 23 s (wizard_sync.c); false on a failure or a timeout. */
     private suspend fun pullAll(sink: SaveSink, host: String, names: List<String>): Boolean = tryOr({ false }) {

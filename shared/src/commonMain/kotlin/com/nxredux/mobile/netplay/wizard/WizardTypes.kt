@@ -20,7 +20,8 @@ data class ClientOffer(
 sealed interface HostOutcome {
     /**
      * Both sides start [core]; [peer] is the joiner's address; [emptySaves]: saves were due but not served (no rsync).
-     * [mixed]: the joiner runs the other GBA link core; [peerWl]: the joiner's `wl=` (null: none sent).
+     * [mixed]: the two sides' caps named different GBA link cores and the games' modes allow a mixed link (each side then
+     * runs the game's own mode); [peerWl]: the joiner's `wl=` (null: none sent).
      */
     data class Started(
         val core: String, val peer: String, val emptySaves: Boolean, val mixed: Boolean = false, val peerWl: String? = null,

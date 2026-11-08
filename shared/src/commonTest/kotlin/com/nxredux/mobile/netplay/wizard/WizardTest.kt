@@ -474,12 +474,56 @@ class WizardTest {
         assertEquals(HostOutcome.Started("gpsp", "10.0.0.2", emptySaves = false, mixed = true, peerWl = "rfu"), hostJob.await())
     }
 
-    @Test fun a_pinned_host_and_a_joiner_on_auto_end_on_one_core() = runTest {
+    @Test fun a_pinned_host_and_a_joiner_on_auto_run_the_mixed_rules_of_the_traded_caps() = runTest {
+        // The caps named two cores, so both sides run the game's own mode, though the joiner switches to gpSP.
         val (h, c) = PipeChannel.pair()
         val hostJob = async { Wizard.host(h, hostGbaWifi, saves = { error("a link session copies no saves") }) }
         val joinAuto = ClientOffer("Pokemon Ruby (USA)", any = false, tag = "MGBA", core = "mgba", pick = null, usb = false, wl = "rfu")
-        assertEquals(ClientOutcome.Started("gpsp", 2, emptySaves = false, mixed = false, peerWl = "rfu"), Wizard.client(c, joinAuto, FakeSaveSink()))
-        assertEquals(HostOutcome.Started("gpsp", "10.0.0.2", emptySaves = false, mixed = false, peerWl = "rfu"), hostJob.await())
+        assertEquals(ClientOutcome.Started("gpsp", 2, emptySaves = false, mixed = true, peerWl = "rfu"), Wizard.client(c, joinAuto, FakeSaveSink()))
+        assertEquals(HostOutcome.Started("gpsp", "10.0.0.2", emptySaves = false, mixed = true, peerWl = "rfu"), hostJob.await())
+    }
+
+    @Test fun a_joiner_on_auto_switching_to_a_handheld_hosts_core_keeps_the_handhelds_mixed_rule() = runTest {
+        // A handheld mGBA host takes the joiner's gpSP caps as a mixed pair (auto_cable); the switched joiner must match.
+        val joinGba = ClientOffer("Pokemon Ruby (USA)", any = false, tag = "GBA", core = "gpsp", pick = null, usb = true, wl = "rfu")
+        val (h, c) = PipeChannel.pair()
+        val job = async { Wizard.client(c, joinGba, FakeSaveSink()) }
+        assertEquals("core=gpsp,tag=GBA,wl=rfu,auto=1", HelloCodec.parse(h.readLine(1000))!!.caps)
+        h.writeLine("HELLO 2 $rubyEsc host 2 caps=core=mgba,tag=MGBA,wl=rfu")
+        h.writeLine("START 2")
+        assertEquals("START", h.readLine(1000))
+        val out = job.await()
+        assertEquals(ClientOutcome.Started("mgba", 2, emptySaves = false, mixed = true, peerWl = "rfu"), out)
+        val session = com.nxredux.mobile.netplay.NetplaySession(
+            com.nxredux.mobile.netplay.NetplayRole.CLIENT, "10.0.0.1", "mgba", "gpsp", overUsb = true, mixed = true, peerWl = "rfu",
+        )
+        assertEquals(mapOf("mgba_link_mode" to "auto_cable"), com.nxredux.mobile.netplay.NetplayLinkOptions.forSession(session, "cable"))
+        // Without a shared Wi-Fi mode the same switch is today's same-core session.
+        val (h2, c2) = PipeChannel.pair()
+        val job2 = async { Wizard.client(c2, joinGba.copy(wl = "none"), FakeSaveSink()) }
+        h2.readLine(1000)
+        h2.writeLine("HELLO 2 $rubyEsc host 2 caps=core=mgba,tag=MGBA,wl=none")
+        h2.writeLine("START 2")
+        h2.readLine(1000)
+        assertEquals(ClientOutcome.Started("mgba", 2, emptySaves = false, mixed = false, peerWl = "none"), job2.await())
+    }
+
+    @Test fun a_host_keeping_its_core_for_a_joiner_that_sent_the_other_one_runs_the_mixed_rules() = runTest {
+        val hostAutoUsb = HostOffer("Pokemon Ruby (USA)", "GBA", "gpsp", pick = null, usb = true, wl = "rfu")
+        val (h, c) = PipeChannel.pair()
+        val hostJob = async { Wizard.host(h, hostAutoUsb, saves = { error("a link session copies no saves") }) }
+        c.writeLine("HELLO 2 $rubyEsc client caps=core=mgba,tag=MGBA,wl=rfu,auto=1")
+        assertEquals("HELLO 2 $rubyEsc host 2 caps=core=gpsp,tag=GBA,wl=rfu", c.readLine(1000))
+        assertEquals("START 2", c.readLine(1000))
+        c.writeLine("START")
+        assertEquals(HostOutcome.Started("gpsp", "10.0.0.2", emptySaves = false, mixed = true, peerWl = "rfu"), hostJob.await())
+        // Over the cable a poke game is not a mixed pair: today's same-core rules.
+        val (h2, c2) = PipeChannel.pair()
+        val hostJob2 = async { Wizard.host(h2, hostAutoUsb.copy(wl = "poke"), saves = { error("a link session copies no saves") }) }
+        c2.writeLine("HELLO 2 $rubyEsc client caps=core=mgba,tag=MGBA,wl=poke,auto=1")
+        c2.readLine(1000); c2.readLine(1000)
+        c2.writeLine("START")
+        assertEquals(HostOutcome.Started("gpsp", "10.0.0.2", emptySaves = false, mixed = false, peerWl = "poke"), hostJob2.await())
     }
 
     @Test fun a_client_on_auto_sends_auto_1_and_a_pinned_one_does_not() = runTest {
