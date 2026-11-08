@@ -4,6 +4,7 @@ import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.storage.GameRef
 import com.nxredux.mobile.library.LibraryIndex
 import com.nxredux.mobile.settings.AppSettings
+import com.nxredux.mobile.tryOr
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -104,9 +105,7 @@ class RaController(
 
     /** [readStatus], or the status shown now with the read's failure: the store throws when its files go away. */
     private suspend fun readStatusOrKeep(error: String? = null): RaStatus =
-        try { readStatus(error) } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            idleStatus.copy(lastError = "Could not read status: ${e::class.simpleName}")
-        }
+        tryOr({ e -> idleStatus.copy(lastError = "Could not read status: ${e::class.simpleName}") }) { readStatus(error) }
 
     // The whole journal is parsed here (pending count), and the games folder listed: on [work], as the walks.
     private suspend fun readStatus(error: String? = null): RaStatus = withContext(work) {
@@ -123,7 +122,7 @@ class RaController(
         val previous = idleStatus
         _state.value = RaState.Authenticating
         job = scope.launch {
-            val result: String? = try {
+            val result: String? = tryOr({ e -> if (e is RaHttpException) "No connection" else "Sign-in failed: ${e::class.simpleName}" }) {
                 val r = platform.http.post(RaRequests.URL, RaRequests.loginWithPassword(user, password), RaRequests.CONTENT_TYPE)
                 val body = RaJson.parse(LoginBody.serializer(), r.body)
                 when {
@@ -135,9 +134,9 @@ class RaController(
                         emit(RaMessage.Notice("Signed in as ${settings.raUsername}")); null
                     }
                 }
-            } catch (e: CancellationException) { throw e } catch (e: RaHttpException) { "No connection" } catch (e: Exception) { "Sign-in failed: ${e::class.simpleName}" }
+            }
             _state.value = RaState.Idle(
-                try { readStatus(result) } catch (e: CancellationException) { throw e } catch (e: Exception) { previous.copy(lastError = result ?: "Sign-in failed: ${e::class.simpleName}") },
+                tryOr({ e -> previous.copy(lastError = result ?: "Sign-in failed: ${e::class.simpleName}") }) { readStatus(result) },
             )
         }
     }
@@ -145,24 +144,22 @@ class RaController(
     fun syncNow() {
         if (_state.value is RaState.Prefetching) { emit(RaMessage.Failure("Wait for the game data download to finish")); return }
         if (busy) return
-        val user = settings.raUsername; val token = settings.raToken
-        if (token == null || user.isBlank()) { emit(RaMessage.Failure("Sign in first")); return }
+        val (user, token) = credentials() ?: run { emit(RaMessage.Failure("Sign in first")); return }
         if (!platform.connectivity.isConnected()) { emit(RaMessage.Failure("No connection")); return }
         val previous = idleStatus
         _state.value = RaState.Syncing(RaSyncProgress(RaSyncStep.STARTING), previous)
         job = scope.launch {
-            try {
+            tryOr({ e -> _state.value = RaState.Idle(previous); emit(RaMessage.Failure("Sync failed: ${e::class.simpleName}")) }) {
                 val r = onWork { post -> newSync().run(user, token) { p -> post { _state.value = RaState.Syncing(p, previous) } } }
                 emit(syncMessage(r))
                 _state.value = RaState.Idle(readStatus(if (r.stop == RaSyncStop.AUTH) RA_SIGN_IN_AGAIN else null))
-            } catch (e: CancellationException) { throw e } catch (e: Exception) { _state.value = RaState.Idle(previous); emit(RaMessage.Failure("Sync failed: ${e::class.simpleName}")) }
+            }
         }
     }
 
     fun prefetchAll() {
         if (busy) return
-        val user = settings.raUsername; val token = settings.raToken
-        if (token == null || user.isBlank()) { emit(RaMessage.Failure("Sign in first")); return }
+        val (user, token) = credentials() ?: run { emit(RaMessage.Failure("Sign in first")); return }
         if (!platform.connectivity.isConnected()) { emit(RaMessage.Failure("No connection")); return }
         val previous = idleStatus
         paused.value = false
@@ -171,7 +168,10 @@ class RaController(
         _download.value = t.snapshot(RaDownloadPhase.RUNNING)
         fun publish() { if (tracker === t && _state.value is RaState.Prefetching) _download.value = t.snapshot(if (paused.value) RaDownloadPhase.PAUSED else RaDownloadPhase.RUNNING) }
         job = scope.launch {
-            try {
+            tryOr({ e ->
+                _state.value = RaState.Idle(previous); _download.value = t.snapshot(RaDownloadPhase.STOPPED, stopReason = e::class.simpleName)
+                emit(RaMessage.Failure("Download failed: ${e::class.simpleName}"))
+            }) {
                 val idx = withContext(work) { index() } ?: run { _state.value = RaState.Idle(previous); _download.value = null; emit(RaMessage.Failure("No library index yet")); return@launch }
                 // The walk (every cached game's sets.json parsed, each folder's hashes.json) runs on [work]; the tracker,
                 // the page and the state change only here, in its order, so pause/resume/cancel never meet it mid-change.
@@ -190,9 +190,6 @@ class RaController(
                 emit(if (r.failed) RaMessage.Failure("$text (stopped: $why)") else RaMessage.Notice(text))
                 _download.value = t.snapshot(if (r.failed) RaDownloadPhase.STOPPED else RaDownloadPhase.DONE, stopReason = why.takeIf { r.failed })
                 _state.value = RaState.Idle(readStatus(if (r.stop == RaSyncStop.AUTH) RA_SIGN_IN_AGAIN else null))
-            } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                _state.value = RaState.Idle(previous); _download.value = t.snapshot(RaDownloadPhase.STOPPED, stopReason = e::class.simpleName)
-                emit(RaMessage.Failure("Download failed: ${e::class.simpleName}"))
             }
         }
     }
@@ -205,8 +202,7 @@ class RaController(
      * library pointer gets one, so the panel finds it.
      */
     suspend fun fetchGame(path: String): RaGameFetch {
-        val user = settings.raUsername; val token = settings.raToken
-        if (token == null || user.isBlank()) return RaGameFetch.Failed("sign in first")
+        val (user, token) = credentials() ?: return RaGameFetch.Failed("sign in first")
         if (!platform.connectivity.isConnected()) return RaGameFetch.Failed(RaPrefetch.NO_CONNECTION)
         return oneGame.withLock {
             withContext(work) {
@@ -282,8 +278,8 @@ class RaController(
                 }
                 emit(RaMessage.Notice(when (what) { ResetScope.ALL -> "Achievement data erased"; ResetScope.LOGIN -> "Signed out"; ResetScope.ACCOUNT -> "Account data reset" }))
             } catch (e: Exception) { emit(RaMessage.Failure("Could not delete: ${e::class.simpleName}")) }
-            _state.value = try { RaState.Idle(readStatus()) } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                emit(RaMessage.Failure("Could not read status: ${e::class.simpleName}")); RaState.Idle(previous)
+            _state.value = tryOr({ e -> emit(RaMessage.Failure("Could not read status: ${e::class.simpleName}")); RaState.Idle(previous) }) {
+                RaState.Idle(readStatus())
             }
         }
     }
@@ -354,6 +350,12 @@ class RaController(
             if (e !is CancellationException) { updates.close(); drain.join() }
             throw e
         } finally { updates.close() }
+    }
+
+    /** The signed-in user and token; null when signed out. */
+    private fun credentials(): Pair<String, String>? {
+        val user = settings.raUsername; val token = settings.raToken
+        return if (token == null || user.isBlank()) null else user to token
     }
 
     private fun emit(m: RaMessage) { _messages.tryEmit(m) }

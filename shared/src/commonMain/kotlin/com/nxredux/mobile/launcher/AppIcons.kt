@@ -1,7 +1,7 @@
 package com.nxredux.mobile.launcher
 
 import androidx.compose.ui.graphics.ImageBitmap
-import kotlinx.coroutines.CancellationException
+import com.nxredux.mobile.tryOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -29,7 +29,7 @@ class AppIcons(private val launcher: AppLauncher, private val scope: CoroutineSc
         val pending = loading.getOrPut(key) {
             scope.async {
                 // A failure is a missing icon, never the scope's end.
-                try { if (mono) launcher.silhouette(id) else launcher.icon(id) } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+                tryOrNull { if (mono) launcher.silhouette(id) else launcher.icon(id) }
             }
         }
         val icon = pending.await()

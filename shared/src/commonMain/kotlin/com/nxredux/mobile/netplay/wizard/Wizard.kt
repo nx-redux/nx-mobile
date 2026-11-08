@@ -7,13 +7,14 @@ import com.nxredux.mobile.netplay.NetplaySaves
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.NetplayWire
 import com.nxredux.mobile.netplay.RejectReason
+import com.nxredux.mobile.tryOr
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * The handheld's control-channel exchange (nx-redux wizard_net.c at 8f5a760b), both roles: HELLO 2 with caps,
  * the gates (version, game, role, core), `REJECT core-<core>.<tag>`, SYNC-READY + `FILE <name>` with an rsync pull,
- * `START 2` / `START`. Neither driver throws [NetplayIoException]; neither closes the channel on success (the caller does).
+ * `START 2` / `START`. Neither driver throws [NetplayIoException]; neither closes the channel (the caller does).
  */
 object Wizard {
     const val RECV_MS = 5_000L
@@ -32,7 +33,7 @@ object Wizard {
      */
     suspend fun host(ch: NetplayChannel, offer: HostOffer, saves: suspend () -> HostSaves, onSync: () -> Unit = {}): HostOutcome {
         try {
-            val hello = HelloCodec.parse(ch.readLine(RECV_MS)) ?: run { ch.close(); return HostOutcome.Turned(null) }
+            val hello = HelloCodec.parse(ch.readLine(RECV_MS)) ?: return HostOutcome.Turned(null)
             HelloCodec.mismatch(hello, offer.game, Hello.CLIENT, hello.any)?.let { reason ->
                 ch.writeLine(Reject(reason).format())
                 return HostOutcome.Turned(reason.wire)
@@ -45,23 +46,13 @@ object Wizard {
             // A link session (GB/GBC/GBA) copies no saves: each player keeps their own, which a trade needs (the
             // handheld's NETPLAY_SYNC_SAVES=0). START follows the HELLO at once.
             val emptySaves = if (NetplayCores.isLink(run)) false else {
-                val served = try {
-                    saves()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
+                val served = tryOr({
                     sendQuietly(ch, Reject(RejectReason.SYNC).format())
                     return HostOutcome.Turned(RejectReason.SYNC.wire)
-                }
+                }) { saves() }
                 try {
                     if (served.files.isNotEmpty() && served.canServe) {
-                        val up = try {
-                            served.start(ch.remoteAddress)
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            false
-                        }
+                        val up = tryOr({ false }) { served.start(ch.remoteAddress) }
                         if (!up) {
                             sendQuietly(ch, Reject(RejectReason.SYNC).format())
                             return HostOutcome.Turned(RejectReason.SYNC.wire)
@@ -200,14 +191,10 @@ object Wizard {
     }
 
     /** Each pull within 15 s and all of them within 23 s (wizard_sync.c); false on a failure or a timeout. */
-    private suspend fun pullAll(sink: SaveSink, host: String, names: List<String>): Boolean = try {
+    private suspend fun pullAll(sink: SaveSink, host: String, names: List<String>): Boolean = tryOr({ false }) {
         withTimeoutOrNull(TOTAL_PULL_MS) {
             names.all { name -> withTimeoutOrNull(FILE_PULL_MS) { sink.pull(host, name); true } == true }
         } == true
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        false
     }
 
     /** The text for a REJECT; `core-<core>[.<tag>]` names the host's emulator, a bare `core` is a plain refusal. */
