@@ -367,6 +367,11 @@ interface AppSettings {
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
+    /** The 3DS layout chord's tip ([com.nxredux.mobile.runner.LayoutTip]) hidden for good from its button. Defaulted, like [debugLog]. */
+    var layoutTipHidden: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
     /**
      * First setup's All files access step was answered (Allow or Skip); it is never shown again. Defaulted, like
      * [debugLog].

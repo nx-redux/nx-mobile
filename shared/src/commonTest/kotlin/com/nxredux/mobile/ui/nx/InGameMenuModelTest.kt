@@ -453,10 +453,10 @@ class InGameMenuModelTest {
         assertEquals(listOf("Controller Layout", "Pad Opacity (landscape)"), m.state.page.rows.map { it.label })
         val opacity = m.optionRow(1)
         assertEquals(listOf("100%", "60%", "40%", "25%"), opacity.choices)
-        assertEquals(2, opacity.index)
+        assertEquals(1, opacity.index)                       // 60%, the default
         m.select(1)
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.PAD_LANDSCAPE_OPACITY, "25"), m.press(NxButton.A))   // A steps segments
-        assertEquals("25%", m.optionRow(1).valueLabel)                     // not a visual row: in place
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.PAD_LANDSCAPE_OPACITY, "40"), m.press(NxButton.A))   // A steps segments
+        assertEquals("40%", m.optionRow(1).valueLabel)                     // not a visual row: in place
     }
 
     @Test fun a_changes_a_row_left_right_go_between_pages() {
@@ -1449,7 +1449,7 @@ class InGameMenuModelTest {
         fold.press(NxButton.A); fold.press(NxButton.LEFT)                  // its live preview: Large screen back to the last one offered
         assertEquals("Picture in picture", fold.optionRow(0).valueLabel)   // in its live preview
         val phone = model().apply { screen = ScreenClass.REGULAR_PHONE }.openConsoleSettings()
-        assertEquals("Side by side", phone.optionRow(2).valueLabel)
+        assertEquals("Single screen", phone.optionRow(2).valueLabel)   // a regular phone's landscape default (user)
         assertTrue("Side by side" in phone.optionRow(2).choices)
     }
 
@@ -1571,6 +1571,22 @@ class InGameMenuModelTest {
         assertTrue("Layout (portrait, controller)" in labels())
         assertTrue("Layout (portrait)" !in labels() && "Layout (landscape)" !in labels())
         assertTrue("3D Resolution" in labels())
+    }
+
+    // A layout row the pad skin ignores shows unavailable (user: the Fold's skin places the 3DS screens itself).
+    @Test fun aLayoutRowThePadSkinIgnoresIsUnavailable() {
+        val m = model().apply { screen = ScreenClass.STUBBY_PHONE }
+        m.ndsView = NdsView(landscape = true, controllerMode = false)
+        m.layoutLocked = setOf(com.nxredux.mobile.options.N3dsOptions.LAYOUT_LANDSCAPE)
+        m.open3dsConsoleSettings()
+        val i = m.state.page.rows.indexOfFirst { it.label == "Layout (landscape)" }
+        val row = m.optionRow(i)
+        assertEquals("Unavailable", row.valueLabel)
+        assertEquals(InGameMenuModel.LAYOUT_SKIN_LINE, row.info)
+        assertTrue(row.choices.isEmpty(), "nothing to change")
+        m.select(i)
+        assertNull(m.press(NxButton.RIGHT))
+        assertEquals("Unavailable", m.optionRow(i).valueLabel)
     }
 
     // The 3DS layout rows are not visual (Azahar draws the layout, so the paused frame can't show it): A does not open a strip,

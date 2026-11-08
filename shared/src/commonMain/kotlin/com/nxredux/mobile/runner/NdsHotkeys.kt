@@ -65,6 +65,11 @@ class NdsHotkeys {
         return NdsAction.Stylus(stylus)
     }
 
+    /** A pad skin shows (host-set): where it places the screens itself ([skinLayouts] false) SELECT + Left / Right does nothing. */
+    var skinShown = false
+    /** The skin lays the screens out by the player's layout (a regular phone's landscape, NdsOptions.skinLayout; host-set). */
+    var skinLayouts = false
+
     fun onButton(button: NxButton, down: Boolean): NdsDecision {
         if (button == NxButton.SELECT) selectHeld = down   // SELECT itself still reaches the core
         if (!down) {
@@ -80,7 +85,8 @@ class NdsHotkeys {
             button == NxButton.R2 -> NdsDecision(false, NdsAction.SwapScreens)
             button == NxButton.L2 -> NdsDecision(false, toggleStylus())
             selectHeld && (button == NxButton.LEFT || button == NxButton.RIGHT) ->
-                NdsDecision(false, NdsAction.CycleLayout(if (button == NxButton.RIGHT) 1 else -1))
+                if (skinShown && !skinLayouts) NdsDecision(false)   // the skin places the screens: kept, nothing to cycle
+                else NdsDecision(false, NdsAction.CycleLayout(if (button == NxButton.RIGHT) 1 else -1))
             selectHeld && (button == NxButton.UP || button == NxButton.DOWN) ->
                 NdsDecision(false, NdsAction.CycleCorner(if (button == NxButton.DOWN) 1 else -1))
             stylus && button.isDirection -> {

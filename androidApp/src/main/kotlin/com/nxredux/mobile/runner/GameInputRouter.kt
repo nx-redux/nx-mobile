@@ -246,6 +246,18 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private val padNames = HashMap<DeviceKey, String>()
 
     private val ndsHotkeys = NdsHotkeys()        // a new activity, a new instance: stylus mode is off at every launch
+
+    /**
+     * A pad skin [shown] or gone, and whether it lays the DS / 3DS screens out by the player's layout ([layouts]: a regular
+     * phone's landscape): both consoles' chords follow (SELECT + Left / Right cycles only where the layout shows).
+     */
+    fun setSkinLayouts(shown: Boolean, layouts: Boolean) {
+        n3dsHotkeys.skinShown = shown; n3dsHotkeys.skinLayouts = shown && layouts
+        ndsHotkeys.skinShown = shown; ndsHotkeys.skinLayouts = shown && layouts
+    }
+
+    /** The skin lays the DS / 3DS screens out by the player's layout ([setSkinLayouts]). */
+    val skinLayouts: Boolean get() = n3dsHotkeys.skinLayouts
     private val ndsHat = DpadHat()               // hardware hat directions the core has been given (the forwarded ones)
     private var ndsHatX = 0
     private var ndsHatY = 0
@@ -387,6 +399,30 @@ internal class GameInputRouter(private val host: GameInputHost) {
         applyFrontend(frontendValues + change)
         showNdsLabel(label)
         host.persistGameKey(key, value, "Could not save the screen layout")
+    }
+
+    /** The notices' buttons, by toast id: what a tap on one does ([showNotice]). */
+    private val noticeActions = HashMap<Long, () -> Unit>()
+
+    /** A notice over the picture for [ms] (a tip: [LayoutTip]), with a button [action] whose tap runs [onAction] and closes it. */
+    fun showNotice(text: String, ms: Long, action: String? = null, onAction: () -> Unit = {}) {
+        val id = notifications.push(text, null, ms, SystemClock.elapsedRealtime(), action)
+        if (action != null && id >= 0) noticeActions[id] = onAction
+        publishNotifications()
+    }
+
+    /** A notice's Close was tapped: it goes, its action not run. */
+    fun onNoticeDismiss(id: Long) {
+        noticeActions.remove(id)
+        notifications.dismiss(id)
+        publishNotifications()
+    }
+
+    /** A notice's button was tapped: its action, and the notice goes. */
+    fun onNoticeAction(id: Long) {
+        noticeActions.remove(id)?.invoke()
+        notifications.dismiss(id)
+        publishNotifications()
     }
 
     private fun showNdsLabel(text: String) {

@@ -284,6 +284,10 @@ internal class InGameMenuController(
             it.screen = activity.screenClass()   // the DS / 3DS layout rows: this window's values and defaults
             it.displayMax3d = host.nds3dDisplayMax   // the DS / 3DS 3D Resolution rows' scales
             it.ndsView = host.ndsView                 // the DS / 3DS layout row in use, and the DS inset rows only in Picture in picture
+            // the 3DS layout rows a pad skin ignores here, shown unavailable (only 3DS keys: no other console has them)
+            it.layoutLocked = AndroidAppSettings(activity).padSkin.let { on ->
+                com.nxredux.mobile.options.N3dsOptions.lockedLayoutRows(on, activity.screenClass()) + com.nxredux.mobile.options.NdsOptions.lockedLayoutRows(on, activity.screenClass())
+            }
             // netplay: the root is "Leave netplay?" only; Continue / Quit once the session has ended. An ended link
             // session's game is a local one ([netplayNow] null): the normal root.
             if (netplayNow != null) {

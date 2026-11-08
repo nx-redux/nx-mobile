@@ -68,6 +68,11 @@ class N3dsHotkeys {
      * and SELECT + Left / Right (layout) are kept from the core and do nothing; SELECT + R still swaps.
      */
     var skinShown = false
+    /**
+     * The skin lays the screens out by the player's layout (a regular phone's landscape, N3dsOptions.skinLayout; host-set):
+     * SELECT + Left / Right cycles it there too.
+     */
+    var skinLayouts = false
 
     /** The core's right-stick deadzone (0..1, [N3dsOptions.deadzone]), host-set. */
     var deadzone: Float = DEFAULT_DEADZONE
@@ -125,7 +130,7 @@ class N3dsHotkeys {
         var key: N3dsKey? = null
         val decision = when {
             chord && button == NxButton.R1 -> { key = N3dsKey.L3; N3dsDecision(false) }
-            chord && skinShown -> N3dsDecision(false)
+            chord && skinShown && !(skinLayouts && button.isHorizontal()) -> N3dsDecision(false)
             chord && button == NxButton.L1 -> N3dsDecision(false, toggleStylus())
             chord -> N3dsDecision(false, N3dsAction.CycleLayout(if (button == NxButton.RIGHT) 1 else -1))
             stylus && button.isDirection -> {
@@ -246,3 +251,6 @@ class N3dsHotkeys {
 }
 
 private val CHORD_BUTTONS = setOf(NxButton.LEFT, NxButton.RIGHT, NxButton.L1, NxButton.R1)
+
+/** LEFT or RIGHT: the layout chord's buttons. */
+private fun NxButton.isHorizontal() = this == NxButton.LEFT || this == NxButton.RIGHT

@@ -311,4 +311,16 @@ class NdsLayoutTest {
         assertFalse(NdsLayout.isDsFrame(300, 450))      // 2:3 but not whole 256 steps
         assertFalse(NdsLayout.isDsFrame(512, 769))
     }
+
+    // Side by side in a pad skin's glass fills it (user: whole-number 2x left wide margins on the Flip): the pair scaled
+    // evenly to the glass, centred, both screens still one size in whole px.
+    @Test fun regions_filled_to_a_glass_scale_evenly_and_centre() {
+        val glass = PxRect(0f, 0f, 1386f, 870f)
+        val r = NdsLayout.regions(glass, SIDE_BY_SIDE, true, REGULAR_PHONE, NdsSettings(), 0f).filledTo(glass)
+        val shown = r.shownRect()
+        assertEquals(1386f, shown.width, 1f)                              // the width fills
+        assertEquals((870f - shown.height) / 2f, shown.y, 1f)             // centred
+        assertEquals(r[0].dst.width, r[1].dst.width); assertEquals(r[0].dst.height, r[1].dst.height)
+        assertEquals(kotlin.math.round(r[0].dst.width), r[0].dst.width)   // whole px
+    }
 }

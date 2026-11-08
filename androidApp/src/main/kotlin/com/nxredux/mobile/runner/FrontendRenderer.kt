@@ -32,6 +32,7 @@ import com.nxredux.mobile.layout.pictureSpace
 import com.nxredux.mobile.layout.placedFor
 import com.nxredux.mobile.options.BRICK_HEIGHT
 import com.nxredux.mobile.options.FrontendSettings
+import com.nxredux.mobile.options.NdsLayoutChoice
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.layout.hiddenBandReach
 import com.nxredux.mobile.options.N3dsOptions
@@ -772,7 +773,20 @@ internal class FrontendRenderer(
         if (isN3ds) return skinN3dsLayout(g)
         if (!NdsOptions.appliesTo(gameTag) || !NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt())) return null
         val p = padLayout.skinPlacement() ?: return null
-        val stack = p.glass(GlassScreen.STACK)?.rect?.let { fitAspect(it, 256f / 384f) }   // the two screens' stack, centred in the glass
+        // a regular phone's landscape: the player's layout in the skin's one glass (NdsOptions.skinLayout), as without a skin
+        val glass = p.glass(GlassScreen.STACK)?.rect
+        val choice = NdsOptions.skinLayout(frontendValues, isLandscape(), ndsControllerMode(), activity.windowShape().screenClass)
+        if (glass != null && choice != null) {
+            val laid = NdsLayout.regions(glass, choice, true, activity.windowShape().screenClass, NdsSettings.parse(frontendValues),
+                NDS_INSET_MARGIN_DP * resources.displayMetrics.density)
+            // Side by side fills the glass (user: its whole-number scale left wide margins); the others stay whole-number
+            val regions = if (choice == NdsLayoutChoice.SIDE_BY_SIDE) laid.filledTo(glass) else laid
+            if (regions.isNotEmpty()) {
+                val top = regions.firstOrNull { it.screen == NdsScreen.TOP }?.dst ?: regions.first().dst
+                return SkinDs(top, regions.firstOrNull { it.screen == NdsScreen.BOTTOM }?.dst ?: top, regions)
+            }
+        }
+        val stack = glass?.let { fitAspect(it, 256f / 384f) }   // the two screens' stack, centred in the glass
         val top = stack?.copy(height = stack.height / 2f) ?: p.glass(GlassScreen.TOP)?.rect?.let { fitAspect(it, 256f / 192f) } ?: return null   // the top screen, centred in its glass
         val bottom = stack?.copy(y = stack.y + stack.height / 2f, height = stack.height / 2f) ?: p.glass(GlassScreen.TOUCH)?.rect ?: return null
         val big = NdsSettings.parse(frontendValues).big
@@ -786,7 +800,9 @@ internal class FrontendRenderer(
         val fw = g[0].roundToInt()
         val fh = g[1].roundToInt()
         val regions = if (SkinN3ds.cutsStack(fw, fh, pinned = host.n3dsStackPinned)) {
-            SkinN3ds.regions(stack, top, p.glass(GlassScreen.TOUCH)?.rect, padLayout.n3dsSkinBig) ?: return null
+            // a regular phone's landscape: the player's layout in the skin's one glass (N3dsOptions.skinLayout)
+            val layout = N3dsOptions.skinLayout(frontendValues, isLandscape(), ndsControllerMode(), activity.windowShape().screenClass)
+            SkinN3ds.regions(stack, top, p.glass(GlassScreen.TOUCH)?.rect, padLayout.n3dsSkinBig, layout) ?: return null
         } else {
             val whole = SkinN3ds.whole(stack, top, fw, fh) ?: return null
             listOf(NdsRegion(NdsScreen.TOP, FrameRect(0f, 0f, 1f, 1f), whole, shaded = true, touch = false))

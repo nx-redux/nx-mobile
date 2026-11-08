@@ -109,12 +109,23 @@ object N3dsOptions {
 
     /**
      * The layout a screen starts with before the player picks one: Large screen on a Fold-shaped screen or tablet in
-     * landscape, Stacked in portrait (the controller row too), Side by side on a regular phone in landscape.
+     * landscape, Stacked in portrait (the controller row too), Single screen on a regular phone in landscape (user).
      */
     fun defaultLayout(screen: ScreenClass, landscape: Boolean): String = when {
         !landscape -> "stacked"
         screen.isFoldShaped || screen.isTablet -> "large"
-        else -> "side_by_side"
+        else -> "single_screen"
+    }
+
+    /**
+     * The layout rows a pad skin ([skinOn]) ignores on [screen], which the Display page shows unavailable (user): portrait's
+     * (the skin's top and touch screen pieces place them), landscape's on the Fold or a tablet ([skinLayout] null there).
+     * Portrait with a controller keeps its row: no skin is drawn then.
+     */
+    fun lockedLayoutRows(skinOn: Boolean, screen: ScreenClass): Set<String> = when {
+        !skinOn -> emptySet()
+        screen.isFoldShaped || screen.isTablet -> setOf(LAYOUT_PORTRAIT, LAYOUT_LANDSCAPE)
+        else -> setOf(LAYOUT_PORTRAIT)
     }
 
     private const val LAYOUT_INFO_LIST = "Large screen: the top one big, the bottom one\nunder it at least half its size (in portrait it fills\nthe height left, up to the top's size).\n" +
@@ -163,6 +174,14 @@ object N3dsOptions {
         val active = layoutKey(view.landscape, view.controllerMode)
         return rows.filter { it.key !in OLD_LAYOUT_KEYS || it.key == active }
     }
+
+    /**
+     * The layout the app draws under a pad skin: on a regular phone in [landscape] (user: its skin's one glass is too
+     * small for the top over touch screen) the player's ([appLayoutFor], Single screen unless picked); null elsewhere (the
+     * Fold, a tablet, portrait), where the skin's own top over touch screen stays.
+     */
+    fun skinLayout(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): String? =
+        if (!landscape || screen.isFoldShaped || screen.isTablet) null else appLayoutFor(values, landscape, controllerMode, screen)
 
     /** The app's layout for the row in use on [screen]: the pick (old keys read too), else the screen's [defaultLayout]. */
     fun appLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): String =

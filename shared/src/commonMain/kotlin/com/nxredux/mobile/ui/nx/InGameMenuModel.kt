@@ -355,6 +355,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             refreshFrontendPages()
         }
 
+    /** The 3DS layout rows the pad skin ignores here (N3dsOptions.lockedLayoutRows, host-set): shown unavailable (user). */
+    var layoutLocked: Set<String> = emptySet()
+        set(value) {
+            if (value == field) return
+            field = value
+            refreshFrontendPages()
+        }
+
     private var nds3dNow: Int? = null            // the DS 3D scale in use (null: unknown / not DS)
     private var nds3dSoftware = false            // the core renders in software: the 3D Resolution rows take no effect
 
@@ -1356,7 +1364,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             val current = shaderValue(key) ?: return null
             return ShaderOptions.cycle(key, current, delta, presets, params)?.let { setFrontendValue(key, it) }
         }
-        if (key == FrontendOptions.OVERLAY && !overlayAvailable) return null
+        if (key == FrontendOptions.OVERLAY && !overlayAvailable || key in layoutLocked) return null
         if (softwareLocked(key)) return null
         // An unset DS layout row (no stored value) cycles from its shown default, like frontendRow shows it.
         val option = optionFor(key)
@@ -1386,7 +1394,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** The raw values a frontend or shader row offers, in [MenuRow.Option.choices]' order; null for an unknown key. */
     private fun settingValues(key: String): List<String>? = when {
         ShaderOptions.isShaderKey(key) -> ShaderOptions.choices(key, presets, params)
-        key == FrontendOptions.OVERLAY && !overlayAvailable -> emptyList()
+        key == FrontendOptions.OVERLAY && !overlayAvailable || key in layoutLocked -> emptyList()
         key == FrontendOptions.OVERLAY -> FrontendOptions.choices(key, overlays)
         else -> optionFor(key)?.values
     }
@@ -1655,6 +1663,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun frontendRow(o: FrontendOption): MenuRow.Option =
         if (o.key == FrontendOptions.OVERLAY && !overlayAvailable) {
             MenuRow.Option(o.label, o.key, OVERLAY_UNAVAILABLE, OVERLAY_UNAVAILABLE_LINE, detail = OVERLAY_UNAVAILABLE_INFO)
+        } else if (o.key in layoutLocked) {
+            MenuRow.Option(o.label, o.key, UNAVAILABLE, LAYOUT_SKIN_LINE, detail = LAYOUT_SKIN_INFO)
         } else if (softwareLocked(o.key)) {
             val value = ConsoleSettings.fitted(o, frontend[o.key] ?: o.default).second
             MenuRow.Option(o.label, o.key, o.labelOf(value), NdsOptions.SOFTWARE_NOTE)
@@ -1897,6 +1907,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val NO_LOCKED = "Everything unlocked."
         const val ACH_KEY_PREFIX = "ach:"
         const val OVERLAY_UNAVAILABLE = "Unavailable"
+        /** A layout row the pad skin ignores ([layoutLocked]): its line and its info. */
+        const val LAYOUT_SKIN_LINE = "The pad skin places the screens"
+        const val LAYOUT_SKIN_INFO = "The pad skin lays the two screens out here.\nTurn Pad skin off to use this layout."
         private const val RESET_TEXT = "Progress since your last save will be lost."
         private const val QUIT_TEXT = "Save & Quit keeps your place for next time. Quit keeps the last resume point."
         const val OVERLAY_UNAVAILABLE_LINE = "Off while the DS screens are drawn apart"

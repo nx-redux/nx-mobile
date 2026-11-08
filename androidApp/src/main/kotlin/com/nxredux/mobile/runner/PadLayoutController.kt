@@ -231,7 +231,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         cornerView?.let { root.removeView(it) }
         cornerView = null
         skinShownState.value = false
-        input.n3dsHotkeys.skinShown = false
+        input.setSkinLayouts(shown = false, layouts = false)
         input.dpadHat.clear()
         overlayPadShown.value = false   // set again below where the bare buttons are added
         overlayClear.value = false
@@ -531,7 +531,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         // / Left / Right chords ([N3dsHotkeys.skinShown])
         if (input.ndsStylusOn.value) input.toggleNdsStylus()
         if (input.n3dsStylusOn.value) input.toggleN3dsStylus()
-        input.n3dsHotkeys.skinShown = true
+        // a regular phone's landscape: the skin lays the DS / 3DS screens out by the player's layout, which SELECT + Left / Right cycles
+        input.setSkinLayouts(shown = true, layouts = isLandscape(orientation) && activity.windowShape().screenClass.let { !it.isFoldShaped && !it.isTablet })
         skinPlacement()
         game.requestLayout()
         updatePadVisibility()

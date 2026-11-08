@@ -99,7 +99,7 @@ object FrontendOptions {
     const val PAD_LANDSCAPE_OPACITY = "nx_pad_landscape_opacity"
     /** [PAD_LANDSCAPE_OPACITY]'s values, in percent, in menu order. */
     val PAD_OPACITIES = listOf(100, 60, 40, 25)
-    const val PAD_OPACITY_DEFAULT = 40
+    const val PAD_OPACITY_DEFAULT = 60
     /** Enabled cheats (normalised info texts — desc with its source prefix — joined by `|`); written to the game config only, never a row. */
     const val CHEATS = "nx_cheats"
     const val NONE = "None"

@@ -21,10 +21,10 @@ enum class NdsLayoutChoice(override val value: String, override val label: Strin
 
 /**
  * The layout a screen starts with before the player picks one: large screen on the near-square shapes (Fold-shaped,
- * tablets) and in portrait, side by side on a regular phone in landscape. The controller row uses the portrait default.
+ * tablets) and in portrait, single screen on a regular phone in landscape (user). The controller row uses the portrait default.
  */
 fun ndsDefault(screen: ScreenClass, landscape: Boolean): NdsLayoutChoice =
-    if (landscape && !screen.isFoldShaped && !screen.isTablet) NdsLayoutChoice.SIDE_BY_SIDE else NdsLayoutChoice.LARGE
+    if (landscape && !screen.isFoldShaped && !screen.isTablet) NdsLayoutChoice.SINGLE else NdsLayoutChoice.LARGE
 
 /** Side by side is not offered in landscape on a Fold-shaped screen: the two screens would be tiny there. */
 internal fun offers(choice: NdsLayoutChoice, landscape: Boolean, screen: ScreenClass?): Boolean =
@@ -272,6 +272,24 @@ object NdsOptions {
     }
 
     /** The layout drawn for the row in use on [screen] ([NdsSettings.layoutShown] of the parsed [values]). */
+    /**
+     * The layout the app draws under a pad skin: on a regular phone in [landscape] (user, as the 3DS's) the player's
+     * ([layoutShown], Single screen unless picked) in the skin's one glass; null elsewhere (the Fold, a tablet, portrait),
+     * where the skin's own top over touch screen stays.
+     */
+    fun skinLayout(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): NdsLayoutChoice? =
+        if (!landscape || screen.isFoldShaped || screen.isTablet) null else layoutShown(values, landscape, controllerMode, screen)
+
+    /**
+     * The layout rows a pad skin ([skinOn]) ignores on [screen], shown unavailable (user): portrait's, and landscape's on
+     * the Fold or a tablet ([skinLayout] null there). Portrait with a controller keeps its row: no skin is drawn then.
+     */
+    fun lockedLayoutRows(skinOn: Boolean, screen: ScreenClass): Set<String> = when {
+        !skinOn -> emptySet()
+        screen.isFoldShaped || screen.isTablet -> setOf(LAYOUT_PORTRAIT, LAYOUT_LANDSCAPE)
+        else -> setOf(LAYOUT_PORTRAIT)
+    }
+
     fun layoutShown(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): NdsLayoutChoice =
         NdsSettings.parse(values).layoutShown(landscape, controllerMode, screen)
 

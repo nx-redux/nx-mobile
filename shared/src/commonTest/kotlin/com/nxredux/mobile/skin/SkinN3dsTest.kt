@@ -55,6 +55,38 @@ class SkinN3dsTest {
         assertEquals(PxRect(440f, 360f, 320f, 240f), r.single { it.screen == NdsScreen.BOTTOM }.dst)
     }
 
+    // A regular phone's landscape glass (user): the player's layout in it.
+    @Test
+    fun sideBySideInAStackGlass() {   // the big screen left, both one height
+        val r = SkinN3ds.regions(PxRect(0f, 0f, 1440f, 600f), null, null, NdsScreen.TOP, layout = "side_by_side")!!
+        val top = r.single { it.screen == NdsScreen.TOP }.dst; val bottom = r.single { it.screen == NdsScreen.BOTTOM }.dst
+        assertEquals(PxRect(0f, 60f, 800f, 480f), top)
+        assertEquals(PxRect(800f, 60f, 640f, 480f), bottom)
+        assertTrue(r.single { it.screen == NdsScreen.BOTTOM }.touch)
+    }
+
+    @Test
+    fun sideBySideSwappedPutsTheTouchScreenLeft() {
+        val r = SkinN3ds.regions(PxRect(0f, 0f, 1440f, 600f), null, null, NdsScreen.BOTTOM, layout = "side_by_side")!!
+        assertEquals(0f, r.single { it.screen == NdsScreen.BOTTOM }.dst.x)
+        assertEquals(640f, r.single { it.screen == NdsScreen.TOP }.dst.x)
+    }
+
+    @Test
+    fun stackedInAStackGlassIsOneSize() {   // one above the other at the same scale, centred
+        val r = SkinN3ds.regions(PxRect(0f, 0f, 1440f, 600f), null, null, NdsScreen.TOP, layout = "stacked")!!
+        val top = r.single { it.screen == NdsScreen.TOP }.dst; val bottom = r.single { it.screen == NdsScreen.BOTTOM }.dst
+        assertEquals(top.height, bottom.height, 0.01f); assertEquals(600f, top.height + bottom.height, 0.01f)
+        assertEquals(500f, top.width, 0.01f); assertEquals(400f, bottom.width, 0.01f)
+    }
+
+    @Test
+    fun singleScreenInAStackGlassIsTheBigOneAlone() {
+        val r = SkinN3ds.regions(PxRect(0f, 0f, 1440f, 600f), null, null, NdsScreen.TOP, layout = "single_screen")!!
+        assertEquals(listOf(NdsScreen.TOP), r.map { it.screen })
+        assertEquals(PxRect(220f, 0f, 1000f, 600f), r.single().dst)
+    }
+
     @Test
     fun topAndTouchGlasses() {
         val r = SkinN3ds.regions(null, PxRect(0f, 0f, 600f, 300f), PxRect(100f, 320f, 400f, 300f), NdsScreen.TOP)!!

@@ -1678,6 +1678,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         lifecycleScope.launch {
             view.getGLRetroEvents().first { it is GLRetroView.GLRetroEvents.SurfaceCreated }
             padLayout.onCoreRunning()
+            offerLayoutTip()
         }
         val game = findViewById<FrameLayout>(R.id.gameContainer)
         game.addView(view)
@@ -2136,6 +2137,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * player's layout (drawn whole in the skin).
      */
     private fun n3dsSkinStack(): Boolean = isN3ds && padLayout.skinShown && netplayNow == null
+
+    /** On a DS or 3DS game where SELECT + Left / Right changes the layout: the tip saying so, until hidden from its button ([LayoutTip]). */
+    private fun offerLayoutTip() {
+        val settings = AndroidAppSettings(this)
+        if (!LayoutTip.due((isN3ds || isNds) && netplayNow == null, padLayout.skinShown, input.skinLayouts, settings.layoutTipHidden)) return
+        // up until closed (user): Close, or its button to hide it for good
+        input.showNotice(LayoutTip.text(ds = isNds), com.nxredux.mobile.ui.nx.NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) { settings.layoutTipHidden = true }
+    }
     override val n3dsStackPinned: Boolean get() = netplayNow == null
 
     /**
@@ -3167,7 +3176,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     var origin by remember { mutableStateOf(IntOffset.Zero) }   // this view's top-left in the window
                     BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow().round() }) {
                         val maxW = nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset).dp
-                        NxNotifications(toasts, pill, safeSides = sides, placement = placement, topCentreMaxWidth = maxW)
+                        NxNotifications(toasts, pill, safeSides = sides, placement = placement, topCentreMaxWidth = maxW, onAction = input::onNoticeAction, onDismiss = input::onNoticeDismiss)
                         // Top-right of the picture (not the screen: the landscape pad's shoulders hold the screen's corners),
                         // kept inside the cutout; not under the menu.
                         val kind = speed.indicator.value
