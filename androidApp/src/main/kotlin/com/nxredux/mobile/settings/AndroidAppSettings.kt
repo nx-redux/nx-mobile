@@ -1,5 +1,6 @@
 package com.nxredux.mobile.settings
 
+import com.nxredux.mobile.kids.KidsPin
 import android.content.Context
 import androidx.core.content.edit
 import com.nxredux.mobile.BuildConfig
@@ -147,6 +148,9 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var artMix: Boolean
         get() = prefs.getBoolean(KEY_ART_MIX, false)
         set(value) = prefs.edit { putBoolean(KEY_ART_MIX, value) }
+    override var artWheelMigrated: Boolean
+        get() = prefs.getBoolean(KEY_ART_WHEEL_MIGRATED, false)
+        set(value) = prefs.edit { putBoolean(KEY_ART_WHEEL_MIGRATED, value) }
 
     override var showHomeTab: Boolean
         get() = prefs.getBoolean(KEY_SHOW_HOME_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
@@ -256,6 +260,38 @@ class AndroidAppSettings(context: Context) : AppSettings {
             NxLog.enabled = value   // at once: the app, the runner and the cores in this process
         }
 
+    override var kidsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_KIDS_ENABLED, false)
+        set(value) = prefs.edit { putBoolean(KEY_KIDS_ENABLED, value) }
+
+    override var kidsSchedule: String?
+        get() = prefs.getString(KEY_KIDS_SCHEDULE, null)
+        set(value) = prefs.edit { if (value == null) remove(KEY_KIDS_SCHEDULE) else putString(KEY_KIDS_SCHEDULE, value) }
+
+    override var kidsAllowedApps: Set<String>
+        get() = prefs.getStringSet(KEY_KIDS_APPS, null)?.toSet() ?: emptySet()
+        set(value) = prefs.edit { putStringSet(KEY_KIDS_APPS, value.toSet()) }
+
+    override var kidsUnlockUntil: Long
+        get() = prefs.getLong(KEY_KIDS_UNLOCK_UNTIL, 0L)
+        set(value) = prefs.edit { putLong(KEY_KIDS_UNLOCK_UNTIL, value) }
+
+    override var kidsFlagHome: String?
+        get() = prefs.getString(KEY_KIDS_FLAG_HOME, null)
+        set(value) = prefs.edit { if (value == null) remove(KEY_KIDS_FLAG_HOME) else putString(KEY_KIDS_FLAG_HOME, value) }
+
+    override var kidsOnWhenHome: Boolean
+        get() = prefs.getBoolean(KEY_KIDS_ON_WHEN_HOME, false)
+        set(value) = prefs.edit { if (value) putBoolean(KEY_KIDS_ON_WHEN_HOME, true) else remove(KEY_KIDS_ON_WHEN_HOME) }
+
+    override fun setKidsPin(pin: String) = prefs.edit { putString(KEY_KIDS_PIN, KidsPin.hash(pin)) }
+
+    override fun kidsPinMatches(pin: String): Boolean = prefs.getString(KEY_KIDS_PIN, null)?.let { KidsPin.matches(pin, it) } == true
+
+    override val kidsPinSet: Boolean get() = prefs.getString(KEY_KIDS_PIN, null) != null
+
+    override fun clearKidsPin() = prefs.edit { remove(KEY_KIDS_PIN) }
+
     override var saveFormat: SaveFormat
         get() = SaveFormat.fromStored(prefs.getInt(KEY_SAVE_FORMAT, -1))
         set(value) = prefs.edit { putInt(KEY_SAVE_FORMAT, value.stored) }
@@ -325,6 +361,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_ART_BOX2D = "art_box2d"
         private const val KEY_ART_WHEEL = "art_wheel"
         private const val KEY_ART_MIX = "art_mix"
+        private const val KEY_ART_WHEEL_MIGRATED = "art_wheel_migrated"
         private const val KEY_SHOW_HOME_TAB = "show_home_tab"
         private const val KEY_SHOW_CONSOLES_TAB = "show_consoles_tab"
         private const val KEY_SHOW_COLLECTIONS_TAB = "show_collections_tab"
@@ -350,6 +387,13 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_SKIN_TWEAKS = "skin_tweaks"
         private const val KEY_GAME_RUMBLE = "game_rumble"
         private const val KEY_DEBUG_LOG = "debug_log"
+        private const val KEY_KIDS_ENABLED = "kids_enabled"
+        private const val KEY_KIDS_SCHEDULE = "kids_schedule"
+        private const val KEY_KIDS_APPS = "kids_apps"
+        private const val KEY_KIDS_UNLOCK_UNTIL = "kids_unlock_until"
+        private const val KEY_KIDS_FLAG_HOME = "kids_flag_home"
+        private const val KEY_KIDS_ON_WHEN_HOME = "kids_on_when_home"
+        private const val KEY_KIDS_PIN = "kids_pin"
         private const val KEY_SECOND_SCREEN = "second_screen"
         private const val KEY_BOTTOM_SCREEN = "bottom_screen"
         private const val KEY_PAUSE_UNFOCUSED = "pause_unfocused"

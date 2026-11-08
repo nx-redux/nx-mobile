@@ -9,6 +9,20 @@ import com.swordfish.libretrodroid.NxLog
 /** The broadcast that asks the game process to quit its game (auto state, saves) and end; [EndGameReceiver] gets it. */
 fun endGameAction(context: Context): String = context.packageName + ".END_GAME"
 
+/** Extra on the END_GAME broadcast: Kids Mode locks the game; it quits without its auto state (battery save still written). */
+const val EXTRA_KIDS_LOCK = "kids_lock"
+
+/** What an END_GAME broadcast carries; plain data so it is testable without an Intent. */
+data class EndGameSpec(val action: String, val packageName: String, val kidsLock: Boolean)
+
+fun endGameSpec(packageName: String, kidsLock: Boolean) = EndGameSpec("$packageName.END_GAME", packageName, kidsLock)
+
+/** The Kids Mode lock's end request: the game process quits, writes its battery save, and skips the auto state. */
+fun kidsLockIntent(context: Context): Intent {
+    val spec = endGameSpec(context.packageName, kidsLock = true)
+    return Intent(spec.action).setPackage(spec.packageName).putExtra(EXTRA_KIDS_LOCK, spec.kidsLock)
+}
+
 /**
  * The menu's side of the game process, before every launch: at most one game runs, and a new one never starts beside
  * (or inside) the old one's process. The game still paused in the background is brought back when it is the very one

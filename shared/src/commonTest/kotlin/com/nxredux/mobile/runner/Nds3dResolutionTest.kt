@@ -227,4 +227,16 @@ class Nds3dResolutionTest {
         assertEquals("2", Res3dConsole.DS.coreValue(2))
         assertEquals(Res3dConsole.PS2, Res3dConsole.forTag("PS2"))
     }
+
+    @Test fun ps2PictureOnASecond1080pDisplayReachesTwo() {
+        assertEquals(2 to 2, Ps2Resolution.shownScales(mainHeightPx = null, secondHeightPx = 1080))
+    }
+
+    @Test fun ps2PictureOnMainOnlyHasNoSecondReach() {
+        assertEquals(2 to 1, Ps2Resolution.shownScales(mainHeightPx = 960, secondHeightPx = null))
+    }
+
+    @Test fun ps2PictureOnBothTakesTheBiggerShown() {
+        assertEquals(3 to 3, Ps2Resolution.shownScales(mainHeightPx = 720, secondHeightPx = 1440))
+    }
 }

@@ -20,6 +20,7 @@
 
 #define MODULE_NAME_CORE "Libretro Core"
 
+#include "videoviews.h"
 #include <vector>
 #include <string>
 #include <cstring>
@@ -126,6 +127,11 @@ public:
     bool isGameGeometryUpdated() const;
     void clearGameGeometryUpdated();
 
+    // nx-mobile: video views. Enabled per core before its load; the map is written on the core's thread inside retro_run
+    // and taken by the GL thread after the step.
+    void setVideoViewsEnabled(bool enabled);
+    bool takeVideoViews(std::vector<libretrodroid::VideoView>& out);
+
     // Content frame rate from RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO. True once per new report, with its fps in [fps].
     // Thread-safe: flycast reports it from its emulation thread (spg.cpp CalculateSync) while step() reads it on the GL thread.
     bool consumeTimingUpdate(double &fps);
@@ -195,6 +201,10 @@ private:
     std::atomic<double> timingFps { 0.0 };
 
     std::array<libretrodroid::RumbleState, 4> rumbleStates;
+
+    bool videoViewsEnabled = false;
+    std::vector<libretrodroid::VideoView> videoViews;
+    bool videoViewsUpdated = false;
 
     std::unordered_map<std::string, struct Variable> variables;
     bool dirtyVariables = false;

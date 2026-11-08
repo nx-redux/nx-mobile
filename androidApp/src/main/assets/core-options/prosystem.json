@@ -3,8 +3,8 @@
  "emulator": "ProSystem",
  "sections": [
   {
-   "key": "",
-   "label": "",
+   "key": "video",
+   "label": "Video",
    "info": "",
    "items": [
     {
@@ -21,7 +21,14 @@
       "Millions (24-bit)"
      ],
      "default": "16bit"
-    },
+    }
+   ]
+  },
+  {
+   "key": "audio",
+   "label": "Audio",
+   "info": "",
+   "items": [
     {
      "key": "prosystem_low_pass_filter",
      "label": "Audio Filter",
@@ -85,7 +92,14 @@
       "95%"
      ],
      "default": "60"
-    },
+    }
+   ]
+  },
+  {
+   "key": "input",
+   "label": "Input",
+   "info": "",
+   "items": [
     {
      "key": "prosystem_gamepad_dual_stick_hack",
      "label": "Dual Stick Controller",
@@ -104,6 +118,6 @@
    ]
   }
  ],
- "soSha256": "6993fdc67b5d8697d333015492f776f2ff1be3b72b07aa1d760e261d9358f41f",
- "probedAt": "2026-09-29"
+ "soSha256": "9b329121aefb465b64b63d63cbc9298d3f350bfa254fce99c5b32b57edb2024f",
+ "probedAt": "2026-11-07"
 }

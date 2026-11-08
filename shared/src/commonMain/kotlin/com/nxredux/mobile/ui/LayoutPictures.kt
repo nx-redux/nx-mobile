@@ -160,7 +160,7 @@ internal fun tabPicture(
             Res.drawable.onboarding_tab_consoles_carousel_vertical_none,
         )
         MenuCategory.COLLECTIONS -> Res.drawable.onboarding_tab_collections_carousel_vertical
-        MenuCategory.TOOLS -> Res.drawable.onboarding_tab_tools_carousel_vertical
+        MenuCategory.TOOLS, MenuCategory.APPS -> Res.drawable.onboarding_tab_tools_carousel_vertical
         MenuCategory.HOME -> horizontalTabPicture(category, style, stats, art)
     }
 
@@ -169,7 +169,7 @@ private fun minimalTabPicture(category: MenuCategory, stats: Boolean): DrawableR
     MenuCategory.HOME -> if (stats) Res.drawable.onboarding_tab_home_minimal else Res.drawable.onboarding_tab_home_minimal_nostats
     MenuCategory.CONSOLES -> Res.drawable.onboarding_tab_consoles_minimal
     MenuCategory.COLLECTIONS -> Res.drawable.onboarding_tab_collections_minimal
-    MenuCategory.TOOLS -> Res.drawable.onboarding_tab_tools_minimal
+    MenuCategory.TOOLS, MenuCategory.APPS -> Res.drawable.onboarding_tab_tools_minimal
 }
 
 private fun horizontalTabPicture(category: MenuCategory, style: MenuStyle, stats: Boolean, art: ConsoleArt): DrawableResource = when (category) {
@@ -182,7 +182,7 @@ private fun horizontalTabPicture(category: MenuCategory, style: MenuStyle, stats
         byArt(art, Res.drawable.onboarding_tab_consoles_carousel, Res.drawable.onboarding_tab_consoles_carousel_background, Res.drawable.onboarding_tab_consoles_carousel_none),
     )
     MenuCategory.COLLECTIONS -> pick(style, Res.drawable.onboarding_tab_collections_list, Res.drawable.onboarding_tab_collections_grid, Res.drawable.onboarding_tab_collections_carousel)
-    MenuCategory.TOOLS -> pick(style, Res.drawable.onboarding_tab_tools_list, Res.drawable.onboarding_tab_tools_grid, Res.drawable.onboarding_tab_tools_carousel)
+    MenuCategory.TOOLS, MenuCategory.APPS -> pick(style, Res.drawable.onboarding_tab_tools_list, Res.drawable.onboarding_tab_tools_grid, Res.drawable.onboarding_tab_tools_carousel)
 }
 
 /** The Consoles picture for Layouts → Consoles background [art]: with the controllers, a console's bg.png, or neither. */

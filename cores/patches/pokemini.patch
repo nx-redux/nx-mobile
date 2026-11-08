@@ -1,12 +1,11 @@
 # licence: modifies PokeMini (https://github.com/libretro/PokeMini), GPL-3.0 or later (its LICENSE file); this patch
 # is distributed under the same licence.
-# reason: nx-redux all/cores/patches/pokemini/0001-fix-resume-audio.patch, verbatim so states cross with the Brick.
-# Defers the first retro_unserialize by 40 frames so audio resumes after an auto-resume load (without it the core
-# stays silent), and fixes an emulation-source bug in source/PokeMini.c: the state loader matched the audio chunk
-# under the tag "LCD-" instead of "AUD-". Applies to pin 78656d4615691c393e65e48672ce5fff5b1f97d3 (the last pin it
-# applies to). git apply ignores this preamble.
+# reason: nx-redux all/cores/patches/pokemini/0001-fix-resume-audio.patch, its libretro.c part: defers the first
+# retro_unserialize by 40 frames so audio resumes after an auto-resume load (without it the core stays silent). Its
+# source/PokeMini.c part (the state loader matched the audio chunk under "LCD-" instead of "AUD-") is upstream since
+# 2025-03-28 and was dropped with the 132111b7 bump. git apply ignores this preamble.
 diff --git a/libretro/libretro.c b/libretro/libretro.c
-index 1f8b3c2b46a79372860c928a47a840b18cc60710..9e849f174c05e78c7808a63ad151db64ab4c3b87 100644
+index 1f8b3c2..aec607d 100644
 --- a/libretro/libretro.c
 +++ b/libretro/libretro.c
 @@ -1007,6 +1007,45 @@ void retro_init (void)
@@ -85,16 +84,3 @@ index 1f8b3c2b46a79372860c928a47a840b18cc60710..9e849f174c05e78c7808a63ad151db64
  	if (PokeMini_LoadSSStream((uint8_t*)data, size)) {
  		if (log_cb) log_cb(RETRO_LOG_INFO, "Save state loaded successfully.\n");
  	} else {
-diff --git a/source/PokeMini.c b/source/PokeMini.c
-index 06140261ba4d4c36e9605ecfee471bcfddba5f25..9b6f6912185cc1017c129c1d5953688fe5e0019a 100644
---- a/source/PokeMini.c
-+++ b/source/PokeMini.c
-@@ -489,7 +489,7 @@ int PokeMini_LoadSSStream(uint8_t *buffer, uint64_t size)
- 				memstream_set_buffer(NULL, 0);
- 				return 0;
- 			}
--		} else if (!strcmp(PMiniStr, "LCD-")) {		// Audio
-+		} else if (!strcmp(PMiniStr, "AUD-")) {		// Audio
- 			if (!MinxAudio_LoadStateStream(stream, BSize)) {
- 				memstream_close(stream);
- 				memstream_set_buffer(NULL, 0);

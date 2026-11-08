@@ -4,26 +4,17 @@ import com.nxredux.mobile.ui.nx.nxModalButton
 import com.nxredux.mobile.ui.nx.nxModalSmall
 import com.nxredux.mobile.ui.nx.nxScrollFade
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -50,12 +41,8 @@ import com.nxredux.mobile.ui.nx.NxRichList
 import com.nxredux.mobile.ui.nx.NxTextSizes
 import com.nxredux.mobile.ui.nx.nxListLabelSize
 import com.nxredux.mobile.ui.nx.nxTextScale
-import com.nxredux.mobile.ui.nx.LocalPortrait
+import com.nxredux.mobile.ui.nx.SlidePanel
 
-/** The panel's share of the page's width: 60% of a portrait screen (the list shows beside it), under half a landscape one. */
-private const val PANEL_SHARE_PORTRAIT = 0.6f
-private const val PANEL_SHARE_LANDSCAPE = 0.45f
-private const val SLIDE_MS = 220
 /** The room above the panel's header and under its list. */
 private val PANEL_EDGE = 10.dp
 
@@ -72,26 +59,8 @@ fun RaPanelOverlay(panel: RaPanel?, onRow: (Int) -> Unit, onButton: (NxButton) -
     // The last panel shown, so it slides out with its content after it closed.
     var last by remember { mutableStateOf(panel) }
     if (panel != null) last = panel
-    // The modals' scrim over the list behind; a tap on it closes the panel, as on a modal.
-    AnimatedVisibility(panel != null, modifier = Modifier.fillMaxSize(), enter = fadeIn(tween(SLIDE_MS)), exit = fadeOut(tween(SLIDE_MS))) {
-        Box(Modifier.fillMaxSize().background(LocalNxColors.current.scrimModal).pointerInput(Unit) { detectTapGestures { onButton(NxButton.X) } })
-    }
-    AnimatedVisibility(
-        panel != null, modifier = Modifier.fillMaxSize(),
-        enter = slideInHorizontally(tween(SLIDE_MS)) { it }, exit = slideOutHorizontally(tween(SLIDE_MS)) { it },
-    ) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            // The device's orientation, not this box's shape: a portrait page above the menu pad (or on a near-square
-            // screen) is wide and short, yet a portrait one.
-            val share = if (LocalPortrait.current) PANEL_SHARE_PORTRAIT else PANEL_SHARE_LANDSCAPE
-            last?.let { p ->
-                Column(
-                    Modifier.align(Alignment.TopEnd).width(maxWidth * share).fillMaxHeight()
-                        .background(LocalNxColors.current.modalPanel, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
-                        .pointerInput(Unit) { detectTapGestures { } },   // taps inside stay inside
-                ) { RaPanelBody(p, onRow, onButton) }
-            }
-        }
+    SlidePanel(panel != null, onDismiss = { onButton(NxButton.X) }) {
+        last?.let { p -> RaPanelBody(p, onRow, onButton) }
     }
 }
 

@@ -1,9 +1,12 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.layout.ConsoleScale
+import com.nxredux.mobile.layout.CoreFrame
 import com.nxredux.mobile.options.NdsLayoutChoice
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.PxRect
+import com.nxredux.mobile.options.ScreenScaling
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -11,6 +14,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DualScreenTest {
+    @Test fun the_layout_shortcut_cycles_only_on_one_display() {
+        assertTrue(DualScreen.layoutCycles(DualMode.OFF))
+        for (m in listOf(DualMode.SPLIT, DualMode.PANEL_UP, DualMode.PANEL)) assertFalse(DualScreen.layoutCycles(m))
+    }
     @Test fun mode_off_without_display() = assertEquals(DualMode.OFF, DualScreen.mode(false, true, true, false))
     @Test fun mode_off_when_setting_off() = assertEquals(DualMode.OFF, DualScreen.mode(true, false, true, true))
     @Test fun mode_split_for_ds() = assertEquals(DualMode.SPLIT, DualScreen.mode(true, true, true, false))
@@ -22,7 +29,6 @@ class DualScreenTest {
         assertEquals(PictureOn.SECOND, DualScreen.pictureOn(2400, 1080, 1920, 1080, bottom = BottomScreen.AUTO, skin = true))
         assertEquals(PictureOn.MAIN, DualScreen.pictureOn(2400, 1080, 1920, 1080, bottom = BottomScreen.SECOND, skin = true))
         assertEquals(PictureOn.SECOND, DualScreen.pictureOn(2400, 1080, 1920, 1080, bottom = BottomScreen.MAIN, skin = true))
-        assertEquals(PictureOn.MAIN, DualScreen.pictureOn(2400, 1080, 1920, 1080, rotated = true, bottom = BottomScreen.AUTO, skin = true))
     }
 
     @Test fun auto_without_a_skin_still_goes_by_shape() =
@@ -36,11 +42,11 @@ class DualScreenTest {
 
     @Test fun menu_goes_on_the_second_display_when_the_main_one_is_the_picture() {
         // The wide monitor is the picture on AUTO, so the menu stays on the phone.
-        assertFalse(DualScreen.menuOnSecond(1248, 1972, 2560, 1600, rotated = false, BottomScreen.AUTO))
+        assertFalse(DualScreen.menuOnSecond(1248, 1972, 2560, 1600, BottomScreen.AUTO))
         // Bottom = main puts the picture on the second: menu stays on main.
-        assertFalse(DualScreen.menuOnSecond(1248, 1972, 2560, 1600, rotated = false, BottomScreen.MAIN))
+        assertFalse(DualScreen.menuOnSecond(1248, 1972, 2560, 1600, BottomScreen.MAIN))
         // Bottom = second puts the picture on main: the menu goes to the second.
-        assertTrue(DualScreen.menuOnSecond(1248, 1972, 2560, 1600, rotated = false, BottomScreen.SECOND))
+        assertTrue(DualScreen.menuOnSecond(1248, 1972, 2560, 1600, BottomScreen.SECOND))
     }
 
     @Test fun nds_split_top_main() {
@@ -105,8 +111,6 @@ class DualScreenTest {
     @Test fun picture_on_second_when_wider() = assertEquals(PictureOn.SECOND, DualScreen.pictureOn(1240, 1080, 1920, 1080))
     @Test fun picture_on_main_when_wider() = assertEquals(PictureOn.MAIN, DualScreen.pictureOn(1920, 1080, 1240, 1080))
     @Test fun picture_on_tie_goes_second() = assertEquals(PictureOn.SECOND, DualScreen.pictureOn(1920, 1080, 1280, 720))
-    @Test fun picture_on_main_for_a_rotated_core() =
-        assertEquals(PictureOn.MAIN, DualScreen.pictureOn(1240, 1080, 1920, 1080, rotated = true))
     // Bottom screen: the chosen one is the touch screen, so the picture goes on the other; Auto is the shape rule.
     @Test fun bottom_main_puts_the_picture_on_second() =
         assertEquals(PictureOn.SECOND, DualScreen.pictureOn(1920, 1080, 1240, 1080, bottom = BottomScreen.MAIN))
@@ -117,8 +121,6 @@ class DualScreenTest {
         assertEquals(DualScreen.pictureOn(1920, 1080, 1240, 1080), DualScreen.pictureOn(1920, 1080, 1240, 1080, bottom = BottomScreen.AUTO))
         assertEquals(PictureOn.SECOND, DualScreen.pictureOn(1280, 960, 1280, 960, bottom = BottomScreen.AUTO))   // same shape
     }
-    @Test fun a_rotated_core_wins_over_the_bottom_screen() =
-        assertEquals(PictureOn.MAIN, DualScreen.pictureOn(1920, 1080, 1240, 1080, rotated = true, bottom = BottomScreen.MAIN))
     @Test fun bottom_screen_parses_the_setting_and_the_override_wins() {
         assertEquals(BottomScreen.AUTO, BottomScreen.parse("auto"))
         assertEquals(BottomScreen.MAIN, BottomScreen.parse("main"))
@@ -136,6 +138,26 @@ class DualScreenTest {
         assertEquals(PxRect(240f, 0f, 1440f, 1080f), DualScreen.fullFrame(1920f, 1080f, 4f / 3f))
     @Test fun full_frame_letterboxes_a_wide_picture() =
         assertEquals(PxRect(0f, 191f, 1240f, 697f), DualScreen.fullFrame(1240f, 1080f, 16f / 9f))
+    @Test fun scaled_frame_follows_screen_scaling() {
+        val f = CoreFrame(320f, 240f, 4f / 3f, rotated = false)
+        assertEquals(PxRect(240f, 0f, 1440f, 1080f), DualScreen.scaledFrame(1920f, 1080f, f, ConsoleScale.FILL, ScreenScaling.ASPECT))
+        assertEquals(PxRect(0f, 0f, 1920f, 1080f), DualScreen.scaledFrame(1920f, 1080f, f, ConsoleScale.FILL, ScreenScaling.FULLSCREEN))
+        assertEquals(PxRect(320f, 60f, 1280f, 960f), DualScreen.scaledFrame(1920f, 1080f, f, ConsoleScale.FILL, ScreenScaling.NATIVE))
+    }
+    @Test fun scaled_frame_auto_takes_the_consoles_whole_number_scale() {
+        val gba = CoreFrame(240f, 160f, 1.5f, rotated = false)
+        assertEquals(PxRect(240f, 60f, 1440f, 960f), DualScreen.scaledFrame(1920f, 1080f, gba, ConsoleScale.NATIVE, ScreenScaling.AUTO))
+        val snes = CoreFrame(256f, 224f, 4f / 3f, rotated = false)
+        assertEquals(896f, DualScreen.scaledFrame(1920f, 1080f, snes, ConsoleScale.WHOLE_HEIGHT, ScreenScaling.AUTO).height)
+    }
+    @Test fun scaled_frame_moves_by_the_screen_offsets_in_brick_units() {
+        val f = CoreFrame(320f, 240f, 4f / 3f, rotated = false)
+        val unit = 1080f / 768f
+        assertEquals(PxRect(240f + 10 * unit, -20 * unit, 1440f, 1080f), DualScreen.scaledFrame(1920f, 1080f, f, ConsoleScale.FILL, ScreenScaling.AUTO, 10, -20))
+        assertEquals(PxRect(320f + 10 * unit, 60f - 20 * unit, 1280f, 960f), DualScreen.scaledFrame(1920f, 1080f, f, ConsoleScale.FILL, ScreenScaling.NATIVE, 10, -20))
+    }
+    @Test fun native_falls_back_to_aspect_below_one_whole_multiple() =
+        assertEquals(PxRect(0f, 60f, 400f, 300f), DualScreen.scaledFrame(400f, 420f, CoreFrame(640f, 480f, 4f / 3f, rotated = false), ConsoleScale.FILL, ScreenScaling.NATIVE))
     @Test fun full_frame_empty_without_an_aspect() = assertEquals(PxRect(0f, 0f, 0f, 0f), DualScreen.fullFrame(1920f, 1080f, 0f))
     @Test fun split_main_screen_follows_the_picture() {
         assertEquals(NdsScreen.TOP, DualScreen.splitMain(NdsScreen.TOP, PictureOn.MAIN))
@@ -161,5 +183,14 @@ class DualScreenTest {
         assertEquals(whole.map { it.copy(dst = it.dst.copy(x = it.dst.x + 100f, y = it.dst.y + 50f)) }, inGlass)
         assertEquals(PxRect(100f, 50f, 800f, 600f), inGlass.single().dst)
         assertTrue(inGlass.single().touch)
+    }
+
+    @Test fun onlyTheTopScreenIsShaded() {
+        val s = com.nxredux.mobile.options.NdsSettings.parse(emptyMap())
+        assertEquals(listOf(true, false), DualScreen.ndsPanelUp(1920f, 1080f, s).sortedBy { it.screen }.map { it.shaded })
+        for (which in NdsScreen.entries) {
+            assertEquals(which == NdsScreen.TOP, DualScreen.ndsScreen(1280f, 960f, which).single().shaded)
+            assertEquals(which == NdsScreen.TOP, DualScreen.n3dsScreen(1280f, 960f, which).single().shaded)
+        }
     }
 }

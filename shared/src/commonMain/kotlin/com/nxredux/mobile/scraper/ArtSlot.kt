@@ -2,10 +2,19 @@ package com.nxredux.mobile.scraper
 
 /**
  * One kind of typed art and its `.media/<folder>/`. The 2D box is NX Redux's `boxart2d/` (the older `box2d/` is still
- * read, [LEGACY_BOX2D_FOLDER]); the wheel and the device-made mix are optional ([ArtExtras]).
+ * read, [LEGACY_BOX2D_FOLDER]); the wheel and the device-made mix are optional ([ArtExtras]). [GRID] and [HERO] are
+ * SteamGridDB's hit kinds: written as a 2D box and a screenshot ([fileSlot]); their own `grid/` and `hero/` folders are
+ * no longer read or written.
  */
 enum class ArtSlot(val folder: String) {
     BOX_3D("boxart"), BOX_2D("boxart2d"), SCREENSHOT("screenshot"), GRID("grid"), HERO("hero"), WHEEL("wheel"), MIX("mix"),
+}
+
+/** The slot whose folder a hit of this kind is written to: a grid is a 2D box, a hero a screenshot; any other, itself. */
+val ArtSlot.fileSlot: ArtSlot get() = when (this) {
+    ArtSlot.GRID -> ArtSlot.BOX_2D
+    ArtSlot.HERO -> ArtSlot.SCREENSHOT
+    else -> this
 }
 
 /** The 2D box's older folder: still read (`boxart2d/` wins), never written; Reset deletes the app's files there. */
@@ -13,11 +22,11 @@ const val LEGACY_BOX2D_FOLDER = "box2d"
 
 /**
  * Tools → Artwork → Settings' optional art (NX Redux `scraper_prefs.h`), all off by default: [box2d] the 2D box art as
- * an extra download beside the 3D box, [wheel] the game's logo, [mix] the device-made picture of the screenshot, box and
- * wheel (which needs the wheel: [wantWheel]). With [mix] on a game has art only with its mix ([ArtHave.complete]).
+ * an extra download beside the 3D box, [wheel] the game's logo, [mix] the handheld's mix picture (ScreenScraper's, else the
+ * device-made one of the screenshot, box and wheel). With [mix] on a game has art only with its mix ([ArtHave.complete]).
  */
 data class ArtExtras(val box2d: Boolean = false, val wheel: Boolean = false, val mix: Boolean = false) {
-    val wantWheel: Boolean get() = wheel || mix
+    val wantWheel: Boolean get() = wheel
 }
 
 /** How the app writes a fitted image; [ext] is the file extension. */
@@ -47,7 +56,7 @@ data class ArtCap(val maxW: Int, val maxH: Int, val force: ArtEncoding? = null, 
 /**
  * The per-slot caps. Pixel size never filters or ranks a pick; it only bounds what is written. The 2D box and the wheel
  * as NX Redux stores them (`scraper_compositor.h`: full-colour PNG within 480x576, never grown); the mix is made at
- * exactly its canvas size ([MixCompositor]), so its cap only names the encoding.
+ * exactly its canvas size ([MixCompositor.create], or [MixCompositor.onCanvas] for a downloaded one), so its cap only names the encoding.
  */
 object ArtCaps {
     fun of(slot: ArtSlot): ArtCap = when (slot) {

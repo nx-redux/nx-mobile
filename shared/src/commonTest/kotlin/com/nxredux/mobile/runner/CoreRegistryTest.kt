@@ -59,9 +59,10 @@ class CoreRegistryTest {
         assertEquals(30, ids.size)
     }
     @Test fun the_bricks_pak_defaults_are_carried() {
-        assertEquals(mapOf("pcsx_rearmed_dithering" to "enabled"), CoreRegistry.forTag("PS")!!.defaultOptions)
+        // The second memory card stays out, as the Brick's pin had it (upstream's default since 2026 is a shared card).
+        assertEquals(mapOf("pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none"), CoreRegistry.forTag("PS")!!.defaultOptions)
         assertEquals(mapOf("race_dark_filter_level" to "50"), CoreRegistry.forTag("NGPC")!!.defaultOptions)
-        assertEquals(mapOf("vb_3dmode" to "anaglyph"), CoreRegistry.forTag("VB")!!.defaultOptions)
+        assertEquals("anaglyph", CoreRegistry.forTag("VB")!!.defaultOptions["vb_3dmode"])
         assertEquals(
             mapOf(
                 "supafaust_pixel_format" to "rgb565",
@@ -80,12 +81,13 @@ class CoreRegistryTest {
         assertTrue("iso" in CoreRegistry.forTag("MD")!!.extensions && "m3u" in CoreRegistry.forTag("MD")!!.extensions)
     }
     @Test fun picodrive_runs_the_sega_consoles_with_each_paks_values() {
-        val six = mapOf(
-            "picodrive_drc" to "enabled", "picodrive_sound_rate" to "44100",
-            "picodrive_input1" to "6 button pad", "picodrive_input2" to "6 button pad",
-        )
-        for (tag in listOf("MD", "SEGACD", "32X")) assertEquals(six, CoreRegistry.forTag(tag)!!.defaultOptions, tag)
-        val three = six + mapOf("picodrive_input1" to "3 button pad", "picodrive_input2" to "3 button pad")
+        val six = mapOf("picodrive_drc" to "enabled", "picodrive_sound_rate" to "44100")
+        for (tag in listOf("MD", "SEGACD", "32X")) {
+            assertEquals(six, CoreRegistry.forTag(tag)!!.defaultOptions, tag)
+            assertEquals(mapOf(0 to 513, 1 to 513), CoreRegistry.forTag(tag)!!.controllerPortsFor(2), tag)   // 6-button pads
+        }
+        for (tag in listOf("SMS", "GG", "SG1000")) assertEquals(mapOf(0 to 257, 1 to 257), CoreRegistry.forTag(tag)!!.controllerPortsFor(2), tag)
+        val three = six
         assertEquals(three + ("picodrive_smstype" to "Master System"), CoreRegistry.forTag("SMS")!!.defaultOptions)
         assertEquals(three + ("picodrive_smstype" to "Game Gear"), CoreRegistry.forTag("GG")!!.defaultOptions)
         assertEquals(three, CoreRegistry.forTag("SG1000")!!.defaultOptions)
@@ -117,7 +119,7 @@ class CoreRegistryTest {
         assertEquals(CoreDescriptor.PS_DUALSHOCK, CoreRegistry.forTag("PS")!!.controllerPort0)
         assertEquals(1, CoreDescriptor.JOYPAD)
         assertEquals(CoreDescriptor.JOYPAD, CoreRegistry.forTag("DC")!!.controllerPort0)   // flycast plugs no pad in by itself
-        assertEquals(setOf("pcsx_rearmed", "swanstation", "flycast", "dolphin"), CoreRegistry.all.filter { it.controllerPort0 != null }.map { it.id }.toSet())
+        assertEquals(setOf("picodrive", "pcsx_rearmed", "swanstation", "flycast", "dolphin"), CoreRegistry.all.filter { it.controllerPort0 != null }.map { it.id }.toSet())
     }
     @Test fun only_flycast_names_its_saves_after_the_content_so_only_it_unpacks_under_the_archive_name() {
         assertEquals(setOf("flycast"), CoreRegistry.all.filter { it.savesNamedAfterContent }.map { it.id }.toSet())

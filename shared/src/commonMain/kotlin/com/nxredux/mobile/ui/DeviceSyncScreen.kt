@@ -1,36 +1,39 @@
 package com.nxredux.mobile.ui
 
 import androidx.compose.foundation.layout.Box
+import com.nxredux.mobile.ui.nx.nxListInset
+import com.nxredux.mobile.ui.nx.NxSettingsList
+import com.nxredux.mobile.ui.nx.NxSettingEvent
+import com.nxredux.mobile.ui.nx.NxSettingRow
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.sync.DeviceSyncController
 import com.nxredux.mobile.sync.DeviceSyncPage
 import com.nxredux.mobile.sync.DeviceSyncText
-import com.nxredux.mobile.sync.SyncLink
 import com.nxredux.mobile.sync.SyncRole
-import com.nxredux.mobile.shared.res.Res
-import com.nxredux.mobile.shared.res.nav_icon_roms
 import com.nxredux.mobile.ui.nx.Hint
-import com.nxredux.mobile.ui.nx.HintTouch
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxDetailListBody
 import com.nxredux.mobile.ui.nx.NxDialog
 import com.nxredux.mobile.ui.nx.NxProgressBody
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxRowKind
-import com.nxredux.mobile.ui.nx.NxSetupLandscapeWidth
-
-/** X on Ready: ROMs on / off; touch, an icon at the title's right, lit while ROMs are on. */
-internal fun deviceSyncRomsHint(on: Boolean): Hint = Hint(NxButton.X, DeviceSyncText.romsHint(on), HintTouch.Icon(Res.drawable.nav_icon_roms, lit = on))
 
 /**
- * Tools → Device Sync, in the handheld's tool-page shape; state straight from the [controller]. As setup's sync step
- * ([setup]), the setup page title and a "Sync with your handheld" headline; Ready lists the links as pill rows (no ring) and
- * Skip (Continue after a sync) at the title's right ([onSetupTap] for its taps), Done's A continues.
+ * Tools → Device Sync, in the Settings root's look ([SettingsRootScreen]), in the tool and setup's sync step alike:
+ * bottom-left the small [SyncSetup.title] (the tool's name, or setup's step count), its head ("Sync with your handheld"
+ * bold, what it syncs and the link's hint, [SettingsWordHead]), then the choices as large words: Sync ROMs with its
+ * state (where available), the links, and in setup Skip (Continue after a sync) last ([onSetupTap] for their taps, with
+ * [syncSetupRows]' indices). Done and the messages are the same page with their lines as the description; the
+ * waiting, searching and syncing pages keep the tool page's bodies. State straight from the [controller].
  */
 @Composable
 fun DeviceSyncScreen(
@@ -42,37 +45,26 @@ fun DeviceSyncScreen(
     val title = chrome?.title ?: DeviceSyncText.TITLE
     Box(modifier.fillMaxSize()) {
         when (val p = page) {
-            is DeviceSyncPage.Ready -> if (chrome != null) {
-                // Sync ROMs as an option row (where available), then the links (and Skip in setup).
-                val rows = syncSetupRows(p, skip = chrome.inSetup).map {
+            is DeviceSyncPage.Ready -> {
+                val skip = chrome?.inSetup == true
+                val all = syncSetupRows(p, skip = skip)
+                val off = if (p.romsAvailable) 1 else 0   // Sync ROMs, first in [syncSetupRows], is a row, not a word
+                val words = all.drop(off).map {
                     when (it) {
-                        SyncSetupRow.Roms -> NxRow("Sync ROMs", secondary = if (p.roms) "On" else "Off", cycleable = true)
-                        is SyncSetupRow.Link -> NxRow(DeviceSyncText.linkLabel(it.link))
-                        SyncSetupRow.Skip -> NxRow(if (chrome.synced) "Continue" else "Skip")
+                        is SyncSetupRow.Link -> DeviceSyncText.linkLabel(it.link)
+                        else -> if (chrome?.synced == true) "Continue" else "Skip"
                     }
                 }
-                // The links as pill rows under the option; setup's Skip at the title's right, the links without the ring.
-                val top = if (chrome.inSetup) 1 else 0
-                val actions = rows.size - top - (if (p.romsAvailable) 1 else 0)
+                val focus = chrome?.focus ?: SyncFocus.LINK
+                val at = syncSetupIndex(p, focus, skip = skip)
                 val lines = listOf(if (p.roms) DeviceSyncText.HEADLINE_ROMS else DeviceSyncText.HEADLINE, DeviceSyncText.hint(p.link))
-                NxDetailListBody(
-                    title = title,
-                    // The headline and its dim line as the other tool pages' (Cheats & Patches'), not a caption.
-                    details = if (chrome.inSetup) listOf("Sync with your handheld") + lines else lines,
-                    rows = rows, selectedIndex = syncSetupIndex(p, chrome.focus, skip = chrome.inSetup),
-                    hints = listOf(Hint(NxButton.A, if (chrome.focus == SyncFocus.LINK) "Start" else "Choose"), Hint(NxButton.B, "Back")),
-                    onSelect = { onSetupTap(it, false) }, onOpen = { onSetupTap(it, true) }, onHint = onHint,
-                    rowKind = if (p.romsAvailable) NxRowKind.OPTIONS else NxRowKind.PILL, actionRows = if (p.romsAvailable) actions else 0,
-                    titleActions = top, actionsOutlined = false,   // the links as plain pill rows, no ring, in setup and the tool alike
-                    landscapeWidth = if (chrome.inSetup) NxSetupLandscapeWidth else 1f,
+                val roms: (@Composable () -> Unit)? = if (!p.romsAvailable) null else ({ SyncRomsRow(p.roms, lit = focus == SyncFocus.ROMS) { open -> onSetupTap(0, open) } })
+                SyncPage(
+                    title, lines, words, if (focus == SyncFocus.ROMS) -1 else at - off,
+                    listOf(Hint(NxButton.A, when (focus) { SyncFocus.LINK -> "Start"; SyncFocus.ROMS -> "Change"; SyncFocus.SKIP -> "Choose" }), Hint(NxButton.B, "Back")),
+                    onHint, onTap = { onSetupTap(it + off, true) }, extra = roms,
                 )
-            } else NxDetailListBody(
-                title = title, details = listOf(if (p.roms) DeviceSyncText.HEADLINE_ROMS else DeviceSyncText.HEADLINE, DeviceSyncText.hint(p.link)),
-                rows = SyncLink.entries.map { NxRow(DeviceSyncText.linkLabel(it)) }, selectedIndex = p.link.ordinal,
-                hints = listOfNotNull(Hint(NxButton.A, "Start"), if (p.romsAvailable) deviceSyncRomsHint(p.roms) else null, Hint(NxButton.B, "Back")),
-                onSelect = { controller.pick(SyncLink.entries[it]) }, onOpen = { controller.pick(SyncLink.entries[it]); onHint(NxButton.A) },
-                onHint = onHint,
-            )
+            }
             DeviceSyncPage.NoWifi -> message(title, listOf(DeviceSyncText.NO_WIFI), listOf(Hint(NxButton.B, "Back")), onHint)
             DeviceSyncPage.WaitingForCable -> NxProgressBody(title, DeviceSyncText.WAITING_CABLE, null, listOf(Hint(NxButton.B, "Back")),
                 detail = DeviceSyncText.WAITING_CABLE_DETAIL, onHint = onHint)
@@ -94,13 +86,9 @@ fun DeviceSyncScreen(
                     onConfirm = { onHint(NxButton.A) }, confirmLabel = "Stop", onCancel = { onHint(NxButton.B) })
             }
             is DeviceSyncPage.Done -> if (chrome?.inSetup == true) {
-                // Setup: Continue at the title's right, as the other setup pages have it.
-                NxDetailListBody(
-                    title = title, details = listOf(DeviceSyncText.done(p.received, p.sent)) + p.notes, rows = listOf(NxRow("Continue")),
-                    selectedIndex = 0, hints = listOf(Hint(NxButton.A, "Continue"), Hint(NxButton.B, "Back")),
-                    onSelect = {}, onOpen = { onHint(NxButton.A) }, onHint = onHint, titleActions = 1,
-                    landscapeWidth = NxSetupLandscapeWidth,
-                )
+                // Setup: Continue as the page's one word.
+                SyncPage(title, listOf(DeviceSyncText.done(p.received, p.sent)) + p.notes, listOf("Continue"), 0,
+                    listOf(Hint(NxButton.A, "Continue"), Hint(NxButton.B, "Back")), onHint, onTap = { onHint(NxButton.A) })
             } else message(title, listOf(DeviceSyncText.done(p.received, p.sent)) + p.notes,
                 listOf(Hint(NxButton.A, if (chrome != null) "Continue" else "Sync again"), Hint(NxButton.B, "Back")), onHint)
             is DeviceSyncPage.Failed -> message(title, listOfNotNull(p.reason, p.detail), listOf(Hint(NxButton.A, "Retry"), Hint(NxButton.B, "Back")), onHint)
@@ -108,8 +96,36 @@ fun DeviceSyncScreen(
     }
 }
 
-/** A page that only says something: the lines as details, no rows. */
+/**
+ * A Device Sync page in the Settings root's look: [title], the head ("Sync with your handheld", [lines]), [extra] (the
+ * Sync ROMs row) and [words].
+ */
+@Composable
+private fun SyncPage(
+    title: String, lines: List<String>, words: List<String>, selected: Int, hints: List<Hint>,
+    onHint: (NxButton) -> Unit, onTap: (Int) -> Unit = {}, extra: (@Composable () -> Unit)? = null,
+) = SettingsRootScreen(
+    title, words, emptyList(), selected, onTap, hintBar = true, onHint = onHint,
+    headline = DeviceSyncText.ASK, description = lines, hints = hints, extra = extra,
+)
+
+/**
+ * Sync ROMs as a Settings options row (an Off / On switch) above the words, its text on the words' edge, [lit] while the
+ * pad is on it. A tap selects it ([onTap] false); A, or a tap on the switch's other side, flips it ([onTap] true).
+ */
+@Composable
+private fun SyncRomsRow(on: Boolean, lit: Boolean, onTap: (open: Boolean) -> Unit) {
+    val row = NxSettingRow("Sync ROMs", choices = listOf("Off", "On"), index = if (on) 1 else 0)
+    Box(Modifier.offset(x = -nxListInset()).widthIn(max = SETTINGS_FRAME_MAX).padding(bottom = 12.dp)) {
+        NxSettingsList(
+            listOf(row), if (lit) 0 else -1, onSelect = { onTap(false) }, onOpen = { onTap(true) },
+            onEvent = { e -> if (e is NxSettingEvent.Choose && e.index != row.index) onTap(true) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/** A page that only says something: its [lines] as the head's description, no words. */
 @Composable
 private fun message(title: String, lines: List<String>, hints: List<Hint>, onHint: (NxButton) -> Unit) =
-    NxDetailListBody(title = title, details = lines, rows = emptyList(), selectedIndex = -1, hints = hints,
-        onSelect = {}, onOpen = {}, onHint = onHint)
+    SyncPage(title, lines, emptyList(), -1, hints, onHint)

@@ -23,7 +23,7 @@ internal object RestartOnlyOptions {
         "virefresh",
     ).mapTo(mutableSetOf()) { "mupen64plus-$it" }
 
-    // melonds-ds v1.3.1 src/libretro: consumed only when the console is created (config/console.cpp GetNdsArgs and
+    // melonds-ds v1.4.0 src/libretro: consumed only when the console is created (config/console.cpp GetNdsArgs and
     // CreateConsole, core/core.cpp LoadGame) and their info texts don't say "restart" (the ones that do, such as
     // console mode, boot mode, firmware and time options, are already hidden by CoreOptionFilter.requiresRestart).
     // Audio bit depth and interpolation stay: UpdateConsole re-applies them live.
@@ -43,12 +43,11 @@ internal object RestartOnlyOptions {
     )
 
     // ppsspp/libretro/libretro.cpp: boot-time, or only re-read on a GPU config change the core triggers
-    // solely for texture scaling/shader changes; the last three are never read.
+    // solely for texture scaling/shader changes; frameskiptype is never read.
     val ppsspp: Set<String> = setOf(
-        "ppsspp_cpu_core", "ppsspp_psp_model", "ppsspp_cache_iso", "ppsspp_locked_cpu_speed",
-        "ppsspp_gpu_hardware_transform", "ppsspp_texture_replacement", "ppsspp_texture_anisotropic_filtering",
-        "ppsspp_skip_buffer_effects", "ppsspp_lower_resolution_for_effects",
-        "ppsspp_software_skinning", "ppsspp_hardware_tesselation", "ppsspp_frameskiptype",
+        "ppsspp_cpu_core", "ppsspp_psp_model", "ppsspp_locked_cpu_speed",
+        "ppsspp_texture_replacement", "ppsspp_texture_anisotropic_filtering",
+        "ppsspp_skip_buffer_effects", "ppsspp_lower_resolution_for_effects", "ppsspp_frameskiptype",
     )
 
     // mednafen_supafaust/libretro.cpp: check_variables (the retro_run update path) re-reads only the four scanline

@@ -98,6 +98,20 @@ class GLRetroView(
             LibretroDroid.setFrameSkip(value)
         }
 
+    /** Audio Buffer: the sound kept ready, in ms (0 the default). Read when the game's audio starts: set it before. */
+    var audioBufferMs: Int = 0
+        set(value) {
+            field = value
+            LibretroDroid.setAudioBufferMs(value)
+        }
+
+    /** Fill Audio Gaps: 0 Auto (with Frame Skip Off), 1 On, 2 Off. Live. */
+    var fillAudioGaps: Int = 0
+        set(value) {
+            field = value
+            LibretroDroid.setFillAudioGaps(value)
+        }
+
     var resamplingQuality: Int by Delegates.observable(2) { _, old, value ->
         if (old != value) pushResamplingQuality()
     }
@@ -190,7 +204,18 @@ class GLRetroView(
      */
     var pictureHeld: Boolean by Delegates.observable(false) { _, old, value ->
         if (old == value) return@observable
-        queueEvent { LibretroDroid.setPictureHeld(value) }
+        val held = value || mainCovered
+        queueEvent { LibretroDroid.setPictureHeld(held) }
+    }
+
+    /**
+     * nx-mobile: something opaque fills this view (the dual-screen panel with the picture on the second display), so it
+     * draws black instead of a picture nobody sees. The second display's picture is drawn apart and keeps going.
+     */
+    var mainCovered: Boolean by Delegates.observable(false) { _, old, value ->
+        if (old == value) return@observable
+        val held = value || pictureHeld
+        queueEvent { LibretroDroid.setPictureHeld(held) }
     }
 
     /**
@@ -198,6 +223,18 @@ class GLRetroView(
      * [scaleMode] and [screenOffset] don't apply; dst is relative to [viewport]. Touches map through the topmost region
      * ([ScreenRegions.mapTouch]). Main thread; applied on the GL thread, and re-applied after create().
      */
+    /**
+     * nx-mobile: a frame composed from the core's ([FrameComposition]) that replaces the core frame for every draw and for
+     * touch (mapped back through its parts); null = the core frame as it is. Re-applied after create().
+     */
+    var composition: FrameComposition? by Delegates.observable(null) { _, old, value ->
+        if (old == value) return@observable
+        val w = value?.width ?: 0
+        val h = value?.height ?: 0
+        val packed = ScreenRegions.pack(value?.parts.orEmpty())
+        queueEvent { LibretroDroid.setComposition(w, h, packed) }
+    }
+
     var screenRegions: List<ScreenRegion> by Delegates.observable(emptyList()) { _, old, value ->
         if (old == value) return@observable
         val packed = ScreenRegions.pack(value)
@@ -243,7 +280,7 @@ class GLRetroView(
 
     /** Where a touch at ([x01], [y01], 0..1 of the second surface) lands in the core frame; null outside a touch region. */
     fun mapSecondaryTouch(x01: Float, y01: Float): FramePoint? =
-        ScreenRegions.mapTouch(secondaryRegions, ScreenRect(0f, 0f, 1f, 1f), x01, y01)
+        ScreenRegions.mapSecondTouch(secondaryRegions, composition, x01, y01)
 
     /**
      * Keeps the touch pointer where it was when the finger lifts or leaves the picture, instead of releasing it. Set for
@@ -352,6 +389,7 @@ class GLRetroView(
         LibretroDroid.setGlDebugOutput(data.glDebugOutput)
         LibretroDroid.setPreferVulkan(data.preferVulkan)
         LibretroDroid.setVulkanSwapchainFrames(data.vulkanSwapchainFrames)
+        LibretroDroid.setVideoViewsEnabled(data.videoViews)
         LibretroDroid.setKeepCoreLoaded(data.keepCoreLoaded)
         LibretroDroid.create(
             openGLESVersion,
@@ -392,9 +430,11 @@ class GLRetroView(
         val offsetX = screenOffset.x
         val offsetY = screenOffset.y
         val regions = ScreenRegions.pack(screenRegions)
+        val composed = composition
+        val composedParts = ScreenRegions.pack(composed?.parts.orEmpty())
         val secondary = ScreenRegions.pack(secondaryRegions)
         val sticky = stickyPointer
-        val held = pictureHeld
+        val held = pictureHeld || mainCovered
         val chain = shaderChain?.let { it.copy(params = it.params + shaderParameterOverrides) }
         queueEvent {
             LibretroDroid.setViewport(left, top, width, height)
@@ -402,6 +442,7 @@ class GLRetroView(
             LibretroDroid.setScreenOffset(offsetX, offsetY)
             LibretroDroid.setPictureHeld(held)
             LibretroDroid.setScreenRegions(regions)
+            LibretroDroid.setComposition(composed?.width ?: 0, composed?.height ?: 0, composedParts)
             LibretroDroid.setSecondaryRegions(secondary)
             setStickyPointers(sticky)
             pushShaderChain(chain)
@@ -694,6 +735,11 @@ class GLRetroView(
      */
     fun getGameGeometry(): FloatArray = LibretroDroid.getGameGeometry()
 
+    /** The core's video view map (where each of its screens sits in its frame); empty when it sends none. */
+    fun videoViews(): List<VideoView> = LibretroDroid.getVideoViews().toList().chunked(6).map {
+        VideoView(it[0], it[1], it[2], it[3], it[4], it[5])
+    }
+
     /** True once the running core's frames come from its own GL framebuffer (a hardware-rendered core). Safe from any thread. */
     fun isHardwareRendered(): Boolean = LibretroDroid.isHardwareRendered()
 
@@ -815,7 +861,7 @@ class GLRetroView(
                 }
                 // nx-mobile 2026-11-03: a hw core's frame went to the second surface from inside the frame
                 // (onCoreFrameDrawn); afterwards its framebuffer may already hold the next frame's first draws (Dolphin's
-                // dual core: the background missing, flicker), and while paused the second display keeps its last frame.
+                // dual core: the background missing, flicker). The paused redraw draws it the same way (native step).
                 if (LibretroDroid.rendersInVideoCallback()) secondaryOutput.swapPending() else secondaryOutput.draw()
             }
         }

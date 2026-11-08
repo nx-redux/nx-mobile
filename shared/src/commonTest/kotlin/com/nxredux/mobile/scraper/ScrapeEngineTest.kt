@@ -18,8 +18,12 @@ import kotlin.test.assertTrue
 class ScrapeEngineTest {
     private class Rig(
         scope: TestScope, val fs: FakeRomsSource = Scrape.homeTree(), val hasher: FakeHasher = FakeHasher(), more: List<ArtSource> = emptyList(),
-        logged: MutableSet<String> = mutableSetOf(),
+        logged: MutableSet<String> = mutableSetOf(), picked: Set<ArtSlot> = emptySet(),
+        pickedBy: suspend (String) -> Set<ArtSlot> = { picked }, var extras: ArtExtras = ArtExtras(),
     ) {
+        val options = mutableListOf<Triple<String, List<ArtOption>, Boolean>>()
+        /** Each early report ([ScrapeEngine.run]'s found) with the full-size downloads made by then. */
+        val found = mutableListOf<Triple<String, List<ArtOption>, Int>>()
         val http = FakeHttp().apply { clock = { scope.testScheduler.currentTime } }
         var auth = ScraperAuth("DEV", "DEVPW")
         val arts = mutableListOf<Pair<String, ArtRefs>>()
@@ -28,10 +32,11 @@ class ScrapeEngineTest {
         val engine = ssEngine(
             http, fitter, hasher, fs, Scrape.home, { auth }, { scope.testScheduler.currentTime }, { delay(it) },
             onArt = { p, a -> arts += p to a }, onWritten = { written += it }, more = more, logged = FakeLoggedArt(logged),
+            onOptions = { p, o, w -> options += Triple(p, o, w) }, picked = pickedBy, extras = { extras },
         )
 
-        suspend fun run(games: List<LibraryGameRef>, start: ScrapeState = ScrapeState(items = games.map { Scrape.item(it) }), replace: Boolean = false) =
-            engine.run(start, { p -> games.firstOrNull { it.gamePath == p } }, replace) {}
+        suspend fun run(games: List<LibraryGameRef>, start: ScrapeState = ScrapeState(items = games.map { Scrape.item(it) }), replace: Boolean = false, wide: Boolean = false) =
+            engine.run(start, { p -> games.firstOrNull { it.gamePath == p } }, replace, wide = wide, found = { p, o -> found += Triple(p, o, http.count("https://m/")) }) {}
     }
 
     private val tetris = Scrape.homeGame("Tetris.gb")
@@ -52,6 +57,256 @@ class ScrapeEngineTest {
         assertTrue(rig.http.times[second] >= rig.http.times[first] + ScreenScraperSource.RATE_MS)
         assertEquals(rig.http.times[first], rig.http.times[tImage])     // images follow at once
         assertEquals(rig.http.times[second], rig.http.times[zImage])
+    }
+
+    @Test fun records_every_option_slot_hit_it_sees() = runTest {
+        val sgdb = FakeSource("sgdb", setOf(ArtSlot.GRID, ArtSlot.HERO))
+        sgdb.offer("Tetris.gb", ArtSlot.GRID, "https://g/1.png"); sgdb.offer("Tetris.gb", ArtSlot.GRID, "https://g/2.png")
+        sgdb.offer("Tetris.gb", ArtSlot.HERO, "https://g/h.png")
+        val rig = Rig(this, more = listOf(sgdb))
+        val signed = "https://neoclone.screenscraper.fr/api2/mediaJeu.php?devid=D&devpassword=P&ssid=U&sspassword=W&jeuid=42"
+        rig.http.on("romnom=Tetris.gb", Scrape.json(
+            """{"response":{"jeu":{"id":"42","medias":[{"type":"ss","region":"us","url":"$signed&media=ss(us)"},{"type":"ss","region":"eu","url":"$signed&media=ss(eu)"},{"type":"box-2D","region":"us","url":"https://m/b.png"}]}}}""",
+        ))
+        rig.run(listOf(tetris))   // nothing downloads (404): every source is asked
+        val (path, options, wide) = rig.options.single()
+        assertEquals(tetris.gamePath, path)
+        assertEquals(false, wide)
+        assertEquals(listOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT, ArtSlot.SCREENSHOT, ArtSlot.GRID, ArtSlot.GRID, ArtSlot.HERO), options.map { it.slot })
+        val shots = options.filter { it.slot == ArtSlot.SCREENSHOT }
+        fun bare(u: String?) = u != null && "devid" !in u && "devpassword" !in u && "ssid" !in u && "sspassword" !in u && "jeuid=42" in u
+        assertTrue(shots.all { bare(it.url) && bare(it.thumb) && "maxwidth=320&maxheight=320" in it.thumb!! }, shots.toString())
+        assertEquals(listOf(SourceId.SS, SourceId.SS, SourceId.SS, "sgdb", "sgdb", "sgdb"), options.map { it.source })
+    }
+
+    @Test fun picked_screenshot_survives_replace() = runTest {
+        val sgdb = FakeSource("sgdb", setOf(ArtSlot.GRID, ArtSlot.HERO))
+        sgdb.offer("Tetris.gb", ArtSlot.HERO, "https://m/h.png")
+        val rig = Rig(this, more = listOf(sgdb), picked = setOf(ArtSlot.SCREENSHOT))
+        rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png", "box-3D" to "https://m/t-3d.png"))
+        rig.http.on("https://m/", OK_PNG)
+        val end = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), replace = true)
+        assertEquals(ItemStatus.DONE, end.items.single().status)
+        assertTrue(rig.written.none { it.first.contains("screenshot") || it.first.contains("hero") }, rig.written.toString())
+        assertEquals(1, rig.http.count("t-3d"))   // the box is still fetched again
+        assertEquals(0, rig.http.count("t-ss"))
+        assertTrue(rig.options.all { o -> o.second.none { it.slot == ArtSlot.SCREENSHOT || it.slot == ArtSlot.HERO } })
+    }
+
+    @Test fun pick_made_mid_run_is_not_overwritten() = runTest {
+        var calls = 0
+        val rig = Rig(this, pickedBy = { if (calls++ > 0) setOf(ArtSlot.SCREENSHOT) else emptySet() })   // the user picks after the game's first check
+        rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png", "box-3D" to "https://m/t-3d.png"))
+        rig.http.on("https://m/", OK_PNG)
+        val end = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), replace = true)
+        assertTrue(calls > 1)
+        assertTrue(rig.written.none { it.first.contains("screenshot") }, rig.written.toString())
+        assertEquals(0, rig.http.count("t-ss"))
+        assertEquals(1, rig.http.count("t-3d"))
+        assertEquals(ItemStatus.DONE, end.items.single().status)
+    }
+
+    @Test fun options_reported_as_each_source_answers() = runTest {
+        val tgdb = FakeSource("tgdb", setOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT, ArtSlot.GRID))
+        tgdb.offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://t/s.png")
+        val sgdb = FakeSource("sgdb", setOf(ArtSlot.GRID, ArtSlot.HERO))
+        sgdb.offer("Tetris.gb", ArtSlot.HERO, "https://g/h.png")
+        val rig = Rig(this, more = listOf(tgdb, sgdb))
+        rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png", "box-3D" to "https://m/t-3d.png"))
+        rig.http.on("https://m/", OK_PNG)
+        rig.run(listOf(tetris), wide = true)
+        assertTrue(rig.found.all { it.first == tetris.gamePath })
+        // ScreenScraper's two before any of its downloads, then each source's on top, in the order found.
+        assertEquals(listOf(2, 3, 4), rig.found.map { it.second.size })
+        assertEquals(0, rig.found.first().third)
+        assertEquals(listOf(SourceId.SS, SourceId.SS), rig.found.first().second.map { it.source })
+        assertEquals(rig.options.single().second, rig.found.last().second)   // the end's list is the last one reported
+        assertTrue(rig.options.single().third)
+    }
+
+    @Test fun bulk_run_reports_nothing_early_without_a_listener() = runTest {
+        val rig = Rig(this)
+        rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png"))
+        rig.http.on("https://m/", OK_PNG)
+        rig.engine.run(ScrapeState(items = listOf(Scrape.item(tetris))), { tetris }) {}   // no found: as before
+        assertEquals(1, rig.options.single().second.size)
+        assertTrue(rig.found.isEmpty())
+    }
+
+    @Test fun no_options_reported_when_nothing_asked() = runTest {
+        val rig = Rig(this)
+        val end = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)))
+        assertEquals(ItemStatus.SKIPPED, end.items.single().status)
+        assertEquals(ScrapeEngine.HAS_ART, end.items.single().reason)
+        assertTrue(rig.options.isEmpty())
+    }
+
+    @Test fun wide_asks_every_source_for_option_slots_without_writing() = runTest {
+        val tgdb = FakeSource("tgdb", setOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT, ArtSlot.GRID))
+        tgdb.offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://t/s.png"); tgdb.offer("Tetris.gb", ArtSlot.GRID, "https://t/g.png")
+        val sgdb = FakeSource("sgdb", setOf(ArtSlot.GRID, ArtSlot.HERO))
+        sgdb.offer("Tetris.gb", ArtSlot.HERO, "https://g/h.png")
+        val rig = Rig(this, more = listOf(tgdb, sgdb))
+        rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png", "box-3D" to "https://m/t-3d.png"))
+        val end = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), wide = true)
+        val item = end.items.single()
+        assertTrue(item.status != ItemStatus.SKIPPED || item.reason != ScrapeEngine.HAS_ART, item.toString())
+        assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT, ArtSlot.GRID)), tgdb.asked)
+        assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.GRID, ArtSlot.HERO)), sgdb.asked)
+        assertTrue(rig.written.isEmpty() && rig.arts.isEmpty() && rig.http.count("m/t-") == 0, rig.written.toString())
+        val (_, options, wide) = rig.options.single()
+        assertTrue(wide)
+        assertEquals(setOf(SourceId.SS, "tgdb", "sgdb"), options.map { it.source }.toSet())
+        assertEquals(5, options.size)   // ScreenScraper's screenshot and 3D box, TheGamesDB's two, SteamGridDB's hero
+    }
+
+    @Test fun widePassAllSlots() = runTest {
+        val rig = Rig(this)
+        val signed = "https://neoclone.screenscraper.fr/api2/mediaJeu.php?devid=D&devpassword=P&ssid=U&sspassword=W&jeuid=42"
+        rig.http.on("romnom=Tetris.gb", found("box-3D" to "$signed&media=box-3D", "box-2D" to "$signed&media=box-2D", "ss" to "$signed&media=ss", "wheel" to "$signed&media=wheel"))
+        rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), wide = true)
+        val (_, options, wide) = rig.options.single()
+        assertTrue(wide)
+        assertEquals(setOf(ArtSlot.BOX_3D, ArtSlot.BOX_2D, ArtSlot.SCREENSHOT, ArtSlot.WHEEL), options.map { it.slot }.toSet())
+        for (o in options) {
+            val thumb = assertNotNull(o.thumb)
+            assertTrue("maxwidth=320" in thumb && "ssid" !in thumb && "devpassword" !in thumb && "jeuid=42" in thumb, thumb)
+        }
+        assertTrue(rig.written.isEmpty(), rig.written.toString())
+    }
+
+    @Test fun replaceKeepsPickedBox2d() = runTest {
+        val fs = Scrape.homeTree()
+        val box2d = fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "boxart2d"))!!
+        fs.writeBytes(box2d, "Tetris.png", byteArrayOf(7))
+        val rig = Rig(this, fs = fs, logged = mutableSetOf("Roms/GB/.media/boxart2d/Tetris.png"), picked = setOf(ArtSlot.BOX_2D))
+        rig.http.on("romnom=Tetris.gb", found("box-3D" to "https://m/t-3d.png", "box-2D" to "https://m/t-2d.png", "ss" to "https://m/t-ss.png"))
+        rig.http.on("https://m/", OK_PNG)
+        val end = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), replace = true)
+        assertContentEquals(OK_PNG.body, fs.bytesAt("Home/Roms/GB/.media/boxart/Tetris.png"))
+        assertContentEquals(byteArrayOf(7), fs.bytesAt("Home/Roms/GB/.media/boxart2d/Tetris.png"))
+        assertEquals(0, rig.http.count("t-2d"))
+        assertTrue(rig.written.none { "boxart2d" in it.first }, rig.written.toString())
+        assertEquals(ItemStatus.DONE, end.items.single().status)
+        // With only a 2D box offered, nothing is written over the pick, and the game still counts its box.
+        val rig2 = Rig(this, fs = fs, logged = mutableSetOf("Roms/GB/.media/boxart2d/Tetris.png"), picked = setOf(ArtSlot.BOX_2D))
+        rig2.http.on("romnom=Tetris.gb", found("box-2D" to "https://m/t-2d.png", "ss" to "https://m/t-ss.png"))
+        rig2.http.on("https://m/", OK_PNG)
+        assertEquals(ItemStatus.DONE, rig2.run(listOf(tetris.copy(have = Scrape.HAS_ART)), replace = true).items.single().status)
+        assertContentEquals(byteArrayOf(7), fs.bytesAt("Home/Roms/GB/.media/boxart2d/Tetris.png"))
+        assertEquals(0, rig2.http.count("t-2d"))
+    }
+
+    @Test fun pickedBox3dKeptUnderReplace() = runTest {
+        val fs = Scrape.homeTree()
+        val box = fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "boxart"))!!
+        fs.writeBytes(box, "Tetris.png", byteArrayOf(7))
+        val rig = Rig(this, fs = fs, logged = mutableSetOf("Roms/GB/.media/boxart/Tetris.png"), picked = setOf(ArtSlot.BOX_3D), extras = ArtExtras(box2d = true))
+        rig.http.on("romnom=Tetris.gb", found("box-3D" to "https://m/t-3d.png", "box-2D" to "https://m/t-2d.png"))
+        rig.http.on("https://m/", OK_PNG)
+        rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), replace = true)
+        assertContentEquals(byteArrayOf(7), fs.bytesAt("Home/Roms/GB/.media/boxart/Tetris.png"))   // the pick: neither written nor removed
+        assertContentEquals(OK_PNG.body, fs.bytesAt("Home/Roms/GB/.media/boxart2d/Tetris.png"))   // the 2D box is its own slot
+        assertEquals(0, rig.http.count("t-3d"))
+    }
+
+    @Test fun boxPickedMidFetchStillDone() = runTest {
+        // The 2D box is picked while the game is fetched: it leaves the count, and the 3D box written then is not counted
+        // again (the game is DONE, not PARTIAL).
+        var reads = 0
+        val rig = Rig(this, pickedBy = { if (reads++ == 0) emptySet() else setOf(ArtSlot.BOX_2D) })
+        rig.http.on("romnom=Tetris.gb", found("box-3D" to "https://m/t-3d.png", "box-2D" to "https://m/t-2d.png", "ss" to "https://m/t-ss.png"))
+        rig.http.on("https://m/", OK_PNG)
+        val end = rig.run(listOf(tetris))
+        assertContentEquals(OK_PNG.body, rig.fs.bytesAt("Home/Roms/GB/.media/boxart/Tetris.png"))
+        assertEquals(0, rig.http.count("t-2d"))
+        assertEquals(ItemStatus.DONE, end.items.single().status, end.items.single().reason)
+    }
+
+    @Test fun pickedWheelNotFetched() = runTest {
+        val rig = Rig(this, picked = setOf(ArtSlot.WHEEL), extras = ArtExtras(wheel = true))
+        rig.http.on("romnom=Tetris.gb", found("ss" to "https://m/t-ss.png", "box-3D" to "https://m/t-3d.png", "wheel" to "https://m/t-wheel.png"))
+        rig.http.on("https://m/", OK_PNG)
+        rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), replace = true)
+        assertTrue(rig.written.none { "wheel" in it.first }, rig.written.toString())
+        assertEquals(0, rig.http.count("t-wheel"))
+        assertEquals(1, rig.http.count("t-3d"))
+    }
+
+    @Test fun wide_does_not_reask_a_slot_already_asked() = runTest {
+        val src = FakeSource("tgdb", setOf(ArtSlot.SCREENSHOT))
+        val rig = Rig(this, more = listOf(src))
+        rig.run(listOf(tetris.copy(have = ArtHave(box = true))), wide = true)
+        assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.SCREENSHOT)), src.asked)
+    }
+
+    @Test fun wide_source_stop_keeps_status() = runTest {
+        val sgdb = FakeSource("sgdb", setOf(ArtSlot.GRID, ArtSlot.HERO))
+        sgdb.fail = { SourceStop("Key refused") }
+        val rig = Rig(this, more = listOf(sgdb))
+        val end = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), wide = true)
+        assertEquals(ItemStatus.DONE, end.items.single().status)
+        assertEquals("Key refused", end.notes["sgdb"])
+    }
+
+    @Test fun wide_source_stop_does_not_mark_wide() = runTest {
+        val sgdb = FakeSource("sgdb", setOf(ArtSlot.GRID, ArtSlot.HERO))
+        sgdb.fail = { SourceStop("Key refused") }
+        val tgdb = FakeSource("tgdb", setOf(ArtSlot.SCREENSHOT))
+        tgdb.offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://t/s.png")
+        val rig = Rig(this, more = listOf(tgdb, sgdb))
+        rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), wide = true)
+        val (_, options, wide) = rig.options.single()
+        assertEquals(false, wide)
+        assertEquals(listOf("tgdb"), options.map { it.source })
+    }
+
+    @Test fun wide_pause_does_not_mark_wide() = runTest {
+        val rig = Rig(this)
+        rig.http.on("romnom=Tetris.gb", HttpResult(-1, null))
+        val end = rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), wide = true)
+        assertEquals(JobPhase.PAUSED, end.phase)
+        assertEquals(false, rig.options.single().third)
+    }
+
+    @Test fun wide_with_no_hits_reports_empty() = runTest {
+        val rig = Rig(this)
+        rig.run(listOf(tetris.copy(have = Scrape.HAS_ART)), wide = true)
+        assertEquals(Triple(tetris.gamePath, emptyList<ArtOption>(), true), rig.options.single())
+    }
+
+    @Test fun write_pick_replaces_screenshot_and_logs_origin() = runTest {
+        val fs = Scrape.homeTree()
+        val shot = fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "screenshot"))!!
+        fs.writeBytes(shot, "Tetris.jpg", byteArrayOf(7))
+        val rig = Rig(this, fs = fs)
+        val origin = ArtOrigin("steamgriddb", "9", "77")
+        val option = ArtOption(ArtSlot.SCREENSHOT, "https://x/shot", origin.source, origin.gameId, origin.assetId)
+        val refs = rig.engine.writePick(tetris, ArtSlot.SCREENSHOT, OK_PNG.body!!, option)
+        assertContentEquals(OK_PNG.body, fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"))
+        assertNull(fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.jpg"))
+        assertEquals(listOf<Pair<String, ArtOrigin?>>("Roms/GB/.media/screenshot/Tetris.png" to origin), rig.written)
+        assertEquals("Home/Roms/GB/.media/screenshot/Tetris.png", refs?.screenshot)
+    }
+
+    @Test fun write_pick_of_garbage_is_null() = runTest {
+        val rig = Rig(this)
+        rig.fitter.undecodable = { true }
+        assertNull(rig.engine.writePick(tetris, ArtSlot.SCREENSHOT, byteArrayOf(1, 2), ArtOption(ArtSlot.SCREENSHOT, "https://x/s", "x")))
+        assertTrue(rig.written.isEmpty())
+    }
+
+    @Test fun index_art_prefers_picked_mirror_screenshot() {
+        val own = "Extra/Genesis/.media/screenshot/Sonic.png"
+        val mirror = "Home/Roms/.sources/x1/Genesis/.media/screenshot/Sonic.png"
+        val sonic = Scrape.extraGame("Sonic.md", "MD").copy(art = ArtRefs(screenshot = own))
+        val after = ArtRefs(screenshot = mirror)
+        assertEquals(own, ScrapeEngine.indexArt(sonic, ArtRefs(), after).screenshot)
+        assertEquals(mirror, ScrapeEngine.indexArt(sonic, ArtRefs(), after, picked = setOf(ArtSlot.SCREENSHOT)).screenshot)
+        // The hero flag follows the screenshot chosen.
+        val heroAfter = after.copy(heroShot = true)
+        assertEquals(false, ScrapeEngine.indexArt(sonic, ArtRefs(), heroAfter).heroShot)
+        assertEquals(true, ScrapeEngine.indexArt(sonic, ArtRefs(), heroAfter, picked = setOf(ArtSlot.SCREENSHOT)).heroShot)
     }
 
     @Test fun tryTwoOnlyAfterTryOneFails() = runTest {

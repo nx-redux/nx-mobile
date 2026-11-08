@@ -35,7 +35,10 @@ import com.nxredux.mobile.achievements.sortedBy
 import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.netplay.NetplaySession
+import com.nxredux.mobile.layout.CoreFrame
+import com.nxredux.mobile.layout.consoleScale
 import com.nxredux.mobile.options.BottomScreenOptions
+import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsScreen
@@ -73,6 +76,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
+import kotlin.math.sin
 import kotlin.math.roundToInt
 
 /**
@@ -111,6 +116,8 @@ internal interface DualScreenHost : LifecycleOwner {
     fun publishMenuSecondScreen()
     /** Runs [block] on the open in-game menu, if any, and redraws it. */
     fun withMenu(block: (InGameMenuModel) -> Unit)
+    /** The open in-game menu moves to the display it belongs on now ([menuOnSecond]). */
+    fun placeMenu()
     /** The Fast forward / Rewind tiles' live state ([SpeedController.tiles]); null rewind: no Rewind tile. */
     fun speedTiles(): Pair<Boolean, Boolean?>
     /** The Mic tile's state: null where this isn't a mic console or a session is on. */
@@ -238,28 +245,41 @@ internal class DualScreenController(
     private fun secondDraws(mode: DualMode = dualMode, picture: PictureOn = pictureOn): Boolean =
         mode == DualMode.SPLIT || (picture == PictureOn.SECOND && (mode == DualMode.PANEL || mode == DualMode.PANEL_UP))
 
+    /**
+     * On dual screen the in-game menu is on the top display: the one with the picture (the DS / 3DS picture screen while
+     * split). The other display is left to what it shows.
+     */
+    fun menuOnSecond(): Boolean = presentation != null && dualMode != DualMode.OFF && pictureOn == PictureOn.SECOND
+
+    /** Shows [content] as the in-game menu on the second display; null takes it away. */
+    fun showMenuOnSecond(content: (@Composable () -> Unit)?) { presentation?.showMenu(content) }
+
     /** The panel fills the game's window on main (the picture is on the second display). */
     fun mainPanelShown(): Boolean = mainPanel.value != null
 
     /** The panel fills the game's whole window on main (not a skin's glass): it hides the pad, the menu opens over it. */
     fun mainPanelCoversWindow(): Boolean = mainPanel.value != null && mainPanelGlass.value == null
 
+    /** Main shows no game picture: the panel modes with the picture on the second display. */
+    fun mainShowsNoPicture(): Boolean =
+        presentation != null && pictureOn == PictureOn.SECOND && (dualMode == DualMode.PANEL || dualMode == DualMode.PANEL_UP)
+
     /**
      * The DS/3DS screens cut for the second display, in px of its surface: split, the screen not on main; with the picture
      * there, both DS screens side by side (panel up). Empty when it draws nothing, has no surface, or (split) the DS frame
      * is not the plain stack; null when it draws the whole frame instead ([secondRegions]). [g]: the game geometry.
      */
-    fun secondDsRegions(g: FloatArray): List<NdsRegion>? {
+    fun secondDsRegions(g: FloatArray, map: ScreenMap?): List<NdsRegion>? {
         val surface = secondSurface
         if (!secondDraws() || surface == null || surface.width <= 0 || surface.height <= 0) return emptyList()
         val sw = surface.width.toFloat()
         val sh = surface.height.toFloat()
-        val dsFrame = isNds && NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt())
+        val dsFrame = isNds && (map != null || NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt()))
         return when {
             // Not the plain DS stack (no frame yet, or another layout): main draws it whole, so nothing is cut for here.
-            dualMode == DualMode.SPLIT && isNds -> if (!dsFrame) emptyList() else DualScreen.ndsScreen(sw, sh, DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn).other)
-            dualMode == DualMode.SPLIT && isN3ds -> DualScreen.n3dsScreen(sw, sh, DualScreen.splitMain(n3dsPicture, pictureOn).other)
-            dualMode == DualMode.PANEL_UP && dsFrame -> DualScreen.ndsPanelUp(sw, sh, NdsSettings.parse(frontendValues))
+            dualMode == DualMode.SPLIT && isNds -> if (!dsFrame) emptyList() else DualScreen.ndsScreen(sw, sh, DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn).other).withMap(map)
+            dualMode == DualMode.SPLIT && isN3ds -> DualScreen.n3dsScreen(sw, sh, DualScreen.splitMain(n3dsPicture, pictureOn).other).withMap(map)
+            dualMode == DualMode.PANEL_UP && dsFrame -> DualScreen.ndsPanelUp(sw, sh, NdsSettings.parse(frontendValues)).withMap(map)
             else -> null
         }
     }
@@ -290,10 +310,12 @@ internal class DualScreenController(
         )
     }
 
-    /** The whole core frame fitted at the game's aspect on a [w] x [h] surface (px of it); null before the first frame or with no room. */
+    /** The whole core frame placed on a [w] x [h] surface by Screen Scaling (px of it); null before the first frame or with no room. */
     private fun wholeFrame(w: Float, h: Float, g: FloatArray): PxRect? {
-        val aspect = g[2].takeIf { it > 0f } ?: if (g[0] > 0f && g[1] > 0f) g[0] / g[1] else return null
-        return DualScreen.fullFrame(w, h, aspect).takeIf { it.width > 0f && it.height > 0f }
+        if (g[0] <= 0f || g[1] <= 0f) return null
+        val frame = CoreFrame(g[0], g[1], g[2], rotated = abs(sin(g[3])) > 0.5f)
+        val s = FrontendSettings.parse(frontendValues)
+        return DualScreen.scaledFrame(w, h, frame, consoleScale(owner.layoutTag()), s.scaling, s.offsetX, s.offsetY).takeIf { it.width > 0f && it.height > 0f }
     }
 
     /**
@@ -302,7 +324,7 @@ internal class DualScreenController(
      */
     fun secondWholeFrame(g: FloatArray): PxRect? {
         val surface = secondSurface ?: return null
-        if (!secondDraws() || secondDsRegions(g) != null) return null
+        if (!secondDraws() || secondDsRegions(g, renderer.screenMap) != null) return null
         return wholeFrame(surface.width.toFloat(), surface.height.toFloat(), g)
     }
 
@@ -337,7 +359,7 @@ internal class DualScreenController(
      */
     fun syncDual() {
         val wanted = if (isFinishing || isDestroyed) DualMode.OFF else dualModeNow()
-        val geometry = retroView?.getGameGeometry()   // read once for the picture screen and the layout
+        val geometry = retroView?.getGameGeometry()
         val display = secondScreens.current.value.takeIf { wanted != DualMode.OFF }
         // A different display, or the same one at a new size or density: a new window.
         if (presentation?.display?.displayId != display?.displayId || (display != null && shapeOf(display) != presentationShape)) {
@@ -346,7 +368,7 @@ internal class DualScreenController(
         }
         // No window on the second display (it went before it showed): nothing is moved onto it, both screens stay here.
         val mode = if (display != null && presentation == null) DualMode.OFF else wanted
-        val picture = if (display == null || presentation == null) PictureOn.MAIN else pictureOnNow(display, geometry, mode)
+        val picture = if (display == null || presentation == null) PictureOn.MAIN else pictureOnNow(display, mode)
         val old = dualMode
         val oldPicture = pictureOn
         val changed = mode != old
@@ -362,40 +384,40 @@ internal class DualScreenController(
             // Split and panel up set Azahar's layout and swap options; the other modes put the user's back.
             val forcedBefore = DualScreen.n3dsCoreOptions(old) != null
             val forced = DualScreen.n3dsCoreOptions(mode) != null
-            if (forced && !forcedBefore) captureN3dsSwap()
+            // Under video views the core stays at its unswapped Default and SWAP is the app's: nothing to note or put back.
+            if (forced && !forcedBefore && !renderer.n3dsViews) captureN3dsSwap()
             syncN3dsCore()
-            if (forcedBefore && !forced) restoreN3dsScreen()
+            if (forcedBefore && !forced && !renderer.n3dsViews) restoreN3dsScreen()
         }
         // A new mode builds the pad again too: the skin comes or goes with it ([SkinDual.skinAllowed]).
         if (changed) padLayout.applyLayout(activity.resources.configuration.orientation)
         renderer.relayoutFrontend(geometry)
+        owner.placeMenu()
     }
 
     /**
      * Which display is the picture screen for [display]: the game's window as landscape (it is locked so while dual)
      * against the display's real size as it is turned now, unless a bottom screen is chosen (the console's Bottom screen,
-     * else Settings → Second screen's). [geometry]: the view's game geometry (null before the view).
+     * else Settings → Second screen's).
      */
     /** Where the picture goes in [mode] (the mode being set, not the last one: under a skin it decides Auto). */
-    private fun pictureOnNow(display: Display, geometry: FloatArray?, mode: DualMode = dualMode): PictureOn {
+    private fun pictureOnNow(display: Display, mode: DualMode = dualMode): PictureOn {
         val root = findViewById<View>(R.id.root)
         val dm = resources.displayMetrics
         val w = if (root.width > 0) root.width else dm.widthPixels
         val h = if (root.height > 0) root.height else dm.heightPixels
         val real = android.graphics.Point().also { @Suppress("DEPRECATION") display.getRealSize(it) }
         val bottom = BottomScreen.resolve(frontendValues[BottomScreenOptions.KEY], appSettings.bottomScreen)
-        // A core that turns its picture (SET_ROTATION): the second display's regions draw it unturned, so it stays on main.
-        return DualScreen.pictureOn(maxOf(w, h), minOf(w, h), real.x, real.y, GameGeometry.of(geometry).rotated, bottom, skin = padLayout.dualSkinWanted(mode))
+        return DualScreen.pictureOn(maxOf(w, h), minOf(w, h), real.x, real.y, bottom, skin = padLayout.dualSkinWanted(mode))
     }
 
     /**
-     * Either display's size or the core's geometry changed: a new picture screen lays both out again ([syncDual]).
-     * [geometry]: the view's, when the caller has just read it.
+     * Either display's size changed: a new picture screen lays both out again ([syncDual]).
      */
-    fun recheckPictureOn(geometry: FloatArray? = null) {
+    fun recheckPictureOn() {
         if (dualMode == DualMode.OFF) return
         val display = presentation?.display ?: return
-        if (pictureOnNow(display, geometry ?: retroView?.getGameGeometry()) != pictureOn) syncDual()
+        if (pictureOnNow(display) != pictureOn) syncDual()
     }
 
     /** While the second screen is in use the main display stays landscape, either way up; then the previous orientation is back. */
@@ -486,6 +508,7 @@ internal class DualScreenController(
         presentationShape = null
         dropSecondSurface()
         p.releaseTouch()
+        owner.placeMenu()   // a menu that was on that display comes back here
     }
 
     /** The app's theme (accent, option text size) for the panel, on either display. */
@@ -524,6 +547,7 @@ internal class DualScreenController(
         if (wasCovering != mainPanelCoversWindow()) {
             padLayout.updatePadVisibility()
             menuView?.layoutParams = menuLayoutParams(resources.configuration.orientation, overPanel = mainPanelCoversWindow(), glass = true)
+            renderer.relayoutFrontend()   // the main picture stops or starts drawing; the 3D Resolution follows
         }
         // Re-read as it comes up; while up, each RA event, player, disc and setting change refreshes it.
         if (shown && !panelWasShown) {
@@ -642,7 +666,7 @@ internal class DualScreenController(
      */
     fun syncMainPanelHost() {
         val host = mainPanelHost ?: return
-        val shown = if (mainPanel.value != null) !menuOpen else mainPanelPill.value
+        val shown = if (mainPanel.value != null) !menuOpen || menuOnSecond() else mainPanelPill.value
         host.visibility = if (shown) View.VISIBLE else View.GONE
     }
 

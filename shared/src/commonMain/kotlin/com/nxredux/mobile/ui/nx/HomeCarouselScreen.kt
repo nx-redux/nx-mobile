@@ -120,10 +120,14 @@ internal fun homeCarouselScreenCentred(
  */
 internal fun homeCarouselTiles(rows: List<MainRow>, accentRgb: Int): List<GridTile> = rows.mapNotNull { r ->
     when (r) {
-        is MainRow.Continue -> continuePictures(continueFrame(r), r.entry).firstOrNull().let { picture ->
+        is MainRow.Continue -> continueFrame(r).let { frame ->
+            val game = r.entry.game
+            val picture = continuePictures(frame, r.entry).firstOrNull()
             GridTile.Game(
-                picture, r.entry.game.shownName, abstractUrl = abstractArtFor(r.entry),
-                resumeFrame = picture != null && picture == continueFrame(r),
+                picture, game.shownName, abstractUrl = abstractArtFor(r.entry),
+                // A hero screenshot is drawn as one ([tileArt]: TileFit.HERO in the wide tile).
+                heroShot = picture != null && picture != frame && picture == game.screenshotRef?.value && game.heroShot,
+                resumeFrame = picture != null && picture == frame,
             )
         }
         MainRow.PickAGame -> GridTile.Game(abstractAccentArtUrl(accentRgb), PICK_A_GAME)

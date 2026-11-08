@@ -1,9 +1,10 @@
 Azahar (the Nintendo 3DS libretro core, azahar_libretro) and the third-party code compiled into it are distributed
 under terms that require attribution and inclusion of their respective licenses. This information follows.
 
-Build: Azahar 2126.1.2 (azahar-emu/azahar 9e6f523a57fac9564ac0bf8286db3c3702d301ec), libretro target citra_libretro,
+Build: Azahar 2126.2 (azahar-emu/azahar 219d743a1e698101fe1ab8bef43e6563126c3c27), libretro target citra_libretro,
 built with -DENABLE_LIBRETRO=ON -DENABLE_VULKAN=ON -DENABLE_OPENGL=ON -DENABLE_TESTS=OFF for arm64 Android (see
-cores/Makefile and cores/patches/azahar.patch). The sections below cover the libraries linked into that build (its
+cores/Makefile and cores/patches/azahar.patch, which also carries azahar-emu/azahar#2718's video views code under
+GPL-3.0 or later, so the built core is distributed under GPL-3.0). The sections below cover the libraries linked into that build (its
 static libraries and the header-only code its objects include); SDL2, Qt, cubeb, OpenAL, libusb, Discord RPC and the
 web service are not built.
 

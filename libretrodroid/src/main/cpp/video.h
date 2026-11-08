@@ -93,6 +93,12 @@ public:
     void setPictureHeld(bool held);
     void updateContentSize(unsigned width, unsigned height);
     void updateScreenRegions(std::vector<ScreenRegion> regions);
+    // nx-mobile: while set, the core frame is first composed into a width x height frame from its parts (src: 0..1 of
+    // the core frame, dst: 0..1 of the composed one), and that composed frame is what every draw samples.
+    void setComposition(int width, int height, std::vector<ScreenRegion> parts);
+    // A point (0..1) of the composed frame mapped back into the core frame through the touch part under it; outside
+    // every touch part (-10, -10). Unchanged while not composing. ScreenRegions.mapCompositionTouch is its Kotlin twin.
+    std::pair<float, float> mapCompositionPoint(float x, float y) const;
     // Regions drawn on a second surface by renderSecondary; dst is 0..1 of that whole surface. Doesn't redraw the main
     // output.
     void updateSecondaryRegions(std::vector<ScreenRegion> regions);
@@ -151,7 +157,17 @@ private:
     static ShaderChainEntry createShaderChainEntry(const ShaderManager::Pass& pass);
 
     // layout's region quads on framebuffer 0 at layout's screen size; preset (may be null) draws the shaded ones.
-    void renderRegions(VideoLayout& layout, PresetChainRenderer* preset);
+    // A screen cut from the frame, copied into its own texture so a preset sees it as a whole frame of its own.
+    struct RegionCrop { GLuint framebuffer = 0; GLuint texture = 0; unsigned width = 0; unsigned height = 0; };
+    void renderRegions(VideoLayout& layout, PresetChainRenderer* preset, std::vector<RegionCrop>& crops);
+    void renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layout, PresetChainRenderer* preset,
+                     std::vector<RegionCrop>& crops);
+    // While composing: a quad of the whole composed frame cut into its screens, each shaded as its part says.
+    std::vector<RegionQuad> splitByComposition(const RegionQuad& whole) const;
+    GLuint cropRegion(RegionCrop& crop, const std::array<float, 12>& coordinates, unsigned width, unsigned height);
+    void releaseCrops();
+    std::vector<RegionCrop> mainCrops;
+    std::vector<RegionCrop> secondaryCrops;
     void drawBuiltInChain(const std::array<float, 12>& vertices, const std::array<float, 12>& coordinates,
                           unsigned screenWidth, unsigned screenHeight);
     void drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned screenHeight);
@@ -179,6 +195,21 @@ private:
     unsigned frameCount = 0;
     // The nearest default shader for unshaded regions, built on first use.
     std::optional<ShaderChainEntry> plainShader;
+
+    unsigned coreContentWidth = 0;
+    unsigned coreContentHeight = 0;
+    float coreAspectRatio = 0.0F;
+    int compositionWidth = 0;
+    int compositionHeight = 0;
+    std::vector<ScreenRegion> compositionParts;
+    GLuint compositionFramebuffer = 0;
+    GLuint compositionTexture = 0;
+    int compositionTextureWidth = 0;
+    int compositionTextureHeight = 0;
+    bool composing() const { return compositionWidth > 0 && compositionHeight > 0 && !compositionParts.empty(); }
+    GLuint frameTexture();
+    void composeFrame();
+    void releaseComposition();
 
     bool immersiveModeEnabled = false;
     ImmersiveMode immersiveMode;

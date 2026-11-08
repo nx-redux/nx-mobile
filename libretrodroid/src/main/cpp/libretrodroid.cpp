@@ -316,6 +316,7 @@ void LibretroDroid::onSurfaceCreated() {
     video->updateScreenOffset(screenOffsetX, screenOffsetY);
     video->setPictureHeld(pictureHeld);
     video->updateScreenRegions(screenRegions);
+    video->setComposition(compositionWidth, compositionHeight, compositionParts);
     video->updateSecondaryRegions(secondaryRegions);
     video->setPresetChain(presetChain);
     geometryWidth = (float) system_av_info.geometry.base_width;
@@ -359,7 +360,8 @@ void LibretroDroid::onMotionEvent(
 void LibretroDroid::onTouchEvent(float xAxis, float yAxis) {
     LOGD("Received touch event: %.2f, %.2f", xAxis, yAxis);
     if (video) {
-        auto [x, y] = video->getLayout().getRelativePosition(xAxis, yAxis);
+        auto [rx, ry] = video->getLayout().getRelativePosition(xAxis, yAxis);
+        auto [x, y] = video->mapCompositionPoint(rx, ry);
         currentInput()->onMotionEvent(0, Input::MOTION_SOURCE_POINTER, x, y);
     }
 }
@@ -407,6 +409,11 @@ void LibretroDroid::create(
     resetGlobalVariables();
 
     Environment::getInstance().initialize(systemDir, savesDir, &callback_get_current_framebuffer);
+    Environment::getInstance().setVideoViewsEnabled(videoViewsEnabled);
+    {
+        std::lock_guard<std::mutex> guard(videoViewsLock);
+        videoViews.clear();
+    }
     // A failed load never reaches destroy(); releaseCore() above deinitialised its core, drop its VFS files too.
     VFS::getInstance().deinitialize();
     // Again after releaseCore(): the old core may have set a memory map from retro_unload_game/retro_deinit, and a new
@@ -730,6 +737,10 @@ void LibretroDroid::step() {
             const auto run = hitchProbe.takeRunStats();
             LOGW("NXHITCH summary steps=%lu hitches=%lu run_avg=%.2f run_worst=%.1f", hitchProbe.steps(),
                  hitchProbe.hitches(), run.averageMs, run.worstMs);
+            if (audio) {
+                const auto f = audio->takeFifoStats();
+                LOGW("NXAUDIO underrun=%ld overrun=%ld min_fill=%ld capacity=%ld xruns_total=%ld slowdown=%.3f", f.underrun, f.overrun, f.minFill, f.capacity, f.xruns, slowdownMeter.speed());
+            }
         }
     }
 
@@ -741,6 +752,7 @@ void LibretroDroid::step() {
     unsigned int speed = frameSpeed;
     const bool lk = gbalink::active();               // nx-mobile GBA link: speed 1, held while either side pauses
     const bool np = !lk && netplay::active();        // nx-mobile netplay: one lockstep frame per step
+    const bool paused = speed == 0 && !np && !lk;
     if (np || lk) speed = 1;
 
     // Neither rewind nor fast forward runs in netplay or a link session: the peers would desync. Rewinding wins over
@@ -790,6 +802,21 @@ void LibretroDroid::step() {
         }
         rewindPlayed += runs;   // the probe's clock (RewindProbe): a paused step plays none
         hitchProbe.ranCore(HitchProbe::Clock::now(), runs);
+        // Fill Audio Gaps: a game that falls behind (Frame Skip Off lets it slow down) makes its sound slower than real
+        // time; the audio plays at the speed it reaches, as a slower tempo at the same pitch (time stretch), instead of
+        // running dry. Auto does it with Frame Skip Off; never in netplay or a link, and FF plays at its own speed.
+        if (audio) {
+            const int gaps = fillAudioGaps.load();
+            const bool fill = !np && !lk && (gaps == FILL_GAPS_ON || (gaps == FILL_GAPS_AUTO && !FPSSync::frameSkip));
+            audio->setTimeStretch(fill);
+            const bool measure = fill && fpsSync && !fastForward && speed > 0;
+            if (measure) {
+                audio->setSlowdownSpeed(slowdownMeter.add(SlowdownMeter::Clock::now(), runs, fpsSync->getContentRefreshRate()));
+            } else {
+                slowdownMeter.reset();
+                audio->setSlowdownSpeed(1.0);
+            }
+        }
         if (speed > 0) rewindState = (np || lk) ? REWIND_STATUS_OFF : rewind.enabled() ? REWIND_STATUS_READY : offStatus();
     }
     auto& achievements = Achievements::getInstance();
@@ -802,6 +829,9 @@ void LibretroDroid::step() {
             // shader and layout. GL cores otherwise draw only inside their video callback, leaving the picture stale.
             // An FF step that ran frames shows its last one like any step.
             video->renderPausedFrame();
+            // A hw core's second surface is drawn from inside its frame (frameDrawnHook); the paused redraw is that
+            // frame here, so a shader picked from the menu shows on the second display at once.
+            if (video->rendersInVideoCallback() && frameDrawnHook) frameDrawnHook();
         } else if (!video->rendersInVideoCallback()) {
             video->renderFrame();
         }
@@ -814,6 +844,7 @@ void LibretroDroid::step() {
     // The frame sleep runs without the core lock, so achievements and the off-thread save calls aren't held up by it.
     lock.unlock();
     frameDeadlineNanos = 0;   // set below for a sleep-timer frame only
+    bool stamped = false;
     if (fastForward) {
         auto ahead = fastForwardPacer.sleepFor(std::chrono::steady_clock::now());
         if (ahead > Duration::zero()) std::this_thread::sleep_for(ahead);
@@ -823,12 +854,20 @@ void LibretroDroid::step() {
         // presentation deadline and a margin: no later than a frame queued then could show), not at the first refresh
         // after this step happened to end (8/25 ms frames of a 60 fps game on a 120 Hz screen).
         if (runs > 0) {
-            if (auto at = fpsSync->presentAt(std::chrono::microseconds(presentationLeadMicros.load()))) PresentTime::set(*at);
+            if (auto at = fpsSync->presentAt(std::chrono::microseconds(presentationLeadMicros.load()))) stamped = PresentTime::set(*at);
         }
         // The second surface stamps its frame from the same deadline with its own display's lead (SecondaryOutput).
         frameDeadlineNanos = (runs > 0 && fpsSync->presentAt(std::chrono::microseconds(0)))
             ? std::chrono::duration_cast<std::chrono::nanoseconds>(fpsSync->deadline().time_since_epoch()).count() : 0;
     }
+    // nx-mobile: paused, the picture doesn't change; redrawing it at the screen's rate only burns GPU and battery.
+    if (paused) {
+        std::this_thread::sleep_until(pausedRedrawAt + PAUSED_REDRAW_INTERVAL);
+        pausedRedrawAt = std::chrono::steady_clock::now();
+    }
+    // The surface keeps its last stamp for every later frame: an unstamped frame after a stamped one goes back to auto.
+    if (!stamped && presentStamped) PresentTime::clear();
+    presentStamped = stamped;
     hitchProbe.waited(HitchProbe::Clock::now());
     if (fastForward) hitchProbe.reset();
     lock.lock();
@@ -864,6 +903,15 @@ void LibretroDroid::step() {
         geometryChanged = true;
 
         dirtyVideo = true;
+    }
+
+    std::vector<VideoView> views;
+    if (Environment::getInstance().takeVideoViews(views)) {
+        {
+            std::lock_guard<std::mutex> guard(videoViewsLock);
+            videoViews = std::move(views);
+        }
+        geometryChanged = true;
     }
 
     if (video && Environment::getInstance().isScreenRotationUpdated()) {
@@ -1295,7 +1343,8 @@ void LibretroDroid::afterGameLoad() {
     audio = std::make_unique<Audio>(
         (int32_t) std::lround(inputSampleRate),
         system_av_info.timing.fps,
-        preferLowLatencyAudio
+        preferLowLatencyAudio,
+        audioBufferMs.load()
     );
     audio->setResamplingQuality(resamplingQuality.load());
 
@@ -1396,6 +1445,13 @@ void LibretroDroid::setPictureHeld(bool held) {
     }
 }
 
+void LibretroDroid::setComposition(int width, int height, std::vector<ScreenRegion> parts) {
+    compositionWidth = width;
+    compositionHeight = height;
+    compositionParts = std::move(parts);
+    if (video) video->setComposition(compositionWidth, compositionHeight, compositionParts);
+}
+
 void LibretroDroid::setScreenRegions(std::vector<ScreenRegion> regions) {
     screenRegions = std::move(regions);
 
@@ -1429,6 +1485,11 @@ void LibretroDroid::renderSecondary(unsigned width, unsigned height) {
     } catch (const std::exception& e) {
         LOGE("Error rendering the second screen: %s", e.what());
     }
+}
+
+std::vector<VideoView> LibretroDroid::getVideoViews() {
+    std::lock_guard<std::mutex> guard(videoViewsLock);
+    return videoViews;
 }
 
 std::array<float, 4> LibretroDroid::getGameGeometry() const {

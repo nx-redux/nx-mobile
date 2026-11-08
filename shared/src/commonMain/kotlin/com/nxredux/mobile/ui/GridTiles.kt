@@ -7,15 +7,16 @@ import com.nxredux.mobile.ui.nx.consolePad
 import com.nxredux.mobile.ui.nx.toolIcon
 import org.jetbrains.compose.resources.DrawableResource
 
-/** What a Grid tile shows: a console's logo, a game's screenshot (or stand-in), a tool's icon and name, a collection's name. */
+/** What a Grid tile shows: a console's logo, a game's screenshot (or its abstract picture), a tool's icon and name, a collection's name. */
 sealed interface GridTile {
     data class Logo(val res: DrawableResource?, val name: String, val count: Int? = null, val pad: ConsolePad? = null) : GridTile     // null res: the name as a title tile; count: its games; pad: its controller (Carousel only)
     /**
-     * null urls: a plain title tile ([appId]: an Android game's, its app icon until the tile is measured); [heroUrl] / [gridUrl]: the stand-ins
-     * ([tileArt]); [abstractUrl]: its generated picture ([abstractArtFor]), the tile's last fallback, drawn as a screenshot.
+     * null urls: a plain title tile ([appId]: an Android game's, its app icon until the tile is measured); [heroShot]:
+     * the screenshot is a SteamGridDB hero ([tileArt]: wide tiles only); [abstractUrl]: its generated picture
+     * ([abstractArtFor]), the tile's last fallback, drawn as a screenshot.
      */
     data class Game(
-        val screenshotUrl: String?, val title: String, val appId: String? = null, val heroUrl: String? = null, val gridUrl: String? = null,
+        val screenshotUrl: String?, val title: String, val appId: String? = null, val heroShot: Boolean = false,
         val abstractUrl: String? = null,
         val resumeFrame: Boolean = false,   // the picture is Continue's resume frame: trimmed of its letterbox and zoomed, as Grid Home's card
     ) : GridTile
@@ -25,11 +26,11 @@ sealed interface GridTile {
 
 /**
  * Whether a game tile [width] x [height] dp shows no real art: [tileArt] without the abstract picture finds nothing (no
- * screenshot, and no SteamGridDB stand-in of the tile's shape), so it draws its abstract picture, an app icon or a title
+ * screenshot, or a hero one in a tile that is not wide), so it draws its abstract picture, an app icon or a title
  * tile. Such a tile's caption always shows ([com.nxredux.mobile.ui.nx.NxMenuTile]); one with real art shows it lit only.
  */
 internal fun GridTile.Game.artLess(width: Float, height: Float): Boolean =
-    tileArt(width, height, screenshotUrl, heroUrl, gridUrl) == null
+    tileArt(width, height, screenshotUrl, heroShot) == null
 
 /**
  * A tool's name as a tile shows it: "RetroAchievements" breaks as "Retro / Achievements" and "Cheats & Patches" as
@@ -48,7 +49,7 @@ internal fun gameGridTiles(entries: List<Listed>): List<GridTile.Game> = entries
 
 private fun gameTile(e: Listed, title: String, shot: String? = null) =
     GridTile.Game(
-        shot ?: e.game.screenshotRef?.value, title, e.appId, heroUrl = e.game.heroRef?.value, gridUrl = e.game.gridRef?.value, abstractUrl = abstractArtFor(e),
+        shot ?: e.game.screenshotRef?.value, title, e.appId, heroShot = shot == null && e.game.heroShot, abstractUrl = abstractArtFor(e),
         resumeFrame = shot != null,   // a hidden save state's frame: trimmed and zoomed, as Continue's
     )
 
@@ -63,26 +64,27 @@ private fun gameTile(e: Listed, title: String, shot: String? = null) =
 internal fun abstractArtFor(e: Listed): String? =
     e.appId?.let(::abstractAppArtUrl) ?: abstractArtUrl(e.system.tag, e.game.fileName)
 
-/**
- * Home's Continue card pictures, in fallback order (the next shows when one fails to load): the [resumeFrame] (its
- * hidden save state's frame, else the resume slot's: [continueFrame]), the
- * screenshot, the SteamGridDB hero, the grid (the tiles' stand-ins), and last the game's abstract picture
- * ([abstractArtFor]); empty only for a game with none, which the card draws as a title card.
- */
 /** Continue's resume frame: the hidden save state's (Save & Quit's, [HomeShot]), else the resume slot's screenshot. */
 internal fun continueFrame(row: MainRow.Continue): String? = row.shot ?: row.resume.previewPath
 
-internal fun continuePictures(resumeFrame: String?, e: Listed): List<String> =
-    listOfNotNull(resumeFrame, e.game.screenshotRef?.value, e.game.heroRef?.value, e.game.gridRef?.value, abstractArtFor(e)).distinct()
+/**
+ * Home's Continue card pictures (and the Game Switcher List's background), in fallback order (the next shows when one
+ * fails to load): the [resumeFrame] (its hidden save state's frame, else the resume slot's: [continueFrame]), the
+ * screenshot, and last the game's abstract picture ([abstractArtFor]); empty only for a game with none, which the card
+ * draws as a title card. A hero screenshot ([com.nxredux.mobile.library.GameEntry.heroShot]) is left out when
+ * [portrait], as on every portrait background ([backgroundArt]).
+ */
+internal fun continuePictures(resumeFrame: String?, e: Listed, portrait: Boolean = false): List<String> =
+    listOfNotNull(resumeFrame, backgroundArt(e.game.screenshotRef?.value, e.game.heroShot, portrait), abstractArtFor(e)).distinct()
 
 /**
  * A game list's full-screen picture for [e] (the List background, the Backdrop picture, either orientation):
- * [backgroundArt] (the screenshot, else the stand-in of the screen's shape), else its abstract picture
+ * [backgroundArt] (the screenshot; a hero one only in landscape), else its abstract picture
  * ([abstractBackgroundFor]: an Android game's without its icon), a box-only game's too (its real box stays in the box
  * slot).
  */
 internal fun gameBackground(e: Listed, portrait: Boolean): String? =
-    backgroundArt(e.game.screenshotRef?.value, e.game.heroRef?.value, e.game.gridRef?.value, portrait) ?: abstractBackgroundFor(e)
+    backgroundArt(e.game.screenshotRef?.value, e.game.heroShot, portrait) ?: abstractBackgroundFor(e)
 
 /**
  * A game's abstract picture as a full-screen background ([gameBackground]): an Android game's without its icon
@@ -130,14 +132,14 @@ internal fun gridTileIdentity(tiles: List<GridTile>): List<GridTile> = tiles.map
 internal fun homeOnly(row: MainRow): Nothing = error("${row::class.simpleName} is a Home row: the Home screens draw it")
 
 /**
- * What a Backdrop game shows: its box ([boxShown]: the 3D box art, else the 2D front [box2dUrl] or the grid [gridUrl]
- * in the case) over its screenshot as the backdrop; null urls are drawn plain. [tag]: its system's, for the console
+ * What a Backdrop game shows: its box ([backdropBoxShown]: Backdrop art's kind [art], then the 3D box art, the 2D front
+ * [box2dUrl] in the case and the [wheelUrl]) over its screenshot as the backdrop; null urls are drawn plain. [tag]: its system's, for the console
  * logo on the placeholder box of a game without box art. [appId]: an Android game's, whose placeholder box shows the
  * app icon when it has no screenshot. [abstractUrl]: its generated picture ([abstractArtFor]): the placeholder case's cover.
  */
 data class BackdropGame(
     val boxartUrl: String?, val screenshotUrl: String?, val title: String, val tag: String? = null, val appId: String? = null,
-    val box2dUrl: String? = null, val gridUrl: String? = null, val abstractUrl: String? = null,
+    val box2dUrl: String? = null, val abstractUrl: String? = null,
     val wheelUrl: String? = null, val art: BackdropArt = BackdropArt.BOX3D,
 )
 
@@ -145,7 +147,7 @@ internal fun backdropGames(entries: List<Listed>, art: BackdropArt = BackdropArt
     entries.map {
         BackdropGame(
             it.game.boxartRef?.value, it.game.screenshotRef?.value, it.shown, it.system.tag, it.appId,
-            box2dUrl = it.game.box2dRef?.value, gridUrl = it.game.gridRef?.value, abstractUrl = abstractArtFor(it),
+            box2dUrl = it.game.box2dRef?.value, abstractUrl = abstractArtFor(it),
             wheelUrl = it.game.wheelRef?.value, art = art,
         )
     }

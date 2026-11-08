@@ -10,6 +10,7 @@ import coil3.PlatformContext
 import coil3.compose.AsyncImagePainter
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.request.addLastModifiedToFileCacheKey
+import com.nxredux.mobile.kids.KidsMode
 import com.nxredux.mobile.update.AppRelease
 import com.nxredux.mobile.ui.nx.LaunchOverlay
 import com.nxredux.mobile.ui.nx.LaunchTargets
@@ -52,6 +53,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -79,6 +81,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -203,7 +207,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
         onDispose { if (state.launchNameProvider === provider) state.launchNameProvider = null }
     }
     // Bars and the cutout above and below only (the side cutout is in each page's inset: [nxPageInset]), never the IME: the shell must not shrink for the keyboard (NxModal pads for it where needed).
-    Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).windowInsetsPadding(nxScreenInsets())) {
+    Box(Modifier.fillMaxSize().background(NxDefaults.colors.background).onAnyTouch(state::onTouch).windowInsetsPadding(nxScreenInsets())) {
         HandheldShell(
             controllerConnected = controllerConnected,
             showPad = menuPad,   // Pad skin Off: the menus full screen, no on-screen pad ([AppState.menuPadShown])
@@ -226,7 +230,11 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                     LaunchedEffect(portrait, separate) { state.onPadContext(portrait, separate) }
                     MenuLocals(state, look, footer, touchscreen) {
                         CompositionLocalProvider(LocalLaunchTargets provides launchTargets) {
-                        Box(m) {
+                        // A parent with the full menu while Kids Mode is on: the bar above every page, its button back to Kids Mode.
+                        val kidsMode by state.kidsModeState.collectAsState()
+                        Column(m) {
+                        if (kidsMode == KidsMode.Parent) KidsParentBar(state::kidsEndParent)
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
                             // A tool on the top screen ([MenuTopScreen]): this one keeps the menu, still.
                             val toolAbove = DualMenu.bottom(screen, dualMenu, toolOnTop) == BottomContent.Menu
                             // The window decides whether Settings splits; AppState needs it for RIGHT on a category. A tool on
@@ -282,6 +290,7 @@ fun App(state: AppState, onPadEvent: (PadEvent) -> Unit = {}) {
                                     onCancel = { state.answerUpdate(false) }, cancelLabel = "Not now", scrimDismisses = false, scrollSteps = state.updateScroll)
                             }
                             PageOverlays(state, chooser, error, notice)
+                        }
                         }
                         }
                     }
@@ -510,7 +519,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
     if (!onTop && page is Screen.Games && DualMenu.bottom(page, dualMenu) == BottomContent.Details) {
         val ra by state.gameDetailRa.collectAsState()
         val entry = page.entries.getOrNull(pageSelection.value.index)
-        GameDetailsPane(entry, entry?.let { allInfo[it.game.path] }, ra, onBack = { state.back() })
+        GameDetailsPane(entry, entry?.let { allInfo[it.game.path] }, ra, state.artLayout.collectAsState().value.backdrop, onBack = { state.back() })
         return
     }
     val now = rememberNow(allInfo)
@@ -553,6 +562,19 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.FolderSummary -> WithIndex(selection) { val (t, _) = remember(s) { state.setupChrome() }; FolderSummaryScreen(s, t, it, state::select, state::setupStepRow, state::onButton, note = remember(s) { state.setupNote() }) }
             is Screen.AndroidGamesStep -> WithIndex(selection) { val (t, b) = remember(s) { state.setupChrome() }; AndroidGamesStepScreen(s.ask, t, b, it, state::select, state::setupStepRow, state::onButton) }
             Screen.Loading -> Box(Modifier.fillMaxSize())
+            // Kids Mode's pages: the tiles while Locked, the parent's PIN and the unlock sheet after it.
+            Screen.KidsHome -> WithIndex(selection) {
+                val tiles by state.kidsTiles.collectAsState()
+                val mode by state.kidsModeState.collectAsState()
+                KidsHomeScreen(tiles, it, mode, state::kidsNow, state::kidsOpenApp, state::kidsLockPressed, state::onKidsColumns)
+            }
+            is Screen.KidsPin -> WithIndex(selection) {
+                KidsPinScreen(s, it, state::kidsNow, onKey = state::kidsPinTap)
+            }
+            Screen.KidsUnlock -> WithIndex(selection) { KidsUnlockScreen(it, state::kidsUnlockChip, state::kidsOpenFullMenu, state::kidsOpenSettings, state::onKidsUnlockColumns) }
+            // A parent's Kids Mode pages: setup's steps (and Allowed apps), a day's play time.
+            is Screen.KidsSetup -> WithIndex(selection) { KidsSetupScreen(s, it, state::select, state::kidsSetupRow, state::kidsSetupSetting, state::onButton) }
+            is Screen.KidsDayEdit -> WithIndex(selection) { KidsDayEditScreen(s, it, state::select, state::kidsDayRow, state::kidsDaySetting, state::onButton) }
             // layoutKey: the tab or list laid out, not the Screen: a republish of the same page (a context menu opening or
             // closing, another tab rebuilt) must not snap a carousel or backdrop mid-glide; its own tiles changing still do.
             is Screen.Systems -> {
@@ -578,6 +600,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     minimalOpening = minimalOpening.value?.takeIf { s.category != null && it.page == s.category },
                     bandShade = listBand.shade, bandInfo = listBand.info,
                     canSearch = state.canSearch,
+                    onKidsLock = state::kidsParentPressed.takeIf { state.kidsModeState.collectAsState().value is KidsMode.Open },
                     // Per page (s, not the screen now: a sliding-out page keeps its own): the screen carries its hidden tabs
                     // (none over a pushed one), so both follow every rebuild. With none, a long press on a tab word is a plain tap.
                     onTabMenu = state::openTabMenu.takeIf { s.hidden.isNotEmpty() },
@@ -593,6 +616,7 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             is Screen.Switcher -> GameSwitcherScreen(
                 s, state::onButton, info = gameInfoFor(gameInfo, now, s.entries.getOrNull(s.index)?.game, full = true),
                 onSelect = state::selectSwitcherRow, onOpen = { state.selectSwitcherRow(it); state.openSelected() },
+                backdropArt = state.artLayout.collectAsState().value.backdrop,
             )
             // The other screens take the index as a value: [WithIndex] reads it, so only the screen recomposes.
             // Settings: two panes on a wide landscape window (the root on the left, its pages on the right), else one page.
@@ -605,12 +629,16 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
                     if (settingsSplitView(LocalWindowSize.current, s)) SettingsSplitScreen(state, s, selection) { SettingsPage(state, s, selection, titled = true) }
                     else NarrowSettingsPage(state, s, selection)
                 }
-            is Screen.CheatDb -> state.cheatDb?.let { c -> WithIndex(selection) { CheatDbScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) } } ?: Box(Modifier.fillMaxSize())
+            // Cheats & Patches and RetroAchievements: the Settings root's look, so the Settings hint bar rules too.
+            is Screen.CheatDb -> state.cheatDb?.let { c -> SettingsHintBar { WithIndex(selection) { CheatDbScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) } } } ?: Box(Modifier.fillMaxSize())
             Screen.DeviceSync -> state.deviceSync?.let {
                 val setup by state.syncSetup.collectAsState()
-                DeviceSyncScreen(it, onHint = state::onButton, setup = setup, onSetupTap = state::syncSetupTap)
+                // The Settings root's look: its hints start at the words' edge (shown always: Retry and the like are hints alone).
+                CompositionLocalProvider(LocalNxHintBarStart provides settingsSectionStart()) {
+                    DeviceSyncScreen(it, onHint = state::onButton, setup = setup, onSetupTap = state::syncSetupTap)
+                }
             } ?: Box(Modifier.fillMaxSize())
-            is Screen.RetroAchievements -> state.achievements?.let { c -> WithIndex(selection) { RetroAchievementsScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) } } ?: Box(Modifier.fillMaxSize())
+            is Screen.RetroAchievements -> state.achievements?.let { c -> SettingsHintBar { WithIndex(selection) { RetroAchievementsScreen(s, c, it, state::select, { state.openSelected() }, onHint = state::onButton) } } } ?: Box(Modifier.fillMaxSize())
             is Screen.RaDownload -> state.achievements?.let { c -> WithIndex(selection) { RaDownloadScreen(s, c, it, state::select, {}, onHint = state::onButton) } } ?: Box(Modifier.fillMaxSize())
             is Screen.GameTime -> WithIndex(selection) { GameTimeScreen(s, it, state::select, { state.openSelected() }, state::gameTimeSelectModal, onHint = state::onButton) }
             // A game's sessions: on a split window beside the tracker list (the RetroAchievements column browser's rule); else one page.
@@ -621,13 +649,20 @@ internal fun PageContent(state: AppState, page: Screen, pageSelection: State<Lis
             // same rule as the two-pane Settings); else one page.
             is Screen.RaGames, is Screen.RaGame, is Screen.RaAchievement, is Screen.RaSettings ->
                 if (raSplitView(LocalWindowSize.current, s)) RaSplitScreen(state, s) { RaLevelPage(state, s, selection, split = true) }
-                else RaLevelPage(state, s, selection, split = false)
-            // Artwork's pages: on a split window a column browser beside the page they came from (the RetroAchievements
-            // rule); the Artwork page itself, and every page on a narrow or portrait window, one page.
+                else if (s is Screen.RaAchievement) RaLevelPage(state, s, selection, split = false)   // its own detail page
+                else SettingsHintBar { NarrowRaPage(state, s, selection) }
+            // Artwork and its pages: on a split window Settings' wide stage (its words on the left, the page or the
+            // highlighted word's preview on the right); on a narrow or portrait window one page. Either way the Settings
+            // look: the hint bar follows Layouts → Button hints and starts at the words' edge, as Settings'.
             is Screen.Artwork, is Screen.ArtworkConsoles, is Screen.ArtworkProgress, is Screen.ArtworkSettings,
             is Screen.ArtworkReset ->
-                if (artworkSplitView(LocalWindowSize.current, s)) ArtworkSplitScreen(state, s, selection)
-                else WithIndex(selection) { ArtworkScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton) }
+                if (artworkSplitView(LocalWindowSize.current, s)) CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart()) {
+                    ArtworkStageScreen(state, s, selection)
+                }
+                else SettingsHintBar {
+                    if (s is Screen.Artwork) WithIndex(selection) { ArtworkScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton) }
+                    else NarrowArtworkPage(state, s, selection)
+                }
         }
         (page as? Screen.EmulatorOptions)?.takeIf(::gameSettingsModal)?.let { modal ->
             val rowEditModal by state.rowEdit.collectAsState()   // the row the pad is changing
@@ -654,6 +689,8 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
     val index = { selection.value.index }
     val minimalOpening = state.minimalOpening.collectAsState()   // a Minimal page's row being opened (its page draws the band)
     val raPanel by state.raPanel.collectAsState()   // the achievements panel over the list
+    val artPanel by state.artPanel.collectAsState()   // the Fetch art / Change art panel over the list
+    val artLayout by state.artLayout.collectAsState()   // Layouts → Backdrop art / List art: the panel's Switch changes them here
     val dual by state.dualMenu.collectAsState()   // the menu is on the second display: its details pane has the achievements
     val current = { s.entries.getOrNull(selection.value.index) }
     GameListScreen(
@@ -668,8 +705,8 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
         emptyText = if (s.source is ListSource.Search || s.source is ListSource.Filtered) "No results" else null,
         info = { gameInfoFor(gameInfo, now, current()?.game, full = true) },   // Grid shows none (its tiles have tileInfo)
         style = style, orientation = orientation, alignment = state.settings.gameListVerticalAlignment, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = remember(s.entries, gameInfo, now) { entryTileInfo(s.entries, gameInfo, now) }, layoutKey = s.source,
-        artBox = state.settings.gameListArt.boxed,
-        backdropArt = state.settings.backdropArt,
+        artBox = artLayout.list.boxed,
+        backdropArt = artLayout.backdrop,
         onSearch = state::openListSearch.takeIf { s.source.searchable },
         onLayout = state::toggleLayoutMenu.takeIf { state.settings.gameListLayoutOptions }, layoutOpen = s.layoutMenu != null,
         // Layouts → Achievements panel Hide: no icon or hint (X and the game's menu still open it). Dual: none (X does nothing).
@@ -677,6 +714,10 @@ internal fun GamesPage(state: AppState, s: Screen.Games, selection: State<ListSe
         minimalOpening = minimalOpening.value?.takeIf { it.page == s.source },
     )
     RaPanelOverlay(raPanel.takeIf { state.screen.value === s }, onRow = state::openRaPanelRow, onButton = state::onButton)
+    ArtPanelOverlay(
+        artPanel.takeIf { state.screen.value === s }, artLayout.backdrop, artLayout.list,
+        onTap = state::artPanelTap, onAnswer = state::artPanelAnswer, onDismiss = state::closeArtPanel,
+    )
     s.layoutMenu?.let { at ->
         GameListLayoutMenu(
             current = GameListLayouts.indexOf(state.settings.gameListStyle, state.settings.gameListOrientation, state.settings.gameListVerticalAlignment), highlighted = at,
@@ -701,6 +742,39 @@ private fun NarrowSettingsPage(state: AppState, s: Screen, selection: State<List
             SettingsPage(state, s, selection, titled = false)
         }
     }
+}
+
+/**
+ * An Artwork page below the root on a narrow window, as a narrow Settings page ([NarrowSettingsPage]): the rows block,
+ * "Artwork / page" its first line, at least the root's word block high so that line sits where "Artwork" does.
+ */
+@Composable
+private fun NarrowArtworkPage(state: AppState, s: Screen, selection: State<ListSelection>) {
+    val words = state.artworkStagePage(s).rows.map { it.label }
+    WithSettingsWordBlockSize(ARTWORK_TITLE, words) { size ->
+        val block = remember(size.height) { SettingsBlockMode(ARTWORK_TITLE, minHeight = size.height) }
+        CompositionLocalProvider(LocalSettingsBlock provides block) {
+            WithIndex(selection) { ArtworkScreen(s, state, it, state::select, { state.openSelected() }, onHint = state::onButton, split = true) }
+        }
+    }
+}
+
+/**
+ * A RetroAchievements level on a narrow window (its games, a game's achievements, its Settings), as a narrow Settings
+ * page: the rows block, "RetroAchievements / page" its first line, at least the tool page's word block high so that line
+ * sits where "RetroAchievements" does there; Settings' dialogs over it.
+ */
+@Composable
+private fun NarrowRaPage(state: AppState, s: Screen, selection: State<ListSelection>) {
+    val c = state.achievements
+    val ra = c?.state?.collectAsState()?.value
+    val download = c?.download?.collectAsState()?.value
+    val words = ra?.let { st -> raRows(st, download).map { raRowLabel(it, download, raPending(st)) } }.orEmpty()
+    WithSettingsWordBlockSize(RA_TITLE, words) { size ->
+        val block = remember(size.height) { SettingsBlockMode(RA_TITLE, minHeight = size.height) }
+        CompositionLocalProvider(LocalSettingsBlock provides block) { RaLevelPage(state, s, selection, split = true) }
+    }
+    if (s is Screen.RaSettings) RaSettingsDialogs(s, state, state::onButton)
 }
 
 /** A Settings screen drawn as one page (or as the two-pane Settings' focused right pane, [titled]: the split draws its dialog). */
@@ -748,7 +822,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
                 derivedStateOf(structuralEqualityPolicy()) { menuBackground(style, category, s.rows.getOrNull(selection.value.index), consoleArt, portrait) }
             }
             // Grid and Carousel: plain, as menuBackground gives every non-List style (a Carousel Consoles tab on Background aside).
-            MainMenuBackground(bg, state.settings.gameListArt)
+            MainMenuBackground(bg, state.artLayout.collectAsState().value.list)
         }
         is Screen.Games -> {
             // Grid and Carousel: plain black, as their tabs (the tiles carry the art). Minimal: the names alone, no art.
@@ -771,7 +845,7 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
                     NxBackdropPicture(backdropPictureTarget(live.value, url), Modifier.fillMaxSize())
                 } else {
                     // List: Layouts → List art ([listArtShown]).
-                    val art = state.settings.gameListArt
+                    val art = state.artLayout.collectAsState().value.list
                     val shown by remember(s, portrait, art, selection) {
                         derivedStateOf(structuralEqualityPolicy()) { listArtShown(s.entries.getOrNull(selection.value.index), art, portrait) }
                     }
@@ -790,12 +864,19 @@ internal fun PageBackground(state: AppState, s: Screen, style: MenuStyle, select
         is Screen.StorageUpgrade, is Screen.CopySaves -> SettingsBackground()
         // The folder picker: the small mark only, so the large one never sits behind its names.
         is Screen.FilePicker -> SettingsBackground()
-        // Settings: the small mark at the top right alone ([SettingsBackground]); the large centred mark is not drawn.
+        // Settings and every Artwork page (the root drawn as Settings' root, the others as its rows block or on its wide
+        // stage): the small mark at the top right alone ([SettingsBackground]); the large centred mark is not drawn. RetroAchievements and Cheats & Patches (Settings' root too) and Device Sync (a
+        // setup page) have it as well.
+        is Screen.Artwork, is Screen.ArtworkConsoles, is Screen.ArtworkProgress, is Screen.ArtworkSettings, is Screen.ArtworkReset,
+        is Screen.RetroAchievements, is Screen.CheatDb, Screen.DeviceSync -> SettingsBackground()
+        // RetroAchievements' levels drawn as the rows block (a narrow window; its detail page keeps its own).
+        is Screen.RaGames, is Screen.RaGame, is Screen.RaSettings ->
+            if (raSplitView(LocalWindowSize.current, s)) MarkBackground(s) else SettingsBackground()
         else -> if (settingsPane(s) != null) SettingsBackground() else MarkBackground(s)
     }
 }
 
-/** The NX mark; two panes (the RetroAchievements column browser, Game Tracker, Artwork), centred on the right pane (same size), as the page it sits behind. */
+/** The NX mark; two panes (the RetroAchievements column browser, Game Tracker), centred on the right pane (same size), as the page it sits behind. */
 @Composable
 private fun MarkBackground(s: Screen) = NxScreenBackground(
     url = null, fallback = Res.drawable.background, fade = false, modifier = Modifier.fillMaxSize().clipToBounds(), centred = true,
@@ -875,5 +956,23 @@ private fun MainMenuBackground(bg: MenuBackground, listArt: GameListArt) {
             )
         }
         MenuBackground.Plain -> Box(Modifier.fillMaxSize().background(LocalNxColors.current.background))
+    }
+}
+
+/**
+ * [content] under the Settings hint bar's rules: shown only while Layouts → Button hints is on, starting at the section
+ * words' edge (Settings, the tools drawn as its root).
+ */
+@Composable
+private fun SettingsHintBar(content: @Composable () -> Unit) =
+    CompositionLocalProvider(LocalNxHintBarHidden provides !LocalLauncherChrome.current.buttonHints, LocalNxHintBarStart provides settingsSectionStart(), content = content)
+
+/** [onTouch] on every finger down anywhere inside, seen before the children and never consumed (Kids Mode's Parent idle). */
+internal fun Modifier.onAnyTouch(onTouch: () -> Unit): Modifier = pointerInput(onTouch) {
+    awaitPointerEventScope {
+        while (true) {
+            val e = awaitPointerEvent(PointerEventPass.Initial)
+            if (e.type == PointerEventType.Press) onTouch()
+        }
     }
 }

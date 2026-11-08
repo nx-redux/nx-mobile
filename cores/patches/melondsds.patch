@@ -1,14 +1,32 @@
 Licence: modifies melonDS DS (https://github.com/JesseTG/melonds-ds), GPL-3.0 (its LICENSE file); this patch is
 distributed under the same licence.
 melonDS DS on GLES 3.2: lets the GL renderer build against GLES3 (with patches/melonds.patch on the melonDS
-dependency), requests a GLES 3.2 context, ports the compositor shaders to GLSL ES 3.00, and keeps glsm and the
-frontend clear of melonDS VAO state. Applied to cores/src/melondsds.
+dependency), requests a GLES 3.2 context, ports the compositor shaders to GLSL ES 3.00, and turns face culling off
+around the screen blit. Also carries JesseTG/melonds-ds#335 (video views: the frontend lays the screens out). Applied to cores/src/melondsds.
 
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 49d182d..9868bba 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -30,6 +30,13 @@ a design goal is to avoid a 2.x release for as long as possible.
+   for setting the initial second of the emulated console's clock
+   when Starting Time Mode is Absolute.
+   [#302](https://github.com/JesseTG/melonds-ds/issues/302)
++- Added support for RetroArch's video views,
++  which let the frontend arrange the emulated screens itself
++  with its own screen layout, stereo 3D modes, headset output,
++  and a shader for each screen.
++  The new "Frontend Screen Layout" core option controls it;
++  on its default of Auto, the frontend takes over in its stereo 3D modes and on a headset,
++  and in its 2D mode wherever that looks the same as the current screen layout.
+ 
+ ### Changed
+ 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index e96d2f3..301a4a9 100644
+index 30aefe1..be99ae4 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -72,9 +72,7 @@ set(ENABLE_OGLRENDERER ${ENABLE_OPENGL})
+@@ -77,9 +77,7 @@ set(ENABLE_OGLRENDERER ${ENABLE_OPENGL})
  set(OPENGL_PROFILE ${DEFAULT_OPENGL_PROFILE} CACHE STRING "OpenGL profile to use if OpenGL is enabled. Valid values are 'OpenGL', 'OpenGLES2', 'OpenGLES3', 'OpenGLES31', and 'OpenGLES32'.")
  set_property(CACHE OPENGL_PROFILE PROPERTY STRINGS OpenGL OpenGLES2 OpenGLES3)
  
@@ -17,10 +35,22 @@ index e96d2f3..301a4a9 100644
 -endif()
 +# GLES: melonDS carries the melonDS-android-lib GLES port (cores/patches/melonds.patch)
  
- if (ANDROID)
-     if (NOT ANDROID_PLATFORM)
+ if (APPLE)
+     # Apple's OpenGL stops at 4.1, but melonDS's compute renderer needs 4.3
+diff --git a/src/libretro/CMakeLists.txt b/src/libretro/CMakeLists.txt
+index d8b1062..0c33a8c 100644
+--- a/src/libretro/CMakeLists.txt
++++ b/src/libretro/CMakeLists.txt
+@@ -76,6 +76,7 @@ add_library(melondsds_libretro ${LIBRARY_TYPE}
+     input/solar.hpp
+     libretro.cpp
+     libretro.hpp
++    libretro_views.h
+     math.hpp
+     message/error.cpp
+     message/error.hpp
 diff --git a/src/libretro/PlatformOGLPrivate.h b/src/libretro/PlatformOGLPrivate.h
-index a5e9d1a..05f1a8f 100644
+index 8abec16..e3a2610 100644
 --- a/src/libretro/PlatformOGLPrivate.h
 +++ b/src/libretro/PlatformOGLPrivate.h
 @@ -21,6 +21,10 @@
@@ -34,8 +64,471 @@ index a5e9d1a..05f1a8f 100644
  #if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
  #include <glsym/glsym.h>
  #endif
+@@ -219,9 +223,13 @@ RETRO_END_DECLS
+ #define GL_BGRA GL_BGRA_EXT
+ #define glBindFragDataLocation glBindFragDataLocationEXT
+ #define glClearDepth glClearDepthf
++#ifndef HAVE_OPENGLES3
+ #define glColorMaski glColorMaskiEXT
++#endif
+ #define glDepthRange glDepthRangef
++#ifndef HAVE_OPENGLES3
+ #define glFramebufferTexture glFramebufferTextureEXT
++#endif
+ #define glMapBuffer glMapBufferOES
+ 
+ #ifndef GL_READ_ONLY
+diff --git a/src/libretro/config/config.cpp b/src/libretro/config/config.cpp
+index 641ce91..da371c9 100644
+--- a/src/libretro/config/config.cpp
++++ b/src/libretro/config/config.cpp
+@@ -844,6 +844,13 @@ static void MelonDsDs::config::ParseScreenOptions(CoreConfig& config) noexcept {
+         config.SetSmallScreenLayout(HybridSideScreenDisplay::Both);
+     }
+ 
++    if (optional<bool> value = MelonDsDs::ParseFrontendLayout(get_variable(FRONTEND_LAYOUT))) {
++        config.SetFrontendLayout(*value);
++    } else {
++        retro::warn("Failed to get value for {}; defaulting to {}", FRONTEND_LAYOUT, values::AUTO);
++        config.SetFrontendLayout(true);
++    }
++
+     if (optional<unsigned> value = MelonDsDs::ParseIntegerInRange(get_variable(NUMBER_OF_SCREEN_LAYOUTS), 1u, MAX_SCREEN_LAYOUTS)) {
+         config.SetNumberOfScreenLayouts(*value);
+     } else {
+diff --git a/src/libretro/config/config.hpp b/src/libretro/config/config.hpp
+index 20c526d..f8d4416 100644
+--- a/src/libretro/config/config.hpp
++++ b/src/libretro/config/config.hpp
+@@ -254,6 +254,10 @@ namespace MelonDsDs {
+         [[nodiscard]] unsigned FlushDelay() const noexcept { return _flushDelay; }
+         void SetFlushDelay(unsigned delay) noexcept { _flushDelay = delay; }
+ 
++        /// Whether the frontend may lay out the screens itself, where it can.
++        [[nodiscard]] bool FrontendLayout() const noexcept { return _frontendLayout; }
++        void SetFrontendLayout(bool frontendLayout) noexcept { _frontendLayout = frontendLayout; }
++
+         [[nodiscard]] unsigned NumberOfScreenLayouts() const noexcept { return _numberOfScreenLayouts; }
+         void SetNumberOfScreenLayouts(unsigned numberOfScreenLayouts) noexcept { _numberOfScreenLayouts = numberOfScreenLayouts; }
+ 
+@@ -507,6 +511,7 @@ namespace MelonDsDs {
+         string _dsiSdImagePath;
+         uint64_t _dsiSdImageSize;
+         unsigned _flushDelay = 120; // TODO: Make configurable
++        bool _frontendLayout = true;
+         unsigned _numberOfScreenLayouts = 1;
+         std::array<ScreenLayout, config::screen::MAX_SCREEN_LAYOUTS> _screenLayouts;
+         unsigned _screenGap = 0;
+diff --git a/src/libretro/config/constants.hpp b/src/libretro/config/constants.hpp
+index e51359f..7b96732 100644
+--- a/src/libretro/config/constants.hpp
++++ b/src/libretro/config/constants.hpp
+@@ -96,6 +96,7 @@ namespace MelonDsDs::config {
+         constexpr unsigned MAX_SCREEN_GAP = 126;
+         static constexpr const char *const CATEGORY = "screen";
+         static constexpr const char *const CURSOR_TIMEOUT = "melonds_cursor_timeout";
++        static constexpr const char *const FRONTEND_LAYOUT = "melonds_frontend_layout";
+         static constexpr const char *const HYBRID_RATIO = "melonds_hybrid_ratio";
+         // HYBRID_SCREEN_FILTERING is no longer OpenGL-exclusive but the name is kept for compatibility
+         static constexpr const char *const HYBRID_SCREEN_FILTERING = "melonds_opengl_filtering";
+diff --git a/src/libretro/config/definitions.hpp b/src/libretro/config/definitions.hpp
+index 8f0f52d..6ee2902 100644
+--- a/src/libretro/config/definitions.hpp
++++ b/src/libretro/config/definitions.hpp
+@@ -65,6 +65,7 @@ namespace MelonDsDs::config::definitions {
+         JoystickCursorMaxSpeed,
+         JoystickCursorResponse,
+         JoystickCursorSpeedup,
++        FrontendLayout,
+         NumberOfScreenLayouts,
+         ScreenLayout1,
+         ScreenLayout2,
+diff --git a/src/libretro/config/definitions/screen.hpp b/src/libretro/config/definitions/screen.hpp
+index 5a23347..4a6f12f 100644
+--- a/src/libretro/config/definitions/screen.hpp
++++ b/src/libretro/config/definitions/screen.hpp
+@@ -176,7 +176,8 @@ namespace MelonDsDs::config::definitions {
+         config::screen::HYBRID_RATIO,
+         "Hybrid/Largescreen Ratio",
+         nullptr,
+-        "The size of the larger screen relative to the smaller ones when using a hybrid or largescreen layout.",
++        "The size of the larger screen relative to the smaller ones when using a hybrid or largescreen layout. "
++        "Not used while the frontend arranges the screens (see Frontend Screen Layout).",
+         nullptr,
+         config::screen::CATEGORY,
+         {
+@@ -191,7 +192,8 @@ namespace MelonDsDs::config::definitions {
+         config::screen::HYBRID_SMALL_SCREEN,
+         "Hybrid Small Screen Mode",
+         nullptr,
+-        "Choose which screens will be shown when using a hybrid layout.",
++        "Choose which screens will be shown when using a hybrid layout. "
++        "Not used while the frontend arranges the screens (see Frontend Screen Layout).",
+         nullptr,
+         config::screen::CATEGORY,
+         {
+@@ -206,7 +208,8 @@ namespace MelonDsDs::config::definitions {
+         config::screen::HYBRID_SCREEN_FILTERING,
+         "Hybrid/Largescreen Filtering",
+         nullptr,
+-        "Affects how the hybrid/largescreen screen is scaled up.\n"
++        "Affects how the hybrid/largescreen screen is scaled up. "
++        "Not used while the frontend arranges the screens (see Frontend Screen Layout).\n"
+         "\n"
+         "Nearest: No filtering. Graphics look blocky.\n"
+         "Linear: Smooth scaling.\n",
+@@ -226,7 +229,8 @@ namespace MelonDsDs::config::definitions {
+         nullptr,
+         "Choose how large the gap between the screens should be. "
+         "Vertical layouts (including rotations) only. "
+-        "Dimensions exclude the effects of the frontend's scaling.",
++        "Dimensions exclude the effects of the frontend's scaling. "
++        "Not used while the frontend arranges the screens (see Frontend Screen Layout).",
+         nullptr,
+         config::screen::CATEGORY,
+         {
+@@ -369,7 +373,8 @@ namespace MelonDsDs::config::definitions {
+         "The size of the secondary screen relative to the primary screen. "
+         "Applies to vertical layouts (Top/Bottom, Bottom/Top). "
+         "At 100%, both screens are the same size. "
+-        "At 50%, the secondary screen is half the width and height of the primary screen.",
++        "At 50%, the secondary screen is half the width and height of the primary screen. "
++        "Not used while the frontend arranges the screens (see Frontend Screen Layout).",
+         nullptr,
+         config::screen::CATEGORY,
+         {
+@@ -393,7 +398,8 @@ namespace MelonDsDs::config::definitions {
+         config::screen::SECONDARY_SCREEN_FILTERING,
+         "Secondary Screen Filtering",
+         nullptr,
+-        "Affects how the secondary screen is scaled down.\n"
++        "Affects how the secondary screen is scaled down. "
++        "Not used while the frontend arranges the screens (see Frontend Screen Layout).\n"
+         "\n"
+         "Nearest: No filtering. Graphics look blocky.\n"
+         "Linear: Smooth scaling. Recommended when using Secondary Screen Scale below 100%.\n",
+@@ -407,6 +413,35 @@ namespace MelonDsDs::config::definitions {
+         MelonDsDs::config::values::NEAREST
+     };
+ 
++    constexpr retro_core_option_v2_definition FrontendLayout {
++        config::screen::FRONTEND_LAYOUT,
++        "Frontend Screen Layout",
++        nullptr,
++        "Lets the frontend arrange the emulated screens itself, "
++        "with its own screen layout, stereo 3D mode, headset output, and a shader for each screen. "
++        "Has no effect on a frontend that can't do this.\n"
++        "\n"
++        "Auto: The frontend arranges the screens where it can. "
++        "It always does in its stereo 3D modes and on a headset. "
++        "In its 2D mode it only does while the current screen layout is "
++        "Top/Bottom or Bottom/Top (with no screen gap and a full-size secondary screen), "
++        "Top Only, or Bottom Only; "
++        "every other layout is shown the way it's configured here.\n"
++        "Off: The screen layouts configured here always apply.\n"
++        "\n"
++        "While the frontend arranges the screens, "
++        "the current screen layout still chooses which screens are shown, "
++        "which one comes first, and how they're rotated.",
++        nullptr,
++        config::screen::CATEGORY,
++        {
++            {MelonDsDs::config::values::AUTO, "Auto"},
++            {MelonDsDs::config::values::DISABLED, "Off"},
++            {nullptr, nullptr},
++        },
++        MelonDsDs::config::values::AUTO
++    };
++
+     constexpr retro_core_option_v2_definition NumberOfScreenLayouts {
+         config::screen::NUMBER_OF_SCREEN_LAYOUTS,
+         "# of Screen Layouts",
+diff --git a/src/libretro/config/parse.hpp b/src/libretro/config/parse.hpp
+index 0b0822b..c6bd13c 100644
+--- a/src/libretro/config/parse.hpp
++++ b/src/libretro/config/parse.hpp
+@@ -140,6 +140,13 @@ namespace MelonDsDs {
+         return std::nullopt;
+     }
+ 
++    /// \return \c true if the frontend may lay out the screens itself ("Auto").
++    constexpr std::optional<bool> ParseFrontendLayout(std::string_view value) noexcept {
++        if (value == config::values::AUTO) return true;
++        if (value == config::values::DISABLED) return false;
++        return std::nullopt;
++    }
++
+     constexpr std::optional<MelonDsDs::ScreenLayout> ParseScreenLayout(std::string_view value) noexcept {
+         using MelonDsDs::ScreenLayout;
+         if (value == config::values::TOP_BOTTOM) return ScreenLayout::TopBottom;
+diff --git a/src/libretro/config/visibility.cpp b/src/libretro/config/visibility.cpp
+index 9d5c922..9bf1221 100644
+--- a/src/libretro/config/visibility.cpp
++++ b/src/libretro/config/visibility.cpp
+@@ -160,9 +160,18 @@ bool MelonDsDs::CoreOptionVisibility::Update() noexcept {
+         anyVerticalLayouts |= !parsedLayout || LayoutSupportsScreenGap(*parsedLayout);
+         anySecondaryScaleLayouts |= !parsedLayout || LayoutSupportsSecondaryScreenScale(*parsedLayout);
+     }
+-    ShowHybridOptions = anyHybridLayouts;
+-    ShowVerticalLayoutOptions = anyVerticalLayouts;
+-    ShowSecondaryScaleOptions = anySecondaryScaleLayouts;
++
++    // The frontend always arranges the screens itself in its stereo modes (and on a headset),
++    // where the options that shape this core's own layouts do nothing.
++    // In its 2D mode they decide whether the frontend arranges the screens at all, so they stay.
++    constexpr unsigned STEREO_VIEWS = RETRO_VIDEO_VIEWS_STATUS_PRESENTS | RETRO_VIDEO_VIEWS_STATUS_STEREO;
++    optional<bool> frontendLayout = ParseFrontendLayout(get_variable(screen::FRONTEND_LAYOUT));
++    unsigned viewsStatus = retro::get_video_views_status().value_or(0);
++    bool frontendArrangesScreens = frontendLayout && *frontendLayout && (viewsStatus & STEREO_VIEWS) == STEREO_VIEWS;
++
++    ShowHybridOptions = anyHybridLayouts && !frontendArrangesScreens;
++    ShowVerticalLayoutOptions = anyVerticalLayouts && !frontendArrangesScreens;
++    ShowSecondaryScaleOptions = anySecondaryScaleLayouts && !frontendArrangesScreens;
+ 
+     if (!VisibilityInitialized || ShowHybridOptions != oldShowHybridOptions) {
+         set_option_visible(screen::HYBRID_SMALL_SCREEN, ShowHybridOptions);
+diff --git a/src/libretro/core/core.cpp b/src/libretro/core/core.cpp
+index df32f07..065e0fc 100644
+--- a/src/libretro/core/core.cpp
++++ b/src/libretro/core/core.cpp
+@@ -216,6 +216,7 @@ void MelonDsDs::CoreState::Run() noexcept {
+ 
+     if (_renderState.Ready()) [[likely]] {
+         // If the global state needed for rendering is ready...
++        UpdateVideoViewsStatus();
+         _inputState.Update(Config, _screenLayout);
+         _inputState.Apply(nds, _screenLayout, _micState, Config);
+         // melonDS pulls microphone samples as it needs them
+@@ -267,6 +268,7 @@ void MelonDsDs::CoreState::Run() noexcept {
+             _inputState.StopRumble();
+         }
+ 
++        SendVideoViews();
+         _renderState.Render(nds, _inputState, Config, _screenLayout);
+         RenderAudio(*Console);
+ 
+@@ -450,6 +452,8 @@ void MelonDsDs::CoreState::RenderErrorScreen() noexcept {
+         _screenLayout.SetDirty();
+     }
+ 
++    UpdateVideoViewsStatus();
++
+     // The screen layout hotkey works here too, even though there's no console to drive
+     _inputState.Update(Config, _screenLayout);
+     _inputState.Apply(_screenLayout);
+@@ -462,9 +466,71 @@ void MelonDsDs::CoreState::RenderErrorScreen() noexcept {
+         }
+     }
+ 
++    SendVideoViews();
+     _renderState.Render(*_messageScreen, Config, _screenLayout);
+ }
+ 
++void MelonDsDs::CoreState::UpdateVideoViewsStatus() noexcept {
++    ZoneScopedN(TracyFunction);
++    unsigned status = 0;
++
++    if (_viewsStatusSupported) {
++        if (optional<unsigned> answer = retro::get_video_views_status()) {
++            status = *answer;
++        }
++        else {
++            // A frontend that doesn't know the call won't learn it while content is running
++            _viewsStatusSupported = false;
++        }
++    }
++
++    if (status == _viewsStatus) {
++        return;
++    }
++
++    retro::info(
++        "Video views: presents={} stereo={} headset={}",
++        (status & RETRO_VIDEO_VIEWS_STATUS_PRESENTS) != 0,
++        (status & RETRO_VIDEO_VIEWS_STATUS_STEREO) != 0,
++        (status & RETRO_VIDEO_VIEWS_STATUS_HMD) != 0
++    );
++
++    _viewsStatus = status;
++    _screenLayout.SetViewsStatus(status);
++
++    // The frontend's stereo modes take over some of the screen options
++    _optionVisibility.Update();
++}
++
++void MelonDsDs::CoreState::SendVideoViews() noexcept {
++    ZoneScopedN(TracyFunction);
++    std::span<const retro_video_view> views = _screenLayout.Views();
++
++    if (!views.empty()) {
++        // The map goes out with every frame it describes;
++        // an unchanged one costs the frontend a comparison,
++        // and sending it again covers a frontend that dropped it.
++        retro_video_views map {};
++        map.views = views.data();
++        map.num_views = static_cast<unsigned>(views.size());
++
++        bool accepted = retro::set_video_views(map);
++        if (!accepted && !_viewsMapRejected) {
++            retro::error("The frontend rejected a video views map of {} views", views.size());
++        }
++
++        _viewsMapRejected = !accepted;
++        _viewsMapSent = true;
++    }
++    else if (_viewsMapSent) {
++        // This core's own layout applies again, so the frontend should show the frame as it is
++        retro_video_views none {};
++        retro::set_video_views(none);
++        _viewsMapSent = false;
++        _viewsMapRejected = false;
++    }
++}
++
+ std::chrono::system_clock::time_point ToSystemTime(std::chrono::local_seconds time) noexcept {
+     return std::chrono::system_clock::from_time_t(time.time_since_epoch().count());
+ }
+@@ -619,6 +685,14 @@ void MelonDsDs::CoreState::DestroyRenderState() {
+ bool MelonDsDs::CoreState::LoadGame(unsigned type, std::span<const retro_game_info> game) noexcept try {
+     ZoneScopedN(TracyFunction);
+ 
++    // The frontend dropped any view map of ours when the last content unloaded,
++    // and this object outlives that content.
++    _viewsStatus = 0;
++    _viewsStatusSupported = true;
++    _viewsMapSent = false;
++    _viewsMapRejected = false;
++    _screenLayout.SetViewsStatus(0);
++
+     InitContent(type, game);
+ 
+     // ...then load the game.
+diff --git a/src/libretro/core/core.hpp b/src/libretro/core/core.hpp
+index bb52319..4654f01 100644
+--- a/src/libretro/core/core.hpp
++++ b/src/libretro/core/core.hpp
+@@ -147,6 +147,14 @@ namespace MelonDsDs {
+             int type
+         ) noexcept;
+         [[gnu::hot]] static void RenderAudio(melonDS::NDS& nds) noexcept;
++        /// Follows the frontend's video views status,
++        /// which decides whether the frame is packed for the frontend to arrange.
++        /// Call before the screen layout is updated for the frame.
++        void UpdateVideoViewsStatus() noexcept;
++        /// Tells the frontend where the screens are in the frame that's about to be drawn,
++        /// or takes back the last map once this core's own layout applies again.
++        /// Call after the screen layout is updated and before the frame is sent.
++        void SendVideoViews() noexcept;
+         [[gnu::cold]] bool InitErrorScreen(const config_exception& e) noexcept;
+         [[gnu::cold]] void RenderErrorScreen() noexcept;
+         [[gnu::cold]] void InitContent(unsigned type, std::span<const retro_game_info> game);
+@@ -196,6 +204,14 @@ namespace MelonDsDs {
+         /// \see UpdateSystemAvInfo
+         bool _nudgeMaxHeight = false;
+         uint32_t _flushTaskId = 0;
++        /// The frontend's \c RETRO_VIDEO_VIEWS_STATUS_ flags as of the last frame.
++        unsigned _viewsStatus = 0;
++        /// \c false once the frontend has shown that it doesn't know the status call.
++        bool _viewsStatusSupported = true;
++        /// Whether the frontend holds a view map from us.
++        bool _viewsMapSent = false;
++        /// Whether the frontend turned down the last view map we sent.
++        bool _viewsMapRejected = false;
+         /// non-nullopt while the task is compiling melonDS's shaders;
+         /// the console can't emulate a frame until it finishes.
+         std::optional<uint32_t> _shaderCompileTaskId = std::nullopt;
+diff --git a/src/libretro/core/test.cpp b/src/libretro/core/test.cpp
+index 8b8bd27..33e4c7b 100644
+--- a/src/libretro/core/test.cpp
++++ b/src/libretro/core/test.cpp
+@@ -168,9 +168,19 @@ extern "C" int melondsds_analog_cursor_y() {
+     return Core.GetInputState().JoystickTouchPosition().y;
+ }
+ 
++extern "C" int melondsds_touch_x() {
++    using namespace MelonDsDs;
++    return Core.GetInputState().ConsoleTouchPosition().x;
++}
++
++extern "C" int melondsds_touch_y() {
++    using namespace MelonDsDs;
++    return Core.GetInputState().ConsoleTouchPosition().y;
++}
++
+ extern "C" int melondsds_screen_layout() {
+     using namespace MelonDsDs;
+-    return static_cast<int>(Core.GetScreenLayoutData().Layout());
++    return static_cast<int>(Core.GetScreenLayoutData().SelectedLayout());
+ }
+ 
+ extern "C" bool melondsds_is_opengl_renderer() {
+@@ -397,6 +407,12 @@ extern "C" retro_proc_address_t MelonDsDs::GetRetroProcAddress(const char* sym)
+     if (string_is_equal(sym, "melondsds_analog_cursor_y"))
+         return reinterpret_cast<retro_proc_address_t>(melondsds_analog_cursor_y);
+ 
++    if (string_is_equal(sym, "melondsds_touch_x"))
++        return reinterpret_cast<retro_proc_address_t>(melondsds_touch_x);
++
++    if (string_is_equal(sym, "melondsds_touch_y"))
++        return reinterpret_cast<retro_proc_address_t>(melondsds_touch_y);
++
+     if (string_is_equal(sym, "melondsds_screen_layout"))
+         return reinterpret_cast<retro_proc_address_t>(melondsds_screen_layout);
+ 
+diff --git a/src/libretro/environment.cpp b/src/libretro/environment.cpp
+index 2608b2e..ccd96c6 100644
+--- a/src/libretro/environment.cpp
++++ b/src/libretro/environment.cpp
+@@ -566,6 +566,21 @@ bool retro::set_system_av_info(const retro_system_av_info& av_info) noexcept {
+     return retro::environment(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, (void*)&av_info);
+ }
+ 
++optional<unsigned> retro::get_video_views_status() noexcept {
++    ZoneScopedN(TracyFunction);
++    unsigned status = 0;
++    if (!retro::environment(RETRO_ENVIRONMENT_GET_VIDEO_VIEWS_STATUS, &status)) {
++        return nullopt;
++    }
++
++    return status;
++}
++
++bool retro::set_video_views(retro_video_views& views) noexcept {
++    ZoneScopedN(TracyFunction);
++    return retro::environment(RETRO_ENVIRONMENT_SET_VIDEO_VIEWS, &views);
++}
++
+ bool retro::set_memory_maps(const retro_memory_map& map) noexcept {
+     ZoneScopedN(TracyFunction);
+     return retro::environment(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, (void*)&map);
+diff --git a/src/libretro/environment.hpp b/src/libretro/environment.hpp
+index 7a2a771..23e2297 100644
+--- a/src/libretro/environment.hpp
++++ b/src/libretro/environment.hpp
+@@ -24,6 +24,7 @@
+ #include <glm/ext/vector_int2_sized.hpp>
+ #undef isnan
+ #include <fmt/format.h>
++#include "libretro_views.h"
+ #include "std/chrono.hpp"
+ #include "std/span.hpp"
+ 
+@@ -97,6 +98,13 @@ namespace retro {
+     std::optional<retro_language> get_language() noexcept;
+     bool set_geometry(const retro_game_geometry& geometry) noexcept;
+     bool set_system_av_info(const retro_system_av_info& av_info) noexcept;
++    /// \return The frontend's \c RETRO_VIDEO_VIEWS_STATUS_ flags,
++    /// or \c nullopt if it doesn't know the call.
++    std::optional<unsigned> get_video_views_status() noexcept;
++    /// Tells the frontend how the frame divides into screens.
++    /// The map isn't \c const because the frontend writes the recommended eye size back into it
++    /// while a headset is tracking.
++    bool set_video_views(retro_video_views& views) noexcept;
+     bool set_memory_maps(const retro_memory_map& map) noexcept;
+     bool set_memory_maps(std::span<const retro_memory_descriptor> descriptors) noexcept;
+     std::optional<std::string_view> username() noexcept;
 diff --git a/src/libretro/format.cpp b/src/libretro/format.cpp
-index 3698a6b..e6498ac 100644
+index 78ab324..da589c3 100644
 --- a/src/libretro/format.cpp
 +++ b/src/libretro/format.cpp
 @@ -61,12 +61,14 @@ auto fmt::formatter<MelonDsDs::FormattedGLEnum>::format(MelonDsDs::FormattedGLEn
@@ -54,7 +547,7 @@ index 3698a6b..e6498ac 100644
              name = "GL_FRAMEBUFFER_UNSUPPORTED";
              break;
 diff --git a/src/libretro/glsl/melondsds.frag b/src/libretro/glsl/melondsds.frag
-index ceb157c..cbe96c5 100644
+index cfd37d9..b5987c4 100644
 --- a/src/libretro/glsl/melondsds.frag
 +++ b/src/libretro/glsl/melondsds.frag
 @@ -1,4 +1,6 @@
@@ -65,17 +558,20 @@ index ceb157c..cbe96c5 100644
  layout(std140) uniform uConfig
  {
      vec2 uScreenSize;
-@@ -9,7 +11,7 @@ layout(std140) uniform uConfig
+@@ -7,9 +9,10 @@ layout(std140) uniform uConfig
+     vec4 cursorPos;
+     bool cursorVisible;
  };
- uniform sampler2D ScreenTex;
- smooth in vec2 fTexcoord;
++precision highp sampler2DArray;
+ uniform sampler2DArray ScreenTex;
+ smooth in vec3 fTexcoord;
 -out vec4 oColor;
 +layout(location = 0) out vec4 oColor;
  void main()
  {
      vec4 pixel = texture(ScreenTex, fTexcoord);
 diff --git a/src/libretro/glsl/melondsds.vert b/src/libretro/glsl/melondsds.vert
-index c6bf9e5..ef7d7a5 100644
+index b7a6e16..6f97f1e 100644
 --- a/src/libretro/glsl/melondsds.vert
 +++ b/src/libretro/glsl/melondsds.vert
 @@ -1,4 +1,6 @@
@@ -95,104 +591,451 @@ index c6bf9e5..ef7d7a5 100644
      fpos.z = 0.0;
      fpos.w = 1.0;
      gl_Position = fpos;
+diff --git a/src/libretro/input/joypad.cpp b/src/libretro/input/joypad.cpp
+index fabccaa..d817085 100644
+--- a/src/libretro/input/joypad.cpp
++++ b/src/libretro/input/joypad.cpp
+@@ -140,7 +140,7 @@ void JoypadState::Apply(ScreenLayoutData& layout) const noexcept {
+         // If the "cycle screen layout" button was just pressed (and is not being held)...
+ 
+         layout.NextLayout(); // ...update the screen layout to the next in the sequence.
+-        retro::debug("Switched to screen layout {} of {} ({})", layout.LayoutIndex() + 1, layout.NumberOfLayouts(), layout.Layout());
++        retro::debug("Switched to screen layout {} of {} ({})", layout.LayoutIndex() + 1, layout.NumberOfLayouts(), layout.SelectedLayout());
+         // Add 1 to the index because we present the layout index as 1-based to the user.
+     }
+ }
+diff --git a/src/libretro/libretro_views.h b/src/libretro/libretro_views.h
+new file mode 100644
+index 0000000..cfaa783
+--- /dev/null
++++ b/src/libretro/libretro_views.h
+@@ -0,0 +1,69 @@
++/*
++    Copyright 2026 Davey Hughes
++
++    melonDS DS is free software: you can redistribute it and/or modify it under
++    the terms of the GNU General Public License as published by the Free
++    Software Foundation, either version 3 of the License, or (at your option)
++    any later version.
++
++    melonDS DS is distributed in the hope that it will be useful, but WITHOUT ANY
++    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
++    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
++
++    You should have received a copy of the GNU General Public License along
++    with melonDS DS. If not, see http://www.gnu.org/licenses/.
++*/
++#ifndef MELONDS_DS_LIBRETRO_VIEWS_H
++#define MELONDS_DS_LIBRETRO_VIEWS_H
++
++#include <limits.h>
++#include <libretro.h>
++
++// RetroArch's video views API as of libretro/RetroArch#19811,
++// until the libretro.h that libretro-common ships has it.
++#ifndef RETRO_ENVIRONMENT_SET_VIDEO_VIEWS
++
++#define RETRO_ENVIRONMENT_SET_VIDEO_VIEWS (95 | RETRO_ENVIRONMENT_EXPERIMENTAL)
++#define RETRO_ENVIRONMENT_GET_VIDEO_VIEWS_STATUS (96 | RETRO_ENVIRONMENT_EXPERIMENTAL)
++
++#define RETRO_VIDEO_VIEWS_STATUS_PRESENTS (1 << 0)
++#define RETRO_VIDEO_VIEWS_STATUS_STEREO (1 << 1)
++// A headset is tracking; only set together with PRESENTS and STEREO.
++#define RETRO_VIDEO_VIEWS_STATUS_HMD (1 << 2)
++
++#define RETRO_VIDEO_VIEW_EYE_NONE 0
++#define RETRO_VIDEO_VIEW_EYE_LEFT 1
++#define RETRO_VIDEO_VIEW_EYE_RIGHT 2
++#define RETRO_VIDEO_VIEWS_MAX 8
++// The map's LEFT and RIGHT views were drawn from the frontend's eye poses; melonDS DS's never are.
++#define RETRO_VIDEO_VIEWS_FLAG_TRACKED (1 << 0)
++
++enum retro_vr_reference_space {
++    RETRO_VR_REFERENCE_SPACE_LOCAL = 0,
++    RETRO_VR_REFERENCE_SPACE_STAGE = 1,
++    RETRO_VR_REFERENCE_SPACE_DUMMY = INT_MAX
++};
++
++struct retro_video_view {
++    unsigned x;
++    unsigned y;
++    unsigned width;
++    unsigned height;
++    unsigned screen;
++    unsigned eye;
++    float aspect_ratio;
++};
++
++struct retro_video_views {
++    const struct retro_video_view* views;
++    unsigned num_views;
++    unsigned flags;
++    enum retro_vr_reference_space reference_space;
++    // Outputs: the frontend writes these back while a headset is tracking.
++    unsigned recommended_view_width;
++    unsigned recommended_view_height;
++};
++
++#endif
++
++#endif //MELONDS_DS_LIBRETRO_VIEWS_H
 diff --git a/src/libretro/render/opengl.cpp b/src/libretro/render/opengl.cpp
-index bf3641e..33bfa4d 100644
+index d2aec34..7818363 100644
 --- a/src/libretro/render/opengl.cpp
 +++ b/src/libretro/render/opengl.cpp
-@@ -160,7 +160,12 @@ MelonDsDs::OpenGLRenderState::OpenGLRenderState() {
- 
-     // MelonDS needs at least OpenGL 3.2 for OpenGL renderer
-     // (it doesn't use the legacy fixed-function pipeline)
+@@ -180,7 +180,11 @@ MelonDsDs::OpenGLRenderState::OpenGLRenderState(RenderMode mode) : _mode(mode) {
+     // Its compute renderer's shaders are "#version 430 core", so that one needs 4.3.
+     // The frontend gets exactly one version request per context,
+     // which is why each render mode gets its own OpenGLRenderState.
 +#ifdef HAVE_OPENGLES
-+    // GLES 3.2: melonDS carries the melonDS-android-lib GLES port (cores/patches/melonds.patch)
-+    params.context_type = RETRO_HW_CONTEXT_OPENGLES_VERSION;
++    _hw_render.context_type = RETRO_HW_CONTEXT_OPENGLES_VERSION;
 +#else
-     params.context_type = RETRO_HW_CONTEXT_OPENGL_CORE;
+     _hw_render.context_type = RETRO_HW_CONTEXT_OPENGL_CORE;
 +#endif
-     params.major = 3;
-     params.minor = 2;
-     params.context_reset = HardwareContextReset;
-@@ -223,6 +228,7 @@ void MelonDsDs::OpenGLRenderState::ContextReset(melonDS::NDS& nds, const CoreCon
+     _hw_render.version_major = LEGACY_GL_VERSION.first;
+     _hw_render.version_minor = LEGACY_GL_VERSION.second;
+ #ifdef HAVE_COMPUTE_RENDERER
+@@ -247,6 +251,7 @@ void MelonDsDs::OpenGLRenderState::ContextReset(melonDS::NDS& nds, const CoreCon
          throw opengl_not_initialized_exception();
      }
  
 +#if defined(HAVE_OPENGL) && !defined(HAVE_OPENGLES) // GLES: the core links libGLESv3, nothing to resolve
      // The core doesn't link against OpenGL,
      // so the OpenGL 1.0/1.1 functions that glsym doesn't cover
-     // must be resolved before glsm makes its first OpenGL call
-@@ -246,6 +252,7 @@ void MelonDsDs::OpenGLRenderState::ContextReset(melonDS::NDS& nds, const CoreCon
+     // must be resolved before we make our first OpenGL call
+@@ -270,6 +275,7 @@ void MelonDsDs::OpenGLRenderState::ContextReset(melonDS::NDS& nds, const CoreCon
          retro::error("Frontend couldn't resolve {} OpenGL functions, can't use the OpenGL renderer", missingSymbols);
          throw opengl_not_initialized_exception();
      }
 +#endif
  
-     glsm_ctl(GLSM_CTL_STATE_CONTEXT_RESET, nullptr);
-     TracyGpuContext; // Must be called AFTER the function pointers are bound!
-@@ -296,6 +303,9 @@ void MelonDsDs::OpenGLRenderState::ContextReset(melonDS::NDS& nds, const CoreCon
-     _contextInitialized = true;
- 
-     // Stop using OpenGL structures
-+    // On GLES glsm owns no VAO, so its bind/unbind toggle vertex attrib arrays on
-+    // whatever VAO is bound: keep melonDS's GLRenderer VAOs out of it.
-+    glBindVertexArray(0);
-     glsm_ctl(GLSM_CTL_STATE_UNBIND, nullptr); // Always succeeds
-     retro::debug("Unbound GL state");
- 
-@@ -408,6 +418,9 @@ void MelonDsDs::OpenGLRenderState::Render(
-     TracyGpuZone(TracyFunction);
-     retro_assert(nds.GetRenderer3D().Accelerated);
- 
-+    // On GLES glsm owns no VAO, so its bind/unbind toggle vertex attrib arrays on
-+    // whatever VAO is bound: keep melonDS's GLRenderer VAOs out of it.
-+    glBindVertexArray(0);
-     glsm_ctl(GLSM_CTL_STATE_BIND, nullptr);
- 
-     GLuint current_fbo = glsm_get_current_framebuffer();
-@@ -459,6 +472,9 @@ void MelonDsDs::OpenGLRenderState::Render(
-     glDisable(GL_DEPTH_TEST);
+     // Now resolve everything else that glsym knows about
+     rglgen_resolve_symbols(_hw_render.get_proc_address);
+@@ -726,6 +732,7 @@ void MelonDsDs::OpenGLRenderState::BindState() noexcept {
      glDisable(GL_STENCIL_TEST);
      glDisable(GL_BLEND);
-+    // melonDS's GLRenderer may leave these on; they would clip or cull the screen quads
+     glDisable(GL_SCISSOR_TEST);
 +    glDisable(GL_CULL_FACE);
-+    glDisable(GL_SCISSOR_TEST);
+     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+     glDepthMask(GL_TRUE); // For the depth clears in InitFrameState and the closed-lid path
+     glClearColor(0, 0, 0, 0);
+@@ -773,6 +780,7 @@ void MelonDsDs::OpenGLRenderState::UnbindState() noexcept {
+     glDisable(GL_STENCIL_TEST);
+     glDisable(GL_BLEND);
+     glDisable(GL_SCISSOR_TEST);
++    glDisable(GL_CULL_FACE);
  
-     glViewport(0, 0, screenLayout.BufferWidth(), screenLayout.BufferHeight());
+     glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ONE, GL_ZERO);
+     glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+diff --git a/src/libretro/screenlayout.cpp b/src/libretro/screenlayout.cpp
+index fb727c9..084e0bc 100644
+--- a/src/libretro/screenlayout.cpp
++++ b/src/libretro/screenlayout.cpp
+@@ -49,10 +49,15 @@ MelonDsDs::ScreenLayoutData::ScreenLayoutData() :
+     bottomScreenMatrixInverse(1),
+     hybridScreenMatrix(1),
+     pointerMatrix(1),
++    touchRotationMatrix(1),
+     secondaryScreenScale(100),
+     secondaryScreenScaleFactor(1.0f),
+     hybridRatio(2),
+-    _numberOfLayouts(1) {
++    _numberOfLayouts(1),
++    _frontendLayout(true),
++    _viewsStatus(0), // Until the frontend says otherwise
++    _numberOfViews(0),
++    _views() {
+ }
  
-@@ -474,6 +490,9 @@ void MelonDsDs::OpenGLRenderState::Render(
+ MelonDsDs::ScreenLayoutData::~ScreenLayoutData() noexcept {
+@@ -179,7 +184,7 @@ mat3 MelonDsDs::ScreenLayoutData::GetTopScreenMatrix(unsigned scale) const noexc
+         case ScreenLayout::UpsideDown:
+             return NorthwestMatrix(scale);
+         case ScreenLayout::BottomTop:
+-            return SouthwestScaledMatrix(scale, screenGap, secondaryScreenScaleFactor);
++            return SouthwestScaledMatrix(scale, ScreenGap(), SecondaryScreenScaleFactor());
+         case ScreenLayout::RightLeft:
+             return EastMatrix(scale);
+         case ScreenLayout::HybridTop:
+@@ -207,9 +212,9 @@ mat3 MelonDsDs::ScreenLayoutData::GetBottomScreenMatrix(unsigned scale) const no
+         case ScreenLayout::TurnLeft:
+         case ScreenLayout::TurnRight:
+         case ScreenLayout::UpsideDown:
+-            return SouthwestMatrix(scale, screenGap);
++            return SouthwestMatrix(scale, ScreenGap());
+         case ScreenLayout::TopBottom:
+-            return SouthwestScaledMatrix(scale, screenGap, secondaryScreenScaleFactor);
++            return SouthwestScaledMatrix(scale, ScreenGap(), SecondaryScreenScaleFactor());
+         case ScreenLayout::BottomTop:
+         case ScreenLayout::BottomOnly:
+         case ScreenLayout::RightLeft:
+@@ -256,6 +261,7 @@ void MelonDsDs::ScreenLayoutData::Apply(const CoreConfig& config, const RenderSt
+     SetScale(1);
+ #endif
+     SetLayouts(config.ScreenLayouts());
++    SetFrontendLayout(config.FrontendLayout());
+     HybridSmallScreenLayout(config.SmallScreenLayout());
+     ScreenGap(config.ScreenGap());
+     secondaryScreenScale = config.SecondaryScreenScale();
+@@ -310,13 +316,50 @@ void MelonDsDs::ScreenLayoutData::Update() noexcept {
+     bottomScreenTranslation = transformedScreenPoints[4];
+     hybridScreenTranslation = transformedScreenPoints[8];
+     pointerMatrix = math::ts<float>(vec2(bufferSize) / 2.0f, vec2(bufferSize) / (2.0f * RETRO_MAX_POINTER_COORDINATE<float>));
++    touchRotationMatrix = mat3(1);
  
-     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-     glBindVertexArray(vao);
-+    // glsm's bind/unbind may have toggled this VAO's attrib arrays (no glsm-owned VAO on GLES): re-enable them
-+    glEnableVertexAttribArray(0);
-+    glEnableVertexAttribArray(1);
-     if (nds.IsLidClosed()) [[unlikely]] {
-         // If the emulated lid is closed, just draw a blank
-         // so that there's no annoying flickering with some games
-@@ -485,6 +504,7 @@ void MelonDsDs::OpenGLRenderState::Render(
+     ScreenLayout layout = Layout();
+     retro::ScreenOrientation newOrientation = LayoutOrientation(layout);
+ 
++    _numberOfViews = 0;
++    if (ViewsActive()) {
++        // Every layout that packs a frame for views draws its screens at the resolution scale
++        uvec2 screenSize = NDS_SCREEN_SIZE<unsigned> * resolutionScale;
++        auto addView = [&](uvec2 translation) noexcept {
++            _views[_numberOfViews] = {
++                .x = translation.x,
++                .y = translation.y,
++                .width = screenSize.x,
++                .height = screenSize.y,
++                .screen = _numberOfViews, // Screens are numbered in the order they're shown
++                .eye = RETRO_VIDEO_VIEW_EYE_NONE,
++                .aspect_ratio = 0.0f, // i.e. width / height
++            };
++            ++_numberOfViews;
++        };
++
++        bool bottomFirst = IsBottomScreenFirst(layout);
++        if (bottomFirst) addView(bottomScreenTranslation);
++        if (layout != ScreenLayout::BottomOnly) addView(topScreenTranslation);
++        if (!bottomFirst && layout != ScreenLayout::TopOnly) addView(bottomScreenTranslation);
++    }
++
+     if (retro::set_screen_rotation(newOrientation)) {
+         // Try to rotate the screen. If that failed...
+-        pointerMatrix = glm::rotate(pointerMatrix, LayoutAngle(layout));
++        if (!ViewsActive()) {
++            pointerMatrix = glm::rotate(pointerMatrix, LayoutAngle(layout));
++        }
++        else if (newOrientation != retro::ScreenOrientation::Normal) {
++            // The frontend turns each view on its own,
++            // and reports a touch as far across a view's rectangle as it is across the screen it sees.
++            // So the point turns about the middle of the touch screen, not the middle of the frame.
++            vec2 halfScreenSize = NDS_SCREEN_SIZE<float> / 2.0f;
++            touchRotationMatrix = glm::translate(touchRotationMatrix, halfScreenSize);
++            touchRotationMatrix = glm::scale(touchRotationMatrix, halfScreenSize);
++            touchRotationMatrix = glm::rotate(touchRotationMatrix, LayoutAngle(layout));
++            touchRotationMatrix = glm::scale(touchRotationMatrix, 1.0f / halfScreenSize);
++            touchRotationMatrix = glm::translate(touchRotationMatrix, -halfScreenSize);
++        }
+         orientation = newOrientation;
+     } else if (newOrientation != retro::ScreenOrientation::Normal) {
+         // A rotation to normal orientation may "fail", even though it's the default.
+diff --git a/src/libretro/screenlayout.hpp b/src/libretro/screenlayout.hpp
+index 6edc64e..2fbfa75 100644
+--- a/src/libretro/screenlayout.hpp
++++ b/src/libretro/screenlayout.hpp
+@@ -18,6 +18,7 @@
+ #define MELONDS_DS_SCREENLAYOUT_HPP
+ 
+ #include <algorithm>
++#include <array>
+ #include <cstddef>
+ #include <cstdint>
+ #include <optional>
+@@ -33,6 +34,7 @@
+ #include "config/constants.hpp"
+ #include "environment.hpp"
+ #include "input/input.hpp"
++#include "libretro_views.h"
+ #include "buffer.hpp"
+ #include "retro/scaler.hpp"
+ 
+@@ -93,6 +95,54 @@ namespace MelonDsDs {
+         }
      }
  
-     glFlush();
-+    glBindVertexArray(0); // keep glsm's unbind from disabling this VAO's attrib arrays
++    /// The layout a frame is packed with while the frontend arranges the screens itself.
++    /// The frontend takes each screen from the frame as it's drawn,
++    /// so a layout that draws a screen enlarged falls back to a vertical one
++    /// that keeps its focused screen first.
++    constexpr ScreenLayout ViewsPackedLayout(ScreenLayout layout) noexcept {
++        switch (layout) {
++            case ScreenLayout::HybridTop:
++            case ScreenLayout::FlippedHybridTop:
++            case ScreenLayout::LargescreenTop:
++            case ScreenLayout::FlippedLargescreenTop:
++                return ScreenLayout::TopBottom;
++            case ScreenLayout::HybridBottom:
++            case ScreenLayout::FlippedHybridBottom:
++            case ScreenLayout::LargescreenBottom:
++            case ScreenLayout::FlippedLargescreenBottom:
++                return ScreenLayout::BottomTop;
++            default:
++                return layout;
++        }
++    }
++
++    /// Whether a frontend that stacks the screens vertically
++    /// shows them the same way this layout would.
++    constexpr bool ViewsMatchLayout(ScreenLayout layout, unsigned screenGap, unsigned secondaryScreenScale) noexcept {
++        switch (layout) {
++            case ScreenLayout::TopOnly:
++            case ScreenLayout::BottomOnly:
++                return true;
++            case ScreenLayout::TopBottom:
++            case ScreenLayout::BottomTop:
++                return screenGap == 0 && secondaryScreenScale == 100;
++            default:
++                return false;
++        }
++    }
++
++    /// Whether the bottom screen comes before the top one in this layout.
++    constexpr bool IsBottomScreenFirst(ScreenLayout layout) noexcept {
++        switch (layout) {
++            case ScreenLayout::BottomTop:
++            case ScreenLayout::RightLeft:
++            case ScreenLayout::BottomOnly:
++                return true;
++            default:
++                return false;
++        }
++    }
++
+     /// The width of the widest image that any screen layout needs
+     /// at the given resolution scale, in pixels.
+     constexpr unsigned MaxBufferWidth(unsigned scale) noexcept {
+@@ -162,9 +212,17 @@ namespace MelonDsDs {
  
-     glsm_ctl(GLSM_CTL_STATE_UNBIND, nullptr);
+         unsigned LayoutIndex() const noexcept { return _layoutIndex; }
+         unsigned NumberOfLayouts() const noexcept { return _numberOfLayouts; }
+-        ScreenLayout Layout() const noexcept { return _layouts[_layoutIndex]; }
++
++        /// The layout the player chose.
++        ScreenLayout SelectedLayout() const noexcept { return _layouts[_layoutIndex]; }
++
++        /// The layout the frame is drawn with:
++        /// the one the player chose, or the one that packs it for the frontend's views.
++        ScreenLayout Layout() const noexcept {
++            return ViewsActive() ? ViewsPackedLayout(SelectedLayout()) : SelectedLayout();
++        }
+         void SetLayouts(const std::array<ScreenLayout, config::screen::MAX_SCREEN_LAYOUTS>& layouts, unsigned numberOfLayouts) noexcept {
+-            ScreenLayout oldLayout = Layout();
++            ScreenLayout oldLayout = SelectedLayout();
  
-@@ -492,6 +512,19 @@ void MelonDsDs::OpenGLRenderState::Render(
-     // GLSM state_unbind doesn't do this, and a stale PBO binding causes
-     // glReadPixels (used by the frontend for screenshots) to fail.
-     glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-+    // The frontend (LibretroDroid's FramebufferRenderer) draws with client-side arrays right after this callback;
-+    // a VAO left bound makes that draw fail silently (black screen). Leave neutral state.
-+    // Tried without this block and the GL_CULL_FACE/GL_SCISSOR_TEST disables above (2026-09-27): the whole
-+    // picture went black on Adreno 840 (Galaxy Z Fold), so both stay.
-+    glBindVertexArray(0);
-+    glBindBuffer(GL_ARRAY_BUFFER, 0);
-+    glUseProgram(0);
-+    glDisable(GL_SCISSOR_TEST);
-+    glDisable(GL_BLEND);
-+    glDisable(GL_STENCIL_TEST);
-+    glDisable(GL_CULL_FACE);
-+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-+    glActiveTexture(GL_TEXTURE0);
+             if (_layoutIndex >= numberOfLayouts) {
+                 _layoutIndex = numberOfLayouts - 1;
+@@ -172,11 +230,11 @@ namespace MelonDsDs {
+             _layouts = layouts;
+             _numberOfLayouts = numberOfLayouts;
  
- #if defined(HAVE_TRACY) && !defined(__APPLE__)
-     if (_tracyCapture) {
+-            if (oldLayout != Layout()) _dirty = true;
++            if (oldLayout != SelectedLayout()) _dirty = true;
+         }
+ 
+         void SetLayouts(const std::span<const ScreenLayout> layouts) noexcept {
+-            ScreenLayout oldLayout = Layout();
++            ScreenLayout oldLayout = SelectedLayout();
+ 
+             if (_layoutIndex >= layouts.size()) {
+                 _layoutIndex = layouts.size() - 1;
+@@ -184,14 +242,47 @@ namespace MelonDsDs {
+             memcpy(_layouts.data(), layouts.data(), layouts.size() * sizeof(ScreenLayout));
+             _numberOfLayouts = layouts.size();
+ 
+-            if (oldLayout != Layout()) _dirty = true;
++            if (oldLayout != SelectedLayout()) _dirty = true;
+         }
+ 
+         void NextLayout() noexcept {
+-            ScreenLayout oldLayout = Layout();
++            ScreenLayout oldLayout = SelectedLayout();
+             _layoutIndex = (_layoutIndex + 1) % _numberOfLayouts;
+ 
+-            if (oldLayout != Layout()) _dirty = true;
++            if (oldLayout != SelectedLayout()) _dirty = true;
++        }
++
++        /// Whether the frontend may arrange the screens itself (the Frontend Screen Layout option).
++        bool FrontendLayout() const noexcept { return _frontendLayout; }
++        void SetFrontendLayout(bool frontendLayout) noexcept {
++            bool wasActive = ViewsActive();
++            _frontendLayout = frontendLayout;
++            if (wasActive != ViewsActive()) _dirty = true;
++        }
++
++        /// The frontend's \c RETRO_VIDEO_VIEWS_STATUS_ flags, as of this frame.
++        unsigned ViewsStatus() const noexcept { return _viewsStatus; }
++        void SetViewsStatus(unsigned status) noexcept {
++            bool wasActive = ViewsActive();
++            _viewsStatus = status;
++            if (wasActive != ViewsActive()) _dirty = true;
++        }
++
++        /// Whether the frame is packed for the frontend's views instead of following the player's layout.
++        /// The frontend's stereo modes and headset always get views;
++        /// in 2D they only stand in for a layout that they'd look the same as.
++        bool ViewsActive() const noexcept {
++            if (!_frontendLayout || !(_viewsStatus & RETRO_VIDEO_VIEWS_STATUS_PRESENTS))
++                return false;
++
++            return (_viewsStatus & RETRO_VIDEO_VIEWS_STATUS_STEREO)
++                || ViewsMatchLayout(SelectedLayout(), screenGap, secondaryScreenScale);
++        }
++
++        /// The screens the frame divides into, primary screen first.
++        /// Empty unless the frame is packed for the frontend's views.
++        [[nodiscard]] std::span<const retro_video_view> Views() const noexcept {
++            return {_views.data(), _numberOfViews};
+         }
+ 
+         HybridSideScreenDisplay HybridSmallScreenLayout() const noexcept { return hybridSmallScreenLayout; }
+@@ -211,14 +302,15 @@ namespace MelonDsDs {
+             }
+         }
+ 
+-        unsigned ScreenGap() const noexcept { return screenGap; }
++        // The frontend spaces and sizes the screens itself while it arranges them
++        unsigned ScreenGap() const noexcept { return ViewsActive() ? 0 : screenGap; }
+         void ScreenGap(unsigned _screen_gap) noexcept {
+             if (_screen_gap != screenGap) _dirty = true;
+             screenGap = _screen_gap;
+         }
+ 
+-        unsigned SecondaryScreenScale() const noexcept { return secondaryScreenScale; }
+-        float SecondaryScreenScaleFactor() const noexcept { return secondaryScreenScaleFactor; }
++        unsigned SecondaryScreenScale() const noexcept { return ViewsActive() ? 100 : secondaryScreenScale; }
++        float SecondaryScreenScaleFactor() const noexcept { return ViewsActive() ? 1.0f : secondaryScreenScaleFactor; }
+         void SecondaryScreenScale(unsigned _scale) noexcept {
+             if (_scale != secondaryScreenScale) _dirty = true;
+             secondaryScreenScale = _scale;
+@@ -238,7 +330,7 @@ namespace MelonDsDs {
+ 
+         /// @param input Coordinates in pointer space (from -32767 to 32767)
+         [[nodiscard]] glm::ivec2 TransformPointerInput(glm::i16vec2 input) const noexcept {
+-            glm::vec3 transformed = bottomScreenMatrixInverse * pointerMatrix * glm::vec3(input, 1.0f);
++            glm::vec3 transformed = touchRotationMatrix * bottomScreenMatrixInverse * pointerMatrix * glm::vec3(input, 1.0f);
+             return glm::ivec2(transformed.x, transformed.y);
+         }
+ 
+@@ -285,6 +377,9 @@ namespace MelonDsDs {
+         glm::mat3 hybridScreenMatrix;
+         glm::mat3 hybridScreenMatrixInverse;
+         glm::mat3 pointerMatrix;
++        /// Turns a point within the touch screen, for a frontend that rotates each view on its own.
++        /// The identity matrix otherwise.
++        glm::mat3 touchRotationMatrix;
+ 
+         unsigned screenGap;
+         unsigned secondaryScreenScale;
+@@ -297,6 +392,11 @@ namespace MelonDsDs {
+         unsigned _numberOfLayouts;
+         std::array<ScreenLayout, config::screen::MAX_SCREEN_LAYOUTS> _layouts;
+ 
++        bool _frontendLayout;
++        unsigned _viewsStatus;
++        unsigned _numberOfViews;
++        std::array<retro_video_view, 2> _views;
++
+         // Offset in pixels, not bytes
+         glm::uvec2 topScreenTranslation;
+         glm::uvec2 bottomScreenTranslation;

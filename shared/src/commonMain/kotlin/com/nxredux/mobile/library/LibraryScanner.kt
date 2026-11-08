@@ -4,6 +4,8 @@ import com.nxredux.mobile.runner.Console
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.scraper.ArtSlot
+import com.nxredux.mobile.scraper.LegacyArtMove
 import com.nxredux.mobile.settings.ExtraFolder
 import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.GamePath
@@ -53,10 +55,9 @@ data class GameEntry(
     val boxartRef: ContentRef? = null,     // .media/boxart/<name> (3D box)
     val screenshotRef: ContentRef? = null, // .media/screenshot/<name>
     val box2dRef: ContentRef? = null,      // .media/boxart2d/<name>, else the legacy .media/box2d/<name> (2D front cover)
-    val gridRef: ContentRef? = null,       // .media/grid/<name> (SteamGridDB 2:3 grid)
-    val heroRef: ContentRef? = null,       // .media/hero/<name> (SteamGridDB wide hero)
     val wheelRef: ContentRef? = null,      // .media/wheel/<name> (known, not shown)
-    val mixRef: ContentRef? = null,        // .media/mix/<name> (known, not shown: Generate mix's has-art rule)
+    val mixRef: ContentRef? = null,        // .media/mix/<name> (known, not shown: Mix's has-art rule)
+    val heroShot: Boolean = false,         // the screenshot is a SteamGridDB hero ([IndexedGame.heroShot])
     val folder: ContentRef,
     val sourceId: String,
     val relativeDir: String,
@@ -89,6 +90,24 @@ class LibraryScanner(
     private val compute: CoroutineContext? = null,
     /** A CD CHD's sectors for the disc probe (Android's libchdr); null places only GD and DVD CHDs. */
     private val chdSectors: com.nxredux.mobile.library.disc.ChdSectors? = null,
+    /**
+     * The Change art picks: per game ([GameEntry.path]) its picked file slots ([ArtSlot.SCREENSHOT], [ArtSlot.BOX_2D],
+     * [ArtSlot.BOX_3D], [ArtSlot.WHEEL], [ArtSlot.MIX]), read once per [scan] and [readArt]: an extra folder's game shows a picked
+     * slot's file from its home mirror (where the pick is written) over the folder's own.
+     */
+    private val picks: suspend () -> Map<String, Set<ArtSlot>> = { emptyMap() },
+    /**
+     * The written-art log's SteamGridDB hero screenshots, as home-relative file paths
+     * (`Roms/GB/.media/screenshot/Tetris.jpg`): a game whose chosen screenshot is the home tree's or its mirror's file at
+     * such a path is [ArtRefs.heroShot]. Read at most once per [scan] and [readArt] (again after a [legacyMove] changed a folder).
+     */
+    private val heroShots: suspend () -> Set<String> = { emptySet() },
+    /**
+     * The one-time `grid/` and `hero/` move, run on each `.media` listing the scan and [readArt] read (the home tree's,
+     * the mirrors' and an extra folder's own) before it is mapped. A function, so the app can hand over a mover built
+     * after the scanner; null runs none.
+     */
+    private val legacyMove: suspend () -> LegacyArtMove? = { null },
 ) {
     private val art = ArtworkResolver(source)
 
@@ -100,18 +119,32 @@ class LibraryScanner(
     /** One folder's typed `.media` art (by base name, per [ArtworkResolver.TYPED] folder) and `map.txt` aliases, looked up once per scan. */
     private class FolderLookup(
         val box3d: Map<String, ContentRef>, val box2d: Map<String, ContentRef>, val screenshot: Map<String, ContentRef>,
-        val grid: Map<String, ContentRef>, val hero: Map<String, ContentRef>, val names: Map<String, String>,
+        val names: Map<String, String>,
         val wheel: Map<String, ContentRef> = emptyMap(), val mix: Map<String, ContentRef> = emptyMap(),
+        /** The names in [screenshot] whose file is a SteamGridDB hero ([heroShots]); an extra folder's own files never are. */
+        val heroes: Set<String> = emptySet(),
+        /** An extra folder's home mirror alone ([withMirror]), for a game's picked slots. */
+        val mirror: FolderLookup? = null,
     ) {
         /**
          * A game's art of every kind: the file named for [key] (a disc folder's name, else the file's base name), else
-         * for [base]. The one place an art kind is mapped: the scan and [readArt] both read it.
+         * for [base]. The one place an art kind is mapped: the scan and [readArt] both read it. [picked]: the file slots
+         * that are a Change art pick, each the mirror's first.
          */
-        fun artFor(key: String, base: String): ArtRefs {
+        fun artFor(key: String, base: String, picked: Set<ArtSlot> = emptySet()): ArtRefs {
             fun Map<String, ContentRef>.of(): String? = (this[key] ?: this[base])?.value
+            fun Map<String, ContentRef>.nameOf(): String? = if (key in this) key else base.takeIf { it in this }
+            val m = mirror?.takeIf { picked.isNotEmpty() }
+            fun slot(s: ArtSlot, mine: Map<String, ContentRef>, theirs: Map<String, ContentRef>?): String? =
+                (if (s in picked) theirs?.of() else null) ?: mine.of()
+            // The screenshot and whether it is a hero, from the same map and name.
+            val mirrorName = if (ArtSlot.SCREENSHOT in picked) m?.screenshot?.nameOf() else null
+            val shotName = if (mirrorName != null) null else screenshot.nameOf()
             return ArtRefs(
-                boxart = box3d.of(), box2d = box2d.of(), screenshot = screenshot.of(), grid = grid.of(), hero = hero.of(),
-                wheel = wheel.of(), mix = mix.of(),
+                boxart = slot(ArtSlot.BOX_3D, box3d, m?.box3d), box2d = slot(ArtSlot.BOX_2D, box2d, m?.box2d),
+                screenshot = mirrorName?.let { m?.screenshot?.get(it) }?.value ?: shotName?.let { screenshot[it] }?.value,
+                wheel = slot(ArtSlot.WHEEL, wheel, m?.wheel), mix = slot(ArtSlot.MIX, mix, m?.mix),
+                heroShot = if (mirrorName != null) mirrorName in m?.heroes.orEmpty() else shotName != null && shotName in heroes,
             )
         }
     }
@@ -183,6 +216,8 @@ class LibraryScanner(
         }
         val lookups = HashMap<ContentRef, FolderLookup>()
         val sets = ScanSets()
+        val picked = pickedGames()
+        val heroes = HeroShots()
         val extraNames = scanned.associate { it.id to source.displayName(it.ref) }
         val systems = ArrayList<IndexedSystem>()
         for ((tag, files) in byTag) {
@@ -193,10 +228,10 @@ class LibraryScanner(
                 folderName = hf?.folderName ?: "",
                 art = hf?.artRef?.value,
                 bg = hf?.bgRef?.value,
-                games = indexGames(reads, files, lookups, tag, sets, extraNames),
+                games = indexGames(reads, files, lookups, tag, sets, extraNames, picked, heroes),
             )
         }
-        if (unassigned.isNotEmpty()) systems += IndexedSystem(tag = "", displayName = UNASSIGNED, unassigned = true, games = indexGames(reads, unassigned, lookups, null, sets, extraNames))
+        if (unassigned.isNotEmpty()) systems += IndexedSystem(tag = "", displayName = UNASSIGNED, unassigned = true, games = indexGames(reads, unassigned, lookups, null, sets, extraNames, picked, heroes))
         LibraryIndex(
             LibraryIndex.VERSION, home.value, scanned.map { IndexedExtra(it.id, it.ref.value) }, defaultTags, systems.inLibraryOrder(), offline, lateMount,
             probes = probes.used, heads = heads.used,
@@ -337,16 +372,18 @@ class LibraryScanner(
      */
     private suspend fun indexGames(
         reads: ScanReads, files: List<IndexedFile>, lookups: MutableMap<ContentRef, FolderLookup>, tag: String?, scanSets: ScanSets, extraNames: Map<String, String>,
+        picked: Map<String, Set<ArtSlot>>, heroes: HeroShots,
     ): List<IndexedGame> {
-        for (f in files) if (f.lookupFolder !in lookups) lookups[f.lookupFolder] = lookup(reads, f)
+        for (f in files) if (f.lookupFolder !in lookups) lookups[f.lookupFolder] = lookup(reads, f, heroes)
         val core = tag?.let { CoreRegistry.forTag(it)?.id }
         val sets = if (core == ARCADE_CORE && files.isNotEmpty()) scanSets.get() else ArcadeSets.EMPTY
         val naomi = if (core == NAOMI_CORE && files.any { Names.isArchive(it.entry.name) }) scanSets.naomi() else NaomiSets.EMPTY
-        return buildGames(files, lookups, tag, core, sets, naomi, extraNames)
+        return buildGames(files, lookups, tag, core, sets, naomi, extraNames, picked)
     }
 
     private fun buildGames(
         files: List<IndexedFile>, lookups: Map<ContentRef, FolderLookup>, tag: String?, core: String?, sets: ArcadeSets, naomi: NaomiSets, extraNames: Map<String, String>,
+        picked: Map<String, Set<ArtSlot>>,
     ): List<IndexedGame> {
         val out = ArrayList<IndexedGame>()
         val plain = ArrayList<Boolean>()   // per out entry: named by a rule, not an alias
@@ -370,7 +407,7 @@ class LibraryScanner(
                     ?: (if (naomiSet) naomi.title(base)?.let(Names::plainTitle) else null) ?: Names.plainName(key),
                 lookupDir = f.lookupDir,
                 firstSeen = f.entry.lastModified,   // the file's date; withFirstSeen keeps a known game's
-            ).withArt(look.artFor(key, base))
+            ).withArt(look.artFor(key, base, picked = pickedSlots(picked, f.sourceId, f.relativeDir, name)))
             plain += alias == null
         }
         // An extra folder's copy of a home game (the same file name, any case) is left out: the home copy is the one
@@ -444,10 +481,10 @@ class LibraryScanner(
      * games keep their file names and no art. A home failure propagates, since it means the home is unreadable, and so
      * does a hidden listing ([ListingUnavailable]) anywhere.
      */
-    private suspend fun lookup(reads: ScanReads, f: IndexedFile): FolderLookup {
-        if (f.sourceId == Recents.HOME) return readLookup(reads, f)
-        val own = try { readLookup(reads, f) } catch (e: CancellationException) { throw e } catch (e: ListingUnavailable) { throw e } catch (e: Throwable) { NO_LOOKUP }
-        return withMirror(own, try { mirrorLookup(reads, f.sourceId, f.lookupDir) } catch (e: CancellationException) { throw e } catch (e: ListingUnavailable) { throw e } catch (e: Throwable) { null })
+    private suspend fun lookup(reads: ScanReads, f: IndexedFile, heroes: HeroShots): FolderLookup {
+        if (f.sourceId == Recents.HOME) return readLookup(reads, f, heroes)
+        val own = try { readLookup(reads, f, heroes) } catch (e: CancellationException) { throw e } catch (e: ListingUnavailable) { throw e } catch (e: Throwable) { NO_LOOKUP }
+        return withMirror(own, try { mirrorLookup(reads, f.sourceId, f.lookupDir, heroes) } catch (e: CancellationException) { throw e } catch (e: ListingUnavailable) { throw e } catch (e: Throwable) { null })
     }
 
     /** [own] with an extra folder's home [mirror] art. */
@@ -455,26 +492,72 @@ class LibraryScanner(
         mirror ?: return own
         // The extra folder's own `.media` wins per typed folder; the home mirror fills only the names it lacks there.
         return FolderLookup(
-            mirror.box3d + own.box3d, mirror.box2d + own.box2d, mirror.screenshot + own.screenshot, mirror.grid + own.grid, mirror.hero + own.hero, own.names,
+            mirror.box3d + own.box3d, mirror.box2d + own.box2d, mirror.screenshot + own.screenshot, own.names,
             mirror.wheel + own.wheel, mirror.mix + own.mix,
+            heroes = own.heroes + (mirror.heroes - own.screenshot.keys), mirror = mirror,
         )
     }
 
-    private suspend fun readLookup(reads: ScanReads, f: IndexedFile): FolderLookup {
+    /** The picked slots per game; a failed read is none (the folders' own files, as before Change art). */
+    private suspend fun pickedGames(): Map<String, Set<ArtSlot>> =
+        try { picks() } catch (e: CancellationException) { throw e } catch (_: Throwable) { emptyMap() }
+
+    /** An extra folder's game's picked slots in [picked] (a home game's pick is in its own folder: nothing to prefer). */
+    private fun pickedSlots(picked: Map<String, Set<ArtSlot>>, sourceId: String, dir: String, file: String): Set<ArtSlot> =
+        if (sourceId == Recents.HOME || picked.isEmpty()) emptySet() else picked[GamePath.of(GameRef(sourceId, dir, file))].orEmpty()
+
+    /** The scan's (or [readArt]'s) [heroShots], read when first needed and again after a [legacyMove] changed a folder; a failed read is none. */
+    private inner class HeroShots {
+        private var shots: Set<String>? = null
+        suspend fun get(): Set<String> = shots
+            ?: (try { heroShots() } catch (e: CancellationException) { throw e } catch (_: Throwable) { emptySet() }).also { shots = it }
+        fun stale() { shots = null }
+    }
+
+    /**
+     * The `.media` folder [media]'s listing after the [legacyMove] ([homeSegments]: its home-relative path, null for an
+     * extra folder's own), and whether the move changed it (then it is listed again).
+     */
+    private suspend fun mediaEntries(reads: ScanReads, media: ContentRef, homeSegments: List<String>?, heroes: HeroShots): Pair<List<Entry>, Boolean> {
+        val listed = reads.list(media)
+        val mover = legacyMove() ?: return listed to false
+        if (!mover.move(media, listed, homeSegments)) return listed to false
+        reads.forget(media)
+        heroes.stale()   // the log's hero paths moved with the files
+        return reads.list(media) to true
+    }
+
+    /** A folder's `.media` path in the home tree ([Recents.HOME]'s [dir]), else null (an extra folder's own: nothing logged). */
+    private fun homeMedia(sourceId: String, dir: String): List<String>? =
+        if (sourceId == Recents.HOME) dir.split('/').filter { it.isNotEmpty() } + ".media" else null
+
+    private suspend fun readLookup(reads: ScanReads, f: IndexedFile, heroes: HeroShots): FolderLookup {
         val children = reads.list(f.lookupFolder)   // already listed by the walk
-        val media = art.mediaListing(children, reads::list) ?: emptyList()
+        val homeSegments = homeMedia(f.sourceId, f.lookupDir)
+        val media = children.firstOrNull { it.isDirectory && it.name == ".media" }
+            ?.let { mediaEntries(reads, it.ref, homeSegments, heroes).first } ?: emptyList()
         val names = reads.sidecars.displayNames(f.sourceId, f.lookupDir, children)   // in-folder map.txt, then an extra's .sources copy
-        return mediaLookup(media, names)
+        return mediaLookup(media, names, heroes = heroes, heroDir = homeSegments)
     }
 
     /**
      * Only the typed folders: an untyped `.media/<name>.png` (NX Redux's old mix) is not a game's art. The 2D box is
      * `boxart2d/`, else the legacy `box2d/` per name.
      */
-    private suspend fun mediaLookup(media: List<Entry>, names: Map<String, String>, reuse: Boolean = false): FolderLookup {
+    private suspend fun mediaLookup(
+        media: List<Entry>, names: Map<String, String>, reuse: Boolean = false, heroes: HeroShots, heroDir: List<String>?,
+    ): FolderLookup {
         suspend fun sub(name: String) = art.subArtMap(media, name, artMaps, reuse)
+        val shotFiles = art.subArtFiles(media, "screenshot", artMaps, reuse)
+        // [heroDir]: this `.media`'s home-relative path, where the log's hero paths are ([heroShots]). Each name's chosen
+        // file is checked by its full name, as the engine checks it (a hand-placed G.png beside a logged hero G.jpg is
+        // the one shown, and no hero).
+        val hero = if (heroDir == null || shotFiles.isEmpty()) emptySet() else heroes.get().let { all ->
+            val at = (heroDir + "screenshot").joinToString("/")
+            if (all.isEmpty()) emptySet() else shotFiles.filterTo(HashMap()) { (_, f) -> "$at/${f.name}" in all }.keys
+        }
         return FolderLookup(
-            sub("boxart"), sub("box2d") + sub("boxart2d"), sub("screenshot"), sub("grid"), sub("hero"), names, sub("wheel"), sub("mix"),
+            sub("boxart"), sub("box2d") + sub("boxart2d"), shotFiles.mapValues { it.value.ref }, names, sub("wheel"), sub("mix"), heroes = hero,
         )
     }
 
@@ -484,10 +567,11 @@ class LibraryScanner(
      * Each segment is looked up once per scan ([ScanReads.home]): before any scraping there is no `.sources/<id>`, and
      * that extra's folders then cost no mirror lookups at all.
      */
-    private suspend fun mirrorLookup(reads: ScanReads, sourceId: String, dir: String, reuse: Boolean = false): FolderLookup? {
+    private suspend fun mirrorLookup(reads: ScanReads, sourceId: String, dir: String, heroes: HeroShots, reuse: Boolean = false): FolderLookup? {
         val segments = listOf("Roms", Sidecars.SOURCES, sourceId) + dir.split('/').filter { it.isNotEmpty() } + ".media"
         val dir = reads.home?.dir(segments) ?: return null
-        return mediaLookup(reads.list(dir), emptyMap(), reuse)
+        val (media, moved) = mediaEntries(reads, dir, segments, heroes)
+        return mediaLookup(media, emptyMap(), reuse && !moved, heroes, segments)
     }
 
     /**
@@ -505,19 +589,25 @@ class LibraryScanner(
         val reads = ScanReads(source, sidecars, home)
         val roots = mapOf(Recents.HOME to reads.home) + index.extras.associate { it.id to DirWalk(source, ContentRef(it.ref)) }
         val out = HashMap<ArtKey, ArtRefs>()
+        val picked = pickedGames()
+        val heroes = HeroShots()
         val folders = index.systems.flatMap { it.games }.groupBy { it.source to it.lookupDir }
         for ((at, games) in folders) {
             val (sourceId, dir) = at
             val look = try {
                 val root = roots[sourceId] ?: continue
                 val media = root.dir(dir.split('/').filter { it.isNotEmpty() } + ".media")
-                val own = media?.let { mediaLookup(reads.list(it), emptyMap(), reuse) } ?: NO_LOOKUP
-                if (sourceId == Recents.HOME) own else withMirror(own, mirrorLookup(reads, sourceId, dir, reuse))
+                val homeSegments = homeMedia(sourceId, dir)
+                val own = media?.let {
+                    val (entries, moved) = mediaEntries(reads, it, homeSegments, heroes)
+                    mediaLookup(entries, emptyMap(), reuse && !moved, heroes, homeSegments)
+                } ?: NO_LOOKUP
+                if (sourceId == Recents.HOME) own else withMirror(own, mirrorLookup(reads, sourceId, dir, heroes, reuse))
             } catch (e: CancellationException) { throw e } catch (e: ListingUnavailable) { throw e } catch (e: Throwable) { continue }
             for (g in games) {
                 val base = Names.stripExtension(g.file)
                 val key = if (g.lookupDir != g.dir) g.dir.substringAfterLast('/') else base   // a disc folder's game: its folder's name
-                out[artKey(g)] = look.artFor(key, base)
+                out[artKey(g)] = look.artFor(key, base, picked = pickedSlots(picked, g.source, g.dir, g.file))
             }
         }
         out

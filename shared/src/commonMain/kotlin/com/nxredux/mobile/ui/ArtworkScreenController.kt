@@ -1,8 +1,5 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.library.path
-import com.nxredux.mobile.scraper.ArtHave
-import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.scraper.ArtworkController
 import com.nxredux.mobile.scraper.JobPhase
 import com.nxredux.mobile.scraper.KeyResult
@@ -19,10 +16,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-/** What [controller]'s build and keys turn on ([artworkDetails], Settings). */
+/** What [controller]'s build and keys turn on (Settings). */
 internal fun artSources(controller: ArtworkController) = ArtSources(
     ss = controller.ssAvailable, tgdb = controller.tgdbAvailable, sgdb = controller.sgdbAvailable,
-    sgdbKey = controller.sgdbKeySet, labels = controller.sourceLabels, tgdbBuilt = controller.tgdbSupported,
+    sgdbKey = controller.sgdbKeySet, tgdbBuilt = controller.tgdbSupported,
 )
 
 /** What the Artwork pages need from [AppState]: its notice, the Tools page and the library as it stands. */
@@ -74,33 +71,14 @@ internal class ArtworkScreenController(
 
     // --- The Artwork page ---
 
-    /** The page's game counts and what they were counted from ([ArtworkScreenHost.gamesInputs], the sources, Generate mix). */
-    private class PageCounts(val inputs: List<Any?>, val sources: ArtSources, val mix: Boolean, val games: Int, val withArt: Int, val missing: Int)
-    private var counts: PageCounts? = null
-
-    /**
-     * The counts over the whole library, counted again only when the library, the sources or Generate mix (the has-art
-     * rule) changed: a job emits per item (progress, quota), and most emissions leave them as they were.
-     */
-    private fun counts(): PageCounts {
-        val inputs = host.gamesInputs()
-        val sources = artSources(controller)
-        val mix = settings.artMix
-        counts?.takeIf { c -> c.sources == sources && c.mix == mix && c.inputs.size == inputs.size && c.inputs.indices.all { c.inputs[it] === inputs[it] } }?.let { return it }
-        // Only games in consoles an art source knows (Unassigned and unsupported left out): games = with art + missing.
-        val games = host.games().filter { controller.fetchable(it) }
-        return PageCounts(inputs, sources, mix, games.size, games.count { it.have.complete }, controller.missingCount(games)).also { counts = it }
-    }
-
     /** The page as it stands; [progress]: with its Progress row even before the job is there (beside a starting fetch). */
     private fun page(progress: Boolean = false): Screen.Artwork {
-        val c = counts()
         val state = controller.state.value
-        val details = artworkDetails(controller.available, c.games, c.withArt, c.missing, state, c.sources)
+        val details = artworkDetails(controller.available, state)
         return Screen.Artwork(details, artworkRows(controller.available, state, settings.artReplaceExisting, progress))
     }
 
-    /** The job as it moves ([AppState.artworkJob]: the split's left pane is drawn again on each emission). */
+    /** The job as it moves ([AppState.artworkJob]: the stage's words are drawn again on each emission). */
     val job: StateFlow<ScrapeState> get() = controller.state
 
     /** The sign-in and key prompts' live text ([ArtworkAccountSettings]). */
@@ -126,7 +104,7 @@ internal class ArtworkScreenController(
         selection.value = (if (at >= 0) ListSelection(at, p.rows.size) else selection.value).clampedTo(p.rows.size)
     }
 
-    /** The library's art changed outside a fetch ([AppState]'s art check): the open page's counts follow. */
+    /** The library's art changed outside a fetch ([AppState]'s art check): Fetch by console's counts follow. */
     fun libraryChanged() = onState(controller.state.value)
 
     /**
@@ -308,52 +286,92 @@ internal class ArtworkScreenController(
         }
     }
 
-    // --- The column browser's left pane ([artworkSplitView]) ---
+    // --- Settings' wide stage ([artworkSplitView]) ---
+
+    /** The words last drawn beside a page ([stagePage]): a word tap finds its word by what it does there. */
+    private var drawnWords: List<ArtworkRow> = emptyList()
 
     /**
-     * The page the left pane shows beside [s]: the Artwork page as it stands beside Fetch by console, Progress and
-     * Settings, their row lit; Settings beside Reset, Reset artwork lit. Null for the page itself and any other screen.
+     * The Artwork page the stage's word block shows beside [s]: [s] itself on the root, else the page as it stands, with
+     * its Progress word even before the job is there (beside a starting fetch). Remembered as drawn ([wordTap]).
      */
-    fun parentOf(s: Screen): ArtworkParent? = when (s) {
-        is Screen.ArtworkConsoles -> pageParent(ArtworkAction.FETCH_BY_CONSOLE)
-        is Screen.ArtworkProgress -> pageParent(ArtworkAction.PROGRESS, progress = true)   // lit even before its job is there
-        is Screen.ArtworkSettings -> pageParent(ArtworkAction.SETTINGS)
-        is Screen.ArtworkReset -> more.settingsPage().let { p -> ArtworkParent(p, p.rows.indexOfFirst { it.kind == ArtworkSettingKind.RESET }.coerceAtLeast(0)) }
+    fun stagePage(s: Screen): Screen.Artwork =
+        (s as? Screen.Artwork ?: page(progress = s is Screen.ArtworkProgress)).also { drawnWords = it.rows }
+
+    /** The stage's word lit for page [s] (open grey, with its "›"): Reset is under Settings. Null on the root and elsewhere. */
+    fun wordOf(s: Screen): ArtworkAction? = when (s) {
+        is Screen.ArtworkConsoles -> ArtworkAction.FETCH_BY_CONSOLE
+        is Screen.ArtworkProgress -> ArtworkAction.PROGRESS
+        is Screen.ArtworkSettings, is Screen.ArtworkReset -> ArtworkAction.SETTINGS
         else -> null
     }
 
-    private fun pageParent(on: ArtworkAction, progress: Boolean = false): ArtworkParent =
-        page(progress).let { p -> ArtworkParent(p, p.rows.indexOfFirst { it.action == on }.coerceAtLeast(0)) }
-
     /**
-     * A tap on row [index] of the left pane showing [parent] ([parentOf]): that page's row opens in place of the right
-     * pane, as B then A there would (Fetch by console beside Settings, Fetch missing art starting its job; a Settings row
-     * beside Reset re-opens Settings on it and acts on it, an On/Off row flipping). The row is found by what it does, so a
-     * page whose rows moved since it was drawn (Resume gone) acts on the row tapped or not at all. The row already open,
-     * an open dialog or prompt on the right, a loading screen, or a pane no longer beside the current page do nothing.
+     * A tap on the stage's word [index]. On the root it selects and opens the word (as A). On a page that word's page
+     * opens in its place, as B then A would (Fetch missing art starting its job); from Reset, Settings' word goes back
+     * to the Settings rows on Reset. The word is found by what it does as drawn, so a word gone since (Resume) does
+     * nothing. The open page's own word, an open dialog or prompt, or a loading screen do nothing.
      */
-    fun parentTap(parent: Screen, index: Int) {
-        val here = screen.value
-        val p = parentOf(here) ?: return
-        if (p.screen::class != parent::class || loader.active || dialogOpen(here)) return
-        when (val ps = p.screen) {
+    fun wordTap(index: Int) {
+        if (loader.active) return
+        when (val here = screen.value) {
             is Screen.Artwork -> {
-                val action = (parent as Screen.Artwork).rows.getOrNull(index)?.action ?: return
-                if (action == ps.rows.getOrNull(p.row)?.action || ps.rows.none { it.action == action }) return
+                if (index !in here.rows.indices) return
+                selection.value = ListSelection(index, here.rows.size)
+                onPageButton(here, NxButton.A)
+            }
+            else -> {
+                val open = wordOf(here) ?: return
+                if (dialogOpen(here)) return
+                val action = drawnWords.getOrNull(index)?.action ?: return
+                if (action == open) {
+                    if (here is Screen.ArtworkReset) more.openSettings(ArtworkSettingKind.RESET)
+                    return
+                }
+                if (page().rows.none { it.action == action }) return
                 showPage(action)
                 (screen.value as? Screen.Artwork)?.let { onPageButton(it, NxButton.A) }
             }
-            is Screen.ArtworkSettings -> {
-                val kind = (parent as Screen.ArtworkSettings).rows.getOrNull(index)?.kind ?: return
-                if (kind == ps.rows.getOrNull(p.row)?.kind || ps.rows.none { it.kind == kind }) return
-                more.openSettings(kind)
-                (screen.value as? Screen.ArtworkSettings)?.let { more.onSettingsButton(it, NxButton.A) }
-            }
-            else -> return
         }
     }
 
-    /** A dialog or prompt open on an Artwork page: it takes every input, the left pane's taps included. */
+    /**
+     * The page the root previews in the right frame while [action] is highlighted: Fetch by console's consoles,
+     * Progress, the Settings rows. Fetch missing art and Resume have no page: null (an empty frame).
+     */
+    fun preview(action: ArtworkAction): Screen? = when (action) {
+        ArtworkAction.FETCH_BY_CONSOLE -> Screen.ArtworkConsoles(consoleRows())
+        ArtworkAction.PROGRESS -> Screen.ArtworkProgress(controller.state.value)
+        ArtworkAction.SETTINGS -> more.settingsPage()
+        ArtworkAction.RESUME, ArtworkAction.FETCH_MISSING -> null
+    }
+
+    /**
+     * A tap on [row] of the root's preview: opens the highlighted word's page on that row, without acting on it. A
+     * one-tap list ([com.nxredux.mobile.ui.nx.nxTap]) calls this twice: the second call, on the page it opened with
+     * [row] selected, acts on it (A), as Settings' preview ([AppState.settingsPreviewTap]).
+     */
+    fun previewTap(row: Int) {
+        if (loader.active) return
+        val here = screen.value
+        if (here !is Screen.Artwork) {
+            if (wordOf(here) != null && !dialogOpen(here) && row == selection.value.index) onButton(here, NxButton.A)
+            return
+        }
+        val action = here.rows.getOrNull(selection.value.index)?.action ?: return
+        pageSelection = selection.value
+        when (action) {
+            ArtworkAction.FETCH_BY_CONSOLE -> { openConsoles(); selectRow(row) }
+            ArtworkAction.PROGRESS -> { openProgress(); selectRow(row) }
+            ArtworkAction.SETTINGS -> more.openSettings(more.settingsPage().rows.getOrNull(row)?.kind)
+            ArtworkAction.RESUME, ArtworkAction.FETCH_MISSING -> Unit
+        }
+    }
+
+    /** The open page's selection moved to [row], kept within its rows. */
+    private fun selectRow(row: Int) { selection.value = selection.value.copy(index = row).clampedTo(selection.value.count) }
+
+    /** A dialog or prompt open on an Artwork page: it takes every input, the stage's word and preview taps included. */
     private fun dialogOpen(s: Screen): Boolean = when (s) {
         is Screen.ArtworkSettings -> s.dialogOpen
         is Screen.ArtworkReset -> s.confirm != null
@@ -379,27 +397,14 @@ internal class ArtworkScreenController(
     /** A touch on an Artwork Settings row's control ([ArtworkAccountSettings.onSettingEvent]). */
     fun onSettingEvent(s: Screen.ArtworkSettings, event: NxSettingEvent) = more.onSettingEvent(s, event)
 
-    // --- The game context menu's Fetch art ---
+    // --- The game context menu's Fetch art / Change art ---
 
     /**
-     * A game in a console an enabled art source knows (excluded tags never), whose art is incomplete (Fetch missing art's
-     * rule, from the index in memory) or any game when Replace existing is on.
+     * None for a game no enabled art source knows (excluded tags never); Change art when it has any art (3D or 2D
+     * box, screenshot, wheel; written by the app or placed by hand: [hasAnyArt]), else Fetch art.
      */
-    fun canFetch(entry: Listed): Boolean {
-        if (!controller.available || entry.system.unassigned || !controller.canFetch(entry.system.tag, entry.game.fileName)) return false
-        if (settings.artReplaceExisting) return true
-        val g = entry.game
-        val art = ArtRefs(
-            g.boxartRef?.value, g.box2dRef?.value, g.screenshotRef?.value, g.gridRef?.value, g.heroRef?.value,
-            wheel = g.wheelRef?.value, mix = g.mixRef?.value,
-        )
-        return !ArtHave.of(art, needMix = settings.artMix).complete
-    }
-
-    /** Fetches [entry]'s art in the foreground under the loading overlay (B cancels), then says how it went. */
-    fun fetchGame(entry: Listed) {
-        loader.start(message = "Fetching art…", cancellable = true) {
-            guardArtwork(error) { host.showNotice(fetchResultText(controller.fetchGame(entry.game.path, settings.artReplaceExisting))) }
-        }
+    fun artMenu(entry: Listed): ArtMenuItem {
+        if (!controller.available || entry.system.unassigned || !controller.canFetch(entry.system.tag, entry.game.fileName, entry.system.android)) return ArtMenuItem.NONE
+        return if (hasAnyArt(entry.game)) ArtMenuItem.CHANGE else ArtMenuItem.FETCH
     }
 }

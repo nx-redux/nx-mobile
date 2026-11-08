@@ -138,7 +138,10 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "picture whole, in a box on the right; None shows no picture. A game without the picture shows its " +
             "screenshot instead.",
     )
-    SettingsKind.BACKDROP_ART -> quiet("The box in a Backdrop row; the background stays the screenshot")
+    SettingsKind.BACKDROP_ART -> quiet(
+        "The box in a Backdrop row; the background stays the screenshot. In every layout it also sets the game panel's " +
+            "header and the Game Switcher's box.",
+    )
     SettingsKind.LAYOUT_OPTIONS -> SettingText(
         "The Layout icon in game list titles",
         "The Layout icon opens a dropdown of every game list layout; picking one sets the game lists' rows here. Hidden, " +
@@ -244,6 +247,37 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "are logged. It takes effect at once.",
     )
     SettingsKind.LICENSES_LINK -> quiet(row.secondary.orEmpty())   // the URL behind the icon; A opens it
+    // Settings -> Kids Mode.
+    SettingsKind.KIDS_ENABLE -> quiet(
+        "Big tiles of allowed apps outside play times",
+        "On, games open only in the play times; outside them your kid sees big tiles of the allowed apps, and Tools, " +
+            "Settings and the Apps drawer need your PIN. The first time you turn it on, a short setup asks for a PIN, the " +
+            "apps, the play times and two permissions. It needs NX Redux as the home app.",
+    )
+    SettingsKind.KIDS_PIN -> quiet("Choose a new 6-digit PIN")
+    SettingsKind.KIDS_DAY -> quiet(
+        "When games open on this day",
+        "The hours games open on this day, in half-hour steps, or Locked to keep them closed all day. Ten minutes " +
+            "before the end your kid is told to save.",
+    )
+    SettingsKind.KIDS_APPS -> quiet("The apps your kid can open while games are closed", "The apps your kid can open while games are closed. $KIDS_APPS_AVOID")
+    SettingsKind.KIDS_GUARD -> SettingText(
+        row.secondary.orEmpty(),
+        "Without Usage access, NX Redux cannot send your kid back from an app that isn't allowed. Grant it here.",
+    )
+    SettingsKind.KIDS_ALARMS -> SettingText(
+        row.secondary.orEmpty(),
+        "Without Alarms & reminders, the warning and the lock can come a few minutes late. Allow it here.",
+    )
+    SettingsKind.KIDS_HOME -> SettingText(
+        row.secondary.orEmpty(),
+        "Without NX Redux as the home app, Home leaves it and the lock can't bring your kid back from other apps. Set it here.",
+    )
+    SettingsKind.KIDS_FORGOT -> SettingText(
+        row.secondary.orEmpty(),
+        "Kids Mode keeps a file named kids-mode.flag at this path. Delete it with a file manager or from a computer and " +
+            "Kids Mode turns off the next time NX Redux opens. The play times and allowed apps stay.",
+    )
     else -> SettingText("")
 }
 

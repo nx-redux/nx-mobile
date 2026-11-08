@@ -324,7 +324,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var overlays: List<String> = emptyList()
     private var frontendLocked: Set<String> = emptySet()
     private var frontendTag = ""                 // the console's tag: selects the console's own rows
-    private var overlayAvailable = true          // false while the DS screens are split (the overlay is off)
+    private var overlayAvailable = true          // false while the app places the DS / 3DS screens: no overlay, no offsets
 
     /**
      * The game window's [ScreenClass] (null: unknown): the DS and 3DS layout rows offer that screen's values and show its
@@ -1364,7 +1364,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             val current = shaderValue(key) ?: return null
             return ShaderOptions.cycle(key, current, delta, presets, params)?.let { setFrontendValue(key, it) }
         }
-        if (key == FrontendOptions.OVERLAY && !overlayAvailable || key in layoutLocked) return null
+        if (key in layoutLocked) return null
         if (softwareLocked(key)) return null
         // An unset DS layout row (no stored value) cycles from its shown default, like frontendRow shows it.
         val option = optionFor(key)
@@ -1394,7 +1394,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** The raw values a frontend or shader row offers, in [MenuRow.Option.choices]' order; null for an unknown key. */
     private fun settingValues(key: String): List<String>? = when {
         ShaderOptions.isShaderKey(key) -> ShaderOptions.choices(key, presets, params)
-        key == FrontendOptions.OVERLAY && !overlayAvailable || key in layoutLocked -> emptyList()
+        key in layoutLocked -> emptyList()
         key == FrontendOptions.OVERLAY -> FrontendOptions.choices(key, overlays)
         else -> optionFor(key)?.values
     }
@@ -1614,8 +1614,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         }
     }.map { ConsoleSettings.fitted(it, frontend[it.key] ?: it.default).first }
 
-    /** The frontend's rows ([FrontendOptions.table]: scaling, sharpness, overlay, offsets, pad opacity, Debug HUD), locked ones left out. */
-    private fun frontendRows() = FrontendOptions.table.filter { it.key !in frontendLocked }
+    /**
+     * The frontend's rows ([FrontendOptions.table]: scaling, sharpness, overlay, offsets, pad opacity, Debug HUD), locked
+     * ones left out, and Overlay and the offsets while the app places the DS / 3DS screens ([overlayAvailable] false).
+     */
+    private fun frontendRows() = FrontendOptions.table.filter { it.key !in frontendLocked && (overlayAvailable || it.key !in PLACED_SCREENS_HIDE) }
 
     private fun shadersPage() = MenuPage(
         PageKind.Shaders, "Shaders",
@@ -1661,9 +1664,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     private fun frontendRow(o: FrontendOption): MenuRow.Option =
-        if (o.key == FrontendOptions.OVERLAY && !overlayAvailable) {
-            MenuRow.Option(o.label, o.key, OVERLAY_UNAVAILABLE, OVERLAY_UNAVAILABLE_LINE, detail = OVERLAY_UNAVAILABLE_INFO)
-        } else if (o.key in layoutLocked) {
+        if (o.key in layoutLocked) {
             MenuRow.Option(o.label, o.key, UNAVAILABLE, LAYOUT_SKIN_LINE, detail = LAYOUT_SKIN_INFO)
         } else if (softwareLocked(o.key)) {
             val value = ConsoleSettings.fitted(o, frontend[o.key] ?: o.default).second
@@ -1906,14 +1907,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val ADJUST_BUTTONS_LABEL = "Adjust buttons"
         const val NO_LOCKED = "Everything unlocked."
         const val ACH_KEY_PREFIX = "ach:"
-        const val OVERLAY_UNAVAILABLE = "Unavailable"
         /** A layout row the pad skin ignores ([layoutLocked]): its line and its info. */
         const val LAYOUT_SKIN_LINE = "The pad skin places the screens"
         const val LAYOUT_SKIN_INFO = "The pad skin lays the two screens out here.\nTurn Pad skin off to use this layout."
         private const val RESET_TEXT = "Progress since your last save will be lost."
         private const val QUIT_TEXT = "Save & Quit keeps your place for next time. Quit keeps the last resume point."
-        const val OVERLAY_UNAVAILABLE_LINE = "Off while the DS screens are drawn apart"
-        const val OVERLAY_UNAVAILABLE_INFO = "Overlays are off while the DS screens\nare drawn apart."
+        private val PLACED_SCREENS_HIDE = setOf(FrontendOptions.OVERLAY, FrontendOptions.OFFSET_X, FrontendOptions.OFFSET_Y)
         private const val NO_LIVE_OPTIONS = "This emulator has no options that\ncan be changed while running."
 
         /** The core's options, on the Options page and outside the game: "Emulator" (the app's word for a core). */

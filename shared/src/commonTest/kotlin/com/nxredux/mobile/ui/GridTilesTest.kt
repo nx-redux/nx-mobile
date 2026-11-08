@@ -42,9 +42,6 @@ class GridTilesTest {
         assertEquals(abstractArtUrl("GBA", "Kirby.gba"), gameBackground(boxOnly, portrait = false))
         assertEquals(abstractArtUrl("GBA", "Kirby.gba"), gameBackground(boxOnly, portrait = true))
         assertEquals("s/z.png", gameBackground(listed("Zelda", shot = "s/z.png"), portrait = false))
-        val hero = listed("Metroid").let { it.copy(game = it.game.copy(heroRef = ContentRef("h"))) }
-        assertEquals("h", gameBackground(hero, portrait = false))
-        assertEquals(abstractArtUrl("GBA", "Metroid.gba"), gameBackground(hero, portrait = true))   // a hero never fills a portrait screen
         // An Android game's background: its icon-less form (the cover shows the icon); a ROM's unchanged.
         val app = boxOnly.copy(system = gba.copy(android = true))
         assertEquals(abstractAppArtUrl("Kirby.gba", icon = false), gameBackground(app, portrait = false))
@@ -100,21 +97,31 @@ class GridTilesTest {
         assertEquals(BackdropGame(null, null, "Kirby", "GBA", abstractUrl = abstractArtUrl("GBA", "Kirby.gba")), games[1])   // no art: its abstract picture
     }
 
-    // The 2D front and the grid travel with the game, for the cover drawn in the case; the hero only to the Grid tile.
-    @Test fun backdropGamesCarryBox2dAndGrid() {
-        val zelda = listed("Zelda").let { it.copy(game = it.game.copy(box2dRef = ContentRef("2/zelda.jpg"), gridRef = ContentRef("g/zelda.jpg"), heroRef = ContentRef("h/zelda.jpg"))) }
+    // The 2D front travels with the game, for the cover drawn in the case (a grid is a 2D box on disk now).
+    @Test fun backdropGamesCarryBox2d() {
+        val zelda = listed("Zelda").let { it.copy(game = it.game.copy(box2dRef = ContentRef("2/zelda.jpg"))) }
         val game = backdropGames(listOf(zelda)).single()
         assertEquals("2/zelda.jpg", game.box2dUrl)
-        assertEquals("g/zelda.jpg", game.gridUrl)
         assertNull(game.boxartUrl)
         assertNull(game.screenshotUrl)
-        // A tile keeps the screenshot apart and carries both stand-ins; it picks by its own shape ([tileArt]).
+        // A tile never draws a box: a 2D-box-only game's tile is its abstract picture.
         val tile = gameGridTiles(listOf(zelda)).single()
         assertNull(tile.screenshotUrl)
-        assertEquals("h/zelda.jpg", tile.heroUrl)
-        assertEquals("g/zelda.jpg", tile.gridUrl)
+        assertEquals(false, tile.heroShot)
+        assertEquals(TileArt(abstractArtUrl("GBA", "Zelda.gba"), TileFit.CROP), tileArt(140f, 154f, tile.screenshotUrl, tile.heroShot, tile.abstractUrl))
+        assertEquals(TileArt(abstractArtUrl("GBA", "Zelda.gba"), TileFit.CROP), tileArt(340f, 240f, tile.screenshotUrl, tile.heroShot, tile.abstractUrl))
         val pin = gridTiles(listOf(MainRow.Pin(zelda))).single() as GridTile.Game
         assertEquals(tile.copy(title = pin.title), pin)
+    }
+
+    // A hero screenshot's flag travels with the tile, and the background drops it in portrait.
+    @Test fun heroShotTravelsToTheTileAndBackground() {
+        val zelda = listed("Zelda", shot = "s/zelda.png").let { it.copy(game = it.game.copy(heroShot = true)) }
+        assertEquals(true, gameGridTiles(listOf(zelda)).single().heroShot)
+        assertEquals("s/zelda.png", gameBackground(zelda, portrait = false))
+        assertEquals(abstractBackgroundFor(zelda), gameBackground(zelda, portrait = true))
+        // Home's resume frame is never a hero.
+        assertEquals(false, (gridTiles(listOf(MainRow.Pin(zelda, "frame.png"))).single() as GridTile.Game).heroShot)
     }
 
     // A pinned tool on Home is the Tools tab's tile.
@@ -161,18 +168,27 @@ class GridTilesTest {
         assertEquals(abstractArtUrl("GBA", "com.example.alpha"), abstractArtFor(rom))
     }
 
-    // Home's Continue card: the resume frame, the screenshot, the hero, the grid, then the abstract picture; a missing
-    // link is skipped, so a game with no art at all still has a picture.
+    // Home's Continue card: the resume frame, the screenshot, then the abstract picture; a missing link is skipped, so
+    // a game with no art at all still has a picture.
     @Test fun continuePicturesRunTheWholeChain() {
-        val full = listed("Zelda", shot = "s").let { it.copy(game = it.game.copy(heroRef = ContentRef("h"), gridRef = ContentRef("g"))) }
-        assertEquals(listOf("r", "s", "h", "g", abstractArtUrl("GBA", "Zelda.gba")), continuePictures("r", full))
-        assertEquals(listOf("s", "h", "g", abstractArtUrl("GBA", "Zelda.gba")), continuePictures(null, full))
+        val full = listed("Zelda", shot = "s")
+        assertEquals(listOf("r", "s", abstractArtUrl("GBA", "Zelda.gba")), continuePictures("r", full))
+        assertEquals(listOf("s", abstractArtUrl("GBA", "Zelda.gba")), continuePictures(null, full))
         assertEquals(listOf(abstractArtUrl("GBA", "Kirby.gba")), continuePictures(null, listed("Kirby", box = "b")))   // a box never fills the card
-        val gridOnly = listed("Metroid").let { it.copy(game = it.game.copy(gridRef = ContentRef("g"))) }
-        assertEquals(listOf("g", abstractArtUrl("GBA", "Metroid.gba")), continuePictures(null, gridOnly))
         val android = SystemFolder("Android", ANDROID_TAG, null, emptyList(), android = true)
         val alpha = Listed(android, GameEntry(ContentRef("app:a/A"), "a/A", "Alpha", folder = ContentRef("app:"), sourceId = "android", relativeDir = ""))
         assertEquals(listOf(abstractAppArtUrl("a/A")), continuePictures(null, alpha))
+    }
+
+    // A hero screenshot never fills a portrait Continue card or Switcher List background (the next picture shows); in
+    // landscape, and behind a resume frame, it stays in the chain.
+    @Test fun continuePicturesDropAHeroInPortrait() {
+        val hero = listed("Zelda", shot = "s").let { it.copy(game = it.game.copy(heroShot = true)) }
+        val abstract = abstractArtUrl("GBA", "Zelda.gba")
+        assertEquals(listOf(abstract), continuePictures(null, hero, portrait = true))
+        assertEquals(listOf("r", abstract), continuePictures("r", hero, portrait = true))
+        assertEquals(listOf("s", abstract), continuePictures(null, hero, portrait = false))
+        assertEquals(listOf("s", abstract), continuePictures(null, listed("Zelda", shot = "s"), portrait = true))   // a plain screenshot stays
     }
 
     // The Grid's reset identity ignores game counts: a rescan that only changes them keeps the grid steady.
@@ -194,12 +210,10 @@ class GridTilesTest {
         val shot = bare.copy(screenshotUrl = "s/kirby.png")
         assertEquals(false, shot.artLess(200f, 120f))
         assertEquals(false, shot.artLess(0f, 0f))                                           // unmeasured: still its screenshot
-        val hero = bare.copy(heroUrl = "h/kirby.png")
+        val hero = bare.copy(screenshotUrl = "s/kirby.png", heroShot = true)
         assertEquals(false, hero.artLess(200f, 120f))                                       // wide: the hero
-        assertEquals(true, hero.artLess(140f, 154f))                                        // tall: no grid, the abstract picture
-        val grid = bare.copy(gridUrl = "g/kirby.png")
-        assertEquals(false, grid.artLess(140f, 154f))
-        assertEquals(true, grid.artLess(200f, 120f))
+        assertEquals(true, hero.artLess(140f, 154f))                                        // tall: never a hero, the abstract picture
+        assertEquals(true, hero.artLess(0f, 0f))                                            // unmeasured: a hero waits for the shape
         assertEquals(true, bare.artLess(0f, 0f))                                            // unmeasured, no screenshot: a title tile
     }
 

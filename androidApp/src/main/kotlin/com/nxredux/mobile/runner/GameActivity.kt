@@ -3,7 +3,9 @@ package com.nxredux.mobile.runner
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.AlertDialog
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.IntentFilter
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -53,6 +55,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.round
 import com.nxredux.mobile.ui.nx.NxSpeedIndicator
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
@@ -156,6 +159,15 @@ import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.InputRouter
 import com.nxredux.mobile.ui.nx.MenuEffect
 import com.nxredux.mobile.ui.nx.NotificationQueue
+import com.nxredux.mobile.kids.KIDS_WARNING
+import com.nxredux.mobile.kids.KIDS_WARN_SHOWN
+import com.nxredux.mobile.kids.kidsWarnAction
+import com.nxredux.mobile.kids.AndroidKidsPlatform
+import com.nxredux.mobile.kids.KidsAlarmReceiver
+import com.nxredux.mobile.kids.KidsAlarms
+import com.nxredux.mobile.kids.KidsSchedule
+import com.nxredux.mobile.kids.kidsGameBlocked
+import com.nxredux.mobile.kids.kidsInputDue
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxNotifications
 import com.nxredux.mobile.ui.nx.NxProgressPill
@@ -199,6 +211,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             com.nxredux.mobile.options.FrontendOptions.PAD_LANDSCAPE_OPACITY,
             NdsOptions.LAYOUT_PORTRAIT, NdsOptions.LAYOUT_LANDSCAPE, NdsOptions.PIP_CORNER, NdsOptions.PIP_SIZE, NdsOptions.PIP_OPACITY,
         )
+        /** Cores that send a video view map (melonds-ds#335, azahar#2718 in our patches). */
+        private val VIDEO_VIEW_CORES = setOf("melondsds", "azahar")
         const val EXTRA_CORE_FILE = "core_file"
         private const val KEY_FCEUMM_TURBO_SINCE = "fceumm_turbo_since"
         const val EXTRA_CORE_ID = "core_id"
@@ -233,6 +247,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val KEY_RESUME_SLOT = "nx_resume_slot"
         private const val KEY_NETPLAY_LOCAL = "nx_netplay_local"   // netplay link: the session had ended ([netplayLocal])
         private const val KEY_NAME_HOLD_SHOWN_AT = "nx_name_hold_shown_at"   // the launch name's hold was up ([LaunchNameHold.shownAt])
+        /** Kids Mode's "Games close in 10 minutes" toast stays this long. */
+        private const val KIDS_WARNING_MS = 6000L
         private const val NETPLAY_NOTICE_MS = 5000L   // netplay: "Netplay ended ...", "Using <core> for this match ..."
         private const val NETPLAY_PILL_MS = 1000L     // netplay: a countdown pill outlives one 250 ms status tick
         /** Beside a real-path cache copy: what it was copied from ([realPathCopyStamp]). */
@@ -284,6 +300,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         internal fun endForHandoff(): Boolean {
             if (screens == 0) return false
             latest?.get()?.takeIf { !it.isFinishing }?.onSessionHandedOff()
+            return true
+        }
+
+        /** Kids Mode lock: as [endForHandoff], but the auto state is not written (the battery save still is). */
+        internal fun endForKidsLock(): Boolean {
+            if (screens == 0) return false
+            latest?.get()?.takeIf { !it.isFinishing }?.onKidsLock()
             return true
         }
     }
@@ -644,6 +667,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             it.registerInputDeviceListener(input.inputDeviceListener, Handler(Looper.getMainLooper()))
         }
         menu.menuRouter = InputRouter(lifecycleScope, menu::onMenuPress)
+        ContextCompat.registerReceiver(this, kidsWarn, IntentFilter(kidsWarnAction(this)), ContextCompat.RECEIVER_NOT_EXPORTED)
         lifecycleScope.launch { dual.secondScreens.current.collect { dual.syncDual(); menu.menuModel?.let(menu::publishSecondScreen) } }
         // The game's window resized (a rotation, a fold): the picture screen may be the other display now.
         findViewById<View>(R.id.root).addOnLayoutChangeListener { v, l, t, r, b, ol, ot, or_, ob ->
@@ -685,7 +709,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             intent.getStringExtra(EXTRA_TAG) ?: "UNKNOWN", resumeSlot, netplay != null,
         ))
         launchRecords.keepSwitcherReturnFor(launchId)   // a switcher mark of another launch is not this game's to end on
+        kidsReportsInput = AndroidAppSettings(this).kidsEnabled
         lifecycleScope.launch {
+            // Kids Mode Locked (a recreation from Recents after Android killed this process, a launch that raced the
+            // lock): the game never starts, and its screen goes.
+            if (kidsLockedHere()) {
+                NxLog.i(TAG_LOG, "Kids Mode is locked: not starting ${intent.getStringExtra(EXTRA_TITLE)}")
+                finish()
+                return@launch
+            }
             if (claim.mustWait) {
                 // Also before the battery load and the RA prepare: the old game's quit writes the same saves and stops its client.
                 // The watchdog only informs: the emulator never starts before the old game's native destroy.
@@ -721,6 +753,40 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (isDestroyed) return
         NxLog.i(TAG_LOG, "another game takes over: quitting ${intent.getStringExtra(EXTRA_TITLE)}")
         quitWithAutoState(chosen = false)
+    }
+
+    /**
+     * Kids Mode's own check in the game process: the stored state (this process's copy of the settings, read at its
+     * start) says Locked, and the main process does not hold Parent mode (asked only then; no answer counts as none).
+     */
+    private suspend fun kidsLockedHere(): Boolean {
+        val s = AndroidAppSettings(this)
+        if (!s.kidsEnabled) return false
+        val app = applicationContext
+        return withContext(Dispatchers.IO) {
+            kidsGameBlocked(true, AndroidKidsPlatform.localNow(), KidsSchedule.decode(s.kidsSchedule), s.kidsUnlockUntil) {
+                runCatching { PrefsProvider.kidsParent(app) }.onFailure { NxLog.w(TAG_LOG, "Kids Mode: no answer on Parent mode", it) }.getOrDefault(false)
+            }
+        }
+    }
+
+    /** Kids Mode is on: input here is reported to the main process for Parent mode's idle time ([kidsInputSeen]). */
+    private var kidsReportsInput = false
+    private var kidsInputAt = -1L
+
+    /** Input in the game: at most every 30 s ([kidsInputDue]) the main process hears it, so a parent playing stays Parent. */
+    private fun kidsInputSeen() {
+        if (!kidsReportsInput) return
+        val now = SystemClock.elapsedRealtime()
+        if (!kidsInputDue(kidsInputAt, now)) return
+        kidsInputAt = now
+        runCatching { sendBroadcast(Intent(this, KidsAlarmReceiver::class.java).setAction(KidsAlarms.ACTION_GAME_INPUT)) }
+    }
+
+    private fun onKidsLock() {
+        if (isDestroyed) return
+        NxLog.i(TAG_LOG, "Kids Mode lock: quitting ${intent.getStringExtra(EXTRA_TITLE)} without its auto state")
+        quitWithAutoState(chosen = false, autoState = false)
     }
 
     /**
@@ -1080,6 +1146,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(kidsWarn) }   // not registered when onCreate stopped early
         renderer.cancelGeometryWatch()
         window?.decorView?.removeCallbacks(nds3dTick)
         rumbles.forEach { it.release() }
@@ -1327,8 +1394,18 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // values then, so leaving split (or unfolding) puts back the stored ones. Not under netplay: a session changes no
         // core option once it runs, so an unfold could never put them back; it runs the user's swap, as it launched.
         val launchDual = dual.dualModeNow()
-        val n3dsSplit = if (N3dsOptions.appliesTo(tag)) DualScreen.n3dsForcedOptions(launchDual, n3dsSkinStack() && np == null) else null
-        if (n3dsSplit != null) dual.n3dsSwapBeforeSplit = DualScreen.n3dsSwapRestore(null, resolved.values)
+        // 3DS under video views (no netplay): Azahar stays at its unswapped Default, which keeps its views on; the app
+        // draws the player's layout and does SWAP itself ([FrontendRenderer.n3dsComposition], [N3dsSwap]).
+        val n3dsViews = N3dsOptions.appliesTo(tag) && np == null && LibretroDroid.videoViewsOffered()
+        renderer.n3dsViews = n3dsViews
+        if (n3dsViews) {
+            n3dsSwapMode = resolved.values[DualScreen.N3DS_SWAP_MODE_KEY] ?: "Toggle"
+            renderer.n3dsSwapped = N3dsSwap.initial(resolved.values)
+        }
+        val n3dsSplit = if (!N3dsOptions.appliesTo(tag)) null
+            else if (n3dsViews) DualScreen.N3DS_VIEWS_CORE
+            else DualScreen.n3dsForcedOptions(launchDual, n3dsSkinStack() && np == null)
+        if (n3dsSplit != null && !n3dsViews) dual.n3dsSwapBeforeSplit = DualScreen.n3dsSwapRestore(null, resolved.values)
         n3dsSwapPinnedHalfFolded = N3dsOptions.appliesTo(tag) && np == null && n3dsHalfFoldedPin(launchDual)
         val options = FrontendOptions.coreValues(resolved.values)
             .filterNot { (k, _) -> k == N3dsOptions.LAYOUT && N3dsOptions.appliesTo(tag) }   // set from the row below
@@ -1345,6 +1422,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsSkinStack())),
             ).withN3dsSplit(n3dsSplit) else emptyList()
         options.firstOrNull { it.key == N3dsOptions.STACKED_SMALL_PROPORTION }?.value?.let { renderer.n3dsProportion = it }
+        if (n3dsViews) {
+            renderer.n3dsProportion = n3dsProportion()
+            renderer.n3dsComposeLayout = N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsSkinStack())
+        }
         // netplay link: gambatte gets its link options; a GBA link engine starts now, before the core loads, so
         // a joiner learns the host's gpsp_serial from its READY and runs with it (the handheld reloads instead).
         val linkKind = np?.let { NetplayCores.link(it.coreId) }
@@ -1567,9 +1648,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     } else emptyMap()
                     val forced = netplayPad?.options.orEmpty() + linkOptions + wiiScreenOption() + nds3dLaunch + ps2BiosOption + n64Vram + graphics.forcedOptions
                     variables = (options.map { v ->
-                        forced[v.key]?.let { Variable(v.key, it) }
-                            ?: if (launchSega != null && (v.key == SegaPadType.PICODRIVE_INPUT1 || v.key == SegaPadType.PICODRIVE_INPUT2))
-                                Variable(v.key, SegaPadType.picodriveInput(launchSegaPad)) else v
+                        forced[v.key]?.let { Variable(v.key, it) } ?: v
                     } + forced.filterKeys { k -> options.none { it.key == k } }.map { (k, v) -> Variable(k, v) }).toTypedArray()
                     rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
                     preferLowLatencyAudio = true
@@ -1581,6 +1660,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     // Display → Graphics API ([graphics]): Vulkan frames are bridged into the GLES presentation.
                     preferVulkan = graphics.preferVulkan
                     vulkanSwapchainFrames = graphics.swapchainFrames
+                    // DS / 3DS: the core reports where each screen sits in its frame (video views), the layouts read it.
+                    videoViews = gameCoreId in VIDEO_VIEW_CORES
                     // gpsp: never unload the core between games, so its recompiler cache stays mapped near it.
                     keepCoreLoaded = descriptor?.keepLoaded == true
                     shader = renderer.shaderFor(frontend)
@@ -1596,6 +1677,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     // them (connectDolphinPorts), or Dolphin connects Wiimotes 2-4 and the game shows a co-star cursor.
                     if (descriptor?.id == DOLPHIN_ID) controllerPorts = dolphinPorts(dolphinDevice(), claimedPorts(), players)
                     if (descriptor?.id == SegaPadType.GPGX) SegaPadType.gpgxPorts(launchSega, players)?.let { controllerPorts = it }
+                    if (descriptor?.id == SegaPadType.PICODRIVE && launchSega != null) controllerPorts = SegaPadType.picodrivePorts(launchSega, launchSegaPad, players)
                     netplayPad?.ports?.takeIf { it.isNotEmpty() }?.let { controllerPorts = controllerPorts + it }   // netplay: the pak's ports 0-1
                     if (inner != null) {
                         gameFilePath = inner.absolutePath
@@ -2094,6 +2176,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun syncN3dsCore() {
         if (!isN3ds) return
         val screen = screenClass()
+        if (renderer.n3dsViews) {
+            // The core keeps its Default: a layout, proportion, rotation or fold is the app's to draw, at once.
+            renderer.n3dsComposeLayout = N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen, n3dsSkinStack())
+            renderer.n3dsProportion = n3dsProportion(screen = screen)
+            applyOptions(listOf(Variable(N3dsOptions.CURSOR_VISIBLE, N3dsOptions.cursorVisible(input.n3dsHotkeys.stylus))))
+            renderer.relayoutFrontend()
+            return
+        }
         val options = listOf(
             Variable(N3dsOptions.LAYOUT, N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screen, n3dsSkinStack())),
             // Large screen halves the touch screen (portrait: fills the height left), Stacked keeps both alike: a layout
@@ -2129,6 +2219,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /** The core's swap was last pinned by half-folding ([syncN3dsCore]): flat again puts the user's values back. */
     private var n3dsSwapPinnedHalfFolded = false
+    /** The player's Swap Screen Mode (Toggle / Hold), which the app's SWAP follows under video views. */
+    private var n3dsSwapMode = "Toggle"
 
     /**
      * A 3DS under a pad skin cuts its screens from the Stacked frame: the core is then Stacked with equal screens
@@ -2163,6 +2255,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun onN3dsPictureSpace() {
         if (!isN3ds || netplayNow != null || DualScreen.n3dsForcedOptions(dual.dualMode, n3dsSkinStack()) != null) return
         val proportion = n3dsProportion()
+        if (renderer.n3dsViews) {
+            if (proportion != renderer.n3dsProportion) { renderer.n3dsProportion = proportion; renderer.relayoutFrontend() }
+            return
+        }
         if (proportion == renderer.n3dsProportion) return
         lastN3dsLayout = lastN3dsLayout?.plus(N3dsOptions.STACKED_SMALL_PROPORTION to proportion)
         renderer.watchGeometry(why = "3DS Large screen proportion $proportion sent")
@@ -2206,6 +2302,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         padLayout.padLandscapeAlpha.value = s.padLandscapeAlpha
         val view = retroView ?: return
         view.resamplingQuality = AudioOptions.qualityOf(values)
+        view.audioBufferMs = AudioOptions.bufferMsOf(values, gameTag)   // read when the game's audio starts
+        view.fillAudioGaps = AudioOptions.fillGapsOf(values)
         view.frameSkip = FrameSkipOptions.skipOf(values, gameTag)
         view.scaleMode = when (s.scaling) {
             ScreenScaling.NATIVE -> ScaleMode.INTEGER
@@ -2496,15 +2594,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     .onFailure { NxLog.w(TAG_LOG, "setting the Sega pad failed", it) }
             }
         }
-        changes.filterIsInstance<SegaPadChange.Option>().takeIf { it.isNotEmpty() }
-            ?.let { opts -> applyOptions(opts.map { Variable(it.key, it.value) }) }
     }
 
     override fun relayoutFrontend() = renderer.relayoutFrontend()
-
-    override fun recheckPictureOn(g: FloatArray) {
-        if (dual.dualMode != DualMode.OFF) dual.recheckPictureOn(g)
-    }
 
     override fun persistConsoleKey(key: String, value: String, failure: String) {
         val store = configStore ?: return
@@ -3134,6 +3226,20 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         publishNotifications()
     }
 
+    /**
+     * Kids Mode's 10-minute warning from the main process ([com.nxredux.mobile.kids.AndroidKids.warn]), an ordered
+     * broadcast: only while this screen is resumed (in front) is it the overlay's toast, answered [KIDS_WARN_SHOWN];
+     * otherwise the main process posts a notification.
+     */
+    private val kidsWarn = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+            resultCode = KIDS_WARN_SHOWN
+            notifications.push(KIDS_WARNING, null, KIDS_WARNING_MS, SystemClock.elapsedRealtime())
+            publishNotifications()
+        }
+    }
+
     /** Publishes the queue and keeps a 250 ms expiry tick running while anything is shown. */
     override fun publishNotifications() {
         notificationState.value = notifications.toasts to notifications.pill
@@ -3221,17 +3327,20 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun ndsControllerMode(): Boolean = renderer.ndsControllerMode()
     override fun screenClass(): ScreenClass = windowShape().screenClass
     // Half-folded (no second screen's mode, which places the screens itself) the screens follow the fold.
+    override fun layoutSetByDual(): Boolean = !DualScreen.layoutCycles(dual.dualMode)
 
     // The second display's state, owned by [dual]: read by the input, layout and picture code.
     override val presentation: SecondScreenPresentation? get() = dual.presentation
     override val dualMode: DualMode get() = dual.dualMode
     override val pictureOn: PictureOn get() = dual.pictureOn
     override val n3dsPicture: NdsScreen get() = dual.n3dsPicture
-    override fun secondDsRegions(g: FloatArray): List<NdsRegion>? = dual.secondDsRegions(g)
+    override fun secondDsRegions(g: FloatArray, map: ScreenMap?): List<NdsRegion>? = dual.secondDsRegions(g, map)
     override fun secondWholeFrame(g: FloatArray): com.nxredux.mobile.options.PxRect? = dual.secondWholeFrame(g)
     override fun secondRegions(g: FloatArray, ds: List<NdsRegion>?): List<ScreenRegion> = dual.secondRegions(g, ds)
-    override fun onN3dsSwapPressed(down: Boolean): Boolean = dual.onN3dsSwapPressed(down) || renderer.onSkinN3dsSwap(down)
+    override fun onN3dsSwapPressed(down: Boolean): Boolean =
+        dual.onN3dsSwapPressed(down) || renderer.onSkinN3dsSwap(down) || renderer.onN3dsViewsSwap(down, n3dsSwapMode)
     override fun mainPanelCoversWindow(): Boolean = dual.mainPanelCoversWindow()
+    override fun mainShowsNoPicture(): Boolean = dual.mainShowsNoPicture()
     /** A NAOMI / Atomiswave set (flycast's set table, the launcher's rule): read once, the table only for a DC archive. */
     override val dcArcadeSet: Boolean by lazy {
         val name = intent.getStringExtra(EXTRA_FILE_NAME).orEmpty()
@@ -3480,6 +3589,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun handleMenuEffect(effect: MenuEffect) = menu.handle(effect)
     override fun publishMenuSecondScreen() { menu.menuModel?.let(menu::publishSecondScreen) }
+    override fun placeMenu() = menu.placeMenu()
     override fun withMenu(block: (InGameMenuModel) -> Unit) { menu.menuModel?.let { block(it); menu.menuState.value = it.state } }
 
     override fun publishMenuShaders() {
@@ -3499,6 +3609,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * are swallowed too, even after the hold went; a release whose press went through goes through.
      */
     override fun dispatchKeyEvent(raw: KeyEvent): Boolean {
+        kidsInputSeen()
         val event = SystemButtonKeys.translate(this, raw)   // a bound SELECT / START / MENU button as its role, first
         val code = event.keyCode
         // The Adjust buttons editor is touch-driven: Back / B leave it, every other key waits (the menu under it and the
@@ -3538,12 +3649,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /** Touches wait for the game while the launch name's hold is up ([HoldTouchGate]): the lit pad above it does nothing yet. */
-    override fun dispatchTouchEvent(event: MotionEvent): Boolean =
-        holdTouches.swallows(event.actionMasked, nameHold != null) || super.dispatchTouchEvent(event)
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        kidsInputSeen()
+        return holdTouches.swallows(event.actionMasked, nameHold != null) || super.dispatchTouchEvent(event)
+    }
 
     /** Sticks wait for the game while the launch name's hold is up, and go nowhere under the Adjust buttons editor. */
-    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
-        nameHold != null || skinEditView != null || super.dispatchGenericMotionEvent(event)
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        kidsInputSeen()
+        return nameHold != null || skinEditView != null || super.dispatchGenericMotionEvent(event)
+    }
 
     override fun onGenericMotionEvent(event: MotionEvent?): Boolean = input.onGenericMotionEvent(event)
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean = input.onKeyDown(keyCode, event)

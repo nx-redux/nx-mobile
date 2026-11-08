@@ -10,14 +10,14 @@ import kotlin.test.assertTrue
 class NetplayPadsTest {
     private val pico = "picodrive"
     private val gpgx = "genesis_plus_gx"
-    private val threeButtons = mapOf("picodrive_input1" to "3 button pad", "picodrive_input2" to "3 button pad")
+    private val threeButtons = mapOf(0 to 257, 1 to 257)   // RETRO_DEVICE_SUBCLASS(JOYPAD, 0): picodrive's 3-button pad
 
     @Test fun picodrive_gets_the_paks_three_button_pad_on_every_sega_tag() {
         // SMS/GG/SG1000.pak set it; MD/SEGACD/32X.pak leave picodrive's default, also 3 button pad. Never the 6-button pad.
         for (tag in listOf("MD", "SEGACD", "32X", "SMS", "GG", "SG1000", "GPGX")) {
             val pad = assertNotNull(NetplayPads.forSession(tag, pico), tag)
-            assertEquals(threeButtons, pad.options, tag)
-            assertTrue(pad.ports.isEmpty(), tag)
+            assertEquals(threeButtons, pad.ports, tag)
+            assertTrue(pad.options.isEmpty(), tag)
             assertEquals(SegaPad.THREE, pad.pad, tag)
         }
     }

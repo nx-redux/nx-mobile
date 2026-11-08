@@ -24,7 +24,7 @@ class PadOptionsTest {
     }
 
     @Test fun nds_keeps_its_rows_and_gains_the_layout_row() {
-        assertEquals(NdsOptions.table + BottomScreenOptions.row + PadOptions.layoutRow + (SpeedOptions.table + AudioOptions.row), ConsoleSettings.tableFor("NDS"))
+        assertEquals(NdsOptions.table + BottomScreenOptions.row + PadOptions.layoutRow + (SpeedOptions.table + AudioOptions.rows), ConsoleSettings.tableFor("NDS"))
     }
 
     // Portrait Pad is gone: portrait always lays the see-through overlay over the full-screen game (no band to hide).

@@ -4,7 +4,7 @@ import com.nxredux.mobile.library.NaomiSets
 import com.nxredux.mobile.library.Names
 
 object CoreRegistry {
-    // melonDS DS (JesseTG/melonds-ds v1.3.1). The core draws the plain top-over-bottom 256x384 stack and takes the
+    // melonDS DS (JesseTG/melonds-ds v1.4.0). The core draws the plain top-over-bottom 256x384 stack and takes the
     // touchscreen as a pointer; the frontend lays the two screens out (NdsLayout), so those options are locked. Keys and
     // values: src/libretro/config/constants.hpp and config/definitions/screen.hpp at the pin. BIOS and firmware are
     // optional (built-in free ones); Bios/NDS/ is copied into the system dir when present. The renderer's default comes from the device's GLES version at load (NdsRenderer). The mic options are locked too: the
@@ -38,9 +38,13 @@ object CoreRegistry {
             "melonds_mic_input" to "microphone",
             "melonds_mic_input_active" to "always",
             "melonds_show_mic_state" to "disabled",
+            // Improved Polygon Splitting warps textures on large floor polygons under GLES (Mario Kart DS's low flyover
+            // shots); the standalone melonDS app runs its GL renderer with it off too.
+            "melonds_opengl_better_polygons" to "disabled",
+            "melonds_frontend_layout" to "auto",
         ),
         lockedOptions = setOf(
-            "melonds_touch_mode", "melonds_number_of_screen_layouts", "melonds_screen_layout1",
+            "melonds_frontend_layout", "melonds_opengl_better_polygons", "melonds_touch_mode", "melonds_number_of_screen_layouts", "melonds_screen_layout1",
             "melonds_screen_gap", "melonds_show_cursor", "melonds_mic_input", "melonds_mic_input_active",
             "melonds_show_mic_state", "melonds_opengl_resolution", "melonds_secondary_screen_scale",
             "melonds_secondary_screen_filtering", "melonds_hybrid_ratio", "melonds_hybrid_small_screen",
@@ -88,9 +92,9 @@ object CoreRegistry {
         biosFiles = listOf("PPSSPP/"),
         // The backend is locked to "auto", which asks GET_PREFERRED_HW_RENDER, so Graphics API picks GL or Vulkan; "none"
         // (software context) is hidden. retro_cheat_set only works with ppsspp_cheats enabled (off by default), so it is
-        // locked on: the in-game Cheats row is the switch.
-        defaultOptions = mapOf("ppsspp_backend" to "auto", "ppsspp_cheats" to "enabled"),
-        lockedOptions = setOf("ppsspp_cheats", "ppsspp_backend"),
+        // locked on: the in-game Cheats row is the switch. VR Mode needs stereo video views, which we never report.
+        defaultOptions = mapOf("ppsspp_backend" to "auto", "ppsspp_cheats" to "enabled", "ppsspp_vr_mode" to "Off"),
+        lockedOptions = setOf("ppsspp_cheats", "ppsspp_backend", "ppsspp_vr_mode"),
         hiddenValues = mapOf("ppsspp_backend" to setOf("vulkan", "none")),
         vulkan = VulkanSwitch(gles = mapOf("ppsspp_backend" to "auto"), vulkan = mapOf("ppsspp_backend" to "auto")),
         restartOnlyOptions = RestartOnlyOptions.ppsspp,
@@ -154,7 +158,8 @@ object CoreRegistry {
     private val pcsxRearmed = CoreDescriptor(
         "pcsx_rearmed", "libpcsx_rearmed_libretro_android.so",
         setOf("bin", "cue", "img", "mdf", "pbp", "toc", "cbn", "m3u", "chd", "iso", "exe"),
-        defaultOptions = mapOf("pcsx_rearmed_dithering" to "enabled"),
+        // No second memory card unless picked, as before the 2026 pin (its default became a card shared by all games).
+        defaultOptions = mapOf("pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none"),
         biosFiles = listOf("psxonpsp660.bin", "scph101.bin", "scph5501.bin", "scph7001.bin", "scph1001.bin"),   // optional: HLE built in
         controllerPort0 = CoreDescriptor.PS_DUALSHOCK,
         players = 2,
@@ -216,7 +221,12 @@ object CoreRegistry {
     )
     private val vb = CoreDescriptor(
         "mednafen_vb", "libmednafen_vb_libretro_android.so", setOf("vb", "vboy", "bin"),
-        defaultOptions = mapOf("vb_3dmode" to "anaglyph"),
+        // VR needs stereo video views or a headset, which the frontend never reports; head-locked would take a GL context.
+        defaultOptions = mapOf(
+            "vb_3dmode" to "anaglyph",
+            "vb_vr" to "disabled", "vb_vr_screen_distance" to "1.0", "vb_vr_screen_width" to "1.1",
+        ),
+        lockedOptions = setOf("vb_vr", "vb_vr_screen_distance", "vb_vr_screen_width"),
         cheats = false,   // retro_cheat_set is empty
         name = "Beetle VB",
     )
@@ -275,26 +285,31 @@ object CoreRegistry {
         "picodrive", "libpicodrive_libretro_android.so", setOf("32x", "bin", "md", "gen", "smd", "68k", "sms", "gg", "sg", "cue", "iso", "chd", "m3u"),
         // Its NDK build has no libretro VFS (plain fopen on the path): give it a real file.
         loadMode = LoadMode.REAL_PATH,
-        // The Brick's MD, SEGACD and 32X paks' values (the rest of theirs are the core's defaults); picodrive_input1 and
-        // picodrive_input2 are set at launch and on a change from Controls → Controller Type (SegaPadType).
-        defaultOptions = mapOf(
-            "picodrive_drc" to "enabled", "picodrive_sound_rate" to "44100",
-            "picodrive_input1" to "6 button pad", "picodrive_input2" to "6 button pad",
-        ),
-        lockedOptions = setOf("picodrive_input1", "picodrive_input2"),
+        // The Brick's MD, SEGACD and 32X paks' values (the rest of theirs are the core's defaults).
+        defaultOptions = mapOf("picodrive_drc" to "enabled", "picodrive_sound_rate" to "44100"),
+        // The 6-button pad on both ports; Controls → Controller Type replaces it at launch and live (SegaPadType).
+        controllerPort0 = SegaPadType.MDPAD_6B,
+        controllerPortCount = 2,
         players = 2,
         name = "PicoDrive",
     )
     // Tag views of picodrive for the 8-bit consoles (as mgbaSgb): the SMS, GG and SG1000 paks force the 3-button pad
     // (no Controller Type row there) and SMS and GG the Master System Type. Same id: states and configs stay <TAG>-picodrive.
-    private val picodrive8bit = picodrive.copy(
-        defaultOptions = picodrive.defaultOptions + mapOf("picodrive_input1" to "3 button pad", "picodrive_input2" to "3 button pad"),
-    )
+    private val picodrive8bit = picodrive.copy(controllerPort0 = SegaPadType.MDPAD_3B)
     private val picodriveSms = picodrive8bit.copy(defaultOptions = picodrive8bit.defaultOptions + ("picodrive_smstype" to "Master System"))
     private val picodriveGg = picodrive8bit.copy(defaultOptions = picodrive8bit.defaultOptions + ("picodrive_smstype" to "Game Gear"))
+    private val GEARCOLECO_ADAM = mapOf(
+        "gearcoleco_cartridge_hardware" to "ColecoVision",
+        "gearcoleco_adam_disk_drive" to "Loaded media",
+        "gearcoleco_adam_writable_media" to "Disabled",
+        "gearcoleco_adam_computer_reset" to "Idle",
+    )
     private val gearcoleco = CoreDescriptor(
         "gearcoleco", "libgearcoleco_libretro_android.so", setOf("col", "cv", "bin", "rom"),
         biosFiles = listOf("colecovision.rom", "coleco.rom"),
+        // Cartridges only: the ADAM computer (its disks, data packs and firmware) is not offered, so its rows stay at the defaults.
+        defaultOptions = GEARCOLECO_ADAM,
+        lockedOptions = GEARCOLECO_ADAM.keys,
         cheats = false, ramCheats = true,   // retro_cheat_set is a TODO; the database's ColecoVision files are RAM patches
         players = 2,
         name = "Gearcoleco",
@@ -362,7 +377,7 @@ object CoreRegistry {
         rewind = false,
     )
 
-    // Nintendo 3DS on Azahar (azahar-emu/azahar 2126.1.2, src/citra_libretro, patched; cores/Makefile), GLES or Vulkan
+    // Nintendo 3DS on Azahar (azahar-emu/azahar 2126.2, src/citra_libretro, patched; cores/Makefile), GLES or Vulkan
     // (Graphics API). Content through the runner's VFS: the game is /rom/<name>, read from the SAF descriptor in place, not
     // a multi-GB copy into the cache. FileUtil's plain stat misses that file, so the patch asks the VFS when stat finds
     // nothing (cores/patches/azahar.patch). Decrypted games only; the AES keyblob and the open-source shared font are
@@ -375,6 +390,7 @@ object CoreRegistry {
     private val azahar = CoreDescriptor(
         "azahar", "libazahar_libretro_android.so", setOf("3ds", "3dsx", "z3dsx", "elf", "axf", "cci", "zcci", "cxi", "zcxi", "app"),
         defaultOptions = mapOf(
+            "citra_frontend_layout" to "auto",
             "citra_graphics_api" to "OpenGL",
             "citra_resolution_factor" to "3",
             "citra_use_disk_shader_cache" to "enabled",
@@ -392,6 +408,7 @@ object CoreRegistry {
             "citra_render_3d" to "off",
         ),
         lockedOptions = setOf(
+            "citra_frontend_layout",
             "citra_resolution_factor", "citra_large_screen_proportion", "citra_render_3d",
             "citra_graphics_api", "citra_use_libretro_save_path", "citra_enable_mouse_touchscreen", "citra_enable_motion",
             "citra_motion_sensitivity", "citra_input_type",

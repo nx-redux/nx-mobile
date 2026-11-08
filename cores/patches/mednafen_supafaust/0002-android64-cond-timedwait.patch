@@ -1,0 +1,16 @@
+# license: modifies Supafaust (https://github.com/libretro/supafaust), GPL-2.0 (COPYING); this patch is distributed under the same license.
+# Upstream b531176a sends Android to pthread_cond_timedwait_monotonic_np, which only 32-bit bionic ever had; arm64
+# fails to compile. 64-bit Android keeps the generic POSIX path it used before.
+diff --git a/mednafen/mthreading/MThreading_POSIX.cpp b/mednafen/mthreading/MThreading_POSIX.cpp
+index e4fd19b..4299f9a 100644
+--- a/mednafen/mthreading/MThreading_POSIX.cpp
++++ b/mednafen/mthreading/MThreading_POSIX.cpp
+@@ -29,7 +29,7 @@
+ //
+ //
+ //
+-#if defined(__ANDROID__)
++#if defined(__ANDROID__) && !defined(__LP64__)
+  #define MDFN_USE_COND_TIMEDWAIT_MONOTONIC_NP
+ #elif defined(__SWITCH__) || defined(HAVE_LIBNX)
+  /* libnx pthread lacks a reliable CLOCK_MONOTONIC cond clock; use realtime. */

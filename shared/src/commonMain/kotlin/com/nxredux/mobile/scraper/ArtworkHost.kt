@@ -1,6 +1,7 @@
 package com.nxredux.mobile.scraper
 
 import com.nxredux.mobile.library.ArtRefs
+import com.nxredux.mobile.runner.ContentRef
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -31,7 +32,8 @@ interface ArtworkHost {
 
 /**
  * Builds the engine (its sources in order, ScreenScraper with the controller's live auth) and its art/log callbacks
- * ([onAndroidArt]: an Android game's screenshot stored; [logged]: the written-art log's queries).
+ * ([onAndroidArt]: an Android game's screenshot stored; [logged]: the written-art log's queries; [onOptions] and
+ * [picked]: the Change art option list, as [ScrapeEngine] takes them).
  */
 typealias ScrapeEngineFactory = (
     auth: () -> ScraperAuth,
@@ -39,6 +41,8 @@ typealias ScrapeEngineFactory = (
     onWritten: suspend (List<Pair<String, ArtOrigin?>>) -> Unit,
     onAndroidArt: suspend () -> Unit,
     logged: LoggedArt,
+    onOptions: suspend (gamePath: String, options: List<ArtOption>, wide: Boolean) -> Unit,
+    picked: suspend (gamePath: String) -> Set<ArtSlot>,
 ) -> ScrapeEngine
 
 /**
@@ -49,6 +53,40 @@ enum class SignInResult { OK, BAD_LOGIN, OFFLINE, UNAVAILABLE, BUILD_REFUSED }
 
 /** One game's fetch: its status and why (the item's reason, or the pause reason when the fetch was stopped). */
 data class FetchResult(val status: ItemStatus, val reason: String? = null)
+
+/**
+ * A game's Change art list: its saved [options] in the order found, [currentKeys] per file slot ([ArtSlot.fileSlot]) the
+ * option that slot's file came from (no entry for a hand-placed file, an extra folder's own, or none), and [note] why
+ * some or every source is missing from it (stopped sources, a pause).
+ */
+data class ArtOptionsResult(val options: List<ArtOption>, val currentKeys: Map<ArtSlot, String>, val note: String? = null)
+
+/** An option's preview: its [ref], or null when there is none to show; [dropped]: the link is dead and left the list. */
+data class OptionImage(val ref: ContentRef?, val dropped: Boolean = false)
+
+/** What the art panel asks of the artwork controller ([ArtworkController] implements it; the defaults are its own). */
+interface ArtOptionsPort {
+    /**
+     * One game's fetch; [wide]: also every source's screenshot, grid and hero candidates. [found]: the options so far,
+     * each time a source's answer adds some while this call's own run goes on (shown only, not the saved list).
+     */
+    suspend fun fetchGame(
+        gamePath: String, replaceExisting: Boolean = false, wide: Boolean = false, found: suspend (List<ArtOption>) -> Unit = {},
+    ): FetchResult
+    /**
+     * The game's Change art list; [searchAgain]: the wide search runs again first. [autoSearch] false: the saved list
+     * as it is, never searched for (the read right after the panel's own Fetch art). [found]: as [fetchGame]'s, while
+     * the search runs.
+     */
+    suspend fun artOptions(
+        gamePath: String, replaceExisting: Boolean, searchAgain: Boolean = false, autoSearch: Boolean = true,
+        found: suspend (List<ArtOption>) -> Unit = {},
+    ): ArtOptionsResult
+    /** [option]'s preview; [OptionImage.dropped] when its link is dead and the option was dropped from the list. */
+    suspend fun optionImage(gamePath: String, option: ArtOption): OptionImage
+    /** Writes [option] into its file slot (2D box, 3D box, wheel or screenshot); false when it could not. */
+    suspend fun pickOption(gamePath: String, option: ArtOption): Boolean
+}
 
 /** A Reset artwork: how many files it deleted and whether it paused the running fetch (it had games in scope). */
 data class ResetResult(val deleted: Int, val pausedJob: Boolean = false)
@@ -61,7 +99,7 @@ data class ResetResult(val deleted: Int, val pausedJob: Boolean = false)
  * next change rewrites the file. An absent file is an empty log; a failed read ([ArtworkHost.readPrivate] throws) is
  * neither cached nor saved over: the call fails and the next one reads again.
  */
-class ArtLogStore(private val host: ArtworkHost, private val name: String) : LoggedArt {
+class ArtLogStore(private val host: ArtworkHost, private val name: String) : LoggedArt, MovedArtLog {
     private val mutex = Mutex()
     private var log: WrittenArtLog? = null
     /** Lines appended since the file was last written whole. */
@@ -95,10 +133,27 @@ class ArtLogStore(private val host: ArtworkHost, private val name: String) : Log
 
     override suspend fun contains(path: String): Boolean = mutex.withLock { path in load() }
 
+    /** Where the logged file at [path] came from; null when unknown or not logged. */
+    override suspend fun origin(path: String): ArtOrigin? = mutex.withLock { load().origin(path) }
+
     override suspend fun remove(path: String) = mutex.withLock {
         val l = load()
         if (path in l) { l.remove(listOf(path)); save(l) }
     }
+
+    /** The entry at [from] now at [to], its origin kept, in one save; nothing when [from] is not logged. */
+    override suspend fun move(from: String, to: String) = mutex.withLock {
+        val l = load()
+        if (from !in l) return@withLock
+        val origin = l.origin(from)
+        l.remove(listOf(from))
+        l.remove(listOf(to))   // [to]'s origin is [from]'s, even an unknown one
+        l.add(to, origin)
+        save(l)
+    }
+
+    /** [block]'s answer from the log under its lock, nothing saved. */
+    suspend fun <T> read(block: (WrittenArtLog) -> T): T = mutex.withLock { block(load()) }
 
     /** Runs [block] on the log under its lock, then saves it. */
     suspend fun <T> edit(block: suspend (WrittenArtLog) -> T): T = mutex.withLock {

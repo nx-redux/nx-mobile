@@ -1,10 +1,144 @@
 # licence: modifies Azahar (https://github.com/azahar-emu/azahar), GPL-2.0 or later (its source files; license.txt is
-# the GPLv2 text; see LICENSES/azahar.txt); this patch is distributed under the same licence.
+# the GPLv2 text; see LICENSES/azahar.txt); this patch is distributed under the same licence. It also carries
+# azahar-emu/azahar#2718 (video views), whose new files are GPL-3.0 or later, so the patched core is GPL-3.0.
+diff --git a/CMakeModules/GenerateSettingKeys.cmake b/CMakeModules/GenerateSettingKeys.cmake
+index f75bfe5..8ddc633 100644
+--- a/CMakeModules/GenerateSettingKeys.cmake
++++ b/CMakeModules/GenerateSettingKeys.cmake
+@@ -298,6 +298,7 @@ if (ENABLE_LIBRETRO)
+         "enable_touch_pointer_timeout"
+         "enable_motion"
+         "motion_sensitivity"
++        "frontend_layout"
+     )
+         string(REPLACE "_" "_1" KEY_JNI_ESCAPED ${KEY})
+         set(SETTING_KEY_LIST "${SETTING_KEY_LIST}\n\"${KEY}\",")
+diff --git a/src/citra_libretro/CMakeLists.txt b/src/citra_libretro/CMakeLists.txt
+index e28f994..5a589f3 100644
+--- a/src/citra_libretro/CMakeLists.txt
++++ b/src/citra_libretro/CMakeLists.txt
+@@ -13,7 +13,10 @@ add_library(citra_libretro_common OBJECT
+         environment.cpp
+         environment.h
+         core_settings.cpp
+-        core_settings.h)
++        core_settings.h
++        libretro_views.h
++        video_views.cpp
++        video_views.h)
+ 
+ target_compile_definitions(citra_libretro_common PRIVATE HAVE_LIBRETRO)
+ target_link_libraries(citra_libretro_common PRIVATE citra_common citra_core video_core libretro tsl::robin_map)
 diff --git a/src/citra_libretro/citra_libretro.cpp b/src/citra_libretro/citra_libretro.cpp
-index 8a65f9d..ec47bbc 100644
+index 8a65f9d..4be9067 100644
 --- a/src/citra_libretro/citra_libretro.cpp
 +++ b/src/citra_libretro/citra_libretro.cpp
-@@ -223,9 +223,16 @@ void retro_run() {
+@@ -2,6 +2,7 @@
+ // Licensed under GPLv2 or any later version
+ // Refer to the license.txt file included.
+ 
++#include <algorithm>
+ #include <list>
+ #include <numeric>
+ #include <vector>
+@@ -32,6 +33,7 @@
+ #include "citra_libretro/core_settings.h"
+ #include "citra_libretro/environment.h"
+ #include "citra_libretro/input/input_factory.h"
++#include "citra_libretro/video_views.h"
+ 
+ #include "common/arch.h"
+ #if CITRA_ARCH(x86_64)
+@@ -63,6 +65,14 @@ public:
+     bool game_loaded = false;
+     bool first_run_loop = true;
+     struct retro_hw_render_callback hw_render{};
++    /// The last video views status logged; all ones before the content's first run.
++    unsigned views_status = ~0u;
++    /// The frontend holds a view map from us.
++    bool views_map_sent = false;
++    /// False once the frontend has shown it doesn't know the status call.
++    bool views_status_supported = true;
++    /// The last view map the frontend rejected, logged once.
++    std::vector<retro_video_view> views_rejected;
+ };
+ 
+ CitraLibRetro* emu_instance;
+@@ -211,6 +221,73 @@ static void UpdateSettings() {
+     Core::System::GetInstance().ApplySettings();
+ }
+ 
++static bool SameViews(const std::vector<retro_video_view>& a,
++                      const std::vector<retro_video_view>& b) {
++    return std::equal(a.begin(), a.end(), b.begin(), b.end(),
++                      [](const retro_video_view& l, const retro_video_view& r) {
++                          return l.x == r.x && l.y == r.y && l.width == r.width &&
++                                 l.height == r.height && l.screen == r.screen && l.eye == r.eye &&
++                                 l.aspect_ratio == r.aspect_ratio;
++                      });
++}
++
++/**
++ * Follows the frontend's video views status, and sends the view map for the
++ * frame this run draws.
++ */
++static void UpdateVideoViews() {
++    unsigned status = 0;
++    // A frontend that doesn't know the call won't learn it while content runs.
++    if (emu_instance->views_status_supported && !LibRetro::GetVideoViewsStatus(&status)) {
++        emu_instance->views_status_supported = false;
++        status = 0;
++    }
++    LibRetro::UpdateLayoutOptionsDisplay(LibRetro::settings.frontend_layout, status);
++    const auto mode = LibRetro::VideoViews::SelectMode(
++        LibRetro::settings.frontend_layout, LibRetro::settings.layout_option,
++        LibRetro::settings.render_3d, Settings::values.swap_screen.GetValue(), status,
++        Settings::values.graphics_api.GetValue() != Settings::GraphicsAPI::Software);
++    const bool changed = mode != LibRetro::VideoViews::CurrentMode();
++
++    if (changed || status != emu_instance->views_status) {
++        LOG_INFO(Frontend, "Video views: presents={} stereo={}, {}",
++                 (status & RETRO_VIDEO_VIEWS_STATUS_PRESENTS) ? 1 : 0,
++                 (status & RETRO_VIDEO_VIEWS_STATUS_STEREO) ? 1 : 0,
++                 !mode.active  ? "own layout"
++                 : mode.stereo ? "views in stereo"
++                               : "views in 2D");
++        emu_instance->views_status = status;
++    }
++
++    if (changed) {
++        LibRetro::VideoViews::SetCurrentMode(mode);
++        LibRetro::ApplyLayoutSettings();
++        Core::System::GetInstance().ApplySettings();
++        emu_instance->emu_window->UpdateLayout();
++    }
++
++    // RETRO_ENVIRONMENT_SET_VIDEO_VIEWS asks for the map every run: resending covers state loads
++    // and run-ahead, and an unchanged map costs the frontend one comparison.
++    if (mode.active) {
++        const auto views =
++            LibRetro::VideoViews::BuildMap(emu_instance->emu_window->GetFramebufferLayout(),
++                                           mode.stereo, Settings::values.swap_screen.GetValue());
++        retro_video_views map{};
++        map.views = views.data();
++        map.num_views = static_cast<unsigned>(views.size());
++        if (!LibRetro::SetVideoViews(&map) && !SameViews(views, emu_instance->views_rejected)) {
++            LOG_ERROR(Frontend, "The frontend rejected a video views map of {} views",
++                      views.size());
++            emu_instance->views_rejected = views;
++        }
++        emu_instance->views_map_sent = true;
++    } else if (emu_instance->views_map_sent) {
++        retro_video_views none{};
++        LibRetro::SetVideoViews(&none);
++        emu_instance->views_map_sent = false;
++    }
++}
++
+ /**
+  * libretro callback; Called every game tick.
+  */
+@@ -223,9 +300,16 @@ void retro_run() {
          return;
      }
  
@@ -21,7 +155,7 @@ index 8a65f9d..ec47bbc 100644
          Core::System::GetInstance().ApplySettings();
          emu_instance->emu_window->UpdateLayout();
      }
-@@ -237,8 +244,6 @@ void retro_run() {
+@@ -237,8 +321,6 @@ void retro_run() {
      }
  
      // Check if the screen swap button is pressed
@@ -30,11 +164,227 @@ index 8a65f9d..ec47bbc 100644
      bool screen_swap_btn =
          !!LibRetro::CheckInput(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3);
      if (screen_swap_btn != screen_swap_button_state) {
+@@ -269,6 +351,8 @@ void retro_run() {
+         screen_swap_button_state = screen_swap_btn;
+     }
+ 
++    UpdateVideoViews();
++
+ #ifdef ENABLE_OPENGL
+     if (Settings::values.graphics_api.GetValue() == Settings::GraphicsAPI::OpenGL) {
+         // We can't assume that the frontend has been nice and preserved all OpenGL settings. Reset.
+@@ -635,6 +719,13 @@ bool retro_load_game(const struct retro_game_info* info) {
+ void retro_unload_game() {
+     LOG_DEBUG(Frontend, "Unloading game...");
+     Core::System::GetInstance().Shutdown();
++    // The mode outlives retro_deinit() while the core stays loaded.
++    LibRetro::VideoViews::SetCurrentMode({});
++    emu_instance->views_status = ~0u;
++    emu_instance->views_status_supported = true;
++    // The frontend clears the map when content unloads.
++    emu_instance->views_map_sent = false;
++    emu_instance->views_rejected.clear();
+ }
+ 
+ unsigned retro_get_region() {
 diff --git a/src/citra_libretro/core_settings.cpp b/src/citra_libretro/core_settings.cpp
-index 53fb164..8e07396 100644
+index 53fb164..553d215 100644
 --- a/src/citra_libretro/core_settings.cpp
 +++ b/src/citra_libretro/core_settings.cpp
-@@ -1043,6 +1043,21 @@ static void ParseLayoutOptions(void) {
+@@ -6,6 +6,7 @@
+ 
+ #include "citra_libretro/core_settings.h"
+ #include "citra_libretro/environment.h"
++#include "citra_libretro/video_views.h"
+ 
+ #include "common/file_util.h"
+ #include "common/settings.h"
+@@ -67,6 +68,7 @@ static constexpr const char* dump_textures = citra_setting(BaseKeys::dump_textur
+ } // namespace graphics
+ 
+ namespace layout {
++static constexpr const char* frontend_layout = citra_setting(BaseKeys::frontend_layout);
+ static constexpr const char* layout_option = citra_setting(BaseKeys::layout_option);
+ static constexpr const char* swap_screen = citra_setting(BaseKeys::swap_screen);
+ static constexpr const char* swap_screen_mode = citra_setting(BaseKeys::swap_screen_mode);
+@@ -452,11 +454,35 @@ static constexpr retro_core_option_v2_definition option_definitions[] = {
+     },
+ 
+     // Layout Category
++    {
++        config::layout::frontend_layout,
++        "Frontend Layout and 3D",
++        "Frontend Layout and 3D",
++        "Let the frontend lay out the 3DS screens and show 3D, with its own "
++        "screen layout, stereo 3D mode and a shader for each screen and eye. "
++        "'Auto' does this where the frontend can: always in its stereo 3D "
++        "modes and on a headset, and in its 2D mode only while Screen Layout "
++        "is Default Top-Bottom or Single Screen Only and Stereoscopic 3D Mode "
++        "is Off. Otherwise, and always with 'Off', Screen Layout and "
++        "Stereoscopic 3D Mode apply. Prominent 3DS Screen picks which screen "
++        "the frontend shows first.",
++        nullptr,
++        config::category::layout,
++        {
++            { "auto", "Auto" },
++            { "off", "Off" },
++            { nullptr, nullptr }
++        },
++        "auto"
++    },
+     {
+         config::layout::layout_option,
+         "Screen Layout",
+         "Screen Layout",
+-        "Choose how the 3DS screens are arranged in the display.",
++        "Choose how the 3DS screens are arranged in the display. While the "
++        "frontend lays out the screens (Frontend Layout and 3D), Single Screen "
++        "Only gives it the prominent screen alone, and every other layout "
++        "gives it both screens.",
+         nullptr,
+         config::category::layout,
+         {
+@@ -472,7 +498,9 @@ static constexpr retro_core_option_v2_definition option_definitions[] = {
+         config::layout::swap_screen,
+         "Prominent 3DS Screen",
+         "Prominent Screen",
+-        "Choose which screen is displayed prominently in single screen or large screen layouts.",
++        "Choose which screen is displayed prominently in single screen or large screen layouts. "
++        "While the frontend lays out the screens (Frontend Layout and 3D), this "
++        "chooses which screen the frontend shows first.",
+         nullptr,
+         config::category::layout,
+         {
+@@ -501,7 +529,8 @@ static constexpr retro_core_option_v2_definition option_definitions[] = {
+         "Large Screen Proportion",
+         "Large Screen Proportion",
+         "How many times larger the main screen is compared to the small screen "
+-        "in the Large Screen layout.",
++        "in the Large Screen layout. Not used while the frontend lays out the "
++        "screens (Frontend Layout and 3D).",
+         nullptr,
+         config::category::layout,
+         {
+@@ -541,7 +570,9 @@ static constexpr retro_core_option_v2_definition option_definitions[] = {
+         "single red/cyan image for use with red/cyan glasses. 'Interlaced' alternates "
+         "the eyes on odd and even scanlines for interlaced 3D displays, and 'Reverse "
+         "Interlaced' swaps which eye is on which line. 'Cardboard VR' outputs side by "
+-        "side with lens-distortion correction for Cardboard-style viewers.",
++        "side with lens-distortion correction for Cardboard-style viewers. Not "
++        "used while the frontend lays out the screens (Frontend Layout and 3D); "
++        "its stereo mode applies instead.",
+         nullptr,
+         config::category::layout,
+         {
+@@ -560,8 +591,9 @@ static constexpr retro_core_option_v2_definition option_definitions[] = {
+         config::layout::factor_3d,
+         "Stereoscopic 3D Depth",
+         "Stereo 3D Depth",
+-        "Depth intensity of the stereoscopic 3D effect, as a percentage. Only used "
+-        "when a 3D mode is active.",
++        "Depth intensity of the stereoscopic 3D effect, as a percentage. Used while "
++        "both eyes are shown: in the frontend's stereo modes, or with a "
++        "Stereoscopic 3D Mode other than Off.",
+         nullptr,
+         config::category::layout,
+         {
+@@ -570,7 +602,7 @@ static constexpr retro_core_option_v2_definition option_definitions[] = {
+             {  "80",  "80%" }, {  "90",  "90%" }, { "100", "100%" },
+             { nullptr, nullptr }
+         },
+-        "0"
++        "50"
+     },
+ 
+     // Storage Category
+@@ -719,7 +751,23 @@ static const retro_core_options_v2 options_v2 = {
+     const_cast<retro_core_option_v2_category*>(option_categories),
+     const_cast<retro_core_option_v2_definition*>(option_definitions)};
+ 
++/// Whether the frontend shows the Layout options. New core options show until the core hides
++/// them; only options the frontend took reset this, as RetroArch sets a running core's
++/// environment again, ignoring every call, to read its system info.
++static bool layout_options_visible = true;
++
++static bool RETRO_CALLCONV UpdateOptionsDisplay(void) {
++    unsigned status = 0;
++    if (!LibRetro::GetVideoViewsStatus(&status)) {
++        status = 0;
++    }
++    return UpdateLayoutOptionsDisplay(
++        LibRetro::FetchVariable(config::layout::frontend_layout, "auto") != "off", status);
++}
++
+ void RegisterCoreOptions(void) {
++    LibRetro::SetCoreOptionsUpdateDisplayCallback(UpdateOptionsDisplay);
++
+     // Try v2 first, then fallback to v1 and v0 if needed
+     unsigned version = 0;
+     if (!LibRetro::GetCoreOptionsVersion(&version)) {
+@@ -731,6 +779,7 @@ void RegisterCoreOptions(void) {
+     if (version >= 2) {
+         if (LibRetro::SetCoreOptionsV2(&options_v2)) {
+             LOG_INFO(Frontend, "V2 core options set successfully");
++            layout_options_visible = true;
+             return;
+         }
+     }
+@@ -764,6 +813,7 @@ void RegisterCoreOptions(void) {
+ 
+         if (LibRetro::SetCoreOptionsV1(options_v1.data())) {
+             LOG_INFO(Frontend, "V1 core options set successfully");
++            layout_options_visible = true;
+             return;
+         }
+     }
+@@ -817,6 +867,7 @@ void RegisterCoreOptions(void) {
+     // Set V0 variables
+     if (LibRetro::SetVariables(variables.data())) {
+         LOG_INFO(Frontend, "V0 core options set successfully");
++        layout_options_visible = true;
+     } else {
+         LOG_ERROR(Frontend, "Failed to set core options with any version");
+     }
+@@ -974,6 +1025,8 @@ static void ParseGraphicsOptions(void) {
+         LibRetro::FetchVariable(config::graphics::use_disk_shader_cache, config::enabled) ==
+         config::enabled;
+ 
++    Settings::values.async_shader_compilation = true;
++
+     auto resolution = LibRetro::FetchVariable(config::graphics::resolution_factor, "1");
+     Settings::values.resolution_factor = std::stoi(resolution);
+ 
+@@ -1017,22 +1070,17 @@ static Settings::StereoRenderOption GetStereoRenderOption(const std::string& nam
+ }
+ 
+ static void ParseLayoutOptions(void) {
+-    Settings::values.layout_option =
++    LibRetro::settings.frontend_layout =
++        LibRetro::FetchVariable(config::layout::frontend_layout, "auto") != "off";
++
++    LibRetro::settings.layout_option =
+         GetLayoutOption(LibRetro::FetchVariable(config::layout::layout_option, "default"));
+ 
+-    Settings::values.render_3d =
++    LibRetro::settings.render_3d =
+         GetStereoRenderOption(LibRetro::FetchVariable(config::layout::render_3d, "off"));
+ 
+-    Settings::values.factor_3d =
+-        static_cast<u32>(std::stoi(LibRetro::FetchVariable(config::layout::factor_3d, "0")));
+-
+-    // EmuWindow::get3DMode() forces the mode Off on mobile builds while
+-    // render_3d_which_display is None, which is its default and which no
+-    // libretro code path ever changes — so render_3d alone is inert on Android.
+-    Settings::values.render_3d_which_display =
+-        (Settings::values.render_3d.GetValue() == Settings::StereoRenderOption::Off)
+-            ? Settings::StereoWhichDisplay::None
+-            : Settings::StereoWhichDisplay::Both;
++    LibRetro::settings.factor_3d =
++        static_cast<u32>(std::stoi(LibRetro::FetchVariable(config::layout::factor_3d, "50")));
+ 
+     Settings::values.swap_screen =
+         LibRetro::FetchVariable(config::layout::swap_screen, "Top") == "Bottom";
+@@ -1043,6 +1091,72 @@ static void ParseLayoutOptions(void) {
      auto large_screen_proportion =
          LibRetro::FetchVariable(config::layout::large_screen_proportion, "4.00");
      Settings::values.large_screen_proportion = std::stof(large_screen_proportion);
@@ -53,10 +403,61 @@ index 53fb164..8e07396 100644
 +    // nx-mobile 2026-10-20: set by the app while its stylus mode is on.
 +    Settings::values.cursor_always_visible =
 +        LibRetro::FetchVariable("citra_cursor_visible", "disabled") == "enabled";
++
++    ApplyLayoutSettings();
++}
++
++void ApplyLayoutSettings(void) {
++    const auto& views = VideoViews::CurrentMode();
++    if (views.active) {
++        Settings::values.layout_option =
++            views.single ? Settings::LayoutOption::SingleScreen : Settings::LayoutOption::Default;
++        Settings::values.render_3d = views.stereo ? Settings::StereoRenderOption::SideBySideFull
++                                                  : Settings::StereoRenderOption::Off;
++    } else {
++        Settings::values.layout_option = LibRetro::settings.layout_option;
++        Settings::values.render_3d = LibRetro::settings.render_3d;
++    }
++
++    const bool both_eyes =
++        Settings::values.render_3d.GetValue() != Settings::StereoRenderOption::Off;
++
++    // EmuWindow::get3DMode() forces the mode Off on mobile builds while
++    // render_3d_which_display is None, its default, so render_3d alone is
++    // inert on Android.
++    Settings::values.render_3d_which_display =
++        both_eyes ? Settings::StereoWhichDisplay::Both : Settings::StereoWhichDisplay::None;
++
++    // Games render a second eye whenever the slider is up.
++    Settings::values.factor_3d = both_eyes ? LibRetro::settings.factor_3d : 0u;
++}
++
++std::array<retro_core_option_display, 2> LayoutOptionsDisplay(bool frontend_layout,
++                                                              unsigned status) {
++    // The frontend's stereo modes use views whatever these say; in its 2D mode they decide
++    // whether views are used. Screen Layout always shows, as it picks whether the views are of
++    // one screen or both.
++    const bool visible = !(frontend_layout && (status & RETRO_VIDEO_VIEWS_STATUS_PRESENTS) &&
++                           (status & RETRO_VIDEO_VIEWS_STATUS_STEREO));
++    return {
++        {{config::layout::large_screen_proportion, visible}, {config::layout::render_3d, visible}}};
++}
++
++bool UpdateLayoutOptionsDisplay(bool frontend_layout, unsigned status) {
++    const auto display = LayoutOptionsDisplay(frontend_layout, status);
++    // They show and hide together.
++    if (display[0].visible == layout_options_visible) {
++        return false;
++    }
++    for (const auto& option : display) {
++        LibRetro::SetCoreOptionsDisplay(&option);
++    }
++    layout_options_visible = display[0].visible;
++    return true;
  }
  
  static void ParseStorageOptions(void) {
-@@ -1123,7 +1138,9 @@ static void ParseInputOptions(void) {
+@@ -1123,7 +1237,9 @@ static void ParseInputOptions(void) {
              "port:0,sensitivity:" + std::to_string(LibRetro::settings.motion_sensitivity) +
              ",engine:libretro";
      } else {
@@ -67,11 +468,82 @@ index 53fb164..8e07396 100644
      }
  }
  
+diff --git a/src/citra_libretro/core_settings.h b/src/citra_libretro/core_settings.h
+index 15d613d..6d69246 100644
+--- a/src/citra_libretro/core_settings.h
++++ b/src/citra_libretro/core_settings.h
+@@ -4,8 +4,11 @@
+ 
+ #pragma once
+ 
++#include <array>
+ #include <string>
++#include "common/settings.h"
+ #include "core/hle/service/cfg/cfg.h"
++#include "libretro.h"
+ 
+ namespace LibRetro {
+ 
+@@ -33,9 +36,30 @@ struct CoreSettings {
+ 
+     float motion_sensitivity;
+ 
++    /// "Frontend Layout and 3D" is Auto: the frontend lays out the screens when it can.
++    bool frontend_layout;
++
++    /// Azahar's own Screen Layout, Stereoscopic 3D Mode and Depth, as the user chose them.
++    Settings::LayoutOption layout_option;
++
++    Settings::StereoRenderOption render_3d;
++
++    u32 factor_3d;
++
+ } extern settings;
+ 
+ void RegisterCoreOptions(void);
+ void ParseCoreOptions(void);
+ 
++/// Sets Azahar's layout, 3D mode and 3D slider from the options and the video views mode.
++void ApplyLayoutSettings(void);
++
++/// Whether to show the Layout options the frontend's views can override, for the "Frontend
++/// Layout and 3D" option (true for Auto) and the frontend's RETRO_VIDEO_VIEWS_STATUS_ flags.
++std::array<retro_core_option_display, 2> LayoutOptionsDisplay(bool frontend_layout,
++                                                              unsigned status);
++
++/// Shows or hides those options in the frontend's menu; returns whether any changed.
++bool UpdateLayoutOptionsDisplay(bool frontend_layout, unsigned status);
++
+ } // namespace LibRetro
 diff --git a/src/citra_libretro/emu_window/libretro_window.cpp b/src/citra_libretro/emu_window/libretro_window.cpp
-index f8cfb2c..3c3f006 100644
+index f8cfb2c..f12c8c3 100644
 --- a/src/citra_libretro/emu_window/libretro_window.cpp
 +++ b/src/citra_libretro/emu_window/libretro_window.cpp
-@@ -281,13 +281,20 @@ LayoutGeometry ComputeLayoutGeometry() {
+@@ -12,6 +12,7 @@
+ #include "citra_libretro/core_settings.h"
+ #include "citra_libretro/environment.h"
+ #include "citra_libretro/input/input_factory.h"
++#include "citra_libretro/video_views.h"
+ #include "common/settings.h"
+ #include "core/3ds.h"
+ #ifdef ENABLE_OPENGL
+@@ -235,6 +236,15 @@ void EmuWindow_LibRetro::DoneCurrent() {
+ void EmuWindow_LibRetro::OnMinimalClientAreaChangeRequest(std::pair<u32, u32> _minimal_size) {}
+ 
+ LayoutGeometry ComputeLayoutGeometry() {
++    const auto& views = LibRetro::VideoViews::CurrentMode();
++    if (views.active) {
++        const bool swapped = Settings::values.swap_screen.GetValue();
++        const auto [width, height] = LibRetro::VideoViews::PackedSize(
++            views, swapped, Settings::values.resolution_factor.GetValue());
++        // As for Single Screen Only below, the top screen alone has no touch screen to point at.
++        return {width, height, !(views.single && !swapped)};
++    }
++
+     unsigned baseX;
+     unsigned baseY;
+     bool emulated_pointer = true;
+@@ -281,13 +291,20 @@ LayoutGeometry ComputeLayoutGeometry() {
          baseY *= scaling;
          break;
      case Settings::LayoutOption::Default:
@@ -95,6 +567,106 @@ index f8cfb2c..3c3f006 100644
  
      return {baseX, baseY, emulated_pointer};
  }
+diff --git a/src/citra_libretro/environment.cpp b/src/citra_libretro/environment.cpp
+index 23c053b..bbf7eea 100644
+--- a/src/citra_libretro/environment.cpp
++++ b/src/citra_libretro/environment.cpp
+@@ -7,10 +7,10 @@
+ #include "audio_core/audio_types.h"
+ #include "audio_core/libretro_sink.h"
+ #include "common/scm_rev.h"
+-#include "core/3ds.h"
+ #include "core_settings.h"
+ #include "emu_window/libretro_window.h"
+ #include "environment.h"
++#include "video_views.h"
+ 
+ #ifdef HAVE_LIBRETRO_VFS
+ #include "streams/file_stream.h"
+@@ -115,6 +115,15 @@ bool GetCoreOptionsVersion(unsigned* version) {
+     return environ_cb(RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION, version);
+ }
+ 
++bool SetCoreOptionsDisplay(const retro_core_option_display* display) {
++    return environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, (void*)display);
++}
++
++bool SetCoreOptionsUpdateDisplayCallback(retro_core_options_update_display_callback_t callback) {
++    retro_core_options_update_display_callback cb{callback};
++    return environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK, &cb);
++}
++
+ bool SetMemoryMaps(const retro_memory_map* map) {
+     return environ_cb(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, (void*)map);
+ }
+@@ -152,6 +161,14 @@ bool SetGeometry(retro_system_av_info* cb) {
+     return environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, cb);
+ }
+ 
++bool GetVideoViewsStatus(unsigned* flags) {
++    return environ_cb(RETRO_ENVIRONMENT_GET_VIDEO_VIEWS_STATUS, flags);
++}
++
++bool SetVideoViews(retro_video_views* views) {
++    return environ_cb(RETRO_ENVIRONMENT_SET_VIDEO_VIEWS, views);
++}
++
+ bool SetInputDescriptors(const retro_input_descriptor desc[]) {
+     return environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, (void*)desc);
+ }
+@@ -311,8 +328,10 @@ void retro_get_system_av_info(struct retro_system_av_info* info) {
+     auto geom = ComputeLayoutGeometry();
+     info->geometry.base_width = geom.width;
+     info->geometry.base_height = geom.height;
+-    // Max must cover the largest possible layout (SideScreen at 10x = 7200).
+-    info->geometry.max_width = (Core::kScreenBottomWidth + Core::kScreenTopWidth) * 10;
+-    info->geometry.max_height = (Core::kScreenTopHeight + Core::kScreenBottomHeight) * 10;
++    // Max must cover the largest layout at 10x: the stereo views packing, 8000x4800.
++    const auto [max_width, max_height] =
++        LibRetro::VideoViews::PackedSize({.active = true, .stereo = true}, false, 10);
++    info->geometry.max_width = max_width;
++    info->geometry.max_height = max_height;
+     info->geometry.aspect_ratio = (float)geom.width / (float)geom.height;
+ }
+diff --git a/src/citra_libretro/environment.h b/src/citra_libretro/environment.h
+index d321f95..5e292fe 100644
+--- a/src/citra_libretro/environment.h
++++ b/src/citra_libretro/environment.h
+@@ -5,6 +5,7 @@
+ #pragma once
+ 
+ #include <cstdint>
++#include "citra_libretro/libretro_views.h"
+ #include "common/logging/backend.h"
+ #include "common/logging/filter.h"
+ #include "common/logging/log.h"
+@@ -46,6 +47,12 @@ bool SetCoreOptionsV1(const retro_core_option_definition* options);
+ /// Gets the core options version supported by the frontend.
+ bool GetCoreOptionsVersion(unsigned* version);
+ 
++/// Shows or hides a core option in the frontend's menu.
++bool SetCoreOptionsDisplay(const retro_core_option_display* display);
++
++/// Sets the callback the frontend calls after an option changes, to update which options show.
++bool SetCoreOptionsUpdateDisplayCallback(retro_core_options_update_display_callback_t callback);
++
+ bool SetHWSharedContext(void);
+ 
+ /// Returns the LibRetro save directory, or a empty string if one doesn't exist.
+@@ -90,6 +97,13 @@ bool SetFrameTimeCallback(retro_frame_time_callback* cb);
+ /// Set the size of the new screen buffer.
+ bool SetGeometry(retro_system_av_info* cb);
+ 
++/// Gets the frontend's RETRO_VIDEO_VIEWS_STATUS_ flags.
++bool GetVideoViewsStatus(unsigned* flags);
++
++/// Tells the frontend how the frame divides into screens and eyes. The frontend writes a
++/// recommended eye size back into views, which Azahar ignores: it never sends a head-tracked map.
++bool SetVideoViews(retro_video_views* views);
++
+ /// Tells LibRetro what input buttons are labelled on the 3DS.
+ bool SetInputDescriptors(const retro_input_descriptor desc[]);
+ 
 diff --git a/src/citra_libretro/input/mouse_tracker.cpp b/src/citra_libretro/input/mouse_tracker.cpp
 index a4ba964..52f5c30 100644
 --- a/src/citra_libretro/input/mouse_tracker.cpp
@@ -308,8 +880,215 @@ index a4ba964..52f5c30 100644
  }
  
  } // namespace Input
+diff --git a/src/citra_libretro/libretro_views.h b/src/citra_libretro/libretro_views.h
+new file mode 100644
+index 0000000..e160fc7
+--- /dev/null
++++ b/src/citra_libretro/libretro_views.h
+@@ -0,0 +1,54 @@
++// Copyright 2026 Citra Emulator Project / Azahar Emulator Project
++// Licensed under GPLv3 or any later version
++// Refer to the LICENSE.txt file included.
++
++#pragma once
++
++#include "libretro.h"
++
++// RetroArch's video views API as of libretro/RetroArch#19811, until the vendored libretro.h
++// has it.
++#ifndef RETRO_ENVIRONMENT_SET_VIDEO_VIEWS
++
++#define RETRO_ENVIRONMENT_SET_VIDEO_VIEWS (95 | RETRO_ENVIRONMENT_EXPERIMENTAL)
++#define RETRO_ENVIRONMENT_GET_VIDEO_VIEWS_STATUS (96 | RETRO_ENVIRONMENT_EXPERIMENTAL)
++
++#define RETRO_VIDEO_VIEWS_STATUS_PRESENTS (1 << 0)
++#define RETRO_VIDEO_VIEWS_STATUS_STEREO (1 << 1)
++// A headset is tracking; only set together with PRESENTS and STEREO.
++#define RETRO_VIDEO_VIEWS_STATUS_HMD (1 << 2)
++
++#define RETRO_VIDEO_VIEW_EYE_NONE 0
++#define RETRO_VIDEO_VIEW_EYE_LEFT 1
++#define RETRO_VIDEO_VIEW_EYE_RIGHT 2
++#define RETRO_VIDEO_VIEWS_MAX 8
++// The map's LEFT and RIGHT views were drawn from the frontend's eye poses; Azahar's never are.
++#define RETRO_VIDEO_VIEWS_FLAG_TRACKED (1 << 0)
++
++enum retro_vr_reference_space {
++    RETRO_VR_REFERENCE_SPACE_LOCAL = 0,
++    RETRO_VR_REFERENCE_SPACE_STAGE = 1,
++    RETRO_VR_REFERENCE_SPACE_DUMMY = INT_MAX
++};
++
++struct retro_video_view {
++    unsigned x;
++    unsigned y;
++    unsigned width;
++    unsigned height;
++    unsigned screen;
++    unsigned eye;
++    float aspect_ratio;
++};
++
++struct retro_video_views {
++    const struct retro_video_view* views;
++    unsigned num_views;
++    unsigned flags;
++    enum retro_vr_reference_space reference_space;
++    // Outputs: the frontend writes these back while a headset is tracking.
++    unsigned recommended_view_width;
++    unsigned recommended_view_height;
++};
++
++#endif
+diff --git a/src/citra_libretro/video_views.cpp b/src/citra_libretro/video_views.cpp
+new file mode 100644
+index 0000000..8f831b1
+--- /dev/null
++++ b/src/citra_libretro/video_views.cpp
+@@ -0,0 +1,90 @@
++// Copyright 2026 Citra Emulator Project / Azahar Emulator Project
++// Licensed under GPLv3 or any later version
++// Refer to the LICENSE.txt file included.
++
++#include "citra_libretro/video_views.h"
++#include "core/3ds.h"
++
++namespace LibRetro::VideoViews {
++
++namespace {
++
++Mode current_mode;
++
++retro_video_view MakeView(const Common::Rectangle<u32>& rect, u32 x_offset, unsigned screen,
++                          unsigned eye) {
++    retro_video_view view{};
++    view.x = rect.left + x_offset;
++    view.y = rect.top;
++    view.width = rect.GetWidth();
++    view.height = rect.GetHeight();
++    view.screen = screen;
++    view.eye = eye;
++    view.aspect_ratio = 0.0f;
++    return view;
++}
++
++} // namespace
++
++Mode SelectMode(bool frontend_layout, Settings::LayoutOption own_layout,
++                Settings::StereoRenderOption own_3d, bool swapped, unsigned status,
++                bool renderer_stereo) {
++    const bool presents = (status & RETRO_VIDEO_VIEWS_STATUS_PRESENTS) != 0;
++    const bool stereo = (status & RETRO_VIDEO_VIEWS_STATUS_STEREO) != 0;
++    const bool single = own_layout == Settings::LayoutOption::SingleScreen;
++    // In 2D, views only stand in for Azahar's own layout where they look the same.
++    const bool own_matches = (own_layout == Settings::LayoutOption::Default || single) &&
++                             own_3d == Settings::StereoRenderOption::Off;
++    Mode mode;
++    mode.active = frontend_layout && presents && (stereo || own_matches);
++    mode.single = mode.active && single;
++    // Only the top screen has 3D, so the bottom screen alone is drawn once.
++    const bool top_shown = !(mode.single && swapped);
++    mode.stereo = mode.active && renderer_stereo && stereo && top_shown;
++    return mode;
++}
++
++const Mode& CurrentMode() {
++    return current_mode;
++}
++
++void SetCurrentMode(const Mode& mode) {
++    current_mode = mode;
++}
++
++std::pair<u32, u32> PackedSize(const Mode& mode, bool swapped, u32 scale) {
++    u32 width = static_cast<u32>(Core::kScreenTopWidth);
++    u32 height = static_cast<u32>(Core::kScreenTopHeight + Core::kScreenBottomHeight);
++    if (mode.single) {
++        width = static_cast<u32>(swapped ? Core::kScreenBottomWidth : Core::kScreenTopWidth);
++        height = static_cast<u32>(swapped ? Core::kScreenBottomHeight : Core::kScreenTopHeight);
++    }
++    if (mode.stereo) {
++        width *= 2;
++    }
++    return {width * scale, height * scale};
++}
++
++std::vector<retro_video_view> BuildMap(const Layout::FramebufferLayout& layout, bool stereo,
++                                       bool swapped) {
++    // Screens number in the order Prominent 3DS Screen puts them; a screen shown alone is 0.
++    const unsigned top = (swapped && layout.bottom_screen_enabled) ? 1 : 0;
++    const unsigned bottom = (!swapped && layout.top_screen_enabled) ? 1 : 0;
++    std::vector<retro_video_view> views;
++    if (layout.top_screen_enabled && stereo) {
++        views.push_back(MakeView(layout.top_screen, 0, top, RETRO_VIDEO_VIEW_EYE_LEFT));
++        // The right eye is where the full side-by-side draw puts it: see
++        // RendererOpenGL::DrawTopScreen() in src/video_core/renderer_opengl/renderer_opengl.cpp and
++        // RendererVulkan::DrawTopScreen() in src/video_core/renderer_vulkan/renderer_vulkan.cpp.
++        views.push_back(
++            MakeView(layout.top_screen, layout.width / 2, top, RETRO_VIDEO_VIEW_EYE_RIGHT));
++    } else if (layout.top_screen_enabled) {
++        views.push_back(MakeView(layout.top_screen, 0, top, RETRO_VIDEO_VIEW_EYE_NONE));
++    }
++    if (layout.bottom_screen_enabled) {
++        views.push_back(MakeView(layout.bottom_screen, 0, bottom, RETRO_VIDEO_VIEW_EYE_NONE));
++    }
++    return views;
++}
++
++} // namespace LibRetro::VideoViews
+diff --git a/src/citra_libretro/video_views.h b/src/citra_libretro/video_views.h
+new file mode 100644
+index 0000000..3607023
+--- /dev/null
++++ b/src/citra_libretro/video_views.h
+@@ -0,0 +1,45 @@
++// Copyright 2026 Citra Emulator Project / Azahar Emulator Project
++// Licensed under GPLv3 or any later version
++// Refer to the LICENSE.txt file included.
++
++#pragma once
++
++#include <utility>
++#include <vector>
++#include "citra_libretro/libretro_views.h"
++#include "common/common_types.h"
++#include "common/settings.h"
++#include "core/frontend/framebuffer_layout.h"
++
++namespace LibRetro::VideoViews {
++
++/// Whether the frame is packed for the frontend's views, in stereo, and with one screen.
++struct Mode {
++    bool active = false; ///< The frontend lays out the screens.
++    bool stereo = false; ///< Both eyes are drawn and shown.
++    bool single = false; ///< Only the prominent screen is sent, as Single Screen Only shows it.
++
++    bool operator==(const Mode&) const = default;
++};
++
++/// The mode for the "Frontend Layout and 3D" option (true for Auto), the user's own Screen
++/// Layout, Stereoscopic 3D Mode and Prominent 3DS Screen (true for Bottom), the frontend's
++/// RETRO_VIDEO_VIEWS_STATUS_ flags, and whether the renderer draws both eyes.
++Mode SelectMode(bool frontend_layout, Settings::LayoutOption own_layout,
++                Settings::StereoRenderOption own_3d, bool swapped, unsigned status,
++                bool renderer_stereo);
++
++/// The mode Azahar's layout currently follows.
++const Mode& CurrentMode();
++void SetCurrentMode(const Mode& mode);
++
++/// The packed frame's size at a resolution factor: Azahar's default layout, or the prominent
++/// screen alone for Single Screen Only, twice as wide in stereo for the full side-by-side draw.
++std::pair<u32, u32> PackedSize(const Mode& mode, bool swapped, u32 scale);
++
++/// The view map for a layout computed for the views packing. Screens number from 0 in the
++/// order Prominent 3DS Screen puts them, and a screen the layout leaves out has no view.
++std::vector<retro_video_view> BuildMap(const Layout::FramebufferLayout& layout, bool stereo,
++                                       bool swapped);
++
++} // namespace LibRetro::VideoViews
 diff --git a/src/common/file_util.cpp b/src/common/file_util.cpp
-index 3168a26..510b7fd 100644
+index 3168a26..9829fcb 100644
 --- a/src/common/file_util.cpp
 +++ b/src/common/file_util.cpp
 @@ -155,6 +155,21 @@ static void StripTailDirSlashes(std::string& fname) {
@@ -358,6 +1137,15 @@ index 3168a26..510b7fd 100644
  
      LOG_ERROR(Common_Filesystem, "Stat failed {}: {}", filename, GetLastErrorMsg());
      return 0;
+@@ -1527,7 +1552,7 @@ std::size_t IOFile::WriteImpl(const void* data, std::size_t length, std::size_t
+ 
+     std::size_t written;
+ #if defined(HAVE_LIBRETRO_VFS)
+-    written = rfwrite(data, elem_size, length, m_file) / elem_size;
++    written = static_cast<std::size_t>(rfwrite(data, elem_size, length, m_file));
+ #else
+     written = std::fwrite(data, elem_size, length, m_file);
+ #endif
 diff --git a/src/common/settings.h b/src/common/settings.h
 index c83f322..2c5a18e 100644
 --- a/src/common/settings.h
@@ -530,6 +1318,25 @@ index e602bd3..b76b22c 100644
      }
  }
  
+diff --git a/src/core/savestate.cpp b/src/core/savestate.cpp
+index 16c3db6..6f878d6 100644
+--- a/src/core/savestate.cpp
++++ b/src/core/savestate.cpp
+@@ -299,10 +299,10 @@ bool System::LoadStateBuffer(std::vector<u8> buffer) {
+     }
+     std::string revision = fmt::format("{:02x}", fmt::join(header.revision, ""));
+     if (revision != Common::g_scm_rev) {
+-        LOG_ERROR(Core,
+-                  "Save state file created from a different revision (core: {}, savestate: {})",
+-                  Common::g_scm_rev, revision);
+-        return false;
++        LOG_WARNING(Core,
++                    "Save state file created from a different revision (core: {}, savestate: {}), "
++                    "loading anyway",
++                    Common::g_scm_rev, revision);
+     }
+ 
+     std::vector<u8> state(buffer.begin() + sizeof(CSTHeader), buffer.end());
 diff --git a/src/video_core/cursor_dot.h b/src/video_core/cursor_dot.h
 new file mode 100644
 index 0000000..bb33f02

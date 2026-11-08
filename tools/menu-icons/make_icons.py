@@ -157,6 +157,15 @@ def sync():
     return [arrow(200, 330), arrow(20, 150)]
 
 
+# --- Kids Mode's Lock: a 4-unit shackle arch over a rounded body with a round keyhole.
+def lock():
+    cx = 24
+    r_out, r_in, top, foot = 10, 6, 16, 23   # the arch's outer and inner radii, its centre's height, where its legs end
+    shackle = (f"M {f(cx - r_out)} {f(foot)} V {f(top)} A {f(r_out)} {f(r_out)} 0 0 1 {f(cx + r_out)} {f(top)} "
+               f"V {f(foot)} H {f(cx + r_in)} V {f(top)} A {f(r_in)} {f(r_in)} 0 0 0 {f(cx - r_in)} {f(top)} V {f(foot)} Z")
+    return [shackle, rrect(9, 21, 39, 42, 4) + " " + circle(cx, 31.5, 3.5)]
+
+
 ICONS = {
     "achievements": trophy,
     "gametime": stopwatch,
@@ -165,6 +174,7 @@ ICONS = {
     "sync": sync,
     "settings": gear,
     "app": apps,
+    "lock": lock,
 }
 
 

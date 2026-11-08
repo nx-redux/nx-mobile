@@ -42,6 +42,9 @@ internal interface ContextMenuHost {
     /** tool-pins.txt as last read or written (app-private; never shortcuts.txt). */
     val toolPins: List<String>
 
+    /** Kids Mode is on: nothing is pinned on Home (its pinned tools are hidden), so no menu offers Pin. */
+    val kidsOn: Boolean get() = false
+
     /** Writes [keys] ([pinKey]s) as the tool pins off the main thread, then keeps them in memory; false (nothing changed) when the write fails. */
     suspend fun writeToolPins(keys: List<String>): Boolean
 
@@ -87,11 +90,11 @@ internal interface ContextMenuHost {
     /** After a tag switch's sidecar write (and copy prompt): moves the game in the index and opens the new tag's list. */
     fun finishSwitch(game: GameEntry, from: SystemFolder, tag: String)
 
-    /** Fetch art is offered for [entry]: a console ScreenScraper knows, in a build that can fetch. */
-    fun canFetchArt(entry: Listed): Boolean = false
+    /** The art item [entry]'s menu offers: none, Fetch art (no art yet) or Change art. */
+    fun artMenu(entry: Listed): ArtMenuItem = ArtMenuItem.NONE
 
-    /** Fetches [entry]'s art under the loading overlay, then shows the result as a notice. */
-    fun fetchArt(entry: Listed) {}
+    /** Opens the art panel for [entry]; [fetchFirst]: Fetch art (its art is fetched first), else Change art. */
+    fun openArtPanel(entry: Listed, fetchFirst: Boolean) {}
 
     /** [entry] can be played over netplay here (the platform has netplay, and the game's tag has it now). */
     fun netplayOffered(entry: Listed): Boolean = false
@@ -190,7 +193,7 @@ internal class ContextMenuController(
                 // tab) gets one holding just these. A pushed tab never offers them again.
                 val tabs = if (s.pushed) emptyList() else ContextMenus.hiddenTabItems(host.hiddenTabs())
                 fun show(fromStart: Boolean) {
-                    val own = rowMenu(row, fromStart)
+                    val own = rowMenu(row, fromStart, s.category)
                     val menu = when {
                         own != null -> own.copy(items = own.items + tabs)
                         tabs.isNotEmpty() -> ContextMenu(null, tabs, title = APP_NAME)
@@ -215,7 +218,7 @@ internal class ContextMenuController(
                 val app = s.apps.getOrNull(i) ?: return
                 if (index != null) host.select(i)
                 val tool = ToolRow(ToolKind.APP, app.label, null, appId = app.id)
-                _screen.value = s.copy(menu = ContextMenu(null, ContextMenus.drawerItems(inTools = app.shown, pinned = tool.pinKey in host.toolPins), tool = tool))
+                _screen.value = s.copy(menu = ContextMenu(null, ContextMenus.drawerItems(inTools = app.shown, pinned = tool.pinKey in host.toolPins, pin = !host.kidsOn), tool = tool))
             }
             else -> Unit
         }
@@ -237,7 +240,7 @@ internal class ContextMenuController(
     /** Opens [s]'s menu on [e]; [canResume]: it has a save state, so Play from start leads. */
     private fun gameMenu(s: Screen.Games, e: Listed, canResume: Boolean) {
         val items = ContextMenus.itemsFor(
-            s.source, e, pinned = pinned(e), fetchArt = host.canFetchArt(e), netplay = host.netplayOffered(e),
+            s.source, e, pinned = pinned(e), art = host.artMenu(e), netplay = host.netplayOffered(e),
             canResume = canResume, netplayLeads = host.netplayInMenu,
         )
         // The achievements panel, last, while Layouts hides its icon and hint.
@@ -253,13 +256,15 @@ internal class ContextMenuController(
     /** A hidden Netplay hint (alone or with the bar) puts Y's Netplay in a Home game's menu. */
     private fun homeNetplay(e: Listed): Boolean = host.netplayInMenu && host.netplayOffered(e) && ContextMenus.hasNetplay(e)
 
-    /** A main-menu row's menu; null for a row without one (a console, Pick a game, "+N"). */
-    private fun rowMenu(row: MainRow?, fromStart: Boolean): ContextMenu? = when (row) {
+    /** A main-menu row's menu on [category]'s tab; null for a row without one (a console, Pick a game, "+N", Kids Mode's Apps). */
+    private fun rowMenu(row: MainRow?, fromStart: Boolean, category: MenuCategory?): ContextMenu? = when (row) {
         is MainRow.Collection -> ContextMenu(null, ContextMenus.collectionItems(), collection = row.name)
         is MainRow.Pin -> ContextMenu(row.entry, ContextMenus.pinRowItems(netplay = homeNetplay(row.entry), fromStart = fromStart))
         is MainRow.Shelf -> ContextMenu(row.entry, ContextMenus.homeGameItems(pinned = false, netplay = homeNetplay(row.entry), fromStart = fromStart))   // never a pinned game
         is MainRow.Continue -> ContextMenu(row.entry, ContextMenus.homeGameItems(pinned = host.pins.any { it.path in row.entry.game.lines }, netplay = homeNetplay(row.entry), fromStart = fromStart))
-        is MainRow.Tool -> ContextMenu(null, ContextMenus.toolItems(pinned = row.row.pinKey in host.toolPins, app = row.row.kind == ToolKind.APP), tool = row.row)
+        is MainRow.Tool -> if (row.row.kind == ToolKind.KIDS_LOCK || category == MenuCategory.APPS) null   // Kids Mode's Lock and Apps: no menu
+            else ContextMenus.toolItems(pinned = row.row.pinKey in host.toolPins, app = row.row.kind == ToolKind.APP, pin = !host.kidsOn)
+                .takeIf { it.isNotEmpty() }?.let { ContextMenu(null, it, tool = row.row) }
         is MainRow.PinnedTool -> ContextMenu(null, ContextMenus.toolItems(pinned = true), tool = row.row)
         is MainRow.MoreTools -> null   // Home's "+N": no menu
         else -> null
@@ -380,7 +385,8 @@ internal class ContextMenuController(
             ContextKind.RENAME -> setMenu(m.copy(prompt = MenuPrompt.Rename(m.game.game.shownName), promptFocus = -1))
             ContextKind.ADD_TO_COLLECTION -> openCollectionPicker(m)
             ContextKind.GAME_SETTINGS -> { closeContextMenu(); host.openGameSettings(m.game) }
-            ContextKind.FETCH_ART -> { closeContextMenu(); host.fetchArt(m.game) }
+            ContextKind.FETCH_ART -> { closeContextMenu(); host.openArtPanel(m.game, fetchFirst = true) }
+            ContextKind.CHANGE_ART -> { closeContextMenu(); host.openArtPanel(m.game, fetchFirst = false) }
             ContextKind.NETPLAY -> { closeContextMenu(); host.openNetplay(m.game) }
             ContextKind.PLAY_FROM_START -> { closeContextMenu(); host.playFromStart(m.game) }
         }
@@ -533,7 +539,7 @@ internal class ContextMenuController(
             ContextKind.CONSOLE -> CoreRegistry.consoles.firstOrNull { it.id == value }?.let { c -> applyTag(m, c.defaultTagFor(settings.defaultTags[c.id])) }
             ContextKind.ADD_TO_COLLECTION -> if (value.isEmpty()) setMenu(m.copy(sub = null, prompt = MenuPrompt.NewCollection(), promptFocus = -1)) else addToCollection(m, value)
             ContextKind.PIN, ContextKind.UNPIN, ContextKind.HIDE, ContextKind.UNHIDE, ContextKind.RENAME,
-            ContextKind.REMOVE_FROM_COLLECTION, ContextKind.REMOVE_RECENT, ContextKind.GAME_SETTINGS, ContextKind.FETCH_ART,
+            ContextKind.REMOVE_FROM_COLLECTION, ContextKind.REMOVE_RECENT, ContextKind.GAME_SETTINGS, ContextKind.FETCH_ART, ContextKind.CHANGE_ART,
             ContextKind.PIN_TOOL, ContextKind.UNPIN_TOOL, ContextKind.ADD_TO_TOOLS, ContextKind.REMOVE_FROM_TOOLS,
             ContextKind.RENAME_COLLECTION, ContextKind.DELETE_COLLECTION, ContextKind.NETPLAY, ContextKind.PLAY_FROM_START,
             ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.OPEN_TOOLS, ContextKind.ACHIEVEMENTS -> closeContextMenu()

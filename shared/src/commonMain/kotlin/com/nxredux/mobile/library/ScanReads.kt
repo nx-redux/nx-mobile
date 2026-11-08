@@ -29,4 +29,7 @@ internal class ScanReads(private val source: RomsSource, sidecars: Sidecars, hom
     private val listings = HashMap<ContentRef, List<Entry>>()
 
     suspend fun list(dir: ContentRef): List<Entry> = listings[dir] ?: source.listChildren(dir).also { listings[dir] = it }
+
+    /** Drops [dir]'s kept listing: the next [list] reads it again (a folder this scan changed). */
+    fun forget(dir: ContentRef) { listings.remove(dir) }
 }

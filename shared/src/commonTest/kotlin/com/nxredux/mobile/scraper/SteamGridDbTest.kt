@@ -2,12 +2,15 @@ package com.nxredux.mobile.scraper
 
 import com.nxredux.mobile.library.ArtRefs
 import com.nxredux.mobile.library.ensurePath
+import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.scraper.Scrape.OK_PNG
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -193,6 +196,16 @@ class SteamGridDbTest {
         assertEquals(SgdbAsset(1, "https://x/1.png"), Sgdb.parseAssets("""{"success":true,"data":[{"id":1,"url":"https://x/1.png"}]}""").single())
     }
 
+    @Test fun thumbFromAsset() = runTest {
+        val r = Rig()
+        r.http.on("search/autocomplete/", ok(SgdbFixtures.autocomplete))
+        r.http.on("grids/game/", ok("""{"success":true,"data":[{"id":7,"score":1,"style":"alternate","width":600,"height":900,"mime":"image/jpeg","url":"https://cdn2.steamgriddb.com/grid/x.jpg","thumb":"https://cdn2.steamgriddb.com/thumb/x.jpg"}]}"""))
+        val hit = r.src.find(tetris, setOf(ArtSlot.GRID)).single()
+        assertEquals("https://cdn2.steamgriddb.com/grid/x.jpg", hit.url)
+        assertEquals("https://cdn2.steamgriddb.com/thumb/x.jpg", hit.thumb)
+        assertNull(Sgdb.parseAssets("""{"success":true,"data":[{"id":1,"url":"https://x/1.png","thumb":""}]}""").single().thumb)
+    }
+
     @Test fun findReturnsGridsThenHeroesWithOrigins() = runTest {
         val r = Rig()
         r.answerAll()
@@ -281,12 +294,16 @@ class SteamGridDbTest {
 
     // --- The engine's want rule, with fake earlier sources and a fake SteamGridDB ---
 
-    private class EngineRig(vararg val sources: FakeSource) {
+    private class EngineRig(vararg val sources: FakeSource, var extras: ArtExtras = ArtExtras(), pixels: PixelCodec? = null) {
         val fs = Scrape.homeTree()
         val http = FakeHttp().apply { on("https://", OK_PNG) }
         val written = mutableListOf<String>()
         val arts = mutableListOf<ArtRefs>()
-        val engine = ScrapeEngine(http, FakeFitter(), fs, Scrape.home, sources.toList(), onArt = { _, a -> arts += a }, onWritten = { w -> written += w.map { it.first } })
+        val log = FakeLoggedArt(mutableSetOf())
+        val engine = ScrapeEngine(
+            http, FakeFitter(), fs, Scrape.home, sources.toList(), onArt = { _, a -> arts += a },
+            onWritten = { w -> written += w.map { it.first }; log.record(w) }, logged = log, extras = { extras }, pixels = pixels,
+        )
         suspend fun run(vararg games: LibraryGameRef, replace: Boolean = false) =
             engine.run(ScrapeState(items = games.map { Scrape.item(it) }), { p -> games.firstOrNull { it.gamePath == p } }, replace) {}
     }
@@ -295,49 +312,58 @@ class SteamGridDbTest {
         for (f in listOf("Tetris.gb", "Zelda.gb")) { offer(f, ArtSlot.GRID, "https://sg/grid-$f"); offer(f, ArtSlot.HERO, "https://sg/hero-$f") }
     }
 
-    @Test fun gridWantedForBoxOrPortraitBackground() = runTest {
+    @Test fun gridWritesBoxart2d() = runTest {
         val sg = sgdb()
         val rig = EngineRig(FakeSource("ss"), sg)
-        // No box, no screenshot: grid (the box) and hero; the grid also is the portrait background.
-        val bare = Scrape.homeGame("Tetris.gb")
-        // A box but no screenshot: the grid as the portrait background, and the hero.
-        val boxed = Scrape.homeGame("Zelda.gb", have = ArtHave(box = true))
-        val end = rig.run(bare, boxed)
-        assertEquals(
-            listOf("Tetris.gb" to setOf(ArtSlot.GRID, ArtSlot.HERO), "Zelda.gb" to setOf(ArtSlot.GRID, ArtSlot.HERO)),
-            sg.asked,
-        )
-        assertEquals(
-            listOf("Roms/GB/.media/grid/Tetris.jpg", "Roms/GB/.media/hero/Tetris.jpg", "Roms/GB/.media/grid/Zelda.jpg", "Roms/GB/.media/hero/Zelda.jpg"),
-            rig.written,
-        )
-        assertEquals(List(2) { ItemStatus.DONE to "steamgriddb · ${ScrapeEngine.NO_SCREENSHOT}" }, end.items.map { it.status to it.reason })
-        assertTrue(rig.arts.all { ArtHave.of(it).complete })
-        // A box and a grid already, no screenshot: only the hero.
-        val sg2 = sgdb()
-        val rig2 = EngineRig(sg2)
-        rig2.run(Scrape.homeGame("Tetris.gb", have = ArtHave(box = true, grid = true)))
-        assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.HERO)), sg2.asked)
+        val end = rig.run(Scrape.homeGame("Tetris.gb"))
+        assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.GRID, ArtSlot.HERO)), sg.asked)
+        val media = "Roms/GB/.media"
+        assertEquals(listOf("$media/boxart2d/Tetris.jpg", "$media/screenshot/Tetris.jpg"), rig.written)   // a grid's and a hero's cap: JPEG
+        assertNotNull(rig.fs.bytesAt("Home/$media/boxart2d/Tetris.jpg"))
+        assertNotNull(rig.fs.bytesAt("Home/$media/screenshot/Tetris.jpg"))
+        assertTrue(rig.fs.listChildren(ContentRef("Home/$media")).none { it.name == "grid" || it.name == "hero" })
+        assertEquals(listOf(SourceId.SGDB, SourceId.SGDB), rig.written.map { rig.log.origins.getValue(it).source })
+        val art = rig.arts.single()
+        assertEquals("Home/$media/boxart2d/Tetris.jpg", art.box2d)
+        assertEquals("Home/$media/screenshot/Tetris.jpg", art.screenshot)
+        assertTrue(art.heroShot)
+        assertTrue(ArtHave.of(art).complete)
+        val item = end.items.single()
+        assertEquals(ItemStatus.DONE, item.status)
+        assertTrue(item.reason!!.contains(ScrapeEngine.NO_SCREENSHOT), item.reason)   // the hero stand-in's note
     }
 
-    @Test fun heroOnlyWithoutScreenshot() = runTest {
-        // An earlier source finds the screenshot: SteamGridDB is asked only for the box (a grid), never a hero.
+    @Test fun heroOnlyWhenNoScreenshot() = runTest {
+        // An earlier source finds the screenshot: SteamGridDB's hero is never written over it.
         val ss = FakeSource("ss").apply { offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://ss/shot") }
         val sg = sgdb()
         val rig = EngineRig(ss, sg)
         val item = rig.run(Scrape.homeGame("Tetris.gb")).items.single()
-        assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.GRID)), sg.asked)
+        assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.GRID)), sg.asked)   // only the box
         assertEquals(ItemStatus.DONE to "ss, steamgriddb", item.status to item.reason)   // the sources that wrote
-        assertFalse(rig.written.any { "/hero/" in it })
-        // A hero already (no box): not asked for another, only the grid (the box).
+        val shot = rig.written.single { "/screenshot/" in it }
+        assertEquals("ss", rig.log.origins.getValue(shot).source)
+        assertFalse(rig.arts.single().heroShot)
+        // A screenshot already (no box): not asked for a hero, only the grid (the box).
         val sg2 = sgdb()
-        val rig2 = EngineRig(sg2)
-        rig2.run(Scrape.homeGame("Tetris.gb", have = ArtHave(hero = true)))
+        EngineRig(sg2).run(Scrape.homeGame("Tetris.gb", have = ArtHave(screenshot = true)))
         assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.GRID)), sg2.asked)
         // Under Replace a hero is fetched again.
         val sg3 = sgdb()
-        EngineRig(sg3).run(Scrape.homeGame("Tetris.gb", have = ArtHave(box = true, grid = true, hero = true)), replace = true)
+        EngineRig(sg3).run(Scrape.homeGame("Tetris.gb", have = Scrape.HAS_ART), replace = true)
         assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.GRID, ArtSlot.HERO)), sg3.asked)
+    }
+
+    @Test fun want2dTakesGrid() = runTest {
+        val ss = FakeSource("ss", slots = setOf(ArtSlot.BOX_3D, ArtSlot.BOX_2D, ArtSlot.SCREENSHOT)).apply {
+            offer("Tetris.gb", ArtSlot.BOX_3D, "https://ss/3d"); offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://ss/shot")
+        }
+        val sg = sgdb()
+        val rig = EngineRig(ss, sg, extras = ArtExtras(box2d = true))
+        assertEquals(ItemStatus.DONE, rig.run(Scrape.homeGame("Tetris.gb")).items.single().status)
+        assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.GRID)), sg.asked)   // the 2D box only
+        assertEquals("ss", rig.log.origins.getValue("Roms/GB/.media/boxart/Tetris.png").source)
+        assertEquals(SourceId.SGDB, rig.log.origins.getValue("Roms/GB/.media/boxart2d/Tetris.jpg").source)
     }
 
     @Test fun notAskedWhenEarlierSourcesFilledEverything() = runTest {
@@ -348,19 +374,106 @@ class SteamGridDbTest {
         assertTrue(sg.asked.isEmpty())
     }
 
-    @Test fun portraitGridKeptOnDiskIsNotAskedAgain() = runTest {
+    @Test fun aGridInTheOldFolderIsNotABox() = runTest {
         val sg = sgdb()
         val rig = EngineRig(sg)
         rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "grid"))?.let { rig.fs.writeBytes(it, "Tetris.jpg", byteArrayOf(1)) }
-        rig.run(Scrape.homeGame("Tetris.gb", have = ArtHave(box = true)))
-        assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.HERO)), sg.asked)
+        rig.run(Scrape.homeGame("Tetris.gb", have = ArtHave(screenshot = true)))
+        assertEquals(listOf("Tetris.gb" to setOf(ArtSlot.GRID)), sg.asked)
+        assertEquals(listOf("Roms/GB/.media/boxart2d/Tetris.jpg"), rig.written)
     }
 
-    @Test fun aGridWrittenOnlyAsThePortraitBackgroundIsPartial() = runTest {
-        val sg = FakeSource(SourceId.SGDB, slots = setOf(ArtSlot.GRID, ArtSlot.HERO)).apply { offer("Tetris.gb", ArtSlot.GRID, "https://sg/grid") }
+    @Test fun replaceWithAGridRemovesTheAppsStale3dBox() = runTest {
+        val sg = FakeSource(SourceId.SGDB, slots = setOf(ArtSlot.GRID)).apply { offer("Tetris.gb", ArtSlot.GRID, "https://sg/grid") }
         val rig = EngineRig(sg)
-        val item = rig.run(Scrape.homeGame("Tetris.gb", have = ArtHave(box = true))).items.single()
-        assertEquals(ItemStatus.PARTIAL to ScrapeEngine.NO_SCREENSHOT, item.status to item.reason)
-        assertEquals(listOf("Roms/GB/.media/grid/Tetris.jpg"), rig.written)
+        val dir = rig.fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "boxart"))!!
+        rig.fs.writeBytes(dir, "Tetris.png", byteArrayOf(1))
+        val logged = FakeLoggedArt(mutableSetOf("Roms/GB/.media/boxart/Tetris.png"))
+        val engine = ScrapeEngine(rig.http, FakeFitter(), rig.fs, Scrape.home, listOf(sg), onArt = { _, _ -> }, onWritten = {}, logged = logged)
+        val game = Scrape.homeGame("Tetris.gb", have = Scrape.HAS_ART)
+        engine.run(ScrapeState(items = listOf(Scrape.item(game))), { game }, replace = true) {}
+        assertNull(rig.fs.bytesAt("Home/Roms/GB/.media/boxart/Tetris.png"))   // the app's own 3D box would win over the new 2D box
+        assertNotNull(rig.fs.bytesAt("Home/Roms/GB/.media/boxart2d/Tetris.jpg"))
+    }
+
+    private suspend fun EngineRig.putShot(name: String, bytes: ByteArray, origin: ArtOrigin?) {
+        fs.writeBytes(fs.ensurePath(Scrape.home, listOf("Roms", "GB", ".media", "screenshot"))!!, name, bytes)
+        if (origin != null) log.origins["Roms/GB/.media/screenshot/$name"] = origin
+    }
+
+    @Test fun replaceNeverPutsAHeroOverTheAppsScreenshot() = runTest {
+        for (stopped in listOf(false, true)) {
+            val ss = FakeSource("screenscraper").apply { if (stopped) fail = { SourceStop("Quota") } }
+            val sg = FakeSource(SourceId.SGDB, slots = setOf(ArtSlot.HERO)).apply { offer("Tetris.gb", ArtSlot.HERO, "https://sg/hero") }
+            val rig = EngineRig(ss, sg)
+            rig.putShot("Tetris.png", byteArrayOf(7), ArtOrigin("screenscraper"))
+            rig.run(Scrape.homeGame("Tetris.gb", have = Scrape.HAS_ART), replace = true)
+            assertContentEquals(byteArrayOf(7), rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"), "stopped=$stopped")
+            assertNull(rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.jpg"))
+            assertEquals("screenscraper", rig.log.origins.getValue("Roms/GB/.media/screenshot/Tetris.png").source)
+            assertTrue(rig.written.none { "/screenshot/" in it }, rig.written.toString())
+        }
+    }
+
+    @Test fun replaceNeverPutsAHeroOverAHandPlacedScreenshot() = runTest {
+        val sg = FakeSource(SourceId.SGDB, slots = setOf(ArtSlot.HERO)).apply { offer("Tetris.gb", ArtSlot.HERO, "https://sg/hero") }
+        val rig = EngineRig(sg)
+        rig.putShot("Tetris.png", byteArrayOf(8), origin = null)
+        rig.run(Scrape.homeGame("Tetris.gb", have = Scrape.HAS_ART), replace = true)
+        assertContentEquals(byteArrayOf(8), rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"))
+        assertTrue(rig.written.isEmpty(), rig.written.toString())
+    }
+
+    @Test fun replaceKeepingARealScreenshotOverAHeroIsNotMissingOne() = runTest {
+        // Only a hero offered for the screenshot: the real one stays, and the game is DONE once its box came.
+        val ss = FakeSource("ss", slots = setOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT)).apply { offer("Tetris.gb", ArtSlot.BOX_2D, "https://ss/box") }
+        val sg = FakeSource(SourceId.SGDB, slots = setOf(ArtSlot.HERO)).apply { offer("Tetris.gb", ArtSlot.HERO, "https://sg/hero") }
+        val rig = EngineRig(ss, sg)
+        rig.putShot("Tetris.png", byteArrayOf(7), ArtOrigin("screenscraper"))
+        val item = rig.run(Scrape.homeGame("Tetris.gb", have = Scrape.HAS_ART), replace = true).items.single()
+        assertEquals(ItemStatus.DONE to "ss", item.status to item.reason)
+        assertContentEquals(byteArrayOf(7), rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"))
+        // No box either: only the box is missing.
+        val ss2 = FakeSource("ss", slots = setOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT))
+        val sg2 = FakeSource(SourceId.SGDB, slots = setOf(ArtSlot.HERO)).apply { offer("Tetris.gb", ArtSlot.HERO, "https://sg/hero") }
+        val rig2 = EngineRig(ss2, sg2)
+        rig2.putShot("Tetris.png", byteArrayOf(7), origin = null)
+        val item2 = rig2.run(Scrape.homeGame("Tetris.gb", have = Scrape.HAS_ART), replace = true).items.single()
+        assertEquals(ScrapeEngine.NO_BOX, item2.reason)
+    }
+
+    @Test fun replaceMayPutANewHeroOverAHero() = runTest {
+        val sg = FakeSource(SourceId.SGDB, slots = setOf(ArtSlot.HERO)).apply { offer("Tetris.gb", ArtSlot.HERO, "https://sg/hero2") }
+        val rig = EngineRig(sg)
+        rig.putShot("Tetris.jpg", byteArrayOf(9), ArtOrigin(SourceId.SGDB, "1", "old"))
+        rig.run(Scrape.homeGame("Tetris.gb", have = Scrape.HAS_ART), replace = true)
+        assertContentEquals(OK_PNG.body, rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.jpg"))
+        assertEquals("https://sg/hero2", rig.log.origins.getValue("Roms/GB/.media/screenshot/Tetris.jpg").assetId)
+        assertTrue(rig.arts.single().heroShot)
+    }
+
+    @Test fun aLaterRealScreenshotReplacesThisRunsHero() = runTest {
+        // SteamGridDB asked first: its hero stands in, then the next source's screenshot replaces it in the same run.
+        val sg = FakeSource(SourceId.SGDB, slots = setOf(ArtSlot.HERO)).apply { offer("Tetris.gb", ArtSlot.HERO, "https://sg/hero") }
+        val ss = FakeSource("ss").apply { offer("Tetris.gb", ArtSlot.BOX_2D, "https://ss/box"); offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://ss/shot") }
+        val rig = EngineRig(sg, ss)
+        val item = rig.run(Scrape.homeGame("Tetris.gb")).items.single()
+        assertEquals(ItemStatus.DONE to "steamgriddb, ss", item.status to item.reason)   // no "no screenshot": a real one won
+        assertNotNull(rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"))
+        assertNull(rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.jpg"))         // the hero's file is gone
+        val art = rig.arts.single()
+        assertEquals("Home/Roms/GB/.media/screenshot/Tetris.png", art.screenshot)
+        assertFalse(art.heroShot)
+    }
+
+    @Test fun want2dWithNo3dBoxTakesTheGridAsTheBox() = runTest {
+        val ss = FakeSource("ss", slots = setOf(ArtSlot.BOX_3D, ArtSlot.BOX_2D, ArtSlot.SCREENSHOT)).apply { offer("Tetris.gb", ArtSlot.SCREENSHOT, "https://ss/shot") }
+        val sg = FakeSource(SourceId.SGDB, slots = setOf(ArtSlot.GRID)).apply { offer("Tetris.gb", ArtSlot.GRID, "https://sg/grid") }
+        val rig = EngineRig(ss, sg, extras = ArtExtras(box2d = true))
+        val item = rig.run(Scrape.homeGame("Tetris.gb")).items.single()
+        assertEquals(ItemStatus.DONE to "ss, steamgriddb", item.status to item.reason)   // the box is no longer missing
+        assertNotNull(rig.fs.bytesAt("Home/Roms/GB/.media/boxart2d/Tetris.jpg"))
+        assertNull(rig.fs.bytesAt("Home/Roms/GB/.media/boxart/Tetris.png"))
+        assertTrue(ArtHave.of(rig.arts.single()).box)
     }
 }

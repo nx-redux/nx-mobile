@@ -1,25 +1,10 @@
 # licence: modifies FCEUmm (https://github.com/libretro/libretro-fceumm), GPL-2.0 (its Copying file); this patch is
 # distributed under the same licence.
 diff --git a/src/drivers/libretro/libretro.c b/src/drivers/libretro/libretro.c
-index 5ecaa3f..6ad8c04 100644
+index 55cf607..fcacaa0 100644
 --- a/src/drivers/libretro/libretro.c
 +++ b/src/drivers/libretro/libretro.c
-@@ -1834,7 +1834,14 @@ void retro_set_environment(retro_environment_t cb)
-    vfs_iface_info.required_interface_version = FILESTREAM_REQUIRED_VFS_VERSION;
-    vfs_iface_info.iface                      = NULL;
-    if (environ_cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs_iface_info))
-+   {
-       filestream_vfs_init(&vfs_iface_info);
-+      /* path_is_valid (the content check before filestream_open) goes
-+       * through file_path_io's stat callback; without this it always stats
-+       * the real filesystem, so frontend-virtual content paths fail. Only
-+       * takes effect when the frontend offers VFS v3 or newer. */
-+      path_vfs_init(&vfs_iface_info);
-+   }
- 
-    environ_cb(RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE,
-          (void*)content_overrides);
-@@ -2043,8 +2050,13 @@ void retro_deinit (void)
+@@ -2084,8 +2084,13 @@ void retro_deinit (void)
     stereo_filter_deinit();
  }
  
@@ -33,7 +18,7 @@ index 5ecaa3f..6ad8c04 100644
     /* Reset clears the turbo toggle phase so the rapid-fire cycle starts
      * at the same point every reset, matching how the core's other
      * input-poll state behaves on power-cycle.  Without this, a held
-@@ -3119,13 +3131,40 @@ static void FCEUD_UpdateInput(void)
+@@ -3154,13 +3159,40 @@ static void FCEUD_UpdateInput(void)
        bool curR = input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R);
        static bool prevL = false, prevR = false;
  
@@ -76,7 +61,7 @@ index 5ecaa3f..6ad8c04 100644
     }
  
     /* Handle internal palette switching */
-@@ -3419,6 +3458,9 @@ bool retro_serialize(void *data, size_t size)
+@@ -3454,6 +3486,9 @@ bool retro_serialize(void *data, size_t size)
  
  bool retro_unserialize(const void * data, size_t size)
  {
@@ -86,7 +71,7 @@ index 5ecaa3f..6ad8c04 100644
     /* Cannot load state while Game Genie
      * screen is open */
     if (geniestage == 1)
-@@ -4329,6 +4371,7 @@ bool retro_load_game_special(
+@@ -4364,6 +4399,7 @@ bool retro_load_game_special(
  
  void retro_unload_game(void)
  {

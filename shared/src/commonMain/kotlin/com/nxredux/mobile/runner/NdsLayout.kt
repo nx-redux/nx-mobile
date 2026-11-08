@@ -123,7 +123,10 @@ object NdsLayout {
     internal fun wholePx(v: Float): Float = floor(v + 0.001f).coerceAtLeast(0f)
 
     private fun full(screen: NdsScreen, dst: PxRect) =
-        NdsRegion(screen, src(screen), dst, shaded = true, touch = screen == NdsScreen.BOTTOM)
+        NdsRegion(screen, src(screen), dst, shaded = takesShader(screen), touch = screen == NdsScreen.BOTTOM)
+
+    /** Only the top screen takes the shader: the touch screen stays flat, so what is drawn is where a finger lands. */
+    fun takesShader(screen: NdsScreen): Boolean = screen == NdsScreen.TOP
 
     /** The largest whole scale that fits [space] with [cols] x [rows] screens of 256x192 each; 0 when not even 1x does. */
     private fun fitScale(space: PxRect, cols: Int, rows: Int): Int =
@@ -163,8 +166,7 @@ object NdsLayout {
      * 1x) in the height, and the other one centred below it, fixed (the inset corner and size don't apply). The other
      * screen takes the largest whole scale the leftover height holds, up to one step under the big one (but never less
      * than that half). In portrait, where that leaves it under 2x, it fills the leftover height up to 2x at any scale (the
-     * band never shrinks for it). Only the big screen is shaded unless both end up the same size; the other is drawn
-     * unshaded like an inset (shaded regions share one size).
+     * band never shrinks for it). Only the top screen is shaded (takesShader).
      */
     private fun large(space: PxRect, landscape: Boolean, big: NdsScreen): List<NdsRegion> {
         val k = (1..fitScale(space, 1, 1)).lastOrNull { k ->
@@ -181,7 +183,7 @@ object NdsLayout {
         val other = big.other
         val bigRect = PxRect(top.x, top.y, SCREEN_WIDTH * k, bigH)
         val otherRect = PxRect(space.x + wholePx((space.width - touchW) / 2f), top.y + bigH, touchW, touchH)
-        return listOf(full(big, bigRect), NdsRegion(other, src(other), otherRect, shaded = touchH == bigH, touch = false))
+        return listOf(full(big, bigRect), NdsRegion(other, src(other), otherRect, shaded = takesShader(other), touch = false))
     }
 
     /** Both screens at one whole scale, [first] over the other, centred. */

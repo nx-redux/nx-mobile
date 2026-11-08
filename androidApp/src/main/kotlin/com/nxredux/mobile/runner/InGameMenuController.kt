@@ -14,11 +14,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
@@ -239,6 +242,9 @@ internal class InGameMenuController(
     private fun toast(msg: String) = host.toast(msg)
 
     var menuView: ComposeView? = null
+    // The open menu's content, hosted here or on the second display ([placeMenu]): (on the second, its window size there).
+    private var menuContent: (@Composable (Boolean, DpSize?) -> Unit)? = null
+    private var menuShownOnSecond = false
         private set
     var menuModel: InGameMenuModel? = null
         private set
@@ -344,91 +350,113 @@ internal class InGameMenuController(
         refreshSlots()
         input.releaseAllGameInput()
         host.pauseForMenu()   // the core, its sound, rumble and motion hold; the battery save is written
-        val root = findViewById<FrameLayout>(R.id.root)
         // The accents cannot change while a game runs; read on every open all the same, so a change made since launch shows the next time it opens.
         // The in-game menu is on the accent and the Secondary accent, as the Settings pages.
         val colors = AndroidAppSettings(activity).let { nxColorsFor(it.accent, it.secondaryAccent) }
-        val overlay = ComposeView(activity).apply {
-            setContent {
-                val config = LocalConfiguration.current
-                NxTheme(colors = colors) {
-                    // No controller: hints show the on-screen pad's own labels (Sega C, PS ○); one attached: the A/B art.
-                    // Keyed on the profile's revision: a live Controller Type change redraws them with the menu open.
-                    val connected = padLayout.controllerConnected.value
-                    val hintGlyphs = remember(connected, padProfileRevision.value) {
-                        if (connected) HintGlyphs.STANDARD else HintGlyphs.forPad(padProfile())
-                    }
-                    // Shortcuts' bind rows and Adjust buttons come and go with a controller (the on-screen pad binds nothing).
-                    LaunchedEffect(connected) { menuModel?.let { it.setPadDrawn(padDrawn()); it.setControllerConnected(connected); menuState.value = it.state } }
-                    // The page title's gutter follows the app's: the narrow one in portrait, as HandheldShell sets it; a
-                    // clip-on controller's empty room below the game counts as a pad below.
-                    // In a pad skin's glass: laid out for the glass's shape, as the main menu in the skin (HandheldShell).
-                    val skinGlass = skinGlass()
-                    val portraitLayout = skinGlass?.let { it.height > it.width } ?: (config.orientation == Configuration.ORIENTATION_PORTRAIT)
-                    val padBelow = skinGlass != null || portraitLayout && padLayout.portraitBandPx() > 0
-                    // The window decides the two panes, as Settings' ([inGameMenuSplit]): portrait never splits. In a pad
-                    // skin's glass the glass is the menu's window (a landscape skin's tall glass: one column, not two panes).
-                    val density = LocalDensity.current
-                    val window = skinGlass?.let { g -> with(density) { DpSize(g.width.toDp(), g.height.toDp()) } }
-                        ?: DpSize(config.screenWidthDp.dp, config.screenHeightDp.dp)
-                    CompositionLocalProvider(
-                        LocalHintGlyphs provides hintGlyphs, LocalPortrait provides portraitLayout, LocalPadBelow provides padBelow,
-                        LocalWindowSize provides window, LocalInSkin provides (skinGlass != null),
-                        // No controller and no skin round the menu (its picture full screen): no pad to press hints with.
-                        LocalInGameTouchOnly provides (footerModeFor(connected, padVisible = skinGlass != null) == FooterMode.BUTTONS),
-                        LocalNxOptionText provides AndroidAppSettings(activity).optionTextSize.ofListLabel,   // Appearance → Text size
-                    ) {
-                    // In the glass: the camera cutout reaches into it only as far as it runs past the glass's top (and
-                    // a bottom one past its bottom), so the part outside is taken off before the menu pads by it.
-                    val outside = skinGlass?.let { g ->
-                        val windowH = (root.height.takeIf { it > 0 } ?: activity.windowShape().heightPx).toFloat()
-                        with(density) { PaddingValues(top = g.y.coerceAtLeast(0f).toDp(), bottom = (windowH - g.y - g.height).coerceAtLeast(0f).toDp()) }
-                    }
-                    // in the glass: clipped to its rounded corners, as the frame's hole is cut
-                    val glassCorner = if (skinGlass != null) with(density) { skinGlassCorner().toDp() } else 0.dp
-                    Box((if (outside != null) Modifier.consumeWindowInsets(outside) else Modifier).clip(RoundedCornerShape(glassCorner))) {
-                    menuState.value?.let { s ->
-                        InGameMenu(
-                            state = s,
-                            slots = slotsUi.value,
-                            onSelect = { i -> if (!quitting) menuModel?.let { it.select(i); menuState.value = it.state } },
-                            onActivate = { i -> if (!quitting) menuModel?.let { m -> val effect = m.activate(i); menuState.value = m.state; handle(effect) } },
-                            onDismiss = { if (!quitting) menuModel?.let { val e = it.press(NxButton.B); menuState.value = it.state; handle(e) } },
-                            onChange = { d -> if (!quitting) menuModel?.let { val e = it.press(if (d > 0) NxButton.RIGHT else NxButton.LEFT); menuState.value = it.state; handle(e) } },
-                            onPress = ::onMenuPress,
-                            badgePath = { a -> menuModel?.badgePath(a) },
-                            rowAchievement = { r -> menuModel?.achievementOf(r) },   // the Achievements page's rows as the panel's
-                            onInfoTruncated = { info, t -> if (!quitting) menuModel?.let { it.setInfoTruncated(info, t); menuState.value = it.state } },
-                            // Two panes on a wide area (the unfolded Fold, a phone in landscape), as Settings.
-                            onSplit = { split -> menuModel?.split = split },
-                            onParentTap = { kind, i -> if (!quitting) menuModel?.let { m -> val e = m.tapParent(kind, i); menuState.value = m.state; handle(e) } },
-                            // A row of the Options preview beside the root's Options row: the page opens on it.
-                            onPreviewTap = { i -> if (!quitting) menuModel?.let { m -> val e = m.tapPreview(i); menuState.value = m.state; handle(e) } },
-                            // The game panel beside the root list (the model caches it until its inputs change).
-                            panel = menuModel?.panelState(),
-                            onPanelEvent = { ev -> if (!quitting) menuModel?.let { m -> val e = m.panelEvent(ev); menuState.value = m.state; handle(e) } },
-                            onPanelColumns = { c -> menuModel?.panelColumns = c },
-                            // The Menu tab's shortcuts below its words (too narrow beside them): DOWN / UP move between them.
-                            onShortcutsBelow = { b -> menuModel?.shortcutsBelow = b },
-                            // Portrait: the Options page beside the root only while its words fit there, else whole.
-                            onOptionsBeside = { b -> menuModel?.optionsBeside = b },
-                            // Not in netplay: the header over Continue / Leave only.
-                            panelBeside = menuModel?.panelBeside ?: true,
-                            // In the dual-screen panel's place: opaque, as the panel it replaces.
-                            opaque = dual.mainPanel.value != null,
-                            // An options row's switch, segment, picker or info icon, and the popup over it.
-                            onOption = { ev -> if (!quitting) menuModel?.let { m -> val e = m.optionEvent(ev); menuState.value = m.state; handle(e) } },
-                        )
-                    }
-                    }
-                    }
+        menuContent = { onSecond, windowOverride ->
+            val config = LocalConfiguration.current
+            NxTheme(colors = colors) {
+                // No controller: hints show the on-screen pad's own labels (Sega C, PS ○); one attached: the A/B art.
+                // Keyed on the profile's revision: a live Controller Type change redraws them with the menu open.
+                val connected = padLayout.controllerConnected.value
+                val hintGlyphs = remember(connected, padProfileRevision.value) {
+                    if (connected) HintGlyphs.STANDARD else HintGlyphs.forPad(padProfile())
+                }
+                // Shortcuts' bind rows and Adjust buttons come and go with a controller (the on-screen pad binds nothing).
+                LaunchedEffect(connected) { menuModel?.let { it.setPadDrawn(padDrawn()); it.setControllerConnected(connected); menuState.value = it.state } }
+                // In a pad skin's glass (here, not on the second display): laid out for the glass's shape, as the main menu
+                // in the skin (HandheldShell). The page title's gutter follows the app's: the narrow one in portrait; a
+                // clip-on controller's empty room below the game counts as a pad below.
+                val skinGlass = if (onSecond) null else skinGlass()
+                val portraitLayout = skinGlass?.let { it.height > it.width } ?: (!onSecond && config.orientation == Configuration.ORIENTATION_PORTRAIT)
+                val padBelow = skinGlass != null || portraitLayout && padLayout.portraitBandPx() > 0
+                // The window decides the two panes, as Settings' ([inGameMenuSplit]): portrait never splits. In a pad
+                // skin's glass the glass is the menu's window (a landscape skin's tall glass: one column, not two panes).
+                val density = LocalDensity.current
+                val window = windowOverride ?: skinGlass?.let { g -> with(density) { DpSize(g.width.toDp(), g.height.toDp()) } }
+                    ?: DpSize(config.screenWidthDp.dp, config.screenHeightDp.dp)
+                CompositionLocalProvider(
+                    LocalHintGlyphs provides hintGlyphs, LocalPortrait provides portraitLayout, LocalPadBelow provides padBelow,
+                    LocalWindowSize provides window, LocalInSkin provides (skinGlass != null),
+                    // No controller and no skin round the menu (its picture full screen): no pad to press hints with.
+                    LocalInGameTouchOnly provides (footerModeFor(connected, padVisible = skinGlass != null) == FooterMode.BUTTONS),
+                    LocalNxOptionText provides AndroidAppSettings(activity).optionTextSize.ofListLabel,   // Appearance → Text size
+                ) {
+                // In the glass: the camera cutout reaches into it only as far as it runs past the glass's top (and
+                // a bottom one past its bottom), so the part outside is taken off before the menu pads by it.
+                val outside = skinGlass?.let { g ->
+                    val windowH = (findViewById<FrameLayout>(R.id.root).height.takeIf { it > 0 } ?: activity.windowShape().heightPx).toFloat()
+                    with(density) { PaddingValues(top = g.y.coerceAtLeast(0f).toDp(), bottom = (windowH - g.y - g.height).coerceAtLeast(0f).toDp()) }
+                }
+                // in the glass: clipped to its rounded corners, as the frame's hole is cut
+                val glassCorner = if (skinGlass != null) with(density) { skinGlassCorner().toDp() } else 0.dp
+                Box((if (outside != null) Modifier.consumeWindowInsets(outside) else Modifier).clip(RoundedCornerShape(glassCorner))) {
+                menuState.value?.let { s ->
+                    InGameMenu(
+                        state = s,
+                        slots = slotsUi.value,
+                        onSelect = { i -> if (!quitting) menuModel?.let { it.select(i); menuState.value = it.state } },
+                        onActivate = { i -> if (!quitting) menuModel?.let { m -> val effect = m.activate(i); menuState.value = m.state; handle(effect) } },
+                        onDismiss = { if (!quitting) menuModel?.let { val e = it.press(NxButton.B); menuState.value = it.state; handle(e) } },
+                        onChange = { d -> if (!quitting) menuModel?.let { val e = it.press(if (d > 0) NxButton.RIGHT else NxButton.LEFT); menuState.value = it.state; handle(e) } },
+                        onPress = ::onMenuPress,
+                        badgePath = { a -> menuModel?.badgePath(a) },
+                        rowAchievement = { r -> menuModel?.achievementOf(r) },   // the Achievements page's rows as the panel's
+                        onInfoTruncated = { info, t -> if (!quitting) menuModel?.let { it.setInfoTruncated(info, t); menuState.value = it.state } },
+                        // Two panes on a wide area (the unfolded Fold, a phone in landscape), as Settings.
+                        onSplit = { split -> menuModel?.split = split },
+                        onParentTap = { kind, i -> if (!quitting) menuModel?.let { m -> val e = m.tapParent(kind, i); menuState.value = m.state; handle(e) } },
+                        // A row of the Options preview beside the root's Options row: the page opens on it.
+                        onPreviewTap = { i -> if (!quitting) menuModel?.let { m -> val e = m.tapPreview(i); menuState.value = m.state; handle(e) } },
+                        // The game panel beside the root list (the model caches it until its inputs change).
+                        panel = menuModel?.panelState(),
+                        onPanelEvent = { ev -> if (!quitting) menuModel?.let { m -> val e = m.panelEvent(ev); menuState.value = m.state; handle(e) } },
+                        onPanelColumns = { c -> menuModel?.panelColumns = c },
+                        // The Menu tab's shortcuts below its words (too narrow beside them): DOWN / UP move between them.
+                        onShortcutsBelow = { b -> menuModel?.shortcutsBelow = b },
+                        // Portrait: the Options page beside the root only while its words fit there, else whole.
+                        onOptionsBeside = { b -> menuModel?.optionsBeside = b },
+                        // Not in netplay: the header over Continue / Leave only.
+                        panelBeside = menuModel?.panelBeside ?: true,
+                        // In the dual-screen panel's place: opaque, as the panel it replaces.
+                        opaque = !onSecond && dual.mainPanel.value != null,
+                        // An options row's switch, segment, picker or info icon, and the popup over it.
+                        onOption = { ev -> if (!quitting) menuModel?.let { m -> val e = m.optionEvent(ev); menuState.value = m.state; handle(e) } },
+                    )
+                }
+                }
                 }
             }
         }
-        menuView = overlay
         padLayout.skinStripHidden = true   // the skin's strip shortcuts (SAVE, LOAD, ...) go while the menu is up
-        padLayout.skinUnderMenu = !dual.mainPanelCoversWindow()   // in the skin (not over the dual-screen panel): its frame round the menu
-        root.addView(overlay, menuLayoutParams(resources.configuration.orientation, overPanel = dual.mainPanelCoversWindow(), glass = true))
+        placeMenu()
+    }
+
+    /**
+     * Puts the open menu on the display it belongs on: on dual screen the top display ([DualScreenController.menuOnSecond]),
+     * else over the game here (in a pad skin's glass, its frame round it). Called on open and whenever the second display
+     * or the picture's place changes.
+     */
+    fun placeMenu() {
+        val content = menuContent ?: return
+        if (!menuOpen) return
+        val second = dual.menuOnSecond()
+        if (second == menuShownOnSecond && (second || menuView != null)) return
+        val root = findViewById<FrameLayout>(R.id.root)
+        if (second) {
+            menuView?.let { root.removeView(it) }
+            menuView = null
+            padLayout.skinUnderMenu = false
+            // The second display's window is its own size (and scaled density): the menu's window is what it gets there.
+            dual.showMenuOnSecond { BoxWithConstraints(Modifier.fillMaxSize()) { content(true, DpSize(maxWidth, maxHeight)) } }
+        } else {
+            dual.showMenuOnSecond(null)
+            val overlay = ComposeView(activity).apply { setContent { content(false, null) } }
+            menuView = overlay
+            padLayout.skinUnderMenu = !dual.mainPanelCoversWindow()   // in the skin (not over the dual-screen panel): its frame round the menu
+            root.addView(overlay, menuLayoutParams(resources.configuration.orientation, overPanel = dual.mainPanelCoversWindow(), glass = true))
+        }
+        menuShownOnSecond = second
         dual.syncMainPanelHost()
         padLayout.updatePadVisibility()
     }
@@ -482,6 +510,9 @@ internal class InGameMenuController(
         menuState.value?.panelTab?.takeIf { dual.mainPanelShown() && it != dual.dualPanelTab }?.let { dual.dualPanelTab = it; dual.refreshDualPanel() }
         menuView?.let { findViewById<FrameLayout>(R.id.root).removeView(it) }
         menuView = null
+        dual.showMenuOnSecond(null)
+        menuContent = null
+        menuShownOnSecond = false
         padLayout.skinStripHidden = false   // the skin's strip shortcuts back
         padLayout.skinUnderMenu = false
         dual.syncMainPanelHost()
@@ -608,9 +639,11 @@ internal class InGameMenuController(
         }
     }
 
-    /** The 3DS options the second-screen split holds for the session: a save keeps their stored values. */
+    /** The 3DS options the second-screen split or the video views hold for the session: a save keeps their stored values. */
     private fun dualForcedOptions(): Set<String> =
-        if (isN3ds) DualScreen.n3dsForcedOptions(dual.dualMode, halfFolded = false)?.keys.orEmpty() else emptySet()
+        if (!isN3ds) emptySet()
+        else DualScreen.n3dsForcedOptions(dual.dualMode, halfFolded = false)?.keys.orEmpty() +
+            if (renderer.n3dsViews) DualScreen.N3DS_VIEWS_CORE.keys else emptySet()
 
     /**
      * Reads the core's options on the emulation thread, then runs [then] on the main thread and redraws.

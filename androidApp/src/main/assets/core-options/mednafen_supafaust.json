@@ -1,6 +1,6 @@
 {
  "core": "mednafen_supafaust",
- "emulator": "Supafaust",
+ "emulator": "Beetle Supafaust",
  "sections": [
   {
    "key": "",
@@ -567,6 +567,6 @@
    ]
   }
  ],
- "soSha256": "6fe8639ae7aebe9d2340e2fa87013663c7ad272af91cb35f75e02b1ec2012f90",
- "probedAt": "2026-09-29"
+ "soSha256": "1e6bb09261daff76c7229fed2fe2f078f4c72f998df2f92f264204dd95885f5a",
+ "probedAt": "2026-11-07"
 }

@@ -3,6 +3,7 @@ package com.nxredux.mobile.runner
 import com.nxredux.mobile.skin.GlassScreen
 import com.nxredux.mobile.skin.SkinN3ds
 import com.nxredux.mobile.skin.SkinDual
+import com.swordfish.libretrodroid.FrameComposition
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -96,14 +97,12 @@ internal interface FrontendHost : LifecycleOwner {
     val n3dsStackPinned: Boolean
     fun isLandscape(): Boolean
     /** The DS/3DS screens cut for the second display, and what it draws ([GameActivity]'s second-screen block). */
-    fun secondDsRegions(g: FloatArray): List<NdsRegion>?
+    fun secondDsRegions(g: FloatArray, map: ScreenMap?): List<NdsRegion>?
     fun secondRegions(g: FloatArray, ds: List<NdsRegion>?): List<ScreenRegion>
     /** The open in-game menu's shader rows, and its frontend rows (overlay list, locks, overlay availability), again. */
     fun publishMenuShaders()
     fun publishMenuFrontend()
     fun toast(msg: String): android.widget.Toast
-    /** The core's geometry changed to [g]: a dual mode checks which display the picture belongs on. */
-    fun recheckPictureOn(g: FloatArray)
     /** The core is held (the in-game menu, another app focused): it makes no new frame meanwhile. */
     fun corePaused(): Boolean
     /**
@@ -115,6 +114,8 @@ internal interface FrontendHost : LifecycleOwner {
     fun onNds3dLayout(current: Int?, displayMax: Int, sizeChange: Boolean)
     /** Where the second display draws the whole frame (px of its surface; the 3DS picture there), else null. [g]: the game geometry. */
     fun secondWholeFrame(g: FloatArray): PxRect?
+    /** Main shows no game picture: the panel modes with the picture on the second display. */
+    fun mainShowsNoPicture(): Boolean
     /**
      * A 3DS game was laid out flat in [FrontendRenderer.n3dsPictureSpace]: Large screen in portrait sends the proportion
      * that space gives when it is not the one the core has.
@@ -157,7 +158,20 @@ internal class FrontendRenderer(
     private val pictureOn get() = host.pictureOn
     private val n3dsPicture get() = host.n3dsPicture
     private fun isLandscape() = host.isLandscape()
-    private fun secondDsRegions(g: FloatArray) = host.secondDsRegions(g)
+    private fun secondDsRegions(g: FloatArray) = host.secondDsRegions(g, screenMap)
+
+    /** The core's video view map for the frame laid out last (DS / 3DS); null without one or when the frame doesn't fit it. */
+    var screenMap: ScreenMap? = null
+        private set
+
+    private fun screenMapFor(view: GLRetroView, g: FloatArray): ScreenMap? {
+        if (!NdsOptions.appliesTo(gameTag) && !isN3ds) return null
+        val views = view.videoViews().map { MapView(it.x, it.y, it.width, it.height, it.screen, it.eye) }
+        return ScreenMap.from(views, g[0].roundToInt(), g[1].roundToInt(), byShape = isN3ds)
+    }
+
+    /** The DS frame can be cut into its two screens: the core's map says where, or it is the plain 256 x 384 stack. */
+    private fun dsScreensKnown(g: FloatArray): Boolean = screenMap != null || NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt())
     private fun secondRegions(g: FloatArray, ds: List<NdsRegion>?) = host.secondRegions(g, ds)
     private fun toast(msg: String) = host.toast(msg)
 
@@ -184,6 +198,42 @@ internal class FrontendRenderer(
      * against its shapes ([N3ds3dResolution.frameFactor]); a send's frame comes later, awaited by its [watchGeometry].
      */
     var n3dsProportion = "2"
+
+    /** 3DS under Azahar's video views: the core stays at Default, unswapped; the app draws the player's layout. */
+    var n3dsViews = false
+    /** The Azahar layout the player's row asks for ([N3dsOptions.coreLayoutFor]), drawn by the app under views. */
+    var n3dsComposeLayout = "default"
+    /** The app's 3DS swap under views ([N3dsSwap]). */
+    var n3dsSwapped = false
+
+    private fun n3dsComposition(): FrameComposition? {
+        val map = screenMap ?: return null
+        if (!isN3ds || !n3dsViews || dualMode == DualMode.SPLIT || padLayout.skinShown) return null
+        val layout = if (dualMode == DualMode.PANEL_UP) "side_by_side" else n3dsComposeLayout
+        val factor = N3dsSwap.factorFromTopHeight(map.topSizePx.second)
+        val c = AzaharLayout.compose(layout, factor, n3dsProportion.toFloatOrNull() ?: 1f, n3dsSwapped)
+        val w = c.width.toFloat()
+        val h = c.height.toFloat()
+        return FrameComposition(c.width, c.height, c.placements.map { p ->
+            val src = map.src(p.screen)
+            ScreenRegion(
+                ScreenRect(src.left, src.top, src.right, src.bottom),
+                ScreenRect(p.dst.x / w, p.dst.y / h, (p.dst.x + p.dst.width) / w, (p.dst.y + p.dst.height) / h),
+                shaded = NdsLayout.takesShader(p.screen), touch = p.screen == NdsScreen.BOTTOM,
+            )
+        })
+    }
+
+    /** 3DS SWAP under views on one display: the app's Toggle / Hold ([N3dsSwap]); false when another layout owns it. */
+    fun onN3dsViewsSwap(down: Boolean, mode: String): Boolean {
+        if (!isN3ds || !n3dsViews || screenMap == null || dualMode == DualMode.SPLIT || padLayout.skinShown) return false
+        val next = N3dsSwap.next(n3dsSwapped, mode, down)
+        if (next != n3dsSwapped) {
+            n3dsSwapped = next
+            relayoutFrontend()
+        }
+        return true
+    }
 
     /**
      * The space the 3DS picture was last fitted in on the main display (Screen Scaling Auto, flat, the picture there); null
@@ -479,7 +529,6 @@ internal class FrontendRenderer(
     /** The one way a changed core geometry is laid out (the watch's and the flow's), once per distinct geometry. */
     private fun layOutFromCore(g: FloatArray) {
         if (!geometryWatch.shouldLayOut(g)) return
-        host.recheckPictureOn(g)
         relayoutFrontend(g)
     }
 
@@ -501,7 +550,14 @@ internal class FrontendRenderer(
         val w = game.width.toFloat()
         val h = game.height.toFloat()
         if (w <= 0f || h <= 0f) return
-        val g = geometry ?: view.getGameGeometry()
+        val packed = geometry ?: view.getGameGeometry()
+        view.mainCovered = host.mainShowsNoPicture()
+        screenMap = screenMapFor(view, packed)
+        // 3DS on one display (and the Panel Up frame) from the map: the app rebuilds Azahar's own layout from it, and
+        // that composed frame is the frame every later step lays out.
+        val composition = n3dsComposition()
+        view.composition = composition
+        val g = composition?.let { floatArrayOf(it.width.toFloat(), it.height.toFloat(), it.width / it.height.toFloat(), packed[3]) } ?: packed
         val origin = IntArray(2).also { game.getLocationInWindow(it) }
         syncSkinFill(view, FrontendSettings.parse(frontendValues))
         val frame = coreFrame(g)   // null before the first frame (0x0)
@@ -594,7 +650,7 @@ internal class FrontendRenderer(
             reportN3ds3d(w, h, screen, halfFolded = false, g, flat = shown, secondDs)
             host.onN3dsPictureSpace()   // after the report: it read this frame against the proportion it was drawn at
         }
-        if (isPs2) reportPs2Resolution(w, h, screen, shown)
+        if (isPs2) reportPs2Resolution(w, h, screen, shown, g)
         if (viewport != lastViewport) {
             lastViewport = viewport
             view.viewport = viewport
@@ -620,18 +676,22 @@ internal class FrontendRenderer(
      */
     private fun reportNds3d(w: Float, h: Float, screen: ScreenClass, halfFolded: Boolean) {
         val second = Nds3dResolution.currentScale(secondNdsRegions) ?: 1
-        report3d(w, h, screen, halfFolded, Nds3dResolution.currentScale(ndsRegions + secondNdsRegions), second) {
+        val shown = if (host.mainShowsNoPicture()) secondNdsRegions else ndsRegions + secondNdsRegions
+        report3d(w, h, screen, halfFolded, Nds3dResolution.currentScale(shown), second) {
             Nds3dResolution.displayMax(w, h, screen)
         }
     }
 
     /**
      * The PS2 3D scale's inputs to the host, as [reportNds3d]: the [shown] picture's height over the 448 px frame, and the
-     * window's display maximum ([Ps2Resolution.displayMax]). Nothing before the first frame (the launch's value stands).
+     * window's display maximum ([Ps2Resolution.displayMax]); with the picture on a second display, its height there.
+     * Nothing before the first frame (the launch's value stands).
      */
-    private fun reportPs2Resolution(w: Float, h: Float, screen: ScreenClass, shown: PxRect) {
+    private fun reportPs2Resolution(w: Float, h: Float, screen: ScreenClass, shown: PxRect, g: FloatArray) {
         if (!gameReady || shown.height <= 0f) return
-        report3d(w, h, screen, halfFolded = false, Ps2Resolution.currentScale(shown.height.roundToInt()), second = 1) {
+        val main = shown.height.roundToInt().takeUnless { host.mainShowsNoPicture() }
+        val (current, second) = Ps2Resolution.shownScales(main, host.secondWholeFrame(g)?.height?.roundToInt())
+        report3d(w, h, screen, halfFolded = false, current, second) {
             Ps2Resolution.displayMax(w.roundToInt(), h.roundToInt())
         }
     }
@@ -650,7 +710,11 @@ internal class FrontendRenderer(
         if (geometryWatch.active && watchIsLayoutSwitch) return
         N3ds3dResolution.frameFactor(g[0], g[1], n3dsProportion.toFloatOrNull())?.let { n3dsFactor = it }
         val factor = n3dsFactor
-        val main = if (flat != null) N3ds3dResolution.currentScale(flat.width, g[0], factor) else N3ds3dResolution.regionScale(ndsRegions)
+        val main = when {
+            host.mainShowsNoPicture() -> null
+            flat != null -> N3ds3dResolution.currentScale(flat.width, g[0], factor)
+            else -> N3ds3dResolution.regionScale(ndsRegions)
+        }
         val second = secondDs?.let(N3ds3dResolution::regionScale)
             ?: host.secondWholeFrame(g)?.let { N3ds3dResolution.currentScale(it.width, g[0], factor) }
         report3d(w, h, screen, halfFolded, listOfNotNull(main, second).maxOrNull(), second ?: 1) {
@@ -671,7 +735,8 @@ internal class FrontendRenderer(
         val area = Nds3dArea(w, h, screen, retroView?.display?.displayId, isLandscape(), halfFolded, dualMode)
         val sizeChange = area.isSizeChangeFrom(nds3dArea)
         nds3dArea = area
-        host.onNds3dLayout(current, maxOf(nds3dMainMax, second), sizeChange)
+        // Under the panel the main display shows no screen: only the second display's reach counts.
+        host.onNds3dLayout(current, if (host.mainShowsNoPicture()) second else maxOf(nds3dMainMax, second), sizeChange)
     }
 
     /** The 3DS game launched with internal resolution [factor]: what a frame of a size no layout explains is taken to carry. */
@@ -734,7 +799,7 @@ internal class FrontendRenderer(
         if (!NdsOptions.appliesTo(gameTag)) return null
         val frameW = g[0].roundToInt()
         val frameH = g[1].roundToInt()
-        if (!NdsLayout.isDsFrame(frameW, frameH)) {
+        if (!dsScreensKnown(g)) {
             // Safety net (0x0 before the first frame; anything else is a core or option change): one picture, as for any core.
             if (frameW > 0 && frameH > 0 && !ndsFrameWarned) {
                 ndsFrameWarned = true
@@ -746,20 +811,20 @@ internal class FrontendRenderer(
             val main = DualScreen.splitMain(NdsSettings.parse(frontendValues).big, pictureOn)
             // under a pad skin (landscape with a second display): the main display's screen in the skin's screen
             val glass = SkinDual.splitGlass(padLayout.skinPlacement()?.takeIf { padLayout.skinShown }, main)
-            return if (glass != null) DualScreen.ndsScreenIn(SkinDual.dsScreenIn(glass), main) else DualScreen.ndsScreen(w, h, main)
+            return (if (glass != null) DualScreen.ndsScreenIn(SkinDual.dsScreenIn(glass), main) else DualScreen.ndsScreen(w, h, main)).withMap(screenMap)
         }
-        if (dualMode == DualMode.PANEL_UP) return DualScreen.ndsPanelUp(w, h, NdsSettings.parse(frontendValues))
+        if (dualMode == DualMode.PANEL_UP) return DualScreen.ndsPanelUp(w, h, NdsSettings.parse(frontendValues)).withMap(screenMap)
         val landscape = isLandscape()
         val settings = NdsSettings.parse(frontendValues)
         val regions = NdsLayout.regions(
             space, settings.layoutShown(landscape, ndsControllerMode(), screen), landscape, screen, settings,
             NDS_INSET_MARGIN_DP * resources.displayMetrics.density,
         )
-        if (room != PadRoom.HIDDEN_BAND || regions.isEmpty()) return regions
+        if (room != PadRoom.HIDDEN_BAND || regions.isEmpty()) return regions.withMap(screenMap)
         // The band hidden: the screens as one picture, at the top when they reach into the overlay, else centred above it.
         val shown = regions.shownRect()
         val dy = (placedFor(room, shown, h, overlayH).y - shown.y).roundToInt().toFloat()
-        return regions.map { it.copy(dst = it.dst.copy(y = it.dst.y + dy)) }
+        return regions.map { it.copy(dst = it.dst.copy(y = it.dst.y + dy)) }.withMap(screenMap)
     }
 
     /**
@@ -771,7 +836,7 @@ internal class FrontendRenderer(
     private fun skinDsLayout(g: FloatArray): SkinDs? {
         if (!padLayout.skinShown || dualMode != DualMode.OFF) return null
         if (isN3ds) return skinN3dsLayout(g)
-        if (!NdsOptions.appliesTo(gameTag) || !NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt())) return null
+        if (!NdsOptions.appliesTo(gameTag) || !dsScreensKnown(g)) return null
         val p = padLayout.skinPlacement() ?: return null
         // a regular phone's landscape: the player's layout in the skin's one glass (NdsOptions.skinLayout), as without a skin
         val glass = p.glass(GlassScreen.STACK)?.rect
@@ -780,7 +845,7 @@ internal class FrontendRenderer(
             val laid = NdsLayout.regions(glass, choice, true, activity.windowShape().screenClass, NdsSettings.parse(frontendValues),
                 NDS_INSET_MARGIN_DP * resources.displayMetrics.density)
             // Side by side fills the glass (user: its whole-number scale left wide margins); the others stay whole-number
-            val regions = if (choice == NdsLayoutChoice.SIDE_BY_SIDE) laid.filledTo(glass) else laid
+            val regions = (if (choice == NdsLayoutChoice.SIDE_BY_SIDE) laid.filledTo(glass) else laid).withMap(screenMap)
             if (regions.isNotEmpty()) {
                 val top = regions.firstOrNull { it.screen == NdsScreen.TOP }?.dst ?: regions.first().dst
                 return SkinDs(top, regions.firstOrNull { it.screen == NdsScreen.BOTTOM }?.dst ?: top, regions)
@@ -790,7 +855,7 @@ internal class FrontendRenderer(
         val top = stack?.copy(height = stack.height / 2f) ?: p.glass(GlassScreen.TOP)?.rect?.let { fitAspect(it, 256f / 192f) } ?: return null   // the top screen, centred in its glass
         val bottom = stack?.copy(y = stack.y + stack.height / 2f, height = stack.height / 2f) ?: p.glass(GlassScreen.TOUCH)?.rect ?: return null
         val big = NdsSettings.parse(frontendValues).big
-        return SkinDs(top, bottom, dsScreenRegions(top, bottom, DsKind.DS, big))
+        return SkinDs(top, bottom, dsScreenRegions(top, bottom, DsKind.DS, big).withMap(screenMap))
     }
 
     private fun skinN3dsLayout(g: FloatArray): SkinDs? {
@@ -802,7 +867,7 @@ internal class FrontendRenderer(
         val regions = if (SkinN3ds.cutsStack(fw, fh, pinned = host.n3dsStackPinned)) {
             // a regular phone's landscape: the player's layout in the skin's one glass (N3dsOptions.skinLayout)
             val layout = N3dsOptions.skinLayout(frontendValues, isLandscape(), ndsControllerMode(), activity.windowShape().screenClass)
-            SkinN3ds.regions(stack, top, p.glass(GlassScreen.TOUCH)?.rect, padLayout.n3dsSkinBig, layout) ?: return null
+            SkinN3ds.regions(stack, top, p.glass(GlassScreen.TOUCH)?.rect, padLayout.n3dsSkinBig, layout)?.withMap(screenMap) ?: return null
         } else {
             val whole = SkinN3ds.whole(stack, top, fw, fh) ?: return null
             listOf(NdsRegion(NdsScreen.TOP, FrameRect(0f, 0f, 1f, 1f), whole, shaded = true, touch = false))
@@ -861,8 +926,8 @@ internal class FrontendRenderer(
         val main = DualScreen.splitMain(n3dsPicture, pictureOn)
         // under a pad skin (landscape with a second display): the main display's screen in the skin's screen, at its shape
         val glass = SkinDual.splitGlass(padLayout.skinPlacement()?.takeIf { padLayout.skinShown }, main)
-            ?: return DualScreen.n3dsScreen(w, h, main)
-        return DualScreen.n3dsScreenIn(SkinDual.screenIn(glass, if (main == NdsScreen.TOP) 5f / 3f else 4f / 3f), main)
+            ?: return DualScreen.n3dsScreen(w, h, main).withMap(screenMap)
+        return DualScreen.n3dsScreenIn(SkinDual.screenIn(glass, if (main == NdsScreen.TOP) 5f / 3f else 4f / 3f), main).withMap(screenMap)
     }
 
     /** Split DS screens turn the overlay off and the menu shows it unavailable; both follow when that changes. */

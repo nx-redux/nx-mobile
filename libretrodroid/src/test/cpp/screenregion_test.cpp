@@ -93,6 +93,27 @@ int main() {
         check(!regionDownscales(q4, 0.0F, 0.0F, 1248.0F, 1900.0F), "empty texture");
     }
 
+    {
+        // A core rotated a quarter turn counterclockwise (SET_ROTATION 1, a vertical arcade game): the picture turns
+        // with it, so the view's top-left shows the frame's top-right.
+        ScreenRegion whole { 0.0F, 0.0F, 1.0F, 1.0F,  0.0F, 0.0F, 1.0F, 1.0F,  true, false };
+        RegionQuad r1 = buildRegionQuad(whole, 0.0F, 0.0F, 1.0F, 1.0F, false, 1);
+        near(1.0F, r1.coordinates[0], "r1 top-left u");     near(0.0F, r1.coordinates[1], "r1 top-left v");
+        near(0.0F, r1.coordinates[2], "r1 bottom-left u");  near(0.0F, r1.coordinates[3], "r1 bottom-left v");
+        near(1.0F, r1.coordinates[4], "r1 top-right u");    near(1.0F, r1.coordinates[5], "r1 top-right v");
+        near(0.0F, r1.coordinates[10], "r1 bottom-right u"); near(1.0F, r1.coordinates[11], "r1 bottom-right v");
+        near(-1.0F, r1.vertices[0], "r1 vertices stay");
+        // Half a turn: top-left shows the bottom-right; four turns are none.
+        RegionQuad r2 = buildRegionQuad(whole, 0.0F, 0.0F, 1.0F, 1.0F, false, 2);
+        near(1.0F, r2.coordinates[0], "r2 top-left u");     near(1.0F, r2.coordinates[1], "r2 top-left v");
+        RegionQuad r4 = buildRegionQuad(whole, 0.0F, 0.0F, 1.0F, 1.0F, false, 4);
+        RegionQuad r0 = buildRegionQuad(whole, 0.0F, 0.0F, 1.0F, 1.0F, false);
+        for (int i = 0; i < 12; i++) near(r0.coordinates[i], r4.coordinates[i], "four turns are none");
+        // Three turns (clockwise once): top-left shows the frame's bottom-left.
+        RegionQuad r3 = buildRegionQuad(whole, 0.0F, 0.0F, 1.0F, 1.0F, false, 3);
+        near(0.0F, r3.coordinates[0], "r3 top-left u");     near(1.0F, r3.coordinates[1], "r3 top-left v");
+    }
+
     if (failures == 0) std::printf("screenregion: all checks passed\n");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

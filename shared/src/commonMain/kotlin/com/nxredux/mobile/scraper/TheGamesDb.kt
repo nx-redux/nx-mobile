@@ -12,11 +12,14 @@ data class TgdbGame(val id: Int, val title: String, val platform: Int?)
 /** One image of a game (`GameImage` in the API spec); [side] `front`/`back` for a boxart, else null. */
 data class TgdbImage(val id: Int, val type: String, val side: String?, val filename: String, val resolution: String?)
 
-/** `Games/ByGameName` with `include=boxart`: the games, their boxart by game id, the image base URL and the allowance left. */
-data class TgdbGames(val games: List<TgdbGame>, val boxart: Map<Int, List<TgdbImage>>, val baseUrl: String?, val left: Int?)
+/**
+ * `Games/ByGameName` with `include=boxart`: the games, their boxart by game id, the image base URL, the allowance left
+ * and the thumbnails' base URL (`base_url.thumb`).
+ */
+data class TgdbGames(val games: List<TgdbGame>, val boxart: Map<Int, List<TgdbImage>>, val baseUrl: String?, val left: Int?, val thumbBase: String? = null)
 
-/** `Games/Images`: images by game id, the base URL and the allowance left. */
-data class TgdbImages(val images: Map<Int, List<TgdbImage>>, val baseUrl: String?, val left: Int?)
+/** `Games/Images`: images by game id, the base URL, the allowance left and the thumbnails' base URL (`base_url.thumb`). */
+data class TgdbImages(val images: Map<Int, List<TgdbImage>>, val baseUrl: String?, val left: Int?, val thumbBase: String? = null)
 
 /**
  * TheGamesDB API v1's pure rules: the platform map keyed by the refined ScreenScraper id, the request URLs, lenient
@@ -26,6 +29,8 @@ object Tgdb {
     const val API = "https://api.thegamesdb.net/v1"
     /** Used when an answer carries no `base_url` (the spec's documented CDN). */
     const val DEFAULT_ORIGINAL = "https://cdn.thegamesdb.net/images/original/"
+    /** The thumbnails' base when an answer carries no `base_url.thumb`. */
+    const val DEFAULT_THUMB = "https://cdn.thegamesdb.net/images/thumb/"
 
     /** ScreenScraper ids TheGamesDB has no platform for (not asked). */
     val NONE: Set<Int> = setOf(222, 234, 263)
@@ -90,14 +95,16 @@ object Tgdb {
             TgdbGame(g["id"].int() ?: return@mapNotNull null, g["game_title"].str() ?: return@mapNotNull null, g["platform"].int())
         }
         val box = o.obj("include")?.obj("boxart")
-        return TgdbGames(games, images(box?.obj("data")), box?.obj("base_url")?.get("original").str(), left(o))
+        val base = box?.obj("base_url")
+        return TgdbGames(games, images(box?.obj("data")), base?.get("original").str(), left(o), base?.get("thumb").str())
     }
 
     /** A `Games/Images` body; anything unreadable is empty, never a throw. */
     fun parseImages(body: String?): TgdbImages {
         val o = parse(body) ?: return TgdbImages(emptyMap(), null, null)
         val data = o.obj("data")
-        return TgdbImages(images(data?.obj("images")), data?.obj("base_url")?.get("original").str(), left(o))
+        val base = data?.obj("base_url")
+        return TgdbImages(images(data?.obj("images")), base?.get("original").str(), left(o), base?.get("thumb").str())
     }
 
     /** An `API/Limit` body's allowance left, or null. */
@@ -136,8 +143,11 @@ object Tgdb {
     fun rankLogos(images: List<TgdbImage>): List<TgdbImage> = images.filter { it.type == "clearlogo" }.sortedBy { it.id }
 
     /** The original's URL (the smaller variants' sizes are undocumented, so only the original is known to be ≥ a cap). */
-    fun imageUrl(baseUrl: String?, filename: String): String =
-        (baseUrl?.takeIf { it.isNotEmpty() } ?: DEFAULT_ORIGINAL).let { if (it.endsWith('/')) it else "$it/" } + filename.removePrefix("/")
+    fun imageUrl(baseUrl: String?, filename: String, default: String = DEFAULT_ORIGINAL): String =
+        (baseUrl?.takeIf { it.isNotEmpty() } ?: default).let { if (it.endsWith('/')) it else "$it/" } + filename.removePrefix("/")
+
+    /** The thumbnail's URL (the Change art preview). */
+    fun thumbUrl(thumbBase: String?, filename: String): String = imageUrl(thumbBase, filename, DEFAULT_THUMB)
 }
 
 /**
@@ -239,7 +249,7 @@ class TheGamesDbSource(
         if (wanted == setOf(ArtSlot.WHEEL)) return logos(k, ref, game)
         val hits = ArrayList<ArtHit>()
         if (ArtSlot.BOX_2D in wanted) {
-            Tgdb.rankBoxart(games.boxart[game.id].orEmpty()).mapTo(hits) { hit(ArtSlot.BOX_2D, games.baseUrl, game, it) }
+            Tgdb.rankBoxart(games.boxart[game.id].orEmpty()).mapTo(hits) { hit(ArtSlot.BOX_2D, games.baseUrl, games.thumbBase, game, it) }
         }
         // The clear logo only beside a screenshot (no call of its own here: other sources' wheels come first).
         val withLogos = ArtSlot.SCREENSHOT in wanted && ArtSlot.WHEEL in wanted
@@ -249,9 +259,9 @@ class TheGamesDbSource(
             val images = Tgdb.parseImages(body)
             setLeft(images.left)
             val mine = images.images[game.id].orEmpty()
-            if (ArtSlot.SCREENSHOT in wanted) Tgdb.rankScreens(mine).mapTo(hits) { hit(ArtSlot.SCREENSHOT, images.baseUrl, game, it) }
+            if (ArtSlot.SCREENSHOT in wanted) Tgdb.rankScreens(mine).mapTo(hits) { hit(ArtSlot.SCREENSHOT, images.baseUrl, images.thumbBase, game, it) }
             if (withLogos) {
-                val logos = Tgdb.rankLogos(mine).map { hit(ArtSlot.WHEEL, images.baseUrl, game, it) }
+                val logos = Tgdb.rankLogos(mine).map { hit(ArtSlot.WHEEL, images.baseUrl, images.thumbBase, game, it) }
                 hits += logos
                 remember(k, ref, game, logos)
             }
@@ -263,15 +273,17 @@ class TheGamesDbSource(
     private suspend fun logos(k: String, ref: LibraryGameRef, game: TgdbGame): List<ArtHit> {
         val images = Tgdb.parseImages(api(Tgdb.images(k, game.id, listOf("clearlogo"))))
         setLeft(images.left)
-        return Tgdb.rankLogos(images.images[game.id].orEmpty()).map { hit(ArtSlot.WHEEL, images.baseUrl, game, it) }
+        return Tgdb.rankLogos(images.images[game.id].orEmpty()).map { hit(ArtSlot.WHEEL, images.baseUrl, images.thumbBase, game, it) }
             .also { remember(k, ref, game, it) }
     }
 
     private suspend fun remember(k: String, ref: LibraryGameRef, game: TgdbGame, logos: List<ArtHit>) =
         lock.withLock { last = Last(k, ref.gamePath, game, logos) }
 
-    private fun hit(slot: ArtSlot, base: String?, game: TgdbGame, img: TgdbImage) =
-        ArtHit(slot, Tgdb.imageUrl(base, img.filename), ArtOrigin(SourceId.TGDB, game.id.toString(), img.id.toString()))
+    private fun hit(slot: ArtSlot, base: String?, thumbBase: String?, game: TgdbGame, img: TgdbImage) = ArtHit(
+        slot, Tgdb.imageUrl(base, img.filename), ArtOrigin(SourceId.TGDB, game.id.toString(), img.id.toString()),
+        thumb = Tgdb.thumbUrl(thumbBase, img.filename),
+    )
 
     /** A paced, counted call: stops first when the allowance is spent; the body of a 200, null for other answers. */
     private suspend fun api(url: String): String? = calls.get(

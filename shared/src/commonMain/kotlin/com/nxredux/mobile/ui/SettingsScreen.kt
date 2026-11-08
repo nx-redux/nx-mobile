@@ -179,6 +179,7 @@ private val OPENER_KINDS = setOf(
     SettingsKind.BUTTON_LAYOUT, SettingsKind.BUTTON_LAYOUT_ORIENTATION, SettingsKind.SHORTCUTS, SettingsKind.SYSTEM_BUTTONS, SettingsKind.ANDROID_GAMES, SettingsKind.HIDDEN, SettingsKind.UNASSIGNED,
     SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER,
+    SettingsKind.KIDS_PIN, SettingsKind.KIDS_DAY, SettingsKind.KIDS_APPS,
 )
 
 /** Rows whose values are a segmented button however many or long they are (Game lists' layout: its five styles side by side; the Game Switcher's Full screen / List). */
@@ -186,6 +187,9 @@ private val SEGMENTED_KINDS = setOf(SettingsKind.GAME_LIST_STYLE, SettingsKind.S
 
 /** Rows whose secondary (a path, a state, a count, the last scan) is their description, not a value. */
 private val DESCRIBED_KINDS = setOf(SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.RESCAN, SettingsKind.UNASSIGNED, SettingsKind.HIDDEN)
+
+/** Rows whose secondary is their description line ([settingsInfo]), with more behind the info icon: Kids Mode's warnings and flag path. */
+private val LINE_KINDS = setOf(SettingsKind.KIDS_GUARD, SettingsKind.KIDS_ALARMS, SettingsKind.KIDS_HOME, SettingsKind.KIDS_FORGOT)
 
 /**
  * [row] as a touch row: its name, its description ([settingsInfo]; Library's [DESCRIBED_KINDS] their secondary, in the
@@ -202,7 +206,8 @@ internal fun settingsTouchRow(row: SettingsRow, choices: SettingChoices?, sectio
     return NxSettingRow(
         row.label, info = text.line, detail = text.detail,
         choices = values?.labels.orEmpty(), index = values?.index ?: -1,
-        value = if (values == null && !described && row.kind != SettingsKind.LICENSES_LINK) row.secondary else null,   // the link's URL: behind its info icon
+        // The link's URL: behind its info icon; [LINE_KINDS]' secondary: their description ([settingsInfo]).
+        value = if (values == null && !described && row.kind != SettingsKind.LICENSES_LINK && row.kind !in LINE_KINDS) row.secondary else null,
         opens = row.kind in OPENER_KINDS, enabled = row.enabled,
         segmented = row.kind in SEGMENTED_KINDS,
         warning = row.warning,
@@ -227,6 +232,8 @@ internal fun settingsRowAction(row: SettingsRow, section: SettingsSection?): Str
     SettingsKind.RESET_DEFAULTS -> if (section == SettingsSection.SHORTCUTS) "Clear all" else "Reset"
     SettingsKind.BUTTON_LAYOUT_RESET -> "Reset"
     SettingsKind.EXTRA -> "Remove"
+    SettingsKind.KIDS_GUARD, SettingsKind.KIDS_ALARMS -> "Grant"
+    SettingsKind.KIDS_HOME -> "Set"
     else -> null
 }
 

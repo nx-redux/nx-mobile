@@ -29,7 +29,7 @@ class MenuStylesTest {
     @Test fun minimal_on_every_tab_and_the_game_lists() {
         assertEquals(
             MenuCategory.entries.associateWith { MenuStyle.MINIMAL },
-            MenuStyles.decode("HOME=MINIMAL\nCONSOLES=MINIMAL\nCOLLECTIONS=MINIMAL\nTOOLS=MINIMAL"),
+            MenuStyles.decode("HOME=MINIMAL\nCONSOLES=MINIMAL\nCOLLECTIONS=MINIMAL\nTOOLS=MINIMAL\nAPPS=MINIMAL"),
         )
         assertEquals(emptyMap(), MenuStyles.decode("CONSOLES=BACKDROP"))
         assertEquals(MenuStyle.MINIMAL, MenuStyles.GAME_LIST_STYLES.last())

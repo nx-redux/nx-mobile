@@ -52,8 +52,9 @@ struct RegionQuad {
     float srcHeight;
 };
 
-// vpX, vpY, vpW, vpH: the viewport in 0..1 of the view, y down (VideoLayout's viewportRect).
-RegionQuad buildRegionQuad(const ScreenRegion& region, float vpX, float vpY, float vpW, float vpH, bool bottomLeftOrigin);
+// vpX, vpY, vpW, vpH: the viewport in 0..1 of the view, y down (VideoLayout's viewportRect). quarterTurns: the core's
+// rotation (SET_ROTATION, counterclockwise), turning the source within its region.
+RegionQuad buildRegionQuad(const ScreenRegion& region, float vpX, float vpY, float vpW, float vpH, bool bottomLeftOrigin, int quarterTurns = 0);
 
 // True when [quad]'s source, in pixels of a [texW] x [texH] frame, is larger than its destination, in pixels of a
 // [viewW] x [viewH] view, in either axis: such a region samples linearly so a high-resolution frame doesn't shimmer.

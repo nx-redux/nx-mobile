@@ -34,35 +34,35 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 
 | core | repo | commit | kind | build time (M-series Mac, clean) |
 |---|---|---|---|---|
-| gambatte | libretro/gambatte-libretro | d9d6cd06382d1ced30de34d56d3609452323dab1 | ndk-build (patched: link) | 0:05 |
-| fceumm | libretro/libretro-fceumm | 236ccdfc911e84c60fea6b9d0699c2d440a8de14 | ndk-build (patched) | 0:06 |
+| gambatte | libretro/gambatte-libretro | 77f2567d718b8973d02caa2daa8dce4953faf811 | ndk-build (patched: link) | 0:05 |
+| fceumm | libretro/libretro-fceumm | e0f3086a8104f8fbbe49a2615b10401504a9533f | ndk-build | 0:06 |
 | snes9x | libretro/snes9x | fae2fea08f74180759ef540ee94259213f503480 | ndk-build | 0:15 |
-| genesis_plus_gx | libretro/Genesis-Plus-GX | c2838c7dc4236fc2fe94e5dbd08b41486067918e | ndk-build | 0:07 |
+| genesis_plus_gx | libretro/Genesis-Plus-GX | f27655b592ef43f317272d79883bcaa10d3ac8ad | ndk-build | 0:07 |
 | mgba | libretro/mgba | 7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6 | cmake (patched: real link cable) | 0:09 |
-| melondsds | JesseTG/melonds-ds | bc4e4b67d2d470d7c682810a1e892cafd6f9082b (v1.3.1) | cmake (JIT, GLES3 GL renderer, patched; 11 FetchContent deps pinned offline; 7.1 MB stripped) | 0:50 |
-| mupen64plus_next | libretro/mupen64plus-libretro-nx | 6752836de8b224febfd5708444755b77712ac939 | ndk-build (GLES3, patched: cheat code parts; hi-res packs read through the VFS) | 0:20 |
-| ppsspp | hrydgard/ppsspp | 2a1700a7ee495310c52c85f9436652cc8f26e45e | cmake | 16:24 |
-| race | libretro/race | 171950ea64c96ead503340ed60fa7ba18f56325c | ndk-build | 0:04 |
-| mednafen_pce_fast | libretro/beetle-pce-fast-libretro | 52675734da114a19b3705f03906b1455f3d76644 | ndk-build | 0:05 |
-| mednafen_vb | libretro/beetle-vb-libretro | 65debc7c4c7b85e2fd988d2be53496c2cf0b5f44 | ndk-build | 0:03 |
-| handy | libretro/libretro-handy | fca239207e9c111da3e85d2faf0b1b9d7524e498 | ndk-build | 0:03 |
-| stella2014 | libretro/stella2014-libretro | 3cc89f0d316d6c924a5e3f4011d17421df58e615 | ndk-build | 0:06 |
-| prosystem | libretro/prosystem-libretro | acae250da8d98b8b9707cd499e2a0bf6d8500652 | ndk-build | 0:03 |
-| a5200 | libretro/a5200 | 526404072821bb2021fab16f8c5dbbca300512c8 | ndk-build | 0:03 |
+| melondsds | JesseTG/melonds-ds | f394adbacb5722ee97c1b37c8064da9a25818310 (v1.4.0) | cmake (JIT, GLES 3.2 port of the new GL renderer, patched; 11 FetchContent deps pinned offline; 6.6 MB stripped) | 0:50 |
+| mupen64plus_next | libretro/mupen64plus-libretro-nx | 15bada85906593376e8fd697f1b0b3af3a20f512 | ndk-build (GLES3, patched: cheat code parts; hi-res packs read through the VFS) | 0:20 |
+| ppsspp | hrydgard/ppsspp | d4e3c7eb2bf0ec9241621b3752cd3e5406178c78 | cmake (patched: cheat slots) | 16:24 |
+| race | libretro/race | c7810dd7f172827bfa2004813bc000b13786636b | ndk-build (patched: old states) | 0:04 |
+| mednafen_pce_fast | libretro/beetle-pce-fast-libretro | 2de1ce1c3f237b161c126c54ba407990bb86d1e9 | ndk-build | 0:05 |
+| mednafen_vb | libretro/beetle-vb-libretro | d5ae54c8e23b573a3b34e888b2d48a588027e92c | ndk-build | 0:03 |
+| handy | libretro/libretro-handy | bc55d462f0b2d6b073ea93dc552ebd73cec60fd1 | ndk-build | 0:03 |
+| stella2014 | libretro/stella2014-libretro | 7d1361e407e63f29e52892655069e5fb4096e691 | ndk-build (patched: old states) | 0:06 |
+| prosystem | libretro/prosystem-libretro | 8a88014287c7a01cd568067e5a557d0a2b2a051f | ndk-build | 0:03 |
+| a5200 | libretro/a5200 | 40c6f2f1ad4a3145b328d5baaf010fae6c7e752b | ndk-build | 0:03 |
 | mednafen_wswan | libretro/beetle-wswan-libretro | 4b01295838ea89e3f1355bbe4cb5cf98aa6108cd (HEAD on 2026-09-25; no Brick pin) | ndk-build | 0:01 |
-| mednafen_supafaust | libretro/supafaust | e25f66765938d33f9ad5850e8d6cd597e55b7299 | ndk-build | 0:07 |
-| pokemini | libretro/PokeMini | 78656d4615691c393e65e48672ce5fff5b1f97d3 | ndk-build (patched) | 0:04 |
-| fake08 | jtothebell/fake-08 | f6bab5a7ba521ce440e45d1aeef6122674be6ee9 | ndk-build (`platform/libretro`, `libfake08.so`) | 0:09 |
-| prboom | libretro/libretro-prboom | 93c8e7a2074e4fd8410398e3d571c6d9afec1d84 | ndk-build (+ `prboom.wad`) | 0:05 |
+| mednafen_supafaust | libretro/supafaust | 642d1d1b6684aa7e306a02a89885f3f5456a5157 | ndk-build (patched: cheats, arm64 timed wait) | 0:07 |
+| pokemini | libretro/PokeMini | 132111b76343559860532a1ccc094f93f1ed5650 | ndk-build (patched) | 0:04 |
+| fake08 | jtothebell/fake-08 | 814991a2571ad3970e386cef48f3b148aa1c27b9 | ndk-build (`platform/libretro`, `libfake08.so`) | 0:09 |
+| prboom | libretro/libretro-prboom | 4849268e7342494193f2bbf2d0128a751cf58da7 | ndk-build (+ `prboom.wad`; 3.4 MB stripped) | 0:05 |
 | gpsp | libretro/gpsp | 5819380c2ffb0900219d700a382ee68c464ebb99 | ndk-build (dynarec, patched; link) | 0:12 |
-| pcsx_rearmed | libretro/pcsx_rearmed | 6eb679d064a1efe92af79fe9970c0591c8da02d4 | ndk-build (dynarec, `USE_LIBRETRO_VFS=1`, patched) | 0:05 |
-| swanstation | libretro/swanstation | dd4805619bbbfc6e0d1776372cb16377088b448e (the Brick's PSX.pak pin) | cmake (GLES HW renderer) | 0:12 |
-| picodrive | irixxxx/picodrive | b0be121b7d58d6ee1ee2809974e62893c80a8264 | ndk-build (SH2 dynarec, patched; 1.6 MB stripped) | 0:24 |
-| gearcoleco | drhelius/Gearcoleco | ed5095b3ce158ff0cf82395a61c2476505634894 | ndk-build (`platforms/libretro`; 0.7 MB stripped) | 0:10 |
-| fbneo | libretro/FBNeo | 6a5cc250c2db8d874a06ee86e302a2a78918b4c1 | ndk-build (`src/burner/libretro`, + `system/fbneo/`; 63.2 MB stripped) | 0:28 |
-| flycast (DC) | flyinghead/flycast | 5aa091fde632fb332c8d8c34e280d62dc951954c (v2.7) | cmake (dynarec, GLES3, patched; 6 submodules; 23.1 MB stripped) | 1:15 |
+| pcsx_rearmed | libretro/pcsx_rearmed | 7b0e8f8fadfbce3d170d195b9d9eecaabfa08c8e | ndk-build (dynarec, `USE_LIBRETRO_VFS=1`) | 0:10 |
+| swanstation | libretro/swanstation | 631f0fb31b809e0f889d7c551fe695788e39c1d3 | cmake (GLES/Vulkan HW renderer, patched) | 0:12 |
+| picodrive | irixxxx/picodrive | 9c298c1fe7347a50b07a494cdb8c91d2f9b40c6a | ndk-build (SH2 dynarec, patched; 1.7 MB stripped) | 1:16 |
+| gearcoleco | drhelius/Gearcoleco | 2805e70fd56c3bb6a0412a4ddaf210eefc8a5d7c (1.7.6+11) | ndk-build (`platforms/libretro`; 0.9 MB stripped) | 0:10 |
+| fbneo | libretro/FBNeo | d15071abf14191eebb4a5d7c7147398edcf237c8 | ndk-build (`src/burner/libretro`, + `system/fbneo/`; 69.9 MB stripped) | 0:28 |
+| flycast (DC) | flyinghead/flycast | 7adbf3caef251b153e348df3f469a0f35878339d (master, 93 past v2.7) | cmake (dynarec, GLES3, patched; 6 submodules; 17.2 MB stripped) | 1:15 |
 | dolphin | libretro/dolphin | 32c61f9d0e933331bb7087ba57e96883241b4960 | cmake 3.30.3 (LTO, GLES, patched; 34 submodules; + system/dolphin-emu/Sys 14 MB; ~15 MB stripped) | 4:09 |
-| armsx2 (PS2) | ARMSX2/ARMSX2 | 023224576867a3846faedc7640911772c7783529 (2.9) | cmake 3.30.3 (upstream's dependency script into build/armsx2-deps; GLES/Vulkan; page size read at runtime, so 4 KB and 16 KB kernels; games open through the libretro VFS, no ISO copy; + system/pcsx2/resources 11 MB; 33.0 MB stripped) | 5:12 |
+| armsx2 (PS2) | ARMSX2/ARMSX2 | ba6892742e357085897d0a151bd8e40485dda968 (2.9.2) | cmake 3.30.3 (upstream's dependency script into build/armsx2-deps; GLES/Vulkan; page size read at runtime, so 4 KB and 16 KB kernels; games open through the libretro VFS, no ISO copy; + system/pcsx2/resources 11 MB; 31.0 MB stripped) | 5:12 |
 
 melondsds (melonDS DS) replaced libretro/melonDS on 2026-09-27. Its eleven CMake FetchContent dependencies are pinned
 by full SHA in `MELONDSDS_DEPS` and cloned into `src/melondsds-deps/<name>-src` before configure, which runs with
@@ -112,25 +112,35 @@ Since 2026-11-03 it also holds each DirectSound FIFO sample until the next (zero
 do; upstream's linear interpolation cut 7-22 dB above 8 kHz and sounded dull), and reads the mix out x3/4, on mGBA's
 scale (the hardware's 10-bit output x48; upstream was 4/3 of it, 2.5 dB louder). States load.
 
-`patches/fceumm.patch` adds one `path_vfs_init` call next to its `filestream_vfs_init`, so the content check
-(`path_is_valid`) uses the runner's VFS v3 `stat` and a SAF file-descriptor ROM (`/rom/<name>`) loads without a cache
-copy; upstream fceumm only wires the file-stream callbacks. No emulation source is touched, so states still cross with
-the Brick.
+fceumm needs no patch since 2026-11-07: upstream's `path_vfs_init` call (libretro-fceumm #660) makes the content check
+(`path_is_valid`) use the runner's VFS v3 `stat`, so a SAF file-descriptor ROM (`/rom/<name>`) loads without a cache
+copy. The app carried that one line as `patches/fceumm.patch` until then.
 
-picodrive, gearcoleco and fbneo were added on 2026-09-26 (Brick pins). `patches/picodrive.patch` (build script only)
+picodrive, gearcoleco and fbneo were added on 2026-09-26 (Brick pins). picodrive moved to 9c298c1f on 2026-11-07: its
+pad type is no longer the `picodrive_input1/2` options but the port device (`RETRO_DEVICE_MD_3BTN` / `_6BTN`, 257 / 513,
+as genesis_plus_gx's), so the app sends Controller Type as devices; its submodules are fetched non-recursively
+(`picodrive_SUBMODULES`), since dr_libs' test-only miniaudio submodule hangs the clone. The Brick still runs b0be121b
+until nx-redux is bumped to match (netplay lockstep and states need the same pin). `patches/picodrive.patch` (build script only)
 sets `use_sh2drc := 1` for arm64 in `jni/Android.mk`; upstream enables the 32X SH2 dynarec for 32-bit arm only, and the
 arm64 emitter (`cpu/drc/emit_arm64.c`) is in the tree. fbneo stages `system/fbneo/hiscore.dat` (from `metadata/`) and
-`system/fbneo/sets.tsv` (name, title, parent, romof, BIOS flag; 8047 sets), generated by `scripts/fbneo-sets.py` from the
+`system/fbneo/sets.tsv` (name, title, parent, romof, BIOS flag; 8510 sets), generated by `scripts/fbneo-sets.py` from the
 pinned arcade-only ClrMame Pro XML DAT. picodrive's and fbneo's times exclude the clone (0:42 for picodrive; FBNeo's is
 large and network-bound); gearcoleco's includes it.
+
+gearcoleco moved to 1.7.6+11 (2805e70f) on 2026-11-07. Upstream added the ADAM computer (disks, data packs, its EOS and
+SmartWRITER firmware); the app offers cartridges only, so `gearcoleco_cartridge_hardware` and the three `gearcoleco_adam_*`
+options are locked at their defaults (CoreRegistry). Only a load test ran (no ColecoVision game on the Nova); 1.6+ also
+checks a save state's machine and cartridge identity, so states from the old pin may be refused.
 
 flycast (tag DC) was added on 2026-09-28 from the Dreamcast GL spike. It builds the top-level CMake target
 `flycast_libretro` with flycast's own libretro Android CI flags and only the six submodules the Android libretro build
 uses; its 1:15 includes the clone. `LICENSES/flycast.txt` (flycast's GPL-2.0-or-later text, the core being GPL-3.0 as
-built because it links xBRZ, plus the notices of the dependencies linked into it) ships in the APK as `licenses/flycast.txt`. `patches/flycast.patch` has four hunks:
-- `CMakeLists.txt`: links libandroid into the libretro target (upstream links it for the standalone app only), so
-  vmem's weak `ASharedMemory_create` resolves. Without it vmem falls back to `/dev/ashmem`, which targetSdk 29+ apps
-  cannot open, runs without fast-mem, and the dynarec's write-protect fault handler crashes.
+built because it links xBRZ, plus the notices of the dependencies linked into it) ships in the APK as `licenses/flycast.txt`. `patches/flycast.patch` has five hunks (since the
+2026-11-07 bump upstream links libandroid into the libretro target itself):
+- `core/hw/maple/maple_devs.cpp`: the VMU file is flushed after every write (block write and full save). flycast writes
+  it through stdio and flushed only on close, so a process killed without unloading (a crash, the hang watchdog, a
+  force-stop) lost the last writes; Soulcalibur's new save then had a directory entry without its FAT chain, and the
+  game reported its data as unreadable.
 - `shell/libretro/oslib.cpp` `getVmuPath`: per-game VMUs are named after the content file (`<content>.A1.bin`) instead
   of the disc's game ID, so the app's saves mirror can tie a VMU to its game; an existing game-ID VMU from an earlier
   run is read once, then rewritten as `<content>.A1.bin` and deleted by flycast (`maple_devs.cpp` `OnSetup`). The
@@ -139,11 +149,12 @@ built because it links xBRZ, plus the notices of the dependencies linked into it
   created on the blit path, on every render-size change). The spec ignores that, but the Android emulator's GLES stack
   drops the default vertex array's client state, and the frontend's presentation quad then draws nothing (black screen
   after any resize: internal resolution 320x240, emulated framebuffer).
-- `core/hw/naomi/naomi_roms.cpp` and `naomi_cart.cpp` `loadBios` (from nx-redux 959dbfb7): the `awbios` entry also
-  accepts the modern MAME dump `bios.ic23_l` (64 KB, CRC `e5693ce3`) as an alternative to `bios0.ic23` (128 KB).
-  `loadBios` tries each listed blob by CRC, then by name, and maps the first one found; a 64 KB `awbios` image is
-  mirrored into the upper half of the 128 KB BIOS window, as the hardware's address decoding does. So an `awbios.zip`
-  holding only `bios.ic23_l` boots Atomiswave games.
+- `core/hw/naomi/naomi_roms.cpp` (from nx-redux 959dbfb7): the `awbios` entry also accepts the modern MAME dump
+  `bios.ic23_l` (64 KB, CRC `e5693ce3`) beside `bios0.ic23` (128 KB, of which flycast now reads only the first 64 KB;
+  the rest is writable). `loadBios` tries each listed blob by CRC, then by name, and maps the first one found, so an
+  `awbios.zip` holding only `bios.ic23_l` boots Atomiswave games.
+- `core/rend/vulkan/vk_context_lr.cpp` `VkCreateDevice`: also enables the frontend's required device extensions (its
+  AHardwareBuffer bridge needs them).
 
 The cores added on 2026-09-25 use nx-redux's pins (`workspace/tg5040/cores/Makefile`) so save states cross with the
 Brick where the core matches; a bump is one commit per core and needs that core's device pass again.
@@ -157,11 +168,11 @@ Deviations (build flags only, no source patch): `mednafen_wswan_FLAGS = -C jni`,
 run 2026-09-23. Per-core times are from `output/*.so` mtimes relative to the run start (cores build
 sequentially), so each includes that core's shallow clone; ppsspp dominates because of its recursive
 submodule clone (ffmpeg, glslang, SPIRV-Cross, ...) and CMake build. `mgba` builds with CMake, not
-ndk-build, because upstream ships no libretro `Android.mk`. Patches: `patches/pokemini.patch` (nx-redux's resume-audio patch, verbatim so states cross with the Brick: the first state
-load after start is deferred 40 frames so audio resumes, and `source/PokeMini.c`'s state loader reads the audio chunk
-under `"AUD-"` instead of `"LCD-"`, an emulation-source fix; the only nx-redux source patch carried over) and
-`patches/pcsx_rearmed.patch` (build script only: the pin's `jni/Android.mk` names `encodings/compat_strl.c` instead of
-`compat/compat_strl.c` under `USE_LIBRETRO_VFS=1`; fixed upstream in 6f230b1, patched here to keep nx-redux's pin). Two staging
+ndk-build, because upstream ships no libretro `Android.mk`. Patches: `patches/pokemini.patch` (nx-redux's resume-audio patch, its libretro.c part: the first state
+load after start is deferred 40 frames so audio resumes; since the 2026-11-08 bump its `source/PokeMini.c` part, the
+state loader reading the audio chunk under `"AUD-"` instead of `"LCD-"`, is upstream) (pcsx_rearmed's
+build-path patch went with the 2026-11-07 pin, which has upstream's fix 6f230b1; the Brick stays on 6eb679d0, patched there,
+until nx-redux is bumped to match). Two staging
 deviations: ppsspp's `assets/` as `system/PPSSPP/`, and prboom's `prboom.wad` (its own game data, in the repo) as
 `system/prboom.wad`. fake08 builds from `platform/libretro` and its module is `fake08`, so its artifact is `libfake08.so`.
 
@@ -169,6 +180,43 @@ Reproducibility (2026-09-23, the original eight cores): rebuilding from the same
 bit-identical. Only `ppsspp` differs, because it embeds a build timestamp: its bundled libpng
 (`ext/libpng17/pngerror.c`) compiles `__DATE__`/`__TIME__` into the copyright string
 (e.g. `translated Sep 23 2026 00:59:43`). The other seven cores are byte-for-byte reproducible.
+
+## melonDS DS (DS): check save states on every pin bump
+
+melonDS refuses a save state whose format major version differs from its own (`SAVESTATE_MAJOR` in the melonDS
+dependency's `src/Savestate.h`), and melonDS DS also rejects one whose size differs from what the running core
+expects. v1.4.0 (melonDS major 14) cannot load v1.3.1 states (major 12): the load fails cleanly with a toast, the game
+keeps running, and in-game battery saves are unaffected. On every pin bump, compare `SAVESTATE_MAJOR` with the
+current pin's; if it changed, say in the release notes that DS save states from earlier versions won't load.
+
+Checked: v1.3.1 → v1.4.0 (2026-11-07, Nova): old states refused cleanly (major 12 → 14).
+
+## Azahar (3DS): check save states on every pin bump
+
+Pin and build notes are in the `Makefile` above `azahar_HASH`. A 3DS save state records the git revision of the core
+that wrote it. Upstream's libretro core refuses any state from another revision, so before our patch every pin bump
+broke all the states players had. `patches/azahar.patch` (`src/core/savestate.cpp`, `System::LoadStateBuffer`) loads
+such a state with a warning instead.
+
+**The risk:** the revision check was upstream's guard against a changed state format. Without it, a state from an older
+core is read by the new code. If the format changed, it usually fails cleanly: the reader throws, `retro_unserialize`
+returns false and the app shows its load failure. A change the reader does not notice could instead load a broken
+game state.
+
+**So on every Azahar pin bump:**
+
+1. Look at the upstream diff between the two pins for serialization changes: `serialize`, `SERIALIZE_EXPORT`,
+   `BOOST_CLASS_VERSION`, `template <class Archive>` and new members of serialized classes.
+2. On a device, resume a state saved by the old core (the `Mario Kart 7` race state is the usual one) and play on for
+   a minute: the race goes on, with no error in the log beyond the revision warning.
+3. If the format changed, say so in the release notes so players know older 3DS states will not load.
+
+Checked: 2126.1.2 → 2126.2 (2026-11-05, Nova): old states load and play.
+
+The patch also carries azahar-emu/azahar#2718 (video views: the app lays out the 3DS screens from the core's map). On
+every pin bump, re-check it: the PR's commits re-apply, its Frontend Layout and 3D option is still `citra_frontend_layout`
+with `auto`, and a 3DS game sends a map (top and bottom views) in single display and Split. Drop the carried commits
+once the pin includes them.
 
 ## Link cores (netplay stage 2c, 2026-10-10)
 

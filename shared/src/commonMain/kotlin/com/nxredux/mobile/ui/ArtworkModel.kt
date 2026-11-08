@@ -29,10 +29,17 @@ enum class ArtKeyFor(val label: String) { SGDB("SteamGridDB"), TGDB("TheGamesDB"
  * artwork; [SECTION] a group's label and [GAP] the space before one, never selected.
  */
 enum class ArtworkSettingKind {
-    SECTION, GAP, REPLACE, BOX2D, WHEEL, MIX, SS_LOGIN, SS_LOGOUT, SGDB_KEY, SGDB_REMOVE, TGDB_KEY, TGDB_REMOVE, TGDB_LEFT, RESET;
+    SECTION, GAP, REPLACE, BOX2D, WHEEL, MIX, SS_LOGIN, SS_LOGOUT, SGDB_KEY, SGDB_REMOVE, TGDB_KEY, TGDB_REMOVE, TGDB_LEFT, CLEAR_CACHE, RESET;
 
     /** The On/Off rows that step on A / LEFT / RIGHT (when enabled). */
     val toggle: Boolean get() = this == REPLACE || this == BOX2D || this == WHEEL || this == MIX
+}
+
+/** [bytes] as "512 B", "2.0 KB" or "12.3 MB" (one decimal from a kilobyte up), for the cache size. */
+internal fun formatBytes(bytes: Long): String = when {
+    bytes < 1024 -> "$bytes B"
+    bytes < 1_048_576 -> { val t = (bytes * 10 + 512) / 1024; "${t / 10}.${t % 10} KB" }
+    else -> { val t = (bytes * 10 + 524_288) / 1_048_576; "${t / 10}.${t % 10} MB" }
 }
 
 /** [enabled] false: dimmed and A / LEFT / RIGHT do nothing. */
@@ -44,21 +51,17 @@ data class ArtworkSettingRow(val kind: ArtworkSettingKind, val label: String, va
 data class ResetScope(val label: String, val tags: Set<String>?)
 
 /**
- * Which art sources this build and the user's keys turn on, for the Artwork page and Settings: [ss] the build's
+ * Which art sources this build and the user's keys turn on, for Artwork → Settings: [ss] the build's
  * credentials, [tgdb] TheGamesDB has the user's key and [tgdbBuilt] the engine has the source, [sgdb] the
- * build has SteamGridDB and [sgdbKey] the user's key is set; [labels] the enabled sources' names in fetch order (the
- * credit line).
+ * build has SteamGridDB and [sgdbKey] the user's key is set.
  */
 data class ArtSources(
     val ss: Boolean = false, val tgdb: Boolean = false, val sgdb: Boolean = false, val sgdbKey: Boolean = false,
-    val labels: List<String> = emptyList(), val tgdbBuilt: Boolean = false,
+    val tgdbBuilt: Boolean = false,
 )
 
-/** The Artwork page's detail lines: counts, the job, stopped sources' notes, the credit. */
-internal fun artworkDetails(
-    available: Boolean, games: Int, withArt: Int, missing: Int, state: ScrapeState, sources: ArtSources,
-): List<String> = buildList {
-    add("${gamesLabel(games)} · $withArt with art · $missing missing")
+/** The Artwork page's status lines: the job and stopped sources' notes (none while idle), or why the build can't fetch. */
+internal fun artworkDetails(available: Boolean, state: ScrapeState): List<String> = buildList {
     if (!available) { add("Artwork fetching isn't available in this build."); return@buildList }
     // No per-source account lines (sign-in, quota, keys): the Account page has them, and here they cost rows on a narrow screen.
     when (state.phase) {
@@ -67,12 +70,7 @@ internal fun artworkDetails(
         else -> Unit
     }
     state.notes.values.forEach(::add)   // each stopped source's note
-    artCredit(sources.labels)?.let(::add)
 }
-
-/** The credit line: "Source: a - b - c" over the enabled sources, short for a narrow screen; null with none. */
-internal fun artCredit(sources: List<String>): String? =
-    sources.takeIf { it.isNotEmpty() }?.joinToString(" - ", prefix = "Source: ")
 
 internal fun quotaText(q: SsQuota): String = "${groupThousands(q.today)} / ${groupThousands(q.max)}"
 

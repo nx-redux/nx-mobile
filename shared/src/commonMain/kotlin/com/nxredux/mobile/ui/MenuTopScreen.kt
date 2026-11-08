@@ -141,6 +141,7 @@ private fun PreviewList(state: AppState, list: SecondList, allInfo: Map<String, 
     val gameInfo = launcherGameInfo(allInfo, chrome.extraInfo)
     val now = rememberNow(allInfo)
     val style = state.styleOf(page)
+    val artLayout by state.artLayout.collectAsState()   // Layouts → Backdrop art / List art, live
     PageBackground(state, page, style, selection, live)
     CompositionLocalProvider(LocalLauncherChrome provides chrome) {
         val current = { list.entries.getOrNull(selection.value.index) }
@@ -151,8 +152,8 @@ private fun PreviewList(state: AppState, list: SecondList, allInfo: Map<String, 
             info = { gameInfoFor(gameInfo, now, current()?.game, full = true) },
             style = style, orientation = state.orientationOf(page), alignment = state.settings.gameListVerticalAlignment,
             tileInfo = remember(list.entries, gameInfo, now) { entryTileInfo(list.entries, gameInfo, now) }, layoutKey = list.source,
-            artBox = state.settings.gameListArt.boxed,
-            backdropArt = state.settings.backdropArt,
+            artBox = artLayout.list.boxed,
+            backdropArt = artLayout.backdrop,
             tapOpens = { true },
         )
     }

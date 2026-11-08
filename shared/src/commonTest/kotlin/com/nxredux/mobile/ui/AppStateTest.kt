@@ -103,6 +103,7 @@ import com.nxredux.mobile.storage.Shortcuts
 import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.storage.GameRef
 import com.nxredux.mobile.scraper.AndroidArtStore
+import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.storage.ToolPins
 import com.nxredux.mobile.storage.UserDataStore
 import com.nxredux.mobile.ui.nx.Hint
@@ -5623,13 +5624,13 @@ class AppStateTest {
         assertEquals(listOf("Visible", "Layout", "Orientation"), page(SettingsSection.LAYOUT_COLLECTIONS))
         assertEquals(listOf("Visible", "Layout", "Orientation"), page(SettingsSection.LAYOUT_TOOLS))
         assertEquals(
-            listOf("Layout options", "Alignment", "Layout", "Orientation"),   // the layout and its orientation last, over the picture
+            listOf("Backdrop art", "Layout options", "Alignment", "Layout", "Orientation"),   // the layout and its orientation last, over the picture
             page(SettingsSection.LAYOUT_GAME_LISTS),
         )
         assertEquals(listOf("Page title", "Button hints"), page(SettingsSection.LAYOUT_TITLE_HINTS))
         assertEquals(listOf("Layout"), page(SettingsSection.LAYOUT_SWITCHER))
         settings.gameListStyle = MenuStyle.LIST
-        assertEquals(listOf("List art", "Layout options", "Layout"), page(SettingsSection.LAYOUT_GAME_LISTS).filter { it != "Achievements panel" })
+        assertEquals(listOf("List art", "Backdrop art", "Layout options", "Layout"), page(SettingsSection.LAYOUT_GAME_LISTS).filter { it != "Achievements panel" })
         settings.gameListStyle = MenuStyle.BACKDROP
         assertEquals(
             listOf("Backdrop art", "Layout options", "Alignment", "Layout", "Orientation"),
@@ -5669,7 +5670,7 @@ class AppStateTest {
             assertEquals(turns, "Orientation" in labels, "$style $o")
             assertEquals(turns && o == MenuOrientation.VERTICAL, "Alignment" in labels, "$style $o")
             assertEquals(style == MenuStyle.LIST, "List art" in labels, "$style")
-            assertEquals(style == MenuStyle.BACKDROP, "Backdrop art" in labels, "$style")
+            assertTrue("Backdrop art" in labels, "$style")   // every layout: it also sets the game panel header and the Switcher box
         }
     }
 
@@ -5867,7 +5868,7 @@ class AppStateTest {
         settings.gameListStyle = MenuStyle.LIST
         state.openSettings(SettingsSection.LAYOUT_GAME_LISTS)
         val page = assertIs<Screen.Settings>(state.screen.value)
-        assertEquals(listOf("List art", "Layout options", "Layout"), page.rows.map { it.label }.filter { it != "Achievements panel" })
+        assertEquals(listOf("List art", "Backdrop art", "Layout options", "Layout"), page.rows.map { it.label }.filter { it != "Achievements panel" })
         assertEquals(LayoutShot.Games(MenuStyle.LIST), page.shot)
     }
 
@@ -6023,7 +6024,7 @@ class AppStateTest {
         assertEquals(listOf("Visible" to "Show", "Layout" to "List", "Background" to settings.consoleArt.label), group(SettingsSection.LAYOUT_CONSOLES))
         assertEquals(listOf("Visible" to "Show", "Layout" to "List"), group(SettingsSection.LAYOUT_COLLECTIONS))
         assertEquals(listOf("Visible" to "Show", "Layout" to "List"), group(SettingsSection.LAYOUT_TOOLS))
-        assertEquals(listOf("List art" to "Screenshot", "Layout options" to "Show", "Layout" to "List"), group(SettingsSection.LAYOUT_GAME_LISTS))
+        assertEquals(listOf("List art" to "Screenshot", "Backdrop art" to "3D box art", "Layout options" to "Show", "Layout" to "List"), group(SettingsSection.LAYOUT_GAME_LISTS))
         assertEquals(
             listOf("Page title" to "Show", "Button hints" to "Hide"),
             group(SettingsSection.LAYOUT_TITLE_HINTS),
@@ -7653,6 +7654,7 @@ class AppStateTest {
             MenuCategory.HOME -> tab.rows.filterIsInstance<MainRow.Pin>().map { "pin:${it.entry.game.shownName}" }
             MenuCategory.COLLECTIONS -> listOf("collections")
             MenuCategory.TOOLS -> listOf("tools")
+            MenuCategory.APPS -> listOf("apps")
             MenuCategory.CONSOLES -> tab.rows.map { (it as MainRow.System).system.tag }
         }
     }
@@ -9687,12 +9689,12 @@ class AppStateTest {
         val groups = listOf(SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS,
             SettingsSection.LAYOUT_GAME_LISTS, SettingsSection.LAYOUT_TITLE_HINTS, SettingsSection.LAYOUT_SWITCHER)
         val rows = groups.flatMap { g -> state.openLayoutsPage(g) }
-        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout", "Visible", "Layout", "Visible", "Layout", "Visible", "Layout", "List art", "Layout options", "Layout", "Page title", "Button hints", "Layout"), rows.map { it.label })
+        assertEquals(listOf("Visible", "New shelf", "Not started shelf", "Most played shelf", "Stats", "Layout", "Visible", "Layout", "Visible", "Layout", "Visible", "Layout", "List art", "Backdrop art", "Layout options", "Layout", "Page title", "Button hints", "Layout"), rows.map { it.label })
         val styles = rows.filter { it.kind == SettingsKind.MENU_STYLE }
         assertEquals(listOf(MenuCategory.HOME, MenuCategory.CONSOLES, MenuCategory.COLLECTIONS, MenuCategory.TOOLS), styles.map { it.category })
         assertTrue(styles.all { it.enabled })
         assertEquals(1, rows.count { it.kind == SettingsKind.GAME_LIST_STYLE })
-        assertEquals(listOf("Show", "Show", "Show", "Show", "Show", "Minimal", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "Screenshot", "Show", "List", "Show", "Hide", "Full screen"), rows.map { it.secondary })
+        assertEquals(listOf("Show", "Show", "Show", "Show", "Show", "Minimal", "Show", "Grid", "Show", "Minimal", "Show", "Grid", "Screenshot", "3D box art", "Show", "List", "Show", "Hide", "Full screen"), rows.map { it.secondary })
     }
 
     @Test fun layouts_page_defaults_to_carousel_tools_grid_and_cycles_four_main_menu_styles() = runTest {
@@ -9704,7 +9706,7 @@ class AppStateTest {
         assertEquals(listOf("Visible", "Layout", "Orientation", "Background"), state.openLayoutsPage(SettingsSection.LAYOUT_CONSOLES).map { it.label })
         assertEquals(listOf("Visible", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_COLLECTIONS).map { it.label })
         assertEquals(listOf("Visible", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_TOOLS).map { it.label })
-        assertEquals(listOf("List art", "Layout options", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_GAME_LISTS).map { it.label })
+        assertEquals(listOf("List art", "Backdrop art", "Layout options", "Layout"), state.openLayoutsPage(SettingsSection.LAYOUT_GAME_LISTS).map { it.label })
         // Layouts' group rows carry each layout: Tools' own default is Grid, Home's and Collections' Minimal; the fixture's game list is List.
         assertEquals(listOf("Minimal", "Carousel", "Minimal", "Grid", "List"), state.openLayoutsPage(SettingsSection.MAIN_MENU).take(5).map { it.secondary })
         state.selectLayoutsRow(SettingsKind.MENU_STYLE, MenuCategory.CONSOLES); state.onButton(NxButton.RIGHT)   // Consoles: Carousel to Minimal, no Backdrop
@@ -9927,6 +9929,7 @@ class AppStateTest {
             MenuCategory.CONSOLES -> showConsolesTab = shown
             MenuCategory.COLLECTIONS -> showCollectionsTab = shown
             MenuCategory.TOOLS -> showToolsTab = shown
+            MenuCategory.APPS -> Unit   // Kids Mode's: no Layouts setting
         }
     }
 
@@ -9999,7 +10002,7 @@ class AppStateTest {
         )
         assertEquals(listOf("Visible" to "Show", "Layout" to "Grid"), page(SettingsSection.LAYOUT_TOOLS))
         assertEquals(
-            listOf("Layout options" to "Show", "Layout" to "Carousel", "Orientation" to "Horizontal"),
+            listOf("Backdrop art" to "3D box art", "Layout options" to "Show", "Layout" to "Carousel", "Orientation" to "Horizontal"),
             page(SettingsSection.LAYOUT_GAME_LISTS),
         )
         assertEquals(
@@ -11229,9 +11232,9 @@ class AppStateTest {
         assertEquals(MenuOrientation.VERTICAL, settings.gameListOrientation)
         assertEquals("Vertical", rows()[at(SettingsKind.GAME_LIST_ORIENTATION)].secondary)
         state.select(at(SettingsKind.GAME_LIST_STYLE)); state.onButton(NxButton.RIGHT); state.onButton(NxButton.RIGHT)   // Backdrop, then Minimal: the rows go
-        assertEquals(listOf(SettingsKind.LAYOUT_OPTIONS, SettingsKind.GAME_LIST_STYLE), rows().map { it.kind })   // Minimal: no art row, no orientation
+        assertEquals(listOf(SettingsKind.BACKDROP_ART, SettingsKind.LAYOUT_OPTIONS, SettingsKind.GAME_LIST_STYLE), rows().map { it.kind })   // Minimal: no List art, no orientation
         state.onButton(NxButton.RIGHT)                                   // List
-        assertEquals(listOf(SettingsKind.LIST_ART, SettingsKind.LAYOUT_OPTIONS, SettingsKind.GAME_LIST_STYLE), rows().map { it.kind })
+        assertEquals(listOf(SettingsKind.LIST_ART, SettingsKind.BACKDROP_ART, SettingsKind.LAYOUT_OPTIONS, SettingsKind.GAME_LIST_STYLE), rows().map { it.kind })
         assertEquals(at(SettingsKind.GAME_LIST_STYLE), state.selection.value.index)
         assertEquals(MenuOrientation.VERTICAL, settings.gameListOrientation)
     }
@@ -12208,6 +12211,59 @@ class AppStateTest {
         assertTrue(state.menuPadShown())                                     // one screen: the skin round the tool too (user)
     }
 
+    // Dual screen: Settings opened from Tools stays on the top screen through a Library rescan, the menu below on its row.
+    @Test fun a_rescan_from_settings_keeps_settings_on_the_top_screen() = runTest {
+        val state = state(MemorySettings(ContentRef("Home")))
+        state.load()
+        state.onDualMenu(true)
+        state.openTools()
+        val settingsAt = state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }
+        state.select(settingsAt); state.onButton(NxButton.A)
+        val row = openLibraryOn(state, SettingsKind.RESCAN)
+        assertTrue(state.toolOnTop.value)
+        state.onButton(NxButton.A)                                                                  // rescan
+        advanceUntilIdle()
+        assertEquals(SettingsSection.LIBRARY, assertIs<Screen.Settings>(state.screen.value).section)
+        assertEquals(row, state.selection.value.index)
+        assertTrue(state.toolOnTop.value)
+        val (menu, at) = assertNotNull(state.toolUnder())
+        assertEquals(MenuCategory.TOOLS, menu.category)
+        assertEquals(settingsAt, at.index)
+    }
+
+    // Dual screen: leaving a Settings page over a stale library reloads it; Settings stays on the top screen after.
+    @Test fun a_reload_on_leaving_a_settings_page_keeps_settings_on_the_top_screen() = runTest {
+        val state = state(MemorySettings(ContentRef("Home")))
+        state.load()
+        state.onDualMenu(true)
+        state.openTools()
+        val settingsAt = state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }
+        state.select(settingsAt); state.onButton(NxButton.A)
+        state.openSettings(SettingsSection.DEFAULT_EMULATORS)
+        state.cycleDefaultTag("gba")                                                             // the index no longer fits
+        state.openSettingsMenu(); state.openSettings(SettingsSection.EMULATORS)
+        assertTrue(state.toolOnTop.value)
+        state.onButton(NxButton.B)                                                               // reloads, back on Settings
+        advanceUntilIdle()
+        assertIs<Screen.SettingsMenu>(state.screen.value)
+        assertTrue(state.toolOnTop.value)
+        assertEquals(settingsAt, assertNotNull(state.toolUnder()).second.index)
+    }
+
+    // A scan that ends on the main menu leaves no tool on the top screen.
+    @Test fun a_rescan_that_ends_on_the_menu_takes_the_tool_off_the_top_screen() = runTest {
+        val state = state(MemorySettings(ContentRef("Home")))
+        state.load()
+        state.onDualMenu(true)
+        state.openTools()
+        state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }); state.onButton(NxButton.A)
+        assertTrue(state.toolOnTop.value)
+        state.rescan()
+        advanceUntilIdle()
+        assertIs<Screen.Systems>(state.screen.value)
+        assertFalse(state.toolOnTop.value)
+    }
+
     // Dual screen: the highlighted Apps tile previews the drawer on the top screen; a tap there opens it on that app.
     // An app added meanwhile sorts before Apps: the menu below still shows Apps highlighted, and B lands on it.
     @Test fun the_drawer_previews_on_the_top_screen_and_opens_there() = runTest {
@@ -12551,8 +12607,16 @@ class AppStateTest {
 
     @Test fun android_console_takes_screenshots_from_the_art_store() = runTest {
         val art = object : AndroidArtStore {
-            override fun screenshot(appId: String): ContentRef? = if (appId == "a/A") ContentRef("file:///art/a.png") else null
-            override suspend fun writeScreenshot(appId: String, png: ByteArray): ContentRef? = null
+            override fun art(appId: String, slot: ArtSlot): ContentRef? = when {
+                appId != "a/A" -> null
+                slot == ArtSlot.SCREENSHOT -> ContentRef("file:///art/a.png")
+                slot == ArtSlot.BOX_2D -> ContentRef("file:///art/a.box2d.png")
+                slot == ArtSlot.WHEEL -> ContentRef("file:///art/a.wheel.png")
+                else -> null
+            }
+            override fun heroShot(appId: String): Boolean = appId == "a/A"
+            override suspend fun write(appId: String, slot: ArtSlot, bytes: ByteArray, hero: Boolean): ContentRef? = null
+            override suspend fun read(appId: String, slot: ArtSlot): ByteArray? = null
             override suspend fun deleteAll(): Int = 0
         }
         val state = AppState(
@@ -12563,14 +12627,19 @@ class AppStateTest {
         state.load(); advanceUntilIdle()
         val games = assertNotNull(androidRow(state)).games
         assertEquals(listOf(ContentRef("file:///art/a.png"), null), games.map { it.screenshotRef })
+        assertEquals(listOf(ContentRef("file:///art/a.box2d.png"), null), games.map { it.box2dRef })
+        assertEquals(listOf(ContentRef("file:///art/a.wheel.png"), null), games.map { it.wheelRef })
+        assertEquals(listOf(true, false), games.map { it.heroShot })
         assertEquals(listOf(null, null), games.map { it.boxartRef })
     }
 
     @Test fun a_replaced_screenshot_with_a_new_ref_rebuilds_the_console_row() = runTest {
         var ref = ContentRef("file:///art/a.png?v=1")
         val art = object : AndroidArtStore {
-            override fun screenshot(appId: String): ContentRef? = ref.takeIf { appId == "a/A" }
-            override suspend fun writeScreenshot(appId: String, png: ByteArray): ContentRef? = null
+            override fun art(appId: String, slot: ArtSlot): ContentRef? = ref.takeIf { appId == "a/A" && slot == ArtSlot.SCREENSHOT }
+            override fun heroShot(appId: String): Boolean = false
+            override suspend fun write(appId: String, slot: ArtSlot, bytes: ByteArray, hero: Boolean): ContentRef? = null
+            override suspend fun read(appId: String, slot: ArtSlot): ByteArray? = null
             override suspend fun deleteAll(): Int = 0
         }
         val state = AppState(

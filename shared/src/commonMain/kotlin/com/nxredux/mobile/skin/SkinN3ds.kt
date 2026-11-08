@@ -3,6 +3,7 @@ package com.nxredux.mobile.skin
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.runner.DualScreen
+import com.nxredux.mobile.runner.NdsLayout
 import com.nxredux.mobile.runner.NdsRegion
 import kotlin.math.abs
 
@@ -34,8 +35,7 @@ object SkinN3ds {
      * The two screens: with a [stack] glass, the biggest 400:480 rect in it cut into an upper and a lower half (a glass
      * wider than that: the upper screen across its width, the lower in the height left); else the
      * [top] and [touch] glasses. [big] goes in the upper slot, its other in the lower; each fitted at its own shape and
-     * centred there. The touch screen takes touches; the upper screen is shaded, the lower only when the two are one size
-     * (one shader chain). Null without the glasses.
+     * centred there. The touch screen takes touches; only the top screen is shaded ([NdsLayout.takesShader]). Null without the glasses.
      */
     fun regions(stack: PxRect?, top: PxRect?, touch: PxRect?, big: NdsScreen, layout: String? = null): List<NdsRegion>? {
         if (stack != null && layout != null && layout != "large") return laidOut(stack, big, layout)
@@ -50,10 +50,9 @@ object SkinN3ds {
         } else (top ?: return null) to (touch ?: return null)
         val a = fit(upper, aspectOf(big))
         val b = fit(lower, aspectOf(big.other))
-        val same = a.width == b.width && a.height == b.height
         return listOf(
-            NdsRegion(big, DualScreen.n3dsSrc(big), a, shaded = true, touch = big == NdsScreen.BOTTOM),
-            NdsRegion(big.other, DualScreen.n3dsSrc(big.other), b, shaded = same, touch = big.other == NdsScreen.BOTTOM),
+            NdsRegion(big, DualScreen.n3dsSrc(big), a, shaded = NdsLayout.takesShader(big), touch = big == NdsScreen.BOTTOM),
+            NdsRegion(big.other, DualScreen.n3dsSrc(big.other), b, shaded = NdsLayout.takesShader(big.other), touch = big.other == NdsScreen.BOTTOM),
         )
     }
 
@@ -64,23 +63,23 @@ object SkinN3ds {
      */
     private fun laidOut(stack: PxRect, big: NdsScreen, layout: String): List<NdsRegion>? {
         val wa = widthOf(big); val wb = widthOf(big.other)
-        fun region(screen: NdsScreen, dst: PxRect, shaded: Boolean) =
-            NdsRegion(screen, DualScreen.n3dsSrc(screen), dst, shaded = shaded, touch = screen == NdsScreen.BOTTOM)
+        fun region(screen: NdsScreen, dst: PxRect) =
+            NdsRegion(screen, DualScreen.n3dsSrc(screen), dst, shaded = NdsLayout.takesShader(screen), touch = screen == NdsScreen.BOTTOM)
         return when (layout) {
             "side_by_side" -> {
                 val box = fit(stack, (wa + wb) / SCREEN_H)
                 val s = box.height / SCREEN_H
-                listOf(region(big, PxRect(box.x, box.y, wa * s, box.height), true),
-                    region(big.other, PxRect(box.x + wa * s, box.y, wb * s, box.height), false))
+                listOf(region(big, PxRect(box.x, box.y, wa * s, box.height)),
+                    region(big.other, PxRect(box.x + wa * s, box.y, wb * s, box.height)))
             }
             "stacked" -> {
                 val box = fit(stack, maxOf(wa, wb) / (2f * SCREEN_H))
                 val s = box.height / (2f * SCREEN_H); val h = SCREEN_H * s
                 val cx = box.x + box.width / 2f
-                listOf(region(big, PxRect(cx - wa * s / 2f, box.y, wa * s, h), true),
-                    region(big.other, PxRect(cx - wb * s / 2f, box.y + h, wb * s, h), false))
+                listOf(region(big, PxRect(cx - wa * s / 2f, box.y, wa * s, h)),
+                    region(big.other, PxRect(cx - wb * s / 2f, box.y + h, wb * s, h)))
             }
-            "single_screen" -> listOf(region(big, fit(stack, aspectOf(big)), true))
+            "single_screen" -> listOf(region(big, fit(stack, aspectOf(big))))
             else -> null
         }
     }

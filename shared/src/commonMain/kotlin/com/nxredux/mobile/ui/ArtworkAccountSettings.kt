@@ -31,7 +31,7 @@ internal suspend fun guardArtwork(error: MutableStateFlow<String?>, block: suspe
 }
 
 /**
- * Tools → Artwork → Settings: Replace existing art, the optional art (2D box art, Wheel, Generate mix), the art
+ * Tools → Artwork → Settings: Replace existing art, the optional art (2D box art, Wheel, Mix), the art
  * sources' accounts (ScreenScraper sign-in modal and the SteamGridDB / TheGamesDB key prompt, drafts in the screen, as
  * RetroAchievements) and Reset artwork. [showPage] goes back to the Artwork page on a row.
  */
@@ -46,22 +46,28 @@ internal class ArtworkAccountSettings(
     private val host: ArtworkScreenHost,
     private val showPage: (ArtworkAction) -> Unit,
 ) {
+    /** The Change art preview cache's size, read when the page opens and after a clear (the rows are built synchronously). */
+    private var cacheBytes = 0L
+
+    private fun refreshCacheSize() {
+        scope.launch { quietly { cacheBytes = controller.optionCacheSize() }; refreshSettings() }
+    }
+
     private val signedIn: Boolean get() = settings.ssUsername.isNotEmpty() && settings.ssPassword != null
 
     /**
-     * In groups: Art to fetch (Replace existing art and the optional art: 2D box art, Wheel, Generate mix; only when
-     * fetching is available; the Wheel shows On and is locked while Generate mix needs it, as NX Redux's "Needed by
-     * Generate mix"), then Accounts (ScreenScraper's login / logout row, only in a build with its credentials; the
-     * SteamGridDB key rows; TheGamesDB's key rows and its read-only allowance for the key in use, only once the user's key
-     * is set), and Reset artwork last, after a gap.
+     * In groups: Art to fetch (Replace existing art and the optional art: 2D box art, Wheel, Mix; only when
+     * fetching is available), then Accounts (ScreenScraper's login / logout row, only in a build with its credentials; the
+     * SteamGridDB key row, one row each: the key prompt, or once set Remove; TheGamesDB's key row likewise and its
+     * read-only allowance for the key in use, only once the user's key is set), and Reset artwork last, after a gap.
      */
     private fun settingRows(): List<ArtworkSettingRow> = buildList {
         if (controller.available) {
             add(ArtworkSettingRow(ArtworkSettingKind.SECTION, "Art to fetch"))
             add(ArtworkSettingRow(ArtworkSettingKind.REPLACE, "Replace existing art", onOff(settings.artReplaceExisting)))
             add(ArtworkSettingRow(ArtworkSettingKind.BOX2D, "2D box art", onOff(settings.artBox2d)))
-            add(ArtworkSettingRow(ArtworkSettingKind.WHEEL, "Wheel", onOff(settings.artWheel || settings.artMix), enabled = !settings.artMix))
-            add(ArtworkSettingRow(ArtworkSettingKind.MIX, "Generate mix", onOff(settings.artMix)))
+            add(ArtworkSettingRow(ArtworkSettingKind.WHEEL, "Wheel", onOff(settings.artWheel)))
+            add(ArtworkSettingRow(ArtworkSettingKind.MIX, "Mix", onOff(settings.artMix)))
         }
         if (controller.ssAvailable || controller.sgdbAvailable || controller.tgdbSupported) {
             if (isNotEmpty()) add(ArtworkSettingRow(ArtworkSettingKind.GAP, ""))
@@ -79,23 +85,24 @@ internal class ArtworkAccountSettings(
         }
         if (controller.sgdbAvailable) {
             val set = controller.sgdbKeySet
-            add(ArtworkSettingRow(ArtworkSettingKind.SGDB_KEY, "SteamGridDB API key", if (set) "Set" else "Not set"))
             if (set) add(ArtworkSettingRow(ArtworkSettingKind.SGDB_REMOVE, "Remove SteamGridDB key"))
+            else add(ArtworkSettingRow(ArtworkSettingKind.SGDB_KEY, "SteamGridDB API key", "Not set"))
         }
         if (controller.tgdbSupported) {
             val set = controller.tgdbKeySet
-            add(ArtworkSettingRow(ArtworkSettingKind.TGDB_KEY, "TheGamesDB API key", if (set) "Set" else "Not set"))
             if (set) add(ArtworkSettingRow(ArtworkSettingKind.TGDB_REMOVE, "Remove TheGamesDB key"))
+            else add(ArtworkSettingRow(ArtworkSettingKind.TGDB_KEY, "TheGamesDB API key", "Not set"))
         }
         if (controller.tgdbAvailable) {
             val left = controller.state.value.tgdbLeft
             add(ArtworkSettingRow(ArtworkSettingKind.TGDB_LEFT, "TheGamesDB", left?.let { "${groupThousands(it)} left this month" } ?: "—"))
         }
         if (isNotEmpty()) add(ArtworkSettingRow(ArtworkSettingKind.GAP, ""))
+        add(ArtworkSettingRow(ArtworkSettingKind.CLEAR_CACHE, "Clear unused images", formatBytes(cacheBytes)))
         add(ArtworkSettingRow(ArtworkSettingKind.RESET, "Reset artwork"))
     }
 
-    /** The Settings page as it would open now (no modal), for the left pane beside Reset ([ArtworkScreenController.parentOf]). */
+    /** The Settings page as it would open now (no modal), for the wide stage's preview ([ArtworkScreenController.preview]). */
     fun settingsPage(): Screen.ArtworkSettings = Screen.ArtworkSettings(settingRows())
 
     fun openSettings(on: ArtworkSettingKind? = null) {
@@ -103,6 +110,7 @@ internal class ArtworkAccountSettings(
         screen.value = Screen.ArtworkSettings(rows)
         selection.value = ListSelection(on?.let { k -> rows.indexOfFirst { it.kind == k } }?.coerceAtLeast(0) ?: 0, rows.size)
             .landOn { rows[it].selectable }
+        refreshCacheSize()
         // The quota and allowance rows follow through [refreshSettings]; a failed read keeps "—".
         if (controller.ssAvailable && signedIn) scope.launch { quietly { controller.refreshQuota() } }
         if (controller.tgdbAvailable) scope.launch { quietly { controller.tgdbAllowance() } }
@@ -132,8 +140,8 @@ internal class ArtworkAccountSettings(
 
     /**
      * Where the highlight goes when the rows change, so a second A never lands on another action: the same row kind
-     * when it is still there; ScreenScraper's login for its logout (and back); otherwise the nearest row above it that
-     * stays (a key's Remove row or TheGamesDB's allowance: that source's key row), or the first. Never a group label or gap.
+     * when it is still there; ScreenScraper's login for its logout (and back), a source's key row for its Remove row (and
+     * back); otherwise the nearest row above it that stays (TheGamesDB's allowance), or the first. Never a group label or gap.
      */
     private fun keepRow(before: List<ArtworkSettingRow>, index: Int, rows: List<ArtworkSettingRow>): Int {
         fun at(kind: ArtworkSettingKind) = rows.indexOfFirst { it.kind == kind && it.selectable }.takeIf { it >= 0 }
@@ -144,6 +152,10 @@ internal class ArtworkAccountSettings(
         when (kind) {
             ArtworkSettingKind.SS_LOGOUT -> at(ArtworkSettingKind.SS_LOGIN)
             ArtworkSettingKind.SS_LOGIN -> at(ArtworkSettingKind.SS_LOGOUT)
+            ArtworkSettingKind.SGDB_KEY -> at(ArtworkSettingKind.SGDB_REMOVE)
+            ArtworkSettingKind.SGDB_REMOVE -> at(ArtworkSettingKind.SGDB_KEY)
+            ArtworkSettingKind.TGDB_KEY -> at(ArtworkSettingKind.TGDB_REMOVE)
+            ArtworkSettingKind.TGDB_REMOVE -> at(ArtworkSettingKind.TGDB_KEY)
             else -> null
         }?.let { return it }
         return (index - 1 downTo 0).firstNotNullOfOrNull { i -> before[i].takeIf { it.selectable }?.let { at(it.kind) } } ?: first
@@ -234,6 +246,24 @@ internal class ArtworkAccountSettings(
             }
             return
         }
+        if (s.confirmClearCache) {
+            when (button) {
+                NxButton.A -> {
+                    screen.value = s.copy(confirmClearCache = false)
+                    scope.launch {
+                        guardArtwork(error) {
+                            val freed = controller.clearOptionCache()
+                            cacheBytes = 0
+                            host.showNotice("Cleared ${formatBytes(freed)}")
+                        }
+                        refreshSettings()
+                    }
+                }
+                NxButton.B, NxButton.MENU -> screen.value = s.copy(confirmClearCache = false)
+                else -> Unit
+            }
+            return
+        }
         if (s.editingKey) {
             when (button) {
                 NxButton.A -> submitKey(s)
@@ -257,6 +287,7 @@ internal class ArtworkAccountSettings(
                 ArtworkSettingKind.TGDB_REMOVE -> {
                     controller.clearTgdbKey(); refreshSettings(); host.showNotice("TheGamesDB key removed"); refreshAllowance()
                 }
+                ArtworkSettingKind.CLEAR_CACHE -> screen.value = s.copy(confirmClearCache = true)
                 ArtworkSettingKind.RESET -> openReset()
                 ArtworkSettingKind.TGDB_LEFT, ArtworkSettingKind.SECTION, ArtworkSettingKind.GAP -> Unit
             }
@@ -279,12 +310,12 @@ internal class ArtworkAccountSettings(
 
     private fun onOff(on: Boolean) = if (on) "On" else "Off"
 
-    /** Flips an On/Off row's setting (the Wheel only while Generate mix is off: its row is locked otherwise). */
+    /** Flips an On/Off row's setting (the Wheel and the Mix are independent). */
     private fun toggle(kind: ArtworkSettingKind) {
         when (kind) {
             ArtworkSettingKind.REPLACE -> settings.artReplaceExisting = !settings.artReplaceExisting
             ArtworkSettingKind.BOX2D -> settings.artBox2d = !settings.artBox2d
-            ArtworkSettingKind.WHEEL -> if (!settings.artMix) settings.artWheel = !settings.artWheel
+            ArtworkSettingKind.WHEEL -> settings.artWheel = !settings.artWheel
             ArtworkSettingKind.MIX -> settings.artMix = !settings.artMix
             else -> return
         }

@@ -13,10 +13,17 @@ import kotlin.test.assertTrue
 
 class RaUiTest {
     private val status = RaStatus("me", 1234, 3, 1_758_800_000_000L, 12)
+    // The page's head: the user as the headline, points and the last sync below; the unlocks waiting on Sync now.
     @Test fun details_block() {
-        assertEquals(listOf("me", "1,234 points", "3 unlocks waiting", "Last sync: ${formatDateTime(1_758_800_000_000L)}"), raDetails(RaState.Idle(status)))
-        assertEquals(listOf("Not signed in", "Sign in under Settings", "0 unlocks waiting", "Last sync: Never"), raDetails(RaState.Idle(RaStatus(null, null, 0, null, 0))))
-        assertEquals(listOf("me", "1,234 points", "Nothing waiting", "Last sync: Never"), raDetails(RaState.Idle(status.copy(pending = 0, lastSync = null))))
+        val signedOut = RaState.Idle(RaStatus(null, null, 0, null, 0))
+        assertEquals("me", raHeadline(RaState.Idle(status)))
+        assertEquals(listOf("1,234 points", "Last sync: ${formatDateTime(1_758_800_000_000L)}"), raDetails(RaState.Idle(status)))
+        assertEquals("Not signed in", raHeadline(signedOut))
+        assertEquals(listOf("Sign in under Settings", "Last sync: Never"), raDetails(signedOut))
+        assertEquals(listOf("1,234 points", "Last sync: Never"), raDetails(RaState.Idle(status.copy(pending = 0, lastSync = null))))
+        assertEquals("Sync now (3)", raRowLabel(RaAction.SYNC, null, raPending(RaState.Idle(status))))
+        assertEquals("Sync now", raRowLabel(RaAction.SYNC, null, raPending(RaState.Idle(status.copy(pending = 0)))))
+        assertEquals("Sync now", raRowLabel(RaAction.SYNC, null, raPending(signedOut)))
     }
     @Test fun progress_lines_and_fractions() {
         fun syncing(step: RaSyncStep, done: Int = 0, total: Int = 0, current: String? = null) = RaState.Syncing(RaSyncProgress(step, done, total, current), status)

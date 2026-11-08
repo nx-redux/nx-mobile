@@ -11,29 +11,33 @@
      "key": "melonds_console_mode",
      "label": "Console Mode",
      "labelCategorized": "",
-     "info": "Whether melonDS should emulate a Nintendo DS or a Nintendo DSi. DSi mode has some limits:\n\n- Native BIOS/firmware/NAND files must be provided, including for the regular DS.\n- Some features (such as savestates) are not available in DSi mode.\n- Direct boot mode cannot be used for DSiWare.\n\nSee the DSi-specific options in this category for more information. If unsure, set to DS mode unless playing a DSi game. Changes take effect at the next restart.",
+     "info": "Whether to emulate a Nintendo DS or a Nintendo DSi.\n\nAuto uses DSi mode for games that need a DSi, and DS mode for everything else. The DS and DSi settings force the corresponding console; this is mostly useful for homebrew development.\n\nDSi mode has some limits:\n\n- Native BIOS/firmware/NAND files must be provided, including for the regular DS.\n- Some features (such as savestates) are not available in DSi mode.\n\nSee the DSi-specific options in this category for more information. If unsure, use Auto. Changes take effect at the next restart.",
      "values": [
+      "auto",
       "ds",
       "dsi"
      ],
      "labels": [
+      "Auto",
       "DS",
       "DSi (experimental)"
      ],
-     "default": "ds"
+     "default": "auto"
     },
     {
      "key": "melonds_slot2_device",
      "label": "Slot-2 Device",
      "labelCategorized": "",
-     "info": "The peripheral that will be inserted into the emulated console's Slot-2. Ignored in DSi mode, or if a GBA ROM is explicitly loaded. If a GBA ROM for any game in the Boktai trilogy is inserted, the corresponding Solar Sensor setting will be forced. In supported NDS games, each Boktai cart will have different effects. \nChanges take effect at next core start.",
+     "info": "The peripheral that will be inserted into the emulated console's Slot-2. Ignored in DSi mode, or if a GBA ROM is explicitly loaded. If a GBA ROM for any game in the Boktai trilogy is inserted, the corresponding Solar Sensor setting will be forced. In supported NDS games, each Boktai cart will have different effects. The Motion Paks read your device's accelerometer (and its gyroscope, for the homebrew pak) if the frontend supports them; otherwise, they act as if the console is lying flat and still. \nChanges take effect at next core start.",
      "values": [
       "auto",
       "rumble-pak",
       "expansion-pak",
       "solar1",
       "solar2",
-      "solar3"
+      "solar3",
+      "motion-pak-homebrew",
+      "motion-pak-retail"
      ],
      "labels": [
       "Auto",
@@ -41,9 +45,61 @@
       "Memory Expansion Pak",
       "Solar Sensor (Boktai 1)",
       "Solar Sensor (Boktai 2)",
-      "Solar Sensor (Boktai 3)"
+      "Solar Sensor (Boktai 3)",
+      "Motion Pak (Homebrew)",
+      "Motion Pack (Retail)"
      ],
      "default": "auto"
+    },
+    {
+     "key": "melonds_rumble_intensity",
+     "label": "Rumble Intensity",
+     "labelCategorized": "",
+     "info": "How hard the Rumble Pak drives your controller's motors. The emulated Rumble Pak has no volume control of its own, so this scales whatever the game asks for.\n\nIgnored unless \"Slot-2 Device\" is set to Rumble Pak.",
+     "values": [
+      "0",
+      "6554",
+      "13107",
+      "19661",
+      "26214",
+      "32768",
+      "39321",
+      "45875",
+      "52428",
+      "58982",
+      "65535"
+     ],
+     "labels": [
+      "Off",
+      "10%",
+      "20%",
+      "30%",
+      "40%",
+      "50%",
+      "60%",
+      "70%",
+      "80%",
+      "90%",
+      "100%"
+     ],
+     "default": "65535"
+    },
+    {
+     "key": "melonds_rumble_type",
+     "label": "Rumble Motors",
+     "labelCategorized": "",
+     "info": "Which of your controller's motors the Rumble Pak drives. Most controllers pair a heavy motor with a lighter one; which feels closer to a real Rumble Pak depends on the controller.\n\nIgnored unless \"Slot-2 Device\" is set to Rumble Pak.",
+     "values": [
+      "both",
+      "strong",
+      "weak"
+     ],
+     "labels": [
+      "Both",
+      "Strong Only",
+      "Weak Only"
+     ],
+     "default": "both"
     },
     {
      "key": "melonds_solar_sensor_host_sensor",
@@ -1363,6 +1419,137 @@
       ":59"
      ],
      "default": "0"
+    },
+    {
+     "key": "melonds_start_time_absolute_second",
+     "label": "Starting Second",
+     "labelCategorized": "",
+     "info": "The initial second to use when Starting Time Mode is Absolute. Changes take effect at next restart.",
+     "values": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "27",
+      "28",
+      "29",
+      "30",
+      "31",
+      "32",
+      "33",
+      "34",
+      "35",
+      "36",
+      "37",
+      "38",
+      "39",
+      "40",
+      "41",
+      "42",
+      "43",
+      "44",
+      "45",
+      "46",
+      "47",
+      "48",
+      "49",
+      "50",
+      "51",
+      "52",
+      "53",
+      "54",
+      "55",
+      "56",
+      "57",
+      "58",
+      "59"
+     ],
+     "labels": [
+      ":00",
+      ":01",
+      ":02",
+      ":03",
+      ":04",
+      ":05",
+      ":06",
+      ":07",
+      ":08",
+      ":09",
+      ":10",
+      ":11",
+      ":12",
+      ":13",
+      ":14",
+      ":15",
+      ":16",
+      ":17",
+      ":18",
+      ":19",
+      ":20",
+      ":21",
+      ":22",
+      ":23",
+      ":24",
+      ":25",
+      ":26",
+      ":27",
+      ":28",
+      ":29",
+      ":30",
+      ":31",
+      ":32",
+      ":33",
+      ":34",
+      ":35",
+      ":36",
+      ":37",
+      ":38",
+      ":39",
+      ":40",
+      ":41",
+      ":42",
+      ":43",
+      ":44",
+      ":45",
+      ":46",
+      ":47",
+      ":48",
+      ":49",
+      ":50",
+      ":51",
+      ":52",
+      ":53",
+      ":54",
+      ":55",
+      ":56",
+      ":57",
+      ":58",
+      ":59"
+     ],
+     "default": "0"
     }
    ]
   },
@@ -1375,14 +1562,14 @@
      "key": "melonds_render_mode",
      "label": "Render Mode",
      "labelCategorized": "",
-     "info": "Software mode is faster and more accurate, while OpenGL mode supports scaling up the resolution of 3D graphics in most cases.\n\nOpenGL mode may be buggy on some graphics hardware. If it doesn't work, software rendering is used as a fallback. Changes take effect immediately but may require the frontend's video driver to be restarted.",
+     "info": "Software is fastest and most accurate. OpenGL (Classic) can scale up 3D graphics, but some games don't render correctly.\n\nFalls back to software rendering if OpenGL can't be used. Changes take effect immediately but may require the frontend's video driver to be restarted.",
      "values": [
       "software",
       "opengl"
      ],
      "labels": [
       "Software",
-      "OpenGL"
+      "OpenGL (Classic)"
      ],
      "default": "software"
     },
@@ -1390,7 +1577,7 @@
      "key": "melonds_opengl_resolution",
      "label": "Internal Resolution",
      "labelCategorized": "",
-     "info": "The degree to which the emulated 3D engine's graphics are scaled up. Dimensions are given per screen. OpenGL renderer only.",
+     "info": "The degree to which the emulated 3D engine's graphics are scaled up. Dimensions are given per screen. OpenGL renderers only. Changing this takes a few seconds while the OpenGL (Compute) renderer recompiles its shaders.",
      "values": [
       "1",
       "2",
@@ -1417,7 +1604,7 @@
      "key": "melonds_opengl_better_polygons",
      "label": "Improved Polygon Splitting",
      "labelCategorized": "",
-     "info": "Enable this if your game's 3D models are not rendering correctly. OpenGL renderer only.",
+     "info": "Enable this if your game's 3D models are not rendering correctly. OpenGL (Classic) renderer only.",
      "values": [
       "disabled",
       "enabled"
@@ -1691,6 +1878,21 @@
       "300%"
      ],
      "default": "200"
+    },
+    {
+     "key": "melonds_frontend_layout",
+     "label": "Frontend Screen Layout",
+     "labelCategorized": "",
+     "info": "Lets the frontend arrange the emulated screens itself, with its own screen layout, stereo 3D mode, headset output, and a shader for each screen. Has no effect on a frontend that can't do this.\n\nAuto: The frontend arranges the screens where it can. It always does in its stereo 3D modes and on a headset. In its 2D mode it only does while the current screen layout is Top/Bottom or Bottom/Top (with no screen gap and a full-size secondary screen), Top Only, or Bottom Only; every other layout is shown the way it's configured here.\nOff: The screen layouts configured here always apply.\n\nWhile the frontend arranges the screens, the current screen layout still chooses which screens are shown, which one comes first, and how they're rotated.",
+     "values": [
+      "auto",
+      "disabled"
+     ],
+     "labels": [
+      "Auto",
+      "Off"
+     ],
+     "default": "auto"
     },
     {
      "key": "melonds_number_of_screen_layouts",
@@ -2083,7 +2285,7 @@
      "key": "melonds_hybrid_ratio",
      "label": "Hybrid/Largescreen Ratio",
      "labelCategorized": "",
-     "info": "The size of the larger screen relative to the smaller ones when using a hybrid or largescreen layout.",
+     "info": "The size of the larger screen relative to the smaller ones when using a hybrid or largescreen layout. Not used while the frontend arranges the screens (see Frontend Screen Layout).",
      "values": [
       "2",
       "3"
@@ -2098,7 +2300,7 @@
      "key": "melonds_hybrid_small_screen",
      "label": "Hybrid Small Screen Mode",
      "labelCategorized": "",
-     "info": "Choose which screens will be shown when using a hybrid layout.",
+     "info": "Choose which screens will be shown when using a hybrid layout. Not used while the frontend arranges the screens (see Frontend Screen Layout).",
      "values": [
       "one",
       "both"
@@ -2113,7 +2315,7 @@
      "key": "melonds_opengl_filtering",
      "label": "Hybrid/Largescreen Filtering",
      "labelCategorized": "",
-     "info": "Affects how the hybrid/largescreen screen is scaled up.\n\nNearest: No filtering. Graphics look blocky.\nLinear: Smooth scaling.\n",
+     "info": "Affects how the hybrid/largescreen screen is scaled up. Not used while the frontend arranges the screens (see Frontend Screen Layout).\n\nNearest: No filtering. Graphics look blocky.\nLinear: Smooth scaling.\n",
      "values": [
       "nearest",
       "linear"
@@ -2128,7 +2330,7 @@
      "key": "melonds_screen_gap",
      "label": "Screen Gap",
      "labelCategorized": "",
-     "info": "Choose how large the gap between the screens should be. Vertical layouts (including rotations) only. Dimensions exclude the effects of the frontend's scaling.",
+     "info": "Choose how large the gap between the screens should be. Vertical layouts (including rotations) only. Dimensions exclude the effects of the frontend's scaling. Not used while the frontend arranges the screens (see Frontend Screen Layout).",
      "values": [
       "0",
       "1",
@@ -2393,7 +2595,7 @@
      "key": "melonds_secondary_screen_scale",
      "label": "Secondary Screen Scale",
      "labelCategorized": "",
-     "info": "The size of the secondary screen relative to the primary screen. Applies to vertical layouts (Top/Bottom, Bottom/Top). At 100%, both screens are the same size. At 50%, the secondary screen is half the width and height of the primary screen.",
+     "info": "The size of the secondary screen relative to the primary screen. Applies to vertical layouts (Top/Bottom, Bottom/Top). At 100%, both screens are the same size. At 50%, the secondary screen is half the width and height of the primary screen. Not used while the frontend arranges the screens (see Frontend Screen Layout).",
      "values": [
       "50",
       "55",
@@ -2426,7 +2628,7 @@
      "key": "melonds_secondary_screen_filtering",
      "label": "Secondary Screen Filtering",
      "labelCategorized": "",
-     "info": "Affects how the secondary screen is scaled down.\n\nNearest: No filtering. Graphics look blocky.\nLinear: Smooth scaling. Recommended when using Secondary Screen Scale below 100%.\n",
+     "info": "Affects how the secondary screen is scaled down. Not used while the frontend arranges the screens (see Frontend Screen Layout).\n\nNearest: No filtering. Graphics look blocky.\nLinear: Smooth scaling. Recommended when using Secondary Screen Scale below 100%.\n",
      "values": [
       "nearest",
       "linear"
@@ -3186,6 +3388,6 @@
    ]
   }
  ],
- "soSha256": "22c6a6736d2cdbcca159b53de5039afa1d2aac5bd4ea85bf2564183aba0cf754",
- "probedAt": "2026-09-29"
+ "soSha256": "7d5e365a58ee950a0d81bbf64499704b9de31ecb62295ff14e70dc7502df410b",
+ "probedAt": "2026-11-06"
 }

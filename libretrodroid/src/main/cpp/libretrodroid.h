@@ -27,6 +27,7 @@
 #include <vector>
 #include <unordered_set>
 #include <mutex>
+#include "videoviews.h"
 #include <memory>
 #include <optional>
 #include <array>
@@ -39,6 +40,7 @@
 #include "video.h"
 #include "renderers/renderer.h"
 #include "fpssync.h"
+#include "slowdown.h"
 #include "fastforward.h"
 #include "hitchprobe.h"
 #include "perfhint.h"
@@ -166,11 +168,17 @@ public:
     // The next create() offers the core Vulkan (bridged into the GLES presentation). Set before create().
     void setPreferVulkan(bool value) { preferVulkan = value; }
     void setVulkanSwapchainFrames(bool value) { vulkanSwapchainFrames = value; }
+    // nx-mobile: offer video views to the next core loaded (GET_VIDEO_VIEWS_STATUS answers PRESENTS).
+    void setVideoViewsEnabled(bool value) { videoViewsEnabled = value; }
+    // The core's last accepted view map (empty: none), any thread. A change also raises takeGameGeometryChanged().
+    std::vector<VideoView> getVideoViews();
     void handleRumbleUpdates(const std::function<void(int, float, float)> &handler);
 
     void setFrameSpeed(unsigned int speed);
     // nx-mobile 2026-11-03: Frame Skip (Auto true, Off false): see FPSSync::frameSkip. Any thread, live.
     void setFrameSkip(bool skip) { FPSSync::frameSkip = skip; }
+    // Frame Skip Off: the game's achieved speed, which the audio plays at (SlowdownMeter). GL thread.
+    SlowdownMeter slowdownMeter;
 
     // nx-mobile 2026-11-03: the display's presentation deadline (how early a frame must be queued to show at a refresh);
     // a sleep-timer frame is stamped to show at its deadline + this + 1.5 ms. 0 = unknown: one frame. Any thread.
@@ -184,6 +192,13 @@ public:
     // nx-mobile 2026-10-30: the Audio Resampling Quality row, 0 Low to 3 Max (Audio::Quality). Any thread; step()
     // hands it to the audio, as afterGameLoad does a new one.
     void setResamplingQuality(int quality) { resamplingQuality.store(quality); }
+    // nx-mobile 2026-11-04: Audio Buffer (ms kept ready, 0 default), read when the game's audio starts; Fill Audio Gaps
+    // (FILL_GAPS_*), live. Any thread.
+    void setAudioBufferMs(int ms) { audioBufferMs.store(ms); }
+    void setFillAudioGaps(int mode) { fillAudioGaps.store(mode); }
+    static constexpr int FILL_GAPS_AUTO = 0;   // with Frame Skip Off, where the game slows down
+    static constexpr int FILL_GAPS_ON = 1;
+    static constexpr int FILL_GAPS_OFF = 2;
 
     // nx-mobile 2026-10-24: rewind. Enabled, step() snapshots the game after each frame (once the core can serialize);
     // rewinding, it steps back through those snapshots instead of playing, one per capture interval, and wins over
@@ -231,6 +246,8 @@ public:
     // Regions of the core frame drawn at places in the view (empty = one picture). Remembered, like the viewport, so a
     // Video created later (a new surface) gets them. GL thread.
     void setScreenRegions(std::vector<ScreenRegion> regions);
+    // nx-mobile: the frame composed from the core's (Video::setComposition); width 0 clears it. Remembered like the regions. GL thread.
+    void setComposition(int width, int height, std::vector<ScreenRegion> parts);
 
     // Regions drawn on a second surface (dst 0..1 of that whole surface). Remembered like setScreenRegions. GL thread.
     void setSecondaryRegions(std::vector<ScreenRegion> regions);
@@ -307,6 +324,8 @@ protected:
 private:
     // UI thread (setFrameSpeed) and GL thread (step) both read it.
     std::atomic<unsigned> frameSpeed { 1 };
+    static constexpr std::chrono::milliseconds PAUSED_REDRAW_INTERVAL { 50 };
+    std::chrono::steady_clock::time_point pausedRedrawAt {};   // GL thread
     bool audioEnabled = true;
     bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
@@ -329,6 +348,9 @@ private:
     float screenOffsetY = 0.0F;
     bool pictureHeld = false;
     std::vector<ScreenRegion> screenRegions;
+    int compositionWidth = 0;
+    int compositionHeight = 0;
+    std::vector<ScreenRegion> compositionParts;
     std::vector<ScreenRegion> secondaryRegions;
 
     std::atomic<float> geometryWidth { 0.0F };
@@ -336,6 +358,9 @@ private:
     std::atomic<float> geometryAspect { 0.0F };
     std::atomic<float> geometryRotation { 0.0F };
     std::atomic<bool> geometryChanged { false };
+    bool videoViewsEnabled = false;
+    std::mutex videoViewsLock;
+    std::vector<VideoView> videoViews;   // guarded by videoViewsLock
     std::atomic<bool> hardwareFrame { false };
     // Set on the GL thread by handleVideoRefresh, rethrown by step() after retro_run returns.
     std::exception_ptr videoCallbackError = nullptr;
@@ -343,6 +368,7 @@ private:
     float screenRefreshRate = 60.0;
     std::function<void()> frameDrawnHook;   // GL thread, for one step
     int64_t frameDeadlineNanos = 0;          // GL thread
+    bool presentStamped = false;             // GL thread
     int openglESVersion = 2;
     bool skipDuplicateFrames = false;
     bool immersiveModeEnabled = false;
@@ -374,6 +400,8 @@ private:
     std::atomic<unsigned> fastForwardSpeed { 0 };
     std::atomic<bool> fastForwardAudible { false };
     std::atomic<int> resamplingQuality { 2 };
+    std::atomic<int> audioBufferMs { 0 };
+    std::atomic<int> fillAudioGaps { FILL_GAPS_AUTO };
     FastForwardPacer fastForwardPacer;
     HitchProbe hitchProbe;   // nx-mobile diag: GL thread
     std::atomic<bool> hitchResetPending { false };   // resume() (UI thread) asks step() to restart it

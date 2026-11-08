@@ -26,7 +26,7 @@ class DsScreenRegionsTest {
         assertEquals(NdsLayout.BOTTOM_SRC, bottom.src)
         assertEquals(dsBottom, bottom.dst)
         assertTrue(bottom.touch)
-        // Shaded regions share one size: the 6x top screen is shaded, the 5x touch screen drawn plain.
+        // Only the top screen is shaded (NdsLayout.takesShader): the 6x top screen, not the 5x touch screen.
         assertTrue(top.shaded)
         assertFalse(bottom.shaded)
     }
@@ -74,11 +74,11 @@ class DsScreenRegionsTest {
     }
 
     @Test
-    fun same_size_screens_are_both_shaded() {
-        // One tall glass cut in half (a stack): both screens at one scale.
+    fun only_the_top_screen_is_shaded_even_at_one_size() {
+        // One tall glass cut in half (a stack): both screens at one scale; the shader is the top screen's (NdsLayout.takesShader).
         val stackTop = PxRect(0f, 0f, 1024f, 768f)
         val stackBottom = PxRect(0f, 768f, 1024f, 768f)
-        assertTrue(dsScreenRegions(stackTop, stackBottom, DsKind.DS, NdsScreen.TOP).all { it.shaded })
+        assertEquals(listOf(true, false), dsScreenRegions(stackTop, stackBottom, DsKind.DS, NdsScreen.TOP).map { it.shaded })
     }
 
     /** Where window point ([x], [y]) in [r]'s screen lands in the 400 x 480 3DS frame, as the fork maps a touch. */

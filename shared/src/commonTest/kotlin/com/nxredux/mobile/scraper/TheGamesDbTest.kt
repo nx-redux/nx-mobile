@@ -171,6 +171,24 @@ class TheGamesDbTest {
         assertEquals(listOf(4521, 4600), Tgdb.rankScreens(Tgdb.parseImages(TgdbFixtures.images()).images.getValue(53)).map { it.id })
     }
 
+    @Test fun thumbBase() = runTest {
+        val body = """{"data":{"base_url":{"original":"https://cdn.thegamesdb.net/images/original/","thumb":"https://cdn.thegamesdb.net/images/thumb/"},
+            "images":{"53":[{"id":1,"type":"screenshot","side":null,"filename":"screenshots/1.jpg"}]}}}"""
+        assertEquals("https://cdn.thegamesdb.net/images/thumb/", Tgdb.parseImages(body).thumbBase)
+        val r = Rig()
+        r.http.on("Games/ByGameName", ok(TgdbFixtures.byName()))
+        r.http.on("Games/Images", ok(body))
+        val shot = r.src.find(sonic, setOf(ArtSlot.SCREENSHOT)).single()
+        assertEquals("https://cdn.thegamesdb.net/images/thumb/screenshots/1.jpg", shot.thumb)
+        assertEquals("https://cdn.thegamesdb.net/images/original/screenshots/1.jpg", shot.url)
+        // The boxart's answer carries no thumb base here: the documented thumb CDN.
+        val r2 = Rig()
+        r2.http.on("Games/ByGameName", ok(TgdbFixtures.byName()))
+        val box = r2.src.find(sonic, setOf(ArtSlot.BOX_2D)).first()
+        assertEquals("https://cdn.thegamesdb.net/images/thumb/boxart/front/53-1.jpg", box.thumb)
+        assertEquals("https://cdn.thegamesdb.net/images/original/boxart/front/53-1.jpg", box.url)
+    }
+
     @Test fun findReturnsOriginalUrlsAndOrigins() = runTest {
         val r = Rig()
         r.http.on("Games/ByGameName", ok(TgdbFixtures.byName()))

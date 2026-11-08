@@ -73,6 +73,7 @@ public:
     // the viewport. Drawn unrotated: no core that uses regions sets a rotation.
     void updateScreenRegions(std::vector<ScreenRegion> regions);
     const std::vector<RegionQuad>& getRegionQuads() const { return regionQuads; }
+    bool isBottomLeftOrigin() const { return bottomLeftOrigin; }
 
 private:
     void updateBuffers();
