@@ -104,7 +104,7 @@ class CheatMatchTest {
     }
 
     @Test fun a_source_only_file_loses_to_a_regional_one_for_a_region_less_rom() {
-        // The database's `(Rumbles)` packs have no region, so they used to win as "no extra qualifiers".
+        // The database's `(Rumbles)` packs have no region, so they would otherwise win as "no extra qualifiers".
         val files = listOf(
             "Contra III - The Alien Wars (USA) (Action Replay).cht", "Contra III - The Alien Wars (USA).cht",
             "Contra Iii - The Alien Wars (Rumbles).cht",
@@ -168,7 +168,7 @@ class CheatMatchTest {
         assertEquals("", CheatMatch.sourceLabel("Zelda (USA).cht"))
     }
 
-    // libretro's PSP set names files "Name [US] [ULUS-10041].cht" (nx-redux #257): the stem ends at " [" and the
+    // libretro's PSP set names files "Name [US] [ULUS-10041].cht": the stem ends at " [" and the
     // region code compares with the ROM's No-Intro region.
     @Test fun psp_bracket_region_matches_the_rom_region() {
         val files = listOf(

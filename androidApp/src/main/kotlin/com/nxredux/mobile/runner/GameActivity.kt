@@ -442,7 +442,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     @Volatile override var resumePending = false
         private set
     private var resumeCover: ResumeCover? = null   // the resume's screenshot over the game until its frame shows (main thread only)
-    // The launch sequence's name (a Minimal launch; null: none, the screen opens as before) and its hold over the window.
+    // The launch sequence's name (a Minimal launch; null: none, the screen opens without one) and its hold over the window.
     private val launchName by lazy { launchNameFrom(intent.extras) }
     private var nameHold: LaunchNameHold? = null   // main thread only; null once it has gone
     private val heldDowns = HashSet<Int>()   // key codes whose press the hold swallowed: their release is swallowed too
@@ -2234,7 +2234,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun offerLayoutTip() {
         val settings = AndroidAppSettings(this)
         if (!LayoutTip.due((isN3ds || isNds) && netplayNow == null, padLayout.skinShown, input.skinLayouts, settings.layoutTipHidden)) return
-        // up until closed (user): Close, or its button to hide it for good
+        // up until closed: Close, or its button to hide it for good
         input.showNotice(LayoutTip.text(ds = isNds), com.nxredux.mobile.ui.nx.NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) { settings.layoutTipHidden = true }
     }
     override val n3dsStackPinned: Boolean get() = netplayNow == null
@@ -3093,10 +3093,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     // ------------------------------------------------------------------ achievements
 
     /**
-     * Before the view exists: an RA console, signed in and enabled, gets a bridge and a background hash. An archive's
-     * unpacked [inner] ROM is what is hashed, and its name refines the console.
-     */
-    /**
      * The N64 game's hi-res texture pack when Use High-Res textures is on (GLideN64 only): `<NAME>_HIRESTEXTURES.hts`, named
      * by the ROM header, in [home]'s `Textures/N64/` or else in `.cache/` in the game's folder, served to the core as a
      * read-only virtual file ([N64HiresPack]). Empty when there is none; a pack that cannot be found or opened only leaves
@@ -3132,6 +3128,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         return buf.copyOf(n)
     }
 
+    /**
+     * Before the view exists: an RA console, signed in and enabled, gets a bridge and a background hash. An archive's
+     * unpacked [inner] ROM is what is hashed, and its name refines the console.
+     */
     private fun prepareAchievements(tag: String, romFileName: String, content: ContentRef, inner: File?) {
         val settings = AndroidAppSettings(this)
         if (!settings.raEnabled || settings.raToken == null) return

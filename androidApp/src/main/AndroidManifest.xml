@@ -14,7 +14,7 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <!-- The on-screen pad's press tick (Settings → Controls → Pad vibration). -->
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- 3b-1: All files access, for the sideloaded build (a Play build drops this line and stays on SAF): ROM sync,
+    <!-- All files access, for the sideloaded build (a Play build drops this line and stays on SAF): ROM sync,
          the library read as plain paths, and the app's own folder picker. Asked in first setup; optional. -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
     <!-- Kids Mode: the warning and the lock on the dot (Alarms & reminders, asked in its setup), the alarms set again
@@ -171,12 +171,12 @@
             android:name=".achievements.RaDownloadService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />
-        <!-- Tools → Device Sync: keeps a running sync alive off screen (spec 2026-10-14-device-sync-3a). -->
+        <!-- Tools → Device Sync: keeps a running sync alive off screen. -->
         <service
             android:name=".sync.DeviceSyncService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />
-        <!-- USB Cable netplay: the VPN that carries 10.99.0.0/30 over the cable only (spec 2b.4). -->
+        <!-- USB Cable netplay: the VPN that carries 10.99.0.0/30 over the cable only. -->
         <service
             android:name=".netplay.usb.UsbLinkVpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"

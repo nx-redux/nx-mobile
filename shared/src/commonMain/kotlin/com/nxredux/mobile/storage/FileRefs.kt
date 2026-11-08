@@ -11,7 +11,6 @@ object FileRefs {
     /** The error for a file home read while All files access is off (shown by the library, Import and the like). */
     const val ACCESS_OFF_MESSAGE = "All files access is off. Turn it on in Settings → Library → All files access, or pick the home folder again."
 
-    /** The prefix of a file ref's value. */
     const val SCHEME = "file://"
 
     /** True for a folder or file ref read by path. App-private art `file://` models are art, not folder refs: they are never passed here. */

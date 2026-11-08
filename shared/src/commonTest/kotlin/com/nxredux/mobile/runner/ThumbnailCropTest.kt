@@ -25,7 +25,7 @@ class ThumbnailCropTest {
     private fun region(screen: NdsScreen, dst: PxRect, inset: Boolean = false) =
         NdsRegion(screen, FrameRect(0f, 0f, 1f, 0.5f), dst, shaded = false, touch = screen == NdsScreen.BOTTOM, inset = inset)
 
-    @Test fun aDsStateKeepsTheTopScreen() {   // (user) the top screen only, wherever it is drawn
+    @Test fun aDsStateKeepsTheTopScreen() {   // the top screen only, wherever it is drawn
         val top = PxRect(0f, 0f, 512f, 384f)
         val bottom = PxRect(128f, 400f, 256f, 192f)
         assertEquals(top, listOf(region(NdsScreen.TOP, top), region(NdsScreen.BOTTOM, bottom)).thumbnailPicture())

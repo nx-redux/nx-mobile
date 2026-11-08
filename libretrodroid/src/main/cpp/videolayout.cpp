@@ -95,7 +95,6 @@ void VideoLayout::updateForegroundVertices() {
             viewportYOffset += emptyVerticalSpace;
             break;
         case V_ALIGN_CENTER:
-            // do nothing
             break;
     }
 

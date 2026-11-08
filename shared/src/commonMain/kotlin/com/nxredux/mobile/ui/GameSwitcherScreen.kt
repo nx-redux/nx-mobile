@@ -106,7 +106,7 @@ fun GameSwitcherScreen(
 }
 
 /**
- * The switcher's List (NX Redux PR #218): a game list's List titled Recent over its games ([switcherListRows]), the
+ * The switcher's List: a game list's List titled Recent over its games ([switcherListRows]), the
  * selected one's resume frame behind the rows (else its screenshot, else its abstract picture, as List Home's Continue);
  * the List's own band, glide, marquee and hidden-hints behaviour. UP/DOWN move (AppState); A Resume, Y Remove, B Back.
  */
@@ -178,7 +178,7 @@ private fun RemoveDialog(entry: SwitcherEntry, onButton: (NxButton) -> Unit) = N
  * nx-redux's Game Switcher: one recent game at a time — its resume screenshot (or box art) filling the
  * screen, the title on top (the system and n / N under it), the game's info above the hints, and
  * B Back · Y Remove · A Resume. LEFT/RIGHT (or a horizontal swipe) moves.
- * Y asks for confirmation first ([Screen.Switcher.confirmRemove]). NX Redux PR #218: the info line follows Extra info
+ * Y asks for confirmation first ([Screen.Switcher.confirmRemove]). The info line follows Extra info
  * (the caller's [info]), and with Button hints hidden (where they can be) it moves into the bar's row, over its scrim.
  */
 @Composable

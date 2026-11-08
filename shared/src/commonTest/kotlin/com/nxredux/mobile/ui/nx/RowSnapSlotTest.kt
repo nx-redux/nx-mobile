@@ -20,8 +20,8 @@ class RowSnapSlotTest {
     }
 
     @Test fun aFractionalDpSlotCanMissTheRowsItHolds() {
-        // The old slot (rows x a fractional dp row) rounds once, the rows round each: 8 rows of 36.4 dp at 2.625x lay
-        // out as 8 x 96 = 768 px, but the slot as 764 px, so the last row was cut by 4 px at rest.
+        // A slot of rows x a fractional dp row rounds once, the rows round each: 8 rows of 36.4 dp at 2.625x lay
+        // out as 8 x 96 = 768 px, but the slot as 764 px, so the last row is cut by 4 px at rest.
         assertEquals(768, nxRowsSlotPx(px(36.4f, 2.625f), 8))
         assertEquals(764, px(36.4f * 8, 2.625f))
     }

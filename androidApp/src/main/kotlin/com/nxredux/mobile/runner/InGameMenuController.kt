@@ -251,7 +251,7 @@ internal class InGameMenuController(
     val menuState = mutableStateOf<MenuState?>(null)
 
     private var menuListingJob: Job? = null   // openMenu's overlay / preset re-list (main thread only)
-    lateinit var menuRouter: InputRouter   // set in onCreate, as before the split
+    lateinit var menuRouter: InputRouter   // set in onCreate
 
     private var optionsGeneration = 0   // bumped per live option change; drops stale re-reads
     // NdsRenderer.APPLY_ON_RESTART values set in the menu: kept from the running core, shown and saved (next launch).
@@ -612,7 +612,7 @@ internal class InGameMenuController(
             MenuEffect.SaveForGame -> saveOptions(game = true)
             MenuEffect.RestoreDefaults -> restoreOptions()
             is MenuEffect.ShortcutsChanged -> host.applyShortcuts(effect.overrides)
-            // A tile: the game runs with it on, so the menu closes (spec).
+            // A tile: the game runs with it on, so the menu closes.
             is MenuEffect.SetSpeed -> { host.setSpeedToggle(effect.ff, effect.rewind); closeMenu() }
             is MenuEffect.SetMic -> { host.setMic(effect.on); closeMenu() }
             MenuEffect.ResetGame -> { host.resetGame(); closeMenu() }
@@ -675,7 +675,7 @@ internal class InGameMenuController(
                 // meanwhile has already applied its value, so this write keeps it instead of bringing back the old one.
                 val written = configWrites.withLock {
                     // A key Graphics API forced for this launch keeps its stored value: the running one is the session's only.
-                    // Shortcuts: only the rows overridden here (spec: overrides inherit), never a full snapshot of what
+                    // Shortcuts: only the rows overridden here (overrides inherit), never a full snapshot of what
                     // fires, so a later Controls → Shortcuts change still reaches the others; a row given back to the
                     // default loses its line ([Shortcuts.droppedOnSave]).
                     val overrides = host.shortcutOverrides

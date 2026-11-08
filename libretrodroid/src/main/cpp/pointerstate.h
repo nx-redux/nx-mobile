@@ -21,7 +21,7 @@
 namespace libretrodroid {
 
 /**
- * One port's pointer in 0..1 of the core frame (-1 = released). nx-mobile 2026-10-13 (Wii): [sticky] keeps the last
+ * One port's pointer in 0..1 of the core frame (-1 = released). Wii: [sticky] keeps the last
  * position when the finger lifts or leaves the picture (Dolphin's IR pointer stays where it was aimed), and a velocity
  * from a right stick moves it every frame ([advance]), starting from the centre.
  */

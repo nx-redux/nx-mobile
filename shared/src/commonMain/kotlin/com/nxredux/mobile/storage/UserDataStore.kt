@@ -1,6 +1,6 @@
 package com.nxredux.mobile.storage
 
-/** The app's nx-redux user data (recents, pins, hidden games, save-slot markers), implemented per platform over the SD-card root. */
+/** The app's nx-redux user data (recents, pins, hidden games, save-slot markers), implemented per platform over the data root. */
 interface UserDataStore {
     suspend fun readRecents(): List<Recent>
     suspend fun writeRecents(list: List<Recent>)

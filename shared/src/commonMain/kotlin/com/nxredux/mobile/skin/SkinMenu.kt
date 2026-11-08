@@ -27,7 +27,7 @@ fun SkinPlacement.menuRoom(): PxRect? =
     stackedMenuRoom() ?: glasses.maxByOrNull { it.rect.width * it.rect.height }?.let(::menuRect)
 
 /**
- * DS / 3DS on a portrait phone (user): the top screen alone being too short for the menu, the top screen's width from
+ * DS / 3DS on a portrait phone: the top screen alone being too short for the menu, the top screen's width from
  * its top down to just above the shoulder buttons (L / R, ZL / ZR under it), the frame's foot ([menuFrame]) and a gap
  * clear of them; the touch screen under it is hidden while the menu is open ([underMenu]). Only the phone's own layouts
  * ([SkinFamily.LARGE]): the unfolded Fold and a tablet give the top screen half the screen, so the menu stays in it.

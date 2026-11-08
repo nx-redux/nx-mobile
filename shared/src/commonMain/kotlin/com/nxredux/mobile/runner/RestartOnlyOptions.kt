@@ -5,7 +5,7 @@ package com.nxredux.mobile.runner
  * Derived from a source audit; paths are relative to `cores/src/`.
  */
 internal object RestartOnlyOptions {
-    // mupen64plus_next/libretro/libretro.c update_variables `if (startup)` block (lines 919-1544);
+    // mupen64plus_next/libretro/libretro.c update_variables `if (startup)` block;
     // GLideN64's config is built once at context creation.
     val mupen64plusNext: Set<String> = listOf(
         "169screensize", "43screensize", "BackgroundMode", "BilinearMode", "CorrectTexrectCoords",
@@ -51,7 +51,7 @@ internal object RestartOnlyOptions {
     )
 
     // mednafen_supafaust/libretro.cpp: check_variables (the retro_run update path) re-reads only the four scanline
-    // options; everything else is piped into mednafen's settings in retro_load_game (lines 497-740).
+    // options; everything else is piped into mednafen's settings in retro_load_game.
     val supafaust: Set<String> = setOf(
         "supafaust_pixel_format", "supafaust_correct_aspect", "supafaust_h_filter", "supafaust_deinterlacer",
         "supafaust_region", "supafaust_frame_begin_vblank", "supafaust_run_ahead", "supafaust_multitap",

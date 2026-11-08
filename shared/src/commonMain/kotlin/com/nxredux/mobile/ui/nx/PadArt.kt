@@ -50,7 +50,7 @@ internal fun padPainter(res: DrawableResource): Painter = remember(res) { Bitmap
 internal fun padAspect(res: DrawableResource): Float? = PadArt.now(res).let { if (it.width > 0) it.height.toFloat() / it.width else null }
 
 /**
- * Decodes the pads of [tiles] ahead of time ([PadArt.prefetch]), nearest the selection [around] first, so a step through
+ * Decodes [pads] ahead of time ([PadArt.prefetch]), nearest the selection [around] first, so a step through
  * the consoles finds each picture ready. Restarts only when the list changes; the order is the selection when it does.
  */
 @Composable

@@ -40,7 +40,7 @@ void* get_symbol(void* handle, const char* symbol) {
 void Core::open(const std::string& soCorePath) {
     libHandle = dlopen(soCorePath.c_str(), RTLD_LOCAL | RTLD_LAZY | coreretention::dlopenFlags());
     if (!libHandle) {
-        // 2026-10-14: the loader's reason, so the error dialog (CoreLoadFailure) names why a device refused the core.
+        // The loader's reason, so the error dialog (CoreLoadFailure) names why a device refused the core.
         const char* why = dlerror();
         LOGE("Cannot dlopen %s: %s", soCorePath.c_str(), why != nullptr ? why : "unknown");
         CoreLog::add('E', "core load: %s", why != nullptr ? why : "unknown loader error");

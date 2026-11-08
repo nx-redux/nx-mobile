@@ -225,7 +225,7 @@ class EmulatorSettingsControllerTest {
     /**
      * The state, its off-main work ([AppDeps.compute], the Emulator Settings pages too) and its scope all on the test's
      * scheduler: one thread, virtual time. On the real Dispatchers.Default a wall-time poll could time out under load,
-     * and the work landed on pool threads while the test thread drove the same state.
+     * and the work would land on pool threads while the test thread drove the same state.
      */
     private fun TestScope.TestState(configs: MemoryConfigs, src: FakeRomsSource = source, tables: CoreOptionSource = Tables()) = AppState(
         AppDeps(MemorySettings(ContentRef("Home")), src, Runner, Picker, coreOptions = tables, emulatorConfigs = configs, compute = UnconfinedTestDispatcher(testScheduler)),

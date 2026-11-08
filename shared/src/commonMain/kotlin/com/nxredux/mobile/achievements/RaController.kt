@@ -337,7 +337,7 @@ class RaController(
      * reports, [post]ed as actions, runs here on the caller's dispatcher in the order posted: the state, the download's
      * tracker and its page are only ever changed from one thread, and a cancel there cancels the queue with the job, so no
      * late update lands after it. Every posted action has run when this returns, or throws (a failed walk's last reports
-     * land before its failure is handled, as when the walk ran here); a cancel drops them.
+     * land before its failure is handled); a cancel drops them.
      */
     private suspend fun <T> onWork(block: suspend (post: (() -> Unit) -> Unit) -> T): T = coroutineScope {
         val updates = Channel<() -> Unit>(Channel.UNLIMITED)

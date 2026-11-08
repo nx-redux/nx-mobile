@@ -185,7 +185,7 @@ class SettingsTouchRowsTest {
             settingsHints(rows, 0, NxSettingRow("Pad skin", choices = listOf("Off", "On"), index = 1), info = true))
         assertEquals(listOf(back, change, Hint(NxButton.A, "Choose")), settingsHints(rows, 1, NxSettingRow("Accent", choices = List(9) { "c$it" }, index = 0)))
         assertEquals(listOf(back, change), settingsHints(rows, 1, NxSettingRow("Pad theme", choices = listOf("NX Carbon", "NX Onyx"), index = 0)))   // segmented: A steps
-        assertEquals(listOf(back, Hint(NxButton.A, "Select")), settingsHints(rows, 1))   // no touch row: as before
+        assertEquals(listOf(back, Hint(NxButton.A, "Select")), settingsHints(rows, 1))   // no touch row
     }
 
     @Test fun emulatorRowsBecomeTouchRows() {

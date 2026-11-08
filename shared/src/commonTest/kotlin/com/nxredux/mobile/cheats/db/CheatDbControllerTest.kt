@@ -298,7 +298,7 @@ class CheatDbControllerTest {
     }
 
     @Test fun without_a_stored_commit_or_an_api_answer_the_zip_date_decides() = runTest {
-        // Older install: no commit stored. Then the API failing / answering must not change the old behaviour.
+        // Older install: no commit stored. Then the API failing / answering leaves the zip date deciding.
         for ((stored, api) in listOf<Pair<String?, CheatDbCommit?>>(null to commit("bbb", commitBetweenOldAndMid), "aaa" to null, null to null)) {
             val fake = FakeCheatDbPlatform().apply { manifestText = withCommit(stored).render(); remote = zipOld; commit = api }
             val messages = ArrayList<CheatDbMessage>()
@@ -499,7 +499,7 @@ class CheatDbControllerTest {
         val fake = FakeCheatDbPlatform().apply { failSource = CheatDbSource.PCSX2 }
         val c = CheatDbController(fake, setOf("PS2"), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), now = { 42L })
         c.refresh(); c.download()
-        assertEquals(CheatDbState.NotInstalled, c.state.value)   // nothing else to install: a failure, as before
+        assertEquals(CheatDbState.NotInstalled, c.state.value)   // nothing else to install: a failure
         assertEquals(emptyList(), fake.installs)
     }
 
@@ -526,7 +526,7 @@ class CheatDbControllerTest {
         fake.remote = "stamp-3"; fake.downloadStamp = "stamp-3"
         c.checkForUpdates()
         assertEquals(listOf(CheatDbSource.LIBRETRO, CheatDbSource.PCSX2), fake.downloads)
-        // buildbot unreachable: the check fails, as before.
+        // buildbot unreachable: the check fails.
         fake.remote = null
         c.checkForUpdates()
         assertEquals(CheatDbMessage.Failure("Could not check for updates (Wi-Fi?)"), messages.last())

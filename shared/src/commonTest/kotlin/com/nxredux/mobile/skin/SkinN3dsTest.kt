@@ -33,7 +33,7 @@ class SkinN3dsTest {
         assertTrue(top.shaded); assertFalse(bottom.shaded)
     }
 
-    // A stack glass wider than the stack (landscape, user): the top screen across the glass's whole width at its top, the
+    // A stack glass wider than the stack (landscape): the top screen across the glass's whole width at its top, the
     // touch screen in the height left under it.
     @Test
     fun aWideStackGlassGivesTheTopItsWholeWidth() {
@@ -55,7 +55,7 @@ class SkinN3dsTest {
         assertEquals(PxRect(440f, 360f, 320f, 240f), r.single { it.screen == NdsScreen.BOTTOM }.dst)
     }
 
-    // A regular phone's landscape glass (user): the player's layout in it.
+    // A regular phone's landscape glass: the player's layout in it.
     @Test
     fun sideBySideInAStackGlass() {   // the big screen left, both one height
         val r = SkinN3ds.regions(PxRect(0f, 0f, 1440f, 600f), null, null, NdsScreen.TOP, layout = "side_by_side")!!

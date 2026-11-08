@@ -1,4 +1,4 @@
-// nx-mobile 2026-11-03: diagnostic. Finds the steps that stay on screen too long (a 60 fps game's frame shown for
+// Diagnostic. Finds the steps that stay on screen too long (a 60 fps game's frame shown for
 // 33 ms or more) and splits the late step's time into the core's run, our draw, the pacing sleep and the time spent
 // outside the step (the buffer swap and the GL thread's other work), so a hitch can be pinned on one of them.
 // GL thread only.

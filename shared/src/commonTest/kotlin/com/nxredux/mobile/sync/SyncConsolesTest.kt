@@ -90,7 +90,7 @@ class SyncConsolesTest {
         assertEquals(listOf("Wonder Boy.sms"), SyncRoms.held(p.pairs[1], tags.keys, tags))
     }
 
-    /** A folder of no phone console still pairs with the same name on the handheld, as before the mapping. */
+    /** A folder of no phone console still pairs with the same name on the handheld. */
     @Test fun console_less_folders_pair_by_exact_name() {
         val p = SyncConsoles.pairMapped(listOf("Amiga (AMIGA)", "Other (XYZ)"), listOf("Amiga (AMIGA)", "Commodore (C64)"))
         assertEquals(listOf(ConsolePair("Amiga (AMIGA)", "Amiga (AMIGA)", "AMIGA")), p.pairs)

@@ -34,7 +34,7 @@ class ListArtTest {
         val shotOnly = game("shot" to "s.png")
         for (art in listOf(GameListArt.MIX, GameListArt.BOX3D, GameListArt.BOX2D, GameListArt.WHEEL))
             assertEquals(ListArtShown.Full("s.png"), listArtShown(shotOnly, art, portrait = true), "$art")
-        // No screenshot either: today's chain (its abstract picture), as Screenshot would show.
+        // No screenshot either: the background chain (its abstract picture), as Screenshot would show.
         val bare = game()
         assertEquals(ListArtShown.Full(gameBackground(bare, portrait = false)), listArtShown(bare, GameListArt.WHEEL, portrait = false))
     }

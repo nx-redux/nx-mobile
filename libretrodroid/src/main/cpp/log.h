@@ -25,7 +25,7 @@
 #include <android/log.h>
 #include "logflag.h"
 
-// 2026-10-14: the Debug log setting (logflag.h) gates everything below an error. An expression, not do {} while (0),
+// The Debug log setting (logflag.h) gates everything below an error. An expression, not do {} while (0),
 // so a LOGx in an expression position still compiles.
 #define NX_LOG_GATED(prio, ...) ((void) (nx_log_enabled() && __android_log_print(prio, MODULE_NAME, __VA_ARGS__)))
 

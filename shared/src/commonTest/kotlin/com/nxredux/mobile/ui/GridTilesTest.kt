@@ -97,7 +97,7 @@ class GridTilesTest {
         assertEquals(BackdropGame(null, null, "Kirby", "GBA", abstractUrl = abstractArtUrl("GBA", "Kirby.gba")), games[1])   // no art: its abstract picture
     }
 
-    // The 2D front travels with the game, for the cover drawn in the case (a grid is a 2D box on disk now).
+    // The 2D front travels with the game, for the cover drawn in the case (a grid is stored as a 2D box).
     @Test fun backdropGamesCarryBox2d() {
         val zelda = listed("Zelda").let { it.copy(game = it.game.copy(box2dRef = ContentRef("2/zelda.jpg"))) }
         val game = backdropGames(listOf(zelda)).single()

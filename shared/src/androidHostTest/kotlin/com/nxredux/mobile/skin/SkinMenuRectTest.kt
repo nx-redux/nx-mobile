@@ -29,7 +29,7 @@ class SkinMenuRectTest {
         assertEquals(top.rect, p.menuRect(top))
     }
 
-    // DS / 3DS on a portrait phone (user): the top screen alone is too short, so the menu runs on down, to just above the
+    // DS / 3DS on a portrait phone: the top screen alone is too short, so the menu runs on down, to just above the
     // L / R buttons (the frame's foot and a gap clear of them); the touch screen under it is hidden while the menu is open.
     @Test
     fun stacked_screens_give_the_menu_room_down_to_above_the_shoulders() {
@@ -54,7 +54,7 @@ class SkinMenuRectTest {
         assertEquals(p.menuRect(assertNotNull(p.glass(GlassScreen.PICTURE))), p.menuRoom())
     }
 
-    // Under the stretched menu (user): one glass the menu's size in the layout's own frame; what it covers is not drawn.
+    // Under the stretched menu: one glass the menu's size in the layout's own frame; what it covers is not drawn.
     @Test
     fun under_a_stretched_menu_the_screens_are_one_glass_in_the_frame() {
         for (variant in listOf(SkinVariant.DS, SkinVariant.N3DS_REGULAR)) {
@@ -90,7 +90,7 @@ class SkinMenuRectTest {
         assertEquals(null, p.stackedMenuRoom())
     }
 
-    // The unfolded Fold and a tablet give the top screen half the screen (user): the menu stays in it.
+    // The unfolded Fold and a tablet give the top screen half the screen: the menu stays in it.
     @Test
     fun the_unfolded_fold_and_a_tablet_keep_the_menu_on_the_top_screen() {
         for (variant in listOf(SkinVariant.DS, SkinVariant.N3DS_REGULAR)) {

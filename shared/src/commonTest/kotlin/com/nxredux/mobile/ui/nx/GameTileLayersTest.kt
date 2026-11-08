@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 
 class GameTileLayersTest {
     // A lit title tile (no art) on Home: the ring, the caption fade for its info line, and the centred name over the fade,
-    // in full white (the fade greyed it before).
+    // in full white (under the fade it would be greyed).
     @Test fun aLitTitleTilesNameIsOverTheFade() {
         val layers = gameTileLayers(picture = false, lit = true, caption = true, homeCaption = true)
         assertEquals(listOf(FADE, TITLE, CAPTION), layers)
@@ -89,7 +89,7 @@ class GameTileLayersTest {
         // No inside caption (the Carousel): unchanged, the title tile keeps its centred name.
         assertEquals(listOf(TITLE, EDGE), gameTileLayers(picture = false, lit = false, caption = false, homeCaption = false, artLess = true))
         assertEquals(listOf(PICTURE, EDGE), gameTileLayers(picture = true, lit = false, caption = false, homeCaption = false, artLess = true))
-        // Real art: the caption only when lit, as before.
+        // Real art: the caption only when lit.
         assertEquals(listOf(PICTURE, EDGE), gameTileLayers(picture = true, lit = false, caption = true, homeCaption = true, artLess = false))
     }
 }

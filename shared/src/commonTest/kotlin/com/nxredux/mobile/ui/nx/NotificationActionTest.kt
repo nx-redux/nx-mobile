@@ -4,7 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-/** A toast with a button (the layout tip's "Don't show again", user), and dismissing one early. */
+/** A toast with a button (the layout tip's "Don't show again"), and dismissing one early. */
 class NotificationActionTest {
     @Test fun aToastCarriesItsAction() {
         val q = NotificationQueue()
@@ -21,7 +21,7 @@ class NotificationActionTest {
         assertEquals(listOf(b), q.toasts.map { it.id })
     }
 
-    @Test fun aToastUntilClosedNeverExpires() {   // the layout tip waits for Close or its button (user)
+    @Test fun aToastUntilClosedNeverExpires() {   // the layout tip waits for Close or its button
         val q = NotificationQueue()
         q.push("tip", null, NotificationQueue.UNTIL_CLOSED, now = 1_000L, action = "Don't show again")
         q.tick(now = 10L * 24 * 3600 * 1000)

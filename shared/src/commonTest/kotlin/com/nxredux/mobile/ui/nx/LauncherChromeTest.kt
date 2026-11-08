@@ -47,7 +47,7 @@ class LauncherChromeTest {
 
     @Test fun touch_only_never_keeps_an_empty_bar_room() {
         assertEquals(false, launcherChromeFor(true, false, touch).emptyBarRoom)   // Button hints Off, touch: no strip
-        assertEquals(true, launcherChromeFor(true, false, pad).emptyBarRoom)      // with a pad: the room stays, as before
+        assertEquals(true, launcherChromeFor(true, false, pad).emptyBarRoom)      // with a pad: the room stays
         assertEquals(false, launcherChromeFor(true, true, pad).emptyBarRoom)
     }
 }

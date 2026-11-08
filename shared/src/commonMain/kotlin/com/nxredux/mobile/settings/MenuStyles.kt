@@ -18,7 +18,7 @@ object MenuStyles {
     const val DEFAULT_TAB_SHOWN = true
     /** Layouts → Page title: Show. */
     const val DEFAULT_PAGE_TITLE = true
-    /** Layouts → Button hints: Show. */
+    /** Layouts → Button hints: Hide. */
     const val DEFAULT_BUTTON_HINTS = false
     /** Layouts → Extra info: Show. */
     const val DEFAULT_EXTRA_INFO = true
@@ -26,7 +26,7 @@ object MenuStyles {
     const val DEFAULT_HOME_STATS = true
 
     /**
-     * [category]'s default style: Grid for Tools (NX Redux CFG_DEFAULT_MENUSTYLE_TOOLS), Minimal for Home and
+     * [category]'s default style: Grid for Tools and Apps (NX Redux CFG_DEFAULT_MENUSTYLE_TOOLS), Minimal for Home and
      * Collections, Carousel for Consoles.
      */
     fun defaultStyleOf(category: MenuCategory): MenuStyle = when (category) {

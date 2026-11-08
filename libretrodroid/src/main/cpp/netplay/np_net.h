@@ -34,7 +34,7 @@
 #ifdef __ANDROID__
 #include <android/log.h>
 #include "../logflag.h"
-/* 2026-10-14: info only, so the Debug log setting gates it. */
+/* Info only, so the Debug log setting gates it. */
 #define NP_LOG(...) ((void) (nx_log_enabled() && __android_log_print(ANDROID_LOG_INFO, "nx-netplay", __VA_ARGS__)))
 #else
 #include <stdio.h>
@@ -78,8 +78,8 @@ ssize_t np_net_send_some(int fd, const void* buf, size_t len);
 void np_encode_header(uint8_t out[NP_HDR_SIZE], uint8_t cmd, uint32_t frame, uint16_t size);
 
 /* ---- Accumulating reader ----------------------------------------------------------------------------------
- * Replaces the handheld's recv_packet, which did one recv for the header and one for the payload and lost
- * framing on a short read. Bytes are fed in as they arrive; the reader returns one event at a time:
+ * Unlike the handheld's recv_packet (one recv for the header, one for the payload), framing survives a short
+ * read. Bytes are fed in as they arrive; the reader returns one event at a time:
  * - NP_RD_PACKET: a full header plus `size` payload bytes (size <= 4096). After a STATE_HDR the caller switches
  *   the reader to raw mode with np_reader_expect_raw (the state stream after STATE_HDR has no framing).
  * - NP_RD_RAW_DONE: the raw buffer given to np_reader_expect_raw is full.

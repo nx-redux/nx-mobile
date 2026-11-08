@@ -24,7 +24,7 @@
 
 namespace libretrodroid {
 
-// 2026-10-13: which of a fixed number of shared-context slots are taken. Pure, host-tested.
+// Which of a fixed number of shared-context slots are taken. Pure, host-tested.
 class SharedContextSlots {
 public:
     explicit SharedContextSlots(int max) : used(max, false) {}

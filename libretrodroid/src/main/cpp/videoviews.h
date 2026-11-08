@@ -1,4 +1,4 @@
-// nx-mobile: libretro video views (RetroArch master's libretro.h, experimental): a core reports where each of its screens
+// Libretro video views (RetroArch master's libretro.h, experimental): a core reports where each of its screens
 // sits in its frame, and the frontend lays them out. The vendored libretro.h predates the calls.
 #ifndef LIBRETRODROID_VIDEOVIEWS_H
 #define LIBRETRODROID_VIDEOVIEWS_H

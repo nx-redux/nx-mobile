@@ -173,7 +173,7 @@ class FakeSyncPlatform(override val cable: FakeUsbCable = FakeUsbCable()) : Devi
     /** Called with each ROM run as it starts (a test's pull can change [home]). */
     var onRomRun: (RomRun) -> Unit = {}
 
-    /** This phone's private `Saves/` files. */
+    /** The files below this phone's data root `Saves/`. */
     var homeSaves: List<SaveFile> = emptyList()
     var defaults: Map<String, String> = emptyMap()
     var format: SaveFormat = SaveFormat.RETROARCH

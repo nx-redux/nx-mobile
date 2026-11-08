@@ -4,7 +4,7 @@ package com.nxredux.mobile.scraper
  * One kind of typed art and its `.media/<folder>/`. The 2D box is NX Redux's `boxart2d/` (the older `box2d/` is still
  * read, [LEGACY_BOX2D_FOLDER]); the wheel and the device-made mix are optional ([ArtExtras]). [GRID] and [HERO] are
  * SteamGridDB's hit kinds: written as a 2D box and a screenshot ([fileSlot]); their own `grid/` and `hero/` folders are
- * no longer read or written.
+ * read only by the one-time move ([LegacyArtMove]) and never written.
  */
 enum class ArtSlot(val folder: String) {
     BOX_3D("boxart"), BOX_2D("boxart2d"), SCREENSHOT("screenshot"), GRID("grid"), HERO("hero"), WHEEL("wheel"), MIX("mix"),

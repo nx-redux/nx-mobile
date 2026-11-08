@@ -498,7 +498,7 @@ class LibraryScanner(
         )
     }
 
-    /** The picked slots per game; a failed read is none (the folders' own files, as before Change art). */
+    /** The picked slots per game; a failed read is none (the folders' own files then). */
     private suspend fun pickedGames(): Map<String, Set<ArtSlot>> =
         try { picks() } catch (e: CancellationException) { throw e } catch (_: Throwable) { emptyMap() }
 

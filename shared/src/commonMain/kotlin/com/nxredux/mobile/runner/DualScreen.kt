@@ -81,7 +81,7 @@ object DualScreen {
         bottom == BottomScreen.MAIN -> PictureOn.SECOND
         bottom == BottomScreen.SECOND -> PictureOn.MAIN
         // under a pad skin (no controller) AUTO means the phone is the bottom (touch) screen: by shape a wide phone in
-        // landscape would take the top screen (user)
+        // landscape would take the top screen
         skin -> PictureOn.SECOND
         secondW.toLong() * mainH >= mainW.toLong() * secondH -> PictureOn.SECOND
         else -> PictureOn.MAIN

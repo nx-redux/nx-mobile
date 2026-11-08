@@ -143,7 +143,7 @@ class NdsOptionsTest {
     }
 
     @Test fun phone_landscape_default_side_by_side() {
-        assertEquals(NdsLayoutChoice.SINGLE, ndsDefault(phone, landscape = true))   // a regular phone's landscape (user)
+        assertEquals(NdsLayoutChoice.SINGLE, ndsDefault(phone, landscape = true))   // a regular phone's landscape
     }
 
     @Test fun phone_portrait_default_large() {
@@ -314,7 +314,7 @@ class NdsOptionsTest {
         assertEquals(3, insetShown(mapOf(LAYOUT_PORTRAIT_CONTROLLER to "pip"), NdsView(landscape = false, controllerMode = true)).size)
     }
 
-    // Under a pad skin the player's layout shows on a regular phone in landscape only (user, as the 3DS's).
+    // Under a pad skin the player's layout shows on a regular phone in landscape only (as the 3DS's).
     @Test fun aSkinTakesThePlayersLayoutOnARegularPhoneInLandscape() {
         assertEquals(NdsLayoutChoice.SINGLE, NdsOptions.skinLayout(emptyMap(), landscape = true, controllerMode = false, screen = phone))
         assertEquals(NdsLayoutChoice.PIP, NdsOptions.skinLayout(mapOf(LAYOUT_LANDSCAPE to "pip"), landscape = true, controllerMode = false, screen = phone))

@@ -21,7 +21,7 @@ enum class NdsLayoutChoice(override val value: String, override val label: Strin
 
 /**
  * The layout a screen starts with before the player picks one: large screen on the near-square shapes (Fold-shaped,
- * tablets) and in portrait, single screen on a regular phone in landscape (user). The controller row uses the portrait default.
+ * tablets) and in portrait, single screen on a regular phone in landscape. The controller row uses the portrait default.
  */
 fun ndsDefault(screen: ScreenClass, landscape: Boolean): NdsLayoutChoice =
     if (landscape && !screen.isFoldShaped && !screen.isTablet) NdsLayoutChoice.SINGLE else NdsLayoutChoice.LARGE
@@ -53,14 +53,14 @@ enum class PipOpacity(override val value: String, override val label: String) : 
     val alpha: Float get() = value.toInt() / 100f
 }
 
+/** How a running DS game is shown: in [landscape], and in portrait whether a non-clip-on controller hides the pad ([controllerMode]). */
+data class NdsView(val landscape: Boolean, val controllerMode: Boolean)
+
 /**
  * The DS screen settings in effect; unknown stored values read as no pick. A null [portrait], [landscape] or [controller] is
  * "not chosen yet": the screen's default applies ([layoutShown]). [controller] is the portrait layout used instead of
  * [portrait] while a non-clip-on controller has dropped the pad band.
  */
-/** How a running DS game is shown: in [landscape], and in portrait whether a non-clip-on controller hides the pad ([controllerMode]). */
-data class NdsView(val landscape: Boolean, val controllerMode: Boolean)
-
 data class NdsSettings(
     val portrait: NdsLayoutChoice? = null,
     val landscape: NdsLayoutChoice? = null,
@@ -271,9 +271,8 @@ object NdsOptions {
         return key to next.value
     }
 
-    /** The layout drawn for the row in use on [screen] ([NdsSettings.layoutShown] of the parsed [values]). */
     /**
-     * The layout the app draws under a pad skin: on a regular phone in [landscape] (user, as the 3DS's) the player's
+     * The layout the app draws under a pad skin: on a regular phone in [landscape] (as the 3DS's) the player's
      * ([layoutShown], Single screen unless picked) in the skin's one glass; null elsewhere (the Fold, a tablet, portrait),
      * where the skin's own top over touch screen stays.
      */
@@ -281,7 +280,7 @@ object NdsOptions {
         if (!landscape || screen.isFoldShaped || screen.isTablet) null else layoutShown(values, landscape, controllerMode, screen)
 
     /**
-     * The layout rows a pad skin ([skinOn]) ignores on [screen], shown unavailable (user): portrait's, and landscape's on
+     * The layout rows a pad skin ([skinOn]) ignores on [screen], shown unavailable: portrait's, and landscape's on
      * the Fold or a tablet ([skinLayout] null there). Portrait with a controller keeps its row: no skin is drawn then.
      */
     fun lockedLayoutRows(skinOn: Boolean, screen: ScreenClass): Set<String> = when {
@@ -290,6 +289,7 @@ object NdsOptions {
         else -> setOf(LAYOUT_PORTRAIT)
     }
 
+    /** The layout drawn for the row in use on [screen] ([NdsSettings.layoutShown] of the parsed [values]). */
     fun layoutShown(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): NdsLayoutChoice =
         NdsSettings.parse(values).layoutShown(landscape, controllerMode, screen)
 

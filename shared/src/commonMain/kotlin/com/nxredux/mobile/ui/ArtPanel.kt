@@ -183,7 +183,6 @@ data class ArtPanel(
 ) {
     /** Every tile, section by section: the flat order [focus] counts in. */
     val tiles: List<ArtTile> get() = sections.flatMap { it.tiles }
-    /** The focus is on Search again. */
     val onSearchAgain: Boolean get() = focus == sections.sumOf { it.tiles.size }
     /** [t] is the picture in use in its section. */
     fun isCurrent(t: ArtTile): Boolean = currentKeys[t.option.slot.fileSlot] == t.option.key

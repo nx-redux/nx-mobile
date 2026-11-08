@@ -19,7 +19,7 @@ import com.nxredux.mobile.ui.nx.LaunchTimeline
  * on (its [LaunchName], in window px, as the menu captured it; the view's own place in the window is taken off), until
  * the core's first frame and at least [LaunchTimeline.HOLD_MS] after it was first shown ([shownAt], kept across a GLES
  * relaunch). [release] fades the name out over [LaunchTimeline.NAME_FADE_MS] (ease-in, wall-clock: the system's animator
- * scale doesn't touch it) on the black, then the view goes and the game cuts in (spec steps 4-6). Over the game area (the
+ * scale doesn't touch it) on the black, then the view goes and the game cuts in. Over the game area (the
  * game container: its picture, the resume cover, the frontend overlay), so the player never sees the cover's screenshot
  * before the name goes, and under the on-screen pad, which stays lit as the menu left it. The activity holds input back
  * while it is up: keys ([holdSwallows]), sticks, and touches ([HoldTouchGate]), the pad's included. Main thread only.
@@ -118,7 +118,7 @@ internal fun nameFadeAlpha(elapsedMs: Long): Float {
 }
 
 /**
- * While the launch name's hold is up the player's input waits for the game (the spec: ignored from A until the emulator
+ * While the launch name's hold is up the player's input waits for the game (ignored from A until the emulator
  * has the screen): every key is swallowed but the volume keys, and Back too until the hold has been up
  * [LaunchTimeline.GIVE_UP_MS] ([heldForMs]), so a core that never draws can still be left, as the menu gives up.
  */

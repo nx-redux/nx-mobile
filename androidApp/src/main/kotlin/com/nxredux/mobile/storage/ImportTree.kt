@@ -19,7 +19,6 @@ data class TreeEntry(val ref: ContentRef, val name: String, val isDirectory: Boo
 interface ImportTree {
     /** [dir]'s direct children (callers recurse). SAF throws [com.nxredux.mobile.library.ListingUnavailable] for a hidden listing. */
     fun list(dir: ContentRef): List<TreeEntry>
-    /** The direct child [name] of [dir], or null. */
     fun child(dir: ContentRef, name: String): TreeEntry?
     fun openRead(file: ContentRef): InputStream?
 

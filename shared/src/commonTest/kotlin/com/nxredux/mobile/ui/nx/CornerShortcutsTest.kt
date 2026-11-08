@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 
 /**
  * The touch shortcut buttons in the screen's bottom-right corner ([cornerShortcuts]): with no pad drawn (a controller
- * attached), the slots the player set, in slot order, all four alike (user).
+ * attached), the slots the player set, in slot order, all four alike.
  */
 class CornerShortcutsTest {
     private val ff = TouchShortcut(ShortcutAction.TOGGLE_FF, on = true)
@@ -22,7 +22,7 @@ class CornerShortcutsTest {
         assertEquals(emptyList<Pair<TouchSlot, TouchShortcut>>(), cornerShortcuts(mapOf(TouchSlot.ONE to ff), padDrawn = true))
     }
 
-    @Test fun slotsThreeAndFourAreNamedAsTheOthers() {   // no longer a skin-only pair
+    @Test fun slotsThreeAndFourAreNamedAsTheOthers() {
         assertEquals(listOf("Touch button 1", "Touch button 2", "Touch button 3", "Touch button 4"), TouchSlot.entries.map { it.label })
     }
 }

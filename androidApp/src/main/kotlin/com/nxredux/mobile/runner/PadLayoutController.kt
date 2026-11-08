@@ -198,7 +198,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     /** The picture clears the bare buttons: they are drawn solid ([syncBareAlpha]). */
     val overlayClear = mutableStateOf(false)
 
-    /** Sets [overlayClear]. */
     fun setOverlayClear(clear: Boolean) {
         overlayClear.value = clear
         syncBareAlpha()
@@ -220,7 +219,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         if (root.height <= 0) null else IntArray(2).also { root.getLocationInWindow(it) }[1] to root.height
     }) { next, angle -> onPosture(next, angle) } }   // lazy: first touched in onCreate ([collectPosture])
 
-    /** Positions the game container and (re)builds the Compose pad(s) for [orientation]. */
+    /** Positions the game container and (re)builds the on-screen pad for [orientation]. */
     fun applyLayout(orientation: Int) {
         val root = findViewById<FrameLayout>(R.id.root)
         val game = findViewById<FrameLayout>(R.id.gameContainer)
@@ -476,7 +475,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             // the GameCube's C-stick, the Classic Controller's and the PlayStation's right stick: the right analog
             onCStick = { x, y -> if (skinRightStickIsAnalog(input.gcPad, isWii, wiiPad, psSkin())) input.onWiiRightStick(x, y) else input.onCStick(x, y) },
             onGlass = { x, y, down -> glassTouch(game, x, y, down) }, bare = bare)
-        view.useStick = PadStickModes[padStickKey, stickDefault()]   // the drawn pad's choice, shared
+        view.useStick = PadStickModes[padStickKey, stickDefault()]   // the player's choice, shared by the skin and its bare buttons
         view.dimmed = motionDim()
         // under the menu and the notifications, over the game
         val below = listOfNotNull(menuView, notificationsView).map { root.indexOfChild(it) }.filter { it >= 0 }.minOrNull() ?: -1
@@ -495,7 +494,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private fun addBareSkin(root: FrameLayout, game: FrameLayout) {
         val pack = skinPack ?: return
         bareView = addSkinView(root, game, pack, bare = true) { onBareResized() }
-        // no stylus mode: its pill was the drawn pad's, and a touch off the buttons is the touch screen anyway
+        // no stylus mode: a touch off the buttons is the touch screen anyway
         if (input.ndsStylusOn.value) input.toggleNdsStylus()
         if (input.n3dsStylusOn.value) input.toggleN3dsStylus()
         if (barePlacement() == null) {
@@ -541,7 +540,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         game.post { relayoutFrontend() }
     }
 
-    /** The skin's MOTION shaded while the phone's motion is off (the drawn pad dims its pill), or with no sensors to use. */
+    /** The skin's MOTION shaded while the phone's motion is off, or with no sensors to use. */
     private fun motionDim(): Set<String> = if (padMotion()?.on == true) emptySet() else setOf("MOTION")
     private var motionHeld = false   // the skin's MOTION held past the long-press time: recentred, so its release is no tap
     private val motionHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -552,12 +551,12 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 
     /** MIC and SWAP are the pad's own (the DS mic toggle, swap screens); the rest are the game's ([PadLayoutHost.onSkinShortcut]). */
     private fun onSkinAction(action: SkinAction, down: Boolean) {
-        action.slot?.let { host.onPadShortcut(it, down); return }   // a strip slot: the player's action, as the drawn pad's
+        action.slot?.let { host.onPadShortcut(it, down); return }   // a strip slot: the player's action
         when (action) {
             SkinAction.MIC -> if (down) padMic()?.onTap?.invoke()
-            // the 3DS's swap (held as long as the cap, as the drawn pad's SWAP pill); the DS's on press
+            // the 3DS's swap (held as long as the cap); the DS's on press
             SkinAction.SWAP -> if (N3dsOptions.appliesTo(layoutTag())) input.onN3dsSwap(down) else if (down) input.applyNdsAction(NdsAction.SwapScreens)
-            // the stick or the d-pad on a tight Dreamcast layout: the drawn pad's choice flipped (nothing held may stick;
+            // the stick or the d-pad on a tight Dreamcast layout: the player's choice flipped (nothing held may stick;
             // the new placement lets go of the skin's own touches)
             SkinAction.STICK_SWAP -> if (down) {
                 input.releaseAllGameInput()
@@ -565,7 +564,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 PadStickModes[padStickKey] = next
                 skinViews().forEach { it.useStick = next }
             }
-            // the Wii's MOTION, as the drawn pad's pill: a tap flips the phone's motion, a hold recentres it (no tap then)
+            // the Wii's MOTION: a tap flips the phone's motion, a hold recentres it (no tap then)
             SkinAction.MOTION -> if (down) {
                 motionHeld = false
                 motionHandler.postDelayed(motionHold, android.view.ViewConfiguration.getLongPressTimeout().toLong())
@@ -577,7 +576,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         }
     }
 
-    /** The skin's view changed size (insets, a resize): laid out again for it, or back to the drawn pads if none fits now. */
+    /** The skin's view changed size (insets, a resize): laid out again for it, or laid out again whole if none fits now. */
     private fun onSkinResized() {
         if (skinView == null) return
         if (skinPlacement() == null) applyLayout(resources.configuration.orientation) else relayoutFrontend()
@@ -681,7 +680,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         }
     }
 
-    /** The bare buttons are over the game, so they hide while the in-game menu is open and touch reaches the menu. */
     /**
      * No pad drawn (a controller attached): the corner buttons over the game ([CornerButtons]): a DS / 3DS game's mic
      * bottom-left ([micCornerShown]) and the set touch shortcuts bottom-right ([cornerShortcuts]). Added whatever they are
@@ -704,6 +702,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         cornerView = v
     }
 
+    /** The bare buttons are over the game, so they hide while the in-game menu is open and touch reaches the menu. */
     fun updatePadVisibility() {
         // The panel filling the game's window hides the pad too: it would cover the panel (dual-screen handhelds have buttons).
         val hide = menuOpen || mainPanelShown()
@@ -725,7 +724,6 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         return im.inputDeviceIds.toList().mapNotNull { id -> im.getInputDevice(id) }.filter(input::isPad)
     }
 
-    /** The names of every attached [controllers]. */
     fun controllerNames(): List<String> = controllers().map { it.name }
 
     /**

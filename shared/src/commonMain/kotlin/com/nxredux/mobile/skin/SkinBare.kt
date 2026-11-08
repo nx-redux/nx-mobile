@@ -32,7 +32,7 @@ fun overlayMode(padSkinOn: Boolean, placed: Boolean, controller: Boolean): Overl
 }
 
 /**
- * A touch shortcut's pill on the overlay (user: with no frame its word needs a ground), window px: centred on the slot at
+ * A touch shortcut's pill on the overlay (with no frame its word needs a ground), window px: centred on the slot at
  * [cx], [cy] ([slotHw] x [slotHh] its half size), [STRIP_PILL_TALL] of its height, round its [textW] word with
  * [STRIP_PILL_PAD] each side, at least a pill's [STRIP_PILL_MIN_SHAPE] width, and within the slot less [STRIP_PILL_GAP].
  * [k]: window px per picture px.

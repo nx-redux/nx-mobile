@@ -4,7 +4,7 @@ enum class SyncAction { NONE, IMPORT, EXPORT }
 
 /**
  * The BIOS import's newer-wins rule ([decide]) and the `.part`/`.tmp` names sync skips ([isTransient]). Saves are not
- * synced: they live in private storage only.
+ * imported this way: they are read and written in place under the data root.
  */
 object MirrorRules {
     fun decide(localMtime: Long?, treeMtime: Long?): SyncAction = when {

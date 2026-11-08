@@ -45,7 +45,7 @@ data class VideoView(val x: Int, val y: Int, val width: Int, val height: Int, va
 data class FramePoint(val x: Float, val y: Float)
 
 /**
- * nx-mobile: a frame the frontend composes from the core's frame before drawing it like a core frame ([width] x [height]
+ * A frame the frontend composes from the core's frame before drawing it like a core frame ([width] x [height]
  * px): each part draws its [ScreenRegion.src] (0..1 of the core frame) at its [ScreenRegion.dst] (0..1 of the composed
  * frame). Used to rebuild a core's own screen layout from its video view map.
  */

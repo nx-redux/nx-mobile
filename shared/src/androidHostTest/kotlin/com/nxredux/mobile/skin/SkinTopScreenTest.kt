@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 /**
  * Portrait on a phone (no stacked layout: the large one): the top screen's frame is cut to the top picture's shape
  * (the 3DS's 400 x 240, the DS's 256 x 192), so its black border is as thin above and below as at the sides, and the
- * bottom screen moves up by what that saves (user).
+ * bottom screen moves up by what that saves.
  */
 class SkinTopScreenTest {
     private val carbon = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
@@ -50,7 +50,7 @@ class SkinTopScreenTest {
         assertTrue(dpad.y > touch.y + touch.height, "DPAD ${dpad.y} under the touch screen $touch")
     }
 
-    // with the room the shorter top frame frees (user, layout b): the 2x bottom screen up under it, SELECT START just under
+    // with the room the shorter top frame frees: the 2x bottom screen up under it, SELECT START just under
     // that, the stick and the face up 18 (412 over the bottom, picture px), the C-stick nub between them; the bottom row stays
     @Test
     fun the_pad_rises_with_the_room_the_top_frame_frees() {

@@ -366,7 +366,7 @@ private fun BarInfoLine(lines: List<InfoLine>, start: Dp) {
 
 /**
  * Button hints hidden, the Game Switcher's Full screen: the selected game's [lines] in the hint bar's empty row (its
- * scrim laid by the caller), left-aligned on the page inset ([nxPageInset]) and vertically centred (NX Redux PR #218's drawInfo).
+ * scrim laid by the caller), left-aligned on the page inset ([nxPageInset]) and vertically centred.
  */
 @Composable
 internal fun SwitcherBarInfoLine(lines: List<InfoLine>, modifier: Modifier) {

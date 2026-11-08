@@ -1,4 +1,4 @@
-// nx-mobile 2026-11-03: the debug.nx.* switches that turn a pacing aid off for side-by-side checks
+// The debug.nx.* switches that turn a pacing aid off for side-by-side checks
 // (adb shell setprop debug.nx.adpf 0, debug.nx.presenttime 0). Unset or anything but "0" leaves the aid on.
 #ifndef LIBRETRODROID_DEBUGPROP_H
 #define LIBRETRODROID_DEBUGPROP_H

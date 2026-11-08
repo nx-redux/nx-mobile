@@ -110,7 +110,7 @@ class IconPaletteTest {
         assertEquals("nxabstract://app/$id", url)
         assertEquals(id, abstractAppIdOf(url))
         assertNull(abstractSeedOf(url))                           // never read as a ROM's
-        assertEquals(abstractSeed(abstractArtKey(ANDROID_TAG, id)), abstractAppSeed(id))   // the seed it had before
+        assertEquals(abstractSeed(abstractArtKey(ANDROID_TAG, id)), abstractAppSeed(id))   // the same seed as its Android-tag key
         val rom = abstractArtUrl("MD", "Gunstar Heroes (USA).md")
         assertEquals("nxabstract://d973b800", rom)
         assertNull(abstractAppIdOf(rom))

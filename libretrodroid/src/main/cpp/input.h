@@ -62,7 +62,7 @@ public:
     void onMotionEvent(int port, int motionSource, float xAxis, float yAxis);
     void onTriggerEvent(unsigned int port, float l2, float r2);
 
-    // nx-mobile (Wii): a pointer that stays where it was on lift, and a stick velocity that moves it each frame.
+    // Wii: a pointer that stays where it was on lift, and a stick velocity that moves it each frame.
     void setStickyPointer(unsigned int port, bool sticky);
     void setPointerVelocity(unsigned int port, float vx, float vy);
     void advancePointers(float seconds);

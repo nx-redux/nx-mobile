@@ -41,7 +41,7 @@ class TouchStandInsTest {
         assertEquals(listOf(FooterAction(NxButton.A, "Done", true)), artworkProgressHints(JobPhase.DONE).touchButtons())   // ended: Done, in the page
     }
 
-    // New folder is a row now (Create new folder): no title icon for it.
+    // New folder is a row (Create new folder): no title icon for it.
     @Test fun file_picker_new_folder_has_no_title_icon() {
         val hint = filePickerHintsForTest(insideFolder = true).single { it.button == NxButton.X }
         assertEquals(HintTouch.None, hint.touch)

@@ -60,7 +60,7 @@ class ScrapeEngine(
      */
     private val onOptions: suspend (gamePath: String, options: List<ArtOption>, wide: Boolean) -> Unit = { _, _, _ -> },
     /**
-     * The file slots the user picked for this game (SCREENSHOT, BOX_2D, BOX_3D, WHEEL): no fetch (Replace existing
+     * The file slots the user picked for this game (SCREENSHOT, BOX_2D, BOX_3D, WHEEL, MIX): no fetch (Replace existing
      * included) writes, replaces or removes a picked slot's file.
      */
     private val picked: suspend (gamePath: String) -> Set<ArtSlot> = { emptySet() },
@@ -73,7 +73,7 @@ class ScrapeEngine(
         /** Every source that knows a waiting game has stopped for this run (Resume tries them again). */
         const val ALL_STOPPED = "Every art source stopped"
         const val NO_SOURCE = "No art source for its system"
-        /** Skipped: the game has a box and a screenshot already (without Replace existing art). */
+        /** Skipped: the game has its art already ([ArtHave.complete]; without Replace existing art). */
         const val HAS_ART = "Has art"
         /** Done with a SteamGridDB hero as the screenshot (no real one), or Partial without a screenshot. */
         const val NO_SCREENSHOT = "no screenshot"

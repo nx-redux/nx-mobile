@@ -29,10 +29,10 @@
  */
 
 /*
- * Port notes (nx-mobile):
+ * Port notes:
  *
  * Wire: byte-for-byte the handheld's engine protocol. Packet = 7-byte header (u8 cmd, u32 frame BE, u16 size BE)
- * + size payload bytes. INPUT carries 10 bytes (protocol 3, nx-redux b73f77ce): u16 buttons, i16 LX, LY, RX, RY, all
+ * + size payload bytes. INPUT carries 10 bytes (protocol 3): u16 buttons, i16 LX, LY, RX, RY, all
  * big-endian; a 2-byte INPUT (an older peer) counts with centred sticks, any other size is dropped. STATE_HDR carries
  * a u32 BE state size and is followed by that many raw bytes with no framing. PAUSE / RESUME / DISCONNECT / READY /
  * STATE_ACK carry frame 0, size 0.
@@ -43,8 +43,7 @@
  * lock) never touches the socket: it reads the ring under the mutex and appends outgoing packets to an in-memory
  * queue, then pokes the thread through a self-pipe. The thread drains the queue with non-blocking sends (looping
  * until every byte is written, POLLOUT in between), so neither side ever blocks while holding the mutex and the
- * mutex is never held across a blocking call. Send path chosen: queue + engine thread (not a send from
- * np_pre_frame).
+ * mutex is never held across a blocking call.
  *
  * State sync (host -> client, once). The host's first np_pre_frame after the accept serialises the core (GL
  * thread, outside the mutex) and queues STATE_HDR + raw bytes; the thread waits for STATE_ACK (10 s), queues READY
@@ -53,18 +52,18 @@
  * unserialises them (GL thread), the thread sends STATE_ACK and waits for READY (10 s). Both sides then prefill
  * frames 0 and 1 with neutral input: run_frame 0, self_frame 2.
  *
- * Fixed handheld bugs (plan-research-nxredux.md §3):
- * - the 160 ms blocking receive wait in preFrame is gone (the thread receives);
+ * Where it differs from the handheld's engine:
+ * - preFrame never waits on a blocking receive (the thread receives);
  * - ring: remote INPUT for frame f re-initialises slot(f) when it still holds an older frame, and pre-frame only
- *   initialises its own slot when slot->frame != self_frame, so an early remote half is never wiped (§3c);
- * - framing: the accumulating reader handles split headers/payloads; size > 4096 ends the session (IO) (§3d);
+ *   initialises its own slot when slot->frame != self_frame, so an early remote half is never wiped;
+ * - framing: the accumulating reader handles split headers/payloads; size > 4096 ends the session (IO);
  * - pause: local_paused and remote_paused are tracked separately and frames never run while either is set, while
- *   the thread keeps reading, so RESUME and DISCONNECT are always seen (§3e). A local pause sends PAUSE and stops our
+ *   the thread keeps reading, so RESUME and DISCONNECT are always seen. A local pause sends PAUSE and stops our
  *   input at the same time, as minarch does: the handheld's double-pause free-run needs a peer that pauses and keeps
- *   sending input (nx-redux #191), so old and new handhelds stay in step, and a paused peer waits without the
+ *   sending input, so old and new handhelds stay in step, and a paused peer waits without the
  *   handheld's stall timeout. RESUME goes out before our next INPUT;
  * - countdown: stall, peer pause and local pause run a 30 s wall-clock countdown on the injected clock; input for
- *   the run frame or a RESUME clears it, KEEPALIVE does not; KEEPALIVE goes out every 500 ms while stalled (§3a);
+ *   the run frame or a RESUME clears it, KEEPALIVE does not; KEEPALIVE goes out every 500 ms while stalled;
  * - np_input(port >= 2) is 0 (the handheld mirrored P2 on every port > 0);
  * - every send writes all bytes with MSG_NOSIGNAL.
  * Dropped: hotspot, Wi-Fi, NXDR re-broadcast, discovery, checkCoreSupport (Kotlin decides). The phone ends the
@@ -74,7 +73,7 @@
  * connection from it, closing any other and listening on; the client retries its connect for ~30 s (60 x 500 ms)
  * and waits up to 45 s for STATE_HDR, since a phone host starts listening early in its game start.
  *
- * Stage 2 (nx-mobile): the phone starts np_start only after its core has loaded (GameActivity's first frame), so a
+ * The phone starts np_start only after its core has loaded (GameActivity's first frame), so a
  * handheld's 10 s state waits start late enough.
  */
 
@@ -103,7 +102,7 @@
 #define NP_INPUT_SIZE 10		// u16 buttons + i16 LX, LY, RX, RY (protocol 3)
 #define NP_INPUT_SIZE_LEGACY 2	// u16 buttons only (protocol 2 peers): sticks centred
 
-// Frame buffer for rollback (power of 2 for efficient wraparound)
+// Input ring indexed by frame (power of 2 for efficient wraparound)
 #define NETPLAY_FRAME_BUFFER_SIZE 64
 #define NETPLAY_FRAME_MASK (NETPLAY_FRAME_BUFFER_SIZE - 1)
 
@@ -146,7 +145,6 @@ enum {
 // The largest bundled netplay core's state (pcsx_rearmed) is a few MB.
 #define NP_MAX_STATE_SIZE (64u * 1024u * 1024u)
 
-// Frame input entry
 typedef struct {
 	uint32_t frame;
 	uint16_t p1_input;					  // Host input (always Player 1)
@@ -710,7 +708,7 @@ int np_start(np_role role, const char* peer_ip, uint16_t port, np_clock_fn clock
 	memcpy(np.peer_ip, peer_ip, strlen(peer_ip) + 1);
 
 	// The thread takes np_mutex first, so it sees the phase set below. A listener that cannot open leaves the fields as
-	// they are (still IDLE, not started; the next np_start resets them), as before the move to np_tcp; np_link resets.
+	// they are (still IDLE, not started; the next np_start resets them); np_link resets.
 	int rc = np_tcp_start(role == NP_ROLE_HOST, port, &np.listen_fd, &np.wake, &np.thread, engine_thread);
 	if (rc != 0) {
 		if (rc == NP_TCP_START_SETUP)

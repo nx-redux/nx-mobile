@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SafCopyTest {
-    // Critical (review): nothing read (-1) is never a finished copy, even when the provider reports no size.
+    // Nothing read (-1) is never a finished copy, even when the provider reports no size.
     @Test fun a_copy_is_finished_only_when_its_bytes_were_written() {
         assertFalse(safCopyComplete(written = -1, expected = null))
         assertFalse(safCopyComplete(written = -1, expected = 10))

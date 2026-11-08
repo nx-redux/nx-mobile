@@ -41,7 +41,6 @@ import kotlin.math.sqrt
  * [NX_DRAIN_MS] ([MenuMarkCell]), in the Grid's rows ([NxTileGrid]).
  */
 
-/** An unselected console logo's ink. */
 private const val CONSOLE_DIM_ALPHA = 0.42f   // role: an unselected console logo
 
 /** A Grid mark tile's edge: a touch over an unlit game tile's ([NxColors.inkEdge]), as the mark tile has no picture to edge. */

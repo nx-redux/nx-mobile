@@ -461,7 +461,7 @@ class AppStateKidsTest {
         assertEquals(2, kidsUnlockStep(3, NxButton.LEFT, columns = 2))
         assertEquals(2, kidsUnlockStep(2, NxButton.LEFT, columns = 2))
         assertEquals(0, kidsUnlockStep(KIDS_UNLOCK_FULL_MENU, NxButton.UP, columns = 2))
-        // One row: as before.
+        // One row: RIGHT steps along, DOWN goes to Open full menu.
         assertEquals(3, kidsUnlockStep(2, NxButton.RIGHT))
         assertEquals(KIDS_UNLOCK_FULL_MENU, kidsUnlockStep(1, NxButton.DOWN))
     }

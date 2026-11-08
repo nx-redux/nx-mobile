@@ -43,7 +43,6 @@ import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** A key on the PIN pad. */
 internal sealed interface PinKey {
     data class Digit(val d: Int) : PinKey
     data object Back : PinKey

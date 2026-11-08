@@ -14,7 +14,7 @@ object NdsResumeCleanup {
 
     /**
      * The files to delete (under `.minui/NDS/` only), empty when there is nothing stale. [markerText] is the resume
-     * marker's content, null when it doesn't exist; [exists] answers for a path relative to the SD root.
+     * marker's content, null when it doesn't exist; [exists] answers for a path relative to the data root.
      */
     fun victims(tag: String, coreId: String, romFileName: String, markerText: String?, naming: SaveNaming = SaveNaming.DEFAULT, innerFileName: String? = null, exists: (String) -> Boolean): List<String> {
         if (tag != TAG || coreId != CORE_ID) return emptyList()

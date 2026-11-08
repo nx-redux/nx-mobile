@@ -313,7 +313,7 @@ class NdsLayoutTest {
         assertFalse(NdsLayout.isDsFrame(512, 769))
     }
 
-    // Side by side in a pad skin's glass fills it (user: whole-number 2x left wide margins on the Flip): the pair scaled
+    // Side by side in a pad skin's glass fills it (whole-number 2x leaves wide margins on the Flip): the pair scaled
     // evenly to the glass, centred, both screens still one size in whole px.
     @Test fun regions_filled_to_a_glass_scale_evenly_and_centre() {
         val glass = PxRect(0f, 0f, 1386f, 870f)

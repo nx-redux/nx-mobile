@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- USB Cable netplay, phone to phone (spec 2b.3): the other phone asked this one to be its accessory. -->
+<!-- USB Cable netplay, phone to phone: the other phone asked this one to be its accessory. -->
 <resources>
     <usb-accessory manufacturer="NX Redux" model="NX Redux Mobile Link" version="1" />
 </resources>

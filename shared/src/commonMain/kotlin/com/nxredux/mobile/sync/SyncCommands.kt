@@ -38,9 +38,9 @@ object SyncCommands {
     )
 
     /**
-     * [root]: the card root (private storage). No shell: each element is one argv entry. A saves step may run against
-     * [savesDir] (a staging tree) instead of `<root>/Saves/`, and with [onlyTags] moves only the `Saves/<T>/` folders
-     * named there (each tag escaped as an rsync pattern).
+     * [root]: the data root (`Saves/` and `.userdata/shared` live under it). No shell: each element is one argv entry. A
+     * saves step may run against [savesDir] (a staging tree) instead of `<root>/Saves/`, and with [onlyTags] moves only
+     * the `Saves/<T>/` folders named there (each tag escaped as an rsync pattern).
      */
     fun clientArgs(
         binary: String, step: SyncStep, peerIp: String, root: String, savesDir: String? = null, onlyTags: List<String>? = null,

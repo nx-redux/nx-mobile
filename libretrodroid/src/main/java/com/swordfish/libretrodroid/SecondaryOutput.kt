@@ -153,7 +153,7 @@ internal class SecondaryOutput {
     }
 
     /**
-     * nx-mobile 2026-11-03: a sleep-timer frame is stamped to show at its deadline + this display's presentation deadline
+     * A sleep-timer frame is stamped to show at its deadline + this display's presentation deadline
      * + 1.5 ms (as the main surface's, with its own deadline), so it lands on a steady refresh whatever the step's run
      * time, then swapped. eglSurface is current.
      */

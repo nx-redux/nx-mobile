@@ -71,31 +71,31 @@ public:
 
 public:
     void write(const int16_t *data, size_t frames);
-    // nx-mobile diag (NXHITCH summary): samples the FIFO lacked when read (played as silence), samples dropped because
+    // Diag (NXHITCH summary): samples the FIFO lacked when read (played as silence), samples dropped because
     // it was full, and its lowest fill seen (samples), since the last take. Any thread.
     struct FifoStats { long underrun; long overrun; long minFill; long capacity; long xruns; };
     FifoStats takeFifoStats();
 
     // The pause (0) / run (1) speed. UI thread.
     void setPlaybackSpeed(const double newPlaybackSpeed);
-    // nx-mobile 2026-10-24: audible FF's playback speed (the game's achieved speed), 0 when not in audible FF. Separate
+    // Audible FF's playback speed (the game's achieved speed), 0 when not in audible FF. Separate
     // from setPlaybackSpeed, which another thread writes: the callback combines them with a pause (0) winning, so an FF
     // update landing just after a pause can't play the FIFO's tail at FF pitch in the menu. GL thread.
     void setFastForwardSpeed(double speed);
-    // nx-mobile 2026-11-04: the game's achieved speed with Frame Skip Off (SlowdownMeter), 1 otherwise; playback follows
+    // The game's achieved speed with Frame Skip Off (SlowdownMeter), 1 otherwise; playback follows
     // it outside fast forward. GL thread.
     void setSlowdownSpeed(double speed) { slowdownSpeed.store(speed); }
-    // nx-mobile 2026-11-04: Frame Skip Off plays the game's slowdown as a slower tempo at the same pitch (SoundTouch),
+    // Frame Skip Off plays the game's slowdown as a slower tempo at the same pitch (SoundTouch),
     // not a lower pitch. GL thread.
     void setTimeStretch(bool on) { timeStretchWanted.store(on); }
-    // nx-mobile 2026-10-24: fast forward. Muted, the realtime callback plays silence with the rate controller held, as
+    // Fast forward. Muted, the realtime callback plays silence with the rate controller held, as
     // at speed 0, and drops what the FIFO still held; audible, the caller sets the FF speed. Whenever the output was
     // muted and is not anymore (FF ended, or muted FF turned audible) it stays silent until the FIFO is refilled
     // (crackles otherwise). GL thread, like setRewind.
     void setFastForward(bool active, bool audible);
-    // nx-mobile 2026-10-24: rewind without its audio mutes the output like muted FF, refilled the same way after.
+    // Rewind without its audio mutes the output like muted FF, refilled the same way after.
     void setRewind(bool active, bool audible);
-    // nx-mobile 2026-10-30: libsamplerate converter levels, as the handheld's Audio Resampling Quality.
+    // Libsamplerate converter levels, as the handheld's Audio Resampling Quality.
     enum Quality { LOW = 0, MEDIUM = 1, HIGH = 2, MAX = 3, QUALITY_COUNT = 4 };
     // The resampler for what plays from now; audible fast forward plays at MEDIUM at most. An unknown value is HIGH.
     // GL thread: a level's converter is made here the first time, never on the realtime callback.
@@ -131,9 +131,9 @@ private:
     std::unique_ptr<oboe::FifoBuffer> fifoBuffer = nullptr;
     int32_t audioBufferFrames = 0;
 
-    // nx-mobile 2026-10-30: streaming libsamplerate converters, one per level, made on first use (setResamplingQuality)
-    // and kept until ~Audio. Each keeps its position and filter history across callbacks, unlike the per-callback
-    // linear resampler it replaces, which restarted at every buffer edge.
+    // Streaming libsamplerate converters, one per level, made on first use (setResamplingQuality)
+    // and kept until ~Audio. Each keeps its position and filter history across callbacks, so nothing
+    // restarts at a buffer edge.
     static constexpr int32_t INPUT_CHUNK_FRAMES = 64;
     static constexpr int32_t OUTPUT_CHUNK_FRAMES = 1024;
     static constexpr int32_t STRETCH_CHUNK_FRAMES = 256;

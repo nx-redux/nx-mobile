@@ -126,7 +126,7 @@ public class LibretroDroid {
     public static native void setPreferVulkan(boolean enabled);
     /** The next core renders into a swapchain on the bridge's surface (Dolphin): its frames are bounded by that surface. Set before create(). */
     public static native void setVulkanSwapchainFrames(boolean enabled);
-    /** nx-mobile: offer libretro video views to the next core loaded. */
+    /** Offer libretro video views to the next core loaded. */
     public static native void setVideoViewsEnabled(boolean enabled);
     /** The core's video view map, 6 ints per view (x, y, width, height, screen, eye); empty when there is none. */
     public static native int[] getVideoViews();
@@ -141,13 +141,13 @@ public class LibretroDroid {
     /** Keep the next core's library loaded after its session (RTLD_NODELETE), so it is never reloaded elsewhere. Set before create(). */
     public static native void setKeepCoreLoaded(boolean keep);
     public static native void setFrameSpeed(int speed);
-    /** nx-mobile: Frame Skip: true (Auto) skips frames to hold the game's speed, false shows every frame and lets it slow. Any thread. */
+    /** Frame Skip: true (Auto) skips frames to hold the game's speed, false shows every frame and lets it slow. Any thread. */
     public static native void setFrameSkip(boolean skip);
-    // nx-mobile: Audio Buffer (ms kept ready, 0 default; read when the game's audio starts) and Fill Audio Gaps (0 Auto,
+    // Audio Buffer (ms kept ready, 0 default; read when the game's audio starts) and Fill Audio Gaps (0 Auto,
     // 1 On, 2 Off; live).
     public static native void setAudioBufferMs(int ms);
     public static native void setFillAudioGaps(int mode);
-    /** nx-mobile: the display's presentation deadline (Display.getPresentationDeadlineNanos), for the sleep timer's frame stamps. Any thread. */
+    /** The display's presentation deadline (Display.getPresentationDeadlineNanos), for the sleep timer's frame stamps. Any thread. */
     public static native void setPresentationDeadline(long nanos);
     public static native void setAudioEnabled(boolean enabled);
     /**
@@ -182,17 +182,17 @@ public class LibretroDroid {
     public static native void setPictureHeld(boolean held);
     /** 11 floats per region: src l,t,r,b (0..1 of the frame), dst l,t,r,b (0..1 of the viewport), shaded, touch (0/1), alpha (0..1). */
     public static native void setScreenRegions(float[] packed);
-    /** nx-mobile: compose a width x height frame from the core's (parts packed like setScreenRegions); width 0 clears it. GL thread. */
+    /** Compose a width x height frame from the core's (parts packed like setScreenRegions); width 0 clears it. GL thread. */
     public static native void setComposition(int width, int height, float[] packed);
     /** Same packing as setScreenRegions; dst is 0..1 of the whole second surface. GL thread. */
     public static native void setSecondaryRegions(float[] packed);
     /** Draws the last frame's secondary regions into the current default framebuffer (width x height); never runs the core. GL thread. */
     public static native void renderSecondary(int width, int height);
-    /** nx-mobile: renderSecondary from inside the core's frame (the view's onCoreFrameDrawn); takes no lock. GL thread. */
+    /** RenderSecondary from inside the core's frame (the view's onCoreFrameDrawn); takes no lock. GL thread. */
     public static native void renderSecondaryInFrame(int width, int height);
-    /** nx-mobile: the running core draws inside its video callback (a hw core): its framebuffer is whole only then. */
+    /** The running core draws inside its video callback (a hw core): its framebuffer is whole only then. */
     public static native boolean rendersInVideoCallback();
-    /** nx-mobile: the last step's frame deadline on the sleep timer (CLOCK_MONOTONIC ns), 0 when not stamped. GL thread. */
+    /** The last step's frame deadline on the sleep timer (CLOCK_MONOTONIC ns), 0 when not stamped. GL thread. */
     public static native long getFrameDeadlineNanos();
     public static native float[] getGameGeometry();
 
@@ -216,7 +216,7 @@ public class LibretroDroid {
 
     public static native void setCheat(int index, boolean enable, String code);
     public static native void resetCheat();
-    // nx-mobile: RetroArch RAM-patch cheats, 9 ints each (see libretrodroidjni.cpp); an empty array clears them.
+    // RetroArch RAM-patch cheats, 9 ints each (see libretrodroidjni.cpp); an empty array clears them.
     public static native void setMemoryCheats(int[] fields);
 
     public static native byte[] serializeSRAM();

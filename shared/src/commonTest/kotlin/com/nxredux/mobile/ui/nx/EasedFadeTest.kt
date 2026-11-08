@@ -18,8 +18,7 @@ class EasedFadeTest {
     }
 
     @Test fun tailEndsWithZeroSlope() {
-        // The slope where the fade runs out is 0, so a bright picture shows no line there. The old curve (edge ×
-        // (1 − t²)^1.2 on 8 linear stops) ended its last stop at a slope of about 1.3.
+        // The slope where the fade runs out is 0, so a bright picture shows no line there.
         for (p in listOf(2f, TOP_BAND_POWER)) {
             fun slope(h: Float) = (easedFadeAlpha(edge, 1f - h, p) - easedFadeAlpha(edge, 1f, p)) / h
             assertTrue(slope(0.01f) < 0.01f, "slope ${slope(0.01f)} at power $p")

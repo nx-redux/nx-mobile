@@ -23,13 +23,13 @@ import kotlinx.coroutines.withContext
  * The game's fast forward and rewind: owns the [SpeedControl] the shortcuts drive and puts its [SpeedOutput] on the view
  * ([GLRetroView.fastForward], [GLRetroView.rewinding] and their audio; [GLRetroView.rewindEnabled] from the console's
  * Rewind row). Pause is the view's frameSpeed, which this never touches, so a toggled FF is still on when the menu
- * closes (L6). While rewind is offered, a 100 ms tick reads [GLRetroView.rewindStatus]. Rewinding, EMPTY (latched by the
- * engine until rewinding goes off) ends a toggled rewind ([SpeedControl.onRewindEmpty], L16), and OFF (no buffer built yet)
+ * closes. While rewind is offered, a 100 ms tick reads [GLRetroView.rewindStatus]. Rewinding, EMPTY (latched by the
+ * engine until rewinding goes off) ends a toggled rewind ([SpeedControl.onRewindEmpty]), and OFF (no buffer built yet)
  * ends the rewind, as the press did nothing ([SpeedControl.onRewindOff]). UNAVAILABLE at any time (the engine gave up on
  * this game: melonDS DS in DSi mode, a state size that changes, refused serializes) hides rewind for the session
  * ([SpeedControl.onRewindUnavailable]): the tiles and touch buttons follow through [onTiles]. OFF alone is never read
  * as unavailable: it is also the status before the first capture. Around a save state's write or read
- * ([aroundState]) FF and rewind are forced off, then put back (L6). [onTiles] runs when the game panel's tiles
+ * ([aroundState]) FF and rewind are forced off, then put back. [onTiles] runs when the game panel's tiles
  * ([tiles]) change, whatever changed them (a shortcut, the panel, the buffer running out, a speed row, a session).
  * Main thread, but for [aroundState].
  */
@@ -81,7 +81,7 @@ internal class SpeedController(
     /** A netplay or GBA link session plays ([setSession]): every shortcut does nothing. */
     val inSession: Boolean get() = netplay
 
-    /** Focus or the menu took the buttons: holds end, toggles stay (Review Focus 5). */
+    /** Focus or the menu took the buttons: holds end, toggles stay. */
     fun releaseHolds() { control.releaseHolds(); apply() }
 
     /** A netplay or GBA link session plays now ([netplay]), or no longer does. */

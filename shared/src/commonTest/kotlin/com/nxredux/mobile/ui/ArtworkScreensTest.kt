@@ -776,7 +776,7 @@ class ArtworkScreensTest {
     }
 
     @Test fun generate_mix_users_keep_their_wheel_once() = runTest {
-        // Mix used to fetch wheels whatever Wheel said; now it does not, so the first load turns Wheel on for them.
+        // Mix does not fetch wheels by itself, so the first load turns Wheel on for those with Mix on.
         val r = rig(stored = { artMix = true; artWheel = false })
         assertTrue(r.settings.artWheel); assertTrue(r.settings.artWheelMigrated)
         // Done once: Wheel turned off stays off on the next launch.

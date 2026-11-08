@@ -106,7 +106,7 @@ class StackLayoutTest {
         assertEquals(24f, carouselStackGeometry(200f, 200f, 300f, 200f, false, 24f).let { it.centreX - it.slotW / 2 })   // never under the gutter
     }
 
-    // Layouts → Vertical alignment. Left is today's geometry, value for value; Right mirrors it about the body's middle:
+    // Layouts → Vertical alignment. Left (the default) is the unmirrored geometry, value for value; Right mirrors it about the body's middle:
     // the stack at W − x, the caption's two insets swapped (its text starts on the margin the stack had).
     private data class Frame(val w: Float, val h: Float, val sw: Float, val sh: Float, val pad: Boolean, val gutter: Float)
     private val alignScreens = listOf(

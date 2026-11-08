@@ -489,7 +489,7 @@ void Environment::callback_retro_log(enum retro_log_level level, const char *fmt
             if (nx_log_enabled()) __android_log_vprint(ANDROID_LOG_DEBUG, MODULE_NAME_CORE, fmt, argptr);
             break;
 #endif
-        // 2026-10-14: below an error, only with Settings → System → Debug log on (CoreLog above keeps its copy).
+        // Below an error, only with Settings → System → Debug log on (CoreLog above keeps its copy).
         case RETRO_LOG_INFO:
             if (nx_log_enabled()) __android_log_vprint(ANDROID_LOG_INFO, MODULE_NAME_CORE, fmt, argptr);
             break;
@@ -500,7 +500,6 @@ void Environment::callback_retro_log(enum retro_log_level level, const char *fmt
             __android_log_vprint(ANDROID_LOG_ERROR, MODULE_NAME_CORE, fmt, argptr);
             break;
         default:
-            // Log nothing in here.
             break;
     }
 }
@@ -682,7 +681,7 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             LOGD("Called RETRO_ENVIRONMENT_SET_HW_RENDER");
             return environment_handle_set_hw_render(static_cast<struct retro_hw_render_callback*>(data));
 
-        // nx-mobile: Azahar (3DS) asks for a shared context before SET_HW_RENDER. The runner's GL context is the
+        // Azahar (3DS) asks for a shared context before SET_HW_RENDER. The runner's GL context is the
         // core's alone already (one per game, nothing else drawing in it), and the frontend's draw restores the state
         // it touches (Video::renderFrame), so there is nothing to change: acknowledge it.
         case RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT:
@@ -696,7 +695,7 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             shutdownRequest.request();
             return true;
 
-        // nx-mobile 2026-10-13: contexts sharing the core's, for its worker threads (Dolphin's shader compilers);
+        // Contexts sharing the core's, for its worker threads (Dolphin's shader compilers);
         // libretro has no call for them. Only our patched cores ask (nxsharedgl.h).
         case NX_ENVIRONMENT_GET_SHARED_GL:
             LOGD("Called NX_ENVIRONMENT_GET_SHARED_GL");
@@ -838,7 +837,7 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             libretrodroid::Achievements::getInstance().setMemoryMap(static_cast<const struct retro_memory_map*>(data));
             return true;
 
-        case NL_ENVIRONMENT_SET_NETPACKET_INTERFACE:   // nx-mobile: the GBA link (netplay/linkhooks.h)
+        case NL_ENVIRONMENT_SET_NETPACKET_INTERFACE:   // the GBA link (netplay/linkhooks.h)
             LOGD("Called SET_NETPACKET_INTERFACE");
             return libretrodroid::gbalink::setNetpacket(static_cast<const nl_netpacket_callback*>(data));
 

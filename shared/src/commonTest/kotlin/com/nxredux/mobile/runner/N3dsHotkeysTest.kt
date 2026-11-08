@@ -34,7 +34,7 @@ class N3dsHotkeysTest {
         assertEquals(emptyList(), h.takeKeys())                                 // a chord: no SELECT tap
     }
 
-    // A regular phone's landscape skin lays the screens out by the player's layout (user): SELECT + Left / Right cycles it
+    // A regular phone's landscape skin lays the screens out by the player's layout: SELECT + Left / Right cycles it
     @Test fun under_a_skin_that_takes_the_layout_select_left_right_cycles_it() {
         val h = N3dsHotkeys().apply { skinShown = true; skinLayouts = true }
         h.down(NxButton.SELECT)

@@ -9,12 +9,11 @@ import kotlin.math.roundToInt
  * the rest -400), in the picker's order; [WHITE] is the default. Every preset but Red has a relative luminance of 0.43
  * or more, so a selected name stays clearly brighter than an unselected one (ink 60%) and the hint grey. Red stays
  * red-400, since a brighter red reads as pink; each layout still marks the selection by more than the name's
- * brightness. [id] is what is
- * stored (a shade change keeps it, so a stored accent takes the new shade); [rgb] is 0xRRGGBB.
+ * brightness. [id] is what is stored (a shade change keeps it, so a stored accent takes the new shade); [rgb] is 0xRRGGBB.
  */
 enum class AccentPreset(val id: String, val label: String, val rgb: Int) {
     WHITE("white", "White", 0xE4E4E7),     // zinc-200, black text 16.6:1
-    RED("red", "Red", 0xF87171),           // red-400, 7.6:1. The one exception to the luminance floor (0.33): a red bright enough turns pink
+    RED("red", "Red", 0xF87171),           // red-400, 7.6:1. The one exception to the luminance floor (it sits at 0.33): a red bright enough turns pink
     ORANGE("orange", "Orange", 0xFDBA74),  // orange-300, 12.5:1
     AMBER("amber", "Amber", 0xFBBF24),     // amber-400, 12.6:1
     LIME("lime", "Lime", 0xA3E635),        // lime-400, 13.9:1

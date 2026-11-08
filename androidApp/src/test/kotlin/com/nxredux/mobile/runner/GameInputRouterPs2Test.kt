@@ -17,7 +17,7 @@ class GameInputRouterPs2Test {
     @Test fun thumbKeysGoToCoreOnPs2() {
         for (key in listOf(KeyEvent.KEYCODE_BUTTON_THUMBL, KeyEvent.KEYCODE_BUTTON_THUMBR))
             assertEquals(ThumbKeyRoute.CORE, thumbKeyRoute(key, wii = false, n3ds = false))
-        // The consoles that take them still do.
+        // The Wii and the 3DS keep their own routes.
         assertEquals(ThumbKeyRoute.WII_RECENTER, thumbKeyRoute(KeyEvent.KEYCODE_BUTTON_THUMBL, wii = true, n3ds = false))
         assertEquals(ThumbKeyRoute.WII_HOME, thumbKeyRoute(KeyEvent.KEYCODE_BUTTON_THUMBR, wii = true, n3ds = false))
         assertEquals(ThumbKeyRoute.N3DS_SWAP, thumbKeyRoute(KeyEvent.KEYCODE_BUTTON_THUMBL, wii = false, n3ds = true))

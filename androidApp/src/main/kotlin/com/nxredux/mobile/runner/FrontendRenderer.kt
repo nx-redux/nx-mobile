@@ -96,7 +96,7 @@ internal interface FrontendHost : LifecycleOwner {
     /** Whether a 3DS skin's core is pinned to the plain unswapped stack (not under netplay, which keeps the player's layout). */
     val n3dsStackPinned: Boolean
     fun isLandscape(): Boolean
-    /** The DS/3DS screens cut for the second display, and what it draws ([GameActivity]'s second-screen block). */
+    /** The DS/3DS screens cut for the second display, and what it draws ([DualScreenController.secondDsRegions]). */
     fun secondDsRegions(g: FloatArray, map: ScreenMap?): List<NdsRegion>?
     fun secondRegions(g: FloatArray, ds: List<NdsRegion>?): List<ScreenRegion>
     /** The open in-game menu's shader rows, and its frontend rows (overlay list, locks, overlay availability), again. */
@@ -535,7 +535,7 @@ internal class FrontendRenderer(
     /**
      * Lays the picture out in the game area and the pad around it. The space the pad leaves ([PadRoom]: the space above
      * portrait's bare buttons, else the whole area) holds the picture: under Screen Scaling Auto at its console's scale ([picture]); Native, Aspect and Fullscreen
-     * size it in the whole area as before. DS games (a plain 256x384 frame) get their screens as regions of the view
+     * size it in the whole area. DS games (a plain 256x384 frame) get their screens as regions of the view
      * ([NdsLayout], in that same space), with the viewport the whole area and no offsets or overlay: the fork ignores the
      * screen offset and the scaling mode for regions. Under a pad skin, DS / 3DS screens go in its glasses instead
      * ([skinDsLayout]). Other games: the picture (or its overlay box) becomes the GL
@@ -598,7 +598,7 @@ internal class FrontendRenderer(
             pictureBox.value = windowRect(origin, skinDs?.top ?: shown)
             shownPicture = null
             view.screenRegions = nds.map { it.toScreenRegion(w, h) }
-            // Under a skin there is no drawn pad to place beside the screens.
+            // Under a skin the pad takes no room beside the screens.
             fitPad(if (skinDs != null) PadRoom.NONE else room, shown, frameKnown = true, h, overlayH)
             val scales = nds.joinToString(" + ") { "${it.screen.value}${if (it.inset) " inset" else ""} %.2fx".format(java.util.Locale.US, it.dst.height / 192f) }
             if (skinDs != null) {
@@ -637,7 +637,7 @@ internal class FrontendRenderer(
             offset = PointF(s.offsetX * unit, s.offsetY * unit)
             shown = placed.copy(x = placed.x + offset.x, y = placed.y + offset.y)
         } else {
-            // The overrides, as before; Auto too before the first frame, which has nothing to place yet.
+            // The overrides (Native, Aspect, Fullscreen); Auto too before the first frame, which has nothing to place yet.
             val layout = frontendLayout(w, h, g[0].toInt(), g[1].toInt(), g[2], s.scaling, s.offsetX, s.offsetY, overlayAspect)
             box = layout.box
             offset = PointF(layout.offsetX, layout.offsetY)
@@ -773,7 +773,7 @@ internal class FrontendRenderer(
         origin[0] + (r.x + r.width).roundToInt(), origin[1] + (r.y + r.height).roundToInt(),
     )
 
-    /** The relayout's inputs and outcome, once per change, for the Debug log (the device checks read the spec's tables from it). */
+    /** The relayout's inputs and outcome, once per change, for the Debug log. */
     private var lastLayoutLog: String? = null
 
     private fun spaceAndPicture(space: PxRect, picture: PxRect) = "space=${space.short()} picture=${picture.short()}"
@@ -844,7 +844,7 @@ internal class FrontendRenderer(
         if (glass != null && choice != null) {
             val laid = NdsLayout.regions(glass, choice, true, activity.windowShape().screenClass, NdsSettings.parse(frontendValues),
                 NDS_INSET_MARGIN_DP * resources.displayMetrics.density)
-            // Side by side fills the glass (user: its whole-number scale left wide margins); the others stay whole-number
+            // Side by side fills the glass (a whole-number scale leaves wide margins); the others stay whole-number
             val regions = (if (choice == NdsLayoutChoice.SIDE_BY_SIDE) laid.filledTo(glass) else laid).withMap(screenMap)
             if (regions.isNotEmpty()) {
                 val top = regions.firstOrNull { it.screen == NdsScreen.TOP }?.dst ?: regions.first().dst
@@ -875,7 +875,6 @@ internal class FrontendRenderer(
         return SkinDs(regions[0].dst, regions.getOrNull(1)?.dst ?: regions[0].dst, regions)
     }
 
-    /** The biggest [aspect] (width / height) rect centred in [r]; [r] itself for an unknown aspect. */
     /** [fit] (the picture at its shape in [glass]) cut to the biggest whole multiple of the frame's height, centred. */
     private fun wholeMultiple(glass: PxRect, fit: PxRect, g: FloatArray): PxRect {
         val frameH = g[1]
@@ -886,6 +885,7 @@ internal class FrontendRenderer(
         return PxRect(glass.x + (glass.width - pw) / 2f, glass.y + (glass.height - ph) / 2f, pw, ph)
     }
 
+    /** The biggest [aspect] (width / height) rect centred in [r]; [r] itself for an unknown aspect. */
     private fun fitAspect(r: PxRect, aspect: Float): PxRect {
         if (aspect <= 0f || r.width <= 0f || r.height <= 0f) return r
         val w = minOf(r.width, r.height * aspect)
@@ -897,7 +897,7 @@ internal class FrontendRenderer(
     private class SkinDs(val top: PxRect, val bottom: PxRect, val regions: List<NdsRegion>)
 
     /**
-     * 3DS SWAP (the pill, SELECT + R, a pad's left-stick click) [down] or up under a pad skin with the screens as regions
+     * 3DS SWAP (the skin's SWAP, SELECT + R, a pad's left-stick click) [down] or up under a pad skin with the screens as regions
      * ([skinDsLayout]): a press trades the screens' glasses (touch follows the bottom screen) and the core never sees it.
      * False otherwise: the key is someone else's (split's, else Azahar's own).
      */

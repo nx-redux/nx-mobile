@@ -1,4 +1,4 @@
-// nx-mobile 2026-11-03: Android's performance hint session (ADPF, Android 13+): the game's busy threads report each
+// Android's performance hint session (ADPF, Android 13+): the game's busy threads report each
 // step's work against the frame budget, so the system raises clocks before a frame runs late and keeps those threads on
 // the big cores. The NDK calls are looked up at runtime (minSdk 26), so older Android just runs without it.
 // GL thread only.

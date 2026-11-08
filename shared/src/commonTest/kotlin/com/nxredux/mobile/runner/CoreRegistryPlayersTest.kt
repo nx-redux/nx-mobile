@@ -28,7 +28,7 @@ class CoreRegistryPlayersTest {
     @Test fun every_player_port_gets_the_pad_device() {
         val dc = CoreRegistry.forTag("DC")!!
         assertEquals(mapOf(0 to 1, 1 to 1, 2 to 1, 3 to 1), dc.controllerPortsFor(4))
-        assertEquals(mapOf(0 to 1, 1 to 0, 2 to 0, 3 to 0), dc.controllerPortsFor(1))   // the one-player shape, as before
+        assertEquals(mapOf(0 to 1, 1 to 0, 2 to 0, 3 to 0), dc.controllerPortsFor(1))   // the one-player shape
         val ps = CoreRegistry.forTag("PS")!!
         assertEquals(mapOf(0 to CoreDescriptor.PS_DUALSHOCK, 1 to CoreDescriptor.PS_DUALSHOCK), ps.controllerPortsFor(2))
         assertEquals(mapOf(0 to CoreDescriptor.PS_DUALSHOCK), ps.controllerPortsFor(1))

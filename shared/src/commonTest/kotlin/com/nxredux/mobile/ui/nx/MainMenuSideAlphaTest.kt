@@ -30,7 +30,7 @@ class MainMenuSideAlphaTest {
         }
     }
 
-    // The first two steps sit below the old fade (0.5, 0.38); beyond too.
+    // The first two steps sit below the row's own fade (0.5, 0.38); beyond too.
     @Test fun belowTheRowsOwnFade() {
         val g = backdropSlotGeometry(BackdropSlot.COLLECTION, 358f)
         for (d in listOf(0.5f, 1f, 1.5f, 2f, 3f, 3.5f)) assertTrue(mainMenuSideAlpha(d) <= rowItem(RowStyle.BACKDROP, d, g).alpha + 1e-4f, "at $d")

@@ -12,7 +12,7 @@ import kotlin.math.PI
 /**
  * Generated abstract art for a game with nothing else to show: a soft gradient ground and a few large translucent
  * shapes, the same for the same game every time.
- * Pure here: the seed, the PRNG and the plan; [com.nxredux.mobile.ui.nx.renderAbstractPng] draws a plan per platform.
+ * Pure here: the seed, the PRNG and the plan; each platform's fetcher ([com.nxredux.mobile.ui.nx.abstractArtFetcher]) draws a plan.
  * Never real art: a game showing it still counts as having none (fetching, the missing-art counts).
  */
 

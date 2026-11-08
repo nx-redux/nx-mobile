@@ -170,7 +170,7 @@ class RowLayoutTest {
         val room = 44f
         for (body in listOf(242f, 291f, 344f, 423f, 616f)) for (caption in listOf(0f, 60f, 74f)) {
             val shown = carouselRowPlace(body, 0f, caption)
-            val raw = rowGeometry(RowStyle.CAROUSEL, false, body, caption)               // the title shown: as before,
+            val raw = rowGeometry(RowStyle.CAROUSEL, false, body, caption)               // the title shown:
             assertEquals(min(raw.itemW, CAROUSEL_MAX_W), shown.g.itemW, e)              // held to the Carousel's cap
             assertEquals(raw.itemW / raw.itemH, shown.g.itemW / shown.g.itemH, 1e-4f)
             assertEquals(rowBlockTop(body, shown.g.itemH, caption), shown.top, e)
@@ -378,7 +378,7 @@ class RowLayoutTest {
                 assertTrue(stack.slotW <= 0.3f * w + 1f, "stack $w x $h: ${stack.slotW}")   // rounded to whole dp
             }
         }
-        // No width (as before): the band as grown; a body wide enough keeps it.
+        // No width: the band as grown; a body wide enough keeps it.
         val free = backdropRowPlace(BackdropSlot.BOX, true, 620f, 0f, 60f).g
         assertEquals(free, backdropRowPlace(BackdropSlot.BOX, true, 620f, 0f, 60f, bodyW = 10_000f).g)
     }

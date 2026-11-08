@@ -16,7 +16,7 @@ class PictureHoldTest {
     }
 
     @Test fun a_core_reporting_no_geometry_still_shows_once_running() {
-        // 0x0 geometry after the first frame: placed as before (fit to the area) rather than black for good.
+        // 0x0 geometry after the first frame: placed to fit the area rather than black for good.
         assertFalse(PictureHold.held(frameKnown = false, gameReady = true))
     }
 }

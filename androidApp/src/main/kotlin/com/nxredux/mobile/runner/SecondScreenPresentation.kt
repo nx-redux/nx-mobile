@@ -153,13 +153,13 @@ class SecondScreenPresentation(private val activity: ComponentActivity, display:
 
     override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean = activity.dispatchGenericMotionEvent(ev)
 
-    /** Shows [content] over the whole display (the panel; the surface under it is not drawn on), or null to take it away. */
     /** The in-game menu on this display, over the picture and the panel; null takes it away. */
     fun showMenu(content: (@Composable () -> Unit)?) {
         if (content != null) releaseTouch()
         menu = content
     }
 
+    /** Shows [content] over the whole display (the panel; the surface under it is not drawn on), or null to take it away. */
     fun showPanel(content: (@Composable () -> Unit)?) {
         if (content != null) releaseTouch()   // the surface stops forwarding touches under the panel: a held finger lifts now
         panel = content

@@ -67,7 +67,7 @@ class WiiDiscIdTest {
         assertEquals(WiiDisc("SMNE01", gameCube = false), WiiDiscId.read("iso", reader(at(0x100, 0 to id, 0x18 to wiiMagic)), noInflate))
     }
 
-    // Neither magic (homebrew, an odd dump) or a header cut short: Wii, as before the platform was read.
+    // Neither magic (homebrew, an odd dump) or a header cut short: Wii.
     @Test fun noMagicOrAShortHeaderCountsAsWii() {
         assertEquals(WiiDisc("SMNE01", gameCube = false), WiiDiscId.read("iso", reader(at(0x100, 0 to id)), noInflate))
         assertEquals(WiiDisc("GALE01", gameCube = false), WiiDiscId.read("iso", reader(at(0x1C, 0 to "GALE01".encodeToByteArray())), noInflate))

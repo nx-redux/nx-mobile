@@ -24,7 +24,7 @@ fun thumbnailCrop(picture: PxRect?, w: Int, h: Int): ThumbnailCrop? {
 }
 
 /**
- * A DS / 3DS save state's picture: the top screen alone (user), wherever the layout draws it (an inset too); the drawn
+ * A DS / 3DS save state's picture: the top screen alone, wherever the layout draws it (an inset too); the drawn
  * screen when the top one is not shown (Single screen on the bottom). Null with no screens.
  */
 fun List<NdsRegion>.thumbnailPicture(): PxRect? =

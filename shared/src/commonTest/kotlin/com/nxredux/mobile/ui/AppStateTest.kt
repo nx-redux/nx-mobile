@@ -173,8 +173,8 @@ class AppStateTest {
         override var useExtractedFileName = false
         override var padSkin: Boolean = true
         override var padTheme: PadTheme = PadTheme.DEFAULT
-        // Pinned to List, the default before Carousel: the walks below step Consoles, Collections and Tools as lists; Home
-        // to Grid, its default before Minimal. The real defaults (a missing tab is its MenuStyles.defaultStyleOf) are tested with menuStyles = emptyMap() ([freshSettings]).
+        // Pinned to List: the walks below step Consoles, Collections and Tools as lists; Home to Grid.
+        // The real defaults (a missing tab is its MenuStyles.defaultStyleOf) are tested with menuStyles = emptyMap() ([freshSettings]).
         override var menuStyles: Map<MenuCategory, MenuStyle> = LIST_TABS
         override var gameListStyle: MenuStyle = MenuStyle.LIST
         override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap()
@@ -497,7 +497,7 @@ class AppStateTest {
         assertEquals(1, assertNotNull(assertIs<Screen.Onboarding>(state.screen.value).touchRows)[0].index)
     }
 
-    // The customise question no longer asks the text size (setup asked it first).
+    // The customise question does not ask the text size (setup asks it first).
     // Two buttons side by side (the customise question's answers): LEFT takes the first, RIGHT the second, as UP / DOWN.
     @Test fun left_and_right_move_between_two_buttons_side_by_side() = runTest {
         val (state, _) = atOnboardingStep(OnboardingStep.CUSTOMISE)
@@ -2534,7 +2534,7 @@ class AppStateTest {
         assertIs<Screen.FolderSummary>(st.screen.value)           // setHome saw first setup: its next step (the home holds games)
     }
 
-    // Pad skin On: the skin is round every page after setup, the tools (Settings among them) too (user); Off: none anywhere.
+    // Pad skin On: the skin is round every page after setup, the tools (Settings among them) too; Off: none anywhere.
     @Test fun the_pad_skin_shows_on_the_menu_and_every_tool() = runTest {
         val settings = MemorySettings(ContentRef("Home")).apply { padSkin = true }
         val state = state(settings)
@@ -2863,7 +2863,7 @@ class AppStateTest {
         assertEquals(0, store.deletes)
     }
 
-    // --- 3b-1: All files access ---
+    // --- All files access ---
 
     // First setup's All files step: B goes back to the text size question, its Skip row on to the home pick.
     @Test fun b_on_the_all_files_step_goes_back_to_the_text_size_and_skip_goes_on() = runTest {
@@ -3125,7 +3125,7 @@ class AppStateTest {
         val systems = assertIs<Screen.Systems>(state.screen.value).systems
         state.openSystem(systems.first { it.tag == "GB" })
         state.onButton(NxButton.MENU)
-        assertNotNull(assertIs<Screen.Games>(state.screen.value).menu)   // every console list has a menu now
+        assertNotNull(assertIs<Screen.Games>(state.screen.value).menu)   // every console list has a menu
         assertTrue(ContextKind.EMULATOR !in menuKinds(state))          // GB has one emulator: no Emulator item
         state.onButton(NxButton.B)
         state.back()
@@ -5161,7 +5161,7 @@ class AppStateTest {
         st.load()
         st.openSettings(SettingsSection.LIBRARY)
         val s = assertIs<Screen.Settings>(st.screen.value)
-        assertTrue(s.details.isEmpty())                                                            // the counts are the first row now
+        assertTrue(s.details.isEmpty())                                                            // the counts are the first row
         assertEquals(
             listOf(
                 SettingsRow(SettingsKind.RESCAN, "7 games · 2 consoles"),                           // SFC + SUPA are one console; no clock, no Last scan
@@ -6047,7 +6047,7 @@ class AppStateTest {
         assertIs<Screen.SettingsMenu>(state.screen.value)
     }
 
-    // --- Two-pane Settings (task S3): the menu is the left pane, every page the right ---
+    // --- Two-pane Settings: the menu is the left pane, every page the right ---
 
     /** A tap on row [i] as every list draws it ([nxTap]): [opens] is the list's [LocalNxTapOpens] for it (false in game lists). */
     private fun tap(state: AppState, i: Int, opens: Boolean = true) =
@@ -6907,7 +6907,7 @@ class AppStateTest {
         val state = raBrowser()
         state.openSelected(); state.openSelected()   // Achievements → Alpha
         assertIs<Screen.RaGame>(state.screen.value)
-        state.onButton(NxButton.DOWN); state.onButton(NxButton.A)   // no list + detail split any more: A opens the detail
+        state.onButton(NxButton.DOWN); state.onButton(NxButton.A)   // A opens the detail
         assertEquals("Second", assertIs<Screen.RaAchievement>(state.screen.value).achievement.title)
     }
 
@@ -7648,7 +7648,7 @@ class AppStateTest {
         texts = mapOf("Home/Collections/RPGs.txt" to "$mk\n/Roms/Game Boy (GB)/missing.gb\n", "Home/Collections/Racing.txt" to ""),
     )
 
-    /** Every tab in order, as the old single list read: Home's pins ("pin:<name>"), each console's tag, "collections", "tools". */
+    /** Every tab in order as one list: Home's pins ("pin:<name>"), each console's tag, "collections", "tools". */
     private fun rowKinds(state: AppState) = assertIs<Screen.Systems>(state.screen.value).tabs.flatMap { tab ->
         when (tab.category) {
             MenuCategory.HOME -> tab.rows.filterIsInstance<MainRow.Pin>().map { "pin:${it.entry.game.shownName}" }
@@ -8173,7 +8173,7 @@ class AppStateTest {
         val data = FakeUserData(recents = listOf(Recent(mk), Recent(tetris)))
         val state = state(MemorySettings(ContentRef("Home")), data = data)
         state.load()
-        state.openList(ListSource.Recent)                                // the Recently Played list (no main menu row now)
+        state.openList(ListSource.Recent)                                // the Recently Played list (no main menu row)
         state.onButton(NxButton.MENU)
         assertEquals(listOf(ContextKind.REMOVE_RECENT), menuKinds(state))   // recents: only Remove
         state.onButton(NxButton.A)
@@ -8722,7 +8722,7 @@ class AppStateTest {
         val rows = assertIs<Screen.Systems>(state.screen.value).rows.filterIsInstance<MainRow.System>()
         assertEquals(listOf(listOf("GB"), listOf("SFC", "SUPA")), rows.map { r -> r.systems.map { it.tag } })
         assertEquals("SFC", mergedRow(state).backdrop.tag)                   // the console's default tag gives the background
-        state.openSystem(rows[0].system)                                     // Game Boy: one tag, as before
+        state.openSystem(rows[0].system)                                     // Game Boy: one tag, unchanged
         val gb = assertIs<Screen.Games>(state.screen.value)
         assertEquals(ListSource.Console(rows[0].system), gb.source)
         assertEquals(listOf(null), gb.entries.map { it.label })
@@ -10354,7 +10354,7 @@ class AppStateTest {
         assertTrue(SettingsSection.SECOND_SCREEN !in sections())
         state.openSettings(SettingsSection.EMULATORS)
         state.onSecondScreenChanged(true)
-        assertEquals(listOf("Default emulators", "Default settings"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })   // no row under Emulators any more
+        assertEquals(listOf("Default emulators", "Default settings"), assertIs<Screen.Settings>(state.screen.value).rows.map { it.label })   // no row under Emulators
     }
 
     @Test fun the_second_screen_page_has_enable_then_bottom_screen_and_b_returns_to_the_root_on_it() = runTest {
@@ -10467,7 +10467,7 @@ class AppStateTest {
         assertEquals(SettingsKind.SAVES, page().rows[state.selection.value.index].kind)
     }
 
-    // Library's Saves group: after ROM folders, before Games; Emulators no longer lists it; B from Saves lands on it.
+    // Library's Saves group: after ROM folders, before Games; Emulators does not list it; B from Saves lands on it.
     @Test fun saves_is_a_library_row_and_b_from_it_returns_to_its_row() = runTest {
         val st = state(MemorySettings(ContentRef("Home")), data = FakeUserData(hidden = listOf(mario)))   // a hidden game: its row follows
         st.load()
@@ -12208,7 +12208,7 @@ class AppStateTest {
         state.onSkinDualMenu(false)
         state.openTools()
         state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.SETTINGS }); state.onButton(NxButton.A)
-        assertTrue(state.menuPadShown())                                     // one screen: the skin round the tool too (user)
+        assertTrue(state.menuPadShown())                                     // one screen: the skin round the tool too
     }
 
     // Dual screen: Settings opened from Tools stays on the top screen through a Library rescan, the menu below on its row.
@@ -13570,7 +13570,7 @@ class AppStateTest {
     }
 }
 
-/** The consoles on the main menu (every tab), as the tests knew them before typed rows. */
+/** The consoles on the main menu (every tab). */
 private val Screen.Systems.systems: List<SystemFolder> get() = tabs.flatMap { it.rows }.flatMap { (it as? MainRow.System)?.systems.orEmpty() }   // a merged row: each of its systems
 
 /** The main menu on the Tools tab: its tools. */

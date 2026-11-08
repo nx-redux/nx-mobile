@@ -41,7 +41,7 @@ class NdsHotkeysTest {
     }
 
     // Under a pad skin that places the screens itself (the Fold's, a tablet's, portrait) SELECT + Left / Right does
-    // nothing; where the skin takes the layout (a regular phone's landscape, user) it cycles it.
+    // nothing; where the skin takes the layout (a regular phone's landscape) it cycles it.
     @Test fun under_a_skin_select_left_right_cycles_only_where_the_skin_takes_the_layout() {
         val placed = NdsHotkeys().apply { skinShown = true; skinLayouts = false }
         placed.onButton(NxButton.SELECT, true)

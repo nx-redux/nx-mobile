@@ -43,7 +43,7 @@ class CoreRegistryVulkanTest {
         assertEquals("OpenGL", d.defaultOptions["citra_graphics_api"])
     }
 
-    // DBZ BT3 runs on the Fold over the Vulkan bridge (2026-10-28): the Graphics API row picks the core's renderer.
+    // DBZ BT3 runs on the Fold over the Vulkan bridge: the Graphics API row picks the core's renderer.
     @Test fun ps2SwitchesRenderer() {
         val d = CoreRegistry.forTag("PS2")!!
         assertEquals(VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan")), d.vulkan)

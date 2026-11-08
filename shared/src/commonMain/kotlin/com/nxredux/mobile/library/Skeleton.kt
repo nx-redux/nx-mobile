@@ -5,8 +5,9 @@ import com.nxredux.mobile.runner.CoreRegistry
 
 /**
  * The NX Redux card layout inside the home folder: one `Roms/` and one `Bios/` folder per console, named by its console
- * tag (no `Saves/`: saves live inside the app). Creates what is missing; never renames, deletes or touches anything
- * that exists.
+ * tag. `Saves/` is not part of it: it is created on first write under the data root, which is this home folder once
+ * private data has moved there (the Android media-folder home creates its own `Saves/` too). Creates what is missing;
+ * never renames, deletes or touches anything that exists.
  */
 object Skeleton {
     fun folders(): List<String> = buildList {

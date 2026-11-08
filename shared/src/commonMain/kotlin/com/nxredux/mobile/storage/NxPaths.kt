@@ -3,7 +3,8 @@ package com.nxredux.mobile.storage
 import com.nxredux.mobile.runner.CoreRegistry
 
 /**
- * nx-redux / minarch on-disk layout, relative to the SD-card root (on Android: `filesDir/sd`).
+ * nx-redux / minarch on-disk layout, relative to the data root (on Android: `DataRoot.of`, the home folder, or the
+ * app-private root until the data has moved there).
  * Mirrors minarch exactly so a Device Sync can map files 1:1: `<rom>` is the ROM file name with its last
  * extension stripped only when that extension is 2..4 characters long (minarch's `stripExtension`), and
  * `<rom.ext>` is the full name; names are never sanitized. Slots are 0-based on disk. The battery-save, clock and

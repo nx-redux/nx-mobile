@@ -138,7 +138,7 @@ int32_t Audio::computeAudioBufferSize() {
 
 double Audio::computeMaximumLatency() const {
     double maxLatency = (audioLatencySettings->bufferSizeInVideoFrames / contentRefreshRate) * 1000;
-    // nx-mobile Audio Buffer: the FIFO is kept half full, so its whole length is twice the sound kept ready.
+    // Audio Buffer: the FIFO is kept half full, so its whole length is twice the sound kept ready.
     return std::max({ maxLatency, 32.0, 2.0 * requestedBufferMs });
 }
 
@@ -282,7 +282,7 @@ oboe::DataCallbackResult Audio::onAudioReady(oboe::AudioStream *oboeStream, void
 
 int32_t Audio::readStretched(SRC_STATE *converter, double ratio, int32_t numFrames, int16_t *out, double tempo) {
     // A steady pull: each callback feeds SoundTouch the frames this callback plays at this tempo (the fraction carried),
-    // so the FIFO drains evenly. Fed only as it needs, it pulled a whole sequence (~40 ms) in one callback and could
+    // so the FIFO drains evenly. Fed only as it needs, it would pull a whole sequence (~40 ms) in one callback and could
     // empty the FIFO. Topped up only when it holds less than a callback's worth (once on start, after a tempo jump).
     stretchCarry += numFrames * tempo;
     auto feed = [&](long frames) {

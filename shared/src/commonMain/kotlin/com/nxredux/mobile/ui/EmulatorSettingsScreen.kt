@@ -82,7 +82,6 @@ fun EmulatorOptionsScreen(
     )
 }
 
-/** The row an event is on. */
 internal val NxSettingEvent.row: Int get() = when (this) {
     is NxSettingEvent.Choose -> row
     is NxSettingEvent.OpenPicker -> row

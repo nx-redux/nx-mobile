@@ -7,8 +7,7 @@ import com.nxredux.mobile.runner.SegaPadType
 
 /**
  * Console Settings rows about the controller: Controller Layout for every console (the letters printed on the pad;
- * buttons work as printed, [com.nxredux.mobile.runner.PhysicalKeys]), Controller Type for the Sega pad tags, and
- * Portrait Pad for the two-screen consoles and arcade.
+ * buttons work as printed, [com.nxredux.mobile.runner.PhysicalKeys]) and Controller Type for the Sega pad tags.
  * Frontend `nx_` keys, per game with a console default. The layout row is read on every key, so a change applies when
  * the menu closes; the type is sent to the running core at once (GameActivity.applySegaPad).
  */

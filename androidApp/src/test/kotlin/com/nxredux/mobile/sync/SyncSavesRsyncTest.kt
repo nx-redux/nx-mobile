@@ -148,7 +148,7 @@ class SyncSavesRsyncTest {
         assertEquals(FoldPlan(emptyList(), emptyList(), 0), second.fold)
     }
 
-    /** Follow-up 2: a handheld holding one game under two formats: the second sync downloads neither name again. */
+    /** A handheld holding one game under two formats: the second sync downloads neither name again. */
     @Test fun a_second_sync_downloads_no_other_format_name() {
         val s = serve()
         write(s.saves, "GBA/Emerald.srm", "NEW", t3)

@@ -21,31 +21,22 @@
 
 namespace libretrodroid {
 
-/*****************************************************************************
- * Track info structure
- *****************************************************************************/
-
 typedef struct {
 	int type;			// CD_TRACK_* type
 	int frames;			// Total frames in track
-	int pregap_frames;	// Pregap frames
-	int postgap_frames; // Postgap frames
+	int pregap_frames;
+	int postgap_frames;
 	int start_frame;	// Starting frame (cumulative)
 	int is_gdrom;		// Track came from GD-ROM metadata
 	int lba_start;		// Absolute disc LBA of the track's first sector (see
 						// chdreader_first_track_sector)
 } chd_track_info_t;
 
-/*****************************************************************************
- * CHD track handle
- *****************************************************************************/
-
 typedef struct {
 	chd_file* chd;
 	FILE* file;			// libchdr never closes a FILE it was given; closed with the handle
 	uint32_t track_num;
 
-	// Track info
 	chd_track_info_t tracks[CD_MAX_TRACKS];
 	int num_tracks;
 
@@ -54,7 +45,7 @@ typedef struct {
 	uint32_t track_lba_start; // Absolute LBA rcheevos addresses this track by
 	int track_frames;		  // Number of frames in track
 	int track_type;			  // CD_TRACK_* type
-	int track_pregap;		  // Pregap frames for this track
+	int track_pregap;
 
 	// Sector format info (determined from track type)
 	int sector_header_size; // Bytes to skip to reach raw data (0, 16, or 24)
@@ -69,10 +60,6 @@ typedef struct {
 	uint8_t* hunk_buffer;
 	uint32_t cached_hunk;
 } chd_track_handle_t;
-
-/*****************************************************************************
- * Helper: Parse track type string
- *****************************************************************************/
 
 static int parse_track_type(const char* type_str) {
 	if (strcmp(type_str, "MODE1") == 0)
@@ -92,12 +79,8 @@ static int parse_track_type(const char* type_str) {
 	if (strcmp(type_str, "AUDIO") == 0)
 		return CD_TRACK_AUDIO;
 
-	return CD_TRACK_MODE1; // Default
+	return CD_TRACK_MODE1;
 }
-
-/*****************************************************************************
- * Helper: Parse CHD track metadata
- *****************************************************************************/
 
 static int parse_chd_tracks(chd_file* chd, chd_track_info_t* tracks, int* num_tracks) {
 	char metadata[256];
@@ -200,10 +183,6 @@ static int parse_chd_tracks(chd_file* chd, chd_track_info_t* tracks, int* num_tr
 	return track_idx > 0 ? 0 : -1;
 }
 
-/*****************************************************************************
- * Helper: Check if track is data track
- *****************************************************************************/
-
 static int is_data_track(int type) {
 	return type != CD_TRACK_AUDIO;
 }
@@ -273,10 +252,6 @@ static void get_sector_format(int track_type, int frame_size, int* header_size, 
 		break;
 	}
 }
-
-/*****************************************************************************
- * Helper: Find requested track
- *****************************************************************************/
 
 static int find_track(chd_track_handle_t* handle, uint32_t track_request) {
 	if (handle->num_tracks == 0)
@@ -363,7 +338,6 @@ void* chdreader_open_track(const char* path, uint32_t track) {
 		return NULL;
 	}
 
-	// Allocate handle
 	chd_track_handle_t* handle = (chd_track_handle_t*)calloc(1, sizeof(chd_track_handle_t));
 	if (!handle) {
 		chd_close(chd);
@@ -376,7 +350,6 @@ void* chdreader_open_track(const char* path, uint32_t track) {
 	handle->track_num = track;
 	handle->cached_hunk = (uint32_t)-1;
 
-	// Get hunk info
 	const chd_header* header = chd_get_header(chd);
 	handle->hunk_bytes = header->hunkbytes;
 
@@ -391,20 +364,17 @@ void* chdreader_open_track(const char* path, uint32_t track) {
 		return NULL;
 	}
 
-	// Allocate hunk buffer
 	handle->hunk_buffer = (uint8_t*)malloc(handle->hunk_bytes);
 	if (!handle->hunk_buffer) {
 		free_handle(handle);
 		return NULL;
 	}
 
-	// Parse track metadata
 	if (parse_chd_tracks(chd, handle->tracks, &handle->num_tracks) != 0) {
 		free_handle(handle);
 		return NULL;
 	}
 
-	// Find requested track
 	int track_idx = find_track(handle, track);
 	if (track_idx < 0) {
 		free_handle(handle);
@@ -450,7 +420,6 @@ size_t chdreader_read_sector(void* track_handle, uint32_t sector, void* buffer, 
 		frame += handle->track_pregap;
 	}
 
-	// Calculate which hunk contains this frame
 	uint32_t hunk_num = frame / handle->frames_per_hunk;
 	uint32_t frame_in_hunk = frame % handle->frames_per_hunk;
 
@@ -463,7 +432,6 @@ size_t chdreader_read_sector(void* track_handle, uint32_t sector, void* buffer, 
 		handle->cached_hunk = hunk_num;
 	}
 
-	// Calculate offset into hunk
 	uint32_t offset = frame_in_hunk * handle->frame_size;
 	uint8_t* src = handle->hunk_buffer + offset;
 
@@ -509,7 +477,6 @@ size_t chdreader_read_sector(void* track_handle, uint32_t sector, void* buffer, 
 	if (data_size > handle->frame_size - header_skip)
 		data_size = handle->frame_size - header_skip;
 
-	// Copy the data
 	size_t to_copy = requested_bytes;
 	if (to_copy > data_size)
 		to_copy = data_size;

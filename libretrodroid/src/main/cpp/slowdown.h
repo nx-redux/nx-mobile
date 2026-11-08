@@ -1,5 +1,5 @@
 /*
- * nx-mobile 2026-11-04: the game's achieved speed while Frame Skip is Off, for the audio to follow.
+ * The game's achieved speed while Frame Skip is Off, for the audio to follow.
  *
  * With Frame Skip Off a game that can't keep up runs every frame and slows down (FPSSync drops the lag instead of
  * catching up), so it makes its sound slower than real time. The audio's rate controller only bends playback by about

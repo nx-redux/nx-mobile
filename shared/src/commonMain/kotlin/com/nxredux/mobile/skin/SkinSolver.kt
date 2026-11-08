@@ -41,8 +41,11 @@ fun skinTiles(c: SkinCell, k: Float, stretchMax: Float): List<SkinTile> {
     }
 }
 
-/** A piece of a layout built from pieces: [src] in its parts picture drawn at [dst] (scaled when the sizes differ). */
-/** [strip]: one of the frame strip's shortcut labels (hidden with the in-game menu open). [piece]: the layout's piece it draws (an index into [SkinLayoutSpec.pieces]); -1: the frame or a strip label. */
+/**
+ * A piece of a layout built from pieces: [src] in its parts picture drawn at [dst] (scaled when the sizes differ).
+ * [strip]: one of the frame strip's shortcut labels (hidden with the in-game menu open). [piece]: the layout's piece it
+ * draws (an index into [SkinLayoutSpec.pieces]); -1: the frame or a strip label.
+ */
 data class SkinPiece(val src: PxRect, val dst: PxRect, val strip: Boolean = false, val alt: String? = null, val knob: Boolean = false, val knobOf: String = "STICK", val piece: Int = -1)
 
 /** A control's hit area placed in the window: its [spec] (id, shape, sizes scaled) at [x], [y]. */

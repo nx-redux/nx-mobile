@@ -44,8 +44,8 @@ class MainMenuListTopEdgeTest {
     }
 
     @Test fun thePillGapMatchesTheFold() {
-        // Measured on the Fold's cover screen at font scale 0.9: 89 px rows, 79 px pills, so 10 px (3.8 dp) apart, when
-        // the label was the row's own (now it is the target pitch's, so that row's pitch is passed as the target).
+        // Measured on the Fold's cover screen at font scale 0.9: 89 px rows, 79 px pills, so 10 px (3.8 dp) apart, with
+        // the label at the row's own pitch (passed here as the target pitch).
         assertTrue(abs(nxPillGap(89 / density, 0.9f, (89 / density).dp) * density - 10f) <= 1.5f)
     }
 

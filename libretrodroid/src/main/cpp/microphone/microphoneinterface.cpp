@@ -46,7 +46,7 @@ void MicrophoneInterface::setSource(int source) {
 retro_microphone_interface* MicrophoneInterface::getInterface() {
     LOGI("Fetching microphone interface");
 
-    // One static table: the caller copies it, and a new one per request was never freed.
+    // One static table: the caller copies it, so no request allocates one.
     static retro_microphone_interface interface {
         .interface_version = 1,
         .open_mic = libretroOpenMicrophone,

@@ -29,7 +29,7 @@ class ScannerMirrorArtTest {
         "Home/Roms/.sources" to listOf("x1"),
         "Home/Roms/.sources/x1" to listOf("My Sega Genesis"),
         "Home/Roms/.sources/x1/My Sega Genesis" to listOf(".media"),
-        mirror to listOf("Sonic.png", "boxart", "box2d", "grid", "hero"),   // grid/ and hero/: no longer read
+        mirror to listOf("Sonic.png", "boxart", "box2d", "grid", "hero"),   // grid/ and hero/: not read
         "$mirror/boxart" to listOf("Sonic.png"),
         "$mirror/box2d" to listOf("Sonic.jpg"),
         "$mirror/grid" to listOf("Sonic.jpg"),

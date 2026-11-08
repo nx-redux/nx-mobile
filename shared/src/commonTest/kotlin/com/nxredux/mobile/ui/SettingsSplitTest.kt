@@ -13,7 +13,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** Settings splits into categories | options on a wide landscape window (task S3). */
+/** Settings splits into categories | options on a wide landscape window. */
 class SettingsSplitTest {
     @Test fun wideLandscapeWindowsSplit() {
         assertTrue(settingsSplit(DpSize(840.dp, 360.dp)))   // Flip, 21:9

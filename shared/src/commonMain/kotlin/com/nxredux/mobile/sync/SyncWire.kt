@@ -14,7 +14,7 @@ sealed interface SyncMessage {
 }
 
 /**
- * The handheld's Device Sync wire (nx-redux `workspace/all/sync/sync.c` and `sync_proto.c`, feat/device-sync-states):
+ * The handheld's Device Sync wire (nx-redux `workspace/all/sync/sync.c` and `sync_proto.c`):
  * `HELLO_TRIMUI_SYNC:<ip>:<flag>` broadcast, `TRIMUI_SYNC_ACK:<ip>:<flag>` unicast, then READY / DONE (or FAIL, from
  * either side once paired, when its run fails or is stopped). A current handheld appends a NUL and `v2`; firmware
  * without it is refused at pairing. The phone sends `c`, or `C` with ROMs on.

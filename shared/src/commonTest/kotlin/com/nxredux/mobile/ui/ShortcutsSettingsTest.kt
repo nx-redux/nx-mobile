@@ -155,7 +155,7 @@ class ShortcutsSettingsTest {
         assertEquals("Button 1", s.row(ShortcutAction.RESET.label).secondary)
     }
 
-    // L23: MENU pressed and released alone binds nothing, keeps waiting, and opens nothing (its keys are swallowed).
+    // MENU pressed and released alone binds nothing, keeps waiting, and opens nothing (its keys are swallowed).
     @Test fun menuAloneNotBound() = runTest {
         val s = state()
         s.openShortcuts()
@@ -276,7 +276,7 @@ class ShortcutsSettingsTest {
         s.openShortcuts()
         s.bind(ShortcutAction.TOGGLE_FF); s.captureKey(110, true); s.captureKey(103, true)
         s.select(s.page().rows.indexOfFirst { it.label == "Touch button 2" }); s.onButton(NxButton.RIGHT)
-        assertEquals("", settings.shortcuts)                    // not per change (L25)
+        assertEquals("", settings.shortcuts)                    // not per change
         s.onButton(NxButton.B)
         assertEquals(SettingsSection.CONTROLS, s.page().section)
         assertEquals(

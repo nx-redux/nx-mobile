@@ -49,7 +49,7 @@ class CoreRegistryDcTest {
         assertFalse(CoreRegistry.loadsArchive("DC", "Crazy Taxi (USA).zip", sets))   // a zipped disc is unpacked
         assertFalse(CoreRegistry.loadsArchive("DC", "Crazy Taxi (USA).7z", sets))
         assertFalse(CoreRegistry.loadsArchive("DC", "Shenmue.chd", sets))
-        assertTrue(CoreRegistry.loadsArchive("DC", "Crazy Taxi (USA).zip", NaomiSets.EMPTY))   // no table: as before
+        assertTrue(CoreRegistry.loadsArchive("DC", "Crazy Taxi (USA).zip", NaomiSets.EMPTY))   // no table: every archive as is
         // fbneo's sets are not flycast's: the table does not apply.
         assertTrue(CoreRegistry.loadsArchive("FBN", "mslug2.zip", sets))
         assertFalse(CoreRegistry.loadsArchive("GBA", "Tetris.zip", NaomiSets.EMPTY))
