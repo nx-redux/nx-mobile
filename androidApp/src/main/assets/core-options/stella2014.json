@@ -23,6 +23,21 @@
      "default": "16bit"
     },
     {
+     "key": "stella2014_palette",
+     "label": "Color Palette",
+     "labelCategorized": "",
+     "info": "Selects the color palette used to render games. 'Standard' is Stella's own calibrated palette; 'Z26' matches the palette from the z26 emulator. Both are built in, so switching takes effect immediately.",
+     "values": [
+      "standard",
+      "z26"
+     ],
+     "labels": [
+      "Standard",
+      "Z26"
+     ],
+     "default": "standard"
+    },
+    {
      "key": "stella2014_mix_frames",
      "label": "Interframe Blending",
      "labelCategorized": "",
@@ -444,6 +459,6 @@
    ]
   }
  ],
- "soSha256": "5d5d168075bad31149649e3a046ad6aa6e9d32e0b1ed55ec52b2357443707d57",
- "probedAt": "2026-09-29"
+ "soSha256": "a15bea07a62a58f45977b21301539338430fd97fa5c2627758f839b440df335d",
+ "probedAt": "2026-11-08"
 }
