@@ -547,20 +547,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     // ---- Nintendo DS screens (NdsLayout regions) ----
     override val ndsRegions: List<NdsRegion> get() = renderer.ndsRegions
     override val secondNdsRegions: List<NdsRegion> get() = renderer.secondNdsRegions
-    private var ndsRenderMode: String? = null               // melonds_render_mode this game started with (the notice's)
-    private var ndsFellBack = false                         // OpenGL was asked for, the core draws in software ([NdsRenderer.showFallbackNotice])
+    internal var ndsRenderMode: String? = null              // melonds_render_mode this game started with (the notice's)
+        private set
+    internal var ndsFellBack = false                        // OpenGL was asked for, the core draws in software ([NdsRenderer.showFallbackNotice])
+        private set
 
     // ---- DS / 3DS 3D resolution (Nds3dResolution, N3ds3dResolution): melonDS's GL scale, Azahar's factor follow the layout ----
-    private val nds3dSender = Nds3dSender()
-    /** The 3D scale last sent to melonDS DS or Azahar (the launch's included); null for another core. */
-    var nds3dValue: Int? = null
-        private set
-    private var nds3dCurrent: Int? = null                   // the scale the DS / 3DS screens show now (FrontendRenderer.onNds3dLayout)
+    private val res3d = Res3dController(this, renderer)
     override val ndsView: com.nxredux.mobile.options.NdsView?
         get() = if (isNds || isN3ds) com.nxredux.mobile.options.NdsView(isLandscape(), renderer.ndsControllerMode()) else null
-    override var nds3dDisplayMax: Int? = null               // the most any layout reaches on the displays in use; null before the first layout
-        private set
-    private val nds3dTick = Runnable { tickNds3d() }
+    override val nds3dDisplayMax: Int? get() = res3d.displayMax
     override val configWrites = Mutex()           // hotkey saves land in press order
     override val isNds: Boolean get() = NdsOptions.appliesTo(gameTag)
 
@@ -926,97 +922,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun corePaused(): Boolean = menuOpen || focusPaused
 
-    /** The console whose 3D scale the app sets for this game: a DS on melonDS DS, a 3DS on Azahar, a PS2 on ARMSX2; null for any other. */
-    private val res3d: Res3dConsole? get() = Res3dConsole.forTag(gameTag)?.takeIf { gameCoreId == it.coreId }
+    override fun onNds3dLayout(current: Int?, displayMax: Int, sizeChange: Boolean) = res3d.onLayout(current, displayMax, sizeChange)
 
-    private fun setsRes3d(): Boolean = res3d != null
-
-    override fun onNds3dLayout(current: Int?, displayMax: Int, sizeChange: Boolean) {
-        if (!setsRes3d()) return
-        nds3dCurrent = current
-        nds3dDisplayMax = displayMax
-        // An open menu's Max Scale / Scale lists follow a rotation or fold.
-        withMenuIf({ it.displayMax3d != displayMax }) { it.displayMax3d = displayMax }
-        // An open menu's DS / 3DS layout row follows a rotation or a controller hiding the pad.
-        withMenuIf({ it.ndsView != ndsView }) { it.ndsView = ndsView }
-        offerNds3d(sizeChange)
-    }
-
-    /**
-     * A new DS / 3DS 3D scale can reach the core now: not under netplay (no core option changes mid-session, so nothing is
-     * offered and the sender keeps the value the core has; [playLocally] offers again), not while quitting, not once the
-     * view is gone.
-     */
-    private fun canSendNds3d(): Boolean = netplayNow == null && !quitting && retroView?.isAttachedToWindow == true
-
-    /**
-     * The 3D scale for the console's rows' values and the layout now, to the core if it changed: at once, or for a game area that
-     * only changed size, once it has settled ([Nds3dSender]; [tickNds3d] drains it every 100 ms meanwhile).
-     */
-    private fun offerNds3d(sizeChange: Boolean) {
-        val console = res3d ?: return
-        if (!canSendNds3d()) return
-        val max = nds3dDisplayMax ?: return
-        val value = Nds3dResolution.valueFor(frontendValues, nds3dCurrent, max, console)
-        nds3dSender.offer(value, sizeChange, SystemClock.uptimeMillis())?.let(::sendNds3d)
-        scheduleNds3dTick()
-    }
-
-    private fun tickNds3d() {
-        if (!canSendNds3d()) return   // a held size waits; the next offer (or playLocally's) replaces it
-        nds3dSender.tick(SystemClock.uptimeMillis())?.let(::sendNds3d)
-        scheduleNds3dTick()
-    }
-
-    private fun scheduleNds3dTick() {
-        val root = window?.decorView ?: return
-        root.removeCallbacks(nds3dTick)
-        if (nds3dSender.pending) root.postDelayed(nds3dTick, 100)
-    }
-
-    /**
-     * [value] to melonDS DS or Azahar (a locked option: only the app sets it), which rebuilds its surfaces on its next
-     * frame; Azahar's frame size follows a frame or more later ([FrontendRenderer.onN3dsFactorSent]).
-     */
-    private fun sendNds3d(value: Int) {
-        val console = res3d ?: return
-        nds3dValue = value
-        NxLog.i(TAG_LOG, "$gameTag 3D resolution ${value}x (${Nds3dMode.parse(frontendValues[console.modeKey]).value})")
-        applyOptions(listOf(Variable(console.coreKey, console.coreValue(value))))
-        if (console == Res3dConsole.N3DS) renderer.onN3dsFactorSent(value)
-        withMenu { publishNds3d(it) }
-    }
-
-    /**
-     * The launch's DS / 3DS 3D scale (no screens placed yet: the window's display maximum stands in for the shown scale), as a
-     * forced option over the locked default; the sender starts from it, so the first layout sends only a different value.
-     * The 3DS frame's factor starts from it (or the locked default without one).
-     */
-    private fun nds3dLaunchOption(): Map<String, String> {
-        val console = res3d ?: return emptyMap()
-        val shape = windowShape()
-        val max = console.displayMaxOf(shape.widthPx to shape.heightPx, shape.screenClass)
-        if (max == null) {
-            if (console == Res3dConsole.N3DS) CoreRegistry.forId(console.coreId)?.defaultOptions?.get(console.coreKey)?.toIntOrNull()?.let(renderer::startN3dsFactor)
-            return emptyMap()
-        }
-        val value = Nds3dResolution.valueFor(frontendValues, null, max, console)
-        nds3dSender.offer(value, sizeChange = false, SystemClock.uptimeMillis())
-        nds3dValue = value
-        if (console == Res3dConsole.N3DS) renderer.startN3dsFactor(value)
-        NxLog.i(TAG_LOG, "$gameTag 3D resolution ${value}x at launch (${Nds3dMode.parse(frontendValues[console.modeKey]).value})")
-        return mapOf(console.coreKey to console.coreValue(value))
-    }
-
-    /**
-     * The in-game 3D Resolution rows' live state: the scale in use and whether the running game draws in software (the
-     * mode it started with, or OpenGL's fallback; a Render Mode changed in the menu waits for the next launch).
-     */
-    override fun publishNds3d(model: InGameMenuModel) {
-        val console = res3d ?: return
-        // The 3DS has no software renderer to fall back to (Software API hidden), nor has the PS2: their scale always applies.
-        model.setNds3d(nds3dValue, software = console == Res3dConsole.DS && NdsRenderer.rendersSoftware(ndsRenderMode, ndsFellBack))
-    }
+    override fun publishNds3d(model: InGameMenuModel) = res3d.publish(model)
 
     /**
      * Leaving via Home/recents: grab the frame for the switcher preview now. This runs before the pause,
@@ -1204,7 +1112,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun onDestroy() {
         runCatching { unregisterReceiver(kidsWarn) }   // not registered when onCreate stopped early
         renderer.cancelGeometryWatch()
-        window?.decorView?.removeCallbacks(nds3dTick)
+        res3d.cancelTick()
         rumbles.forEach { it.release() }
         motionSensors?.stop()
         if (isWii) LibretroDroid.setSensorEnabled(0, false)   // a next Wii game sets its own on its first frame
@@ -1672,7 +1580,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val launchSega = if (segaSetting != null) frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO else null
         val launchSegaPad = segaPad
         launchedSegaSetting = launchSega
-        val nds3dLaunch = nds3dLaunchOption()   // read on the main thread: the window's size
+        val nds3dLaunch = res3d.launchOption()   // read on the main thread: the window's size
         // PS2 BIOS row: the pick while its file is still in the folder, else Auto (the core's own choice).
         val ps2BiosOption = if (Ps2Options.appliesTo(tag)) {
             Ps2Options.biosOption(frontendValues[Ps2Options.BIOS], biosPresent.filter { it.endsWith(".bin", ignoreCase = true) })
@@ -2341,11 +2249,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun applyFrontend(values: Map<String, String>) {
         val oldSegaSetting = frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
         val oldBottomScreen = frontendValues[BottomScreenOptions.KEY]
-        val res3dKeys = res3d?.keys.orEmpty()
+        val res3dKeys = res3d.console?.keys.orEmpty()
         val old3d = res3dKeys.map { frontendValues[it] }
         frontendValues = values
         // Display → 3D Resolution (the menu, live): the new value goes at once, not as a size change.
-        if (setsRes3d() && res3dKeys.map { values[it] } != old3d) offerNds3d(sizeChange = false)
+        if (res3d.applies() && res3dKeys.map { values[it] } != old3d) res3d.offer(sizeChange = false)
         // Display → Bottom screen (the menu, live): the picture may move. Posted, as for the Sega pad.
         if (values[BottomScreenOptions.KEY] != oldBottomScreen) findViewById<View?>(R.id.root)?.post { dual.recheckPictureOn() }
         val segaSetting = values[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
@@ -3150,7 +3058,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         dual.refreshDiscs()
         dual.refreshDualPanel()
         // The core kept the launch's DS / 3DS 3D scale through the session: the one for the layout now goes once.
-        if (setsRes3d()) offerNds3d(sizeChange = false)
+        if (res3d.applies()) res3d.offer(sizeChange = false)
     }
 
     // ------------------------------------------------------------------ achievements
@@ -3652,7 +3560,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun placeMenu() = menu.placeMenu()
     private fun relayoutPad() = padLayout.applyLayout(resources.configuration.orientation)
     override fun withMenu(block: (InGameMenuModel) -> Unit) { menu.menuModel?.let { block(it); menu.menuState.value = it.state } }
-    private fun withMenuIf(pred: (InGameMenuModel) -> Boolean, block: (InGameMenuModel) -> Unit) { menu.menuModel?.takeIf(pred)?.let { block(it); menu.menuState.value = it.state } }
+    internal fun withMenuIf(pred: (InGameMenuModel) -> Boolean, block: (InGameMenuModel) -> Unit) { menu.menuModel?.takeIf(pred)?.let { block(it); menu.menuState.value = it.state } }
 
     override fun publishMenuShaders() {
         withMenu { it.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams) }
