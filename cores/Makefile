@@ -407,6 +407,7 @@ gearcoleco_ARTIFACT = libs/$(ABI)/libretro.so
 
 # FB Neo licence: non-commercial, and no donation asks for any project using its source (README Constraints).
 # 7z support on, Neo Geo CD off (upstream Android.mk defaults). No rotation patch: the runner honours SET_ROTATION.
+# patches/fbneo/0001: retro_unserialize rejects a state of another size; one from another version was read in misaligned and crashed.
 fbneo_REPO = https://github.com/libretro/FBNeo
 fbneo_HASH = d15071abf14191eebb4a5d7c7147398edcf237c8
 fbneo_KIND = ndkbuild
