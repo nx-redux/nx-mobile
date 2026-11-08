@@ -2,6 +2,8 @@ package com.nxredux.mobile.sync
 
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
@@ -33,33 +35,55 @@ class SyncDaemonRsyncTest {
     private fun freePort(): Int = ServerSocket(0).use { it.localPort }
 
     /** Runs [step] against the daemon on [port] (the args' fixed port swapped for it); its exit code. */
-    private fun client(bin: String, step: SyncStep, root: File, port: Int): Int {
+    private fun client(bin: String, step: SyncStep, root: File, port: Int, password: String = SyncPairedDaemon.PASSWORD): Int {
         val args = SyncCommands.clientArgs(bin, step, "127.0.0.1", root.path)
             .map { it.replace("127.0.0.1:${SyncWire.RSYNC_PORT}/", "127.0.0.1:$port/") }
-        val p = ProcessBuilder(args).redirectErrorStream(true).start()
+        val p = SyncPairedDaemon.client(args, password).start()
         p.inputStream.bufferedReader().readText()
         return p.waitFor()
     }
 
-    @Test fun the_daemon_log_parses_to_module_relative_entries() {
-        val bin = rsync()
-        assumeTrue("no rsync >= 3.1 on this machine", bin != null)
+    /** Starts the paired daemon on a free port: the port and its transfer log. */
+    private fun serve(bin: String): Pair<Int, File> {
         val work = tmp.newFolder("work")
         val shared = tmp.newFolder("served-shared")
         val saves = tmp.newFolder("served-saves")
         val log = File(work, "sync.log")
         val port = freePort()
         val conf = SyncCommands.daemonConf("127.0.0.1", shared = shared.path, saves = saves.path,
-            pidFile = File(work, "rsyncd.pid").path, logFile = log.path)
+            pidFile = File(work, "rsyncd.pid").path, logFile = log.path,
+            secretsFile = SyncPairedDaemon.secrets(work).path, lockFile = SyncPairedDaemon.lock(work).path)
             .replace("port = ${SyncWire.RSYNC_PORT}\n", "port = $port\n")
         val confFile = File(work, "rsyncd.conf").apply { writeText(conf) }
-        daemon = ProcessBuilder(bin!!, "--daemon", "--no-detach", "--config=${confFile.path}")
+        daemon = ProcessBuilder(bin, "--daemon", "--no-detach", "--config=${confFile.path}")
             .redirectErrorStream(true).redirectOutput(File(work, "daemon.out")).start()
         val deadline = System.currentTimeMillis() + 5_000
         while (runCatching { Socket("127.0.0.1", port).close() }.isFailure) {
             check(System.currentTimeMillis() < deadline) { "daemon did not listen: ${File(work, "daemon.out").readText()}" }
             Thread.sleep(50)
         }
+        return port to log
+    }
+
+    /** A wrong password is refused, and the daemon log says so in the line [SyncProgress.authFailed] watches for. */
+    @Test fun a_wrong_password_is_refused_and_logged() {
+        val bin = rsync()
+        assumeTrue("no rsync >= 3.1 on this machine", bin != null)
+        val (port, log) = serve(bin!!)
+        val peer = tmp.newFolder("peer")
+        File(peer, "Saves/GB").mkdirs()
+        File(peer, "Saves/GB/t.srm").writeText("save")
+        assertNotEquals(0, client(bin, SyncStep.SEND_SAVES, peer, port, password = "0".repeat(32)))
+        val deadline = System.currentTimeMillis() + 5_000
+        while (System.currentTimeMillis() < deadline && !(log.exists() && log.readLines().any(SyncProgress::authFailed))) Thread.sleep(50)
+        assertTrue(log.takeIf { it.exists() }?.readText().orEmpty(), log.exists() && log.readLines().any(SyncProgress::authFailed))
+        assertTrue(File(tmp.root, "served-saves/GB").list().isNullOrEmpty())
+    }
+
+    @Test fun the_daemon_log_parses_to_module_relative_entries() {
+        val bin = rsync()
+        assumeTrue("no rsync >= 3.1 on this machine", bin != null)
+        val (port, log) = serve(bin!!)
         // The peer's card: one state (plus a file the filter refuses) and one save to push.
         val peer = tmp.newFolder("peer")
         File(peer, ".userdata/shared/GB-gambatte").mkdirs()

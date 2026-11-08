@@ -26,7 +26,14 @@ object DeviceSyncText {
     const val STOPPED = "Sync stopped. Files already copied stay."
     const val CLOSE_GAME = "Close the running game first, then sync."
     const val IMPORTING = "Wait for the import to finish, then sync."
-    const val OLD_FIRMWARE = "Update the handheld to the latest NX Redux to use Device Sync."
+    /** The peer speaks an older Device Sync (no pairing code). */
+    const val UPDATE_PEER = "Update NX Redux on the other device to sync."
+    fun pairingCode(code: String) = "Pairing code $code — the same on the other device?"
+    const val PAIRING_NOT_CONFIRMED = "Pairing not confirmed."
+    /** The peer sent FAIL while the code was up: its user pressed Cancel (or its wait ran out). */
+    const val PEER_CANCELLED = "The other device cancelled the pairing."
+    /** The daemon refused a wrong password: whoever connected did not pair with this run. */
+    const val AUTH_FAILED = "The other device failed the pairing check."
     const val CABLE_LOST = "The cable link was lost."
     /** The cable dropped mid-sync (unplugged, or not pushed fully in). */
     const val CABLE_DISCONNECTED = "The cable was disconnected. Plug it in firmly on both devices, then sync again."

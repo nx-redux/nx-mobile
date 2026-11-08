@@ -140,9 +140,16 @@ class RsyncProcessTest {
     @Test fun streaming_feeds_each_line_split_on_cr_and_lf_and_returns_the_exit_code() = runBlocking {
         val bin = script("stream.so", "printf 'sending incremental file list\\nGB/a.st0\\n  1 (xfr#1, to-chk=1/2)\\r  2 (xfr#1, to-chk=0/2)\\n'; exit 23")
         val lines = mutableListOf<String>()
-        val code = Rsync(bin, quiet).runStreaming(listOf(bin.absolutePath), lines::add)
+        val code = Rsync(bin, quiet).runStreaming(listOf(bin.absolutePath), onLine = lines::add)
         assertEquals(23, code)
         assertEquals(listOf("sending incremental file list", "GB/a.st0", "  1 (xfr#1, to-chk=1/2)", "  2 (xfr#1, to-chk=0/2)"), lines)
+    }
+
+    @Test fun streaming_passes_its_environment_and_keeps_it_out_of_argv() = runBlocking {
+        val bin = script("env.so", "echo \"pw=\$RSYNC_PASSWORD args=\$*\"")
+        val lines = mutableListOf<String>()
+        assertEquals(0, Rsync(bin, quiet).runStreaming(listOf(bin.absolutePath, "x"), mapOf("RSYNC_PASSWORD" to "s3cret")) { lines += it })
+        assertEquals(listOf("pw=s3cret args=x"), lines)
     }
 
     @Test fun cancelling_a_streaming_step_stops_the_process() {

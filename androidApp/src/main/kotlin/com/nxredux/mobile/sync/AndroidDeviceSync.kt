@@ -3,6 +3,7 @@ package com.nxredux.mobile.sync
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.wifi.WifiManager
+import android.system.Os
 import com.nxredux.mobile.library.Collections
 import com.nxredux.mobile.library.LibraryIndexCodec
 import com.nxredux.mobile.library.SidecarTxt
@@ -37,6 +38,7 @@ import java.io.File
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.security.SecureRandom
 
 /**
  * Device Sync on Android: sockets on the Wi-Fi or cable network, the bundled rsync. The controller
@@ -64,6 +66,9 @@ class AndroidDeviceSync(
     @Volatile private var tail: Job? = null
     /** The daemon log's one reader: the [tail] job's while it runs, then [stopServer]'s final pass. */
     @Volatile private var logTail: SyncLogTail? = null
+    /** The paired run's rsync password ([pairWith]): RSYNC_PASSWORD for every client rsync, the daemon's secrets file. */
+    @Volatile private var password: String? = null
+    private val random = SecureRandom()
     /** The extra folders (n → path) of the last [ownExtras], which [runRom] resolves its ends with. */
     @Volatile private var extraRoots: Map<Int, String> = emptyMap()
 
@@ -81,6 +86,12 @@ class AndroidDeviceSync(
         alive(active, text)
     }
     override fun log(message: String) = NxLog.i(TAG, message)
+    override fun randomBytes(count: Int): ByteArray = ByteArray(count).also(random::nextBytes)
+    override fun pairWith(password: String?) { this.password = password }
+
+    /** [args] against the peer's daemon, with the run's password in the environment. */
+    private suspend fun Rsync.runPeer(args: List<String>, onLine: (String) -> Unit): Int =
+        runStreaming(args, password?.let { mapOf(PASSWORD_ENV to it) }.orEmpty(), onLine)
 
     /**
      * The UDP socket on [link]'s network. Binding it to the link's `Network` is best effort, as in AndroidNetplay: with
@@ -153,21 +164,21 @@ class AndroidDeviceSync(
     override suspend fun listRemoteRoms(peerIp: String): Pair<Int, List<String>> {
         val rsync = withContext(Dispatchers.IO) { Rsync.find(app) } ?: return NO_RSYNC to emptyList()
         val lines = ArrayList<String>()
-        val code = rsync.runStreaming(SyncCommands.listArgs(rsync.binary.absolutePath, peerIp)) { lines += it }
+        val code = rsync.runPeer(SyncCommands.listArgs(rsync.binary.absolutePath, peerIp)) { lines += it }
         return code to lines
     }
 
     override suspend fun listRemoteHashes(peerIp: String): Pair<Int, List<String>> {
         val rsync = withContext(Dispatchers.IO) { Rsync.find(app) } ?: return NO_RSYNC to emptyList()
         val lines = ArrayList<String>()
-        val code = rsync.runStreaming(SyncCommands.listHashesArgs(rsync.binary.absolutePath, peerIp)) { lines += it }
+        val code = rsync.runPeer(SyncCommands.listHashesArgs(rsync.binary.absolutePath, peerIp)) { lines += it }
         return code to lines
     }
 
     override suspend fun listRemoteBios(peerIp: String): Pair<Int, List<String>> {
         val rsync = withContext(Dispatchers.IO) { Rsync.find(app) } ?: return NO_RSYNC to emptyList()
         val lines = ArrayList<String>()
-        val code = rsync.runStreaming(SyncCommands.listArgs(rsync.binary.absolutePath, peerIp, "bios")) { lines += it }
+        val code = rsync.runPeer(SyncCommands.listArgs(rsync.binary.absolutePath, peerIp, "bios")) { lines += it }
         return code to lines
     }
 
@@ -178,7 +189,7 @@ class AndroidDeviceSync(
     override suspend fun listRemoteFolder(peerIp: String, folder: String): Pair<Int, List<String>> {
         val rsync = withContext(Dispatchers.IO) { Rsync.find(app) } ?: return NO_RSYNC to emptyList()
         val lines = ArrayList<String>()
-        val code = rsync.runStreaming(SyncCommands.listFolderArgs(rsync.binary.absolutePath, peerIp, folder)) { lines += it }
+        val code = rsync.runPeer(SyncCommands.listFolderArgs(rsync.binary.absolutePath, peerIp, folder)) { lines += it }
         return code to lines
     }
 
@@ -205,7 +216,7 @@ class AndroidDeviceSync(
         val rsync = withContext(Dispatchers.IO) { Rsync.find(app) } ?: return RemoteText.Failed(NO_RSYNC)
         val file = withContext(Dispatchers.IO) { work.mkdirs(); File(work, FETCH_FILE).apply { delete() } }
         val lines = ArrayList<String>()
-        val code = rsync.runStreaming(SyncCommands.fetchArgs(rsync.binary.absolutePath, peerIp, module, path, file.absolutePath)) { lines += it }
+        val code = rsync.runPeer(SyncCommands.fetchArgs(rsync.binary.absolutePath, peerIp, module, path, file.absolutePath)) { lines += it }
         return withContext(Dispatchers.IO) {
             try {
                 when {
@@ -230,7 +241,7 @@ class AndroidDeviceSync(
             NxLog.w(TAG, "device sync push of $name not written", e)
             return 1
         }
-        return rsync.runStreaming(SyncCommands.putArgs(rsync.binary.absolutePath, peerIp, module, remoteDir, file.absolutePath)) { }
+        return rsync.runPeer(SyncCommands.putArgs(rsync.binary.absolutePath, peerIp, module, remoteDir, file.absolutePath)) { }
     }
 
     /** The file's text, or null when it is absent; a file that exists but cannot be read throws. */
@@ -257,7 +268,7 @@ class AndroidDeviceSync(
     override suspend fun pullCollections(peerIp: String): CollectionsPull {
         val rsync = withContext(Dispatchers.IO) { Rsync.find(app) } ?: return CollectionsPull(NO_RSYNC, emptyList())
         return try {
-            SyncCollectionFiles.pull(rsync::runStreaming, rsync.binary.absolutePath, peerIp, File(work, COLLECTIONS_PULL_DIR))
+            SyncCollectionFiles.pull({ args, onLine -> rsync.runPeer(args, onLine) }, rsync.binary.absolutePath, peerIp, File(work, COLLECTIONS_PULL_DIR))
         } catch (e: java.io.IOException) {
             NxLog.w(TAG, "device sync collections pull unreadable", e)
             CollectionsPull(1, emptyList())
@@ -267,7 +278,7 @@ class AndroidDeviceSync(
     override suspend fun pushCollections(peerIp: String, files: Map<String, String>): Pair<Int, List<String>> {
         val rsync = withContext(Dispatchers.IO) { Rsync.find(app) } ?: return NO_RSYNC to emptyList()
         return try {
-            SyncCollectionFiles.push(rsync::runStreaming, rsync.binary.absolutePath, peerIp, File(work, COLLECTIONS_PUSH_DIR), files)
+            SyncCollectionFiles.push({ args, onLine -> rsync.runPeer(args, onLine) }, rsync.binary.absolutePath, peerIp, File(work, COLLECTIONS_PUSH_DIR), files)
         } catch (e: java.io.IOException) {
             NxLog.w(TAG, "device sync collections push not written", e)
             1 to emptyList()
@@ -297,7 +308,7 @@ class AndroidDeviceSync(
             SyncCommands.romArgs(rsync.binary.absolutePath, run, peerIp, homeRoms().path, extraRoots, filesFrom, exclude, filter, bios)
         }
         val lines = ArrayList<String>()
-        val code = rsync.runStreaming(args) { lines += it; onLine(it) }
+        val code = rsync.runPeer(args) { lines += it; onLine(it) }
         return SyncCommands.romResult(run, code, lines)
     }
 
@@ -316,7 +327,7 @@ class AndroidDeviceSync(
             (Rsync.find(app) ?: return@withContext null) to root
         } ?: return NO_RSYNC
         val only = staged.takeIf { step == SyncStep.RECEIVE_SAVES }
-        return rsync.runStreaming(SyncCommands.clientArgs(rsync.binary.absolutePath, step, peerIp, root.absolutePath, stagedDir?.absolutePath, only), onLine)
+        return rsync.runPeer(SyncCommands.clientArgs(rsync.binary.absolutePath, step, peerIp, root.absolutePath, stagedDir?.absolutePath, only), onLine)
     }
 
     /**
@@ -380,8 +391,10 @@ class AndroidDeviceSync(
             val collectionsDir = if (romsAvailable()) homeCollections().takeIf { it.isDirectory }?.path else null
             // The served folder must be the real record: app-private copies that differ are folded into it first.
             if (collectionsDir != null) collections.foldStoreIntoHome()
+            val secrets = writeSecrets(password ?: return@withContext false.also { NxLog.w(TAG, "device sync server: not paired") })
             val conf = SyncCommands.daemonConf(peerIp, shared.absolutePath, File(root, "Saves").absolutePath,
-                File(work, PID_FILE).absolutePath, log.absolutePath, serverRoms, bios, collectionsDir)
+                File(work, PID_FILE).absolutePath, log.absolutePath, secrets.absolutePath, File(work, LOCK_FILE).absolutePath,
+                serverRoms, bios, collectionsDir)
             val p = rsync.startDaemonWith(conf, SyncWire.RSYNC_PORT, work) ?: return@withContext false
             daemon = p
             val reader = SyncLogTail(log, onLogLine)
@@ -394,6 +407,19 @@ class AndroidDeviceSync(
             NxLog.w(TAG, "device sync server did not start", e)
             false
         }
+    }
+
+    /**
+     * The daemon's secrets file, 0600 before the password goes in: with `strict modes` rsync refuses a file others could
+     * read.
+     */
+    private fun writeSecrets(password: String): File {
+        val file = File(work, SECRETS_FILE)
+        file.delete()
+        file.createNewFile()
+        Os.chmod(file.absolutePath, SECRETS_MODE)
+        file.writeText(SyncPairing.secrets(password))
+        return file
     }
 
     /** Reads [reader] every [TAIL_MS] until cancelled; a failed read is logged and retried on the next round. */
@@ -414,6 +440,7 @@ class AndroidDeviceSync(
         try {
             daemon?.let { p -> try { Rsync.stop(p) } catch (e: Exception) { NxLog.w(TAG, "device sync daemon stop failed", e) } }
             daemon = null
+            if (!File(work, SECRETS_FILE).let { !it.exists() || it.delete() }) NxLog.w(TAG, "device sync secrets file not removed")
             val job = tail; tail = null
             val reader = logTail; logTail = null
             val ended = job == null || withTimeoutOrNull(JOIN_MS) { job.cancel(); job.join(); true } == true
@@ -432,6 +459,10 @@ class AndroidDeviceSync(
         private const val JOIN_MS = 2_000L
         private const val LOG_FILE = "sync.log"
         private const val PID_FILE = "rsyncd.pid"
+        private const val SECRETS_FILE = "rsyncd.secrets"
+        private const val LOCK_FILE = "rsyncd.lock"
+        private const val SECRETS_MODE = 384   // 0600
+        private const val PASSWORD_ENV = "RSYNC_PASSWORD"
         private const val FETCH_FILE = "fetch.tmp"
         private const val PUSH_DIR = "push"
         private const val COLLECTIONS_PULL_DIR = "collections-pull"

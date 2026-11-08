@@ -68,17 +68,19 @@ class Rsync internal constructor(
     }
 
     /**
-     * Device Sync: runs [args] (the binary first), handing each output line to [onLine] (rsync's progress2 rewrites a
-     * line with `\r`, so both `\r` and `\n` end one); the exit code. [onLine] may still be called for output flushed
+     * Device Sync: runs [args] (the binary first) with [env] added to its environment (a password stays out of argv,
+     * which `/proc` shows to every app), handing each output line to [onLine] (rsync's progress2 rewrites a line with
+     * `\r`, so both `\r` and `\n` end one); the exit code. [onLine] may still be called for output flushed
      * before EOF. Cancellation stops the process and its children and always surfaces as the CancellationException,
      * never as a read error from the pipe closing.
      */
-    suspend fun runStreaming(args: List<String>, onLine: (String) -> Unit): Int {
+    suspend fun runStreaming(args: List<String>, env: Map<String, String> = emptyMap(), onLine: (String) -> Unit): Int {
         val started = AtomicReference<Process?>()
         try {
             // Started before the reader child exists, as in pull(): a cancel can then never land inside start().
             val p = withContext(Dispatchers.IO) {
-                ProcessBuilder(args).redirectErrorStream(true).start().also { argvOf[it] = args; started.set(it) }
+                ProcessBuilder(args).redirectErrorStream(true).apply { environment().putAll(env) }.start()
+                    .also { argvOf[it] = args; started.set(it) }
             }
             val cancelled = AtomicBoolean(false)
             return coroutineScope {

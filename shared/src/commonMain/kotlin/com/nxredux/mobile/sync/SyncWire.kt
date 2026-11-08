@@ -3,10 +3,12 @@ package com.nxredux.mobile.sync
 /** A peer's discovery flag (nx-redux `sync_proto.c`): `0`, `R` (ROMs on), `c` (client-only), `C` (both). */
 data class SyncFlags(val romsOn: Boolean, val clientOnly: Boolean)
 
-/** A Device Sync datagram. [filters]: the peer filters its own side (a `v2` trailer, or client-only); false is old firmware. */
+/** A Device Sync datagram. [Hello.nonce] / [Ack.nonce]: the peer's `v3` nonce; null for a peer this phone can't pair with. */
 sealed interface SyncMessage {
-    data class Hello(val ip: String, val flags: SyncFlags, val filters: Boolean) : SyncMessage
-    data class Ack(val ip: String, val flags: SyncFlags, val filters: Boolean) : SyncMessage
+    data class Hello(val ip: String, val flags: SyncFlags, val nonce: String?) : SyncMessage
+    data class Ack(val ip: String, val flags: SyncFlags, val nonce: String?) : SyncMessage
+    /** The peer's user confirmed the pairing code. */
+    data object Ok : SyncMessage
     data object Ready : SyncMessage
     data object Done : SyncMessage
     /** The peer's run failed or was stopped after pairing: DONE's counterpart, as a failure. */
@@ -15,9 +17,10 @@ sealed interface SyncMessage {
 
 /**
  * The handheld's Device Sync wire (nx-redux `workspace/all/sync/sync.c` and `sync_proto.c`):
- * `HELLO_TRIMUI_SYNC:<ip>:<flag>` broadcast, `TRIMUI_SYNC_ACK:<ip>:<flag>` unicast, then READY / DONE (or FAIL, from
- * either side once paired, when its run fails or is stopped). A current handheld appends a NUL and `v2`; firmware
- * without it is refused at pairing. The phone sends `c`, or `C` with ROMs on.
+ * `HELLO_TRIMUI_SYNC:<ip>:<flag>` broadcast, `TRIMUI_SYNC_ACK:<ip>:<flag>` unicast, each with a NUL and `v3:<nonce>`
+ * ([SyncPairing]); OK once the user confirmed the pairing code, then READY / DONE (or FAIL, from either side once
+ * paired, when its run fails or is stopped). A peer without a valid `v3` trailer is refused at pairing. The phone sends
+ * `c`, or `C` with ROMs on.
  */
 object SyncWire {
     const val UDP_PORT = 19999
@@ -27,14 +30,17 @@ object SyncWire {
     const val READY = "TRIMUI_SYNC_READY"
     const val DONE = "TRIMUI_SYNC_DONE"
     const val FAIL = "TRIMUI_SYNC_FAIL"
-    private const val TRAILER = "v2"
+    const val OK = "TRIMUI_SYNC_OK"
+    private const val TRAILER = "v3:"
 
     /** The phone's flag: `C` with ROMs on, `c` without; client-only either way. */
     fun flag(roms: Boolean): Char = if (roms) 'C' else 'c'
-    /** The discovery HELLO for [ownIp] (a dotted IPv4 address, else IllegalArgumentException), with the phone's flag. */
-    fun hello(ownIp: String, roms: Boolean = false): String = "$HELLO${checked(ownIp)}:${flag(roms)}"
-    /** The answer to a peer's HELLO, from [ownIp] (a dotted IPv4 address, else IllegalArgumentException), with the flag. */
-    fun ack(ownIp: String, roms: Boolean = false): String = "$ACK${checked(ownIp)}:${flag(roms)}"
+    /** The discovery HELLO for [ownIp] (a dotted IPv4 address) with the phone's flag and the run's [nonce]; else IllegalArgumentException. */
+    fun hello(ownIp: String, roms: Boolean = false, nonce: String): String = "$HELLO${checked(ownIp)}:${flag(roms)}${trailer(nonce)}"
+    /** The answer to a peer's HELLO, from [ownIp] (a dotted IPv4 address) with the flag and the run's [nonce]; else IllegalArgumentException. */
+    fun ack(ownIp: String, roms: Boolean = false, nonce: String): String = "$ACK${checked(ownIp)}:${flag(roms)}${trailer(nonce)}"
+
+    private fun trailer(nonce: String) = "\u0000$TRAILER${requireNotNull(SyncPairing.checkedNonce(nonce)) { "not a nonce: $nonce" }}"
 
     /** [text] as a message, or null for anything else (a bad IP, an unknown flag, another app's packet). */
     fun parse(text: String): SyncMessage? {
@@ -43,6 +49,7 @@ object SyncWire {
         if (head == READY) return SyncMessage.Ready
         if (head == DONE) return SyncMessage.Done
         if (head == FAIL) return SyncMessage.Fail
+        if (head == OK) return SyncMessage.Ok
         val hello = head.startsWith(HELLO)
         if (!hello && !head.startsWith(ACK)) return null
         val payload = head.removePrefix(if (hello) HELLO else ACK)
@@ -55,8 +62,8 @@ object SyncWire {
             "C" -> SyncFlags(romsOn = true, clientOnly = true)
             else -> return null
         }
-        val filters = trailer == TRAILER || flags.clientOnly
-        return if (hello) SyncMessage.Hello(ip, flags, filters) else SyncMessage.Ack(ip, flags, filters)
+        val nonce = trailer?.takeIf { it.startsWith(TRAILER) }?.let { SyncPairing.checkedNonce(it.removePrefix(TRAILER)) }
+        return if (hello) SyncMessage.Hello(ip, flags, nonce) else SyncMessage.Ack(ip, flags, nonce)
     }
 
     /** [text] when it is a canonical dotted IPv4 address (four 0..255 parts, no leading zeros), else null. */

@@ -22,6 +22,11 @@ enum class SyncStep(val number: Int, val label: String, val push: Boolean, val m
  * every value that reaches a URL or a config line is checked, since a newline would start a directive nobody wrote.
  */
 object SyncCommands {
+    /**
+     * Not 4: a push's daemon side logs and exits a moment after the client is done, so the client's back-to-back ROM
+     * runs overlap (3 still open at the 4th, measured with rsync 3.5.1) and a low limit refuses a run of a normal sync.
+     */
+    const val MAX_CONNECTIONS = 16
     /** Dreamcast shared memory cards: saves (`Saves/DC`), so never carried by BIOS sync. */
     private const val VMU_CARDS = "vmu_save_*.bin"
     /** `map.txt` (a collections folder's alias map, not a collection) in any case, as an rsync pattern. */
@@ -51,7 +56,7 @@ object SyncCommands {
         require(savesDir == null || noBreak(savesDir)) { "a path with a line break" }
         require(onlyTags.orEmpty().none { it.isEmpty() || '/' in it || !noBreak(it) }) { "not a plain tag" }
         val local = if (shared) "$base/.userdata/shared/" else savesDir?.let { it.trimEnd('/') + "/" } ?: "$base/Saves/"
-        val remote = "rsync://$peerIp:${SyncWire.RSYNC_PORT}/${step.module}/"
+        val remote = "${peer(peerIp)}/${step.module}/"
         val filters = if (shared) SyncAreas.sharedFilterArgs() else SyncAreas.savesExcludeArgs() + onlyTags?.let { tags ->
             tags.flatMap { val t = SyncRoms.escape(it); listOf("--include=/$t/", "--include=/$t/**") } + "--exclude=*"
         }.orEmpty()
@@ -74,7 +79,7 @@ object SyncCommands {
         fun resolve(e: RomEnd): String = when (e) {
             is RomEnd.Home -> dir(homeRoms.trimEnd('/'), e.path)
             is RomEnd.Extra -> dir((extraRoots[e.extra] ?: error("no extra folder ${e.extra}")).trimEnd('/'), e.path)
-            is RomEnd.Peer -> dir("rsync://$peerIp:${SyncWire.RSYNC_PORT}/${e.module}", e.path)
+            is RomEnd.Peer -> dir("${peer(peerIp)}/${e.module}", e.path)
             is RomEnd.Bios -> dir((homeBios ?: error("no home Bios folder")).trimEnd('/'), e.path)
         }
         val limited = filesFromFile != null || filterFile != null || run.ignoreExisting
@@ -134,6 +139,12 @@ object SyncCommands {
 
     private fun noBreak(s: String) = '\n' !in s && '\r' !in s
 
+    /**
+     * The peer daemon's URL root. The user makes rsync send RSYNC_PASSWORD (set in the process environment, never in
+     * argv, where any app could read it from `/proc`).
+     */
+    private fun peer(ip: String) = "rsync://${SyncPairing.USER}@$ip:${SyncWire.RSYNC_PORT}"
+
     private fun requireIpv4(ip: String) = require(SyncWire.ipv4(ip) == ip) { "not a dotted IPv4 address: $ip" }
 
     /** `base/path/`, or `base/` when [path] is empty. */
@@ -144,7 +155,7 @@ object SyncCommands {
         requireIpv4(peerIp)
         require(module == "roms" || module == "bios") { "not a listable module: $module" }
         // --8-bit-output: names raw, not with each non-ASCII byte as `\#ooo` (`Pokémon mini (PKM)` must pair by name).
-        return listOf(binary, "--list-only", "--8-bit-output", "--timeout=30", "--contimeout=10", "rsync://$peerIp:${SyncWire.RSYNC_PORT}/$module/")
+        return listOf(binary, "--list-only", "--8-bit-output", "--timeout=30", "--contimeout=10", "${peer(peerIp)}/$module/")
     }
 
     /**
@@ -154,7 +165,7 @@ object SyncCommands {
     fun listHashesArgs(binary: String, peerIp: String): List<String> {
         requireIpv4(peerIp)
         return listOf(binary, "--list-only", "--8-bit-output", "-R", "--timeout=30", "--contimeout=10",
-            "rsync://$peerIp:${SyncWire.RSYNC_PORT}/roms/./*/.retroachievements/hashes.json")
+            "${peer(peerIp)}/roms/./*/.retroachievements/hashes.json")
     }
 
     /** Lists the top-level entries of the peer's `roms/<folder>/` (which games a sibling console folder holds). */
@@ -162,7 +173,7 @@ object SyncCommands {
         requireIpv4(peerIp)
         require(noBreak(folder)) { "a path with a line break" }
         return listOf(binary, "--list-only", "--8-bit-output", "--timeout=30", "--contimeout=10",
-            dir("rsync://$peerIp:${SyncWire.RSYNC_PORT}/roms", folder))
+            dir("${peer(peerIp)}/roms", folder))
     }
 
     /**
@@ -175,7 +186,7 @@ object SyncCommands {
         requireIpv4(peerIp)
         require(noBreak(localDir)) { "a path with a line break" }
         val local = localDir.trimEnd('/') + "/"
-        val remote = "rsync://$peerIp:${SyncWire.RSYNC_PORT}/collections/"
+        val remote = "${peer(peerIp)}/collections/"
         return listOf(binary) + (OPTIONS - "--update") +
             listOf("--exclude=._*", "--exclude=.DS_Store", "--exclude=/$MAP_TXT", "--include=/*.[tT][xX][tT]", "--exclude=*") +
             if (push) listOf(local, remote) else listOf(remote, local)
@@ -184,14 +195,14 @@ object SyncCommands {
     /** Copies one file [path] of the peer's [module] to [localFile]. */
     fun fetchArgs(binary: String, peerIp: String, module: String, path: String, localFile: String): List<String> {
         requireIpv4(peerIp)
-        return listOf(binary, "-t", "--timeout=30", "--contimeout=10", "rsync://$peerIp:${SyncWire.RSYNC_PORT}/$module/$path", localFile)
+        return listOf(binary, "-t", "--timeout=30", "--contimeout=10", "${peer(peerIp)}/$module/$path", localFile)
     }
 
     /** Copies [localFile] into the peer's [module] folder [remoteDir]. */
     fun putArgs(binary: String, peerIp: String, module: String, remoteDir: String, localFile: String): List<String> {
         requireIpv4(peerIp)
         return listOf(binary, "-t", "--no-perms", "--timeout=30", "--contimeout=10", localFile,
-            "rsync://$peerIp:${SyncWire.RSYNC_PORT}/$module/$remoteDir/")
+            "${peer(peerIp)}/$module/$remoteDir/")
     }
 
     /**
@@ -201,14 +212,16 @@ object SyncCommands {
      * (`<roms>/.sources`, where extras' art lives and `[roms]` hides it) and the read-only `[nx-extras]` manifest
      * folder. With [bios] (this phone's home `Bios/`, whenever it has All files access, ROMs on or off) it serves
      * `[bios]` (writable; the peer never replaces a file). With [collections] (the home `Collections/`, likewise) it
-     * serves `[collections]` (writable; `map.txt` never moves).
+     * serves `[collections]` (writable; `map.txt` never moves). Every module asks for the pairing user and the run's
+     * password in [secretsFile] ([SyncPairing.secrets]); at most [MAX_CONNECTIONS] at once, counted in [lockFile] (rsync's
+     * default, `/var/run/rsyncd.lock`, does not exist on Android, and a lock that won't open refuses every connection).
      */
     fun daemonConf(
-        peerIp: String, shared: String, saves: String, pidFile: String, logFile: String, roms: ServerRoms? = null, bios: String? = null,
-        collections: String? = null,
+        peerIp: String, shared: String, saves: String, pidFile: String, logFile: String, secretsFile: String, lockFile: String, roms: ServerRoms? = null,
+        bios: String? = null, collections: String? = null,
     ): String {
         requireIpv4(peerIp)
-        val paths = listOf(shared, saves, pidFile, logFile) + (roms?.let { listOf(it.roms, it.manifestDir) + it.extras }.orEmpty()) +
+        val paths = listOf(shared, saves, pidFile, logFile, secretsFile, lockFile) + (roms?.let { listOf(it.roms, it.manifestDir) + it.extras }.orEmpty()) +
             listOfNotNull(bios, collections)
         require(paths.none { '\n' in it || '\r' in it }) { "a path with a line break" }
         return buildString {
@@ -220,6 +233,11 @@ object SyncCommands {
             append("log file = ").append(logFile).append('\n')
             append("log format = %m %o %f\n")
             append("transfer logging = yes\n")
+            append("auth users = ").append(SyncPairing.USER).append('\n')
+            append("secrets file = ").append(secretsFile).append('\n')
+            append("strict modes = true\n")
+            append("max connections = ").append(MAX_CONNECTIONS).append('\n')
+            append("lock file = ").append(lockFile).append('\n')
             append('\n')
             append("[shared]\n")
             append("  path = ").append(shared).append('\n')

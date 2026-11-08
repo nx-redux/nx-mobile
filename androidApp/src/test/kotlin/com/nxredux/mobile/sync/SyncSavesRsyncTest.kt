@@ -50,7 +50,8 @@ class SyncSavesRsyncTest {
         val saves = tmp.newFolder("handheld-saves")
         val port = freePort()
         val conf = SyncCommands.daemonConf("127.0.0.1", shared = tmp.newFolder("sh").path, saves = saves.path,
-            pidFile = File(work, "rsyncd.pid").path, logFile = File(work, "sync.log").path)
+            pidFile = File(work, "rsyncd.pid").path, logFile = File(work, "sync.log").path,
+            secretsFile = SyncPairedDaemon.secrets(work).path, lockFile = SyncPairedDaemon.lock(work).path)
             .replace("port = ${SyncWire.RSYNC_PORT}\n", "port = $port\n")
         val confFile = File(work, "rsyncd.conf").apply { writeText(conf) }
         daemon = ProcessBuilder(bin!!, "--daemon", "--no-detach", "--config=${confFile.path}")
@@ -64,7 +65,7 @@ class SyncSavesRsyncTest {
     }
 
     private fun exec(args: List<String>, port: Int): String {
-        val p = ProcessBuilder(args.map { it.replace("127.0.0.1:${SyncWire.RSYNC_PORT}/", "127.0.0.1:$port/") }).redirectErrorStream(true).start()
+        val p = SyncPairedDaemon.client(args.map { it.replace("127.0.0.1:${SyncWire.RSYNC_PORT}/", "127.0.0.1:$port/") }).start()
         val out = p.inputStream.bufferedReader().readText()
         assertEquals(out, 0, p.waitFor())
         return out

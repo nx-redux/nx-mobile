@@ -42,9 +42,10 @@ import kotlin.coroutines.EmptyCoroutineContext
 /**
  * Tools → Device Sync: pairs with a handheld or a phone on the cable or Wi-Fi with the handheld's protocol
  * ([SyncWire]), then runs the rsync steps as the client ([SyncStep]: saves and states 1-4, plus BIOS 5-6 and
- * collections 7 when both sides can, ROMs 8-9 with ROMs on), or the daemon as the server ([SyncRoles]). A peer on old
- * firmware (no `v2`, no `c`) is refused at pairing. Lives in a process-level [scope] so leaving the screen does not
- * stop it; [platform] does the I/O and [now] tells when the next HELLO/READY is due.
+ * collections 7 when both sides can, ROMs 8-9 with ROMs on), or the daemon as the server ([SyncRoles]). Between
+ * pairing and either role both users confirm the pairing code ([SyncPairing]); a peer without the `v3` trailer is
+ * refused at pairing. Lives in a process-level [scope] so leaving the screen does not stop it; [platform] does the I/O
+ * and [now] tells when the next HELLO/OK/READY is due.
  */
 class DeviceSyncController(
     private val scope: CoroutineScope,
@@ -84,6 +85,8 @@ class DeviceSyncController(
      * log reader thread, read by the wait loop.
      */
     @Volatile private var serverActivity = 0L
+    /** A on the Pairing page; read by the run's confirm loop. */
+    @Volatile private var codeConfirmed = false
     /**
      * A sync (any phase from Start to its end) is under way: no game may start, no import may run. Stays true through a
      * stopped run's cleanup, since a stopped server still delivers its last log lines.
@@ -126,6 +129,15 @@ class DeviceSyncController(
             DeviceSyncPage.NoWifi -> if (button == NxButton.B) _page.value = ready(SyncLink.WIFI)
             DeviceSyncPage.WaitingForCable -> if (button == NxButton.B) backToReady(SyncLink.CABLE)
             is DeviceSyncPage.Searching -> if (button == NxButton.B) backToReady(p.link)
+            is DeviceSyncPage.Pairing -> when (button) {
+                NxButton.A -> if (!p.confirmed) {
+                    codeConfirmed = true
+                    _page.update { if (it is DeviceSyncPage.Pairing) it.copy(confirmed = true) else it }
+                }
+                // As a confirmed Stop: the run's end tells the peer FAIL.
+                NxButton.B -> stop()
+                else -> Unit
+            }
             is DeviceSyncPage.Syncing -> when {
                 p.confirmStop && button == NxButton.A -> stop()
                 // On the live page, so a progress or file line landing in between is kept.
@@ -198,6 +210,7 @@ class DeviceSyncController(
         var finished: DeviceSyncPage.Done? = null
         try {
             if (!platform.rsyncAvailable()) { show(me, DeviceSyncPage.Failed(link, DeviceSyncText.NO_RSYNC)); return }
+            val nonce = SyncPairing.nonce(platform.randomBytes(SyncPairing.NONCE_BYTES))
             val ownIp: String
             var cablePeer: String? = null
             // The cable's drop count once Up: any further drop ends the run ([watchingCable]).
@@ -224,16 +237,23 @@ class DeviceSyncController(
             val end = watchingCable(drops) {
                 show(me, DeviceSyncPage.Searching(link, ownIp))
                 log("searching on $link as $ownIp, roms $roms")
-                val peer = when (val found = discover(sock, ownIp, cablePeer, roms)) {
+                val peer = when (val found = discover(sock, ownIp, cablePeer, roms, nonce)) {
                     is Peer -> found
                     Unpaired.MISSED_ACK -> { log("no ACK, only READY: failed"); return@watchingCable DeviceSyncPage.Failed(link, DeviceSyncText.MISSED_ACK) }
                     Unpaired.NONE -> { log("no device found"); return@watchingCable DeviceSyncPage.Failed(link, DeviceSyncText.NO_DEVICE) }
                 }
-                if (!peer.filters) return@watchingCable DeviceSyncPage.Failed(link, DeviceSyncText.OLD_FIRMWARE)   // latest firmware only
-                val isServer = SyncRoles.isServer(ownClientOnly = true, peerClientOnly = peer.flags.clientOnly, ownIp = ownIp, peerIp = peer.ip)
+                // Told FAIL too, as the handheld does: an older peer that paired with us stops waiting.
                 failTo = peer.ip
-                if (isServer) serve(me, sock, link, ownIp, peer, roms, tally)
-                else client(me, sock, link, ownIp, peer, roms, tally) { finished = it }
+                val peerNonce = peer.nonce ?: return@watchingCable DeviceSyncPage.Failed(link, DeviceSyncText.UPDATE_PEER)
+                val isServer = SyncRoles.isServer(ownClientOnly = true, peerClientOnly = peer.flags.clientOnly, ownIp = ownIp, peerIp = peer.ip)
+                val secret = SyncPairing.derive(ownIp, nonce, peer.ip, peerNonce)
+                val readySeen = when (val c = confirmCode(me, sock, link, peer, secret.code, isServer)) {
+                    is Confirmed -> c.readySeen
+                    is NotConfirmed -> return@watchingCable c.page
+                }
+                platform.pairWith(secret.password)
+                if (isServer) serve(me, sock, link, peer, roms, tally)
+                else client(me, sock, link, peer, roms, tally, readySeen) { finished = it }
             } ?: run {
                 cableDropped = true
                 finished?.also { log("cable dropped after DONE; run done") } ?: run {
@@ -241,7 +261,7 @@ class DeviceSyncController(
                     DeviceSyncPage.Failed(link, DeviceSyncText.CABLE_DISCONNECTED)
                 }
             }
-            if (end !is DeviceSyncPage.Failed || end.reason == DeviceSyncText.PEER_FAILED) failTo = null
+            if (end !is DeviceSyncPage.Failed || end.reason == DeviceSyncText.PEER_FAILED || end.reason == DeviceSyncText.PEER_CANCELLED) failTo = null
             show(me, end)
         } catch (e: CancellationException) {
             throw e   // first: a cancelled step must never read as a lost network
@@ -249,6 +269,7 @@ class DeviceSyncController(
             show(me, DeviceSyncPage.Failed(link, DeviceSyncText.NETWORK_LOST))
         } finally {
             withContext(NonCancellable) {
+                platform.pairWith(null)
                 failTo?.let { ip -> socket?.let { sendFail(it, ip) } }
                 socket?.close()
                 if (startedCable || cableDropped) platform.cable.stop()
@@ -309,13 +330,49 @@ class DeviceSyncController(
     }
 
     /** A HELLO from the paired [peer] after pairing means our ACK was lost: it is sent again. */
-    private suspend fun reAck(sock: SyncSocket, d: SyncDatagram, message: SyncMessage?, ownIp: String, peer: Peer, roms: Boolean) {
-        if (message is SyncMessage.Hello && message.ip == peer.ip && d.sourceIp == peer.ip) sock.send(SyncWire.ack(ownIp, roms), peer.ip)
+    private suspend fun reAck(sock: SyncSocket, d: SyncDatagram, message: SyncMessage?, peer: Peer) {
+        if (message is SyncMessage.Hello && message.ip == peer.ip && d.sourceIp == peer.ip) sock.send(peer.ack, peer.ip)
     }
 
     private sealed interface Discovery
-    private class Peer(val ip: String, val flags: SyncFlags, val filters: Boolean) : Discovery
+    /** [nonce]: the peer's (null: it can't pair, [SyncWire.parse]); [ack]: this run's ACK, for [reAck]. */
+    private class Peer(val ip: String, val flags: SyncFlags, val nonce: String?, val ack: String) : Discovery
     private enum class Unpaired : Discovery { MISSED_ACK, NONE }
+
+    private sealed interface Confirmation
+    /** Both users confirmed; [readySeen]: the serving peer's READY already came (a client needs no other). */
+    private class Confirmed(val readySeen: Boolean) : Confirmation
+    private class NotConfirmed(val page: DeviceSyncPage.Failed) : Confirmation
+
+    /**
+     * Shows [code] until both users confirmed it: this side's A, then OK to the peer each second until its OK arrives
+     * (or, for a client, the server's READY, sent only once it confirmed). One OK goes out even when the peer's came
+     * first. B on the page cancels the run ([onButton]); no answer within [CONFIRM_MS], or the peer's FAIL, ends it.
+     */
+    private suspend fun confirmCode(me: Job, sock: SyncSocket, link: SyncLink, peer: Peer, code: String, isServer: Boolean): Confirmation {
+        codeConfirmed = false
+        show(me, DeviceSyncPage.Pairing(link, peer.ip, code))
+        log("pairing code shown for ${peer.ip}")
+        val deadline = now() + CONFIRM_MS
+        var peerOk = false
+        var readySeen = false
+        var nextOk = Long.MIN_VALUE
+        while (true) {
+            val mine = codeConfirmed
+            if (mine && now() >= nextOk) { sock.send(SyncWire.OK, peer.ip); nextOk = now() + INTERVAL_MS }
+            if (mine && peerOk) { log("pairing confirmed on both sides"); return Confirmed(readySeen) }
+            if (now() >= deadline) { log("pairing not confirmed in time"); return NotConfirmed(DeviceSyncPage.Failed(link, DeviceSyncText.PAIRING_NOT_CONFIRMED)) }
+            val d = sock.receive(POLL_MS) ?: continue
+            val m = SyncWire.parse(d.text)
+            if (d.sourceIp != peer.ip) continue
+            when {
+                m == SyncMessage.Ok -> peerOk = true
+                m == SyncMessage.Ready && !isServer -> { peerOk = true; readySeen = true }
+                m == SyncMessage.Fail -> { log("FAIL from ${peer.ip} while pairing"); return NotConfirmed(DeviceSyncPage.Failed(link, DeviceSyncText.PEER_CANCELLED)) }
+                else -> reAck(sock, d, m, peer)
+            }
+        }
+    }
 
     /**
      * HELLO each second (unicast to [cablePeer] on the cable, broadcast on Wi-Fi) until a fitting HELLO or ACK comes.
@@ -325,8 +382,9 @@ class DeviceSyncController(
      * pairs; a phone server re-ACKs our next HELLO ([reAck]) long before that count. [Unpaired.NONE] after
      * [SEARCH_MS] with no peer: the run holds the keep-alive service and keeps the screen on.
      */
-    private suspend fun discover(sock: SyncSocket, ownIp: String, cablePeer: String?, roms: Boolean): Discovery {
-        val hello = SyncWire.hello(ownIp, roms)
+    private suspend fun discover(sock: SyncSocket, ownIp: String, cablePeer: String?, roms: Boolean, nonce: String): Discovery {
+        val hello = SyncWire.hello(ownIp, roms, nonce)
+        val ack = SyncWire.ack(ownIp, roms, nonce)
         var nextHello = now()
         val deadline = now() + SEARCH_MS
         var readyFrom: String? = null
@@ -346,15 +404,15 @@ class DeviceSyncController(
                 if (readies >= MISSED_ACK_READIES) return Unpaired.MISSED_ACK
                 continue
             }
-            val (ip, flags, filters) = when (m) {
-                is SyncMessage.Hello -> Triple(m.ip, m.flags, m.filters)
-                is SyncMessage.Ack -> Triple(m.ip, m.flags, m.filters)
+            val (ip, flags, peerNonce) = when (m) {
+                is SyncMessage.Hello -> Triple(m.ip, m.flags, m.nonce)
+                is SyncMessage.Ack -> Triple(m.ip, m.flags, m.nonce)
                 else -> continue   // a stale READY/DONE from an earlier sync never pairs
             }
             if (ip != d.sourceIp || !fits(ip, ownIp, cablePeer)) continue   // a spoofed payload, our own echo, another link's peer
-            if (m is SyncMessage.Hello) sock.send(SyncWire.ack(ownIp, roms), ip)
-            log("paired with $ip by ${if (m is SyncMessage.Hello) "HELLO" else "ACK"} ($flags, filters $filters)")
-            return Peer(ip, flags, filters)
+            if (m is SyncMessage.Hello) sock.send(ack, ip)
+            log("paired with $ip by ${if (m is SyncMessage.Hello) "HELLO" else "ACK"} ($flags, v3 ${peerNonce != null})")
+            return Peer(ip, flags, peerNonce, ack)
         }
     }
 
@@ -363,17 +421,20 @@ class DeviceSyncController(
         ip != ownIp && (if (cablePeer != null) ip == cablePeer else SyncWire.ipValue(ip) !in CABLE_NET)
 
     private suspend fun client(
-        me: Job, sock: SyncSocket, link: SyncLink, ownIp: String, peer: Peer, roms: Boolean, tally: MutableStateFlow<Tally>,
+        me: Job, sock: SyncSocket, link: SyncLink, peer: Peer, roms: Boolean, tally: MutableStateFlow<Tally>, readySeen: Boolean,
         onFinished: (DeviceSyncPage.Done) -> Unit,   // every step ran: the run is Done whatever its DONE repeats meet
     ): DeviceSyncPage {
         show(me, DeviceSyncPage.Syncing(link, peer.ip, SyncRole.CLIENT, null, 0, 0, listOf(DeviceSyncText.WAITING_PEER)))
         val deadline = now() + READY_WAIT_MS
-        while (true) {
+        // OK goes on each second until READY, as the handheld client does: a server that lost every OK still gets one.
+        var nextOk = now() + INTERVAL_MS
+        while (!readySeen) {
             if (now() >= deadline) return DeviceSyncPage.Failed(link, DeviceSyncText.noReady(peer.ip))
+            if (now() >= nextOk) { sock.send(SyncWire.OK, peer.ip); nextOk = now() + INTERVAL_MS }
             val d = sock.receive(POLL_MS) ?: continue
             val m = SyncWire.parse(d.text)
             if (d.sourceIp == peer.ip && m == SyncMessage.Ready) break
-            reAck(sock, d, m, ownIp, peer, roms)
+            reAck(sock, d, m, peer)
         }
         // ROMs run when either side asked and this phone can; asked but unable, steps 1–4 run and Done says so.
         val romsOn = roms || peer.flags.romsOn
@@ -948,15 +1009,18 @@ class DeviceSyncController(
     }
 
     private suspend fun serve(
-        me: Job, sock: SyncSocket, link: SyncLink, ownIp: String, peer: Peer, roms: Boolean, tally: MutableStateFlow<Tally>,
+        me: Job, sock: SyncSocket, link: SyncLink, peer: Peer, roms: Boolean, tally: MutableStateFlow<Tally>,
     ): DeviceSyncPage {
         try {
             serverActivity = now()
+            // Set on the log reader's thread: a wrong password ends the run at once, so a guesser gets one try per code.
+            val authFailed = MutableStateFlow(false)
             // The daemon's open connections, by pid: while one is open the peer is mid-step and says nothing.
             val sessions = MutableStateFlow(emptySet<String>())
             if (!platform.checkSaveFileTimes()) return DeviceSyncPage.Failed(link, DeviceSyncText.NO_SAVE_FILE_TIMES)
             val started = platform.startServer(peer.ip, roms || peer.flags.romsOn) { line ->
                 serverActivity = now()   // any daemon line, counted or not: the peer is still working with it
+                if (SyncProgress.authFailed(line)) authFailed.value = true
                 SyncProgress.daemonSession(line)?.let { (pid, open) -> sessions.update { if (open) it + pid else it - pid } }
                 val e = SyncProgress.daemonLine(line) ?: return@startServer
                 tally.update {
@@ -982,6 +1046,7 @@ class DeviceSyncController(
             var peerHeard = now()
             var nextReady = now()
             while (true) {
+                if (authFailed.value) { log("a client failed the daemon's password check"); return DeviceSyncPage.Failed(link, DeviceSyncText.AUTH_FAILED) }
                 val quiet = now() - maxOf(peerHeard, serverActivity)
                 if (sessions.value.isNotEmpty()) {
                     if (quiet >= SERVER_WAIT_MS) return DeviceSyncPage.Failed(link, DeviceSyncText.SERVER_TIMEOUT)
@@ -995,7 +1060,7 @@ class DeviceSyncController(
                 val m = SyncWire.parse(d.text)
                 if (d.sourceIp == peer.ip && m == SyncMessage.Done) break
                 if (d.sourceIp == peer.ip && m == SyncMessage.Fail) { log("FAIL from ${peer.ip}"); return DeviceSyncPage.Failed(link, DeviceSyncText.PEER_FAILED) }
-                reAck(sock, d, m, ownIp, peer, roms)
+                reAck(sock, d, m, peer)
             }
         } finally {
             // Even when stopped, failed or the network went (inside startServer too, which tears down what it began):
@@ -1030,6 +1095,8 @@ class DeviceSyncController(
         const val INTERVAL_MS = 1_000L
         const val POLL_MS = 200L
         const val READY_WAIT_MS = 30_000L
+        /** How long the pairing code waits for both users. */
+        const val CONFIRM_MS = 120_000L
         /** READYs in a row from one device while searching that mean its ACK was lost (one a second: about 5 s). */
         const val MISSED_ACK_READIES = 5
         /**

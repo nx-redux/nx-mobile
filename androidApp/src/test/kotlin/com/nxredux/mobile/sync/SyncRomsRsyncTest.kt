@@ -51,6 +51,7 @@ class SyncRomsRsyncTest {
         val port = freePort()
         val conf = SyncCommands.daemonConf("127.0.0.1", shared = tmp.newFolder("sh").path, saves = tmp.newFolder("sv").path,
             pidFile = File(work, "rsyncd.pid").path, logFile = File(work, "sync.log").path,
+            secretsFile = SyncPairedDaemon.secrets(work).path, lockFile = SyncPairedDaemon.lock(work).path,
             roms = ServerRoms(roms.path, extraDirs.map { it.path }, manifest.path), bios = bios.path)
             .replace("port = ${SyncWire.RSYNC_PORT}\n", "port = $port\n")
         val confFile = File(work, "rsyncd.conf").apply { writeText(conf) }
@@ -67,7 +68,7 @@ class SyncRomsRsyncTest {
     private fun swapPort(args: List<String>, port: Int) = args.map { it.replace("127.0.0.1:${SyncWire.RSYNC_PORT}/", "127.0.0.1:$port/") }
 
     private fun exec(args: List<String>): Pair<Int, String> {
-        val p = ProcessBuilder(args).redirectErrorStream(true).start()
+        val p = SyncPairedDaemon.client(args).start()
         val out = p.inputStream.bufferedReader().readText()
         return p.waitFor() to out
     }

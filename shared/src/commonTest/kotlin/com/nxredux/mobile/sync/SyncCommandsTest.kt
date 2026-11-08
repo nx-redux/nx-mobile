@@ -27,30 +27,30 @@ class SyncCommandsTest {
     @Test fun collections_pull_and_push_args_take_top_level_txt_without_update() {
         val noUpdate = opts - "--update"
         val filters = listOf("--exclude=._*", "--exclude=.DS_Store", "--exclude=/[mM][aA][pP].[tT][xX][tT]", "--include=/*.[tT][xX][tT]", "--exclude=*")
-        assertEquals(listOf("/b") + noUpdate + filters + listOf("rsync://10.0.0.2:18730/collections/", "/c/pull/"),
+        assertEquals(listOf("/b") + noUpdate + filters + listOf("rsync://nxsync@10.0.0.2:18730/collections/", "/c/pull/"),
             SyncCommands.collectionsArgs("/b", "10.0.0.2", "/c/pull", push = false))
-        assertEquals(listOf("/b") + noUpdate + filters + listOf("/c/push/", "rsync://10.0.0.2:18730/collections/"),
+        assertEquals(listOf("/b") + noUpdate + filters + listOf("/c/push/", "rsync://nxsync@10.0.0.2:18730/collections/"),
             SyncCommands.collectionsArgs("/b", "10.0.0.2", "/c/push/", push = true))
         assertFalse("--update" in SyncCommands.collectionsArgs("/b", "10.0.0.2", "/c", push = true))
         assertFailsWith<IllegalArgumentException> { SyncCommands.collectionsArgs("/b", "x", "/c", push = true) }
     }
 
     @Test fun daemon_conf_adds_collections_only_with_a_collections_folder() {
-        assertTrue("[collections]" !in SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l"))
-        val c = SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", collections = "/sd/Collections")
+        assertTrue("[collections]" !in SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", "/k", "/x"))
+        val c = SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", "/k", "/x", collections = "/sd/Collections")
         assertTrue("[collections]\n  path = /sd/Collections\n  read only = false\n  list = false\n  exclude = ._* .DS_Store /[mM][aA][pP].[tT][xX][tT]\n" in c)
-        assertFailsWith<IllegalArgumentException> { SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", collections = "/c\n[evil]") }
+        assertFailsWith<IllegalArgumentException> { SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", "/k", "/x", collections = "/c\n[evil]") }
     }
 
     @Test fun a_bios_run_resolves_the_home_bios_and_never_replaces() {
         val push = RomRun(SyncStep.SEND_BIOS, "PS", RomEnd.Bios("PS"), RomEnd.Peer("bios", "ps"), ignoreExisting = true)
         val a = SyncCommands.romArgs("/b", push, "10.0.0.2", "/sd/Roms", emptyMap(), null, null, homeBios = "/sd/Bios")
-        assertEquals(listOf("/sd/Bios/PS/", "rsync://10.0.0.2:18730/bios/ps/"), a.takeLast(2))
+        assertEquals(listOf("/sd/Bios/PS/", "rsync://nxsync@10.0.0.2:18730/bios/ps/"), a.takeLast(2))
         assertTrue("--ignore-existing" in a && "--ignore-missing-args" in a)
         assertTrue("--exclude=._*" in a && "--exclude=.DS_Store" in a)
         val pull = RomRun(SyncStep.RECEIVE_BIOS, "PS", RomEnd.Peer("bios", "ps"), RomEnd.Bios("PS"), ignoreExisting = true)
         val p = SyncCommands.romArgs("/b", pull, "10.0.0.2", "/sd/Roms", emptyMap(), null, null, homeBios = "/sd/Bios/")
-        assertEquals(listOf("rsync://10.0.0.2:18730/bios/ps/", "/sd/Bios/PS/"), p.takeLast(2))
+        assertEquals(listOf("rsync://nxsync@10.0.0.2:18730/bios/ps/", "/sd/Bios/PS/"), p.takeLast(2))
         assertTrue("--ignore-existing" in p && "--ignore-missing-args" in p)
         // The daemon can't enforce never-replace: every planned BIOS run, push and pull, carries --ignore-existing.
         val planned = SyncRoms.biosPlan(listOf("PS"), listOf("ps"))
@@ -68,29 +68,29 @@ class SyncCommandsTest {
     }
 
     @Test fun daemon_conf_adds_bios_only_with_a_bios_folder() {
-        assertTrue("[bios]" !in SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l"))
-        val c = SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", bios = "/sd/Bios")
+        assertTrue("[bios]" !in SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", "/k", "/x"))
+        val c = SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", "/k", "/x", bios = "/sd/Bios")
         assertTrue("[bios]\n  path = /sd/Bios\n  read only = false\n  list = false\n  exclude = ._* .DS_Store vmu_save_*.bin\n" in c)
         assertTrue("[roms]" !in c)
-        assertFailsWith<IllegalArgumentException> { SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", bios = "/sd/Bios\n[evil]") }
+        assertFailsWith<IllegalArgumentException> { SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", "/k", "/x", bios = "/sd/Bios\n[evil]") }
     }
 
     @Test fun client_args_push_and_pull_each_area_with_its_filter() {
         assertEquals(opts, SyncCommands.OPTIONS)
         assertEquals(
-            listOf("/b") + opts + SyncAreas.sharedFilterArgs() + listOf("/r/.userdata/shared/", "rsync://10.0.0.2:18730/shared/"),
+            listOf("/b") + opts + SyncAreas.sharedFilterArgs() + listOf("/r/.userdata/shared/", "rsync://nxsync@10.0.0.2:18730/shared/"),
             SyncCommands.clientArgs("/b", SyncStep.SEND_STATES, "10.0.0.2", "/r"),
         )
         assertEquals(
-            listOf("/b") + opts + SyncAreas.savesExcludeArgs() + listOf("/r/Saves/", "rsync://10.0.0.2:18730/saves/"),
+            listOf("/b") + opts + SyncAreas.savesExcludeArgs() + listOf("/r/Saves/", "rsync://nxsync@10.0.0.2:18730/saves/"),
             SyncCommands.clientArgs("/b", SyncStep.SEND_SAVES, "10.0.0.2", "/r/"),
         )
         assertEquals(
-            listOf("/b") + pullOpts + SyncAreas.sharedFilterArgs() + listOf("rsync://10.0.0.2:18730/shared/", "/r/.userdata/shared/"),
+            listOf("/b") + pullOpts + SyncAreas.sharedFilterArgs() + listOf("rsync://nxsync@10.0.0.2:18730/shared/", "/r/.userdata/shared/"),
             SyncCommands.clientArgs("/b", SyncStep.RECEIVE_STATES, "10.0.0.2", "/r"),
         )
         assertEquals(
-            listOf("/b") + pullOpts + SyncAreas.savesExcludeArgs() + listOf("rsync://10.0.0.2:18730/saves/", "/r/Saves/"),
+            listOf("/b") + pullOpts + SyncAreas.savesExcludeArgs() + listOf("rsync://nxsync@10.0.0.2:18730/saves/", "/r/Saves/"),
             SyncCommands.clientArgs("/b", SyncStep.RECEIVE_SAVES, "10.0.0.2", "/r"),
         )
         assertFailsWith<IllegalArgumentException> { SyncCommands.clientArgs("/b", SyncStep.SEND_SAVES, "10.0.0.2;rm", "/r") }
@@ -101,11 +101,11 @@ class SyncCommandsTest {
         assertEquals(
             listOf("/b") + pullOpts + SyncAreas.savesExcludeArgs() +
                 listOf("--include=/GBA/", "--include=/GBA/**", "--include=/MGBA/", "--include=/MGBA/**", "--exclude=*") +
-                listOf("rsync://10.0.0.2:18730/saves/", "/s/recv/"),
+                listOf("rsync://nxsync@10.0.0.2:18730/saves/", "/s/recv/"),
             args,
         )
         assertEquals(
-            listOf("/b") + opts + SyncAreas.savesExcludeArgs() + listOf("/s/send/", "rsync://10.0.0.2:18730/saves/"),
+            listOf("/b") + opts + SyncAreas.savesExcludeArgs() + listOf("/s/send/", "rsync://nxsync@10.0.0.2:18730/saves/"),
             SyncCommands.clientArgs("/b", SyncStep.SEND_SAVES, "10.0.0.2", "/r", savesDir = "/s/send/"),
         )
         assertTrue("--include=/a\\*b/" in SyncCommands.clientArgs("/b", SyncStep.RECEIVE_SAVES, "10.0.0.2", "/r", onlyTags = listOf("a*b")))
@@ -113,7 +113,8 @@ class SyncCommandsTest {
     }
 
     @Test fun the_daemon_always_filters() {
-        val conf = SyncCommands.daemonConf("10.0.0.2", shared = "/r/.userdata/shared", saves = "/r/Saves", pidFile = "/w/d.pid", logFile = "/w/d.log")
+        val conf = SyncCommands.daemonConf("10.0.0.2", shared = "/r/.userdata/shared", saves = "/r/Saves", pidFile = "/w/d.pid", logFile = "/w/d.log",
+            secretsFile = "/w/rsyncd.secrets", lockFile = "/w/rsyncd.lock")
         assertEquals(
             """
             pid file = /w/d.pid
@@ -124,6 +125,11 @@ class SyncCommandsTest {
             log file = /w/d.log
             log format = %m %o %f
             transfer logging = yes
+            auth users = nxsync
+            secrets file = /w/rsyncd.secrets
+            strict modes = true
+            max connections = 16
+            lock file = /w/rsyncd.lock
 
             [shared]
               path = /r/.userdata/shared
@@ -143,16 +149,36 @@ class SyncCommandsTest {
     }
 
     @Test fun the_daemon_conf_refuses_line_breaks_and_bad_ips() {
-        assertFailsWith<IllegalArgumentException> { SyncCommands.daemonConf("10.0.0.2", "/s\n[x]", "/v", "/p", "/l") }
-        assertFailsWith<IllegalArgumentException> { SyncCommands.daemonConf("10.0.0.2", "/s", "/v", "/p\r", "/l") }
-        assertFailsWith<IllegalArgumentException> { SyncCommands.daemonConf("any", "/s", "/v", "/p", "/l") }
+        assertFailsWith<IllegalArgumentException> { SyncCommands.daemonConf("10.0.0.2", "/s\n[x]", "/v", "/p", "/l", "/k", "/x") }
+        assertFailsWith<IllegalArgumentException> { SyncCommands.daemonConf("10.0.0.2", "/s", "/v", "/p\r", "/l", "/k", "/x") }
+        assertFailsWith<IllegalArgumentException> { SyncCommands.daemonConf("any", "/s", "/v", "/p", "/l", "/k", "/x") }
+        assertFailsWith<IllegalArgumentException> { SyncCommands.daemonConf("10.0.0.2", "/s", "/v", "/p", "/l", "/k\n[x]", "/x") }
+    }
+
+    /** The password travels as RSYNC_PASSWORD only: no call takes it, and every URL names the pairing user. */
+    @Test fun every_peer_url_carries_the_pairing_user() {
+        val ip = "10.0.0.2"
+        val run = RomRun(SyncStep.SEND_ROMS, "GB", RomEnd.Home("GB"), RomEnd.Peer("roms", "GB"))
+        val calls = SyncStep.entries.filter { it.module == "shared" || it.module == "saves" }.map { SyncCommands.clientArgs("/b", it, ip, "/r") } +
+            listOf(
+                SyncCommands.listArgs("/b", ip), SyncCommands.listArgs("/b", ip, "bios"), SyncCommands.listHashesArgs("/b", ip),
+                SyncCommands.listFolderArgs("/b", ip, "GB"), SyncCommands.collectionsArgs("/b", ip, "/c", push = false),
+                SyncCommands.collectionsArgs("/b", ip, "/c", push = true), SyncCommands.fetchArgs("/b", ip, "roms", "a", "/c/a"),
+                SyncCommands.putArgs("/b", ip, "roms", "GB", "/c/a"),
+                SyncCommands.romArgs("/b", run, ip, "/sd/Roms", emptyMap(), null, null),
+            )
+        for (args in calls) {
+            val urls = args.filter { "rsync://" in it }
+            assertEquals(1, urls.size, "$args")
+            assertTrue(urls.single().startsWith("rsync://nxsync@$ip:18730/"), urls.single())
+        }
     }
 
     @Test fun rom_args_keep_names_with_spaces_whole() {
         val run = RomRun(SyncStep.SEND_ROMS, "Pokémon mini (PKM)", RomEnd.Home("Pokémon mini (PKM)"), RomEnd.Peer("roms", "Pokémon mini (PKM)"))
         val a = SyncCommands.romArgs("/bin/rsync", run, "192.168.1.10", "/sd/Roms", emptyMap(), null, "/c/ex.txt")
         assertEquals("/sd/Roms/Pokémon mini (PKM)/", a[a.size - 2])
-        assertEquals("rsync://192.168.1.10:18730/roms/Pokémon mini (PKM)/", a.last())
+        assertEquals("rsync://nxsync@192.168.1.10:18730/roms/Pokémon mini (PKM)/", a.last())
         assertTrue("--exclude-from=/c/ex.txt" in a); assertTrue("--inplace" !in a)
         assertTrue("--exclude=._*" in a && "--exclude=.DS_Store" in a)
     }
@@ -166,7 +192,7 @@ class SyncCommandsTest {
         assertEquals(2, runs.size)
         for (run in runs) {
             val a = SyncCommands.romArgs("/b", run, "10.0.0.2", "/sd/Roms", emptyMap(), null, "/c/ex.txt")
-            assertEquals(listOf("rsync://10.0.0.2:18730/roms/${(run.from as RomEnd.Peer).path}/", "/sd/Roms/$gba/.retroachievements/"), a.takeLast(2))
+            assertEquals(listOf("rsync://nxsync@10.0.0.2:18730/roms/${(run.from as RomEnd.Peer).path}/", "/sd/Roms/$gba/.retroachievements/"), a.takeLast(2))
             assertTrue("--ignore-existing" in a && "--ignore-missing-args" in a && "--update" in a)
             val gone = listOf("rsync: [sender] change_dir \"/${(run.from as RomEnd.Peer).path}\" (in roms) failed: No such file or directory (2)",
                 "rsync error: some files/attrs were not transferred (see previous errors) (code 23) at main.c(1338) [sender=3.4.1]")
@@ -177,7 +203,7 @@ class SyncCommandsTest {
     @Test fun rom_pull_from_an_extra_module_with_files_from() {
         val run = RomRun(SyncStep.RECEIVE_ROMS, "Game Boy (GB)", RomEnd.Peer("extra-1", ""), RomEnd.Home("Game Boy (GB)"), filesFrom = listOf("a.gb"))
         val a = SyncCommands.romArgs("/bin/rsync", run, "192.168.1.10", "/sd/Roms", emptyMap(), "/c/list.txt", null)
-        assertEquals(listOf("rsync://192.168.1.10:18730/extra-1/", "/sd/Roms/Game Boy (GB)/"), a.takeLast(2))
+        assertEquals(listOf("rsync://nxsync@192.168.1.10:18730/extra-1/", "/sd/Roms/Game Boy (GB)/"), a.takeLast(2))
         assertTrue("--files-from=/c/list.txt" in a); assertTrue("--inplace" !in a)
     }
 
@@ -218,9 +244,9 @@ class SyncCommandsTest {
     }
 
     @Test fun daemon_conf_adds_rom_modules_only_with_roms() {
-        val base = SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l")
+        val base = SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", "/k", "/x")
         assertTrue("[roms]" !in base)
-        val c = SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", ServerRoms("/sd/Roms", listOf("/storage/SD/Games"), "/c/nx"))
+        val c = SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", "/k", "/x", ServerRoms("/sd/Roms", listOf("/storage/SD/Games"), "/c/nx"))
         assertTrue("[roms]\n  path = /sd/Roms\n  read only = false\n  list = false\n  exclude = ._* .DS_Store /.sources/\n" in c)
         assertTrue("[extra-0]\n  path = /storage/SD/Games\n  read only = true\n" in c)
         assertTrue("[nx-extras]\n  path = /c/nx\n  read only = true\n" in c)
@@ -237,18 +263,18 @@ class SyncCommandsTest {
 
     @Test fun daemon_conf_rejects_a_line_break_in_a_rom_path() {
         assertFailsWith<IllegalArgumentException> {
-            SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", ServerRoms("/sd/Roms", listOf("/x\n[evil]"), "/c"))
+            SyncCommands.daemonConf("192.168.1.10", "/s", "/v", "/p", "/l", "/k", "/x", ServerRoms("/sd/Roms", listOf("/x\n[evil]"), "/c"))
         }
     }
 
     @Test fun list_fetch_put_args() {
-        assertEquals(listOf("/b", "--list-only", "--8-bit-output", "--timeout=30", "--contimeout=10", "rsync://10.99.0.2:18730/roms/"), SyncCommands.listArgs("/b", "10.99.0.2"))
-        assertEquals(listOf("/b", "--list-only", "--8-bit-output", "--timeout=30", "--contimeout=10", "rsync://10.99.0.2:18730/bios/"),
+        assertEquals(listOf("/b", "--list-only", "--8-bit-output", "--timeout=30", "--contimeout=10", "rsync://nxsync@10.99.0.2:18730/roms/"), SyncCommands.listArgs("/b", "10.99.0.2"))
+        assertEquals(listOf("/b", "--list-only", "--8-bit-output", "--timeout=30", "--contimeout=10", "rsync://nxsync@10.99.0.2:18730/bios/"),
             SyncCommands.listArgs("/b", "10.99.0.2", "bios"))
-        assertEquals(listOf("/b", "--list-only", "--8-bit-output", "-R", "--timeout=30", "--contimeout=10", "rsync://10.99.0.2:18730/roms/./*/.retroachievements/hashes.json"),
+        assertEquals(listOf("/b", "--list-only", "--8-bit-output", "-R", "--timeout=30", "--contimeout=10", "rsync://nxsync@10.99.0.2:18730/roms/./*/.retroachievements/hashes.json"),
             SyncCommands.listHashesArgs("/b", "10.99.0.2"))
-        assertEquals("rsync://10.99.0.2:18730/nx-extras/extras.json", SyncCommands.fetchArgs("/b", "10.99.0.2", "nx-extras", "extras.json", "/c/e.json")[4])
-        assertEquals("rsync://10.99.0.2:18730/roms/GB/.retroachievements/", SyncCommands.putArgs("/b", "10.99.0.2", "roms", "GB/.retroachievements", "/c/h.json").last())
+        assertEquals("rsync://nxsync@10.99.0.2:18730/nx-extras/extras.json", SyncCommands.fetchArgs("/b", "10.99.0.2", "nx-extras", "extras.json", "/c/e.json")[4])
+        assertEquals("rsync://nxsync@10.99.0.2:18730/roms/GB/.retroachievements/", SyncCommands.putArgs("/b", "10.99.0.2", "roms", "GB/.retroachievements", "/c/h.json").last())
     }
     @Test fun art_runs_ignore_existing_and_missing_args() {
         val art = RomRun(SyncStep.SEND_ROMS, "GB", RomEnd.Home("GB/.media"), RomEnd.Peer("roms", "GB/.media"), ignoreExisting = true)
@@ -272,7 +298,7 @@ class SyncCommandsTest {
     }
 
     @Test fun list_folder_args() {
-        assertEquals(listOf("/b", "--list-only", "--8-bit-output", "--timeout=30", "--contimeout=10", "rsync://10.99.0.2:18730/roms/Game Boy Advance (MGBA)/"),
+        assertEquals(listOf("/b", "--list-only", "--8-bit-output", "--timeout=30", "--contimeout=10", "rsync://nxsync@10.99.0.2:18730/roms/Game Boy Advance (MGBA)/"),
             SyncCommands.listFolderArgs("/b", "10.99.0.2", "Game Boy Advance (MGBA)"))
         assertFailsWith<IllegalArgumentException> { SyncCommands.listFolderArgs("/b", "10.99.0.2", "a\nb") }
     }

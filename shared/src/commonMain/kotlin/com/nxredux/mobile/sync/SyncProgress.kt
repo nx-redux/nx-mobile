@@ -23,6 +23,11 @@ object SyncProgress {
         return m.groupValues[1] to (m.groupValues[2] == "connect from ")
     }
 
+    private val AUTH_FAILED = Regex("""^\d{4}/\d\d/\d\d \d\d:\d\d:\d\d \[\d+] auth failed on module """)
+
+    /** A daemon log line saying a client gave the wrong user or password. */
+    fun authFailed(line: String): Boolean = AUTH_FAILED.containsMatchIn(line)
+
     /** A `--info=progress2` line with `to-chk=`, else null. */
     fun progress(line: String): StepProgress? {
         val (left, total) = TO_CHECK.find(line)?.destructured ?: return null
