@@ -336,6 +336,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var usingData = false
     /** Overlays and shaders: app-private for good ([DataRoot.private]). */
     override lateinit var privateRoot: File
+        private set
     override lateinit var shaderRoots: Shaders.Roots
         private set
     private lateinit var paths: NxPaths
