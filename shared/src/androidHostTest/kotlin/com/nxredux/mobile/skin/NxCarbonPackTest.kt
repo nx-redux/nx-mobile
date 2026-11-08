@@ -944,6 +944,34 @@ class NxCarbonPackTest {
         assertTrue(c("START").y + c("START").spec.r < 1848f - 20f, "on the window")
     }
 
+    // A column's well holds SELECT and START where it has both (user: the PlayStation's R3 over them is not their pair).
+    @Test
+    fun aColumnsWellHoldsSelectAndStart() {
+        val p = assertNotNull(SkinChoice.place(pack, 2448, 1848, 420, false, false, 320f to 240f, null, foldable = true, variant = SkinVariant.PS1))
+        fun c(id: String) = p.controls.first { it.spec.id == id }
+        val sel = c("SELECT"); val st = c("START")
+        assertEquals(sel.x, st.x, 1f); assertTrue(c("R3").y < sel.y, "R3 over them")
+        val my = (sel.y + st.y) / 2f
+        assertTrue(p.pieces.any { w -> w.dst.height > w.dst.width * 1.5f && kotlin.math.abs(w.dst.x + w.dst.width / 2f - sel.x) < 2f &&
+            kotlin.math.abs(w.dst.y + w.dst.height / 2f - my) < 2f }, "SELECT and START in a well")
+    }
+
+    // The GameCube's tall landscape (the unfolded Fold, a tablet, user): MENU over on the right with START, the pair in a
+    // well, clear of the d-pad it overlapped on the left.
+    @Test
+    fun gameCubeTallLandscapeHasMenuWithStartOnTheRight() {
+        for ((w, h, dpi) in listOf(Triple(2448, 1848, 420), Triple(2304, 1440, 280))) {
+            val p = assertNotNull(SkinChoice.place(pack, w, h, dpi, dpi == 280, false, 640f to 480f, null, foldable = dpi == 420, variant = SkinVariant.GC), "$w")
+            fun c(id: String) = p.controls.first { it.spec.id == id }
+            val menu = c("MENU"); val start = c("START")
+            assertTrue(menu.x > w / 2f, "$w MENU right")
+            stacked(menu, start, "$w MENU over START")
+            val my = (menu.y + start.y) / 2f
+            assertTrue(p.pieces.any { q -> q.dst.height > q.dst.width * 1.5f && kotlin.math.abs(q.dst.x + q.dst.width / 2f - menu.x) < 2f &&
+                kotlin.math.abs(q.dst.y + q.dst.height / 2f - my) < 2f }, "$w the pair in a well")
+        }
+    }
+
     @Test
     fun regular3dsIsThe3dsWithoutTheNewControls() {
         // New 3DS Controls off (user: the default): the 3DS layouts without ZL / ZR and the C-stick nub, L / R the DS's pills
