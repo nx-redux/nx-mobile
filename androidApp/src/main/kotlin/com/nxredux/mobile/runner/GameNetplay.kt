@@ -60,7 +60,7 @@ internal class GameNetplay(private val game: GameActivity) {
         private set
     /** netplay: the session this screen plays in now: [session], or null once a link session's game is a local one. */
     val now: NetplaySession? get() = session.takeUnless { local }
-    /** netplay link: starts the cheat load a normal launch starts in startEmulator, once the game is local ([playLocally]). */
+    /** netplay link: starts the cheat load a normal launch starts at once ([LaunchPipeline]), once the game is local ([playLocally]). */
     var localCheats: (() -> Job)? = null
     /** netplay: this screen's id on the session copy it plays on ([NetplaySessionDir.claim]). */
     private val owner by lazy { java.util.UUID.randomUUID().toString() }

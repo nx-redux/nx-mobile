@@ -39,7 +39,7 @@ internal class Res3dController(private val game: GameActivity, private val rende
 
     /**
      * A new DS / 3DS 3D scale can reach the core now: not under netplay (no core option changes mid-session, so nothing is
-     * offered and the sender keeps the value the core has; [GameActivity.playLocally] offers again), not while quitting,
+     * offered and the sender keeps the value the core has; [GameActivity.becomeLocal] offers again), not while quitting,
      * not once the view is gone.
      */
     private fun canSend(): Boolean = game.netplayNow == null && !game.quitting && game.retroView?.isAttachedToWindow == true
