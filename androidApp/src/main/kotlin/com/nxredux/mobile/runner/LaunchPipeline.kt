@@ -151,7 +151,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
         attachView(cfg, prepared, data)
     }
 
-    private fun refuse(message: String): Nothing? { game.fail(message); return null }
+    private fun refuse(message: String): Nothing? { game.fail(message, GameActivity.START_FAILED); return null }
 
     private fun refuse(message: String, title: String): Nothing? { game.fail(message, title); return null }
 
@@ -860,7 +860,7 @@ internal class LaunchPipeline(private val game: GameActivity) {
             view.getGLRetroErrors().flowWithLifecycle(game.lifecycle, Lifecycle.State.STARTED).collect { code ->
                 if (code == GLRetroView.ERROR_LOAD_LIBRARY) {
                     val lines = runCatching { view.getRecentCoreErrors() }.getOrDefault(emptyList())
-                    game.fail(CoreLoadFailure.message(coreFile, lines))
+                    game.fail(CoreLoadFailure.message(coreFile, lines), GameActivity.START_FAILED)
                     return@collect
                 }
                 val name = when (code) {
@@ -873,19 +873,19 @@ internal class LaunchPipeline(private val game: GameActivity) {
                 if (code == GLRetroView.ERROR_LOAD_GAME) {
                     val lines = runCatching { view.getRecentCoreErrors() }.getOrDefault(emptyList())
                     lines.forEach { NxLog.i(TAG_LOG, "core said: $it") }
-                    loadFailure(lines)?.let { game.fail(it); return@collect }
+                    loadFailure(lines)?.let { game.fail(it, GameActivity.START_FAILED); return@collect }
                 }
                 if (code == GLRetroView.ERROR_GL_NOT_COMPATIBLE && VulkanFallback.relaunchOnGles(game.launchedOnVulkan)) {
                     // netplay: a relaunch would start without the session (it is gone), so the dialog says what to do. An
                     // ended link session's relaunch ([GameNetplay.local]) is a plain launch, which relaunches as any other.
                     if (game.intent.hasExtra(GameActivity.EXTRA_NETPLAY_ROLE) && !game.gameNetplay.local) {
-                        game.fail("Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES.")
+                        game.fail("Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES.", GameActivity.START_FAILED)
                     } else {
                         game.relaunchOnGles()
                     }
                     return@collect
                 }
-                game.fail("The core reported $name")
+                game.fail("The core reported $name", GameActivity.START_FAILED)
             }
         }
     }

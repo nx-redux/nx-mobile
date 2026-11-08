@@ -166,7 +166,7 @@ import kotlin.concurrent.thread
 internal const val TAG_LOG = "NXAPP"
 
 internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost, FrontendHost, DualScreenHost, InGameMenuHost,
-    Res3dHost, ShortcutsMicHost {
+    Res3dHost, ShortcutsMicHost, GameNetplayHost {
 
     companion object {
         /** The frontend rows a pad skin leaves out ([menuLocked]): it places the screens itself. */
@@ -204,6 +204,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val KEY_NAME_HOLD_SHOWN_AT = "nx_name_hold_shown_at"   // the launch name's hold was up ([LaunchNameHold.shownAt])
         /** Kids Mode's "Games close in 10 minutes" toast stays this long. */
         private const val KIDS_WARNING_MS = 6000L
+        /** The failure dialog's title unless a caller names another. */
+        internal const val START_FAILED = "Could not start the game"
         /** [onCoreHung]: between the hung game's finish and the process kill. */
         private const val HUNG_FINISH_GRACE_MS = 500L
         /** [endProcess]: at most this long for the netplay engine's shutdown before the process goes anyway. */
@@ -933,8 +935,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         recreate()
     }
 
+    private fun fail(message: String) = fail(message, START_FAILED)
+
     /** [title]: "Netplay failed" for a netplay session's failures, which may come mid-game. */
-    internal fun fail(message: String, title: String = "Could not start the game") {
+    override fun fail(message: String, title: String) {
         NxLog.e(TAG_LOG, message)
         if (relaunching) return   // a late error from the Vulkan attempt: the recreated screen owns the launch now
         // Destroyed without finishing: a recreation, whose new screen owns the launch (and its launch record), and
@@ -1348,7 +1352,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * Achievements need nothing here: a link session ran them from launch ([NetplaySession.allowsAchievements]). [localCheats]:
      * the cheat load a normal launch starts at once ([LaunchPipeline]), for a session that held it back.
      */
-    internal fun becomeLocal(localCheats: (() -> Job)?) {
+    override fun becomeLocal(localCheats: (() -> Job)?) {
         speed.setSession(netplay = false)   // the shortcuts work again
         shortcuts.onSessionEnded()
         saves.openLocal(dataRoot, paths)
