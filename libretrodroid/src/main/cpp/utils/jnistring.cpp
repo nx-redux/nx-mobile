@@ -23,19 +23,20 @@
 
 JniString::JniString(JNIEnv *env, jstring javaString) :
     env(env), javaString(javaString) {
-    nativeString = env->GetStringUTFChars(javaString, 0);
+    // Kotlin hands nullable strings through (a Variable's key or value); JNI aborts on a null under CheckJNI.
+    nativeString = javaString != nullptr ? env->GetStringUTFChars(javaString, nullptr) : nullptr;
 }
 
 JniString::~JniString() {
-    env->ReleaseStringUTFChars(javaString, nativeString);
+    if (nativeString != nullptr) env->ReleaseStringUTFChars(javaString, nativeString);
 }
 
 const char* JniString::cString() {
-    return strdup(nativeString);
+    return strdup(nativeString != nullptr ? nativeString : "");
 }
 
 std::string JniString::stdString() {
-    return std::string(nativeString);
+    return nativeString != nullptr ? std::string(nativeString) : std::string();
 }
 
 jstring newSafeJString(JNIEnv* env, const char* s) {

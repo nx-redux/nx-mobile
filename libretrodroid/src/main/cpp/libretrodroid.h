@@ -291,7 +291,7 @@ public:
 
 private:
     void updateAudioSampleRateMultiplier();
-    // GL thread: the audible-FF playback speed. Kept apart from frameSpeed's (UI thread) so a pause always wins.
+    // GL thread: the audible-FF playback speed. Kept apart from frameSpeed's so a pause always wins.
     void updateFastForwardAudioSpeed();
     // GL thread, in step(): starts/stops the pacer and tells audio and the core (GET_FASTFORWARDING) on a change.
     void applyFastForward(unsigned maxSpeed, bool audible);
@@ -322,11 +322,12 @@ protected:
     static void callback_retro_set_input_poll();
 
 private:
-    // UI thread (setFrameSpeed) and GL thread (step) both read it.
+    // UI thread (setFrameSpeed) writes it; the GL thread (step) reads it and hands it to the audio.
     std::atomic<unsigned> frameSpeed { 1 };
     static constexpr std::chrono::milliseconds PAUSED_REDRAW_INTERVAL { 50 };
     std::chrono::steady_clock::time_point pausedRedrawAt {};   // GL thread
-    bool audioEnabled = true;
+    // UI thread writes it; a threaded core's audio callback reads it.
+    std::atomic<bool> audioEnabled { true };
     bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
     bool preferVulkan = false;

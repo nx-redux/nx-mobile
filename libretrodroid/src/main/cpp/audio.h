@@ -76,11 +76,11 @@ public:
     struct FifoStats { long underrun; long overrun; long minFill; long capacity; long xruns; };
     FifoStats takeFifoStats();
 
-    // The pause (0) / run (1) speed. UI thread.
+    // The pause (0) / run (1) speed. GL thread.
     void setPlaybackSpeed(const double newPlaybackSpeed);
     // Audible FF's playback speed (the game's achieved speed), 0 when not in audible FF. Separate
-    // from setPlaybackSpeed, which another thread writes: the callback combines them with a pause (0) winning, so an FF
-    // update landing just after a pause can't play the FIFO's tail at FF pitch in the menu. GL thread.
+    // from setPlaybackSpeed: the callback combines them with a pause (0) winning, so an FF update landing just after a
+    // pause can't play the FIFO's tail at FF pitch in the menu. GL thread.
     void setFastForwardSpeed(double speed);
     // The game's achieved speed with Frame Skip Off (SlowdownMeter), 1 otherwise; playback follows
     // it outside fast forward. GL thread.
