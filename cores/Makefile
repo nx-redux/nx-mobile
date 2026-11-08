@@ -240,9 +240,9 @@ race_KIND = ndkbuild
 race_BUILD_PATH = .
 race_ARTIFACT = libs/$(ABI)/libretro.so
 
-# patches/mednafen_pce_fast/0001: retro_cheat_set heap-copies the code; 256+ chars overflowed its stack buffer.
+# patches/mednafen_pce_fast/0001: retro_cheat_set heap-copies the code; upstream truncates it at 255 chars, dropping later parts.
 mednafen_pce_fast_REPO = https://github.com/libretro/beetle-pce-fast-libretro
-mednafen_pce_fast_HASH = 52675734da114a19b3705f03906b1455f3d76644
+mednafen_pce_fast_HASH = 2de1ce1c3f237b161c126c54ba407990bb86d1e9
 mednafen_pce_fast_LICENSE = COPYING mednafen/tremor/COPYING
 mednafen_pce_fast_KIND = ndkbuild
 mednafen_pce_fast_BUILD_PATH = .

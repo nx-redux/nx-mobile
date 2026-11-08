@@ -924,6 +924,21 @@
      "default": "100"
     },
     {
+     "key": "pce_fast_adpcmlp",
+     "label": "(CD) ADPCM Low-pass Filter",
+     "labelCategorized": "ADPCM Low-pass Filter",
+     "info": "CD game only. Applies a low-pass filter to CD ADPCM sample playback, reducing high-frequency aliasing/harshness. The cutoff scales with the ADPCM sample rate.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
      "key": "pce_fast_cddavolume",
      "label": "(CD) CDDA Volume %",
      "labelCategorized": "CDDA Volume %",
@@ -1028,10 +1043,25 @@
       ""
      ],
      "default": "100"
+    },
+    {
+     "key": "pce_fast_cdignoreerrors",
+     "label": "CD Ignore EDC/L-EC Errors",
+     "labelCategorized": "",
+     "info": "Ignore EDC/L-EC errors. Needed for compatibility with some hacks.",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
     }
    ]
   }
  ],
- "soSha256": "0c5b5de645126418707ff274f44687a9e29fd92c42b6ebac3af09ad9fcfd981a",
- "probedAt": "2026-09-29"
+ "soSha256": "377147e12629ec829578d2938f845276e625853bd2bb776012bedba853ee09c6",
+ "probedAt": "2026-11-08"
 }

@@ -43,7 +43,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | mupen64plus_next | libretro/mupen64plus-libretro-nx | 6752836de8b224febfd5708444755b77712ac939 | ndk-build (GLES3, patched: cheat code parts; hi-res packs read through the VFS) | 0:20 |
 | ppsspp | hrydgard/ppsspp | d4e3c7eb2bf0ec9241621b3752cd3e5406178c78 | cmake (patched: cheat slots) | 16:24 |
 | race | libretro/race | c7810dd7f172827bfa2004813bc000b13786636b | ndk-build (patched: old states) | 0:04 |
-| mednafen_pce_fast | libretro/beetle-pce-fast-libretro | 52675734da114a19b3705f03906b1455f3d76644 | ndk-build | 0:05 |
+| mednafen_pce_fast | libretro/beetle-pce-fast-libretro | 2de1ce1c3f237b161c126c54ba407990bb86d1e9 | ndk-build | 0:05 |
 | mednafen_vb | libretro/beetle-vb-libretro | d5ae54c8e23b573a3b34e888b2d48a588027e92c | ndk-build | 0:03 |
 | handy | libretro/libretro-handy | bc55d462f0b2d6b073ea93dc552ebd73cec60fd1 | ndk-build | 0:03 |
 | stella2014 | libretro/stella2014-libretro | 3cc89f0d316d6c924a5e3f4011d17421df58e615 | ndk-build | 0:06 |
