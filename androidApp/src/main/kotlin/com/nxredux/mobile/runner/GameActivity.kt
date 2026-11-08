@@ -249,12 +249,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val MUPEN64PLUS_NEXT_ID = "mupen64plus_next"
         // Instance-state key: the slot to resume from when the system recreates this activity after a process kill.
         private const val KEY_RESUME_SLOT = "nx_resume_slot"
-        private const val KEY_NETPLAY_LOCAL = "nx_netplay_local"   // netplay link: the session had ended ([netplayLocal])
         private const val KEY_NAME_HOLD_SHOWN_AT = "nx_name_hold_shown_at"   // the launch name's hold was up ([LaunchNameHold.shownAt])
         /** Kids Mode's "Games close in 10 minutes" toast stays this long. */
         private const val KIDS_WARNING_MS = 6000L
-        private const val NETPLAY_NOTICE_MS = 5000L   // netplay: "Netplay ended ...", "Using <core> for this match ..."
-        private const val NETPLAY_PILL_MS = 1000L     // netplay: a countdown pill outlives one 250 ms status tick
         /** Beside a real-path cache copy: what it was copied from ([realPathCopyStamp]). */
         private const val REAL_PATH_STAMP = ".nxstamp"
         // Process-wide, single thread: the Home auto state and its thumbnail are written off the main thread
@@ -270,7 +267,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val AUTO_SERIALIZE_WAIT_MS = 10_000L
 
         /** Blocks until every queued Home write has finished. Call off the main thread before touching slot 9. */
-        private fun awaitAutoWrites() { runCatching { autoWriter.submit {}.get() } }
+        internal fun awaitAutoWrites() { runCatching { autoWriter.submit {}.get() } }
 
         /** Debug builds only: the latest game screen, for the adb GAME_STOP hook ([debugQuit]). Main thread. */
         private var debugGame: java.lang.ref.WeakReference<GameActivity>? = null
@@ -497,7 +494,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private set
     /**
      * Fast forward and rewind on the view; the shortcuts drive it ([onShortcut]), the speed rows configure it ([applyFrontend]).
-     * Off for a netplay session ([SpeedController.setSession]): a link session's end turns it back on ([playLocally]), a
+     * Off for a netplay session ([SpeedController.setSession]): a link session's end turns it back on ([becomeLocal]), a
      * lockstep session's does not, so a game played on alone after lockstep keeps it off, as it keeps save states off.
      */
     internal val speed by lazy {
@@ -557,40 +554,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private set
 
     // ---- netplay (Wi-Fi lockstep, see the "netplay" block) ----
-    /**
-     * netplay: this launch's session (read in onCreate from the EXTRA_NETPLAY_* extras); null for every other launch. In a
-     * session there are no save states or auto-resume, no cheats, Core Options or local multiplayer slots, no achievements
-     * outside a link session ([NetplaySession.allowsAchievements]), and the menu is only "Leave netplay?".
-     */
-    override var netplay: NetplaySession? = null
-        private set
-    /** netplay: recreated after a process kill with a session's intent: that session is gone, nothing is started. */
-    private var netplayRestored = false
-    /** netplay over USB: the cable's start this screen ran on; a newer sheet start makes this screen's stop a no-op. */
-    private var netplayUsbToken: Long? = null
-    /** netplay: the engine session; set just before it starts, so onDestroy always shuts down what was started. */
-    private var netplayGame: NetplayRun? = null
-    /** A Wi-Fi session's radio out of power save for the screen's life: a delayed frame's input stalls both players. */
-    private var netplayWifi: android.net.wifi.WifiManager.WifiLock? = null
-    private var netplayPillShown = false   // the countdown pill is the session's (hidden again on Clear)
-    /** netplay: the session ended and the game plays on alone (the menu is then Continue / Quit). */
-    override var netplayEnded = false
-        private set
-    /**
-     * netplay link: the link session ended ([playLocally]), or this screen came back after a process kill with one that
-     * had: the game is a normal local launch from then on. The one switch the menu, the panel and the option guards
-     * read, through [netplayNow]; [netplay] itself stays for the launch's setup and onDestroy's release.
-     */
-    private var netplayLocal = false
-    /** netplay: the session this screen plays in now: [netplay], or null once a link session's game is a local one. */
-    override val netplayNow: NetplaySession? get() = netplay.takeUnless { netplayLocal }
-    /** netplay link: starts the cheat load a normal launch starts in startEmulator, once the game is local ([playLocally]). */
-    private var localCheats: (() -> Job)? = null
-    /** netplay: this screen's id on the session copy it plays on ([NetplaySessionDir.claim]). */
-    private val netplayOwner by lazy { java.util.UUID.randomUUID().toString() }
-    /** netplay: the engine did not start; the game stays paused and silent behind the failure dialog (closeMenu too). */
-    private var netplayStartFailed = false
-    @Volatile private var netplayOwnCopyFailed = false   // a host's copy of its own saves failed: it starts without them
+    private val gameNetplay = GameNetplay(this)
+    override val netplay: NetplaySession? get() = gameNetplay.session
+    override val netplayEnded: Boolean get() = gameNetplay.ended
+    override val netplayNow: NetplaySession? get() = gameNetplay.now
 
     // ---- RetroAchievements (see the "achievements" block) ----
     override var achievements: AchievementsBridge? = null   // null: off, signed out, or a console RA does not cover
@@ -667,20 +634,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             override fun handleOnBackPressed() { if (!holdKeepsBack()) backPressed() }
         })
         // netplay: a session launches cold: no saved or requested resume slot.
-        val launchSession = netplaySessionFrom(
-            intent.getStringExtra(EXTRA_NETPLAY_ROLE), intent.getStringExtra(EXTRA_NETPLAY_PEER),
-            intent.getStringExtra(EXTRA_CORE_ID) ?: "", intent.getStringExtra(EXTRA_NETPLAY_FOLDER_CORE),
-            intent.getBooleanExtra(EXTRA_NETPLAY_EMPTY_SAVES, false),
-            intent.getBooleanExtra(EXTRA_NETPLAY_USB, false),
-        )
-        // netplay link: recreated after a process kill once its session had ended: the local game it had become, as a
-        // normal launch (its resume slot below), not a session.
-        netplayLocal = launchSession?.endsAsLocalGame == true && savedInstanceState?.getBoolean(KEY_NETPLAY_LOCAL) == true
-        netplay = launchSession.takeUnless { netplayLocal }
-        netplayRestored = netplay != null && savedInstanceState != null
-        // The cable is the menu process's: never instantiated here (a fresh, unstarted one would stop the menu's VPN).
-        if (netplay?.overUsb == true) netplayUsbToken = intent.getLongExtra(EXTRA_NETPLAY_USB_TOKEN, -1L).takeIf { it >= 0 }
-        if (netplay?.overUsb == false) netplayWifi = lowLatencyWifiLock(this, "nxredux:netplay")?.also { runCatching { it.acquire() } }
+        gameNetplay.onCreate(intent, savedInstanceState)
         // Decided here, not after startEmulator's async setup, so a stop in between still records the slot.
         // A saved slot (recreated after a process kill) wins over the launch intent's.
         val savedSlot = savedInstanceState?.getInt(KEY_RESUME_SLOT, -1)?.takeIf { it in 0..NxPaths.AUTO_SLOT }
@@ -789,7 +743,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // The battery save is written synchronously (the process may be killed once backgrounded).
         // A quit writes it once itself, off the main thread (quitWithAutoState), so nothing here then.
         if (!quitting) writeBatterySave(notify = false)
-        netplayGame?.pause()   // netplay: backgrounded: no input goes out; the other side stalls, 30 s ends the session
+        gameNetplay.run?.pause()   // netplay: backgrounded: no input goes out; the other side stalls, 30 s ends the session
         syncMotionSensors(foreground = false)
         // Closes the phone mic at once (the paused core stops reading it); the toggle stays as it is for onResume.
         retroView?.microphoneSource = MicSource.SILENCE.native
@@ -802,7 +756,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // elsewhere: focusResume does, once this window is the top one again.
         if (!corePaused()) {
             if (!quitting) rumbles.forEach { it.resume() }
-            netplayGame?.resume()   // netplay: input flows again; with the menu open it stays paused until Continue
+            gameNetplay.run?.resume()   // netplay: input flows again; with the menu open it stays paused until Continue
         }
         syncMotionSensors(foreground = true)
         shortcuts.onResume()
@@ -839,7 +793,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * local pause stops this device's input instead. The core stops with its rumble latched: still while held, back on release.
      */
     private fun holdCore() {
-        netplayGame?.takeIf { it.live }?.pause() ?: run { retroView?.frameSpeed = 0 }
+        gameNetplay.run?.takeIf { it.live }?.pause() ?: run { retroView?.frameSpeed = 0 }
         retroView?.audioEnabled = false
         rumbles.forEach { it.pause() }
         shortcuts.pushMicSource()
@@ -847,8 +801,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /** Plays the core on; a failed netplay start keeps the game paused behind its dialog. */
     private fun releaseCore() {
-        netplayGame?.takeIf { it.live }?.resume()
-        if (!netplayStartFailed) {
+        gameNetplay.run?.takeIf { it.live }?.resume()
+        if (!gameNetplay.startFailed) {
             retroView?.frameSpeed = 1
             retroView?.audioEnabled = true
         }
@@ -866,7 +820,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * so it holds the screen too.
      */
     private fun syncKeepScreenOn() {
-        if (testAwake || !corePaused() || netplayGame?.live == true) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (testAwake || !corePaused() || gameNetplay.run?.live == true) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
@@ -978,7 +932,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         putResumeSlot(outState)
-        if (netplayLocal) outState.putBoolean(KEY_NETPLAY_LOCAL, true)
+        gameNetplay.onSaveInstanceState(outState)
         nameHold?.let { outState.putLong(KEY_NAME_HOLD_SHOWN_AT, it.shownAt) }
         pendingOutState = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) outState else null
     }
@@ -1097,22 +1051,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // ON_DESTROY goes to the lifecycle observers before this body (API 29+, onActivityPreDestroyed) or from within
         // super.onDestroy() (older): either way GLRetroView's LibretroDroid.destroy() has run by the release below.
         super.onDestroy()
-        netplayWifi?.let { runCatching { if (it.isHeld) it.release() } }
-        netplayWifi = null
-        // netplay: after the native destroy (above), off the main thread: the engine shut down, a session copy deleted.
-        // Only this screen's own claim is deleted: a newer launch's copy (committed before this teardown) is kept.
-        netplay?.let { np ->
-            val owner = netplayOwner
-            NetplayGame.release(netplayGame, if (np.onCopy) ({ NetplaySessionDir.release(filesDir, owner) }) else null)
-            // The cable carried this session (the sheet handed it over at launch), unless a newer launch's start took it over.
-            // Stopped in the menu process, which owns it: a Binder call, so off the main thread.
-            netplayUsbToken?.takeIf { np.overUsb }?.let { token ->
-                val app = applicationContext
-                thread(name = "usb-cable-stop") {
-                    runCatching { PrefsProvider.usbCableStopIf(app, token) }.onFailure { NxLog.w(TAG_LOG, "could not stop the USB cable", it) }
-                }
-            }
-        }
+        gameNetplay.onDestroyed()
         sessionClaim?.let { sessions.release(it.token) }
         sessionClaim = null
         screens--
@@ -1180,8 +1119,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private suspend fun startEmulator() {
         val coreFile = intent.getStringExtra(EXTRA_CORE_FILE) ?: return fail("No core given")
         // netplay: extras that make no session must not start an ordinary game on the real saves; a recreated session is over.
-        if (intent.hasExtra(EXTRA_NETPLAY_ROLE) && netplay == null && !netplayLocal) return fail(NetplayText.FAILED, NetplayText.FAILED)
-        if (netplayRestored) return fail(NetplayText.ENDED, NetplayText.FAILED)
+        if (intent.hasExtra(EXTRA_NETPLAY_ROLE) && netplay == null && !gameNetplay.local) return fail(NetplayText.FAILED, NetplayText.FAILED)
+        if (gameNetplay.restored) return fail(NetplayText.ENDED, NetplayText.FAILED)
         val np = netplay
         val tag = intentTag ?: "UNKNOWN"
         val title = intentTitle ?: "game"
@@ -1281,7 +1220,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         } }
         cheatsLoad = if (np != null) null else loadCheats()   // netplay: no cheats (a saved nx_cheats set included)
         // netplay link: the cheats come once the session has ended and the game is a local one.
-        if (np?.endsAsLocalGame == true) localCheats = { cheatsSupported = cheatsOk; loadCheats() }
+        if (np?.endsAsLocalGame == true) gameNetplay.localCheats = { cheatsSupported = cheatsOk; loadCheats() }
         // Resolved and decoded before the view exists, so the first frame already has its overlay (the configured one;
         // with none stored the default is None).
         // A DS game starts split (every DS layout draws its screens as regions), which shows no overlay: none is
@@ -1354,7 +1293,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
             NetplayLinkKind.NETPACKET -> {
                 val own = options.firstOrNull { it.key == NetplayLinkOptions.GPSP_SERIAL }?.value
-                val mode = connectLink(np, own) ?: return fail(NetplayText.FAILED_CONNECT, NetplayText.FAILED)
+                val mode = gameNetplay.connectLink(np, own) ?: return fail(NetplayText.FAILED_CONNECT, NetplayText.FAILED)
                 NetplayLinkOptions.forSession(np, mode)
             }
         }
@@ -1419,7 +1358,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         saveStates = if (np == null) SaveStates(dataRoot, paths) else null   // netplay: no save states, no auto-resume
         refreshSlots()   // warm for the first menu open
         dropStaleNdsResume(tag, coreId, romFileName)
-        np?.let { prepareNetplaySaves(it, tag, romFileName) }
+        np?.let { gameNetplay.prepareSaves(it, tag, romFileName, dataRoot, paths) }
         // netplay: on a copy the battery save is the session folder's (read only: writeBatterySave skips it), under the
         // default names (the folder is mobile's own), with no clock file.
         val sessionPaths = if (sessionDir != null) NxPaths(tag, coreId, romFileName) else null
@@ -1790,25 +1729,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             if (launchRecords.started(launchId)) {
                 sendBroadcast(Intent(LaunchRecords.action(this@GameActivity)).setPackage(packageName))   // the menu records it
             }
-            // netplay: the engine starts once the core has loaded and can serialize, so a handheld's 10 s state
-            // waits begin only now. The host listens (its 45 s CONNECTING limit counts from here); the client connects
-            // with its 60 × 500 ms retries. A menu or background already in place pauses it at once.
-            if (np != null) {
-                if (!startNetplay(np)) {
-                    // The game must not play on (or be heard) behind the dialog, a menu closed meanwhile included.
-                    netplayStartFailed = true
-                    retroView?.frameSpeed = 0
-                    retroView?.audioEnabled = false
-                    fail(NetplayText.FAILED, NetplayText.FAILED)
-                    return@launch
-                }
-                if (menuOpen || focusPaused || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) netplayGame?.pause()
-                val now = SystemClock.elapsedRealtime()
-                netplayFirstFrameNotices(np, descriptor?.name ?: coreId, netplayOwnCopyFailed).forEach {
-                    notifications.push(it, null, NETPLAY_NOTICE_MS, now)
-                }
-                publishNotifications()
-            }
+            if (np != null && !gameNetplay.onFirstFrame(np, descriptor?.name ?: coreId)) return@launch
             val slot = resumeSlot
             if (slot != null) resumeFrom(view, slot) else resumePending = false
             dropResumeCover(view)
@@ -1825,7 +1746,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         // Debug builds: a file named simulate_vulkan_fail in the app's files dir makes a Vulkan launch take the fallback
         // as a failed bridge setup would (no phone at hand fails it): `adb shell run-as <package> touch files/simulate_vulkan_fail`.
-        if (BuildConfig.DEBUG && launchedOnVulkan && (!intent.hasExtra(EXTRA_NETPLAY_ROLE) || netplayLocal) && File(filesDir, SIMULATE_VULKAN_FAIL).exists()) {
+        if (BuildConfig.DEBUG && launchedOnVulkan && (!intent.hasExtra(EXTRA_NETPLAY_ROLE) || gameNetplay.local) && File(filesDir, SIMULATE_VULKAN_FAIL).exists()) {
             relaunchOnGles()
         }
     }
@@ -1941,8 +1862,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 }
                 if (code == GLRetroView.ERROR_GL_NOT_COMPATIBLE && VulkanFallback.relaunchOnGles(launchedOnVulkan)) {
                     // netplay: a relaunch would start without the session (it is gone), so the dialog says what to do. An
-                    // ended link session's relaunch ([netplayLocal]) is a plain launch, which relaunches as any other.
-                    if (intent.hasExtra(EXTRA_NETPLAY_ROLE) && !netplayLocal) {
+                    // ended link session's relaunch ([GameNetplay.local]) is a plain launch, which relaunches as any other.
+                    if (intent.hasExtra(EXTRA_NETPLAY_ROLE) && !gameNetplay.local) {
                         fail("Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES.")
                     } else {
                         relaunchOnGles()
@@ -1973,7 +1894,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /** [title]: "Netplay failed" for a netplay session's failures, which may come mid-game. */
-    private fun fail(message: String, title: String = "Could not start the game") {
+    internal fun fail(message: String, title: String = "Could not start the game") {
         NxLog.e(TAG_LOG, message)
         if (relaunching) return   // a late error from the Vulkan attempt: the recreated screen owns the launch now
         // Destroyed without finishing: a recreation, whose new screen owns the launch (and its launch record), and
@@ -2864,135 +2785,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     // ------------------------------------------------------------------ netplay
 
     /**
-     * netplay: the saves a session plays on, before the battery load. A host on its folder's own core keeps its
-     * real saves but loses the game's auto-resume state (handheld 19d3a5e1), so a later resume cannot roll back battery
-     * saves written in the session; manual slots stay. A host on another core plays on a fresh copy of its own battery
-     * saves in the session folder; one whose saves were not served (emptySaves) on an empty copy. A client plays on the
-     * host's saves, committed there before launch (an empty folder when the host had none).
-     */
-    private suspend fun prepareNetplaySaves(np: NetplaySession, tag: String, romFileName: String) {
-        withContext(Dispatchers.IO) {
-            runCatching {
-                when {
-                    !np.onCopy -> {
-                        awaitAutoWrites()   // a Home write of this game's auto state may still be landing
-                        val marker = File(dataRoot, NxPaths(tag, np.folderCoreId, romFileName).lastSlot).takeIf { it.exists() }?.readText()
-                        NetplaySaves.resumeVictims(tag, np.folderCoreId, romFileName, marker, paths.naming, paths.innerFileName) { File(dataRoot, it).exists() }
-                            .forEach { File(dataRoot, it).delete() }
-                        lastSlotCache = null
-                    }
-                    // A host on another core plays on a copy of its own saves; one whose saves were not served on an empty
-                    // copy, as the joiner does. Under the session folder's lock (prepareHost).
-                    np.role == NetplayRole.HOST -> {
-                        val savesDir = if (np.emptySaves) null else File(dataRoot, paths.savesDir)
-                        val copied = NetplaySessionDir.prepareHost(filesDir, netplayOwner, savesDir, paths) {
-                            NxLog.e(TAG_LOG, "netplay: copying the host's own saves failed", it)
-                        }
-                        if (!copied) netplayOwnCopyFailed = true
-                    }
-                    // The host's copy committed before launch (kept), or an empty one; a copy an older screen claimed is stale.
-                    else -> NetplaySessionDir.claim(filesDir, netplayOwner)
-                }
-            }.onFailure {
-                NxLog.e(TAG_LOG, "netplay saves setup failed", it)
-                // A host on a copy whose claim itself failed plays without its saves too: say so (first frame).
-                if (np.role == NetplayRole.HOST && np.onCopy) netplayOwnCopyFailed = true
-            }
-        }
-    }
-
-    /**
-     * netplay: starts this screen's session once the first frame is up ([netplayGame] set first, so onDestroy shuts down
-     * what started). A GBA link's engine started before the load ([connectLink]); its status ticks from now. GB link has
-     * no engine: gambatte runs it.
-     */
-    private suspend fun startNetplay(np: NetplaySession): Boolean = when (NetplayCores.link(np.coreId)) {
-        null -> NetplayGame(np, lifecycleScope, SystemClock::elapsedRealtime, ::onNetplayNotice).also { netplayGame = it }.start()
-        NetplayLinkKind.NETPACKET -> (netplayGame as? NetplayLinkGame)?.let { it.begin(); it.live } ?: false
-        NetplayLinkKind.GBLINK -> true
-    }
-
-    /** netplay link: the GBA link engine, started before the core loads; the raw gpsp_serial the core runs with, or null. */
-    private suspend fun connectLink(np: NetplaySession, ownSerial: String?): String? =
-        NetplayLinkGame(np, lifecycleScope, SystemClock::elapsedRealtime, ::onNetplayNotice).also { netplayGame = it }.connect(ownSerial)
-
-    /** netplay: a status notice from [NetplayGame]'s ticker (main thread). */
-    private fun onNetplayNotice(notice: NetplayNotice) {
-        val now = SystemClock.elapsedRealtime()
-        when (notice) {
-            NetplayNotice.Clear -> {
-                if (!netplayPillShown) return
-                notifications.hideProgress()
-                netplayPillShown = false
-            }
-            is NetplayNotice.Pill -> {
-                notifications.progress(notice.text, "", null, NETPLAY_PILL_MS, now)
-                netplayPillShown = true
-            }
-            is NetplayNotice.Ended -> {
-                if (netplayPillShown) notifications.hideProgress()
-                netplayPillShown = false
-                notifications.push(notice.text, null, NETPLAY_NOTICE_MS, now)
-                if (netplay?.endsAsLocalGame == true) linkEnded() else {
-                    // The ended session holds no frames: an open menu pauses the game as for any other launch.
-                    if (menuOpen || focusPaused) retroView?.frameSpeed = 0
-                    netplayEnded = true
-                    withMenu { it.endNetplay(local = false) }
-                }
-            }
-            is NetplayNotice.Failed -> {
-                if (netplayPillShown) notifications.hideProgress()
-                netplayPillShown = false
-                fail(notice.text, NetplayText.FAILED)
-            }
-        }
-        publishNotifications()
-    }
-
-    /**
-     * netplay link: Leave. The link ends and the game plays on ([linkEnded]); the menu stays open on the normal root and
-     * the player leaves later with Quit. A GBA link's engine sends DISCONNECT and shuts down off main; [NetplayRun.leave]
-     * detaches it first, so no Ended notice follows. GB link has no engine: gambatte's network serial stops on its mode's
-     * variable update, read at the next frame (the menu holds frames, so on Continue). Set past [applyOptions]' guard and
-     * not stored: the link options are this launch's ([graphicsForcedOptions]), never the user's config.
-     */
-    private fun leaveLink() {
-        netplayGame?.leave()
-        if (netplayPillShown) { notifications.hideProgress(); netplayPillShown = false; publishNotifications() }   // the ticker is gone
-        if (netplay?.let { NetplayCores.link(it.coreId) } == NetplayLinkKind.GBLINK) retroView?.let { view ->
-            val off = Variable(NetplayLinkOptions.GB_MODE, NetplayLinkOptions.GB_OFF)
-            view.queueEvent { runCatching { view.updateVariables(off) }.onFailure { NxLog.w("GameActivity", "ending the GB link failed", it) } }
-        }
-        linkEnded()
-    }
-
-    /**
-     * netplay link: the session is over, from the other side or the network ([NetplayNotice.Ended]) or by Leave
-     * ([leaveLink]): the game is a local one from here ([playLocally]); an open menu stays open, paused, and becomes the
-     * normal root on the slot a normal launch shows.
-     */
-    private fun linkEnded() {
-        // The link holds no frames now: an open menu pauses the game as for any other launch.
-        if (menuOpen || focusPaused) retroView?.frameSpeed = 0
-        netplayEnded = true
-        playLocally()
-        withMenu {
-            it.cheatsAvailable = cheatsSupported
-            lastSlotCache?.let { slot -> it.showSlot(slot - 1) }
-            it.endNetplay(local = true)
-        }
-    }
-
-    /**
      * netplay link: the session ended (the other player left, it dropped, or this player left). Each player ran their own game on their own
      * save (never a copy: [NetplaySession.onCopy]), so from here it is the normal launch of that game: save states, the
      * auto state on Quit and on stop, cheats (loaded now, the saved ones applied), Options and the panel, as [netplayNow]
      * is null. The link engine is idle already (or shutting down after Leave); [netplay] stays for onDestroy (the engine release, the USB cable).
-     * Achievements need nothing here: a link session ran them from launch ([NetplaySession.allowsAchievements]).
+     * Achievements need nothing here: a link session ran them from launch ([NetplaySession.allowsAchievements]). [localCheats]:
+     * the cheat load a normal launch starts in startEmulator, for a session that held it back.
      */
-    private fun playLocally() {
-        if (netplayLocal) return
-        netplayLocal = true
+    internal fun becomeLocal(localCheats: (() -> Job)?) {
         speed.setSession(netplay = false)   // the shortcuts work again
         shortcuts.onSessionEnded()
         saveStates = SaveStates(dataRoot, paths).also { ss ->
@@ -3001,7 +2801,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         refreshSlots()
         localCheats?.let { load ->
-            localCheats = null
             val job = load().also { cheatsLoad = it }
             lifecycleScope.launch {
                 job.join()
@@ -3407,15 +3206,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (e.confirmDiscard) e.keepEditing() else if (e.requestCancel()) closeSkinEdit()
     }
 
-    /**
-     * netplay: DISCONNECT and shut the engine down (off main), then quit; saveStates is null: no auto state. A link
-     * session ends the link instead and plays on, the menu open on the normal root.
-     */
     override fun quitGame(chosen: Boolean, autoState: Boolean) = quitWithAutoState(chosen, autoState)
 
-    override fun leaveNetplay() {
-        if (netplay?.endsAsLocalGame == true) leaveLink() else { netplayGame?.leave(); quitWithAutoState(chosen = true) }
-    }
+    override fun leaveNetplay() = gameNetplay.leave()
 
     override fun handleMenuEffect(effect: MenuEffect) = menu.handle(effect)
     override fun publishMenuSecondScreen() { menu.menuModel?.let(menu::publishSecondScreen) }
