@@ -229,5 +229,10 @@ GB/GBC and GBA link as on the NX Redux handheld (nx-redux main 2f25643b):
   their `003` is left out (our patch covers the JIT cache). `NX_SIOLS_DIR` is passed on the ndk-build line.
 - mGBA: nx-redux `patches/mgba/001` as is (real link cable; a `CMakeLists.txt` hunk compiles `sio_lockstep` in through
   `-DNX_SIOLS_DIR`). The combined core is GPL-2.0-or-later (MPL-2.0 §3.3).
+- mGBA: nx-redux `patches/mgba/003` (the `mgba_link_mode` option: gpSP's Wireless Adapter and Pokemon / Advance Wars
+  cable protocols), built on `001` alone. It compiles `gba_wifi_link/` in through `-DNX_GWL_DIR`, the shared protocol
+  library copied from nx-redux `workspace/all/cores/gba_wifi_link` with its host tests (`gmake test-gwl`, which check
+  its gpSP files against `gpsp_HASH` plus gpSP `patches/gpsp/001` and `002`). Its `NOTICE.txt` is appended to the mGBA
+  licence file. The app asks `gwl_mode.c` (compiled into libretrodroid) which mode a ROM uses.
 - gambatte: `HAVE_NETWORK` is on upstream (`jni/Android.mk`); nx-redux `patches/gambatte/002` (async slave reply) minus
   its `Makefile.common` hunk (`-lpthread`; bionic has pthreads in libc).

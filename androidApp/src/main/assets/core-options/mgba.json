@@ -390,6 +390,33 @@
       "enabled"
      ],
      "default": "OFF"
+    },
+    {
+     "key": "mgba_link_mode",
+     "label": "Link Cable Connectivity (Restart)",
+     "labelCategorized": "",
+     "info": "Configures the serial (Link Cable) connection in a netplay session. 'Link Cable - Real' joins two mGBA over the USB Cable. 'Automatic' picks the game's mode the way gpSP does; 'Automatic (USB Cable)' uses the Wireless Adapter when that is the game's mode and the real link cable otherwise. The Wireless Adapter and the Pokemon / Advance Wars modes work with gpSP too.",
+     "values": [
+      "cable",
+      "auto",
+      "auto_cable",
+      "rfu",
+      "mul_poke",
+      "mul_aw1",
+      "mul_aw2",
+      "disabled"
+     ],
+     "labels": [
+      "Link Cable - Real (USB only)",
+      "Automatic",
+      "Automatic (USB Cable)",
+      "GBA Wireless Adapter",
+      "Link Cable - Pokemon Gen3 mode",
+      "Link Cable - Advance Wars 1 mode",
+      "Link Cable - Advance Wars 2 mode",
+      "Disabled"
+     ],
+     "default": "cable"
     }
    ]
   },

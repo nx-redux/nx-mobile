@@ -27,6 +27,7 @@
 
 extern "C" {
 #include "np_link.h"
+#include "gwl_mode.h"
 }
 
 namespace libretrodroid {
@@ -64,6 +65,21 @@ JNIEXPORT jstring JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_linkH
         return newSafeJString(env, mode);   // the peer's bytes as they came off the network: any of them
     } catch (std::exception &exception) {
         LOGE("Error in link host mode: %s", exception.what());
+        JavaUtils::throwRetroException(env, ERROR_GENERIC);
+        return nullptr;
+    }
+}
+
+JNIEXPORT jstring JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_gbaLinkMode(
+    JNIEnv* env,
+    jclass obj,
+    jstring path
+) {
+    try {
+        JniString romPath(env, path);
+        return newSafeJString(env, gwl_mode_token(gwl_probe_file(romPath.stdString().c_str())));
+    } catch (std::exception &exception) {
+        LOGE("Error in GBA link mode: %s", exception.what());
         JavaUtils::throwRetroException(env, ERROR_GENERIC);
         return nullptr;
     }
