@@ -305,9 +305,10 @@ mednafen_supafaust_ARTIFACT = libs/$(ABI)/libretro.so
 # OwlResampler_neon.inc uses the C++17-removed `register` specifier; the NDK's clang makes that an error by default.
 mednafen_supafaust_FLAGS = APP_CPPFLAGS=-Wno-register
 
-# patches/pokemini.patch: nx-redux's resume-audio fix (the only nx-redux source patch carried over).
+# patches/pokemini.patch: nx-redux's resume-audio fix, its libretro.c part (the first state load waits 40 frames so audio
+# resumes); its "AUD-" state-chunk fix in source/PokeMini.c is upstream since 2025-03-28.
 pokemini_REPO = https://github.com/libretro/PokeMini
-pokemini_HASH = 78656d4615691c393e65e48672ce5fff5b1f97d3
+pokemini_HASH = 132111b76343559860532a1ccc094f93f1ed5650
 pokemini_LICENSE = LICENSE
 pokemini_KIND = ndkbuild
 pokemini_BUILD_PATH = .
