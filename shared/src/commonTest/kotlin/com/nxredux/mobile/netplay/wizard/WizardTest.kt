@@ -439,6 +439,55 @@ class WizardTest {
         }
     }
 
+    private val hostMgbaWifi = HostOffer("Pokemon Ruby (USA)", "MGBA", "mgba", pick = "mgba", usb = false, wl = "rfu")
+
+    @Test fun an_mgba_host_off_the_cable_turns_away_a_joiner_without_wifi_modes() = runTest {
+        // Without wl= the joiner would run the real cable over Wi-Fi (gbalink_transport_ok, WizCaps_mgbaNeedsWl).
+        for ((hello, core) in listOf("" to null, " caps=core=mgba,tag=MGBA" to "mgba", " caps=core=gpsp,tag=GBA" to "gpsp")) {
+            val (h, c) = PipeChannel.pair()
+            val hostJob = async { Wizard.host(h, hostMgbaWifi, saves = { error("a link session copies no saves") }) }
+            c.writeLine("HELLO 2 $rubyEsc client$hello")
+            assertEquals("REJECT core-mgba.MGBA", c.readLine(1000), hello)
+            assertEquals(HostOutcome.Turned("core", core, noWifiModes = true), hostJob.await(), hello)
+        }
+        // Over the cable the real cable is right.
+        val (h, c) = PipeChannel.pair()
+        val hostJob = async { Wizard.host(h, hostMgbaWifi.copy(usb = true), saves = { error("a link session copies no saves") }) }
+        c.writeLine("HELLO 2 $rubyEsc client caps=core=mgba,tag=MGBA")
+        c.readLine(1000); c.readLine(1000)
+        c.writeLine("START")
+        assertEquals(HostOutcome.Started("mgba", "10.0.0.2", emptySaves = false), hostJob.await())
+    }
+
+    @Test fun an_auto_host_adopting_mgba_off_the_cable_turns_away_a_joiner_without_wifi_modes() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val hostAuto = HostOffer("Pokemon Ruby (USA)", "GBA", "gpsp", pick = null, usb = false, wl = "rfu")
+        val hostJob = async { Wizard.host(h, hostAuto, saves = { error("a link session copies no saves") }) }
+        c.writeLine("HELLO 2 $rubyEsc client caps=core=mgba,tag=MGBA")
+        assertEquals("REJECT core-gpsp.GBA", c.readLine(1000))
+        assertEquals(HostOutcome.Turned("core", "mgba", noWifiModes = true), hostJob.await())
+    }
+
+    @Test fun a_gpsp_host_off_the_cable_still_takes_a_joiner_without_caps() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val hostJob = async { Wizard.host(h, hostGbaWifi, saves = { error("a link session copies no saves") }) }
+        c.writeLine("HELLO 2 $rubyEsc client")
+        c.readLine(1000); c.readLine(1000)
+        c.writeLine("START")
+        assertEquals(HostOutcome.Started("gpsp", "10.0.0.2", emptySaves = false), hostJob.await())
+    }
+
+    @Test fun an_mgba_joiner_off_the_cable_stops_at_a_host_without_wifi_modes() = runTest {
+        val joinMgba = ClientOffer("Pokemon Ruby (USA)", any = false, tag = "MGBA", core = "mgba", pick = "mgba", usb = false, wl = "rfu")
+        for (caps in listOf("", " caps=core=mgba,tag=MGBA")) {
+            val (h, c) = PipeChannel.pair()
+            val job = async { Wizard.client(c, joinMgba, FakeSaveSink()) }
+            h.readLine(1000)
+            h.writeLine("HELLO 2 $rubyEsc host 2$caps")
+            assertEquals(ClientOutcome.Refused(com.nxredux.mobile.netplay.NetplayText.NO_WIFI_MODES), job.await(), caps)
+        }
+    }
+
     @Test fun a_same_core_session_is_not_mixed_and_knows_the_peers_mode() = runTest {
         val (h, c) = PipeChannel.pair()
         val hostJob = async { Wizard.host(h, hostGbaWifi, saves = { error("a link session copies no saves") }) }

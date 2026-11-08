@@ -90,7 +90,7 @@ class NetplayUsbControllerTest {
         assertTrue(noCable.offers(kart))
         noCable.open(emerald); runCurrent()
         val err = assertIs<NetplayPage.Error>(noCable.page.value)         // read first: then the cable-only page
-        assertEquals(NetplayText.cableOnly("mGBA"), err.text)
+        assertEquals(NetplayText.cableOnlyNoUsb("mGBA"), err.text)
         noCable.onButton(NxButton.B)
         assertNull(noCable.page.value)
 

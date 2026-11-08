@@ -142,7 +142,7 @@ class NetplayController(
             wl = mode
             if (NetplayCores.usbOnly(entry.system.tag, mode) && platform.usb?.available != true) {
                 val name = NetplayCores.name(NetplayCores.defaultCore(entry.system.tag).orEmpty())
-                _page.value = NetplayPage.Error(NetplayText.cableOnly(name), null)
+                _page.value = NetplayPage.Error(NetplayText.cableOnlyNoUsb(name), null)
                 return@launch
             }
             showFirstRole(entry)
@@ -348,7 +348,7 @@ class NetplayController(
         }
     }
 
-    private fun turnedAwayText(out: HostOutcome.Turned): String? = when (out.reason) {
+    private fun turnedAwayText(out: HostOutcome.Turned): String? = if (out.noWifiModes) NetplayText.NO_WIFI_MODES else when (out.reason) {
         RejectReason.SYNC.wire -> NetplayText.SAVE_TRANSFER_FAILED
         RejectReason.CORE.wire -> out.joinerCore?.let { NetplayText.coreTurnedAway(NetplayCores.name(it)) }
         else -> null

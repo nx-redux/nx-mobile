@@ -54,6 +54,13 @@ object NetplayCores {
     fun wifiOk(core: String, wl: String?): Boolean = core != "mgba" || wl in GbaWifiLink.WIFI_MODES
 
     /**
+     * WizCaps_mgbaNeedsWl: off the USB cable, mGBA on one side ([run] here, [peerCore] there) against a side that sent no
+     * `wl=` ([ourWl], [peerWl] null): that side would fall back to the real cable over Wi-Fi, so the pair is refused.
+     */
+    fun needsPeerWl(run: String, peerCore: String?, ourWl: String?, peerWl: String?, usb: Boolean): Boolean =
+        !usb && ((run == "mgba" && peerWl == null) || (peerCore == "mgba" && ourWl == null))
+
+    /**
      * A phone joiner on Auto (`auto=1`) from folder [joinerTag] with game mode [joinerWl] switches to the host's [run] when
      * its folder offers it over this connection, exactly as [joinerRun] decides on that side.
      */

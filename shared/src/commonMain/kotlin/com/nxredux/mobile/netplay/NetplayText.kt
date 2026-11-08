@@ -88,6 +88,10 @@ object NetplayText {
     fun setEmulator(name: String) = "The host is using $name.\nSet Emulator to $name."
     /** Host or Join over Wi-Fi with the Emulator row pinned to a core that links this game over the cable alone ([name]: mGBA). */
     fun cableOnly(name: String) = "$name links this game over the USB cable only.\n\nPick USB Cable, or another emulator."
+    /** Opening the sheet on a device without a USB link for a game that [name] (mGBA) links over the cable alone. */
+    fun cableOnlyNoUsb(name: String) = "$name links this game over the USB cable only, which this device does not have."
+    /** mGBA off the cable against a side without the Wi-Fi link modes (the handheld's WIZ_NET_MGBA_WL_TEXT). */
+    const val NO_WIFI_MODES = "The other device can't link\nmGBA over Wi-Fi.\n\nUpdate it, or use the USB Cable."
     /** Flashed on the host's waiting page when a joiner on another core was refused. */
     fun coreTurnedAway(name: String) = "A player using $name was turned away."
     fun joinAnyway(host: String, own: String) =

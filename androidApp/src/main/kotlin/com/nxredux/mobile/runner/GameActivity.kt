@@ -1489,8 +1489,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         // netplay link: gambatte gets its link options; a GBA link engine starts now, before the core loads, so
         // a joiner learns the host's gpsp_serial or mgba_link_mode from its READY and runs with it (the handheld reloads instead).
+        // Outside a session mGBA gets the real cable (NetplayLinkOptions.forSolo).
         val linkKind = np?.let { NetplayCores.link(it.coreId) }
-        val linkOptions: Map<String, String> = if (np == null || linkKind == null) emptyMap() else when (linkKind) {
+        val linkOptions: Map<String, String> = if (np == null) NetplayLinkOptions.forSolo(coreId) else when (linkKind) {
+            null -> emptyMap()
             NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
             NetplayLinkKind.NETPACKET -> {
                 val own = NetplayLinkOptions.modeKey(np.coreId)?.let { key -> options.firstOrNull { it.key == key }?.value }
@@ -1692,7 +1694,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 val graphics = GraphicsApiOptions.resolve(frontendValues[GraphicsApiOptions.KEY], descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, vulkanFailed)
                 launchedOnVulkan = graphics.preferVulkan
                 launchEnv = graphics.env
-                // netplay link: the link options are this launch's too (a session's port, mode and peer): never saved.
+                // netplay link: the link options are this launch's too (a session's port, mode and peer; a solo mGBA's cable): never saved.
                 graphicsForcedOptions = graphics.forcedOptions.keys + linkOptions.keys
                 GLRetroViewData(this@GameActivity).apply {
                     coreFilePath = coreFile

@@ -33,17 +33,24 @@ object NetplayLinkOptions {
     }
 
     /**
-     * gbalink_serial_option for mGBA: a peer that sent no `wl=` ([peerHasWl] false: a build without the Wi-Fi modes)
-     * speaks only the real cable. A [mixed] session runs the game's own mode, as [gpspSerial]. Otherwise over USB `auto`
-     * is `auto_cable`, and off it the real cable (`cable`) is `auto`.
+     * gbalink_serial_option for mGBA in a session ([forSolo] outside one): a peer that sent no `wl=` ([peerHasWl] false:
+     * a build without the Wi-Fi modes) speaks only the real cable. A [mixed] session runs the game's own mode, as
+     * [gpspSerial]. Otherwise over USB `cable` and `auto` are `auto_cable` (the adapter for a game that has one), and off
+     * it `cable` and `auto_cable` are `auto` (the real cable is the lockstep one).
      */
     fun mgbaMode(value: String, overUsb: Boolean, peerHasWl: Boolean, mixed: Boolean): String = when {
         !peerHasWl -> "cable"
         mixed -> if (overUsb) "auto_cable" else "auto"
-        overUsb && value == "auto" -> "auto_cable"
-        !overUsb && value == "cable" -> "auto"
+        overUsb && (value == "auto" || value == "cable") -> "auto_cable"
+        !overUsb && (value == "cable" || value == "auto_cable") -> "auto"
         else -> value
     }
+
+    /**
+     * gbalink_serial_option outside a session: mGBA's mode matters only in one, and `cable` keeps the core from scanning
+     * the ROM for it on every load. Never saved, like [forSession]'s.
+     */
+    fun forSolo(coreId: String): Map<String, String> = if (coreId == "mgba") mapOf(MGBA_LINK to MGBA_DEFAULT) else emptyMap()
 
     /** gbalink_link_mode_key: the core option that holds [coreId]'s link mode; null for a core without one. */
     fun modeKey(coreId: String): String? = when (coreId) {

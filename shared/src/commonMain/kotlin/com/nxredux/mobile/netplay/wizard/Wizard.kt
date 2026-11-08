@@ -14,7 +14,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * The handheld's control-channel exchange (nx-redux wizard_net.c at 8f5a760b), both roles: HELLO 2 with caps,
- * the gates (version, game, role, core; gpSP with mGBA passes only for the same Wi-Fi mode, WizCaps_linkMismatch),
+ * the gates (version, game, role, core; gpSP with mGBA passes only for the same Wi-Fi mode, and mGBA off the cable only
+ * with a peer that sent `wl=`, WizCaps_linkMismatch),
  * `REJECT core-<core>.<tag>`, SYNC-READY + `FILE <name>` with an rsync pull,
  * `START 2` / `START`. Neither driver throws [NetplayIoException]; neither closes the channel (the caller does).
  */
@@ -40,12 +41,15 @@ object Wizard {
                 ch.writeLine(Reject(reason).format())
                 return HostOutcome.Turned(reason.wire)
             }
-            val run = NetplayCores.hostRun(
+            val picked = NetplayCores.hostRun(
                 offer.tag, offer.core, offer.pick, hello.core, hello.tag, hello.auto, offer.usb, offer.wl, hello.wl,
-            ) ?: run {
+            )
+            val noWifiModes = NetplayCores.needsPeerWl(picked ?: offer.core, hello.core, offer.wl, hello.wl, offer.usb)
+            if (picked == null || noWifiModes) {
                 ch.writeLine(Reject(RejectReason.CORE, offer.core, offer.tag.trim().uppercase()).format())
-                return HostOutcome.Turned(RejectReason.CORE.wire, hello.core)
+                return HostOutcome.Turned(RejectReason.CORE.wire, hello.core, noWifiModes)
             }
+            val run = picked
             val mixed = mixedCaps(run, hello.core, offer.wl, hello.wl, offer.usb)
             ch.writeLine(HelloCodec.format(Hello.host(wireGame(offer.game), 2, Caps.of(run, offer.tag, wl = offer.wl))))
             // A link session (GB/GBC/GBA) copies no saves: each player keeps their own, which a trade needs (the
@@ -109,7 +113,9 @@ object Wizard {
         val h = HelloCodec.parse(reply) ?: return ClientOutcome.Refused(NetplayText.NOT_WAITING)
         HelloCodec.mismatch(h, offer.game, Hello.HOST, offer.any)?.let { return ClientOutcome.Refused(NetplayText.reject(it)) }
         // A host that names another core (one that predates the check, or a phone): switch on Auto, else stop, sending nothing.
-        val core = NetplayCores.joinerRun(offer.tag, offer.core, offer.pick, h.core, offer.usb, offer.wl, h.wl)
+        val picked = NetplayCores.joinerRun(offer.tag, offer.core, offer.pick, h.core, offer.usb, offer.wl, h.wl)
+        if (NetplayCores.needsPeerWl(picked ?: offer.core, h.core, offer.wl, h.wl, offer.usb)) return ClientOutcome.Refused(NetplayText.NO_WIFI_MODES)
+        val core = picked
             ?: return ClientOutcome.Refused(NetplayCores.refusal(offer.tag, offer.pick, h.core.orEmpty(), h.tag, offer.usb, offer.wl))
         val mixed = mixedCaps(offer.core, h.core, offer.wl, h.wl, offer.usb)
         var syncing = false

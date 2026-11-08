@@ -56,8 +56,8 @@ interface NetplayPlatform {
  * Handed to the runner with the launch (GameSession.netplay). [emptySaves]: a save copy was due but did not happen (this
  * device has no usable rsync), so this side plays on an empty isolated copy, as the other side does.
  * [overUsb]: the session runs over the USB cable; the game screen stops the cable when it releases the session.
- * [mixed]: a GBA link whose caps named gpSP on one side and mGBA on the other ([com.nxredux.mobile.netplay.wizard.HostOutcome.Started.mixed]); [peerWl]: the other side's game link mode
- * from its caps (null: it sent none, a build without the Wi-Fi modes).
+ * [mixed]: a GBA link whose caps named gpSP on one side and mGBA on the other (the wizard outcome's `mixed`); [peerWl]:
+ * the other side's game link mode from its caps (null: it sent none, a build without the Wi-Fi modes).
  */
 data class NetplaySession(
     val role: NetplayRole,

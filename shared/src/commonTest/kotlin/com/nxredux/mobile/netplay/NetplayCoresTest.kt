@@ -113,6 +113,19 @@ class NetplayCoresTest {
         assertEquals("mGBA links this game over the USB cable only.\n\nPick USB Cable, or another emulator.", NetplayText.cableOnly("mGBA"))
     }
 
+    /** WizCaps_mgbaNeedsWl's rows (test_wiz_caps.c): mGBA off the cable needs the other side's wl=. */
+    @Test fun mgba_off_the_cable_needs_the_other_sides_wifi_modes() {
+        assertTrue(NetplayCores.needsPeerWl("mgba", null, "rfu", null, usb = false))
+        assertTrue(NetplayCores.needsPeerWl("mgba", "mgba", "rfu", null, usb = false))
+        assertTrue(NetplayCores.needsPeerWl("mgba", "gpsp", "rfu", null, usb = false))
+        assertTrue(NetplayCores.needsPeerWl("gpsp", "mgba", null, "rfu", usb = false))
+        assertFalse(NetplayCores.needsPeerWl("mgba", null, "rfu", null, usb = true))
+        assertFalse(NetplayCores.needsPeerWl("mgba", "gpsp", "rfu", "rfu", usb = false))
+        assertFalse(NetplayCores.needsPeerWl("mgba", "mgba", "none", "none", usb = false))
+        assertFalse(NetplayCores.needsPeerWl("gpsp", null, "rfu", null, usb = false))
+        assertFalse(NetplayCores.needsPeerWl("gpsp", "gpsp", "rfu", null, usb = false))
+    }
+
     @Test fun phone_hosts_follow_the_handheld_and_keep_their_core_for_a_phone_on_auto() {
         // Phone <-> phone, both on Auto: the host keeps its core; the joiner switches to it.
         assertEquals("gpsp", NetplayCores.hostRun("GBA", "gpsp", null, "mgba", "MGBA", joinerAuto = true, usb = true))

@@ -34,10 +34,39 @@ class NetplayLinkOptionsTest {
         assertEquals("cable", NetplayLinkOptions.mgbaMode("rfu", overUsb = false, peerHasWl = false, mixed = false))
         assertEquals("auto_cable", NetplayLinkOptions.mgbaMode("auto", overUsb = true, peerHasWl = true, mixed = false))
         assertEquals("auto", NetplayLinkOptions.mgbaMode("auto", overUsb = false, peerHasWl = true, mixed = false))
-        assertEquals("cable", NetplayLinkOptions.mgbaMode("cable", overUsb = true, peerHasWl = true, mixed = false))
         assertEquals("auto", NetplayLinkOptions.mgbaMode("cable", overUsb = false, peerHasWl = true, mixed = false))
         assertEquals("mul_poke", NetplayLinkOptions.mgbaMode("mul_poke", overUsb = false, peerHasWl = true, mixed = false))
         assertEquals("disabled", NetplayLinkOptions.mgbaMode("disabled", overUsb = true, peerHasWl = true, mixed = false))
+    }
+
+    /** gbalink_mode.c's mgba_link_mode rows (test_mgba_option_table there): one truth table on both frontends. */
+    @Test fun mgba_mode_matches_the_handhelds_table() {
+        val values = listOf("cable", "auto", "auto_cable", "rfu", "mul_poke", "mul_aw1", "mul_aw2", "disabled")
+        for (v in values) for (usb in listOf(true, false)) {
+            assertEquals("cable", NetplayLinkOptions.mgbaMode(v, usb, peerHasWl = false, mixed = false), "$v usb=$usb old peer")
+            assertEquals(if (usb) "auto_cable" else "auto", NetplayLinkOptions.mgbaMode(v, usb, peerHasWl = true, mixed = true), "$v usb=$usb mixed")
+        }
+        val usb = mapOf("cable" to "auto_cable", "auto" to "auto_cable", "auto_cable" to "auto_cable", "rfu" to "rfu", "mul_poke" to "mul_poke", "disabled" to "disabled")
+        val wifi = mapOf("cable" to "auto", "auto" to "auto", "auto_cable" to "auto", "rfu" to "rfu", "mul_aw2" to "mul_aw2", "disabled" to "disabled")
+        usb.forEach { (v, want) -> assertEquals(want, NetplayLinkOptions.mgbaMode(v, overUsb = true, peerHasWl = true, mixed = false), "$v usb") }
+        wifi.forEach { (v, want) -> assertEquals(want, NetplayLinkOptions.mgbaMode(v, overUsb = false, peerHasWl = true, mixed = false), "$v wifi") }
+    }
+
+    /** gbalink_mode.c's gpsp_serial rows (test_gpsp_option_table there). */
+    @Test fun gpsp_serial_matches_the_handhelds_table() {
+        for (v in listOf("auto", "auto_cable", "lockstep", "rfu", "mul_poke", "disabled")) {
+            assertEquals("auto_cable", NetplayLinkOptions.gpspSerial(v, overUsb = true, mixed = true), v)
+            assertEquals("auto", NetplayLinkOptions.gpspSerial(v, overUsb = false, mixed = true), v)
+            assertEquals(if (v == "auto") "auto_cable" else v, NetplayLinkOptions.gpspSerial(v, overUsb = true, mixed = false), v)
+            assertEquals(if (v == "lockstep") "auto" else v, NetplayLinkOptions.gpspSerial(v, overUsb = false, mixed = false), v)
+        }
+    }
+
+    @Test fun a_solo_mgba_launch_runs_the_real_cable() {
+        // The mode only matters in a session; "cable" keeps the core from scanning the ROM on every load.
+        assertEquals(mapOf("mgba_link_mode" to "cable"), NetplayLinkOptions.forSolo("mgba"))
+        assertEquals(emptyMap<String, String>(), NetplayLinkOptions.forSolo("gpsp"))
+        assertEquals(emptyMap<String, String>(), NetplayLinkOptions.forSolo("snes9x"))
     }
 
     @Test fun ip_digits_pad_each_octet_to_three() {
@@ -68,7 +97,7 @@ class NetplayLinkOptionsTest {
         assertEquals(mapOf("gpsp_serial" to "auto"), NetplayLinkOptions.forSession(session(NetplayRole.CLIENT, "gpsp"), null))
         assertEquals(mapOf("gpsp_serial" to "auto"), NetplayLinkOptions.forSession(session(NetplayRole.CLIENT, "gpsp", mixed = true, peerWl = "rfu"), "mul_poke"))
         assertEquals(mapOf("mgba_link_mode" to "cable"), NetplayLinkOptions.forSession(session(NetplayRole.HOST, "mgba", usb = true), ""))
-        assertEquals(mapOf("mgba_link_mode" to "cable"), NetplayLinkOptions.forSession(session(NetplayRole.HOST, "mgba", usb = true, peerWl = "none"), null))
+        assertEquals(mapOf("mgba_link_mode" to "auto_cable"), NetplayLinkOptions.forSession(session(NetplayRole.HOST, "mgba", usb = true, peerWl = "none"), null))
         assertEquals(mapOf("mgba_link_mode" to "auto"), NetplayLinkOptions.forSession(session(NetplayRole.CLIENT, "mgba", peerWl = "rfu"), "cable"))
         assertEquals(mapOf("mgba_link_mode" to "auto_cable"), NetplayLinkOptions.forSession(session(NetplayRole.CLIENT, "mgba", usb = true, peerWl = "rfu"), "auto"))
         assertEquals(mapOf("mgba_link_mode" to "auto"), NetplayLinkOptions.forSession(session(NetplayRole.HOST, "mgba", mixed = true, peerWl = "poke"), "disabled"))

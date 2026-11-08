@@ -1252,7 +1252,7 @@ class AppStateTest {
         // An MGBA game without a Wi-Fi link mode and no cable: the sheet opens on the USB-cable-only page.
         state.openSystem(systems.first { it.tag == "MGBA" })
         state.onButton(NxButton.Y)
-        assertEquals(com.nxredux.mobile.netplay.NetplayText.cableOnly("mGBA"), assertIs<NetplayPage.Error>(controller.page.value).text)
+        assertEquals("mGBA links this game over the USB cable only, which this device does not have.", assertIs<NetplayPage.Error>(controller.page.value).text)
         state.onButton(NxButton.B)
         assertNull(controller.page.value)
         assertIs<Screen.Games>(state.screen.value)
