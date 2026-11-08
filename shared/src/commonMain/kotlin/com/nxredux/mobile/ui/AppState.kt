@@ -1154,7 +1154,7 @@ class AppState(
         if (!on) { drawerPreviewJob?.cancel(); drawerPreviewJob = null; _drawerPreview.value = null; return }
         if (_drawerPreview.value != null || drawerPreviewJob?.isActive == true) return
         drawerPreviewJob = scope.launch {
-            val apps = l!!.installedApps()
+            val apps = try { l!!.installedApps() } catch (e: CancellationException) { throw e } catch (e: Exception) { return@launch }
             installedCache = apps
             _drawerPreview.value = drawerRows(apps)
         }

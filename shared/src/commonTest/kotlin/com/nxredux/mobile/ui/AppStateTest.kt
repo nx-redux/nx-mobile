@@ -225,7 +225,8 @@ class AppStateTest {
         val launched = mutableListOf<String>()
         val homeRequests = mutableListOf<Boolean>()
         var missing = emptySet<String>()   // ids label() treats as uninstalled
-        override suspend fun installedApps() = apps
+        var listingFails = false
+        override suspend fun installedApps() = if (listingFails) throw IllegalStateException("package manager died") else apps
         override fun label(id: String) = if (id in missing) null else apps.firstOrNull { it.id == id }?.label
         override fun launch(id: String): Boolean { launched += id; return id !in missing }
         override fun isHome() = home
@@ -12287,6 +12288,18 @@ class AppStateTest {
         state.onButton(NxButton.B)
         assertFalse(state.toolOnTop.value)
         assertEquals(ToolKind.APPS, state.screen.value.toolRows()[state.selection.value.index].kind)
+    }
+
+    // A package listing that throws leaves the top screen's drawer preview empty instead of crashing the app.
+    @Test fun a_failing_listing_leaves_the_drawer_preview_empty() = runTest {
+        val launcher = FakeLauncher(listOf(alpha, beta))
+        val state = state(MemorySettings(ContentRef("Home")), launcher = launcher)
+        state.load()
+        launcher.listingFails = true
+        state.onDualMenu(true)
+        state.openTools()
+        state.select(state.screen.value.toolRows().indexOfFirst { it.kind == ToolKind.APPS }); advanceUntilIdle()
+        assertNull(state.drawerPreview.value)
     }
 
     // An app installed after the preview was read: the tap still lands on the app tapped, not on its old index.
