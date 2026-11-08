@@ -6,8 +6,9 @@ import com.nxredux.mobile.runner.CoreRegistry
  * Which tags have netplay and with which cores. The first core of a tag is the handheld pak's (nx-redux main), this
  * device's netplay default, which is also the tag's single-player core here (MD, SMS, GG, SG1000 and SEGACD: picodrive;
  * GPGX: genesis_plus_gx). GB, GBC, GBA and MGBA are link sessions: no input lockstep, each player on their own save.
- * GBA and MGBA run either core (gpSP and mGBA keep the same raw flash save, so either reads the other folder's); mGBA is
- * cable-only ([cableOnly]). Core versions are never compared (not on the wire).
+ * GBA and MGBA run either core (gpSP and mGBA keep the same raw flash save, so either reads the other folder's); mGBA
+ * leaves the USB cable only for a game with a Wi-Fi link mode ([wifiOk]). Core versions are never compared (not on the
+ * wire). The `wl` arguments are the games' link mode tokens ([GbaWifiLink]); null when unknown or not sent.
  */
 object NetplayCores {
     private val PICODRIVE_FIRST = listOf("picodrive", "genesis_plus_gx")
@@ -27,11 +28,11 @@ object NetplayCores {
     fun supported(tag: String): Boolean = CoreRegistry.handheldTag(tag) in table
 
     /**
-     * [tag]'s netplay cores, default first; without the cable ([usb] false) the [cableOnly] ones are left out. Every
-     * adoption decision below uses this connection-aware list.
+     * [tag]'s netplay cores, default first; without the cable ([usb] false) the ones [wifiOk] refuses for this game ([wl])
+     * are left out. Every adoption decision below uses this connection-aware list.
      */
-    fun offered(tag: String, usb: Boolean = true): List<String> =
-        table[CoreRegistry.handheldTag(tag)].orEmpty().let { cores -> if (usb) cores else cores.filterNot(::cableOnly) }
+    fun offered(tag: String, usb: Boolean = true, wl: String? = null): List<String> =
+        table[CoreRegistry.handheldTag(tag)].orEmpty().let { cores -> if (usb) cores else cores.filter { wifiOk(it, wl) } }
 
     /** The handheld pak's core for [tag]; null for a tag without netplay. */
     fun defaultCore(tag: String): String? = offered(tag).firstOrNull()
@@ -46,46 +47,67 @@ object NetplayCores {
     fun link(core: String): NetplayLinkKind? = LINK[core]
     fun isLink(core: String): Boolean = core in LINK
 
-    /** MGBA's link is the real cable only, which runs over the USB cable alone (the handheld's `--modes usb`). */
-    fun usbOnly(tag: String): Boolean = tag.trim().uppercase() == "MGBA"
+    /** An MGBA game without a Wi-Fi link mode links over the real cable alone, so the USB cable alone (the handheld's `--modes usb`). */
+    fun usbOnly(tag: String, wl: String?): Boolean = tag.trim().uppercase() == "MGBA" && wl !in GbaWifiLink.WIFI_MODES
 
-    /** mGBA's link runs over the USB cable alone, whichever folder runs it. */
-    fun cableOnly(core: String): Boolean = core == "mgba"
+    /** gbalink_transport_ok: off the USB cable mGBA links only in the game's Wi-Fi mode, whichever folder runs it. */
+    fun wifiOk(core: String, wl: String?): Boolean = core != "mgba" || wl in GbaWifiLink.WIFI_MODES
+
+    /**
+     * A phone joiner on Auto (`auto=1`) from folder [joinerTag] with game mode [joinerWl] switches to the host's [run] when
+     * its folder offers it over this connection, exactly as [joinerRun] decides on that side.
+     */
+    fun joinerSwitches(run: String, joinerTag: String?, joinerAuto: Boolean, usb: Boolean, joinerWl: String?): Boolean =
+        joinerAuto && joinerTag != null && run in offered(joinerTag, usb, joinerWl)
+
+    /** gpSP and mGBA on two sides link when both games run the same Wi-Fi mode ([GbaWifiLink.mixedOk]); never two other cores. */
+    private fun mixes(a: String, b: String, ourWl: String?, peerWl: String?, usb: Boolean): Boolean =
+        link(a) == NetplayLinkKind.NETPACKET && link(b) == NetplayLinkKind.NETPACKET && GbaWifiLink.mixedOk(ourWl, peerWl, usb)
 
     /**
      * Joining: the host's HELLO named [hostCore] (null: it named none). This device runs [own], or the host's core when
-     * the Emulator row is Auto ([pick] null) and [tag] offers it over this connection ([usb]); null = refuse (show
-     * [refusal], send nothing).
+     * the Emulator row is Auto ([pick] null) and [tag] offers it over this connection ([usb]); otherwise [own] against the
+     * host's other core when the two games' modes allow a mixed link ([ourWl], [peerWl]); null = refuse (show [refusal],
+     * send nothing).
      */
-    fun joinerRun(tag: String, own: String, pick: String?, hostCore: String?, usb: Boolean): String? = when {
+    fun joinerRun(
+        tag: String, own: String, pick: String?, hostCore: String?, usb: Boolean, ourWl: String? = null, peerWl: String? = null,
+    ): String? = when {
         hostCore == null || hostCore == own -> own
-        pick == null && hostCore in offered(tag, usb) -> hostCore
+        pick == null && hostCore in offered(tag, usb, ourWl) -> hostCore
+        mixes(own, hostCore, ourWl, peerWl, usb) -> own
         else -> null
     }
 
-    /** Joining: the host sent `REJECT core-<hostCore>`. The core to reconnect with once (Auto, offered, first refusal), or null. */
-    fun joinerRetry(tag: String, pick: String?, hostCore: String, mayRetry: Boolean, usb: Boolean): String? =
-        hostCore.takeIf { mayRetry && pick == null && it in offered(tag, usb) }
+    /**
+     * Joining: the host sent `REJECT core-<hostCore>`. The core to reconnect with once (Auto, offered for this game
+     * [ourWl], first refusal), or null.
+     */
+    fun joinerRetry(tag: String, pick: String?, hostCore: String, mayRetry: Boolean, usb: Boolean, ourWl: String? = null): String? =
+        hostCore.takeIf { mayRetry && pick == null && it in offered(tag, usb, ourWl) }
 
     /**
      * Hosting: the joiner named [joinerCore] (null: none) from folder [joinerTag], [joinerAuto] when its Emulator row is
      * Auto (`auto=1`, a phone). The core to run; null = REJECT core. Phone and phone follow the host: on Auto both ways the
      * host keeps [own] when the joiner's folder offers it (the joiner switches on this HELLO). Otherwise, on Auto, the host
-     * adopts the joiner's core (a handheld cannot switch).
+     * adopts the joiner's core (a handheld cannot switch). Failing both, [own] links with the joiner's other core when
+     * the two games' modes allow it ([ourWl], [peerWl]).
      */
     fun hostRun(
         tag: String, own: String, pick: String?, joinerCore: String?, joinerTag: String?, joinerAuto: Boolean, usb: Boolean,
+        ourWl: String? = null, peerWl: String? = null,
     ): String? = when {
         joinerCore == null || joinerCore == own -> own
-        pick == null && joinerAuto && joinerTag != null && own in offered(joinerTag, usb) -> own
-        pick == null && joinerCore in offered(tag, usb) -> joinerCore
+        pick == null && joinerSwitches(own, joinerTag, joinerAuto, usb, peerWl) -> own
+        pick == null && joinerCore in offered(tag, usb, ourWl) -> joinerCore
+        mixes(own, joinerCore, ourWl, peerWl, usb) -> own
         else -> null
     }
 
     /** The joiner's message for a host on [hostCore] in folder [hostTag]: "Set Emulator" when this device pins another offered core. */
-    fun refusal(tag: String, pick: String?, hostCore: String, hostTag: String?, usb: Boolean): String {
+    fun refusal(tag: String, pick: String?, hostCore: String, hostTag: String?, usb: Boolean, wl: String? = null): String {
         val name = name(hostCore)
-        return if (pick != null && pick != hostCore && hostCore in offered(tag, usb)) NetplayText.setEmulator(name)
+        return if (pick != null && pick != hostCore && hostCore in offered(tag, usb, wl)) NetplayText.setEmulator(name)
         else NetplayText.coreMismatch(name, hostTag)
     }
 

@@ -13,7 +13,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * The handheld's control-channel exchange (nx-redux wizard_net.c at 8f5a760b), both roles: HELLO 2 with caps,
- * the gates (version, game, role, core), `REJECT core-<core>.<tag>`, SYNC-READY + `FILE <name>` with an rsync pull,
+ * the gates (version, game, role, core; gpSP with mGBA passes only for the same Wi-Fi mode, WizCaps_linkMismatch),
+ * `REJECT core-<core>.<tag>`, SYNC-READY + `FILE <name>` with an rsync pull,
  * `START 2` / `START`. Neither driver throws [NetplayIoException]; neither closes the channel (the caller does).
  */
 object Wizard {
@@ -38,11 +39,17 @@ object Wizard {
                 ch.writeLine(Reject(reason).format())
                 return HostOutcome.Turned(reason.wire)
             }
-            val run = NetplayCores.hostRun(offer.tag, offer.core, offer.pick, hello.core, hello.tag, hello.auto, offer.usb) ?: run {
+            val run = NetplayCores.hostRun(
+                offer.tag, offer.core, offer.pick, hello.core, hello.tag, hello.auto, offer.usb, offer.wl, hello.wl,
+            ) ?: run {
                 ch.writeLine(Reject(RejectReason.CORE, offer.core, offer.tag.trim().uppercase()).format())
                 return HostOutcome.Turned(RejectReason.CORE.wire, hello.core)
             }
-            ch.writeLine(HelloCodec.format(Hello.host(wireGame(offer.game), 2, Caps.of(run, offer.tag))))
+            // The joiner ends on another core unless it names this one or switches to it on this HELLO.
+            val joinerCore = hello.core
+            val mixed = joinerCore != null && joinerCore != run &&
+                !NetplayCores.joinerSwitches(run, hello.tag, hello.auto, offer.usb, hello.wl)
+            ch.writeLine(HelloCodec.format(Hello.host(wireGame(offer.game), 2, Caps.of(run, offer.tag, wl = offer.wl))))
             // A link session (GB/GBC/GBA) copies no saves: each player keeps their own, which a trade needs (the
             // handheld's NETPLAY_SYNC_SAVES=0). START follows the HELLO at once.
             val emptySaves = if (NetplayCores.isLink(run)) false else {
@@ -70,7 +77,7 @@ object Wizard {
             }
             ch.writeLine("START 2")
             if (ch.readLine(RECV_MS) != "START") return HostOutcome.Turned(null)
-            return HostOutcome.Started(run, ch.remoteAddress, emptySaves)
+            return HostOutcome.Started(run, ch.remoteAddress, emptySaves, mixed, hello.wl)
         } catch (e: NetplayIoException) {
             return HostOutcome.Turned(null)
         }
@@ -89,23 +96,24 @@ object Wizard {
     ): ClientOutcome {
         val reply = try {
             // Auto with a choice: the joiner switches to the host's core, so a phone host on Auto keeps its own (never a host's caps).
-            val auto = offer.pick == null && NetplayCores.offered(offer.tag, offer.usb).size > 1
-            ch.writeLine(HelloCodec.format(Hello.client(wireGame(offer.game), offer.any, Caps.of(offer.core, offer.tag, auto))))
+            val auto = offer.pick == null && NetplayCores.offered(offer.tag, offer.usb, offer.wl).size > 1
+            ch.writeLine(HelloCodec.format(Hello.client(wireGame(offer.game), offer.any, Caps.of(offer.core, offer.tag, auto, offer.wl))))
             ch.readLine(RECV_MS)
         } catch (e: NetplayIoException) {
             return ClientOutcome.Refused(NetplayText.NO_ANSWER)
         }
         Reject.parse(reply)?.let { r ->
             if (r.reason == RejectReason.CORE && r.core != null) {
-                NetplayCores.joinerRetry(offer.tag, offer.pick, r.core, offer.mayRetry, offer.usb)?.let { return ClientOutcome.Retry(it) }
+                NetplayCores.joinerRetry(offer.tag, offer.pick, r.core, offer.mayRetry, offer.usb, offer.wl)?.let { return ClientOutcome.Retry(it) }
             }
             return ClientOutcome.Refused(rejectText(r, offer))
         }
         val h = HelloCodec.parse(reply) ?: return ClientOutcome.Refused(NetplayText.NOT_WAITING)
         HelloCodec.mismatch(h, offer.game, Hello.HOST, offer.any)?.let { return ClientOutcome.Refused(NetplayText.reject(it)) }
         // A host that names another core (one that predates the check, or a phone): switch on Auto, else stop, sending nothing.
-        val core = NetplayCores.joinerRun(offer.tag, offer.core, offer.pick, h.core, offer.usb)
-            ?: return ClientOutcome.Refused(NetplayCores.refusal(offer.tag, offer.pick, h.core.orEmpty(), h.tag, offer.usb))
+        val core = NetplayCores.joinerRun(offer.tag, offer.core, offer.pick, h.core, offer.usb, offer.wl, h.wl)
+            ?: return ClientOutcome.Refused(NetplayCores.refusal(offer.tag, offer.pick, h.core.orEmpty(), h.tag, offer.usb, offer.wl))
+        val mixed = h.core != null && h.core != core
         var syncing = false
         try {
             var line: String? = null
@@ -171,7 +179,7 @@ object Wizard {
             }
             if (line != "START" && !line.startsWith("START ")) return ClientOutcome.Refused(NetplayText.UNEXPECTED)
             ch.writeLine("START")
-            return ClientOutcome.Started(core, h.player, emptySaves = false)
+            return ClientOutcome.Started(core, h.player, emptySaves = false, mixed = mixed, peerWl = h.wl)
         } catch (e: CancellationException) {
             if (syncing) sink.abort()
             throw e
@@ -199,7 +207,7 @@ object Wizard {
 
     /** The text for a REJECT; `core-<core>[.<tag>]` names the host's emulator, a bare `core` is a plain refusal. */
     private fun rejectText(r: Reject, offer: ClientOffer): String =
-        if (r.reason == RejectReason.CORE && r.core != null) NetplayCores.refusal(offer.tag, offer.pick, r.core, r.tag, offer.usb)
+        if (r.reason == RejectReason.CORE && r.core != null) NetplayCores.refusal(offer.tag, offer.pick, r.core, r.tag, offer.usb, offer.wl)
         else NetplayText.reject(r.reason)
 
     /**

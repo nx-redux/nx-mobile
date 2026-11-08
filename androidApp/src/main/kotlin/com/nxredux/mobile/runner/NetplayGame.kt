@@ -67,15 +67,16 @@ internal fun netplayNotice(state: Int, secondsLeft: Int, reason: Int, onCopy: Bo
  * every other launch (and for extras that do not make one: an unknown role, a peer that is not an IPv4 address). Both
  * roles need the peer: the client connects to it, the host's engine accepts only it (an IPv4-mapped one is normalised).
  * [emptySaves]: no save copy happened although one was due ([NetplaySession.emptySaves]); [overUsb]: the session runs
- * over the USB cable ([NetplaySession.overUsb]).
+ * over the USB cable ([NetplaySession.overUsb]); [mixed] and [peerWl]: [NetplaySession.mixed], [NetplaySession.peerWl].
  */
 internal fun netplaySessionFrom(
     role: String?, peer: String?, coreId: String, folderCoreId: String?, emptySaves: Boolean = false, overUsb: Boolean = false,
+    mixed: Boolean = false, peerWl: String? = null,
 ): NetplaySession? {
     val r = NetplayRole.entries.firstOrNull { it.name == role } ?: return null
     if (folderCoreId.isNullOrEmpty()) return null
     val ip = NetplayAddress.ipv4(peer) ?: return null
-    return NetplaySession(r, ip, coreId, folderCoreId, emptySaves, overUsb)
+    return NetplaySession(r, ip, coreId, folderCoreId, emptySaves, overUsb, mixed, peerWl)
 }
 
 /**

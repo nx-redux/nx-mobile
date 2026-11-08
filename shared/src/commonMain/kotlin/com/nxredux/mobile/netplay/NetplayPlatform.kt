@@ -41,6 +41,11 @@ interface NetplayPlatform {
      * the inner file).
      */
     suspend fun hostSaves(tag: String, romFileName: String, content: ContentRef): HostSaves
+    /**
+     * The GBA game's own link mode as a caps token ([GbaWifiLink]), read from [content] (the game file [romFileName]);
+     * "none" when it cannot be read as a ROM (an archive, a document that will not open). Blocking: reads the whole ROM.
+     */
+    fun gbaLinkMode(romFileName: String, content: ContentRef): String
     /** Where a joiner's pulls land (a fresh session copy per join). */
     fun clientSink(romFileName: String): SaveSink
     fun keepScreenOn(on: Boolean)
@@ -50,6 +55,8 @@ interface NetplayPlatform {
  * Handed to the runner with the launch (GameSession.netplay). [emptySaves]: a save copy was due but did not happen (this
  * device has no usable rsync), so this side plays on an empty isolated copy, as the other side does.
  * [overUsb]: the session runs over the USB cable; the game screen stops the cable when it releases the session.
+ * [mixed]: a GBA link with the other side on the other core (gpSP with mGBA); [peerWl]: the other side's game link mode
+ * from its caps (null: it sent none, a build without the Wi-Fi modes).
  */
 data class NetplaySession(
     val role: NetplayRole,
@@ -58,6 +65,8 @@ data class NetplaySession(
     val folderCoreId: String,
     val emptySaves: Boolean = false,
     val overUsb: Boolean = false,
+    val mixed: Boolean = false,
+    val peerWl: String? = null,
 ) {
     /** A link session (GB/GBC/GBA) never plays on a copy: each player keeps their own save, which a trade needs. */
     val onCopy: Boolean get() = !NetplayCores.isLink(coreId) && (emptySaves || NetplaySaves.playsOnCopy(role, coreId, folderCoreId))

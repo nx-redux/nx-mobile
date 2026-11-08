@@ -1,5 +1,7 @@
 package com.nxredux.mobile.netplay.wizard
 
+import com.nxredux.mobile.netplay.NetplayCores
+import com.nxredux.mobile.netplay.NetplayLinkKind
 import com.nxredux.mobile.netplay.NetplayWire
 import com.nxredux.mobile.netplay.RejectReason
 import com.nxredux.mobile.runner.CoreRegistry
@@ -7,7 +9,8 @@ import com.nxredux.mobile.runner.CoreRegistry
 /**
  * The handheld's capability token (nx-redux wiz_caps.c at 8f5a760b): the HELLO field `caps=<token>` after the four fixed
  * fields, `[A-Za-z0-9._=,-]`, 1..63 chars, comma-separated `key=value` elements. This device always sends
- * `core=<core id>,tag=<TAG>`, a joiner on Auto adds `,auto=1`.
+ * `core=<core id>,tag=<TAG>`; gpSP and mGBA add the game's link mode `,wl=<token>` (netplay-prelaunch.sh), a joiner on
+ * Auto adds `,auto=1`.
  */
 object Caps {
     const val MAX = 63
@@ -44,13 +47,16 @@ object Caps {
 
     /**
      * What this device sends: `core=<core>,tag=<TAG>` (the handheld's tag, [CoreRegistry.handheldTag]: GPGX_SMS goes as
-     * GPGX, which the handheld knows), plus `,auto=1` when [auto] (a joiner whose Emulator row is Auto and could switch);
-     * "" when that would break the grammar. The `auto` element is dropped when it would not fit. The handheld reads only
-     * `core` and `tag` from caps (wiz_caps.c WizCaps_value), so the extra element is safe there.
+     * GPGX, which the handheld knows), then for gpSP and mGBA `,wl=<wl>` (the game's link mode, when known), then
+     * `,auto=1` when [auto] (a joiner whose Emulator row is Auto and could switch); "" when that would break the grammar.
+     * The `auto` element, then `wl`, is dropped when it would not fit. The handheld reads caps by key (wiz_caps.c
+     * WizCaps_value), so elements it does not know are safe there.
      */
-    fun of(core: String, tag: String, auto: Boolean = false): String {
+    fun of(core: String, tag: String, auto: Boolean = false, wl: String? = null): String {
         val base = "core=$core,tag=${CoreRegistry.handheldTag(tag)}"
-        if (auto) "$base,auto=1".takeIf { isValid(it) }?.let { return it }
+        val withWl = if (wl != null && NetplayCores.link(core) == NetplayLinkKind.NETPACKET) "$base,wl=$wl" else base
+        if (auto) "$withWl,auto=1".takeIf { isValid(it) }?.let { return it }
+        withWl.takeIf { isValid(it) }?.let { return it }
         return base.takeIf { isValid(it) } ?: ""
     }
 }
@@ -70,6 +76,9 @@ data class Hello(
 ) {
     val core: String? get() = Caps.value(caps, "core")
     val tag: String? get() = Caps.value(caps, "tag")
+
+    /** The game's link mode a gpSP or mGBA side sent (`wl=`); null when it sent none. */
+    val wl: String? get() = Caps.value(caps, "wl")
 
     /** A phone joiner on Auto (`auto=1`): it switches to the host's core, so a phone host on Auto keeps its own. */
     val auto: Boolean get() = Caps.value(caps, "auto") == "1"

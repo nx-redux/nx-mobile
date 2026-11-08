@@ -94,7 +94,7 @@ class NetplayUsbControllerTest {
         val p = FakeNetplayPlatform().apply { usbCable = FakeUsbCable(); lastLink = NetplayLink.WIFI }
         val c = controller(p)
         assertTrue(c.offers(emerald))
-        c.open(emerald)
+        c.open(emerald); runCurrent()
         val role = assertIs<NetplayPage.Role>(c.page.value)
         assertEquals(NetplayLink.USB, role.connection)                     // whatever the last choice was
         assertEquals(listOf(NetplayRoleRow.CONNECTION, NetplayRoleRow.HOST, NetplayRoleRow.JOIN, NetplayRoleRow.EMULATOR), role.rows)
@@ -102,6 +102,16 @@ class NetplayUsbControllerTest {
         c.press(NxButton.UP, NxButton.A, NxButton.RIGHT)
         assertEquals(NetplayLink.USB, assertIs<NetplayPage.Role>(c.page.value).connection)   // nothing to switch to
         assertEquals(NetplayLink.WIFI, p.lastLink)                         // the remembered choice is left alone
+    }
+
+    @Test fun mgba_offers_wifi_too_for_a_wifi_mode_game() = runTest {
+        val p = FakeNetplayPlatform().apply { usbCable = FakeUsbCable(); lastLink = NetplayLink.WIFI; gbaMode = "rfu" }
+        val c = controller(p)
+        c.open(emerald); runCurrent()
+        assertEquals(NetplayLink.WIFI, assertIs<NetplayPage.Role>(c.page.value).connection)   // the last choice
+        c.press(NxButton.UP, NxButton.A)
+        assertEquals(NetplayLink.USB, assertIs<NetplayPage.Role>(c.page.value).connection)
+        assertEquals(NetplayLink.USB, p.lastLink)
     }
 
     @Test fun the_last_connection_is_shown_again() = runTest {

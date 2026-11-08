@@ -243,6 +243,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_FOLDER_CORE = "netplay_folder_core"  // the game folder's own core id (saves belong to it)
         const val EXTRA_NETPLAY_EMPTY_SAVES = "netplay_empty_saves"   // Boolean: no save copy happened although one was due
         const val EXTRA_NETPLAY_USB = "netplay_usb"              // Boolean: the session runs over the USB cable
+        const val EXTRA_NETPLAY_MIXED = "netplay_mixed"          // Boolean: a GBA link with the other side on the other core
+        const val EXTRA_NETPLAY_PEER_WL = "netplay_peer_wl"      // the other side's GBA link mode token; absent: it sent none
         const val EXTRA_NETPLAY_USB_TOKEN = "netplay_usb_token"  // Long: the menu's cable start this session runs on (UsbCables.token)
         /** The Dolphin core's descriptor id (Wii and GameCube tags). */
         private const val DOLPHIN_ID = "dolphin"
@@ -705,6 +707,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             intent.getStringExtra(EXTRA_CORE_ID) ?: "", intent.getStringExtra(EXTRA_NETPLAY_FOLDER_CORE),
             intent.getBooleanExtra(EXTRA_NETPLAY_EMPTY_SAVES, false),
             intent.getBooleanExtra(EXTRA_NETPLAY_USB, false),
+            intent.getBooleanExtra(EXTRA_NETPLAY_MIXED, false),
+            intent.getStringExtra(EXTRA_NETPLAY_PEER_WL),
         )
         // netplay link: recreated after a process kill once its session had ended: the local game it had become, as a
         // normal launch (its resume slot below), not a session.
@@ -1484,12 +1488,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             renderer.n3dsComposeLayout = N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsSkinStack())
         }
         // netplay link: gambatte gets its link options; a GBA link engine starts now, before the core loads, so
-        // a joiner learns the host's gpsp_serial from its READY and runs with it (the handheld reloads instead).
+        // a joiner learns the host's gpsp_serial or mgba_link_mode from its READY and runs with it (the handheld reloads instead).
         val linkKind = np?.let { NetplayCores.link(it.coreId) }
         val linkOptions: Map<String, String> = if (np == null || linkKind == null) emptyMap() else when (linkKind) {
             NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
             NetplayLinkKind.NETPACKET -> {
-                val own = options.firstOrNull { it.key == NetplayLinkOptions.GPSP_SERIAL }?.value
+                val own = NetplayLinkOptions.modeKey(np.coreId)?.let { key -> options.firstOrNull { it.key == key }?.value }
                 val mode = connectLink(np, own) ?: return fail(NetplayText.FAILED_CONNECT, NetplayText.FAILED)
                 NetplayLinkOptions.forSession(np, mode)
             }
@@ -3049,7 +3053,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         NetplayLinkKind.GBLINK -> true
     }
 
-    /** netplay link: the GBA link engine, started before the core loads; the raw gpsp_serial the core runs with, or null. */
+    /** netplay link: the GBA link engine, started before the core loads; the raw link mode the core runs with, or null. */
     private suspend fun connectLink(np: NetplaySession, ownSerial: String?): String? =
         NetplayLinkGame(np, lifecycleScope, SystemClock::elapsedRealtime, ::onNetplayNotice).also { netplayGame = it }.connect(ownSerial)
 

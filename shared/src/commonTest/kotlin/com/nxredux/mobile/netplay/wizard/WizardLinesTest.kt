@@ -65,6 +65,16 @@ class WizardLinesTest {
         assertEquals("", Caps.of("x".repeat(50), "SFCSFCSFC"))         // 69 chars: no caps
     }
 
+    @Test fun the_gba_link_cores_add_the_games_wifi_mode() {
+        assertEquals("core=gpsp,tag=GBA,wl=rfu", Caps.of("gpsp", "GBA", wl = "rfu"))
+        assertEquals("core=mgba,tag=MGBA,wl=none,auto=1", Caps.of("mgba", "MGBA", auto = true, wl = "none"))
+        assertEquals("core=snes9x,tag=SFC", Caps.of("snes9x", "SFC", wl = "rfu"))   // only gpSP and mGBA say it
+        assertEquals("core=gpsp,tag=GBA", Caps.of("gpsp", "GBA"))
+        val h = HelloCodec.parse("HELLO 2 $kart client caps=core=mgba,tag=MGBA,wl=poke")!!
+        assertEquals("poke", h.wl)
+        assertEquals(null, HelloCodec.parse("HELLO 2 $kart client caps=core=mgba,tag=MGBA")!!.wl)
+    }
+
     @Test fun a_joiner_on_auto_adds_auto_1_when_it_fits() {
         assertEquals("core=gpsp,tag=GBA,auto=1", Caps.of("gpsp", "GBA", auto = true))
         assertEquals("core=gpsp,tag=GBA", Caps.of("gpsp", "GBA", auto = false))

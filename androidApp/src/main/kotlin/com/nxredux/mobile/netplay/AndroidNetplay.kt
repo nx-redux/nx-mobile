@@ -20,9 +20,11 @@ import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.NaomiSetsAsset
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.Prefs
+import com.nxredux.mobile.storage.AndroidRefs
 import com.nxredux.mobile.storage.NxPaths
 import com.nxredux.mobile.storage.findSave
 import com.nxredux.mobile.storage.readSaveDecoded
+import com.swordfish.libretrodroid.LibretroNetplay
 import com.swordfish.libretrodroid.NxLog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -298,6 +300,15 @@ class AndroidNetplay(context: Context, private val sdRoot: () -> File) : Netplay
             }
             throw e
         }
+    }
+
+    override fun gbaLinkMode(romFileName: String, content: ContentRef): String {
+        // The runner unpacks an archive; the probe reads only a bare ROM, so an archived game links as it did before.
+        if (Names.isArchive(romFileName)) return GbaWifiLink.NONE
+        // A SAF document reads through its descriptor's /proc path, which the native probe opens like a file.
+        return runCatching {
+            AndroidRefs(context.contentResolver).openFd(content, "r")?.use { LibretroNetplay.gbaLinkMode("/proc/self/fd/${it.fd}") }
+        }.onFailure { NxLog.w(TAG, "GBA link mode probe failed", it) }.getOrNull() ?: GbaWifiLink.NONE
     }
 
     override fun clientSink(romFileName: String): SaveSink = NetplaySessionDir.sink(context.filesDir, romFileName, Rsync.find(context))

@@ -24,6 +24,7 @@ class FakeLan {
  * A [NetplayPlatform] over [PipeChannel]: [accept] takes the host end of a pipe a client opened with [connect] (or one a
  * test put into [lan]), [connect] makes a [PipeChannel.pair] and returns its other end ([connectTo] overrides it).
  * [found] feeds [browse]; [wifi] is [wifiInfo]; every [hostSaves] call builds one [hostSavesFor] (kept in [served]).
+ * [gbaLinkMode] answers [gbaMode] and records the file it was asked about in [probes].
  */
 class FakeNetplayPlatform(
     val lan: FakeLan = FakeLan(),
@@ -56,6 +57,8 @@ class FakeNetplayPlatform(
     /** advertiseTo calls: game to target IP. */
     val unicast = ArrayList<Pair<String, String>>()
     val connectedOver = ArrayList<NetplayLink>()
+    var gbaMode = "none"
+    val probes = ArrayList<String>()
 
     override fun wifi(): WifiInfo? = wifiInfo
     override fun openWifiSettings() { wifiSettingsOpened++ }
@@ -82,6 +85,10 @@ class FakeNetplayPlatform(
     override suspend fun hostSaves(tag: String, romFileName: String, content: ContentRef): HostSaves {
         hostSavesCalls += Triple(tag, romFileName, content)
         return hostSavesFor().also { served += it }
+    }
+    override fun gbaLinkMode(romFileName: String, content: ContentRef): String {
+        probes += romFileName
+        return gbaMode
     }
     override fun clientSink(romFileName: String): SaveSink = sink
     override fun keepScreenOn(on: Boolean) { screenOn += on }

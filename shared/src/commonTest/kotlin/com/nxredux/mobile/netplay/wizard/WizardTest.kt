@@ -417,6 +417,71 @@ class WizardTest {
         assertEquals(HostOutcome.Started("gpsp", "10.0.0.2", emptySaves = false), hostJob.await())
     }
 
+    private val hostGbaWifi = HostOffer("Pokemon Ruby (USA)", "GBA", "gpsp", pick = "gpsp", usb = false, wl = "rfu")
+
+    @Test fun a_pinned_host_links_a_handheld_on_the_other_core_with_the_same_wifi_mode() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val hostJob = async { Wizard.host(h, hostGbaWifi, saves = { error("a link session copies no saves") }) }
+        c.writeLine("HELLO 2 $rubyEsc client caps=core=mgba,tag=MGBA,wl=rfu")
+        assertEquals("HELLO 2 $rubyEsc host 2 caps=core=gpsp,tag=GBA,wl=rfu", c.readLine(1000))
+        assertEquals("START 2", c.readLine(1000))
+        c.writeLine("START")
+        assertEquals(HostOutcome.Started("gpsp", "10.0.0.2", emptySaves = false, mixed = true, peerWl = "rfu"), hostJob.await())
+    }
+
+    @Test fun a_pinned_host_still_turns_away_the_other_core_with_another_mode() = runTest {
+        for (caps in listOf("core=mgba,tag=MGBA,wl=poke", "core=mgba,tag=MGBA,wl=none", "core=mgba,tag=MGBA")) {
+            val (h, c) = PipeChannel.pair()
+            val hostJob = async { Wizard.host(h, hostGbaWifi, saves = { error("a link session copies no saves") }) }
+            c.writeLine("HELLO 2 $rubyEsc client caps=$caps")
+            assertEquals("REJECT core-gpsp.GBA", c.readLine(1000), caps)
+            assertEquals(HostOutcome.Turned("core", "mgba"), hostJob.await(), caps)
+        }
+    }
+
+    @Test fun a_same_core_session_is_not_mixed_and_knows_the_peers_mode() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val hostJob = async { Wizard.host(h, hostGbaWifi, saves = { error("a link session copies no saves") }) }
+        c.writeLine("HELLO 2 $rubyEsc client caps=core=gpsp,tag=GBA,wl=poke")
+        c.readLine(1000)
+        c.readLine(1000)
+        c.writeLine("START")
+        assertEquals(HostOutcome.Started("gpsp", "10.0.0.2", emptySaves = false, mixed = false, peerWl = "poke"), hostJob.await())
+    }
+
+    @Test fun a_pinned_joiner_links_a_host_on_the_other_core_with_the_same_wifi_mode() = runTest {
+        val joinMgba = ClientOffer("Pokemon Ruby (USA)", any = false, tag = "MGBA", core = "mgba", pick = "mgba", usb = false, wl = "rfu")
+        for ((hostWl, want) in listOf("rfu" to true, "poke" to false)) {
+            val (h, c) = PipeChannel.pair()
+            val job = async { Wizard.client(c, joinMgba, FakeSaveSink()) }
+            assertEquals("core=mgba,tag=MGBA,wl=rfu", HelloCodec.parse(h.readLine(1000))!!.caps)
+            h.writeLine("HELLO 2 $rubyEsc host 2 caps=core=gpsp,tag=GBA,wl=$hostWl")
+            if (want) {
+                h.writeLine("START 2")
+                assertEquals("START", h.readLine(1000))
+                assertEquals(ClientOutcome.Started("mgba", 2, emptySaves = false, mixed = true, peerWl = "rfu"), job.await())
+            } else {
+                assertTrue(job.await() is ClientOutcome.Refused, hostWl)
+            }
+        }
+    }
+
+    @Test fun phone_to_phone_mixed_both_pinned_over_wifi() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val hostJob = async { Wizard.host(h, hostGbaWifi, saves = { error("a link session copies no saves") }) }
+        val joinMgba = ClientOffer("Pokemon Ruby (USA)", any = false, tag = "MGBA", core = "mgba", pick = "mgba", usb = false, wl = "rfu")
+        assertEquals(ClientOutcome.Started("mgba", 2, emptySaves = false, mixed = true, peerWl = "rfu"), Wizard.client(c, joinMgba, FakeSaveSink()))
+        assertEquals(HostOutcome.Started("gpsp", "10.0.0.2", emptySaves = false, mixed = true, peerWl = "rfu"), hostJob.await())
+    }
+
+    @Test fun a_pinned_host_and_a_joiner_on_auto_end_on_one_core() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val hostJob = async { Wizard.host(h, hostGbaWifi, saves = { error("a link session copies no saves") }) }
+        val joinAuto = ClientOffer("Pokemon Ruby (USA)", any = false, tag = "MGBA", core = "mgba", pick = null, usb = false, wl = "rfu")
+        assertEquals(ClientOutcome.Started("gpsp", 2, emptySaves = false, mixed = false, peerWl = "rfu"), Wizard.client(c, joinAuto, FakeSaveSink()))
+        assertEquals(HostOutcome.Started("gpsp", "10.0.0.2", emptySaves = false, mixed = false, peerWl = "rfu"), hostJob.await())
+    }
+
     @Test fun a_client_on_auto_sends_auto_1_and_a_pinned_one_does_not() = runTest {
         val sent = mapOf(
             joinMgbaUsb to "core=mgba,tag=MGBA,auto=1",

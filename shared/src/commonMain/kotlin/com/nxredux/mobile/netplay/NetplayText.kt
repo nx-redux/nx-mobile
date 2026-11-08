@@ -22,6 +22,8 @@ object NetplayText {
     const val RECEIVING = "Receiving saves..."
     const val STARTING = "Connected - starting game..."
     const val CONNECTING = "Connecting..."
+    /** While the GBA game's link mode is read, before the Role page. */
+    const val READING_GAME = "Reading the game..."
     const val HOST_FAILED = "Could not start hosting.\n\nPlease try again."
     const val NO_ANSWER = "The host did not answer.\n\nPlease try again."
     const val NOT_WAITING = "That device is not waiting\nfor a netplay player."
@@ -84,8 +86,8 @@ object NetplayText {
         "The host is using\n${if (tag.isNullOrEmpty()) name else "$name ($tag folder)"}.\n\nPick the game from the same\nfolder on both devices."
     /** This device has the host's emulator, but its Emulator row pins another. */
     fun setEmulator(name: String) = "The host is using $name.\nSet Emulator to $name."
-    /** Host or Join over Wi-Fi with the Emulator row pinned to a cable-only core ([name]: mGBA). */
-    fun cableOnly(name: String) = "$name links over the USB cable only.\n\nPick USB Cable, or another emulator."
+    /** Host or Join over Wi-Fi with the Emulator row pinned to a core that links this game over the cable alone ([name]: mGBA). */
+    fun cableOnly(name: String) = "$name links this game over the USB cable only.\n\nPick USB Cable, or another emulator."
     /** Flashed on the host's waiting page when a joiner on another core was refused. */
     fun coreTurnedAway(name: String) = "A player using $name was turned away."
     fun joinAnyway(host: String, own: String) =
