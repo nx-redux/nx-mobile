@@ -32,11 +32,6 @@ import com.nxredux.mobile.update.UpdateController
 import com.nxredux.mobile.update.UpdateState
 import com.nxredux.mobile.library.unassignedHint
 import com.nxredux.mobile.library.folderSummary
-import com.nxredux.mobile.library.homeSummary
-import com.nxredux.mobile.library.FolderMerge
-import com.nxredux.mobile.library.splitFolders
-import com.nxredux.mobile.library.rewriteLines
-import com.nxredux.mobile.library.RomMover
 import com.nxredux.mobile.library.MoveResult
 import com.nxredux.mobile.achievements.RaController
 import com.nxredux.mobile.achievements.RaGameView
@@ -65,7 +60,6 @@ import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.LibraryIndex
 import com.nxredux.mobile.library.LibraryIndexCodec
 import com.nxredux.mobile.library.LibraryScanner
-import com.nxredux.mobile.library.MoveItem
 import com.nxredux.mobile.library.ListingUnavailable
 import com.nxredux.mobile.library.MergedLabels
 import com.nxredux.mobile.library.NaomiSets
@@ -195,7 +189,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.coroutines.CoroutineContext
@@ -967,9 +960,6 @@ class AppState(
     private var allFilesStepShown = false   // this run showed the All files step: it counts in the step numbers
     private var androidStepShown = false   // likewise the Android games step
     private var addedExtraId: String? = null   // the ROMs folder first setup added: its summary step counts in the step numbers
-    private var homePage: Screen.FolderSummary? = null   // first setup's home page, when the home held games: B on the next step returns to it
-    private var homeOutside: List<com.nxredux.mobile.library.LooseFile> = emptyList()   // that home's games outside Roms
-    @Volatile private var moveCancelled = false   // B while a summary's move runs: it stops after the current game
     private var welcomeDone = false   // the welcome was answered this run: a load without a home goes to the folder steps
     private var mediaHomeTaken = false   // first setup went on with the media home (no All files access): no pick to wait for
     private var onboardingSync = false   // Device Sync was opened from the sync offer: leaving it returns there
@@ -1613,7 +1603,7 @@ class AppState(
         mediaHomeTaken = true
         firstSetup = true
         if (deps.settings.onboardingDone == false) deps.settings.onboardingStep = FOLDER_STEPS
-        rescan(then = { showHomePage(media) })
+        rescan(then = { folders.showHomePage(media) })
     }
 
     /** All files access is on (or there is no media home): first setup shows the home pick; without it the media home is used. */
@@ -1622,7 +1612,7 @@ class AppState(
     /** B from the media home's first page (the home page, or the ROMs folder offer without one): back past the skipped pick, which runs again going on. */
     private fun backPastMediaHome() {
         mediaHomeTaken = false
-        homePage = null
+        folders.homePage = null
         firstSetup = false
         if (deps.settings.onboardingStep == FOLDER_STEPS) deps.settings.onboardingStep = null
         backFromHomePick()
@@ -1637,7 +1627,7 @@ class AppState(
         if (!mediaHomeTaken || !inFirstSetup()) return null
         val first = when (val s = _screen.value) {
             is Screen.FolderSummary -> s.extraId == Recents.HOME
-            Screen.AddFirstExtra -> homePage == null
+            Screen.AddFirstExtra -> folders.homePage == null
             else -> false
         }
         return if (first) "Your games folder is ${mediaPath(media)}. Put ROMs and BIOS there with a file manager. Uninstalling the app removes it." else null
@@ -2054,7 +2044,7 @@ class AppState(
         val home = home() ?: return false
         firstSetup = true
         if (deps.settings.treeRef == null && home == deps.homes?.media) mediaHomeTaken = true   // a restart on the media home: no pick behind it
-        showHomePage(home)
+        folders.showHomePage(home)
         return true
     }
 
@@ -2861,179 +2851,23 @@ class AppState(
         return true
     }
 
-    /**
-     * First setup's home page after the pick's scan: what [home] holds, in `Roms/` and outside it (its outside games
-     * found as an extra folder's are). A home with no game skips it, to the ROMs folder offer.
-     */
-    private fun showHomePage(home: ContentRef) {
-        _screen.value = Screen.Loading
-        scope.launch {
-            val outside = tryOr({ emptyList() }) { scanner.scanOutsideRoms(home, deps.settings.defaultTags) }
-            val index = libraryIndex.snapshot ?: return@launch showAddFirstExtra()
-            homeOutside = outside
-            val summary = homeSummary(index, outside).copy(split = splitFolders(index).size)
-            if (summary.games == 0) { homePage = null; return@launch showAddFirstExtra() }
-            showHomeSummary(summary)
-        }
-    }
-
-    /** The home page with [summary] (after a move: what the home held before it, and the move's [result]). */
-    private fun showHomeSummary(summary: com.nxredux.mobile.library.FolderSummary, result: MoveResult? = null) {
-        val name = home()?.let { deps.source.displayName(it) } ?: ""
-        val s = Screen.FolderSummary(Recents.HOME, name, name, summary, move = result == null && homeTidy(summary), result = result)
-        homePage = s
-        _screen.value = s
-        _selection.value = ListSelection(0, folderSummaryRows(s).size)
-    }
-
-    /** Whether the home page has anything to move: games outside `Roms/`, or a console split over several folders. */
-    private fun homeTidy(summary: com.nxredux.mobile.library.FolderSummary) = summary.outside > 0 || summary.split > 0
-
-    /**
-     * The home page's move: its outside games into `Roms/` (the folders they empty removed), then each split console's
-     * other folders merged into its main one, every line naming a merged game rewritten (Recents, pins, hidden games,
-     * collections), then a rescan and the result.
-     */
-    private fun moveHomeOutside(s: Screen.FolderSummary) = launchMove(s) { home, index, mover ->
-        // Each merged game's old line → new, filled as it moves: whatever ends the move (a stop, an error, the app
-        // closing), every line naming a game that did move is rewritten to it.
-        val moved = LinkedHashMap<String, String>()
-        // The lines of the games moved so far, rewritten every few seconds too: a process killed mid-merge leaves
-        // only the last few seconds' games at their old paths, not all of them.
-        val rewritten = HashSet<String>()
-        suspend fun flushLines() {
-            val fresh = moved.filterKeys { it !in rewritten }
-            if (fresh.isEmpty()) return
-            runCatching { rewriteHomeLines(fresh) }.onSuccess { rewritten += fresh.keys }
-        }
-        val flusher = launch { while (true) { delay(LINES_FLUSH_MS); withContext(NonCancellable) { flushLines() } } }
-        var outside = MoveResult()
-        val result = try {
-            val items = mover.planLoose(homeOutside, index)
-            val movedItems = HashSet<MoveItem>()
-            outside = mover.run(items, ::moveProgress, onMoved = { movedItems += it }) { moveCancelled }
-            // Folders where a game (or a file nothing placed) stayed are never tried: a wrong empty listing must not delete them.
-            val keep = homeOutside.filter { f -> movedItems.none { it.relativeDir == f.relativeDir && (it.subdir != null || f.entry.name in it.files) } }
-            mover.pruneEmpty(home, homeOutside.map { it.relativeDir }, keep = keep.map { it.relativeDir })
-            val merged = if (outside.cancelled) MoveResult() else FolderMerge(deps.source, home).merge(index, splitFolders(index), moved, ::moveProgress) { moveCancelled }.first
-            MoveResult(outside.moved + merged.moved, outside.clashed + merged.clashed, outside.failed + merged.failed, outside.cancelled || merged.cancelled)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // What moved is counted; the rest (outside and merge) stays where it was.
-            outside.copy(moved = outside.moved + moved.size, failed = outside.failed + 1)
-        } finally {
-            flusher.cancel()
-            withContext(NonCancellable) { flushLines() }
-        }
-        homeOutside = emptyList()
-        scanNow(home, then = { showHomeSummary(s.summary, result) })
-    }
-
-    /** A move from [s]: its progress on the page from 0, then [move] with the home, the library and a mover into the home. */
-    private fun launchMove(s: Screen.FolderSummary, move: suspend CoroutineScope.(home: ContentRef, index: LibraryIndex, mover: RomMover) -> Unit) {
-        val home = home() ?: return
-        val index = libraryIndex.snapshot ?: return
-        moveCancelled = false
-        _screen.value = s.copy(progress = 0 to 0)
-        _selection.value = ListSelection(0, 0)
-        scope.launch { move(home, index, RomMover(deps.source, home)) }
-    }
-
-    /** A move's progress, on the summary page while it shows. */
-    private fun moveProgress(done: Int, total: Int) {
-        (_screen.value as? Screen.FolderSummary)?.let { _screen.value = it.copy(progress = done to total) }
-    }
-
-    /** Every saved line naming a game the merge [moved] (old path → new) follows it: Recents, pins, hidden games, collections. */
-    private suspend fun rewriteHomeLines(moved: Map<String, String>) {
-        recentsLock.withLock {
-            val recents = deps.userData.readRecents()
-            val next = recents.map { r -> moved[r.path]?.let { r.copy(path = it) } ?: r }
-            if (next != recents) deps.userData.writeRecents(next)
-        }
-        val pins = deps.userData.readPins()
-        pins.map { p -> moved[p.path]?.let { p.copy(path = it) } ?: p }.takeIf { it != pins }?.let { deps.userData.writePins(it) }
-        val hidden = deps.userData.readHidden()
-        rewriteLines(hidden, moved).takeIf { it != hidden }?.let { deps.userData.writeHidden(it) }
-        for (name in collections.names()) {
-            val lines = collections.readOrNull(name) ?: continue
-            val next = rewriteLines(lines, moved)
-            if (next != lines) collections.writeMerged(name, next, lines)
-        }
-    }
+    /** First setup's home page and folder summaries, with their moves. */
+    private val folders: FolderSummaryController = FolderSummaryController(
+        scope, _screen, _selection, deps, scanner, libraryIndex, collections,
+        host = object : FolderSummaryHost {
+            override fun home(): ContentRef? = this@AppState.home()
+            override suspend fun scanNow(root: ContentRef, then: ((List<SystemFolder>) -> Unit)?) = this@AppState.scanNow(root, then)
+            override fun showAddFirstExtra() = this@AppState.showAddFirstExtra()
+            override fun finishFolderSteps() = afterFolderSteps { load() }
+            override fun markLibraryDirty() { libraryDirty = true }
+            override val recentsLock: Mutex get() = this@AppState.recentsLock
+        },
+    )
 
     /** First setup's ROMs folder offer (after the home page, or B from the handheld question): Add folder, Skip. */
     private fun showAddFirstExtra() {
         _screen.value = Screen.AddFirstExtra
         _selection.value = ListSelection(0, 2)
-    }
-
-    /**
-     * First setup's summary of the folder [extraId] just added, from the library its scan stored, on Continue. After a
-     * move, [before] (what the folder held) stays the summary, so the page still says what was found.
-     */
-    private fun showFolderSummary(extraId: String, result: MoveResult? = null, before: com.nxredux.mobile.library.FolderSummary? = null) {
-        val index = libraryIndex.snapshot ?: return afterFolderSteps { load() }
-        val extra = deps.settings.extraFolders.firstOrNull { it.id == extraId }
-        val name = extra?.let { deps.source.displayName(it.ref) } ?: ""
-        val home = home()?.let { deps.source.displayName(it) } ?: ""
-        val summary = before ?: folderSummary(index, extraId)
-        val s = Screen.FolderSummary(extraId, name, home, summary, move = result != null, result = result)
-        _screen.value = s
-        val rows = folderSummaryRows(s)
-        _selection.value = ListSelection(0, rows.size)   // on the first row: the Move option where it is offered, else Continue
-    }
-
-    /**
-     * A or a tap on the summary's row [index]: Move toggles; Continue with Move on asks first ([Screen.FolderSummary.confirmMove]),
-     * else goes on.
-     */
-    private fun folderSummaryRow(s: Screen.FolderSummary, index: Int) {
-        if (s.progress != null) return
-        when (folderSummaryRows(s).getOrNull(index)?.kind) {
-            SummaryRowKind.MOVE -> { _screen.value = s.copy(move = !s.move); return }
-            SummaryRowKind.CONTINUE, null -> Unit
-        }
-        if (folderMoveAsk(s) != null) { _screen.value = s.copy(confirmMove = true); return }
-        folderSummaryContinue(s)
-    }
-
-    /** The summary's Continue: the move when it is on (and confirmed), else on to the next step. */
-    private fun folderSummaryContinue(s: Screen.FolderSummary) {
-        if (s.extraId == Recents.HOME) {
-            if (s.move && s.result == null && homeTidy(s.summary)) moveHomeOutside(s) else showAddFirstExtra()
-            return
-        }
-        if (s.move && s.result == null && s.summary.games > s.summary.unassigned) return moveSummaryGames(s)
-        afterFolderSteps { load() }
-    }
-
-    /** The move's confirmation over the summary: A moves, B goes back to the page (Move stays on). */
-    private fun onFolderMoveConfirm(s: Screen.FolderSummary, button: NxButton) {
-        when (button) {
-            NxButton.A -> folderSummaryContinue(s.copy(confirmMove = false))
-            NxButton.B -> _screen.value = s.copy(confirmMove = false)
-            else -> Unit
-        }
-    }
-
-    /** The summary's move: [s]'s placed games into the home's Roms, its progress on the page, then a rescan and the result. */
-    private fun moveSummaryGames(s: Screen.FolderSummary) = launchMove(s) { home, index, mover ->
-        // An unexpected error is a result too (nothing moved past it), never a crash of the app's scope.
-        val result = tryOr({ MoveResult(failed = s.summary.games - s.summary.unassigned) }) {
-            mover.run(mover.plan(index, s.extraId), ::moveProgress) { moveCancelled }
-        }
-        scanNow(home, then = {
-            // Emptied by the move: the folder is no longer a source.
-            val extra = deps.settings.extraFolders.firstOrNull { it.id == s.extraId }
-            if (extra != null && libraryIndex.snapshot?.let { folderSummary(it, s.extraId).games } == 0) {
-                deps.settings.extraFolders = deps.settings.extraFolders - extra
-                deps.folderPicker.forget(extra.ref)
-                libraryDirty = true
-            }
-            showFolderSummary(s.extraId, result, before = s.summary)
-        })
     }
 
     /** First setup is on: the welcome was not finished by an earlier run. */
@@ -3045,7 +2879,7 @@ class AppState(
         val access = deps.allFilesAccess
         val allFiles = allFilesStepShown || (access != null && access.declared && !access.granted() && !deps.settings.allFilesAsked)
         val pick = if (mediaHomeTaken || !homePickShown()) 0 else 1   // no home pick on the media home
-        return (if (allFiles) 1 else 0) + 1 + pick + (if (homePage != null) 1 else 0) + (if (addedExtraId != null) 1 else 0) + (if (androidStepShown) 1 else 0)
+        return (if (allFiles) 1 else 0) + 1 + pick + (if (folders.homePage != null) 1 else 0) + (if (addedExtraId != null) 1 else 0) + (if (androidStepShown) 1 else 0)
     }
 
     /**
@@ -3057,7 +2891,7 @@ class AppState(
         if (!inFirstSetup()) return (if (screen is Screen.AddFirstExtra) "ROM folders" else "Home folder") to (screen is Screen.AddFirstExtra)
         val access = deps.allFilesAccess
         val allFiles = allFilesStepShown || (access != null && access.declared && !access.granted() && !deps.settings.allFilesAsked)
-        val home = if (homePage != null) 1 else 0   // the home page, between the pick and the ROMs folder offer
+        val home = if (folders.homePage != null) 1 else 0   // the home page, between the pick and the ROMs folder offer
         val pick = if (mediaHomeTaken || !homePickShown()) 0 else 1   // no home pick on the media home
         val at = setupPreSteps() + (if (allFiles) 1 else 0) + when (screen) {
             is Screen.PermissionsStep -> 0
@@ -3090,7 +2924,7 @@ class AppState(
             Screen.PickFolder -> pickHome()
             Screen.AddFirstExtra -> if (index == 0) pickExtra() else skipFirstExtra()
             is Screen.AndroidGamesStep -> answerAndroidGames(index == 0)
-            is Screen.FolderSummary -> folderSummaryRow(_screen.value as Screen.FolderSummary, index)
+            is Screen.FolderSummary -> folders.folderSummaryRow(_screen.value as Screen.FolderSummary, index)
             else -> Unit
         }
     }
@@ -3104,8 +2938,8 @@ class AppState(
         allFilesStepShown = false
         androidStepShown = false
         addedExtraId = null
-        homePage = null
-        homeOutside = emptyList()
+        folders.homePage = null
+        folders.homeOutside = emptyList()
     }
 
     /** Onboarding done: the menu on Home, its tabs rebuilt for the layout and options picked. */
@@ -3734,7 +3568,7 @@ class AppState(
         rescan(
             then = {   // runs only on a good scan, so a Roms-folder mispick never shows the offer
                 if (first) {
-                    showHomePage(ref)
+                    folders.showHomePage(ref)
                 } else after()
             },
             kept = { after() },   // the same home again, not listing now
@@ -3783,7 +3617,7 @@ class AppState(
         val id = Sources.uniqueId(Sources.idFor(deps.source.displayName(ref), ref), deps.settings.extraFolders.map { it.id })
         deps.settings.extraFolders = deps.settings.extraFolders + ExtraFolder(id, ref)
         libraryDirty = true
-        if (_screen.value is Screen.AddFirstExtra) { addedExtraId = id; rescan { showFolderSummary(id) }; return }   // the first-setup offer: its summary
+        if (_screen.value is Screen.AddFirstExtra) { addedExtraId = id; rescan { folders.showFolderSummary(id) }; return }   // the first-setup offer: its summary
 
         val fromLibrary = settingsUi.rememberLibraryPage()
         rescan {
@@ -5944,7 +5778,7 @@ class AppState(
         (_screen.value as? Screen.Switcher)?.let { switcher.onSwitcherButton(it, button, repeat); return }
         // The summary: its move's confirmation takes every button first; LEFT and RIGHT flip the Move row as A does.
         (_screen.value as? Screen.FolderSummary)?.let { fs ->
-            if (fs.confirmMove) { onFolderMoveConfirm(fs, button); return }
+            if (fs.confirmMove) { folders.onFolderMoveConfirm(fs, button); return }
             val rows = folderSummaryRows(fs)
             if ((button == NxButton.LEFT || button == NxButton.RIGHT) && rows.getOrNull(_selection.value.index)?.kind == SummaryRowKind.MOVE) {
                 _screen.value = fs.copy(move = !fs.move); return
@@ -6085,7 +5919,7 @@ class AppState(
                 true
             }
             Screen.AddFirstExtra -> {
-                val page = homePage
+                val page = folders.homePage
                 when {
                     !inFirstSetup() -> skipFirstExtra()
                     page != null -> { _screen.value = page; _selection.value = ListSelection(0, folderSummaryRows(page).size) }   // back to the home page
@@ -6106,9 +5940,9 @@ class AppState(
             is Screen.FolderSummary -> {
                 when {
                     s.confirmMove -> _screen.value = s.copy(confirmMove = false)   // the move's confirmation closes first
-                    s.progress != null -> moveCancelled = true
+                    s.progress != null -> folders.moveCancelled = true
                     s.extraId == Recents.HOME && mediaHomeTaken -> backPastMediaHome()
-                    s.extraId == Recents.HOME -> { homePage = null; showPickFolderScreen() }
+                    s.extraId == Recents.HOME -> { folders.homePage = null; showPickFolderScreen() }
                     else -> showAddFirstExtra()
                 }
                 true
@@ -6471,9 +6305,6 @@ internal fun folderSummaryDetails(s: Screen.FolderSummary): List<String> = build
 
 /** [AppSettings.onboardingStep] while first setup's folder steps are under way (no [OnboardingStep] has this name). */
 private const val FOLDER_STEPS = "FOLDERS"
-
-/** How often a home move rewrites the lines of the games it moved so far. */
-private const val LINES_FLUSH_MS = 3_000L
 
 /** Settings' Saves note and the library's notice until the one-time move is done. */
 private const val SAVES_STILL_INSIDE = "Saves are still stored inside the app until your home folder is available."
