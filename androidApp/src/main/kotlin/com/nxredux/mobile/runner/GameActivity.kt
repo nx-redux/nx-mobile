@@ -166,7 +166,7 @@ import kotlin.concurrent.thread
 internal const val TAG_LOG = "NXAPP"
 
 internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost, FrontendHost, DualScreenHost, InGameMenuHost,
-    Res3dHost, ShortcutsMicHost, GameNetplayHost {
+    Res3dHost, ShortcutsMicHost, GameNetplayHost, WiiDolphinHost {
 
     companion object {
         /** The frontend rows a pad skin leaves out ([menuLocked]): it places the screens itself. */
@@ -379,7 +379,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** Debug builds: when this screen was created; game.json's autoState names only a slot 9 written since. */
     private var debugStartedAt = 0L
     /** Players this game's core gives ([CoreRegistry.playersFor]); 1 until launch. */
-    internal var playerCount = 1
+    override var playerCount = 1
         internal set
     override var frontendValues: Map<String, String> = FrontendOptions.defaults()   // every frontend key, as in effect now
         internal set
@@ -432,7 +432,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var padProfileCache: PadProfile? = null
     /** Bumped whenever [padProfileCache] is dropped, so Compose readers of [padProfile] (the menu's hint glyphs) redraw. */
     override val padProfileRevision = mutableStateOf(0)
-    internal fun dropPadProfile() { padProfileCache = null; padProfileRevision.value++; input.gcClearTriggers() }
+    override fun dropPadProfile() { padProfileCache = null; padProfileRevision.value++; input.gcClearTriggers() }
     /** The on-screen pad's profile for this game's system (its kind, face letters, hidden buttons); the intent's tag, for onCreate's layout. */
     override fun padProfile(): PadProfile =
         padProfileCache ?: PadProfile.forTag(layoutTag(), segaPad, n3dsNew, wiiPad, gameCube = wii.gameCube).also { padProfileCache = it }
@@ -1216,7 +1216,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /** The open menu's Wii rows: Motion Controls, once the sensors are known. */
-    internal fun refreshWiiMenu(model: InGameMenuModel) {
+    override fun refreshWiiMenu(model: InGameMenuModel) {
         model.setFrontend(frontendValues, renderer.overlayNames(), menuLocked(), gameTag, overlayAvailable = !renderer.ndsSplit)
     }
 
@@ -1723,7 +1723,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun handleMenuEffect(effect: MenuEffect) = menu.handle(effect)
     override fun publishMenuSecondScreen() { menu.menuModel?.let(menu::publishSecondScreen) }
     override fun placeMenu() = menu.placeMenu()
-    internal fun relayoutPad() = padLayout.applyLayout(resources.configuration.orientation)
+    override fun relayoutPad() = padLayout.applyLayout(resources.configuration.orientation)
     override fun withMenu(block: (InGameMenuModel) -> Unit) { menu.menuModel?.let { block(it); menu.menuState.value = it.state } }
     override fun withMenuIf(pred: (InGameMenuModel) -> Boolean, block: (InGameMenuModel) -> Unit) { menu.menuModel?.takeIf(pred)?.let { block(it); menu.menuState.value = it.state } }
 
