@@ -8,9 +8,12 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.PixelCopy
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.BuildConfig
+import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.NxPaths
 import com.nxredux.mobile.test.NxTestResults
@@ -26,14 +29,29 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
+ * What [SaveSession] reads from [GameActivity]: the view and the state that decides whether a save may be written now.
+ * Read only: the save and quit rules below rely on when the screen sets them, so nothing here may.
+ */
+internal interface SaveSessionHost : LifecycleOwner {
+    val activity: ComponentActivity
+    val retroView: GLRetroView?
+    val gameReady: Boolean
+    val quitting: Boolean
+    val netplay: NetplaySession?
+    val speed: SpeedController
+    val rumbles: Array<RumbleMotor>
+    fun toast(msg: String): android.widget.Toast
+}
+
+/**
  * The game's saves for one screen: save states (the slot strip, manual Save / Load, the resume slot loaded at start,
  * the Home auto state written on stop and the quit's), the battery save and clock file, and the thumbnails. Owns the
  * ordering rules between them: the GL thread's queue for every serialize, [autoWriter] for every slot-9 write, and
- * [coreLock] for the off-main native calls a destroy must not overlap. [game] forwards onStart, onStop,
+ * [coreLock] for the off-main native calls a destroy must not overlap. [GameActivity] forwards onStart, onStop,
  * onSaveInstanceState, onUserLeaveHint and the pause's battery save here. Main thread unless a function says otherwise.
  */
 internal class SaveSession(
-    private val game: GameActivity,
+    private val host: SaveSessionHost,
     private val renderer: FrontendRenderer,
     private val menu: InGameMenuController,
 ) {
@@ -122,7 +140,7 @@ internal class SaveSession(
      * while the GL surface still holds a frame; by onPause GLRetroView has already paused it (no data).
      */
     fun onUserLeaveHint() {
-        if (!game.quitting && game.gameReady && !resumePending) {
+        if (!host.quitting && host.gameReady && !resumePending) {
             val gen = ++homeThumbGen
             homeThumb = null
             captureThumbnail { bmp -> if (gen == homeThumbGen && bmp != null) onHomeThumb(bmp) }
@@ -193,9 +211,9 @@ internal class SaveSession(
     }
 
     private fun writeAutoStateOnStop() {
-        val view = game.retroView ?: return
+        val view = host.retroView ?: return
         val ss = saveStates ?: return
-        if (!game.gameReady || resumePending) return
+        if (!host.gameReady || resumePending) return
         // Serialized on the GL thread (paused, it still runs queued events, and native makes the paused view's context
         // current: a core may run emulation and GL inside it, Azahar's RunLoop drain), but not waited for here: a PS2,
         // GameCube, Wii or PSP state is tens of MB. The GL thread's queue keeps it after this frame and the FF/rewind
@@ -205,7 +223,7 @@ internal class SaveSession(
         // sees the previous state or the new one.
         val t0 = SystemClock.elapsedRealtime()
         val serialized = HandedOffResult<ByteArray>()
-        val queued = game.speed.aroundStateNow {
+        val queued = host.speed.aroundStateNow {
             runCatching {
                 view.queueEvent {
                     serialized.run {
@@ -257,12 +275,12 @@ internal class SaveSession(
             val ss = saveStates ?: return
             ok = withContext(Dispatchers.IO) {
                 awaitAutoWrites()   // a Home write of this game may still be landing
-                runCatching { ss.readSlotState(slot)?.let { game.speed.aroundState { view.unserializeState(it) } } ?: false }.getOrDefault(false)
+                runCatching { ss.readSlotState(slot)?.let { host.speed.aroundState { view.unserializeState(it) } } ?: false }.getOrDefault(false)
             }
-            if (!ok) game.toast("Resume failed")
+            if (!ok) host.toast("Resume failed")
         } finally {
             if (BuildConfig.DEBUG) {
-                NxTestResults.write(game, "resume", "slot" to slot, "ok" to ok, "path" to File(dataRoot, paths.state(slot)).absolutePath)
+                NxTestResults.write(host.activity, "resume", "slot" to slot, "ok" to ok, "path" to File(dataRoot, paths.state(slot)).absolutePath)
             }
             resumePending = false
         }
@@ -284,9 +302,9 @@ internal class SaveSession(
      */
     fun writeHomeResumePoint(view: GLRetroView, ss: SaveStates, onSaved: () -> Unit, done: () -> Unit) {
         captureThumbnail { bmp ->
-            game.lifecycleScope.launch(Dispatchers.IO) {
+            host.lifecycleScope.launch(Dispatchers.IO) {
                 runCatching {
-                    val bytes = game.speed.aroundState { view.serializeState() }
+                    val bytes = host.speed.aroundState { view.serializeState() }
                     check(bytes.isNotEmpty()) { "core returned no state" }
                     autoWriter.submit {
                         if (bmp != null) ss.writeAutoThumb(bmp)
@@ -316,7 +334,7 @@ internal class SaveSession(
         // While a resume is still loading, the running state is the fresh boot: keep the resume point as is. Without
         // [autoState] (the core asked to end) the running state is not worth resuming: keep it as is too.
         if (ss == null || resumePending || !autoState) {
-            game.lifecycleScope.launch {
+            host.lifecycleScope.launch {
                 // A manual Save/Load or a Wii HOME write still running reads the core off the main thread: it must end
                 // before the destroy, which waits only for the auto writes.
                 joinSlotJobs(slotJobs)
@@ -328,13 +346,13 @@ internal class SaveSession(
             return
         }
         captureThumbnail { bmp ->
-            game.lifecycleScope.launch {
+            host.lifecycleScope.launch {
                 // A manual Save/Load still running must finish before the state is serialized.
                 joinSlotJobs(slotJobs)
                 // true = written, null = skipped (the core can't save states), false = failed.
                 val ok: Boolean? = withContext(Dispatchers.IO) {
                     // Both reads of the core before any wait; null = the core was already destroyed (nothing to write).
-                    val bytes = game.speed.aroundState {
+                    val bytes = host.speed.aroundState {
                         withLiveCore {
                             // On the GL thread (a core may draw inside it: Azahar), waited for under the lock: the GL
                             // thread never takes coreLock, so the destroy observer just waits for it.
@@ -358,7 +376,7 @@ internal class SaveSession(
                     }
                     ok
                 }
-                if (ok == false) game.toast("Could not save resume point")
+                if (ok == false) host.toast("Could not save resume point")
                 finish()
             }
         }
@@ -379,7 +397,7 @@ internal class SaveSession(
     fun refreshSlots() {
         val ss = saveStates ?: run { slotsUi.value = emptyList(); return }
         slotsJob?.cancel()
-        slotsJob = game.lifecycleScope.launch {
+        slotsJob = host.lifecycleScope.launch {
             val (slots, last) = withContext(Dispatchers.IO) {
                 runCatching { readSlots(ss) to ss.lastSlot() }
                     .onFailure { NxLog.w("GameActivity", "could not list the slots", it) }.getOrNull()
@@ -435,26 +453,26 @@ internal class SaveSession(
      * pointer to it), and a Load would be overwritten by the resume's unserialize while the pointer says the loaded slot.
      */
     private fun slotsBusy(): Boolean {
-        if (game.gameReady && !resumePending) return false
-        game.toast("Still loading")
+        if (host.gameReady && !resumePending) return false
+        host.toast("Still loading")
         return true
     }
 
     fun saveToSlot(slot: Int) {
-        val view = game.retroView ?: return
+        val view = host.retroView ?: return
         val ss = saveStates ?: return
         if (slotsBusy()) return
         captureThumbnail { bmp ->
-            trackSlotJob(game.lifecycleScope.launch(Dispatchers.IO) {
+            trackSlotJob(host.lifecycleScope.launch(Dispatchers.IO) {
                 val ok = runCatching {
                     // Empty = the core refused (or is gone): keep the slot's old state and report the failure.
-                    val bytes = game.speed.aroundState { view.serializeState() }
+                    val bytes = host.speed.aroundState { view.serializeState() }
                     check(bytes.isNotEmpty()) { "core returned no state" }
                     ss.writeState(slot, bytes)
                     if (bmp != null) ss.writeThumb(slot, bmp)
                 }.isSuccess
                 withContext(Dispatchers.Main) {
-                    if (ok) { lastSlotCache = slot; refreshSlots(); game.toast("Saved to slot $slot") } else game.toast("Save failed")
+                    if (ok) { lastSlotCache = slot; refreshSlots(); host.toast("Saved to slot $slot") } else host.toast("Save failed")
                 }
             })
         }
@@ -462,25 +480,25 @@ internal class SaveSession(
 
     /** Loads manual [slot] and records it as the last used one; the menu closes on success. */
     fun loadFromSlot(slot: Int) {
-        val view = game.retroView ?: return
+        val view = host.retroView ?: return
         val ss = saveStates ?: return
         if (slotsBusy()) return
         // The read is in the job too, not on main: a state file is up to tens of MB (PSP and DC).
-        trackSlotJob(game.lifecycleScope.launch(Dispatchers.IO) {
+        trackSlotJob(host.lifecycleScope.launch(Dispatchers.IO) {
             val read = runCatching { ss.readState(slot) }
                 .onFailure { NxLog.e("GameActivity", "could not read slot $slot", it) }
             if (read.getOrNull() == null && read.isSuccess) return@launch   // empty slot: ignore (the menu stays open)
-            val ok = read.getOrNull()?.let { bytes -> runCatching { game.speed.aroundState { view.unserializeState(bytes) } }.getOrDefault(false) } ?: false
+            val ok = read.getOrNull()?.let { bytes -> runCatching { host.speed.aroundState { view.unserializeState(bytes) } }.getOrDefault(false) } ?: false
             if (ok) runCatching { saveStates?.rememberSlot(slot) }
                 .onFailure { NxLog.e("GameActivity", "could not record last slot", it) }
             // The loaded state's rumble may stay latched unreported: start from still rather than re-apply the old one.
             withContext(Dispatchers.Main) {
                 if (ok) {
-                    game.rumbles.forEach { it.forget() }
+                    host.rumbles.forEach { it.forget() }
                     lastSlotCache = slot   // the pointer moved: a save or load right after follows it before the refresh lands
                     refreshSlots()
                     menu.closeMenu()
-                } else game.toast("Load failed")
+                } else host.toast("Load failed")
             }
         })
     }
@@ -498,7 +516,7 @@ internal class SaveSession(
      * [fullSize] (a backdrop drawn over the picture) it keeps the picture's own pixel size.
      */
     fun captureThumbnail(fullSize: Boolean = false, cb: (Bitmap?) -> Unit) {
-        val view = game.retroView ?: return cb(null)
+        val view = host.retroView ?: return cb(null)
         val w = view.width
         val h = view.height
         if (w <= 0 || h <= 0) return cb(null)
@@ -527,11 +545,11 @@ internal class SaveSession(
      * ([clockSave]) is written with it; either changing returns true.
      */
     fun writeBatterySave(notify: Boolean): Boolean {
-        val view = game.retroView ?: return false
+        val view = host.retroView ?: return false
         val battery = batterySaves ?: return false
-        if (!game.gameReady) return false
+        if (!host.gameReady) return false
         // netplay: only a host on its folder's own core, with its saves served, writes its real saves; a copy never.
-        game.netplay?.let { if (it.onCopy) return false }
+        host.netplay?.let { if (it.onCopy) return false }
         return runCatching {
             synchronized(battery) {
                 val wrote = battery.write(view.serializeSRAM(useEmulationThread = false))
@@ -545,7 +563,7 @@ internal class SaveSession(
         }
             .onFailure {
                 NxLog.e("GameActivity", "battery save failed", it)
-                if (notify) game.runOnUiThread { game.toast("Battery save failed") }
+                if (notify) host.activity.runOnUiThread { host.toast("Battery save failed") }
             }.getOrDefault(false)
     }
 }

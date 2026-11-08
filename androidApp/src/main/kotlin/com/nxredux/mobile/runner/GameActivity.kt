@@ -166,7 +166,8 @@ import kotlin.concurrent.thread
 internal const val TAG_LOG = "NXAPP"
 
 internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost, FrontendHost, DualScreenHost, InGameMenuHost,
-    Res3dHost, ShortcutsMicHost, GameNetplayHost, WiiDolphinHost {
+    Res3dHost, ShortcutsMicHost, GameNetplayHost, WiiDolphinHost,
+    SaveSessionHost {
 
     companion object {
         /** The frontend rows a pad skin leaves out ([menuLocked]): it places the screens itself. */
