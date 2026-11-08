@@ -2420,7 +2420,7 @@ class InGameMenuModelTest {
         val m = shortcuts(overrides = ShortcutOverrides(mapOf(ShortcutAction.TOGGLE_FF to menuR1), emptyMap()))
         assertEquals("", m.state.page.intro)
         m.setControllerConnected(false)
-        assertEquals(listOf("Touch button 1", "Touch button 2", "Touch button 3 (skin)", "Touch button 4 (skin)"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Touch button 1", "Touch button 2", "Touch button 3", "Touch button 4"), m.state.page.rows.map { it.label })
         assertEquals(SHORTCUTS_NO_CONTROLLER, m.state.page.intro)
         assertEquals("Touch button 1", m.state.page.rows[m.state.page.selected].label)
         m.setControllerConnected(true)
@@ -2539,11 +2539,11 @@ class InGameMenuModelTest {
 
     @Test fun noRewindRowsWithoutRewind() {
         assertEquals(
-            listOf("Toggle FF", "Hold FF", "Reset Game", "Save State", "Load State", "Save & Quit", "Touch button 1", "Touch button 2", "Touch button 3 (skin)", "Touch button 4 (skin)"),
+            listOf("Toggle FF", "Hold FF", "Reset Game", "Save State", "Load State", "Save & Quit", "Touch button 1", "Touch button 2", "Touch button 3", "Touch button 4"),
             shortcuts(canRewind = false).state.page.rows.map { it.label },
         )
         assertEquals(
-            listOf("Toggle FF", "Hold FF", "Toggle Rewind", "Hold Rewind", "Reset Game", "Save State", "Load State", "Save & Quit", "Touch button 1", "Touch button 2", "Touch button 3 (skin)", "Touch button 4 (skin)"),
+            listOf("Toggle FF", "Hold FF", "Toggle Rewind", "Hold Rewind", "Reset Game", "Save State", "Load State", "Save & Quit", "Touch button 1", "Touch button 2", "Touch button 3", "Touch button 4"),
             shortcuts(canRewind = true).state.page.rows.map { it.label },
         )
     }

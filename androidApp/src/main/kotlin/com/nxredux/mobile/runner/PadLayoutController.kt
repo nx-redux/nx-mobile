@@ -32,6 +32,10 @@ import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_TAG
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.ui.nx.PadMic
+import com.nxredux.mobile.ui.nx.CornerButtons
+import com.nxredux.mobile.ui.nx.cornerShortcuts
+import com.nxredux.mobile.ui.nx.micCornerShown
+import com.nxredux.mobile.ui.nx.NxTheme
 import com.nxredux.mobile.ui.nx.PadMotion
 import com.nxredux.mobile.ui.nx.PadStickModes
 import com.nxredux.mobile.ui.nx.TouchShortcut
@@ -169,6 +173,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     /** The skin's bare buttons over the full-screen game while they are the pad ([addBareSkin]), else null. */
     private var bareView: PadSkinView? = null
     private fun skinViews() = listOfNotNull(skinView, bareView)
+    /** The corner buttons (mic, touch shortcuts) while no pad is drawn ([addCornerButtons]: a controller), else null. */
+    private var cornerView: ComposeView? = null
     /** The touch shortcuts changed ([PadLayoutHost.padShortcuts]): the skin's strip writes the new ones. */
     fun refreshSkinShortcuts() { skinViews().forEach { it.shortcuts = host.padShortcuts } }
     /** The in-game menu is open: the skin's strip shortcuts are hidden ([PadSkinView.stripHidden]). */
@@ -219,6 +225,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         skinView = null
         bareView?.let { root.removeView(it) }
         bareView = null
+        cornerView?.let { root.removeView(it) }
+        cornerView = null
         skinShownState.value = false
         input.n3dsHotkeys.skinShown = false
         input.dpadHat.clear()
@@ -263,7 +271,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         }
         // No touch cut-off under the buttons: they take their own touches and the gaps pass to the game, so a DS touch
         // screen under them still answers.
-        if (mode == OverlayMode.BARE) addBareSkin(root, game)
+        if (mode == OverlayMode.BARE) addBareSkin(root, game) else addCornerButtons(root)
         root.removeCallbacks(revealTimeout)
         // Hidden until the renderer places the picture; the timeout shows them for a game that never draws.
         if (bareView != null) startReveal(root)
@@ -669,9 +677,32 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     }
 
     /** The bare buttons are over the game, so they hide while the in-game menu is open and touch reaches the menu. */
+    /**
+     * No pad drawn (a controller attached): the corner buttons over the game ([CornerButtons]): a DS / 3DS game's mic
+     * bottom-left ([micCornerShown]) and the set touch shortcuts bottom-right ([cornerShortcuts]). Added whatever they are
+     * now: both are states ([PadLayoutHost.padMic] is set up after the first layout, the shortcuts change with the
+     * session), so the buttons come and go with them; with neither the view draws nothing.
+     */
+    private fun addCornerButtons(root: FrameLayout) {
+        val v = ComposeView(activity).apply {
+            setContent {
+                NxTheme {
+                    CornerButtons(
+                        mic = host.padMic()?.takeIf { micCornerShown(it, padDrawn = false) },
+                        shortcuts = cornerShortcuts(host.padShortcuts, padDrawn = false),
+                        onShortcut = host::onPadShortcut,
+                    )
+                }
+            }
+        }
+        root.addView(v, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        cornerView = v
+    }
+
     fun updatePadVisibility() {
         // The panel filling the game's window hides the pad too: it would cover the panel (dual-screen handhelds have buttons).
         val hide = menuOpen || mainPanelShown()
+        cornerView?.visibility = if (hide) View.GONE else View.VISIBLE
         // Waiting for the picture ([reveal]): invisible, not gone, so they are still laid out.
         val waiting = !reveal.shouldShow(SystemClock.uptimeMillis())
         // at the Pad Opacity the menu may have changed too

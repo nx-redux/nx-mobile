@@ -24,16 +24,16 @@ enum class ShortcutAction(val label: String, val key: String, val rewind: Boolea
 }
 
 /**
- * The on-screen touch buttons a console or game can give an action: the drawn pad shows [ONE] and [TWO] ([padDrawn]),
- * a pad skin's strip under its screen all four.
+ * The on-screen touch buttons a console or game can give an action: all four on a pad skin's strip under its screen,
+ * and in the screen's bottom-right corner where no pad is drawn ([com.nxredux.mobile.ui.nx.cornerShortcuts]).
  */
-enum class TouchSlot(val key: String, val padDrawn: Boolean = true) {
+enum class TouchSlot(val key: String) {
     ONE("touch_1"),
     TWO("touch_2"),
-    THREE("touch_3", padDrawn = false),
-    FOUR("touch_4", padDrawn = false),
+    THREE("touch_3"),
+    FOUR("touch_4"),
     ;
 
-    /** Its row's name: "Touch button 3 (skin)" for one only a pad skin's strip shows. */
-    val label: String get() = "Touch button ${ordinal + 1}" + if (padDrawn) "" else " (skin)"
+    /** Its row's name. */
+    val label: String get() = "Touch button ${ordinal + 1}"
 }

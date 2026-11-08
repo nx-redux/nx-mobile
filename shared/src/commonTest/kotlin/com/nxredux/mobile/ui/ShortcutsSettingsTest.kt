@@ -123,7 +123,7 @@ class ShortcutsSettingsTest {
         assertEquals(ShortcutAction.entries.map { it.label }, binds.map { it.label })
         assertTrue(binds.all { it.secondary == "None" })
         val touch = rows.filter { it.kind == SettingsKind.SHORTCUT_TOUCH }
-        assertEquals(listOf("Touch button 1", "Touch button 2", "Touch button 3 (skin)", "Touch button 4 (skin)"), touch.map { it.label })
+        assertEquals(listOf("Touch button 1", "Touch button 2", "Touch button 3", "Touch button 4"), touch.map { it.label })
         assertTrue(touch.all { it.secondary == "None" })
         assertEquals(SettingsRow(SettingsKind.RESET_DEFAULTS, "Clear all"), rows.last())
         assertEquals(binds + touch + rows.last(), rows)
@@ -315,7 +315,7 @@ class ShortcutsSettingsTest {
         val rows = s.page().rows
         assertEquals(listOf(SettingsRow(SettingsKind.TEXT, SHORTCUTS_NO_CONTROLLER)), rows.filter { it.kind == SettingsKind.TEXT })
         assertTrue(rows.none { it.kind == SettingsKind.SHORTCUT_BIND })
-        assertEquals(listOf("Touch button 1", "Touch button 2", "Touch button 3 (skin)", "Touch button 4 (skin)", "Clear all"), rows.filter { it.selectable }.map { it.label })
+        assertEquals(listOf("Touch button 1", "Touch button 2", "Touch button 3", "Touch button 4", "Clear all"), rows.filter { it.selectable }.map { it.label })
         assertEquals("Touch button 1", s.page().rows[s.selection.value.index].label)   // never on the line
         s.onControllerConnected(true)   // the binding was kept
         assertEquals("R1", s.row("Toggle FF").secondary)
