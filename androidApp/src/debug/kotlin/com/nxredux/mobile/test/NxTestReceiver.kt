@@ -3,8 +3,10 @@ package com.nxredux.mobile.test
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.CompanionLookup
 import com.nxredux.mobile.library.DiscSheet
+import com.nxredux.mobile.runner.ArcadeSetsAsset
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.GameSession
 import com.nxredux.mobile.runner.LibretroRunner
@@ -144,15 +146,20 @@ class NxTestReceiver : BroadcastReceiver() {
             scope.launch {
                 val lookup = runCatching { DiscSheet.companions(FileRomsSource({ true }, { true }), folder, file.name) }
                     .getOrElse { CompanionLookup.Missing(it.message ?: "companions", file.name) }
-                val companions = when (val found = lookup) {
+                val sheet = when (val found = lookup) {
                     is CompanionLookup.Found -> found.companions
                     is CompanionLookup.Missing -> {
                         NxTestResults.write(app, "game", "state" to "refused", "reason" to "missing ${found.name}")
                         return@launch
                     }
                 }
+                // An fbneo set's parent and BIOS sets, as the launcher adds them (AppState.launch).
+                val arcade = if (core.id == "fbneo" && CoreRegistry.loadsArchive(tag.uppercase(), file.name)) {
+                    ArcadeCompanions.find(FileRomsSource({ true }, { true }), folder, file.name, ArcadeSetsAsset.get(app))
+                } else null
                 val session = GameSession(tag.uppercase(), file.nameWithoutExtension, core, FileRefs.of(path), folder, file.name,
-                    resumeSlot = slot, companions = companions, gamePath = gamePath)
+                    resumeSlot = slot, companions = sheet + arcade?.companions.orEmpty(),
+                    systemSets = arcade?.systemSets.orEmpty(), gamePath = gamePath)
                 NxTestResults.markShowWhenLocked(app)
                 LibretroRunner(app) { true }.apply { recordLaunches = false }.launch(session, Recent(path))
             }
