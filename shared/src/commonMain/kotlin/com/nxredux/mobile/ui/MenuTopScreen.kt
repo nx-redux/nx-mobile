@@ -61,7 +61,8 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
     val dual by state.dualMenu.collectAsState()
     val selection = state.selection.collectAsState()
     val resumeInfo = state.resumeInfo.collectAsState()
-    val gameInfo by state.gameInfo.collectAsState()
+    val gameInfoState = state.gameInfo.collectAsState()
+    val gameInfo by gameInfoState
     val netplayPage = state.netplay?.page?.collectAsState()
     val look = rememberMenuLook(state, screen)
     val controllerConnected = rememberControllerConnected()
@@ -87,7 +88,7 @@ fun MenuTopScreen(state: AppState, inSkin: Boolean = false) {
                             val notice by state.notice.collectAsState()
                             val loading by state.loading.collectAsState()
                             val loadingMessage by state.loadingMessage.collectAsState()
-                            PageContent(state, screen, selection, resumeInfo, gameInfo, live, onTop = true)
+                            PageContent(state, screen, selection, resumeInfo, gameInfoState, live, onTop = true)
                             if (loading) NxLoadingOverlay(loadingMessage)
                             PageOverlays(state, chooser, error, notice)
                         }

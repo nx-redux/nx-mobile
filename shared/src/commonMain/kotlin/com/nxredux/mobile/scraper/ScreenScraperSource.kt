@@ -58,6 +58,8 @@ class ScreenScraperSource(
         private val NOT_HASHED = DiscSheet.EXTENSIONS + "chd"
         /** Arcade systems (a DC zip/7z refines to 75): a set's archive is the game, its own CRC the one to send. */
         private val ARCADE_IDS = setOf(75, 6, 7, 8, 142)
+        /** ROM hashes kept for the process ([hash]); each about a hundred bytes. */
+        private const val HASHES_KEPT = 4_096
     }
 
     override val id = SourceId.SS
@@ -72,6 +74,14 @@ class ScreenScraperSource(
     /** Guards [sinceQuota] (the job and a single-game fetch count lookups together). */
     private val countLock = Mutex()
     private var sinceQuota = 0
+
+    /** Guards [hashes] (the job and a single-game fetch hash at once). */
+    private val hashLock = Mutex()
+    /**
+     * Each ROM's last hash by (ref, read inside a zip) with the [RomStamp] it was read at: Resume, Fetch again and
+     * Change art ask for the same ROMs again, and a hash streams up to [HASH_LIMIT] bytes. Oldest dropped first.
+     */
+    private val hashes = LinkedHashMap<String, Pair<RomStamp, Pair<Long, Long>>>()
 
     /** The last quota read (null after [forgetQuota] or before any read). */
     val lastQuota: SsQuota? get() = quota
@@ -227,8 +237,17 @@ class ScreenScraperSource(
         return found(api(ScraperRequest.gameInfo(a, ref.fileName, systemId, crc, size)))
     }
 
+    /** [ref]'s ROM's CRC32 and size, reused while its [RomStamp] is unchanged; a failed hash is not kept. */
     private suspend fun hash(ref: LibraryGameRef, inZip: Boolean): Pair<Long, Long>? = try {
-        if (inZip) hasher.crc32AndSizeInZip(ref.rom) else hasher.crc32AndSize(ref.rom)
+        val key = (if (inZip) "zip:" else "") + ref.rom.value
+        val stamp = hasher.stamp(ref.rom)
+        stamp?.let { st -> hashLock.withLock { hashes[key]?.takeIf { it.first == st }?.second } }
+            ?: (if (inZip) hasher.crc32AndSizeInZip(ref.rom) else hasher.crc32AndSize(ref.rom))?.also { h ->
+                if (stamp != null) hashLock.withLock {
+                    hashes.remove(key); hashes[key] = stamp to h
+                    while (hashes.size > HASHES_KEPT) hashes.remove(hashes.keys.first())
+                }
+            }
     } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
 
     private fun found(r: HttpResult): GameLookup.Found? =

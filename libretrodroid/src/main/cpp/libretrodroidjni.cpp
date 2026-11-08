@@ -515,10 +515,9 @@ JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_seri
 ) {
     try {
         auto [data, size] = LibretroDroid::getInstance().serializeState();
-        std::unique_ptr<int8_t[]> owned(data);
 
         jbyteArray result = env->NewByteArray(size);
-        if (result != nullptr && size > 0) env->SetByteArrayRegion(result, 0, size, owned.get());
+        if (result != nullptr && size > 0) env->SetByteArrayRegion(result, 0, size, data.get());
 
         return result;
 

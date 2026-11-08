@@ -750,7 +750,13 @@ void LibretroDroid::step() {
     // Here, not in setFrameSpeed: audio belongs to the GL thread, which frees it in destroy(). A paused step runs too.
     if (audio) audio->setPlaybackSpeed(speed);
     const bool lk = gbalink::active();               // GBA link: speed 1, held while either side pauses
-    const bool np = !lk && netplay::active();        // netplay: one lockstep frame per step
+    const bool npSession = netplay::active();
+    const bool np = !lk && npSession;                // netplay: one lockstep frame per step
+    stepNetplayActive = npSession ? 1 : 0;
+    struct StepNetplayReset {
+        std::atomic<int>& flag;
+        ~StepNetplayReset() { flag = -1; }   // a step left by a core's exception too
+    } stepNetplayReset { stepNetplayActive };
     const bool paused = speed == 0 && !np && !lk;
     if (np || lk) speed = 1;
 
@@ -1221,7 +1227,8 @@ int16_t LibretroDroid::handleSetInputState(
     unsigned int index,
     unsigned int id
 ) {
-    if (netplay::active()) return netplay::inputState(port, device, index, id);
+    const int stepNetplay = stepNetplayActive.load(std::memory_order_relaxed);
+    if (stepNetplay >= 0 ? stepNetplay == 1 : netplay::active()) return netplay::inputState(port, device, index, id);
     return currentInput()->getInputState(port, device, index, id);
 }
 
@@ -1242,29 +1249,31 @@ void LibretroDroid::reset() {
     if (fpsSync) fpsSync->reset();
 }
 
-std::pair<int8_t*, size_t> LibretroDroid::serializeState() {
+std::pair<LibretroDroid::StateBuffer, size_t> LibretroDroid::serializeState() {
     std::lock_guard<std::mutex> lock(coreLock);
 
     // An empty result (nullptr, 0) means "no state": no core (quit racing the native destroy), or a core that
     // reports no size or refuses retro_serialize (mupen64plus/ppsspp while booting). Never hand back a buffer
     // the core did not fill, or it would be written as a save state.
-    if (core == nullptr) return std::pair<int8_t*, size_t>(nullptr, 0);
+    if (core == nullptr) return { nullptr, 0 };
 
     // A core may run emulation (and GL) inside retro_serialize_size (Azahar drains its async work with RunLoop): on
     // the GL thread while the view is paused (onStop's auto state), the paused view's context is made current for it.
     TeardownContext context;
     size_t size = core->retro_serialize_size();
-    if (size == 0) return std::pair<int8_t*, size_t>(nullptr, 0);
+    if (size == 0) return { nullptr, 0 };
 
-    auto data = new int8_t[size]();
+    // Zeroed: a core may write less than the size it reported (PPSSPP rounds it up to 8 MB), and the rest is saved
+    // too. calloc, not new[](): fresh pages from the system are zero already, so a large state is not cleared twice.
+    StateBuffer data(static_cast<int8_t*>(std::calloc(size, 1)));
+    if (!data) throw std::bad_alloc();
 
-    if (!core->retro_serialize(data, size)) {
+    if (!core->retro_serialize(data.get(), size)) {
         LOGE("Cannot save state: retro_serialize refused");
-        delete[] data;
-        return std::pair<int8_t*, size_t>(nullptr, 0);
+        return { nullptr, 0 };
     }
 
-    return std::pair(data, size);
+    return { std::move(data), size };
 }
 
 void LibretroDroid::resetCheat() {

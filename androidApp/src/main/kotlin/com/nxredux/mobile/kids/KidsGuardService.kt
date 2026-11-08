@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
@@ -35,22 +36,31 @@ import com.swordfish.libretrodroid.NxLog
  * they are (the ongoing notification still opens the tiles screen).
  *
  * Start and stop go through [update] only: a stop never reaches an instance before its startForeground (a crash on
- * API 28+); a start in flight reads [wanted] in onStartCommand instead. Main thread only.
+ * API 28+); a start in flight reads [wanted] in onStartCommand instead. The service's own calls are on the main thread;
+ * each look runs on its own thread (usage events, the keyboard setting and the allowed apps are reads across processes,
+ * and the first look scans hours of events), and only the decision and the bounce come back to main.
  */
 class KidsGuardService : Service() {
     private val main = Handler(Looper.getMainLooper())
+    private lateinit var looks: HandlerThread
+    private lateinit var look: Handler
     private lateinit var settings: AndroidAppSettings
     private lateinit var kids: KidsController
-    /** The resume event last sent back, so one event is bounced once (the next poll may still see it). */
-    private var bouncedPkg: String? = null
-    private var bouncedAt = 0L
-    /** The first look of this guard (a long one) is still to come. */
+    /** The resume event last sent back, so one event is bounced once (the next poll may still see it). Set on main. */
+    @Volatile private var bounced: GuardEvent? = null
+    /** The first look of this guard (a long one) is still to come. [look]'s thread only, as are the two below. */
     private var firstLook = true
+    private var allowedFrom: Set<String>? = null
+    private var allowedPkgs: Set<String> = emptySet()
+
+    /** Cleared on main by a stop, so a look already under way does not post the next one. */
+    @Volatile private var polling = false
 
     private val poll = object : Runnable {
         override fun run() {
+            if (!polling) return
             check()
-            main.postDelayed(this, POLL_MS)
+            if (polling) look.postDelayed(this, POLL_MS)
         }
     }
 
@@ -60,6 +70,8 @@ class KidsGuardService : Service() {
         super.onCreate()
         settings = AndroidAppSettings(this)
         kids = AndroidKids.get(this)
+        looks = HandlerThread("kids-guard").also { it.start() }
+        look = Handler(looks.looper)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -76,39 +88,60 @@ class KidsGuardService : Service() {
         }
         if (running !== this) {
             running = this
-            main.removeCallbacks(poll)
-            main.post(poll)
+            polling = true
+            look.removeCallbacks(poll)
+            look.post(poll)
         }
         if (!wanted) stop()
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
-        main.removeCallbacks(poll)
+        polling = false
+        look.removeCallbacks(poll)
+        looks.quitSafely()
         if (running === this) running = null
         super.onDestroy()
     }
 
     private fun stop() {
-        main.removeCallbacks(poll)
+        polling = false
+        look.removeCallbacks(poll)
         if (running === this) running = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
+    /** [look]'s thread: what is in front and what may be, handed to [decide] on main. */
     private fun check() {
         if (getSystemService(PowerManager::class.java)?.isInteractive == false) return   // nobody is using another app
         val window = if (firstLook) FIRST_WINDOW_MS else WINDOW_MS
         firstLook = false
         val front = front(window) ?: return
-        val pkg = front.pkg
-        val at = front.at
-        if (pkg == bouncedPkg && at == bouncedAt) return
+        if (front == bounced) return
         val ime = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+        val allowed = allowedPackages()
+        main.post { decide(front, ime, allowed) }
+    }
+
+    /** The allowed apps' packages, worked out again only when the list changed. */
+    private fun allowedPackages(): Set<String> {
+        val apps = settings.kidsAllowedApps
+        if (apps != allowedFrom) {
+            allowedPkgs = guardAllowedPackages(apps)
+            allowedFrom = apps
+        }
+        return allowedPkgs
+    }
+
+    /** Main thread: sends [front] back unless it may stay. A look that lands after the guard stopped does nothing. */
+    private fun decide(front: GuardEvent, ime: String?, allowed: Set<String>) {
+        if (running !== this || front == bounced) return
+        val pkg = front.pkg
         val exempt = guardExempt(ime, kids.granting)
         val game = com.nxredux.mobile.runner.GameActivity::class.java.name
-        if (!guardShouldBounce(pkg, front.cls, packageName, game, guardAllowedPackages(settings.kidsAllowedApps), exempt)) return
-        bouncedPkg = pkg; bouncedAt = at
+        if (!guardShouldBounce(pkg, front.cls, packageName, game, allowed, exempt)) return
+        bounced = front
         if (pkg == packageName) {   // our game screen while Locked: it quits as at the lock, then the tiles
             NxLog.i(TAG, "guard: the game screen locked")
             AndroidKids.quitGameThenShowMenu(this)

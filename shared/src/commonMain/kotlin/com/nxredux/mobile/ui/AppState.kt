@@ -80,7 +80,6 @@ import com.nxredux.mobile.library.fits
 import com.nxredux.mobile.library.matches
 import com.nxredux.mobile.library.move
 import com.nxredux.mobile.library.path
-import com.nxredux.mobile.library.setArt
 import com.nxredux.mobile.library.withArt
 import com.nxredux.mobile.library.rename
 import com.nxredux.mobile.library.playableSystems
@@ -1063,7 +1062,9 @@ class AppState(
     private val _displayDualMenu = MutableStateFlow(false)
     /** The main menu's top screen is a second display (the presentation path), not the skin's top glass. */
     val displayDualMenu: StateFlow<Boolean> = _displayDualMenu.asStateFlow()
-    private var skinDualMenu = false
+    private val _skinDualMenu = MutableStateFlow(false)
+    /** The menu skin shows its two screens ([onSkinDualMenu]); the pad's visibility depends on it ([menuPadShown]). */
+    val skinDualMenu: StateFlow<Boolean> = _skinDualMenu.asStateFlow()
 
     private val _secondList = MutableStateFlow<SecondList?>(null)
     /** While [dualMenu]: the highlighted console's or collection's games (the list A would open), for the second display; else null. */
@@ -1092,12 +1093,12 @@ class AppState(
 
     /** The menu skin shows its two screens ([active]: the top screen in its top glass, the menu below) or not. */
     fun onSkinDualMenu(active: Boolean) {
-        skinDualMenu = active
+        _skinDualMenu.value = active
         applyDualMenu()
     }
 
     private fun applyDualMenu() {
-        val active = _displayDualMenu.value || skinDualMenu
+        val active = _displayDualMenu.value || _skinDualMenu.value
         if (_dualMenu.value == active) return
         _dualMenu.value = active
         if (active) ra.closeRaPanel()   // the panel is a single-screen overlay: dual mode shows the details pane instead
@@ -1388,8 +1389,7 @@ class AppState(
         // main menu itself (a pin row, the switcher over it). Ends with the scope, so the recorder never holds this state.
         scope.launch {
             recents.written.collect {
-                rebuildMainRows()
-                swapMainRows()
+                refreshMainRows()
                 refreshGameInfo()   // a game was just played
             }
         }
@@ -1459,7 +1459,7 @@ class AppState(
         deps.deviceSync?.let { c ->
             scope.launch { c.notices.collect { showNotice(it) } }
             // Files arrived (saves, states, their pictures): Continue's resume point and slot picture are read again.
-            scope.launch { c.received.collect { rebuildMainRows(); swapMainRows() } }
+            scope.launch { c.received.collect { refreshMainRows() } }
             // ROM files arrived: a plain Systems page rescans at once; anywhere else (the tool itself) waits until it is left.
             // Collections changed (merged by this phone's writer, or pushed by a peer phone into its home `Collections/`): a
             // store copy takes in a daemon-written home file, then the tab is listed again and those counts redone.
@@ -1468,7 +1468,7 @@ class AppState(
                     synced.received.forEach { collections.storeFollowsHome(it) }
                     refreshCollectionNames()
                     (synced.written + synced.received).forEach { invalidateCollectionCounts(it) }
-                    rebuildMainRows(); swapMainRows()
+                    refreshMainRows()
                 }
             }
             scope.launch { c.romsArrived.collect { val s = _screen.value; if (s is Screen.Systems && s.menu == null && s.search == null) rescan() else { romsPending = true; libraryDirty = true } } }
@@ -1673,10 +1673,36 @@ class AppState(
      * The main menu's tabs ([buildMenuTabs]): Home (the last game, the stats as last computed, the game and tool pins),
      * consoles, collections (as last listed, with the counts cached so far), Tools. No tree access: an index start shows it
      * before any SAF call. One rebuild at a time ([rowsLock]); the collections not counted yet are counted after it.
+     * Returns once a build begun after this call has finished, so the rows reflect whatever the caller just changed.
      */
     private suspend fun rebuildMainRows() {
-        rowsLock.withLock { buildMainRows() }
+        buildMainRowsMerged()
         fillCollectionCounts()
+    }
+
+    /** [rebuildMainRows], then the menu shows the new rows. */
+    private suspend fun refreshMainRows() {
+        rebuildMainRows()
+        swapMainRows()
+    }
+
+    private var rowsAsked = 0L   // main-thread confined, as the rows are
+    private var rowsBuiltFor = 0L
+
+    /**
+     * One build serves every call made before it began: a return from a game fires several triggers at once (the
+     * foreground, the installed apps, a sync's arrivals), and a build per trigger would re-read the pins, the recents and
+     * every game's resume info and frame for each. A call made while a build runs waits for the next one, which serves
+     * all of those.
+     */
+    private suspend fun buildMainRowsMerged() {
+        val ask = ++rowsAsked
+        rowsLock.withLock {
+            if (rowsBuiltFor >= ask) return@withLock
+            val covers = rowsAsked
+            buildMainRows()
+            rowsBuiltFor = covers
+        }
     }
 
     /** [games]' hidden save state frames by path ([UserDataStore.hiddenStateShot]); an Android game has none. */
@@ -1824,7 +1850,7 @@ class AppState(
                 counts.forEach { (n, c) -> val stamp = read[n]?.stamp; if (c != null && stamp != null) countCache.put(n, stamp, library, c) else countCache.remove(n) }
                 countCache.retain(collectionNames)
                 countCache.save()
-                rowsLock.withLock { buildMainRows() }
+                buildMainRowsMerged()
                 swapMainRows()
             }
         }
@@ -1846,7 +1872,7 @@ class AppState(
 
     /** The tree was just read (a scan, the index start's probe): pick up a changed Collections tab. */
     private suspend fun refreshCollectionsFlag() {
-        if (refreshCollectionNames()) { rebuildMainRows(); swapMainRows() }
+        if (refreshCollectionNames()) refreshMainRows()
     }
 
     /**
@@ -2103,7 +2129,7 @@ class AppState(
         // First setup between the welcome and HANDHELD (the folder steps and their pickers): not asked yet.
         // A tool opened from the menu while the skin shows two screens: it is on the top screen, the menu (and its pad) below.
         val step = onboarding.step ?: return deps.settings.padSkin && deps.settings.onboardingDone != false &&
-            (padScreen(_screen.value) || (skinDualMenu && _toolOnTop.value))
+            (padScreen(_screen.value) || (_skinDualMenu.value && _toolOnTop.value))
         // Setup shows it on its own page only (the choice, live); every other page keeps the full height.
         return step == OnboardingStep.PAD && deps.settings.padSkin
     }
@@ -5156,7 +5182,7 @@ class AppState(
                 }
                 libraryDirty = false   // the index is this re-index's
                 refreshCollectionNames()
-                rebuildMainRows(); swapMainRows()   // the consoles and the collection counts follow the new index, names changed or not
+                refreshMainRows()   // the consoles and the collection counts follow the new index, names changed or not
                 // Still on a Library page: the rows were built before this scan, so refresh them (selection clamped).
                 (_screen.value as? Screen.Settings)?.takeIf { it.section.library }?.let { s ->
                     val page = settingsPage(s.section, s.confirmRemove)
@@ -5253,6 +5279,21 @@ class AppState(
      * (ignoring case, the tag breaking ties), a name shared across the list labelled as NX Redux does ([MergedLabels]).
      */
     private fun consoleEntries(systems: List<SystemFolder>): List<Listed> {
+        val cache = consoleEntriesOf?.takeIf { it.first === systemsCache }?.second
+            ?: HashMap<List<String>, Pair<List<SystemFolder>, List<Listed>>>().also { consoleEntriesOf = systemsCache to it }
+        val key = systems.map { it.tag }
+        cache[key]?.let { (from, entries) -> if (from.size == systems.size && from.indices.all { from[it] === systems[it] }) return entries }
+        return buildConsoleEntries(systems).also { cache[key] = systems to it }
+    }
+
+    /**
+     * [consoleEntries] built for the [systemsCache] it was: a merged console's sort and labels run over all its games,
+     * and dual screen asks again on every highlight. Keyed by tags, checked by the folders' identity (the Android
+     * console is rebuilt outside [systemsCache]).
+     */
+    private var consoleEntriesOf: Pair<List<SystemFolder>, HashMap<List<String>, Pair<List<SystemFolder>, List<Listed>>>>? = null
+
+    private fun buildConsoleEntries(systems: List<SystemFolder>): List<Listed> {
         systems.singleOrNull()?.let { s -> return s.games.map { Listed(s, it) } }
         val all = systems.flatMap { s -> s.games.map { Listed(s, it) } }.sortedWith(compareBy({ it.game.shownName.lowercase() }, { it.system.tag }))
         val labels = MergedLabels.labels(all.map { MergedLabels.Row(it.game.shownName, it.game.fileName, it.system.tag) })
@@ -5707,10 +5748,10 @@ class AppState(
         // Back on a list or a page: Home's rows are rebuilt all the same (the page stays as it is; [swapMainRows] only acts
         // on the menu), so B to the menu shows Continue's new resume frame, not the one read when the game launched.
         if (switcherBack) { dropSwitcherReturn(); switcherRowsRebuilt = true; scope.launch { rebuildMainRows() }; refreshSwitcher(); return }
-        val s = _screen.value as? Screen.Systems ?: run { scope.launch { rebuildMainRows(); swapMainRows() }; reopenSwitcher(); return }
+        val s = _screen.value as? Screen.Systems ?: run { scope.launch { refreshMainRows() }; reopenSwitcher(); return }
         if (s.menu != null) { dropSwitcherReturn(); return }
         if (!firstSetup) updaterOnMainMenu()   // back over the menu (from a game, or the install-permission screen)
-        scope.launch { rebuildMainRows(); swapMainRows(); reopenSwitcher() }   // Continue's save (its resume frame) may be new since the rows were built
+        scope.launch { refreshMainRows(); reopenSwitcher() }   // Continue's save (its resume frame) may be new since the rows were built
         val root = home() ?: return
         if (foregroundJob?.isActive == true) return   // a quick second onStart: the first check (or its scan) covers it
         foregroundJob = scope.launch {
@@ -6069,7 +6110,7 @@ class AppState(
         // snapshot above still shows it); the highlight stays on its row where that row is still there.
         switcherRemoval?.let { removal ->
             switcherRemoval = null
-            scope.launch { removal.join(); rebuildMainRows(); swapMainRows() }
+            scope.launch { removal.join(); refreshMainRows() }
         }
     }
 
@@ -6365,10 +6406,13 @@ class AppState(
 
     private val gameTimeScreen = deps.gameTime?.let { data ->
         GameTimeScreenController(scope, _screen, _selection, _error, data, loader) {
-            val text = deps.indexStore.read()
-            val art = withContext(deps.compute) {   // the whole library index: decode off the main thread
+            // The index in memory, not the stored one: it has art a failed or pending write has not stored yet. Before the
+            // first load there is only the stored one.
+            val index = indexLock.withLock { library }
+            val text = if (index == null) deps.indexStore.read() else null
+            val art = withContext(deps.compute) {   // every game of the library: off the main thread
                 HashMap<String, String?>().also { art ->
-                    text?.let(LibraryIndexCodec::decode)?.systems?.forEach { s -> s.games.forEach { g -> art[GamePath.of(GameRef(g.source, g.dir, g.file))] = g.boxart ?: g.box2d ?: g.screenshot } }
+                    (index ?: text?.let(LibraryIndexCodec::decode))?.systems?.forEach { s -> s.games.forEach { g -> art[GamePath.of(GameRef(g.source, g.dir, g.file))] = g.boxart ?: g.box2d ?: g.screenshot } }
                 }
             }
             return@GameTimeScreenController { path: String -> art[path] }
@@ -6475,6 +6519,27 @@ class AppState(
         )
     }
 
+    /**
+     * Each game's places in the index it was built for ((console, game) indices), so a fetch's thousands of results
+     * each find their game without a pass over the library. Read and written under [indexLock] only.
+     */
+    private var artPositionsOf: Pair<LibraryIndex, Map<GameRef, List<Pair<Int, Int>>>>? = null
+
+    private fun artPositions(index: LibraryIndex): Map<GameRef, List<Pair<Int, Int>>> {
+        val map = HashMap<GameRef, MutableList<Pair<Int, Int>>>()
+        index.systems.forEachIndexed { si, s -> s.games.forEachIndexed { gi, g -> map.getOrPut(GameRef(g.source, g.dir, g.file)) { ArrayList(1) }.add(si to gi) } }
+        return map
+    }
+
+    /** [LibraryIndex.setArt] at known places: only the consoles holding the game are copied. */
+    private fun LibraryIndex.withArtAt(at: List<Pair<Int, Int>>, art: ArtRefs): LibraryIndex {
+        val next = systems.toMutableList()
+        at.groupBy({ it.first }, { it.second }).forEach { (si, games) ->
+            next[si] = next[si].let { s -> s.copy(games = s.games.toMutableList().also { list -> games.forEach { gi -> list[gi] = list[gi].withArt(art) } }) }
+        }
+        return copy(systems = next)
+    }
+
     private val artworkHost = object : ArtworkHost {
         override suspend fun libraryGames(): List<LibraryGameRef> = artworkGamesWithTitles(withHidden = false)
         override suspend fun allLibraryGames(): List<LibraryGameRef> = artworkGamesWithTitles(withHidden = true)
@@ -6486,10 +6551,10 @@ class AppState(
         override suspend fun applyArt(gamePath: String, art: ArtRefs) {
             val ref = GamePath.split(gamePath) ?: return
             mutateIndex(refresh = null, persistNow = false) { current ->
-                val game = current?.systems?.firstNotNullOfOrNull { s ->
-                    s.games.firstOrNull { it.source == ref.sourceId && it.dir == ref.relativeDir && it.file == ref.fileName }
-                } ?: return@mutateIndex null
-                current.setArt(game, art)
+                current ?: return@mutateIndex null
+                val positions = artPositionsOf?.takeIf { it.first === current }?.second ?: artPositions(current)
+                val at = positions[ref] ?: return@mutateIndex null
+                current.withArtAt(at, art).also { artPositionsOf = it to positions }   // same order and sizes: the places hold
             } ?: return
             scheduleArtFlush()
         }
@@ -7257,8 +7322,7 @@ class AppState(
         val next = buildAndroidConsole()
         androidConsole = next
         if (allMenuTabs.isNotEmpty() && next != menuAndroidConsole) {   // before the menu's first build, that build takes it
-            rebuildMainRows()
-            swapMainRows()
+            refreshMainRows()
         }
         val s = _screen.value as? Screen.Games ?: return
         val shown = (s.source.base as? ListSource.Console)?.system?.takeIf { it.android } ?: return

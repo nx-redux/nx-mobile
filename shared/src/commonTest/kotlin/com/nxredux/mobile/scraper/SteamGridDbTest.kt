@@ -476,4 +476,20 @@ class SteamGridDbTest {
         assertNull(rig.fs.bytesAt("Home/Roms/GB/.media/boxart/Tetris.png"))
         assertTrue(ArtHave.of(rig.arts.single()).box)
     }
+    @Test fun regionalVariantsShareOneSearchAndAssetReadPerJob() = runTest {
+        val r = Rig()
+        r.answerAll()
+        val usa = Scrape.homeGame("Tetris (USA).gb").copy(name = "Tetris (USA)")
+        val jpn = Scrape.homeGame("Tetris (Japan).gb").copy(name = "Tetris (Japan)")
+        r.src.startJob()
+        val first = r.src.find(usa, setOf(ArtSlot.GRID, ArtSlot.HERO))
+        val second = r.src.find(jpn, setOf(ArtSlot.GRID, ArtSlot.HERO))
+        assertEquals(first.map { it.url }, second.map { it.url })
+        assertEquals(1, r.http.count("search/autocomplete/"))
+        assertEquals(1, r.http.count("grids/game/"))
+        assertEquals(1, r.http.count("heroes/game/"))
+        r.src.startJob()
+        r.src.find(jpn, setOf(ArtSlot.GRID))
+        assertEquals(2, r.http.count("search/autocomplete/"))
+    }
 }

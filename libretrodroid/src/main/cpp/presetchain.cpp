@@ -501,7 +501,7 @@ void PresetChainRenderer::render(
     // Units: 0 = Texture, 1 = Orig, 2.. = LUTs in order, then Pass1..PassN outputs.
     const unsigned lutBase = 2;
     const auto passBase = lutBase + (unsigned) lutTextures.size();
-    const auto units = passBase + (unsigned) passes.size();
+    const auto units = textureUnits();
 
     // A GL core caches its texture bindings: put back what it left on every unit the chain touches. A software
     // frame's units hold only our own bindings, so they are not queried every frame.

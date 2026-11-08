@@ -10,7 +10,7 @@ import kotlin.math.roundToInt
 
 /**
  * The DS stylus cursor in [parent]: a plain, non-clickable dot (touches pass through to what is under it), placed by its
- * centre in px of [parent], sized by [parent]'s display density. Its view is added on the first [show].
+ * centre in px of [parent], sized by [parent]'s display density. Its view is added, at its size, on the first [show].
  */
 internal class PenDot(private val parent: FrameLayout) {
     private var view: View? = null
@@ -18,11 +18,11 @@ internal class PenDot(private val parent: FrameLayout) {
     /** The dot centred on ([cx], [cy]); full strength while [pressed], else dimmed. */
     fun show(cx: Float, cy: Float, pressed: Boolean) {
         val v = view ?: create()
-        val size = (SIZE_DP * parent.resources.displayMetrics.density).roundToInt()
-        v.layoutParams = FrameLayout.LayoutParams(size, size, Gravity.TOP or Gravity.START).apply {
-            leftMargin = (cx - size / 2f).roundToInt()
-            topMargin = (cy - size / 2f).roundToInt()
-        }
+        // Moved by translation, not margins: a relayout of the game container (the GL surface's parent) per pen step
+        // costs a frame's worth of work.
+        val half = v.layoutParams.width / 2f
+        v.translationX = (cx - half).roundToInt().toFloat()
+        v.translationY = (cy - half).roundToInt().toFloat()
         v.alpha = if (pressed) 1f else 0.6f
         v.visibility = View.VISIBLE
     }
@@ -41,7 +41,8 @@ internal class PenDot(private val parent: FrameLayout) {
         v.isClickable = false
         v.isFocusable = false
         v.visibility = View.GONE
-        parent.addView(v, FrameLayout.LayoutParams(0, 0, Gravity.TOP or Gravity.START))
+        val size = (SIZE_DP * density).roundToInt()
+        parent.addView(v, FrameLayout.LayoutParams(size, size, Gravity.TOP or Gravity.START))
         view = v
     }
 

@@ -309,6 +309,37 @@ class LibretroThumbnailsTest {
         assertEquals(2, http.count("?F=0"))
     }
 
+    @Test fun aLoadedListIsCheckedBeforeAnyProbe() = runTest {
+        val http = FakeHttp()
+        http.on("Named_Boxarts/?F=0", HttpResult(200, gbaIndex.encodeToByteArray()))
+        http.on("Named_Boxarts/Advance%20Wars", png)
+        http.on("Named_Boxarts/Legend%20of%20Zelda", png)
+        val src = LibretroThumbnails(http, { 0L }) {}
+        src.startJob()
+        src.find(game("Zzz.gba", "GBA"), setOf(ArtSlot.BOX_2D))   // a miss loads the list
+        http.calls.clear()
+        // Listed under its libretro name only: the candidates the list lacks are never asked for.
+        val zelda = src.find(game("The Legend of Zelda - The Minish Cap [!].gba", "GBA"), setOf(ArtSlot.BOX_2D)).single()
+        assertEquals("Named_Boxarts/Legend of Zelda, The - The Minish Cap (USA)", zelda.origin.assetId)
+        assertEquals(listOf(zelda.url), http.calls)
+        http.calls.clear()
+        // A candidate the list has is fetched at once.
+        val exact = src.find(game("Advance Wars (USA).gba", "GBA"), setOf(ArtSlot.BOX_2D)).single()
+        assertEquals("Named_Boxarts/Advance Wars (USA)", exact.origin.assetId)
+        assertEquals(listOf(exact.url), http.calls)
+        http.calls.clear()
+        // Not listed at all: no request.
+        assertEquals(emptyList(), src.find(game("Unknown Game.gba", "GBA"), setOf(ArtSlot.BOX_2D)))
+        assertEquals(emptyList<String>(), http.calls)
+    }
+
+    @Test fun anEmptyListStillProbes() = runTest {
+        val http = FakeHttp().apply { on("?F=0", HttpResult(HttpResult.TOO_LARGE, null)); on("Named_Boxarts/Golden%20Sun.png", png) }
+        val src = LibretroThumbnails(http, { 0L }) {}
+        assertEquals(emptyList(), src.find(game("Advance Wars.gba", "GBA"), setOf(ArtSlot.BOX_2D)))
+        assertEquals(1, src.find(game("Golden Sun.gba", "GBA"), setOf(ArtSlot.BOX_2D)).size)
+    }
+
     @Test fun eachFolderHasItsOwnList() = runTest {
         val http = FakeHttp()
         http.on("Named_Boxarts/?F=0", HttpResult(200, gbaIndex.encodeToByteArray()))

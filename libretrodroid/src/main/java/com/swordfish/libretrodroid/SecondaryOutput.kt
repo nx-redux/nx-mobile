@@ -43,6 +43,24 @@ internal class SecondaryOutput {
     private var stamped = false
     private var presentationDeadlineNanos = 0L   // the second display's; 0 = unknown, frames are not stamped
 
+    // What was current before a draw (the main surface, or a teardown's pbuffer while the view is paused), made current
+    // again after it. Each eglGetCurrent* call wraps its handle in a new object: only the draw surface is asked per
+    // draw, and the rest is asked again when it differs. The same draw surface comes with the same read surface and
+    // context: a new context goes through [contextLost], which forgets them.
+    private class MainTarget(val display: EGLDisplay, val context: EGLContext, val draw: EGLSurface, val read: EGLSurface)
+    private var main: MainTarget? = null
+
+    private fun mainTarget(): MainTarget? {
+        val draw = EGL14.eglGetCurrentSurface(EGL14.EGL_DRAW)
+        // No draw surface says nothing about the context (none, or a surfaceless one): asked in full.
+        main?.let { if (draw != EGL14.EGL_NO_SURFACE && it.draw == draw) return it }
+        main = null
+        val display = EGL14.eglGetCurrentDisplay()
+        val context = EGL14.eglGetCurrentContext()
+        if (display == EGL14.EGL_NO_DISPLAY || context == EGL14.EGL_NO_CONTEXT) return null
+        return MainTarget(display, context, draw, EGL14.eglGetCurrentSurface(EGL14.EGL_READ)).also { main = it }
+    }
+
     /** A surface is set and drawable. */
     val active: Boolean get() = surface != null && !dropped && width > 0 && height > 0
 
@@ -64,6 +82,7 @@ internal class SecondaryOutput {
      * it, or is destroyed here if it somehow survived. Re-created on the next [draw].
      */
     fun contextLost() {
+        main = null
         if (eglSurface != EGL14.EGL_NO_SURFACE) {
             val size = IntArray(1)
             val alive = eglDisplay != EGL14.EGL_NO_DISPLAY &&
@@ -89,11 +108,9 @@ internal class SecondaryOutput {
         val target = surface ?: return
         if (dropped || width <= 0 || height <= 0) return
 
-        val display = EGL14.eglGetCurrentDisplay()
-        val context = EGL14.eglGetCurrentContext()
-        val mainDraw = EGL14.eglGetCurrentSurface(EGL14.EGL_DRAW)
-        val mainRead = EGL14.eglGetCurrentSurface(EGL14.EGL_READ)
-        if (display == EGL14.EGL_NO_DISPLAY || context == EGL14.EGL_NO_CONTEXT) return
+        val main = mainTarget() ?: return
+        val display = main.display
+        val context = main.context
 
         if (eglSurface == EGL14.EGL_NO_SURFACE) {
             eglSurface = createWindowSurface(display, context, target) ?: run {
@@ -107,7 +124,7 @@ internal class SecondaryOutput {
 
         if (!EGL14.eglMakeCurrent(display, eglSurface, eglSurface, context)) {
             onEglError("eglMakeCurrent", drop = true)
-            restore(display, mainDraw, mainRead, context)
+            restore(main)
             return
         }
         try {
@@ -126,7 +143,7 @@ internal class SecondaryOutput {
                 stampAndSwap(display)
             }
         } finally {
-            restore(display, mainDraw, mainRead, context)
+            restore(main)
         }
     }
 
@@ -135,20 +152,16 @@ internal class SecondaryOutput {
         if (!swapPending) return
         swapPending = false
         if (dropped || eglSurface == EGL14.EGL_NO_SURFACE) return
-        val display = EGL14.eglGetCurrentDisplay()
-        val context = EGL14.eglGetCurrentContext()
-        val mainDraw = EGL14.eglGetCurrentSurface(EGL14.EGL_DRAW)
-        val mainRead = EGL14.eglGetCurrentSurface(EGL14.EGL_READ)
-        if (display == EGL14.EGL_NO_DISPLAY || context == EGL14.EGL_NO_CONTEXT) return
-        if (!EGL14.eglMakeCurrent(display, eglSurface, eglSurface, context)) {
+        val main = mainTarget() ?: return
+        if (!EGL14.eglMakeCurrent(main.display, eglSurface, eglSurface, main.context)) {
             onEglError("eglMakeCurrent", drop = true)
-            restore(display, mainDraw, mainRead, context)
+            restore(main)
             return
         }
         try {
-            stampAndSwap(display)
+            stampAndSwap(main.display)
         } finally {
-            restore(display, mainDraw, mainRead, context)
+            restore(main)
         }
     }
 
@@ -169,9 +182,10 @@ internal class SecondaryOutput {
         if (!EGL14.eglSwapBuffers(display, eglSurface)) onEglError("eglSwapBuffers", drop = false)
     }
 
-    private fun restore(display: EGLDisplay, draw: EGLSurface, read: EGLSurface, context: EGLContext) {
-        if (!EGL14.eglMakeCurrent(display, draw, read, context)) {
+    private fun restore(main: MainTarget) {
+        if (!EGL14.eglMakeCurrent(main.display, main.draw, main.read, main.context)) {
             NxLog.e(TAG, "restoring the main surface failed: 0x${Integer.toHexString(EGL14.eglGetError())}")
+            this.main = null   // asked again next time
         }
     }
 

@@ -147,14 +147,21 @@ object Libretro {
     /** It carries a Beta / Proto / Demo / Sample / Hack / Pirate / Unl tag (in a `(...)` or `[...]` group) or a `[b]` bad dump. */
     fun unwanted(name: String): Boolean = GROUP.findAll(name).any { UNWANTED.containsMatchIn(it.value.trim()) }
 
-    /** A name list by [matchKey], by [TitleMatch.loose] and by [TitleMatch.head] (names in listing order). */
-    class NameIndex(val exact: Map<String, List<String>>, val loose: Map<String, List<String>>, val heads: Map<String, List<String>>)
+    /**
+     * A name list by [matchKey], by [TitleMatch.loose] and by [TitleMatch.head] (names in listing order); [names]: every
+     * listed name as the server has it.
+     */
+    class NameIndex(
+        val exact: Map<String, List<String>>, val loose: Map<String, List<String>>, val heads: Map<String, List<String>>,
+        val names: Set<String> = emptySet(),
+    )
 
-    /** The listing's [NameIndex]; names without a key are left out. */
+    /** The listing's [NameIndex]; names without a key are left out of the keyed maps. */
     fun index(names: List<String>): NameIndex = NameIndex(
         exact = names.groupBy { matchKey(it) }.filterKeys { it.isNotEmpty() },
         loose = names.groupBy { TitleMatch.loose(it) }.filterKeys { it.isNotEmpty() },
         heads = names.mapNotNull { n -> TitleMatch.head(n)?.let { it to n } }.groupBy({ it.first }, { it.second }),
+        names = names.toSet(),
     )
 
     /**
@@ -200,8 +207,9 @@ object Libretro {
  * engine (no second download). When every candidate misses (an untagged "Advance Wars.gba" against libretro's
  * "Advance Wars (USA)"), the system's name list for that folder (its directory index, read once per job and kept for
  * the job) is matched by [Libretro.matchKey], then [TitleMatch]'s looser tier, and the [Libretro.bestListed] name
- * fetched. 404 = the next candidate; 429 / 5xx = asked again once after [BUSY_WAIT_MS], then the source stops for the
- * job; no connection after [TRIES] tries pauses the job.
+ * fetched. Once a system's list is loaded, a candidate it lacks is never probed (it could only be a 404). 404 = the
+ * next candidate; 429 / 5xx = asked again once after [BUSY_WAIT_MS], then the source stops for the job; no connection
+ * after [TRIES] tries pauses the job.
  */
 class LibretroThumbnails(
     private val http: ScraperHttp, now: () -> Long, private val sleep: suspend (Long) -> Unit,
@@ -260,9 +268,15 @@ class LibretroThumbnails(
             .map { name -> ArtHit(found.slot, Libretro.url(system, folder, name), ArtOrigin(SourceId.LIBRETRO, gameId = system, assetId = "$folder/$name"), note = Libretro.regionOf(name)) }
     }
 
-    /** The first system x name that answers with an image. */
+    /** The first system x name that answers with an image; a system's loaded list ([lists]) leaves out the names it lacks. */
     private suspend fun probe(systems: List<String>, names: List<String>, slot: ArtSlot, folder: String): ArtHit? {
-        for (system in systems) for (name in names) fetch(system, folder, name, slot)?.let { return it }
+        for (system in systems) {
+            val listed = listLock.withLock { lists["$system/$folder"] }?.names?.takeIf { it.isNotEmpty() }
+            for (name in names) {
+                if (listed != null && Libretro.clean(name) !in listed) continue
+                fetch(system, folder, name, slot)?.let { return it }
+            }
+        }
         return null
     }
 
