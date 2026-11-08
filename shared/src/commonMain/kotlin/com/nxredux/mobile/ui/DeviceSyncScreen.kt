@@ -72,11 +72,6 @@ fun DeviceSyncScreen(
             // can take them all on a narrow screen.
             is DeviceSyncPage.Searching -> NxProgressBody(title, "${DeviceSyncText.SEARCHING}\n${DeviceSyncText.ownIp(p.ownIp, p.link)}", null,
                 listOf(Hint(NxButton.B, "Cancel")), detail = DeviceSyncText.searchingDetail(p.link), onHint = onHint)
-            is DeviceSyncPage.Pairing -> if (p.confirmed) {
-                message(title, listOf(DeviceSyncText.pairingCode(p.code), DeviceSyncText.WAITING_PEER), listOf(Hint(NxButton.B, "Cancel")), onHint)
-            } else {
-                message(title, listOf(DeviceSyncText.pairingCode(p.code)), listOf(Hint(NxButton.A, "Sync"), Hint(NxButton.B, "Cancel")), onHint)
-            }
             is DeviceSyncPage.Syncing -> {
                 val details = listOfNotNull(
                     DeviceSyncText.syncingWith(p.peerIp, p.link),

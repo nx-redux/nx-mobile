@@ -61,13 +61,6 @@ interface DeviceSyncPlatform {
     fun importing(): Boolean
     /** The bundled rsync runs: a build without it can't sync either role, so the sync stops before pairing. */
     suspend fun rsyncAvailable(): Boolean
-    /** [count] bytes from a CSPRNG: the run's pairing nonce. */
-    fun randomBytes(count: Int): ByteArray
-    /**
-     * The paired run's rsync password ([SyncPairing.derive]), or null once the run ended: every client rsync from here
-     * on gets it as RSYNC_PASSWORD, and [startServer] writes it to the daemon's secrets file.
-     */
-    fun pairWith(password: String?)
     /** ROM sync can run here: All files access is on and the home folder is a real path. Cheap; called on the main thread. */
     fun romsAvailable(): Boolean
     /**
@@ -146,14 +139,10 @@ interface DeviceSyncPlatform {
     /**
      * Starts the daemon for [peerIp], serving the real `Saves/` and `.userdata/shared`, filtered, plus the ROM modules
      * when [roms] (only honoured when [romsAvailable]) and `[bios]` and `[collections]` whenever [romsAvailable]; each
-     * daemon log line to [onLogLine]; false when it did not start. Only [pairWith]'s user and password get in: its
-     * secrets file is removed again by [stopServer].
+     * daemon log line to [onLogLine]; false when it did not start.
      */
     suspend fun startServer(peerIp: String, roms: Boolean, onLogLine: (String) -> Unit): Boolean
-    /**
-     * Stops the daemon, removes its secrets file and delivers every remaining log line to onLogLine before returning.
-     * Idempotent; a no-op with no daemon.
-     */
+    /** Stops the daemon and delivers every remaining log line to onLogLine before returning. Idempotent; a no-op with no daemon. */
     suspend fun stopServer()
     /** The foreground service + keep-screen-on while [active]; [text] for the notification. */
     fun keepAlive(active: Boolean, text: String?)
@@ -169,8 +158,6 @@ sealed interface DeviceSyncPage {
     data object WaitingForCable : DeviceSyncPage
     /** Saying HELLO as [ownIp] on [link] until a device answers. */
     data class Searching(val link: SyncLink, val ownIp: String) : DeviceSyncPage
-    /** Paired with [peerIp]: [code] to check against the other screen, A to sync ([confirmed] then), B to cancel. */
-    data class Pairing(val link: SyncLink, val peerIp: String, val code: String, val confirmed: Boolean = false) : DeviceSyncPage
     /**
      * [step] null: the client waits for READY, or the server role (no steps). [lines] newest last, at most 200. [steps]:
      * 9 with ROMs, else 7 with BIOS and collections, else 4; [console] the console a ROM step works on (a BIOS step: the tag).

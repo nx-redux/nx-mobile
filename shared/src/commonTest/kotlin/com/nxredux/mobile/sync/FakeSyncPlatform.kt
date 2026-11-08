@@ -58,7 +58,7 @@ class FakeSyncPlatform(override val cable: FakeUsbCable = FakeUsbCable()) : Devi
     /** Per step run: the `staged` tags it was given. */
     val stagedBy = mutableMapOf<SyncStep, List<String>?>()
     override suspend fun runClientStep(step: SyncStep, peerIp: String, onLine: (String) -> Unit, staged: List<String>?): Int {
-        stepsRun += step; calls += step.name; stagedBy[step] = staged; stepPasswords += password
+        stepsRun += step; calls += step.name; stagedBy[step] = staged
         stepThrows[step]?.let { throw it }
         stepLine = onLine
         val (lines, code) = steps[step] ?: (emptyList<String>() to 0)
@@ -73,18 +73,9 @@ class FakeSyncPlatform(override val cable: FakeUsbCable = FakeUsbCable()) : Devi
     }
     /** The held step was cancelled while it waited (its rsync would have been killed). */
     var heldCancelled = false
-    /** The run's rsync password as [pairWith] set it (null: none, or the run ended). */
-    var password: String? = null
-    /** The password in effect at each client step. */
-    val stepPasswords = mutableListOf<String?>()
-    /** The password in effect when the daemon started. */
-    var serverPassword: String? = null
-    override fun pairWith(password: String?) { this.password = password }
-    /** Random bytes: the nonce 0123456789abcdef for eight. */
-    override fun randomBytes(count: Int): ByteArray = ByteArray(count) { (0x01 + 0x22 * it).toByte() }
     var serverRoms: Boolean? = null
     override suspend fun startServer(peerIp: String, roms: Boolean, onLogLine: (String) -> Unit): Boolean {
-        serverStarted = peerIp; serverRoms = roms; logLine = onLogLine; serverPassword = password; return serverStarts
+        serverStarted = peerIp; serverRoms = roms; logLine = onLogLine; return serverStarts
     }
     override suspend fun stopServer() { serverCalls += "stop"; onStopServer(); stopGate?.await(); stopped++ }
     override fun keepAlive(active: Boolean, text: String?) { alive += active to text }

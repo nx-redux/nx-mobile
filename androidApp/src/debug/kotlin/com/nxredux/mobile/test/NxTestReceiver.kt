@@ -35,9 +35,7 @@ import java.io.File
  * through [NxTestResults]:
  *
  * - RESET: deletes the result files.
- * - SYNC (`--es link wifi|cable --ez roms true|false --ez confirm true|false`): starts a Device Sync as the screen
- *   would; sync.json (state "pairing" with the code while it shows). With confirm (default false) A is pressed on the
- *   pairing code, so an unattended run gets past it.
+ * - SYNC (`--es link wifi|cable --ez roms true|false`): starts a Device Sync as the screen would; sync.json.
  * - SYNC_STOP: stops (or backs out of) that sync; sync.json state "stopped".
  * - GAME (`--es path <rom> --es tag <TAG> [--ei slot n] [--es game_path <library path>]`): launches the ROM as the
  *   launcher does (game_path: the game's identity, so a paused one is brought back, not started again); GameActivity writes
@@ -54,7 +52,7 @@ class NxTestReceiver : BroadcastReceiver() {
             ACTION_RESET -> NxTestResults.reset(app)
             ACTION_SYNC -> {
                 val link = if (intent.getStringExtra("link").equals("wifi", ignoreCase = true)) SyncLink.WIFI else SyncLink.CABLE
-                startSync(app, link, intent.getBooleanExtra("roms", false), intent.getBooleanExtra("confirm", false))
+                startSync(app, link, intent.getBooleanExtra("roms", false))
             }
             ACTION_SYNC_STOP -> stopSync(app)
             ACTION_GAME -> {
@@ -83,7 +81,7 @@ class NxTestReceiver : BroadcastReceiver() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         var syncJob: Job? = null
 
-        fun startSync(app: Context, link: SyncLink, roms: Boolean, confirm: Boolean) {
+        fun startSync(app: Context, link: SyncLink, roms: Boolean) {
             syncJob?.cancel()
             val c = DeviceSyncs.get(app)
             if (c.running) { NxTestResults.write(app, "sync", "state" to "refused", "reason" to "a sync is already running"); return }
@@ -105,19 +103,9 @@ class NxTestReceiver : BroadcastReceiver() {
                     NxTestResults.write(app, "sync", "state" to "refused", "reason" to (notice ?: "not started"), "roms" to romsOn)
                     return@launch
                 }
-                // The code goes to sync.json either way: a harness waits for it before pressing A on the other device.
-                val confirming = launch {
-                    c.page.collect {
-                        if (it is DeviceSyncPage.Pairing && !it.confirmed) {
-                            NxTestResults.write(app, "sync", "state" to "pairing", "code" to it.code, "link" to link.name)
-                            if (confirm) c.onButton(NxButton.A)
-                        }
-                    }
-                }
                 val end = withTimeoutOrNull(SYNC_TIMEOUT_MS) {
                     c.page.first { it is DeviceSyncPage.Done || it is DeviceSyncPage.Failed || it == DeviceSyncPage.NoWifi }
                 }
-                confirming.cancel()
                 when (end) {
                     is DeviceSyncPage.Done -> NxTestResults.write(app, "sync", "state" to "done", "received" to end.received,
                         "sent" to end.sent, "notes" to end.notes.joinToString("\n"), "roms" to romsOn)
@@ -129,13 +117,13 @@ class NxTestReceiver : BroadcastReceiver() {
             }
         }
 
-        /** As the user would: B out of Searching / Pairing / WaitingForCable / NoWifi, confirmed Stop on Syncing. */
+        /** As the user would: B out of Searching / WaitingForCable / NoWifi, confirmed Stop on Syncing. */
         fun stopSync(app: Context) {
             syncJob?.cancel()
             syncJob = null
             val c = DeviceSyncs.current()
             when (val p = c?.page?.value) {
-                is DeviceSyncPage.Searching, is DeviceSyncPage.Pairing, DeviceSyncPage.WaitingForCable, DeviceSyncPage.NoWifi -> c.onButton(NxButton.B)
+                is DeviceSyncPage.Searching, DeviceSyncPage.WaitingForCable, DeviceSyncPage.NoWifi -> c.onButton(NxButton.B)
                 is DeviceSyncPage.Syncing -> c.cancel()
                 else -> NxLog.i(TAG, "SYNC_STOP on $p")
             }

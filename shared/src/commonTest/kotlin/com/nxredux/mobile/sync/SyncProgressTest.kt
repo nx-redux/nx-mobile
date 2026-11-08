@@ -2,8 +2,6 @@ package com.nxredux.mobile.sync
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 import kotlin.test.assertNull
 
 class SyncProgressTest {
@@ -39,13 +37,5 @@ class SyncProgressTest {
         assertEquals(DaemonEntry("nx-art", false, "y/GB/.media/boxart/c.png"), SyncProgress.daemonLine("2026/10/15 12:00:00 [9] nx-art send y/GB/.media/boxart/c.png"))
         assertEquals(DaemonEntry("bios", true, "PS/scph5501.bin"), SyncProgress.daemonLine("2026/10/15 12:00:00 [9] bios recv PS/scph5501.bin"))
         assertEquals(DaemonEntry("collections", true, "RPGs.txt"), SyncProgress.daemonLine("2026/10/15 12:00:00 [9] collections recv RPGs.txt"))
-    }
-
-    @Test fun an_auth_failure_is_told_apart_from_other_daemon_lines() {
-        assertTrue(SyncProgress.authFailed("2026/11/08 12:00:00 [4242] auth failed on module saves from UNDETERMINED (192.168.1.9): password mismatch"))
-        assertTrue(SyncProgress.authFailed("2026/11/08 12:00:00 [4242] auth failed on module roms from UNDETERMINED (192.168.1.9): unauthorized user"))
-        assertFalse(SyncProgress.authFailed("2026/11/08 12:00:00 [4242] saves recv auth failed on module.srm"))
-        assertFalse(SyncProgress.authFailed("2026/11/08 12:00:00 [4242] connect from UNDETERMINED (192.168.1.9)"))
-        assertFalse(SyncProgress.authFailed("auth failed on module saves"))
     }
 }

@@ -32,20 +32,6 @@ class DeviceSyncControllerTest {
     private fun DeviceSyncController.press(vararg b: NxButton) = b.forEach { onButton(it) }
     private val handheld = "192.168.1.10"
     private val phone = "192.168.1.20"
-    /** The nonce [FakeSyncPlatform] gives this phone. */
-    private val ownNonce = "0123456789abcdef"
-    private val peerNonce = "fedcba9876543210"
-    private fun hello(ip: String, flag: String = "0") = "HELLO_TRIMUI_SYNC:$ip:$flag\u0000v3:$peerNonce"
-    private fun ack(ip: String, flag: String = "0") = "TRIMUI_SYNC_ACK:$ip:$flag\u0000v3:$peerNonce"
-
-    /** [ip]'s HELLO with [flag], then A on the pairing code and the peer's OK: the run goes on past pairing. */
-    private fun TestScope.pair(c: DeviceSyncController, p: FakeSyncPlatform, ip: String = handheld, flag: String = "0") {
-        p.socket.from(ip, hello(ip, flag)); runCurrent()
-        assertIs<DeviceSyncPage.Pairing>(c.page.value)
-        c.press(NxButton.A)
-        p.socket.from(ip, SyncWire.OK); runCurrent()
-    }
-
     private val saveSteps = listOf(SyncStep.SEND_STATES, SyncStep.SEND_SAVES, SyncStep.RECEIVE_STATES, SyncStep.RECEIVE_SAVES)
 
     @Test fun ready_offers_cable_first_and_up_down_switch() = runTest {
@@ -90,9 +76,9 @@ class DeviceSyncControllerTest {
         backgroundScope.launch { c.received.collect { got += it } }
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
         assertEquals(DeviceSyncPage.Searching(SyncLink.WIFI, phone), c.page.value)
-        assertEquals(listOf(SyncWire.hello(phone, nonce = ownNonce)), p.socket.broadcasts)
-        pair(c, p, handheld, "0")
-        assertTrue(SyncWire.ack(phone, nonce = ownNonce) to handheld in p.socket.sent)
+        assertEquals(listOf(SyncWire.hello(phone)), p.socket.broadcasts)
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
+        assertTrue(SyncWire.ack(phone) to handheld in p.socket.sent)
         assertEquals(SyncRole.CLIENT, (c.page.value as DeviceSyncPage.Syncing).role)
         p.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
         assertEquals(saveSteps, p.stepsRun)
@@ -119,9 +105,9 @@ class DeviceSyncControllerTest {
         val p = FakeSyncPlatform()
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        p.socket.from(phone, SyncWire.hello(phone, nonce = ownNonce))
-        p.socket.from("192.168.1.11", hello(handheld))
-        p.socket.from("10.99.0.2", hello("10.99.0.2"))
+        p.socket.from(phone, SyncWire.hello(phone))
+        p.socket.from("192.168.1.11", "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2")
+        p.socket.from("10.99.0.2", "HELLO_TRIMUI_SYNC:10.99.0.2:0\u0000v2")
         p.socket.from(handheld, SyncWire.READY)
         p.socket.from(handheld, SyncWire.DONE)
         p.socket.from(handheld, "garbage")
@@ -157,195 +143,24 @@ class DeviceSyncControllerTest {
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
         repeat(3) { p.socket.from(handheld, SyncWire.READY); advanceTimeBy(1_000); runCurrent() }
-        p.socket.from(handheld, ack(handheld)); runCurrent()
-        assertIs<DeviceSyncPage.Pairing>(c.page.value)
+        p.socket.from(handheld, "TRIMUI_SYNC_ACK:$handheld:0\u0000v2"); runCurrent()
+        assertIs<DeviceSyncPage.Syncing>(c.page.value)
     }
 
     @Test fun an_ack_also_pairs() = runTest {
         val p = FakeSyncPlatform()
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        p.socket.from(handheld, ack(handheld)); runCurrent()
-        assertIs<DeviceSyncPage.Pairing>(c.page.value)
-        assertFalse(p.socket.sent.any { it.first.startsWith(SyncWire.ACK) })   // no ACK for an ACK
-    }
-
-    private fun FakeSyncSocket.oks(ip: String) = sent.count { it == SyncWire.OK to ip }
-
-    /** Starts a Wi-Fi run on [c] and has [ip] say HELLO with [flag]: the code page is up. */
-    private fun TestScope.toCode(c: DeviceSyncController, p: FakeSyncPlatform, ip: String = handheld, flag: String = "0") {
-        c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        p.socket.from(ip, hello(ip, flag)); runCurrent()
-    }
-
-    @Test fun pairing_shows_the_code_and_runs_nothing_until_both_confirm() = runTest {
-        val p = FakeSyncPlatform()
-        val c = rig(p)
-        toCode(c, p)
-        val secret = SyncPairing.derive(phone, ownNonce, handheld, peerNonce)
-        assertEquals(DeviceSyncPage.Pairing(SyncLink.WIFI, handheld, secret.code), c.page.value)
-        advanceTimeBy(10_000); runCurrent()
-        assertEquals(0, p.socket.oks(handheld))   // no OK before this side's A
-        c.press(NxButton.A); runCurrent()
-        assertEquals(DeviceSyncPage.Pairing(SyncLink.WIFI, handheld, secret.code, confirmed = true), c.page.value)
-        advanceTimeBy(250); runCurrent()
-        assertEquals(1, p.socket.oks(handheld))
-        advanceTimeBy(3_000); runCurrent()
-        assertEquals(4, p.socket.oks(handheld))   // every second until the peer's OK
-        assertTrue(p.stepsRun.isEmpty())
-        assertNull(p.password)
-        // The handheld serves: its READY says it confirmed too.
-        p.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
-        assertIs<DeviceSyncPage.Done>(c.page.value)
-        assertEquals(saveSteps, p.stepsRun)
-        assertEquals<List<String?>>(saveSteps.map { secret.password }, p.stepPasswords)
-        assertEquals(4, p.socket.oks(handheld))
-        assertNull(p.password)   // cleared as the run ended
-    }
-
-    @Test fun the_server_starts_its_daemon_only_after_the_peers_ok() = runTest {
-        val p = FakeSyncPlatform().apply { wifi = "192.168.1.5" }
-        val c = rig(p)
-        toCode(c, p, flag = "c")
-        val secret = SyncPairing.derive("192.168.1.5", ownNonce, handheld, peerNonce)
-        c.press(NxButton.A); advanceTimeBy(2_500); runCurrent()
-        assertNull(p.serverStarted)
-        assertEquals(0, p.socket.sent.count { it == SyncWire.READY to handheld })
-        assertEquals(3, p.socket.oks(handheld))
-        p.socket.from(handheld, SyncWire.READY); runCurrent()   // a READY is no OK from a client
-        assertNull(p.serverStarted)
-        p.socket.from(handheld, SyncWire.OK); runCurrent()
-        assertEquals(handheld, p.serverStarted)
-        assertEquals(secret.password, p.serverPassword)
-        assertEquals(SyncRole.SERVER, (c.page.value as DeviceSyncPage.Syncing).role)
-        assertTrue(SyncWire.READY to handheld in p.socket.sent)
-        p.socket.from(handheld, SyncWire.DONE); runCurrent()
-        assertIs<DeviceSyncPage.Done>(c.page.value)
-        assertNull(p.password)
-    }
-
-    /** The peer confirmed first: its OK waits for this side's A, which still sends one OK. */
-    @Test fun an_ok_before_this_sides_confirm_waits_for_it() = runTest {
-        val p = FakeSyncPlatform().apply { wifi = "192.168.1.5" }
-        val c = rig(p)
-        toCode(c, p, flag = "c")
-        p.socket.from(handheld, SyncWire.OK); advanceTimeBy(5_000); runCurrent()
-        assertIs<DeviceSyncPage.Pairing>(c.page.value)
-        assertNull(p.serverStarted)
-        assertEquals(0, p.socket.oks(handheld))
-        c.press(NxButton.A); advanceTimeBy(250); runCurrent()
-        assertEquals(1, p.socket.oks(handheld))
-        assertEquals(handheld, p.serverStarted)
-    }
-
-    @Test fun b_on_the_code_cancels_and_tells_the_peer() = runTest {
-        val p = FakeSyncPlatform()
-        val c = rig(p)
-        toCode(c, p)
-        c.press(NxButton.B); runCurrent()
-        assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.STOPPED), c.page.value)
-        advanceTimeBy(1_000); runCurrent()
-        assertEquals(5, p.socket.fails(handheld))
-        assertEquals(0, p.socket.oks(handheld))
-        assertTrue(p.stepsRun.isEmpty())
-        assertNull(p.serverStarted)
-        assertFalse(c.running)
-    }
-
-    @Test fun b_after_confirming_still_cancels() = runTest {
-        val p = FakeSyncPlatform().apply { wifi = "192.168.1.5" }
-        val c = rig(p)
-        toCode(c, p, flag = "c")
-        c.press(NxButton.A); advanceTimeBy(1_500); runCurrent()
-        c.press(NxButton.B); advanceTimeBy(1_000); runCurrent()
-        assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.STOPPED), c.page.value)
-        assertEquals(5, p.socket.fails(handheld))
-        assertNull(p.serverStarted)
-    }
-
-    @Test fun no_confirmation_in_120_s_fails_and_tells_the_peer() = runTest {
-        for (confirm in listOf(false, true)) {
-            val p = FakeSyncPlatform()
-            val c = rig(p)
-            toCode(c, p)
-            if (confirm) c.press(NxButton.A)   // this side said yes, the other never did
-            advanceTimeBy(119_000); runCurrent()
-            assertIs<DeviceSyncPage.Pairing>(c.page.value)
-            advanceTimeBy(1_500); runCurrent()
-            assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.PAIRING_NOT_CONFIRMED), c.page.value)
-            advanceTimeBy(1_000); runCurrent()
-            assertEquals(5, p.socket.fails(handheld))
-            assertTrue(p.stepsRun.isEmpty())
-            assertFalse(c.running)
-        }
-    }
-
-    @Test fun the_peer_cancelling_the_code_ends_the_run_without_an_echo() = runTest {
-        val p = FakeSyncPlatform()
-        val c = rig(p)
-        toCode(c, p)
-        p.socket.from("192.168.1.99", SyncWire.FAIL); runCurrent()   // not the peer
-        assertIs<DeviceSyncPage.Pairing>(c.page.value)
-        p.socket.from(handheld, SyncWire.FAIL); advanceTimeBy(1_000); runCurrent()
-        assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.PEER_CANCELLED), c.page.value)
-        assertEquals(0, p.socket.fails(handheld))
-    }
-
-    @Test fun an_ok_from_another_device_counts_for_nothing() = runTest {
-        val p = FakeSyncPlatform().apply { wifi = "192.168.1.5" }
-        val c = rig(p)
-        toCode(c, p, flag = "c")
-        c.press(NxButton.A)
-        p.socket.from("192.168.1.99", SyncWire.OK); advanceTimeBy(2_000); runCurrent()
-        assertIs<DeviceSyncPage.Pairing>(c.page.value)
-        assertNull(p.serverStarted)
-    }
-
-    /** A server may have lost every OK: the client keeps sending one each second until READY comes. */
-    @Test fun the_client_keeps_sending_ok_until_ready() = runTest {
-        val p = FakeSyncPlatform()
-        val c = rig(p)
-        c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p)
+        p.socket.from(handheld, "TRIMUI_SYNC_ACK:$handheld:0\u0000v2"); runCurrent()
         assertIs<DeviceSyncPage.Syncing>(c.page.value)
-        val before = p.socket.oks(handheld)
-        advanceTimeBy(3_100); runCurrent()
-        assertEquals(before + 3, p.socket.oks(handheld))
-        p.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
-        assertIs<DeviceSyncPage.Done>(c.page.value)
-        assertEquals(before + 3, p.socket.oks(handheld))
-    }
-
-    /** A late or extra OK while serving changes nothing. */
-    @Test fun the_server_ignores_a_late_ok() = runTest {
-        val p = FakeSyncPlatform()
-        val c = serving(p)
-        p.socket.from(handheld, SyncWire.OK); advanceTimeBy(1_000); runCurrent()
-        assertEquals(SyncRole.SERVER, (c.page.value as DeviceSyncPage.Syncing).role)
-        p.socket.from(handheld, SyncWire.DONE); runCurrent()
-        assertIs<DeviceSyncPage.Done>(c.page.value)
-    }
-
-    /** One wrong password is the end: a peer guessing the code gets one try per run. */
-    @Test fun an_auth_failure_in_the_daemon_log_ends_the_run() = runTest {
-        val p = FakeSyncPlatform()
-        val c = serving(p)
-        p.logLine!!("2026/11/08 12:00:00 [7] connect from UNDETERMINED ($handheld)")
-        p.logLine!!("2026/11/08 12:00:00 [7] auth failed on module saves from UNDETERMINED ($handheld): password mismatch")
-        advanceTimeBy(300); runCurrent()
-        assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.AUTH_FAILED), c.page.value)
-        assertEquals(listOf("stop"), p.serverCalls)
-        advanceTimeBy(1_000); runCurrent()
-        assertEquals(5, p.socket.fails(handheld))
-        assertNull(p.password)
-        assertFalse(c.running)
+        assertFalse(p.socket.sent.any { it.first.startsWith(SyncWire.ACK) })   // no ACK for an ACK
     }
 
     @Test fun no_ready_in_30_s_fails() = runTest {
         val p = FakeSyncPlatform()
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "0")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
         p.socket.from("192.168.1.99", SyncWire.READY)   // not the peer
         advanceTimeBy(30_500); runCurrent()
         assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.noReady(handheld)), c.page.value)
@@ -357,7 +172,7 @@ class DeviceSyncControllerTest {
         p.steps[SyncStep.SEND_SAVES] = emptyList<String>() to 23
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "0")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
         p.socket.from(handheld, SyncWire.READY); advanceTimeBy(1_000); runCurrent()
         assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.stepFailed(SyncStep.SEND_SAVES, 23)), c.page.value)
         assertEquals(listOf(SyncStep.SEND_STATES, SyncStep.SEND_SAVES), p.stepsRun)
@@ -373,7 +188,7 @@ class DeviceSyncControllerTest {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { c.page.collect { pages += it } }
         p.steps[SyncStep.SEND_STATES] = listOf("GB-gambatte/T.st0", " 1 (xfr#1, to-chk=2/3)") to 0
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "0")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
         p.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
         val s = pages.filterIsInstance<DeviceSyncPage.Syncing>().last { it.step == SyncStep.SEND_STATES }
         assertEquals(1, s.done); assertEquals(3, s.total)
@@ -385,7 +200,7 @@ class DeviceSyncControllerTest {
         val p = FakeSyncPlatform().apply { wifi = "192.168.1.5" }
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "c")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:c"); runCurrent()
         assertEquals(handheld, p.serverStarted)
         val s = c.page.value as DeviceSyncPage.Syncing
         assertEquals(SyncRole.SERVER, s.role)
@@ -399,24 +214,17 @@ class DeviceSyncControllerTest {
         assertEquals(DeviceSyncPage.Done(SyncLink.WIFI, received = 2, sent = 1), c.page.value)
     }
 
-    /**
-     * A peer without the v3 trailer (a v2 handheld or phone, older firmware, a malformed nonce) is refused at pairing: no
-     * code, no server, no rsync step, no role decision.
-     */
-    @Test fun a_peer_without_v3_is_refused_without_rsync_or_a_server() = runTest {
-        val old = listOf("0\u0000v2", "0", "c", "C\u0000v2", "R\u0000v3:0123", "0\u0000v3:FEDCBA9876543210")
-        for (ownIp in listOf("192.168.1.5", "192.168.1.20")) for (tail in old) {   // whichever side the IP rule would have chosen
+    /** Old firmware (no v2, no c) is refused at pairing: no server, no rsync step, no role decision. */
+    @Test fun an_old_firmware_peer_is_refused_without_rsync_or_a_server() = runTest {
+        for (ownIp in listOf("192.168.1.5", "192.168.1.20")) {   // whichever side the old IP rule would have chosen
             val p = FakeSyncPlatform().apply { wifi = ownIp }
             val c = rig(p)
             c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-            p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:$tail"); runCurrent()
-            assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.UPDATE_PEER), c.page.value, tail)
+            p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0"); runCurrent()
+            assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.OLD_FIRMWARE), c.page.value)
             assertTrue(p.stepsRun.isEmpty())
-            assertNull(p.password)
             assertNull(p.serverStarted)
             assertEquals(emptyList(), p.serverCalls)
-            advanceTimeBy(1_000); runCurrent()
-            assertEquals(5, p.socket.fails(handheld))   // as the handheld does: an older peer stops waiting
             assertTrue(p.socket.closed)
             assertFalse(c.running)
         }
@@ -426,7 +234,7 @@ class DeviceSyncControllerTest {
         val p = FakeSyncPlatform()
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "R")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:R\u0000v2"); runCurrent()
         p.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
         assertIs<DeviceSyncPage.Done>(c.page.value)
         assertEquals(saveSteps, p.stepsRun)
@@ -513,7 +321,7 @@ class DeviceSyncControllerTest {
         val p = FakeSyncPlatform().apply { wifi = "192.168.1.5" }
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "c")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:c"); runCurrent()
         c.press(NxButton.B)
         assertTrue((c.page.value as DeviceSyncPage.Syncing).confirmStop)
         c.press(NxButton.B)
@@ -529,7 +337,7 @@ class DeviceSyncControllerTest {
         val p = FakeSyncPlatform()
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "0")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
         c.cancel(); runCurrent()
         assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.STOPPED), c.page.value)
     }
@@ -589,11 +397,11 @@ class DeviceSyncControllerTest {
         assertEquals(1, p.cable.starts)
         p.cable.state.value = UsbLinkState.Up("10.99.0.1", "10.99.0.2"); runCurrent()
         assertEquals(DeviceSyncPage.Searching(SyncLink.CABLE, "10.99.0.1"), c.page.value)
-        assertEquals(listOf(SyncWire.hello("10.99.0.1", nonce = ownNonce) to "10.99.0.2"), p.socket.sent)
-        p.socket.from("192.168.1.10", hello("192.168.1.10"))   // not the cable peer
+        assertEquals(listOf(SyncWire.hello("10.99.0.1") to "10.99.0.2"), p.socket.sent)
+        p.socket.from("192.168.1.10", "HELLO_TRIMUI_SYNC:192.168.1.10:0\u0000v2")   // not the cable peer
         runCurrent()
         assertIs<DeviceSyncPage.Searching>(c.page.value)
-        pair(c, p, "10.99.0.2", "0")
+        p.socket.from("10.99.0.2", "HELLO_TRIMUI_SYNC:10.99.0.2:0\u0000v2"); runCurrent()
         val s = c.page.value as DeviceSyncPage.Syncing
         assertEquals(SyncRole.CLIENT, s.role)   // a new handheld: the phone (c) is the client though its IP is lower
         p.socket.from("10.99.0.2", SyncWire.READY); advanceTimeBy(5_000); runCurrent()
@@ -637,7 +445,7 @@ class DeviceSyncControllerTest {
         p.holdAt = SyncStep.SEND_SAVES
         val c = rig(p)
         c.press(NxButton.A); runCurrent()
-        pair(c, p, "10.99.0.2", "0")
+        p.socket.from("10.99.0.2", "HELLO_TRIMUI_SYNC:10.99.0.2:0\u0000v2"); runCurrent()
         p.socket.from("10.99.0.2", SyncWire.READY); runCurrent()
         assertEquals(SyncStep.SEND_SAVES, (c.page.value as DeviceSyncPage.Syncing).step)
         p.cable.drops.value = 1; runCurrent()   // a drop the cable may still ride out: its state stays Up
@@ -659,7 +467,7 @@ class DeviceSyncControllerTest {
         p.cable.state.value = UsbLinkState.Up("10.99.0.1", "10.99.0.2")
         val c = rig(p)
         c.press(NxButton.A); runCurrent()
-        pair(c, p, "10.99.0.2", "0")
+        p.socket.from("10.99.0.2", "HELLO_TRIMUI_SYNC:10.99.0.2:0\u0000v2"); runCurrent()
         p.socket.from("10.99.0.2", SyncWire.READY); runCurrent()
         assertEquals(1, p.socket.sent.count { it == SyncWire.DONE to "10.99.0.2" })   // the first DONE, the repeats to come
         p.cable.state.value = UsbLinkState.Lost; runCurrent()
@@ -674,7 +482,7 @@ class DeviceSyncControllerTest {
         val c = rig(p)
         c.press(NxButton.A); runCurrent()
         p.cable.state.value = UsbLinkState.Up("10.99.0.1", "10.99.0.2"); runCurrent()
-        pair(c, p, "10.99.0.2", "c")
+        p.socket.from("10.99.0.2", "HELLO_TRIMUI_SYNC:10.99.0.2:c"); runCurrent()
         assertEquals(SyncRole.SERVER, (c.page.value as DeviceSyncPage.Syncing).role)
         p.cable.state.value = UsbLinkState.Lost; runCurrent()
         assertEquals(DeviceSyncPage.Failed(SyncLink.CABLE, DeviceSyncText.CABLE_DISCONNECTED), c.page.value)
@@ -692,7 +500,7 @@ class DeviceSyncControllerTest {
         p.holdAt = SyncStep.SEND_SAVES
         val c = rig(p)
         c.press(NxButton.A); runCurrent()
-        pair(c, p, "10.99.0.2", "0")
+        p.socket.from("10.99.0.2", "HELLO_TRIMUI_SYNC:10.99.0.2:0\u0000v2"); runCurrent()
         p.socket.from("10.99.0.2", SyncWire.READY); runCurrent()
         assertIs<DeviceSyncPage.Syncing>(c.page.value)
         c.press(NxButton.B, NxButton.A); advanceTimeBy(1_000); runCurrent()
@@ -704,7 +512,7 @@ class DeviceSyncControllerTest {
         val p = FakeSyncPlatform()
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "0")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
         p.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
         assertIs<DeviceSyncPage.Done>(c.page.value)
         c.press(NxButton.A); runCurrent()
@@ -720,7 +528,7 @@ class DeviceSyncControllerTest {
         val pages = mutableListOf<DeviceSyncPage>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { c.page.collect { pages += it } }
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "0")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
         p.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
         val last = pages.filterIsInstance<DeviceSyncPage.Syncing>().last()
         assertEquals(200, last.lines.size)
@@ -732,7 +540,7 @@ class DeviceSyncControllerTest {
         p.wifi = "192.168.1.5"
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "c")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:c"); runCurrent()
         return c
     }
 
@@ -741,7 +549,7 @@ class DeviceSyncControllerTest {
         p.holdAt = hold
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "0")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
         p.socket.from(handheld, SyncWire.READY); runCurrent()
         return c
     }
@@ -754,7 +562,7 @@ class DeviceSyncControllerTest {
         p.steps[SyncStep.SEND_SAVES] = emptyList<String>() to 23
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "0")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
         p.socket.from(handheld, SyncWire.READY); advanceTimeBy(1_000); runCurrent()
         assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.stepFailed(SyncStep.SEND_SAVES, 23)), c.page.value)
         assertEquals(5, p.socket.fails(handheld))
@@ -780,15 +588,15 @@ class DeviceSyncControllerTest {
         val p = FakeSyncPlatform()
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "0")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
         p.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
         assertIs<DeviceSyncPage.Done>(c.page.value)
         assertEquals(5, p.socket.sent.count { it == SyncWire.DONE to handheld })
         assertEquals(0, p.socket.fails(handheld))
     }
 
-    /** No peer, no FAIL: B while searching. A peer without v3 refused at pairing is told FAIL, as the handheld does. */
-    @Test fun no_fail_without_a_peer_but_fail_to_a_refused_one() = runTest {
+    /** No peer, no FAIL: B while searching, or an old firmware refused at pairing. */
+    @Test fun no_fail_without_a_paired_peer() = runTest {
         val p = FakeSyncPlatform()
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
@@ -797,9 +605,9 @@ class DeviceSyncControllerTest {
         val q = FakeSyncPlatform()
         val d = rig(q)
         d.pick(SyncLink.WIFI); d.press(NxButton.A); runCurrent()
-        q.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); advanceTimeBy(1_000); runCurrent()
-        assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.UPDATE_PEER), d.page.value)
-        assertEquals(5, q.socket.fails(handheld))
+        q.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0"); advanceTimeBy(1_000); runCurrent()
+        assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.OLD_FIRMWARE), d.page.value)
+        assertFalse(q.socket.sent.any { it.first == SyncWire.FAIL })
     }
 
     @Test fun the_server_ends_on_the_peers_fail_without_echoing_it() = runTest {
@@ -896,7 +704,7 @@ class DeviceSyncControllerTest {
         p.stepThrows[SyncStep.SEND_SAVES] = IOException("error=2, No such file or directory")
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "0")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
         p.socket.from(handheld, SyncWire.READY); advanceTimeBy(1_000); runCurrent()
         assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.stepError(SyncStep.SEND_SAVES)), c.page.value)
         assertEquals(listOf(SyncStep.SEND_STATES, SyncStep.SEND_SAVES), p.stepsRun)
@@ -946,7 +754,7 @@ class DeviceSyncControllerTest {
         val got = mutableListOf<Int>()
         backgroundScope.launch { c.received.collect { got += it } }
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "0")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
         p.socket.from(handheld, SyncWire.READY); advanceTimeBy(1_000); runCurrent()
         assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.stepFailed(SyncStep.RECEIVE_SAVES, 12)), c.page.value)
         assertEquals(listOf(3), got)
@@ -957,17 +765,17 @@ class DeviceSyncControllerTest {
         val p = FakeSyncPlatform()
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "0")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
         assertIs<DeviceSyncPage.Syncing>(c.page.value)
-        p.socket.from(handheld, hello(handheld)); runCurrent()
-        assertEquals(2, p.socket.sent.count { it == SyncWire.ack(phone, nonce = ownNonce) to handheld })
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
+        assertEquals(2, p.socket.sent.count { it == SyncWire.ack(phone) to handheld })
     }
 
     @Test fun a_hello_from_the_peer_while_serving_is_acked_again() = runTest {
         val p = FakeSyncPlatform()
         serving(p)
-        p.socket.from(handheld, hello(handheld, "c")); runCurrent()
-        assertEquals(2, p.socket.sent.count { it == SyncWire.ack("192.168.1.5", nonce = ownNonce) to handheld })
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:c"); runCurrent()
+        assertEquals(2, p.socket.sent.count { it == SyncWire.ack("192.168.1.5") to handheld })
     }
 
     @Test fun a_progress_line_after_stop_does_not_bring_syncing_back() = runTest {
@@ -1021,7 +829,7 @@ class DeviceSyncControllerTest {
         val p = FakeSyncPlatform().apply { roms = true }
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.X, NxButton.A); runCurrent()
-        assertEquals(SyncWire.hello(phone, roms = true, nonce = ownNonce), p.socket.broadcasts.first())
+        assertTrue(p.socket.broadcasts.first().endsWith(":C"))
     }
 
     private val gb = "Game Boy (GB)"
@@ -1034,11 +842,11 @@ class DeviceSyncControllerTest {
     }}}}"""
 
     /**
-     * Pairs over Wi-Fi with [peer] saying HELLO with [flag], the X toggle pressed first when [toggle], then
+     * Pairs over Wi-Fi with [peer] saying HELLO with [flag] (+ [trailer]), the X toggle pressed first when [toggle], then
      * READY lets the run go. [onRig] runs before Start (collectors).
      */
     private fun TestScope.romClient(
-        p: FakeSyncPlatform, toggle: Boolean = true, flag: String = "0",
+        p: FakeSyncPlatform, toggle: Boolean = true, flag: String = "0", trailer: String = "\u0000v2",
         onRig: (DeviceSyncController) -> Unit = {},
     ): DeviceSyncController {
         val c = rig(p)
@@ -1046,7 +854,7 @@ class DeviceSyncControllerTest {
         c.pick(SyncLink.WIFI)
         if (toggle) c.press(NxButton.X)
         c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, flag)
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:$flag$trailer"); runCurrent()
         p.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
         return c
     }
@@ -1115,7 +923,7 @@ class DeviceSyncControllerTest {
     /** A phone at the lower IP serves (both are client-only), so this phone at .20 is the client. */
     @Test fun a_phone_peer_without_roms_module_is_named() = runTest {
         val p = FakeSyncPlatform().apply { roms = true; remoteListing = 5 to emptyList() }
-        val c = romClient(p, toggle = false, flag = "C")
+        val c = romClient(p, toggle = false, flag = "C", trailer = "")
         assertNull(p.serverStarted)
         assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.PEER_NO_ROMS), c.page.value)
         assertTrue(p.stepsRun.isEmpty())
@@ -1129,7 +937,7 @@ class DeviceSyncControllerTest {
 
     @Test fun a_phone_peer_without_an_extras_list_is_named() = runTest {
         val p = FakeSyncPlatform().apply { roms = true }
-        val c = romClient(p, toggle = false, flag = "C")
+        val c = romClient(p, toggle = false, flag = "C", trailer = "")
         assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.PEER_NO_ROMS), c.page.value)
         assertTrue(p.stepsRun.isEmpty())
     }
@@ -1143,7 +951,7 @@ class DeviceSyncControllerTest {
             remoteTexts["roms/$gbHashes"] = RemoteText.Found(hashes(".sources/sd/Games/p.gb"))
             remoteHashes = hashListing(gb)
         }
-        val c = romClient(p, toggle = false, flag = "C")
+        val c = romClient(p, toggle = false, flag = "C", trailer = "")
         assertIs<DeviceSyncPage.Done>(c.page.value)
         assertTrue(RomRun(SyncStep.RECEIVE_ROMS, gb, RomEnd.Peer("extra-2", "Games"), RomEnd.Home(gb), only = listOf("p.gb"), pair = ConsolePair(gb, gb, "GB").key) in p.romRuns)
         assertTrue("\"p.gb\"" in p.homeTexts[gbHashes]!!)
@@ -1174,7 +982,7 @@ class DeviceSyncControllerTest {
         p.steps[SyncStep.SEND_SAVES] = listOf("rsync: connection unexpectedly closed (0 bytes received so far) [sender]") to 12
         val c = rig(p)
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "0")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); advanceTimeBy(300); runCurrent()
         p.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
         assertEquals(DeviceSyncPage.Failed(SyncLink.WIFI, DeviceSyncText.stepFailed(SyncStep.SEND_SAVES, 12),
             detail = "connection unexpectedly closed (0 bytes received so far) [sender]"), c.page.value)
@@ -1290,7 +1098,7 @@ class DeviceSyncControllerTest {
         var arrived = 0
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { c.romsArrived.collect { arrived++ } }
         c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()
-        pair(c, p, handheld, "C")
+        p.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:C"); runCurrent()
         assertEquals(true, p.serverRoms)
         p.logLine!!("2026/10/15 12:00:00 [1] roms send $gb/b.gb")
         p.logLine!!("2026/10/15 12:00:00 [1] roms recv $gb/a.gb")
@@ -1492,7 +1300,7 @@ class DeviceSyncControllerTest {
             remoteFolders[gb] = 0 to listOf(dir("."), file("p.gb"))
             home = mapOf(null to listOf(gb), gb to listOf("p.gb", "q.gb"))
         }
-        val c = romClient(p, toggle = false, flag = "C")
+        val c = romClient(p, toggle = false, flag = "C", trailer = "")
         assertIs<DeviceSyncPage.Done>(c.page.value)
         assertEquals(listOf(gb), p.folderListings)
     }
@@ -1581,7 +1389,7 @@ class DeviceSyncControllerTest {
 
     @Test fun a_phone_peer_without_a_bios_module_skips_bios_with_the_other_phone_note() = runTest {
         val p = FakeSyncPlatform().withBios().apply { remoteBios = 5 to listOf("@ERROR: Unknown module 'bios'") }
-        val c = romClient(p, toggle = false, flag = "c")
+        val c = romClient(p, toggle = false, flag = "c", trailer = "")
         assertNull(p.serverStarted)
         assertTrue(p.romRuns.isEmpty())
         assertEquals(DeviceSyncPage.Done(SyncLink.WIFI, received = 0, sent = 0, notes = listOf(DeviceSyncText.BIOS_PEER_PHONE)), c.page.value)
@@ -1687,7 +1495,7 @@ class DeviceSyncControllerTest {
 
     @Test fun a_phone_peer_without_a_collections_module_skips_with_the_other_phone_note() = runTest {
         val p = FakeSyncPlatform().withBios().apply { collectionsPull = CollectionsPull(5, listOf("@ERROR: Unknown module 'collections'")) }
-        val c = romClient(p, toggle = false, flag = "c")
+        val c = romClient(p, toggle = false, flag = "c", trailer = "")
         assertEquals(listOf(DeviceSyncText.COLLECTIONS_PEER_PHONE), (c.page.value as DeviceSyncPage.Done).notes)
     }
 
@@ -1855,7 +1663,7 @@ class DeviceSyncControllerTest {
 
     @Test fun a_phone_peer_keeps_the_whole_saves_rsync() = runTest {
         val p = FakeSyncPlatform().apply { homeSaves = listOf(SaveFile("GBA/Emerald.srm", 1_000_000L)) }
-        val c = romClient(p, toggle = false, flag = "c")
+        val c = romClient(p, toggle = false, flag = "c", trailer = "")
         assertIs<DeviceSyncPage.Done>(c.page.value)
         assertTrue(p.staged.isEmpty())
         assertTrue(p.folds.isEmpty())

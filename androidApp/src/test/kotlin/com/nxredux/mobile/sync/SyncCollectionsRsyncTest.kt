@@ -44,7 +44,6 @@ class SyncCollectionsRsyncTest {
         val port = ServerSocket(0).use { it.localPort }
         val conf = SyncCommands.daemonConf("127.0.0.1", shared = tmp.newFolder("sh").path, saves = tmp.newFolder("sv").path,
             pidFile = File(work, "rsyncd.pid").path, logFile = File(work, "sync.log").path,
-            secretsFile = SyncPairedDaemon.secrets(work).path, lockFile = SyncPairedDaemon.lock(work).path,
             collections = collections.path.takeIf { withCollections })
             .replace("port = ${SyncWire.RSYNC_PORT}\n", "port = $port\n")
         val confFile = File(work, "rsyncd.conf").apply { writeText(conf) }
@@ -60,7 +59,7 @@ class SyncCollectionsRsyncTest {
 
     /** Runs the args with the daemon's port swapped in. */
     private fun runner(port: Int): suspend (List<String>, (String) -> Unit) -> Int = { args, onLine ->
-        val p = SyncPairedDaemon.client(args.map { it.replace("127.0.0.1:${SyncWire.RSYNC_PORT}/", "127.0.0.1:$port/") }).start()
+        val p = ProcessBuilder(args.map { it.replace("127.0.0.1:${SyncWire.RSYNC_PORT}/", "127.0.0.1:$port/") }).redirectErrorStream(true).start()
         p.inputStream.bufferedReader().forEachLine(onLine)
         p.waitFor()
     }
