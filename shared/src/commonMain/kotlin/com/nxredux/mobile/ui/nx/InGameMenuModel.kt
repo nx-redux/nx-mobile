@@ -987,9 +987,15 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** Rebuilds the root page, keeping the selection on the row with the same label (root labels are unique), and the panel. */
     private fun refreshRoot() {
+        // the root, Options and Controls (Adjust buttons comes and goes on these), each keeping its selected row by label
         state = state.copy(stack = state.stack.map { p ->
-            if (p.kind != PageKind.Root) p else {
-                val fresh = rootPage()
+            val fresh = when (p.kind) {
+                PageKind.Root -> rootPage()
+                PageKind.Options -> optionsPage()
+                PageKind.Settings(OptionGroup.CONTROLS) -> groupPage(OptionGroup.CONTROLS)
+                else -> null
+            }
+            if (fresh == null) p else {
                 val label = p.rows.getOrNull(p.selected)?.label
                 fresh.copy(selected = fresh.rows.indexOfFirst { it.label == label }.coerceAtLeast(0))
             }
@@ -1538,8 +1544,6 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             add(MenuRow.Slot("Save", SlotAction.SAVE))
             add(MenuRow.Slot("Load", SlotAction.LOAD))
             add(MenuRow.Submenu("Options", PageKind.Options))
-            // the pad skin's buttons, only while they are drawn: a controller attached draws none
-            if (padDrawn && !controllerConnected) add(MenuRow.Action(ADJUST_BUTTONS_LABEL, MenuAction.ADJUST_BUTTONS))
             add(MenuRow.Action("Quit", MenuAction.QUIT))
         },
     )
@@ -1563,14 +1567,22 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      */
     private fun groupPage(group: OptionGroup) = MenuPage(
         PageKind.Settings(group), group.label,
-        settingRows().filter { OptionGroup.of(it.key) == group }.map(::frontendRow),
+        settingRows().filter { OptionGroup.of(it.key) == group }.map(::frontendRow) +
+            // Controls ends with Adjust buttons (user), only while the pad skin's buttons are drawn (a controller draws none)
+            (if (group == OptionGroup.CONTROLS && adjustable()) listOf(MenuRow.Action(ADJUST_BUTTONS_LABEL, MenuAction.ADJUST_BUTTONS)) else emptyList()),
     )
+
+    /** Adjust buttons is offered: the pad skin or its bare buttons are drawn and no controller is attached. */
+    private fun adjustable() = padDrawn && !controllerConnected
 
     /** Every app setting the running game shows: this console's rows, then the frontend's. */
     private fun settingRows(): List<FrontendOption> = consoleRows() + frontendRows()
 
     /** The groups with rows to show, in order. */
-    private fun shownGroups(): List<OptionGroup> = OptionGroup.grouped(settingRows()) { it.key }.map { it.first }
+    private fun shownGroups(): List<OptionGroup> = OptionGroup.grouped(settingRows()) { it.key }.map { it.first }.let { groups ->
+        // Controls for Adjust buttons alone too, in its place among the groups
+        if (!adjustable() || OptionGroup.CONTROLS in groups) groups else (groups + OptionGroup.CONTROLS).sortedBy { it.ordinal }
+    }
 
     /**
      * This console's own rows, locked ones and the ones read only at launch ([FrontendOption.atLaunch]: set in
@@ -1670,8 +1682,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     }
 
     /**
-     * A pad skin or its bare buttons are drawn ([drawn]): with no controller attached the root offers Adjust buttons
-     * (the editor for the layout being played). Rebuilds the root.
+     * A pad skin or its bare buttons are drawn ([drawn]): with no controller attached Options → Controls offers Adjust
+     * buttons (the editor for the layout being played). Rebuilds the pages it shows on.
      */
     fun setPadDrawn(drawn: Boolean) {
         if (drawn == padDrawn) return

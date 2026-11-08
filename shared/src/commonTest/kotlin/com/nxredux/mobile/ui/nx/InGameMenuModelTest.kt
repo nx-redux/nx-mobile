@@ -77,20 +77,27 @@ class InGameMenuModelTest {
         assertEquals(2, m.state.slotIndex)
     }
 
-    // Adjust buttons: only while a skin or its bare buttons are drawn and no controller is attached (no pad is drawn then).
-    @Test fun adjust_buttons_shows_while_the_pad_is_drawn_without_a_controller() {
+    // Adjust buttons lives in Options → Controls (user), only while a skin or its bare buttons are drawn and no controller is
+    // attached (no pad is drawn then); Controls shows for it even with no settings rows of its own.
+    @Test fun adjust_buttons_is_in_options_controls_while_the_pad_is_drawn_without_a_controller() {
         val m = model()
         m.setPadDrawn(true)
         m.setControllerConnected(false)
-        assertEquals(listOf("Continue", "Save", "Load", "Options", "Adjust buttons", "Quit"), m.state.page.rows.map { it.label })
-        m.select(m.state.page.rows.indexOfFirst { it.label == "Adjust buttons" })
+        assertEquals(listOf("Continue", "Save", "Load", "Options", "Quit"), m.state.page.rows.map { it.label })   // not on the root
+        m.select(m.state.page.rows.indexOfFirst { it.label == "Options" }); m.press(NxButton.A)
+        assertEquals(PageKind.Options, m.state.page.kind)
+        m.select(m.state.page.rows.indexOfFirst { it.label == "Controls" }); m.press(NxButton.A)
+        assertEquals(PageKind.Settings(com.nxredux.mobile.options.OptionGroup.CONTROLS), m.state.page.kind)
+        assertEquals("Adjust buttons", m.state.page.rows.last().label)
+        m.select(m.state.page.rows.lastIndex)
         assertEquals(MenuEffect.AdjustButtons, m.press(NxButton.A))
-        assertEquals(PageKind.Root, m.state.page.kind)   // the menu stays as it was under the editor
+        assertEquals(PageKind.Settings(com.nxredux.mobile.options.OptionGroup.CONTROLS), m.state.page.kind)   // the menu stays as it was under the editor
         m.setControllerConnected(true)
-        assertEquals(listOf("Continue", "Save", "Load", "Options", "Quit"), m.state.page.rows.map { it.label })
+        assertEquals(null, m.state.page.rows.firstOrNull { it.label == "Adjust buttons" })   // gone at once from the open page
         m.setControllerConnected(false)
+        assertEquals("Adjust buttons", m.state.page.rows.last().label)
         m.setPadDrawn(false)
-        assertEquals(listOf("Continue", "Save", "Load", "Options", "Quit"), m.state.page.rows.map { it.label })
+        assertEquals(null, m.state.page.rows.firstOrNull { it.label == "Adjust buttons" })
     }
 
     @Test fun up_on_continue_reaches_the_tab_row_down_wraps_and_slot_rows_change_the_slot() {

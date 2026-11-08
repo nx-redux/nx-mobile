@@ -5,6 +5,7 @@ import androidx.compose.ui.draw.clip
 import android.content.res.Configuration
 import android.view.Gravity
 import com.nxredux.mobile.options.PxRect
+import com.nxredux.mobile.skin.menuRect
 import com.nxredux.mobile.ui.nx.LocalInSkin
 import kotlin.math.roundToInt
 import android.widget.FrameLayout
@@ -447,8 +448,11 @@ internal class InGameMenuController(
     /** The corner radius of the glass the menu sits in, window px. */
     private fun skinGlassCorner(): Float = menuGlass()?.corner ?: 0f
 
-    /** The pad skin's screen glass the menu sits in, window px ([menuGlass]), or null with no skin shown. */
-    private fun skinGlass(): PxRect? = menuGlass()?.rect
+    /**
+     * The room the menu takes over a pad skin, window px: its screen glass ([menuGlass]) and the touch shortcut strip under
+     * it, hidden while the menu is open ([com.nxredux.mobile.skin.menuRect]); null with no skin shown.
+     */
+    private fun skinGlass(): PxRect? = menuGlass()?.let { g -> padLayout.skinPlacement()?.menuRect(g) ?: g.rect }
 
     /** The glass the menu sits in: the biggest of the skin's (a DS's top screen), never across the frames between two. */
     private fun menuGlass(): com.nxredux.mobile.skin.PlacedGlass? {
