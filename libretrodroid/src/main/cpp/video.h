@@ -33,6 +33,7 @@
 #include "immersivemode.h"
 #include "videolayout.h"
 #include "presetchain.h"
+#include "filtercache.h"
 
 namespace libretrodroid {
 
@@ -153,6 +154,9 @@ private:
 
     void initializeRenderer(RenderingOptions renderingOptions);
 
+    // The texture units a draw may sample this frame, for CoreGlStateGuard's sampler unbinding.
+    unsigned sampledTextureUnits() const;
+
     // Compiles one shader pass and looks up the handles the built-in draw loops use. Throws when the program fails.
     static ShaderChainEntry createShaderChainEntry(const ShaderManager::Pass& pass);
 
@@ -162,8 +166,11 @@ private:
     void renderRegions(VideoLayout& layout, PresetChainRenderer* preset, std::vector<RegionCrop>& crops);
     void renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layout, PresetChainRenderer* preset,
                      std::vector<RegionCrop>& crops);
-    // While composing: a quad of the whole composed frame cut into its screens, each shaded as its part says.
-    std::vector<RegionQuad> splitByComposition(const RegionQuad& whole) const;
+    // While composing: a quad of the whole composed frame cut into its screens (each shaded as its part says),
+    // appended to out.
+    void appendComposition(const RegionQuad& whole, std::vector<RegionQuad>& out) const;
+    // The quads of the draw in progress; a member so a frame allocates nothing once it has grown.
+    std::vector<RegionQuad> quadScratch;
     GLuint cropRegion(RegionCrop& crop, const std::array<float, 12>& coordinates, unsigned width, unsigned height);
     void releaseCrops();
     std::vector<RegionCrop> mainCrops;
@@ -171,6 +178,9 @@ private:
     void drawBuiltInChain(const std::array<float, 12>& vertices, const std::array<float, 12>& coordinates,
                           unsigned screenWidth, unsigned screenHeight);
     void drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned screenHeight);
+    // Sets filter on the frame texture, bound on the active unit, unless this draw already set it there.
+    void applyFrameFilter(GLint filter);
+    TextureFilterCache frameFilter;
     // Builds secondaryPresetRenderer from the requested chain when the main one is live and it isn't yet.
     void updateSecondaryPresetRenderer();
 

@@ -92,6 +92,9 @@ public:
     // those bindings (it caches them). Default on.
     void setPreserveTextureBindings(bool preserve) { preserveTextureBindings = preserve; }
 
+    // The texture units render() samples, from unit 0: Texture, Orig, the LUTs, then each pass's output.
+    unsigned textureUnits() const { return 2 + (unsigned) lutTextures.size() + (unsigned) passes.size(); }
+
     // Forgets the GL names without deleting them: their context is gone, and deleting them would hit whatever
     // reuses those names in the current one.
     void abandonGlObjects();

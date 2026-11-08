@@ -568,8 +568,11 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
     }
 
     retro_vulkan_image frameImage;
-    std::vector<VkSemaphore> frameSemaphores;
-    std::vector<VkCommandBuffer> frameCommands;
+    // Swapped with the core-side lists: each keeps the other's capacity, so neither side allocates per frame.
+    std::vector<VkSemaphore>& frameSemaphores = takenSemaphores;
+    std::vector<VkCommandBuffer>& frameCommands = takenCommandBuffers;
+    frameSemaphores.clear();
+    frameCommands.clear();
     uint32_t frameSrcFamily;
     VkSemaphore frameSignal;
     {
@@ -669,22 +672,22 @@ bool VulkanBridge::bridgeFrame(unsigned width, unsigned height, Frame& out) {
                          0, nullptr, 0, nullptr, 2, post);
     vkEndCommandBuffer(cmd);
 
-    std::vector<VkCommandBuffer> cmds = frameCommands;   // the core's own (set_command_buffers) go first
-    cmds.push_back(cmd);
+    frameCommands.push_back(cmd);   // after the core's own (set_command_buffers)
 
-    std::vector<VkPipelineStageFlags> waitStages(frameSemaphores.size(), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-    std::vector<VkSemaphore> signals;
-    if (useSyncFd) signals.push_back(exportSemaphores[index]);
-    if (frameSignal != VK_NULL_HANDLE) signals.push_back(frameSignal);
+    submitWaitStages.assign(frameSemaphores.size(), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+    VkSemaphore signals[2];
+    uint32_t signalCount = 0;
+    if (useSyncFd) signals[signalCount++] = exportSemaphores[index];
+    if (frameSignal != VK_NULL_HANDLE) signals[signalCount++] = frameSignal;
 
     VkSubmitInfo submit { VK_STRUCTURE_TYPE_SUBMIT_INFO };
     submit.waitSemaphoreCount = (uint32_t) frameSemaphores.size();
     submit.pWaitSemaphores = frameSemaphores.data();
-    submit.pWaitDstStageMask = waitStages.data();
-    submit.commandBufferCount = (uint32_t) cmds.size();
-    submit.pCommandBuffers = cmds.data();
-    submit.signalSemaphoreCount = (uint32_t) signals.size();
-    submit.pSignalSemaphores = signals.data();
+    submit.pWaitDstStageMask = submitWaitStages.data();
+    submit.commandBufferCount = (uint32_t) frameCommands.size();
+    submit.pCommandBuffers = frameCommands.data();
+    submit.signalSemaphoreCount = signalCount;
+    submit.pSignalSemaphores = signals;
 
     VkResult r;
     {

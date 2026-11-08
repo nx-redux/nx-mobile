@@ -161,6 +161,11 @@ private:
     VkSemaphore signalSemaphore = VK_NULL_HANDLE;
     std::mutex queueMutex;
 
+    // bridgeFrame's per-frame lists (render thread only), kept for their capacity.
+    std::vector<VkSemaphore> takenSemaphores;
+    std::vector<VkCommandBuffer> takenCommandBuffers;
+    std::vector<VkPipelineStageFlags> submitWaitStages;
+
     // Frontend frame resources, one per sync index.
     VkCommandPool commandPool = VK_NULL_HANDLE;
     VkCommandBuffer commandBuffers[SYNC_COUNT] {};

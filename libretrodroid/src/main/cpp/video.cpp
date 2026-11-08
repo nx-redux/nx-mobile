@@ -211,7 +211,12 @@ void Video::updatePresetRenderer() {
 // state it left (GL cores cache their state).
 class CoreGlStateGuard {
 public:
-    explicit CoreGlStateGuard(bool active) : active(active) {
+    // GLES 3.0's minimum GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS: every device has at least these.
+    static constexpr unsigned MAX_SAMPLER_UNITS = 32;
+
+    // sampledUnits: the texture units this draw samples (0 up); a sampler bound past them changes nothing it draws.
+    CoreGlStateGuard(bool active, unsigned sampledUnits)
+        : active(active), units(std::min(sampledUnits, MAX_SAMPLER_UNITS)) {
         if (!active) return;
         scissor = glIsEnabled(GL_SCISSOR_TEST);
         blend = glIsEnabled(GL_BLEND);
@@ -226,7 +231,7 @@ public:
         // A sampler object bound on a unit overrides the textures' own filtering: Azahar leaves one on unit 0 between
         // frames (paused), and our textures (no mipmaps) then sample black.
         glGetIntegerv(GL_ACTIVE_TEXTURE, &activeTexture);
-        for (GLuint unit = 0; unit < SAMPLER_UNITS; ++unit) {
+        for (GLuint unit = 0; unit < units; ++unit) {
             glActiveTexture(GL_TEXTURE0 + unit);
             glGetIntegerv(GL_SAMPLER_BINDING, &samplers[unit]);
             if (samplers[unit] != 0) glBindSampler(unit, 0);
@@ -249,7 +254,7 @@ public:
         auto savedVertexArray = static_cast<GLuint>(vertexArray);
         auto savedArrayBuffer = static_cast<GLuint>(arrayBuffer);
         glBindVertexArray(savedVertexArray != 0 && glIsVertexArray(savedVertexArray) ? savedVertexArray : 0);
-        for (GLuint unit = 0; unit < SAMPLER_UNITS; ++unit) {
+        for (GLuint unit = 0; unit < units; ++unit) {
             auto sampler = static_cast<GLuint>(samplers[unit]);
             if (sampler != 0 && glIsSampler(sampler)) glBindSampler(unit, sampler);
         }
@@ -272,14 +277,25 @@ private:
     GLint arrayBuffer = 0;
     GLboolean colorMask[4] = { GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE };
     GLint vertexArray = 0;
-    static constexpr GLuint SAMPLER_UNITS = 16;   // the units our passes use (Texture, Orig, LUTs, pass outputs)
-    GLint samplers[SAMPLER_UNITS] = {};
+    unsigned units;
+    GLint samplers[MAX_SAMPLER_UNITS] = {};
     GLint activeTexture = GL_TEXTURE0;
 };
 
+unsigned Video::sampledTextureUnits() const {
+    // The built-in shaders and immersive mode sample units 0 and 1.
+    unsigned units = 2;
+    // The chain is (re)built inside this draw, after the guard: its units are not known yet.
+    if (presetDirty && requestedPreset) return CoreGlStateGuard::MAX_SAMPLER_UNITS;
+    // The second surface's chain, when not built yet, is built from the main one's preset: the same units.
+    if (presetRenderer) units = std::max(units, presetRenderer->textureUnits());
+    if (secondaryPresetRenderer) units = std::max(units, secondaryPresetRenderer->textureUnits());
+    return units;
+}
+
 void Video::renderFrame(bool force) {
     // Same for the paused redraw.
-    CoreGlStateGuard guard(rendersInVideoCallback());
+    CoreGlStateGuard guard(rendersInVideoCallback(), sampledTextureUnits());
     drawFrame(force);
 }
 
@@ -318,10 +334,10 @@ void Video::drawFrame(bool force) {
     // Bind on unit 0: a GL core may leave another unit active with its own texture bound, and it caches
     // those bindings. Unit 0 is rebound and cleared by the pass loop below anyway.
     GLint filter = linearTexture ? GL_LINEAR : GL_NEAREST;
+    frameFilter.invalidate();
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, frameTexture());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+    applyFrameFilter(filter);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     if (!videoLayout.getRegionQuads().empty()) {
@@ -332,7 +348,9 @@ void Video::drawFrame(bool force) {
 
     if (presetRenderer && composing()) {
         RegionQuad whole{ videoLayout.getForegroundVertices(), videoLayout.getTextureCoordinates(), true, 1.0F, 1.0F, 1.0F };
-        renderQuads(splitByComposition(whole), videoLayout, presetRenderer.get(), mainCrops);
+        quadScratch.clear();
+        appendComposition(whole, quadScratch);
+        renderQuads(quadScratch, videoLayout, presetRenderer.get(), mainCrops);
         frameCount++;
         return;
     }
@@ -354,18 +372,18 @@ void Video::drawFrame(bool force) {
 }
 
 void Video::renderRegions(VideoLayout& layout, PresetChainRenderer* preset, std::vector<RegionCrop>& crops) {
-    std::vector<RegionQuad> quads;
+    quadScratch.clear();
     for (const auto& quad : layout.getRegionQuads()) {
         if (quad.shaded && preset && composing() && quad.srcWidth > 0.999F && quad.srcHeight > 0.999F) {
-            for (auto& part : splitByComposition(quad)) quads.push_back(part);
+            appendComposition(quad, quadScratch);
         } else {
-            quads.push_back(quad);
+            quadScratch.push_back(quad);
         }
     }
-    renderQuads(quads, layout, preset, crops);
+    renderQuads(quadScratch, layout, preset, crops);
 }
 
-std::vector<RegionQuad> Video::splitByComposition(const RegionQuad& whole) const {
+void Video::appendComposition(const RegionQuad& whole, std::vector<RegionQuad>& out) const {
     // The whole composed frame drawn as one quad, cut into its screens: each part's place in the frame is found on the
     // quad through its texture coordinates, so a rotated picture is cut the same way. The composed texture keeps the
     // core frame's row order: with a bottom-left origin its row 0 is the picture's bottom row.
@@ -374,7 +392,7 @@ std::vector<RegionQuad> Video::splitByComposition(const RegionQuad& whole) const
         u0 = std::min(u0, whole.coordinates[i]); u1 = std::max(u1, whole.coordinates[i]);
         v0 = std::min(v0, whole.coordinates[i + 1]); v1 = std::max(v1, whole.coordinates[i + 1]);
     }
-    if (u1 <= u0 || v1 <= v0) return { whole };
+    if (u1 <= u0 || v1 <= v0) { out.push_back(whole); return; }
     // Corners of the frame on screen: (0,0), (1,0) and (0,1) of the frame give the frame -> vertex map.
     std::array<float, 2> p00{}, p10{}, p01{};
     bool f00 = false, f10 = false, f01 = false;
@@ -386,9 +404,8 @@ std::vector<RegionQuad> Video::splitByComposition(const RegionQuad& whole) const
         if (right && top) { p10 = at; f10 = true; }
         if (left && bottom) { p01 = at; f01 = true; }
     }
-    if (!f00 || !f10 || !f01) return { whole };
+    if (!f00 || !f10 || !f01) { out.push_back(whole); return; }
     const bool bottomLeft = videoLayout.isBottomLeftOrigin();
-    std::vector<RegionQuad> parts;
     for (const auto& part : compositionParts) {
         const float top = bottomLeft ? 1.0F - part.dstBottom : part.dstTop;
         const float bottom = bottomLeft ? 1.0F - part.dstTop : part.dstBottom;
@@ -406,9 +423,8 @@ std::vector<RegionQuad> Video::splitByComposition(const RegionQuad& whole) const
         q.shaded = part.shaded;
         q.srcWidth = whole.srcWidth * (part.dstRight - part.dstLeft);
         q.srcHeight = whole.srcHeight * (part.dstBottom - part.dstTop);
-        parts.push_back(q);
+        out.push_back(q);
     }
-    return parts;
 }
 
 void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layout, PresetChainRenderer* preset,
@@ -448,6 +464,7 @@ void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layou
                     frameTexture(), (unsigned) getTextureStorageWidth(), (unsigned) getTextureStorageHeight(),
                     frameW, frameH, coordinates, quad.vertices, layout.getFramebufferVertices(),
                     (int) screenW, (int) screenH, linearTexture, frameCount);
+                frameFilter.invalidate();   // its first pass sets the filter of the texture it samples
             }
         } else {
             // Built-in shaders: single-pass ones (the app only uses SHADER_DEFAULT) draw each region exactly; the
@@ -457,8 +474,7 @@ void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layou
             GLint filter = (linearTexture || down) ? GL_LINEAR : GL_NEAREST;
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, frameTexture());
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+            applyFrameFilter(filter);
             glBindTexture(GL_TEXTURE_2D, 0);
             drawBuiltInChain(quad.vertices, frameCoordinates(quad.coordinates), screenW, screenH);
         }
@@ -466,9 +482,14 @@ void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layou
     GLint filter = linearTexture ? GL_LINEAR : GL_NEAREST;
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, frameTexture());
+    applyFrameFilter(filter);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void Video::applyFrameFilter(GLint filter) {
+    if (!frameFilter.needsSet(frameTexture(), filter)) return;
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
-    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void Video::drawBuiltInChain(const std::array<float, 12>& vertices, const std::array<float, 12>& coordinates,
@@ -563,8 +584,7 @@ GLuint Video::cropRegion(RegionCrop& crop, const std::array<float, 12>& coordina
     glUseProgram(s.gProgram);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, frameTexture());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    applyFrameFilter(GL_NEAREST);
     glUniform1i(s.gTextureHandle, 0);
     glUniform2f(s.gTextureSizeHandle, (float) getTextureStorageWidth(), (float) getTextureStorageHeight());
     glUniform1f(s.gScreenDensityHandle, 1.0F);
@@ -614,8 +634,7 @@ void Video::drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned scr
     glBindTexture(GL_TEXTURE_2D, frameTexture());
     GLint plainFilter = regionDownscales(quad, getTextureWidth(), getTextureHeight(),
                                          (float) screenWidth, (float) screenHeight) ? GL_LINEAR : GL_NEAREST;
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, plainFilter);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, plainFilter);
+    applyFrameFilter(plainFilter);
     glUniform1i(s.gTextureHandle, 0);
     glUniform2f(s.gTextureSizeHandle, getTextureStorageWidth(), getTextureStorageHeight());
     glUniform1f(s.gScreenDensityHandle, getScreenDensity((float) screenWidth, (float) screenHeight));
@@ -653,9 +672,7 @@ void Video::drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned scr
 
     glDisableVertexAttribArray(s.gvPositionHandle);
     glDisableVertexAttribArray(s.gvCoordinateHandle);
-    GLint filter = linearTexture ? GL_LINEAR : GL_NEAREST;
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+    applyFrameFilter(linearTexture ? GL_LINEAR : GL_NEAREST);
     glBindTexture(GL_TEXTURE_2D, 0);
     glUseProgram(0);
 }
@@ -689,7 +706,7 @@ void Video::renderSecondary(unsigned width, unsigned height) {
         secondaryLayout.updateScreenSize(width, height);
     }
 
-    CoreGlStateGuard guard(rendersInVideoCallback());
+    CoreGlStateGuard guard(rendersInVideoCallback(), sampledTextureUnits());
 
     glDisable(GL_DEPTH_TEST);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -702,6 +719,7 @@ void Video::renderSecondary(unsigned width, unsigned height) {
     if (getTextureWidth() <= 0.0F || getTextureHeight() <= 0.0F) return;
 
     updateSecondaryPresetRenderer();
+    frameFilter.invalidate();
     renderRegions(secondaryLayout, secondaryPresetRenderer.get(), secondaryCrops);
 }
 
@@ -774,6 +792,8 @@ void Video::composeFrame() {
     glUseProgram(s.gProgram);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, renderer->getTexture());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glUniform1i(s.gTextureHandle, 0);
     glUniform2f(s.gTextureSizeHandle, (float) renderer->getTextureSize().first, (float) renderer->getTextureSize().second);
     glUniform1f(s.gScreenDensityHandle, 1.0F);
@@ -792,8 +812,6 @@ void Video::composeFrame() {
             quad.coordinates[i] *= scaleX;
             quad.coordinates[i + 1] *= scaleY;
         }
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glVertexAttribPointer(s.gvPositionHandle, 2, GL_FLOAT, GL_FALSE, 0, quad.vertices.data());
         glEnableVertexAttribArray(s.gvPositionHandle);
         glVertexAttribPointer(s.gvCoordinateHandle, 2, GL_FLOAT, GL_FALSE, 0, quad.coordinates.data());

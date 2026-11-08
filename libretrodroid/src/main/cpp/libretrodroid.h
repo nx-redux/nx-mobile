@@ -33,6 +33,7 @@
 #include <array>
 #include <atomic>
 #include <exception>
+#include <cstdlib>
 
 #include "log.h"
 #include "core.h"
@@ -82,9 +83,11 @@ public:
     /** RetroArch RAM-patch cheats (handler 1), applied to the core's system RAM before every retro_run; empty = none. */
     void setMemoryCheats(std::vector<CheatMemPatch> patches);
 
-    // serializeState/serializeSRAM/serializeRTC/serializeMemory return a new[] buffer the caller must delete[], or (nullptr, 0) when there is
-    // nothing to save (no core, no SRAM, or the core refused to serialize).
-    std::pair<int8_t*, size_t> serializeState();
+    // serializeSRAM/serializeRTC/serializeMemory return a new[] buffer the caller must delete[], and serializeState an
+    // owned one, or (nullptr, 0) when there is nothing to save (no core, no SRAM, or the core refused to serialize).
+    struct FreeDeleter { void operator()(int8_t* p) const { std::free(p); } };
+    using StateBuffer = std::unique_ptr<int8_t[], FreeDeleter>;
+    std::pair<StateBuffer, size_t> serializeState();
     bool unserializeState(int8_t *data, size_t size);
 
     std::pair<int8_t *, size_t> serializeSRAM();
@@ -324,6 +327,9 @@ protected:
 private:
     // UI thread (setFrameSpeed) writes it; the GL thread (step) reads it and hands it to the audio.
     std::atomic<unsigned> frameSpeed { 1 };
+    // Whether a netplay session runs, read once per step for every input_state call in it (asking the engine takes its
+    // mutex); -1 outside a step, where input_state asks the engine. An atomic: a threaded core polls from its own thread.
+    std::atomic<int> stepNetplayActive { -1 };
     static constexpr std::chrono::milliseconds PAUSED_REDRAW_INTERVAL { 50 };
     std::chrono::steady_clock::time_point pausedRedrawAt {};   // GL thread
     // UI thread writes it; a threaded core's audio callback reads it.
