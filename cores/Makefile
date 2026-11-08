@@ -361,14 +361,15 @@ pcsx_rearmed_SUBMODULES = frontend/libpicofe
 # VFS (content arrives as /rom/<name> virtual files, never a real path).
 pcsx_rearmed_FLAGS = USE_LIBRETRO_VFS=1
 
-# SwanStation (PSX folder), libretro's DuckStation fork: the Brick's PSX.pak pin (nx-redux workspace/tg5040/cores/Makefile),
-# so serialize sizes match a handheld's for netplay. CMake kind like mgba: src/libretro/CMakeLists.txt adds the SHARED
+# SwanStation (PSX folder), libretro's DuckStation fork. 631f0fb3 (2026-11-08) is past the Brick's PSX.pak pin dd480561:
+# save states went from version 55 to 57 (older ones still load), so netplay and states with a Brick need nx-redux bumped
+# too. The Vulkan device comes from the core's create_device2 (negotiation v2). CMake kind like mgba: src/libretro/CMakeLists.txt adds the SHARED
 # target swanstation_libretro (empty prefix, build root, OUTPUT_NAME swanstation_libretro_android on Android). No
 # submodules. GLES hardware renderer through the libretro HW context. patches/swanstation.patch: a PBP whose TOC is all
 # zero (Tekken 3 SLPS-01300) opens as one data track (PCSX-ReARMed's fallback), sized from its block table; save states
-# are unchanged, so netplay with the handheld's unpatched pin still matches.
+# are unchanged by it.
 swanstation_REPO = https://github.com/libretro/swanstation
-swanstation_HASH = dd4805619bbbfc6e0d1776372cb16377088b448e
+swanstation_HASH = 631f0fb31b809e0f889d7c551fe695788e39c1d3
 swanstation_LICENSE = LICENSE
 swanstation_KIND = cmake
 swanstation_BUILD_PATH = .

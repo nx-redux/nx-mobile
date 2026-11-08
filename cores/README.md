@@ -56,7 +56,7 @@ Design: `docs/superpowers/specs/2026-09-22-cores-build-pipeline-design.md`.
 | prboom | libretro/libretro-prboom | 4849268e7342494193f2bbf2d0128a751cf58da7 | ndk-build (+ `prboom.wad`; 3.4 MB stripped) | 0:05 |
 | gpsp | libretro/gpsp | 5819380c2ffb0900219d700a382ee68c464ebb99 | ndk-build (dynarec, patched; link) | 0:12 |
 | pcsx_rearmed | libretro/pcsx_rearmed | 7b0e8f8fadfbce3d170d195b9d9eecaabfa08c8e | ndk-build (dynarec, `USE_LIBRETRO_VFS=1`) | 0:10 |
-| swanstation | libretro/swanstation | dd4805619bbbfc6e0d1776372cb16377088b448e (the Brick's PSX.pak pin) | cmake (GLES HW renderer) | 0:12 |
+| swanstation | libretro/swanstation | 631f0fb31b809e0f889d7c551fe695788e39c1d3 | cmake (GLES/Vulkan HW renderer, patched) | 0:12 |
 | picodrive | irixxxx/picodrive | 9c298c1fe7347a50b07a494cdb8c91d2f9b40c6a | ndk-build (SH2 dynarec, patched; 1.7 MB stripped) | 1:16 |
 | gearcoleco | drhelius/Gearcoleco | 2805e70fd56c3bb6a0412a4ddaf210eefc8a5d7c (1.7.6+11) | ndk-build (`platforms/libretro`; 0.9 MB stripped) | 0:10 |
 | fbneo | libretro/FBNeo | d15071abf14191eebb4a5d7c7147398edcf237c8 | ndk-build (`src/burner/libretro`, + `system/fbneo/`; 69.9 MB stripped) | 0:28 |
