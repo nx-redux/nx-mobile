@@ -43,6 +43,9 @@ import com.nxredux.mobile.shortcuts.Shortcuts
 import com.nxredux.mobile.ui.nx.GamePanelEvent
 import com.nxredux.mobile.ui.nx.HintGlyphs
 import com.nxredux.mobile.ui.nx.InGameMenu
+import com.nxredux.mobile.ui.nx.LocalInGameTouchOnly
+import com.nxredux.mobile.ui.nx.footerModeFor
+import com.nxredux.mobile.ui.nx.FooterMode
 import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.InputRouter
 import com.nxredux.mobile.ui.nx.LocalHintGlyphs
@@ -364,6 +367,8 @@ internal class InGameMenuController(
                     CompositionLocalProvider(
                         LocalHintGlyphs provides hintGlyphs, LocalPortrait provides portraitLayout, LocalPadBelow provides padBelow,
                         LocalWindowSize provides window, LocalInSkin provides (skinGlass != null),
+                        // No controller and no skin round the menu (its picture full screen): no pad to press hints with.
+                        LocalInGameTouchOnly provides (footerModeFor(connected, padVisible = skinGlass != null) == FooterMode.BUTTONS),
                         LocalNxOptionText provides AndroidAppSettings(activity).optionTextSize.ofListLabel,   // Appearance → Text size
                     ) {
                     // In the glass: the camera cutout reaches into it only as far as it runs past the glass's top (and

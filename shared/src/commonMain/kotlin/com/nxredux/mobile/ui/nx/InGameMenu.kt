@@ -221,6 +221,29 @@ private fun MenuTabs(panel: PanelUi, focused: Boolean) {
 /** The tab row is drawn over the menu's body ([menuTabsShown]): the lists start right under it, not level with its words. */
 private val LocalMenuTabsAbove = compositionLocalOf { false }
 
+/**
+ * No controller and no pad on screen (a game without a skin: the menu over the whole picture): the hint bar shows only
+ * [touchOnlyHints], the hints a tap cannot stand in for. The runner provides it ([footerModeFor] BUTTONS).
+ */
+val LocalInGameTouchOnly = compositionLocalOf { false }
+
+/**
+ * [hints] reduced to those a touch-only player has no other way to: the Achievements page's Locked only and Mute, a
+ * Shortcuts row's None and Default. The rest are a tap on the row (A), the row's value (LEFT / RIGHT) or Back (B).
+ */
+internal fun touchOnlyHints(page: MenuPage, hints: List<Hint>): List<Hint> = when (page.kind) {
+    PageKind.Achievements, PageKind.Shortcuts -> hints.filter { it.button == NxButton.X || it.button == NxButton.Y }
+    else -> emptyList()
+}
+
+/** The menu's hint bar: all [hints] with a pad to press them; touch only, [touchOnlyHints], and no bar (no room) without any. */
+@Composable
+private fun MenuHintBar(page: MenuPage, hints: List<Hint>, modifier: Modifier = Modifier, onHint: (NxButton) -> Unit) {
+    val shown = if (LocalInGameTouchOnly.current) touchOnlyHints(page, hints) else hints
+    if (shown.isEmpty() && LocalInGameTouchOnly.current) return
+    NxHintBar(shown, modifier, onHint = onHint)
+}
+
 /** The focused page's selected option row is being changed with the pad ([MenuState.editing]): [OptionsBody] marks it. */
 internal val LocalMenuEditing = compositionLocalOf { false }
 
@@ -299,8 +322,8 @@ private fun InGameMenuContent(
         } else {
             Modifier
         }
-        NxHintBar(
-            hintsFor(page, selectedRow, state.selectedShowsInfo, state.panelFocus ?: PanelFocus.Tabs.takeIf { offMenuTab }, state.panelTab, panel = beside != null, editing = state.editing, twoPane = split != null), hintModifier,
+        MenuHintBar(
+            page, hintsFor(page, selectedRow, state.selectedShowsInfo, state.panelFocus ?: PanelFocus.Tabs.takeIf { offMenuTab }, state.panelTab, panel = beside != null, editing = state.editing, twoPane = split != null), hintModifier,
             onHint = { onPress(menuHintButton(it)) },
         )
     }
@@ -863,7 +886,7 @@ private fun AdjustContent(
                     AdjustArrow(">", valueSize, selection.barText) { onChange(1) }
                 }
             }
-            NxHintBar(hintsFor(page, row), onHint = { hint ->
+            MenuHintBar(page, hintsFor(page, row), onHint = { hint ->
                 when (val b = adjustHintButton(hint)) {
                     null -> Unit
                     NxButton.B -> dismiss()
