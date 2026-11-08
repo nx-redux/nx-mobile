@@ -159,6 +159,11 @@ sealed interface DeviceSyncPage {
     /** Saying HELLO as [ownIp] on [link] until a device answers. */
     data class Searching(val link: SyncLink, val ownIp: String) : DeviceSyncPage
     /**
+     * Paired with the device at [peerIp]: nothing transfers until A here, so the user can check it is the device they
+     * meant (its own IP on its screen) and not another one on the same network. [ownIp]: this phone's on [link].
+     */
+    data class Confirm(val link: SyncLink, val peerIp: String, val ownIp: String) : DeviceSyncPage
+    /**
      * [step] null: the client waits for READY, or the server role (no steps). [lines] newest last, at most 200. [steps]:
      * 9 with ROMs, else 7 with BIOS and collections, else 4; [console] the console a ROM step works on (a BIOS step: the tag).
      */

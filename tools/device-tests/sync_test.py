@@ -75,12 +75,19 @@ class Runner:
         """SYNC hook; polls sync.json. 'stalled' when the Brick's daemon saw no connection in STALL_S."""
         f, b = self.f, self.b
         f.rm_result("sync")
-        f.broadcast("SYNC", "--es link wifi --ez roms %s" % ("true" if roms else "false"))
+        f.broadcast("SYNC", "--es link wifi --ez roms %s --ez confirm true" % ("true" if roms else "false"))
         t0 = time.time()
+        confirmed = False
         while True:
-            time.sleep(3)
+            time.sleep(1 if not confirmed else 3)
             j = f.read_json("sync")
             el = round(time.time() - t0, 1)
+            # The phone presses its own A (confirm true); the Brick's confirm screen needs one too.
+            if not confirmed and j and j.get("state") == "confirm":
+                print("[sync] confirm with %s: A on the Brick" % j.get("peer"), flush=True)
+                b.confirm_device_sync()
+                confirmed = True
+                continue
             if j and j.get("state") in TERMINAL_SYNC:
                 j["elapsed"] = el
                 return j

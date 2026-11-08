@@ -99,16 +99,18 @@ survive Home and return, quit, and load their auto state again (slot 9).
 - [ ] Core options with categories (localized labels); controller type lists
 - [ ] A collection file or map.txt starting with a byte-order mark (from Windows): its first entry still works
 
-## Security fixes (Device Sync pairing v3, update check): device checks still owed
+## Security fixes (Device Sync confirm, update check): device checks still owed
 
-Needs two devices; the phone and the handheld must both run the new builds (they refuse older ones).
+Needs two devices. No protocol change: an older build on the other side still syncs.
 
-- [ ] Phone ↔ phone (Wi-Fi and cable): same code on both; A on both in either order syncs; B on either side ends both;
-  no answer for 120 s gives "Pairing not confirmed."
-- [ ] Phone ↔ Brick (Wi-Fi and cable): same code on both; the Brick serves with the password; a full ROM sync finishes
-- [ ] An old phone or handheld build: refused with "Update NX Redux on the other device to sync."
-- [ ] After every ending the secrets file is gone from the phone's `files/device-sync/`
-- [ ] Unattended `sync_test.py` against the Brick presses A on the Brick's code screen and finishes
+- [ ] Phone ↔ phone (Wi-Fi and cable): each confirm page shows the other's IP, matching the IP that device shows for
+  itself ("This device: …")
+- [ ] Phone ↔ Brick (Wi-Fi and cable): the same, both ways
+- [ ] A on both, in either order, syncs; B on either side cancels both (the other says "The other device cancelled the
+  sync." while its confirm page shows, "The other device's sync failed…" once it pressed A)
+- [ ] An old build on the other side still syncs, in both roles (old server: A here, then it runs; old client: A here
+  within its 30 s wait for READY)
+- [ ] Unattended `sync_test.py` against the Brick presses A on the Brick's confirm screen and finishes
 - [ ] In-app update with the dev build's local feed (`-PnxUpdateFeed=http://localhost:<port>/latest.json` + adb
   reverse): offer, download and install; no `digest` → "Update not verified: GitHub sent no checksum"; a LAN or other
   host → "Update not verified: not a GitHub download"; `"draft": true` or a `-rc` tag → up to date; a 302 to another

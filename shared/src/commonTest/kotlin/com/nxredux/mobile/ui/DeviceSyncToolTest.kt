@@ -331,7 +331,7 @@ class DeviceSyncToolTest {
         r.platform.steps[SyncStep.RECEIVE_SAVES] = listOf("GB/Tetris.srm", " 1 (xfr#1, to-chk=0/1)") to 0
         r.openDeviceSync()
         r.sync.pick(SyncLink.WIFI); r.state.onButton(NxButton.A); runCurrent()
-        r.platform.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
+        pairWithHandheld(r)
         val before = r.data.resumeReads
         assertTrue(before > 0, "Home's Continue row was built from the recents")
         r.platform.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
@@ -343,7 +343,7 @@ class DeviceSyncToolTest {
     @Test fun a_sync_that_received_nothing_does_not_rebuild() = runTest {
         val r = rig(); r.openDeviceSync()
         r.sync.pick(SyncLink.WIFI); r.state.onButton(NxButton.A); runCurrent()
-        r.platform.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
+        pairWithHandheld(r)
         val before = r.data.resumeReads
         r.platform.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
         assertEquals(DeviceSyncPage.Done(SyncLink.WIFI, received = 0, sent = 0, notes = listOf(DeviceSyncText.BIOS_NO_ACCESS, DeviceSyncText.COLLECTIONS_NO_ACCESS)), r.sync.page.value)
@@ -359,7 +359,7 @@ class DeviceSyncToolTest {
         r.platform.onWriteCollection = { name, lines -> r.source.writeText(ContentRef("Home/Collections"), "$name.txt", lines.joinToString("") { "$it\n" }) }
         r.openDeviceSync()
         r.state.syncSetupTap(2, open = true); runCurrent()   // Sync via Wi-Fi (the page opens on Sync ROMs, above the links)
-        r.platform.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
+        pairWithHandheld(r)
         r.platform.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent(); advanceUntilIdle()
         assertEquals(DeviceSyncPage.Done(SyncLink.WIFI, received = 1, sent = 0), r.sync.page.value)
         assertEquals(Screen.DeviceSync, r.state.screen.value)
@@ -369,12 +369,24 @@ class DeviceSyncToolTest {
         assertEquals(listOf("Faves"), collections)
     }
 
+    /**
+     * The handheld's HELLO, then A on the confirm page (its IP and this phone's): the run goes on to wait for READY.
+     * [direct]: A straight to the controller, for a run whose tool is not on screen.
+     */
+    private fun TestScope.pairWithHandheld(r: Rig, direct: Boolean = false) {
+        r.platform.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
+        assertEquals(DeviceSyncPage.Confirm(SyncLink.WIFI, handheld, r.platform.wifi!!), r.sync.page.value)
+        if (direct) r.sync.onButton(NxButton.A) else r.state.onButton(NxButton.A)
+        runCurrent()
+        assertIs<DeviceSyncPage.Syncing>(r.sync.page.value)
+    }
+
     /** A ROM sync that received files, run to Done with the X toggle on; the controller is driven directly. */
     private fun TestScope.receiveRoms(r: Rig) {
         r.platform.roms = true
         r.platform.romResults[2] = listOf("a.gb", " 1 (xfr#1, to-chk=0/1)") to 0   // run 2: the home pull
         r.sync.pick(SyncLink.WIFI); r.sync.onButton(NxButton.X); r.sync.onButton(NxButton.A); runCurrent()
-        r.platform.socket.from(handheld, "HELLO_TRIMUI_SYNC:$handheld:0\u0000v2"); runCurrent()
+        pairWithHandheld(r, direct = true)
         r.platform.socket.from(handheld, SyncWire.READY); advanceTimeBy(5_000); runCurrent()
         assertIs<DeviceSyncPage.Done>(r.sync.page.value)
     }

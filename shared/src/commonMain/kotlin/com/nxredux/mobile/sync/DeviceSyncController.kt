@@ -15,6 +15,7 @@ import com.nxredux.mobile.tryOrNull
 import com.nxredux.mobile.tryQuietly
 import com.nxredux.mobile.ui.nx.NxButton
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
 import kotlin.concurrent.Volatile
 import kotlin.coroutines.CoroutineContext
@@ -77,6 +79,8 @@ class DeviceSyncController(
     /** The X toggle on Ready: ROMs in this run too. Off at every open; only counts while the platform offers ROMs. */
     private var romsToggle = false
     private var job: Job? = null
+    /** Completed by A on the confirm page; set only while that page's run waits for it. */
+    @Volatile private var confirmed: CompletableDeferred<Unit>? = null
     /** The link of the latest run, for a Stop that comes while it is not yet on the Syncing page. */
     private var runLink = SyncLink.CABLE
     /**
@@ -126,6 +130,12 @@ class DeviceSyncController(
             DeviceSyncPage.NoWifi -> if (button == NxButton.B) _page.value = ready(SyncLink.WIFI)
             DeviceSyncPage.WaitingForCable -> if (button == NxButton.B) backToReady(SyncLink.CABLE)
             is DeviceSyncPage.Searching -> if (button == NxButton.B) backToReady(p.link)
+            // B: the run's end sends the peer FAIL, so its confirm page (or its wait for READY) ends too.
+            is DeviceSyncPage.Confirm -> when (button) {
+                NxButton.A -> confirmed?.complete(Unit)
+                NxButton.B -> backToReady(p.link)
+                else -> Unit
+            }
             is DeviceSyncPage.Syncing -> when {
                 p.confirmStop && button == NxButton.A -> stop()
                 // On the live page, so a progress or file line landing in between is kept.
@@ -232,6 +242,7 @@ class DeviceSyncController(
                 if (!peer.filters) return@watchingCable DeviceSyncPage.Failed(link, DeviceSyncText.OLD_FIRMWARE)   // latest firmware only
                 val isServer = SyncRoles.isServer(ownClientOnly = true, peerClientOnly = peer.flags.clientOnly, ownIp = ownIp, peerIp = peer.ip)
                 failTo = peer.ip
+                confirm(me, sock, link, ownIp, peer, roms)?.let { return@watchingCable it }
                 if (isServer) serve(me, sock, link, ownIp, peer, roms, tally)
                 else client(me, sock, link, ownIp, peer, roms, tally) { finished = it }
             } ?: run {
@@ -241,7 +252,7 @@ class DeviceSyncController(
                     DeviceSyncPage.Failed(link, DeviceSyncText.CABLE_DISCONNECTED)
                 }
             }
-            if (end !is DeviceSyncPage.Failed || end.reason == DeviceSyncText.PEER_FAILED) failTo = null
+            if (end !is DeviceSyncPage.Failed || end.reason == DeviceSyncText.PEER_FAILED || end.reason == DeviceSyncText.PEER_CANCELLED) failTo = null
             show(me, end)
         } catch (e: CancellationException) {
             throw e   // first: a cancelled step must never read as a lost network
@@ -313,6 +324,39 @@ class DeviceSyncController(
         if (message is SyncMessage.Hello && message.ip == peer.ip && d.sourceIp == peer.ip) sock.send(SyncWire.ack(ownIp, roms), peer.ip)
     }
 
+    /**
+     * The confirm page until this side's A: null then, or the page to end on when the peer sent FAIL first. No time limit,
+     * since the user may first walk over to read the other screen. Meanwhile the peer's HELLOs are answered again, and
+     * its READYs dropped: a server repeats READY each second, so the client meets the next one after A.
+     */
+    private suspend fun confirm(me: Job, sock: SyncSocket, link: SyncLink, ownIp: String, peer: Peer, roms: Boolean): DeviceSyncPage? {
+        val pressed = CompletableDeferred<Unit>()
+        confirmed = pressed
+        try {
+            show(me, DeviceSyncPage.Confirm(link, peer.ip, ownIp))
+            log("confirm page for ${peer.ip}")
+            return coroutineScope {
+                val cancelled = async { peerCancelled(sock, ownIp, peer, roms) }
+                select {
+                    pressed.onAwait { cancelled.cancel(); log("confirmed"); null }
+                    cancelled.onAwait { log("FAIL from ${peer.ip} while confirming"); DeviceSyncPage.Failed(link, DeviceSyncText.PEER_CANCELLED) }
+                }
+            }
+        } finally {
+            confirmed = null
+        }
+    }
+
+    /** Returns once the paired [peer] sends FAIL; answers its HELLOs meanwhile ([reAck]). */
+    private suspend fun peerCancelled(sock: SyncSocket, ownIp: String, peer: Peer, roms: Boolean) {
+        while (true) {
+            val d = sock.receive(POLL_MS) ?: continue
+            val m = SyncWire.parse(d.text)
+            if (d.sourceIp == peer.ip && m == SyncMessage.Fail) return
+            reAck(sock, d, m, ownIp, peer, roms)
+        }
+    }
+
     private sealed interface Discovery
     private class Peer(val ip: String, val flags: SyncFlags, val filters: Boolean) : Discovery
     private enum class Unpaired : Discovery { MISSED_ACK, NONE }
@@ -373,6 +417,7 @@ class DeviceSyncController(
             val d = sock.receive(POLL_MS) ?: continue
             val m = SyncWire.parse(d.text)
             if (d.sourceIp == peer.ip && m == SyncMessage.Ready) break
+            if (d.sourceIp == peer.ip && m == SyncMessage.Fail) { log("FAIL from ${peer.ip} before READY"); return DeviceSyncPage.Failed(link, DeviceSyncText.PEER_FAILED) }
             reAck(sock, d, m, ownIp, peer, roms)
         }
         // ROMs run when either side asked and this phone can; asked but unable, steps 1–4 run and Done says so.
@@ -1029,7 +1074,11 @@ class DeviceSyncController(
         val ART_EXTENSIONS = setOf("png", "jpg", "jpeg")
         const val INTERVAL_MS = 1_000L
         const val POLL_MS = 200L
-        const val READY_WAIT_MS = 30_000L
+        /**
+         * The client's wait for READY after its own A. Long, since a new server sends READY only once its user pressed
+         * A too; the page offers Stop meanwhile.
+         */
+        const val READY_WAIT_MS = 3_600_000L
         /** READYs in a row from one device while searching that mean its ACK was lost (one a second: about 5 s). */
         const val MISSED_ACK_READIES = 5
         /**
