@@ -165,7 +165,8 @@ import kotlin.concurrent.thread
 /** The process-wide log tag of the game screen and its controllers. */
 internal const val TAG_LOG = "NXAPP"
 
-internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost, FrontendHost, DualScreenHost, InGameMenuHost {
+internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost, FrontendHost, DualScreenHost, InGameMenuHost,
+    Res3dHost {
 
     companion object {
         /** The frontend rows a pad skin leaves out ([menuLocked]): it places the screens itself. */
@@ -406,9 +407,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     // ---- Nintendo DS screens (NdsLayout regions) ----
     override val ndsRegions: List<NdsRegion> get() = renderer.ndsRegions
     override val secondNdsRegions: List<NdsRegion> get() = renderer.secondNdsRegions
-    internal var ndsRenderMode: String? = null              // melonds_render_mode this game started with (the notice's)
+    override var ndsRenderMode: String? = null              // melonds_render_mode this game started with (the notice's)
         internal set
-    internal var ndsFellBack = false                        // OpenGL was asked for, the core draws in software ([NdsRenderer.showFallbackNotice])
+    override var ndsFellBack = false                        // OpenGL was asked for, the core draws in software ([NdsRenderer.showFallbackNotice])
         internal set
 
     // ---- DS / 3DS 3D resolution (Nds3dResolution, N3ds3dResolution): melonDS's GL scale, Azahar's factor follow the layout ----
@@ -1720,7 +1721,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun placeMenu() = menu.placeMenu()
     internal fun relayoutPad() = padLayout.applyLayout(resources.configuration.orientation)
     override fun withMenu(block: (InGameMenuModel) -> Unit) { menu.menuModel?.let { block(it); menu.menuState.value = it.state } }
-    internal fun withMenuIf(pred: (InGameMenuModel) -> Boolean, block: (InGameMenuModel) -> Unit) { menu.menuModel?.takeIf(pred)?.let { block(it); menu.menuState.value = it.state } }
+    override fun withMenuIf(pred: (InGameMenuModel) -> Boolean, block: (InGameMenuModel) -> Unit) { menu.menuModel?.takeIf(pred)?.let { block(it); menu.menuState.value = it.state } }
 
     override fun publishMenuShaders() {
         withMenu { it.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams) }
