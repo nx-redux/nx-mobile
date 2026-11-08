@@ -380,7 +380,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private set
 
     override fun onInputDevicesChanged() {
-        padLayout.applyLayout(resources.configuration.orientation)
+        relayoutPad()
         if (menuOpen) menu.menuModel?.let(menu::publishPlayers)
         dual.refreshDualPanel()
     }
@@ -535,7 +535,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override var shortcutOverrides: ShortcutOverrides = ShortcutOverrides.NONE
         private set
     // Settings → Controls → Game rumble, read once per game: each port's rumble on its own pad; port 0 falls back to the phone.
-    private val gameRumble by lazy { AndroidAppSettings(this).gameRumble }
+    private val gameRumble by lazy { settings.gameRumble }
+    private val intentTitle: String? get() = intent.getStringExtra(EXTRA_TITLE)
+    private val intentTag: String? get() = intent.getStringExtra(EXTRA_TAG)
+    // One instance per game: the game process's prefs refresh in place (Prefs.refreshGame), so reads stay current.
+    private val settings by lazy { AndroidAppSettings(this) }
     /** Each port's rumble (index = port); empty until [startEmulator] builds it, so every use must tolerate empty. */
     override var rumbles: Array<RumbleMotor> = emptyArray()
         private set
@@ -573,7 +577,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun dropPadProfile() { padProfileCache = null; padProfileRevision.value++; input.gcClearTriggers() }
     /** The on-screen pad's profile for this game's system (its kind, face letters, hidden buttons); the intent's tag, for onCreate's layout. */
     override fun padProfile(): PadProfile =
-        padProfileCache ?: PadProfile.forTag(intent.getStringExtra(EXTRA_TAG) ?: gameTag, segaPad, n3dsNew, wiiPad, gameCube = wiiGameCube).also { padProfileCache = it }
+        padProfileCache ?: PadProfile.forTag(layoutTag(), segaPad, n3dsNew, wiiPad, gameCube = wiiGameCube).also { padProfileCache = it }
 
     // ---- cheats ----
     override var cheatSet: CheatSet = CheatSet.EMPTY   // resolved on IO after start; toggles live here until Save Changes
@@ -654,7 +658,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         // The game's own Recents entry (launcher mode) carries its title; sharing the menu's task, the entry stays the app's.
         if (isTaskRoot) {
-            val recentsLabel = intent.getStringExtra(EXTRA_TITLE) ?: "Game"
+            val recentsLabel = intentTitle ?: "Game"
             if (Build.VERSION.SDK_INT >= 33) setTaskDescription(ActivityManager.TaskDescription.Builder().setLabel(recentsLabel).build())
             else @Suppress("DEPRECATION") setTaskDescription(ActivityManager.TaskDescription(recentsLabel))
         }
@@ -687,7 +691,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Half-folded from the menu: the first layout already places a skin at the hinge. A re-creation (rotation, process
         // kill) leaves the launch's posture out: it may be long gone.
         padLayout.seedPosture(if (savedInstanceState == null) postureSeedFrom(intent.extras) else null)
-        padLayout.applyLayout(resources.configuration.orientation)
+        relayoutPad()
         padLayout.collectPosture()
         // Back as a gesture or a key on Android 16+ (targetSdk 36: predictive back, KEYCODE_BACK does not reach
         // onKeyDown): what the key's press did there, the in-game menu toggles (B inside it). Before 16 the gesture and
@@ -720,15 +724,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // From the claim to the final release: the menu reads this as "a game screen is alive" (playing, suspended, closing).
         liveGameStore.write(LiveGame(
             Process.myPid(), launchId, intent.getStringExtra(EXTRA_GAME_PATH), intent.getStringExtra(EXTRA_CORE_ID) ?: "",
-            intent.getStringExtra(EXTRA_TAG) ?: "UNKNOWN", resumeSlot, netplay != null,
+            intentTag ?: "UNKNOWN", resumeSlot, netplay != null,
         ))
         launchRecords.keepSwitcherReturnFor(launchId)   // a switcher mark of another launch is not this game's to end on
-        kidsReportsInput = AndroidAppSettings(this).kidsEnabled
+        kidsReportsInput = settings.kidsEnabled
         lifecycleScope.launch {
             // Kids Mode Locked (a recreation from Recents after Android killed this process, a launch that raced the
             // lock): the game never starts, and its screen goes.
             if (kidsLockedHere()) {
-                NxLog.i(TAG_LOG, "Kids Mode is locked: not starting ${intent.getStringExtra(EXTRA_TITLE)}")
+                NxLog.i(TAG_LOG, "Kids Mode is locked: not starting $intentTitle")
                 finish()
                 return@launch
             }
@@ -765,7 +769,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     private fun onSessionHandedOff() {
         if (isDestroyed) return
-        NxLog.i(TAG_LOG, "another game takes over: quitting ${intent.getStringExtra(EXTRA_TITLE)}")
+        NxLog.i(TAG_LOG, "another game takes over: quitting $intentTitle")
         quitWithAutoState(chosen = false)
     }
 
@@ -774,11 +778,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * start) says Locked, and the main process does not hold Parent mode (asked only then; no answer counts as none).
      */
     private suspend fun kidsLockedHere(): Boolean {
-        val s = AndroidAppSettings(this)
-        if (!s.kidsEnabled) return false
+        if (!settings.kidsEnabled) return false
         val app = applicationContext
         return withContext(Dispatchers.IO) {
-            kidsGameBlocked(true, AndroidKidsPlatform.localNow(), KidsSchedule.decode(s.kidsSchedule), s.kidsUnlockUntil) {
+            kidsGameBlocked(true, AndroidKidsPlatform.localNow(), KidsSchedule.decode(settings.kidsSchedule), settings.kidsUnlockUntil) {
                 runCatching { PrefsProvider.kidsParent(app) }.onFailure { NxLog.w(TAG_LOG, "Kids Mode: no answer on Parent mode", it) }.getOrDefault(false)
             }
         }
@@ -799,7 +802,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     private fun onKidsLock() {
         if (isDestroyed) return
-        NxLog.i(TAG_LOG, "Kids Mode lock: quitting ${intent.getStringExtra(EXTRA_TITLE)} without its auto state")
+        NxLog.i(TAG_LOG, "Kids Mode lock: quitting $intentTitle without its auto state")
         quitWithAutoState(chosen = false, autoState = false)
     }
 
@@ -830,8 +833,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         super.onResume()
         // The core runs again only with the menu closed (closeMenu resumes it then); a quit never does. Focus held
         // elsewhere: focusResume does, once this window is the top one again.
-        if (!menuOpen && !focusPaused && !quitting) rumbles.forEach { it.resume() }
-        if (!menuOpen && !focusPaused) netplayGame?.resume()   // netplay: input flows again; with the menu open it stays paused until Continue
+        if (!corePaused()) {
+            if (!quitting) rumbles.forEach { it.resume() }
+            netplayGame?.resume()   // netplay: input flows again; with the menu open it stays paused until Continue
+        }
         syncMotionSensors(foreground = true)
         // The permission may have been granted or revoked in Android's settings meanwhile: live or noise again.
         mic?.setGranted(micAccess.granted())
@@ -842,32 +847,47 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** API 29+: multi-resume keeps this activity resumed while another app has the focus; only the top one is told. */
     override fun onTopResumedActivityChanged(isTopResumedActivity: Boolean) {
         super.onTopResumedActivityChanged(isTopResumedActivity)
-        if (isTopResumedActivity) focusResume() else if (AndroidAppSettings(this).pauseWhenUnfocused) focusPause()
+        if (isTopResumedActivity) focusResume() else if (settings.pauseWhenUnfocused) focusPause()
     }
 
     /** The game holds as under the menu (see openMenu); an open menu has already paused it. */
     private fun focusPause() {
         if (focusPaused || quitting) return
         focusPaused = true
+        syncKeepScreenOn()
         if (menuOpen) return
         input.releaseAllGameInput()
-        netplayGame?.takeIf { it.live }?.pause() ?: run { retroView?.frameSpeed = 0 }
-        retroView?.audioEnabled = false
-        rumbles.forEach { it.pause() }
-        pushMicSource()
+        holdCore()
     }
 
     /** Focused again: the game plays on, unless the menu opened meanwhile (closeMenu resumes it then). */
     private fun focusResume() {
         if (!focusPaused) return
         focusPaused = false
+        syncKeepScreenOn()
         if (menuOpen || quitting || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        releaseCore()
+    }
+
+    /**
+     * Stops the core for the menu or a focus pause. Netplay: native runs a session at speed 1 whatever frameSpeed says; a
+     * local pause stops this device's input instead. The core stops with its rumble latched: still while held, back on release.
+     */
+    private fun holdCore() {
+        netplayGame?.takeIf { it.live }?.pause() ?: run { retroView?.frameSpeed = 0 }
+        retroView?.audioEnabled = false
+        rumbles.forEach { it.pause() }
+        pushMicSource()
+    }
+
+    /** Plays the core on; a failed netplay start keeps the game paused behind its dialog. */
+    private fun releaseCore() {
         netplayGame?.takeIf { it.live }?.resume()
         if (!netplayStartFailed) {
             retroView?.frameSpeed = 1
             retroView?.audioEnabled = true
         }
-        rumbles.forEach { it.resume() }
+        if (!quitting) rumbles.forEach { it.resume() }
         renderer.onCoreResumed()
         pushMicSource()
     }
@@ -876,11 +896,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var testAwake = false
 
     /**
-     * The screen stays on while the game runs (cutscenes and attract screens get no input), not under the in-game menu:
-     * a paused game sleeps on Android's timeout. A live netplay session runs on under the menu, so it holds the screen too.
+     * The screen stays on while the game runs (cutscenes and attract screens get no input), not while it is held (the
+     * in-game menu, a focus pause): a paused game sleeps on Android's timeout. A live netplay session runs on while held,
+     * so it holds the screen too.
      */
     private fun syncKeepScreenOn() {
-        if (testAwake || !menuOpen || netplayGame?.live == true) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (testAwake || !corePaused() || netplayGame?.live == true) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
@@ -888,11 +909,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun pauseForMenu() {
         syncKeepScreenOn()
         syncMotionSensors()   // no motion while paused
-        // netplay: native runs a session at speed 1 whatever frameSpeed says; a local pause stops this device's input instead.
-        netplayGame?.takeIf { it.live }?.pause() ?: run { retroView?.frameSpeed = 0 }
-        retroView?.audioEnabled = false
-        rumbles.forEach { it.pause() }   // the core stops with its rumble latched: still while paused, back on closeMenu
-        pushMicSource()   // the phone mic closes under the menu
+        holdCore()   // the phone mic closes under the menu too
         lifecycleScope.launch(Dispatchers.IO) { writeBatterySave(notify = true) }
     }
 
@@ -903,15 +920,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         closeSkinEdit()
         syncKeepScreenOn()
         if (focusPaused) { syncMotionSensors(); pushMicSource(); return }   // another app has the focus: focusResume plays on later
-        netplayGame?.takeIf { it.live }?.resume()   // netplay: input goes out again (see openMenu)
-        if (!netplayStartFailed) {   // netplay: a failed start keeps the game paused behind its dialog
-            retroView?.frameSpeed = 1
-            retroView?.audioEnabled = true
-        }
-        if (!quitting) rumbles.forEach { it.resume() }
         syncMotionSensors()
-        renderer.onCoreResumed()
-        pushMicSource()
+        releaseCore()
     }
 
     override fun corePaused(): Boolean = menuOpen || focusPaused
@@ -926,9 +936,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         nds3dCurrent = current
         nds3dDisplayMax = displayMax
         // An open menu's Max Scale / Scale lists follow a rotation or fold.
-        menu.menuModel?.takeIf { it.displayMax3d != displayMax }?.let { it.displayMax3d = displayMax; menu.menuState.value = it.state }
+        withMenuIf({ it.displayMax3d != displayMax }) { it.displayMax3d = displayMax }
         // An open menu's DS / 3DS layout row follows a rotation or a controller hiding the pad.
-        menu.menuModel?.takeIf { it.ndsView != ndsView }?.let { it.ndsView = ndsView; menu.menuState.value = it.state }
+        withMenuIf({ it.ndsView != ndsView }) { it.ndsView = ndsView }
         offerNds3d(sizeChange)
     }
 
@@ -974,7 +984,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         NxLog.i(TAG_LOG, "$gameTag 3D resolution ${value}x (${Nds3dMode.parse(frontendValues[console.modeKey]).value})")
         applyOptions(listOf(Variable(console.coreKey, console.coreValue(value))))
         if (console == Res3dConsole.N3DS) renderer.onN3dsFactorSent(value)
-        menu.menuModel?.let { publishNds3d(it); menu.menuState.value = it.state }
+        withMenu { publishNds3d(it) }
     }
 
     /**
@@ -1270,7 +1280,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * keeps its last minute ([startGameTimeTicker]).
      */
     private fun onCoreHung(stalledMillis: Long) {
-        val title = intent.getStringExtra(EXTRA_TITLE) ?: "The game"
+        val title = intentTitle ?: "The game"
         NxLog.e("GameActivity", "the core has been stuck in one frame for ${stalledMillis / 1000} s: closing $title")
         runCatching { CoreHangNotice.record(applicationContext, title) }
         runCatching { finish() }.onFailure { NxLog.w("GameActivity", "could not finish the hung game", it) }
@@ -1296,8 +1306,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (intent.hasExtra(EXTRA_NETPLAY_ROLE) && netplay == null && !netplayLocal) return fail(NetplayText.FAILED, NetplayText.FAILED)
         if (netplayRestored) return fail(NetplayText.ENDED, NetplayText.FAILED)
         val np = netplay
-        val tag = intent.getStringExtra(EXTRA_TAG) ?: "UNKNOWN"
-        val title = intent.getStringExtra(EXTRA_TITLE) ?: "game"
+        val tag = intentTag ?: "UNKNOWN"
+        val title = intentTitle ?: "game"
         val coreId = intent.getStringExtra(EXTRA_CORE_ID) ?: coreFile.removePrefix("lib").substringBefore("_libretro")
         // The tag's own descriptor: a tag view (SGB) carries its own extensions and defaults; the id alone would give plain mgba.
         val descriptor = CoreRegistry.forTag(tag)?.takeIf { it.id == coreId } ?: CoreRegistry.forId(coreId)
@@ -1307,7 +1317,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         input.slots = if (players > 1 && np == null) PlayerSlots(players) else null
         // onCreate laid out before the slots existed: a pad benched in an earlier game counted there. Lay out again (only
         // when a benched pad is attached: one player, slots null, never re-lays out here).
-        if (padLayout.layoutControllerNames() != padLayout.controllerNames()) padLayout.applyLayout(resources.configuration.orientation)
+        if (padLayout.layoutControllerNames() != padLayout.controllerNames()) relayoutPad()
         // Kept for one player: a key held through the load keeps its recorded send.
         if (input.inputs.count != players) input.inputs = PortInputs(players)
         rumbles = Array(players) { RumbleMotor(this, gameRumble, phoneFallback = it == 0) }
@@ -1331,7 +1341,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // The battery-save, clock and state names follow the handheld's save settings. The save setup waits
         // for the unpack (after the inner-file check below), since Use extracted file name names them after the
         // archive's inner file; the config and marker names never depend on the settings.
-        paths = NxPaths(tag, coreId, romFileName, AndroidAppSettings(this).saveNaming)
+        paths = NxPaths(tag, coreId, romFileName, settings.saveNaming)
         showResumeCover()   // the screenshot's name depends on the tag and ROM name only: up long before the core loads
         val home = AndroidHomeLocator(this).current()   // a SAF tree or a file ref (the media home without access): BiosImport picks the tree
         // netplay: a session on a copy never touches the real saves: its session folder is its own.
@@ -1390,8 +1400,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 DolphinCheats.combine(builtIn, resolvedSet)
             } else resolvedSet
             cheatSet = savedCheats?.let(combined::withSaved) ?: combined
-            menu.menuModel?.let { it.setCheats(cheatSet.entries, cheatsFolder, cheatSet.expected); menu.menuState.value = it.state }
-            dual.refreshDualPanel()
+            publishCheats()
         } }
         cheatsLoad = if (np != null) null else loadCheats()   // netplay: no cheats (a saved nx_cheats set included)
         // netplay link: the cheats come once the session has ended and the game is a local one.
@@ -1425,10 +1434,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         canMic = descriptor?.microphone == true
         mic = if (canMic) MicControl(micAccess.usable).apply {
             setGranted(micAccess.granted())
-            setAsked(AndroidAppSettings(this@GameActivity).micAsked)
+            setAsked(settings.micAsked)
             setSession(netplay = np != null)
         } else null
-        shortcutBase = Shortcuts.decodeBase(AndroidAppSettings(this).shortcuts)
+        shortcutBase = Shortcuts.decodeBase(settings.shortcuts)
         shortcutClaimed = ConsoleHotkeys.claimed(tag)
         applyShortcuts(Shortcuts.fromConfig(resolved.values))
         speed.setSession(netplay = np != null)
@@ -1596,7 +1605,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             if (resolved != n3dsNew) {
                 n3dsNew = resolved
                 dropPadProfile()
-                padLayout.applyLayout(resources.configuration.orientation)   // the pad was composed without them in onCreate
+                relayoutPad()   // the pad was composed without them in onCreate
             }
         }
         // Wii Controller and Motion Controls (Console Settings): Auto reads the disc ID and looks it up in GameTDB's table.
@@ -1607,9 +1616,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (wiiDisc?.gameCube == true) {
             wiiGameCube = true
             dropPadProfile()   // the GameCube pad, not the plain one
-            padLayout.applyLayout(resources.configuration.orientation)   // the pad was composed from the intent tag in onCreate
+            relayoutPad()   // the pad was composed from the intent tag in onCreate
             NxLog.i(TAG_LOG, "GameCube disc ${wiiDisc.id} under the Wii tag: no Wii controls")
-            menu.menuModel?.let { refreshWiiMenu(it); menu.menuState.value = it.state }   // a menu opened during the read drops its Wii rows
+            withMenu { refreshWiiMenu(it) }   // a menu opened during the read drops its Wii rows
         }
         if (WiiOptions.appliesTo(tag) && !wiiGameCube) {
             val id = wiiDisc?.id
@@ -1628,13 +1637,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             LibretroDroid.setSensorEnabled(0, wiiMotionOn)
             NxLog.i(TAG_LOG, "Wii disc $id: $wiiControls -> $pad, motion $wiiMotionOn")
             dropPadProfile()
-            padLayout.applyLayout(resources.configuration.orientation)
+            relayoutPad()
             // A menu opened during the read: its Motion Controls row (left out until the sensors were known) and its Wii rows.
-            menu.menuModel?.let { refreshWiiMenu(it); menu.menuState.value = it.state }
+            withMenu { refreshWiiMenu(it) }
         }
         padMap = if (isDc) PadMap.IDENTITY else PadMap.forTag(tag, segaPad)
         // Only 3-button draws differently from the six the pad was composed with in onCreate: recompose it.
-        if (segaPad == SegaPad.THREE) padLayout.applyLayout(resources.configuration.orientation)
+        if (segaPad == SegaPad.THREE) relayoutPad()
         val contentExtension = Names.extensionOf(inner?.name ?: romFileName)
         // A missing required BIOS: say which file goes where instead of letting the core fail silently.
         val present = withContext(Dispatchers.IO) { systemDir.list()?.toSet() ?: emptySet() }
@@ -1675,7 +1684,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 // Display → Graphics API: the core options for the API and whether the runner offers Vulkan.
                 // Vulkan that could not start here before, or this is the relaunch after it did: OpenGL ES (VulkanFallback).
                 val vulkanFailed = intent.getBooleanExtra(EXTRA_FORCE_GLES, false) ||
-                    descriptor?.id in AndroidAppSettings(this@GameActivity).vulkanFailedCores
+                    descriptor?.id in settings.vulkanFailedCores
                 val graphics = GraphicsApiOptions.resolve(frontendValues[GraphicsApiOptions.KEY], descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, vulkanFailed)
                 launchedOnVulkan = graphics.preferVulkan
                 launchEnv = graphics.env
@@ -1843,7 +1852,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         lifecycleScope.launch {
             shaderExtraction.join()
             renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(shaderRoots) }
-            menu.menuModel?.let { it.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams); menu.menuState.value = it.state }
+            publishMenuShaders()
         }
         lifecycleScope.launch {
             view.getGLRetroEvents().first { it is GLRetroView.GLRetroEvents.FrameRendered }
@@ -1851,7 +1860,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             if (BuildConfig.DEBUG) NxTestResults.write(this@GameActivity, "game", "state" to "running", "tag" to gameTag, "core" to gameCoreId)
             intent.getStringExtra(EXTRA_GAME_PATH)?.let { path ->
                 val tag = gameTag
-                val name = intent.getStringExtra(EXTRA_TITLE) ?: path.substringAfterLast('/')
+                val name = intentTitle ?: path.substringAfterLast('/')
                 lifecycleScope.launch {
                     val rec = withContext(Dispatchers.IO) { GameTimeService.recorder(this@GameActivity) }
                     rec.start(path, tag, name)
@@ -1906,7 +1915,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     view.getGLRetroEvents().filter { it is GLRetroView.GLRetroEvents.FrameRendered }.take(30).collect {}
                     if (NdsRenderer.showFallbackNotice(ndsRenderMode, view.isHardwareRendered())) {
                         ndsFellBack = true
-                        menu.menuModel?.let { publishNds3d(it); menu.menuState.value = it.state }
+                        withMenu { publishNds3d(it) }
                         toast("GPU renderer unavailable — using software")
                     }
                 }
@@ -2092,7 +2101,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun relaunchOnGles() {
         if (isFinishing || relaunching || failShown) return
         relaunching = true
-        AndroidAppSettings(this).recordVulkanFailure(gameCoreId)
+        settings.recordVulkanFailure(gameCoreId)
         NxLog.w(TAG_LOG, "Vulkan could not start for $gameCoreId: starting again on OpenGL ES")
         android.widget.Toast.makeText(applicationContext, VulkanFallback.NOTICE, android.widget.Toast.LENGTH_LONG).show()
         intent = Intent(intent).putExtra(EXTRA_FORCE_GLES, true)
@@ -2282,7 +2291,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /** On a DS or 3DS game where SELECT + Left / Right changes the layout: the tip saying so, until hidden from its button ([LayoutTip]). */
     private fun offerLayoutTip() {
-        val settings = AndroidAppSettings(this)
         if (!LayoutTip.due((isN3ds || isNds) && netplayNow == null, padLayout.skinShown, input.skinLayouts, settings.layoutTipHidden)) return
         // up until closed: Close, or its button to hide it for good
         input.showNotice(LayoutTip.text(ds = isNds), com.nxredux.mobile.ui.nx.NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) { settings.layoutTipHidden = true }
@@ -2325,7 +2333,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (split == null) this else filterNot { it.key in split } + split.map { (k, v) -> Variable(k, v) }
 
     /** The tag the layout goes by: the intent's until startEmulator sets [gameTag] (onCreate lays out before it). */
-    override fun layoutTag(): String = intent.getStringExtra(EXTRA_TAG) ?: gameTag
+    override fun layoutTag(): String = intentTag ?: gameTag
 
     // ------------------------------------------------------------------ frontend (display) settings
 
@@ -2386,7 +2394,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // stopped here, or it would keep cycling the row.
         findViewById<FrameLayout>(R.id.root).post {
             if (menuOpen) menu.menuRouter.releaseAll()
-            padLayout.applyLayout(resources.configuration.orientation)
+            relayoutPad()
         }
     }
 
@@ -2406,7 +2414,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Posted, as for the Sega pad (applySegaPad): the press that made the change is still being dispatched.
         findViewById<FrameLayout>(R.id.root).post {
             if (menuOpen) menu.menuRouter.releaseAll()
-            padLayout.applyLayout(resources.configuration.orientation)
+            relayoutPad()
         }
     }
 
@@ -2442,7 +2450,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Posted, as for the Sega pad (applySegaPad): the press that made the change is still being dispatched.
         findViewById<FrameLayout>(R.id.root).post {
             if (menuOpen) menu.menuRouter.releaseAll()
-            padLayout.applyLayout(resources.configuration.orientation)
+            relayoutPad()
         }
     }
 
@@ -2720,7 +2728,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val builtIn = readDolphinBuiltIn() ?: return
         dolphinPlayerCheats = null
         cheatSet = DolphinCheats.refresh(builtIn, player, cheatSet.enabledKeys(), dolphinSavedCheats)
-        menu.menuModel?.let { it.setCheats(cheatSet.entries, cheatsFolder, cheatSet.expected); menu.menuState.value = it.state }
+        publishCheats()
+    }
+
+    private fun publishCheats() {
+        withMenu { it.setCheats(cheatSet.entries, cheatsFolder, cheatSet.expected) }
         dual.refreshDualPanel()
     }
 
@@ -3062,7 +3074,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     // The ended session holds no frames: an open menu pauses the game as for any other launch.
                     if (menuOpen || focusPaused) retroView?.frameSpeed = 0
                     netplayEnded = true
-                    menu.menuModel?.let { it.endNetplay(local = false); menu.menuState.value = it.state }
+                    withMenu { it.endNetplay(local = false) }
                 }
             }
             is NetplayNotice.Failed -> {
@@ -3101,11 +3113,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (menuOpen || focusPaused) retroView?.frameSpeed = 0
         netplayEnded = true
         playLocally()
-        menu.menuModel?.let {
+        withMenu {
             it.cheatsAvailable = cheatsSupported
             lastSlotCache?.let { slot -> it.showSlot(slot - 1) }
             it.endNetplay(local = true)
-            menu.menuState.value = it.state
         }
     }
 
@@ -3185,14 +3196,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * unpacked [inner] ROM is what is hashed, and its name refines the console.
      */
     private fun prepareAchievements(tag: String, romFileName: String, content: ContentRef, inner: File?) {
-        val settings = AndroidAppSettings(this)
         if (!settings.raEnabled || settings.raToken == null) return
         val consoleId = RaConsoles.consoleId(tag, inner?.name ?: romFileName) ?: return
         val controller = AchievementsService.controller(this, settings, AndroidLibraryIndexStore(this))
         val hasher = AndroidRaHasher(this, AndroidRomsSources.of(this))
         val folder = intent.getStringExtra(EXTRA_FOLDER_URI) ?: ""
         val pointer = intent.getStringExtra(EXTRA_GAME_PATH)?.let(GamePath::split)?.let { ref ->
-            RaGamePointer(tag, ref.sourceId, ref.relativeDir, ref.fileName, intent.getStringExtra(EXTRA_TITLE) ?: ref.fileName)
+            RaGamePointer(tag, ref.sourceId, ref.relativeDir, ref.fileName, intentTitle ?: ref.fileName)
         }
         // The launch's place in hashes.json; always completed (null on a failure) so the bridge's await never hangs.
         val launch = CompletableDeferred<RaLaunchFingerprint?>()
@@ -3228,11 +3238,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun applyAchievements(model: InGameMenuModel) {
         val b = achievements?.takeIf { it.available } ?: return model.setAchievementsAvailable(false)
         val summary = b.summary()
-        model.setAchievements(if (summary != null) b.list() else null, summary, AndroidAppSettings(this).raSortOrder, b.muted, b.badges)
+        model.setAchievements(if (summary != null) b.list() else null, summary, settings.raSortOrder, b.muted, b.badges)
     }
 
     private fun refreshMenuAchievements() {
-        menu.menuModel?.let { applyAchievements(it); menu.menuState.value = it.state }
+        withMenu { applyAchievements(it) }
         dual.refreshDualPanel()
     }
 
@@ -3246,7 +3256,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     private fun onAchievementEvent(e: RaEvent) {
         val b = achievements ?: return
-        val settings = AndroidAppSettings(this)
         val now = SystemClock.elapsedRealtime()
         val toastMs = settings.raNotificationSeconds * 1000L
         fun badge(a: RaAchievement) = RaBadgeFolders.fileName(a.badge, locked = false)?.let(b.badges::get)
@@ -3363,7 +3372,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * ([CoreConfigStore.migrateFceummTurbo]). Kept in its own prefs file, written once.
      */
     private fun fceummTurboSince(): Long {
-        val prefs = getSharedPreferences("nx-migrations", MODE_PRIVATE)
+        val prefs = Prefs.open(this, "nx-migrations")
         prefs.getLong(KEY_FCEUMM_TURBO_SINCE, 0L).takeIf { it > 0L }?.let { return it }
         return System.currentTimeMillis().also { prefs.edit().putLong(KEY_FCEUMM_TURBO_SINCE, it).commit() }
     }
@@ -3501,7 +3510,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun setMic(on: Boolean) {
         val m = mic ?: return
         if (m.setOn(on)) {
-            AndroidAppSettings(this).micAsked = true
+            settings.micAsked = true
             m.setAsked(true)
             micPrompt.launch(android.Manifest.permission.RECORD_AUDIO)   // the prompt only: never the settings page
         }
@@ -3574,7 +3583,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun showSkinEdit(edit: PadLayoutController.SkinEdit, frame: Bitmap?) {
         if (!menuOpen || quitting || skinEditView != null) { frame?.recycle(); return }
         val root = findViewById<FrameLayout>(R.id.root)
-        val settings = AndroidAppSettings(this)
         val state = SkinLayoutEdit.state(settings, edit.consoleId, edit.placement, edit.w, edit.h)
         val colors = nxColorsFor(settings.accent, settings.secondaryAccent)
         val title = CoreRegistry.consoles.firstOrNull { it.id == edit.consoleId }?.displayName ?: "Adjust buttons"
@@ -3595,9 +3603,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                         SkinLayoutEditor(
                             state, picture, parts, edit.bare, backdrop, title,
                             onSave = { tweaks ->
-                                SkinLayoutEdit.save(AndroidAppSettings(this@GameActivity), edit.consoleId, edit.placement.spec.id, tweaks)
+                                SkinLayoutEdit.save(settings, edit.consoleId, edit.placement.spec.id, tweaks)
                                 closeSkinEdit()
-                                padLayout.applyLayout(resources.configuration.orientation)
+                                relayoutPad()
                             },
                             onClose = ::closeSkinEdit,
                             bareAlpha = alpha,
@@ -3642,16 +3650,17 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun handleMenuEffect(effect: MenuEffect) = menu.handle(effect)
     override fun publishMenuSecondScreen() { menu.menuModel?.let(menu::publishSecondScreen) }
     override fun placeMenu() = menu.placeMenu()
+    private fun relayoutPad() = padLayout.applyLayout(resources.configuration.orientation)
     override fun withMenu(block: (InGameMenuModel) -> Unit) { menu.menuModel?.let { block(it); menu.menuState.value = it.state } }
+    private fun withMenuIf(pred: (InGameMenuModel) -> Boolean, block: (InGameMenuModel) -> Unit) { menu.menuModel?.takeIf(pred)?.let { block(it); menu.menuState.value = it.state } }
 
     override fun publishMenuShaders() {
-        menu.menuModel?.let { it.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams); menu.menuState.value = it.state }
+        withMenu { it.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams) }
     }
 
     override fun publishMenuFrontend() {
-        menu.menuModel?.let {
+        withMenu {
             it.setFrontend(frontendValues, renderer.overlayNames(), menuLocked(), gameTag, overlayAvailable = !renderer.ndsSplit)
-            menu.menuState.value = it.state
         }
     }
     override val gameContainer: FrameLayout get() = findViewById(R.id.gameContainer)

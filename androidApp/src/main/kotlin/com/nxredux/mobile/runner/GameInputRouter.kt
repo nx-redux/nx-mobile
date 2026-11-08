@@ -320,8 +320,6 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private val gcGestures = mapOf(NxButton.L2 to TriggerGesture(), NxButton.R2 to TriggerGesture())
     private val gcStates = mutableMapOf(NxButton.L2 to TriggerGesture.State.OFF, NxButton.R2 to TriggerGesture.State.OFF)
     private val gcHoldTimers = mutableMapOf<NxButton, Job>()
-    /** The GameCube triggers latched at a soft press. */
-    val gcLatched = mutableStateOf(emptySet<NxButton>())
 
     /** An on-screen L or R ([btn]) touch: a tap latches a soft press, holding presses it fully while held. */
     private fun gcTrigger(btn: NxButton, down: Boolean) {
@@ -344,7 +342,6 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private fun gcApply(btn: NxButton, state: TriggerGesture.State) {
         val was = gcStates[btn]
         gcStates[btn] = state
-        gcLatched.value = gcStates.filterValues { it == TriggerGesture.State.SOFT }.keys
         val view = retroView ?: return
         fun level(b: NxButton) = when (gcStates[b]) { TriggerGesture.State.SOFT -> 0.5f; TriggerGesture.State.FULL -> 1f; else -> 0f }
         view.sendTriggers(0, level(NxButton.L2), level(NxButton.R2))
@@ -520,18 +517,26 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private fun routeNdsHat(view: GLRetroView, event: MotionEvent) {
         val x = ndsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_X))
         val y = ndsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_Y), event.getAxisValue(MotionEvent.AXIS_Y))
+        routeHat(view, ndsHatX, ndsHatY, x, y) { b, down -> routeNds(b, down) }
+        ndsHatX = x
+        ndsHatY = y
+    }
+
+    /**
+     * The hat's edges from ([oldX], [oldY]) to ([x], [y]) as direction presses and releases through [route] (true: forward
+     * it); the forwarded ones reach the core as its d-pad.
+     */
+    private fun routeHat(view: GLRetroView, oldX: Int, oldY: Int, x: Int, y: Int, route: (NxButton, Boolean) -> Boolean) {
         var changed = false
         fun edge(old: Int, new: Int, negative: NxButton, positive: NxButton) {
             if (old == new) return
             val released = when (old) { -1 -> negative; 1 -> positive; else -> null }
             val pressed = when (new) { -1 -> negative; 1 -> positive; else -> null }
-            if (released != null && routeNds(released, down = false)) changed = ndsHat.release(released) || changed
-            if (pressed != null && routeNds(pressed, down = true)) changed = ndsHat.press(pressed) || changed
+            if (released != null && route(released, false)) changed = ndsHat.release(released) || changed
+            if (pressed != null && route(pressed, true)) changed = ndsHat.press(pressed) || changed
         }
-        edge(ndsHatX, x, NxButton.LEFT, NxButton.RIGHT)
-        edge(ndsHatY, y, NxButton.UP, NxButton.DOWN)
-        ndsHatX = x
-        ndsHatY = y
+        edge(oldX, x, NxButton.LEFT, NxButton.RIGHT)
+        edge(oldY, y, NxButton.UP, NxButton.DOWN)
         if (changed) view.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, ndsHat.x.toFloat(), ndsHat.y.toFloat(), 0)
     }
 
@@ -620,19 +625,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private fun routeN3dsHat(view: GLRetroView, event: MotionEvent) {
         val x = n3dsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_X))
         val y = n3dsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_Y))
-        var changed = false
-        fun edge(old: Int, new: Int, negative: NxButton, positive: NxButton) {
-            if (old == new) return
-            val released = when (old) { -1 -> negative; 1 -> positive; else -> null }
-            val pressed = when (new) { -1 -> negative; 1 -> positive; else -> null }
-            if (released != null && routeN3ds(released, down = false)) changed = ndsHat.release(released) || changed
-            if (pressed != null && routeN3ds(pressed, down = true)) changed = ndsHat.press(pressed) || changed
-        }
-        edge(n3dsHatX, x, NxButton.LEFT, NxButton.RIGHT)
-        edge(n3dsHatY, y, NxButton.UP, NxButton.DOWN)
+        routeHat(view, n3dsHatX, n3dsHatY, x, y) { b, down -> routeN3ds(b, down) }
         n3dsHatX = x
         n3dsHatY = y
-        if (changed) view.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, ndsHat.x.toFloat(), ndsHat.y.toFloat(), 0)
     }
 
     /**
@@ -642,10 +637,12 @@ internal class GameInputRouter(private val host: GameInputHost) {
      * Dreamcast, whose triggers are analog.
      */
     private fun routeTriggerAxes(event: MotionEvent, port: Int = 0) {
-        val l = maxOf(event.getAxisValue(MotionEvent.AXIS_LTRIGGER), event.getAxisValue(MotionEvent.AXIS_BRAKE))
-        val r = maxOf(event.getAxisValue(MotionEvent.AXIS_RTRIGGER), event.getAxisValue(MotionEvent.AXIS_GAS))
-        for ((button, down) in inputs[port].triggers.onAxes(l, r)) sendAxisTrigger(button, down, port)
+        for ((button, down) in inputs[port].triggers.onAxes(leftTrigger(event), rightTrigger(event))) sendAxisTrigger(button, down, port)
     }
+
+    // Some pads report the triggers as LTRIGGER/RTRIGGER, others as BRAKE/GAS.
+    private fun leftTrigger(event: MotionEvent) = maxOf(event.getAxisValue(MotionEvent.AXIS_LTRIGGER), event.getAxisValue(MotionEvent.AXIS_BRAKE))
+    private fun rightTrigger(event: MotionEvent) = maxOf(event.getAxisValue(MotionEvent.AXIS_RTRIGGER), event.getAxisValue(MotionEvent.AXIS_GAS))
 
     /** An axis trigger's press or release: to the DS hotkeys, the 3DS hotkeys (ZL/ZR, always forwarded) or the core. */
     private fun sendAxisTrigger(button: NxButton, down: Boolean, port: Int) {
@@ -882,9 +879,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
             val inp = inputs[port]
             // Dreamcast triggers are analog (flycast reads RETRO_DEVICE_INDEX_ANALOG_BUTTON).
             if (isDc || gcPad) {   // GameCube triggers too: Dolphin reads them as analog buttons
-                val l = maxOf(event.getAxisValue(MotionEvent.AXIS_LTRIGGER), event.getAxisValue(MotionEvent.AXIS_BRAKE))
-                val r = maxOf(event.getAxisValue(MotionEvent.AXIS_RTRIGGER), event.getAxisValue(MotionEvent.AXIS_GAS))
-                inp.triggers.analog(l, r).let { (al, ar) -> view.sendTriggers(port, al, ar) }   // a shortcut's pull reads at rest
+                inp.triggers.analog(leftTrigger(event), rightTrigger(event)).let { (al, ar) -> view.sendTriggers(port, al, ar) }   // a shortcut's pull reads at rest
             } else {
                 routeTriggerAxes(event, port)   // a digital L2/R2 from a pad that reports its triggers only as axes
             }
@@ -1034,15 +1029,16 @@ internal class GameInputRouter(private val host: GameInputHost) {
         // ([com.nxredux.mobile.shortcuts.EffectiveShortcuts.blocked]), before the DS / 3DS routing and the core.
         if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onDown(keyCode, repeat = !first), keyCode, port)) return true }
         // The hotkeys and stylus see the console button the key is (its printed letter on DS/3DS), as the core will.
-        if (isNds) PadKeymap.buttonFor(positionOf(event, keyCode))?.let { b ->
+        val placed = PadKeymap.buttonFor(positionOf(event, keyCode))
+        if (isNds) placed?.let { b ->
             if (b == NxButton.L2 || b == NxButton.R2) { if (first && routeTriggerKey(b, down = true)) routeNds(b, down = true); return true }
             if (!routeNds(b, down = true, repeat = !first)) return true
         }
-        if (gcPad) PadKeymap.buttonFor(positionOf(event, keyCode))?.let { b -> if (gcAnalogTriggerKey(b, event.device)) return true }
-        if (!isNds && !isDc && first) PadKeymap.buttonFor(positionOf(event, keyCode))?.let { b ->
+        if (gcPad) placed?.let { b -> if (gcAnalogTriggerKey(b, event.device)) return true }
+        if (!isNds && !isDc && first) placed?.let { b ->
             if ((b == NxButton.L2 || b == NxButton.R2) && !routeTriggerKey(b, down = true, port)) return true   // its axis pressed it
         }
-        if (isN3ds) PadKeymap.buttonFor(positionOf(event, keyCode))?.let { b ->
+        if (isN3ds) placed?.let { b ->
             if (!routeN3ds(b, down = true, repeat = !first)) return true
         }
         // As printed (or by position on positional consoles) through the console's pad map; N64 by name ([runnerKey]).
@@ -1068,15 +1064,16 @@ internal class GameInputRouter(private val host: GameInputHost) {
         }
         PadKeymap.buttonFor(keyCode)?.let { inputs.menuChord(port, it, down = false) }
         if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onUp(keyCode), keyCode, port)) return true }
-        if (isNds) PadKeymap.buttonFor(positionOf(event, keyCode))?.let { b ->   // as on the down
+        val placed = PadKeymap.buttonFor(positionOf(event, keyCode))   // as on the down
+        if (isNds) placed?.let { b ->
             if (b == NxButton.L2 || b == NxButton.R2) { if (routeTriggerKey(b, down = false)) routeNds(b, down = false); return true }
             if (!routeNds(b, down = false)) return true
         }
-        if (gcPad) PadKeymap.buttonFor(positionOf(event, keyCode))?.let { b -> if (gcAnalogTriggerKey(b, event.device)) return true }
-        if (!isNds && !isDc) PadKeymap.buttonFor(positionOf(event, keyCode))?.let { b ->
+        if (gcPad) placed?.let { b -> if (gcAnalogTriggerKey(b, event.device)) return true }
+        if (!isNds && !isDc) placed?.let { b ->
             if ((b == NxButton.L2 || b == NxButton.R2) && !routeTriggerKey(b, down = false, port)) return true   // not held
         }
-        if (isN3ds) PadKeymap.buttonFor(positionOf(event, keyCode))?.let { b ->
+        if (isN3ds) placed?.let { b ->
             if (!routeN3ds(b, down = false)) return true
         }
         // As printed (or by position on positional consoles) through the console's pad map; N64 by name ([runnerKey]).
