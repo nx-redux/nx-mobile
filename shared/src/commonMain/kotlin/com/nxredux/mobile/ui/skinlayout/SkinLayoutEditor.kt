@@ -277,7 +277,7 @@ private fun StripPlaceholders(placed: SkinPlacement, modifier: Modifier = Modifi
             val px = minOf(hh * 0.9f, hw * 2f * 0.85f / (text.length * 0.6f))
             val m = measurer.measure(text, TextStyle(color = ink.copy(alpha = 0.7f),   // role: its word
                  fontSize = (px / density).sp))
-            drawText(m, topLeft = Offset(c.x - m.size.width / 2f, c.y - m.size.height / 2f))
+            drawText(m, topLeft = Offset(c.x - m.size.width / 2f, c.y + c.spec.labelDy - m.size.height / 2f))   // where the slot's words go
         }
     }
 }

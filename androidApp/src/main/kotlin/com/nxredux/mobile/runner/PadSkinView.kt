@@ -15,6 +15,7 @@ import android.view.View
 import android.widget.FrameLayout
 import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.skin.PlacedControl
+import com.nxredux.mobile.skin.stripPill
 import com.nxredux.mobile.skin.stackedMenuRoom
 import com.nxredux.mobile.skin.underMenu
 import com.nxredux.mobile.skin.SkinCell
@@ -72,6 +73,13 @@ internal class PadSkinPack(val manifest: SkinPackManifest, private val open: (St
 /** What a skin's buttons do beyond the pad's own buttons. */
 /** A strip slot's written label: its cap height in picture px (MENU's is 17). */
 private const val STRIP_CAP = 17f
+
+// The overlay's touch shortcut pills, as the corner shortcut buttons (CornerButtons): see-through, lit while on.
+private val STRIP_PILL_OFF_FILL = android.graphics.Color.argb(115, 0, 0, 0)      // role: see-through over the game
+private val STRIP_PILL_ON_FILL = android.graphics.Color.argb(230, 255, 255, 255) // role: lit while its toggle runs
+private val STRIP_PILL_RING = android.graphics.Color.argb(128, 255, 255, 255)    // role: the pill's edge over any picture
+private val STRIP_PILL_OFF_INK = android.graphics.Color.argb(217, 255, 255, 255) // role: the word on the dark fill
+private val STRIP_PILL_ON_INK = android.graphics.Color.BLACK                      // role: the word on the lit fill
 
 internal enum class SkinAction(val slot: TouchSlot? = null) {
     MIC, SWAP, SAVE, LOAD, REWIND, FAST,
@@ -201,6 +209,13 @@ internal class PadSkinView(
             .getOrDefault(Typeface.DEFAULT_BOLD)
     }
     private val slotLabel = Paint(label)
+    /** The overlay's touch shortcut pills ([stripPill]): their fill and their edge. */
+    private val pillFill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val pillRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1.5f * resources.displayMetrics.density
+        color = STRIP_PILL_RING
+    }
     /**
      * The strip's filled slots spread over the strip's whole width, an even share each (two: centred in its halves),
      * in slot order; the strip's other buttons as placed.
@@ -254,13 +269,23 @@ internal class PadSkinView(
             label.textAlign = if (dx < 0f) Paint.Align.RIGHT else if (dx > 0f) Paint.Align.LEFT else Paint.Align.CENTER
             canvas.drawText(text, c.x + dx, c.y + c.spec.labelDy + c.spec.labelH / 2f, label)   // the baseline: cap height centred
         }
-        // the strip's touch slots: the action's short name, in the label grey (a running toggle in white)
+        // the strip's touch slots: the action's short name, in the label grey (a running toggle in white); on the overlay
+        // (no frame under them, user) each on a see-through pill, as the corner shortcut buttons, lit while on
         for (c in p.controls) {
             val sc = slotOf(c.spec.id)?.let(shortcuts::get) ?: continue
             val cap = STRIP_CAP * p.k
+            val text = touchShortcutLabel(sc.action).uppercase()
             slotLabel.textSize = cap / SKIN_LABEL_CAP
-            slotLabel.color = if (sc.on) android.graphics.Color.WHITE else SKIN_LABEL_GREY
-            canvas.drawText(touchShortcutLabel(sc.action).uppercase(), c.x, c.y + cap / 2f, slotLabel)
+            val wy = c.y + c.spec.labelDy   // the words' middle (a thin band's slot reaches below them, StripSpec.wordUp)
+            if (bare) {
+                val r = stripPill(c.x, wy, c.spec.hw, c.spec.hh, slotLabel.measureText(text), p.k)
+                val round = r.height / 2f
+                pillFill.color = if (sc.on) STRIP_PILL_ON_FILL else STRIP_PILL_OFF_FILL
+                canvas.drawRoundRect(r.x, r.y, r.x + r.width, r.y + r.height, round, round, pillFill)
+                canvas.drawRoundRect(r.x, r.y, r.x + r.width, r.y + r.height, round, round, pillRing)
+                slotLabel.color = if (sc.on) STRIP_PILL_ON_INK else STRIP_PILL_OFF_INK
+            } else slotLabel.color = if (sc.on) android.graphics.Color.WHITE else SKIN_LABEL_GREY
+            canvas.drawText(text, c.x, wy + cap / 2f, slotLabel)
         }
         canvas.restore()
     }

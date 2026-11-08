@@ -174,6 +174,8 @@ data class StripSpec(
     val y: Int,
     val hh: Int,
     val labels: List<StripLabel>,
+    /** Picture px the slots' words sit over their middle: a thin band's touch areas reach down into the frame's rim. */
+    val wordUp: Int = 0,
 )
 
 /** One on-screen button of a [StripSpec]: its control [id] and its label, [sx], [sy], [w] x [h] in the parts picture. */

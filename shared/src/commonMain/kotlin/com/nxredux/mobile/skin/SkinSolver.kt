@@ -212,7 +212,7 @@ object SkinSolver {
                 val cy = fy + fh - st.y
                 // a label drawn in the picture; none (the touch slots, TOUCH_1..4): the app writes the slot's action
                 if (l.w > 0 && l.h > 0) pieces += SkinPiece(PxRect(l.sx.toFloat(), l.sy.toFloat(), l.w.toFloat(), l.h.toFloat()), win(cx - l.w / 2f, cy - l.h / 2f, l.w.toFloat(), l.h.toFloat()), strip = true)
-                controls += PlacedControl(ControlSpec(l.id, ControlShape.RECT, cx, cy, hw = share / 2f * k, hh = st.hh * k), cx * k, cy * k)
+                controls += PlacedControl(ControlSpec(l.id, ControlShape.RECT, cx, cy, hw = share / 2f * k, hh = st.hh * k, labelDy = -st.wordUp * k), cx * k, cy * k)
             }
         }
         val glasses = arrayListOf(PlacedGlass(g.id, g.screen, win(fx + bl, fy + bt, gw, gh), fit * k, g.corner * k))

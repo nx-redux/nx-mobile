@@ -972,6 +972,47 @@ class NxCarbonPackTest {
         }
     }
 
+    // The phone frame's touch shortcut band no taller than its words need (user: the Flip's looked too tall, twice): the
+    // frame's bottom border at most 87 px (141 before), its words centred in the band's black over the rim; the slots'
+    // touch areas reach down into the rim (their words drawn wordUp over their middle), clear of the screen.
+    @Test
+    fun thePhoneFramesShortcutBandIsThin() {
+        for (l in pack.layouts) {
+            val f = l.frame ?: continue
+            val st = f.strip ?: continue
+            if (l.id != "grip_gba" && l.id != "stacked_single") continue
+            val bottom = f.h - f.glass.y - f.glass.h
+            assertTrue(bottom <= 87, "${l.id} bottom border $bottom")
+            val rim = f.glass.y   // the frame's own rim and groove, as at its top
+            assertEquals((bottom - rim) / 2f + rim, (st.y + st.wordUp).toFloat(), 2f, "${l.id} words centred in the band")
+            assertTrue(st.hh >= 30, "${l.id} touch slots still easy to press")
+            assertTrue(bottom - st.y - st.hh >= SkinTweaks.SCREEN_CLEAR, "${l.id} slots clear of the screen")
+        }
+        val p = assertNotNull(SkinChoice.place(pack, 2520, 1080, 480, false, false, 240f to 160f, null, variant = SkinVariant.GBA))
+        val slot = p.controls.first { it.spec.id == "TOUCH_1" }
+        assertEquals(-assertNotNull(p.spec.frame?.strip).wordUp * p.k, slot.spec.labelDy, 0.5f, "the slot's words over its middle")
+    }
+
+    // The N64 on a phone in portrait (the Flip, user): the switch and MENU on the left under the stick, so B / A drop
+    // further from the stick, and sit further right.
+    @Test
+    fun n64PhonePortraitHasTheSwitchAndMenuLeftAndBaLower() {
+        val p = assertNotNull(SkinChoice.place(pack, 1080, 2520, 480, false, false, 320f to 240f, null, variant = SkinVariant.N64))
+        assertEquals("stacked_n64", p.spec.id)
+        fun c(id: String) = p.controls.first { it.spec.id == id }
+        val st = c("STICK"); val sw = c("STICK_SWAP"); val menu = c("MENU")
+        assertEquals(sw.y, menu.y, 1f); assertTrue(sw.x < menu.x)
+        assertEquals(st.x, (sw.x + menu.x) / 2f, 2f, "the pair centred under the stick")
+        assertTrue(sw.y - sw.spec.r > st.y + st.spec.r * 208f / 170f, "under the stick's ring")
+        assertTrue(c("B").y - st.y >= 150f * p.k, "B lower, away from the stick")
+        assertTrue((c("B").x - st.x) / p.k >= 310f, "B / A further right (user): ${(c("B").x - st.x) / p.k}")
+        // its well clear of the C-buttons' ring (user: it overlapped): the ring's radius 208, the well's round B ~1.1 B
+        val cx = listOf("CU", "CD", "CL", "CR").map { c(it).x }.average().toFloat()
+        val cy = listOf("CU", "CD", "CL", "CR").map { c(it).y }.average().toFloat()
+        assertTrue(kotlin.math.hypot(c("B").x - cx, c("B").y - cy) >= (208f + 1.1f * 67f) * p.k, "B's well clear of the C ring")
+        assertTrue(c("A").y + c("A").spec.r < 2520f - 20f, "on the window")
+    }
+
     @Test
     fun regular3dsIsThe3dsWithoutTheNewControls() {
         // New 3DS Controls off (user: the default): the 3DS layouts without ZL / ZR and the C-stick nub, L / R the DS's pills
