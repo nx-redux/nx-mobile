@@ -2777,17 +2777,22 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         slotJobs += job
     }
 
-    /** PixelCopy the current (paused) game frame for a screenshot at the view's native pixel size (no scaling). */
+    /**
+     * PixelCopy the current (paused) game frame for a screenshot at the view's native pixel size (no scaling), cut to the
+     * game's own picture ([thumbnailCrop]: no bars or anything drawn around it; a DS / 3DS game's top screen).
+     */
     private fun captureThumbnail(cb: (Bitmap?) -> Unit) {
         val view = retroView ?: return cb(null)
         val w = view.width
         val h = view.height
         if (w <= 0 || h <= 0) return cb(null)
+        val crop = thumbnailCrop(renderer.thumbnailPicture(), w, h)   // taken now: the layout it was copied from
         val full = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         try {
             PixelCopy.request(view, full, { result ->
                 if (result == PixelCopy.SUCCESS) {
-                    cb(full)
+                    if (crop == null) cb(full)
+                    else cb(Bitmap.createBitmap(full, crop.x, crop.y, crop.width, crop.height).also { if (it !== full) full.recycle() })
                 } else {
                     full.recycle()
                     cb(null)

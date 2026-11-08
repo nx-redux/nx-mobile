@@ -212,6 +212,9 @@ internal class FrontendRenderer(
     val pictureBox = androidx.compose.runtime.mutableStateOf<android.graphics.Rect?>(null)
     /** The single picture as last laid out (game-area px, offsets included); null while the DS screens are split. */
     private var shownPicture: PxRect? = null
+
+    /** What a save state's picture keeps (game-area px): the one picture, or the DS / 3DS top screen ([thumbnailPicture]). */
+    fun thumbnailPicture(): PxRect? = if (ndsRegions.isNotEmpty()) ndsRegions.thumbnailPicture() else shownPicture
     private var hudJob: Job? = null
 
     /** The overlay file names offered for this console (the Overlay setting's list). */
