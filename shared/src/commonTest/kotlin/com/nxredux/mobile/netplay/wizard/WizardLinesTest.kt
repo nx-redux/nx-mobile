@@ -135,6 +135,7 @@ class WizardLinesTest {
         assertEquals("REJECT game", Reject(RejectReason.GAME).format())
         assertEquals("REJECT role", Reject(RejectReason.ROLE).format())
         assertEquals("REJECT sync", Reject(RejectReason.SYNC).format())
+        assertEquals("REJECT link-gpsp.rfu.poke", Reject(RejectReason.LINK, "gpsp", wl = "rfu", peerWl = "poke").format())
     }
 
     @Test fun rejects_parse_like_the_handheld() {
@@ -147,8 +148,34 @@ class WizardLinesTest {
         assertEquals(Reject(RejectReason.OTHER), Reject.parse("REJECT weird"))
         assertEquals(Reject(RejectReason.OTHER), Reject.parse("REJECT"))
         assertEquals(Reject(RejectReason.OTHER), Reject.parse("REJECT core-"))
+        // The handheld's link-mode reasons (wiz_caps.c WizCaps_linkReason, the same strings as its test_wiz_caps.c).
+        assertEquals(Reject(RejectReason.LINK, "gpsp", wl = "rfu", peerWl = "poke"), Reject.parse("REJECT link-gpsp.rfu.poke"))
+        assertEquals(Reject(RejectReason.LINK, "mgba", wl = "poke", peerWl = "poke"), Reject.parse("REJECT link-mgba.poke.poke"))
+        for (bad in listOf("link-gpsp.rfu", "link-gpsp.rfu.none", "link-.rfu.poke", "link-gpsp.rfu.poke.x", "link-"))
+            assertEquals(Reject(RejectReason.OTHER), Reject.parse("REJECT $bad"), bad)
         assertNull(Reject.parse("HELLO 2 g host 2"))
         // %31s: a longer token is cut at 31 chars before it is read
         assertEquals(Reject(RejectReason.CORE, "abcdefghijklmnopqrstuvwxyz", null), Reject.parse("REJECT core-abcdefghijklmnopqrstuvwxyz0123"))
+    }
+    @Test fun the_link_mode_reject_follows_the_handhelds_rule() {
+        // The same vectors as nx-redux test_wiz_caps.c test_link_reason.
+        fun reason(sc: String, sw: String?, rc: String?, rw: String?, usb: Boolean) = Reject.link(sc, sw, rc, rw, usb)?.format()
+        assertEquals("REJECT link-gpsp.rfu.poke", reason("gpsp", "rfu", "mgba", "poke", false))
+        assertEquals("REJECT link-mgba.poke.rfu", reason("mgba", "poke", "gpsp", "rfu", false))
+        assertEquals("REJECT link-gpsp.rfu.poke", reason("gpsp", "rfu", "mgba", "poke", true))
+        assertEquals("REJECT link-gpsp.aw1.aw2", reason("gpsp", "aw1", "mgba", "aw2", false))
+        assertEquals("REJECT link-gpsp.poke.poke", reason("gpsp", "poke", "mgba", "poke", true))
+        assertEquals("REJECT link-mgba.aw2.aw2", reason("mgba", "aw2", "gpsp", "aw2", true))
+        assertNull(reason("gpsp", "poke", "mgba", "poke", false))
+        assertNull(reason("gpsp", "rfu", "mgba", "rfu", true))
+        assertNull(reason("gpsp", "rfu", "gpsp", "poke", false))
+        assertNull(reason("gpsp", "rfu", "mgba", "none", true))
+        assertNull(reason("gpsp", "none", "mgba", "none", true))
+        assertNull(reason("gpsp", "rfu", "mgba", null, false))
+        assertNull(reason("gpsp", "rfu", "mgba", "bogus", false))
+        assertNull(reason("gpsp", "rfu", null, "poke", false))
+        // A reason this side sends parses back to itself.
+        val r = Reject.link("mgba", "poke", "gpsp", "rfu", false)!!
+        assertEquals(r, Reject.parse(r.format()))
     }
 }

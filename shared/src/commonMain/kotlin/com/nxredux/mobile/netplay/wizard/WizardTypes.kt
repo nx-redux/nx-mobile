@@ -28,12 +28,17 @@ sealed interface HostOutcome {
     ) : HostOutcome
 
     /**
-     * The joiner was turned away. [reason]: the REJECT reason sent (`version`, `game`, `role`, `core`), or `sync` for any
+     * The joiner was turned away. [reason]: the REJECT reason sent (`version`, `game`, `role`, `core`, `link`), or `sync` for any
      * failed save copy (REJECT sync when the saves could not be served, a SYNC-FAIL, or no SYNC-DONE within 30 s);
-     * null for an I/O or protocol failure. [joinerCore] is the joiner's core for `core`; [noWifiModes]: refused because
-     * mGBA would run off the cable against a side without the Wi-Fi modes ([com.nxredux.mobile.netplay.NetplayCores.needsPeerWl]).
+     * null for an I/O or protocol failure. [joinerCore] is the joiner's core for `core` and `link`; [noWifiModes]: refused
+     * because mGBA would run off the cable against a side without the Wi-Fi modes
+     * ([com.nxredux.mobile.netplay.NetplayCores.needsPeerWl]). For `link` (both games in Wi-Fi modes that can't link),
+     * [ownWl] and [joinerWl] are the two games' modes.
      */
-    data class Turned(val reason: String?, val joinerCore: String? = null, val noWifiModes: Boolean = false) : HostOutcome
+    data class Turned(
+        val reason: String?, val joinerCore: String? = null, val noWifiModes: Boolean = false,
+        val ownWl: String? = null, val joinerWl: String? = null,
+    ) : HostOutcome
 }
 
 /** How a client handshake ended. */

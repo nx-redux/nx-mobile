@@ -16,7 +16,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  * The handheld's control-channel exchange (nx-redux wizard_net.c at 8f5a760b), both roles: HELLO 2 with caps,
  * the gates (version, game, role, core; gpSP with mGBA passes only for the same Wi-Fi mode, and mGBA off the cable only
  * with a peer that sent `wl=`, WizCaps_linkMismatch),
- * `REJECT core-<core>.<tag>`, SYNC-READY + `FILE <name>` with an rsync pull,
+ * `REJECT core-<core>.<tag>` (`link-<core>.<wl>.<wl>` when both games are in Wi-Fi modes that can't link), SYNC-READY + `FILE <name>` with an rsync pull,
  * `START 2` / `START`. Neither driver throws [NetplayIoException]; neither closes the channel (the caller does).
  */
 object Wizard {
@@ -46,7 +46,9 @@ object Wizard {
             )
             val noWifiModes = NetplayCores.needsPeerWl(picked ?: offer.core, hello.core, offer.wl, hello.wl, offer.usb)
             if (picked == null || noWifiModes) {
-                ch.writeLine(Reject(RejectReason.CORE, offer.core, offer.tag.trim().uppercase()).format())
+                val link = if (noWifiModes) null else Reject.link(offer.core, offer.wl, hello.core, hello.wl, offer.usb)
+                ch.writeLine((link ?: Reject(RejectReason.CORE, offer.core, offer.tag.trim().uppercase())).format())
+                if (link != null) return HostOutcome.Turned(RejectReason.LINK.wire, hello.core, ownWl = offer.wl, joinerWl = hello.wl)
                 return HostOutcome.Turned(RejectReason.CORE.wire, hello.core, noWifiModes)
             }
             val run = picked
@@ -105,7 +107,7 @@ object Wizard {
             return ClientOutcome.Refused(NetplayText.NO_ANSWER)
         }
         Reject.parse(reply)?.let { r ->
-            if (r.reason == RejectReason.CORE && r.core != null) {
+            if ((r.reason == RejectReason.CORE || r.reason == RejectReason.LINK) && r.core != null) {
                 NetplayCores.joinerRetry(offer.tag, offer.pick, r.core, offer.mayRetry, offer.usb, offer.wl)?.let { return ClientOutcome.Retry(it) }
             }
             return ClientOutcome.Refused(rejectText(r, offer))
@@ -115,8 +117,10 @@ object Wizard {
         // A host that names another core (one that predates the check, or a phone): switch on Auto, else stop, sending nothing.
         val picked = NetplayCores.joinerRun(offer.tag, offer.core, offer.pick, h.core, offer.usb, offer.wl, h.wl)
         if (NetplayCores.needsPeerWl(picked ?: offer.core, h.core, offer.wl, h.wl, offer.usb)) return ClientOutcome.Refused(NetplayText.NO_WIFI_MODES)
-        val core = picked
-            ?: return ClientOutcome.Refused(NetplayCores.refusal(offer.tag, offer.pick, h.core.orEmpty(), h.tag, offer.usb, offer.wl))
+        val core = picked ?: return ClientOutcome.Refused(
+            Reject.link(h.core.orEmpty(), h.wl, offer.core, offer.wl, offer.usb)?.let { linkText(it, offer) }
+                ?: NetplayCores.refusal(offer.tag, offer.pick, h.core.orEmpty(), h.tag, offer.usb, offer.wl),
+        )
         val mixed = mixedCaps(offer.core, h.core, offer.wl, h.wl, offer.usb)
         var syncing = false
         try {
@@ -218,9 +222,22 @@ object Wizard {
     }
 
     /** The text for a REJECT; `core-<core>[.<tag>]` names the host's emulator, a bare `core` is a plain refusal. */
-    private fun rejectText(r: Reject, offer: ClientOffer): String =
-        if (r.reason == RejectReason.CORE && r.core != null) NetplayCores.refusal(offer.tag, offer.pick, r.core, r.tag, offer.usb, offer.wl)
-        else NetplayText.reject(r.reason)
+    private fun rejectText(r: Reject, offer: ClientOffer): String = when {
+        r.reason == RejectReason.LINK -> linkText(r, offer)
+        r.reason == RejectReason.CORE && r.core != null -> NetplayCores.refusal(offer.tag, offer.pick, r.core, r.tag, offer.usb, offer.wl)
+        else -> NetplayText.reject(r.reason)
+    }
+
+    /**
+     * A link-mode refusal from the host ([r] names its core and mode). The way out on a phone whose Emulator row pins
+     * another core that this game offers here is the host's core, as in [NetplayCores.refusal].
+     */
+    private fun linkText(r: Reject, offer: ClientOffer): String {
+        val host = r.core.orEmpty()
+        val pinnedAway = offer.pick != null && offer.pick != host && host in NetplayCores.offered(offer.tag, offer.usb, offer.wl)
+        val hint = if (pinnedAway) "Set Emulator to ${NetplayCores.name(host)}." else NetplayText.SAME_FOLDER
+        return NetplayText.linkModes(theirs = r.wl, ours = r.peerWl, hint = hint)
+    }
 
     /**
      * The game as sent: the handheld reads the token with `%255s`, so at most [GAME_TOKEN_MAX] UTF-8 bytes, cut on a

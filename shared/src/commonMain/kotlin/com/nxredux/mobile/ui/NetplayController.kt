@@ -337,7 +337,7 @@ class NetplayController(
                         }
                         is HostOutcome.Turned -> {
                             // The host keeps waiting after any refusal; some say why for a moment first.
-                            turnedAwayText(out)?.let { hostStatus(it); delay(NOTICE_MS) }
+                            turnedAwayText(out, usb)?.let { hostStatus(it); delay(NOTICE_MS) }
                             hostStatus(NetplayText.WAITING_PLAYER)
                         }
                     }
@@ -348,9 +348,11 @@ class NetplayController(
         }
     }
 
-    private fun turnedAwayText(out: HostOutcome.Turned): String? = if (out.noWifiModes) NetplayText.NO_WIFI_MODES else when (out.reason) {
+    private fun turnedAwayText(out: HostOutcome.Turned, usb: Boolean): String? = if (out.noWifiModes) NetplayText.NO_WIFI_MODES else when (out.reason) {
         RejectReason.SYNC.wire -> NetplayText.SAVE_TRANSFER_FAILED
         RejectReason.CORE.wire -> out.joinerCore?.let { NetplayText.coreTurnedAway(NetplayCores.name(it)) }
+        // As the handheld host: one line while Wi-Fi keeps waiting for others, the full reason for the cable's one peer.
+        RejectReason.LINK.wire -> if (!usb) NetplayText.LINK_TURNED_AWAY else NetplayText.linkModes(theirs = out.joinerWl, ours = out.ownWl)
         else -> null
     }
 

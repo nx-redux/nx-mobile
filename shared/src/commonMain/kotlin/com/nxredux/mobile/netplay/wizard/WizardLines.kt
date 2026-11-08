@@ -1,5 +1,6 @@
 package com.nxredux.mobile.netplay.wizard
 
+import com.nxredux.mobile.netplay.GbaWifiLink
 import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.netplay.NetplayLinkKind
 import com.nxredux.mobile.netplay.NetplayWire
@@ -123,10 +124,17 @@ object HelloCodec {
     }
 }
 
-/** `REJECT <reason>`; a core refusal names the refusing side's core and folder (`core-<core>.<tag>`, WizCaps_coreReason). */
-data class Reject(val reason: RejectReason, val core: String? = null, val tag: String? = null) {
+/**
+ * `REJECT <reason>`; a core refusal names the refusing side's core and folder (`core-<core>.<tag>`, WizCaps_coreReason).
+ * A link-mode refusal ([RejectReason.LINK], WizCaps_linkReason) names the refusing side's core, its game's mode [wl] and
+ * the other side's [peerWl]: `link-<core>.<wl>.<peerWl>`.
+ */
+data class Reject(
+    val reason: RejectReason, val core: String? = null, val tag: String? = null, val wl: String? = null, val peerWl: String? = null,
+) {
     fun format(): String = when (reason) {
         RejectReason.CORE -> "REJECT ${coreReason(core, tag)}"
+        RejectReason.LINK -> "REJECT link-$core.$wl.$peerWl"
         RejectReason.OTHER -> "REJECT"
         else -> "REJECT ${reason.wire}"
     }
@@ -146,12 +154,32 @@ data class Reject(val reason: RejectReason, val core: String? = null, val tag: S
             }
         }
 
+        /**
+         * WizCaps_linkReason: gpSP and mGBA on the two sides ([senderCore] refusing, [receiverCore] refused), both games
+         * in a Wi-Fi mode, yet the modes differ or the transport turns them into the real cable ([GbaWifiLink.mixedOk]).
+         * Only builds that send `wl=` get here, so the refused side knows the reason. null when the refusal is about
+         * something else (a side in no Wi-Fi mode runs the real cable, which the plain core refusal covers).
+         */
+        fun link(senderCore: String, senderWl: String?, receiverCore: String?, receiverWl: String?, usb: Boolean): Reject? {
+            if (receiverCore == null || receiverCore == senderCore || '.' in senderCore) return null
+            val a = senderWl?.takeIf { it in GbaWifiLink.WIFI_MODES } ?: return null
+            val b = receiverWl?.takeIf { it in GbaWifiLink.WIFI_MODES } ?: return null
+            if (GbaWifiLink.mixedOk(a, b, usb) || "link-$senderCore.$a.$b".length > REASON_MAX) return null
+            return Reject(RejectReason.LINK, senderCore, wl = a, peerWl = b)
+        }
+
         /** null for anything that is not a REJECT line; an unknown reason is [RejectReason.OTHER]. */
         fun parse(line: String): Reject? {
             val f = line.substringBefore('\n').substringBefore('\r').split(' ').filter { it.isNotEmpty() }
             if (f.isEmpty() || f[0] != "REJECT") return null
             val token = f.getOrNull(1)?.take(REASON_MAX) ?: return Reject(RejectReason.OTHER)
             if (token == RejectReason.CORE.wire) return Reject(RejectReason.CORE)
+            if (token.startsWith("link-")) {
+                val parts = token.substring(5).split('.')
+                if (parts.size != 3 || parts[0].isEmpty() || parts[1] !in GbaWifiLink.WIFI_MODES || parts[2] !in GbaWifiLink.WIFI_MODES)
+                    return Reject(RejectReason.OTHER)
+                return Reject(RejectReason.LINK, parts[0], wl = parts[1], peerWl = parts[2])
+            }
             if (token.startsWith("core-") && token.length > 5) {
                 val rest = token.substring(5)
                 val dot = rest.indexOf('.')   // core names carry no '.', so the first one starts the folder tag

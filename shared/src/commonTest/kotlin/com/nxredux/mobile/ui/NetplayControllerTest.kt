@@ -132,6 +132,21 @@ class NetplayControllerTest {
         assertEquals(1, p.adverts.size)
     }
 
+    @Test fun host_turns_away_a_game_in_another_link_mode_and_says_so() = runTest {
+        val p = FakeNetplayPlatform().apply { gbaMode = "poke" }
+        val c = controller(p)
+        c.open(ruby); runCurrent()
+        c.press(NxButton.DOWN, NxButton.DOWN, NxButton.RIGHT, NxButton.RIGHT, NxButton.UP, NxButton.UP, NxButton.A)   // Emulator = mGBA, Host
+        runCurrent()
+        val (h, cEnd) = PipeChannel.pair()
+        p.lan.pending.send(h)
+        cEnd.writeLine("HELLO 2 Pokemon${esc}Ruby${esc}(USA) client caps=core=gpsp,tag=GBA,wl=rfu"); runCurrent()
+        assertEquals("REJECT link-mgba.poke.rfu", cEnd.readLine(1000)); runCurrent()
+        assertEquals(NetplayText.LINK_TURNED_AWAY, assertIs<NetplayPage.Hosting>(c.page.value).status)
+        advanceTimeBy(NetplayController.NOTICE_MS + 1)
+        assertEquals(NetplayText.WAITING_PLAYER, assertIs<NetplayPage.Hosting>(c.page.value).status)
+    }
+
     @Test fun only_gba_link_games_are_probed_and_b_during_the_probe_closes() = runTest {
         val p = FakeNetplayPlatform()
         val c = controller(p)

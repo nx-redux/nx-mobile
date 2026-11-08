@@ -429,8 +429,65 @@ class WizardTest {
         assertEquals(HostOutcome.Started("gpsp", "10.0.0.2", emptySaves = false, mixed = true, peerWl = "rfu"), hostJob.await())
     }
 
+    @Test fun a_pinned_host_turns_away_the_other_core_in_another_wifi_mode_naming_the_modes() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val hostJob = async { Wizard.host(h, hostGbaWifi, saves = { error("a link session copies no saves") }) }
+        c.writeLine("HELLO 2 $rubyEsc client caps=core=mgba,tag=MGBA,wl=poke")
+        assertEquals("REJECT link-gpsp.rfu.poke", c.readLine(1000))
+        assertEquals(HostOutcome.Turned("link", "mgba", ownWl = "rfu", joinerWl = "poke"), hostJob.await())
+    }
+
+    @Test fun a_pinned_host_on_the_cable_turns_away_the_other_core_in_a_wifi_only_mode() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val hostJob = async { Wizard.host(h, hostGbaWifi.copy(usb = true, wl = "poke"), saves = { error("a link session copies no saves") }) }
+        c.writeLine("HELLO 2 $rubyEsc client caps=core=mgba,tag=MGBA,wl=poke")
+        assertEquals("REJECT link-gpsp.poke.poke", c.readLine(1000))
+        assertEquals(HostOutcome.Turned("link", "mgba", ownWl = "poke", joinerWl = "poke"), hostJob.await())
+    }
+
+    @Test fun a_link_mode_reject_names_both_modes_or_wifi() = runTest {
+        val joinMgba = ClientOffer("Pokemon Ruby (USA)", any = false, tag = "MGBA", core = "mgba", pick = "mgba", usb = false, wl = "poke")
+        val (h, c) = PipeChannel.pair()
+        val job = async { Wizard.client(c, joinMgba.copy(tag = "GBA"), FakeSaveSink()) }
+        h.readLine(1000)
+        h.writeLine("REJECT link-gpsp.rfu.poke")
+        assertEquals(
+            ClientOutcome.Refused("The other player's game links\nwith the Wireless Adapter,\nthis one with the Pokémon cable.\n\nSet Emulator to gpSP."),
+            job.await(),
+        )
+        val (h2, c2) = PipeChannel.pair()
+        val job2 = async { Wizard.client(c2, joinMgba.copy(usb = true, mayRetry = false, pick = null), FakeSaveSink()) }
+        h2.readLine(1000)
+        h2.writeLine("REJECT link-gpsp.poke.poke")
+        assertEquals(
+            ClientOutcome.Refused("With two different emulators,\nthis game links only\nover Wi-Fi.\n\nPick the game from the same\nfolder on both devices."),
+            job2.await(),
+        )
+    }
+
+    @Test fun a_link_mode_reject_on_auto_still_retries_with_the_hosts_core() = runTest {
+        val joinAuto = ClientOffer("Pokemon Ruby (USA)", any = false, tag = "MGBA", core = "mgba", pick = null, usb = true, wl = "poke")
+        val (h, c) = PipeChannel.pair()
+        val job = async { Wizard.client(c, joinAuto, FakeSaveSink()) }
+        h.readLine(1000)
+        h.writeLine("REJECT link-gpsp.poke.poke")
+        assertEquals(ClientOutcome.Retry("gpsp"), job.await())
+    }
+
+    @Test fun a_joiner_catches_a_host_in_another_wifi_mode_itself() = runTest {
+        val joinMgba = ClientOffer("Pokemon Ruby (USA)", any = false, tag = "MGBA", core = "mgba", pick = "mgba", usb = false, wl = "rfu")
+        val (h, c) = PipeChannel.pair()
+        val job = async { Wizard.client(c, joinMgba, FakeSaveSink()) }
+        h.readLine(1000)
+        h.writeLine("HELLO 2 $rubyEsc host 2 caps=core=gpsp,tag=GBA,wl=aw2")
+        assertEquals(
+            ClientOutcome.Refused("The other player's game links\nwith the Advance Wars 2 cable,\nthis one with the Wireless Adapter.\n\nSet Emulator to gpSP."),
+            job.await(),
+        )
+    }
+
     @Test fun a_pinned_host_still_turns_away_the_other_core_with_another_mode() = runTest {
-        for (caps in listOf("core=mgba,tag=MGBA,wl=poke", "core=mgba,tag=MGBA,wl=none", "core=mgba,tag=MGBA")) {
+        for (caps in listOf("core=mgba,tag=MGBA,wl=none", "core=mgba,tag=MGBA")) {
             val (h, c) = PipeChannel.pair()
             val hostJob = async { Wizard.host(h, hostGbaWifi, saves = { error("a link session copies no saves") }) }
             c.writeLine("HELLO 2 $rubyEsc client caps=$caps")
