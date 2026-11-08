@@ -3,9 +3,7 @@ package com.nxredux.mobile.runner
 import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
-import androidx.activity.ComponentActivity
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.lowLatencyWifiLock
 import com.nxredux.mobile.netplay.NetplayCores
@@ -32,9 +30,7 @@ import kotlin.concurrent.thread
  * What [GameNetplay] needs from [GameActivity]: the pause state the session follows, the notices and menu it updates,
  * and the screen's ways out (the failure dialog, Quit, the local game a link session's end leaves).
  */
-internal interface GameNetplayHost : LifecycleOwner {
-    val activity: ComponentActivity
-    val retroView: com.swordfish.libretrodroid.GLRetroView?
+internal interface GameNetplayHost : GameScreenHost {
     val menuOpen: Boolean
     val focusPaused: Boolean
     val cheatsSupported: Boolean
@@ -42,7 +38,7 @@ internal interface GameNetplayHost : LifecycleOwner {
     val notifications: NotificationQueue
     fun publishNotifications()
     fun withMenu(block: (InGameMenuModel) -> Unit)
-    fun fail(message: String, title: String)
+    fun fail(message: String, title: String = GameActivity.START_FAILED)
     fun quitGame(chosen: Boolean, autoState: Boolean)
     fun becomeLocal(localCheats: (() -> Job)?)
 }

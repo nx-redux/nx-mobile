@@ -8,9 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.PixelCopy
-import androidx.activity.ComponentActivity
 import androidx.compose.runtime.mutableStateOf
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.netplay.NetplaySession
@@ -32,15 +30,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  * What [SaveSession] reads from [GameActivity]: the view and the state that decides whether a save may be written now.
  * Read only: the save and quit rules below rely on when the screen sets them, so nothing here may.
  */
-internal interface SaveSessionHost : LifecycleOwner {
-    val activity: ComponentActivity
-    val retroView: GLRetroView?
+internal interface SaveSessionHost : GameScreenHost {
     val gameReady: Boolean
-    val quitting: Boolean
     val netplay: NetplaySession?
     val speed: SpeedController
     val rumbles: Array<RumbleMotor>
-    fun toast(msg: String): android.widget.Toast
 }
 
 /**

@@ -5,9 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.widget.FrameLayout
-import androidx.activity.ComponentActivity
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -93,8 +91,7 @@ import kotlinx.coroutines.withContext
  * settles. Built by the activity for the pipeline alone, so these setters stay out of every other class's reach. Each
  * stage sets them in place, not at its end: later reads in the same stage, and a menu opened mid-load, rely on them.
  */
-internal interface LaunchHost : LifecycleOwner {
-    val activity: ComponentActivity
+internal interface LaunchHost : GameScreenHost {
     val input: GameInputRouter
     val padLayout: PadLayoutController
     val renderer: FrontendRenderer
@@ -115,11 +112,9 @@ internal interface LaunchHost : LifecycleOwner {
     val netplay: NetplaySession?
     val achievements: AchievementsBridge?
     val focusPaused: Boolean
-    val quitting: Boolean
     val isDolphin: Boolean
     val isDc: Boolean
     val isN3ds: Boolean
-    val retroView: GLRetroView?
 
     var usingData: Boolean
     var dataRoot: File
@@ -172,10 +167,9 @@ internal interface LaunchHost : LifecycleOwner {
     /** The launch name's hold fades now, or once its minimum is up. */
     fun releaseNameHold()
 
-    fun fail(message: String, title: String)
+    fun fail(message: String, title: String = GameActivity.START_FAILED)
     fun relaunchOnGles()
     fun quitGame(chosen: Boolean, autoState: Boolean)
-    fun toast(msg: String): android.widget.Toast
     fun isLandscape(): Boolean
     fun screenClass(): ScreenClass
     fun n3dsSkinStack(): Boolean
@@ -269,7 +263,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         attachView(cfg, prepared, data)
     }
 
-    private fun refuse(message: String): Nothing? { host.fail(message, GameActivity.START_FAILED); return null }
+    private fun refuse(message: String): Nothing? { host.fail(message); return null }
 
     private fun refuse(message: String, title: String): Nothing? { host.fail(message, title); return null }
 
@@ -324,7 +318,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             gameCoreId = coreId
             // MainActivity does it too, in the menu process; here for a game started before that copy is in place. Not
             // awaited: it is locked across both processes, and a first-run or post-update copy (~10 MB) must not hold up the
-            // host. Re-read once it is done.
+            // game. Re-read once it is done.
             val extraction = lifecycleScope.async(Dispatchers.IO) { Overlays.extractBundled(host.activity) }
             val shaderExtraction = lifecycleScope.launch(Dispatchers.IO) { Shaders.extractBundled(host.activity) }
             restartOnlyOptions = descriptor?.restartOnlyOptions ?: emptySet()
@@ -483,7 +477,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // romFileName (config, cheats, thumbnails; saves and states unless Use extracted file name is on) keeps the archive
             // name, as on the Brick; unless the tag's core loads the archive as is (fbneo's romsets and flycast's known sets:
             // the zip is the game).
-            // Only a real unpack outlasts the delay and shows the toast; it is taken down with the unpack, not left over the host.
+            // Only a real unpack outlasts the delay and shows the toast; it is taken down with the unpack, not left over the game.
             val unpacked: Unpacked? = if (!Names.isArchive(cfg.romFileName) || archiveAsIs) null else {
                 var unpackToast: android.widget.Toast? = null
                 val unpacking = lifecycleScope.launch { delay(400); unpackToast = toast("Unpacking ${cfg.romFileName}…") }
@@ -515,7 +509,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         if (alt != null) "Pick ${CoreRegistry.handheldTag(alt)} from the game's Emulator menu." else "Move it to the folder of the console it belongs to.",
                 )
             }
-            // minarch names saves after the unpacked file when Use extracted file name is on (ma_host.c:75-76): known only now.
+            // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c:75-76): known only now.
             paths = paths.withInner(inner?.let { unpackedEntry })
             saves.open(if (cfg.np == null) SaveStates(dataRoot, paths) else null)   // netplay: no save states, no auto-resume
             dropStaleNdsResume(cfg.tag, cfg.coreId, cfg.romFileName)
@@ -936,7 +930,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             view.getGLRetroErrors().flowWithLifecycle(host.lifecycle, Lifecycle.State.STARTED).collect { code ->
                 if (code == GLRetroView.ERROR_LOAD_LIBRARY) {
                     val lines = runCatching { view.getRecentCoreErrors() }.getOrDefault(emptyList())
-                    host.fail(CoreLoadFailure.message(coreFile, lines), GameActivity.START_FAILED)
+                    host.fail(CoreLoadFailure.message(coreFile, lines))
                     return@collect
                 }
                 val name = when (code) {
@@ -949,19 +943,19 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 if (code == GLRetroView.ERROR_LOAD_GAME) {
                     val lines = runCatching { view.getRecentCoreErrors() }.getOrDefault(emptyList())
                     lines.forEach { NxLog.i(TAG_LOG, "core said: $it") }
-                    loadFailure(lines)?.let { host.fail(it, GameActivity.START_FAILED); return@collect }
+                    loadFailure(lines)?.let { host.fail(it); return@collect }
                 }
                 if (code == GLRetroView.ERROR_GL_NOT_COMPATIBLE && VulkanFallback.relaunchOnGles(host.launchedOnVulkan)) {
                     // netplay: a relaunch would start without the session (it is gone), so the dialog says what to do. An
                     // ended link session's relaunch ([GameNetplay.local]) is a plain launch, which relaunches as any other.
                     if (host.activity.intent.hasExtra(GameActivity.EXTRA_NETPLAY_ROLE) && !host.gameNetplay.local) {
-                        host.fail("Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES.", GameActivity.START_FAILED)
+                        host.fail("Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES.")
                     } else {
                         host.relaunchOnGles()
                     }
                     return@collect
                 }
-                host.fail("The core reported $name", GameActivity.START_FAILED)
+                host.fail("The core reported $name")
             }
         }
     }

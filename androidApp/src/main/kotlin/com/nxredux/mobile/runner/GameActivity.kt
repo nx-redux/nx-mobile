@@ -937,8 +937,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         recreate()
     }
 
-    private fun fail(message: String) = fail(message, START_FAILED)
-
     /** [title]: "Netplay failed" for a netplay session's failures, which may come mid-game. */
     override fun fail(message: String, title: String) {
         NxLog.e(TAG_LOG, message)

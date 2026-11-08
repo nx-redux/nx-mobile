@@ -1,19 +1,15 @@
 package com.nxredux.mobile.runner
 
 import android.os.SystemClock
-import androidx.activity.ComponentActivity
 import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.swordfish.libretrodroid.NxLog
 import com.swordfish.libretrodroid.Variable
 
 /** What [Res3dController] needs from [GameActivity]: the game state it reads, the core options and the open menu it writes. */
-internal interface Res3dHost {
-    val activity: ComponentActivity
+internal interface Res3dHost : GameScreenHost {
     val gameTag: String
     val gameCoreId: String
     val frontendValues: Map<String, String>
-    val retroView: com.swordfish.libretrodroid.GLRetroView?
-    val quitting: Boolean
     val netplayNow: com.nxredux.mobile.netplay.NetplaySession?
     val ndsView: com.nxredux.mobile.options.NdsView?
     /** melonds_render_mode this game started with, and whether OpenGL fell back to software. */

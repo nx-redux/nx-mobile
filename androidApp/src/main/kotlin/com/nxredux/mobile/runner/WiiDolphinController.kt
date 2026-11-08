@@ -4,9 +4,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.view.KeyEvent
 import android.widget.FrameLayout
-import androidx.activity.ComponentActivity
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.R
 import com.nxredux.mobile.options.WiiOptions
@@ -27,15 +25,12 @@ import kotlinx.coroutines.withContext
  * What [WiiDolphinController] needs from [GameActivity]: the game state the controller and sensors follow, the frontend
  * values and config writes Motion Controls goes through, and the pad and menu it rebuilds when the controller changes.
  */
-internal interface WiiDolphinHost : LifecycleOwner {
-    val activity: ComponentActivity
-    val retroView: GLRetroView?
+internal interface WiiDolphinHost : GameScreenHost {
     val gameTag: String
     val isWii: Boolean
     val isDolphin: Boolean
     val isN3ds: Boolean
     val gameReady: Boolean
-    val quitting: Boolean
     val menuOpen: Boolean
     val menuRouter: InputRouter
     val playerCount: Int
@@ -49,7 +44,6 @@ internal interface WiiDolphinHost : LifecycleOwner {
     fun relayoutPad()
     fun withMenu(block: (InGameMenuModel) -> Unit)
     fun refreshWiiMenu(model: InGameMenuModel)
-    fun toast(msg: String): android.widget.Toast
 }
 
 /**

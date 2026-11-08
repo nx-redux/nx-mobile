@@ -2,11 +2,9 @@ package com.nxredux.mobile.runner
 
 import android.os.SystemClock
 import android.view.View
-import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.R
 import com.nxredux.mobile.settings.AndroidAppSettings
@@ -31,15 +29,11 @@ import kotlinx.coroutines.withContext
  * What [ShortcutsMicController] needs from [GameActivity]: the state its shortcuts and mic follow, and the actions a
  * shortcut runs (speed, reset, quit, slots), which stay the activity's.
  */
-internal interface ShortcutsMicHost : LifecycleOwner {
-    /** For the mic permission prompt, which must be registered while the activity is being created. */
-    val activity: ComponentActivity
+internal interface ShortcutsMicHost : GameScreenHost {
     val settings: AndroidAppSettings
     val speed: SpeedController
-    val retroView: com.swordfish.libretrodroid.GLRetroView?
     val menuOpen: Boolean
     val focusPaused: Boolean
-    val quitting: Boolean
     val canRewind: Boolean
     val saveStates: SaveStates?
     var lastSlotCache: Int?
@@ -47,7 +41,6 @@ internal interface ShortcutsMicHost : LifecycleOwner {
     fun quitGame(chosen: Boolean, autoState: Boolean)
     fun saveToSlot(slot: Int)
     fun loadFromSlot(slot: Int)
-    fun toast(msg: String): android.widget.Toast
 }
 
 /**
